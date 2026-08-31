@@ -20,8 +20,10 @@ import {
   contentLooksLikeStateTransitionReject,
   apiRejectSearchQueries,
   contentLooksLikeAskedFieldReject,
+  contentLooksLikeWrongFieldReject,
   filterWriteRejectFiles,
   isApiRejectAsk,
+  askedRejectFieldTokens,
   lineNumberOfWriteReject,
   pickSearchHitsToRead,
   pickSymbolHitsToRead,
@@ -749,6 +751,10 @@ test("T2 hunt searches parent ValidationError, not bare issue_id", () => {
     apiRejectSearchQueries(COPILOT_T2_ASK).some((q) => /ValidationError parent/i.test(q)),
     true
   );
+  assert.equal(
+    apiRejectSearchQueries(COPILOT_T2_ASK).some((q) => /get\("parent"\)/.test(q)),
+    true
+  );
 });
 
 test("API-reject hunts do not latch *_id as a named symbol", () => {
@@ -756,6 +762,42 @@ test("API-reject hunts do not latch *_id as a named symbol", () => {
   assert.equal(queryHasNamedSymbol(COPILOT_ASSIGNEE_REJECT_ASK), false);
   assert.equal(queryHasNamedSymbol(COPILOT_C2_ASK), false);
   assert.equal(queryHasNamedSymbol("Where is requireAuth defined?"), true);
+});
+
+test("asked-field tokens use the qualifier, not a type suffix like issue_id", () => {
+  const parentFields = askedRejectFieldTokens(
+    "Where does the API reject a bad parent issue_id?"
+  );
+  assert.ok(parentFields.includes("parent"));
+  assert.equal(parentFields.includes("issue_id"), false);
+  const ownerFields = askedRejectFieldTokens("Where does the API reject a bad owner_id?");
+  assert.ok(ownerFields.includes("owner"));
+  assert.ok(ownerFields.includes("owner_id"));
+});
+
+test("wrong-field validate() is not an asked-field reject", () => {
+  const htmlValidate = [
+    "def validate(self, data):",
+    "    if data.get(\"comment_html\"):",
+    "        raise serializers.ValidationError({\"comment_html\": \"HTML content is not valid\"})",
+    "    return data"
+  ].join("\n");
+  const parentReject =
+    'if data.get("parent"):\n    raise serializers.ValidationError("Parent is not valid issue_id")';
+  const ask = "Where does the API reject a bad parent issue_id?";
+  assert.equal(contentLooksLikeAskedFieldReject(htmlValidate, ask), false);
+  assert.equal(contentLooksLikeWrongFieldReject(htmlValidate, ask), true);
+  assert.equal(contentLooksLikeAskedFieldReject(parentReject, ask), true);
+  assert.equal(contentLooksLikeWrongFieldReject(parentReject, ask), false);
+  const kept = filterWriteRejectFiles(
+    [
+      { path: "api/serializers/item.py", content: htmlValidate },
+      { path: "app/serializers/item.py", content: parentReject }
+    ],
+    ask
+  );
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0]?.path, "app/serializers/item.py");
 });
 
 test("asked-field reject keeps the matching ValidationError and drops converters", () => {
@@ -788,6 +830,56 @@ test("asked-field reject keeps the matching ValidationError and drops converters
     COPILOT_T2_ASK
   );
   assert.equal(t2Picked[0]?.fileName, "apps/api/app/serializers/issue.py");
+});
+
+test("API-reject pick prefers asked-field reject over a different field's validate()", () => {
+  const ask = "Where does the API reject a bad parent issue_id?";
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "api/serializers/item.py",
+        lineNumber: 10,
+        content:
+          'raise serializers.ValidationError({"comment_html": "HTML content is not valid"})',
+        score: 0.99
+      },
+      {
+        fileName: "app/serializers/item.py",
+        lineNumber: 40,
+        content: 'raise serializers.ValidationError("Parent is not valid issue_id")',
+        score: 0.2
+      }
+    ],
+    2,
+    ask
+  );
+  assert.equal(picked.length, 1);
+  assert.equal(picked[0]?.fileName, "app/serializers/item.py");
+});
+
+test("API-reject pick keeps a serializer with a wrong-field snippet so hunt can jump in-file", () => {
+  const ask = "Where does the API reject a bad parent issue_id?";
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "api/serializers/item.py",
+        lineNumber: 10,
+        content:
+          'raise serializers.ValidationError({"comment_html": "HTML content is not valid"})',
+        score: 0.9
+      },
+      {
+        fileName: "utils/filters/converters.py",
+        lineNumber: 184,
+        content: 'raise ValidationError("Invalid filter value")',
+        score: 0.95
+      }
+    ],
+    2,
+    ask
+  );
+  assert.equal(picked.length, 1);
+  assert.equal(picked[0]?.fileName, "api/serializers/item.py");
 });
 
 test("filterWriteRejectFiles keeps the asked field reject, not OpenAPI", () => {

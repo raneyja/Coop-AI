@@ -570,6 +570,10 @@ export function BlastRadiusEvidenceCard({
   });
   const directCount = evidence.directDependents?.length ?? 0;
   const transitiveCount = evidence.transitiveDependents?.length ?? 0;
+  const namedCaller = evidence.namedAskSymbols?.[0]?.trim();
+  const dependentsTitle = namedCaller
+    ? `Callers of ${namedCaller} (${directCount})`
+    : `Code dependents (${directCount + transitiveCount})`;
   const prCount = evidence.openPullRequests?.length ?? 0;
   const slackCount = evidence.slackSearch?.messages?.length ?? 0;
   const localCount = evidence.localFiles?.files?.length ?? 0;
@@ -699,12 +703,12 @@ export function BlastRadiusEvidenceCard({
         <EvidenceConnectionGroup
           connection={host}
           briefSummary={{
-            title: `Code dependents (${directCount + transitiveCount})`,
+            title: dependentsTitle,
             sourceLabel: blastRadiusSourceLabelDependencies()
           }}
         >
           <IntegrationResultCollapsible
-            title={`Code dependents (${directCount + transitiveCount})`}
+            title={dependentsTitle}
             sourceLabel={blastRadiusSourceLabelDependencies()}
             sectionDomId={evidenceSectionDomId(artifactId, blastRadiusSourceLabelDependencies())}
             open={expanded.graph}

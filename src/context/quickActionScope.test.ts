@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import {
   isFileLevelQuickAction,
+  isHonestRepoIntelligenceScope,
   isQuickActionBlocked,
   quickActionBlockedMessage,
   quickActionWorksWithoutFile,
+  repoContextForActivatedThread,
   shouldSkipOpenFileAttach,
   shouldWarnOpenFileAttachFailure
 } from "./quickActionScope";
@@ -73,6 +75,56 @@ async function run(): Promise<void> {
       /open a file/i.test(quickActionBlockedMessage("understand-repo", prefsOnly)),
       false
     );
+    assert.equal(isHonestRepoIntelligenceScope(prefsOnly), false);
+  });
+
+  test("honest repo intelligence requires Use-repo or a bound file", () => {
+    assert.equal(
+      isHonestRepoIntelligenceScope({ owner: "acme", repo: "widgets", scope: "repo" }),
+      true
+    );
+    assert.equal(
+      isHonestRepoIntelligenceScope({
+        owner: "acme",
+        repo: "widgets",
+        file: "src/a.ts",
+        scope: "file"
+      }),
+      true
+    );
+    assert.equal(
+      isHonestRepoIntelligenceScope({ owner: "acme", repo: "widgets" }, "src/a.ts"),
+      true
+    );
+    assert.equal(isHonestRepoIntelligenceScope({ owner: "acme", repo: "widgets" }), false);
+    assert.equal(isHonestRepoIntelligenceScope({}), false);
+  });
+
+  test("activated thread restores Use-repo or a file, not prefs-only owner/repo", () => {
+    assert.deepEqual(
+      repoContextForActivatedThread({
+        owner: "coopai-group",
+        repo: "InspectIQ",
+        branch: "main"
+      }),
+      {}
+    );
+    const useRepo = repoContextForActivatedThread({
+      owner: "coopai-group",
+      repo: "InspectIQ",
+      branch: "main",
+      scope: "repo"
+    });
+    assert.equal(useRepo.scope, "repo");
+    assert.equal(useRepo.repo, "InspectIQ");
+    const withFile = repoContextForActivatedThread({
+      owner: "coopai-group",
+      repo: "InspectIQ",
+      file: "app/globals.css",
+      scope: "file"
+    });
+    assert.equal(withFile.file, "app/globals.css");
+    assert.deepEqual(repoContextForActivatedThread(undefined), {});
   });
 
   test("empty context blocks repo-wide actions", () => {

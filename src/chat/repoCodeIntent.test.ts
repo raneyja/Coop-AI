@@ -108,5 +108,9 @@ assert.equal(failures.length, 0, "routing eval regressed");
 
 assert.equal(isConversationalChat("Thanks"), true);
 assert.equal(isConversationalChat("ok thanks that worked"), true);
+assert.equal(isConversationalChat("hi"), true);
+assert.equal(isConversationalChat("Hello"), true);
+assert.equal(isConversationalChat("hey there"), true);
+assert.equal(isConversationalChat("test"), false);
 assert.equal(isConversationalChat("Explain this function"), false);
 assert.equal(isConversationalChat("ok now add logging around requireAuth"), false);

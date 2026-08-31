@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   enrichContextWithIndexedRepo,
+  indexedRepoEvidenceWants,
   understandRepoEmptyEvidenceMessage,
   understandRepoMissingEntryBodiesMessage,
   hasUnderstandRepoEntryBodies
@@ -23,7 +24,7 @@ async function run(): Promise<void> {
     }
   };
 
-  await test("enrichContextWithIndexedRepo attaches manifest and remote file for workspace repos", async () => {
+  await test("enrichContextWithIndexedRepo attaches remote file without inventory for blast-radius", async () => {
     const request: ContextFetchRequest = {
       id: "test:file_metadata:0",
       type: "file_metadata",
@@ -107,11 +108,182 @@ async function run(): Promise<void> {
 
     const data = result.data as Record<string, unknown>;
     assert.equal(data.indexedWorkspaceAttached, true);
-    assert.ok(data.manifest);
-    assert.ok(data.treeOverview);
-    assert.ok(data.repoInventory);
+    assert.equal(data.manifest, undefined);
+    assert.equal(data.treeOverview, undefined);
+    assert.equal(data.repoInventory, undefined);
     const localFiles = data.localFiles as { files?: Array<{ path: string }> };
     assert.equal(localFiles?.files?.[0]?.path, "README.md");
+  });
+
+  await test("ping / greeting does not want inventory or tree", async () => {
+    const ping: ContextFetchRequest = {
+      id: "test:ping",
+      type: "chat_context",
+      params: { repoId: "github:acme/app", owner: "acme", repo: "app", branch: "main" },
+      intent: {
+        id: "evt-ping",
+        intent: "manual_chat_submit" as const,
+        timestamp: new Date(),
+        costEstimate: "cheap" as const,
+        context: { queryText: "test" }
+      },
+      cost: "cheap",
+      createdAt: new Date()
+    };
+    assert.deepEqual(indexedRepoEvidenceWants(ping), {
+      inventory: false,
+      tree: false,
+      manifest: false,
+      entryFiles: false
+    });
+    const hi = { ...ping, intent: { ...ping.intent, context: { queryText: "hi" } } };
+    assert.equal(indexedRepoEvidenceWants(hi).inventory, false);
+    assert.equal(indexedRepoEvidenceWants(hi).tree, false);
+  });
+
+  await test("file-count question wants inventory not tree", async () => {
+    const request: ContextFetchRequest = {
+      id: "test:count",
+      type: "chat_context",
+      params: { repoId: "github:acme/app", owner: "acme", repo: "app", branch: "main" },
+      intent: {
+        id: "evt-count",
+        intent: "manual_chat_submit" as const,
+        timestamp: new Date(),
+        costEstimate: "cheap" as const,
+        context: { queryText: "how many files are inside of this repo?" }
+      },
+      cost: "cheap",
+      createdAt: new Date()
+    };
+    const wants = indexedRepoEvidenceWants(request);
+    assert.equal(wants.inventory, true);
+    assert.equal(wants.tree, false);
+    assert.equal(wants.manifest, false);
+    assert.equal(wants.entryFiles, false);
+
+    const result = await enrichContextWithIndexedRepo({
+      deps: {
+        api: {
+          fetchRepoManifest: async () => ({
+            repoId: "github:acme/app",
+            files: [],
+            fileCount: 0
+          }),
+          fetchRepoInventoryViaCloud: async () => ({
+            fileCount: 10,
+            lineCount: 2930,
+            indexedAt: "2026-01-01T00:00:00.000Z",
+            branch: "main"
+          }),
+          getBackendClient: () => ({
+            fetchRepoFile: async () => undefined
+          })
+        } as never,
+        apiBaseUrl: "https://api.coop-ai.dev",
+        codeHostRouter: {
+          getRepositoryTree: async () => ({
+            path: "",
+            branch: "main",
+            entries: [{ name: "app", path: "app", type: "dir" as const }]
+          })
+        } as never
+      },
+      target: {
+        repoId: "github:acme/app",
+        owner: "acme",
+        repo: "app",
+        branch: "main",
+        provider: "github"
+      },
+      request,
+      result: {
+        requestId: request.id,
+        type: request.type,
+        data: {},
+        fetchedAt: new Date()
+      },
+      budgetMs: 5_000
+    });
+
+    const data = result.data as Record<string, unknown>;
+    assert.equal((data.repoInventory as { fileCount?: number }).fileCount, 10);
+    assert.equal(data.treeOverview, undefined);
+  });
+
+  await test("plain chat ping does not attach inventory or tree", async () => {
+    const request: ContextFetchRequest = {
+      id: "test:plain-ping",
+      type: "chat_context",
+      params: { repoId: "github:coopai-group/InspectIQ", owner: "coopai-group", repo: "InspectIQ", branch: "main" },
+      intent: {
+        id: "evt-plain-ping",
+        intent: "manual_chat_submit" as const,
+        timestamp: new Date(),
+        costEstimate: "cheap" as const,
+        context: { queryText: "test" }
+      },
+      cost: "cheap",
+      createdAt: new Date()
+    };
+
+    const result = await enrichContextWithIndexedRepo({
+      deps: {
+        api: {
+          fetchRepoManifest: async () => ({
+            repoId: "github:coopai-group/InspectIQ",
+            files: [{ path: "README.md", symbols: [] }],
+            fileCount: 10
+          }),
+          fetchRepoInventoryViaCloud: async () => ({
+            fileCount: 10,
+            lineCount: 2930,
+            indexedAt: "2026-01-01T00:00:00.000Z",
+            branch: "main"
+          }),
+          getBackendClient: () => ({
+            fetchRepoFile: async () => ({
+              path: "README.md",
+              content: "# InspectIQ\n",
+              encoding: "utf-8"
+            })
+          })
+        } as never,
+        apiBaseUrl: "https://api.coop-ai.dev",
+        codeHostRouter: {
+          getRepositoryTree: async () => ({
+            path: "",
+            branch: "main",
+            entries: [
+              { name: "app", path: "app", type: "dir" as const },
+              { name: "public", path: "public", type: "dir" as const }
+            ]
+          })
+        } as never
+      },
+      target: {
+        repoId: "github:coopai-group/InspectIQ",
+        owner: "coopai-group",
+        repo: "InspectIQ",
+        branch: "main",
+        provider: "github"
+      },
+      request,
+      result: {
+        requestId: request.id,
+        type: request.type,
+        data: {},
+        fetchedAt: new Date()
+      },
+      budgetMs: 5_000
+    });
+
+    const data = result.data as Record<string, unknown>;
+    assert.equal(data.indexedWorkspaceAttached, true);
+    assert.equal(data.repoInventory, undefined);
+    assert.equal(data.treeOverview, undefined);
+    assert.equal(data.manifest, undefined);
+    assert.equal(data.entryFiles, undefined);
   });
 
   await test("budget timeout keeps inventory instead of discarding to empty shell", async () => {
@@ -309,7 +481,7 @@ async function run(): Promise<void> {
     assert.match(message, /Attach check failed/i);
     assert.match(message, /0\.1\.0/);
     assert.match(message, /could not attach repository evidence/i);
-    assert.match(message, /will not invent/i);
+    assert.match(message, /can.t summarize architecture from the repo name alone/i);
     assert.match(message, /preview/);
   });
 
@@ -326,7 +498,7 @@ async function run(): Promise<void> {
       hasInventory: true,
       hasTree: true
     });
-    assert.match(message, /will not invent/i);
+    assert.match(message, /can.t summarize architecture from the repo name alone/i);
     assert.match(message, /inventory/i);
     assert.match(message, /tree overview/i);
   });

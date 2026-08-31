@@ -37,7 +37,8 @@ export type BlastRadiusEvidence = {
   file?: string;
   directDependents?: string[];
   transitiveDependents?: string[];
-  dependentDetails?: Array<{ path: string; depth: number; source: string }>;
+  dependentDetails?: Array<{ path: string; depth: number; source: string; strength?: string }>;
+  namedAskSymbols?: string[];
   docsReferences?: Array<{ path: string; depth: number; source: string }>;
   openPullRequests?: Array<{
     number: number;
@@ -345,6 +346,13 @@ export function blastRadiusFromBundle(bundle: unknown[]): BlastRadiusEvidence | 
     const type = asRecord(entry).type;
     if (type === "dependencies" || data.report || data.directDependents) {
       if (data.file) merged.file = String(data.file);
+      if (Array.isArray(data.namedAskSymbols) && data.namedAskSymbols.length) {
+        merged.namedAskSymbols = data.namedAskSymbols as string[];
+      }
+      const reportNamed = asRecord(data.report).namedAskSymbols;
+      if (Array.isArray(reportNamed) && reportNamed.length) {
+        merged.namedAskSymbols = reportNamed as string[];
+      }
       const incomingSource = String(
         asRecord(data.graphMeta).source ?? merged.graphMeta?.source ?? ""
       );
@@ -436,8 +444,15 @@ export function blastRadiusFromBundle(bundle: unknown[]): BlastRadiusEvidence | 
     if (data.teamsSearch && !merged.teamsSearch) {
       merged.teamsSearch = data.teamsSearch as TeamsSearchEvidence;
     }
+    const namedFunctionBlast = (merged.namedAskSymbols ?? []).some((symbol) =>
+      String(symbol).trim()
+    );
     const lightning = asRecord(data.lightning);
-    if (Array.isArray(lightning.dependents) && !merged.directDependents?.length) {
+    if (
+      Array.isArray(lightning.dependents) &&
+      !merged.directDependents?.length &&
+      !namedFunctionBlast
+    ) {
       merged.directDependents = lightning.dependents as string[];
       merged.graphMeta = {
         ...merged.graphMeta,
@@ -451,9 +466,16 @@ export function blastRadiusFromBundle(bundle: unknown[]): BlastRadiusEvidence | 
         jobScan.dependentsSample as Array<{ from?: string; to?: string }>,
         targetFile
       );
-      // Never promote unfiltered sample `from` paths — those are often unrelated
-      // remote edges and become fake "production callers."
-      if (filtered.length > 0 && !merged.directDependents?.length) {
+      // Named-function blast: file importers are not callers. Empty Direct impact
+      // is honest; filling from the job sample re-sells GitHub import graph as
+      // “will break.”
+      if (namedFunctionBlast) {
+        const prior = merged.warnings ?? [];
+        merged.warnings = [
+          ...prior,
+          `Named function blast (${(merged.namedAskSymbols ?? []).join(", ")}) — file-graph job sample is not Direct impact.`
+        ];
+      } else if (filtered.length > 0 && !merged.directDependents?.length) {
         merged.directDependents = filtered;
         merged.graphMeta = {
           ...merged.graphMeta,

@@ -885,6 +885,31 @@
     color: var(--coop-panel-foreground);
   }
 
+  /* Chromium paints type=search clear as the OS accent (blue). Match the panel close X. */
+  .coop-prompt-modal-search::-webkit-search-decoration {
+    -webkit-appearance: none;
+  }
+
+  .coop-prompt-modal-search::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    width: 12px;
+    height: 12px;
+    margin-left: 4px;
+    cursor: pointer;
+    background-color: var(--coop-panel-foreground);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 6l12 12M18 6L6 18' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 6l12 12M18 6L6 18' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+    opacity: 0.8;
+  }
+
+  .coop-prompt-modal-search::-webkit-search-cancel-button:hover {
+    opacity: 1;
+  }
+
   .coop-prompt-modal-view-text {
     @apply box-border max-w-full min-w-0 whitespace-pre-wrap rounded-md border px-2.5 py-2 text-[12px] leading-relaxed;
     border-color: var(--coop-settings-field-border, var(--coop-composer-border));
@@ -3217,6 +3242,15 @@
     @apply inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px];
     background: var(--coop-pill-surface);
     border-color: var(--coop-pill-border);
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-source-chip-dismiss {
+    @apply shrink-0 rounded-full leading-none;
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-source-chip-dismiss:hover {
     color: var(--coop-panel-foreground);
   }
 

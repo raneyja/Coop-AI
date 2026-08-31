@@ -668,6 +668,7 @@ export function activate(context: vscode.ExtensionContext): void {
           repo: payload.repo,
           branch: payload.branch
         });
+        panel.getSession().markKeepRepoOnFreshWindow();
         panel.panel.title = `${payload.owner}/${payload.repo}`;
       }
     ),

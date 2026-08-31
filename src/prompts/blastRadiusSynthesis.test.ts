@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildBlastRadiusSynthesisUserPrompt } from "./blastRadiusSynthesis";
+import { buildBlastRadiusSynthesisUserPrompt, enrichBlastRadiusResponse } from "./blastRadiusSynthesis";
 
 const evidence = {
   file: "fastify.js",
@@ -180,16 +180,60 @@ test("blast-radius synthesis requires attached documentation titles", () => {
 test("named-function blast prompt does not treat every file importer as breakage", () => {
   const prompt = buildBlastRadiusSynthesisUserPrompt({
     evidence: {
-      file: "src/server/authMiddleware.ts",
-      directDependents: ["src/jobs/jobsApi.ts", "src/server/adminOrgApi.ts"],
+      file: "auth/gates.ts",
+      namedAskSymbols: ["gateRequest"],
+      directDependents: ["http/jobs.ts"],
       graphMeta: { source: "import-parse" }
     },
-    file: "src/server/authMiddleware.ts",
-    userFocus: "If we change requireAuth so unauthenticated requests always 401, what else breaks?",
-    userQuestion: "If we change requireAuth so unauthenticated requests always 401, what else breaks?"
+    file: "auth/gates.ts",
+    userFocus: "If we change gateRequest so unauthenticated requests always 401, what else breaks?",
+    userQuestion: "If we change gateRequest so unauthenticated requests always 401, what else breaks?"
   });
   assert.ok(prompt.includes("callers of that identifier"));
   assert.ok(prompt.includes("other exports are Weak"));
+  assert.ok(prompt.includes("Named function(s): gateRequest"));
+  assert.ok(!prompt.includes("http/webhooks.ts"));
+});
+
+test("named-function blast with no callers locks Direct impact empty", () => {
+  const prompt = buildBlastRadiusSynthesisUserPrompt({
+    evidence: {
+      file: "src/server/authMiddleware.ts",
+      namedAskSymbols: ["requireAuth"],
+      directDependents: [],
+      warnings: ["Impact unverified"]
+    },
+    file: "src/server/authMiddleware.ts",
+    userFocus: "What breaks if we change requireAuth to return 401?"
+  });
+  assert.ok(prompt.includes("When callers are unconfirmed"));
+  assert.ok(/Do not list file paths/i.test(prompt));
+  assert.ok(!prompt.includes("partial index coverage caveat"));
+});
+
+test("enrichBlastRadiusResponse replaces guessed callers when named-function callers are unconfirmed", () => {
+  const out = enrichBlastRadiusResponse(
+    [
+      "Impact is unverified — no dependents were confirmed.",
+      "",
+      "Direct impact",
+      "",
+      "src/server/adminOrgApi.ts",
+      "src/api/chatApi.ts"
+    ].join("\n"),
+    {
+      file: "src/server/authMiddleware.ts",
+      namedAskSymbols: ["requireAuth"],
+      directDependents: [],
+      warnings: ["Impact unverified"]
+    }
+  );
+  assert.match(out, /None confirmed/);
+  assert.match(out, /not the same as nothing breaks/i);
+  assert.doesNotMatch(out, /I will not guess/i);
+  assert.doesNotMatch(out, /Your question/);
+  assert.doesNotMatch(out, /adminOrgApi/);
+  assert.doesNotMatch(out, /chatApi/);
 });
 
 console.log(`\nblastRadiusSynthesis: ${passed}/${passed + failed} tests passed`);

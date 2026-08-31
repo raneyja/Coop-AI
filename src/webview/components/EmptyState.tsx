@@ -1,5 +1,6 @@
 import React from "react";
 import { shouldPromptForAgentsMd } from "../lib/agentsMdStatus";
+import { isExplicitRepoScope } from "../../context/contextScope";
 import type { RepoContext } from "../types";
 
 type EmptyStateProps = {
@@ -17,6 +18,8 @@ export function EmptyState({
   onAttachAgentsMd,
   onStartFromAgentsMdTemplate
 }: EmptyStateProps): React.ReactElement {
+  const hasSelectedRepo =
+    isExplicitRepoScope(context) && Boolean(context.owner?.trim() && context.repo?.trim());
   return (
     <div className="flex min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
       <div
@@ -30,7 +33,7 @@ export function EmptyState({
           </h2>
 
           <p className="mx-auto mt-3 max-w-[280px] text-center text-[12.5px] leading-relaxed text-[var(--coop-panel-muted)]">
-            Ask anything about this repo.
+            {hasSelectedRepo ? "Ask anything about this repo." : "Ask a question, or pick a repo."}
             <br />
             <span className="coop-slash-hint-command font-medium">Type / for commands.</span>
           </p>

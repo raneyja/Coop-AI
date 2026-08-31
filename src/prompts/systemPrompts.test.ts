@@ -46,6 +46,8 @@ test("chat use case asks for right-sized dense answers that still finish", () =>
   assert.ok(prompt.includes("one screen"));
   assert.ok(prompt.includes("Complete the last thought"));
   assert.ok(prompt.includes("only what the ask requires"));
+  assert.ok(prompt.includes("Greetings and pings are not overview requests"));
+  assert.ok(prompt.includes("Do not lead with a census because inventory is present"));
 });
 
 test("comprehension keeps its full required section list (not thinned by chat density rules)", () => {
@@ -674,7 +676,8 @@ test("buildUserMessageWithContext renders line_count for LOC questions", () => {
   assert.ok(message.includes('source="index-stats"'));
   assert.ok(message.includes('line_count="66934"'));
   assert.ok(message.includes('file_count="1233"'));
-  assert.ok(message.includes("66934 line(s) of code"));
+  assert.equal(message.includes("The repository contains"), false);
+  assert.equal(message.includes("66934 line(s) of code"), false);
 });
 
 test("buildUserMessageWithContext forbids estimating a missing line count", () => {

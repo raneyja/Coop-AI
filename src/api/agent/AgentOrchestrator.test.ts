@@ -644,7 +644,7 @@ async function run(): Promise<void> {
       }
     );
     assert.equal(streamed, 0, "must not call the answer model on an empty hunt");
-    assert.match(result.answer ?? "", /will not guess a path/i);
+    assert.match(result.answer ?? "", /usable match/i);
     assert.doesNotMatch(result.answer ?? "", /Your question/);
   });
 
@@ -765,7 +765,7 @@ async function run(): Promise<void> {
     assert.equal(result.steps[0]?.tool, "read_file");
     assert.equal(planCalls >= 1, true);
     assert.match(result.answer ?? "", /issue_relation_mapper/);
-    assert.doesNotMatch(result.answer ?? "", /could not find an indexed file/i);
+    assert.doesNotMatch(result.answer ?? "", /usable match/i);
   });
 
   await test("named filename seeds read_file even when the body uses a different export", async () => {
@@ -803,7 +803,7 @@ async function run(): Promise<void> {
     );
     assert.equal(result.steps[0]?.tool, "read_file");
     assert.match(result.steps[0]?.summary ?? "", /authMiddleware\.ts/);
-    assert.doesNotMatch(result.answer ?? "", /could not find an indexed file/i);
+    assert.doesNotMatch(result.answer ?? "", /usable match/i);
     assert.match(result.answer ?? "", /extractBearerToken/);
   });
 
@@ -963,7 +963,7 @@ async function run(): Promise<void> {
       }
     );
     assert.equal(streamed, 1);
-    assert.doesNotMatch(result.answer ?? "", /could not find an indexed file/i);
+    assert.doesNotMatch(result.answer ?? "", /usable match/i);
     assert.match(result.answer ?? "", /extractBearerToken/);
   });
 
@@ -1018,7 +1018,7 @@ async function run(): Promise<void> {
       }
     );
     assert.equal(streamed, 1);
-    assert.doesNotMatch(result.answer ?? "", /could not find an indexed file/i);
+    assert.doesNotMatch(result.answer ?? "", /usable match/i);
     assert.match(result.answer ?? "", /work_item_state/);
   });
 
@@ -1070,7 +1070,7 @@ async function run(): Promise<void> {
       }
     );
     assert.equal(streamed, 1);
-    assert.doesNotMatch(result.answer ?? "", /could not find an indexed file/i);
+    assert.doesNotMatch(result.answer ?? "", /usable match/i);
     assert.ok(
       result.steps.some((s) => s.tool === "read_file" && s.summary.includes(filePath)),
       `expected auto read of ${filePath}, got ${result.steps.map((s) => s.summary).join(" | ")}`
@@ -1482,7 +1482,7 @@ async function run(): Promise<void> {
       }
     );
     assert.equal(streamed, 0);
-    assert.match(result.answer ?? "", /will not guess a path/i);
+    assert.match(result.answer ?? "", /usable match/i);
   });
 
   await test("T2 hunt attaches parent ValidationError, not converters", async () => {
@@ -1568,7 +1568,105 @@ async function run(): Promise<void> {
         ?.map((file) => file.content)
         .join("\n") ?? "";
     assert.match(attached, /Parent is not valid issue_id/);
-    assert.doesNotMatch(result.answer ?? "", /will not guess a path/i);
+    assert.doesNotMatch(result.answer ?? "", /usable match/i);
+  });
+
+  await test("API-reject hunt does not answer from a different field's validate()", async () => {
+    const htmlPath = "api/serializers/item.py";
+    const html = [
+      "class ItemCommentSerializer:",
+      "    def validate(self, data):",
+      '        if "comment_html" in data:',
+      '            raise serializers.ValidationError({"comment_html": "HTML content is not valid"})',
+      "        return data"
+    ].join("\n");
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: htmlPath,
+              lineNumber: 2,
+              content: "def validate(self, data):",
+              score: 0.99
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) =>
+        rel === htmlPath ? { path: rel, content: html } : undefined
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where does the API reject a bad parent issue_id?",
+        repoId: "github:acme/app",
+        action: "locate",
+        maxSteps: 4
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async () => "should not stream a wrong-field validate"
+      }
+    );
+    assert.match(result.answer ?? "", /usable match/i);
+    assert.doesNotMatch(result.answer ?? "", /comment_html/);
+  });
+
+  await test("API-reject hunt jumps in-file from a wrong-field validate() to the asked field", async () => {
+    const writerPath = "api/serializers/item.py";
+    const writer = [
+      "class ItemSerializer:",
+      "    def validate(self, data):",
+      '        if data.get("comment_html"):',
+      '            raise serializers.ValidationError({"comment_html": "HTML content is not valid"})',
+      '        if data.get("parent"):',
+      '            raise serializers.ValidationError("Parent is not valid issue_id")',
+      "        return data"
+    ].join("\n");
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: writerPath,
+              lineNumber: 3,
+              content:
+                'raise serializers.ValidationError({"comment_html": "HTML content is not valid"})',
+              score: 0.99
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) =>
+        rel === writerPath ? { path: rel, content: writer } : undefined
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where does the API reject a bad parent issue_id?",
+        repoId: "github:acme/app",
+        action: "locate",
+        maxSteps: 4
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async () =>
+          "validate() rejects a parent that is not a valid issue_id."
+      }
+    );
+    const attached =
+      (result.context?.read_file as { files?: Array<{ content: string }> } | undefined)?.files
+        ?.map((file) => file.content)
+        .join("\n") ?? "";
+    assert.match(attached, /Parent is not valid issue_id/);
+    assert.doesNotMatch(result.answer ?? "", /usable match/i);
   });
 
   console.log(`\nAgentOrchestrator: ${passed}/${passed + failed} tests passed`);

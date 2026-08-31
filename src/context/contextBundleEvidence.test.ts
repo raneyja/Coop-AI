@@ -234,6 +234,31 @@ test("contextBundleHasRepoFactEvidence detects packageStructure and tree", () =>
   );
 });
 
+test("blastRadiusFromBundle does not promote job-scan importers for a named-function blast", () => {
+  const evidence = blastRadiusFromBundle([
+    {
+      type: "dependencies",
+      data: {
+        file: "src/server/authMiddleware.ts",
+        namedAskSymbols: ["requireAuth"],
+        directDependents: [],
+        jobScan: {
+          source: "dependency-graph-job",
+          edgeCount: 25,
+          dependentsSample: [
+            { from: "src/api/adminOrgApi.ts", to: "src/server/authMiddleware.ts" },
+            { from: "src/api/atlassianAppApi.ts", to: "src/server/authMiddleware.ts" },
+            { from: "src/api/jobsApi.ts", to: "src/server/authMiddleware.ts" }
+          ]
+        }
+      }
+    }
+  ]);
+  assert.ok(evidence);
+  assert.equal(evidence!.directDependents?.length ?? 0, 0);
+  assert.ok((evidence!.warnings ?? []).some((w) => /named function blast/i.test(w)));
+});
+
 const total = passed + failed;
 console.log(`\ncontextBundleEvidence: ${passed}/${total} tests passed`);
 if (failed > 0) {

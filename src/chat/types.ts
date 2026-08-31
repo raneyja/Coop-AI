@@ -634,6 +634,7 @@ export type WebviewInbound =
       };
     }
   | { type: "context:dismiss-warning" }
+  | { type: "context:clear" }
   | { type: "agents:create-skeleton" }
   | { type: "agents:start-from-template" }
   | { type: "agents:attach" }

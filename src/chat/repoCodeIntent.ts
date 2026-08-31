@@ -25,14 +25,14 @@ const NONE: RepoCodeIntent = { action: "none", confidence: "low", reason: "no re
 
 /** Acknowledgements and small talk. */
 const CONVERSATIONAL =
-  /^(?:thanks|thank\s+you|ty|ok|okay|k|got\s+it|nice|cool|great|perfect|yes|yep|no|nope|sure|sounds\s+good|never\s+mind)\b/i;
+  /^(?:hi|hello|hey(?:\s+there)?|yo|howdy|greetings|good\s+(?:morning|afternoon|evening)|thanks|thank\s+you|ty|ok|okay|k|got\s+it|nice|cool|great|perfect|yes|yep|no|nope|sure|sounds\s+good|never\s+mind)\b/i;
 
 /**
  * True when the whole message is small talk ("Thanks"), not "ok now add logging".
  * Prefix-only matching would steal real change asks that start with "ok".
  */
 export function isConversationalChat(message: string): boolean {
-  return /^(?:thanks|thank\s+you|ty|ok(?:ay)?|k|got\s+it|nice|cool|great|perfect|yes|yep|no|nope|sure|sounds\s+good|never\s+mind)(?:\s+thanks?)?(?:\s+that(?:'s|\s+is)?\s+worked)?[.!?]*$/i.test(
+  return /^(?:hi|hello|hey(?:\s+there)?|yo|howdy|greetings|good\s+(?:morning|afternoon|evening)|thanks|thank\s+you|ty|ok(?:ay)?|k|got\s+it|nice|cool|great|perfect|yes|yep|no|nope|sure|sounds\s+good|never\s+mind)(?:\s+thanks?)?(?:\s+that(?:'s|\s+is)?\s+worked)?[.!?]*$/i.test(
     message.trim()
   );
 }

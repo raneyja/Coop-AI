@@ -15,6 +15,7 @@ import { resolveInventoryRepoIds } from "../workspace/repoInventorySources";
 import type { RepoTarget } from "../workspace/indexedRepoWorkspaceTypes";
 import type { IndexedRepoFileReadRequest } from "./indexedRepoFileRegistry";
 import { resolveActiveRepoTarget } from "../workspace/repoTargetResolver";
+import { repoFactNeeds } from "../workspace/repoFactIntent";
 import { COOP_EXTENSION_BUILD_ID } from "../config/coopBuildId";
 
 const MAX_ENTRY_FILES = 6;
@@ -74,8 +75,28 @@ function withResolvedMeta(
 }
 
 /**
- * Baseline indexed-repo evidence for every chat turn, quick action, and slash command
- * when the active repository is in the remote workspace.
+ * What indexed evidence this turn should fetch. Inventory and tree are
+ * ask-driven (repo-fact intent or Understand Repo) — not a briefing on every ping.
+ */
+export function indexedRepoEvidenceWants(request: ContextFetchRequest): {
+  inventory: boolean;
+  tree: boolean;
+  manifest: boolean;
+  entryFiles: boolean;
+} {
+  const isUnderstandRepo = request.params.quickAction === "understand-repo";
+  const needs = repoFactNeeds(request.intent.context?.queryText);
+  return {
+    inventory: isUnderstandRepo || needs.fileCount || needs.lineCount,
+    tree: isUnderstandRepo || needs.treeOverview,
+    manifest: isUnderstandRepo || needs.packageManifests || needs.treeOverview,
+    entryFiles: isUnderstandRepo
+  };
+}
+
+/**
+ * Indexed-repo evidence for the active Use-repo or bound file.
+ * Inventory/tree attach only when the ask needs them (or Understand Repo).
  *
  * On budget timeout, returns the best partial evidence already fetched — never discards
  * a successful inventory/tree to an empty shell.
@@ -107,12 +128,12 @@ export async function enrichContextWithIndexedRepo(options: {
 
   const baseData = asRecord(result.data);
   const summaryReady = hasRepoSummaryEvidence(baseData);
-  const needsTree = !baseData.treeOverview;
-  const needsInventory = !baseData.repoInventory;
-  const needsManifest = !summaryReady && !baseData.manifest;
+  const wants = indexedRepoEvidenceWants(request);
+  const needsTree = wants.tree && !baseData.treeOverview;
+  const needsInventory = wants.inventory && !baseData.repoInventory;
+  const needsManifest = wants.manifest && !summaryReady && !baseData.manifest;
   const needsEntryFiles =
-    request.params.quickAction === "understand-repo" &&
-    !(Array.isArray(baseData.entryFiles) && baseData.entryFiles.length > 0);
+    wants.entryFiles && !(Array.isArray(baseData.entryFiles) && baseData.entryFiles.length > 0);
   const file = request.params.file?.trim();
   const isRemoteFile = request.params.fileSource === "remote";
   const needsRemoteFile = Boolean(file && isRemoteFile && localFilesFromContextData(baseData).length === 0);
@@ -316,7 +337,7 @@ export function understandRepoEmptyEvidenceMessage(options: {
       (branch ? ` (branch \`${branch}\`)` : "") +
       ".",
     "",
-    "Deep-Index may be ready, but this turn did not receive file bodies, inventory, or a tree overview — so Coop will not invent an architecture summary.",
+    "This turn did not receive file bodies, inventory, or a tree overview, so I can’t summarize architecture from the repo name alone.",
     "",
     "Try again in a moment, confirm the Remote workspace repo is selected, or Reindex the repo in the admin portal if browse still works but chat does not."
   ].join("\n");
@@ -369,6 +390,6 @@ export function understandRepoMissingEntryBodiesMessage(options: {
     "",
     attachedLine,
     "",
-    "Coop will not invent an architecture summary from repo identity alone. Retry Understand Repo, or confirm Remote browse can open the same files on this branch."
+    "I can’t summarize architecture from the repo name alone. Retry Understand Repo, or confirm Remote browse can open the same files on this branch."
   ].join("\n");
 }

@@ -196,6 +196,50 @@ async function run(): Promise<void> {
     assert.equal(restored?.messages[1]?.activity?.files[0]?.path, "src/auth.ts");
   });
 
+  await test("startNewThread without inherit does not copy the prior repo", async () => {
+    const store = createStore();
+    store.setActiveThread([userMessage("hi")], 0, "hi", [], {
+      owner: "coopai-group",
+      repo: "InspectIQ",
+      branch: "main",
+      scope: "repo"
+    });
+    const priorId = store.getActiveThreadId();
+    const next = store.startNewThread();
+    assert.equal(next.repoContext, undefined);
+    assert.equal(next.messages.length, 0);
+    const prior = store.switchTo(priorId);
+    assert.equal(prior?.repoContext?.repo, "InspectIQ");
+    assert.equal(prior?.repoContext?.scope, "repo");
+  });
+
+  await test("startNewThread does not reuse a draft that still has Use-repo", async () => {
+    const store = createStore();
+    store.setActiveThread([], 0, "New Chat", [], {
+      owner: "coopai-group",
+      repo: "InspectIQ",
+      branch: "main",
+      scope: "repo"
+    });
+    const priorId = store.getActiveThreadId();
+    const next = store.startNewThread();
+    assert.notEqual(next.id, priorId);
+    assert.equal(next.repoContext, undefined);
+    const prior = store.getThreadById(priorId);
+    assert.equal(prior?.repoContext?.repo, "InspectIQ");
+  });
+
+  await test("persisting empty context clears Use-repo on the thread", async () => {
+    const store = createStore();
+    store.setActiveThread([], 0, "New Chat", [], {
+      owner: "coopai-group",
+      repo: "InspectIQ",
+      scope: "repo"
+    });
+    store.setActiveThread([], 0, "New Chat", [], {});
+    assert.equal(store.getActiveThread().repoContext, undefined);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     process.exit(1);

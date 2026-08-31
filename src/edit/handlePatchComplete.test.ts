@@ -435,6 +435,97 @@ async function main(): Promise<void> {
     assert.ok(addText.includes("currently in progress"));
   });
 
+  await test("/edit tests rewrite gather>0 to the attached SUT", async () => {
+    const sut = [
+      "export const MAX_USER_FACING_RESPONSE_MS = 15_000;",
+      "export const RESERVED_SYNTHESIS_MS = 6_000;",
+      "export function remainingContextGatherBudgetMs(startedAt: number, now = Date.now(), maxMs = MAX_USER_FACING_RESPONSE_MS, reserveSynthesisMs = RESERVED_SYNTHESIS_MS) {",
+      "  return Math.max(0, maxMs - (now - startedAt) - reserveSynthesisMs);",
+      "}"
+    ].join("\n");
+    const testBody = [
+      'import { remainingContextGatherBudgetMs } from "./responseDeadline";',
+      "console.log(`done`);"
+    ].join("\n");
+    const content = [
+      "File: `src/config/responseDeadline.test.ts`",
+      "",
+      "```patch",
+      "<<<<<<< SEARCH",
+      "console.log(`done`);",
+      "=======",
+      '  await test("remainingContextGatherBudgetMs 10 seconds after start", () => {',
+      "    const started = Date.now();",
+      "    const gather = remainingContextGatherBudgetMs(started, started + 10_000);",
+      "    assert.ok(gather > 0);",
+      "  });",
+      "console.log(`done`);",
+      ">>>>>>> REPLACE",
+      "```"
+    ].join("\n");
+    const result = await handlePatchComplete(content, {
+      messageTimestamp: 2026,
+      file: "src/config/responseDeadline.test.ts",
+      ask: "/edit Add one test to this file for remainingContextGatherBudgetMs 10 seconds after start.",
+      fileContents: {
+        "src/config/responseDeadline.test.ts": testBody,
+        "src/config/responseDeadline.ts": sut
+      },
+      publish: () => undefined
+    });
+    assert.equal(result?.status, "pending");
+    const joined = (result?.files[0]?.hunks[0]?.lines ?? []).map((line) => line.text).join("\n");
+    assert.match(joined, /assert\.equal\(gather, 0\)/);
+    assert.doesNotMatch(joined, /assert\.ok\(gather > 0\)/);
+  });
+
+  await test("/edit tests rewrite MAX-RESERVED asserts when the SUT nests a helper", async () => {
+    const sut = [
+      "export const MAX_USER_FACING_RESPONSE_MS = 15_000;",
+      "export const RESERVED_SYNTHESIS_MS = 6_000;",
+      "export function remainingResponseBudgetMs(startedAt: number, now = Date.now(), maxMs = MAX_USER_FACING_RESPONSE_MS) {",
+      "  return Math.max(0, maxMs - (now - startedAt));",
+      "}",
+      "export function remainingContextGatherBudgetMs(startedAt: number, now = Date.now(), maxMs = MAX_USER_FACING_RESPONSE_MS, reserveSynthesisMs = RESERVED_SYNTHESIS_MS) {",
+      "  return Math.max(0, remainingResponseBudgetMs(startedAt, now, maxMs) - reserveSynthesisMs);",
+      "}"
+    ].join("\n");
+    const testBody = [
+      'import { remainingContextGatherBudgetMs } from "./responseDeadline";',
+      "console.log(`done`);"
+    ].join("\n");
+    const content = [
+      "File: `src/config/responseDeadline.test.ts`",
+      "",
+      "```patch",
+      "<<<<<<< SEARCH",
+      "console.log(`done`);",
+      "=======",
+      '  await test("remainingContextGatherBudgetMs clamps at zero after 10 seconds", () => {',
+      "    const started = Date.now();",
+      "    const gather = remainingContextGatherBudgetMs(started, Date.now() + 10_000);",
+      "    assert.equal(gather, MAX_USER_FACING_RESPONSE_MS - RESERVED_SYNTHESIS_MS);",
+      "  });",
+      "console.log(`done`);",
+      ">>>>>>> REPLACE",
+      "```"
+    ].join("\n");
+    const result = await handlePatchComplete(content, {
+      messageTimestamp: 2027,
+      file: "src/config/responseDeadline.test.ts",
+      ask: "/edit Add one test to this file for remainingContextGatherBudgetMs 10 seconds after start.",
+      fileContents: {
+        "src/config/responseDeadline.test.ts": testBody,
+        "src/config/responseDeadline.ts": sut
+      },
+      publish: () => undefined
+    });
+    assert.equal(result?.status, "pending");
+    const joined = (result?.files[0]?.hunks[0]?.lines ?? []).map((line) => line.text).join("\n");
+    assert.match(joined, /assert\.equal\(gather, 0\)/);
+    assert.doesNotMatch(joined, /MAX_USER_FACING_RESPONSE_MS/);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     process.exit(1);

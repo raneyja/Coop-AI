@@ -13,8 +13,8 @@ import {
   type BlastRadiusDependentDetail,
   type GraphEdgeSource,
   codePathsFromDependentDetails,
-  extractBlastSearchSymbols,
   extractExportNamesFromSource,
+  resolveNamedBlastSymbols,
   hitLooksLikeReferenceToTarget,
   isTrustedBlastGraphSource,
   mergeDurableWithNamedSymbolSearch,
@@ -95,6 +95,7 @@ export type BlastRadiusReport = {
   includeTransitive: boolean;
   warnings: string[];
   completeness: "full" | "partial" | "minimal";
+  namedAskSymbols?: string[];
 };
 
 export type BlastRadiusAnalysisOptions = {
@@ -117,8 +118,9 @@ export type BlastRadiusAnalysisParams = {
    * never hang, never schedule a hard 15s abort / timeout bubble.
    */
   gatherStartedAt?: number;
-  /** User ask text — used to extract symbols (StateGroup, DocumentStatus) for fallback search. */
   askText?: string;
+  /** Editor chip / caret identifier (requireAuth) when the ask is generic. */
+  selectedSymbol?: string;
   /** Explicit symbols to search when graph dependents are empty. */
   symbols?: string[];
 };
@@ -152,6 +154,10 @@ export class BlastRadiusAnalysisEngine {
 
     const repoId = normalizeGraphRepoId(repoIdFromCoordinates(resolved));
     const includeTransitive = params.includeTransitive !== false;
+    const askSymbols = resolveNamedBlastSymbols(params.askText, {
+      file,
+      selectedSymbol: params.selectedSymbol
+    });
 
     let directDependents: string[] = [];
     let transitiveDependents: string[] = [];
@@ -202,7 +208,6 @@ export class BlastRadiusAnalysisEngine {
           } catch {
             // Soft gather — path-suffix patterns still run.
           }
-          const askSymbols = extractBlastSearchSymbols(params.askText, file);
           const symbols = [
             ...exportSymbols,
             ...(params.symbols ?? []),
@@ -409,7 +414,8 @@ export class BlastRadiusAnalysisEngine {
       graphMeta,
       includeTransitive,
       warnings,
-      completeness
+      completeness,
+      namedAskSymbols: askSymbols.length ? askSymbols : undefined
     };
   }
 

@@ -160,6 +160,44 @@ export function hasExplicitRepoSelection(context: RepoContext): boolean {
   );
 }
 
+/**
+ * Indexed gather and repo chips: the user picked Use-repo or a file bound to
+ * owner/repo. Settings defaults and workspace-membership alone do not count.
+ */
+export function isHonestRepoIntelligenceScope(
+  context: RepoContext,
+  requestFile?: string
+): boolean {
+  if (hasExplicitRepoSelection(context)) {
+    return true;
+  }
+  const file = requestFile?.trim() || context.file?.trim();
+  return Boolean(file && context.owner?.trim() && context.repo?.trim());
+}
+
+/**
+ * What a thread may restore into chat. Owner/repo without Use-repo or a file
+ * is leftover Settings/ghost context — drop it.
+ */
+export function repoContextForActivatedThread(threadRepo: RepoContext | undefined): RepoContext {
+  if (!threadRepo) {
+    return {};
+  }
+  if (threadRepo.file?.trim()) {
+    return threadRepo;
+  }
+  if (hasExplicitRepoSelection(threadRepo)) {
+    return {
+      provider: threadRepo.provider,
+      owner: threadRepo.owner,
+      repo: threadRepo.repo,
+      branch: threadRepo.branch,
+      scope: "repo"
+    };
+  }
+  return {};
+}
+
 export function quickActionBlockedMessage(actionId: QuickActionId, context: RepoContext): string {
   if (ALL_QUICK_ACTIONS.has(actionId) && isExternalFileContext(context)) {
     return externalFileMessage(actionId);

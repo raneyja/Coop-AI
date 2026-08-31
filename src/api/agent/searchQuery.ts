@@ -459,12 +459,27 @@ export function pickSearchHitsToRead<T extends RankedSearchHit & { content?: str
     if (writers.length > 0) {
       pool = [...writers, ...pool.filter((hit) => !writers.includes(hit))];
     }
+    const fieldHits = pool.filter((hit) =>
+      contentLooksLikeAskedFieldReject(hit.content ?? "", userMessage)
+    );
+    if (fieldHits.length > 0) {
+      pool = fieldHits;
+    } else {
+      pool = pool.filter((hit) => {
+        const snippet = hit.content ?? "";
+        if (contentLooksLikeWrongFieldReject(snippet, userMessage)) {
+          const path = normalizePath(hit.fileName);
+          return (
+            /(^|\/)serializers?\//.test(path) || /\.serializer\.(py|ts|go|rb)$/.test(path)
+          );
+        }
+        return isActionableApiRejectHit(hit);
+      });
+    }
     const mutators = pool.filter((hit) => contentLooksLikeWriteReject(hit.content ?? ""));
     if (mutators.length > 0) {
       pool = [...mutators, ...pool.filter((hit) => !mutators.includes(hit))];
     }
-    const actionable = pool.filter((hit) => isActionableApiRejectHit(hit));
-    pool = actionable;
   }
   const picked: T[] = [];
   for (const hit of pool) {
@@ -797,6 +812,8 @@ export function apiRejectSearchQueries(userMessage: string): string[] {
     push(`not valid ${stem}`);
     push(`invalid ${stem}`);
     push(`ValidationError ${stem}`);
+    push(`get("${stem}")`);
+    push(`get("${stem}_id")`);
   }
   for (const field of fields) {
     if (/_id$/i.test(field)) {
@@ -808,31 +825,65 @@ export function apiRejectSearchQueries(userMessage: string): string[] {
 }
 
 /**
- * Field names the user asked the API to reject — `*_id`, the word after "bad",
- * and parent/state/transition when those are the locate subject.
+ * Qualifier stems for API-reject hunts. "bad parent issue_id" is about parent,
+ * not a generic issue_id token that every issue serializer mentions.
+ */
+const REJECT_QUALIFIER_STEMS = [
+  "parent",
+  "assignee",
+  "estimate",
+  "owner",
+  "label",
+  "priority"
+] as const;
+
+function addRejectFieldStem(tokens: Set<string>, raw: string): void {
+  let field = raw.toLowerCase();
+  if (field.endsWith("_id")) {
+    field = field.slice(0, -3);
+  } else if (field.length > 4 && /[a-z]id$/.test(field)) {
+    field = field.slice(0, -2);
+  }
+  if (field.length < 3) {
+    return;
+  }
+  tokens.add(field);
+  tokens.add(`${field}_id`);
+}
+
+/**
+ * Field names the user asked the API to reject. Qualifiers win: "parent issue_id"
+ * → parent, not issue_id. Bare `*_id` only when no qualifier is present.
  */
 export function askedRejectFieldTokens(userMessage: string): string[] {
   const tokens = new Set<string>();
   const text = userMessage.toLowerCase();
-  for (const id of allIdentifiers(userMessage)) {
-    if (isApiFieldIdToken(id)) {
-      tokens.add(id.toLowerCase());
-      tokens.add(id.replace(/_id$/i, "").replace(/Id$/, "").toLowerCase());
+
+  for (const stem of REJECT_QUALIFIER_STEMS) {
+    if (new RegExp(`\\b${stem}(?:_id)?\\b`, "i").test(text)) {
+      addRejectFieldStem(tokens, stem);
     }
   }
+
   const bad = text.match(/\bbad\s+([a-z][a-z0-9_]*)\b/);
   if (bad?.[1] && bad[1].length >= 3) {
-    tokens.add(bad[1]);
+    addRejectFieldStem(tokens, bad[1]);
   }
-  if (/\bparent\b/.test(text)) {
-    tokens.add("parent");
-    tokens.add("parent_id");
-  }
-  if (/\b(state|transition|backlog)\b/.test(text)) {
+
+  if (/\b(state|transition|backlog)(?:_id)?\b/.test(text)) {
     tokens.add("state");
     tokens.add("state_id");
     tokens.add("transition");
   }
+
+  if (tokens.size === 0) {
+    for (const id of allIdentifiers(userMessage)) {
+      if (isApiFieldIdToken(id)) {
+        addRejectFieldStem(tokens, id);
+      }
+    }
+  }
+
   return [...tokens].filter((token) => token.length >= 3);
 }
 
@@ -865,7 +916,21 @@ function validationErrorMessages(content: string): string {
   while ((match = quoted.exec(content)) !== null) {
     chunks.push(match[1] ?? "");
   }
+  const dict = /ValidationError\(\s*\{([^}]*)\}/gi;
+  while ((match = dict.exec(content)) !== null) {
+    chunks.push(match[1] ?? "");
+  }
   return chunks.join("\n");
+}
+
+function contentChecksAskedFieldKey(content: string, fields: string[]): boolean {
+  return fields.some((field) => {
+    const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(
+      `(?:data\\.get\\(|\\[)\\s*['"]${escaped}['"]|\\b${escaped}\\s*=`,
+      "i"
+    ).test(content);
+  });
 }
 
 function contentMentionsAskedField(content: string, fields: string[]): boolean {
@@ -874,7 +939,7 @@ function contentMentionsAskedField(content: string, fields: string[]): boolean {
   }
   const messages = validationErrorMessages(content);
   const haystack = (messages || content).toLowerCase();
-  return fields.some((field) => {
+  const inRejectText = fields.some((field) => {
     const needle = field.toLowerCase().replace(/_/g, "");
     const compact = haystack.replace(/_/g, "");
     if (needle.length >= 3 && compact.includes(needle)) {
@@ -884,6 +949,10 @@ function contentMentionsAskedField(content: string, fields: string[]): boolean {
       messages || content
     );
   });
+  if (inRejectText) {
+    return true;
+  }
+  return contentChecksAskedFieldKey(content, fields);
 }
 
 /**
@@ -906,6 +975,41 @@ export function contentLooksLikeAskedFieldReject(
   }
   if (fields.some((field) => field === "state" || field === "transition" || field === "state_id")) {
     return contentLooksLikeStateTransitionReject(content);
+  }
+  return false;
+}
+
+/**
+ * A ValidationError that is clearly about a different payload field than the
+ * one the user asked about (comment_html vs parent). Generic write/reject
+ * snippets without a sibling field stay eligible.
+ */
+export function contentLooksLikeWrongFieldReject(
+  content: string,
+  userMessage: string
+): boolean {
+  if (!contentLooksLikeWriteReject(content)) {
+    return false;
+  }
+  if (contentLooksLikeAskedFieldReject(content, userMessage)) {
+    return false;
+  }
+  const asked = new Set(askedRejectFieldTokens(userMessage).map((field) => field.toLowerCase()));
+  if (asked.size === 0) {
+    return false;
+  }
+  const haystack = content.toLowerCase();
+  const compact = haystack.replace(/_/g, "");
+  for (const stem of REJECT_QUALIFIER_STEMS) {
+    if (asked.has(stem) || asked.has(`${stem}_id`)) {
+      continue;
+    }
+    if (new RegExp(`\\b${stem}\\b`).test(haystack) || compact.includes(`${stem}id`)) {
+      return true;
+    }
+  }
+  if (!asked.has("comment") && !asked.has("comment_html") && compact.includes("commenthtml")) {
+    return true;
   }
   return false;
 }
@@ -976,7 +1080,7 @@ export function lineNumberOfWriteReject(
     if (!contentLooksLikeWriteReject(rows[i])) {
       continue;
     }
-    const nearby = rows.slice(Math.max(0, i - 2), i + 4).join("\n");
+    const nearby = rows.slice(Math.max(0, i - 12), i + 8).join("\n");
     if (userMessage && fields.length > 0) {
       if (contentLooksLikeAskedFieldReject(nearby, userMessage)) {
         return i + 1;
@@ -1037,6 +1141,14 @@ function rankHit(hit: RankedSearchHit, terms: string[], userMessage?: string): n
   }
   if (isLocaleCatalogPath(hit.fileName) && !(userMessage && userAskedAboutLocales(userMessage))) {
     rank -= 18;
+  }
+  if (userMessage && isApiRejectAsk(userMessage)) {
+    const snippet = (hit as { content?: string }).content ?? "";
+    if (contentLooksLikeAskedFieldReject(snippet, userMessage)) {
+      rank += 24;
+    } else if (contentLooksLikeWriteReject(snippet)) {
+      rank -= 12;
+    }
   }
   if (userMessage && isApiRejectAsk(userMessage) && isServerWritePath(hit.fileName)) {
     rank += 18;

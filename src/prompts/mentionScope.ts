@@ -231,9 +231,22 @@ export type PlainChatHistoryContext = {
   owner?: string;
   repo?: string;
   branch?: string;
+  /** Explorer Use-repo. Prefs-only owner/repo must not stamp chips. */
+  scope?: "repo" | "file";
   /** 1-based inclusive editor highlight — stamped like file/repo chips. */
   selectedLines?: [number, number];
 };
+
+/** Repo/branch chips only for Use-repo or a file bound to owner/repo. */
+function shouldStampRepoChips(context: PlainChatHistoryContext | undefined): boolean {
+  if (!context?.owner?.trim() || !context?.repo?.trim()) {
+    return false;
+  }
+  if (context.file?.trim()) {
+    return true;
+  }
+  return context.scope === "repo";
+}
 
 export type PlainChatHistoryOptions = {
   /** Active repo/file scope for the turn. */
@@ -265,7 +278,7 @@ export function plainChatContextChips(
   if (context?.selectedLines && context.selectedLines.length === 2) {
     chips.push({ key: "selection", value: formatSelectedLinesChip(context.selectedLines) });
   }
-  if (context?.owner?.trim() && context?.repo?.trim()) {
+  if (shouldStampRepoChips(context) && context?.owner?.trim() && context?.repo?.trim()) {
     chips.push({ key: "repo", value: `${context.owner.trim()}/${context.repo.trim()}` });
     if (context.branch?.trim()) {
       chips.push({ key: "branch", value: context.branch.trim() });

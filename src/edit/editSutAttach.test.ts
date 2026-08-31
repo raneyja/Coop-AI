@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { COPILOT_C5_ASK } from "../api/agent/dogfoodContract";
 import { formatChatMessageWithLocalFiles, systemPromptForUseCase } from "../prompts/systemPrompts";
 import {
@@ -7,7 +8,10 @@ import {
   namedCalleeForEditAsk,
   siblingImplementationPath,
   snippetDefinesSymbol,
+  evaluateNamedFunctionAtElapsedMs,
+  rewriteTestReplaceToMatchSut,
   sutAssertionGrounding,
+  sutNumericExpectation,
   sutPathForEditAsk
 } from "./editSutAttach";
 
@@ -125,6 +129,70 @@ test("T8 /edit encodes gather=0 at 10s from the attached SUT, not greater than z
   });
   assert.match(prompt, /<sut_assertions>/);
   assert.match(prompt, /returns 0/);
+});
+
+test("/edit tests encode attached constants for any elapsed-budget function", () => {
+  const sut = [
+    "export const MAX_WAIT_MS = 8_000;",
+    "export const RESERVE_MS = 3_000;",
+    "export function remainingRetryBudgetMs(startedAt: number, now = Date.now(), maxMs = MAX_WAIT_MS, reserveMs = RESERVE_MS) {",
+    "  return Math.max(0, maxMs - (now - startedAt) - reserveMs);",
+    "}"
+  ].join("\n");
+  const ask =
+    "/edit Add one test: remainingRetryBudgetMs 6 seconds after start is still greater than zero.";
+  const files = [
+    { path: "src/retry.test.ts", content: "import { remainingRetryBudgetMs } from \"./retry\";\n" },
+    { path: "src/retry.ts", content: sut }
+  ];
+  assert.equal(evaluateNamedFunctionAtElapsedMs(sut, "remainingRetryBudgetMs", 6_000), 0);
+  const grounding = sutAssertionGrounding(ask, files);
+  assert.match(grounding ?? "", /returns 0/);
+  const rewritten = rewriteTestReplaceToMatchSut(
+    `  await test("still greater than zero", () => {\n    const left = remainingRetryBudgetMs(started, started + 6_000);\n    assert.ok(left > 0);\n  });`,
+    0
+  );
+  assert.match(rewritten, /assert\.equal\(left, 0\)/);
+  assert.doesNotMatch(rewritten, /assert\.ok\(left > 0\)/);
+});
+
+test("rewriteTestReplaceToMatchSut rewrites MAX-RESERVED budget asserts to the SUT value", () => {
+  const rewritten = rewriteTestReplaceToMatchSut(
+    `    const gather = remainingContextGatherBudgetMs(started, started + 10_000);\n    assert.equal(gather, MAX_USER_FACING_RESPONSE_MS - RESERVED_SYNTHESIS_MS);`,
+    0
+  );
+  assert.match(rewritten, /assert\.equal\(gather, 0\)/);
+  assert.doesNotMatch(rewritten, /MAX_USER_FACING_RESPONSE_MS/);
+});
+
+test("evaluateNamedFunctionAtElapsedMs follows a nested helper inside Math.max", () => {
+  const sut = [
+    "export const MAX_WAIT_MS = 8_000;",
+    "export const RESERVE_MS = 3_000;",
+    "export function remainingWaitMs(startedAt: number, now = Date.now(), maxMs = MAX_WAIT_MS) {",
+    "  return Math.max(0, maxMs - (now - startedAt));",
+    "}",
+    "export function remainingRetryBudgetMs(startedAt: number, now = Date.now(), maxMs = MAX_WAIT_MS, reserveMs = RESERVE_MS) {",
+    "  return Math.max(0, remainingWaitMs(startedAt, now, maxMs) - reserveMs);",
+    "}"
+  ].join("\n");
+  assert.equal(evaluateNamedFunctionAtElapsedMs(sut, "remainingRetryBudgetMs", 6_000), 0);
+});
+
+test("sutNumericExpectation encodes the attached remainingContextGatherBudgetMs file", () => {
+  const src = readFileSync("src/config/responseDeadline.ts", "utf8");
+  const ask =
+    "/edit Add one test to this file for remainingContextGatherBudgetMs 10 seconds after start. Match this file’s node:test style. Do not rewrite the existing suite.";
+  const expectation = sutNumericExpectation(ask, [
+    { path: "src/config/responseDeadline.test.ts", content: 'import { remainingContextGatherBudgetMs } from "./responseDeadline";\n' },
+    { path: "src/config/responseDeadline.ts", content: src }
+  ]);
+  assert.equal(expectation?.actual, 0);
+  const rewritten = rewriteTestReplaceToMatchSut(
+    `    const gather = remainingContextGatherBudgetMs(started, Date.now() + 10_000);\n    assert.equal(gather, MAX_USER_FACING_RESPONSE_MS - RESERVED_SYNTHESIS_MS);`,
+    expectation!.actual
+  );
+  assert.match(rewritten, /assert\.equal\(gather, 0\)/);
 });
 
 console.log(`\neditSutAttach: ${passed}/${passed + failed} tests passed`);

@@ -77,6 +77,10 @@ function snapshotThreadRepoContext(ctx: RepoContext): RepoContext | undefined {
   };
 }
 
+function threadHasPersistedRepo(thread: ChatThreadRecord): boolean {
+  return Boolean(snapshotThreadRepoContext(thread.repoContext ?? {}));
+}
+
 export function resolveThreadScopeKey(): string {
   const folder = vscode.workspace.workspaceFolders?.[0]?.uri.toString();
   return folder ?? "global";
@@ -179,7 +183,7 @@ export class ChatThreadStore {
     thread.title = title;
     thread.messageCount = messages.length;
     thread.updatedAt = Date.now();
-    if (repoContext) {
+    if (repoContext !== undefined) {
       thread.repoContext = snapshotThreadRepoContext(repoContext);
     }
     if (threadId === this.snapshot.activeThreadId) {
@@ -244,7 +248,11 @@ export class ChatThreadStore {
     this.discardInactiveDrafts();
     const inherited = inheritContext ? snapshotThreadRepoContext(inheritContext) : undefined;
     const active = this.getThread(this.snapshot.activeThreadId);
-    if (active && isDraftChatThread(active)) {
+    // Reuse only a truly blank draft. A New Chat that still has Use-repo must
+    // not be recycled — that left InspectIQ stuck on the next thread.
+    const canReuseDraft =
+      active && isDraftChatThread(active) && !threadHasPersistedRepo(active);
+    if (canReuseDraft) {
       active.title = "New Chat";
       active.repoContext = inherited;
       active.updatedAt = Date.now();
@@ -271,6 +279,7 @@ export class ChatThreadStore {
     thread.sessionCostUsd = 0;
     thread.title = "New Chat";
     thread.messageCount = 0;
+    thread.repoContext = undefined;
     thread.updatedAt = Date.now();
     this.writeSnapshot();
     return thread;

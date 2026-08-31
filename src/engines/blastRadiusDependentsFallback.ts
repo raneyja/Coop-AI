@@ -53,10 +53,14 @@ export function isRemoteTrustedBlastGraphSource(source: string | undefined): boo
   return source === "import-parse" || source === "scip" || source === "zoekt";
 }
 
+export type BlastCallStrength = "strong" | "weak";
+
 export type BlastRadiusDependentDetail = {
   path: string;
   depth: number;
   source: GraphEdgeSource;
+  /** Named-function blast: strong = calls/binds that identifier. */
+  strength?: BlastCallStrength;
 };
 
 /** Normalize owner/repo or github:owner/repo to github:owner/repo for graph API calls. */
@@ -216,12 +220,52 @@ export function mapSearchSourceToGraphSource(source: LocalSearchResult["source"]
   return "heuristic";
 }
 
-function identifierMentionedInContent(content: string, symbol: string): boolean {
+/**
+ * True when the body uses the named identifier (call, binding, or import of
+ * that export). Importing a sibling export from the same module is not a use.
+ */
+export function contentUsesNamedSymbol(content: string, symbol: string): boolean {
   if (symbol.length < 3) {
     return false;
   }
   const escaped = symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`\\b${escaped}\\b`).test(content);
+  if (
+    new RegExp(
+      `import\\s*\\{[^}]*\\b${escaped}\\b[^}]*\\}|from\\s+\\S+\\s+import\\s+[^\\n]*\\b${escaped}\\b`
+    ).test(content)
+  ) {
+    return true;
+  }
+  const withoutImportLines = content
+    .replace(/^\s*import\s.+$/gm, "")
+    .replace(/^\s*from\s+\S+\s+import\s+.+$/gm, "");
+  return new RegExp(`\\b${escaped}\\b`).test(withoutImportLines);
+}
+
+function looksLikeNamedIdentifier(token: string): boolean {
+  if (token.length < 3 || BLAST_ASK_STOP.has(token.toLowerCase())) {
+    return false;
+  }
+  return /[A-Z]/.test(token) || /_/.test(token) || token.length >= 10;
+}
+
+/**
+ * Symbols the blast should filter to: identifiers in the ask, plus the editor
+ * chip when the user clicked inside a function (requireAuth, not the whole file).
+ */
+export function resolveNamedBlastSymbols(
+  ask: string | undefined,
+  options?: { file?: string; selectedSymbol?: string }
+): string[] {
+  const fromAsk = extractBlastSearchSymbols(ask, options?.file);
+  const chip = options?.selectedSymbol?.trim();
+  if (!chip || !looksLikeNamedIdentifier(chip)) {
+    return fromAsk;
+  }
+  if (fromAsk.some((symbol) => symbol === chip)) {
+    return fromAsk;
+  }
+  return [chip, ...fromAsk];
 }
 
 /** When hit content is real line text, require the module stem, path suffix, or symbol. */
@@ -237,7 +281,7 @@ export function hitLooksLikeReferenceToTarget(
     if (pathOnly) {
       return false;
     }
-    return namedAskSymbols.some((symbol) => identifierMentionedInContent(content, symbol));
+    return namedAskSymbols.some((symbol) => contentUsesNamedSymbol(content, symbol));
   }
   if (pathOnly) {
     // Remote graphSearch often returns path-only rows; trust zoekt/scip source filter only.
@@ -306,6 +350,17 @@ const BLAST_ASK_STOP = new Set(
     "Operational",
     "Transitive",
     "Dependents",
+    "Only",
+    "List",
+    "Sites",
+    "Return",
+    "Returns",
+    "Unauthenticated",
+    "Production",
+    "Requests",
+    "Always",
+    "Every",
+    "Make",
     "Caller",
     "Callers"
   ].map((word) => word.toLowerCase())
@@ -320,6 +375,10 @@ export function extractBlastSearchSymbols(ask: string | undefined, file?: string
   const text = ask?.trim() ?? "";
   const consider = (token: string | undefined): void => {
     if (!token || token.length < 3 || BLAST_ASK_STOP.has(token.toLowerCase())) {
+      return;
+    }
+    // "Only" / "List" from "Only list call sites" — English TitleCase, not code.
+    if (/^[A-Z][a-z]+$/.test(token) && !/[a-z][A-Z]/.test(token) && !/_/.test(token)) {
       return;
     }
     symbols.add(token);
@@ -751,7 +810,10 @@ export function mergeSearchDependentsFallbackIntoDependenciesData(
     source: GraphEdgeSource;
     warnings: string[];
   },
-  options?: { keepFilteredJobDependentsIfSearchEmpty?: boolean }
+  options?: {
+    keepFilteredJobDependentsIfSearchEmpty?: boolean;
+    namedAskSymbols?: string[];
+  }
 ): Record<string, unknown> {
   const priorWarnings = Array.isArray(data.warnings)
     ? (data.warnings as unknown[]).filter((w): w is string => typeof w === "string")
@@ -760,6 +822,7 @@ export function mergeSearchDependentsFallbackIntoDependenciesData(
   const priorDirect = Array.isArray(data.directDependents)
     ? (data.directDependents as unknown[]).filter((p): p is string => typeof p === "string")
     : [];
+  const namedAskSymbols = options?.namedAskSymbols ?? [];
 
   if (fallback.dependents.length > 0) {
     const ranked = sortDependentsProductionFirst(fallback.dependents);
@@ -770,6 +833,7 @@ export function mergeSearchDependentsFallbackIntoDependenciesData(
       ...data,
       directDependents: ranked.map((entry) => entry.path),
       dependentDetails: ranked,
+      namedAskSymbols: namedAskSymbols.length ? namedAskSymbols : data.namedAskSymbols,
       warnings: [...new Set(warnings)],
       graphMeta: {
         ...(typeof data.graphMeta === "object" && data.graphMeta !== null
@@ -780,7 +844,11 @@ export function mergeSearchDependentsFallbackIntoDependenciesData(
     };
   }
 
-  if (options?.keepFilteredJobDependentsIfSearchEmpty && priorDirect.length > 0) {
+  if (
+    namedAskSymbols.length === 0 &&
+    options?.keepFilteredJobDependentsIfSearchEmpty &&
+    priorDirect.length > 0
+  ) {
     warnings.push(
       "Import/symbol search found no additional callers — keeping dependency edges that target this file only."
     );
@@ -790,14 +858,21 @@ export function mergeSearchDependentsFallbackIntoDependenciesData(
     };
   }
 
-  warnings.push(
-    "No dependents verified in import/symbol search for this file. Impact unverified — do not claim zero impact."
-  );
+  if (namedAskSymbols.length > 0) {
+    warnings.push(
+      `Named function blast (${namedAskSymbols.join(", ")}) — file importers that do not call it are not “will break.” Impact unverified until callers are confirmed.`
+    );
+  } else {
+    warnings.push(
+      "No dependents verified in import/symbol search for this file. Impact unverified — do not claim zero impact."
+    );
+  }
   const { directDependents: _dropDirect, dependentDetails: _dropDetails, ...rest } = data;
   return {
     ...rest,
     directDependents: [],
     dependentDetails: [],
+    namedAskSymbols: namedAskSymbols.length ? namedAskSymbols : data.namedAskSymbols,
     warnings: [...new Set(warnings)],
     graphMeta: {
       ...(typeof data.graphMeta === "object" && data.graphMeta !== null

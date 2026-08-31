@@ -50,11 +50,11 @@ export { pickTopSearchHit };
 const DEFAULT_MAX_STEPS = AGENT_MAX_TOOL_ROUNDS;
 const READ_LINE_PADDING = 25;
 /** Each retry is another round trip — the gather budget is shared with the answer. */
-const MAX_SEARCH_ATTEMPTS = 5;
+const MAX_SEARCH_ATTEMPTS = 8;
 /** Read budget when the index returned a hit with no line number. */
 const UNPOSITIONED_READ_LINES = 120;
 const INDEX_HUNT_MISS =
-  "I could not find an indexed file that matches that symbol or role (tried casing aliases). I will not guess a path. Confirm the name, or open the file and use /edit.";
+  "The index didn’t return a usable match for that name (tried casing aliases). Try a more specific name, or open the file and use /edit.";
 /** Cap mid-loop integration calls so the model cannot spray. */
 const MAX_INTEGRATION_TOOL_CALLS = 3;
 
@@ -466,14 +466,14 @@ export class AgentOrchestrator {
         }
         rawResult = judged.raw;
         const path = typeof args.path === "string" ? args.path : "";
-        if (isApiRejectAsk(query) && !contentLooksLikeAskedFieldReject(readFileBodies(rawResult), query)) {
+        if (isApiRejectAsk(query) && path) {
           const jumped = await this.loadWriteRejectWindow(repoId, path, query);
           if (jumped) {
             rawResult = jumped.raw;
             args.startLine = jumped.startLine;
             args.endLine = jumped.endLine;
             judged = { raw: jumped.raw, matchesSymbol: true };
-          } else {
+          } else if (!contentLooksLikeAskedFieldReject(readFileBodies(rawResult), query)) {
             rawResult = JSON.stringify({
               path,
               skipNote:
@@ -644,6 +644,13 @@ export class AgentOrchestrator {
       conversation = compactApiRejectConversation(query, result.context);
       if (!contextHasWriteReject(result.context, query)) {
         matchingRead = false;
+        if (action !== "change") {
+          return {
+            ...result,
+            answer: INDEX_HUNT_MISS,
+            context: result.steps.length ? result.context : undefined
+          };
+        }
       }
     }
     const history =
@@ -663,7 +670,7 @@ export class AgentOrchestrator {
       filledHistory.push({
         role: "user",
         content:
-          "You did not read a file that mentions the named symbol. Do not invent a path. Summarize Slack/Jira/docs results honestly, and say the definition was not found in the index."
+          "You did not read a file that mentions the named symbol. Summarize Slack/Jira/docs results, and say the index didn’t return a usable definition."
       });
     }
     if (needsGrounding && !matchingRead && !hasIntegrationHits) {
@@ -964,7 +971,7 @@ export class AgentOrchestrator {
       context.search_code = {
         ...context.search_code,
         skipNote:
-          "Index hits did not contain the named symbol in file bodies. Do not invent a definition path or patch a related UI file."
+          "Index hits did not contain the named symbol in file bodies. Cite only files you actually read."
       };
     }
     return { steps, context };
@@ -1024,7 +1031,7 @@ export class AgentOrchestrator {
         });
         continue;
       }
-      if (isApiRejectAsk(query) && !contentLooksLikeAskedFieldReject(body, query)) {
+      if (isApiRejectAsk(query)) {
         const jumped = await this.readWriteRejectInSameFile(
           repoId,
           hit.fileName,
@@ -1036,13 +1043,15 @@ export class AgentOrchestrator {
         if (jumped.ok) {
           return jumped;
         }
-        emit({
-          index: 0,
-          tool: "read_file",
-          summary: `read_file skipped (no write/reject): ${hit.fileName}`,
-          completed: true
-        });
-        continue;
+        if (!contentLooksLikeAskedFieldReject(body, query)) {
+          emit({
+            index: 0,
+            tool: "read_file",
+            summary: `read_file skipped (no write/reject): ${hit.fileName}`,
+            completed: true
+          });
+          continue;
+        }
       }
       this.mergeContext(context, "read_file", readRaw);
       conversation?.push({
@@ -1222,7 +1231,7 @@ export class AgentOrchestrator {
         exhaustedQueries: tried,
         skipNote: lastError
           ? `search_code failed: ${lastError}. Do not claim the symbol is missing from the repo — say the index search failed.`
-          : `Tried ${tried.map((q) => JSON.stringify(q)).join(", ")} with no readable hits. Say the index returned no usable matches for those terms — do not invent file paths.`
+          : `Tried ${tried.map((q) => JSON.stringify(q)).join(", ")} with no readable hits. Say the index returned no usable matches for those terms.`
       };
     }
     return undefined;
@@ -1307,7 +1316,7 @@ export class AgentOrchestrator {
         ? definitions.length
           ? "preferredHits starts with declaration sites from the symbol index — read those lines, not the top of the file."
           : "Read the ranked hits below. Barrel index.ts, build output, and vendored code are already filtered out."
-        : "Every hit was a barrel, build output, vendored file, or a near-miss name (e.g. require_authentication ≠ requireAuth). Search again with a different term — do not invent a path from noise.";
+        : "Every hit was a barrel, build output, vendored file, or a near-miss name (e.g. require_authentication ≠ requireAuth). Search again with a different term.";
       return JSON.stringify(parsed);
     } catch {
       return raw;

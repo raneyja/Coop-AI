@@ -2114,6 +2114,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             <ContextScopeLabel
               context={context}
               onOpenExplorer={openExplorer}
+              onClear={() => post({ type: "context:clear" })}
               onOpenFile={
                 context.file
                   ? () => {

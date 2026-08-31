@@ -12,7 +12,13 @@ import {
   setLastPatchMessageTimestamp,
   upsertPatchRecord
 } from "./patchSession";
+import {
+  rewritePatchSetToMatchSut,
+  sutNumericExpectation,
+  sutPathForEditAsk
+} from "./editSutAttach";
 import { collectOpenPatchFileBytes } from "./patchTarget";
+import { normalizeRelativePath } from "../context/localFileContext";
 import { lookupPatchFileContent } from "./patchFileContents";
 import {
   COMMENT_ONLY_REWRITE_REJECTED_ERROR,
@@ -62,6 +68,8 @@ export type HandlePatchCompleteOptions = {
   fileContents?: Readonly<Record<string, string>>;
   /** User asked for a comment/summary only — do not apply signature rewrites. */
   commentOnly?: boolean;
+  /** /edit ask — used to encode attached SUT numbers instead of user English. */
+  ask?: string;
 };
 
 function lookupAttachedFileContent(
@@ -69,6 +77,37 @@ function lookupAttachedFileContent(
   fileContents: Readonly<Record<string, string>> | undefined
 ): string | undefined {
   return lookupPatchFileContent(relativePath, fileContents);
+}
+
+/** Test-file /edit: include the sibling implementation so assertions encode the SUT. */
+function filesForSutGrounding(
+  options: HandlePatchCompleteOptions
+): Array<{ path: string; content: string }> {
+  const files: Array<{ path: string; content: string }> = [];
+  const seen = new Set<string>();
+  const push = (path: string, content: string): void => {
+    const key = normalizeRelativePath(path);
+    if (!key || seen.has(key) || !content.trim()) {
+      return;
+    }
+    seen.add(key);
+    files.push({ path: key, content });
+  };
+  for (const [path, content] of Object.entries(options.fileContents ?? {})) {
+    push(path, content);
+  }
+  const sibling = sutPathForEditAsk(options.file);
+  if (sibling) {
+    const fromDocs = collectOpenPatchFileBytes(sibling);
+    if (fromDocs?.trim()) {
+      push(sibling, fromDocs);
+    }
+    const attached = lookupAttachedFileContent(sibling, options.fileContents);
+    if (attached?.trim()) {
+      push(sibling, attached);
+    }
+  }
+  return files;
 }
 
 export async function handlePatchComplete(
@@ -118,8 +157,13 @@ export async function handlePatchComplete(
       lookupAttachedFileContent(relativePath, options.fileContents) ??
       collectOpenPatchFileBytes(relativePath)
   });
+  const sutFiles = filesForSutGrounding(options);
+  const expectation = options.ask ? sutNumericExpectation(options.ask, sutFiles) : undefined;
+  const grounded = expectation
+    ? rewritePatchSetToMatchSut(patches, expectation.actual)
+    : patches;
 
-  if (options.commentOnly && countHunks(patches) === 0) {
+  if (options.commentOnly && countHunks(grounded) === 0) {
     setLastAssistantPatchContent(content);
     setLastPatchApplyError(COMMENT_ONLY_REWRITE_REJECTED_ERROR);
     setLastPatchMessageTimestamp(options.messageTimestamp);
@@ -141,12 +185,12 @@ export async function handlePatchComplete(
     return failed;
   }
 
-  const fileCount = countUniqueFiles(patches);
-  const hunkCount = countHunks(patches);
+  const fileCount = countUniqueFiles(grounded);
+  const hunkCount = countHunks(grounded);
   void vscode.commands.executeCommand("setContext", "coopAI.patchPending", true);
   emitPatchEvent("edit.patch_parsed", { fileCount, hunkCount });
 
-  const pending = buildPatchCardState(patches, {
+  const pending = buildPatchCardState(grounded, {
     status: "pending",
     messageTimestamp: options.messageTimestamp,
     fileContents: options.fileContents
@@ -154,7 +198,7 @@ export async function handlePatchComplete(
   const pendingWithSuppress = withSuppressionRegistry({ ...pending, suppressMarkdown: true });
 
   if (options.messageTimestamp !== undefined) {
-    upsertPatchRecord(options.messageTimestamp, patches, pendingWithSuppress, {
+    upsertPatchRecord(options.messageTimestamp, grounded, pendingWithSuppress, {
       fileContents: options.fileContents ? { ...options.fileContents } : undefined
     });
   }
@@ -166,7 +210,7 @@ export async function handlePatchComplete(
       activeMessageTimestamp: options.messageTimestamp
     });
   } else {
-    showPatchReadyNotification(patches);
+    showPatchReadyNotification(grounded);
   }
 
   return pendingWithSuppress;

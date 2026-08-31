@@ -133,6 +133,15 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
 }
 
 function appendBlastRadiusSummaryGuidance(lines: string[], evidence: BlastRadiusEvidence): void {
+  const named = (evidence.namedAskSymbols ?? []).filter((symbol) => symbol.trim());
+  if (named.length > 0 && !(evidence.directDependents?.length)) {
+    lines.push("## When callers are unconfirmed");
+    lines.push(
+      `- Callers of ${named.join(", ")} were not confirmed this turn. Write like a teammate: what the function does, that changing it would break actual callers (not every importer of the file), and that this graph slice didn’t confirm them — not “nothing breaks.” **Direct impact:** none confirmed. Do not list file paths. Next: search for \`${named[0]}(\`.`
+    );
+    lines.push("");
+    return;
+  }
   if (hasVerifiedRemoteBlastDependents(evidence)) {
     lines.push("## Summary guidance");
     lines.push(
@@ -179,6 +188,17 @@ function appendMentionScopeSection(lines: string[], input: BlastRadiusSynthesisI
 
 function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string): string {
   const sections: string[] = [`### ${blastRadiusSourceLabelDependencies()}`, `- Target file: ${file}`];
+  const named = (evidence.namedAskSymbols ?? []).filter((symbol) => symbol.trim());
+  if (named.length > 0) {
+    sections.push(
+      `- Named function(s): ${named.join(", ")}. **Direct impact / will break** is callers of ${named.join(" / ")} only. Files that import this module for other exports are Weak — omit them from Direct impact.`
+    );
+    if (!(evidence.directDependents?.length)) {
+      sections.push(
+        `- Callers of ${named.join(", ")} are **unconfirmed**. Do not list any path under Direct impact.`
+      );
+    }
+  }
   const codeDetails = codeDependentDetailsFromEvidence(evidence);
   const topRisk = rankCodeDependentsByRisk(codeDetails, 5);
 
@@ -400,11 +420,17 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
   return sections.join("\n\n");
 }
 
+function asBlastCallStrength(value: string | undefined): "strong" | "weak" | undefined {
+  return value === "strong" || value === "weak" ? value : undefined;
+}
+
 function codeDependentDetailsFromEvidence(evidence: BlastRadiusEvidence): BlastRadiusDependentDetail[] {
   if (evidence.dependentDetails?.length) {
     return evidence.dependentDetails.map((entry) => ({
-      ...entry,
-      source: asGraphEdgeSource(entry.source)
+      path: entry.path,
+      depth: entry.depth,
+      source: asGraphEdgeSource(entry.source),
+      strength: asBlastCallStrength(entry.strength)
     }));
   }
   const source = asGraphEdgeSource(evidence.graphMeta?.source);
@@ -423,6 +449,31 @@ export function blastResponseClaimsZeroImpact(content: string): boolean {
 }
 
 /**
+ * Named-function blast with no confirmed callers: replace the essay so
+ * “unverified” cannot sit above a guessed Direct impact list.
+ */
+export function honestNamedFunctionBlastAnswer(symbols: string[], file?: string): string {
+  const names = symbols.filter((symbol) => symbol.trim());
+  const named = names[0] ?? "this function";
+  const where = file?.trim() ? ` in \`${file.trim()}\`` : "";
+  return [
+    "## Summary",
+    "",
+    `\`${named}\` is defined${where}. Changing it would break whatever actually calls it — not every file that imports a different helper from the same module.`,
+    "",
+    "This turn’s graph did not confirm those call sites, so I can’t list will-break files with confidence. That is not the same as nothing breaks.",
+    "",
+    "## Direct impact",
+    "",
+    "None confirmed in the index this turn.",
+    "",
+    "## What to do next",
+    "",
+    `Search this repo for \`${named}(\` (the call). An import of a sibling export from the same file is not a \`${named}\` breakage.`
+  ].join("\n");
+}
+
+/**
  * Prevent “0 dependents / no impact” claims when evidence is empty/unverified,
  * and prepend production-ranked callers when the model omitted them.
  */
@@ -433,6 +484,7 @@ export function enrichBlastRadiusResponse(
   if (!evidence) {
     return content;
   }
+  const named = (evidence.namedAskSymbols ?? []).filter((symbol) => symbol.trim());
   const details = codeDependentDetailsFromEvidence(evidence);
   const ranked = rankCodeDependentsByRisk(details, 8);
   const trimmed = content.trim();
@@ -441,6 +493,10 @@ export function enrichBlastRadiusResponse(
   const unverifiedWarning = (evidence.warnings ?? []).some((w) =>
     /impact unverified|no dependents found/i.test(w)
   );
+
+  if (named.length > 0 && !hasDependents) {
+    return honestNamedFunctionBlastAnswer(named, evidence.file);
+  }
 
   if (hasDependents) {
     const missingTop = ranked

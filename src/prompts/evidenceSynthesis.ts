@@ -217,7 +217,7 @@ export const GENERAL_CHAT_EVIDENCE_RULES = `Evidence rules (when a context bundl
 - State evidence strength using one of: strong, medium, weak, or limited when drawing conclusions from attached evidence.
 - When integration blocks show <empty>, say clearly that the search found nothing — do not speculate about tickets, messages, or pages that are not attached.
 - Integration and code-host blocks (Jira, Slack, Teams, Confluence, Notion, Google Docs, PRs/issues, semantic files) are **search samples / capped result sets**, not complete inventories. Never answer "how many" / "list all" / totals from those samples alone — say the attached set is partial and what would be needed for a full count.
-- When \`<repo_inventory>\` is attached, it is the only valid source for repository totals (file count, lines of code, size). Use its numbers verbatim; if a total is missing there, say it is unavailable rather than estimating one.
+- When \`<repo_inventory>\` is attached, it is the only valid source for repository totals (file count, lines of code, size). Use its numbers verbatim only if the user asked for totals or an overview; if a total is missing there, say it is unavailable rather than estimating one. Do not volunteer a file/line census for greetings, pings, or unrelated questions.
 - Weight sources by reliability for decisions: pull requests and commit history > Jira tickets > Confluence/docs > Slack/Teams discussions. Prefer the higher-trust source when they conflict.
 - Never invent ticket IDs, PR numbers, people, or quotes not present in the evidence.`;
 
@@ -228,9 +228,9 @@ export const GENERAL_CHAT_EVIDENCE_RULES = `Evidence rules (when a context bundl
 export const AGENT_REPO_HUNT_RULES = `When <agent_search> or <agent_files> are attached:
 - Prefer <agent_files> bodies. Cite real paths and line ranges from those blocks (citation fences with numeric startLine:endLine:path).
 - If the user named a symbol (requireAuth, parse_token), only discuss files whose attached bodies contain that symbol or its snake_case/camelCase alias. Never substitute a nearby auth UI form or AuthRoot component.
-- If <agent_search> has zero usable hits, or includes skipNote / exhaustedQueries: say the index returned no usable matches for the terms tried. Do not invent definition paths. Do not claim the symbol is absent from the repository (index miss ≠ missing code).
-- Never tell the user to clone the repo, open a local copy, or search on disk. Indexed remote is the workspace. If the write/reject path is not in attached bodies, say what you did read and that the index did not return the API check — do not send them to a clone. Do not invent a view or serializer path from a state catalog or a client state_id post.
-- If an attached body has validate() or ValidationError for state/state_id, cite that. Do not cite OpenAPI/swagger, a read_only serializer class, seed JSON, or a view that only checks permissions.
+- If <agent_search> has zero usable hits, or includes skipNote / exhaustedQueries: say the index returned no usable matches for the terms tried. Do not claim the symbol is absent from the repository (index miss ≠ missing code).
+- Never tell the user to clone the repo, open a local copy, or search on disk. Indexed remote is the workspace. If the write/reject path is not in attached bodies, say what you did read and that the index did not return the API check — do not send them to a clone.
+- If an attached body has validate() or ValidationError, cite it only when it rejects the field the user asked about. A validate() for a different field is a miss — keep hunting; do not narrate “must be elsewhere in this snippet.” Do not cite OpenAPI/swagger, a read_only serializer class, seed JSON, or a view that only checks permissions.
 - Never open **Your question** (or any section) by restating or paraphrasing the user's ask when agent evidence is empty — answer with the miss, then what to try next (different symbol spelling, confirm index freshness).
 - Do not dump the question text under a heading as if it were the answer.`;
 
