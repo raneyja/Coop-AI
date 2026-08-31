@@ -2,6 +2,7 @@ import type { RepoContext } from "../chat/types";
 import type { QuickActionId } from "../webview/types";
 import { shouldSkipLocalEditorAttachForRepoScope } from "../workspace/repoEvidenceIsolation";
 import { isExplicitRepoScope } from "./contextScope";
+import { openFileRelatedToGapsFocus } from "./knowledgeGapsFocus";
 import { isExternalFileContext } from "./outsideWorkspaceFile";
 
 /** Display path for repo-wide ownership analysis (not a real file path). */
@@ -43,6 +44,7 @@ export function shouldSkipOpenFileAttach(options: {
   quickAction?: string;
   hasIntegrationProvider?: boolean;
   allMentionsOutOfScope?: boolean;
+  userFocus?: string;
   context: Pick<RepoContext, "file" | "scope" | "owner" | "repo">;
 }): boolean {
   if (options.quickAction === "understand-repo") {
@@ -56,6 +58,15 @@ export function shouldSkipOpenFileAttach(options: {
   }
   // Gaps / Owner / sticky Use-repo with no file chip: leftover tabs are not evidence.
   if (isRepoWideQuickActionId(options.quickAction) && !options.context.file?.trim()) {
+    return true;
+  }
+  // Gaps + typed focus: an unrelated sticky chip is not Strong hunt evidence.
+  if (
+    options.quickAction === "knowledge-gaps" &&
+    options.userFocus?.trim() &&
+    options.context.file?.trim() &&
+    !openFileRelatedToGapsFocus(options.context.file, options.userFocus)
+  ) {
     return true;
   }
   return shouldSkipLocalEditorAttachForRepoScope(options.context);

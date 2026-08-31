@@ -3,6 +3,8 @@ import {
   COPILOT_C1_ASK,
   COPILOT_C2_ASK,
   COPILOT_C5_ASK,
+  COPILOT_T2_ASK,
+  COPILOT_ASSIGNEE_REJECT_ASK,
   DOGFOOD_HUNT_QUESTION,
   DOGFOOD_HUNT_SEARCH_QUERY
 } from "./dogfoodContract";
@@ -16,7 +18,10 @@ import {
   isGeneratedOrVendorPath,
   contentLooksLikeWriteReject,
   contentLooksLikeStateTransitionReject,
+  apiRejectSearchQueries,
+  contentLooksLikeAskedFieldReject,
   filterWriteRejectFiles,
+  isApiRejectAsk,
   lineNumberOfWriteReject,
   pickSearchHitsToRead,
   pickSymbolHitsToRead,
@@ -719,6 +724,85 @@ test("filename asks are file hunts, not required in-body symbols", () => {
     findAsk
   );
   assert.equal(picked[0]?.fileName, "src/server/authMiddleware.ts");
+});
+
+test("API-reject hunt is a class: C2, parent, and assignee fields all match", () => {
+  assert.equal(isApiRejectAsk(COPILOT_C2_ASK), true);
+  assert.equal(isApiRejectAsk(COPILOT_T2_ASK), true);
+  assert.equal(isApiRejectAsk(COPILOT_ASSIGNEE_REJECT_ASK), true);
+  assert.equal(isApiRejectAsk("Where is the Button component defined in this repo?"), false);
+  assert.equal(isApiRejectAsk("Where does the API create an issue?"), false);
+});
+
+test("T2 hunt searches parent ValidationError, not bare issue_id", () => {
+  const primary = extractAgentSearchQuery(COPILOT_T2_ASK);
+  assert.match(primary, /parent is not valid/i);
+  assert.notEqual(primary.toLowerCase(), "issue_id");
+  const fallbacks = fallbackAgentSearchQueries(COPILOT_T2_ASK);
+  assert.equal(fallbacks[0]?.toLowerCase().includes("issue_id"), false);
+  assert.equal(
+    fallbacks.slice(0, 3).some((q) => /parent is not valid/i.test(q)),
+    true,
+    `T2 first queries must include parent is not valid, got ${fallbacks.join(", ")}`
+  );
+  assert.equal(
+    apiRejectSearchQueries(COPILOT_T2_ASK).some((q) => /ValidationError parent/i.test(q)),
+    true
+  );
+});
+
+test("API-reject hunts do not latch *_id as a named symbol", () => {
+  assert.equal(queryHasNamedSymbol(COPILOT_T2_ASK), false);
+  assert.equal(queryHasNamedSymbol(COPILOT_ASSIGNEE_REJECT_ASK), false);
+  assert.equal(queryHasNamedSymbol(COPILOT_C2_ASK), false);
+  assert.equal(queryHasNamedSymbol("Where is requireAuth defined?"), true);
+});
+
+test("asked-field reject keeps the matching ValidationError and drops converters", () => {
+  const parentBody = 'raise serializers.ValidationError("Parent is not valid issue_id")';
+  const assigneeBody = 'raise serializers.ValidationError("Assignee is not valid assignee_id")';
+  const stateBody =
+    'raise serializers.ValidationError("State is not valid please pass a valid state_id")';
+  const filterBody = 'raise ValidationError("Invalid filter value")';
+  assert.equal(contentLooksLikeAskedFieldReject(parentBody, COPILOT_T2_ASK), true);
+  assert.equal(contentLooksLikeAskedFieldReject(assigneeBody, COPILOT_ASSIGNEE_REJECT_ASK), true);
+  assert.equal(contentLooksLikeAskedFieldReject(stateBody, COPILOT_C2_ASK), true);
+  assert.equal(contentLooksLikeAskedFieldReject(filterBody, COPILOT_T2_ASK), false);
+  assert.equal(contentLooksLikeAskedFieldReject(parentBody, COPILOT_C2_ASK), false);
+  const t2Picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "apps/api/utils/filters/converters.py",
+        lineNumber: 184,
+        content: "def _validate_value(self, rich_field_name: str, value: Any) -> bool:",
+        score: 0.99
+      },
+      {
+        fileName: "apps/api/app/serializers/issue.py",
+        lineNumber: 40,
+        content: parentBody,
+        score: 0.2
+      }
+    ],
+    2,
+    COPILOT_T2_ASK
+  );
+  assert.equal(t2Picked[0]?.fileName, "apps/api/app/serializers/issue.py");
+});
+
+test("filterWriteRejectFiles keeps the asked field reject, not OpenAPI", () => {
+  const kept = filterWriteRejectFiles(
+    [
+      { path: "apps/api/settings/openapi.py", content: "Work Items" },
+      {
+        path: "apps/api/app/serializers/issue.py",
+        content: 'raise serializers.ValidationError("Parent is not valid issue_id")'
+      }
+    ],
+    COPILOT_T2_ASK
+  );
+  assert.equal(kept.length, 1);
+  assert.match(kept[0]?.content ?? "", /Parent is not valid/);
 });
 
 console.log(`\nsearchQuery: ${passed}/${passed + failed} tests passed`);

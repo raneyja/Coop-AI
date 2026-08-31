@@ -18,6 +18,14 @@ export const COPILOT_C1_ASK =
 export const COPILOT_C2_ASK =
   "Users can't move a work item out of backlog — the API returns an error. I don't have this repo cloned. Where is work-item state written, and what rejects a bad transition?";
 
+/** Same job as C2, different field — must not canned-miss or latch `issue_id`. */
+export const COPILOT_T2_ASK =
+  "A client sent a parent that isn’t in this project — the API returns an error. I don’t have this repo cloned. Where does the API reject a bad parent issue_id?";
+
+/** Third-field fixture so hunt cannot overfit to parent or state. */
+export const COPILOT_ASSIGNEE_REJECT_ASK =
+  "A client sent an assignee that isn’t on the team — the API returns an error. Where does the API reject a bad assignee_id?";
+
 /** Copilot inner-loop C4 — PR review of the open function, not A8 status playbook. */
 export const COPILOT_C4_ASK =
   "Review requireAuth as if this were a PR touching production auth. What would you block, what's fine, and what would you ask the author? Stay specific to this code.";

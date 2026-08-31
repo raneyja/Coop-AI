@@ -34,8 +34,11 @@ function test(name: string, fn: () => void): void {
 }
 
 test("E1 ask is not a lone this-service hunt query", () => {
-  assert.equal(extractAgentSearchQuery(E1_ASK), "this service");
-  assert.equal(indexQueryForRetrieval(E1_ASK), "this service");
+  const hunt = extractAgentSearchQuery(E1_ASK);
+  assert.ok(hunt.length > 0 && hunt.length < E1_ASK.length, `hunt=${hunt}`);
+  assert.ok(!/work items/i.test(hunt), `hunt should not be the full onboard ask: ${hunt}`);
+  const retrieval = indexQueryForRetrieval(E1_ASK);
+  assert.ok(retrieval.length < E1_ASK.length);
   const topics = extractOnboardingTopicQueries(E1_ASK);
   assert.ok(topics.length >= 2, `topics=${JSON.stringify(topics)}`);
   assert.ok(
@@ -263,6 +266,77 @@ test("filename identity: empty-state and issue/archive do not beat state.py / is
   });
   assert.ok(fetch.includes(ISSUE));
   assert.ok(fetch.includes(STATE));
+});
+
+const T9_ASK =
+  "I'm on-call for this service and I don't have it cloned. Where does the API create an issue, and what are the 4 files I should read first?";
+const AUTH_API_ASK =
+  "I'm on-call for this service. Where does the API reject a bad token, and what are the 4 files I should read first?";
+
+test("on-call API create is not an on-call-for index query", () => {
+  const topics = extractOnboardingTopicQueries(T9_ASK);
+  assert.ok(!topics.some((t) => /on-call/i.test(t)), `topics=${JSON.stringify(topics)}`);
+  assert.ok(isWeakIndexQuery("I'm on-call for"));
+  const index = onboardingIndexQueries(T9_ASK);
+  assert.ok(index.some((q) => /^issue$/i.test(q)), `expected issue in ${JSON.stringify(index)}`);
+  assert.ok(
+    index.some((q) => /serializer|views/i.test(q)),
+    `expected serializer/views in ${JSON.stringify(index)}`
+  );
+});
+
+test("API-layer paths beat issue-modal when the user asked the API", () => {
+  const paths = [
+    "apps/web/core/components/issues/issue-modal/base.tsx",
+    "apps/web/core/store/issue/helpers/base-issues-utils.ts",
+    "apps/api/app/serializers/issue.py",
+    "apps/api/app/views/issue.py",
+    "apps/api/db/models/issue.py"
+  ];
+  const query = onboardingIndexQueries(T9_ASK).join(" ");
+  const picked = selectOnboardingEvidencePaths(paths, query, 4);
+  assert.ok(
+    picked.some((path) => /serializers\/issue\.py$/.test(path)),
+    `serializer missing from ${picked.join(", ")}`
+  );
+  assert.ok(
+    picked.some((path) => /views\/issue\.py$/.test(path) || /models\/issue\.py$/.test(path)),
+    `view/model missing from ${picked.join(", ")}`
+  );
+  assert.ok(
+    !picked.every((path) => /apps\/web\//.test(path)),
+    `API ask must not be web-only: ${picked.join(", ")}`
+  );
+});
+
+test("API ask with only frontend attached stays uncovered when API hits exist", () => {
+  const uncovered = uncoveredOnboardingTopics({
+    topicQueries: onboardingIndexQueries(T9_ASK),
+    hitPaths: [
+      "apps/web/core/components/issues/issue-modal/base.tsx",
+      "apps/api/app/serializers/issue.py"
+    ],
+    attachedPaths: ["apps/web/core/components/issues/issue-modal/base.tsx"]
+  });
+  assert.ok(uncovered.length > 0, "frontend-only attach must not fail-open when API hits exist");
+});
+
+test("API reject-token onboard is the same job as create-issue", () => {
+  const index = onboardingIndexQueries(AUTH_API_ASK);
+  assert.ok(!index.some((q) => /on-call/i.test(q)));
+  const picked = selectOnboardingEvidencePaths(
+    [
+      "apps/web/core/components/auth/login-modal.tsx",
+      "apps/api/app/serializers/token.py",
+      "apps/api/app/views/auth.py"
+    ],
+    index.join(" "),
+    4
+  );
+  assert.ok(
+    picked.some((path) => /apps\/api\//.test(path)),
+    `API paths missing from ${picked.join(", ")}`
+  );
 });
 
 const total = passed + failed;

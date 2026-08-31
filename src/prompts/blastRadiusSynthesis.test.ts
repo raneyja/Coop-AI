@@ -177,6 +177,21 @@ test("blast-radius synthesis requires attached documentation titles", () => {
   assert.ok(prompt.includes("Fastify architecture notes"));
 });
 
+test("named-function blast prompt does not treat every file importer as breakage", () => {
+  const prompt = buildBlastRadiusSynthesisUserPrompt({
+    evidence: {
+      file: "src/server/authMiddleware.ts",
+      directDependents: ["src/jobs/jobsApi.ts", "src/server/adminOrgApi.ts"],
+      graphMeta: { source: "import-parse" }
+    },
+    file: "src/server/authMiddleware.ts",
+    userFocus: "If we change requireAuth so unauthenticated requests always 401, what else breaks?",
+    userQuestion: "If we change requireAuth so unauthenticated requests always 401, what else breaks?"
+  });
+  assert.ok(prompt.includes("callers of that identifier"));
+  assert.ok(prompt.includes("other exports are Weak"));
+});
+
 console.log(`\nblastRadiusSynthesis: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);

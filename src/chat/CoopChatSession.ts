@@ -175,6 +175,7 @@ import {
   filterJobDependentsForFile,
   isTrustedBlastGraphSource,
   mergeDurableDependentsIntoContextData,
+  mergeDurableWithNamedSymbolSearch,
   mergeSearchDependentsFallbackIntoDependenciesData,
   resolveTrustedRemoteDependents,
   searchDependentsFallback
@@ -3011,6 +3012,7 @@ export class CoopChatSession {
       resolved = await resolveTrustedRemoteDependents(this.options.indexBackend, repoId, file, {
         maxPatterns,
         symbols,
+        namedAskSymbols: askSymbols,
         enrichWithSearch: false
       });
     } catch {
@@ -5531,7 +5533,8 @@ export class CoopChatSession {
       Boolean(this.pendingDualRepoCompare) ||
       shouldSkipOpenFileAttach({
         quickAction,
-        context: this.currentContext
+        context: this.currentContext,
+        userFocus: options?.slashUserArgs ?? (quickAction === "knowledge-gaps" ? message : undefined)
       })
         ? undefined
         : this.loadLocalFilesSyncForChat({
@@ -7073,6 +7076,7 @@ export class CoopChatSession {
         quickAction: effectiveQuickAction,
         hasIntegrationProvider: Boolean(integrationProvider),
         allMentionsOutOfScope,
+        userFocus: options?.userFocus,
         context: turnContext
       });
       let localPayload = skipLocalAttach
@@ -8276,6 +8280,7 @@ export class CoopChatSession {
         fallback = await searchDependentsFallback(this.options.indexBackend, repoId, targetFile, {
           maxPatterns,
           symbols,
+          namedAskSymbols: askSymbols,
           remoteOnly: true
         });
       } catch {
@@ -8287,21 +8292,15 @@ export class CoopChatSession {
         const search = await searchDependentsFallback(this.options.indexBackend, repoId, targetFile, {
           maxPatterns,
           symbols,
+          namedAskSymbols: askSymbols,
           remoteOnly: true
         });
         fallback.warnings.push(...search.warnings);
-        if (search.dependents.length > 0 && search.source !== "workspace") {
-          const seen = new Set(fallback.dependents.map((entry) => entry.path));
-          for (const entry of search.dependents) {
-            if (!seen.has(entry.path)) {
-              seen.add(entry.path);
-              fallback.dependents.push({
-                ...entry,
-                source: fallback.source
-              });
-            }
-          }
-        }
+        fallback.dependents = mergeDurableWithNamedSymbolSearch(
+          fallback.dependents,
+          search.source === "workspace" ? [] : search.dependents,
+          askSymbols
+        );
       } catch {
         // Soft gather — durable edges alone are enough.
       }

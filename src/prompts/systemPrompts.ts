@@ -15,6 +15,7 @@ import {
   formatDualRepoCompareForLlm
 } from "../context/dualRepoCompare";
 import { shouldSkipEvidencePath } from "../api/agent/searchQuery";
+import { sutAssertionGrounding } from "../edit/editSutAttach";
 import { extractAgentProposedPatchText as extractAgentProposedPatch } from "../chat/agentProposedPatch";
 
 // Audience assumes professional engineers. If we add non-engineer seats (admin, eval),
@@ -467,7 +468,7 @@ const CODE_EDIT_BODY = `You are CoopAI in edit mode — a code generation assist
 TASK: Produce a patch that does exactly what the user asked, against the current file or highlight. \`/edit\` only names that target — it is not a rewrite, cleanup, or "improve this code" request.
 
 RULES:
-- The user's words are the spec. Implement that ask and nothing else.
+- The user's words are the spec for the change requested. When the open file is a test, attached SUT, existing tests in this file, and a sut_assertions block beat a false numeric claim in those words.
 - Never add drive-by cleanups (private/readonly, extra refactors, signature rewrites) unless they asked.
 - Prefer the smallest change that still completes the request; match surrounding style and conventions.
 - When \`<editor_selection>\` is present, that highlighted block is the patch target. Do **not** pick a different function from the same file.
@@ -477,6 +478,7 @@ RULES:
 - Attach the full file so SEARCH can match; selection marks the target, not a license to rewrite unrelated methods.
 - When the active editor file is in scope but content is missing, say what file content you need — do not guess.
 - When adding tests or calls for a symbol not defined in the open file, copy arity and types from an attached sibling / \`<repo_semantic_files>\` / \`<file_content>\` for that symbol. Always include the import hunk the change needs. Do not invent a string or undefined API from the user's English example.
+- When the open file is a test: assertions must agree with the attached SUT and sibling tests in this file. Encode constants from those attachments. Do not copy an inequality, timeout, or expected value that the SUT or existing tests prove false. If SUT fetch failed, do not invent numbers. Match this file's runner (node:test, pytest, go test, …) — do not switch frameworks or rewrite the suite.
 - Output patches only (see Patch output format); no **Summary** section, no ask-mode response template, and never invent PENDING/OPEN status-transition stories about unrelated files.`;
 
 export const CODE_EDIT_SYSTEM = withPatchOutputContract(CODE_EDIT_BODY);
@@ -636,7 +638,11 @@ type ManifestSnippet = { path: string; content: string; lineRange?: [number, num
 type MentionFileSnippet = ManifestSnippet & { repoId: string };
 
 /** Shared `<local_files>` block with the authoritative-source guardrail — single owner for both user-turn builders. */
-function emitLocalFilesBlock(lines: string[], files: ManifestSnippet[]): void {
+function emitLocalFilesBlock(
+  lines: string[],
+  files: ManifestSnippet[],
+  userMessage?: string
+): void {
   lines.push("<local_files>");
   lines.push("The file_content blocks below are authoritative source code from the user's workspace.");
   lines.push(
@@ -652,6 +658,12 @@ function emitLocalFilesBlock(lines: string[], files: ManifestSnippet[]): void {
     lines.push("</file_content>");
   }
   lines.push("</local_files>");
+  const grounding = sutAssertionGrounding(userMessage ?? "", files);
+  if (grounding) {
+    lines.push("<sut_assertions>");
+    lines.push(grounding);
+    lines.push("</sut_assertions>");
+  }
 }
 
 export function selectionEditDirective(kind: EditAskKind): string {
@@ -775,7 +787,7 @@ export function formatChatMessageWithLocalFiles(options: {
     file: options.file,
     userMessage: options.message
   });
-  emitLocalFilesBlock(lines, options.files);
+  emitLocalFilesBlock(lines, options.files, options.message);
   lines.push("</attached_context>", "", options.message.trim());
   if (isOpenFileReviewAsk(options.message)) {
     lines.push("", OPEN_FILE_PR_REVIEW_DIRECTIVE);
@@ -980,7 +992,7 @@ export function buildUserMessageWithContext(
     lines.push(...formatPackageStructureForLlm(packageStructure));
   }
   if (localSnippets.length > 0 && !dualRepoCompare) {
-    emitLocalFilesBlock(lines, localSnippets);
+    emitLocalFilesBlock(lines, localSnippets, message);
   }
   if (repoSummarySnippets.length > 0 && !dualRepoCompare) {
     lines.push("<repo_entry_files>");

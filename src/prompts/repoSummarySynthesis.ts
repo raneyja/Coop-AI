@@ -75,6 +75,9 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
     lines.push(
       "When the focus asks where something lives, how a flow works, or which files to read first: **Your question** must name those files/symbols from attached `<repo_entry_files>` / focus-search bodies **before** Architecture. Five files to read first = five attached **domain** paths, not README / docker-compose / package.json unless that is the only evidence. Never name a path that is not in those attached files (no invented `models.py`). If the ask has multiple topics, cover each topic that has attached evidence — not five files from one topic. Tests/migrations are not the five unless that is the only attached evidence. Architecture / Key subsystems FAIL if they are only compose service names (web, api, postgres, redis) with no domain path."
     );
+    lines.push(
+      "If the focus asks where **the API** creates, writes, or rejects something: name attached serializer/view/handler/API paths in **Your question**. A frontend modal, store, or widget is not the API — do not call it that. If no API-layer files are attached, say the API path was not in attached evidence; never invent one."
+    );
   } else {
     lines.push(
       "Synthesize a **repository-wide** overview using `<repo_entry_files>`, `<graph_context>`, and manifest metadata in attached context."

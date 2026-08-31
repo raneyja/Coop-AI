@@ -77,3 +77,49 @@ export function mergeSutFile(
   const files = [...payload.files, sut].slice(0, LOCAL_FILE_MAX_FILES);
   return { ...payload, files };
 }
+
+function parseExportedMsConstant(source: string, name: string): number | undefined {
+  const match = source.match(
+    new RegExp(`export\\s+const\\s+${name}\\s*=\\s*([0-9_]+)`)
+  );
+  if (!match?.[1]) {
+    return undefined;
+  }
+  const value = Number(match[1].replace(/_/g, ""));
+  return Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * When /edit asks to assert remainingContextGatherBudgetMs after N seconds,
+ * encode the attached SUT — do not copy “greater than zero” if gather is 0.
+ */
+export function sutAssertionGrounding(
+  ask: string,
+  files: Array<{ path?: string; content?: string }>
+): string | undefined {
+  if (!/\bremainingContextGatherBudgetMs\b/.test(ask)) {
+    return undefined;
+  }
+  const seconds = ask.match(/(\d+)\s*seconds?\s+after\s+start/i);
+  if (!seconds?.[1]) {
+    return undefined;
+  }
+  const elapsedMs = Number(seconds[1]) * 1000;
+  const sutBody = files
+    .filter((file) => file.path && !isTestSourcePath(file.path) && file.content)
+    .map((file) => file.content ?? "")
+    .join("\n");
+  if (!sutBody.includes("remainingContextGatherBudgetMs")) {
+    return undefined;
+  }
+  const maxMs = parseExportedMsConstant(sutBody, "MAX_USER_FACING_RESPONSE_MS");
+  const reserveMs = parseExportedMsConstant(sutBody, "RESERVED_SYNTHESIS_MS");
+  if (maxMs === undefined || reserveMs === undefined) {
+    return undefined;
+  }
+  const gather = Math.max(0, maxMs - elapsedMs - reserveMs);
+  return [
+    `Attached SUT: remainingContextGatherBudgetMs at elapsed ${elapsedMs}ms returns ${gather} (MAX_USER_FACING_RESPONSE_MS=${maxMs} minus RESERVED_SYNTHESIS_MS=${reserveMs}).`,
+    `Assert that number. If it is 0, do not copy “greater than zero” from the user ask.`
+  ].join(" ");
+}

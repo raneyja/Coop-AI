@@ -216,14 +216,29 @@ export function mapSearchSourceToGraphSource(source: LocalSearchResult["source"]
   return "heuristic";
 }
 
+function identifierMentionedInContent(content: string, symbol: string): boolean {
+  if (symbol.length < 3) {
+    return false;
+  }
+  const escaped = symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\b${escaped}\\b`).test(content);
+}
+
 /** When hit content is real line text, require the module stem, path suffix, or symbol. */
 export function hitLooksLikeReferenceToTarget(
   hit: { fileName: string; content?: string },
   file: string,
-  symbols: string[] = []
+  symbols: string[] = [],
+  namedAskSymbols: string[] = []
 ): boolean {
   const content = (hit.content ?? "").trim();
   const pathOnly = !content || content === hit.fileName || content === normalizeHitPath(hit.fileName);
+  if (namedAskSymbols.length > 0) {
+    if (pathOnly) {
+      return false;
+    }
+    return namedAskSymbols.some((symbol) => identifierMentionedInContent(content, symbol));
+  }
   if (pathOnly) {
     // Remote graphSearch often returns path-only rows; trust zoekt/scip source filter only.
     return true;
@@ -244,13 +259,8 @@ export function hitLooksLikeReferenceToTarget(
   return symbols.some((symbol) => symbol.length >= 3 && content.includes(symbol));
 }
 
-/** PascalCase / CamelCase symbols from the blast ask (e.g. StateGroup, DocumentStatus). */
-export function extractBlastSearchSymbols(ask: string | undefined, file?: string): string[] {
-  if (isGenericBlastImpactAsk(ask)) {
-    return [];
-  }
-  const symbols = new Set<string>();
-  const stop = new Set([
+const BLAST_ASK_STOP = new Set(
+  [
     "What",
     "When",
     "Where",
@@ -298,24 +308,77 @@ export function extractBlastSearchSymbols(ask: string | undefined, file?: string
     "Dependents",
     "Caller",
     "Callers"
-  ]);
-  const text = ask?.trim() ?? "";
-  for (const match of text.matchAll(/\b([A-Z][a-zA-Z0-9]{2,})\b/g)) {
-    const token = match[1];
-    if (!stop.has(token)) {
-      symbols.add(token);
-    }
+  ].map((word) => word.toLowerCase())
+);
+
+/** PascalCase, camelCase, and snake_case from the blast ask (requireAuth, StateGroup). */
+export function extractBlastSearchSymbols(ask: string | undefined, file?: string): string[] {
+  if (isGenericBlastImpactAsk(ask)) {
+    return [];
   }
-  // Prefer class-like names ending in Group/Status/Type/Enum.
+  const symbols = new Set<string>();
+  const text = ask?.trim() ?? "";
+  const consider = (token: string | undefined): void => {
+    if (!token || token.length < 3 || BLAST_ASK_STOP.has(token.toLowerCase())) {
+      return;
+    }
+    symbols.add(token);
+  };
+  for (const match of text.matchAll(/\b([A-Z][a-zA-Z0-9]{2,})\b/g)) {
+    consider(match[1]);
+  }
+  for (const match of text.matchAll(/\b([a-z][a-zA-Z]*[A-Z][a-zA-Z0-9]*)\b/g)) {
+    consider(match[1]);
+  }
+  for (const match of text.matchAll(/\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/g)) {
+    consider(match[1]);
+  }
   const ranked = [...symbols].sort((a, b) => {
     const score = (s: string) =>
-      /(Group|Status|Type|Enum|Kind|Mode)$/.test(s) ? 0 : 1;
+      /(Group|Status|Type|Enum|Kind|Mode)$/.test(s) ? 0 : /[a-z][A-Z]/.test(s) || /_/.test(s) ? 0 : 1;
     return score(a) - score(b) || b.length - a.length;
   });
   if (file?.endsWith(".py") && ranked.length === 0) {
     // Fall back to TitleCase stem for Python models (state → State is weak; skip).
   }
   return ranked.slice(0, 6);
+}
+
+/**
+ * File-level import graph lists every importer of the module. When the ask names
+ * a function, keep only paths that a named-symbol search actually hit.
+ * Empty symbol search must not fail-open to every importer (sibling exports).
+ */
+export function mergeDurableWithNamedSymbolSearch(
+  durable: BlastRadiusDependentDetail[],
+  namedHits: BlastRadiusDependentDetail[],
+  namedAskSymbols: string[]
+): BlastRadiusDependentDetail[] {
+  if (namedAskSymbols.length === 0) {
+    const seen = new Set(durable.map((entry) => entry.path));
+    const out = [...durable];
+    for (const entry of namedHits) {
+      if (!seen.has(entry.path)) {
+        seen.add(entry.path);
+        out.push(entry);
+      }
+    }
+    return sortDependentsProductionFirst(out).slice(0, 30);
+  }
+  if (namedHits.length === 0) {
+    return [];
+  }
+  const named = new Set(namedHits.map((entry) => entry.path));
+  const filtered = durable.filter((entry) => named.has(entry.path));
+  const seen = new Set(filtered.map((entry) => entry.path));
+  const out = [...filtered];
+  for (const entry of namedHits) {
+    if (!seen.has(entry.path)) {
+      seen.add(entry.path);
+      out.push(entry);
+    }
+  }
+  return sortDependentsProductionFirst(out).slice(0, 30);
 }
 
 export type SearchDependentsFallbackOptions = {
@@ -334,6 +397,11 @@ export type SearchDependentsFallbackOptions = {
    * a downloaded folder. Set false only for explicit offline tooling/tests.
    */
   remoteOnly?: boolean;
+  /**
+   * Identifiers the user named in the blast ask. Hits must mention one —
+   * importing the file for a different export is not a caller.
+   */
+  namedAskSymbols?: string[];
 };
 
 /** High-signal substrings for a single local filesystem walk. */
@@ -366,7 +434,7 @@ export function buildLocalCallerNeedles(file: string, symbols: string[] = []): s
 export function searchDependentsInLocalRoots(
   roots: string[],
   file: string,
-  options: { symbols?: string[]; maxHits?: number } = {}
+  options: { symbols?: string[]; namedAskSymbols?: string[]; maxHits?: number } = {}
 ): { dependents: BlastRadiusDependentDetail[]; source: GraphEdgeSource; warnings: string[] } {
   const warnings: string[] = [];
   const needles = buildLocalCallerNeedles(file, options.symbols ?? []);
@@ -408,7 +476,8 @@ export function searchDependentsInLocalRoots(
           !hitLooksLikeReferenceToTarget(
             { fileName: depPath, content: line },
             file,
-            options.symbols ?? []
+            options.symbols ?? [],
+            options.namedAskSymbols ?? []
           )
         ) {
           continue;
@@ -451,12 +520,14 @@ export async function resolveTrustedRemoteDependents(
   options: {
     maxPatterns?: number;
     symbols?: string[];
+    namedAskSymbols?: string[];
     /** When false, skip Zoekt/SCIP search if durable API already returned trusted hits. */
     enrichWithSearch?: boolean;
   } = {}
 ): Promise<{ dependents: BlastRadiusDependentDetail[]; source: GraphEdgeSource; warnings: string[] }> {
   const warnings: string[] = [];
   const normalizedRepoId = normalizeGraphRepoId(repoId);
+  const namedAskSymbols = options.namedAskSymbols ?? [];
   let fallback: {
     dependents: BlastRadiusDependentDetail[];
     source: GraphEdgeSource;
@@ -483,7 +554,9 @@ export async function resolveTrustedRemoteDependents(
   }
 
   const shouldSearch =
-    fallback.dependents.length === 0 || options.enrichWithSearch === true;
+    fallback.dependents.length === 0 ||
+    options.enrichWithSearch === true ||
+    namedAskSymbols.length > 0;
   if (!shouldSearch) {
     return fallback;
   }
@@ -492,6 +565,7 @@ export async function resolveTrustedRemoteDependents(
     const search = await searchDependentsFallback(indexBackend, normalizedRepoId, file, {
       maxPatterns: options.maxPatterns,
       symbols: options.symbols,
+      namedAskSymbols,
       remoteOnly: true
     });
     warnings.push(...fallback.warnings, ...search.warnings);
@@ -502,20 +576,11 @@ export async function resolveTrustedRemoteDependents(
         warnings: [...new Set(warnings)]
       };
     }
-    if (search.dependents.length > 0 && search.source !== "workspace") {
-      const seen = new Set(fallback.dependents.map((entry) => entry.path));
-      for (const entry of search.dependents) {
-        if (!seen.has(entry.path)) {
-          seen.add(entry.path);
-          fallback.dependents.push({
-            ...entry,
-            // Keep durable provenance on the bundle source; per-path may be zoekt.
-            source: entry.source
-          });
-        }
-      }
-      fallback.dependents = sortDependentsProductionFirst(fallback.dependents).slice(0, 30);
-    }
+    fallback.dependents = mergeDurableWithNamedSymbolSearch(
+      fallback.dependents,
+      search.source === "workspace" ? [] : search.dependents,
+      namedAskSymbols
+    );
     return { ...fallback, warnings: [...new Set(warnings)] };
   } catch {
     return { ...fallback, warnings: [...new Set([...fallback.warnings, ...warnings])] };
@@ -578,14 +643,25 @@ export async function searchDependentsFallback(
     enabled = false;
   }
 
-  const patterns = buildImportSearchPatterns(file, symbols);
-  // Prefer import-path patterns first; symbol patterns second (enums/classes).
-  // Never let bare English tokens from the ask crowd out real import queries.
+  const patternSymbols =
+    options.namedAskSymbols && options.namedAskSymbols.length > 0
+      ? options.namedAskSymbols
+      : symbols;
+  const patterns = buildImportSearchPatterns(file, patternSymbols);
+  // Named-function blast: search the identifier, not path suffixes (those
+  // match files that only import a sibling export).
   const importPatterns = patterns.filter(
-    (pattern) => !symbols.some((symbol) => pattern === symbol || pattern.startsWith(`${symbol}.`) || pattern.startsWith(`${symbol}(`))
+    (pattern) =>
+      !patternSymbols.some(
+        (symbol) =>
+          pattern === symbol || pattern.startsWith(`${symbol}.`) || pattern.startsWith(`${symbol}(`)
+      )
   );
   const symbolPatterns = patterns.filter((pattern) => !importPatterns.includes(pattern));
-  const ordered = [...symbolPatterns, ...importPatterns];
+  const ordered =
+    options.namedAskSymbols && options.namedAskSymbols.length > 0 && symbolPatterns.length > 0
+      ? symbolPatterns
+      : [...symbolPatterns, ...importPatterns];
   const maxPatterns = Math.max(1, Math.min(options.maxPatterns ?? 10, ordered.length));
   const seen = new Set<string>([file]);
   const dependents: BlastRadiusDependentDetail[] = [];
@@ -618,7 +694,7 @@ export async function searchDependentsFallback(
           if (!depPath || seen.has(depPath) || depPath === file) {
             continue;
           }
-          if (!hitLooksLikeReferenceToTarget(hit, file, symbols)) {
+          if (!hitLooksLikeReferenceToTarget(hit, file, symbols, options.namedAskSymbols ?? [])) {
             continue;
           }
           const hitGraphSource = mapSearchSourceToGraphSource(hit.source ?? resultSource);
@@ -640,6 +716,7 @@ export async function searchDependentsFallback(
   if (dependents.length === 0 && localRoots.length > 0) {
     const local = searchDependentsInLocalRoots(localRoots, file, {
       symbols,
+      namedAskSymbols: options.namedAskSymbols,
       maxHits: 30
     });
     warnings.push(...local.warnings);

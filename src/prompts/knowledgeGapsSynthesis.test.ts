@@ -168,6 +168,35 @@ test("knowledge-gaps with focus excerpts audits attached code instead of claimin
   assert.ok(prompt.includes("Do not claim the code is missing"));
 });
 
+test("hunt/locate risk prompt names evidence-class gaps not runbook-only", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({
+    evidence: {
+      file: "src/config/responseDeadline.ts",
+      userFocus:
+        "What's still unsafe about default-on hunt for on-call API-error locates?",
+      focusFiles: [
+        {
+          path: "src/api/agent/searchQuery.ts",
+          content: "export function isApiRejectAsk() { return true; }"
+        }
+      ],
+      jobScan: {
+        gaps: [
+          {
+            type: "wrong_file_evidence",
+            message: "Hunt ranking can attach the wrong file"
+          }
+        ]
+      }
+    },
+    file: "src/config/responseDeadline.ts",
+    userFocus: "What's still unsafe about default-on hunt for on-call API-error locates?"
+  });
+  assert.ok(prompt.includes("wrong-file ranking"));
+  assert.ok(prompt.includes("canned miss"));
+  assert.ok(prompt.includes("docs/runbook may be thin"));
+});
+
 console.log(`\nknowledgeGapsSynthesis: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);

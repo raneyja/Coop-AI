@@ -207,6 +207,7 @@ async function run(): Promise<void> {
     assert.ok(prompt.includes("cover each topic that has attached evidence"));
     assert.ok(prompt.includes("Tests/migrations are not the five"));
     assert.ok(prompt.includes("compose service names"));
+    assert.ok(prompt.includes("A frontend modal, store, or widget is not the API"));
     assert.ok(prompt.includes("## Section quality gates (strict pass / fail)"));
     assert.ok(prompt.includes("### Focus-search evidence"));
     assert.ok(prompt.includes("apps/api/issue/views.py"));

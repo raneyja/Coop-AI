@@ -194,6 +194,9 @@ test("code_edit use case uses patch output contract without Summary template", (
   assert.ok(prompt.includes("a request to rewrite"));
   assert.ok(prompt.includes("exact copy of the entire"));
   assert.ok(prompt.includes("PENDING/OPEN"));
+  assert.ok(prompt.includes("assertions must agree with the attached SUT"));
+  assert.ok(prompt.includes("sibling tests in this file"));
+  assert.ok(prompt.includes("sut_assertions"));
   assert.equal(prompt.includes("Uniform response template"), false);
   assert.equal(prompt.includes("1. **Summary** or **Answer**"), false);
   assert.equal(prompt.includes("Selection or focus hints mark where to start looking"), false);

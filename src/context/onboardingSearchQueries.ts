@@ -12,13 +12,14 @@ export const MAX_TOPIC_SEARCH_QUERIES = 3;
 
 const NEWCOMER_PREFIX =
   /\bi'?m new to this (service|repo|repository|codebase|app|application)\b[^.?!]*[.?!]?\s*/gi;
+const ON_CALL_PREFIX = /\bi'?m on-call for(?:\s+this service)?\b[^.?!]*[.?!]?\s*/gi;
 const NOT_CLONED = /\bi don'?t have (it|this) cloned\b[^.?!]*[.?!]?\s*/gi;
 const WITHOUT_CLONING = /\bwithout cloning\b[^.?!]*[.?!]?\s*/gi;
 const THIS_SERVICE = /\bthis service\b/gi;
 const FILES_TO_READ =
   /,?\s*(?:and\s+)?what are the \d+ files?(?: I should read first| to read first)?\??/gi;
 const WEAK_QUERY =
-  /^(this service|the service|focus|what|which|how|where|why|service|the repo|the repository)$/i;
+  /^(this service|the service|focus|what|which|how|where|why|service|the repo|the repository|i'?m on-call for|on-call for)$/i;
 
 /**
  * True when an index query is framing noise (hunt shortening of onboarding/Gaps asks).
@@ -38,6 +39,7 @@ export function isWeakIndexQuery(query: string): boolean {
 function stripOnboardingFiller(text: string): string {
   return text
     .replace(NEWCOMER_PREFIX, " ")
+    .replace(ON_CALL_PREFIX, " ")
     .replace(NOT_CLONED, " ")
     .replace(WITHOUT_CLONING, " ")
     .replace(THIS_SERVICE, " ")
@@ -101,6 +103,16 @@ function expandOnboardingTopic(topic: string): string[] {
   }
   if (/\bstates\b/.test(lower) && !/\bstate\b/.test(lower)) {
     extra.push("state");
+  }
+  if (
+    /\bapi\b/.test(lower) &&
+    /\b(create|creates|creating|write|writes|reject|rejects|invalid)\b/.test(lower)
+  ) {
+    extra.push("serializer");
+    extra.push("views");
+    if (/\bissues?\b/.test(lower)) {
+      extra.push("issue");
+    }
   }
   return extra;
 }
@@ -183,7 +195,7 @@ function queryTopicTokens(query: string): string[] {
   const out: string[] = [];
   for (const raw of query.toLowerCase().split(/\s+/)) {
     const token = raw.replace(/[^a-z0-9]+/g, "");
-    if (token.length < 4 || seen.has(token)) {
+    if ((token.length < 4 && !/^(api|db|ui)$/.test(token)) || seen.has(token)) {
       continue;
     }
     seen.add(token);
@@ -287,16 +299,38 @@ export function onboardingPathScore(path: string, query: string): number {
   }
   if (/(^|\/)(middleware|models|db)\//.test(n)) {
     score += 30;
-  } else if (/(^|\/)(views|serializers|handlers|controllers)\//.test(n)) {
+  } else if (/(^|\/)(views|serializers|handlers|controllers|viewsets)\//.test(n)) {
     score += 10;
+  }
+  if (/\bapi\b/.test(q) && /(^|\/)(api|serializers?|views|handlers|controllers|viewsets)\//.test(n)) {
+    score += 50;
   }
   if (/(^|\/)components\//.test(n)) {
     score -= 20;
+  }
+  if (/\bapi\b/.test(q) && /(^|\/)(components|hooks|store|modal|widgets)\//.test(n)) {
+    score -= 40;
+  }
+  if (/\bapi\b/.test(q) && /(^|\/)apps\/web\//.test(n)) {
+    score -= 30;
   }
   if (/openapi|swagger/.test(n) && !/openapi|swagger/.test(q)) {
     score -= 50;
   }
   return score;
+}
+
+/**
+ * Same basename in the same layer (two middleware copies) collapses.
+ * Same basename in different layers (serializers/issue.py vs views/issue.py) does not.
+ */
+function onboardingLayerDedupeKey(path: string): string {
+  const n = normalizeOnboardingPath(path);
+  const base = pathBasename(n);
+  const layer = n.match(
+    /(^|\/)(serializers?|views|handlers|controllers|viewsets|models|middleware|components|hooks|store|widgets|db)(\/|$)/
+  );
+  return `${layer?.[2] ?? "other"}:${base}`;
 }
 
 function compareOnboardingPaths(a: string, b: string, query: string): number {
@@ -338,17 +372,15 @@ export function selectOnboardingEvidencePaths(paths: string[], query: string, ma
     return unique.slice(0, max);
   }
 
-  const byBasename = new Map<string, (typeof domain)[number]>();
+  const byLayer = new Map<string, (typeof domain)[number]>();
   for (const entry of domain) {
-    const base = pathBasename(entry.path);
-    const existing = byBasename.get(base);
-    if (!existing || entry.score > existing.score) {
-      byBasename.set(base, entry);
+    const key = onboardingLayerDedupeKey(entry.path);
+    const existing = byLayer.get(key);
+    if (!existing || compareOnboardingPaths(entry.path, existing.path, query) < 0) {
+      byLayer.set(key, entry);
     }
   }
-  const deduped = [...byBasename.values()].sort((a, b) =>
-    compareOnboardingPaths(a.path, b.path, query)
-  );
+  const deduped = [...byLayer.values()].sort((a, b) => compareOnboardingPaths(a.path, b.path, query));
 
   const topics = queryTopicTokens(query);
   if (topics.length < 2) {
@@ -432,10 +464,25 @@ export function rankOnboardingEntryFiles<T extends { path: string }>(
   return out;
 }
 
+function isFrontendOnboardingPath(path: string): boolean {
+  const n = normalizeOnboardingPath(path);
+  return /(^|\/)(components|hooks|store|modal|widgets)(\/|$)/.test(n) || /(^|\/)apps\/web\//.test(n);
+}
+
+function isApiLayerOnboardingPath(path: string): boolean {
+  const n = normalizeOnboardingPath(path);
+  return /(^|\/)(api|serializers?|views|handlers|controllers|viewsets)(\/|$)/.test(n);
+}
+
+function askWantsApiLayer(topicQueries: string[]): boolean {
+  return topicQueries.some((topic) => /\bapi\b/i.test(topic));
+}
+
 /**
  * Topics the index hit but we did not attach a filename/type identity.
  * Folder hits (issue/archive.py) and hyphen compounds do not cover.
  * Fail-open: a topic with zero stem/snake hits is not uncovered (cannot invent files).
+ * Exception: when the user asked the API and we only attached frontend, retry API hits.
  */
 export function uncoveredOnboardingTopics(options: {
   topicQueries: string[];
@@ -445,13 +492,25 @@ export function uncoveredOnboardingTopics(options: {
   const rankQuery = options.topicQueries.join(" ");
   const hits = options.hitPaths.filter((path) => !isOnboardingNoisePath(path, rankQuery));
   const attached = options.attachedPaths.filter((path) => !isOnboardingNoisePath(path, rankQuery));
-  return options.topicQueries.filter((topic) => {
+  const fromIdentity = options.topicQueries.filter((topic) => {
     const hasHit = hits.some((path) => pathCoversOnboardingTopic(path, topic));
     if (!hasHit) {
       return false;
     }
     return !attached.some((path) => pathCoversOnboardingTopic(path, topic));
   });
+  if (fromIdentity.length > 0) {
+    return fromIdentity;
+  }
+  if (
+    askWantsApiLayer(options.topicQueries) &&
+    attached.length > 0 &&
+    attached.every((path) => isFrontendOnboardingPath(path)) &&
+    hits.some((path) => isApiLayerOnboardingPath(path))
+  ) {
+    return options.topicQueries;
+  }
+  return [];
 }
 
 export function onboardingTopicsCovered(options: {

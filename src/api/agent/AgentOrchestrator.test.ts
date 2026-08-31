@@ -5,7 +5,7 @@ import * as path from "node:path";
 import type { IndexBackend } from "../../indexing/indexBackend";
 import type { LocalSearchResult } from "../../indexing/types";
 import { createAgentOrchestrator, pickTopSearchHit } from "./AgentOrchestrator";
-import { COPILOT_C1_ASK, COPILOT_C2_ASK } from "./dogfoodContract";
+import { COPILOT_C1_ASK, COPILOT_C2_ASK, COPILOT_T2_ASK } from "./dogfoodContract";
 
 let passed = 0;
 let failed = 0;
@@ -1483,6 +1483,92 @@ async function run(): Promise<void> {
     );
     assert.equal(streamed, 0);
     assert.match(result.answer ?? "", /will not guess a path/i);
+  });
+
+  await test("T2 hunt attaches parent ValidationError, not converters", async () => {
+    const writerPath = "apps/api/plane/app/serializers/issue.py";
+    const writer = [
+      "class IssueSerializer:",
+      "    def validate(self, data):",
+      '        if data.get("parent"):',
+      '            raise serializers.ValidationError("Parent is not valid issue_id")'
+    ].join("\n");
+    const converter = [
+      "class FilterConverter:",
+      "    def _validate_value(self, rich_field_name, value):",
+      '        raise ValidationError("Invalid filter value")'
+    ].join("\n");
+    const searches: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async (_repo, query) => {
+          searches.push(query);
+          if (/parent is not valid/i.test(query) || /invalid parent/i.test(query)) {
+            return {
+              source: "zoekt",
+              stale: false,
+              hits: [
+                {
+                  fileName: writerPath,
+                  lineNumber: 4,
+                  content:
+                    'raise serializers.ValidationError("Parent is not valid issue_id")',
+                  score: 0.9
+                }
+              ],
+              symbols: []
+            };
+          }
+          return {
+            source: "zoekt",
+            stale: false,
+            hits: [
+              {
+                fileName: "apps/api/plane/utils/filters/converters.py",
+                lineNumber: 184,
+                content: "def _validate_value(self, rich_field_name: str, value: Any) -> bool:",
+                score: 0.99
+              }
+            ],
+            symbols: []
+          };
+        }
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        if (rel === writerPath) {
+          return { path: rel, content: writer };
+        }
+        if (/converters\.py$/.test(rel)) {
+          return { path: rel, content: converter };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_T2_ASK,
+        repoId: "github:coop-ai/plane",
+        action: "locate",
+        maxSteps: 4
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async () =>
+          "IssueSerializer.validate rejects a parent that is not a valid issue_id."
+      }
+    );
+    assert.equal(
+      searches.some((q) => /parent is not valid/i.test(q)),
+      true,
+      `T2 must search parent is not valid, got ${searches.join(", ")}`
+    );
+    const attached =
+      (result.context?.read_file as { files?: Array<{ content: string }> } | undefined)?.files
+        ?.map((file) => file.content)
+        .join("\n") ?? "";
+    assert.match(attached, /Parent is not valid issue_id/);
+    assert.doesNotMatch(result.answer ?? "", /will not guess a path/i);
   });
 
   console.log(`\nAgentOrchestrator: ${passed}/${passed + failed} tests passed`);

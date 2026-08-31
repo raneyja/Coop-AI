@@ -7,6 +7,7 @@ import {
   namedCalleeForEditAsk,
   siblingImplementationPath,
   snippetDefinesSymbol,
+  sutAssertionGrounding,
   sutPathForEditAsk
 } from "./editSutAttach";
 
@@ -98,6 +99,32 @@ test("C5 edit prompt includes the real signature and import contract", () => {
   const editSystem = systemPromptForUseCase("code_edit");
   assert.match(editSystem, /copy arity and types/i);
   assert.match(editSystem, /import hunk/i);
+});
+
+test("T8 /edit encodes gather=0 at 10s from the attached SUT, not greater than zero", () => {
+  const sut = [
+    "export const MAX_USER_FACING_RESPONSE_MS = 15_000;",
+    "export const RESERVED_SYNTHESIS_MS = 6_000;",
+    "export function remainingContextGatherBudgetMs(startedAt: number, now = Date.now(), maxMs = MAX_USER_FACING_RESPONSE_MS, reserveSynthesisMs = RESERVED_SYNTHESIS_MS) {",
+    "  return Math.max(0, maxMs - (now - startedAt) - reserveSynthesisMs);",
+    "}"
+  ].join("\n");
+  const ask =
+    "/edit Add one test to src/config/responseDeadline.test.ts: remainingContextGatherBudgetMs 10 seconds after start is still greater than zero. Match this file’s node:test style. Do not rewrite the existing suite.";
+  const files = [
+    { path: "src/config/responseDeadline.test.ts", content: "import { remainingContextGatherBudgetMs } from \"./responseDeadline\";\n" },
+    { path: "src/config/responseDeadline.ts", content: sut }
+  ];
+  const grounding = sutAssertionGrounding(ask, files);
+  assert.match(grounding ?? "", /returns 0/);
+  assert.match(grounding ?? "", /do not copy “greater than zero”/i);
+  const prompt = formatChatMessageWithLocalFiles({
+    message: ask,
+    file: "src/config/responseDeadline.test.ts",
+    files
+  });
+  assert.match(prompt, /<sut_assertions>/);
+  assert.match(prompt, /returns 0/);
 });
 
 console.log(`\neditSutAttach: ${passed}/${passed + failed} tests passed`);

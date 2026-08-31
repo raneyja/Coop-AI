@@ -13,6 +13,7 @@ import {
   isGenericBlastImpactAsk,
   isVerifiedCallerSearchSource,
   mergeDurableDependentsIntoContextData,
+  mergeDurableWithNamedSymbolSearch,
   mergeSearchDependentsFallbackIntoDependenciesData,
   rankCodeDependentsByRisk,
   resolveTrustedRemoteDependents,
@@ -219,6 +220,88 @@ test("extractBlastSearchSymbols skips default blast ask (no Estimate noise)", ()
   assert.deepEqual(
     extractBlastSearchSymbols("Estimate the impact of changing this code.", "src/config/responseDeadline.ts"),
     []
+  );
+});
+
+test("extractBlastSearchSymbols takes camelCase and snake_case from the ask", () => {
+  assert.ok(
+    extractBlastSearchSymbols(
+      "If we change requireAuth so unauthenticated requests always 401, what else breaks?",
+      "src/server/authMiddleware.ts"
+    ).includes("requireAuth")
+  );
+  assert.ok(
+    extractBlastSearchSymbols(
+      "What breaks if we change extractBearerToken?",
+      "src/server/authMiddleware.ts"
+    ).includes("extractBearerToken")
+  );
+  assert.ok(
+    extractBlastSearchSymbols(
+      "If we change require_install_admin, which call sites break?",
+      "src/server/authMiddleware.ts"
+    ).includes("require_install_admin")
+  );
+});
+
+test("named-symbol blast drops file importers that only use a sibling export", () => {
+  const fileImporters: BlastRadiusDependentDetail[] = [
+    { path: "src/jobs/jobsApi.ts", depth: 1, source: "import-parse" },
+    { path: "src/server/adminOrgApi.ts", depth: 1, source: "import-parse" },
+    { path: "src/server/atlassianAppApi.ts", depth: 1, source: "import-parse" }
+  ];
+  const requireAuthHits: BlastRadiusDependentDetail[] = [
+    { path: "src/jobs/jobsApi.ts", depth: 1, source: "zoekt" },
+    { path: "src/server/samlAuth.ts", depth: 1, source: "zoekt" }
+  ];
+  const authCallers = mergeDurableWithNamedSymbolSearch(fileImporters, requireAuthHits, [
+    "requireAuth"
+  ]);
+  assert.ok(authCallers.some((entry) => entry.path === "src/jobs/jobsApi.ts"));
+  assert.ok(authCallers.some((entry) => entry.path === "src/server/samlAuth.ts"));
+  assert.ok(!authCallers.some((entry) => entry.path === "src/server/adminOrgApi.ts"));
+  assert.ok(!authCallers.some((entry) => entry.path === "src/server/atlassianAppApi.ts"));
+
+  const emptyHits = mergeDurableWithNamedSymbolSearch(fileImporters, [], ["requireAuth"]);
+  assert.equal(emptyHits.length, 0);
+
+  const installHits: BlastRadiusDependentDetail[] = [
+    { path: "src/server/adminOrgApi.ts", depth: 1, source: "zoekt" }
+  ];
+  const installCallers = mergeDurableWithNamedSymbolSearch(fileImporters, installHits, [
+    "requireInstallAdmin"
+  ]);
+  assert.ok(installCallers.some((entry) => entry.path === "src/server/adminOrgApi.ts"));
+  assert.ok(!installCallers.some((entry) => entry.path === "src/jobs/jobsApi.ts"));
+});
+
+test("named-symbol hits require the identifier, not a path-only file import", () => {
+  assert.equal(
+    hitLooksLikeReferenceToTarget(
+      { fileName: "src/server/adminOrgApi.ts", content: `import { requireInstallAdmin } from "./authMiddleware";` },
+      "src/server/authMiddleware.ts",
+      ["requireAuth"],
+      ["requireAuth"]
+    ),
+    false
+  );
+  assert.equal(
+    hitLooksLikeReferenceToTarget(
+      { fileName: "src/jobs/jobsApi.ts", content: `router.use(requireAuth);` },
+      "src/server/authMiddleware.ts",
+      ["requireAuth"],
+      ["requireAuth"]
+    ),
+    true
+  );
+  assert.equal(
+    hitLooksLikeReferenceToTarget(
+      { fileName: "src/server/adminOrgApi.ts", content: "src/server/adminOrgApi.ts" },
+      "src/server/authMiddleware.ts",
+      ["requireAuth"],
+      ["requireAuth"]
+    ),
+    false
   );
 });
 

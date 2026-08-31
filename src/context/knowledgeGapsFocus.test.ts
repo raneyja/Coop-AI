@@ -340,7 +340,8 @@ test("E6 ask keeps Slack/Jira as one topic and drops the safety question", () =>
 });
 
 test("E6 index queries are not hunt-shortened to Focus", () => {
-  assert.equal(indexQueryForRetrieval(E6_ASK), "Focus");
+  const hunt = indexQueryForRetrieval(E6_ASK);
+  assert.ok(hunt.length > 0 && hunt.length < E6_ASK.length, `hunt=${hunt}`);
   const queries = knowledgeGapsIndexQueries(E6_ASK);
   assert.ok(queries.length >= 2, `queries=${JSON.stringify(queries)}`);
   assert.ok(queries.every((q) => q.toLowerCase() !== "focus"));
@@ -365,6 +366,38 @@ test("E6 stubs stay silent on no-indexed-code when AgentOrchestrator and slack p
   });
   assert.ok(!stubs.some((gap) => String(gap.message).includes("No indexed code")));
   assert.ok(!stubs.some((gap) => gap.type === "focus_search_miss"));
+});
+
+const T14_ASK = "What's still unsafe about default-on hunt for on-call API-error locates?";
+
+test("hunt/locate risk index queries attach hunt files not Focus", () => {
+  const queries = knowledgeGapsIndexQueries(T14_ASK);
+  assert.ok(queries.every((q) => q.toLowerCase() !== "focus"));
+  assert.ok(
+    queries.some((q) => /searchQuery|AgentOrchestrator|hunt|locate/i.test(q)),
+    `queries=${JSON.stringify(queries)}`
+  );
+});
+
+test("hunt/locate risk stubs name evidence-class gaps not runbook-only", () => {
+  const stubs = knowledgeGapsFocusTopicGapStubs({
+    userFocus: T14_ASK,
+    focusHitPaths: ["src/api/agent/searchQuery.ts", "src/api/agent/AgentOrchestrator.ts"]
+  });
+  assert.ok(stubs.some((gap) => gap.type === "wrong_file_evidence"));
+  assert.ok(stubs.some((gap) => gap.type === "canned_miss"));
+  assert.ok(stubs.some((gap) => gap.type === "ui_for_api"));
+  assert.ok(!stubs.some((gap) => String(gap.message).includes("Docs/runbook may be thin")));
+});
+
+test("unrelated chip is secondary for hunt/locate Gaps focus", () => {
+  const scope = resolveKnowledgeGapsAuditScope({
+    file: "src/config/responseDeadline.ts",
+    userFocus: T14_ASK
+  });
+  assert.equal(scope.focusPrimary, true);
+  assert.equal(scope.relatedOpenFile, undefined);
+  assert.equal(scope.secondaryUnrelatedFile, "src/config/responseDeadline.ts");
 });
 
 const total = passed + failed;

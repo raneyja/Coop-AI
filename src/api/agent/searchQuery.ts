@@ -178,8 +178,17 @@ export function extractAgentSearchQuery(userMessage: string): string {
     return trimmed;
   }
 
+  // On-call API reject: search the field's ValidationError, not `issue_id`
+  // (that query floods converters / OpenAPI and never opens the serializer).
+  if (isApiRejectAsk(trimmed)) {
+    const rejectQuery = apiRejectSearchQueries(trimmed)[0];
+    if (rejectQuery) {
+      return clip(rejectQuery);
+    }
+  }
+
   const identifier = firstIdentifier(trimmed);
-  if (identifier) {
+  if (identifier && !(isApiRejectAsk(trimmed) && isApiFieldIdToken(identifier))) {
     return clip(identifier);
   }
 
@@ -332,6 +341,11 @@ export function fallbackAgentSearchQueries(userMessage: string): string[] {
     const base = file.split("/").pop();
     if (base && base !== file) {
       push(base);
+    }
+  }
+  if (isApiRejectAsk(userMessage)) {
+    for (const rejectQuery of apiRejectSearchQueries(userMessage)) {
+      push(rejectQuery);
     }
   }
   push(primary);
@@ -594,6 +608,15 @@ export function queryNamesSourceFile(fileName: string, userMessage: string): boo
   });
 }
 
+/** API payload field (`issue_id`, `parent_id`) — not a function to ground a hunt. */
+export function isApiFieldIdToken(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed.length < 4) {
+    return false;
+  }
+  return /_id$/i.test(trimmed) || /[a-z]Id$/.test(trimmed);
+}
+
 /** Normalized keys for the symbol the user named + casing aliases. */
 export function namedSymbolKeys(userMessage: string): string[] {
   const primary = extractAgentSearchQuery(userMessage);
@@ -602,6 +625,10 @@ export function namedSymbolKeys(userMessage: string): string[] {
   }
   // "Find authMiddleware.ts" names a file, not a required in-body symbol.
   if (isStemOfNamedSourceFile(primary, userMessage)) {
+    return [];
+  }
+  // On-call API reject: issue_id is the field, not a C1-style symbol latch.
+  if (isApiRejectAsk(userMessage) && isApiFieldIdToken(primary)) {
     return [];
   }
   const keys = new Set<string>([normalizeSymbol(primary)]);
@@ -728,7 +755,85 @@ export function isApiRejectAsk(userMessage: string): boolean {
   const writeOrTransition = /\b(written|writes?|transition|backlog|work[-\s]?item)\b/.test(
     text
   );
-  return apiOrError && writeOrTransition;
+  const fieldReject =
+    /\b[a-z][a-z0-9]*_id\b/.test(text) ||
+    /\b(parent|assignee|estimate)\b/.test(text) ||
+    /\bbad\s+[a-z][a-z0-9_]*\b/.test(text) ||
+    /\b(isn'?t|is not|not valid)\b/.test(text);
+  return apiOrError && (writeOrTransition || fieldReject);
+}
+
+/**
+ * Index queries that land on the asked field's ValidationError — not a bare
+ * `issue_id` / `parent_id` token (those match converters and OpenAPI first).
+ */
+export function apiRejectSearchQueries(userMessage: string): string[] {
+  if (!isApiRejectAsk(userMessage)) {
+    return [];
+  }
+  const unique: string[] = [];
+  const push = (candidate: string | undefined): void => {
+    const clipped = clip(candidate ?? "");
+    if (!clipped) {
+      return;
+    }
+    if (unique.some((seen) => seen.toLowerCase() === clipped.toLowerCase())) {
+      return;
+    }
+    unique.push(clipped);
+  };
+  const fields = askedRejectFieldTokens(userMessage);
+  const stems = [...new Set(fields.map((field) => field.replace(/_id$/i, "")))];
+  const preferred = ["parent", "assignee", "state", "estimate", "transition"];
+  const orderedStems = [
+    ...preferred.filter((stem) => stems.includes(stem)),
+    ...stems.filter((stem) => !preferred.includes(stem))
+  ];
+  for (const stem of orderedStems) {
+    if (stem.length < 3) {
+      continue;
+    }
+    push(`${stem} is not valid`);
+    push(`not valid ${stem}`);
+    push(`invalid ${stem}`);
+    push(`ValidationError ${stem}`);
+  }
+  for (const field of fields) {
+    if (/_id$/i.test(field)) {
+      push(`not valid ${field}`);
+    }
+  }
+  push("ValidationError");
+  return unique;
+}
+
+/**
+ * Field names the user asked the API to reject — `*_id`, the word after "bad",
+ * and parent/state/transition when those are the locate subject.
+ */
+export function askedRejectFieldTokens(userMessage: string): string[] {
+  const tokens = new Set<string>();
+  const text = userMessage.toLowerCase();
+  for (const id of allIdentifiers(userMessage)) {
+    if (isApiFieldIdToken(id)) {
+      tokens.add(id.toLowerCase());
+      tokens.add(id.replace(/_id$/i, "").replace(/Id$/, "").toLowerCase());
+    }
+  }
+  const bad = text.match(/\bbad\s+([a-z][a-z0-9_]*)\b/);
+  if (bad?.[1] && bad[1].length >= 3) {
+    tokens.add(bad[1]);
+  }
+  if (/\bparent\b/.test(text)) {
+    tokens.add("parent");
+    tokens.add("parent_id");
+  }
+  if (/\b(state|transition|backlog)\b/.test(text)) {
+    tokens.add("state");
+    tokens.add("state_id");
+    tokens.add("transition");
+  }
+  return [...tokens].filter((token) => token.length >= 3);
 }
 
 /** Hit body assigns/rejects — not a group enum, seed row, or read-only serializer. */
@@ -751,6 +856,58 @@ export function contentLooksLikeStateTransitionReject(content: string): boolean 
     /invalid.{0,16}transition/i.test(content) ||
     /valid state/i.test(content)
   );
+}
+
+function validationErrorMessages(content: string): string {
+  const chunks: string[] = [];
+  const quoted = /ValidationError\(\s*(?:serializers\.)?["']([^"']+)["']/gi;
+  let match: RegExpExecArray | null;
+  while ((match = quoted.exec(content)) !== null) {
+    chunks.push(match[1] ?? "");
+  }
+  return chunks.join("\n");
+}
+
+function contentMentionsAskedField(content: string, fields: string[]): boolean {
+  if (fields.length === 0) {
+    return false;
+  }
+  const messages = validationErrorMessages(content);
+  const haystack = (messages || content).toLowerCase();
+  return fields.some((field) => {
+    const needle = field.toLowerCase().replace(/_/g, "");
+    const compact = haystack.replace(/_/g, "");
+    if (needle.length >= 3 && compact.includes(needle)) {
+      return true;
+    }
+    return new RegExp(`\\b${field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(
+      messages || content
+    );
+  });
+}
+
+/**
+ * Serializer/view reject for the field the user asked about — parent, state,
+ * assignee, or any `*_id`. Generic filter ValidationError does not count.
+ */
+export function contentLooksLikeAskedFieldReject(
+  content: string,
+  userMessage: string
+): boolean {
+  if (!contentLooksLikeWriteReject(content)) {
+    return false;
+  }
+  const fields = askedRejectFieldTokens(userMessage);
+  if (fields.length === 0) {
+    return contentLooksLikeStateTransitionReject(content);
+  }
+  if (contentMentionsAskedField(content, fields)) {
+    return true;
+  }
+  if (fields.some((field) => field === "state" || field === "transition" || field === "state_id")) {
+    return contentLooksLikeStateTransitionReject(content);
+  }
+  return false;
 }
 
 /** Read-side serializer / seed snippet — represents state, does not reject a transition. */
@@ -805,17 +962,27 @@ export function filterWriteRejectFiles<T extends { path?: string; content?: stri
     if (path && shouldSkipEvidencePath(path, userMessage)) {
       return false;
     }
-    return contentLooksLikeStateTransitionReject(file.content ?? "");
+    return contentLooksLikeAskedFieldReject(file.content ?? "", userMessage);
   });
 }
 
-export function lineNumberOfWriteReject(content: string): number | undefined {
+export function lineNumberOfWriteReject(
+  content: string,
+  userMessage?: string
+): number | undefined {
   const rows = content.split("\n").map((row) => row.replace(/^\d+\|/, ""));
+  const fields = userMessage ? askedRejectFieldTokens(userMessage) : [];
   for (let i = 0; i < rows.length; i++) {
     if (!contentLooksLikeWriteReject(rows[i])) {
       continue;
     }
     const nearby = rows.slice(Math.max(0, i - 2), i + 4).join("\n");
+    if (userMessage && fields.length > 0) {
+      if (contentLooksLikeAskedFieldReject(nearby, userMessage)) {
+        return i + 1;
+      }
+      continue;
+    }
     if (
       /\b(state_id|is_valid_transition|validate_state)\b/i.test(nearby) ||
       /invalid.{0,16}transition/i.test(nearby) ||
@@ -961,6 +1128,16 @@ export function proseLocateSearchAliases(userMessage: string): string[] {
   const aliases: string[] = [];
   if (isApiRejectAsk(userMessage)) {
     aliases.push("ValidationError");
+    const fields = askedRejectFieldTokens(userMessage);
+    if (fields.some((field) => field === "parent" || field === "parent_id")) {
+      aliases.push("invalid parent");
+      aliases.push("parent_id");
+    }
+    for (const field of fields) {
+      if (/_id$/.test(field)) {
+        aliases.push(field);
+      }
+    }
   }
   if (hasWorkItem || hasTransition) {
     aliases.push("validate_state");

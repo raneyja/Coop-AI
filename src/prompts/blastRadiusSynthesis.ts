@@ -1,5 +1,6 @@
 import type { BlastRadiusEvidence } from "../context/contextBundleEvidence";
 import {
+  extractBlastSearchSymbols,
   rankCodeDependentsByRisk,
   asGraphEdgeSource,
   type BlastRadiusDependentDetail
@@ -121,6 +122,11 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
   lines.push(
     "Keep the narrative short: lead with ## Top risk surfaces in **Summary** (production callers first), mirror them exactly in **Direct impact** (no extra paths), cite test/story/e2e files in **Testing surfaces**, treat docs references as secondary."
   );
+  if (extractBlastSearchSymbols(input.userFocus || input.userQuestion, input.file).length > 0) {
+    lines.push(
+      "If the task names a function or identifier: **Direct impact** is callers of that identifier. Files that only import the same module for other exports are Weak / not \"will break.\" Do not treat every importer of the file as a breakage of the named function."
+    );
+  }
   lines.push("Follow the required response structure in your system instructions.");
 
   return lines.join("\n");

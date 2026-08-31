@@ -31,7 +31,7 @@ import {
   shouldSkipEvidencePath,
   filterWriteRejectFiles,
   isApiRejectAsk,
-  contentLooksLikeStateTransitionReject,
+  contentLooksLikeAskedFieldReject,
   lineNumberOfWriteReject,
   textMentionsNamedSymbol,
   textMentionsQueryRoles
@@ -279,7 +279,7 @@ export class AgentOrchestrator {
 
     const canAnswerNow = (): boolean => {
       if (isApiRejectAsk(query)) {
-        return contextHasWriteReject(context);
+        return contextHasWriteReject(context, query);
       }
       if (queryHasNamedSymbol(query) || queryRoleHints(query).length > 0) {
         return matchingRead;
@@ -466,8 +466,8 @@ export class AgentOrchestrator {
         }
         rawResult = judged.raw;
         const path = typeof args.path === "string" ? args.path : "";
-        if (isApiRejectAsk(query) && !contentLooksLikeStateTransitionReject(readFileBodies(rawResult))) {
-          const jumped = await this.loadWriteRejectWindow(repoId, path);
+        if (isApiRejectAsk(query) && !contentLooksLikeAskedFieldReject(readFileBodies(rawResult), query)) {
+          const jumped = await this.loadWriteRejectWindow(repoId, path, query);
           if (jumped) {
             rawResult = jumped.raw;
             args.startLine = jumped.startLine;
@@ -477,7 +477,7 @@ export class AgentOrchestrator {
             rawResult = JSON.stringify({
               path,
               skipNote:
-                "This snippet does not write or reject state. Search a serializer validate() or ValidationError."
+                "This snippet does not write or reject the asked field. Search a serializer validate() or ValidationError."
             });
             judged = { raw: rawResult, matchesSymbol: false };
           }
@@ -490,7 +490,7 @@ export class AgentOrchestrator {
           // do not treat it as definition evidence.
           this.mergeContext(context, plan.tool, rawResult);
         }
-        if (isApiRejectAsk(query) && contextHasWriteReject(context)) {
+        if (isApiRejectAsk(query) && contextHasWriteReject(context, query)) {
           break;
         }
       } else {
@@ -534,8 +534,8 @@ export class AgentOrchestrator {
           !matchingRead &&
           hits.length > 0 &&
           filesRead < AGENT_MAX_FILES_READ &&
-          !queryHasNamedSymbol(query) &&
-          queryRoleHints(query).length === 0
+          (!queryHasNamedSymbol(query) || isApiRejectAsk(query)) &&
+          (queryRoleHints(query).length === 0 || isApiRejectAsk(query))
         ) {
           const seeded = await this.readFirstMatchingHit(
             repoId,
@@ -549,7 +549,7 @@ export class AgentOrchestrator {
             matchingRead = true;
             filesRead += 1;
             lastToolResult = seeded.raw;
-            if (isApiRejectAsk(query) && contextHasWriteReject(context)) {
+            if (isApiRejectAsk(query) && contextHasWriteReject(context, query)) {
               break;
             }
           }
@@ -642,7 +642,7 @@ export class AgentOrchestrator {
     if (isApiRejectAsk(query)) {
       pruneContextToWriteReject(result.context, query);
       conversation = compactApiRejectConversation(query, result.context);
-      if (!contextHasWriteReject(result.context)) {
+      if (!contextHasWriteReject(result.context, query)) {
         matchingRead = false;
       }
     }
@@ -1024,10 +1024,11 @@ export class AgentOrchestrator {
         });
         continue;
       }
-      if (isApiRejectAsk(query) && !contentLooksLikeStateTransitionReject(body)) {
+      if (isApiRejectAsk(query) && !contentLooksLikeAskedFieldReject(body, query)) {
         const jumped = await this.readWriteRejectInSameFile(
           repoId,
           hit.fileName,
+          query,
           emit,
           context,
           conversation
@@ -1069,7 +1070,8 @@ export class AgentOrchestrator {
    */
   private async loadWriteRejectWindow(
     repoId: string,
-    filePath: string
+    filePath: string,
+    query: string
   ): Promise<{ raw: string; startLine: number; endLine: number } | undefined> {
     const fullRaw = await this.executeTool("read_file", { path: filePath, repoId });
     if (!readFilePayloadHasBody(fullRaw)) {
@@ -1077,7 +1079,7 @@ export class AgentOrchestrator {
     }
     const parsed = JSON.parse(fullRaw) as ReadFilePayload;
     const body = (parsed.files ?? []).map((file) => file.content).join("\n");
-    const line = lineNumberOfWriteReject(body);
+    const line = lineNumberOfWriteReject(body, query);
     if (!line) {
       return undefined;
     }
@@ -1094,7 +1096,7 @@ export class AgentOrchestrator {
     const windowBody = (JSON.parse(windowRaw) as ReadFilePayload).files
       ?.map((file) => file.content)
       .join("\n");
-    if (!windowBody || !contentLooksLikeStateTransitionReject(windowBody)) {
+    if (!windowBody || !contentLooksLikeAskedFieldReject(windowBody, query)) {
       return undefined;
     }
     return { raw: windowRaw, startLine, endLine };
@@ -1103,11 +1105,12 @@ export class AgentOrchestrator {
   private async readWriteRejectInSameFile(
     repoId: string,
     filePath: string,
+    query: string,
     emit: (step: AgentStep) => void,
     context: AgentSessionContext,
     conversation?: AgentConversationMessage[]
   ): Promise<{ ok: boolean; raw?: string }> {
-    const jumped = await this.loadWriteRejectWindow(repoId, filePath);
+    const jumped = await this.loadWriteRejectWindow(repoId, filePath, query);
     if (!jumped) {
       return { ok: false };
     }
@@ -1166,7 +1169,7 @@ export class AgentOrchestrator {
           context,
           conversation
         );
-        if (opened.ok && contextHasWriteReject(context)) {
+        if (opened.ok && contextHasWriteReject(context, query)) {
           return true;
         }
       } catch {
@@ -1404,9 +1407,12 @@ function readFileContextHasBody(context: AgentSessionContext | undefined): boole
   return Boolean(files?.some((file) => Boolean(file.content?.trim())));
 }
 
-function contextHasWriteReject(context: AgentSessionContext | undefined): boolean {
+function contextHasWriteReject(
+  context: AgentSessionContext | undefined,
+  query: string
+): boolean {
   const files = (context?.read_file as ReadFilePayload | undefined)?.files ?? [];
-  return files.some((file) => contentLooksLikeStateTransitionReject(file.content ?? ""));
+  return files.some((file) => contentLooksLikeAskedFieldReject(file.content ?? "", query));
 }
 
 function pruneContextToWriteReject(context: AgentSessionContext | undefined, query: string): void {

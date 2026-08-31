@@ -180,6 +180,22 @@ async function run(): Promise<void> {
       }),
       false
     );
+    assert.equal(
+      shouldSkipOpenFileAttach({
+        quickAction: "knowledge-gaps",
+        userFocus: "What's still unsafe about default-on hunt for on-call API-error locates?",
+        context: { ...repoContext, file: "src/config/responseDeadline.ts", scope: "file" }
+      }),
+      true
+    );
+    assert.equal(
+      shouldSkipOpenFileAttach({
+        quickAction: "knowledge-gaps",
+        userFocus: "What's still unsafe about default-on hunt for on-call API-error locates?",
+        context: { ...repoContext, file: "src/api/agent/AgentOrchestrator.ts", scope: "file" }
+      }),
+      false
+    );
   });
 
   test("skip open-file attach for sticky Use-repo plain chat without a file chip", () => {

@@ -145,9 +145,10 @@ export function openFileRelatedToGapsFocus(
   const normalized = path.replace(/\\/g, "/").toLowerCase();
   // Prefer topic content tokens so "documentation" in a verbose ask doesn't
   // falsely relate every docs/ helper file.
-  const tokens = knowledgeGapsFocusTopics(userFocus).flatMap((topic) =>
-    knowledgeGapsTopicContentTokens(topic)
-  );
+  const tokens = knowledgeGapsFocusTopics(userFocus).flatMap((topic) => [
+    ...knowledgeGapsTopicContentTokens(topic),
+    ...topicIndexSynonyms(topic).map((syn) => syn.toLowerCase())
+  ]);
   const fallback = tokenizeFocusTerms(gather).filter(
     (token) => token.length >= 4 && !GAPS_FOCUS_META_TOKENS.has(token)
   );
@@ -279,11 +280,23 @@ const DISTINCTIVE_TOPIC_TOKENS = new Set([
   "auth"
 ]);
 
+export function isHuntLocateGapsAsk(text: string): boolean {
+  const lower = text.toLowerCase();
+  return (
+    /\bhunt\b/.test(lower) ||
+    /\blocate\b/.test(lower) ||
+    /api[-\s]?error/.test(lower) ||
+    /api returned an error/.test(lower) ||
+    /searchquery/.test(lower) ||
+    /agentorchestrator/.test(lower)
+  );
+}
+
 function topicIndexSynonyms(topic: string): string[] {
   const lower = topic.toLowerCase();
   const extra: string[] = [];
-  if (/\bhunt\b|\bloop\b|\bagent\b/i.test(lower)) {
-    extra.push("orchestrator", "agent");
+  if (/\bhunt\b|\bloop\b|\bagent\b|\blocate\b/i.test(lower) || isHuntLocateGapsAsk(lower)) {
+    extra.push("orchestrator", "agent", "searchQuery", "AgentOrchestrator");
   }
   if (/\bslack\b/i.test(lower)) {
     extra.push("search_slack", "slack");
@@ -346,6 +359,38 @@ function isDocsPath(path: string): boolean {
   );
 }
 
+function huntEvidenceClassStubs(topic: string): Array<Record<string, unknown>> {
+  return [
+    {
+      type: "wrong_file_evidence",
+      priority: "high",
+      topic,
+      message:
+        "Hunt ranking can attach the wrong file (UI, OpenAPI, converters) instead of the serializer/validate reject for the asked field."
+    },
+    {
+      type: "canned_miss",
+      priority: "high",
+      topic,
+      message:
+        "Hunt can post a canned miss before reading validate() / ValidationError for the asked field."
+    },
+    {
+      type: "ui_for_api",
+      priority: "medium",
+      topic,
+      message: "On-call hunt/onboard can treat a frontend modal or store as the API."
+    },
+    {
+      type: "default_on_risk",
+      priority: "medium",
+      topic,
+      message:
+        "Default-on hunt for API-error locates still has evidence-class risk (wrong file, miss, UI-for-API)."
+    }
+  ];
+}
+
 /**
  * Heuristic scan stubs when focus topics have no attached code/docs evidence yet.
  * Never claims indexed code is missing when focus hits or file bodies exist.
@@ -365,8 +410,14 @@ export function knowledgeGapsFocusTopicGapStubs(options: {
   const bodies = options.focusFiles ?? [];
   const anyHits = hits.length > 0 || bodies.some((file) => (file.content ?? "").trim());
   const docsAttached = [...hits, ...bodies.map((file) => file.path)].some(isDocsPath);
+  const huntAsk = isHuntLocateGapsAsk(`${options.userFocus ?? ""} ${topics.join(" ")}`);
   const gaps: Array<Record<string, unknown>> = [];
   for (const topic of topics) {
+    const huntTopic = isHuntLocateGapsAsk(topic) || (huntAsk && topics.length === 1);
+    if (huntTopic) {
+      gaps.push(...huntEvidenceClassStubs(topic));
+      continue;
+    }
     if (topicHasCodeEvidence(topic, hits, bodies)) {
       if (!docsAttached) {
         gaps.push({

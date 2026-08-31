@@ -8,6 +8,7 @@ import type {
   TeamsSearchEvidence
 } from "../context/contextBundleEvidence";
 import {
+  isHuntLocateGapsAsk,
   knowledgeGapsGatherQuery,
   resolveKnowledgeGapsAuditScope
 } from "../context/knowledgeGapsFocus";
@@ -249,7 +250,10 @@ function appendKnowledgeGapsResponseContract(
     return (
       gap.type === "missing_docs" ||
       gap.type === "impact_unknown" ||
-      gap.type === "default_on_risk"
+      gap.type === "default_on_risk" ||
+      gap.type === "wrong_file_evidence" ||
+      gap.type === "canned_miss" ||
+      gap.type === "ui_for_api"
     );
   });
   const ownerGaps = scanGaps.filter((gap) => gap.type === "missing_owner");
@@ -270,6 +274,11 @@ function appendKnowledgeGapsResponseContract(
   if (hasFocusExcerpts) {
     lines.push(
       "**Your question** — PASS: the subsystems exist if focus paths/excerpts are attached; then name docs/ownership/default-on risks visible in those excerpts. FAIL: claiming no indexed code; empty “looks good”; a 40-bullet dump."
+    );
+  }
+  if (isHuntLocateGapsAsk(`${input.userFocus ?? ""} ${input.userQuestion ?? ""} ${input.evidence.userFocus ?? ""}`)) {
+    lines.push(
+      "**Your question** — PASS: name hunt evidence-class risks from attached hunt code (wrong-file ranking, canned miss, UI-as-API, default-on). FAIL: echo the ask; “docs/runbook may be thin” as the only answer. Do not invent plane paths."
     );
   }
   lines.push("**Documentation gaps** must include, in order (after the attached page titles above):");
