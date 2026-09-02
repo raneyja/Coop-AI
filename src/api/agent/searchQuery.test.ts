@@ -24,6 +24,7 @@ import {
   filterWriteRejectFiles,
   isApiRejectAsk,
   askedRejectFieldTokens,
+  askedRejectJobTokens,
   lineNumberOfWriteReject,
   pickSearchHitsToRead,
   pickSymbolHitsToRead,
@@ -736,16 +737,16 @@ test("API-reject hunt is a class: C2, parent, and assignee fields all match", ()
   assert.equal(isApiRejectAsk("Where does the API create an issue?"), false);
 });
 
-test("T2 hunt searches parent ValidationError, not bare issue_id", () => {
+test("T2 hunt searches parent field access, not bare issue_id", () => {
   const primary = extractAgentSearchQuery(COPILOT_T2_ASK);
-  assert.match(primary, /parent is not valid/i);
+  assert.match(primary, /parent/i);
   assert.notEqual(primary.toLowerCase(), "issue_id");
   const fallbacks = fallbackAgentSearchQueries(COPILOT_T2_ASK);
-  assert.equal(fallbacks[0]?.toLowerCase().includes("issue_id"), false);
+  assert.equal(fallbacks[0]?.toLowerCase() === "issue_id", false);
   assert.equal(
-    fallbacks.slice(0, 3).some((q) => /parent is not valid/i.test(q)),
+    fallbacks.slice(0, 6).some((q) => /get\("parent"\)/.test(q) || /parent is not valid/i.test(q)),
     true,
-    `T2 first queries must include parent is not valid, got ${fallbacks.join(", ")}`
+    `T2 first queries must include parent access or slogan, got ${fallbacks.join(", ")}`
   );
   assert.equal(
     apiRejectSearchQueries(COPILOT_T2_ASK).some((q) => /ValidationError parent/i.test(q)),
@@ -895,6 +896,159 @@ test("filterWriteRejectFiles keeps the asked field reject, not OpenAPI", () => {
   );
   assert.equal(kept.length, 1);
   assert.match(kept[0]?.content ?? "", /Parent is not valid/);
+});
+
+test("asked-field reject matches a raise whose message does not repeat the field", () => {
+  const ask =
+    "A client sent a reviewer that isn’t on the team — the API returns an error. Where does the API reject a bad reviewer_id?";
+  const reviewerReject = [
+    'if data.get("reviewer"):',
+    '    raise serializers.ValidationError("user not in project")'
+  ].join("\n");
+  const htmlValidate = [
+    "def validate(self, data):",
+    '    if data.get("comment_html"):',
+    '        raise serializers.ValidationError({"comment_html": "HTML content is not valid"})',
+    "    return data"
+  ].join("\n");
+  assert.equal(contentLooksLikeAskedFieldReject(reviewerReject, ask), true);
+  assert.equal(contentLooksLikeAskedFieldReject(htmlValidate, ask), false);
+  const queries = apiRejectSearchQueries(ask);
+  assert.equal(
+    queries.some((q) => /get\("reviewer"\)/.test(q) || q.toLowerCase() === "reviewer"),
+    true,
+    `must search field access, got ${queries.join(", ")}`
+  );
+});
+
+test("API-reject job: invite email is not a signup email reject", () => {
+  const ask =
+    "A client sent an org invite with a blank email — the API returns an error. Where does the API reject a bad email?";
+  assert.deepEqual(askedRejectJobTokens(ask), ["invite"]);
+  const signup = [
+    "export function handleSignup(body) {",
+    "  if (!isValidEmail(body.email)) {",
+    '    raise ValidationError({"email": "Enter a valid email address."})',
+    "  }",
+    "}"
+  ].join("\n");
+  const invite = [
+    "export async function inviteUser(input) {",
+    "  const email = input.email.trim();",
+    '  if (!email) {',
+    '    throw new Error("email is required");',
+    "  }",
+    "}"
+  ].join("\n");
+  assert.equal(contentLooksLikeAskedFieldReject(signup, ask, "app/signup_api.py"), false);
+  assert.equal(contentLooksLikeAskedFieldReject(invite, ask, "app/invite_user.py"), true);
+  assert.equal(
+    shouldSkipEvidencePath("app/signup_api.test.ts", ask),
+    true
+  );
+  const queries = apiRejectSearchQueries(ask);
+  assert.equal(
+    queries.some((q) => /^invite$/i.test(q) || /invite email/i.test(q)),
+    true,
+    `must search the invite job, got ${queries.join(", ")}`
+  );
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "app/signup_api.py",
+        lineNumber: 3,
+        content: 'raise ValidationError({"email": "Enter a valid email address."})',
+        score: 0.99
+      },
+      {
+        fileName: "app/invite_user.py",
+        lineNumber: 4,
+        content: 'throw new Error("email is required")',
+        score: 0.2
+      },
+      {
+        fileName: "app/signup_api.test.ts",
+        lineNumber: 20,
+        content: 'assert.equal(response.body.error, "invalid_email")',
+        score: 0.95
+      }
+    ],
+    2,
+    ask
+  );
+  assert.equal(picked[0]?.fileName, "app/invite_user.py");
+  assert.equal(
+    picked.some((hit) => /signup/i.test(hit.fileName)),
+    false
+  );
+});
+
+test("API-reject hunt ignores invite callers that rethrow and pass email through", () => {
+  const ask =
+    "A client sent an org invite with a blank email — the API returns an error. Where does the API reject a bad email?";
+  const caller = [
+    "    try {",
+    "      inviteResult = await inviteUser({ email: adminEmail, role: \"admin\" });",
+    "    } catch (error) {",
+    "      if (isSeatLimitError(error)) {",
+    "        writeJson(response, 403, { error: error.code, seats: error.seats, used: error.used });",
+    "        return true;",
+    "      }",
+    "      throw error;",
+    "    }"
+  ].join("\n");
+  const check = [
+    "export async function inviteUser(input) {",
+    "  const email = input.email.trim();",
+    "  if (!email) {",
+    '    throw new Error("email is required");',
+    "  }",
+    "}"
+  ].join("\n");
+  const http400 = [
+    "  const email = String(body.email ?? \"\").trim();",
+    "  if (!email) {",
+    '    writeJson(response, 400, { error: "email is required" });',
+    "    return true;",
+    "  }"
+  ].join("\n");
+  assert.equal(contentLooksLikeWriteReject("      throw error;"), false);
+  assert.equal(contentLooksLikeAskedFieldReject(caller, ask, "app/org_api.ts"), false);
+  assert.equal(contentLooksLikeAskedFieldReject(check, ask, "app/invite_user.ts"), true);
+  assert.equal(contentLooksLikeAskedFieldReject(http400, ask, "app/invite_handler.ts"), true);
+  assert.equal(
+    lineNumberOfWriteReject(`${caller}\n\n${check}`, ask, "app/invite_user.ts"),
+    14
+  );
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "app/org_api.ts",
+        lineNumber: 8,
+        content: caller,
+        score: 0.99
+      },
+      {
+        fileName: "app/invite_user.ts",
+        lineNumber: 4,
+        content: check,
+        score: 0.2
+      }
+    ],
+    2,
+    ask
+  );
+  assert.equal(picked[0]?.fileName, "app/invite_user.ts");
+  assert.equal(
+    picked.some((hit) => hit.fileName === "app/org_api.ts"),
+    false
+  );
+  const queries = apiRejectSearchQueries(ask);
+  assert.equal(
+    queries.some((q) => /email is required/i.test(q)),
+    true,
+    `must search the reject slogan, got ${queries.join(", ")}`
+  );
 });
 
 console.log(`\nsearchQuery: ${passed}/${passed + failed} tests passed`);

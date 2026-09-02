@@ -13,6 +13,9 @@ import {
   upsertPatchRecord
 } from "./patchSession";
 import {
+  isTestSourcePath,
+  parseExportedSutLiterals,
+  rewritePatchSetToMatchConstants,
   rewritePatchSetToMatchSut,
   sutNumericExpectation,
   sutPathForEditAsk
@@ -159,9 +162,14 @@ export async function handlePatchComplete(
   });
   const sutFiles = filesForSutGrounding(options);
   const expectation = options.ask ? sutNumericExpectation(options.ask, sutFiles) : undefined;
-  const grounded = expectation
+  let grounded = expectation
     ? rewritePatchSetToMatchSut(patches, expectation.actual)
     : patches;
+  const sutBody = sutFiles
+    .filter((file) => file.path && !isTestSourcePath(file.path))
+    .map((file) => file.content)
+    .join("\n");
+  grounded = rewritePatchSetToMatchConstants(grounded, parseExportedSutLiterals(sutBody));
 
   if (options.commentOnly && countHunks(grounded) === 0) {
     setLastAssistantPatchContent(content);

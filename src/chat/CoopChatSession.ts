@@ -3234,7 +3234,7 @@ export class CoopChatSession {
         const priorEntries = Array.isArray(evidenceData.entryFiles)
           ? (evidenceData.entryFiles as Array<{ path: string; content?: string; truncated?: boolean }>)
           : [];
-        const rankQuery = topicQueries.join(" ") || userFocus;
+        const rankQuery = [userFocus, ...topicQueries].filter(Boolean).join(" ") || userFocus;
         const collectHits = (
           search: typeof focusSearch
         ): string[] => [
@@ -5323,9 +5323,9 @@ export class CoopChatSession {
     // button-driven quick actions or already-routed integration prompts.
     if (!quickAction && !options?.sourceHint) {
       const parsed = parseSlashCommand(message);
-      // /edit create a PR … is a ship command, not another patch.
+      // /edit (or /fix) create a PR … is a ship command, not another patch.
       if (
-        parsed?.def.name === "edit" &&
+        parsed?.def.target.kind === "composer-mode" &&
         isCreatePullRequestAsk(parsed.args || parsed.focus || message)
       ) {
         await this.handleCreatePrChatAsk(

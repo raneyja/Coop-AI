@@ -272,25 +272,33 @@ export function pickEntryPaths(options: {
   });
 }
 
+/**
+ * Anchor bodies come from the code host (Zero-Clone), so this is six remote
+ * round trips. Sequentially they stack inside the soft gather budget, and a
+ * slow host silently reduced the summary to whichever file returned first —
+ * that is how a repo overview ends up anchored on a single types file.
+ */
 async function fetchEntryFiles(
   router: CodeHostRouter,
   coords: RepoCoordinates,
   paths: string[]
 ): Promise<RepoSummaryEntryFile[]> {
+  const settled = await Promise.allSettled(
+    paths.map((path) => router.getFileContent(path, coords))
+  );
   const files: RepoSummaryEntryFile[] = [];
-  for (const path of paths) {
-    try {
-      const remote = await router.getFileContent(path, coords);
-      const content = remote.content ?? "";
-      const truncated = content.length > MAX_FILE_CHARS;
-      files.push({
-        path: remote.path,
-        content: truncated ? `${content.slice(0, MAX_FILE_CHARS)}\n… [truncated]` : content,
-        truncated
-      });
-    } catch {
-      // Skip unreadable paths; remaining entry files still anchor the summary.
+  for (const result of settled) {
+    // Skip unreadable paths; remaining entry files still anchor the summary.
+    if (result.status !== "fulfilled") {
+      continue;
     }
+    const content = result.value.content ?? "";
+    const truncated = content.length > MAX_FILE_CHARS;
+    files.push({
+      path: result.value.path,
+      content: truncated ? `${content.slice(0, MAX_FILE_CHARS)}\n… [truncated]` : content,
+      truncated
+    });
   }
   return files;
 }

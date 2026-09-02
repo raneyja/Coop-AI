@@ -2,12 +2,16 @@ import assert from "node:assert/strict";
 import { extractAgentSearchQuery, indexQueryForRetrieval } from "../api/agent/searchQuery";
 import {
   extractOnboardingTopicQueries,
+  expandBehaviouralIndexQueries,
+  isDemotedDeclarationPath,
   isOnboardingNoisePath,
+  isTypeDeclarationPath,
   isWeakIndexQuery,
+  pickBehaviouralImplementationPaths,
+  pickOnboardingTopicAttachPaths,
   onboardingIndexQueries,
   onboardingTopicsCovered,
   pathMatchesOnboardingTopic,
-  pickOnboardingTopicAttachPaths,
   selectOnboardingEvidencePaths,
   uncoveredOnboardingTopics
 } from "./onboardingSearchQueries";
@@ -123,6 +127,29 @@ test("onboarding ranking fails open when every path is noise", () => {
   ];
   const picked = selectOnboardingEvidencePaths(paths, "authentication issue state", 5);
   assert.deepEqual(picked, paths);
+});
+
+test("J7: tests never beat implementation files when ranking fail-opens", () => {
+  const paths = [
+    "src/webview/lib/chatProseParser.test.ts",
+    "src/context/contextGatheringMessages.test.ts",
+    "src/webview/components/ChatStream.tsx",
+    "src/chat/CoopChatSession.ts",
+    "src/chat/effectiveQuickAction.test.ts"
+  ];
+  const picked = selectOnboardingEvidencePaths(paths, "handleChat sendMessage send", 5);
+  assert.ok(
+    picked.includes("src/chat/CoopChatSession.ts"),
+    `expected CoopChatSession in ${picked.join(", ")}`
+  );
+  assert.ok(
+    picked.includes("src/webview/components/ChatStream.tsx"),
+    `expected ChatStream in ${picked.join(", ")}`
+  );
+  assert.ok(
+    !picked.some((path) => path.includes(".test.")),
+    `tests leaked into first files: ${picked.join(", ")}`
+  );
 });
 
 test("onboarding ranking spreads first files across auth/issue/state and drops tests/migrations", () => {
@@ -336,6 +363,105 @@ test("API reject-token onboard is the same job as create-issue", () => {
   assert.ok(
     picked.some((path) => /apps\/api\//.test(path)),
     `API paths missing from ${picked.join(", ")}`
+  );
+});
+
+const J7_ASK =
+  "I'm new and I don't have this cloned. Where does a chat message get sent, and what are the 5 files I should read first?";
+
+test("J7: onboard ask drops newcomer framing and indexes the action stem", () => {
+  const topics = extractOnboardingTopicQueries(J7_ASK);
+  assert.ok(!topics.some((t) => /i'?m new/i.test(t)), `topics=${JSON.stringify(topics)}`);
+  assert.ok(!topics.some((t) => /\bget\b/i.test(t)), `auxiliary kept: ${JSON.stringify(topics)}`);
+  const index = onboardingIndexQueries(J7_ASK);
+  // handleChatSend is the symbol — "send" alone ranks ChatMessage / types.ts.
+  assert.ok(
+    index.some((q) => /handleChat|sendMessage|sendChat|send/i.test(q)),
+    `expected send-path query in ${JSON.stringify(index)}`
+  );
+  assert.ok(
+    expandBehaviouralIndexQueries("chat message sent").includes("handleChat"),
+    "chat+sent must expand to handleChat"
+  );
+  assert.ok(index.length <= 3);
+});
+
+test("J7: types.ts does not lead a behavioural ask, but stays as context", () => {
+  const query = "send chat message sent";
+  assert.equal(isTypeDeclarationPath("src/chat/types.ts"), true);
+  assert.equal(isTypeDeclarationPath("src/webview/types/index.d.ts"), true);
+  assert.equal(isTypeDeclarationPath("src/chat/CoopChatSession.ts"), false);
+  assert.equal(isDemotedDeclarationPath("src/chat/types.ts", query), true);
+
+  const picked = selectOnboardingEvidencePaths(
+    ["src/chat/types.ts", "src/chat/CoopChatSession.ts"],
+    query,
+    5
+  );
+  assert.equal(
+    picked[0],
+    "src/chat/CoopChatSession.ts",
+    `send path must lead: ${picked.join(", ")}`
+  );
+  assert.ok(picked.includes("src/chat/types.ts"), "declarations stay available as context");
+});
+
+test("J7: an explicit types ask is never demoted", () => {
+  for (const query of ["chat message types", "what interfaces describe a chat message", "types"]) {
+    assert.equal(
+      isDemotedDeclarationPath("src/chat/types.ts", query),
+      false,
+      `demoted on an explicit declaration ask: ${query}`
+    );
+  }
+  const picked = selectOnboardingEvidencePaths(
+    ["src/chat/CoopChatSession.ts", "src/chat/types.ts"],
+    "types",
+    5
+  );
+  assert.equal(picked[0], "src/chat/types.ts", `picked=${picked.join(", ")}`);
+});
+
+test("J7: demotion only applies to declaration files on behavioural asks", () => {
+  assert.equal(isDemotedDeclarationPath("src/chat/CoopChatSession.ts", "send chat message"), false);
+  assert.equal(isDemotedDeclarationPath("src/chat/types.ts", "who owns the chat module"), false);
+  assert.equal(isDemotedDeclarationPath("src/chat/types.ts", "where is a message handled"), true);
+});
+
+test("J7: types-only attach is uncovered when send-path hits exist", () => {
+  const uncovered = uncoveredOnboardingTopics({
+    topicQueries: ["send", "chat message sent"],
+    hitPaths: ["src/chat/types.ts", "src/chat/CoopChatSession.ts", "src/webview/components/ChatComposer.tsx"],
+    attachedPaths: ["src/chat/types.ts"]
+  });
+  assert.ok(uncovered.length > 0, "declaration-only attach must not fail-open when implementation hits exist");
+  const fetch = pickOnboardingTopicAttachPaths({
+    topicQueries: ["send", "chat message sent"],
+    hitPaths: ["src/chat/types.ts", "src/chat/CoopChatSession.ts", "src/webview/components/ChatComposer.tsx"],
+    attachedPaths: ["src/chat/types.ts"]
+  });
+  assert.ok(
+    fetch.includes("src/chat/CoopChatSession.ts"),
+    `expected CoopChatSession in ${fetch.join(", ")}`
+  );
+  assert.ok(!fetch.includes("src/chat/types.ts"));
+});
+
+test("J7: behavioural attach skips types.ts when the hit list has an implementation file", () => {
+  const picked = pickBehaviouralImplementationPaths({
+    query: "send chat message sent",
+    hitPaths: ["src/chat/types.ts", "src/chat/CoopChatSession.ts"],
+    attachedPaths: ["src/chat/types.ts"],
+    maxPaths: 4
+  });
+  assert.deepEqual(picked, ["src/chat/CoopChatSession.ts"]);
+  assert.deepEqual(
+    pickBehaviouralImplementationPaths({
+      query: "send chat message sent",
+      hitPaths: ["src/chat/types.ts", "src/chat/CoopChatSession.ts"],
+      attachedPaths: ["src/chat/CoopChatSession.ts"]
+    }),
+    []
   );
 });
 

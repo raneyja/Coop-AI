@@ -12,6 +12,8 @@ export const MAX_TOPIC_SEARCH_QUERIES = 3;
 
 const NEWCOMER_PREFIX =
   /\bi'?m new to this (service|repo|repository|codebase|app|application)\b[^.?!]*[.?!]?\s*/gi;
+/** Bare "I'm new" with no object — still framing, and it splits into a junk topic. */
+const NEWCOMER_BARE = /\bi'?m\s+new\b(?!\s+to\b)/gi;
 const ON_CALL_PREFIX = /\bi'?m on-call for(?:\s+this service)?\b[^.?!]*[.?!]?\s*/gi;
 const NOT_CLONED = /\bi don'?t have (it|this) cloned\b[^.?!]*[.?!]?\s*/gi;
 const WITHOUT_CLONING = /\bwithout cloning\b[^.?!]*[.?!]?\s*/gi;
@@ -39,6 +41,7 @@ export function isWeakIndexQuery(query: string): boolean {
 function stripOnboardingFiller(text: string): string {
   return text
     .replace(NEWCOMER_PREFIX, " ")
+    .replace(NEWCOMER_BARE, " ")
     .replace(ON_CALL_PREFIX, " ")
     .replace(NOT_CLONED, " ")
     .replace(WITHOUT_CLONING, " ")
@@ -48,9 +51,19 @@ function stripOnboardingFiller(text: string): string {
     .trim();
 }
 
+/** Question words and articles stack up: "where does the …" leaves three to peel. */
+const TOPIC_LEAD = /^(?:where|what|which|who|how|why|does|do|did|is|are|was|were|the|a|an)\s+/i;
+
 function cleanTopic(part: string): string {
-  return part
-    .replace(/^(where|what|which|how|does|do|is|are|the)\s+/i, "")
+  let out = part.trim();
+  let previous = "";
+  while (out !== previous) {
+    previous = out;
+    out = out.replace(TOPIC_LEAD, "");
+  }
+  return out
+    // "a message get sent" — the auxiliary is not part of the topic.
+    .replace(/\b(?:get|gets|getting|got)\s+(?=\w)/gi, "")
     .replace(/\s+(live|flow|work|go|start)\??$/i, "")
     .replace(/[?!.]+$/g, "")
     .replace(/\s+/g, " ")
@@ -92,6 +105,22 @@ export function extractOnboardingTopicQueries(focus: string | undefined): string
   return unique;
 }
 
+/**
+ * Files are named for the action, not the tense the user typed. "where does a
+ * message get sent" must reach `sendMessage` / `messageHandler`, so the index
+ * gets the stem alongside the user's wording.
+ */
+const ACTION_STEMS: Array<[RegExp, string]> = [
+  [/\b(?:sent|sends|sending)\b/, "send"],
+  [/\b(?:handled|handles|handling)\b/, "handler"],
+  [/\b(?:received|receives|receiving)\b/, "receive"],
+  [/\b(?:dispatched|dispatches|dispatching)\b/, "dispatch"],
+  [/\b(?:submitted|submits|submitting)\b/, "submit"],
+  [/\b(?:processed|processes|processing)\b/, "process"],
+  [/\b(?:routed|routes|routing)\b/, "route"],
+  [/\b(?:stored|stores|storing|saved|saves|saving|persisted)\b/, "store"]
+];
+
 function expandOnboardingTopic(topic: string): string[] {
   const lower = topic.toLowerCase();
   const extra: string[] = [];
@@ -113,6 +142,14 @@ function expandOnboardingTopic(topic: string): string[] {
     if (/\bissues?\b/.test(lower)) {
       extra.push("issue");
     }
+  }
+  for (const [pattern, stem] of ACTION_STEMS) {
+    if (pattern.test(lower) && !lower.includes(stem)) {
+      extra.push(stem);
+    }
+  }
+  for (const camel of expandBehaviouralIndexQueries(topic)) {
+    extra.push(camel);
   }
   return extra;
 }
@@ -188,6 +225,49 @@ function filenameStem(path: string): string {
   const base = pathBasename(path);
   const dot = base.lastIndexOf(".");
   return dot > 0 ? base.slice(0, dot) : base;
+}
+
+function titleCaseToken(token: string): string {
+  return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+}
+
+function isActionTopicToken(token: string): boolean {
+  const lower = token.toLowerCase();
+  return ACTION_STEMS.some(([pattern, stem]) => pattern.test(lower) || stem === lower);
+}
+
+/**
+ * "chat message sent" must reach `handleChatSend`, not only the word "send"
+ * (which ranks `types.ts` via ChatMessage). CamelCase keys are repo-agnostic.
+ */
+export function expandBehaviouralIndexQueries(topic: string): string[] {
+  const lower = topic.toLowerCase();
+  const nouns = queryTopicTokens(topic).filter((token) => !isActionTopicToken(token));
+  if (nouns.length === 0) {
+    return [];
+  }
+  const extra: string[] = [];
+  const seen = new Set<string>();
+  const push = (term: string): void => {
+    const key = term.toLowerCase();
+    if (!term || seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    extra.push(term);
+  };
+  for (const [pattern, stem] of ACTION_STEMS) {
+    if (!pattern.test(lower) && !lower.includes(stem)) {
+      continue;
+    }
+    for (const noun of nouns) {
+      push(`handle${titleCaseToken(noun)}`);
+    }
+    for (const noun of nouns) {
+      push(`${stem}${titleCaseToken(noun)}`);
+    }
+  }
+  return extra;
 }
 
 function queryTopicTokens(query: string): string[] {
@@ -281,6 +361,35 @@ function dominantTopic(path: string, topics: string[]): string {
   return best;
 }
 
+/**
+ * Declares shapes, does not run behaviour: `types.ts`, `*.d.ts`, `interfaces/`.
+ * Real files a new hire may need — just never the answer to "where does X happen".
+ */
+export function isTypeDeclarationPath(path: string): boolean {
+  const n = normalizeOnboardingPath(path);
+  return (
+    /\.d\.ts$/.test(n) ||
+    /^(?:types?|interfaces?|enums?|constants?|typings?)$/.test(filenameStem(n)) ||
+    /(^|\/)(?:types?|interfaces?|typings?)\//.test(n)
+  );
+}
+
+/** The ask is about code that runs — "where does a chat message get sent". */
+const BEHAVIOURAL_ASK =
+  /\b(?:send|sends|sent|sending|dispatch|dispatches|dispatched|dispatching|handle|handles|handled|handling|handler|handlers|receive|receives|received|receiving|process|processes|processed|processing|route|routes|routed|routing|submit|submits|submitted|submitting|store|stores|stored|storing|save|saves|saved|saving|call|calls|called|trigger|triggers|triggered|invoke|invokes|invoked|flow|flows)\b/i;
+
+/** The user asked about the shapes themselves, so declarations are the answer. */
+const DECLARATION_ASK = /\b(?:types?|interfaces?|enums?|schemas?|typings?|contracts?)\b/i;
+
+/**
+ * `src/chat/types.ts` defines a ChatMessage; it is not where a chat message is
+ * sent. Declarations stay eligible as context — they just never lead a
+ * behavioural answer, which is how types.ts came to be named as the send path.
+ */
+export function isDemotedDeclarationPath(path: string, query: string): boolean {
+  return isTypeDeclarationPath(path) && BEHAVIOURAL_ASK.test(query) && !DECLARATION_ASK.test(query);
+}
+
 /** Higher is better for a new-hire first-files set. */
 export function onboardingPathScore(path: string, query: string): number {
   const n = normalizeOnboardingPath(path);
@@ -334,6 +443,11 @@ function onboardingLayerDedupeKey(path: string): string {
 }
 
 function compareOnboardingPaths(a: string, b: string, query: string): number {
+  const declarationDelta =
+    Number(isDemotedDeclarationPath(a, query)) - Number(isDemotedDeclarationPath(b, query));
+  if (declarationDelta !== 0) {
+    return declarationDelta;
+  }
   const scoreDelta = onboardingPathScore(b, query) - onboardingPathScore(a, query);
   if (scoreDelta !== 0) {
     return scoreDelta;
@@ -369,7 +483,9 @@ export function selectOnboardingEvidencePaths(paths: string[], query: string, ma
     (entry) => entry.score > 0 && !isOnboardingNoisePath(entry.path, query)
   );
   if (domain.length === 0) {
-    return unique.slice(0, max);
+    // Search order is test-heavy. Prefer any implementation file even at score 0.
+    const nonNoise = unique.filter((path) => !isOnboardingNoisePath(path, query));
+    return (nonNoise.length > 0 ? nonNoise : unique).slice(0, max);
   }
 
   const byLayer = new Map<string, (typeof domain)[number]>();
@@ -510,6 +626,16 @@ export function uncoveredOnboardingTopics(options: {
   ) {
     return options.topicQueries;
   }
+  // types.ts attached, send-path hits ignored — same job as frontend-only API attach.
+  if (
+    BEHAVIOURAL_ASK.test(rankQuery) &&
+    !DECLARATION_ASK.test(rankQuery) &&
+    attached.length > 0 &&
+    attached.every((path) => isTypeDeclarationPath(path)) &&
+    hits.some((path) => !isTypeDeclarationPath(path) && !isOnboardingNoisePath(path, rankQuery))
+  ) {
+    return options.topicQueries;
+  }
   return [];
 }
 
@@ -519,6 +645,45 @@ export function onboardingTopicsCovered(options: {
   attachedPaths: string[];
 }): boolean {
   return uncoveredOnboardingTopics(options).length === 0;
+}
+
+/**
+ * When a behavioural ask only attached types.ts, pull implementation hits next.
+ * Filename identity will not cover "send" → CoopChatSession.ts; the hit list can.
+ */
+export function pickBehaviouralImplementationPaths(options: {
+  query: string;
+  hitPaths: string[];
+  attachedPaths: string[];
+  maxPaths?: number;
+}): string[] {
+  if (!BEHAVIOURAL_ASK.test(options.query) || DECLARATION_ASK.test(options.query)) {
+    return [];
+  }
+  if (options.attachedPaths.some((path) => !isTypeDeclarationPath(path))) {
+    return [];
+  }
+  const used = new Set(options.attachedPaths.map((path) => normalizeOnboardingPath(path)));
+  const maxPaths = options.maxPaths ?? 4;
+  const out: string[] = [];
+  const ranked = [...options.hitPaths].sort((a, b) => compareOnboardingPaths(a, b, options.query));
+  for (const path of ranked) {
+    if (out.length >= maxPaths) {
+      break;
+    }
+    const key = normalizeOnboardingPath(path);
+    if (
+      !path.trim() ||
+      used.has(key) ||
+      isOnboardingNoisePath(path, options.query) ||
+      isTypeDeclarationPath(path)
+    ) {
+      continue;
+    }
+    used.add(key);
+    out.push(path);
+  }
+  return out;
 }
 
 /** One non-noise pathHit per uncovered topic, highest onboarding score first. */
@@ -546,6 +711,14 @@ export function pickOnboardingTopicAttachPaths(options: {
     }
     used.add(normalizeOnboardingPath(pick));
     out.push(pick);
+  }
+  if (out.length === 0) {
+    return pickBehaviouralImplementationPaths({
+      query: rankQuery,
+      hitPaths: options.hitPaths,
+      attachedPaths: options.attachedPaths,
+      maxPaths
+    });
   }
   return out;
 }

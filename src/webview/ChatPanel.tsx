@@ -770,6 +770,16 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           shouldHidePatchMarkdownForMessage(patchCards, messageTimestamp, suppressedPatchTimestamps));
 
       const elements: React.ReactElement[] = [];
+      // Prose first — "replace the following" must sit above the Patch card, not below it.
+      elements.push(
+        <ChatProse
+          key="chat-prose"
+          content={content}
+          relatedArtifactId={relatedArtifactId}
+          hidePatchFences={hidePatchFences}
+          activeFilePath={context.file}
+        />
+      );
       if (showPatchCard && card) {
         elements.push(
           <PatchCard
@@ -922,15 +932,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           />
         );
       }
-      elements.push(
-        <ChatProse
-          key="chat-prose"
-          content={content}
-          relatedArtifactId={relatedArtifactId}
-          hidePatchFences={hidePatchFences}
-          activeFilePath={context.file}
-        />
-      );
       return elements;
     },
     [

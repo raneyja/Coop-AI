@@ -73,10 +73,13 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
       "Answer the ## User focus ask first (Summary + **Your question**). Then synthesize a **repository-wide** overview weighted toward that focus using `<repo_entry_files>`, `<graph_context>`, and manifest metadata in attached context."
     );
     lines.push(
-      "When the focus asks where something lives, how a flow works, or which files to read first: **Your question** must name those files/symbols from attached `<repo_entry_files>` / focus-search bodies **before** Architecture. Five files to read first = five attached **domain** paths, not README / docker-compose / package.json unless that is the only evidence. Never name a path that is not in those attached files (no invented `models.py`). If the ask has multiple topics, cover each topic that has attached evidence — not five files from one topic. Tests/migrations are not the five unless that is the only attached evidence. Architecture / Key subsystems FAIL if they are only compose service names (web, api, postgres, redis) with no domain path."
+      "When the focus asks where something lives or how a flow works: **Your question** must name the attached files/symbols that answer that ask, before Architecture. If they also asked for files to read first: list the attached **domain** paths that support the answer — however many that is (2 is fine; 6 is fine). Do **not** pad to 5, repeat a file, or invent paths to fill a count. There is no official reading list. README / docker-compose / package.json only if that is the only evidence. Tests/migrations only if that is the only attached evidence. Never name a path that is not attached (no invented `models.py`). If the ask has multiple topics, cover each topic that has attached evidence. Architecture / Key subsystems FAIL if they are only compose service names (web, api, postgres, redis) with no domain path."
     );
     lines.push(
       "If the focus asks where **the API** creates, writes, or rejects something: name attached serializer/view/handler/API paths in **Your question**. A frontend modal, store, or widget is not the API — do not call it that. If no API-layer files are attached, say the API path was not in attached evidence; never invent one."
+    );
+    lines.push(
+      "A `types.ts`, `interfaces/`, or `.d.ts` file defines shapes. It is not where a message is sent, handled, or dispatched. If the focus asks where something happens and the only attached files are type declarations, say the implementation path was not in attached evidence — do not name the types file as the send/handle path, and do not pad a reading list. If implementation files are attached, name those first."
     );
   } else {
     lines.push(

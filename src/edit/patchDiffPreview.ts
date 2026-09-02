@@ -128,6 +128,28 @@ function insertAbovePrefix(hunk: PatchHunk): string | undefined {
   return extractInsertedPrefix(replace, search);
 }
 
+/**
+ * Bytes apply() splices before SEARCH, including blank lines.
+ * extractInsertedPrefix strips trailing newlines — that made the card
+ * number `run()` one line earlier than the buffer after Apply.
+ */
+function appliedInsertPrefix(hunk: PatchHunk): string | undefined {
+  const search = hunk.search;
+  const replace = hunk.replace;
+  if (search && replace.endsWith(search) && replace.length > search.length) {
+    return replace.slice(0, replace.length - search.length);
+  }
+  return insertAbovePrefix(hunk);
+}
+
+function splitAppliedInsertLines(prefix: string): string[] {
+  const lines = splitLines(prefix);
+  if ((prefix.endsWith("\n") || prefix.endsWith("\r\n")) && lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+  return lines;
+}
+
 function buildLocationPreviewLines(
   content: string,
   hit: SearchMatchHit,
@@ -160,7 +182,8 @@ function buildLocationPreviewLines(
   const inserted = insertAbovePrefix(hunk);
   let newLine = startLineIdx + 1;
   if (inserted !== undefined) {
-    for (const line of splitLines(inserted)) {
+    const insertLines = splitAppliedInsertLines(appliedInsertPrefix(hunk) ?? inserted);
+    for (const line of insertLines) {
       lines.push({ kind: "add", text: line, lineNumber: newLine });
       newLine += 1;
     }

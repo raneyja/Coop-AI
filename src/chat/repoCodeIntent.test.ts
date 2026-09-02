@@ -3,7 +3,13 @@
  * go. Run it to see coverage as a number rather than a claim.
  */
 import assert from "node:assert/strict";
-import { classifyRepoCodeIntent, isConversationalChat, type RepoCodeAction } from "./repoCodeIntent";
+import {
+  classifyRepoCodeIntent,
+  isConversationalChat,
+  isExplicitNoRepoSearchAsk,
+  isGeneralLanguageQuestion,
+  type RepoCodeAction
+} from "./repoCodeIntent";
 
 type Case = { q: string; expect: RepoCodeAction };
 
@@ -69,6 +75,23 @@ const CASES: Case[] = [
   { q: "Why is chat so slow?", expect: "none" },
   { q: "Why is this taking so long?", expect: "none" },
 
+  // Language recall (J2) — the answer is identical in every repo, so hunting can only miss.
+  {
+    q: "In TypeScript, how do I make every property of a type optional except one required key? Show a short example. Don't search the repo and don't invent a Coop file.",
+    expect: "none"
+  },
+  {
+    q: "In TypeScript, how do I make every property of a type optional except one required key?",
+    expect: "none"
+  },
+  { q: "In Python, what's the best way to merge two dictionaries?", expect: "none" },
+  { q: "How do I write a regex for an ISO date in JavaScript?", expect: "none" },
+  { q: "In Go, how do I return an error from a goroutine?", expect: "none" },
+  // Still repo asks — a language name does not make it general knowledge.
+  { q: "Add a TypeScript type to the auth middleware in this repo", expect: "change" },
+  { q: "Where is the TypeScript config for this project?", expect: "locate" },
+  { q: "In TypeScript, how does our session refresh flow work in this repo?", expect: "understand" },
+
   // Adversarial — must NOT loop (enterprise false-positive bar).
   { q: "Explain this function", expect: "none" },
   { q: "What does this function do?", expect: "none" },
@@ -114,3 +137,29 @@ assert.equal(isConversationalChat("hey there"), true);
 assert.equal(isConversationalChat("test"), false);
 assert.equal(isConversationalChat("Explain this function"), false);
 assert.equal(isConversationalChat("ok now add logging around requireAuth"), false);
+
+// J2 — the two independent nets that keep language recall out of the index.
+assert.equal(isExplicitNoRepoSearchAsk("Don't search the repo and don't invent a Coop file."), true);
+assert.equal(isExplicitNoRepoSearchAsk("without searching the codebase, what does Omit do?"), true);
+assert.equal(isExplicitNoRepoSearchAsk("no need to search the repository"), true);
+// The negation must sit on the search verb, not on a qualifier.
+assert.equal(isExplicitNoRepoSearchAsk("Don't just search the repo — read the file too."), false);
+assert.equal(isExplicitNoRepoSearchAsk("Where is requireAuth defined in this repo?"), false);
+
+assert.equal(
+  isGeneralLanguageQuestion("In TypeScript, how do I make every property optional except one?"),
+  true
+);
+assert.equal(isGeneralLanguageQuestion("What's the idiomatic way to sort a slice in Go?"), true);
+// A repo reference takes it back to a hunt, even with a language named.
+assert.equal(
+  isGeneralLanguageQuestion("In TypeScript, how do I type the auth middleware in this repo?"),
+  false
+);
+assert.equal(
+  isGeneralLanguageQuestion("In TypeScript, how do I type src/server/authMiddleware.ts?"),
+  false
+);
+assert.equal(isGeneralLanguageQuestion("In TypeScript, how do I type this function?"), false);
+// No language named — "how do we handle retries" is still about our code.
+assert.equal(isGeneralLanguageQuestion("How do we handle retries in the payment pipeline?"), false);

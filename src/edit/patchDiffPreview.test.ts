@@ -407,6 +407,42 @@ test("preview names StateManager.get_queryset and includes the class line", () =
   );
 });
 
+test("insert-above preview line numbers include the blank line Apply will write", () => {
+  const fileBody = [
+    "}",
+    "",
+    "async function run() {",
+    "  await testProOrgCatalogUncapped();",
+    "}"
+  ].join("\n");
+  const inserted =
+    "async function testFreeMaxIndexedRepos() {\n  assert.equal(FREE_MAX_INDEXED_REPOS, 3);\n}\n\n";
+  const state = buildPatchCardState(
+    {
+      files: [
+        {
+          relativePath: "src/server/indexedRepoQuota.test.ts",
+          hunks: [
+            {
+              search: "async function run() {",
+              replace: `${inserted}async function run() {`
+            }
+          ]
+        }
+      ]
+    },
+    {
+      status: "pending",
+      fileContents: { "src/server/indexedRepoQuota.test.ts": fileBody }
+    }
+  );
+  const hunk = state.files[0]?.hunks[0];
+  const runLine = hunk?.lines.find(
+    (line) => line.kind === "context" && line.text.includes("async function run()")
+  );
+  assert.equal(runLine?.lineNumber, 7);
+});
+
 console.log(`\npatchDiffPreview: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);

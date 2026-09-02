@@ -116,10 +116,17 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
   },
   {
     name: "edit",
-    aliases: ["patch", "fix"],
+    aliases: ["patch"],
     target: { kind: "composer-mode", mode: "edit" },
     label: "Edit code",
     description: "Generate search-replace patches for code changes"
+  },
+  {
+    name: "fix",
+    aliases: ["repair"],
+    target: { kind: "composer-mode", mode: "edit" },
+    label: "Fix code",
+    description: "Patch the open file from a bug or error description"
   },
   {
     name: "compare",

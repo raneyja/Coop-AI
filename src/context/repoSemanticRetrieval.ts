@@ -335,7 +335,7 @@ export async function searchRepoForFocusQuery(
       loadSemanticSearchContext({
         ...shared,
         query,
-        rankQuery: topicQueries.join(" ") || userQuery,
+        rankQuery: [userQuery, ...topicQueries].filter(Boolean).join(" "),
         rankMode: "onboarding",
         maxFiles: perQueryCap
       })
@@ -343,7 +343,7 @@ export async function searchRepoForFocusQuery(
   );
   return mergeFocusSearchResults(results, {
     query: topicQueries.join(" | "),
-    rankQuery: topicQueries.join(" ") || userQuery,
+    rankQuery: [userQuery, ...topicQueries].filter(Boolean).join(" "),
     maxFiles
   });
 }

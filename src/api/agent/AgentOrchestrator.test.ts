@@ -1612,8 +1612,9 @@ async function run(): Promise<void> {
         streamAnswer: async () => "should not stream a wrong-field validate"
       }
     );
-    assert.match(result.answer ?? "", /usable match/i);
+    assert.match(result.answer ?? "", /couldn.t find where the API rejects/i);
     assert.doesNotMatch(result.answer ?? "", /comment_html/);
+    assert.doesNotMatch(result.answer ?? "", /casing aliases/i);
   });
 
   await test("API-reject hunt jumps in-file from a wrong-field validate() to the asked field", async () => {
@@ -1667,6 +1668,421 @@ async function run(): Promise<void> {
         .join("\n") ?? "";
     assert.match(attached, /Parent is not valid issue_id/);
     assert.doesNotMatch(result.answer ?? "", /usable match/i);
+  });
+
+  await test("API-reject hunt finds a field raise whose message is not “is not valid”", async () => {
+    const htmlPath = "api/serializers/note.py";
+    const writerPath = "app/serializers/review.py";
+    const html = [
+      "class NoteSerializer:",
+      "    def validate(self, data):",
+      '        if data.get("comment_html"):',
+      '            raise serializers.ValidationError({"comment_html": "HTML content is not valid"})',
+      "        return data"
+    ].join("\n");
+    const writer = [
+      "class ReviewSerializer:",
+      "    def validate(self, data):",
+      '        if data.get("reviewer"):',
+      '            raise serializers.ValidationError("user not in project")',
+      "        return data"
+    ].join("\n");
+    const ask =
+      "A client sent a reviewer that isn’t on the team — the API returns an error. Where does the API reject a bad reviewer_id?";
+    const searches: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async (_repo, query) => {
+          searches.push(query);
+          if (/get\("reviewer"\)/.test(query) || /^reviewer(_id)?$/i.test(query)) {
+            return {
+              source: "zoekt",
+              stale: false,
+              hits: [
+                {
+                  fileName: writerPath,
+                  lineNumber: 4,
+                  content:
+                    'if data.get("reviewer"):\n            raise serializers.ValidationError("user not in project")',
+                  score: 0.4
+                }
+              ],
+              symbols: []
+            };
+          }
+          return {
+            source: "zoekt",
+            stale: false,
+            hits: [
+              {
+                fileName: htmlPath,
+                lineNumber: 3,
+                content:
+                  'raise serializers.ValidationError({"comment_html": "HTML content is not valid"})',
+                score: 0.99
+              }
+            ],
+            symbols: []
+          };
+        }
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        if (rel === writerPath) {
+          return { path: rel, content: writer };
+        }
+        if (rel === htmlPath) {
+          return { path: rel, content: html };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: ask,
+        repoId: "github:acme/app",
+        action: "locate",
+        maxSteps: 6
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async () =>
+          "ReviewSerializer.validate raises when the reviewer is not on the team."
+      }
+    );
+    assert.equal(
+      searches.some((q) => /get\("reviewer"\)/.test(q) || /^reviewer(_id)?$/i.test(q)),
+      true,
+      `must search reviewer access, got ${searches.join(", ")}`
+    );
+    const attached =
+      (result.context?.read_file as { files?: Array<{ content: string }> } | undefined)?.files
+        ?.map((file) => file.content)
+        .join("\n") ?? "";
+    assert.match(attached, /user not in project/);
+    assert.doesNotMatch(attached, /comment_html/);
+    assert.doesNotMatch(result.answer ?? "", /casing aliases/i);
+    assert.doesNotMatch(result.answer ?? "", /couldn.t find where the API rejects/i);
+  });
+
+  await test("API-reject hunt attaches invite email, not a signup email 400", async () => {
+    const signupPath = "app/signup_api.py";
+    const invitePath = "app/invite_user.py";
+    const signup = [
+      "export function handleSignup(body) {",
+      "  if (!isValidEmail(body.email)) {",
+      '    raise ValidationError({"email": "Enter a valid email address."});',
+      "  }",
+      "}"
+    ].join("\n");
+    const invite = [
+      "export async function inviteUser(input) {",
+      "  const email = input.email.trim();",
+      "  if (!email) {",
+      '    throw new Error("email is required");',
+      "  }",
+      "}"
+    ].join("\n");
+    const ask =
+      "A client sent an org invite with a blank email — the API returns an error. Where does the API reject a bad email?";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async (_repo, query) => {
+          if (/invite/i.test(query)) {
+            return {
+              source: "zoekt",
+              stale: false,
+              hits: [
+                {
+                  fileName: invitePath,
+                  lineNumber: 4,
+                  content: 'throw new Error("email is required")',
+                  score: 0.8
+                }
+              ],
+              symbols: []
+            };
+          }
+          return {
+            source: "zoekt",
+            stale: false,
+            hits: [
+              {
+                fileName: signupPath,
+                lineNumber: 3,
+                content: 'raise ValidationError({"email": "Enter a valid email address."})',
+                score: 0.99
+              },
+              {
+                fileName: "app/signup_api.test.ts",
+                lineNumber: 20,
+                content: 'assert.equal(body.error, "invalid_email")',
+                score: 0.95
+              }
+            ],
+            symbols: []
+          };
+        }
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        if (rel === invitePath) {
+          return { path: rel, content: invite };
+        }
+        if (rel === signupPath) {
+          return { path: rel, content: signup };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: ask,
+        repoId: "github:acme/app",
+        action: "locate",
+        maxSteps: 6
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async () => "inviteUser throws when email is missing."
+      }
+    );
+    const attached =
+      (result.context?.read_file as { files?: Array<{ path?: string; content: string }> } | undefined)
+        ?.files ?? [];
+    assert.equal(
+      attached.some((file) => file.path === invitePath),
+      true,
+      `must attach invite_user, got ${attached.map((file) => file.path).join(", ")}`
+    );
+    assert.equal(
+      attached.some((file) => /signup/i.test(file.path ?? "")),
+      false
+    );
+    assert.match(attached.map((file) => file.content).join("\n"), /email is required/);
+    assert.doesNotMatch(result.answer ?? "", /Enter a valid email address/);
+  });
+
+  await test("API-reject hunt skips invite callers that rethrow and attaches the email check", async () => {
+    const callerPath = "app/org_api.ts";
+    const invitePath = "app/invite_user.ts";
+    const caller = [
+      "    try {",
+      "      inviteResult = await inviteUser({ email: adminEmail, role: \"admin\" });",
+      "    } catch (error) {",
+      "      if (isSeatLimitError(error)) {",
+      "        writeJson(response, 403, { error: error.code, seats: error.seats, used: error.used });",
+      "        return true;",
+      "      }",
+      "      throw error;",
+      "    }"
+    ].join("\n");
+    const invite = [
+      "export async function inviteUser(input) {",
+      "  const email = input.email.trim();",
+      "  if (!email) {",
+      '    throw new Error("email is required");',
+      "  }",
+      "}"
+    ].join("\n");
+    const ask =
+      "A client sent an org invite with a blank email — the API returns an error. Where does the API reject a bad email?";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: callerPath,
+              lineNumber: 2,
+              content: caller,
+              score: 0.99
+            },
+            {
+              fileName: invitePath,
+              lineNumber: 4,
+              content: 'throw new Error("email is required")',
+              score: 0.2
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        if (rel === callerPath) {
+          return { path: rel, content: caller };
+        }
+        if (rel === invitePath) {
+          return { path: rel, content: invite };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: ask,
+        repoId: "github:acme/app",
+        action: "locate",
+        maxSteps: 6
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async () => "inviteUser throws when email is missing."
+      }
+    );
+    const attached =
+      (result.context?.read_file as { files?: Array<{ path?: string; content: string }> } | undefined)
+        ?.files ?? [];
+    assert.equal(
+      attached.some((file) => file.path === invitePath),
+      true,
+      `must attach invite_user, got ${attached.map((file) => file.path).join(", ")}`
+    );
+    assert.equal(
+      attached.some((file) => file.path === callerPath),
+      false,
+      "must not stop on the invite caller rethrow"
+    );
+    assert.match(attached.map((file) => file.content).join("\n"), /email is required/);
+    assert.doesNotMatch(attached.map((file) => file.content).join("\n"), /adminEmail/);
+  });
+
+  await test("API-reject hunt jumps in-file from an invite caller to the email 400", async () => {
+    const apiPath = "src/server/org_api.ts";
+    const filler = Array.from({ length: 40 }, (_, i) => `  const unused${i} = ${i};`).join("\n");
+    const body = [
+      "    try {",
+      "      inviteResult = await inviteUser({ email: adminEmail, role: \"admin\" });",
+      "    } catch (error) {",
+      "      if (isSeatLimitError(error)) {",
+      "        writeJson(response, 403, { error: error.code, seats: error.seats, used: error.used });",
+      "        return true;",
+      "      }",
+      "      throw error;",
+      "    }",
+      filler,
+      "async function handleInviteUser(body, response) {",
+      "  const email = String(body.email ?? \"\").trim();",
+      "  if (!email) {",
+      '    writeJson(response, 400, { error: "email is required" });',
+      "    return true;",
+      "  }",
+      "}"
+    ].join("\n");
+    const ask =
+      "A client sent an org invite with a blank email — the API returns an error. Where does the API reject a bad email?";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: apiPath,
+              lineNumber: 2,
+              content:
+                "inviteResult = await inviteUser({ email: adminEmail, role: \"admin\" });",
+              score: 0.99
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        if (rel !== apiPath) {
+          return undefined;
+        }
+        return { path: rel, content: body };
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: ask,
+        repoId: "github:acme/app",
+        action: "locate",
+        maxSteps: 6
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async () => "The invite handler returns 400 when email is missing."
+      }
+    );
+    const attached =
+      (result.context?.read_file as { files?: Array<{ path?: string; content: string }> } | undefined)
+        ?.files ?? [];
+    const text = attached.map((file) => file.content).join("\n");
+    assert.match(text, /email is required/);
+    assert.doesNotMatch(text, /throw error/);
+  });
+
+  await test("API-reject miss is one pass: no second hunt, no re-read of skipped files", async () => {
+    const junk = [
+      "api/utils/item_filters.py",
+      "web/components/item-chip.tsx",
+      "api/db/migrations/0045_props.py"
+    ];
+    const searches: string[] = [];
+    const reads: string[] = [];
+    let planTurns = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async (_repo, query) => {
+          searches.push(query);
+          return {
+            source: "zoekt",
+            stale: false,
+            hits: junk.map((fileName, index) => ({
+              fileName,
+              lineNumber: 1,
+              content: `export const LABEL = "${query}";`,
+              score: 0.9 - index * 0.1
+            })),
+            symbols: []
+          };
+        }
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        return { path: rel, content: 'export const LABEL = "chip";\n' };
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message:
+          "A client sent a reviewer that isn’t on the team — the API returns an error. Where does the API reject a bad reviewer_id?",
+        repoId: "github:acme/app",
+        action: "locate",
+        maxSteps: 8
+      },
+      {
+        planTurn: async () => {
+          planTurns += 1;
+          return JSON.stringify({ tool: "search_code", args: { query: "reviewer" } });
+        },
+        streamAnswer: async () => "should not stream after an exhausted hunt"
+      }
+    );
+    assert.equal(planTurns, 0, `must not start a second hunt, planTurns=${planTurns}`);
+    assert.equal(
+      searches.length,
+      new Set(searches.map((q) => q.toLowerCase())).size,
+      `must not repeat search queries, got ${searches.join(" | ")}`
+    );
+    assert.ok(
+      reads.length < junk.length * 4,
+      `skipped files must not be re-read every query, reads=${reads.length} (${reads.join(", ")})`
+    );
+    for (const path of junk) {
+      const n = reads.filter((r) => r === path).length;
+      assert.ok(n <= 3, `${path} re-read ${n} times`);
+    }
+    assert.match(result.answer ?? "", /couldn.t find where the API rejects/i);
+    assert.doesNotMatch(result.answer ?? "", /casing aliases/i);
+    assert.doesNotMatch(result.answer ?? "", /should not stream/i);
   });
 
   console.log(`\nAgentOrchestrator: ${passed}/${passed + failed} tests passed`);

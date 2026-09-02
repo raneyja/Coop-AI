@@ -202,12 +202,15 @@ async function run(): Promise<void> {
     assert.ok(prompt.includes("what are the main services and how does a work item flow from create → board?"));
     assert.ok(prompt.includes("**Your question**"));
     assert.ok(prompt.includes("Answer the ## User focus ask first"));
-    assert.ok(prompt.includes("Five files to read first"));
+    assert.ok(prompt.includes("however many that is"));
+    assert.ok(prompt.includes("Do **not** pad to 5"));
     assert.ok(prompt.includes("no invented `models.py`"));
     assert.ok(prompt.includes("cover each topic that has attached evidence"));
-    assert.ok(prompt.includes("Tests/migrations are not the five"));
+    assert.ok(prompt.includes("Tests/migrations only if"));
     assert.ok(prompt.includes("compose service names"));
     assert.ok(prompt.includes("A frontend modal, store, or widget is not the API"));
+    assert.ok(prompt.includes("not where a message is sent"));
+    assert.ok(prompt.includes("do not name the types file as the send/handle path"));
     assert.ok(prompt.includes("## Section quality gates (strict pass / fail)"));
     assert.ok(prompt.includes("### Focus-search evidence"));
     assert.ok(prompt.includes("apps/api/issue/views.py"));

@@ -3,6 +3,8 @@ import {
   matchSlashCommands,
   parseSlashCommand,
   segmentComposerSlashHighlights,
+  SLASH_COMMANDS,
+  slashCommandDisplayToken,
   slashCommandHistoryContent,
   slashMenuQuery
 } from "./slashCommands";
@@ -166,6 +168,25 @@ test("parses edit alias patch", () => {
   assert.equal(parsed!.def.name, "edit");
 });
 
+test("/fix is its own command on the patch path (Copilot muscle memory)", () => {
+  const parsed = parseSlashCommand("/fix extractBearerToken throws on missing headers");
+  assert.ok(parsed);
+  assert.equal(parsed!.def.name, "fix");
+  assert.equal(parsed!.def.target.kind, "composer-mode");
+  if (parsed!.def.target.kind === "composer-mode") {
+    assert.equal(parsed!.def.target.mode, "edit");
+  }
+  assert.equal(parsed!.args, "extractBearerToken throws on missing headers");
+});
+
+test("/fix is discoverable in the typeahead with its own label", () => {
+  const matches = matchSlashCommands("fi");
+  const fix = matches.find((def) => def.name === "fix");
+  assert.ok(fix, "typing /fi must offer /fix");
+  assert.equal(fix!.label, "Fix code");
+  assert.equal(slashCommandDisplayToken(fix!), "fix");
+});
+
 test("parses compare command with two repos and topic", () => {
   const parsed = parseSlashCommand("/compare plane documenso auth tenancy");
   assert.ok(parsed);
@@ -235,7 +256,8 @@ test("slashMenuQuery returns null once a space is typed or not slash-prefixed", 
 
 // ── matchSlashCommands ───────────────────────────────────────────────────────
 test("matchSlashCommands returns all commands for an empty query", () => {
-  assert.equal(matchSlashCommands("").length, 13);
+  assert.equal(matchSlashCommands("").length, SLASH_COMMANDS.length);
+  assert.ok(SLASH_COMMANDS.length >= 13);
 });
 
 test("matchSlashCommands includes integration commands like slack", () => {

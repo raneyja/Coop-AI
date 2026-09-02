@@ -283,24 +283,34 @@ export function sutAssertionGrounding(
   ask: string,
   files: Array<{ path?: string; content?: string }>
 ): string | undefined {
-  const elapsedMs = parseElapsedMsFromAsk(ask);
   const sutBody = sutSourceFromFiles(files);
+  const parts: string[] = [];
+  const elapsedMs = parseElapsedMsFromAsk(ask);
   const fn = functionNameForSutAsk(ask, sutBody);
-  if (elapsedMs === undefined || !fn || !sutBody.includes(fn)) {
-    return undefined;
+  if (elapsedMs !== undefined && fn && sutBody.includes(fn)) {
+    const actual = evaluateNamedFunctionAtElapsedMs(sutBody, fn, elapsedMs);
+    if (actual !== undefined) {
+      const claimsGtZero = /greater than zero|still\s*>\s*0|still positive/i.test(ask);
+      parts.push(`Attached SUT: ${fn} at elapsed ${elapsedMs}ms returns ${actual}.`);
+      parts.push("Assert that number.");
+      parts.push(
+        claimsGtZero && actual === 0
+          ? `If it is 0, do not copy “greater than zero” from the user ask.`
+          : "If the user stated a different number, follow the attached implementation."
+      );
+    }
   }
-  const actual = evaluateNamedFunctionAtElapsedMs(sutBody, fn, elapsedMs);
-  if (actual === undefined) {
-    return undefined;
+  const literals = parseExportedSutLiterals(sutBody);
+  for (const [name, value] of literals) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (!new RegExp(`\\b${escaped}\\b`).test(ask)) {
+      continue;
+    }
+    parts.push(
+      `Attached SUT: ${name} is ${String(value)}. Assert that value, not a different number or duration from the user ask.`
+    );
   }
-  const claimsGtZero = /greater than zero|still\s*>\s*0|still positive/i.test(ask);
-  return [
-    `Attached SUT: ${fn} at elapsed ${elapsedMs}ms returns ${actual}.`,
-    `Assert that number.`,
-    claimsGtZero && actual === 0
-      ? `If it is 0, do not copy “greater than zero” from the user ask.`
-      : `If the user stated a different number, follow the attached implementation.`
-  ].join(" ");
+  return parts.length > 0 ? parts.join(" ") : undefined;
 }
 
 export type SutNumericExpectation = {
@@ -368,6 +378,115 @@ export function rewritePatchSetToMatchSut<
         ...hunk,
         replace: isTestSourcePath(file.relativePath)
           ? rewriteTestReplaceToMatchSut(hunk.replace, actual)
+          : hunk.replace
+      }))
+    }))
+  };
+}
+
+export type SutLiteral = number | boolean;
+
+/**
+ * SCREAMING_SNAKE constants from attached implementation.
+ * Used to rewrite test assertions that copy a wrong English number.
+ */
+export function parseExportedSutLiterals(source: string): Map<string, SutLiteral> {
+  const literals = new Map<string, SutLiteral>();
+  for (const match of source.matchAll(
+    /(?:export\s+)?const\s+([A-Z][A-Z0-9_]*)\s*=\s*([0-9_]+|true|false)\b/g
+  )) {
+    const name = match[1];
+    const raw = match[2];
+    if (!name || raw === undefined) {
+      continue;
+    }
+    if (raw === "true") {
+      literals.set(name, true);
+      continue;
+    }
+    if (raw === "false") {
+      literals.set(name, false);
+      continue;
+    }
+    const value = Number(raw.replace(/_/g, ""));
+    if (Number.isFinite(value)) {
+      literals.set(name, value);
+    }
+  }
+  return literals;
+}
+
+function claimedNumericLiteral(raw: string): number | undefined {
+  const trimmed = raw.replace(/\s/g, "");
+  if (/^\d+\*1000$/.test(trimmed)) {
+    const n = Number(trimmed.split("*")[0]);
+    return Number.isFinite(n) ? n * 1000 : undefined;
+  }
+  const n = Number(trimmed.replace(/_/g, ""));
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * Close the loop: if the patch asserts a SUT constant equals the wrong number,
+ * rewrite to the attached value before the card is shown.
+ */
+export function rewriteTestReplaceToMatchConstants(
+  replace: string,
+  literals: Map<string, SutLiteral>
+): string {
+  let next = replace;
+  for (const [name, actual] of literals) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (typeof actual === "boolean") {
+      next = next.replace(
+        new RegExp(`assert\\.equal\\(\\s*${escaped}\\s*,\\s*(true|false)\\s*\\)`, "g"),
+        (full, claimed: string) =>
+          claimed === String(actual) ? full : `assert.equal(${name}, ${actual})`
+      );
+      continue;
+    }
+    const actualText = String(actual);
+    next = next.replace(
+      new RegExp(
+        `assert\\.equal\\(\\s*${escaped}\\s*,\\s*([0-9_]+(?:\\s*\\*\\s*1000)?)\\s*\\)`,
+        "g"
+      ),
+      (full, claimed: string) => {
+        const n = claimedNumericLiteral(claimed);
+        if (n === actual) {
+          return full;
+        }
+        return `assert.equal(${name}, ${actualText})`;
+      }
+    );
+    next = next.replace(
+      new RegExp(`assert\\.ok\\(\\s*${escaped}\\s*===\\s*([0-9_]+)\\s*\\)`, "g"),
+      (full, claimed: string) => {
+        const n = claimedNumericLiteral(claimed);
+        if (n === actual) {
+          return full;
+        }
+        return `assert.equal(${name}, ${actualText})`;
+      }
+    );
+  }
+  return next;
+}
+
+export function rewritePatchSetToMatchConstants<
+  T extends { files: Array<{ relativePath: string; hunks: Array<{ search: string; replace: string }> }> }
+>(patches: T, literals: Map<string, SutLiteral>): T {
+  if (literals.size === 0) {
+    return patches;
+  }
+  return {
+    ...patches,
+    files: patches.files.map((file) => ({
+      ...file,
+      hunks: file.hunks.map((hunk) => ({
+        ...hunk,
+        replace: isTestSourcePath(file.relativePath)
+          ? rewriteTestReplaceToMatchConstants(hunk.replace, literals)
           : hunk.replace
       }))
     }))

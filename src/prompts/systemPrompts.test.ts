@@ -132,6 +132,8 @@ test("comprehension use case includes audience block via withOutputContract", ()
   assert.ok(prompt.includes("FAIL:"));
   assert.ok(prompt.includes("generic form→API→DB"));
   assert.ok(prompt.includes("attached domain paths"));
+  assert.ok(prompt.includes("Do not pad to N"));
+  assert.ok(prompt.includes("padding or repeating files to hit a count"));
   assert.ok(prompt.includes("each topic that has attached evidence"));
   assert.ok(prompt.includes("invented paths"));
   assert.ok(prompt.includes("models.py"));
@@ -199,6 +201,8 @@ test("code_edit use case uses patch output contract without Summary template", (
   assert.ok(prompt.includes("assertions must agree with the attached SUT"));
   assert.ok(prompt.includes("sibling tests in this file"));
   assert.ok(prompt.includes("sut_assertions"));
+  assert.ok(prompt.includes("Changing only a parameter type"));
+  assert.ok(prompt.includes("is not a guard"));
   assert.equal(prompt.includes("Uniform response template"), false);
   assert.equal(prompt.includes("1. **Summary** or **Answer**"), false);
   assert.equal(prompt.includes("Selection or focus hints mark where to start looking"), false);

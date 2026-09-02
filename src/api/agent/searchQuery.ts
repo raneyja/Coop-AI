@@ -51,6 +51,8 @@ const IDENTIFIER =
   /\b(?:[a-z][a-zA-Z]*[A-Z][a-zA-Z0-9]*|[A-Z][a-z]+[A-Z][a-zA-Z0-9]*|[a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/g;
 const MAX_SEARCH_CHARS = 48;
 const MAX_FALLBACK_QUERIES = 9;
+/** API-reject hunts need field-access queries, not only “is not valid” slogans. */
+const MAX_API_REJECT_FALLBACK_QUERIES = 12;
 const SOURCE_FILE_EXT =
   "ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|rb|md|json|yml|yaml|css|html|vue|svelte|c|h|cpp|cc|kt|swift";
 const NAMED_SOURCE_FILE = new RegExp(
@@ -295,6 +297,14 @@ export function shouldSkipEvidencePath(fileName: string, userMessage?: string): 
   if (userMessage && isApiRejectAsk(userMessage) && isQueryFilterPath(fileName)) {
     return true;
   }
+  if (
+    userMessage &&
+    isApiRejectAsk(userMessage) &&
+    isTestPath(fileName) &&
+    !userAskedAboutTests(userMessage)
+  ) {
+    return true;
+  }
   // Named symbol + change/locate: skip tests unless the user asked about tests.
   // Otherwise contract tests that say "require_authentication" steal requireAuth.
   if (
@@ -347,6 +357,10 @@ export function fallbackAgentSearchQueries(userMessage: string): string[] {
     for (const rejectQuery of apiRejectSearchQueries(userMessage)) {
       push(rejectQuery);
     }
+    for (const alias of proseLocateSearchAliases(userMessage)) {
+      push(alias);
+    }
+    return unique.slice(0, MAX_API_REJECT_FALLBACK_QUERIES);
   }
   push(primary);
   for (const alias of proseLocateSearchAliases(userMessage)) {
@@ -460,7 +474,7 @@ export function pickSearchHitsToRead<T extends RankedSearchHit & { content?: str
       pool = [...writers, ...pool.filter((hit) => !writers.includes(hit))];
     }
     const fieldHits = pool.filter((hit) =>
-      contentLooksLikeAskedFieldReject(hit.content ?? "", userMessage)
+      contentLooksLikeAskedFieldReject(hit.content ?? "", userMessage, hit.fileName)
     );
     if (fieldHits.length > 0) {
       pool = fieldHits;
@@ -798,22 +812,36 @@ export function apiRejectSearchQueries(userMessage: string): string[] {
     unique.push(clipped);
   };
   const fields = askedRejectFieldTokens(userMessage);
+  const jobs = askedRejectJobTokens(userMessage);
   const stems = [...new Set(fields.map((field) => field.replace(/_id$/i, "")))];
   const preferred = ["parent", "assignee", "state", "estimate", "transition"];
   const orderedStems = [
     ...preferred.filter((stem) => stems.includes(stem)),
     ...stems.filter((stem) => !preferred.includes(stem))
   ];
+  for (const job of jobs) {
+    push(job);
+    for (const stem of orderedStems) {
+      if (stem.length >= 3) {
+        push(`${job} ${stem}`);
+      }
+    }
+  }
   for (const stem of orderedStems) {
     if (stem.length < 3) {
       continue;
     }
+    // Field access first — many APIs raise “user not in project”, not “X is not valid”.
+    push(`get("${stem}")`);
+    push(`get("${stem}_id")`);
+    push(`["${stem}"]`);
+    push(stem);
+    push(`${stem}_id`);
     push(`${stem} is not valid`);
+    push(`${stem} is required`);
     push(`not valid ${stem}`);
     push(`invalid ${stem}`);
     push(`ValidationError ${stem}`);
-    push(`get("${stem}")`);
-    push(`get("${stem}_id")`);
   }
   for (const field of fields) {
     if (/_id$/i.test(field)) {
@@ -887,11 +915,73 @@ export function askedRejectFieldTokens(userMessage: string): string[] {
   return [...tokens].filter((token) => token.length >= 3);
 }
 
-/** Hit body assigns/rejects — not a group enum, seed row, or read-only serializer. */
-export function contentLooksLikeWriteReject(content: string): boolean {
-  return /\b(raise |throw |ValidationError|ValueError|Forbidden|is_valid_transition|invalid.{0,16}transition|validate_state)\b/i.test(
-    content
+/**
+ * Workflow the user named (invite vs signup vs checkout). Empty when the ask
+ * is only a field. Repo-agnostic nouns — not product paths.
+ */
+const REJECT_JOB_STEMS = ["invite", "signup", "register", "checkout", "login"] as const;
+
+function compactJobText(text: string): string {
+  return text.toLowerCase().replace(/[_-\s]/g, "");
+}
+
+export function askedRejectJobTokens(userMessage: string): string[] {
+  const compact = compactJobText(userMessage);
+  const jobs: string[] = [];
+  for (const stem of REJECT_JOB_STEMS) {
+    if (compact.includes(stem)) {
+      jobs.push(stem);
+    }
+  }
+  const spaced = userMessage.toLowerCase();
+  if (/\bsign\s*up\b/.test(spaced) && !jobs.includes("signup")) {
+    jobs.push("signup");
+  }
+  if (/\bsign\s*in\b/.test(spaced) && !jobs.includes("login")) {
+    jobs.push("login");
+  }
+  return jobs;
+}
+
+function contentMentionsAskedJob(content: string, fileName: string, jobs: string[]): boolean {
+  if (jobs.length === 0) {
+    return true;
+  }
+  const hay = compactJobText(`${fileName}\n${content}`);
+  return jobs.some((job) => hay.includes(job));
+}
+
+/** Rethrow of a caught error — not the check that rejected the request. */
+function isRethrowLine(line: string): boolean {
+  return /\b(throw|raise)\s+(error|err|e|ex|exc|exception)\s*;?\s*$/i.test(line.trim());
+}
+
+function lineLooksLikeClientValidationReject(line: string): boolean {
+  return (
+    /\bwriteJson\s*\([^)]*\b(400|422)\b/i.test(line) ||
+    /\b(res\.status|abort)\s*\(\s*(400|422)\b/i.test(line) ||
+    /\bstatus\s*[:=]\s*(400|422)\b/i.test(line)
   );
+}
+
+function lineLooksLikeWriteReject(line: string): boolean {
+  const text = line.replace(/^\d+\|/, "");
+  if (isRethrowLine(text)) {
+    return false;
+  }
+  if (
+    /\b(raise |throw |ValidationError|ValueError|Forbidden|is_valid_transition|invalid.{0,16}transition|validate_state)\b/i.test(
+      text
+    )
+  ) {
+    return true;
+  }
+  return lineLooksLikeClientValidationReject(text);
+}
+
+/** Hit body assigns/rejects — not a group enum, seed row, rethrow, or read-only serializer. */
+export function contentLooksLikeWriteReject(content: string): boolean {
+  return content.split("\n").some((row) => lineLooksLikeWriteReject(row));
 }
 
 /**
@@ -923,36 +1013,64 @@ function validationErrorMessages(content: string): string {
   return chunks.join("\n");
 }
 
-function contentChecksAskedFieldKey(content: string, fields: string[]): boolean {
+function fieldTokenInText(text: string, field: string): boolean {
+  const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp(`\\b${escaped}\\b`, "i").test(text)) {
+    return true;
+  }
+  if (!/_/.test(field)) {
+    return false;
+  }
+  const camel = field.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
+  return new RegExp(`\\b${camel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text);
+}
+
+/** Guard on the asked field — not `email: adminEmail` passed into a callee. */
+function contentHasAskedFieldGuard(content: string, fields: string[]): boolean {
   return fields.some((field) => {
     const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    return new RegExp(
-      `(?:data\\.get\\(|\\[)\\s*['"]${escaped}['"]|\\b${escaped}\\s*=`,
-      "i"
-    ).test(content);
+    return (
+      new RegExp(`\\.get\\(\\s*['"]${escaped}['"]`, "i").test(content) ||
+      new RegExp(`\\[\\s*['"]${escaped}['"]\\s*\\]`, "i").test(content) ||
+      new RegExp(`if\\s*\\(\\s*!+\\s*(?:[\\w$]+\\.)*${escaped}\\b`, "i").test(content) ||
+      new RegExp(`if\\s+not\\s+(?:[\\w$]+\\.)*${escaped}\\b`, "i").test(content) ||
+      new RegExp(`\\b${escaped}\\s*(?:===|!==|==|!=)\\s*(?:['"]['']|null|undefined|None)`, "i").test(
+        content
+      )
+    );
   });
+}
+
+function quotedRejectText(content: string): string {
+  const quotes = [...content.matchAll(/["']([^"']{2,})["']/g)].map((match) => match[1] ?? "");
+  return `${validationErrorMessages(content)}\n${quotes.join("\n")}`;
+}
+
+/** ±12 lines around each raise/throw so a sibling field's validate() does not count. */
+function rejectWindows(content: string): string[] {
+  const rows = content.split("\n");
+  const windows: string[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    if (!contentLooksLikeWriteReject(rows[i] ?? "")) {
+      continue;
+    }
+    windows.push(rows.slice(Math.max(0, i - 12), i + 8).join("\n"));
+  }
+  if (windows.length === 0 && contentLooksLikeWriteReject(content)) {
+    windows.push(content);
+  }
+  return windows;
 }
 
 function contentMentionsAskedField(content: string, fields: string[]): boolean {
   if (fields.length === 0) {
     return false;
   }
-  const messages = validationErrorMessages(content);
-  const haystack = (messages || content).toLowerCase();
-  const inRejectText = fields.some((field) => {
-    const needle = field.toLowerCase().replace(/_/g, "");
-    const compact = haystack.replace(/_/g, "");
-    if (needle.length >= 3 && compact.includes(needle)) {
-      return true;
-    }
-    return new RegExp(`\\b${field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(
-      messages || content
-    );
-  });
-  if (inRejectText) {
+  const messages = quotedRejectText(content);
+  if (fields.some((field) => fieldTokenInText(messages, field))) {
     return true;
   }
-  return contentChecksAskedFieldKey(content, fields);
+  return contentHasAskedFieldGuard(content, fields);
 }
 
 /**
@@ -961,16 +1079,21 @@ function contentMentionsAskedField(content: string, fields: string[]): boolean {
  */
 export function contentLooksLikeAskedFieldReject(
   content: string,
-  userMessage: string
+  userMessage: string,
+  fileName = ""
 ): boolean {
   if (!contentLooksLikeWriteReject(content)) {
+    return false;
+  }
+  const jobs = askedRejectJobTokens(userMessage);
+  if (!contentMentionsAskedJob(content, fileName, jobs)) {
     return false;
   }
   const fields = askedRejectFieldTokens(userMessage);
   if (fields.length === 0) {
     return contentLooksLikeStateTransitionReject(content);
   }
-  if (contentMentionsAskedField(content, fields)) {
+  if (rejectWindows(content).some((window) => contentMentionsAskedField(window, fields))) {
     return true;
   }
   if (fields.some((field) => field === "state" || field === "transition" || field === "state_id")) {
@@ -1066,13 +1189,14 @@ export function filterWriteRejectFiles<T extends { path?: string; content?: stri
     if (path && shouldSkipEvidencePath(path, userMessage)) {
       return false;
     }
-    return contentLooksLikeAskedFieldReject(file.content ?? "", userMessage);
+    return contentLooksLikeAskedFieldReject(file.content ?? "", userMessage, path);
   });
 }
 
 export function lineNumberOfWriteReject(
   content: string,
-  userMessage?: string
+  userMessage?: string,
+  fileName?: string
 ): number | undefined {
   const rows = content.split("\n").map((row) => row.replace(/^\d+\|/, ""));
   const fields = userMessage ? askedRejectFieldTokens(userMessage) : [];
@@ -1082,7 +1206,7 @@ export function lineNumberOfWriteReject(
     }
     const nearby = rows.slice(Math.max(0, i - 12), i + 8).join("\n");
     if (userMessage && fields.length > 0) {
-      if (contentLooksLikeAskedFieldReject(nearby, userMessage)) {
+      if (contentLooksLikeAskedFieldReject(nearby, userMessage, fileName ?? "")) {
         return i + 1;
       }
       continue;
@@ -1144,7 +1268,7 @@ function rankHit(hit: RankedSearchHit, terms: string[], userMessage?: string): n
   }
   if (userMessage && isApiRejectAsk(userMessage)) {
     const snippet = (hit as { content?: string }).content ?? "";
-    if (contentLooksLikeAskedFieldReject(snippet, userMessage)) {
+    if (contentLooksLikeAskedFieldReject(snippet, userMessage, hit.fileName)) {
       rank += 24;
     } else if (contentLooksLikeWriteReject(snippet)) {
       rank -= 12;

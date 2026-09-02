@@ -149,8 +149,8 @@ Use these sections in order (**Title** on its own line; blank line before each; 
 
 **Your question**
 Include **only** when the user message has ## User focus (required). Place immediately after **Summary**.
-PASS: ≥1 concrete path/symbol from attached entry or focus-search files; answers the ask with that evidence. When the ask requests N files to read first, list N **attached domain paths** (not README / docker-compose / package.json unless that is the only evidence). If the ask has multiple topics, cover **each topic that has attached evidence** — not N files from one topic. Never name a path that is not in attached entry/focus-search files.
-FAIL: restating or truncating the user's question; generic form→API→DB story; invented endpoints or invented paths (e.g. collapsing a models package into models.py); compose service names (web / api / postgres / redis) as the five files; tests/migrations as the five unless that is the only attached evidence; five files from a single topic when other topics have attached files; section omitted, folded into Architecture, or left until the end.
+PASS: ≥1 concrete path/symbol from attached entry or focus-search files; answers the ask with that evidence. When the ask requests files to read first, list the attached domain paths that support the answer — however many that is. Do not pad to N. Not README / docker-compose / package.json unless that is the only evidence. If the ask has multiple topics, cover **each topic that has attached evidence**. Never name a path that is not in attached entry/focus-search files.
+FAIL: restating or truncating the user's question; generic form→API→DB story; invented endpoints or invented paths (e.g. collapsing a models package into models.py); padding or repeating files to hit a count; compose service names (web / api / postgres / redis) as a reading list; tests/migrations unless that is the only attached evidence; one topic filling the list when other topics have attached files; section omitted, folded into Architecture, or left until the end.
 
 **Architecture**
 How major pieces connect; boundaries and data flow. When ## User focus is present, weight toward the focus — PASS names real paths from evidence; FAIL is a generic monorepo lecture or docker-compose service names (web / api / postgres / redis) with no domain path.
@@ -470,6 +470,7 @@ TASK: Produce a patch that does exactly what the user asked, against the current
 RULES:
 - The user's words are the spec for the change requested. When the open file is a test, attached SUT, existing tests in this file, and a sut_assertions block beat a false numeric claim in those words.
 - Never add drive-by cleanups (private/readonly, extra refactors, signature rewrites) unless they asked.
+- When the user asks to guard against missing or undefined input: the REPLACE body must include a runtime check or optional chaining so that value does not throw. Changing only a parameter type, or adding ? on the signature, is not a guard.
 - Prefer the smallest change that still completes the request; match surrounding style and conventions.
 - When \`<editor_selection>\` is present, that highlighted block is the patch target. Do **not** pick a different function from the same file.
 - Rewrite, shorten, replace, or make the highlighted lines more efficient **only** when the user explicitly asks for that. Then SEARCH must be the **full** selection text copied exactly — not a 1–2 line paraphrase, and not code remembered from earlier chat turns.

@@ -9,6 +9,8 @@ import {
   siblingImplementationPath,
   snippetDefinesSymbol,
   evaluateNamedFunctionAtElapsedMs,
+  parseExportedSutLiterals,
+  rewriteTestReplaceToMatchConstants,
   rewriteTestReplaceToMatchSut,
   sutAssertionGrounding,
   sutNumericExpectation,
@@ -193,6 +195,28 @@ test("sutNumericExpectation encodes the attached remainingContextGatherBudgetMs 
     expectation!.actual
   );
   assert.match(rewritten, /assert\.equal\(gather, 0\)/);
+});
+
+test("/edit tests rewrite a constant the user got wrong — any SCREAMING_SNAKE, not one function", () => {
+  const sut = "export const TIMEOUT_MS = 15_000;\nexport const RETRY_ENABLED = false;\n";
+  const ask = "/edit Add one test to this file that TIMEOUT_MS is still 30 seconds.";
+  const files = [
+    { path: "src/retry.test.ts", content: "import { TIMEOUT_MS } from \"./retry\";\n" },
+    { path: "src/retry.ts", content: sut }
+  ];
+  const grounding = sutAssertionGrounding(ask, files);
+  assert.match(grounding ?? "", /TIMEOUT_MS is 15000/);
+  const rewritten = rewriteTestReplaceToMatchConstants(
+    '  await test("TIMEOUT_MS is still 30 seconds", () => {\n    assert.equal(TIMEOUT_MS, 30000);\n  });',
+    parseExportedSutLiterals(sut)
+  );
+  assert.match(rewritten, /assert\.equal\(TIMEOUT_MS, 15000\)/);
+  assert.doesNotMatch(rewritten, /30000/);
+  const flag = rewriteTestReplaceToMatchConstants(
+    "    assert.equal(RETRY_ENABLED, true);",
+    parseExportedSutLiterals(sut)
+  );
+  assert.match(flag, /assert\.equal\(RETRY_ENABLED, false\)/);
 });
 
 console.log(`\neditSutAttach: ${passed}/${passed + failed} tests passed`);

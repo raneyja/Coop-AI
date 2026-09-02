@@ -526,6 +526,39 @@ async function main(): Promise<void> {
     assert.doesNotMatch(joined, /MAX_USER_FACING_RESPONSE_MS/);
   });
 
+  await test("/edit tests rewrite a wrong constant equality from attached SUT", async () => {
+    const sut = "export const TIMEOUT_MS = 15_000;\n";
+    const testBody = ['import { TIMEOUT_MS } from "./retry";', "console.log(`done`);"].join("\n");
+    const content = [
+      "File: `src/retry.test.ts`",
+      "",
+      "```patch",
+      "<<<<<<< SEARCH",
+      "console.log(`done`);",
+      "=======",
+      '  await test("TIMEOUT_MS is still 30 seconds", () => {',
+      "    assert.equal(TIMEOUT_MS, 30000);",
+      "  });",
+      "console.log(`done`);",
+      ">>>>>>> REPLACE",
+      "```"
+    ].join("\n");
+    const result = await handlePatchComplete(content, {
+      messageTimestamp: 2028,
+      file: "src/retry.test.ts",
+      ask: "/edit Add one test to this file that TIMEOUT_MS is still 30 seconds.",
+      fileContents: {
+        "src/retry.test.ts": testBody,
+        "src/retry.ts": sut
+      },
+      publish: () => undefined
+    });
+    assert.equal(result?.status, "pending");
+    const joined = (result?.files[0]?.hunks[0]?.lines ?? []).map((line) => line.text).join("\n");
+    assert.match(joined, /assert\.equal\(TIMEOUT_MS, 15000\)/);
+    assert.doesNotMatch(joined, /30000/);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) {
     process.exit(1);

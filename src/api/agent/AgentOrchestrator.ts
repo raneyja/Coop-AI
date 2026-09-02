@@ -51,10 +51,15 @@ const DEFAULT_MAX_STEPS = AGENT_MAX_TOOL_ROUNDS;
 const READ_LINE_PADDING = 25;
 /** Each retry is another round trip — the gather budget is shared with the answer. */
 const MAX_SEARCH_ATTEMPTS = 8;
+/** Field-reject hunts search access patterns after slogan misses. */
+const MAX_API_REJECT_SEARCH_ATTEMPTS = 12;
 /** Read budget when the index returned a hit with no line number. */
 const UNPOSITIONED_READ_LINES = 120;
 const INDEX_HUNT_MISS =
   "The index didn’t return a usable match for that name (tried casing aliases). Try a more specific name, or open the file and use /edit.";
+/** On-call API reject — never reuse the named-function miss copy. */
+const API_REJECT_HUNT_MISS =
+  "I couldn’t find where the API rejects that field in the index. I won’t guess a path. Try a more specific error string, or open the write path and use /edit.";
 /** Cap mid-loop integration calls so the model cannot spray. */
 const MAX_INTEGRATION_TOOL_CALLS = 3;
 
@@ -291,16 +296,17 @@ export class AgentOrchestrator {
       const hunted = await this.huntWriteReject(repoId, query, emit, context, conversation);
       if (hunted) {
         matchingRead = true;
-        return this.finishWithAnswer(
-          { steps, context },
-          query,
-          repoId,
-          action,
-          options,
-          conversation,
-          true
-        );
       }
+      // Index already said yes or no. Do not start a second hunt of the same queries.
+      return this.finishWithAnswer(
+        { steps, context },
+        query,
+        repoId,
+        action,
+        options,
+        conversation,
+        matchingRead
+      );
     }
 
     for (let round = 0; round < maxSteps; round++) {
@@ -473,7 +479,7 @@ export class AgentOrchestrator {
             args.startLine = jumped.startLine;
             args.endLine = jumped.endLine;
             judged = { raw: jumped.raw, matchesSymbol: true };
-          } else if (!contentLooksLikeAskedFieldReject(readFileBodies(rawResult), query)) {
+          } else if (!contentLooksLikeAskedFieldReject(readFileBodies(rawResult), query, path)) {
             rawResult = JSON.stringify({
               path,
               skipNote:
@@ -647,7 +653,7 @@ export class AgentOrchestrator {
         if (action !== "change") {
           return {
             ...result,
-            answer: INDEX_HUNT_MISS,
+            answer: API_REJECT_HUNT_MISS,
             context: result.steps.length ? result.context : undefined
           };
         }
@@ -987,13 +993,19 @@ export class AgentOrchestrator {
     hits: SearchHit[],
     emit: (step: AgentStep) => void,
     context: AgentSessionContext,
-    conversation?: AgentConversationMessage[]
+    conversation?: AgentConversationMessage[],
+    skippedPaths?: Set<string>
   ): Promise<{ ok: boolean; raw?: string }> {
     for (const hit of hits) {
       if (!hit.fileName) {
         continue;
       }
+      const pathKey = normalizeHuntPath(hit.fileName);
+      if (skippedPaths?.has(pathKey)) {
+        continue;
+      }
       if (shouldSkipEvidencePath(hit.fileName, query)) {
+        skippedPaths?.add(pathKey);
         emit({
           index: 0,
           tool: "read_file",
@@ -1023,6 +1035,7 @@ export class AgentOrchestrator {
         queryRoleHints(query).length === 0 ||
         textMentionsQueryRoles(blob, query);
       if (!namedOk || !roleOk) {
+        skippedPaths?.add(pathKey);
         emit({
           index: 0,
           tool: "read_file",
@@ -1043,7 +1056,8 @@ export class AgentOrchestrator {
         if (jumped.ok) {
           return jumped;
         }
-        if (!contentLooksLikeAskedFieldReject(body, query)) {
+        if (!contentLooksLikeAskedFieldReject(body, query, hit.fileName)) {
+          skippedPaths?.add(pathKey);
           emit({
             index: 0,
             tool: "read_file",
@@ -1088,7 +1102,7 @@ export class AgentOrchestrator {
     }
     const parsed = JSON.parse(fullRaw) as ReadFilePayload;
     const body = (parsed.files ?? []).map((file) => file.content).join("\n");
-    const line = lineNumberOfWriteReject(body, query);
+    const line = lineNumberOfWriteReject(body, query, filePath);
     if (!line) {
       return undefined;
     }
@@ -1105,7 +1119,7 @@ export class AgentOrchestrator {
     const windowBody = (JSON.parse(windowRaw) as ReadFilePayload).files
       ?.map((file) => file.content)
       .join("\n");
-    if (!windowBody || !contentLooksLikeAskedFieldReject(windowBody, query)) {
+    if (!windowBody || !contentLooksLikeAskedFieldReject(windowBody, query, filePath)) {
       return undefined;
     }
     return { raw: windowRaw, startLine, endLine };
@@ -1145,6 +1159,7 @@ export class AgentOrchestrator {
    * C2: do not stop at the first ranked hit list. OpenAPI and read-only
    * classes often fill preferredHits; keep searching until a body actually
    * rejects/writes, then answer from that window only.
+   * One pass: never re-search a query, never re-read a path already proven not a reject.
    */
   private async huntWriteReject(
     repoId: string,
@@ -1153,8 +1168,16 @@ export class AgentOrchestrator {
     context: AgentSessionContext,
     conversation?: AgentConversationMessage[]
   ): Promise<boolean> {
-    const queries = fallbackAgentSearchQueries(query).slice(0, MAX_SEARCH_ATTEMPTS);
+    const cap = isApiRejectAsk(query) ? MAX_API_REJECT_SEARCH_ATTEMPTS : MAX_SEARCH_ATTEMPTS;
+    const queries = fallbackAgentSearchQueries(query).slice(0, cap);
+    const skippedPaths = new Set<string>();
+    const triedQueries = new Set<string>();
     for (const searchQuery of queries) {
+      const queryKey = searchQuery.trim().toLowerCase();
+      if (!queryKey || triedQueries.has(queryKey)) {
+        continue;
+      }
+      triedQueries.add(queryKey);
       try {
         const searchRaw = await this.executeTool("search_code", { query: searchQuery, repoId });
         const decorated = this.decorateToolResult("search_code", searchRaw, query);
@@ -1166,7 +1189,12 @@ export class AgentOrchestrator {
           completed: true
         });
         const parsed = JSON.parse(decorated) as SearchPayload & { preferredHits?: SearchHit[] };
-        const toRead = parsed.preferredHits ?? [];
+        const toRead = (parsed.preferredHits ?? []).filter((hit) => {
+          if (!hit.fileName) {
+            return false;
+          }
+          return !skippedPaths.has(normalizeHuntPath(hit.fileName));
+        });
         if (!toRead.length) {
           continue;
         }
@@ -1176,7 +1204,8 @@ export class AgentOrchestrator {
           toRead,
           emit,
           context,
-          conversation
+          conversation,
+          skippedPaths
         );
         if (opened.ok && contextHasWriteReject(context, query)) {
           return true;
@@ -1421,7 +1450,9 @@ function contextHasWriteReject(
   query: string
 ): boolean {
   const files = (context?.read_file as ReadFilePayload | undefined)?.files ?? [];
-  return files.some((file) => contentLooksLikeAskedFieldReject(file.content ?? "", query));
+  return files.some((file) =>
+    contentLooksLikeAskedFieldReject(file.content ?? "", query, file.path ?? "")
+  );
 }
 
 function pruneContextToWriteReject(context: AgentSessionContext | undefined, query: string): void {
