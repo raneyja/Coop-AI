@@ -23,28 +23,7 @@ jobs:
         run: npm run lint
 
       - name: Run tests
-        run: |
-          npm run test:chat-prose
-          npm run test:slash-commands
-          npm run test:chat-intent
-          npm run test:response-deadline
-          npm run test:agent-routing
-          npm run test:chat-message-intent
-          npm run test:context-gathering-messages
-          npm run test:indexed-repo-workspace
-          npm run test:system-prompts
-          npm run test:quick-action-prompts
-          npm run test:knowledge-gaps-enrichment
-          npm run test:format-chat-copy
-          npm run test:effective-quick-action
-          npm run test:chat-threads
-          npm run test:autocomplete
-          npm run test:inline-completion
-          npm run test:autocomplete-smoke
-          npm run test:sso
-          npm run test:user-facing-errors
-          npm run test:billing
-          npm run test:operator
+        run: npm run test:ci
 
   docker-build:
     runs-on: ubuntu-latest

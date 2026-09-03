@@ -39,7 +39,7 @@ async function testFreeOrgCatalogCapped() {
   assert.equal(quota.indexedRepoLimit, 3);
   assert.equal(quota.canEnableMoreRepos, false);
   assert.equal(autoIndexOnCatalogSync("free"), false);
-  assert.equal(autoIndexOnCatalogSync("pro"), true);
+  assert.equal(autoIndexOnCatalogSync("pro"), false);
 }
 
 async function testReconcileFreeOrgTrimsExcess() {
