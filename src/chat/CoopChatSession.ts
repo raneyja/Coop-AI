@@ -7960,7 +7960,7 @@ export class CoopChatSession {
     upgradeUrl: string;
     retryAfterMs?: number;
     message?: string;
-    pool?: "auto" | "frontier" | "free";
+    pool?: "paid" | "auto" | "frontier" | "free";
   }): void {
     this.post({
       type: "chat:quota-exceeded",
@@ -8011,7 +8011,7 @@ export class CoopChatSession {
       this.postQuotaExceeded({
         resetsAt: this.preferences.usageMeters?.periodEnd ?? "",
         upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
-        pool: "auto",
+        pool: "paid",
         message: "You've used this month's included usage. Upgrade to continue."
       });
       return true;
@@ -8045,7 +8045,7 @@ export class CoopChatSession {
     this.postQuotaExceeded({
       resetsAt: this.preferences.usageMeters?.periodEnd ?? "",
       upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
-      pool: "auto",
+      pool: "paid",
       message: "You've used this month's included usage. Upgrade to continue."
     });
   }

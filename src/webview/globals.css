@@ -2246,6 +2246,40 @@
     color: var(--coop-panel-muted);
   }
 
+  .coop-usage-track {
+    @apply mt-1 flex h-1.5 overflow-hidden rounded-full;
+    background: var(--coop-composer-surface);
+  }
+
+  .coop-usage-seg {
+    @apply h-full shrink-0;
+  }
+
+  .coop-usage-seg--auto {
+    background: var(--vscode-charts-green, #3fb950);
+  }
+
+  .coop-usage-seg--frontier {
+    background: var(--vscode-charts-blue, #58a6ff);
+  }
+
+  .coop-usage-legend {
+    @apply mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px];
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-usage-swatch {
+    @apply mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle;
+  }
+
+  .coop-usage-swatch--auto {
+    background: var(--vscode-charts-green, #3fb950);
+  }
+
+  .coop-usage-swatch--frontier {
+    background: var(--vscode-charts-blue, #58a6ff);
+  }
+
   .coop-settings-model-list {
     @apply m-0 list-none p-0;
   }

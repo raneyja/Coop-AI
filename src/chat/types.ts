@@ -333,6 +333,10 @@ export type UserPreferences = {
     seatPriceUsd: number;
     periodStart: string;
     periodEnd: string;
+    usedCents: number;
+    limitCents: number;
+    remainingCents: number;
+    usedRatio: number;
     auto: { usedCents: number; limitCents: number; remainingCents: number; usedRatio: number };
     frontier: { usedCents: number; limitCents: number; remainingCents: number; usedRatio: number };
     nextTier?: "pro" | "pro_plus" | "max";
@@ -782,7 +786,7 @@ export type WebviewOutbound =
         timezone?: string;
         retryAfterMs?: number;
         message?: string;
-        pool?: "auto" | "frontier" | "free";
+        pool?: "paid" | "auto" | "frontier" | "free";
       };
     }
   | { type: "chat:quota-cleared" }

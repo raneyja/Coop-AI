@@ -84,6 +84,10 @@ export type PaidUsageMeters = {
   seatPriceUsd: number;
   periodStart: string;
   periodEnd: string;
+  usedCents: number;
+  limitCents: number;
+  remainingCents: number;
+  usedRatio: number;
   auto: UsagePoolMeter;
   frontier: UsagePoolMeter;
   nextTier?: "pro" | "pro_plus" | "max";
@@ -98,7 +102,7 @@ export type ChatQuotaExceededPayload = {
   upgradeUrl?: string;
   usedCredits?: number;
   limitCredits?: number;
-  pool?: "auto" | "frontier" | "free";
+  pool?: "paid" | "auto" | "frontier" | "free";
   upgradePlan?: "pro" | "pro_plus" | "max";
 };
 
@@ -115,7 +119,7 @@ export class ChatQuotaExceededError extends Error {
 
   public readonly limitCredits?: number;
 
-  public readonly pool?: "auto" | "frontier" | "free";
+  public readonly pool?: "paid" | "auto" | "frontier" | "free";
 
   public readonly upgradePlan?: "pro" | "pro_plus" | "max";
 
@@ -1941,7 +1945,9 @@ function readChatQuotaExceededPayload(
     usedCredits: typeof body.usedCredits === "number" ? body.usedCredits : undefined,
     limitCredits: typeof body.limitCredits === "number" ? body.limitCredits : undefined,
     pool:
-      body.pool === "auto" || body.pool === "frontier" || body.pool === "free" ? body.pool : undefined,
+      body.pool === "paid" || body.pool === "auto" || body.pool === "frontier" || body.pool === "free"
+        ? body.pool
+        : undefined,
     upgradePlan:
       body.upgradePlan === "pro" || body.upgradePlan === "pro_plus" || body.upgradePlan === "max"
         ? body.upgradePlan

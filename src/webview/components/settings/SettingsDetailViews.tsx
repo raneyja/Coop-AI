@@ -346,7 +346,7 @@ function ModelDetail({
 
       <SettingsSection
         title="Models you can pick"
-        description="OpenAI, Anthropic, and Gemini. Frontier models count toward Frontier usage."
+        description="OpenAI, Anthropic, and Gemini. Frontier models fill the monthly bar faster."
       >
         <div className="coop-settings-maker-stack">
           {PICKER_PROVIDER_GROUPS.map((group) => {
@@ -408,23 +408,50 @@ function ModelDetail({
   );
 }
 
-function usageBar(label: string, caption: string, usedRatio: number, usedCents: number, limitCents: number): React.ReactElement {
+function stackedUsagePercents(autoRatio: number, frontierRatio: number): { auto: number; frontier: number } {
+  const auto = Math.max(0, autoRatio) * 100;
+  const frontier = Math.max(0, frontierRatio) * 100;
+  const total = auto + frontier;
+  if (total <= 100) {
+    return { auto, frontier };
+  }
+  const scale = 100 / total;
+  return { auto: auto * scale, frontier: frontier * scale };
+}
+
+function monthlyUsageBar(autoRatio: number, frontierRatio: number, usedRatio: number): React.ReactElement {
   const pct = Math.max(0, Math.min(100, Math.round(usedRatio * 100)));
+  const segments = stackedUsagePercents(autoRatio, frontierRatio);
   return (
     <div className="mt-3">
       <div className="flex items-baseline justify-between gap-2">
-        <p className="coop-prompt-modal-section-title">{label}</p>
+        <p className="coop-prompt-modal-section-title">Monthly usage</p>
         <p className="text-[11px] text-[var(--coop-panel-muted)]">{pct}% used</p>
       </div>
-      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[var(--coop-composer-surface)]">
-        <div
-          className="h-full bg-[var(--vscode-button-background)]"
-          style={{ width: `${pct}%` }}
-        />
+      <div
+        className="coop-usage-track"
+        role="img"
+        aria-label={`${pct}% of monthly usage used`}
+      >
+        {segments.auto > 0 ? (
+          <div className="coop-usage-seg coop-usage-seg--auto" style={{ width: `${segments.auto}%` }} />
+        ) : null}
+        {segments.frontier > 0 ? (
+          <div className="coop-usage-seg coop-usage-seg--frontier" style={{ width: `${segments.frontier}%` }} />
+        ) : null}
       </div>
-      <p className="coop-settings-card-desc mt-1">{caption}</p>
-      <p className="text-[10px] text-[var(--coop-panel-muted)]">
-        ${(usedCents / 100).toFixed(0)} of ${(limitCents / 100).toFixed(0)} included
+      <div className="coop-usage-legend">
+        <span>
+          <span className="coop-usage-swatch coop-usage-swatch--auto" aria-hidden />
+          Auto
+        </span>
+        <span>
+          <span className="coop-usage-swatch coop-usage-swatch--frontier" aria-hidden />
+          Frontier
+        </span>
+      </div>
+      <p className="coop-settings-card-desc mt-1">
+        Chat, quick actions, and models you pick share one bar. Frontier models fill it faster.
       </p>
     </div>
   );
@@ -482,7 +509,7 @@ function PlanUsageDetail({ prefs }: SettingsDetailProps): React.ReactElement {
               {meters.nextTierPriceUsd != null ? ` $${meters.nextTierPriceUsd}/mo` : ""}
             </p>
             <p className="coop-settings-card-desc mt-1">
-              More Coop Auto and Frontier usage when you hit this month&apos;s cap.
+              More monthly usage when you hit this month&apos;s cap.
             </p>
             <div className="coop-settings-actions mt-2">
               <a className="coop-settings-action-btn" href={`${adminBase}/billing`} target="_blank" rel="noreferrer">
@@ -512,19 +539,12 @@ function PlanUsageDetail({ prefs }: SettingsDetailProps): React.ReactElement {
       {meters ? (
         <>
           <p className="coop-prompt-modal-section-title mt-4">Included in {meters.displayName}</p>
-          {usageBar(
-            "Coop Auto",
-            "Includes Coop-assigned models (Auto). Extra Auto use consumes Frontier.",
+          {monthlyUsageBar(
             meters.auto.usedRatio,
-            meters.auto.usedCents,
-            meters.auto.limitCents
-          )}
-          {usageBar(
-            "Frontier",
-            "Claude, GPT, Gemini, and other models you pick. Extra use requires an upgrade.",
             meters.frontier.usedRatio,
-            meters.frontier.usedCents,
-            meters.frontier.limitCents
+            typeof meters.usedRatio === "number"
+              ? meters.usedRatio
+              : Math.min(1, meters.auto.usedRatio + meters.frontier.usedRatio)
           )}
         </>
       ) : null}

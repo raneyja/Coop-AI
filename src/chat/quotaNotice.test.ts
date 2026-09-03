@@ -3,10 +3,11 @@ import {
   buildQuotaExceededUpgradeUrl,
   formatQuotaRetryClock,
   isFreeQuotaExhausted,
+  isPaidQuotaPool,
   isPaidUsageExhausted,
   PAID_USAGE_EXHAUSTED_COPY
 } from "./quotaNotice";
-import { buildFrontierEmptyMessage } from "../server/planQuota";
+import { buildPaidCapMessage } from "../server/planQuota";
 
 const resetsAt = "2026-07-01T21:37:00.000Z";
 
@@ -28,8 +29,19 @@ assert.equal(isFreeQuotaExhausted({ usedTokens: 80_000, limitTokens: 80_000 }), 
 assert.equal(isFreeQuotaExhausted({ usedTokens: 56_287, limitTokens: 80_000 }), false);
 assert.equal(isFreeQuotaExhausted({ remainingCredits: 0 }), true);
 
+assert.equal(isPaidQuotaPool("paid"), true);
+assert.equal(isPaidQuotaPool("auto"), true);
+assert.equal(isPaidQuotaPool("frontier"), true);
+assert.equal(isPaidQuotaPool("free"), false);
+
+assert.equal(isPaidUsageExhausted({ remainingCents: 0 }), true);
+assert.equal(isPaidUsageExhausted({ remainingCents: 10 }), false);
 assert.equal(
-  isPaidUsageExhausted({ auto: { remainingCents: 0 }, frontier: { remainingCents: 0 } }),
+  isPaidUsageExhausted({
+    remainingCents: 0,
+    auto: { remainingCents: 10 },
+    frontier: { remainingCents: 0 }
+  }),
   true
 );
 assert.equal(
@@ -37,8 +49,7 @@ assert.equal(
   false
 );
 assert.equal(PAID_USAGE_EXHAUSTED_COPY.includes("unlimited"), false);
-assert.match(buildFrontierEmptyMessage("pro_plus", true), /Switch to Auto/);
-assert.match(buildFrontierEmptyMessage("pro_plus", true), /Pro\+/);
-assert.match(buildFrontierEmptyMessage(undefined, false), /Enterprise/);
+assert.match(buildPaidCapMessage("pro_plus"), /Upgrade to Pro\+/);
+assert.match(buildPaidCapMessage(undefined), /Enterprise/);
 
 console.log("quotaNotice: 1/1 tests passed");

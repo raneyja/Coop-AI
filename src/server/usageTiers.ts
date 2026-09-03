@@ -4,14 +4,14 @@ export type CapabilityPlan = "free" | "pro" | "enterprise";
 
 export type UsageTierLimits = {
   seatPriceUsd: number;
-  autoCents: number;
-  frontierCents: number;
+  /** Included LLM cost cap in USD cents (provider rates). Not shown as a second price. */
+  costCents: number;
 };
 
 export const USAGE_TIER_LIMITS: Record<UsageTier, UsageTierLimits> = {
-  pro: { seatPriceUsd: 25, autoCents: 4000, frontierCents: 2500 },
-  pro_plus: { seatPriceUsd: 60, autoCents: 12000, frontierCents: 7000 },
-  max: { seatPriceUsd: 100, autoCents: 24000, frontierCents: 14000 }
+  pro: { seatPriceUsd: 25, costCents: 1500 },
+  pro_plus: { seatPriceUsd: 60, costCents: 3750 },
+  max: { seatPriceUsd: 100, costCents: 6500 }
 };
 
 const USAGE_TIER_SET = new Set<UsageTier>(["pro", "pro_plus", "max"]);

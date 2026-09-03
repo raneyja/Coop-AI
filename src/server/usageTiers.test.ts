@@ -22,8 +22,9 @@ assert.equal(displayPlanName("pro"), "Pro");
 assert.equal(displayPlanName("pro_plus"), "Pro+");
 assert.equal(displayPlanName("max"), "Max");
 assert.equal(displayPlanName("enterprise"), "Enterprise");
-assert.equal(USAGE_TIER_LIMITS.pro.frontierCents, 2500);
-assert.equal(USAGE_TIER_LIMITS.pro_plus.autoCents, 12000);
+assert.equal(USAGE_TIER_LIMITS.pro.costCents, 1500);
+assert.equal(USAGE_TIER_LIMITS.pro_plus.costCents, 3750);
+assert.equal(USAGE_TIER_LIMITS.max.costCents, 6500);
 assert.equal(USAGE_TIER_LIMITS.max.seatPriceUsd, 100);
 
 assert.equal(
