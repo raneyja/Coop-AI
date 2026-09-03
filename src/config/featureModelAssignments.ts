@@ -1,6 +1,12 @@
 import type { UseCase } from "../api/types";
 import type { LlmProvider } from "../api/zeroRetentionConfig";
-import { formatModelOptionLabel, getModelDefinition } from "./llmModels";
+import {
+  formatModelOptionLabel,
+  getCatalogModelById,
+  getModelDefinition,
+  isAutoModelSelection,
+  isPickerCatalogModel
+} from "./llmModels";
 import {
   FIM_MISTRAL_MODEL,
   type InlineModelPresetId,
@@ -88,16 +94,28 @@ export type RuntimeModelPrefs = {
   devMode?: boolean;
   llmProvider?: LlmProvider;
   model?: string;
+  usageTier?: string | null;
+  plan?: "free" | "pro" | "enterprise";
 };
 
-export function canUserSelectModels(options: { devMode?: boolean }): boolean {
-  return options.devMode === true;
+export function canUserSelectModels(options: {
+  devMode?: boolean;
+  usageTier?: string | null;
+  plan?: "free" | "pro" | "enterprise";
+}): boolean {
+  if (options.devMode === true) {
+    return true;
+  }
+  if (options.plan === "enterprise" || options.plan === "pro") {
+    return true;
+  }
+  return Boolean(options.usageTier);
 }
 
 /** Strip user model/provider writes when production routing is locked. */
 export function stripUserModelPreferenceUpdates<T extends { model?: string; llmProvider?: string }>(
   updates: T,
-  options: { devMode?: boolean }
+  options: { devMode?: boolean; usageTier?: string | null; plan?: "free" | "pro" | "enterprise" }
 ): T {
   if (canUserSelectModels(options)) {
     return updates;
@@ -108,16 +126,62 @@ export function stripUserModelPreferenceUpdates<T extends { model?: string; llmP
   return next;
 }
 
+/** Chat, quick actions, and /edit honor the global picker. Other features stay assigned. */
+export function pickerAppliesToUseCase(useCase: UseCase): boolean {
+  const feature = resolveFeatureFromUseCase(useCase);
+  return feature === "chat" || feature === "quickActions" || feature === "edit";
+}
+
 export function resolveRuntimeModelForUseCase(
   useCase: UseCase,
   prefs: RuntimeModelPrefs
 ): { provider: LlmProvider; model: string } {
-  if (canUserSelectModels(prefs)) {
-    const provider = (prefs.llmProvider ?? "openai") as LlmProvider;
-    const model = prefs.model?.trim() || getFeatureModelAssignment("chat").model;
-    return { provider, model };
+  if (prefs.devMode === true && !isAutoModelSelection(prefs.model) && prefs.model?.trim()) {
+    return {
+      provider: (prefs.llmProvider ?? "openai") as LlmProvider,
+      model: prefs.model.trim()
+    };
+  }
+  if (
+    pickerAppliesToUseCase(useCase) &&
+    canUserSelectModels(prefs) &&
+    !isAutoModelSelection(prefs.model)
+  ) {
+    const catalog = getCatalogModelById(prefs.model ?? "");
+    if (catalog && isPickerCatalogModel(catalog)) {
+      return { provider: catalog.provider, model: catalog.id };
+    }
   }
   return resolveAssignedModelForUseCase(useCase);
+}
+
+export function resolveHonoredChatModel(input: {
+  allowUnapprovedProvider: boolean;
+  plan: "free" | "pro" | "enterprise";
+  useCase: UseCase;
+  clientProvider?: LlmProvider;
+  clientModel?: string;
+}): { provider: LlmProvider; model: string; selection: string } {
+  const assigned = resolveAssignedModelForUseCase(input.useCase);
+  if (input.allowUnapprovedProvider && input.clientModel && !isAutoModelSelection(input.clientModel)) {
+    return {
+      provider: input.clientProvider ?? assigned.provider,
+      model: input.clientModel,
+      selection: input.clientModel
+    };
+  }
+  if (
+    !pickerAppliesToUseCase(input.useCase) ||
+    isAutoModelSelection(input.clientModel) ||
+    input.plan === "free"
+  ) {
+    return { provider: assigned.provider, model: assigned.model, selection: "auto" };
+  }
+  const catalog = getCatalogModelById(input.clientModel ?? "");
+  if (catalog && isPickerCatalogModel(catalog)) {
+    return { provider: catalog.provider, model: catalog.id, selection: catalog.id };
+  }
+  return { provider: assigned.provider, model: assigned.model, selection: "auto" };
 }
 
 export function resolveRuntimeAutocompleteModel(
@@ -125,7 +189,7 @@ export function resolveRuntimeAutocompleteModel(
   customModel: string,
   prefs: RuntimeModelPrefs
 ): { provider: LlmProvider; model: string; fallback?: { provider: LlmProvider; model: string } } {
-  if (canUserSelectModels(prefs)) {
+  if (prefs.devMode === true) {
     const provider = (prefs.llmProvider ?? "anthropic") as LlmProvider;
     if (preset === "chat") {
       return resolveChatModelPreset(provider, prefs.model ?? "");

@@ -326,6 +326,19 @@ export type UserPreferences = {
   /** Signed-in account email from /v1/me (when available). */
   userEmail?: string;
   plan?: "free" | "pro" | "enterprise";
+  usageTier?: "pro" | "pro_plus" | "max" | null;
+  usageMeters?: {
+    usageTier: "pro" | "pro_plus" | "max";
+    displayName: string;
+    seatPriceUsd: number;
+    periodStart: string;
+    periodEnd: string;
+    auto: { usedCents: number; limitCents: number; remainingCents: number; usedRatio: number };
+    frontier: { usedCents: number; limitCents: number; remainingCents: number; usedRatio: number };
+    nextTier?: "pro" | "pro_plus" | "max";
+    nextTierName?: string;
+    nextTierPriceUsd?: number;
+  };
   userRole?: string;
   authMethod?: "api_key" | "sso_session" | "password" | "google_oauth";
   canInstallIntegrations?: boolean;
@@ -768,6 +781,8 @@ export type WebviewOutbound =
         upgradeUrl: string;
         timezone?: string;
         retryAfterMs?: number;
+        message?: string;
+        pool?: "auto" | "frontier" | "free";
       };
     }
   | { type: "chat:quota-cleared" }

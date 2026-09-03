@@ -69,7 +69,7 @@ Five built-in actions: Understand Repo, Trace Decision, Find Owner, Blast Radius
 
 ### Can I choose the LLM provider or model?
 
-Not on Developer or Pro. Coop assigns models per feature (chat, quick actions, edit, autocomplete) — see [Model assignments](/docs/model-assignments). **Settings → Preferences → Model & chat** shows read-only assignments plus toggles for chat and autocomplete. Custom model selection is an Enterprise capability (coming soon). Set `coopAI.devMode: true` only for local testing overrides.
+**Free** stays on Auto — Coop picks a model per job. **Pro, Pro+, Max, and Enterprise** choose OpenAI, Anthropic, or Gemini from the **model menu in chat**. Autocomplete, intent chips, source previews, and PR notes always stay on Coop’s assigned models. **Settings → Preferences → Model & chat** explains Auto vs a picked model; it is not a second picker. See [Model assignments](/docs/model-assignments).
 
 ### What is Lightning Mode?
 

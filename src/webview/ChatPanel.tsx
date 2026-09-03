@@ -33,7 +33,8 @@ import type {
   CodeHostProviderPreference,
   GithubRepoOption,
   PatchCardState,
-  PatchCardsUpdatePayload
+  PatchCardsUpdatePayload,
+  SettingsStatePayload
 } from "../chat/types";
 import { CHAT_STOPPED_MESSAGE } from "../chat/chatStopped";
 import { inlineArtifactsFromHistory, patchCardsFromHistoryPayload } from "./restoreInlineArtifacts";
@@ -78,7 +79,7 @@ import type { LightningModeState } from "../indexing/lightningTypes";
 import type { EvidenceActionContext } from "./evidenceCardActionHandler";
 import { SLASH_COMMANDS, slashCommandHistoryContent } from "../context/slashCommands";
 import { ProUpgradeChip } from "./LightningModePanel";
-import type { ChatFileMention, ChatImageAttachment, MentionSearchResult } from "../chat/types";
+import type { ChatFileMention, ChatImageAttachment, MentionSearchResult, LlmProviderPreference } from "../chat/types";
 import { inferActionIdFromTemplate } from "./lib/inferPromptActionId";
 import { resolvePromptLibraryRun } from "../prompts/promptLibraryRun";
 import { useLaunchTypewriter } from "./hooks/useLaunchTypewriter";
@@ -134,9 +135,12 @@ type InboundMessage =
         upgradeUrl: string;
         timezone?: string;
         retryAfterMs?: number;
+        message?: string;
+        pool?: "auto" | "frontier" | "free";
       };
     }
   | { type: "chat:quota-cleared" }
+  | { type: "settings:state"; payload: SettingsStatePayload }
   | {
       type: "repo:tree";
       payload: {
@@ -424,6 +428,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [suppressedPatchTimestamps, setSuppressedPatchTimestamps] = useState<number[]>([]);
   const [degradationNotification, setDegradationNotification] = useState<DegradationNotificationPayload | undefined>();
   const [usageLabel, setUsageLabel] = useState<string | undefined>();
+  const [pickerPrefs, setPickerPrefs] = useState<{
+    plan?: "free" | "pro" | "enterprise";
+    usageTier?: string | null;
+    devMode?: boolean;
+    model: string;
+    llmProvider: LlmProviderPreference;
+  }>({ model: "auto", llmProvider: "openai" });
   const [promptLibrary, setPromptLibrary] = useState<{
     prompts: PromptLibraryItem[];
     pinnedIds: string[];
@@ -1177,6 +1188,15 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         case "theme:update":
           applyThemeMode(message.payload.mode);
           break;
+        case "settings:state":
+          setPickerPrefs({
+            plan: message.payload.plan,
+            usageTier: message.payload.usageTier,
+            devMode: message.payload.devMode,
+            model: message.payload.model || "auto",
+            llmProvider: message.payload.llmProvider
+          });
+          break;
         case "context:update":
           setContext(message.payload);
           if (message.payload.projectInstructions?.hasAgentsMd) {
@@ -1380,7 +1400,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setQuotaNotice({
             resetsAt: message.payload.resetsAt,
             upgradeUrl: message.payload.upgradeUrl,
-            timezone: message.payload.timezone
+            timezone: message.payload.timezone,
+            message: message.payload.message,
+            pool: message.payload.pool
           });
           setIsStreaming(false);
           setStreamingBuffer("");
@@ -2047,6 +2069,15 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         launchIntroVisibleLength={launchIntro.visibleLength}
         launchIntroFlashIndex={launchIntro.flashIndex}
         onLaunchIntroSkip={launchIntro.skip}
+        plan={pickerPrefs.plan}
+        usageTier={pickerPrefs.usageTier}
+        devMode={pickerPrefs.devMode}
+        model={pickerPrefs.model}
+        llmProvider={pickerPrefs.llmProvider}
+        onModelChange={(next) => {
+          setPickerPrefs((current) => ({ ...current, ...next }));
+          post({ type: "settings:update", payload: next });
+        }}
       />
     </div>
   );

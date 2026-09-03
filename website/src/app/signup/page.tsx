@@ -1,10 +1,16 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/PageHeader";
 
-export default function SignupPage() {
+function SignupForm() {
+  const searchParams = useSearchParams();
+  const tierParam = searchParams.get("tier");
+  const tier =
+    tierParam === "pro_plus" || tierParam === "max" || tierParam === "pro" ? tierParam : "pro";
+  const planLabel = tier === "pro_plus" ? "Pro+" : tier === "max" ? "Max" : "Pro";
   const [orgName, setOrgName] = useState("");
   const [email, setEmail] = useState("");
   const [seats, setSeats] = useState(5);
@@ -19,7 +25,7 @@ export default function SignupPage() {
     const response = await fetch("/api/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orgName: orgName.trim(), email: email.trim(), seats })
+      body: JSON.stringify({ orgName: orgName.trim(), email: email.trim(), seats, tier })
     });
     const data = (await response.json().catch(() => ({}))) as { url?: string; error?: string };
     setLoading(false);
@@ -35,7 +41,7 @@ export default function SignupPage() {
   return (
     <>
       <PageHeader
-        title="Start Pro"
+        title={`Start ${planLabel}`}
         description="Create your organization, pay via Stripe, and get your admin portal link by email."
       />
 
@@ -97,5 +103,13 @@ export default function SignupPage() {
         </form>
       </section>
     </>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense>
+      <SignupForm />
+    </Suspense>
   );
 }

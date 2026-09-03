@@ -915,6 +915,7 @@ export type BillingInfo = {
 
 export type QuotaSnapshot = {
   plan: string;
+  usageTier?: string | null;
   unlimited?: boolean;
   usedTokens?: number;
   limitTokens?: number;
@@ -925,6 +926,14 @@ export type QuotaSnapshot = {
   windowHours?: number;
   resetsAt?: string;
   retryAfterMs?: number;
+  usageMeters?: {
+    displayName: string;
+    seatPriceUsd: number;
+    periodEnd: string;
+    auto: { usedCents: number; limitCents: number; remainingCents: number; usedRatio: number };
+    frontier: { usedCents: number; limitCents: number; remainingCents: number; usedRatio: number };
+    nextTierName?: string;
+  } | null;
 };
 
 export async function fetchQuota(): Promise<ApiResult<QuotaSnapshot>> {

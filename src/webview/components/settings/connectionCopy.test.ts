@@ -38,8 +38,10 @@ test("displayOrgName returns org name and hides legacy placeholder", () => {
 });
 
 test("displayPlanLabel maps plan ids to product names", () => {
-  assert.equal(displayPlanLabel({ plan: "free" }), "Developer (free)");
+  assert.equal(displayPlanLabel({ plan: "free" }), "Free");
   assert.equal(displayPlanLabel({ plan: "pro" }), "Pro");
+  assert.equal(displayPlanLabel({ plan: "pro", usageTier: "pro_plus" }), "Pro+");
+  assert.equal(displayPlanLabel({ plan: "pro", usageTier: "max" }), "Max");
   assert.equal(displayPlanLabel({ plan: "enterprise" }), "Enterprise");
   assert.equal(displayPlanLabel({}), "");
 });
@@ -82,9 +84,26 @@ test("planUsageHubSubtitle shows plan and used credits", () => {
       plan: "free",
       quotaCredits: { remainingCredits: 24, limitCredits: 80, usedCredits: 56, windowHours: 5, resetsAt: "", retryAfterMs: 0 }
     }),
-    "Developer (free) · 56K of 80K used"
+    "Free · 56K of 80K used"
   );
   assert.equal(planUsageHubSubtitle({ ...basePrefs, hasApiKey: false, isSignedIn: false }), "Sign in to view plan");
+  assert.equal(
+    planUsageHubSubtitle({
+      ...basePrefs,
+      plan: "pro",
+      usageTier: "pro",
+      usageMeters: {
+        usageTier: "pro",
+        displayName: "Pro",
+        seatPriceUsd: 25,
+        periodStart: "2026-09-01T00:00:00.000Z",
+        periodEnd: "2026-10-01T00:00:00.000Z",
+        auto: { usedCents: 2000, limitCents: 4000, remainingCents: 2000, usedRatio: 0.5 },
+        frontier: { usedCents: 0, limitCents: 2500, remainingCents: 2500, usedRatio: 0 }
+      }
+    }),
+    "Pro · Auto 50%"
+  );
 });
 
 test("formatQuotaUsageSummary shows used credits in K format", () => {

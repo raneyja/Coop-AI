@@ -1,18 +1,20 @@
 ---
 title: Model assignments
-description: How CoopAI routes chat, quick actions, edit mode, and autocomplete to assigned models.
+description: How CoopAI routes chat, quick actions, edit mode, and autocomplete — Auto by default, with a paid global picker.
 section: extension
 order: 2
-lastUpdated: "2026-08-21"
+lastUpdated: "2026-09-03"
 ---
 
-CoopAI assigns an LLM per feature in production. You do not pick provider or model on Developer or Pro — Coop routes each use case to the model below. **Custom model selection is an Enterprise capability (coming soon).**
+CoopAI assigns an LLM per feature when you leave the picker on **Auto** (the default). **Free** stays Auto-only. **Pro, Pro+, Max, and Enterprise** pick a model from the **model menu in chat**. Picking a Frontier model counts against Frontier usage. See [Plans & billing](/docs/plans-billing).
+
+Autocomplete, intent suggest, source previews, and PR notes always use the assigned model and bill **Coop Auto**. They do not follow the chat picker.
 
 <!-- figures ml -->
-![Model & chat — read-only assigned models for Chat, Quick actions, /edit, and Autocomplete](/screenshots/docs/extension-settings-models-and-chat.png)
+![Model & chat — what Auto uses for Chat, Quick actions, /edit, and Autocomplete](/screenshots/docs/extension-settings-models-and-chat.png)
 <!-- /figures -->
 
-## Assigned models
+## Assigned models (what Auto uses)
 
 | Feature | Provider | Model | Routes via |
 | --- | --- | --- | --- |
@@ -25,33 +27,37 @@ CoopAI assigns an LLM per feature in production. You do not pick provider or mod
 | **PR notes** (Create pull request summary) | OpenAI | GPT-4o mini | Same (`pr_summary` use case) |
 | **Embeddings** (Deep-Index semantic search) | OpenAI | text-embedding-3-small | Backend only — not shown in settings |
 
-Quick actions and integration chat share the **quick actions** assignment. Plain chat in the composer uses the **chat** assignment regardless of which model you might have used in an older install. Intent suggest runs for everyone when the local phrase classifier is unsure — it never auto-runs a quick action (chips confirm first). Sources expand previews use a short AI overview when the body is long; expanded panels never dump full commit/PR/thread text — use the outbound link for the full record. Create pull request **Notes** use the same cheap OpenAI mini model and are labeled **(AI Generated)** — you can edit them before submit.
+Quick actions and integration chat share the **quick actions** assignment. Plain chat in the composer uses the **chat** assignment unless you pick another catalog model. Intent suggest runs for everyone when the local phrase classifier is unsure — it never auto-runs a quick action (chips confirm first). Sources expand previews use a short AI overview when the body is long; expanded panels never dump full commit/PR/thread text — use the outbound link for the full record. Create pull request **Notes** use the same cheap OpenAI mini model and are labeled **(AI Generated)** — you can edit them before submit.
 
 ## Settings UI — Model & chat
 
 **Extension UI** → **Settings** (gear) → **Preferences** → **Model & chat**
 
-Production users see:
+Paid users see:
 
-- Copy: *Models are assigned by Coop for chat, quick actions, and edit mode. Custom model selection is an Enterprise capability (coming soon).*
-- Read-only assignment rows — feature name, provider · model, and an **On** / **Off** badge
+- How Auto works, plus a plain list of what Auto uses (feature → model, with a link to the maker’s docs)
+- Models you can pick, grouped by maker, each linked to that model’s docs
 - One toggle you **can** change:
   - **Enable inline autocomplete** — master switch for ghost-text completions
-- Chat, quick actions, edit mode, and intent suggest assignment are always on in this list (no toggle)
-- **Save model settings** persists the autocomplete toggle
+- **Save model settings** persists the autocomplete toggle. Change models from the model menu in chat.
+
+This page does **not** change when you pick a model in chat.
+
+Free users see the same page. The model menu in chat is Pro and above.
 
 The Preferences hub subtitle shows **Assigned models** plus autocomplete status (for example, `Assigned models · Autocomplete on`).
 
-There is **no provider or model picker** in settings. Model routing is operator cost — not user-facing credits or per-model pricing.
+Coop does not show credit weights on each picker option. Plan & Usage shows included Auto vs Frontier dollars.
 
 ### Developer mode override
 
-Set `coopAI.devMode: true` in VS Code User settings to unlock local `coopAI.llmProvider` and `coopAI.defaultModel` overrides for testing. The Model & chat screen does **not** expose pickers — edit VS Code settings directly if needed.
+Set `coopAI.devMode: true` in VS Code User settings to unlock local `coopAI.llmProvider` and `coopAI.defaultModel` overrides for testing, including on Free.
 
 ## Related settings
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
+| `coopAI.defaultModel` | `auto` | Global picker sentinel; catalog ids on paid plans |
 | `coopAI.autocomplete.enabled` | `true` | Same as **Enable inline autocomplete** (global scope) |
 | `coopAI.devMode` | `false` | Unlock provider/model overrides and local PAT flows |
 
@@ -60,6 +66,6 @@ See [Extension settings](/docs/extension-settings) for the full settings hub.
 ## Next steps
 
 - [Inline autocomplete](/docs/autocomplete) — default on, global persistence, turn off intentionally
-- [Edit mode](/docs/edit-mode) — `/edit` uses GPT-5.1
+- [Edit mode](/docs/edit-mode) — `/edit` uses GPT-5.1 on Auto
 - [Create pull request](/docs/create-pull-request) — notes use GPT-4o mini
-- [Plans & billing](/docs/plans-billing) — seat-based Pro pricing
+- [Plans & billing](/docs/plans-billing) — seat-based Pro / Pro+ / Max usage

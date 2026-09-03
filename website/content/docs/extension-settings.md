@@ -114,7 +114,7 @@ Profile and chat defaults — moved out of Account:
 | Item | Purpose |
 | --- | --- |
 | **Timezone** | Usage reset times and scheduling context in chat |
-| **Model & chat** | Read-only assigned models, **Enable inline autocomplete** |
+| **Model & chat** | What Auto uses, models by maker, **Enable inline autocomplete** |
 | **Prompt library** | Pin up to 5 prompts for the composer footer — see [Prompt library](/manual#prompt-library) |
 
 The Preferences hub subtitle shows **Assigned models** plus autocomplete status.
@@ -125,26 +125,21 @@ The Preferences hub subtitle shows **Assigned models** plus autocomplete status.
 
 ## Model & chat
 
-**Preferences → Model & chat** shows how Coop routes each feature in production:
+**Preferences → Model & chat** explains how models work. The page does **not** change when you pick a model in chat. There is no picker here — Pro, Pro+, Max, and Enterprise choose a model from the **model menu in chat**.
 
-| Row | Assignment |
-| --- | --- |
-| Chat | OpenAI · GPT-5 mini |
-| Quick actions | Anthropic · Claude Sonnet 4.6 |
-| /edit patches | OpenAI · GPT-5.1 |
-| Autocomplete | Mistral · Codestral |
+The page always shows:
 
-Production users see these rows as **read-only** with **On** / **Off** badges. Copy on the screen:
+1. How Auto works
+2. What Auto uses (feature → model, with a link to the maker’s docs)
+3. Models you can pick, grouped by OpenAI, Anthropic, and Gemini (each linked to docs)
 
-> Models are assigned by Coop for chat, quick actions, and edit mode. Custom model selection is an Enterprise capability (coming soon).
-
-**What you can change:**
+**What you can change here:**
 
 | Toggle | Setting | Default |
 | --- | --- | --- |
 | **Enable inline autocomplete** | `coopAI.autocomplete.enabled` (global scope) | `true` |
 
-Chat, quick actions, and edit mode are always enabled. Click **Save model settings** to persist the autocomplete toggle. Provider and model fields are not writable in production — the extension blocks updates to `coopAI.llmProvider` and `coopAI.defaultModel` unless `coopAI.devMode: true`.
+Click **Save model settings** to persist the autocomplete toggle. Chat, quick actions, and edit mode stay on.
 
 Full table and routing details: [Model assignments](/docs/model-assignments).
 

@@ -44,6 +44,8 @@ export type Preferences = {
   /** Signed-in account email from /v1/me (when available). */
   userEmail?: string;
   plan?: "free" | "pro" | "enterprise";
+  usageTier?: "pro" | "pro_plus" | "max" | null;
+  usageMeters?: import("../../../api/CoopBackendClient").PaidUsageMeters;
   quotaCredits?: {
     usedCredits: number;
     limitCredits: number;

@@ -145,7 +145,7 @@ import { resolveGitUserEmail } from "./resolveGitUserEmail";
 import { formatUserFacingNetworkError } from "../api/userFacingErrors";
 import { ChatQuotaExceededError } from "../api/CoopBackendClient";
 import { CHAT_STOPPED_MESSAGE } from "./chatStopped";
-import { buildQuotaExceededUpgradeUrl, isFreeQuotaExhausted } from "./quotaNotice";
+import { buildQuotaExceededUpgradeUrl, isFreeQuotaExhausted, isPaidUsageExhausted } from "./quotaNotice";
 import type { DecisionTimeline } from "../types/decisionTimeline";
 import type { OwnershipReport } from "../types/ownership";
 import { buildDecisionSynthesisUserPrompt } from "../prompts/decisionSynthesis";
@@ -238,7 +238,8 @@ import {
   quickActionPromptParts,
   type QuickActionMentionRef
 } from "../prompts/quickActionPrompts";
-import { getFeatureModelAssignment, resolveRuntimeModelForUseCase } from "../config/featureModelAssignments";
+import { canUserSelectModels, getFeatureModelAssignment, resolveRuntimeModelForUseCase } from "../config/featureModelAssignments";
+import { isAutoModelSelection } from "../config/llmModels";
 import {
   filterMentionsByInScopeKeys,
   allMentionsOutOfScopeForActiveRepo,
@@ -882,6 +883,8 @@ export class CoopChatSession {
     );
     this.applyDefaultRepoToContext();
     if (this.preferences.plan === "free" && !isFreeQuotaExhausted(this.preferences.quotaCredits)) {
+      this.post({ type: "chat:quota-cleared" });
+    } else if (this.preferences.plan !== "free" && !isPaidUsageExhausted(this.preferences.usageMeters)) {
       this.post({ type: "chat:quota-cleared" });
     }
     await this.pushSettingsState();
@@ -2126,7 +2129,11 @@ export class CoopChatSession {
         if (autocompleteEnabled !== undefined) {
           await vscode.commands.executeCommand("coopAI.setAutocompleteEnabled", autocompleteEnabled);
         }
-        await updateConfiguration(rest);
+        await updateConfiguration({
+          ...rest,
+          plan: this.preferences.plan,
+          usageTier: this.preferences.usageTier
+        });
         if (message.payload.jiraBaseUrl !== undefined) {
           await this.options.integrationSecrets.updateJiraBaseUrl(message.payload.jiraBaseUrl);
         }
@@ -4162,17 +4169,22 @@ export class CoopChatSession {
     const repoId = buildRepoId(this.preferences, turn.context);
     const action = this.turnAgentAction;
     const chatUseCase = action === "change" ? "code_edit" : "chat";
+    const modelPrefs = {
+      devMode: this.preferences.devMode,
+      llmProvider: this.preferences.llmProvider,
+      model: this.preferences.model,
+      plan: this.preferences.plan,
+      usageTier: this.preferences.usageTier
+    };
     const runtimeModel =
       action === "change"
-        ? resolveRuntimeModelForUseCase("code_edit", {
-            devMode: this.preferences.devMode,
-            llmProvider: this.preferences.llmProvider,
-            model: this.preferences.model
-          })
-        : (() => {
-            const editAssignment = getFeatureModelAssignment("edit");
-            return { provider: editAssignment.provider, model: editAssignment.model };
-          })();
+        ? resolveRuntimeModelForUseCase("code_edit", modelPrefs)
+        : canUserSelectModels(modelPrefs) && !isAutoModelSelection(modelPrefs.model)
+          ? resolveRuntimeModelForUseCase("chat", modelPrefs)
+          : (() => {
+              const editAssignment = getFeatureModelAssignment("edit");
+              return { provider: editAssignment.provider, model: editAssignment.model };
+            })();
 
     const synthesisMessages = this.withSelectionFocusActivity(
       appendThinkingProcessingTerms(
@@ -4359,7 +4371,9 @@ export class CoopChatSession {
             resetsAt: error.resetsAt ?? new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
             upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
             timezone: this.preferences.timezone,
-            retryAfterMs: error.retryAfterMs
+            retryAfterMs: error.retryAfterMs,
+            message: error.message,
+            pool: error.pool
           }
         });
         return;
@@ -7059,7 +7073,9 @@ export class CoopChatSession {
     let runtimeModel = resolveRuntimeModelForUseCase(chatUseCase, {
       devMode: this.preferences.devMode,
       llmProvider: this.preferences.llmProvider,
-      model: this.preferences.model
+      model: this.preferences.model,
+      plan: this.preferences.plan,
+      usageTier: this.preferences.usageTier
     });
     // Agent coding loop: mutation uses code_edit prompt + edit model; locate/understand
     // keep chat prompt but use the edit-tier model (not chat mini).
@@ -7074,17 +7090,26 @@ export class CoopChatSession {
         runtimeModel = resolveRuntimeModelForUseCase("code_edit", {
           devMode: this.preferences.devMode,
           llmProvider: this.preferences.llmProvider,
-          model: this.preferences.model
+          model: this.preferences.model,
+          plan: this.preferences.plan,
+          usageTier: this.preferences.usageTier
         });
       } else if (
         this.turnAgentAction === "locate" ||
         this.turnAgentAction === "understand"
       ) {
-        const editAssignment = getFeatureModelAssignment("edit");
-        runtimeModel = {
-          provider: editAssignment.provider,
-          model: editAssignment.model
-        };
+        const pickerOpen = canUserSelectModels({
+          devMode: this.preferences.devMode,
+          plan: this.preferences.plan,
+          usageTier: this.preferences.usageTier
+        });
+        if (!pickerOpen || isAutoModelSelection(this.preferences.model)) {
+          const editAssignment = getFeatureModelAssignment("edit");
+          runtimeModel = {
+            provider: editAssignment.provider,
+            model: editAssignment.model
+          };
+        }
       }
     }
     const cacheKey = JSON.stringify({
@@ -7907,7 +7932,9 @@ export class CoopChatSession {
             resetsAt: error.resetsAt ?? new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
             upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
             timezone: this.preferences.timezone,
-            retryAfterMs: error.retryAfterMs
+            retryAfterMs: error.retryAfterMs,
+            message: error.message,
+            pool: error.pool
           }
         });
         return;
@@ -7932,6 +7959,8 @@ export class CoopChatSession {
     resetsAt: string;
     upgradeUrl: string;
     retryAfterMs?: number;
+    message?: string;
+    pool?: "auto" | "frontier" | "free";
   }): void {
     this.post({
       type: "chat:quota-exceeded",
@@ -7939,63 +7968,85 @@ export class CoopChatSession {
         resetsAt: payload.resetsAt,
         upgradeUrl: payload.upgradeUrl,
         timezone: this.preferences.timezone,
-        retryAfterMs: payload.retryAfterMs
+        retryAfterMs: payload.retryAfterMs,
+        message: payload.message,
+        pool: payload.pool
       }
     });
   }
 
   private async blockIfFreeQuotaExhausted(): Promise<boolean> {
-    if (this.preferences.plan !== "free") {
-      return false;
-    }
-
-    let quota = this.preferences.quotaCredits;
     try {
       const me = await this.options.api.fetchMe(this.preferences.apiBaseUrl);
       if (me.plan) {
-        this.preferences = { ...this.preferences, plan: me.plan };
-      }
-      if (me.plan !== "free") {
-        return false;
-      }
-      if (me.quota) {
-        quota = me.quota;
-        this.preferences = { ...this.preferences, quotaCredits: me.quota };
+        this.preferences = {
+          ...this.preferences,
+          plan: me.plan,
+          quotaCredits: me.quota ?? this.preferences.quotaCredits,
+          usageMeters: me.usageMeters,
+          usageTier: me.usageTier
+        };
       }
     } catch {
-      // Fall back to cached quota snapshot.
+      // Fall back to cached snapshot.
     }
 
-    if (!isFreeQuotaExhausted(quota)) {
-      return false;
+    if (this.preferences.plan === "free") {
+      const quota = this.preferences.quotaCredits;
+      if (!isFreeQuotaExhausted(quota)) {
+        return false;
+      }
+      this.clearIntentFeedback();
+      this.postQuotaExceeded({
+        resetsAt: quota?.resetsAt ?? new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
+        upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
+        retryAfterMs: quota?.retryAfterMs,
+        pool: "free"
+      });
+      return true;
     }
 
-    this.clearIntentFeedback();
-    this.postQuotaExceeded({
-      resetsAt: quota?.resetsAt ?? new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
-      upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
-      retryAfterMs: quota?.retryAfterMs
-    });
-    return true;
+    if (isPaidUsageExhausted(this.preferences.usageMeters)) {
+      this.clearIntentFeedback();
+      this.postQuotaExceeded({
+        resetsAt: this.preferences.usageMeters?.periodEnd ?? "",
+        upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
+        pool: "auto",
+        message: "You've used this month's included usage. Upgrade to continue."
+      });
+      return true;
+    }
+
+    return false;
   }
 
   private async notifyQuotaExceededIfNeeded(): Promise<void> {
-    if (this.preferences.plan !== "free") {
-      return;
-    }
     try {
       await this.refreshPreferences();
     } catch {
       // Best-effort — still show notice from stale quota if available.
     }
-    const quota = this.preferences.quotaCredits;
-    if (!quota || !isFreeQuotaExhausted(quota)) {
+    if (this.preferences.plan === "free") {
+      const quota = this.preferences.quotaCredits;
+      if (!quota || !isFreeQuotaExhausted(quota)) {
+        return;
+      }
+      this.postQuotaExceeded({
+        resetsAt: quota.resetsAt ?? "",
+        upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
+        retryAfterMs: quota.retryAfterMs,
+        pool: "free"
+      });
+      return;
+    }
+    if (!isPaidUsageExhausted(this.preferences.usageMeters)) {
       return;
     }
     this.postQuotaExceeded({
-      resetsAt: quota.resetsAt ?? "",
+      resetsAt: this.preferences.usageMeters?.periodEnd ?? "",
       upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
-      retryAfterMs: quota.retryAfterMs
+      pool: "auto",
+      message: "You've used this month's included usage. Upgrade to continue."
     });
   }
 

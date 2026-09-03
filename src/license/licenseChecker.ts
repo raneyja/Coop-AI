@@ -34,7 +34,9 @@ export type LicenseStatus = {
   canEnableMoreRepos?: boolean;
 };
 
+/** Lowest self-serve paid seat price (Pro). Pro+ is $60, Max is $100. */
 export const PRO_PLAN_PRICE_USD = 25;
+export const PAID_SEAT_PRICES_USD = { pro: 25, pro_plus: 60, max: 100 } as const;
 
 const SECRET_KEY_LICENSE = "coopAI.licenseKey";
 

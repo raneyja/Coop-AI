@@ -6,7 +6,7 @@ export type QuotaExceededNoticeInput = {
   timezone?: string;
 };
 
-/** Local retry time for quota banners (e.g. "2:37 AM"). */
+export const PAID_USAGE_EXHAUSTED_COPY = "You've used this month's included usage.";
 export function formatQuotaRetryClock(
   resetsAt: string,
   timezone?: string,
@@ -48,4 +48,16 @@ export function isFreeQuotaExhausted(quota?: QuotaCreditsSnapshot | null): boole
     return quota.remainingCredits <= 0;
   }
   return false;
+}
+
+export function isPaidUsageExhausted(
+  meters?: {
+    auto: { remainingCents: number };
+    frontier: { remainingCents: number };
+  } | null
+): boolean {
+  if (!meters) {
+    return false;
+  }
+  return meters.auto.remainingCents <= 0 && meters.frontier.remainingCents <= 0;
 }

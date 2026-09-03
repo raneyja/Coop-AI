@@ -5,15 +5,19 @@ import {
   canUserSelectModels,
   formatAssignedModelMeta,
   getFeatureModelAssignment,
+  pickerAppliesToUseCase,
   resolveAssignedModelForUseCase,
   resolveFeatureFromUseCase,
   resolveRuntimeAutocompleteModel,
   resolveRuntimeModelForUseCase,
+  resolveHonoredChatModel,
   stripUserModelPreferenceUpdates
 } from "./featureModelAssignments";
 
 assert.equal(canUserSelectModels({ devMode: false }), false);
 assert.equal(canUserSelectModels({ devMode: true }), true);
+assert.equal(canUserSelectModels({ plan: "pro" }), true);
+assert.equal(canUserSelectModels({ plan: "enterprise" }), true);
 
 assert.equal(resolveFeatureFromUseCase("chat"), "chat");
 assert.equal(resolveFeatureFromUseCase("code_edit"), "edit");
@@ -84,6 +88,110 @@ const stripped = stripUserModelPreferenceUpdates(
 assert.equal(stripped.llmProvider, undefined);
 assert.equal(stripped.model, undefined);
 assert.equal(stripped.llmEnabled, true);
+
+const strippedPaid = stripUserModelPreferenceUpdates(
+  { llmProvider: "anthropic", model: "claude-opus-4-8", llmEnabled: true },
+  { plan: "pro" }
+);
+assert.equal(strippedPaid.llmProvider, "anthropic");
+assert.equal(strippedPaid.model, "claude-opus-4-8");
+
+const paidAuto = resolveRuntimeModelForUseCase("chat", {
+  plan: "pro",
+  model: "auto"
+});
+assert.equal(paidAuto.provider, "openai");
+assert.equal(paidAuto.model, "gpt-5-mini");
+
+const paidOpus = resolveRuntimeModelForUseCase("chat", {
+  plan: "pro",
+  model: "claude-opus-4-8"
+});
+assert.equal(paidOpus.provider, "anthropic");
+assert.equal(paidOpus.model, "claude-opus-4-8");
+
+assert.equal(pickerAppliesToUseCase("chat"), true);
+assert.equal(pickerAppliesToUseCase("code_edit"), true);
+assert.equal(pickerAppliesToUseCase("blast_radius"), true);
+assert.equal(pickerAppliesToUseCase("intent_suggest"), false);
+assert.equal(pickerAppliesToUseCase("pr_summary"), false);
+
+const paidIntent = resolveRuntimeModelForUseCase("intent_suggest", {
+  plan: "pro",
+  model: "claude-opus-4-8"
+});
+assert.equal(paidIntent.model, "gpt-4o-mini");
+
+const paidAutocomplete = resolveRuntimeAutocompleteModel("chat", "", {
+  plan: "pro",
+  llmProvider: "anthropic",
+  model: "claude-opus-4-8"
+});
+assert.equal(paidAutocomplete.provider, "mistral");
+assert.equal(paidAutocomplete.model, "codestral-latest");
+
+const honoredIntent = resolveHonoredChatModel({
+  allowUnapprovedProvider: false,
+  plan: "pro",
+  useCase: "intent_suggest",
+  clientModel: "claude-opus-4-8"
+});
+assert.equal(honoredIntent.model, "gpt-4o-mini");
+assert.equal(honoredIntent.selection, "auto");
+
+const honoredAuto = resolveHonoredChatModel({
+  allowUnapprovedProvider: false,
+  plan: "pro",
+  useCase: "chat",
+  clientModel: "auto"
+});
+assert.equal(honoredAuto.model, "gpt-5-mini");
+assert.equal(honoredAuto.selection, "auto");
+
+const honoredOpus = resolveHonoredChatModel({
+  allowUnapprovedProvider: false,
+  plan: "pro",
+  useCase: "chat",
+  clientModel: "claude-opus-4-8"
+});
+assert.equal(honoredOpus.model, "claude-opus-4-8");
+assert.equal(honoredOpus.selection, "claude-opus-4-8");
+
+const honoredFreeTamper = resolveHonoredChatModel({
+  allowUnapprovedProvider: false,
+  plan: "free",
+  useCase: "chat",
+  clientModel: "claude-opus-4-8"
+});
+assert.equal(honoredFreeTamper.model, "gpt-5-mini");
+assert.equal(honoredFreeTamper.selection, "auto");
+
+const honoredUnknown = resolveHonoredChatModel({
+  allowUnapprovedProvider: false,
+  plan: "pro",
+  useCase: "chat",
+  clientModel: "not-a-real-model"
+});
+assert.equal(honoredUnknown.model, "gpt-5-mini");
+assert.equal(honoredUnknown.selection, "auto");
+
+const honoredDeepseek = resolveHonoredChatModel({
+  allowUnapprovedProvider: false,
+  plan: "pro",
+  useCase: "chat",
+  clientModel: "deepseek-chat"
+});
+assert.equal(honoredDeepseek.model, "gpt-5-mini");
+assert.equal(honoredDeepseek.selection, "auto");
+
+const honoredCodestral = resolveHonoredChatModel({
+  allowUnapprovedProvider: false,
+  plan: "pro",
+  useCase: "chat",
+  clientModel: "codestral-latest"
+});
+assert.equal(honoredCodestral.model, "gpt-5-mini");
+assert.equal(honoredCodestral.selection, "auto");
 
 assert.equal(
   assignedModelsHubSubtitle({ autocompleteEnabled: false }),

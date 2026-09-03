@@ -28,7 +28,7 @@ lastUpdated: "2026-08-21"
 | Check | Success looks like |
 | --- | --- |
 | **API** | [api.coop-ai.dev/health](https://api.coop-ai.dev/health) returns OK |
-| **Model & chat** | Four assigned models, no provider picker |
+| **Model & chat** | How Auto works, what Auto uses, models by maker; autocomplete toggle |
 | **Autocomplete** | Ghost text on type → **Tab** accepts |
 | **/edit** | Patch notification with **Apply** / **Undo** |
 | **Create pull request** | After Apply or after typing in a Use-repo file, click **Create pull request** or type **Create a PR** → confirm → a link to the PR |

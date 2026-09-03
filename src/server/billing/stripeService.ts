@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { BillingConfig } from "./billingConfig";
+import type { UsageTier } from "../usageTiers";
 
 type StripeSession = { id: string; url: string | null };
 type StripePortal = { url: string };
@@ -8,6 +9,7 @@ type StripeSubscription = {
   status: string;
   quantity?: number;
   itemId?: string;
+  priceId?: string;
 };
 
 export type StripeCheckoutSession = {
@@ -32,18 +34,28 @@ export class StripeService {
     seats: number;
     existingOrgId?: string;
     upgrade?: boolean;
+    priceId?: string;
+    usageTier?: UsageTier;
   }): Promise<StripeSession> {
+    const priceId = input.priceId?.trim() || this.config.stripePriceIdPro;
+    if (!priceId) {
+      throw new Error("STRIPE_PRICE_ID_PRO is not configured");
+    }
+    const usageTier = input.usageTier ?? "pro";
     const params = new URLSearchParams();
     params.set("mode", "subscription");
     params.set("customer_email", input.email);
     params.set("success_url", `${this.config.checkoutSuccessUrl}?session_id={CHECKOUT_SESSION_ID}`);
     params.set("cancel_url", this.config.checkoutCancelUrl);
-    params.set("line_items[0][price]", this.config.stripePriceIdPro!);
+    params.set("line_items[0][price]", priceId);
     params.set("line_items[0][quantity]", String(Math.max(1, input.seats)));
     params.set("metadata[org_name]", input.orgName);
     params.set("metadata[admin_email]", input.email);
     params.set("metadata[seat_count]", String(Math.max(1, input.seats)));
+    params.set("metadata[usage_tier]", usageTier);
+    params.set("metadata[stripe_price_id]", priceId);
     params.set("subscription_data[metadata][org_name]", input.orgName);
+    params.set("subscription_data[metadata][usage_tier]", usageTier);
     if (input.existingOrgId) {
       params.set("metadata[existing_org_id]", input.existingOrgId);
       params.set("subscription_data[metadata][existing_org_id]", input.existingOrgId);
@@ -120,17 +132,20 @@ export class StripeService {
     );
     const json = (await response.json().catch(() => ({}))) as StripeSubscription & {
       error?: { message?: string };
-      items?: { data?: Array<{ id?: string; quantity?: number }> };
+      items?: { data?: Array<{ id?: string; quantity?: number; price?: string | { id?: string } }> };
     };
     if (!response.ok) {
       throw new Error(json.error?.message ?? `Stripe request failed (${response.status})`);
     }
     const item = json.items?.data?.[0];
+    const price = item?.price;
+    const priceId = typeof price === "string" ? price : price?.id;
     return {
       id: json.id,
       status: json.status,
       quantity: item?.quantity ?? json.quantity,
-      itemId: item?.id
+      itemId: item?.id,
+      priceId
     };
   }
 

@@ -27,18 +27,18 @@ type PricingTier = {
 
 const tiers: PricingTier[] = [
   {
-    name: "Developer",
+    name: "Free",
     price: "Free",
     audience: "Individual engineers. One account, no team seats.",
     features: [
-      "GitHub, GitLab, and Bitbucket via admin portal (same as Pro)",
+      "GitHub, GitLab, and Bitbucket via admin portal",
       "All collaboration integrations (Slack, Jira, Notion, Teams, Google Docs)",
       "Deep-Index / Lightning Mode, up to 3 repos org-wide",
       "Workspace repos, chat, quick actions, and inline complete & edit",
-      "AI credits with rolling 5-hour window (model-weighted)",
+      "Auto models with a rolling 5-hour usage window",
       "Cloud-hosted, solo account (1 seat)"
     ],
-    note: "Pro adds unlimited Deep-Indexed repos, team seats, and higher AI limits",
+    note: "Paid plans add team seats, unlimited Deep-Index, and monthly Auto + Frontier usage.",
     cta: "Get started free",
     href: "/signup/free",
     highlighted: false
@@ -48,29 +48,58 @@ const tiers: PricingTier[] = [
     price: "$25",
     period: "per user / month",
     features: [
-      "Everything in Developer",
-      "Unlimited Deep-Indexed repos (no 3-repo org cap)",
+      "Everything in Free",
+      "Unlimited Deep-Indexed repos",
       "Team seats. Invite teammates.",
-      "Higher AI limits and usage analytics",
+      "$40 Coop Auto + $25 Frontier included each month",
       "Collections for advanced cross-repo groupings",
       "Priority support"
     ],
-    note: "See Lightning Mode details →",
-    recommended: true,
     cta: "Start Pro",
-    href: "/signup",
+    href: "/signup?tier=pro",
+    highlighted: false
+  },
+  {
+    name: "Pro+",
+    price: "$60",
+    period: "per user / month",
+    audience: "Heavier chat and Frontier model use.",
+    features: [
+      "Everything in Pro",
+      "$120 Coop Auto + $70 Frontier included each month",
+      "Same team, Collections, and unlimited Deep-Index",
+      "Hard stop at the cap — upgrade to continue",
+      "Global model picker (default Auto)"
+    ],
+    recommended: true,
+    cta: "Start Pro+",
+    href: "/signup?tier=pro_plus",
     highlighted: true
+  },
+  {
+    name: "Max",
+    price: "$100",
+    period: "per user / month",
+    features: [
+      "Everything in Pro+",
+      "$240 Coop Auto + $140 Frontier included each month",
+      "Highest self-serve usage before Enterprise",
+      "Hard stop at the cap — contact us to go further"
+    ],
+    cta: "Start Max",
+    href: "/signup?tier=max",
+    highlighted: false
   },
   {
     name: "Enterprise",
     price: "Custom",
     features: [
-      "Everything in Pro",
+      "Everything in Max",
+      "No hard usage cap in v1 (custom contract)",
       "Zero-retention LLM routing. Your code never trains models.",
       "Bring Your Own Key (BYOK). Connect Bedrock, Azure, Vertex, or your own API key.",
       "Self-hosted deployment",
-      "Compliance attestation & DPA support",
-      "Dedicated onboarding"
+      "Compliance attestation & DPA support"
     ],
     cta: "Book a demo",
     href: "/demo",
@@ -85,7 +114,7 @@ export default function PricingPage() {
 
       <section className="pb-20">
         <div className="mx-auto max-w-6xl px-6">
-          <div className="grid gap-6 lg:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-5">
             {tiers.map((tier) => (
               <div
                 key={tier.name}
@@ -99,7 +128,7 @@ export default function PricingPage() {
                   <h2 className="text-lg font-semibold text-gray-900">{tier.name}</h2>
                   {tier.recommended ? (
                     <span className="shrink-0 rounded-sm border border-gray-300 bg-gray-100 px-2.5 py-0.5 font-mono text-[11px] text-gray-700">
-                      default
+                      recommended
                     </span>
                   ) : null}
                 </div>
@@ -125,17 +154,7 @@ export default function PricingPage() {
                 </ul>
 
                 {tier.note ? (
-                  <p className="mt-5 border-t border-coop-border pt-4 text-sm text-coop-muted">
-                    {tier.name === "Pro" ? (
-                      <>
-                        <Link href="/product#lightning-mode" className="font-medium text-gray-900 hover:underline">
-                          {tier.note}
-                        </Link>
-                      </>
-                    ) : (
-                      tier.note
-                    )}
-                  </p>
+                  <p className="mt-5 border-t border-coop-border pt-4 text-sm text-coop-muted">{tier.note}</p>
                 ) : (
                   <div className="mt-5 border-t border-transparent pt-4" aria-hidden />
                 )}
@@ -154,8 +173,8 @@ export default function PricingPage() {
           </div>
 
           <p className="mt-12 text-center text-sm text-coop-muted">
-            Beta participants receive advance notice before any pricing changes at general
-            availability.{" "}
+            Usage is included with your seat. When a pool is empty, upgrade to continue — there is no
+            on-demand spend.{" "}
             <Link href="/login" className="font-medium text-gray-900 hover:underline">
               Already have an account? Sign in
             </Link>

@@ -143,6 +143,37 @@ export class UsageTracker {
     return Number(result.rows[0]?.total ?? 0);
   }
 
+  public canRead(): boolean {
+    return Boolean(this.pool);
+  }
+
+  public async sumUsdCentsForOrg(
+    orgId: string,
+    range: UsageDateRange,
+    eventTypes: string[],
+    bucket: "auto" | "frontier"
+  ): Promise<number> {
+    if (!this.pool || eventTypes.length === 0) {
+      return 0;
+    }
+    const result = await this.pool.query(
+      `SELECT COALESCE(SUM(
+         CASE
+           WHEN (metadata->>'usdCents') ~ '^\\d+$' THEN (metadata->>'usdCents')::bigint
+           ELSE 0
+         END
+       ), 0)::int AS total
+       FROM usage_events
+       WHERE org_id = $1
+         AND created_at >= $2
+         AND created_at < $3
+         AND event_type = ANY($4::text[])
+         AND metadata->>'bucket' = $5`,
+      [orgId, range.from, range.to, eventTypes, bucket]
+    );
+    return Number(result.rows[0]?.total ?? 0);
+  }
+
   public async countEvents(orgId: string, range: UsageDateRange): Promise<number> {
     if (!this.pool) {
       return 0;

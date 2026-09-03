@@ -4,6 +4,8 @@ export type BillingConfig = {
   stripeSecretKey?: string;
   stripeWebhookSecret?: string;
   stripePriceIdPro?: string;
+  stripePriceIdProPlus?: string;
+  stripePriceIdMax?: string;
   checkoutSuccessUrl: string;
   checkoutCancelUrl: string;
   adminPortalUrl: string;
@@ -32,6 +34,8 @@ export function loadBillingConfig(env: NodeJS.ProcessEnv = process.env): Billing
     stripeSecretKey: env.STRIPE_SECRET_KEY?.trim() || undefined,
     stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET?.trim() || undefined,
     stripePriceIdPro: env.STRIPE_PRICE_ID_PRO?.trim() || undefined,
+    stripePriceIdProPlus: env.STRIPE_PRICE_ID_PRO_PLUS?.trim() || undefined,
+    stripePriceIdMax: env.STRIPE_PRICE_ID_MAX?.trim() || undefined,
     checkoutSuccessUrl: resolvePublicUrl(
       env.COOP_CHECKOUT_SUCCESS_URL,
       publicBase,

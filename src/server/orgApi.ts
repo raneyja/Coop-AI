@@ -222,7 +222,9 @@ export async function handleOrgApiRequest(
   if (parsed.method === "GET" && parsed.pathname === "/v1/me") {
     const plan = (await resolveOrgPlanFromDb(deps.orgStore, auth!)) ?? auth!.plan;
     const planQuota = createPlanQuotaService(deps.usageTracker);
+    const storedOrg = deps.orgStore ? await deps.orgStore.getOrganization(auth.orgId) : undefined;
     const quota = await planQuota.getSnapshot(auth.orgId, plan);
+    const usageMeters = await planQuota.getUsageMeters(auth.orgId, plan, storedOrg?.usageTier);
     const indexedRepoQuota =
       deps.orgStore && auth.orgId !== "legacy"
         ? await getIndexedRepoQuota(deps.orgStore, auth.orgId, plan)
@@ -274,7 +276,9 @@ export async function handleOrgApiRequest(
       workspaceRepoLimit: workspaceRepoQuota?.limit,
       canAddMoreWorkspaceRepos: workspaceRepoQuota?.canAddMore,
       primaryWorkspaceRepoId: workspaceRepoQuota?.primaryRepoId,
-      quota
+      quota,
+      usageMeters,
+      usageTier: storedOrg?.usageTier ?? undefined
     });
     return true;
   }

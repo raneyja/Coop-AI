@@ -12,7 +12,7 @@ export function SettingsSection({
   return (
     <section>
       {title ? <h2 className="coop-settings-section-label">{title}</h2> : null}
-      {description ? <p className="coop-settings-card-desc px-0.5">{description}</p> : null}
+      {description ? <p className="coop-settings-card-desc mb-2 px-0.5">{description}</p> : null}
       <div className="coop-settings-card">{children}</div>
     </section>
   );

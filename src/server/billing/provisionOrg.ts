@@ -4,6 +4,7 @@ import type { OrgStore } from "../orgStore";
 import type { UserStore } from "../users/userStore";
 import type { BillingConfig } from "./billingConfig";
 import { adminPortalAcceptInviteUrl, adminPortalFreshLoginUrl } from "./adminPortalUrl";
+import type { UsageTier } from "../usageTiers";
 
 export type ProvisionInput = {
   orgName: string;
@@ -13,6 +14,8 @@ export type ProvisionInput = {
   stripeSubscriptionId: string;
   existingOrgId?: string;
   upgrade?: boolean;
+  usageTier?: UsageTier;
+  stripePriceId?: string;
 };
 
 export type ProvisionResult = {
@@ -43,7 +46,9 @@ export async function provisionOrgFromCheckout(
       stripeCustomerId: input.stripeCustomerId,
       stripeSubscriptionId: input.stripeSubscriptionId,
       seatCount: input.seatCount,
-      billingStatus: "active"
+      billingStatus: "active",
+      usageTier: input.usageTier ?? "pro",
+      stripePriceId: input.stripePriceId ?? null
     });
     await emailService.sendProUpgradeWelcome({
       to: input.adminEmail,
@@ -70,7 +75,9 @@ export async function provisionOrgFromCheckout(
     stripeCustomerId: input.stripeCustomerId,
     stripeSubscriptionId: input.stripeSubscriptionId,
     seatCount: input.seatCount,
-    billingStatus: "active"
+    billingStatus: "active",
+    usageTier: input.usageTier ?? "pro",
+    stripePriceId: input.stripePriceId ?? null
   });
 
   const existingUser = await userStore.findActiveUserByEmail(input.adminEmail);

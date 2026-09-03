@@ -8,6 +8,7 @@ import { handleAdminIntegrationScopeRequest } from "./adminIntegrationScopeApi";
 import { handleAdminOrgRequest } from "./adminOrgApi";
 import { handleAdminAuditRequest } from "./adminAuditApi";
 import { handleAdminAnalyticsRequest } from "./adminAnalyticsApi";
+import { createPlanQuotaService } from "./planQuota";
 
 export type { AdminApiDeps } from "./adminApiShared";
 
@@ -96,6 +97,26 @@ export async function handleAdminApiRequest(
     return true;
   }
   if (await handleAdminAnalyticsRequest(parsed, response, deps, auth, deps.usageTracker)) {
+    return true;
+  }
+
+  if (parsed.method === "GET" && parsed.pathname === "/v1/admin/quota") {
+    const org = await deps.orgStore.getOrganization(auth.orgId);
+    const plan = org?.plan ?? auth.plan;
+    const planQuota = createPlanQuotaService(deps.usageTracker);
+    const quota = await planQuota.getSnapshot(auth.orgId, plan);
+    const usageMeters = await planQuota.getUsageMeters(auth.orgId, plan, org?.usageTier);
+    if (plan === "enterprise") {
+      writeJson(response, 200, { plan, unlimited: true, usageMeters: null });
+      return true;
+    }
+    writeJson(response, 200, {
+      plan,
+      usageTier: org?.usageTier ?? null,
+      unlimited: false,
+      quota,
+      usageMeters
+    });
     return true;
   }
 

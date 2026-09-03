@@ -79,9 +79,9 @@ const API_ERROR_MESSAGES: Record<string, string> = {
   team_not_available:
     "The free plan is individual only — one seat per account. Upgrade to Pro to invite teammates.",
   quota_limit_reached:
-    "You've used your free AI credits for this 5-hour window. Upgrade to Pro for unlimited usage at https://coop-ai.dev/pricing",
+    "You've used your included AI usage. Upgrade for a larger monthly allowance at https://coop-ai.dev/pricing",
   daily_limit_reached:
-    "You've used your free AI credits for this 5-hour window. Upgrade to Pro for unlimited usage at https://coop-ai.dev/pricing",
+    "You've used your included AI usage. Upgrade for a larger monthly allowance at https://coop-ai.dev/pricing",
   sso_not_configured: "SSO is not configured for your organization yet. Ask your admin to finish setup.",
   sso_required: "Your organization requires SSO sign-in. Use Sign in with SSO.",
   sso_unavailable: "Enterprise SSO is not available on this Coop environment.",

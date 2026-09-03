@@ -126,7 +126,7 @@ After sign-in, confirm the hot path:
 | Check | Success looks like |
 | --- | --- |
 | **API health** | **Browser** → [api.coop-ai.dev/health](https://api.coop-ai.dev/health) returns OK |
-| **Model & chat** | **Settings → Preferences → Model & chat** — four assigned models (Chat, Quick actions, /edit, Autocomplete), no provider picker |
+| **Model & chat** | **Settings → Preferences → Model & chat** — how Auto works, what Auto uses, models by maker |
 | **Autocomplete** | Sidebar **Autocomplete On** → type in `.ts` → ghost text → **Tab** accepts |
 | **Edit mode** | `/edit add a comment above this function` → **Apply** / **Undo** on the patch notification |
 | **Create pull request** | After Apply or after typing in a Use-repo file, click **Create pull request** or type **Create a PR** in chat → confirm branch, title, and notes → a link to the PR |

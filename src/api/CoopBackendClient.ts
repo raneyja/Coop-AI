@@ -71,6 +71,26 @@ export type PlanQuotaCredits = {
   retryAfterMs: number;
 };
 
+export type UsagePoolMeter = {
+  usedCents: number;
+  limitCents: number;
+  remainingCents: number;
+  usedRatio: number;
+};
+
+export type PaidUsageMeters = {
+  usageTier: "pro" | "pro_plus" | "max";
+  displayName: string;
+  seatPriceUsd: number;
+  periodStart: string;
+  periodEnd: string;
+  auto: UsagePoolMeter;
+  frontier: UsagePoolMeter;
+  nextTier?: "pro" | "pro_plus" | "max";
+  nextTierName?: string;
+  nextTierPriceUsd?: number;
+};
+
 export type ChatQuotaExceededPayload = {
   message: string;
   retryAfterMs?: number;
@@ -78,6 +98,8 @@ export type ChatQuotaExceededPayload = {
   upgradeUrl?: string;
   usedCredits?: number;
   limitCredits?: number;
+  pool?: "auto" | "frontier" | "free";
+  upgradePlan?: "pro" | "pro_plus" | "max";
 };
 
 export class ChatQuotaExceededError extends Error {
@@ -93,6 +115,10 @@ export class ChatQuotaExceededError extends Error {
 
   public readonly limitCredits?: number;
 
+  public readonly pool?: "auto" | "frontier" | "free";
+
+  public readonly upgradePlan?: "pro" | "pro_plus" | "max";
+
   public constructor(payload: ChatQuotaExceededPayload) {
     super(payload.message);
     this.name = "ChatQuotaExceededError";
@@ -101,6 +127,8 @@ export class ChatQuotaExceededError extends Error {
     this.upgradeUrl = payload.upgradeUrl;
     this.usedCredits = payload.usedCredits;
     this.limitCredits = payload.limitCredits;
+    this.pool = payload.pool;
+    this.upgradePlan = payload.upgradePlan;
   }
 }
 
@@ -132,6 +160,8 @@ export type MeResponse = {
   primaryWorkspaceRepoId?: string;
   repoAccessMode?: "all_indexed" | "per_user";
   quota?: PlanQuotaCredits;
+  usageMeters?: PaidUsageMeters;
+  usageTier?: "pro" | "pro_plus" | "max" | null;
 };
 
 export type MeIntegrationsResponse = {
@@ -1685,8 +1715,14 @@ export class CoopBackendClient {
       } catch {
         errorBody = undefined;
       }
-      if (response.status === 429 && errorBody?.message) {
-        throw new Error(errorBody.message);
+      if (response.status === 429) {
+        const quota = readChatQuotaExceededPayload(response.status, errorBody as Record<string, unknown> | undefined);
+        if (quota) {
+          throw new ChatQuotaExceededError(quota);
+        }
+        if (errorBody?.message) {
+          throw new Error(errorBody.message);
+        }
       }
       throw new Error(
         `Inline completion API returned ${response.status}${text ? `: ${text.slice(0, 200)}` : ""}`
@@ -1781,8 +1817,14 @@ export class CoopBackendClient {
       } catch {
         body = undefined;
       }
-      if (response.status === 429 && body?.message) {
-        throw new Error(body.message);
+      if (response.status === 429) {
+        const quota = readChatQuotaExceededPayload(response.status, body as Record<string, unknown> | undefined);
+        if (quota) {
+          throw new ChatQuotaExceededError(quota);
+        }
+        if (body?.message) {
+          throw new Error(body.message);
+        }
       }
       throw new Error(
         `Inline completion API returned ${response.status}${text ? `: ${text.slice(0, 200)}` : ""}`
@@ -1897,6 +1939,12 @@ function readChatQuotaExceededPayload(
     resetsAt: typeof body.resetsAt === "string" ? body.resetsAt : undefined,
     upgradeUrl: typeof body.upgradeUrl === "string" ? body.upgradeUrl : undefined,
     usedCredits: typeof body.usedCredits === "number" ? body.usedCredits : undefined,
-    limitCredits: typeof body.limitCredits === "number" ? body.limitCredits : undefined
+    limitCredits: typeof body.limitCredits === "number" ? body.limitCredits : undefined,
+    pool:
+      body.pool === "auto" || body.pool === "frontier" || body.pool === "free" ? body.pool : undefined,
+    upgradePlan:
+      body.upgradePlan === "pro" || body.upgradePlan === "pro_plus" || body.upgradePlan === "max"
+        ? body.upgradePlan
+        : undefined
   };
 }

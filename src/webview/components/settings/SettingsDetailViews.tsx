@@ -2,9 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   assignedModelsHubSubtitle,
   COOP_FEATURE_MODEL_ASSIGNMENTS,
-  formatAssignedModelMeta,
-  type CoopFeatureId
+  formatAssignedModelDisplay
 } from "../../../config/featureModelAssignments";
+import {
+  getModelDocsUrl,
+  listPickerCatalogModels,
+  PICKER_PROVIDER_GROUPS
+} from "../../../config/llmModels";
 import { listEuropeanTimezoneOptions, resolveTimezonePreference, US_TIMEZONE_OPTIONS } from "../../../chat/timezone";
 import { type SettingsTestKey } from "../TestButton";
 import { SaveFlashLabel, type SettingsSaveKey } from "../SaveFlashLabel";
@@ -46,6 +50,7 @@ import {
   codeHostDisplayName
 } from "./connectionCopy";
 import type { OrgIntegrationProvider } from "../../../chat/integrationStatusTypes";
+import { DEMO_PAGE_URL } from "../../../config/siteConfig";
 
 function isFreeDeveloperPlan(prefs: Preferences): boolean {
   return prefs.plan === "free";
@@ -254,36 +259,24 @@ export function SettingsDetailView({
   }
 }
 
-function assignmentFeatureEnabled(
-  feature: CoopFeatureId,
-  draft: { autocompleteEnabled: boolean }
-): boolean {
-  return feature === "autocomplete" ? draft.autocompleteEnabled : true;
-}
-
-function AssignedModelRow({
+function ModelDocsLink({
+  model,
   label,
-  meta,
-  enabled
+  chip
 }: {
+  model: string;
   label: string;
-  meta: string;
-  enabled: boolean;
+  chip?: boolean;
 }): React.ReactElement {
+  const href = getModelDocsUrl(model);
+  const className = chip ? "coop-settings-model-chip" : "coop-settings-docs-link";
+  if (!href) {
+    return chip ? <span className="coop-settings-model-chip">{label}</span> : <>{label}</>;
+  }
   return (
-    <div className="coop-health-integration">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="coop-health-integration-name">{label}</div>
-          <div className="coop-health-integration-meta">{meta}</div>
-        </div>
-        <span
-          className={`coop-health-status shrink-0 ${enabled ? "coop-health-status--healthy" : "coop-health-status--offline"}`}
-        >
-          {enabled ? "On" : "Off"}
-        </span>
-      </div>
-    </div>
+    <a className={className} href={href} target="_blank" rel="noreferrer" title={`Open ${label} docs`}>
+      {label}
+    </a>
   );
 }
 
@@ -298,6 +291,7 @@ function ModelDetail({
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   const savedTimer = useRef<number | null>(null);
+  const pickerCatalog = listPickerCatalogModels();
 
   useEffect(() => {
     if (!dirty) {
@@ -336,24 +330,64 @@ function ModelDetail({
 
   return (
     <>
-      <SettingsSection>
-        <div className="space-y-2">
+      <SettingsSection
+        title="Auto"
+        description="Coop picks a model for each job — faster for everyday chat, stronger for /edit. On Pro, choose a specific model from the menu in chat."
+      >
+        <ul className="coop-settings-model-list">
           {COOP_FEATURE_MODEL_ASSIGNMENTS.map((assignment) => (
-            <AssignedModelRow
-              key={assignment.feature}
-              label={assignment.label}
-              meta={formatAssignedModelMeta(assignment)}
-              enabled={assignmentFeatureEnabled(assignment.feature, draft)}
-            />
+            <li key={assignment.feature}>
+              <span className="coop-settings-model-list-feature">{assignment.label}</span>
+              <ModelDocsLink chip model={assignment.model} label={formatAssignedModelDisplay(assignment)} />
+            </li>
           ))}
-        </div>
+        </ul>
+      </SettingsSection>
 
+      <SettingsSection
+        title="Models you can pick"
+        description="OpenAI, Anthropic, and Gemini. Frontier models count toward Frontier usage."
+      >
+        <div className="coop-settings-maker-stack">
+          {PICKER_PROVIDER_GROUPS.map((group) => {
+            const models = pickerCatalog.filter((entry) => entry.provider === group.provider);
+            if (models.length === 0) {
+              return null;
+            }
+            return (
+              <div key={group.provider} className="coop-settings-maker-block">
+                <a
+                  className="coop-settings-maker-heading"
+                  href={group.docsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={`Open ${group.label} docs`}
+                >
+                  {group.label}
+                </a>
+                <div className="coop-settings-maker-models">
+                  {models.map((entry) => (
+                    <ModelDocsLink
+                      key={`${entry.provider}:${entry.id}`}
+                      chip
+                      model={entry.id}
+                      label={entry.label}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </SettingsSection>
+
+      <SettingsSection title="Autocomplete">
         <SettingsCheckboxRow
           title="Enable inline autocomplete"
+          description="Ghost-text suggestions as you type. Autocomplete always uses Codestral."
           checked={draft.autocompleteEnabled}
           onChange={(checked) => update({ autocompleteEnabled: checked })}
         />
-
         <div className="coop-settings-actions">
           <button type="button" className="coop-settings-action-btn" onClick={handleSave} disabled={!dirty}>
             Save model settings
@@ -374,9 +408,39 @@ function ModelDetail({
   );
 }
 
+function usageBar(label: string, caption: string, usedRatio: number, usedCents: number, limitCents: number): React.ReactElement {
+  const pct = Math.max(0, Math.min(100, Math.round(usedRatio * 100)));
+  return (
+    <div className="mt-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="coop-prompt-modal-section-title">{label}</p>
+        <p className="text-[11px] text-[var(--coop-panel-muted)]">{pct}% used</p>
+      </div>
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[var(--coop-composer-surface)]">
+        <div
+          className="h-full bg-[var(--vscode-button-background)]"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="coop-settings-card-desc mt-1">{caption}</p>
+      <p className="text-[10px] text-[var(--coop-panel-muted)]">
+        ${(usedCents / 100).toFixed(0)} of ${(limitCents / 100).toFixed(0)} included
+      </p>
+    </div>
+  );
+}
+
 function PlanUsageDetail({ prefs }: SettingsDetailProps): React.ReactElement {
   const orgName = displayOrgName(prefs);
   const adminBase = (prefs.adminPortalUrl ?? "https://admin.coop-ai.dev").replace(/\/$/, "");
+  const meters = prefs.usageMeters;
+  const resetDate = meters?.periodEnd
+    ? new Date(meters.periodEnd).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+    : undefined;
+  const daysLeft =
+    meters?.periodEnd != null
+      ? Math.max(0, Math.ceil((new Date(meters.periodEnd).getTime() - Date.now()) / 86_400_000))
+      : undefined;
 
   if (!preferencesSignedIn(prefs)) {
     return (
@@ -390,31 +454,91 @@ function PlanUsageDetail({ prefs }: SettingsDetailProps): React.ReactElement {
     <SettingsSection>
       <p className="coop-prompt-modal-section-title">Organization</p>
       <p>{orgName ?? "—"}</p>
-      <p className="coop-prompt-modal-section-title mt-3">Plan &amp; Usage</p>
-      <p>{displayPlanLabel(prefs)}</p>
+
+      <div className="mt-3 grid gap-2">
+        <div className="coop-settings-card p-3">
+          <p className="text-[10px] uppercase tracking-wide text-[var(--coop-panel-muted)]">Current plan</p>
+          <p className="mt-1 text-[15px] font-medium">
+            {displayPlanLabel(prefs)}
+            {meters ? ` $${meters.seatPriceUsd}/mo` : ""}
+          </p>
+          {resetDate ? (
+            <p className="coop-settings-card-desc mt-1">
+              Usage limits reset on {resetDate}
+              {daysLeft != null ? ` (${daysLeft} day${daysLeft === 1 ? "" : "s"} left)` : ""}
+            </p>
+          ) : null}
+          <div className="coop-settings-actions mt-2">
+            <a className="coop-settings-action-btn" href={`${adminBase}/billing`} target="_blank" rel="noreferrer">
+              Adjust plan
+            </a>
+          </div>
+        </div>
+        {meters?.nextTier ? (
+          <div className="coop-settings-card p-3">
+            <p className="text-[10px] uppercase tracking-wide text-[var(--coop-panel-muted)]">Upgrade available</p>
+            <p className="mt-1 text-[15px] font-medium">
+              {meters.nextTierName}
+              {meters.nextTierPriceUsd != null ? ` $${meters.nextTierPriceUsd}/mo` : ""}
+            </p>
+            <p className="coop-settings-card-desc mt-1">
+              More Coop Auto and Frontier usage when you hit this month&apos;s cap.
+            </p>
+            <div className="coop-settings-actions mt-2">
+              <a className="coop-settings-action-btn" href={`${adminBase}/billing`} target="_blank" rel="noreferrer">
+                Upgrade
+              </a>
+            </div>
+          </div>
+        ) : prefs.plan === "pro" || prefs.plan === "enterprise" ? (
+          <div className="coop-settings-card p-3">
+            <p className="text-[10px] uppercase tracking-wide text-[var(--coop-panel-muted)]">Enterprise</p>
+            <p className="coop-settings-card-desc mt-1">Need pooled usage or a custom contract? Contact us.</p>
+            <div className="coop-settings-actions mt-2">
+              <a className="coop-settings-action-btn" href={DEMO_PAGE_URL} target="_blank" rel="noreferrer">
+                Contact
+              </a>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
       {prefs.plan === "free" && prefs.quotaCredits ? (
-        <p className="mt-1 text-[11px] text-[var(--coop-panel-muted)]">
+        <p className="mt-3 text-[11px] text-[var(--coop-panel-muted)]">
           {formatQuotaUsageSummary(prefs.quotaCredits)}
         </p>
       ) : null}
+
+      {meters ? (
+        <>
+          <p className="coop-prompt-modal-section-title mt-4">Included in {meters.displayName}</p>
+          {usageBar(
+            "Coop Auto",
+            "Includes Coop-assigned models (Auto). Extra Auto use consumes Frontier.",
+            meters.auto.usedRatio,
+            meters.auto.usedCents,
+            meters.auto.limitCents
+          )}
+          {usageBar(
+            "Frontier",
+            "Claude, GPT, Gemini, and other models you pick. Extra use requires an upgrade.",
+            meters.frontier.usedRatio,
+            meters.frontier.usedCents,
+            meters.frontier.limitCents
+          )}
+        </>
+      ) : null}
+
       <div className="coop-settings-actions mt-3">
         <a className="coop-settings-action-btn" href={adminBase} target="_blank" rel="noreferrer">
           Open admin portal
         </a>
         {isFreeDeveloperPlan(prefs) ? (
-          <a
-            className="coop-settings-action-btn"
-            href={`${adminBase}/billing`}
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a className="coop-settings-action-btn" href={`${adminBase}/billing`} target="_blank" rel="noreferrer">
             Upgrade to Pro
           </a>
         ) : null}
       </div>
-      <p className="coop-settings-card-desc mt-2">
-        Manage billing, usage, integrations, indexing, and team settings in the admin portal.
-      </p>
     </SettingsSection>
   );
 }

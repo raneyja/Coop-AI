@@ -27,7 +27,7 @@ export function planCapabilities(plan: string | undefined | null): PlanCapabilit
     plan: normalized,
     showCollections: !isFree,
     teamInvites: !isFree,
-    showUsageQuota: isFree,
+    showUsageQuota: normalized !== "enterprise",
     indexedRepoLimit: isFree ? 3 : null,
     chatFeed: true,
     showScopeStep: !isFree,

@@ -3,9 +3,9 @@ import { NextResponse } from "next/server";
 const API_BASE = process.env.COOP_API_BASE?.trim() || "http://localhost:8787";
 
 export async function POST(request: Request) {
-  let body: { orgName?: string; email?: string; seats?: number };
+  let body: { orgName?: string; email?: string; seats?: number; tier?: string };
   try {
-    body = (await request.json()) as { orgName?: string; email?: string; seats?: number };
+    body = (await request.json()) as { orgName?: string; email?: string; seats?: number; tier?: string };
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
@@ -13,6 +13,8 @@ export async function POST(request: Request) {
   const orgName = String(body.orgName ?? "").trim();
   const email = String(body.email ?? "").trim();
   const seats = Math.max(1, Number(body.seats ?? 1) || 1);
+  const tier =
+    body.tier === "pro_plus" || body.tier === "max" || body.tier === "pro" ? body.tier : "pro";
 
   if (!orgName || !email) {
     return NextResponse.json({ error: "orgName and email are required" }, { status: 400 });
@@ -25,7 +27,7 @@ export async function POST(request: Request) {
   const response = await fetch(`${API_BASE}/v1/billing/checkout-session`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ orgName, email, seats })
+    body: JSON.stringify({ orgName, email, seats, tier })
   });
 
   const data = (await response.json().catch(() => ({}))) as { url?: string; message?: string; error?: string };

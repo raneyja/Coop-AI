@@ -8,6 +8,7 @@ import {
 import { clampSeatCountForPlan } from "./planGates";
 import type { OrgRepoAccessMode } from "./repoAccessTypes";
 import { parseOrgRepoAccessMode } from "./repoAccessTypes";
+import { parseUsageTier, type UsageTier } from "./usageTiers";
 
 export type OrgPlan = "free" | "pro" | "enterprise";
 export type IndexStatus = "idle" | "queued" | "indexing" | "cloning" | "ready" | "error" | "disabled";
@@ -18,6 +19,7 @@ export type Organization = {
   plan: OrgPlan;
   repoAccessMode: OrgRepoAccessMode;
   createdAt: Date;
+  usageTier?: UsageTier | null;
 };
 
 export type OrgBilling = {
@@ -27,6 +29,8 @@ export type OrgBilling = {
   seatCount: number;
   billingStatus: string;
   onboardingCompletedAt?: Date;
+  usageTier?: UsageTier | null;
+  stripePriceId?: string;
 };
 
 export type ApiKeyRecord = {
@@ -128,17 +132,18 @@ export class OrgStore {
   ) {}
 
   public async createOrganization(name: string, plan: OrgPlan = "free"): Promise<Organization> {
+    const usageTier = plan === "pro" ? "pro" : null;
     const result = await this.pool.query(
-      `INSERT INTO organizations (name, plan) VALUES ($1, $2)
-       RETURNING id, name, plan, created_at`,
-      [name, plan]
+      `INSERT INTO organizations (name, plan, usage_tier) VALUES ($1, $2, $3)
+       RETURNING id, name, plan, created_at, usage_tier`,
+      [name, plan, usageTier]
     );
     return rowToOrg(result.rows[0]);
   }
 
   public async getOrganization(orgId: string): Promise<Organization | undefined> {
     const result = await this.pool.query(
-      `SELECT id, name, plan, repo_access_mode, created_at FROM organizations WHERE id = $1`,
+      `SELECT id, name, plan, repo_access_mode, created_at, usage_tier FROM organizations WHERE id = $1`,
       [orgId]
     );
     const row = result.rows[0];
@@ -172,8 +177,14 @@ export class OrgStore {
 
   public async setOrganizationPlan(orgId: string, plan: OrgPlan): Promise<Organization | undefined> {
     const result = await this.pool.query(
-      `UPDATE organizations SET plan = $2 WHERE id = $1
-       RETURNING id, name, plan, repo_access_mode, created_at`,
+      `UPDATE organizations
+       SET plan = $2,
+           usage_tier = CASE
+             WHEN $2 = 'pro' THEN COALESCE(usage_tier, 'pro')
+             ELSE NULL
+           END
+       WHERE id = $1
+       RETURNING id, name, plan, repo_access_mode, created_at, usage_tier`,
       [orgId, plan]
     );
     const row = result.rows[0];
@@ -483,7 +494,8 @@ export class OrgStore {
 
   public async getOrganizationBilling(orgId: string): Promise<OrgBilling | undefined> {
     const result = await this.pool.query(
-      `SELECT billing_email, stripe_customer_id, stripe_subscription_id, seat_count, billing_status, onboarding_completed_at
+      `SELECT billing_email, stripe_customer_id, stripe_subscription_id, seat_count, billing_status,
+              onboarding_completed_at, usage_tier, stripe_price_id
        FROM organizations WHERE id = $1`,
       [orgId]
     );
@@ -509,6 +521,8 @@ export class OrgStore {
       stripeSubscriptionId: string;
       seatCount: number;
       billingStatus: string;
+      usageTier: UsageTier | null;
+      stripePriceId: string | null;
     }>
   ): Promise<void> {
     const fields: string[] = [];
@@ -535,6 +549,14 @@ export class OrgStore {
     if (patch.billingStatus !== undefined) {
       fields.push(`billing_status = $${idx++}`);
       values.push(patch.billingStatus);
+    }
+    if (patch.usageTier !== undefined) {
+      fields.push(`usage_tier = $${idx++}`);
+      values.push(patch.usageTier);
+    }
+    if (patch.stripePriceId !== undefined) {
+      fields.push(`stripe_price_id = $${idx++}`);
+      values.push(patch.stripePriceId);
     }
     if (fields.length === 0) return;
     await this.pool.query(`UPDATE organizations SET ${fields.join(", ")} WHERE id = $1`, values);
@@ -742,7 +764,9 @@ function rowToBilling(row: Record<string, unknown>): OrgBilling {
     billingStatus: String(row.billing_status ?? "none"),
     onboardingCompletedAt: row.onboarding_completed_at
       ? new Date(String(row.onboarding_completed_at))
-      : undefined
+      : undefined,
+    usageTier: parseUsageTier(row.usage_tier != null ? String(row.usage_tier) : null),
+    stripePriceId: row.stripe_price_id ? String(row.stripe_price_id) : undefined
   };
 }
 
@@ -752,7 +776,8 @@ function rowToOrg(row: Record<string, unknown>): Organization {
     name: String(row.name),
     plan: String(row.plan) as OrgPlan,
     repoAccessMode: parseOrgRepoAccessMode(row.repo_access_mode) ?? "all_indexed",
-    createdAt: new Date(String(row.created_at))
+    createdAt: new Date(String(row.created_at)),
+    usageTier: parseUsageTier(row.usage_tier != null ? String(row.usage_tier) : null)
   };
 }
 

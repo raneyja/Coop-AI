@@ -353,9 +353,11 @@ Right-click any selection in the editor for **Trace Decision**, **Find Owner**, 
 
 ### Model assignments
 
-Coop assigns a model per feature — you do **not** pick provider or model on Pro. Open **Settings → Preferences → Model & chat** to see four read-only assignment rows with **On** / **Off** badges.
+**Auto** (the default) means Coop picks a model per job. Open **Settings → Preferences → Model & chat** to see what Auto uses.
 
-| Feature | Assigned model |
+On **Pro, Pro+, Max, and Enterprise**, pick a specific OpenAI, Anthropic, or Gemini model from the **model menu in chat**. Chat, quick actions, and /edit follow that pick. Autocomplete stays on Codestral. **Free** stays Auto-only.
+
+| Feature | What Auto uses |
 | --- | --- |
 | **Chat** | OpenAI GPT-5 mini |
 | **Quick actions** + integration chat (`/slack`, `/jira`, …) | Anthropic Claude Sonnet 4.6 |
@@ -364,15 +366,13 @@ Coop assigns a model per feature — you do **not** pick provider or model on Pr
 
 Create pull request **Notes** use **OpenAI GPT-4o mini** and are labeled **(AI Generated)** — you can edit them before submit.
 
-Enterprise custom model selection is coming soon. With `coopAI.devMode: true`, provider and model **dev overrides** apply to local testing only — not production routing.
-
-One toggle remains editable:
+One toggle remains editable on this page:
 
 | Toggle | Effect |
 | --- | --- |
 | **Enable inline autocomplete** | Inline ghost text (syncs with the header **Autocomplete** toggle) |
 
-Chat, quick actions, and edit patches are always on. Click **Save model settings** after changing the autocomplete toggle.
+Chat, quick actions, and edit patches are always on. Click **Save model settings** after changing the autocomplete toggle. Change models from chat, not from this page.
 
 ### Inline complete and edit selection
 
@@ -776,7 +776,7 @@ Ask Coop: "Update AGENTS.md based on what I told you in this thread" to generate
 | --- | --- | --- |
 | Local workspace context | Yes | Yes |
 | AI usage | 80k tokens / 5-hour window | Higher limits (seat-based billing) |
-| Model selection | Coop-assigned per feature | Coop-assigned per feature (Enterprise custom: coming soon) |
+| Model selection | Auto only | Model menu in chat (OpenAI, Anthropic, Gemini). Auto still available. |
 | Code hosts & integrations | Yes (admin portal) | Yes |
 | Deep-Index / Lightning Mode | Yes (3 repos org-wide) | Yes (unlimited) |
 | Team seats | Individual only (1 seat) | Multi-seat |

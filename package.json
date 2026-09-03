@@ -316,8 +316,8 @@
       "properties": {
         "coopAI.defaultModel": {
           "type": "string",
-          "default": "gpt-4o-mini",
-          "description": "Default model for CoopAI chat requests."
+          "default": "auto",
+          "description": "Chat model. Use \"auto\" (default) to follow Coop feature assignments, or a catalog model id on paid plans."
         },
         "coopAI.llmProvider": {
           "type": "string",

@@ -7,7 +7,6 @@ import {
 } from "../config/degradationConfig";
 import { ConflictConfig, mergeConflictConfig, parseConflictSeverity } from "../config/conflictConfig";
 import { IntentConfig, mergeIntentConfig } from "../config/intentConfig";
-import { DEFAULT_MODEL_BY_PROVIDER } from "../config/llmModels";
 import { CoopBackendClient } from "../api/CoopBackendClient";
 import { clampSearchScopeModeForPlan } from "../license/licenseChecker";
 import { resolveCoopBaseUrl, assertCoopEndpoint } from "../api/resolveBaseUrl";
@@ -873,7 +872,7 @@ export function readConfiguration(): Omit<
   const config = vscode.workspace.getConfiguration("coopAI");
   const llmProvider = readProviderPreference(config.get<string>("llmProvider", "anthropic"));
   return {
-    model: config.get<string>("defaultModel", DEFAULT_MODEL_BY_PROVIDER[llmProvider]),
+    model: config.get<string>("defaultModel", "auto")?.trim() || "auto",
     llmProvider,
     temperature: config.get<number>("temperature", 0.5),
     maxTokens: config.get<number>("maxTokens", 8192),
@@ -1024,6 +1023,8 @@ export async function readPreferences(
   let repoAccessMode: UserPreferences["repoAccessMode"];
   let adminControlledRepos = false;
   let quotaCredits: UserPreferences["quotaCredits"];
+  let usageMeters: UserPreferences["usageMeters"];
+  let usageTier: UserPreferences["usageTier"];
   const me = await verifyStoredSession(api, base.apiBaseUrl);
   if (me) {
     orgName = me.orgName;
@@ -1042,6 +1043,9 @@ export async function readPreferences(
     primaryWorkspaceRepoId = me.primaryWorkspaceRepoId;
     repoAccessMode = me.repoAccessMode;
     quotaCredits = me.quota;
+    usageMeters = me.usageMeters;
+    usageTier = me.usageTier;
+    usageTier = me.usageTier;
     try {
       const integrations = await api.fetchMeIntegrations(base.apiBaseUrl);
       orgIntegrationStatuses = normalizeOrgIntegrationStatuses(integrations.integrations ?? []);
@@ -1208,7 +1212,9 @@ export async function readPreferences(
     primaryWorkspaceRepoId,
     repoAccessMode,
     adminControlledRepos,
-    quotaCredits
+    quotaCredits,
+    usageMeters,
+    usageTier
   };
 }
 
@@ -1248,7 +1254,11 @@ export function resolvePreferredCodeHost(input: {
 export async function updateConfiguration(updates: Partial<UserPreferences>): Promise<void> {
   const config = vscode.workspace.getConfiguration("coopAI");
   const devMode = config.get<boolean>("devMode", false);
-  const safeUpdates = stripUserModelPreferenceUpdates(updates, { devMode });
+  const safeUpdates = stripUserModelPreferenceUpdates(updates, {
+    devMode,
+    plan: updates.plan,
+    usageTier: updates.usageTier
+  });
   const ops: Array<[string, string | boolean | number]> = [];
   if (safeUpdates.model !== undefined) {
     ops.push(["defaultModel", safeUpdates.model]);

@@ -44,7 +44,7 @@ Use existing patterns (`coop-prompt-modal`, `coop-settings-card`, `coop-quick-ac
 
 ## Model assignments (operator-controlled)
 
-Production users do **not** pick provider or model. Assignments live in `src/config/featureModelAssignments.ts` and must be wired through settings UI, extension runtime, config writes, and server APIs. See `.cursor/rules/model-assignments.mdc` and `website/content/docs/model-assignments.md`. **Do not** add provider/model pickers without `canUserSelectModels({ devMode: true })` gating.
+Paid users can pick a catalog model (default **Auto**) from the **chat composer**. Settings → Model & chat explains Auto vs a picked model — it is not a second picker. Auto still follows `src/config/featureModelAssignments.ts`. Free stays Auto-only. Autocomplete, intent, evidence, and PR notes always use the assignment. See `.cursor/rules/model-assignments.mdc` and `website/content/docs/model-assignments.md`.
 
 ## Other areas
 

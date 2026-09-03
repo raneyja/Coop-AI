@@ -157,14 +157,23 @@ export function displayOrgName(prefs: Pick<Preferences, "orgName">): string | un
   return name;
 }
 
-export function displayPlanLabel(prefs: Pick<Preferences, "plan">): string {
+export function displayPlanLabel(
+  prefs: Pick<{ plan?: "free" | "pro" | "enterprise"; usageTier?: "pro" | "pro_plus" | "max" | null }, "plan" | "usageTier">
+): string {
+  if (prefs.plan === "enterprise") {
+    return "Enterprise";
+  }
+  if (prefs.usageTier === "pro_plus") {
+    return "Pro+";
+  }
+  if (prefs.usageTier === "max") {
+    return "Max";
+  }
   switch (prefs.plan) {
-    case "enterprise":
-      return "Enterprise";
     case "pro":
       return "Pro";
     case "free":
-      return "Developer (free)";
+      return "Free";
     default:
       return "";
   }
@@ -217,6 +226,10 @@ export function planUsageHubSubtitle(prefs: Preferences): string {
       prefs.quotaCredits.usedCredits ??
       Math.max(0, prefs.quotaCredits.limitCredits - prefs.quotaCredits.remainingCredits);
     return `${plan} · ${used}K of ${prefs.quotaCredits.limitCredits}K used`;
+  }
+  if (prefs.usageMeters) {
+    const autoPct = Math.round(prefs.usageMeters.auto.usedRatio * 100);
+    return `${plan} · Auto ${autoPct}%`;
   }
   return plan;
 }
