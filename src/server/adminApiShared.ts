@@ -4,6 +4,7 @@ import type { AuditLogger } from "./audit/auditLogger";
 import type { UsageTracker } from "./usageTracker";
 import type { IntegrationConnectionStore } from "./integrationConnectionStore";
 import type { IntegrationScopePolicyStore } from "./integrationScopePolicyStore";
+import type { IntegrationApiDeps } from "./integrationApi";
 import type { OrgStore } from "./orgStore";
 import type { OperatorStore } from "./operators/operatorStore";
 import type { ServerConfig } from "./serverConfig";
@@ -19,7 +20,10 @@ export type AdminApiDeps = {
   serverConfig: ServerConfig;
   auditLogger?: AuditLogger;
   usageTracker?: UsageTracker;
-};
+} & Pick<
+  IntegrationApiDeps,
+  "atlassianApp" | "notionApp" | "googleDocsApp" | "teamsApp" | "slackApp"
+>;
 
 export function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
   response.writeHead(statusCode, { "content-type": "application/json; charset=utf-8" });

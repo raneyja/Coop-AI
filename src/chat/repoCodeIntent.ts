@@ -262,3 +262,12 @@ export function classifyRepoCodeIntent(message: string): RepoCodeIntent {
 export function needsRepoCode(message: string): boolean {
   return classifyRepoCodeIntent(message).action !== "none";
 }
+
+/** Understand Repo / slash focus that is a "where does this live" locate, not an architecture overview. */
+export function isLocateShapedRepoAsk(message: string | undefined): boolean {
+  const trimmed = message?.trim() ?? "";
+  if (!trimmed) {
+    return false;
+  }
+  return classifyRepoCodeIntent(trimmed).action === "locate";
+}

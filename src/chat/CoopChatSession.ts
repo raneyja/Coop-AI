@@ -153,7 +153,7 @@ import { buildOwnershipSynthesisUserPrompt } from "../prompts/ownershipSynthesis
 import { buildRepoSummarySynthesisUserPrompt } from "../prompts/repoSummarySynthesis";
 import { buildBlastRadiusSynthesisUserPrompt } from "../prompts/blastRadiusSynthesis";
 import { buildKnowledgeGapsSynthesisUserPrompt } from "../prompts/knowledgeGapsSynthesis";
-import { buildIntegrationSynthesisUserPrompt } from "../prompts/integrationSynthesis";
+import { buildIntegrationSynthesisUserPrompt, countIntegrationResults, emptyIntegrationSlashResponse } from "../prompts/integrationSynthesis";
 import {
   blastRadiusFromBundle,
   confluenceSearchFromBundle,
@@ -259,6 +259,7 @@ import {
 } from "../prompts/mentionResponseEnrichment";
 import {
   parseSlashCommand,
+  slashCommandDisplayToken,
   slashCommandHistoryContent,
   type ParsedSlashCommand
 } from "../context/slashCommands";
@@ -4121,6 +4122,8 @@ export class CoopChatSession {
       | {
           composerMode?: ComposerMode;
           fetchIntegrations?: IntegrationChatProvider[];
+          integrationProvider?: IntegrationChatProvider;
+          sourceHint?: string;
         }
       | undefined,
     _message: string
@@ -4128,6 +4131,9 @@ export class CoopChatSession {
     // Hunt wins over a named Slack/Jira primary-source steal. Slack-only
     // (action none) still skips the loop.
     if (quickAction || options?.composerMode === "edit") {
+      return false;
+    }
+    if (options?.integrationProvider && options?.sourceHint) {
       return false;
     }
     if (this.turnAgentAction === "none") {
@@ -5596,6 +5602,7 @@ export class CoopChatSession {
       conversationalAck ||
       structureIntent ||
       Boolean(this.pendingDualRepoCompare) ||
+      Boolean(options?.integrationProvider) ||
       shouldSkipOpenFileAttach({
         quickAction,
         context: this.currentContext,
@@ -5850,7 +5857,8 @@ export class CoopChatSession {
       query: message,
       hasQuickAction: Boolean(quickAction),
       intentPlan: this.turnIntentPlan,
-      isEditTurn: options?.composerMode === "edit"
+      isEditTurn: options?.composerMode === "edit",
+      integrationSlash: Boolean(options?.integrationProvider && options?.sourceHint)
     });
     if (this.shouldRunAgentOwnedTurn(quickAction, options, message)) {
       await this.runAgentOwnedTurn(turn, message);
@@ -6385,11 +6393,17 @@ export class CoopChatSession {
     const provider = def.target.provider;
     if (!this.isIntegrationConnected(provider)) {
       const label = integrationLabel(provider);
+      const token = slashCommandDisplayToken(def);
+      const message = `${label} isn't connected. Connect ${label} in Settings to use /${token}. /${token} searches ${label}, not the repository.`;
+      this.post({
+        type: "chat:error",
+        payload: { message }
+      });
       this.postDegradationNotification({
         id: `slash-${provider}-${Date.now()}`,
         severity: "warning",
         title: `${label} isn't connected`,
-        message: `Connect ${label} in Settings to use /${provider}.`,
+        message,
         provider,
         action: "refresh"
       });
@@ -6413,7 +6427,10 @@ export class CoopChatSession {
               : provider === "google-docs"
                 ? `Find Google Docs related to ${repoLabel}.`
                 : `Summarize the most relevant ${label} discussions for this code.`;
-    const sourceHint = `Prioritize evidence from ${label} when answering. Cite specific ${label} messages or items when available, and clearly state when ${label} has no relevant information.`;
+    const sourceHint =
+      provider === "google-docs"
+        ? `Answer using Google Docs only. Do not search, cite, or summarize repository files or marketing demo stories. If Google Docs has no relevant documents, say so clearly.`
+        : `Prioritize evidence from ${label} when answering. Cite specific ${label} messages or items when available, and clearly state when ${label} has no relevant information.`;
     await this.handleChatSend(userText, undefined, attachments, {
       sourceHint,
       integrationProvider: provider,
@@ -7215,6 +7232,28 @@ export class CoopChatSession {
       const integrationEvidence = integrationProvider
         ? integrationSearchFromBundle(contextBundle, integrationProvider)
         : undefined;
+
+      if (integrationProvider && options?.sourceHint) {
+        const hits = countIntegrationResults(integrationProvider, integrationEvidence ?? {});
+        if (hits === 0) {
+          const responseContent = emptyIntegrationSlashResponse(
+            integrationProvider,
+            integrationEvidence
+          );
+          await delayUntilMinResponseVisible(turn.startedAt);
+          if (isCancelled()) {
+            return;
+          }
+          this.clearIntentFeedback(turn.threadId);
+          const finalMessage: ChatMessage = {
+            role: "assistant",
+            content: responseContent,
+            timestamp: Date.now()
+          };
+          await this.finishTurnAssistantMessage(turn, finalMessage);
+          return;
+        }
+      }
 
       if (effectiveQuickAction === "understand-repo") {
         const summaryRecord = repoSummary as Record<string, unknown> | undefined;

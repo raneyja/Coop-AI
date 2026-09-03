@@ -44,6 +44,7 @@ import { OrgIdentityDirectoryStore } from "./orgIdentityDirectoryStore";
 import { buildIdentityConnectionHints } from "./identityHintsService";
 import type { IntegrationConnectionStore } from "./integrationConnectionStore";
 import type { IntegrationScopePolicyStore } from "./integrationScopePolicyStore";
+import type { IntegrationApiDeps } from "./integrationApi";
 import type { ServerConfig } from "./serverConfig";
 import { createPlanQuotaService } from "./planQuota";
 import type { EstateSyncService } from "./estateSyncService";
@@ -83,6 +84,10 @@ export type OrgApiDeps = {
   usageTracker?: UsageTracker;
   integrationStore?: IntegrationConnectionStore;
   scopePolicyStore?: IntegrationScopePolicyStore;
+} & Pick<
+  IntegrationApiDeps,
+  "atlassianApp" | "notionApp" | "googleDocsApp" | "teamsApp" | "slackApp"
+> & {
   createPullFromFiles?: (
     coords: RepoCoordinates,
     input: CreatePullRequestInput,

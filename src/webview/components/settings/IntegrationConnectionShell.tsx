@@ -3,6 +3,7 @@ import type { IntegrationChatProvider } from "../../../chat/types";
 import { ConnectionCard } from "./ConnectionCard";
 import { integrationConnectionMeta, integrationDisplayName } from "./connectionCopy";
 import { integrationConfigured, integrationOrgInstalled } from "./subtitles";
+import { findOrgIntegrationStatus, integrationToOrgProvider } from "./integrationStatus";
 import type { Preferences } from "./types";
 import type { SettingsTestKey } from "../TestButton";
 
@@ -39,7 +40,12 @@ export function IntegrationConnectionShell({
 }: IntegrationConnectionShellProps): React.ReactElement {
   const name = integrationDisplayName(provider);
   const connected = integrationConfigured(prefs, provider);
-  const needsReconnect = provider === "slack" && Boolean(prefs.slackNeedsReconnect);
+  const orgStatus = findOrgIntegrationStatus(prefs, integrationToOrgProvider(provider));
+  const needsReconnect = Boolean(
+    orgStatus?.needsReconnect ||
+      orgStatus?.scopeNeedsReconnect ||
+      (provider === "slack" && prefs.slackNeedsReconnect)
+  );
   const showDevFallback = Boolean(prefs.devMode && devFallback && !integrationOrgInstalled(prefs, provider));
 
   return (
@@ -66,7 +72,9 @@ export function IntegrationConnectionShell({
         footer={
           <p className="coop-settings-card-desc coop-prompt-modal-muted">
             {needsReconnect
-              ? `Slack is linked but search isn’t ready. In the admin portal: Disconnect Slack, then Connect again. Return here and click Refresh status.`
+              ? provider === "slack"
+                ? `Slack is linked but search isn’t ready. In the admin portal: Disconnect Slack, then Connect again. Return here and click Refresh status.`
+                : `${name} is linked but access expired. Reconnect it in the Coop admin portal, then return here and click Refresh status.`
               : connected
                 ? `Manage ${name} opens the Coop admin portal — that’s where tools are connected and scoped.`
                 : `Connect ${name} opens the Coop admin portal. Organization credentials stay on the Coop server, not in VS Code.`}

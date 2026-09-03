@@ -1,5 +1,6 @@
 import type { ContextFetchRequest } from "./requestBatcher";
 import { looksLikeAbsoluteDiskPath } from "./outsideWorkspaceFile";
+import { isLocateShapedRepoAsk } from "../chat/repoCodeIntent";
 
 /** Quick actions that auto-fetch all connected doc/discussion integrations. */
 export const REPO_WIDE_INTEGRATION_QUICK_ACTIONS = [
@@ -41,6 +42,12 @@ function isOutsideWorkspaceTarget(request: ContextFetchRequest): boolean {
 
 export function shouldFetchRepoWideIntegrations(request: ContextFetchRequest): boolean {
   if (isOutsideWorkspaceTarget(request)) {
+    return false;
+  }
+  if (
+    request.params.quickAction === "understand-repo" &&
+    isLocateShapedRepoAsk(request.intent?.context?.queryText)
+  ) {
     return false;
   }
   return isRepoWideIntegrationQuickAction(request.params.quickAction);

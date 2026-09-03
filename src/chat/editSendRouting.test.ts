@@ -36,6 +36,10 @@ test("isConcreteFileEditAsk detects applyable identifier validation asks", () =>
   );
 });
 
+test("isConcreteFileEditAsk does not treat bare fix this as a patch spec", () => {
+  assert.equal(isConcreteFileEditAsk("fix this"), false);
+});
+
 test("isConcreteFileEditAsk rejects advisory where/which questions", () => {
   assert.equal(
     isConcreteFileEditAsk(

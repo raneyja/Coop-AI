@@ -54,6 +54,8 @@ export type RepoSemanticRetrievalGateOptions = {
   enabled?: boolean;
   /** Chip / active file — open-file review must not attach estate bodies. */
   openFile?: string;
+  /** Slash /docs etc. — do not attach repo search hits. */
+  integrationProvider?: string;
 };
 
 export function semanticRetrievalQueryText(options: RepoSemanticRetrievalGateOptions): string {
@@ -73,6 +75,9 @@ export function semanticRetrievalQueryText(options: RepoSemanticRetrievalGateOpt
 
 export function shouldRunRepoSemanticRetrieval(options: RepoSemanticRetrievalGateOptions): boolean {
   if (options.enabled === false) {
+    return false;
+  }
+  if (options.integrationProvider) {
     return false;
   }
   if (options.quickAction) {
@@ -130,7 +135,11 @@ export function gateOptionsFromRequest(
     codeEditIntent: extras.codeEditIntent,
     inScopeMentionCount: extras.inScopeMentionCount,
     enabled: extras.enabled,
-    openFile: request.params.file
+    openFile: request.params.file,
+    integrationProvider:
+      typeof request.params.integrationProvider === "string"
+        ? request.params.integrationProvider
+        : undefined
   };
 }
 

@@ -96,6 +96,25 @@ export type IntegrationStatus = {
   connectionKind?: "github_app" | "oauth";
 };
 
+/** Usable in chat — a stored credential that needs reconnect is not connected. */
+export function integrationIsConnected(
+  status?: Pick<IntegrationStatus, "installed" | "needsReconnect">
+): boolean {
+  return Boolean(status?.installed) && !status?.needsReconnect;
+}
+
+export function integrationStatusLabel(
+  status?: Pick<IntegrationStatus, "installed" | "needsReconnect">
+): string {
+  if (status?.needsReconnect) {
+    return "Reconnect required";
+  }
+  if (status?.installed) {
+    return "Connected";
+  }
+  return "Available";
+}
+
 export type SlackScopeChannel = {
   id: string;
   name: string;

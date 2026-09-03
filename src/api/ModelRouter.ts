@@ -8,6 +8,7 @@ import { configuredProviders, loadLlmServerConfig, resolveProviderApiKey, type L
 import { createProviderClient, createFimClient } from "./providers";
 import { selectFimProvider } from "./fimRouter";
 import { buildUserMessageWithContext, buildProjectInstructionsSystemBlock, systemPromptForUseCase } from "../prompts/systemPrompts";
+import { REPO_SUMMARY_LOCATE_ONLY_MARKER } from "../prompts/repoSummarySynthesis";
 import { appendUserPaperclipAttachmentsPrompt } from "../chat/paperclipAttachments";
 import { resolveAnthropicThinkingBudget } from "../config/chatThinkingBudget";
 
@@ -29,7 +30,11 @@ function buildChatSystemContent(request: CompletionRequest, overridePrompt?: str
   }
   const basePrompt = systemPromptForUseCase(request.useCase, {
     activeFile: request.context?.file,
-    hasPaperclipAttachments: requestHasPaperclipAttachments(request)
+    hasPaperclipAttachments: requestHasPaperclipAttachments(request),
+    locateOnly:
+      request.useCase === "comprehension" &&
+      typeof request.message === "string" &&
+      request.message.includes(REPO_SUMMARY_LOCATE_ONLY_MARKER)
   });
   const instructionsBlock =
     request.useCase !== "inline_completion" &&

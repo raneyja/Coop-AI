@@ -100,6 +100,18 @@ test("shouldRunAgentToolLoop is true for a repo hunt (always on)", () => {
   );
 });
 
+test("shouldRunAgentToolLoop is false for /docs slash even when the ask looks like a hunt", () => {
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query: "summarize auth middleware behavior",
+      hasQuickAction: false,
+      intentPlan: emptyChatIntentPlan("summarize auth middleware behavior"),
+      integrationSlash: true
+    }),
+    false
+  );
+});
+
 test("shouldRunAgentToolLoop is false for a file-count inventory ask", () => {
   const query = "How many files are in this repo?";
   assert.equal(

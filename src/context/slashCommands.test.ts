@@ -152,6 +152,18 @@ test("parses integration commands", () => {
   assert.equal(parsed!.args, "who decided to drop redis");
 });
 
+test("/docs is Google Docs, not a repo explain", () => {
+  const parsed = parseSlashCommand("/docs summarize auth middleware behavior");
+  assert.ok(parsed);
+  assert.equal(parsed!.def.target.kind, "integration");
+  if (parsed!.def.target.kind === "integration") {
+    assert.equal(parsed!.def.target.provider, "google-docs");
+  }
+  assert.equal(slashCommandDisplayToken(parsed!.def), "docs");
+  assert.equal(parsed!.def.description, "Search Google Docs only — not the repository");
+  assert.equal(parsed!.args, "summarize auth middleware behavior");
+});
+
 test("parses edit composer-mode command with args", () => {
   const parsed = parseSlashCommand("/edit add null check to login handler");
   assert.ok(parsed);

@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { completeOnboarding, fetchOrg, fetchOrgRepos, fetchUsers } from "@/lib/coopApi";
 import { displayOrgName, getStoredMe } from "@/lib/auth";
-import type { IntegrationStatus } from "@/lib/integrations";
+import { integrationIsConnected, type IntegrationStatus } from "@/lib/integrations";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { isFullyUsable } from "@/lib/indexingProgress";
 import { IntegrationsStep } from "./IntegrationsStep";
@@ -58,7 +58,9 @@ function stepsForPlan(plan: string) {
 
 function collaborationConnected(integrations: IntegrationStatus[]): boolean {
   const collab = ["slack", "atlassian", "notion", "google-docs"] as const;
-  return collab.some((provider) => integrations.find((i) => i.provider === provider)?.installed);
+  return collab.some((provider) =>
+    integrationIsConnected(integrations.find((entry) => entry.provider === provider))
+  );
 }
 
 export function OnboardingWizard({
@@ -91,9 +93,15 @@ export function OnboardingWizard({
   const [usableRepoCount, setUsableRepoCount] = useState(0);
   const [repoAccessMode, setRepoAccessMode] = useState<"all_indexed" | "per_user">("all_indexed");
 
-  const githubConnected = integrations.find((i) => i.provider === "github")?.installed;
-  const gitlabConnected = integrations.find((i) => i.provider === "gitlab")?.installed;
-  const bitbucketConnected = integrations.find((i) => i.provider === "bitbucket")?.installed;
+  const githubConnected = integrationIsConnected(
+    integrations.find((entry) => entry.provider === "github")
+  );
+  const gitlabConnected = integrationIsConnected(
+    integrations.find((entry) => entry.provider === "gitlab")
+  );
+  const bitbucketConnected = integrationIsConnected(
+    integrations.find((entry) => entry.provider === "bitbucket")
+  );
   const anyCodeHostConnected = githubConnected || gitlabConnected || bitbucketConnected;
   const wideStep = currentStepId === "tools";
 

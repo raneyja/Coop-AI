@@ -130,8 +130,24 @@ Keep this section brief (4-6 bullets max) — contextualize the open editor file
 - **Integration surface** — routes, HTTP handlers, or external APIs visible in anchor file content (omit if none)
 - **Owners** — primary owner when ownership evidence is scoped to this path (omit if none)`;
 
-function comprehensionResponseStructure(activeFile?: string): string {
+function comprehensionResponseStructure(activeFile?: string, locateOnly = false): string {
   const trimmed = activeFile?.trim();
+  if (locateOnly) {
+    return `
+## Required response structure
+Use these sections in order (**Title** on its own line; blank line before each; omit empty sections):
+
+**Summary**
+1-3 sentences naming where the asked-about code lives, from attached files only.
+
+**Your question**
+Required. Name the attached implementation path chain that answers the locate ask (UI click → apply logic, middleware file, etc.). Cite real paths/symbols from attached entry or focus-search files. Do not pad a reading list. Do not name Confluence or Notion pages.
+
+**Sources**
+Include **at most 3 bullets**. Each bullet must start with a plain \`[Sources: …]\` label, then an em dash, then **one concrete fact** from GitHub/index evidence. Do not cite Confluence or Notion.
+
+Omit **Architecture**, **Key subsystems**, **Entry points**, **Risks & unknowns**, and **Suggested next steps** — this is a locate answer, not a repo syllabus.`;
+  }
   const activeFileSection = trimmed
     ? `${COMPREHENSION_ACTIVE_FILE_SECTION}
 
@@ -423,11 +439,15 @@ function withOutputContract(
   return `${prompt}\n\n${OPERATING_CONTEXT}\n\n${paperclip}${CURSOR_STYLE_OUTPUT_CONTRACT}${structure}`;
 }
 
-export function buildComprehensionSystem(activeFile?: string, hasPaperclipAttachments = false): string {
+export function buildComprehensionSystem(
+  activeFile?: string,
+  hasPaperclipAttachments = false,
+  locateOnly = false
+): string {
   return withOutputContract(
     REPO_SUMMARY_EVIDENCE_SYSTEM,
     "comprehension",
-    comprehensionResponseStructure(activeFile),
+    comprehensionResponseStructure(activeFile, locateOnly),
     hasPaperclipAttachments
   );
 }
@@ -556,7 +576,7 @@ function buildUseCaseSystemPrompt(useCase: UseCase, options?: SystemPromptOption
   const hasPaperclip = options?.hasPaperclipAttachments ?? false;
   switch (useCase) {
     case "comprehension":
-      return buildComprehensionSystem(options?.activeFile, hasPaperclip);
+      return buildComprehensionSystem(options?.activeFile, hasPaperclip, options?.locateOnly);
     case "decision_archaeology":
       return withOutputContract(DECISION_HISTORIAN_SYSTEM, "decision_archaeology", undefined, hasPaperclip);
     case "ownership":
@@ -586,6 +606,8 @@ export type SystemPromptOptions = {
   activeFile?: string;
   /** Inject the paperclip-attachment system rule only when the turn has such uploads. */
   hasPaperclipAttachments?: boolean;
+  /** Understand Repo locate ask — skip architecture syllabus in the system contract. */
+  locateOnly?: boolean;
 };
 
 export function buildProjectInstructionsSystemBlock(hasInstructions: boolean): string {
@@ -597,8 +619,12 @@ export function buildProjectInstructionsSystemBlock(hasInstructions: boolean): s
 
 export function systemPromptForUseCase(useCase: UseCase, options?: SystemPromptOptions): string {
   // Rebuild per request only when we must vary from the precomputed constants —
-  // an active file for comprehension, or a turn carrying paperclip attachments.
-  if (options?.hasPaperclipAttachments || (useCase === "comprehension" && options?.activeFile?.trim())) {
+  // an active file for comprehension, locate-only Understand Repo, or paperclip attachments.
+  if (
+    options?.hasPaperclipAttachments ||
+    options?.locateOnly ||
+    (useCase === "comprehension" && options?.activeFile?.trim())
+  ) {
     return buildUseCaseSystemPrompt(useCase, options);
   }
   return USE_CASE_PROMPTS[useCase] ?? GENERAL_CHAT_SYSTEM;

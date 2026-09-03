@@ -148,6 +148,14 @@ test("comprehension use case includes audience block via withOutputContract", ()
   assert.ok(prompt.includes("answer that ask explicitly"));
 });
 
+test("comprehension locate-only omits architecture syllabus", () => {
+  const prompt = systemPromptForUseCase("comprehension", { locateOnly: true });
+  assert.ok(prompt.includes("this is a locate answer, not a repo syllabus"));
+  assert.ok(prompt.includes("Omit **Architecture**"));
+  assert.ok(!prompt.includes("How major pieces connect"));
+  assert.ok(!prompt.includes("One bullet per subsystem"));
+});
+
 test("comprehension use case requires active file section when activeFile is set", () => {
   const prompt = systemPromptForUseCase("comprehension", { activeFile: "src/server/githubAppApi.ts" });
   assert.ok(prompt.includes("**How the open file fits**"));

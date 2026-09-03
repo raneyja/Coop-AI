@@ -687,7 +687,12 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           operatorStore,
           serverConfig,
           auditLogger,
-          usageTracker
+          usageTracker,
+          atlassianApp,
+          notionApp,
+          googleDocsApp,
+          teamsApp,
+          slackApp
         })
       ) {
         return;
@@ -720,7 +725,12 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         auditLogger,
         usageTracker,
         integrationStore,
-        scopePolicyStore
+        scopePolicyStore,
+        atlassianApp,
+        notionApp,
+        googleDocsApp,
+        teamsApp,
+        slackApp
       })) {
         return;
       }

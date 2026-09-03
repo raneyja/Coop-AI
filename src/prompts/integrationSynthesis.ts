@@ -24,6 +24,7 @@ import {
 export const INTEGRATION_EVIDENCE_SYSTEM = `You are CoopAI answering from a single primary integration source attached in the evidence card.
 Prioritize the attached search results. Cite specific messages, tickets, or pages by title/key.
 If search returned no results or an error, say so clearly under **Sources**.
+Do not search, cite, or summarize repository files, marketing demo stories, or invented code. If the integration has no relevant hits, say that — do not fall back to a repo explain.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
 ${EVIDENCE_CITATION_RULES}`;
@@ -43,11 +44,27 @@ export type IntegrationSynthesisInput = {
 
 export function buildIntegrationSynthesisUserPrompt(input: IntegrationSynthesisInput): string {
   const lines: string[] = [];
+  const docsOnly = input.provider === "google-docs";
   lines.push("## Task");
-  lines.push(input.userQuestion.trim());
+  if (docsOnly) {
+    lines.push(
+      "Answer from attached Google Docs titles only. Do not name repository files or invent code paths (.ts, .js, .py, .go)."
+    );
+    lines.push(`User ask: ${input.userQuestion.trim()}`);
+    lines.push(
+      "If the attached titles do not answer the ask, say the attached Google Docs do not cover it and list those titles. Never explain repository middleware from training or Use-repo identity."
+    );
+  } else {
+    lines.push(input.userQuestion.trim());
+  }
   lines.push("");
   appendUserFocusInstructions(lines, input.userFocus);
-  if (input.owner && input.repo) {
+  if (docsOnly) {
+    lines.push(
+      "## Scope\n- Google Docs slash. Use-repo may have seeded the search query — it is not code to explain."
+    );
+    lines.push("");
+  } else if (input.owner && input.repo) {
     lines.push(`## Scope\n- Repository: ${input.owner}/${input.repo}`);
     if (input.file) lines.push(`- Active file: ${input.file}`);
     appendMentionScopeSection(lines, input);
@@ -100,7 +117,11 @@ function appendMentionScopeSection(lines: string[], input: IntegrationSynthesisI
   });
 }
 
-function countIntegrationResults(provider: IntegrationChatProvider, evidence: Record<string, unknown>): number {
+/** Hit count for a single-integration evidence blob (issues / messages / pages / documents). */
+export function countIntegrationResults(
+  provider: IntegrationChatProvider,
+  evidence: Record<string, unknown>
+): number {
   switch (provider) {
     case "jira":
       return Array.isArray(evidence.issues) ? evidence.issues.length : 0;
@@ -115,6 +136,66 @@ function countIntegrationResults(provider: IntegrationChatProvider, evidence: Re
     default:
       return 0;
   }
+}
+
+/** Canned slash reply when the named tool returned nothing — never invent repo code. */
+export function emptyIntegrationSlashResponse(
+  provider: IntegrationChatProvider,
+  evidence?: Record<string, unknown>
+): string {
+  const error = typeof evidence?.error === "string" ? evidence.error.trim() : "";
+  if (provider === "google-docs") {
+    return error
+      ? `Google Docs search failed (${error}). /docs searches Google Docs only — not the repository.`
+      : "Google Docs has no documents matching this ask. /docs searches Google Docs only — not the repository.";
+  }
+  const label =
+    provider === "jira"
+      ? "Jira"
+      : provider === "slack"
+        ? "Slack"
+        : provider === "teams"
+          ? "Microsoft Teams"
+          : provider === "confluence"
+            ? "Confluence"
+            : provider === "notion"
+              ? "Notion"
+              : provider;
+  return error
+    ? `${label} search failed (${error}). This command does not search the repository.`
+    : `${label} returned no matching results. This command does not search the repository.`;
+}
+
+const INVENTED_REPO_FILE =
+  /(?:^|[\s`'(])((?:[\w.-]+\/)+[\w.-]+\.(?:ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|rb))\b/gi;
+
+/** True when a /docs answer named a repo path that is not in an attached Doc title. */
+export function googleDocsSlashLeaksRepoCode(content: string, documentTitles: string[]): boolean {
+  const allowed = documentTitles.join("\n").toLowerCase();
+  for (const match of content.matchAll(INVENTED_REPO_FILE)) {
+    const path = (match[1] ?? "").toLowerCase();
+    if (path && !allowed.includes(path)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Replace a /docs answer that invented repo files with titles-only honesty. */
+export function rewriteGoogleDocsSlashIfRepoLeak(content: string, documentTitles: string[]): string {
+  if (!googleDocsSlashLeaksRepoCode(content, documentTitles)) {
+    return content;
+  }
+  const titles = documentTitles.map((title) => title.trim()).filter(Boolean).slice(0, 10);
+  const list = titles.length
+    ? titles.map((title) => `- ${title}`).join("\n")
+    : "- (no document titles were attached)";
+  return [
+    "The attached Google Docs do not describe that in repository code. /docs searches Google Docs only — not the repository.",
+    "",
+    "Docs returned:",
+    list
+  ].join("\n");
 }
 
 function formatIntegrationEvidenceForPrompt(

@@ -4,14 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { displayOrgName, getStoredMe } from "@/lib/auth";
 import {
-  fetchIntegrations,
   fetchMeWorkspaceRepos,
   isOrgSuspendedResult,
   type WorkspaceRepo
 } from "@/lib/coopApi";
 import { displayName } from "@/lib/timezones";
-import { INTEGRATIONS } from "@/lib/integrations";
-import type { IntegrationStatus } from "@/lib/integrations";
+import { INTEGRATIONS, integrationIsConnected } from "@/lib/integrations";
+import { useIntegrations } from "@/hooks/useIntegrations";
 import { dedupeWorkspaceRepos } from "@/lib/workspaceRepoStatus";
 import { AdminStat, AdminStatRow } from "@/components/AdminStatRow";
 import { PlanBadge } from "@/components/PlanBadge";
@@ -24,28 +23,22 @@ export function MemberDashboard() {
   const me = getStoredMe();
   const [repos, setRepos] = useState<WorkspaceRepo[]>([]);
   const [adminControlled, setAdminControlled] = useState(false);
-  const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { integrations, initialLoading: integrationsLoading, error: integrationsError } =
+    useIntegrations({ poll: true });
+  const [reposLoading, setReposLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    setReposLoading(true);
     setError(null);
-    const [reposResult, integrationsResult] = await Promise.all([
-      fetchMeWorkspaceRepos(),
-      fetchIntegrations()
-    ]);
-    setLoading(false);
+    const reposResult = await fetchMeWorkspaceRepos();
+    setReposLoading(false);
 
     if (reposResult.ok && reposResult.data) {
       setRepos(reposResult.data.repos ?? []);
       setAdminControlled(Boolean(reposResult.data.adminControlled));
     } else if (!reposResult.ok && !isOrgSuspendedResult(reposResult)) {
       setError(reposResult.error ?? "Failed to load your repositories.");
-    }
-
-    if (integrationsResult.ok) {
-      setIntegrations(integrationsResult.data ?? []);
     }
   }, []);
 
@@ -54,7 +47,7 @@ export function MemberDashboard() {
   }, [load]);
 
   const uniqueRepos = useMemo(() => dedupeWorkspaceRepos(repos), [repos]);
-  const connectedCount = integrations.filter((integration) => integration.installed).length;
+  const connectedCount = integrations.filter((entry) => integrationIsConnected(entry)).length;
   const greeting = displayName(me?.firstName, me?.lastName, me?.email);
 
   return (
@@ -76,24 +69,24 @@ export function MemberDashboard() {
         </div>
         <AdminStat
           label="Assigned repositories"
-          value={loading ? "—" : uniqueRepos.length}
+          value={reposLoading ? "—" : uniqueRepos.length}
           hint={adminControlled ? "Set by your admin" : "Your workspace selection"}
         />
         <AdminStat
           label="Org integrations"
-          value={loading ? "—" : connectedCount}
+          value={integrationsLoading ? "—" : connectedCount}
           hint={`of ${INTEGRATIONS.length} available`}
         />
       </AdminStatRow>
 
       <section className="space-y-4">
         <h2 className="admin-section-label">
-          Indexed repos{!loading && uniqueRepos.length > 0 ? ` (${uniqueRepos.length})` : ""}
+          Indexed repos{!reposLoading && uniqueRepos.length > 0 ? ` (${uniqueRepos.length})` : ""}
         </h2>
         {error ? <p className="text-sm text-red-400">{error}</p> : null}
         <IndexedRepoStatusList
           repos={repos}
-          loading={loading}
+          loading={reposLoading}
           emptyMessage="No repositories assigned yet. Ask your admin to grant access from Users → Repository access."
         />
         {adminControlled ? (
@@ -115,7 +108,10 @@ export function MemberDashboard() {
           Your admin connects org-wide tools (GitHub, Slack, Jira, etc.). Link your personal accounts in the
           VS Code extension under Settings → Tools after you install.
         </p>
-        <IntegrationStatusList integrations={integrations} loading={loading} />
+        {integrationsError && !/org_suspended|not signed in|session expired/i.test(integrationsError) ? (
+          <p className="text-sm text-red-400">{integrationsError}</p>
+        ) : null}
+        <IntegrationStatusList integrations={integrations} loading={integrationsLoading} />
       </section>
 
       <section className="rounded-md border border-coop-border bg-coop-surface/40 p-5">

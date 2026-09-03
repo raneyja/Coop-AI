@@ -3,7 +3,7 @@ title: Edit mode
 description: Generate search-replace patches from chat — slash commands, apply, undo, and open a pull request.
 section: extension
 order: 4
-lastUpdated: "2026-08-21"
+lastUpdated: "2026-09-03"
 ---
 
 <!-- figures lg -->
@@ -48,7 +48,9 @@ Type `/` in the composer to see edit commands:
 /fix off-by-one in the loop bounds
 ```
 
-All three resolve to the same **edit** composer mode. Text after the command is your instruction.
+All three resolve to the same **edit** composer mode. Text after the command **is the spec** — that is what pass means. Highlighting code is not enough.
+
+Do **not** send `fix this` or bare `/edit` with no named change. There is nothing to score: Coop cannot know the intended bug.
 
 ## Selection and file context
 
@@ -59,7 +61,7 @@ Coop attaches editor context automatically:
 | **Selected lines** | `coopAI.includeSelection` | `true` |
 | **Active file path** | `coopAI.includeActiveFile` | `true` |
 
-**Best practice:** highlight the code you want changed, then run `/edit <instruction>`. Selection focuses the model; edit mode still attaches the **full active file** (up to the local-file byte limit) so multi-hunk refactors can wire call sites. With no selection, Coop uses the active file and your instruction.
+**Best practice:** highlight the code you want changed, then run `/edit <instruction>` that states the defect or desired behavior. Selection focuses the model; edit mode still attaches the **full active file** (up to the local-file byte limit) so multi-hunk refactors can wire call sites. With no selection, Coop uses the active file and your instruction.
 
 Workspace **owner / repo / branch** (Settings → Workspace) help resolve indexed-repo context when the repo is Deep-Indexed.
 

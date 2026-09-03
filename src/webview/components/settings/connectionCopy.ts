@@ -6,6 +6,7 @@ import {
   integrationConfigured,
   integrationReady
 } from "./subtitles";
+import { findOrgIntegrationStatus, integrationToOrgProvider } from "./integrationStatus";
 
 type CodeHostProvider = "github" | "gitlab" | "bitbucket";
 type IntegrationProvider = IntegrationChatProvider;
@@ -66,7 +67,11 @@ export function codeHostListSubtitle(prefs: Preferences, provider: CodeHostProvi
 
 export function integrationConnectionMeta(prefs: Preferences, provider: IntegrationProvider): string {
   const name = INTEGRATION_NAMES[provider];
+  const orgStatus = findOrgIntegrationStatus(prefs, integrationToOrgProvider(provider));
   if (provider === "slack" && prefs.slackNeedsReconnect) {
+    return "Reconnect required — finish in the Coop admin portal";
+  }
+  if (orgStatus?.needsReconnect || orgStatus?.scopeNeedsReconnect) {
     return "Reconnect required — finish in the Coop admin portal";
   }
   if (!integrationConfigured(prefs, provider)) {

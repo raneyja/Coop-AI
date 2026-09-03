@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import {
   buildRepoSummarySynthesisUserPrompt,
   formatActiveFileContextForPrompt,
-  formatRepoSummaryForPrompt
+  formatRepoSummaryForPrompt,
+  REPO_SUMMARY_LOCATE_ONLY_MARKER
 } from "./repoSummarySynthesis";
 
 async function run(): Promise<void> {
@@ -224,6 +225,28 @@ async function run(): Promise<void> {
     });
     assert.ok(!prompt.includes("## User focus (required)"));
     assert.ok(prompt.includes("Synthesize a **repository-wide** overview"));
+  });
+
+  test("locate-shaped Understand Repo skips architecture syllabus", () => {
+    const prompt = buildRepoSummarySynthesisUserPrompt({
+      owner: "raneyja",
+      repo: "Coop-AI",
+      summary: {
+        entryFiles: [
+          { path: "src/webview/PatchCard.tsx" },
+          { path: "src/edit/patchActions.ts" }
+        ],
+        notion: {
+          pages: [{ id: "1", title: "Architecture Overview", url: "https://notion.example/1" }]
+        }
+      },
+      userFocus: "where does Apply on a patch card become an editor change?"
+    });
+    assert.ok(prompt.includes(REPO_SUMMARY_LOCATE_ONLY_MARKER));
+    assert.ok(prompt.includes("Do not cite Confluence or Notion"));
+    assert.ok(!prompt.includes("Cover major subsystems"));
+    assert.ok(!prompt.includes("## Attached documentation (required in response)"));
+    assert.ok(!prompt.includes("Close with a one-line pointer"));
   });
 
   const total = passed + failed;

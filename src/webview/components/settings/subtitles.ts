@@ -194,12 +194,12 @@ export function integrationConfigured(
   prefs: Preferences,
   provider: IntegrationChatProvider
 ): boolean {
-  if (prefs.devMode) {
-    return integrationConfiguredFromFlags(prefs, provider);
-  }
   const orgStatus = findOrgIntegrationStatus(prefs, integrationToOrgProvider(provider));
   if (orgStatus) {
     return orgStatus.installed;
+  }
+  if (prefs.devMode) {
+    return integrationConfiguredFromFlags(prefs, provider);
   }
   if (provider === "slack") {
     return prefs.hasSlackInstalled;

@@ -111,6 +111,19 @@ test("shouldRunRepoSemanticRetrieval skips package-boundary questions", () => {
   );
 });
 
+test("shouldRunRepoSemanticRetrieval skips integration slash turns", () => {
+  assert.equal(
+    shouldRunRepoSemanticRetrieval({
+      queryText: "summarize auth middleware behavior",
+      intentIsPlainChat: true,
+      inScopeMentionCount: 0,
+      enabled: true,
+      integrationProvider: "google-docs"
+    }),
+    false
+  );
+});
+
 test("shouldRunRepoSemanticRetrieval rejects short query", () => {
   assert.equal(
     shouldRunRepoSemanticRetrieval({

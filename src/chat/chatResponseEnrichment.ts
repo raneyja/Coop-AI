@@ -18,6 +18,7 @@ import {
   enrichTraceDecisionResponse
 } from "../prompts/decisionResponseEnrichment";
 import { stripDisallowedNarrativeSourceCitations } from "../prompts/evidenceSynthesis";
+import { rewriteGoogleDocsSlashIfRepoLeak } from "../prompts/integrationSynthesis";
 import { enrichCompactIntegrationDocs } from "../prompts/integrationDocsCompactEnrichment";
 import {
   enrichIncidentReconstructionResponse,
@@ -185,6 +186,14 @@ export function enrichChatResponseForAction(options: {
     }
     default:
       break;
+  }
+
+  if (integrationProvider === "google-docs") {
+    const docs = extractGoogleDocsFromBundle(contextBundle) ?? [];
+    enriched = rewriteGoogleDocsSlashIfRepoLeak(
+      enriched,
+      docs.map((doc) => doc.title)
+    );
   }
 
   if (shouldEnrichSourcesFooter(options.quickAction, options.integrationProvider, enriched)) {

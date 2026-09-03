@@ -26,6 +26,8 @@ const CASES: Case[] = [
   { q: "Find authMiddleware.ts and show me the export.", expect: "locate" },
   { q: "Read src/server/authMiddleware.ts and show me the export.", expect: "locate" },
   { q: "Where does the webhook handler live?", expect: "locate" },
+  { q: "where does API auth live?", expect: "locate" },
+  { q: "where does Apply on a patch card become an editor change?", expect: "locate" },
   {
     q: "I'm picking up COOP-101 — peel auth into coop-backend. What in this repo still owns requireAuth / request auth, and what's the safest first extraction boundary so we don't break every VS Code session?",
     expect: "locate"

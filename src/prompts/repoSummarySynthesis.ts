@@ -24,6 +24,10 @@ import {
   repoSummarySourceLabelDependencies,
   repoSummarySourceLabelOwnership
 } from "./repoSummarySourceLabels";
+import { isLocateShapedRepoAsk } from "../chat/repoCodeIntent";
+
+/** Marker ModelRouter uses to rebuild the comprehension system prompt without the syllabus. */
+export const REPO_SUMMARY_LOCATE_ONLY_MARKER = "## Locate-only response";
 
 export const REPO_SUMMARY_EVIDENCE_SYSTEM = `You are an expert code architect helping engineers understand a repository.
 Summarize architecture, key systems, boundaries, and risks. Prefer evidence from the attached Sources card over speculation.
@@ -68,7 +72,13 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
   }
   lines.push("");
   lines.push("## Instructions");
-  if (input.userFocus?.trim()) {
+  const locateOnly = isLocateShapedRepoAsk(input.userFocus);
+  if (locateOnly) {
+    lines.push(REPO_SUMMARY_LOCATE_ONLY_MARKER);
+    lines.push(
+      "This ask is where something lives. Answer **Summary** + **Your question** with the attached implementation path chain. Omit **Architecture**, **Key subsystems**, **Entry points**, **Risks & unknowns**, and **Suggested next steps**. Do not cite Confluence or Notion. Do not pad a repo syllabus."
+    );
+  } else if (input.userFocus?.trim()) {
     lines.push(
       "Answer the ## User focus ask first (Summary + **Your question**). Then synthesize a **repository-wide** overview weighted toward that focus using `<repo_entry_files>`, `<graph_context>`, and manifest metadata in attached context."
     );
@@ -86,16 +96,18 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
       "Synthesize a **repository-wide** overview using `<repo_entry_files>`, `<graph_context>`, and manifest metadata in attached context."
     );
   }
-  lines.push("Cover major subsystems, entry points, data/backend boundaries, integrations, and top risks.");
-  lines.push(
-    "For enterprise onboarding, call out deploy/CI entry points (workflows, Docker, deploy docs), external integrations (Slack, Jira, Confluence, OAuth/connect config), and configuration boundaries (env files, secrets handling, feature flags) — only when attached evidence supports them."
-  );
-  if (activeFile) {
+  if (!locateOnly) {
+    lines.push("Cover major subsystems, entry points, data/backend boundaries, integrations, and top risks.");
     lines.push(
-      `Include the required **How the open file fits** section for \`${activeFile}\` after **Key subsystems** — role, dependencies, dependents, integration surface, and owners from ## Active file context below. Keep **Architecture** and **Key subsystems** repo-wide; do not turn the whole answer into a file-only deep dive.`
+      "For enterprise onboarding, call out deploy/CI entry points (workflows, Docker, deploy docs), external integrations (Slack, Jira, Confluence, OAuth/connect config), and configuration boundaries (env files, secrets handling, feature flags) — only when attached evidence supports them."
     );
-  } else {
-    lines.push("Do **not** include **How the open file fits** — no active editor file is in scope.");
+    if (activeFile) {
+      lines.push(
+        `Include the required **How the open file fits** section for \`${activeFile}\` after **Key subsystems** — role, dependencies, dependents, integration surface, and owners from ## Active file context below. Keep **Architecture** and **Key subsystems** repo-wide; do not turn the whole answer into a file-only deep dive.`
+      );
+    } else {
+      lines.push("Do **not** include **How the open file fits** — no active editor file is in scope.");
+    }
   }
   appendMentionScopeSection(lines, input);
   if (activeFile) {
@@ -111,20 +123,26 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
   appendCitationKeysSection(lines, listRepoSummarySourceLabels(summaryEvidence));
   const sourcesChecklist = listRepoSummarySourcesChecklist(summaryEvidence);
   appendSourcesChecklistSection(lines, sourcesChecklist);
-  appendIntegrationDocsResponseContract(lines, integrationDocsFromRepoSummary(summaryEvidence));
+  if (!locateOnly) {
+    appendIntegrationDocsResponseContract(lines, integrationDocsFromRepoSummary(summaryEvidence));
+  }
   appendSupplementarySourceCitationGuardrails(lines, sourcesChecklist, [
     repoSummarySourceLabelOwnership(),
     repoSummarySourceLabelDependencies(),
     ...supplementaryKeysOmittedFromChecklist(listRepoSummarySourceLabels(summaryEvidence), sourcesChecklist)
   ]);
-  appendRepoSummaryCraftInstructions(lines, summaryEvidence);
+  if (!locateOnly) {
+    appendRepoSummaryCraftInstructions(lines, summaryEvidence);
+  }
   lines.push("Synthesize from evidence only. Follow the required response structure in your system instructions.");
   lines.push(
     "Every **Sources** bullet MUST start with an exact citation key from the checklist and keep the concrete fact after the em dash (or an equally specific fact from that source). Never leave the label blank; never use filler like \"contributed insights\" or \"provided details\"."
   );
-  lines.push(
-    "Close with a one-line pointer to the matching quick action for paths that need deeper follow-up: **Trace Decision** for decision history, **Find Owner** for CODEOWNERS and escalation, **Blast Radius** before editing a hot path, **Knowledge Gaps** for documentation holes."
-  );
+  if (!locateOnly) {
+    lines.push(
+      "Close with a one-line pointer to the matching quick action for paths that need deeper follow-up: **Trace Decision** for decision history, **Find Owner** for CODEOWNERS and escalation, **Blast Radius** before editing a hot path, **Knowledge Gaps** for documentation holes."
+    );
+  }
   return lines.join("\n");
 }
 

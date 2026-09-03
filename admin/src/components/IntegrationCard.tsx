@@ -213,9 +213,23 @@ export function IntegrationCard({
     }
     if (needsReconnect) {
       if (isGitHub && installed) {
-        return <StatusBadge connected={false} label="Health check failed" showWhenDisconnected />;
+        return (
+          <StatusBadge
+            connected={false}
+            label="Health check failed"
+            showWhenDisconnected
+            tone="reconnect"
+          />
+        );
       }
-      return <StatusBadge connected={false} label="Reconnect required" showWhenDisconnected />;
+      return (
+        <StatusBadge
+          connected={false}
+          label="Reconnect required"
+          showWhenDisconnected
+          tone="reconnect"
+        />
+      );
     }
     if (awaiting && !connected) {
       return (

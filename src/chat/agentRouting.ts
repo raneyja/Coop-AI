@@ -24,6 +24,8 @@ export function shouldRunAgentToolLoop(options: {
   hasQuickAction: boolean;
   intentPlan?: ChatIntentPlan;
   isEditTurn?: boolean;
+  /** Slash /docs /slack /jira etc. — answer from that tool, never a repo hunt. */
+  integrationSlash?: boolean;
 }): boolean {
   return agentTurnAction(options) !== "none";
 }
@@ -39,11 +41,16 @@ export function agentTurnAction(options: {
   hasQuickAction: boolean;
   intentPlan?: ChatIntentPlan;
   isEditTurn?: boolean;
+  /** Slash /docs /slack /jira etc. — answer from that tool, never a repo hunt. */
+  integrationSlash?: boolean;
 }): RepoCodeAction {
   if (options.isEditTurn) {
     return "none";
   }
   if (options.hasQuickAction) {
+    return "none";
+  }
+  if (options.integrationSlash) {
     return "none";
   }
   // Inventory / layout facts use IndexedRepoWorkspace, not list_directory samples.

@@ -412,11 +412,11 @@ Toggle **Autocomplete** in the chat header — **On** / **Off** — for a quick 
 
 Full guide: [Inline autocomplete](/docs/autocomplete).
 
-**Edit selection** — Shipped. Highlight code, describe the change in chat with `/edit`, `/patch`, or `/fix`, then **Apply** the generated patch from the VS Code notification. Coop routes edit patches through **OpenAI GPT-5.1**, attaches the **full active file** (selection is a focus hint, not a context window cut), and includes your editor selection text when present (`coopAI.includeSelection`, default `true`).
+**Edit selection** — Shipped. Highlight code, send `/edit`, `/patch`, or `/fix` with a **named change** (the defect or desired behavior), then **Apply** the generated patch from the VS Code notification. A highlight plus `fix this` is not a spec. Coop routes edit patches through **OpenAI GPT-5.1**, attaches the **full active file** (selection is a focus hint, not a context window cut), and includes your editor selection text when present (`coopAI.includeSelection`, default `true`).
 
 | Step | Surface | Action |
 | --- | --- | --- |
-| Generate | **Extension UI** — chat composer | `/edit <instruction>` (or `/patch`, `/fix`) with a selection or open file |
+| Generate | **Extension UI** — chat composer | `/edit <instruction>` (or `/patch`, `/fix`) with a **named change** plus a selection or open file. Example: `/edit if headers is undefined, return undefined. do not touch requireAuth`. |
 | Apply | **Extension UI** — notification | Click **Apply** on "Patch ready — …" |
 | Or apply | **Extension UI** — Command Palette | **CoopAI: Apply Patch** (`coopAI.applyPatch`) |
 | Undo | **Extension UI** — notification or Command Palette | **Undo** after apply, or **CoopAI: Undo Last Patch** (`coopAI.undoLastPatch`) |
@@ -615,7 +615,7 @@ Integration commands query connected tools with the same **Anthropic Claude Sonn
 | `/teams` | Answer using Microsoft Teams threads |
 | `/confluence` or `/wiki` | Answer using Confluence pages |
 | `/notion` | Answer using Notion pages |
-| `/docs`, `/googledocs` | Answer using Google Docs |
+| `/docs`, `/googledocs` | Search Google Docs only — not the repository |
 
 **Example:** `/slack what did #platform-auth decide about session TTL?`
 

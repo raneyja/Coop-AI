@@ -58,10 +58,20 @@ test("repo-wide quick actions are enumerated consistently", () => {
   ]);
 });
 
-test("understand-repo fetches from all connected tools", () => {
-  assert.equal(shouldFetchRepoWideIntegrations(request("understand-repo")), true);
-  assert.equal(shouldFetchJiraContext(request("understand-repo")), true);
-  assert.equal(shouldFetchSlackContext(request("understand-repo")), true);
+test("understand-repo locate asks skip Confluence/Notion auto-fetch", () => {
+  const locateRequest = {
+    type: "chat_context",
+    params: { quickAction: "understand-repo" },
+    intent: {
+      context: { queryText: "where does Apply on a patch card become an editor change?" }
+    }
+  } as ContextFetchRequest;
+  assert.equal(shouldFetchRepoWideIntegrations(locateRequest), false);
+  assert.equal(shouldFetchConfluenceContext(locateRequest), false);
+  assert.equal(shouldFetchNotionContext(locateRequest), false);
+  assert.equal(shouldFetchGoogleDocsContext(locateRequest), false);
+  assert.equal(shouldFetchJiraContext(locateRequest), false);
+  assert.equal(shouldFetchSlackContext(locateRequest), false);
 });
 
 for (const action of REPO_WIDE_INTEGRATION_QUICK_ACTIONS) {

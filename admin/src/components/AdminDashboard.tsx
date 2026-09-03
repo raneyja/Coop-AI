@@ -5,14 +5,13 @@ import Link from "next/link";
 import { displayOrgName, getStoredMe } from "@/lib/auth";
 import {
   createUpgradeCheckoutSession,
-  fetchIntegrations,
   fetchQuota,
   fetchUsers,
   isOrgSuspendedResult,
   type QuotaSnapshot
 } from "@/lib/coopApi";
-import { INTEGRATIONS } from "@/lib/integrations";
-import type { IntegrationStatus } from "@/lib/integrations";
+import { INTEGRATIONS, integrationIsConnected } from "@/lib/integrations";
+import { useIntegrations } from "@/hooks/useIntegrations";
 import { useOrgPlan } from "@/hooks/useOrgPlan";
 import { AdminStat, AdminStatRow } from "@/components/AdminStatRow";
 import { PlanBadge } from "@/components/PlanBadge";
@@ -23,50 +22,40 @@ import { UpgradeCTA } from "@/components/UpgradeCTA";
 export function AdminDashboard() {
   const me = getStoredMe();
   const { plan, capabilities } = useOrgPlan();
-  const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
+  const { integrations, initialLoading, error: integrationsError } = useIntegrations({ poll: true });
   const [userCount, setUserCount] = useState<number | null>(null);
   const [quota, setQuota] = useState<QuotaSnapshot | undefined>();
   const [quotaLoading, setQuotaLoading] = useState(capabilities.showUsageQuota);
-  const [loading, setLoading] = useState(true);
+  const [usersLoading, setUsersLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [upgrading, setUpgrading] = useState(false);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    setUsersLoading(true);
     setError(null);
     if (capabilities.showUsageQuota) {
       setQuotaLoading(true);
     }
     const requests: [
-      Promise<Awaited<ReturnType<typeof fetchIntegrations>>>,
       Promise<Awaited<ReturnType<typeof fetchUsers>>>,
       Promise<Awaited<ReturnType<typeof fetchQuota>> | null>
-    ] = [
-      fetchIntegrations(),
-      fetchUsers(),
-      capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)
-    ];
-    const [integrationsResult, usersResult, quotaResult] = await Promise.all(requests);
-    setLoading(false);
+    ] = [fetchUsers(), capabilities.showUsageQuota ? fetchQuota() : Promise.resolve(null)];
+    const [usersResult, quotaResult] = await Promise.all(requests);
+    setUsersLoading(false);
     if (capabilities.showUsageQuota) {
       setQuotaLoading(false);
       if (quotaResult?.ok) {
         setQuota(quotaResult.data);
       }
     }
-    if (!integrationsResult.ok) {
-      // Portal-wide OrgSuspendedOverlay handles org_suspended; skip inline red text.
-      if (!isOrgSuspendedResult(integrationsResult)) {
-        setError(integrationsResult.error ?? "Failed to load integrations.");
-      }
-    } else {
-      setIntegrations(integrationsResult.data ?? []);
-    }
     if (usersResult.ok && usersResult.data?.users) {
       setUserCount(usersResult.data.users.length);
     } else {
       setUserCount(null);
+      if (!usersResult.ok && !isOrgSuspendedResult(usersResult)) {
+        setError(usersResult.error ?? "Failed to load users.");
+      }
     }
   }, [capabilities.showUsageQuota]);
 
@@ -74,7 +63,12 @@ export function AdminDashboard() {
     void load();
   }, [load]);
 
-  const connectedCount = integrations.filter((i) => i.installed).length;
+  const connectedCount = integrations.filter((entry) => integrationIsConnected(entry)).length;
+  const listError =
+    error ??
+    (integrationsError && !/org_suspended|not signed in|session expired/i.test(integrationsError)
+      ? integrationsError
+      : null);
 
   async function handleUpgrade() {
     setUpgrading(true);
@@ -119,13 +113,13 @@ export function AdminDashboard() {
         </div>
         <AdminStat
           label="Connected integrations"
-          value={loading ? "—" : connectedCount}
+          value={initialLoading ? "—" : connectedCount}
           hint={`of ${INTEGRATIONS.length} available`}
         />
         <div className="admin-stat">
           <p className="text-xs font-medium uppercase tracking-wide text-coop-muted">Users</p>
           <p className="mt-1 text-2xl font-semibold tabular-nums text-white">
-            {loading ? "—" : userCount ?? "—"}
+            {usersLoading ? "—" : userCount ?? "—"}
           </p>
           <p className="mt-0.5 text-xs text-coop-muted">
             <Link href="/users" className="admin-link text-xs">
@@ -147,8 +141,8 @@ export function AdminDashboard() {
             <span aria-hidden>↗</span>
           </Link>
         </div>
-        {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
-        <IntegrationStatusList integrations={integrations} loading={loading} />
+        {listError ? <p className="mb-4 text-sm text-red-400">{listError}</p> : null}
+        <IntegrationStatusList integrations={integrations} loading={initialLoading} />
       </section>
     </div>
   );
