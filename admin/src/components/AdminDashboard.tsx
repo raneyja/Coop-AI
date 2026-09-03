@@ -18,10 +18,11 @@ import { PlanBadge } from "@/components/PlanBadge";
 import { IntegrationStatusList } from "@/components/IntegrationStatusList";
 import { UsageQuotaMeter } from "@/components/UsageQuotaMeter";
 import { UpgradeCTA } from "@/components/UpgradeCTA";
+import { resolvePlanNudge } from "@/lib/planNudge";
 
 export function AdminDashboard() {
   const me = getStoredMe();
-  const { plan, capabilities } = useOrgPlan();
+  const { plan, usageTier, capabilities, loading: planLoading } = useOrgPlan();
   const { integrations, initialLoading, error: integrationsError } = useIntegrations({ poll: true });
   const [userCount, setUserCount] = useState<number | null>(null);
   const [quota, setQuota] = useState<QuotaSnapshot | undefined>();
@@ -69,6 +70,11 @@ export function AdminDashboard() {
     (integrationsError && !/org_suspended|not signed in|session expired/i.test(integrationsError)
       ? integrationsError
       : null);
+  const effectiveUsageTier = quota?.usageTier ?? usageTier;
+  const nudge =
+    plan === "pro" && planLoading && !effectiveUsageTier
+      ? null
+      : resolvePlanNudge({ plan, usageTier: effectiveUsageTier });
 
   async function handleUpgrade() {
     setUpgrading(true);
@@ -89,14 +95,15 @@ export function AdminDashboard() {
         <p className="mt-1 text-sm text-coop-muted">Overview for {displayOrgName(me)}</p>
       </div>
 
-      {capabilities.showUsageQuota ? (
+      {nudge ? (
         <>
           <UpgradeCTA
             variant="banner"
-            title="Upgrade to Pro"
-            body="Upgrade for unlimited Deep-Indexed repos, additional models, team seats, and higher usage limits."
-            ctaLabel="Upgrade to Pro"
-            onAction={handleUpgrade}
+            title={nudge.title}
+            body={nudge.body}
+            ctaLabel={nudge.ctaLabel}
+            href={nudge.action === "billing" ? "/billing" : undefined}
+            onAction={nudge.action === "checkout" ? handleUpgrade : undefined}
             actionLoading={upgrading}
           />
           {upgradeError ? <p className="text-sm text-red-400">{upgradeError}</p> : null}
@@ -108,7 +115,7 @@ export function AdminDashboard() {
           <p className="text-xs font-medium uppercase tracking-wide text-coop-muted">Organization</p>
           <p className="mt-1 text-lg font-semibold text-white">{displayOrgName(me)}</p>
           <div className="mt-2">
-            <PlanBadge plan={plan} />
+            <PlanBadge plan={plan} usageTier={effectiveUsageTier} />
           </div>
         </div>
         <AdminStat

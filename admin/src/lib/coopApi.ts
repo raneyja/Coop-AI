@@ -761,6 +761,7 @@ export type OrgSummary = {
   id: string;
   name: string;
   plan: string;
+  usageTier?: string | null;
   repoAccessMode?: "all_indexed" | "per_user";
   onboardingCompleted?: boolean;
   memberCount?: number;
@@ -905,6 +906,8 @@ export async function testIntegrationScope(
 
 export type BillingInfo = {
   plan: string;
+  /** Paid usage bucket. Capability plan stays free | pro | enterprise. */
+  usageTier?: string | null;
   seats: number | null;
   /** Stripe subscription quantity when available (may briefly differ from Coop seats). */
   stripeSeats?: number | null;
@@ -930,6 +933,10 @@ export type QuotaSnapshot = {
     displayName: string;
     seatPriceUsd: number;
     periodEnd: string;
+    usedCents?: number;
+    limitCents?: number;
+    remainingCents?: number;
+    usedRatio?: number;
     auto: { usedCents: number; limitCents: number; remainingCents: number; usedRatio: number };
     frontier: { usedCents: number; limitCents: number; remainingCents: number; usedRatio: number };
     nextTierName?: string;
@@ -1242,26 +1249,33 @@ export async function fetchSamlMetadataXml(): Promise<ApiResult<string>> {
   }
 }
 
-export function planLabel(plan: string): string {
-  switch (plan) {
-    case "enterprise":
-      return "Enterprise";
-    case "pro":
-      return "Pro";
-    default:
-      return "Free";
+export function planLabel(plan: string, usageTier?: string | null): string {
+  if (plan === "enterprise") {
+    return "Enterprise";
   }
+  if (plan === "free" || !plan) {
+    return "Free";
+  }
+  if (usageTier === "pro_plus" || plan === "pro_plus") {
+    return "Pro+";
+  }
+  if (usageTier === "max" || plan === "max") {
+    return "Max";
+  }
+  if (plan === "pro") {
+    return "Pro";
+  }
+  return "Free";
 }
 
-export function planBadgeClass(plan: string): string {
-  switch (plan) {
-    case "enterprise":
-      return "admin-chip admin-chip--plan-enterprise";
-    case "pro":
-      return "admin-chip admin-chip--plan-pro";
-    default:
-      return "admin-chip admin-chip--plan-free";
+export function planBadgeClass(plan: string, usageTier?: string | null): string {
+  if (plan === "enterprise") {
+    return "admin-chip admin-chip--plan-enterprise";
   }
+  if (plan === "pro" || plan === "pro_plus" || plan === "max" || usageTier === "pro" || usageTier === "pro_plus" || usageTier === "max") {
+    return "admin-chip admin-chip--plan-pro";
+  }
+  return "admin-chip admin-chip--plan-free";
 }
 
 export type AnalyticsRange = "7d" | "30d" | "90d";

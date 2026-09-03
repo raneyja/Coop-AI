@@ -7,6 +7,7 @@ import { planCapabilities, type OrgPlan, type PlanCapabilities } from "@/lib/pla
 
 export function useOrgPlan(): {
   plan: OrgPlan;
+  usageTier: string | null;
   capabilities: PlanCapabilities;
   isFreePlan: boolean;
   loading: boolean;
@@ -14,6 +15,7 @@ export function useOrgPlan(): {
 } {
   const me = getStoredMe();
   const [plan, setPlan] = useState<OrgPlan>(me?.plan ?? "free");
+  const [usageTier, setUsageTier] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -22,6 +24,7 @@ export function useOrgPlan(): {
     setLoading(false);
     if (result.ok && result.data?.plan) {
       setPlan(result.data.plan as OrgPlan);
+      setUsageTier(result.data.usageTier ?? null);
     } else if (me?.plan) {
       setPlan(me.plan);
     }
@@ -35,6 +38,7 @@ export function useOrgPlan(): {
 
   return {
     plan,
+    usageTier,
     capabilities,
     isFreePlan: plan === "free",
     loading,

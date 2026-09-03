@@ -10,6 +10,7 @@ import {
 } from "@/lib/coopApi";
 import { PlanBadge } from "@/components/PlanBadge";
 import { EnterpriseUpgradeRequestForm } from "@/components/EnterpriseUpgradeRequestForm";
+import { displayUsageTierName, resolvePlanNudge } from "@/lib/planNudge";
 
 export default function BillingPage() {
   const me = getStoredMe();
@@ -79,11 +80,20 @@ export default function BillingPage() {
   }
 
   const plan = billing?.plan ?? me?.plan ?? "free";
+  const usageTier = billing?.usageTier ?? (plan === "pro" ? "pro" : null);
+  const nudge = resolvePlanNudge({ plan, usageTier });
   const isFree = plan === "free";
   const isPro = plan === "pro";
   const isEnterprise = plan === "enterprise";
   const currentSeats = Math.max(1, Math.floor(billing?.seats ?? 1));
   const newTotalPreview = currentSeats + Math.max(0, Math.floor(Number(seatInput)) || 0);
+  const currentPlanName =
+    plan === "enterprise"
+      ? "Enterprise"
+      : plan === "pro"
+        ? displayUsageTierName(usageTier === "pro_plus" || usageTier === "max" ? usageTier : "pro")
+        : "Free";
+  const paidNextIsEnterprise = nudge?.nextName === "Enterprise";
 
   return (
     <div className="space-y-6">
@@ -94,7 +104,8 @@ export default function BillingPage() {
 
       {upgraded && (
         <div className="admin-panel-inset text-sm text-coop-index">
-          Upgrade complete — your organization is now on Pro. Refresh if plan details look stale.
+          Upgrade complete — your organization is now on {currentPlanName}. Refresh if plan details look
+          stale.
         </div>
       )}
 
@@ -102,7 +113,7 @@ export default function BillingPage() {
         <div>
           <p className="admin-section-label">Current plan</p>
           <div className="mt-3 flex items-center gap-3">
-            <PlanBadge plan={plan} />
+            <PlanBadge plan={plan} usageTier={usageTier} />
             <span className="text-sm text-coop-muted">{displayOrgName(me)}</span>
           </div>
         </div>
@@ -179,13 +190,29 @@ export default function BillingPage() {
             <button type="button" className="admin-btn-secondary" onClick={() => void handlePortal()} disabled={opening}>
               {opening ? "Opening…" : "Payment methods & invoices"}
             </button>
+            {nudge && !paidNextIsEnterprise ? (
+              <div className="space-y-2">
+                <p className="text-sm text-coop-muted">{nudge.body}</p>
+                <button
+                  type="button"
+                  className="admin-btn-primary"
+                  onClick={() => void handlePortal()}
+                  disabled={opening}
+                >
+                  {opening ? "Opening…" : nudge.ctaLabel}
+                </button>
+                <p className="text-xs text-coop-muted">
+                  Opens Stripe so you can switch to {nudge.nextName}. Seat count stays the same.
+                </p>
+              </div>
+            ) : null}
             {isPro ? (
               <button
                 type="button"
-                className="admin-btn-secondary"
+                className={paidNextIsEnterprise ? "admin-btn-primary" : "admin-btn-secondary"}
                 onClick={() => setEnterpriseFormOpen(true)}
               >
-                Request Upgrade to Enterprise
+                {paidNextIsEnterprise ? nudge?.ctaLabel ?? "Request Enterprise" : "Request Upgrade to Enterprise"}
               </button>
             ) : null}
           </div>
@@ -205,11 +232,9 @@ export default function BillingPage() {
           </div>
         ) : isPro ? (
           <div className="space-y-3">
-            <p className="text-sm text-coop-muted">
-              Enterprise adds SAML SSO, integration scope controls, 5 workspace repos per seat, and uncapped org indexing.
-            </p>
+            {nudge ? <p className="text-sm text-coop-muted">{nudge.body}</p> : null}
             <button type="button" className="admin-btn-primary" onClick={() => setEnterpriseFormOpen(true)}>
-              Request Upgrade to Enterprise
+              {paidNextIsEnterprise ? "Request Enterprise" : "Request a plan change"}
             </button>
           </div>
         ) : (

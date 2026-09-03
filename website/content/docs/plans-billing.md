@@ -12,7 +12,7 @@ lastUpdated: "2026-09-03"
 | --- | --- | --- | --- | --- | --- |
 | **Price** | Free | $25/seat/month | $60/seat/month | $100/seat/month | Custom |
 | **VS Code extension** | Yes | Yes | Yes | Yes | Yes |
-| **Usage** | Rolling 5-hour Auto window | $40 Auto + $25 Frontier / month | $120 Auto + $70 Frontier | $240 Auto + $140 Frontier | Custom / no hard cap in v1 |
+| **Usage** | Rolling 5-hour Auto window | Monthly included usage | More included usage | Highest self-serve included usage | Custom / no hard cap in v1 |
 | **Model picker** | Auto only | Global picker (default Auto) | Same | Same | Same |
 | **Code hosts (GitHub, GitLab, Bitbucket)** | Yes (admin portal) | Yes | Yes | Yes | Yes |
 | **Collaboration integrations** | Yes (admin portal) | Yes (scope allowlist) | Yes | Yes | Yes |
@@ -28,7 +28,7 @@ lastUpdated: "2026-09-03"
 
 See current pricing at [coop-ai.dev/pricing](/pricing).
 
-**Coop Auto** is included usage for Auto (Coop-assigned models). Extra Auto use drains **Frontier**. Frontier models you pick never drain Auto. When both pools are empty, requests stop until you upgrade — there is no on-demand spend.
+Paid seats include a monthly usage bar. **Auto** (green) is Coop-assigned models. **Frontier** (blue) starts after Auto and is models you pick — those fill the bar faster. Together they are utilization. When the bar is full, requests stop until you upgrade — there is no on-demand spend. The bar shows a percent, not a second dollar price.
 
 Capability gates (team invites, Collections, Deep-Index) stay on the `pro` plan. Usage amounts come from the usage tier (Pro / Pro+ / Max).
 
@@ -48,7 +48,7 @@ Free includes the same tool connectivity and cloud indexing as Pro. Limits are t
 3. Admin connects GitHub + integrations (same flow as free)
 4. Invite team from admin portal
 
-These plans are **seat-based**. Each paid seat includes the extension, unlimited Deep-Indexed repos, team collaboration, Collections, and a monthly Auto + Frontier allowance. Hit the cap and you must upgrade — Coop does not sell extra usage on demand.
+These plans are **seat-based**. Each paid seat includes the extension, unlimited Deep-Indexed repos, team collaboration, Collections, and monthly included usage. Hit the cap and you must upgrade — Coop does not sell extra usage on demand.
 
 Public names: **Pro** ($25), **Pro+** ($60), **Max** ($100). There is no Ultra / $200 individual plan. Above Max is Enterprise.
 
@@ -90,10 +90,10 @@ See also [Enterprise deployment](/docs/enterprise-deployment) and [Security arch
 | Plan | What you see |
 | --- | --- |
 | **Free** | Rolling 5-hour Auto window in the extension and admin portal |
-| **Pro / Pro+ / Max** | Two bars — Coop Auto and Frontier — resetting on the UTC calendar month |
-| **Enterprise** | Custom contract; no two-bucket hard stop in v1 |
+| **Pro / Pro+ / Max** | One stacked bar — Auto (green) then Frontier (blue) — resetting on the UTC calendar month |
+| **Enterprise** | Custom contract; no hard stop in v1 |
 
-USD rates used for Frontier (and Auto overflow) are list-price estimates, not invoices.
+The bar shows a percent, not a second dollar amount. Frontier models fill it faster because they cost more to run.
 
 ## Next steps
 

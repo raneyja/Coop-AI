@@ -6,9 +6,9 @@ order: 2
 lastUpdated: "2026-09-03"
 ---
 
-CoopAI assigns an LLM per feature when you leave the picker on **Auto** (the default). **Free** stays Auto-only. **Pro, Pro+, Max, and Enterprise** pick a model from the **model menu in chat**. Picking a Frontier model counts against Frontier usage. See [Plans & billing](/docs/plans-billing).
+CoopAI assigns an LLM per feature when you leave the picker on **Auto** (the default). **Free** stays Auto-only. **Pro, Pro+, Max, and Enterprise** pick a model from the **model menu in chat**. Picking a Frontier model fills the monthly usage bar faster. See [Plans & billing](/docs/plans-billing).
 
-Autocomplete, intent suggest, source previews, and PR notes always use the assigned model and bill **Coop Auto**. They do not follow the chat picker.
+Autocomplete, intent suggest, source previews, and PR notes always use the assigned model and count as **Auto** on the monthly bar. They do not follow the chat picker.
 
 <!-- figures ml -->
 ![Model & chat — what Auto uses for Chat, Quick actions, /edit, and Autocomplete](/screenshots/docs/extension-settings-models-and-chat.png)
@@ -47,7 +47,7 @@ Free users see the same page. The model menu in chat is Pro and above.
 
 The Preferences hub subtitle shows **Assigned models** plus autocomplete status (for example, `Assigned models · Autocomplete on`).
 
-Coop does not show credit weights on each picker option. Plan & Usage shows included Auto vs Frontier dollars.
+Coop does not show credit weights on each picker option. Plan & Usage shows one monthly bar: Auto (green) then Frontier (blue).
 
 ### Developer mode override
 

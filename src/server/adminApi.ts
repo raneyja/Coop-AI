@@ -112,7 +112,7 @@ export async function handleAdminApiRequest(
     }
     writeJson(response, 200, {
       plan,
-      usageTier: org?.usageTier ?? null,
+      usageTier: org?.usageTier ?? (plan === "pro" ? "pro" : null),
       unlimited: false,
       quota,
       usageMeters

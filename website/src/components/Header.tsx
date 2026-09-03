@@ -12,6 +12,10 @@ export function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const dark = pathname === "/";
+  const wide = pathname === "/pricing";
+  const shellClass = wide
+    ? "mx-auto flex h-16 w-full max-w-[100rem] items-center justify-between px-4 sm:px-6 lg:px-10"
+    : "mx-auto flex h-16 max-w-6xl items-center justify-between px-6";
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
@@ -23,7 +27,7 @@ export function Header() {
           : "sticky top-0 z-50 border-b border-coop-border bg-white"
       }
     >
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+      <div className={shellClass}>
         <Link href="/" className="flex items-center gap-2.5" onClick={closeMobileMenu}>
           <BrandMark inverted={dark} />
         </Link>
