@@ -5,6 +5,7 @@ import * as path from "node:path";
 import {
   collectNestedAgentsMdPaths,
   findGitRoot,
+  loadAttachedAgentsMdFile,
   loadProjectInstructions,
   normalizeInstructionPath,
   parseMdcFrontmatter,
@@ -138,6 +139,19 @@ test("resolveProjectInstructionsGitRoot prefers active file git root", () => {
 
 test("normalizeInstructionPath strips leading ./", () => {
   assert.equal(normalizeInstructionPath("./src/AGENTS.md"), "src/AGENTS.md");
+});
+
+test("loadAttachedAgentsMdFile reads only the chosen file", () => {
+  withTempRepo((root) => {
+    writeFile(root, "AGENTS.md", "Workspace copy — do not leak.");
+    const attached = path.join(root, "mine.md");
+    writeFile(root, "mine.md", "User attached guide.");
+    const loaded = loadAttachedAgentsMdFile(attached);
+    assert.equal(loaded?.path, "mine.md");
+    assert.equal(loaded?.kind, "agents-md");
+    assert.match(loaded?.content ?? "", /User attached guide/);
+    assert.equal(loaded?.content.includes("do not leak"), false);
+  });
 });
 
 console.log(`\nprojectInstructionsLoader: ${passed}/${passed + failed} tests passed`);

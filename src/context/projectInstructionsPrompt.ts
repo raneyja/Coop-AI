@@ -1,7 +1,8 @@
-import { loadProjectInstructionsCached, loadRemoteProjectInstructionsCached } from "./projectInstructionsCache";
+import { loadRemoteProjectInstructionsCached } from "./projectInstructionsCache";
 import {
   formatProjectInstructionsBlock,
-  joinInstructionBlocks
+  joinInstructionBlocks,
+  loadAttachedAgentsMdFile
 } from "./projectInstructionsLoader";
 import { formatVisibleMemoryBlock, sourcedMemoryFacts } from "./visibleMemory";
 import type { VisibleMemoryFact } from "../chat/types";
@@ -24,6 +25,7 @@ export type BuildProjectInstructionsPromptOptions = {
 /**
  * Silent system-prompt block for AGENTS.md + sourced memory.
  * Remote Use-repo never reads a local clone (Zero-Clone / D-P4).
+ * With no Use-repo, only this signed-in account's uploaded/created file is injected.
  */
 export async function buildProjectInstructionsPromptBlock(
   options: BuildProjectInstructionsPromptOptions
@@ -34,6 +36,12 @@ export async function buildProjectInstructionsPromptBlock(
 
   const repoId = options.useRepo?.repoId.trim();
   const memoryBlock = formatVisibleMemoryBlock(sourcedMemoryFacts(options.memoryFacts ?? [], repoId));
+  const attachedFiles =
+    repoId || !options.attachedAgentsMdPath
+      ? []
+      : [loadAttachedAgentsMdFile(options.attachedAgentsMdPath)].filter(
+          (file): file is NonNullable<typeof file> => Boolean(file)
+        );
 
   if (repoId) {
     const files = options.readRemoteFile
@@ -48,15 +56,5 @@ export async function buildProjectInstructionsPromptBlock(
     return joinInstructionBlocks(formatProjectInstructionsBlock(files), memoryBlock);
   }
 
-  if (!options.localGitRoot) {
-    return memoryBlock || undefined;
-  }
-
-  const localFiles = loadProjectInstructionsCached({
-    enabled: true,
-    gitRoot: options.localGitRoot,
-    activeFile: options.activeFile,
-    attachedAgentsMdPath: options.attachedAgentsMdPath
-  });
-  return joinInstructionBlocks(formatProjectInstructionsBlock(localFiles), memoryBlock);
+  return joinInstructionBlocks(formatProjectInstructionsBlock(attachedFiles), memoryBlock);
 }

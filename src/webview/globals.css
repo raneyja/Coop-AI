@@ -1353,6 +1353,26 @@
     @apply flex items-start gap-2.5 text-[13px] leading-[1.45];
   }
 
+  .coop-agent-todo--expandable {
+    @apply flex-col gap-1;
+  }
+
+  .coop-agent-todo-toggle {
+    @apply flex w-full items-start gap-2.5 border-0 bg-transparent p-0 text-left text-[13px] leading-[1.45];
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .coop-agent-todo-toggle .coop-agent-chevron {
+    @apply ml-auto mt-[3px] shrink-0;
+    opacity: 0.55;
+  }
+
+  .coop-agent-todo-detail {
+    @apply m-0 ml-[22px] whitespace-pre-wrap font-sans text-[12px] leading-[1.45];
+    color: color-mix(in srgb, var(--coop-panel-muted) 42%, var(--coop-panel-foreground) 58%);
+  }
+
   .coop-agent-todo--pending {
     opacity: 0.55;
   }
@@ -1377,6 +1397,25 @@
       var(--vscode-progressBar-background, #3794ff) 75%,
       var(--coop-panel-foreground) 25%
     );
+  }
+
+  .coop-agent-todo-glyph-spin {
+    transform-origin: center;
+    transform-box: fill-box;
+    animation: coop-agent-todo-spin 0.85s linear infinite;
+  }
+
+  @keyframes coop-agent-todo-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .coop-agent-todo-glyph-spin {
+      animation: none;
+      stroke-dasharray: 28 8;
+    }
   }
 
   .coop-agent-todo-glyph--done {

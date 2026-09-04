@@ -26,10 +26,14 @@ export type ProjectInstructionsState = {
   gitRoot?: string;
   /** Instruction file paths loaded on each chat turn. */
   sources?: string[];
-  /** True when AGENTS.md is present (attached or in repo). */
+  /** True when AGENTS.md will be loaded (Use-repo file or this account's upload). */
   hasAgentsMd?: boolean;
   /** Basename of a user-attached AGENTS.md file, when set. */
   attachedAgentsMdLabel?: string;
+  /** repo = Use-repo file; attached = this signed-in account's upload/create. */
+  source?: "repo" | "attached";
+  /** Signed-in account can create, upload, or remove a personal file (no Use-repo). */
+  canMutate?: boolean;
 };
 
 /** Settings-visible fact. Injected only when `source` is non-empty. */
@@ -101,6 +105,8 @@ export type ChatTurnActivityTodo = {
   id: string;
   content: string;
   status: "pending" | "in_progress" | "completed";
+  /** Expandable hit list / error under a real search row. */
+  detail?: string;
 };
 
 export type ChatTurnActivityTool = {
@@ -656,6 +662,7 @@ export type WebviewInbound =
   | { type: "agents:start-from-template" }
   | { type: "agents:attach" }
   | { type: "agents:open" }
+  | { type: "agents:detach" }
   | { type: "memory:add"; payload: { text: string; source: string; repoId?: string } }
   | { type: "memory:clear"; payload?: { id?: string } }
   | { type: "degradation:refresh"; payload?: { feature?: string; retrace?: boolean } }

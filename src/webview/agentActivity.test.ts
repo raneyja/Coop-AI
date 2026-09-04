@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   agentStepsToActivity,
+  buildActivityTodosFromFeedback,
   extractFileChipsFromLabels,
   summarizeAgentExploration,
   toolRowsFromTodos,
   type AgentTodoItem
 } from "./agentActivity";
+import { ACTIVITY_PHASE_MS, ACTIVITY_START_DELAY_MS } from "./thinkingMessageRotation";
 
 test("agentStepsToActivity humanizes search/read tools", () => {
   const activity = agentStepsToActivity([
@@ -67,4 +69,34 @@ test("summarizeAgentExploration uses Explored / Exploring, not remaining steps",
 
 test("summarizeAgentExploration is null without real tools", () => {
   assert.equal(summarizeAgentExploration([]), null);
+});
+
+test("synthesis wait does not invent Distilling/Aggregating todos", () => {
+  const todos = buildActivityTodosFromFeedback(
+    undefined,
+    undefined,
+    { awaitingResponse: true },
+    ACTIVITY_START_DELAY_MS + ACTIVITY_PHASE_MS * 4,
+    12,
+    20_000
+  );
+  assert.deepEqual(todos, []);
+});
+
+test("real gather lines stay visible after synthesis starts", () => {
+  const todos = buildActivityTodosFromFeedback(
+    {
+      status: "loading",
+      title: "Fetching context",
+      activityMessages: ["Searching GitHub estate index…", "Pulling in Slack messages…"]
+    },
+    undefined,
+    { awaitingResponse: true },
+    ACTIVITY_START_DELAY_MS + ACTIVITY_PHASE_MS * 4,
+    0,
+    5_000
+  );
+  assert.ok(todos.every((todo) => todo.status === "completed"));
+  assert.ok(todos.some((todo) => todo.content === "Searching GitHub estate index…"));
+  assert.ok(!todos.some((todo) => /distilling|aggregating|weighing gathered/i.test(todo.content)));
 });

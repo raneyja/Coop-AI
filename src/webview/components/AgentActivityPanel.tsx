@@ -44,13 +44,16 @@ function TodoGlyph({ status }: { status: AgentTodoItem["status"] }): React.React
     return (
       <span className="coop-agent-todo-glyph coop-agent-todo-glyph--active" aria-hidden="true">
         <svg viewBox="0 0 16 16" width="14" height="14" fill="none">
-          <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth="1.4" />
-          <path
-            d="M7 5.5 10.2 8 7 10.5"
+          <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth="1.4" opacity="0.35" />
+          <circle
+            className="coop-agent-todo-glyph-spin"
+            cx="8"
+            cy="8"
+            r="6.25"
             stroke="currentColor"
-            strokeWidth="1.5"
+            strokeWidth="1.4"
+            strokeDasharray="10 22"
             strokeLinecap="round"
-            strokeLinejoin="round"
           />
         </svg>
       </span>
@@ -159,16 +162,43 @@ function TodoList({ items }: { items: AgentTodoItem[] }): React.ReactElement {
   return (
     <ul className="coop-agent-todo-list">
       {items.map((todo) => (
-        <li
-          key={todo.id}
-          className={`coop-agent-todo coop-agent-todo--${todo.status}`}
-          data-status={todo.status}
-        >
-          <TodoGlyph status={todo.status} />
-          <RichLabel text={todo.content} />
-        </li>
+        <TodoRow key={todo.id} todo={todo} />
       ))}
     </ul>
+  );
+}
+
+function TodoRow({ todo }: { todo: AgentTodoItem }): React.ReactElement {
+  const detail = todo.detail?.trim() ?? "";
+  const [open, setOpen] = useState(false);
+  if (!detail) {
+    return (
+      <li
+        className={`coop-agent-todo coop-agent-todo--${todo.status}`}
+        data-status={todo.status}
+      >
+        <TodoGlyph status={todo.status} />
+        <RichLabel text={todo.content} />
+      </li>
+    );
+  }
+  return (
+    <li
+      className={`coop-agent-todo coop-agent-todo--${todo.status} coop-agent-todo--expandable`}
+      data-status={todo.status}
+    >
+      <button
+        type="button"
+        className="coop-agent-todo-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <TodoGlyph status={todo.status} />
+        <RichLabel text={todo.content} />
+        <Chevron open={open} />
+      </button>
+      {open ? <pre className="coop-agent-todo-detail">{detail}</pre> : null}
+    </li>
   );
 }
 

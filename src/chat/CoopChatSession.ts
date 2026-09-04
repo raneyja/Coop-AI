@@ -85,7 +85,6 @@ import {
   isPlainChatIntent,
   type ContextGatheringMessageOptions
 } from "../context/contextGatheringMessages";
-import { appendThinkingProcessingTerms } from "../context/thinkingProcessingTerms";
 import { CacheEntry, RateLimitAwareExecutor } from "../context/rateLimitAwareExecution";
 import { createChatOutputGate, delayUntilMinResponseVisible } from "./chatResponseTiming";
 import { createStreamDeltaBatcher } from "./streamDeltaBatcher";
@@ -239,7 +238,7 @@ import {
   type QuickActionMentionRef
 } from "../prompts/quickActionPrompts";
 import { canUserSelectModels, getFeatureModelAssignment, resolveRuntimeModelForUseCase } from "../config/featureModelAssignments";
-import { isAutoModelSelection } from "../config/llmModels";
+import { formatWaitingOnModelMessage, isAutoModelSelection } from "../config/llmModels";
 import {
   filterMentionsByInScopeKeys,
   allMentionsOutOfScopeForActiveRepo,
@@ -399,13 +398,15 @@ import {
   resolveLocalAbsolutePath,
   searchLocalWorkspaceFiles
 } from "../context/localFileResolver";
-import { AGENTS_MD_FILENAME, AGENTS_MD_SKELETON } from "../context/agentsMdSkeleton";
+import { AGENTS_MD_FILENAME, AGENTS_MD_SKELETON, unusedAgentsMdRootPath } from "../context/agentsMdSkeleton";
 import {
+  currentAgentsMdAccountKey,
   getAttachedAgentsMdPath,
   setAttachedAgentsMdPath
 } from "../context/agentsMdAttachmentStore";
 import { buildProjectInstructionsPromptBlock } from "../context/projectInstructionsPrompt";
 import { resolveProjectInstructionsState } from "../context/projectInstructionsStatus";
+import { peekRemoteProjectInstructionsCache } from "../context/projectInstructionsCache";
 import { readProjectInstructionsEnabled } from "../config/projectInstructionsConfig";
 import {
   createVisibleMemoryFact,
@@ -455,6 +456,11 @@ import {
   incidentIntegrationsFromBundle
 } from "../prompts/incidentReconstruction";
 import { enrichChatContextWithIntegrations as mergeIntegrationChatContext, contextBundleHasIntegrationSearch } from "../context/integrationChatEnrichment";
+import {
+  isActivityLabelForTool,
+  stripGenericIntegrationStatus,
+  type IntegrationToolActivityEvent
+} from "../context/integrationActivityLabels";
 import {
   IndexedRepoWorkspace,
   localDiskMatchesTargetRepo,
@@ -1948,6 +1954,9 @@ export class CoopChatSession {
         return;
       case "agents:open":
         await this.openAgentsMd();
+        return;
+      case "agents:detach":
+        await this.detachAgentsMd();
         return;
       case "memory:add": {
         const fact = createVisibleMemoryFact({
@@ -4117,7 +4126,9 @@ export class CoopChatSession {
         if (signal?.aborted) {
           return;
         }
-        this.postThinkingDelta(threadId ?? this.activeThreadId(), thinkingChunk);
+        const id = threadId ?? this.activeThreadId();
+        this.clearIntentFeedback(id);
+        this.postThinkingDelta(id, thinkingChunk);
       }
     );
     return result.message.content || full;
@@ -4186,13 +4197,10 @@ export class CoopChatSession {
               return { provider: editAssignment.provider, model: editAssignment.model };
             })();
 
-    const synthesisMessages = this.withSelectionFocusActivity(
-      appendThinkingProcessingTerms(
-        [],
-        `agent-${turn.streamGeneration}-${Date.now()}`,
-        8
-      ),
-      turn.context
+    const synthesisMessages = this.synthesisActivityMessages(
+      `agent-${turn.streamGeneration}-${Date.now()}`,
+      turn.context,
+      runtimeModel.model
     );
     this.postIntentFeedbackForThread(turn.threadId, {
       status: "loading",
@@ -4251,7 +4259,13 @@ export class CoopChatSession {
           allowedIntegrations,
           searchIntegration: (input) =>
             this.searchIntegrationForAgent(input.provider, input.query, turn.context.file),
-          planTurn: (input) => this.planAgentToolTurn(input, runtimeModel),
+          planTurn: (input) => {
+            const editAssignment = getFeatureModelAssignment("edit");
+            return this.planAgentToolTurn(input, {
+              provider: editAssignment.provider,
+              model: editAssignment.model
+            });
+          },
           streamAnswer: (input) =>
             this.streamAgentAnswer(input, runtimeModel, chatUseCase, (chunk) => {
               outputGate.push(chunk);
@@ -4429,13 +4443,10 @@ export class CoopChatSession {
       integrationScopes,
       // Focus phrases first so Gaps subsystem asks reach doc/discussion search.
       extraSearchTerms: focusTerms.length ? focusTerms : undefined,
-      // Live tool lines in thinking UI — including quiet /gaps gather.
+      // Live tool lines when a fetch actually starts; durable Searched rows on done.
       onToolActivity: (toolEvent) => {
-        if (toolEvent.phase !== "start") {
-          return;
-        }
-        this.appendLiveToolActivityLine(
-          toolEvent.label,
+        this.applyIntegrationToolActivity(
+          toolEvent,
           request.params.quickAction,
           String(request.intent.intent)
         );
@@ -4454,6 +4465,40 @@ export class CoopChatSession {
     // Mid-loop agent searches land in agentTools; re-promote after prefetch so
     // focused ticket/thread hits win over (or fill) the first-pass bundle keys.
     return promoteAgentIntegrationSearches(enriched);
+  }
+
+  /** Live + durable activity for a real integration fetch (not planned theater). */
+  private applyIntegrationToolActivity(
+    event: IntegrationToolActivityEvent,
+    actionId: string | undefined,
+    intent?: string
+  ): void {
+    const threadId = this.activityFeedbackThreadId ?? this.activeThreadId();
+    const turn = this.threadRuns.get(threadId);
+    if (turn && turn.status !== "running") {
+      return;
+    }
+    if (turn && event.phase === "done") {
+      turn.activityLines = (turn.activityLines ?? []).filter(
+        (line) => !isActivityLabelForTool(line, event.tool)
+      );
+      recordTurnActivityLine(turn, event.label, event.detail);
+    }
+    const key = `${threadId}:${actionId ?? "chat"}`;
+    const prior =
+      this.chatDeliverableNarrative.get(key) ??
+      this.lastActivityMessagesByThread.get(threadId) ??
+      [];
+    const next = [...prior.filter((line) => !isActivityLabelForTool(line, event.tool)), event.label];
+    this.chatDeliverableNarrative.set(key, next);
+    this.postIntentFeedbackForThread(threadId, {
+      status: "loading",
+      intent,
+      actionId,
+      title: actionId ? jobTitleForAction(actionId) : "Fetching context...",
+      message: event.label,
+      activityMessages: next
+    });
   }
 
   /** Append a real tool line to the activity checklist (Slack, Jira, …). */
@@ -5048,6 +5093,11 @@ export class CoopChatSession {
     return [focus, ...messages.filter((message) => message !== focus)];
   }
 
+  private synthesisActivityMessages(_seed: string, context: RepoContext | undefined, model: string): string[] {
+    const lines = isAutoModelSelection(model) ? [] : [formatWaitingOnModelMessage(model)];
+    return this.withSelectionFocusActivity(lines, context);
+  }
+
   private loadingFeedbackFor(
     event: IntentEvent,
     intentPlan?: ChatIntentPlan
@@ -5062,7 +5112,7 @@ export class CoopChatSession {
       ...baseMessages
     ];
     const activityMessages = this.withSelectionFocusActivity(
-      dedupeActivityMessages(merged),
+      stripGenericIntegrationStatus(dedupeActivityMessages(merged)),
       intentContextToRepoContext(event.context)
     );
     if (action === "blast-radius") {
@@ -7143,13 +7193,10 @@ export class CoopChatSession {
     let full = "";
 
     if (!quickAction) {
-      const synthesisMessages = this.withSelectionFocusActivity(
-        appendThinkingProcessingTerms(
-          [],
-          `synthesis-${turn.streamGeneration}-${Date.now()}`,
-          8
-        ),
-        turnContext
+      const synthesisMessages = this.synthesisActivityMessages(
+        `synthesis-${turn.streamGeneration}-${Date.now()}`,
+        turnContext,
+        runtimeModel.model
       );
       this.postIntentFeedbackForThread(turn.threadId, {
         status: "loading",
@@ -7159,13 +7206,10 @@ export class CoopChatSession {
         activityMessages: synthesisMessages
       });
     } else {
-      const synthesisMessages = this.withSelectionFocusActivity(
-        appendThinkingProcessingTerms(
-          [],
-          `synthesis-${quickAction}-${turn.streamGeneration}-${Date.now()}`,
-          8
-        ),
-        turnContext
+      const synthesisMessages = this.synthesisActivityMessages(
+        `synthesis-${quickAction}-${turn.streamGeneration}-${Date.now()}`,
+        turnContext,
+        runtimeModel.model
       );
       this.postIntentFeedbackForThread(turn.threadId, {
         status: "loading",
@@ -7795,6 +7839,12 @@ export class CoopChatSession {
         signal,
         (thinkingChunk) => {
           // Thinking is not folded into answer text or model replay — persisted on the trail only.
+          if (!clearedIntentForOutput) {
+            clearedIntentForOutput = true;
+            clearResponseDeadlineForSynthesis(turn.clearResponseDeadline);
+            turn.clearResponseDeadline = () => undefined;
+            this.clearIntentFeedback(turn.threadId);
+          }
           this.postThinkingDelta(turn.threadId, thinkingChunk);
         }
       );
@@ -10653,12 +10703,38 @@ export class CoopChatSession {
     this.postToChat(message);
   }
 
+  private agentsMdAccountKey(): string | undefined {
+    return currentAgentsMdAccountKey(this.preferences);
+  }
+
+  private requireAgentsMdAccount(): string | undefined {
+    const accountKey = this.agentsMdAccountKey();
+    if (!accountKey) {
+      void vscode.window.showWarningMessage("Sign in to create or upload AGENTS.md.");
+      return undefined;
+    }
+    return accountKey;
+  }
+
   private resolveProjectInstructionsContext() {
+    const repoId = this.currentUseRepoId();
+    const accountKey = this.agentsMdAccountKey();
+    const remoteFiles = repoId
+      ? peekRemoteProjectInstructionsCache(repoId, this.currentContext.branch, this.currentContext.branch)
+      : undefined;
+    const remoteHasAgentsMd = Boolean(
+      remoteFiles?.some((file) => file.path === "AGENTS.md" || file.path.toLowerCase().endsWith("/agents.md"))
+    );
     return resolveProjectInstructionsState({
       activeFile: this.currentContext.file,
       workspaceRoots: vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath),
       resolveAbsolutePath: resolveLocalAbsolutePath,
-      attachedAgentsMdPath: getAttachedAgentsMdPath(this.options.extensionContext)
+      attachedAgentsMdPath: repoId
+        ? undefined
+        : getAttachedAgentsMdPath(this.options.extensionContext, accountKey),
+      useRepoId: repoId,
+      remoteHasAgentsMd,
+      canMutate: Boolean(accountKey) && !repoId
     });
   }
 
@@ -10680,9 +10756,11 @@ export class CoopChatSession {
             version: this.currentContext.branch
           }
         : undefined,
-      localGitRoot: repoId ? undefined : this.currentContext.projectInstructions?.gitRoot,
+      localGitRoot: undefined,
       activeFile: this.currentContext.file,
-      attachedAgentsMdPath: getAttachedAgentsMdPath(this.options.extensionContext),
+      attachedAgentsMdPath: repoId
+        ? undefined
+        : getAttachedAgentsMdPath(this.options.extensionContext, this.agentsMdAccountKey()),
       remainingGatherMs: remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now()),
       readRemoteFile: repoId
         ? async (filePath) => {
@@ -10714,6 +10792,16 @@ export class CoopChatSession {
   }
 
   private async attachAgentsMd(): Promise<void> {
+    const accountKey = this.requireAgentsMdAccount();
+    if (!accountKey) {
+      return;
+    }
+    if (this.currentUseRepoId()) {
+      void vscode.window.showInformationMessage(
+        "This chat is using AGENTS.md from the selected repo. Clear Use-repo to upload a personal guide."
+      );
+      return;
+    }
     const picked = await vscode.window.showOpenDialog({
       canSelectMany: false,
       openLabel: "Upload",
@@ -10729,7 +10817,7 @@ export class CoopChatSession {
       return;
     }
     try {
-      await setAttachedAgentsMdPath(this.options.extensionContext, fsPath);
+      await setAttachedAgentsMdPath(this.options.extensionContext, accountKey, fsPath);
       this.postContext();
       await this.pushSettingsState();
       void vscode.window.showInformationMessage(`Uploaded ${path.basename(fsPath)} for Coop chat.`);
@@ -10739,59 +10827,73 @@ export class CoopChatSession {
     }
   }
 
+  private async detachAgentsMd(): Promise<void> {
+    const accountKey = this.requireAgentsMdAccount();
+    if (!accountKey) {
+      return;
+    }
+    try {
+      await setAttachedAgentsMdPath(this.options.extensionContext, accountKey, undefined);
+      this.postContext();
+      await this.pushSettingsState();
+      void vscode.window.showInformationMessage("Removed your uploaded AGENTS.md from Coop.");
+    } catch (error) {
+      console.error("[CoopAI] detachAgentsMd failed", error);
+      void vscode.window.showErrorMessage("Could not remove AGENTS.md.");
+    }
+  }
+
   private async openAgentsMd(): Promise<void> {
-    const attached = getAttachedAgentsMdPath(this.options.extensionContext);
+    if (this.currentUseRepoId()) {
+      const state = this.resolveProjectInstructionsContext();
+      void vscode.window.showInformationMessage(
+        state.hasAgentsMd
+          ? "AGENTS.md is loaded from the selected repo."
+          : "This repo has no AGENTS.md yet."
+      );
+      return;
+    }
+
+    const attached = getAttachedAgentsMdPath(this.options.extensionContext, this.agentsMdAccountKey());
     if (attached && fs.existsSync(attached)) {
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(attached));
       await vscode.window.showTextDocument(doc);
       return;
     }
 
-    const gitRoot =
-      this.currentContext.projectInstructions?.gitRoot ??
-      this.resolveProjectInstructionsContext().gitRoot;
-    if (!gitRoot) {
-      void vscode.window.showWarningMessage("Attach AGENTS.md or open a git repository folder first.");
-      return;
-    }
-
-    const target = path.join(gitRoot, AGENTS_MD_FILENAME);
-    if (!fs.existsSync(target)) {
-      void vscode.window.showWarningMessage(`No ${AGENTS_MD_FILENAME} found. Use Attach AGENTS.md to pick a file.`);
-      return;
-    }
-
-    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(target));
-    await vscode.window.showTextDocument(doc);
+    void vscode.window.showWarningMessage("Create AGENTS.md or upload a file first.");
   }
 
   private async startFromAgentsMdTemplate(): Promise<void> {
+    const accountKey = this.requireAgentsMdAccount();
+    if (!accountKey) {
+      return;
+    }
+    if (this.currentUseRepoId()) {
+      void vscode.window.showInformationMessage(
+        "This chat is using AGENTS.md from the selected repo. Clear Use-repo to create a personal guide."
+      );
+      return;
+    }
+
     const gitRoot =
       this.currentContext.projectInstructions?.gitRoot ?? this.resolveProjectInstructionsContext().gitRoot;
 
     try {
-      if (gitRoot) {
-        const target = path.join(gitRoot, AGENTS_MD_FILENAME);
-        if (fs.existsSync(target)) {
-          const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(target));
-          await vscode.window.showTextDocument(doc);
-          void vscode.window.showInformationMessage(`${AGENTS_MD_FILENAME} already exists — opened for editing.`);
-        } else {
-          await vscode.workspace.fs.writeFile(vscode.Uri.file(target), Buffer.from(AGENTS_MD_SKELETON, "utf8"));
-          const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(target));
-          await vscode.window.showTextDocument(doc);
-          void vscode.window.showInformationMessage(`Created ${AGENTS_MD_FILENAME} from template at the repo root.`);
-        }
-        this.postContext();
-        await this.pushSettingsState();
+      const rootTarget = unusedAgentsMdRootPath(gitRoot, fs.existsSync);
+      if (rootTarget) {
+        await this.writeAndAttachAgentsMd(accountKey, rootTarget);
+        void vscode.window.showInformationMessage(`Created ${AGENTS_MD_FILENAME} from template at the repo root.`);
         return;
       }
 
       const defaultFolder = vscode.workspace.workspaceFolders?.[0]?.uri;
+      const suggestedPath = defaultFolder
+        ? path.join(defaultFolder.fsPath, AGENTS_MD_FILENAME)
+        : undefined;
       const picked = await vscode.window.showSaveDialog({
-        defaultUri: defaultFolder
-          ? vscode.Uri.file(path.join(defaultFolder.fsPath, AGENTS_MD_FILENAME))
-          : undefined,
+        defaultUri:
+          suggestedPath && !fs.existsSync(suggestedPath) ? vscode.Uri.file(suggestedPath) : undefined,
         filters: { Markdown: ["md"] },
         saveLabel: "Create AGENTS.md",
         title: "Save AGENTS.md template"
@@ -10800,17 +10902,28 @@ export class CoopChatSession {
         return;
       }
 
-      await vscode.workspace.fs.writeFile(picked, Buffer.from(AGENTS_MD_SKELETON, "utf8"));
-      await setAttachedAgentsMdPath(this.options.extensionContext, picked.fsPath);
-      const doc = await vscode.workspace.openTextDocument(picked);
-      await vscode.window.showTextDocument(doc);
+      if (fs.existsSync(picked.fsPath)) {
+        void vscode.window.showWarningMessage(
+          "That file already exists. Choose a new name, or use Upload AGENTS.md to attach it without replacing it."
+        );
+        return;
+      }
+
+      await this.writeAndAttachAgentsMd(accountKey, picked.fsPath);
       void vscode.window.showInformationMessage(`Created ${path.basename(picked.fsPath)} from template.`);
-      this.postContext();
-      await this.pushSettingsState();
     } catch (error) {
       console.error("[CoopAI] startFromAgentsMdTemplate failed", error);
       void vscode.window.showErrorMessage("Could not create AGENTS.md from template.");
     }
+  }
+
+  private async writeAndAttachAgentsMd(accountKey: string, fsPath: string): Promise<void> {
+    await vscode.workspace.fs.writeFile(vscode.Uri.file(fsPath), Buffer.from(AGENTS_MD_SKELETON, "utf8"));
+    await setAttachedAgentsMdPath(this.options.extensionContext, accountKey, fsPath);
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(fsPath));
+    await vscode.window.showTextDocument(doc);
+    this.postContext();
+    await this.pushSettingsState();
   }
 
   private async pushSettingsState(): Promise<void> {
@@ -10974,7 +11087,7 @@ export class CoopChatSession {
       const hasLocalHits = localItems.length > 0;
       const emptyHint =
         ranked.length === 0
-          ? "No files matched. Check Workspace → Search scope, GitHub connection, or open the repo folder locally."
+          ? "No files matched. Check GitHub connection, or open the repo folder locally."
           : undefined;
 
       this.post({

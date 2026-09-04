@@ -51,22 +51,29 @@ test("buildChatTurnActivity strips rotating processing terms and synthesis fille
   recordTurnActivityLine(turn, "Weighing gathered evidence…");
   recordTurnActivityLine(turn, "Preparing answer…");
   recordTurnActivityLine(turn, "Pulling in Slack messages…");
-  recordTurnActivityLine(turn, "Searched Slack for `on-call`");
+  recordTurnActivityLine(turn, "Searched Slack for `on-call`", "on-call rotation in #eng");
 
   const activity = buildChatTurnActivity(turn, 5_000);
   assert.ok(activity);
   assert.equal(
-    activity.steps?.some((step) => /Processing context|Weighing gathered|Preparing answer/.test(step.content)),
+    activity.steps?.some((step) => /Processing context|Weighing gathered|Preparing answer|Pulling in Slack/.test(step.content)),
     false
   );
-  assert.ok(activity.steps?.some((step) => step.content.includes("Slack")));
+  assert.ok(activity.steps?.some((step) => step.content === "Searched Slack for `on-call`"));
+  assert.equal(
+    activity.steps?.find((step) => step.content === "Searched Slack for `on-call`")?.detail,
+    "on-call rotation in #eng"
+  );
 });
 
 test("isConcreteActivityLine rejects filler and keeps real tool lines", () => {
   assert.equal(isConcreteActivityLine("Aggregating context…"), false);
   assert.equal(isConcreteActivityLine("Writing your answer…"), false);
   assert.equal(isConcreteActivityLine("Scan complete — preparing answer…"), false);
-  assert.equal(isConcreteActivityLine("Pulling in Slack messages…"), true);
+  assert.equal(isConcreteActivityLine("Pulling in Slack messages…"), false);
+  assert.equal(isConcreteActivityLine("Searching Confluence pages…"), false);
+  assert.equal(isConcreteActivityLine("Searching Confluence for `plane`"), false);
+  assert.equal(isConcreteActivityLine("Searched Confluence for `plane`"), true);
   assert.equal(isConcreteActivityLine("Read `apps/api/auth.py`"), true);
   assert.equal(isConcreteActivityLine("Looked up indexed inventory"), true);
 });
@@ -97,6 +104,23 @@ test("inventory asks persist a Looked up indexed inventory trail", () => {
   );
   assert.ok(followUp);
   assert.ok(followUp.tools.some((tool) => tool.label === "Looked up indexed inventory"));
+});
+
+test("generic integration theater does not count as Explored searches", () => {
+  const turn = accumulator();
+  recordTurnActivityLine(turn, "Searching Confluence pages…");
+  recordTurnActivityLine(turn, "Reviewing Jira tickets…");
+  recordTurnActivityLine(turn, "Pulling in Slack messages…");
+  const empty = buildChatTurnActivity(turn, 4_000);
+  assert.equal(empty, undefined);
+
+  recordTurnActivityLine(turn, "Searched Confluence for `plane`", "Overview\nSetup");
+  const activity = buildChatTurnActivity(turn, 4_000);
+  assert.ok(activity);
+  assert.equal(activity.tools.length, 1);
+  assert.equal(activity.tools[0]?.label, "Searched Confluence for `plane`");
+  assert.equal(summarizeAgentExploration(activity.tools)?.explored, "Explored 1 search");
+  assert.equal(activity.steps?.[0]?.detail, "Overview\nSetup");
 });
 
 test("empty turns omit activity", () => {

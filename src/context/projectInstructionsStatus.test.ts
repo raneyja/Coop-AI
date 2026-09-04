@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 import { clearProjectInstructionsCache, loadProjectInstructionsCached } from "./projectInstructionsCache";
 import { loadProjectInstructions } from "./projectInstructionsLoader";
+import { AGENTS_MD_SKELETON } from "./agentsMdSkeleton";
 import { resolveProjectInstructionsState } from "./projectInstructionsStatus";
 
 function withTempRepo(run: (root: string) => void): void {
@@ -28,23 +29,25 @@ test("resolveProjectInstructionsState reports missing when git repo has no AGENT
     });
     assert.equal(state.status, "missing");
     assert.equal(state.gitRoot, root);
+    assert.equal(state.hasAgentsMd, false);
   });
 });
 
-test("resolveProjectInstructionsState reports loaded when root AGENTS.md exists", () => {
+test("resolveProjectInstructionsState does not treat workspace AGENTS.md as attached", () => {
   withTempRepo((root) => {
-    fs.writeFileSync(path.join(root, "AGENTS.md"), "# Guide\n");
+    fs.writeFileSync(path.join(root, "AGENTS.md"), "# Coop-AI local folder rules — do not leak.\n");
     const state = resolveProjectInstructionsState({
       enabled: true,
       workspaceRoots: [root]
     });
-    assert.equal(state.status, "loaded");
-    assert.equal(state.hasAgentsMd, true);
-    assert.deepEqual(state.sources, ["AGENTS.md"]);
+    assert.equal(state.status, "missing");
+    assert.equal(state.hasAgentsMd, false);
+    assert.equal(state.gitRoot, root);
+    assert.equal(state.attachedAgentsMdLabel, undefined);
   });
 });
 
-test("resolveProjectInstructionsState reports hasAgentsMd false when only repo rule files exist", () => {
+test("resolveProjectInstructionsState reports missing when only repo rule files exist", () => {
   withTempRepo((root) => {
     fs.mkdirSync(path.join(root, ".cursor", "rules"), { recursive: true });
     fs.writeFileSync(
@@ -55,7 +58,7 @@ test("resolveProjectInstructionsState reports hasAgentsMd false when only repo r
       enabled: true,
       workspaceRoots: [root]
     });
-    assert.equal(state.status, "loaded");
+    assert.equal(state.status, "missing");
     assert.equal(state.hasAgentsMd, false);
   });
 });
@@ -72,6 +75,61 @@ test("resolveProjectInstructionsState uses attached AGENTS.md without git root",
     assert.equal(state.hasAgentsMd, true);
     assert.equal(state.attachedAgentsMdLabel, "AGENTS.md");
   });
+});
+
+test("resolveProjectInstructionsState uses attached file even when workspace has a different AGENTS.md", () => {
+  withTempRepo((root) => {
+    fs.writeFileSync(path.join(root, "AGENTS.md"), "# Coop-AI local folder rules — do not leak.\n");
+    const attached = path.join(root, "my-guide.md");
+    fs.writeFileSync(attached, "# My project guide\n");
+    const state = resolveProjectInstructionsState({
+      enabled: true,
+      workspaceRoots: [root],
+      attachedAgentsMdPath: attached,
+      canMutate: true
+    });
+    assert.equal(state.status, "loaded");
+    assert.equal(state.hasAgentsMd, true);
+    assert.equal(state.source, "attached");
+    assert.equal(state.attachedAgentsMdLabel, "my-guide.md");
+    assert.deepEqual(state.sources, ["my-guide.md"]);
+  });
+});
+
+test("resolveProjectInstructionsState Use-repo ignores a personal attached file", () => {
+  withTempRepo((root) => {
+    const attached = path.join(root, "my-guide.md");
+    fs.writeFileSync(attached, "# Personal leftover\n");
+    const state = resolveProjectInstructionsState({
+      enabled: true,
+      workspaceRoots: [root],
+      attachedAgentsMdPath: attached,
+      useRepoId: "github:acme/plane",
+      remoteHasAgentsMd: false,
+      canMutate: true
+    });
+    assert.equal(state.status, "missing");
+    assert.equal(state.hasAgentsMd, false);
+    assert.equal(state.source, "repo");
+    assert.equal(state.canMutate, false);
+  });
+});
+
+test("resolveProjectInstructionsState Use-repo reports remote AGENTS.md", () => {
+  const state = resolveProjectInstructionsState({
+    enabled: true,
+    useRepoId: "github:acme/plane",
+    remoteHasAgentsMd: true
+  });
+  assert.equal(state.status, "loaded");
+  assert.equal(state.hasAgentsMd, true);
+  assert.equal(state.source, "repo");
+  assert.deepEqual(state.sources, ["AGENTS.md"]);
+});
+
+test("AGENTS.md create template is a blank starter, not Coop-AI's repo guide", () => {
+  assert.match(AGENTS_MD_SKELETON, /^# Agent guide/m);
+  assert.equal(/Coop AI repo|coop-ai\.dev|Zero-Clone/i.test(AGENTS_MD_SKELETON), false);
 });
 
 test("loadProjectInstructions includes alwaysApply cursor rules", () => {

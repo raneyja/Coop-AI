@@ -1,4 +1,4 @@
-import { isIntegrationActivityLabel } from "../context/integrationActivityLabels";
+import { isGenericIntegrationStatusLabel } from "../context/integrationActivityLabels";
 import { isThinkingProcessingTermMessage } from "../context/thinkingProcessingTerms";
 import { extractNamedSourceFiles } from "../api/agent/searchQuery";
 import { hasRepoFactNeed, repoFactNeeds } from "../workspace/repoFactIntent";
@@ -35,6 +35,8 @@ export type ChatTurnActivityAccumulator = {
   thinkingEndedAt?: number;
   agentSteps?: ChatTurnAgentStep[];
   activityLines?: string[];
+  /** Expandable payload keyed by durable activity label. */
+  activityDetails?: Record<string, string>;
   /** User ask for this turn — named files still get a Read chip on gather-only answers. */
   modelMessage?: string;
 };
@@ -59,10 +61,14 @@ export function isConcreteActivityLine(line: string): boolean {
   if (SYNTHESIS_FILLER.has(trimmed)) {
     return false;
   }
-  if (isIntegrationActivityLabel(trimmed)) {
-    return true;
+  // Planned “Searching Confluence pages…” theater is live status only.
+  if (isGenericIntegrationStatusLabel(trimmed)) {
+    return false;
   }
-  if (/^(Searched|Read|Explored|Traced|Pulling|Reviewing|Looked up)\b/i.test(trimmed)) {
+  if (/^(Searching|Reviewing|Pulling in)\b/i.test(trimmed)) {
+    return false;
+  }
+  if (/^(Searched|Read|Explored|Traced|Looked up|Reviewed)\b/i.test(trimmed)) {
     return true;
   }
   return /`[^`]+`/.test(trimmed);
@@ -112,15 +118,22 @@ export function recordTurnAgentSteps(
   turn.agentSteps = steps.map((step) => ({ ...step }));
 }
 
-export function recordTurnActivityLine(turn: ChatTurnActivityAccumulator, line: string): void {
+export function recordTurnActivityLine(
+  turn: ChatTurnActivityAccumulator,
+  line: string,
+  detail?: string
+): void {
   if (!isConcreteActivityLine(line)) {
     return;
   }
   const lines = turn.activityLines ?? [];
-  if (lines.includes(line)) {
-    return;
+  if (!lines.includes(line)) {
+    turn.activityLines = [...lines, line];
   }
-  turn.activityLines = [...lines, line];
+  const trimmedDetail = detail?.trim();
+  if (trimmedDetail) {
+    turn.activityDetails = { ...turn.activityDetails, [line]: trimmedDetail };
+  }
 }
 
 export function activityFromAgentSteps(steps: ChatTurnAgentStep[]): {
@@ -238,7 +251,11 @@ export function buildChatTurnActivity(
 ): ChatTurnActivity | undefined {
   const thinkingText = turn.thinkingText?.trim() ?? "";
   const fromSteps = activityFromAgentSteps(turn.agentSteps ?? []);
-  const fromLines = activityFromConcreteLines(turn.activityLines ?? [], fromSteps.tools.length);
+  const fromLines = activityFromConcreteLines(
+    turn.activityLines ?? [],
+    fromSteps.tools.length,
+    turn.activityDetails
+  );
   const fromNamed = activityFromNamedFiles(turn.modelMessage);
   const fromFacts = activityFromRepoFacts(turn.modelMessage);
 
@@ -293,7 +310,8 @@ export function attachChatTurnActivity(
 
 function activityFromConcreteLines(
   lines: string[],
-  toolOffset: number
+  toolOffset: number,
+  details?: Record<string, string>
 ): {
   todos: ChatTurnActivityTodo[];
   tools: ChatTurnActivityTool[];
@@ -303,7 +321,8 @@ function activityFromConcreteLines(
   const todos: ChatTurnActivityTodo[] = concrete.map((line, index) => ({
     id: `line:${toolOffset + index}:${line}`,
     content: line,
-    status: "completed"
+    status: "completed",
+    ...(details?.[line] ? { detail: details[line] } : {})
   }));
   const tools: ChatTurnActivityTool[] = concrete.map((line, index) => ({
     id: `line-tool:${toolOffset + index}`,

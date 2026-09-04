@@ -1,23 +1,30 @@
 import * as vscode from "vscode";
+import {
+  normalizeAgentsMdAccountKey,
+  readAttachedAgentsMdPath,
+  writeAttachedAgentsMdPath
+} from "./agentsMdAttachmentRecord";
 
-const WORKSPACE_KEY = "coopAI.attachedAgentsMdPath";
+export { attachedAgentsMdLabel, normalizeAgentsMdAccountKey } from "./agentsMdAttachmentRecord";
 
-export function getAttachedAgentsMdPath(context: vscode.ExtensionContext): string | undefined {
-  const value = context.workspaceState.get<string>(WORKSPACE_KEY);
-  return value?.trim() ? value : undefined;
+export function getAttachedAgentsMdPath(
+  context: vscode.ExtensionContext,
+  accountKey?: string
+): string | undefined {
+  return readAttachedAgentsMdPath(context.workspaceState, accountKey);
 }
 
 export async function setAttachedAgentsMdPath(
   context: vscode.ExtensionContext,
+  accountKey: string | undefined,
   fsPath: string | undefined
 ): Promise<void> {
-  await context.workspaceState.update(WORKSPACE_KEY, fsPath?.trim() || undefined);
+  await writeAttachedAgentsMdPath(context.workspaceState, accountKey, fsPath);
 }
 
-export function attachedAgentsMdLabel(fsPath: string | undefined): string | undefined {
-  if (!fsPath?.trim()) {
-    return undefined;
-  }
-  const parts = fsPath.replace(/\\/g, "/").split("/");
-  return parts[parts.length - 1] || undefined;
+export function currentAgentsMdAccountKey(prefs: {
+  userEmail?: string;
+  isSignedIn?: boolean;
+}): string | undefined {
+  return normalizeAgentsMdAccountKey(prefs.userEmail, prefs.isSignedIn);
 }

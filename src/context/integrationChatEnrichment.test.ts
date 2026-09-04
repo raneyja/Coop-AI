@@ -273,3 +273,77 @@ test("enrichChatContextWithIntegrations returns partial results when budget elap
     }
   }
 });
+
+test("onToolActivity emits query labels and hit detail, not generic theater", async () => {
+  const localFileResolverPath = require.resolve("./localFileResolver");
+  const originalLocalFileResolverCache = require.cache[localFileResolverPath];
+  const integrationChatEnrichmentPath = require.resolve("./integrationChatEnrichment");
+
+  try {
+    require.cache[localFileResolverPath] = {
+      id: localFileResolverPath,
+      filename: localFileResolverPath,
+      loaded: true,
+      exports: {
+        resolveLocalAbsolutePath: () => undefined
+      }
+    } as NodeJS.Module;
+
+    delete require.cache[integrationChatEnrichmentPath];
+    const { enrichChatContextWithIntegrations } = require("./integrationChatEnrichment") as typeof import("./integrationChatEnrichment");
+
+    const events: Array<{ phase: string; label: string; detail?: string }> = [];
+    await enrichChatContextWithIntegrations({
+      result: {
+        requestId: "ctx-1",
+        type: "chat_context",
+        data: {},
+        fetchedAt: new Date()
+      } as ContextFetchResult,
+      request: {
+        id: "ctx-1",
+        type: "chat_context",
+        params: { quickAction: "understand-repo" },
+        intent: { context: { queryText: "overview" } }
+      } as ContextFetchRequest,
+      secrets: { getCredentials: async () => ({}) } as never,
+      codeHostRouter: {} as never,
+      owner: "CoopAI-Corp",
+      repo: "plane",
+      codeHostConnected: false,
+      onToolActivity: (event) => {
+        events.push({ phase: event.phase, label: event.label, detail: event.detail });
+      },
+      deps: {
+        shouldFetchConfluenceContext: () => true,
+        fetchConfluenceSearchContext: async () =>
+          ({ pages: [{ title: "Plane architecture" }, { title: "Setup" }] }) as never,
+        shouldFetchNotionContext: () => false,
+        fetchNotionSearchContext: async () => ({ pages: [] }) as never,
+        shouldFetchJiraContext: () => false,
+        fetchJiraSearchContext: async () => ({ issues: [] }) as never,
+        shouldFetchSlackContext: () => false,
+        fetchSlackSearchContext: async () => ({ messages: [] }) as never,
+        shouldFetchTeamsContext: () => false,
+        fetchTeamsSearchContext: async () => ({ messages: [] }) as never,
+        shouldFetchGoogleDocsContext: () => false,
+        fetchGoogleDocsSearchContext: async () => ({ documents: [] }) as never,
+        shouldFetchCodeHostContext: () => false
+      }
+    });
+
+    const start = events.find((event) => event.phase === "start");
+    const done = events.find((event) => event.phase === "done");
+    assert.equal(start?.label, "Searching Confluence for `plane`");
+    assert.equal(done?.label, "Searched Confluence for `plane`");
+    assert.equal(done?.detail, "Plane architecture\nSetup");
+    assert.equal(events.some((event) => /Searching Confluence pages/.test(event.label)), false);
+  } finally {
+    delete require.cache[integrationChatEnrichmentPath];
+    if (originalLocalFileResolverCache) {
+      require.cache[localFileResolverPath] = originalLocalFileResolverCache;
+    } else {
+      delete require.cache[localFileResolverPath];
+    }
+  }
+});

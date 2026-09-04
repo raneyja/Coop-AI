@@ -856,6 +856,7 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         onAttachAgentsMd={() => post({ type: "agents:attach" })}
         onOpenAgentsMd={() => post({ type: "agents:open" })}
         onStartFromAgentsMdTemplate={() => post({ type: "agents:start-from-template" })}
+        onDetachAgentsMd={() => post({ type: "agents:detach" })}
         onAddVisibleMemory={(fact) => post({ type: "memory:add", payload: fact })}
         onClearVisibleMemory={(id) => post({ type: "memory:clear", payload: id ? { id } : {} })}
         onCompleteOnboarding={() => {

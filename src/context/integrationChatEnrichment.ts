@@ -20,7 +20,10 @@ import {
 import { buildTraceDecisionSearchSeeds } from "./traceDecisionSearch";
 import type { DecisionTimeline } from "../types/decisionTimeline";
 import {
-  integrationActivityLabel,
+  formatIntegrationHitDetail,
+  integrationCompletedActivityLabel,
+  integrationRunningActivityLabel,
+  preferredIntegrationActivityQuery,
   type IntegrationActivityTool,
   type IntegrationToolActivityEvent
 } from "./integrationActivityLabels";
@@ -139,12 +142,25 @@ async function enrichIntegrationStages(
     extraTerms: [...(options.extraSearchTerms ?? []), ...(traceSeeds?.searchTerms ?? [])]
   });
   const codeHostProvider = options.codeHostProvider ?? "github";
-  const notify = (tool: IntegrationActivityTool, phase: "start" | "done") => {
-    options.onToolActivity?.({
+  const activityQuery = preferredIntegrationActivityQuery(integrationTerms);
+  const notify = (
+    tool: IntegrationActivityTool,
+    phase: "start" | "done",
+    extra?: { query?: string; hits?: string[]; error?: string }
+  ) => {
+    const query = extra?.query ?? activityQuery;
+    const label =
+      phase === "done"
+        ? integrationCompletedActivityLabel(tool, query, codeHostProvider)
+        : integrationRunningActivityLabel(tool, query, codeHostProvider);
+    const event: IntegrationToolActivityEvent = {
       tool,
       phase,
-      label: integrationActivityLabel(tool, codeHostProvider)
-    });
+      label,
+      ...(query ? { query } : {}),
+      ...(phase === "done" ? { detail: formatIntegrationHitDetail(extra?.hits ?? [], extra?.error) } : {})
+    };
+    options.onToolActivity?.(event);
   };
   const connected = options.integrations;
   const allow = (flag: boolean | undefined): boolean => flag !== false;
@@ -168,10 +184,19 @@ async function enrichIntegrationStages(
       return undefined;
     }
     notify(tool, "start");
+    let result: T | undefined;
+    let error: string | undefined;
     try {
-      return await fetch();
+      result = await fetch();
+      return result;
+    } catch (caught) {
+      error = caught instanceof Error ? caught.message : "Search failed";
+      throw caught;
     } finally {
-      notify(tool, "done");
+      notify(tool, "done", {
+        hits: hitsFromSearchResult(tool, result),
+        error
+      });
     }
   };
 
@@ -306,6 +331,89 @@ async function resolveTraceDecisionSearchSeeds(options: {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? { ...(value as Record<string, unknown>) } : {};
+}
+
+function hitsFromSearchResult(tool: IntegrationActivityTool, result: unknown): string[] {
+  if (!result || typeof result !== "object") {
+    return [];
+  }
+  const data = result as Record<string, unknown>;
+  switch (tool) {
+    case "confluence":
+    case "notion":
+      return titlesFrom(data.pages);
+    case "google-docs":
+      return titlesFrom(data.documents);
+    case "jira":
+      return jiraHitLines(data.issues);
+    case "slack":
+      return textHits(data.messages, "text");
+    case "teams":
+      return textHits(data.messages, "body");
+    case "code-host":
+      return [
+        ...numberedHits(data.pullRequests, "PR"),
+        ...numberedHits(data.issues, "#")
+      ];
+    default:
+      return [];
+  }
+}
+
+function titlesFrom(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((entry) => (typeof entry === "object" && entry && "title" in entry ? String(entry.title ?? "") : ""))
+    .map((title) => title.trim())
+    .filter(Boolean);
+}
+
+function jiraHitLines(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return "";
+      }
+      const row = entry as { key?: string; summary?: string };
+      return [row.key, row.summary].filter(Boolean).join(" ").trim();
+    })
+    .filter(Boolean);
+}
+
+function textHits(value: unknown, field: "text" | "body"): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return "";
+      }
+      const row = entry as Record<string, unknown>;
+      return String(row[field] ?? "").trim();
+    })
+    .filter(Boolean);
+}
+
+function numberedHits(value: unknown, prefix: string): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return "";
+      }
+      const row = entry as { number?: number; title?: string };
+      const number = row.number !== undefined ? `${prefix === "PR" ? "PR #" : "#"}${row.number}` : prefix;
+      return [number, row.title].filter(Boolean).join(" ").trim();
+    })
+    .filter(Boolean);
 }
 
 export function contextBundleHasIntegrationSearch(

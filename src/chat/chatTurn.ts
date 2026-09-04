@@ -42,6 +42,8 @@ export type ChatTurn = {
   agentSteps?: Array<{ index: number; tool: string; summary: string; completed: boolean }>;
   /** Concrete live tool lines (Slack/Jira/search) — not synthesis filler. */
   activityLines?: string[];
+  /** Expandable hit list keyed by durable activity label. */
+  activityDetails?: Record<string, string>;
   pendingEvidenceArtifactId?: string;
   lastTraceTimeline?: DecisionTimeline;
   pendingMentions?: import("./types").ChatFileMention[];

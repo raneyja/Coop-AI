@@ -5,11 +5,9 @@ import {
   ACTIVITY_START_DELAY_MS,
   activityPaceElapsedMs,
   buildConcreteActivityMessages,
-  buildWaitingActivityLabels,
   hasTerminalPreparingSignal,
   isSynthesisActivityPhase,
   resolvePacedActivityIndex,
-  SYNTHESIS_TODO_MESSAGES,
   type ThinkingRotationOptions
 } from "./thinkingMessageRotation";
 import type { IntentFeedbackState, JobProgressState } from "./types";
@@ -26,6 +24,8 @@ export type AgentTodoItem = {
   id: string;
   content: string;
   status: AgentTodoStatus;
+  /** Expandable hit list / error under a real search row. */
+  detail?: string;
 };
 
 export type AgentToolRow = {
@@ -93,12 +93,7 @@ export function buildActivityTodosFromFeedback(
   }
 
   if (!prep.length) {
-    const waiting = buildWaitingActivityLabels(intentFeedback, jobProgress, options);
-    if (!waiting.length) {
-      return [];
-    }
-    const label = waiting[waitingLabelStep % waiting.length] ?? waiting[0];
-    return [{ id: `wait:0:${label}`, content: label, status: "in_progress" }];
+    return [];
   }
 
   const activeIndex = resolvePacedActivityIndex({
@@ -136,11 +131,11 @@ function revealActivityMessages(prep: string[], activeIndex: number): string[] {
 
 function buildSynthesisActivityTodos(
   prep: string[],
-  intentFeedback: IntentFeedbackState | undefined,
-  jobProgress: JobProgressState | undefined,
-  options: ThinkingRotationOptions,
+  _intentFeedback: IntentFeedbackState | undefined,
+  _jobProgress: JobProgressState | undefined,
+  _options: ThinkingRotationOptions,
   synthesisElapsedMs: number,
-  waitingLabelStep: number,
+  _waitingLabelStep: number,
   gatherElapsedMs: number
 ): AgentTodoItem[] {
   // Timed prep + every live tool line that already ran (Slack must stay visible).
@@ -164,39 +159,7 @@ function buildSynthesisActivityTodos(
     return [...completedPrep.slice(0, -1), { ...last, status: "in_progress" }];
   }
 
-  const synthesisMessages = [...SYNTHESIS_TODO_MESSAGES];
-  const activeIndex = resolvePacedActivityIndex({
-    concreteCount: synthesisMessages.length,
-    elapsedMs: synthPace,
-    paced: true
-  });
-  const revealed = synthesisMessages.slice(0, activeIndex + 1);
-  const synthesisTodos = buildNarrativeTimeline(revealed, activeIndex).map((entry) => ({
-    id: `synth:${entry.id}`,
-    content: entry.label,
-    status: narrativeStatusToTodo(entry.status)
-  }));
-
-  // After the synthesis list is exhausted, keep the last row alive by rotating soft labels.
-  const onFinalSynthesis = activeIndex >= synthesisMessages.length - 1;
-  if (onFinalSynthesis && synthesisTodos.length) {
-    const waiting = buildWaitingActivityLabels(intentFeedback, jobProgress, {
-      ...options,
-      rotationSeed: `${options.rotationSeed ?? "synthesis"}:live`
-    });
-    const whisper = waiting[waitingLabelStep % waiting.length];
-    const last = synthesisTodos[synthesisTodos.length - 1];
-    if (last && whisper) {
-      synthesisTodos[synthesisTodos.length - 1] = {
-        ...last,
-        content: whisper,
-        status: "in_progress"
-      };
-    }
-  }
-
-  // At most one newly active synthesis row plus previously shown prep — never a sudden pile.
-  return [...completedPrep.slice(-2), ...synthesisTodos];
+  return completedPrep;
 }
 
 function narrativeStatusToTodo(status: NarrativeStep["status"]): AgentTodoStatus {

@@ -80,6 +80,18 @@ export function AgentsMdStatusChip({
     );
   }
 
+  const canCreate = state.source !== "repo" && state.canMutate !== false;
+  if (!canCreate) {
+    return (
+      <span className="coop-agents-md-chip coop-agents-md-chip--missing coop-agents-md-chip--static" title={title}>
+        <span className="coop-agents-md-chip-icon" aria-hidden="true">
+          ✕
+        </span>
+        AGENTS.md
+      </span>
+    );
+  }
+
   return (
     <button
       type="button"

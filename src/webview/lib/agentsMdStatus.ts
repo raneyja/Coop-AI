@@ -8,15 +8,29 @@ export function shouldPromptForAgentsMd(state?: ProjectInstructionsState): boole
   if (!state || state.status === "disabled") {
     return false;
   }
+  if (state.source === "repo") {
+    return false;
+  }
+  if (state.canMutate === false) {
+    return false;
+  }
   return !state.hasAgentsMd;
 }
 
 export function agentsMdStatusTitle(state?: ProjectInstructionsState): string {
+  if (state?.source === "repo") {
+    return agentsMdAttached(state)
+      ? "AGENTS.md from this repo is loaded on every chat turn."
+      : "This repo has no AGENTS.md yet.";
+  }
   if (agentsMdAttached(state)) {
     if (state?.attachedAgentsMdLabel) {
       return `AGENTS.md is attached (${state.attachedAgentsMdLabel}) and loaded on every chat turn.`;
     }
-    return "AGENTS.md from your repo is loaded on every chat turn.";
+    return "Your AGENTS.md is loaded on every chat turn.";
   }
-  return "Create AGENTS.md or attach an existing file.";
+  if (state?.canMutate === false) {
+    return "Sign in to create or upload AGENTS.md.";
+  }
+  return "Create AGENTS.md or upload an existing file.";
 }
