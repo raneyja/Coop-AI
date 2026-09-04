@@ -39,7 +39,7 @@ Capability gates (team invites, Collections, Deep-Index) stay on the `pro` plan.
 3. Connect code hosts and integrations in the [admin portal](/docs/admin-portal)
 4. Deep-Index up to **3 repos** org-wide; use workspace repos, chat, and quick actions in production mode
 
-Free includes the same tool connectivity and cloud indexing as Pro. Limits are the rolling Auto window, the 3-repo Deep-Index cap, and solo account (no team invites). The model picker is not available.
+Free includes the same tool connectivity and cloud indexing as Pro. Limits are the rolling Auto window, the 3-repo Deep-Index cap, and solo account (no team invites). Free stays Auto-only.
 
 ## Pro, Pro+, and Max
 

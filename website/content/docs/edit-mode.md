@@ -24,7 +24,7 @@ Edit mode ships in production. It uses the same chat composer as quick actions â
 
 Edit mode routes to the `code_edit` use case and expects **patch blocks** in the model response â€” not prose-only answers.
 
-**Model:** Coop assigns **OpenAI GPT-5.1** for `/edit`, `/patch`, and `/fix` in production (balanced mutation model). See [Model assignments](/docs/model-assignments).
+**Model:** On Auto, `/edit`, `/patch`, and `/fix` use **OpenAI GPT-5.1**. See [Model assignments](/docs/model-assignments).
 
 ## Slash commands
 

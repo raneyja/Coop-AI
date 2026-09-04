@@ -3,7 +3,7 @@ title: Extension settings
 description: Account, Tools, Workspace, and Preferences in the CoopAI extension.
 section: extension
 order: 1
-lastUpdated: "2026-08-21"
+lastUpdated: "2026-09-03"
 ---
 
 Open settings from the **gear icon** in the Coop sidebar title bar. Settings open in a dedicated editor tab — Account, Tools, Workspace, Indexing, and Preferences. You can also run **CoopAI: Open Settings** from the Command Palette.
@@ -163,7 +163,7 @@ Inline ghost-text completions are **on by default**. Turn them off from the chat
 | `coopAI.autocomplete.showMultipleSuggestions` | `false` | Cycle distinct alternatives with Alt+[ / Alt+]; near-duplicates stay one suggestion |
 | `coopAI.autocomplete.projectImports` | `[]` | Extra import paths to bias completions |
 
-Production routing uses **Mistral Codestral** — not user-selected models. See [Model assignments](/docs/model-assignments).
+Autocomplete always uses **Mistral Codestral** and does not follow the **model menu in chat**. See [Model assignments](/docs/model-assignments).
 
 **Command Palette:** **CoopAI: Toggle Autocomplete**, **CoopAI: Show Autocomplete Help**
 

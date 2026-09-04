@@ -1,7 +1,7 @@
 ---
 title: "CoopAI Owner's Manual"
 description: "Install, configure, and use CoopAI in VS Code: Workflows, prompt library, and team conventions."
-lastUpdated: "2026-08-22"
+lastUpdated: "2026-09-03"
 ---
 
 Congratulations on choosing CoopAI. This manual helps you get the most out of it, from your first chat to team-wide prompt libraries.
@@ -269,7 +269,7 @@ If a past thread was working on a specific file, **switching back to that thread
 
 ### Chat composer
 
-Type free-form questions in the composer. Coop streams answers grounded in your code graph and connected integrations. Free-form chat uses **OpenAI GPT-5 mini** — assigned by Coop, not user-selected.
+Type free-form questions in the composer. Coop streams answers grounded in your code graph and connected integrations. On Auto, free-form chat uses **OpenAI GPT-5 mini**. Paid plans can pick from the **model menu in chat**.
 
 - Press **Enter** to send (Shift+Enter for a new line).
 - Responses stream in real time with markdown formatting.
@@ -462,7 +462,7 @@ Full guide: [Create pull request](/docs/create-pull-request).
 
 ## Quick Actions
 
-Run quick actions from the **Workflows** menu in the chat header, **slash commands** in chat (`/understand`, `/trace`, `/owner`, …), or the **editor context menu**. Right-click a selection for **Trace Decision**, **Find Owner**, **Blast Radius**, or **Knowledge Gaps** — **Understand Repo** is not file-scoped; use **Workflows → Understand Repo** or `/understand` after **Use repo**. Structured quick actions and integration slash commands (`/slack`, `/jira`, …) use **Anthropic Claude Sonnet 4.6** — assigned by Coop for reliable, evidence-backed outputs.
+Run quick actions from the **Workflows** menu in the chat header, **slash commands** in chat (`/understand`, `/trace`, `/owner`, …), or the **editor context menu**. Right-click a selection for **Trace Decision**, **Find Owner**, **Blast Radius**, or **Knowledge Gaps** — **Understand Repo** is not file-scoped; use **Workflows → Understand Repo** or `/understand` after **Use repo**. On Auto, structured quick actions and integration slash commands (`/slack`, `/jira`, …) use **Anthropic Claude Sonnet 4.6**. A paid pick from the **model menu in chat** applies here too.
 
 <!-- figures -->
 ![VS Code editor context menu — CoopAI quick actions for the current selection](/screenshots/docs/context-menu-quick-actions-dark.png)
@@ -606,7 +606,7 @@ Before I ship changes to GraphConsistencyManager.applyEvent(), what am I missing
 
 ### Integration slash commands
 
-Integration commands query connected tools with the same **Anthropic Claude Sonnet 4.6** routing as quick actions.
+On Auto, integration commands query connected tools with the same **Anthropic Claude Sonnet 4.6** routing as quick actions.
 
 | Slash | Description |
 | --- | --- |

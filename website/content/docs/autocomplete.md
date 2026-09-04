@@ -3,7 +3,7 @@ title: Inline autocomplete
 description: Ghost-text code completions in VS Code — default on, FIM, graph context, and Copilot coexistence.
 section: extension
 order: 3
-lastUpdated: "2026-07-12"
+lastUpdated: "2026-09-03"
 ---
 
 CoopAI inline autocomplete shows **ghost-text suggestions** as you type in the editor. Suggestions stream from the Coop API and appear via VS Code's `InlineCompletionItemProvider`.
@@ -25,7 +25,7 @@ Autocomplete is controlled from **Settings → Preferences → Model & chat** �
 ![Model & chat — assigned models and Enable inline autocomplete](/screenshots/docs/extension-autocomplete-settings-on-and-off.png)
 <!-- /figures -->
 
-The **Autocomplete** row in the read-only assignment list shows **On** or **Off** based on that checkbox. Chat, quick actions, and edit mode are always on. There is no provider or model picker in production — see [Model assignments](/docs/model-assignments).
+The **Autocomplete** row in the read-only assignment list shows **On** or **Off** based on that checkbox. Chat, quick actions, and edit mode are always on. Autocomplete always uses the assigned **Codestral** model and does not follow the **model menu in chat** — see [Model assignments](/docs/model-assignments).
 
 **Success:** With **Enable inline autocomplete** checked and saved, typing in an eligible file (e.g. `.ts`) shows ghost text after a short pause.
 
