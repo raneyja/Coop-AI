@@ -1,5 +1,7 @@
+import { resolveCoopApiBase } from "./publicCoopApiBase";
+
 export function getCoopApiBase(): string {
-  return (process.env.COOP_API_BASE?.trim() || "http://localhost:8787").replace(/\/$/, "");
+  return resolveCoopApiBase();
 }
 
 export async function proxyCoopJson(

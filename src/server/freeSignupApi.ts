@@ -13,6 +13,7 @@ type ParsedRequest = {
   method: string;
   pathname: string;
   body: unknown;
+  headers?: Record<string, string | undefined>;
 };
 
 export type FreeSignupApiDeps = {

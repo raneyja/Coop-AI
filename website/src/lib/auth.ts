@@ -1,5 +1,5 @@
 import { getAdminPortalAuthCallbackUrl } from "./adminPortal";
-import { resolvePublicCoopApiBase } from "./publicCoopApiBase";
+import { marketingGoogleAuthStartUrl } from "./googleAuthStart";
 
 export const PASSWORD_MIN_LENGTH = 12;
 
@@ -58,26 +58,16 @@ export function getGoogleAuthStartUrl(options: {
     seats?: number;
   };
 }): string {
-  const apiBase = resolvePublicCoopApiBase();
   const redirect =
     options.mode === "checkout" && typeof window !== "undefined"
       ? window.location.href
       : getAdminPortalAuthCallbackUrl();
-  const params = new URLSearchParams({
+  return marketingGoogleAuthStartUrl({
     mode: options.mode,
-    redirect
+    orgName: options.orgName,
+    redirect,
+    checkout: options.checkout
   });
-  if (options.orgName?.trim()) {
-    params.set("orgName", options.orgName.trim());
-  }
-  if (options.mode === "checkout" && options.checkout) {
-    params.set("tier", options.checkout.tier);
-    params.set("intent", options.checkout.intent);
-    if (options.checkout.intent === "team" && options.checkout.seats != null) {
-      params.set("seats", String(options.checkout.seats));
-    }
-  }
-  return `${apiBase.replace(/\/$/, "")}/v1/auth/google/start?${params.toString()}`;
 }
 
 export const authInputClassName =
