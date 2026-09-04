@@ -45,7 +45,7 @@ SSO is available on the **Enterprise** plan only.
 
 After a successful SAML assertion, Coop issues a session token and redirects back to the admin portal or extension. Extension sign-in opens your system browser; VS Code completes automatically when you return.
 
-**Not supported:** [coop-ai.dev/login](https://coop-ai.dev/login) (marketing site signup) does **not** offer SSO — only the admin portal and extension do.
+**Not supported as a web login:** [coop-ai.dev/login](https://coop-ai.dev/login) opens the VS Code extension. SSO is on the admin portal and in the extension, not as a form on the marketing site.
 
 ## How SAML setup works (two directions)
 

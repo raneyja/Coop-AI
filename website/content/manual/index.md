@@ -51,7 +51,7 @@ See the [Security page](/security) for architecture details.
 3. **Extension UI** — Install the VS Code extension (see below) and sign in under **Settings → Account** — **Continue with Google** or **Continue with email** (same address as signup).
 4. **Browser** — Optional: open the [admin portal](https://admin.coop-ai.dev/login) with the same email/password or Google to manage your personal account.
 
-> **Website login has no SSO.** SAML sign-in is available on the [admin portal](https://admin.coop-ai.dev/login) and in the VS Code extension only — not on [coop-ai.dev/login](https://coop-ai.dev/login). Enterprise developers use **Sign in with SSO** in the extension; org admins use **Continue with SSO** on the admin portal login page.
+> **Marketing Sign in opens VS Code.** [coop-ai.dev/login](https://coop-ai.dev/login) does not sign you in on the web. Enterprise developers use **Sign in with SSO** in the extension; org admins use **Continue with SSO** on the [admin portal](https://admin.coop-ai.dev/login).
 
 > **Forgot your password?** Use [Forgot password](https://coop-ai.dev/forgot-password) on the website or admin portal, or the **Forgot password?** link in the extension.
 
@@ -60,7 +60,7 @@ See the [Security page](/security) for architecture details.
 1. **Browser** — Choose a plan on [Pricing](/pricing) and complete Stripe checkout.
 2. **Browser** — On the [Welcome page](/welcome), wait for provisioning (usually under a minute).
 3. **Email** — Check your inbox for your account welcome email.
-4. **Browser — Admin portal** — Open [admin.coop-ai.dev/login](https://admin.coop-ai.dev/login). Sign in with email/password, **Continue with Google**, or (Enterprise) enter **Organization name** → **Continue with SSO**. The marketing site login at [coop-ai.dev/login](https://coop-ai.dev/login) does **not** offer SSO — use the admin portal for SAML.
+4. **Browser — Admin portal** — Open [admin.coop-ai.dev/login](https://admin.coop-ai.dev/login). Sign in with email/password, **Continue with Google**, or (Enterprise) enter **Organization name** → **Continue with SSO**. The marketing [Sign in](https://coop-ai.dev/login) page opens VS Code — it is not a web login.
 5. **Admin portal** — Connect GitHub (GitHub App on company org — use **Send link to GitHub admin** if IT owns GitHub), Slack, and other tools once for your whole org.
 6. **Admin portal** — Invite teammates from the Users page (or rely on IdP JIT after SSO is configured).
 7. **Extension UI** — Developers install CoopAI in VS Code and sign in with **Continue with Google**, email/password, or **Organization name** + **Sign in with SSO** (Enterprise).
@@ -88,7 +88,7 @@ Use this when **Require SSO** is enabled in **Settings → Single sign-on → Si
 2. **Browser — Admin portal** — **Settings → Single sign-on** → complete steps 1–2 (SP values into IdP, paste IdP Entity ID / SSO URL / cert) → **Save SSO** → **Test connection** with your admin identity.
 3. **Browser — Admin portal** — Step 3: enable **Require SSO** only after a successful test. Coop shows a confirmation — a misconfigured IdP can lock everyone out. Enabling **Require SSO** also ends existing password/Google sessions for the org (SAML sessions stay). **Allow email and password** and **Allow Google** are hidden while **Require SSO** is on.
 4. **Browser — Admin portal** — **Users** → promote at least one SSO user to **admin** if JIT created them as **member** (first SAML login defaults to **member**).
-5. **Browser — Admin portal login** — All admins and members sign in at [admin.coop-ai.dev/login](https://admin.coop-ai.dev/login) with **Organization name** + **Continue with SSO**. Do not send users to [coop-ai.dev/login](https://coop-ai.dev/login) — it has no SSO and returns `sso_required` for password attempts.
+5. **Browser — Admin portal login** — All admins and members sign in at [admin.coop-ai.dev/login](https://admin.coop-ai.dev/login) with **Organization name** + **Continue with SSO**. Do not expect [coop-ai.dev/login](https://coop-ai.dev/login) to be a web SSO form — it opens the extension.
 6. **Extension UI** — Developers use **Settings → Account** → **Organization name** + **Sign in with SSO** (browser handoff; VS Code completes automatically). No password invite required for SSO-only orgs.
 7. **Offboarding** — Deactivate in **Users**, or automate `POST /v1/auth/saml/offboard` from your IdP provisioning job.
 
@@ -137,7 +137,7 @@ Three sign-in paths appear on one screen:
 2. Enter your password and click **Sign in**.
 3. Use **Forgot password?** to reset, or **← Use a different email** to go back.
 
-**Enterprise SSO** requires your **organization name** before you click **Sign in with SSO**. Coop opens your system browser for IdP sign-in; when you finish, VS Code completes the session automatically. Organization name matching is case-insensitive. SSO is **not** available on [coop-ai.dev/login](https://coop-ai.dev/login) — use the [admin portal login](https://admin.coop-ai.dev/login) for browser-based SAML.
+**Enterprise SSO** requires your **organization name** before you click **Sign in with SSO**. Coop opens your system browser for IdP sign-in; when you finish, VS Code completes the session automatically. Organization name matching is case-insensitive. [coop-ai.dev/login](https://coop-ai.dev/login) opens VS Code — for browser-based SAML, use the [admin portal login](https://admin.coop-ai.dev/login).
 
 **After sign-in:** Account shows your org and plan summary, plus **Sign out**.
 
@@ -184,7 +184,7 @@ Enterprise orgs sign in with SAML 2.0 through your company identity provider (Ok
 | --- | --- | --- |
 | **Admin portal** | Yes | [admin.coop-ai.dev/login](https://admin.coop-ai.dev/login) → **Organization name** → **Continue with SSO** |
 | **VS Code extension** | Yes | **Settings → Account** → **Organization name** → **Sign in with SSO** (browser handoff) |
-| **Marketing site** ([coop-ai.dev/login](https://coop-ai.dev/login)) | **No** | Email/password and Google only — if your org requires SSO, use the admin portal or extension |
+| **Marketing site** ([coop-ai.dev/login](https://coop-ai.dev/login)) | Opens VS Code | Sign in in the extension (SSO included). Org admins use the admin portal for browser SAML. |
 
 Organization name matching is case-insensitive on both surfaces. IdP setup detail (Okta, Entra, generic): [Single Sign On (SSO)](/docs/sso). Error codes and known limits: [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting).
 
@@ -808,7 +808,7 @@ Full admin setup is covered in the [Documentation hub](/docs).
 | **No Slack/Jira context** | Ask admin to connect integrations in admin portal |
 | **Forgot password** | [coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password) or **Forgot password?** on the password step |
 | **Can't sign in** | Verify email is verified; try Google; Enterprise: enter org name → **Sign in with SSO** (browser handoff) |
-| **`sso_required`** | Org enforces SSO — use **Continue with SSO** on [admin portal login](https://admin.coop-ai.dev/login) or **Sign in with SSO** in the extension; website login has no SSO |
+| **`sso_required`** | Org enforces SSO — use **Continue with SSO** on [admin portal login](https://admin.coop-ai.dev/login) or **Sign in with SSO** in the extension |
 | **`sso_not_configured`** | Admin: **Settings → Single sign-on** → save IdP config with **Enable SSO** checked |
 | **`missing_org`** | Enter **Organization name** before starting SSO |
 | **`saml_validation_failed`** | Check IdP cert expiry, clock skew, Entity ID / ACS URL match — see [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting) |

@@ -7,6 +7,7 @@ import { coopSessionRegistry } from "./chat/CoopSessionRegistry";
 import { getWebviewOptions } from "./chat/renderWebviewHtml";
 import { readConfiguration, readDegradationConfiguration, SecureApiClient } from "./chat/SecureApiClient";
 import { resolveSearchScopeForPlan } from "./license/planSearchScope";
+import { classifyCoopUriPath } from "./extension/coopUriRoutes";
 import { registerQuickActionCommands } from "./extension/quickActionCommands";
 import {
   registerCoopAutocomplete,
@@ -520,7 +521,15 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.window.registerUriHandler({
       handleUri(uri: vscode.Uri) {
-        if (uri.path !== "/auth/callback") {
+        const kind = classifyCoopUriPath(uri.path);
+        if (kind === "sign-in") {
+          void (async () => {
+            await vscode.commands.executeCommand("workbench.view.extension.coopAI");
+            resolveSession(provider.session).openSettings("account");
+          })();
+          return;
+        }
+        if (kind !== "auth-callback") {
           return;
         }
         const fragmentParams = new URLSearchParams(uri.fragment);

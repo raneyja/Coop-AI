@@ -44,6 +44,7 @@ Create an account at [free signup](/signup/free) (email + password or Google), o
 | --- | --- |
 | **Extension** → Settings → Account | **Continue with Google** · email (two-step) · **Sign in with SSO** |
 | **Admin portal** | Email/password · Google · **Organization name** + **Continue with SSO** (Enterprise) |
+| **Marketing site** ([coop-ai.dev/login](/login)) | Opens VS Code. Sign in in the extension, not in the browser. |
 
 Email in the extension is two steps: enter email → **Continue with email** → password → **Sign in**.
 
@@ -99,7 +100,7 @@ Yes, on the **Enterprise** plan. Org admins configure SAML in the admin portal u
 | --- | --- |
 | **Admin portal** ([admin.coop-ai.dev/login](https://admin.coop-ai.dev/login)) | Yes — **Organization name** + **Continue with SSO** |
 | **VS Code extension** → Settings → Account | Yes — **Sign in with SSO** (browser handoff) |
-| **Marketing site** ([coop-ai.dev/login](https://coop-ai.dev/login)) | No — email/password or Google only |
+| **Marketing site** ([coop-ai.dev/login](https://coop-ai.dev/login)) | Sends you to the VS Code extension — sign in there (SSO included) |
 
 ### What happens when my org requires SSO?
 

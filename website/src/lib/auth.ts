@@ -1,4 +1,5 @@
 import { getAdminPortalAuthCallbackUrl } from "./adminPortal";
+import { resolvePublicCoopApiBase } from "./publicCoopApiBase";
 
 export const PASSWORD_MIN_LENGTH = 12;
 
@@ -52,10 +53,7 @@ export function getGoogleAuthStartUrl(options: {
   mode: "signup" | "login";
   orgName?: string;
 }): string {
-  const apiBase =
-    process.env.NEXT_PUBLIC_COOP_API_BASE?.trim() ||
-    process.env.NEXT_PUBLIC_API_BASE?.trim() ||
-    "http://localhost:8787";
+  const apiBase = resolvePublicCoopApiBase();
   const redirect = getAdminPortalAuthCallbackUrl();
   const params = new URLSearchParams({
     mode: options.mode,
