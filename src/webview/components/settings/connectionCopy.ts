@@ -228,8 +228,12 @@ export function planUsageHubSubtitle(prefs: Preferences): string {
     return `${plan} · ${used}K of ${prefs.quotaCredits.limitCredits}K used`;
   }
   if (prefs.usageMeters) {
-    const autoPct = Math.round(prefs.usageMeters.auto.usedRatio * 100);
-    return `${plan} · Auto ${autoPct}%`;
+    const usedRatio =
+      typeof prefs.usageMeters.usedRatio === "number"
+        ? prefs.usageMeters.usedRatio
+        : prefs.usageMeters.auto.usedRatio + prefs.usageMeters.frontier.usedRatio;
+    const pct = Math.round(Math.max(0, Math.min(1, usedRatio)) * 100);
+    return `${plan} · ${pct}% used`;
   }
   return plan;
 }

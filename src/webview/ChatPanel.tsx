@@ -136,7 +136,7 @@ type InboundMessage =
         timezone?: string;
         retryAfterMs?: number;
         message?: string;
-        pool?: "auto" | "frontier" | "free";
+        pool?: "paid" | "auto" | "frontier" | "free";
       };
     }
   | { type: "chat:quota-cleared" }

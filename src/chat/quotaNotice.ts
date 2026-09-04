@@ -50,14 +50,34 @@ export function isFreeQuotaExhausted(quota?: QuotaCreditsSnapshot | null): boole
   return false;
 }
 
+export function isPaidQuotaPool(pool?: string): boolean {
+  return pool === "paid" || pool === "auto" || pool === "frontier";
+}
+
 export function isPaidUsageExhausted(
   meters?: {
-    auto: { remainingCents: number };
-    frontier: { remainingCents: number };
+    remainingCents?: number;
+    usedCents?: number;
+    limitCents?: number;
+    auto?: { usedCents?: number; remainingCents?: number };
+    frontier?: { usedCents?: number; remainingCents?: number };
   } | null
 ): boolean {
   if (!meters) {
     return false;
   }
-  return meters.auto.remainingCents <= 0 && meters.frontier.remainingCents <= 0;
+  if (typeof meters.remainingCents === "number") {
+    return meters.remainingCents <= 0;
+  }
+  if (typeof meters.usedCents === "number" && typeof meters.limitCents === "number") {
+    return meters.usedCents >= meters.limitCents;
+  }
+  const used = (meters.auto?.usedCents ?? 0) + (meters.frontier?.usedCents ?? 0);
+  if (typeof meters.limitCents === "number") {
+    return used >= meters.limitCents;
+  }
+  if (typeof meters.auto?.remainingCents === "number" && typeof meters.frontier?.remainingCents === "number") {
+    return meters.auto.remainingCents <= 0 && meters.frontier.remainingCents <= 0;
+  }
+  return false;
 }

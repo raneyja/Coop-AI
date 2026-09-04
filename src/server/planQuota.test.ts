@@ -243,7 +243,7 @@ void (async () => {
     model: "gpt-5-mini"
   });
 
-  centsByBucket.auto = 4000;
+  centsByBucket.auto = 1000;
   centsByBucket.frontier = 0;
   await paidQuota.check("org-pro", "pro", 0, paidNow, {
     usageTier: "pro",
@@ -252,8 +252,8 @@ void (async () => {
     model: "gpt-5-mini"
   });
 
-  centsByBucket.auto = 4000;
-  centsByBucket.frontier = 2500;
+  centsByBucket.auto = 1000;
+  centsByBucket.frontier = 500;
   try {
     await paidQuota.check("org-pro", "pro", 0, paidNow, {
       usageTier: "pro",
@@ -261,16 +261,14 @@ void (async () => {
       provider: "openai",
       model: "gpt-5-mini"
     });
-    assert.fail("expected paid auto+frontier exhaustion to 429");
+    assert.fail("expected paid cap exhaustion to 429");
   } catch (error) {
     assert.ok(error instanceof PlanQuotaExceededError);
-    assert.equal(error.pool, "auto");
+    assert.equal(error.pool, "paid");
     assert.equal(error.upgradePlan, "pro_plus");
     assert.match(error.message, /Upgrade to Pro\+/);
   }
 
-  centsByBucket.auto = 100;
-  centsByBucket.frontier = 2500;
   try {
     await paidQuota.check("org-pro", "pro", 0, paidNow, {
       usageTier: "pro",
@@ -278,19 +276,11 @@ void (async () => {
       provider: "anthropic",
       model: "claude-opus-4-8"
     });
-    assert.fail("expected frontier-empty opus to 429");
+    assert.fail("expected paid cap to block Frontier picks too");
   } catch (error) {
     assert.ok(error instanceof PlanQuotaExceededError);
-    assert.equal(error.pool, "frontier");
-    assert.match(error.message, /Switch to Auto/);
+    assert.equal(error.pool, "paid");
   }
-
-  await paidQuota.check("org-pro", "pro", 0, paidNow, {
-    usageTier: "pro",
-    selection: "auto",
-    provider: "openai",
-    model: "gpt-5-mini"
-  });
 
   const unavailable = new PlanQuotaService(undefined, config);
   try {
@@ -308,16 +298,21 @@ void (async () => {
   const meters = await paidQuota.getUsageMeters("org-pro", "pro", "pro", paidNow);
   assert.ok(meters);
   assert.equal(meters?.displayName, "Pro");
-  assert.equal(meters?.auto.limitCents, 4000);
-  assert.equal(meters?.frontier.limitCents, 2500);
+  assert.equal(meters?.limitCents, 1500);
+  assert.equal(meters?.usedCents, 1500);
+  assert.equal(meters?.remainingCents, 0);
+  assert.equal(meters?.auto.limitCents, 1500);
+  assert.equal(meters?.frontier.limitCents, 1500);
+  assert.equal(meters?.auto.usedCents, 1000);
+  assert.equal(meters?.frontier.usedCents, 500);
 
-  centsByBucket.auto = 4000;
+  centsByBucket.auto = 100;
   centsByBucket.frontier = 50;
-  let overflowMeta: Record<string, unknown> | undefined;
-  const overflowPool = {
+  let recordedMeta: Record<string, unknown> | undefined;
+  const recordPool = {
     query: async (sql: string, params: unknown[]) => {
       if (sql.includes("INSERT INTO usage_events")) {
-        overflowMeta = JSON.parse(String(params[4]));
+        recordedMeta = JSON.parse(String(params[4]));
         return { rows: [] };
       }
       if (sql.includes("usdCents") && sql.includes("metadata->>'bucket'")) {
@@ -327,8 +322,8 @@ void (async () => {
       return { rows: [] };
     }
   };
-  const overflowQuota = new PlanQuotaService(new UsageTracker(overflowPool as never), config);
-  await overflowQuota.recordTokens("org-pro", "pro", {
+  const recordQuota = new PlanQuotaService(new UsageTracker(recordPool as never), config);
+  await recordQuota.recordTokens("org-pro", "pro", {
     eventType: "chat.message",
     inputTokens: 1000,
     outputTokens: 0,
@@ -338,8 +333,8 @@ void (async () => {
     selection: "auto",
     usageTier: "pro"
   });
-  assert.equal(overflowMeta?.bucket, "frontier");
-  assert.equal(overflowMeta?.overflowedFromAuto, true);
+  assert.equal(recordedMeta?.bucket, "auto");
+  assert.equal(recordedMeta?.overflowedFromAuto, undefined);
 
   console.log("planQuota: 1/1 tests passed");
 })();

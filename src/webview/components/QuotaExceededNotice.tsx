@@ -1,5 +1,5 @@
 import React from "react";
-import { formatQuotaRetryClock, PAID_USAGE_EXHAUSTED_COPY } from "../../chat/quotaNotice";
+import { formatQuotaRetryClock, isPaidQuotaPool, PAID_USAGE_EXHAUSTED_COPY } from "../../chat/quotaNotice";
 import { CoopNotice } from "./CoopNotice";
 
 export type QuotaExceededNoticeState = {
@@ -7,7 +7,7 @@ export type QuotaExceededNoticeState = {
   upgradeUrl: string;
   timezone?: string;
   message?: string;
-  pool?: "auto" | "frontier" | "free";
+  pool?: "paid" | "auto" | "frontier" | "free";
 };
 
 type QuotaExceededNoticeProps = {
@@ -17,7 +17,7 @@ type QuotaExceededNoticeProps = {
 
 export function QuotaExceededNotice({ notice, onDismiss }: QuotaExceededNoticeProps): React.ReactElement {
   const retryAt = formatQuotaRetryClock(notice.resetsAt, notice.timezone);
-  const paid = notice.pool === "auto" || notice.pool === "frontier";
+  const paid = isPaidQuotaPool(notice.pool);
   const body = notice.message?.trim()
     ? notice.message
     : paid

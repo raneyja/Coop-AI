@@ -66,6 +66,11 @@ export type PaidUsageMeters = {
   seatPriceUsd: number;
   periodStart: string;
   periodEnd: string;
+  usedCents: number;
+  limitCents: number;
+  remainingCents: number;
+  usedRatio: number;
+  /** Share of the one monthly cap (not a second cap). */
   auto: UsagePoolMeter;
   frontier: UsagePoolMeter;
   nextTier?: UsageTier;
@@ -81,8 +86,10 @@ export type PaidQuotaContext = {
   forceAutoBucket?: boolean;
 };
 
+export type QuotaPool = "paid" | "free";
+
 export type PlanQuotaExceededExtras = {
-  pool?: "auto" | "frontier" | "free";
+  pool?: QuotaPool;
   upgradePlan?: UsageTier;
   usedCents?: number;
   limitCents?: number;
@@ -91,7 +98,7 @@ export type PlanQuotaExceededExtras = {
 
 export class PlanQuotaExceededError extends Error {
   public readonly code = "quota_limit_reached";
-  public readonly pool: "auto" | "frontier" | "free";
+  public readonly pool: QuotaPool;
   public readonly upgradePlan?: UsageTier;
   public readonly usedCents?: number;
   public readonly limitCents?: number;
@@ -177,7 +184,7 @@ export class PlanQuotaService {
     }
     const tier = effectiveUsageTier(plan, paid?.usageTier);
     if (tier) {
-      await this.checkPaid(orgId, tier, now, paid);
+      await this.checkPaid(orgId, tier, now);
       return;
     }
     if (!this.appliesToPlan(plan)) {
@@ -237,23 +244,13 @@ export class PlanQuotaService {
       visionWeighted: entry.visionWeighted,
       visionMultiplier: this.config.visionTokenMultiplier
     });
-    const intended = classifyRequestBucket({
+    const bucket: UsageBucket = classifyRequestBucket({
       selection: entry.selection,
       provider: entry.provider,
       resolvedModel: entry.model,
       forceAutoBucket: entry.forceAutoBucket
     });
     const tier = effectiveUsageTier(plan, entry.usageTier);
-    let bucket: UsageBucket = intended;
-    let overflowedFromAuto = false;
-    if (tier && intended === "auto" && this.usageTracker?.canRead()) {
-      const pools = await this.getPaidPoolUsage(orgId);
-      const limits = USAGE_TIER_LIMITS[tier];
-      if (pools.autoCents >= limits.autoCents) {
-        bucket = "frontier";
-        overflowedFromAuto = true;
-      }
-    }
     await this.usageTracker?.record({
       orgId,
       userId: entry.userId,
@@ -274,63 +271,32 @@ export class PlanQuotaService {
         plan,
         bucket,
         usdCents: usd.usdCents,
-        usageTier: tier ?? undefined,
-        overflowedFromAuto: overflowedFromAuto || undefined
+        usageTier: tier ?? undefined
       }
     });
   }
 
-  private async checkPaid(
-    orgId: string,
-    tier: UsageTier,
-    now: Date,
-    paid?: PaidQuotaContext
-  ): Promise<void> {
+  private async checkPaid(orgId: string, tier: UsageTier, now: Date): Promise<void> {
     if (!this.usageTracker?.canRead()) {
       throw new PlanQuotaUnavailableError();
     }
     const limits = USAGE_TIER_LIMITS[tier];
     const pools = await this.getPaidPoolUsage(orgId, now);
+    const usedCents = pools.autoCents + pools.frontierCents;
+    if (usedCents < limits.costCents) {
+      return;
+    }
     const period = utcCalendarMonthRange(now);
     const retryAfterMs = Math.max(0, period.to.getTime() - now.getTime());
     const next = nextUsageTier(tier);
     const upgradePlan = next === "enterprise" ? undefined : next;
     const upgradeUrl = next === "enterprise" ? DEMO_PAGE_URL : this.config.upgradeUrl;
-    const intended = classifyRequestBucket({
-      selection: paid?.selection,
-      provider: paid?.provider ?? "openai",
-      resolvedModel: paid?.model ?? "gpt-5-mini",
-      forceAutoBucket: paid?.forceAutoBucket
-    });
-
-    const autoRemaining = limits.autoCents - pools.autoCents;
-    const frontierRemaining = limits.frontierCents - pools.frontierCents;
-
-    if (intended === "frontier") {
-      if (frontierRemaining <= 0) {
-        throw new PlanQuotaExceededError(retryAfterMs, 0, 0, upgradeUrl, period.to, {
-          pool: "frontier",
-          upgradePlan,
-          usedCents: pools.frontierCents,
-          limitCents: limits.frontierCents,
-          message: buildFrontierEmptyMessage(upgradePlan, autoRemaining > 0)
-        });
-      }
-      return;
-    }
-
-    if (autoRemaining > 0) {
-      return;
-    }
-    if (frontierRemaining > 0) {
-      return;
-    }
     throw new PlanQuotaExceededError(retryAfterMs, 0, 0, upgradeUrl, period.to, {
-      pool: "auto",
+      pool: "paid",
       upgradePlan,
-      usedCents: pools.autoCents + pools.frontierCents,
-      limitCents: limits.autoCents + limits.frontierCents,
-      message: buildPaidBothEmptyMessage(upgradePlan)
+      usedCents,
+      limitCents: limits.costCents,
+      message: buildPaidCapMessage(upgradePlan)
     });
   }
 
@@ -526,19 +492,11 @@ function buildQuotaLimitMessage(_retryAfterMs: number, resetsAt: Date, _upgradeU
   return `You've reached your free AI credits limit. Try again at ${atLabel} or upgrade to Pro for a monthly allowance.`;
 }
 
-export function buildPaidBothEmptyMessage(upgradePlan?: UsageTier): string {
+export function buildPaidCapMessage(upgradePlan?: UsageTier): string {
   if (!upgradePlan) {
     return "You've used this month's included usage. Contact us about Enterprise to continue.";
   }
   return `You've used this month's included usage. Upgrade to ${displayUsageTierName(upgradePlan)} to continue.`;
-}
-
-export function buildFrontierEmptyMessage(upgradePlan: UsageTier | undefined, autoRemaining: boolean): string {
-  const next = upgradePlan ? `upgrade to ${displayUsageTierName(upgradePlan)}` : "contact us about Enterprise";
-  if (autoRemaining) {
-    return `This model uses Frontier usage, which is empty. Switch to Auto or ${next}.`;
-  }
-  return `You've used this month's included usage. ${upgradePlan ? `Upgrade to ${displayUsageTierName(upgradePlan)} to continue.` : "Contact us about Enterprise to continue."}`;
 }
 
 function buildPaidUsageMeters(
@@ -549,14 +507,17 @@ function buildPaidUsageMeters(
   const limits = USAGE_TIER_LIMITS[tier];
   const period = utcCalendarMonthRange(now);
   const next = nextUsageTier(tier);
+  const usedCents = pools.autoCents + pools.frontierCents;
+  const total = toPoolMeter(usedCents, limits.costCents);
   return {
     usageTier: tier,
     displayName: displayUsageTierName(tier),
     seatPriceUsd: limits.seatPriceUsd,
     periodStart: period.from.toISOString(),
     periodEnd: period.to.toISOString(),
-    auto: toPoolMeter(pools.autoCents, limits.autoCents),
-    frontier: toPoolMeter(pools.frontierCents, limits.frontierCents),
+    ...total,
+    auto: toPoolMeter(pools.autoCents, limits.costCents),
+    frontier: toPoolMeter(pools.frontierCents, limits.costCents),
     nextTier: next === "enterprise" ? undefined : next,
     nextTierName: next === "enterprise" ? "Enterprise" : displayUsageTierName(next),
     nextTierPriceUsd: next === "enterprise" ? undefined : USAGE_TIER_LIMITS[next].seatPriceUsd

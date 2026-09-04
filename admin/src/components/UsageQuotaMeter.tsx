@@ -34,8 +34,15 @@ function percentUsed(used: number | undefined, limit: number | undefined): numbe
   return Math.max(0, Math.min(100, ratio));
 }
 
-function formatUsd(cents: number): string {
-  return `$${(cents / 100).toFixed(0)}`;
+function stackedPercents(autoRatio: number, frontierRatio: number): { auto: number; frontier: number } {
+  const auto = Math.max(0, autoRatio) * 100;
+  const frontier = Math.max(0, frontierRatio) * 100;
+  const total = auto + frontier;
+  if (total <= 100) {
+    return { auto, frontier };
+  }
+  const scale = 100 / total;
+  return { auto: auto * scale, frontier: frontier * scale };
 }
 
 function resolveTokenFields(snapshot?: QuotaSnapshot): {
@@ -66,40 +73,6 @@ function resolveTokenFields(snapshot?: QuotaSnapshot): {
   return { usedTokens, limitTokens, remainingTokens };
 }
 
-function PoolBar({
-  label,
-  caption,
-  usedCents,
-  limitCents,
-  usedRatio
-}: {
-  label: string;
-  caption: string;
-  usedCents: number;
-  limitCents: number;
-  usedRatio: number;
-}) {
-  const pct = Math.max(0, Math.min(100, Math.round(usedRatio * 100)));
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-sm font-medium text-white">{label}</p>
-        <p className="text-xs text-coop-muted">{pct}% used</p>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-white/10">
-        <div
-          className="h-full rounded-full bg-coop-index transition-[width] duration-300 ease-out"
-          style={{ width: `${Math.max(4, pct)}%` }}
-        />
-      </div>
-      <p className="text-xs text-coop-muted">{caption}</p>
-      <p className="text-xs text-coop-muted">
-        {formatUsd(usedCents)} of {formatUsd(limitCents)} included
-      </p>
-    </div>
-  );
-}
-
 export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: UsageQuotaMeterProps) {
   const { usedTokens, limitTokens, remainingTokens } = resolveTokenFields(snapshot);
   const meters = snapshot?.usageMeters;
@@ -112,6 +85,12 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: U
   const unlimited = Boolean(snapshot?.unlimited);
   const windowHours = snapshot?.windowHours ?? 5;
   const isPaidMeters = Boolean(meters) && !unlimited;
+  const autoRatio = meters?.auto.usedRatio ?? 0;
+  const frontierRatio = meters?.frontier.usedRatio ?? 0;
+  const totalRatio =
+    typeof meters?.usedRatio === "number" ? meters.usedRatio : Math.min(1, autoRatio + frontierRatio);
+  const segments = stackedPercents(autoRatio, frontierRatio);
+  const totalPct = Math.round(Math.max(0, Math.min(100, totalRatio * 100)));
 
   return (
     <section className="admin-card space-y-3">
@@ -120,7 +99,7 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: U
           <h2 className="admin-section-label">Usage quota</h2>
           <p className="mt-1 text-sm text-coop-muted">
             {isPaidMeters
-              ? `${meters?.displayName ?? "Pro"} includes Coop Auto and Frontier usage that resets each calendar month.`
+              ? `${meters?.displayName ?? "Pro"} includes monthly usage that resets each calendar month.`
               : `Free plan includes ${formatCreditCount(limitTokens ?? 80_000)} AI credits per ${windowHours}-hour window (GPT-4o mini).`}
           </p>
         </div>
@@ -143,21 +122,32 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: U
           <p className="text-sm text-coop-muted">Enterprise usage is not hard-stopped in this view.</p>
         </div>
       ) : meters ? (
-        <div className="space-y-5">
-          <PoolBar
-            label="Coop Auto"
-            caption="Includes Coop-assigned models (Auto). Extra Auto use consumes Frontier."
-            usedCents={meters.auto.usedCents}
-            limitCents={meters.auto.limitCents}
-            usedRatio={meters.auto.usedRatio}
-          />
-          <PoolBar
-            label="Frontier"
-            caption="Claude, GPT, Gemini, and other models you pick. Extra use requires an upgrade."
-            usedCents={meters.frontier.usedCents}
-            limitCents={meters.frontier.limitCents}
-            usedRatio={meters.frontier.usedRatio}
-          />
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-sm font-medium text-white">Monthly usage</p>
+            <p className="text-xs text-coop-muted">{totalPct}% used</p>
+          </div>
+          <div className="flex h-2 overflow-hidden rounded-full bg-white/10" role="img" aria-label={`${totalPct}% of monthly usage used`}>
+            {segments.auto > 0 ? (
+              <div className="h-full bg-coop-index" style={{ width: `${segments.auto}%` }} />
+            ) : null}
+            {segments.frontier > 0 ? (
+              <div className="h-full bg-[#58a6ff]" style={{ width: `${segments.frontier}%` }} />
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-coop-muted">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-coop-index" aria-hidden />
+              Auto
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#58a6ff]" aria-hidden />
+              Frontier
+            </span>
+          </div>
+          <p className="text-xs text-coop-muted">
+            Chat, quick actions, and models you pick share one bar. Frontier models fill it faster.
+          </p>
           {resetLabel ? <p className="text-xs text-coop-muted">Limits reset {resetLabel}</p> : null}
         </div>
       ) : typeof limitTokens === "number" ? (
@@ -172,7 +162,7 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: U
           <div className="h-2 overflow-hidden rounded-full bg-white/10">
             <div
               className="h-full rounded-full bg-coop-index transition-[width] duration-300 ease-out"
-              style={{ width: `${Math.max(4, usedPercent)}%` }}
+              style={{ width: `${usedPercent}%` }}
             />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-coop-muted">

@@ -98,11 +98,15 @@ test("planUsageHubSubtitle shows plan and used credits", () => {
         seatPriceUsd: 25,
         periodStart: "2026-09-01T00:00:00.000Z",
         periodEnd: "2026-10-01T00:00:00.000Z",
-        auto: { usedCents: 2000, limitCents: 4000, remainingCents: 2000, usedRatio: 0.5 },
-        frontier: { usedCents: 0, limitCents: 2500, remainingCents: 2500, usedRatio: 0 }
+        usedCents: 750,
+        limitCents: 1500,
+        remainingCents: 750,
+        usedRatio: 0.5,
+        auto: { usedCents: 750, limitCents: 1500, remainingCents: 750, usedRatio: 0.5 },
+        frontier: { usedCents: 0, limitCents: 1500, remainingCents: 1500, usedRatio: 0 }
       }
     }),
-    "Pro · Auto 50%"
+    "Pro · 50% used"
   );
 });
 
