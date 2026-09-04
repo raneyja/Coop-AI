@@ -159,7 +159,7 @@ function SignupForm() {
 
           <div>
             <label htmlFor="email" className="mb-1 block text-sm text-coop-muted">
-              {forTeam ? "Admin email" : "Your email"}
+              Your email
             </label>
             <input
               id="email"
@@ -169,6 +169,11 @@ function SignupForm() {
               onChange={(e) => setEmail(e.target.value)}
               required
             />
+            {forTeam ? (
+              <p className="mt-1 text-xs text-coop-muted">
+                Use your own email. You&apos;ll be the admin and invite the rest after checkout.
+              </p>
+            ) : null}
           </div>
           <button
             type="submit"
