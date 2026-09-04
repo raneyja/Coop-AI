@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { formatPaidUsageResetCopy } from "../../../chat/quotaNotice";
 import {
   assignedModelsHubSubtitle,
   COOP_FEATURE_MODEL_ASSIGNMENTS,
@@ -461,13 +462,7 @@ function PlanUsageDetail({ prefs }: SettingsDetailProps): React.ReactElement {
   const orgName = displayOrgName(prefs);
   const adminBase = (prefs.adminPortalUrl ?? "https://admin.coop-ai.dev").replace(/\/$/, "");
   const meters = prefs.usageMeters;
-  const resetDate = meters?.periodEnd
-    ? new Date(meters.periodEnd).toLocaleDateString(undefined, { month: "short", day: "numeric" })
-    : undefined;
-  const daysLeft =
-    meters?.periodEnd != null
-      ? Math.max(0, Math.ceil((new Date(meters.periodEnd).getTime() - Date.now()) / 86_400_000))
-      : undefined;
+  const resetCopy = formatPaidUsageResetCopy(meters?.periodEnd);
 
   if (!preferencesSignedIn(prefs)) {
     return (
@@ -489,12 +484,7 @@ function PlanUsageDetail({ prefs }: SettingsDetailProps): React.ReactElement {
             {displayPlanLabel(prefs)}
             {meters ? ` $${meters.seatPriceUsd}/mo` : ""}
           </p>
-          {resetDate ? (
-            <p className="coop-settings-card-desc mt-1">
-              Usage limits reset on {resetDate}
-              {daysLeft != null ? ` (${daysLeft} day${daysLeft === 1 ? "" : "s"} left)` : ""}
-            </p>
-          ) : null}
+          {resetCopy ? <p className="coop-settings-card-desc mt-1">{resetCopy}</p> : null}
           <div className="coop-settings-actions mt-2">
             <a className="coop-settings-action-btn" href={`${adminBase}/billing`} target="_blank" rel="noreferrer">
               Adjust plan

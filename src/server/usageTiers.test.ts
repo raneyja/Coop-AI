@@ -6,6 +6,8 @@ import {
   nextUsageTier,
   parseUsageTier,
   usageTierFromStripePriceId,
+  anniversaryMonthRange,
+  paidUsagePeriodRange,
   utcCalendarMonthRange
 } from "./usageTiers";
 
@@ -39,5 +41,24 @@ assert.equal(
 const range = utcCalendarMonthRange(new Date("2026-09-15T12:00:00.000Z"));
 assert.equal(range.from.toISOString(), "2026-09-01T00:00:00.000Z");
 assert.equal(range.to.toISOString(), "2026-10-01T00:00:00.000Z");
+
+const signedUp = new Date("2026-09-04T17:00:00.000Z");
+const midCycle = anniversaryMonthRange(signedUp, new Date("2026-09-15T12:00:00.000Z"));
+assert.equal(midCycle.from.toISOString(), "2026-09-04T17:00:00.000Z");
+assert.equal(midCycle.to.toISOString(), "2026-10-04T17:00:00.000Z");
+
+const onReset = anniversaryMonthRange(signedUp, new Date("2026-10-04T17:00:00.000Z"));
+assert.equal(onReset.from.toISOString(), "2026-10-04T17:00:00.000Z");
+assert.equal(onReset.to.toISOString(), "2026-11-04T17:00:00.000Z");
+
+const jan31 = anniversaryMonthRange(
+  new Date("2026-01-31T00:00:00.000Z"),
+  new Date("2026-02-15T00:00:00.000Z")
+);
+assert.equal(jan31.from.toISOString(), "2026-01-31T00:00:00.000Z");
+assert.equal(jan31.to.toISOString(), "2026-02-28T00:00:00.000Z");
+
+const missingAnchor = paidUsagePeriodRange(undefined, new Date("2026-09-15T12:00:00.000Z"));
+assert.equal(missingAnchor.from.toISOString(), "2026-09-01T00:00:00.000Z");
 
 console.log("usageTiers: 1/1 tests passed");

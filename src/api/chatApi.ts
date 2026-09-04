@@ -60,6 +60,7 @@ type ChatOrgContext = {
   userId?: string;
   principal: string;
   usageTier?: UsageTier | null;
+  createdAt?: Date;
 };
 
 export function createChatRouter(deps: ChatApiDeps = {}): ModelRouter {
@@ -111,7 +112,8 @@ export async function handleChatApiRequest(
           selection: "auto",
           provider,
           model,
-          forceAutoBucket: true
+          forceAutoBucket: true,
+          periodAnchor: org.createdAt
         }
       );
     } catch (error) {
@@ -206,7 +208,8 @@ export async function handleChatApiRequest(
         usageTier: org.usageTier,
         selection,
         provider,
-        model
+        model,
+        periodAnchor: org.createdAt
       }
     );
   } catch (error) {
@@ -344,7 +347,8 @@ async function resolveChatOrg(
     plan,
     userId: actor.userId,
     principal: actor.principal,
-    usageTier: stored?.usageTier
+    usageTier: stored?.usageTier,
+    createdAt: stored?.createdAt
   };
 }
 

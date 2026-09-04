@@ -224,7 +224,13 @@ export async function handleOrgApiRequest(
     const planQuota = createPlanQuotaService(deps.usageTracker);
     const storedOrg = deps.orgStore ? await deps.orgStore.getOrganization(auth.orgId) : undefined;
     const quota = await planQuota.getSnapshot(auth.orgId, plan);
-    const usageMeters = await planQuota.getUsageMeters(auth.orgId, plan, storedOrg?.usageTier);
+    const usageMeters = await planQuota.getUsageMeters(
+      auth.orgId,
+      plan,
+      storedOrg?.usageTier,
+      new Date(),
+      storedOrg?.createdAt
+    );
     const indexedRepoQuota =
       deps.orgStore && auth.orgId !== "legacy"
         ? await getIndexedRepoQuota(deps.orgStore, auth.orgId, plan)

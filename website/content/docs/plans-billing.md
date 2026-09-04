@@ -90,7 +90,7 @@ See also [Enterprise deployment](/docs/enterprise-deployment) and [Security arch
 | Plan | What you see |
 | --- | --- |
 | **Free** | Rolling 5-hour Auto window in the extension and admin portal |
-| **Pro / Pro+ / Max** | One stacked bar — Auto (green) then Frontier (blue) — resetting on the UTC calendar month |
+| **Pro / Pro+ / Max** | One stacked bar — Auto (green) then Frontier (blue) — resetting monthly on the organization signup anniversary |
 | **Enterprise** | Custom contract; no hard stop in v1 |
 
 The bar shows a percent, not a second dollar amount. Frontier models fill it faster because they cost more to run.

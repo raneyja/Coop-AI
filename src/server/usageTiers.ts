@@ -73,11 +73,56 @@ export function displayUsageTierName(tier: UsageTier): string {
   return displayPlanName(tier);
 }
 
-/** UTC calendar month — v1 paid period (no Stripe retrieve on the chat hot path). */
+/** UTC calendar month — fallback only when signup date is missing. */
 export function utcCalendarMonthRange(now = new Date()): { from: Date; to: Date } {
   const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
   return { from, to };
+}
+
+function addUtcMonths(date: Date, months: number): Date {
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth() + months;
+  const day = date.getUTCDate();
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(
+    Date.UTC(
+      year,
+      month,
+      Math.min(day, lastDay),
+      date.getUTCHours(),
+      date.getUTCMinutes(),
+      date.getUTCSeconds(),
+      date.getUTCMilliseconds()
+    )
+  );
+}
+
+/**
+ * Monthly paid window anchored on signup (org createdAt). No Stripe call.
+ * `to` is exclusive — the next anniversary.
+ */
+export function anniversaryMonthRange(anchor: Date, now = new Date()): { from: Date; to: Date } {
+  if (!Number.isFinite(anchor.getTime()) || !Number.isFinite(now.getTime())) {
+    return utcCalendarMonthRange(now);
+  }
+  let from = new Date(anchor.getTime());
+  while (from.getTime() > now.getTime()) {
+    from = addUtcMonths(from, -1);
+  }
+  let next = addUtcMonths(from, 1);
+  while (next.getTime() <= now.getTime()) {
+    from = next;
+    next = addUtcMonths(from, 1);
+  }
+  return { from, to: next };
+}
+
+export function paidUsagePeriodRange(anchor: Date | undefined, now = new Date()): { from: Date; to: Date } {
+  if (anchor && Number.isFinite(anchor.getTime())) {
+    return anniversaryMonthRange(anchor, now);
+  }
+  return utcCalendarMonthRange(now);
 }
 
 export type StripeUsagePriceIds = {

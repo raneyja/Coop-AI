@@ -105,7 +105,13 @@ export async function handleAdminApiRequest(
     const plan = org?.plan ?? auth.plan;
     const planQuota = createPlanQuotaService(deps.usageTracker);
     const quota = await planQuota.getSnapshot(auth.orgId, plan);
-    const usageMeters = await planQuota.getUsageMeters(auth.orgId, plan, org?.usageTier);
+    const usageMeters = await planQuota.getUsageMeters(
+      auth.orgId,
+      plan,
+      org?.usageTier,
+      new Date(),
+      org?.createdAt
+    );
     if (plan === "enterprise") {
       writeJson(response, 200, { plan, unlimited: true, usageMeters: null });
       return true;

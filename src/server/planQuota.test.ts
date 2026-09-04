@@ -259,13 +259,15 @@ void (async () => {
       usageTier: "pro",
       selection: "auto",
       provider: "openai",
-      model: "gpt-5-mini"
+      model: "gpt-5-mini",
+      periodAnchor: new Date("2026-09-04T17:00:00.000Z")
     });
     assert.fail("expected paid cap exhaustion to 429");
   } catch (error) {
     assert.ok(error instanceof PlanQuotaExceededError);
     assert.equal(error.pool, "paid");
     assert.equal(error.upgradePlan, "pro_plus");
+    assert.equal(error.resetsAt.toISOString(), "2026-10-04T17:00:00.000Z");
     assert.match(error.message, /Upgrade to Pro\+/);
   }
 
@@ -295,9 +297,17 @@ void (async () => {
     assert.equal((error as Error).name, "PlanQuotaUnavailableError");
   }
 
-  const meters = await paidQuota.getUsageMeters("org-pro", "pro", "pro", paidNow);
+  const meters = await paidQuota.getUsageMeters(
+    "org-pro",
+    "pro",
+    "pro",
+    paidNow,
+    new Date("2026-09-04T17:00:00.000Z")
+  );
   assert.ok(meters);
   assert.equal(meters?.displayName, "Pro");
+  assert.equal(meters?.periodStart, "2026-09-04T17:00:00.000Z");
+  assert.equal(meters?.periodEnd, "2026-10-04T17:00:00.000Z");
   assert.equal(meters?.limitCents, 1500);
   assert.equal(meters?.usedCents, 1500);
   assert.equal(meters?.remainingCents, 0);

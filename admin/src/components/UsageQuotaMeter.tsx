@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { QuotaSnapshot } from "@/lib/coopApi";
+import { formatPaidUsageResetCopy } from "@/lib/usageResetCopy";
 
 type UsageQuotaMeterProps = {
   snapshot?: QuotaSnapshot;
@@ -76,7 +77,8 @@ function resolveTokenFields(snapshot?: QuotaSnapshot): {
 export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: UsageQuotaMeterProps) {
   const { usedTokens, limitTokens, remainingTokens } = resolveTokenFields(snapshot);
   const meters = snapshot?.usageMeters;
-  const resetLabel = formatResetTime(snapshot?.resetsAt ?? meters?.periodEnd);
+  const paidResetLabel = formatPaidUsageResetCopy(meters?.periodEnd);
+  const freeResetLabel = formatResetTime(snapshot?.resetsAt);
   const exhausted = typeof remainingTokens === "number" && remainingTokens <= 0;
   const displayUsed =
     exhausted && typeof limitTokens === "number" ? limitTokens : (usedTokens ?? 0);
@@ -99,7 +101,7 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: U
           <h2 className="admin-section-label">Usage quota</h2>
           <p className="mt-1 text-sm text-coop-muted">
             {isPaidMeters
-              ? `${meters?.displayName ?? "Pro"} includes monthly usage that resets each calendar month.`
+              ? `${meters?.displayName ?? "Pro"} includes monthly usage that resets on your signup anniversary.`
               : `Free plan includes ${formatCreditCount(limitTokens ?? 80_000)} AI credits per ${windowHours}-hour window (GPT-4o mini).`}
           </p>
         </div>
@@ -148,7 +150,7 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: U
           <p className="text-xs text-coop-muted">
             Chat, quick actions, and models you pick share one bar. Frontier models fill it faster.
           </p>
-          {resetLabel ? <p className="text-xs text-coop-muted">Limits reset {resetLabel}</p> : null}
+          {paidResetLabel ? <p className="text-xs text-coop-muted">{paidResetLabel}</p> : null}
         </div>
       ) : typeof limitTokens === "number" ? (
         <div className="space-y-2">
@@ -170,8 +172,8 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: U
             <span>{Math.round(usedPercent)}% used</span>
           </div>
           <p className="text-xs text-coop-muted">
-            {exhausted && resetLabel
-              ? `Account paused · resets at ${resetLabel}`
+            {exhausted && freeResetLabel
+              ? `Account paused · resets at ${freeResetLabel}`
               : "Account pauses when exhausted"}
           </p>
         </div>

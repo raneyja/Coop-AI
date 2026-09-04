@@ -16,7 +16,7 @@ import {
   displayUsageTierName,
   effectiveUsageTier,
   nextUsageTier,
-  utcCalendarMonthRange,
+  paidUsagePeriodRange,
   type UsageTier
 } from "./usageTiers";
 
@@ -84,6 +84,8 @@ export type PaidQuotaContext = {
   provider: LlmProvider;
   model: string;
   forceAutoBucket?: boolean;
+  /** Org signup time — monthly usage window is this anniversary, not the calendar month. */
+  periodAnchor?: Date;
 };
 
 export type QuotaPool = "paid" | "free";
@@ -159,7 +161,8 @@ export class PlanQuotaService {
     orgId: string,
     plan: OrgPlan | ChatOrgPlan,
     usageTier?: UsageTier | null,
-    now = new Date()
+    now = new Date(),
+    periodAnchor?: Date
   ): Promise<PaidUsageMeters | undefined> {
     const tier = effectiveUsageTier(plan, usageTier);
     if (!tier || orgId === "dev") {
@@ -168,8 +171,8 @@ export class PlanQuotaService {
     if (!this.usageTracker?.canRead()) {
       return undefined;
     }
-    const pools = await this.getPaidPoolUsage(orgId, now);
-    return buildPaidUsageMeters(tier, pools, now);
+    const pools = await this.getPaidPoolUsage(orgId, now, periodAnchor);
+    return buildPaidUsageMeters(tier, pools, now, periodAnchor);
   }
 
   public async check(
@@ -184,7 +187,7 @@ export class PlanQuotaService {
     }
     const tier = effectiveUsageTier(plan, paid?.usageTier);
     if (tier) {
-      await this.checkPaid(orgId, tier, now);
+      await this.checkPaid(orgId, tier, now, paid?.periodAnchor);
       return;
     }
     if (!this.appliesToPlan(plan)) {
@@ -276,17 +279,17 @@ export class PlanQuotaService {
     });
   }
 
-  private async checkPaid(orgId: string, tier: UsageTier, now: Date): Promise<void> {
+  private async checkPaid(orgId: string, tier: UsageTier, now: Date, periodAnchor?: Date): Promise<void> {
     if (!this.usageTracker?.canRead()) {
       throw new PlanQuotaUnavailableError();
     }
     const limits = USAGE_TIER_LIMITS[tier];
-    const pools = await this.getPaidPoolUsage(orgId, now);
+    const pools = await this.getPaidPoolUsage(orgId, now, periodAnchor);
     const usedCents = pools.autoCents + pools.frontierCents;
     if (usedCents < limits.costCents) {
       return;
     }
-    const period = utcCalendarMonthRange(now);
+    const period = paidUsagePeriodRange(periodAnchor, now);
     const retryAfterMs = Math.max(0, period.to.getTime() - now.getTime());
     const next = nextUsageTier(tier);
     const upgradePlan = next === "enterprise" ? undefined : next;
@@ -302,9 +305,10 @@ export class PlanQuotaService {
 
   private async getPaidPoolUsage(
     orgId: string,
-    now = new Date()
+    now = new Date(),
+    periodAnchor?: Date
   ): Promise<{ autoCents: number; frontierCents: number }> {
-    const range = utcCalendarMonthRange(now);
+    const range = paidUsagePeriodRange(periodAnchor, now);
     const eventTypes = [...LLM_USAGE_EVENT_TYPES];
     const [autoCents, frontierCents] = await Promise.all([
       this.usageTracker!.sumUsdCentsForOrg(orgId, range, eventTypes, "auto"),
@@ -502,10 +506,11 @@ export function buildPaidCapMessage(upgradePlan?: UsageTier): string {
 function buildPaidUsageMeters(
   tier: UsageTier,
   pools: { autoCents: number; frontierCents: number },
-  now: Date
+  now: Date,
+  periodAnchor?: Date
 ): PaidUsageMeters {
   const limits = USAGE_TIER_LIMITS[tier];
-  const period = utcCalendarMonthRange(now);
+  const period = paidUsagePeriodRange(periodAnchor, now);
   const next = nextUsageTier(tier);
   const usedCents = pools.autoCents + pools.frontierCents;
   const total = toPoolMeter(usedCents, limits.costCents);

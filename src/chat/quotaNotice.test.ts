@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   buildQuotaExceededUpgradeUrl,
+  formatPaidUsageResetCopy,
   formatQuotaRetryClock,
   isFreeQuotaExhausted,
   isPaidQuotaPool,
@@ -51,5 +52,22 @@ assert.equal(
 assert.equal(PAID_USAGE_EXHAUSTED_COPY.includes("unlimited"), false);
 assert.match(buildPaidCapMessage("pro_plus"), /Upgrade to Pro\+/);
 assert.match(buildPaidCapMessage(undefined), /Enterprise/);
+
+const periodEnd = "2026-09-06T17:00:00.000Z";
+const resetDateLabel = new Date(periodEnd).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+assert.equal(
+  formatPaidUsageResetCopy(periodEnd, new Date("2026-09-03T17:00:00.000Z")),
+  `Usage limits reset on ${resetDateLabel} (3 days left)`
+);
+assert.equal(
+  formatPaidUsageResetCopy(periodEnd, new Date("2026-09-05T17:00:00.000Z")),
+  `Usage limits reset on ${resetDateLabel} (1 day left)`
+);
+assert.equal(
+  formatPaidUsageResetCopy(periodEnd, new Date("2026-09-06T17:00:00.000Z")),
+  `Usage limits reset on ${resetDateLabel} (today)`
+);
+assert.equal(formatPaidUsageResetCopy(undefined), null);
+assert.equal(formatPaidUsageResetCopy("not-a-date"), null);
 
 console.log("quotaNotice: 1/1 tests passed");
