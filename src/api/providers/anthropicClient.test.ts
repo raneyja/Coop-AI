@@ -42,7 +42,7 @@ test("applyAnthropicThinking uses adaptive + effort for Opus 4.8", () => {
   );
   assert.deepEqual(applied.body.thinking, { type: "adaptive" });
   assert.deepEqual(applied.body.output_config, { effort: "high" });
-  assert.equal(applied.forceTemperature, undefined);
+  assert.equal(applied.forceTemperature, 1);
   const thinking = applied.body.thinking as { type?: string; budget_tokens?: number };
   assert.notEqual(thinking.type, "enabled");
   assert.equal(thinking.budget_tokens, undefined);
@@ -74,6 +74,7 @@ test("applyAnthropicThinking uses adaptive for Sonnet 4.6", () => {
   );
   assert.deepEqual(applied.body.thinking, { type: "adaptive" });
   assert.deepEqual(applied.body.output_config, { effort: "high" });
+  assert.equal(applied.forceTemperature, 1);
 });
 
 test("applyAnthropicThinking ignores OpenAI/Gemini thinking modes", () => {
@@ -86,6 +87,7 @@ test("applyAnthropicThinking ignores OpenAI/Gemini thinking modes", () => {
     }
   );
   assert.equal(applied.body.thinking, undefined);
+  assert.equal(applied.forceTemperature, undefined);
 });
 
 test("parseAnthropicLine ignores signature_delta", () => {

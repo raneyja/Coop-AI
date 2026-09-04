@@ -17,7 +17,6 @@ export type ModelPickerSelectProps = {
   model: string;
   llmProvider: LlmProviderPreference;
   onChange: (next: { model: string; llmProvider: LlmProviderPreference }) => void;
-  compact?: boolean;
 };
 
 type HoveredInsight =
@@ -60,8 +59,7 @@ export function ModelPickerSelect({
   devMode,
   model,
   llmProvider,
-  onChange,
-  compact
+  onChange
 }: ModelPickerSelectProps): React.ReactElement | null {
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -122,7 +120,7 @@ export function ModelPickerSelect({
     <div ref={rootRef} className="relative shrink-0">
       <button
         type="button"
-        className={compact ? "coop-model-picker coop-model-picker--compact" : "coop-model-picker"}
+        className="coop-model-picker"
         aria-label="Model"
         aria-expanded={open}
         aria-haspopup="listbox"

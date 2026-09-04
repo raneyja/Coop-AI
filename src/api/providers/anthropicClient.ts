@@ -28,7 +28,10 @@ export function applyAnthropicThinking(
         thinking: { type: "adaptive" },
         output_config: { effort: thinking.effort ?? "high" }
       },
-      maxTokens: options.maxTokens
+      maxTokens: options.maxTokens,
+      // Anthropic rejects any temperature other than 1 when thinking is on
+      // (extended `enabled` or adaptive). Default chat temp is 0.5.
+      forceTemperature: 1
     };
   }
   const budget = thinking.budgetTokens;
@@ -43,6 +46,35 @@ export function applyAnthropicThinking(
     maxTokens: Math.max(options.maxTokens, budget + 512),
     forceTemperature: 1
   };
+}
+
+/** Final Anthropic Messages body — thinking + temperature clamp live here, not at call sites. */
+export function buildAnthropicInferenceBody(options: {
+  formattedBody: Record<string, unknown>;
+  model: string;
+  maxTokens: number;
+  thinking?: ProviderThinkingOptions;
+}): Record<string, unknown> {
+  const applied = applyAnthropicThinking(
+    {
+      ...options.formattedBody,
+      model: options.model,
+      stream: true
+    },
+    {
+      model: options.model,
+      maxTokens: options.maxTokens,
+      thinking: options.thinking
+    }
+  );
+  const body: Record<string, unknown> = {
+    ...applied.body,
+    max_tokens: applied.maxTokens
+  };
+  if (applied.forceTemperature === 1) {
+    body.temperature = 1;
+  }
+  return body;
 }
 
 export class AnthropicProviderClient extends BaseProviderClient {
@@ -68,25 +100,12 @@ export class AnthropicProviderClient extends BaseProviderClient {
       headers[key.toLowerCase()] = String(value);
     }
 
-    const applied = applyAnthropicThinking(
-      {
-        ...formatted.body,
-        model: options.model,
-        stream: true
-      },
-      {
-        model: options.model,
-        maxTokens: options.maxTokens,
-        thinking: options.thinking
-      }
-    );
-    const body: Record<string, unknown> = {
-      ...applied.body,
-      max_tokens: applied.maxTokens
-    };
-    if (applied.forceTemperature === 1) {
-      body.temperature = 1;
-    }
+    const body = buildAnthropicInferenceBody({
+      formattedBody: formatted.body,
+      model: options.model,
+      maxTokens: options.maxTokens,
+      thinking: options.thinking
+    });
 
     const state: ParseState = { text: "" };
     let response: Response;

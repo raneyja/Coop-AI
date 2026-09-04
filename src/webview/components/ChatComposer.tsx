@@ -669,7 +669,6 @@ export function ChatComposer({
             <div className="flex items-center gap-0.5">
               {model && llmProvider && onModelChange ? (
                 <ModelPickerSelect
-                  compact
                   plan={plan}
                   usageTier={usageTier}
                   devMode={devMode}

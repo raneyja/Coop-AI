@@ -38,11 +38,13 @@ test("picker Claude models never send thinking.type.enabled except Haiku", () =>
     const block = applied.body.thinking as { type?: string; budget_tokens?: number } | undefined;
     if (entry.id === "claude-haiku-4-5-20251001") {
       assert.deepEqual(block, { type: "enabled", budget_tokens: 1024 });
+      assert.equal(applied.forceTemperature, 1);
       continue;
     }
     assert.equal(block?.type, "adaptive");
     assert.equal(block?.budget_tokens, undefined);
     assert.deepEqual(applied.body.output_config, { effort: "high" });
+    assert.equal(applied.forceTemperature, 1);
   }
 });
 

@@ -3651,8 +3651,9 @@
 
 .coop-model-picker {
   display: inline-flex;
-  max-width: 11rem;
-  min-width: 0;
+  width: max-content;
+  max-width: none;
+  flex-shrink: 0;
   height: 1.75rem;
   align-items: center;
   gap: 0.2rem;
@@ -3668,14 +3669,8 @@
 }
 
 .coop-model-picker-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: none;
   white-space: nowrap;
-}
-
-.coop-model-picker--compact {
-  max-width: 8.5rem;
 }
 
 .coop-model-picker:hover {
