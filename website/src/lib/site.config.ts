@@ -12,7 +12,7 @@ export const siteConfig = {
   securityEmail: "security@coop-ai.dev",
   seo: {
     defaultDescription:
-      "CoopAI is code intelligence for VS Code. Understand code, trace decisions, and find owners using context from your repo, Slack, and Jira in every answer.",
+      "CoopAI is a code intelligence agent for VS Code. Understand and write code, using context from your entire code stack.",
     ogImageAlt: "CoopAI: code intelligence for VS Code",
     pages: {
       product: {
