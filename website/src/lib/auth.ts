@@ -50,17 +50,32 @@ export function validatePasswordClient(password: string): string | null {
 }
 
 export function getGoogleAuthStartUrl(options: {
-  mode: "signup" | "login";
+  mode: "signup" | "login" | "checkout";
   orgName?: string;
+  checkout?: {
+    tier: "pro" | "pro_plus" | "max";
+    intent: "individual" | "team";
+    seats?: number;
+  };
 }): string {
   const apiBase = resolvePublicCoopApiBase();
-  const redirect = getAdminPortalAuthCallbackUrl();
+  const redirect =
+    options.mode === "checkout" && typeof window !== "undefined"
+      ? window.location.href
+      : getAdminPortalAuthCallbackUrl();
   const params = new URLSearchParams({
     mode: options.mode,
     redirect
   });
   if (options.orgName?.trim()) {
     params.set("orgName", options.orgName.trim());
+  }
+  if (options.mode === "checkout" && options.checkout) {
+    params.set("tier", options.checkout.tier);
+    params.set("intent", options.checkout.intent);
+    if (options.checkout.intent === "team" && options.checkout.seats != null) {
+      params.set("seats", String(options.checkout.seats));
+    }
   }
   return `${apiBase.replace(/\/$/, "")}/v1/auth/google/start?${params.toString()}`;
 }

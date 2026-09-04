@@ -314,10 +314,24 @@ void (async () => {
   }
 
   {
-    let checkout: { priceId?: string; usageTier?: string } | undefined;
+    let checkout:
+      | {
+          priceId?: string;
+          usageTier?: string;
+          orgName?: string;
+          seats?: number;
+          intent?: string;
+        }
+      | undefined;
     const stripe = {
       isConfigured: () => true,
-      createCheckoutSession: async (input: { priceId?: string; usageTier?: string }) => {
+      createCheckoutSession: async (input: {
+        priceId?: string;
+        usageTier?: string;
+        orgName?: string;
+        seats?: number;
+        intent?: string;
+      }) => {
         checkout = input;
         return { id: "cs_test", url: "https://checkout.stripe.com/test" };
       }
@@ -375,6 +389,80 @@ void (async () => {
     assert.equal(proRes.statusCode, 200);
     assert.equal(checkout?.priceId, "price_pro");
     assert.equal(checkout?.usageTier, "pro");
+
+    const individualRes = mockResponse();
+    await handleBillingApiRequest(
+      {
+        method: "POST",
+        pathname: "/v1/billing/checkout-session",
+        headers: {},
+        body: { email: "jane.doe@acme.com", tier: "pro", intent: "individual", seats: 99 },
+        rawBody: Buffer.from("")
+      },
+      individualRes,
+      { serverConfig: { requireApiAuth: false } as ServerConfig, stripeService: stripe }
+    );
+    assert.equal(individualRes.statusCode, 200);
+    assert.equal(checkout?.orgName, "jane.doe");
+    assert.equal(checkout?.seats, 1);
+    assert.equal(checkout?.intent, "individual");
+
+    const teamMissingOrg = mockResponse();
+    await handleBillingApiRequest(
+      {
+        method: "POST",
+        pathname: "/v1/billing/checkout-session",
+        headers: {},
+        body: { email: "admin@acme.com", seats: 8, tier: "pro", intent: "team" },
+        rawBody: Buffer.from("")
+      },
+      teamMissingOrg,
+      { serverConfig: { requireApiAuth: false } as ServerConfig, stripeService: stripe }
+    );
+    assert.equal(teamMissingOrg.statusCode, 400);
+    assert.match(teamMissingOrg.body ?? "", /org_name_required/);
+
+    const teamRes = mockResponse();
+    await handleBillingApiRequest(
+      {
+        method: "POST",
+        pathname: "/v1/billing/checkout-session",
+        headers: {},
+        body: { orgName: "Acme", email: "admin@acme.com", seats: 8, tier: "pro", intent: "team" },
+        rawBody: Buffer.from("")
+      },
+      teamRes,
+      { serverConfig: { requireApiAuth: false } as ServerConfig, stripeService: stripe }
+    );
+    assert.equal(teamRes.statusCode, 200);
+    assert.equal(checkout?.orgName, "Acme");
+    assert.equal(checkout?.seats, 8);
+    assert.equal(checkout?.intent, "team");
+
+    const existingRes = mockResponse();
+    await handleBillingApiRequest(
+      {
+        method: "POST",
+        pathname: "/v1/billing/checkout-session",
+        headers: {},
+        body: { email: "taken@acme.com", intent: "individual" },
+        rawBody: Buffer.from("")
+      },
+      existingRes,
+      {
+        serverConfig: { requireApiAuth: false } as ServerConfig,
+        stripeService: stripe,
+        userStore: {
+          findActiveUserByEmail: async () => ({
+            id: "user-1",
+            orgId: "org-free",
+            email: "taken@acme.com"
+          })
+        } as unknown as BillingApiDeps["userStore"]
+      }
+    );
+    assert.equal(existingRes.statusCode, 409);
+    assert.match(existingRes.body ?? "", /account_exists/);
 
     if (prevPro === undefined) delete process.env.STRIPE_PRICE_ID_PRO;
     else process.env.STRIPE_PRICE_ID_PRO = prevPro;

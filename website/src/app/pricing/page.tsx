@@ -26,7 +26,7 @@ type PricingTier = {
 
 const paidSharedFeatures = [
   "Unlimited Deep-Indexed repos",
-  "Team seats and Collections",
+  "Collections, plus team seats when you need them",
   "Monthly included usage",
   "Model picker (default Auto)",
   "Priority support"
@@ -51,7 +51,7 @@ const selfServeTiers: PricingTier[] = [
     name: "Pro",
     price: "$25",
     period: "per user / month",
-    audience: "Teams. Unlimited index.",
+    audience: "For you. Add teammates anytime.",
     features: ["Everything in Free", ...paidSharedFeatures],
     cta: "Start Pro",
     href: "/signup?tier=pro",
@@ -181,7 +181,8 @@ export default function PricingPage() {
 
           <p className="mt-12 text-center text-sm text-coop-muted">
             Usage is included with your seat. Hit the cap and upgrade to continue — there is no on-demand
-            spend.{" "}
+            spend. A team can buy Pro, Pro+, or Max: pick the plan, then choose{" "}
+            <span className="font-medium text-gray-900">Start a team</span> at checkout.{" "}
             <Link href="/login" className="font-medium text-gray-900 hover:underline">
               Already have an account? Sign in
             </Link>

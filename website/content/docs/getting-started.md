@@ -141,7 +141,7 @@ More fixes: [Troubleshooting](/docs/troubleshooting).
 | Plan | Best for |
 | --- | --- |
 | **Developer (free)** | Individual use — full integrations, 3-repo Deep-Index cap, solo seat |
-| **Pro** | Teams — unlimited indexing, team seats ($25/seat/month), usage analytics |
+| **Pro** | You or a team — unlimited indexing, $25/seat/month, usage analytics |
 | **Enterprise** | Self-hosted, BYOK, zero-retention, SAML SSO, compliance |
 
 **Enterprise org admins:** configure SAML in the admin portal before rolling SSO to your team — see [Single Sign On (SSO)](/docs/sso).

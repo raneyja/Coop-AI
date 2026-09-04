@@ -4,7 +4,7 @@ import { buildPageMetadata, noIndexRobots } from "@/lib/pageMetadata";
 export const metadata: Metadata = buildPageMetadata(
   "/signup",
   "Sign up",
-  "Create your CoopAI organization.",
+  "Start CoopAI Pro for yourself, or buy seats for a team.",
   { robots: noIndexRobots }
 );
 

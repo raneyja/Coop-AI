@@ -175,11 +175,14 @@ export default function SignupPage() {
                 id="orgName"
                 type="text"
                 className="admin-input"
-                placeholder="My team"
+                placeholder="Your workspace"
                 value={orgName}
                 onChange={(e) => setOrgName(e.target.value)}
                 autoComplete="organization"
               />
+              <p className="mt-1 text-xs text-coop-muted">
+                Leave blank and we&apos;ll name it from your email.
+              </p>
             </div>
 
             {error ? (

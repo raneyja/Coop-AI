@@ -3,7 +3,7 @@ title: Plans & billing
 description: Free, Pro, Pro+, Max, and Enterprise — seats, included usage, and upgrade paths.
 section: plans
 order: 1
-lastUpdated: "2026-09-03"
+lastUpdated: "2026-09-04"
 ---
 
 ## Plan comparison
@@ -43,12 +43,15 @@ Free includes the same tool connectivity and cloud indexing as Pro. Limits are t
 
 ## Pro, Pro+, and Max
 
-1. **Browser** → [Pricing](/pricing) → checkout for Pro, Pro+, or Max
-2. Stripe payment → [Welcome page](/welcome) provisioning
-3. Admin connects GitHub + integrations (same flow as free)
-4. Invite team from admin portal
+1. **Browser** → [Pricing](/pricing) → **Start Pro** (or Pro+ / Max)
+2. Checkout is **for you** by default (1 seat, you are the admin). Choose **Start a team** if you need multiple seats.
+3. Stripe payment → [Welcome page](/welcome) provisioning
+4. You already have admin portal access. Connect GitHub and integrations (same flow as free)
+5. If you bought seats for a team, invite people from the admin portal
 
-These plans are **seat-based**. Each paid seat includes the extension, unlimited Deep-Indexed repos, team collaboration, Collections, and monthly included usage. Hit the cap and you must upgrade — Coop does not sell extra usage on demand.
+These plans are **seat-based**. An individual buys one seat. A team buys several at checkout, or adds seats later from Billing. Each paid seat includes the extension, unlimited Deep-Indexed repos, Collections, and monthly included usage. Hit the cap and you must upgrade — Coop does not sell extra usage on demand.
+
+If you already have a free account, sign in and upgrade from **Admin portal → Billing**. Do not start a second checkout with the same email.
 
 Public names: **Pro** ($25), **Pro+** ($60), **Max** ($100). There is no Ultra / $200 individual plan. Above Max is Enterprise.
 

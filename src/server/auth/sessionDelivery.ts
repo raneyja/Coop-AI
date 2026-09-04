@@ -153,7 +153,9 @@ export function deliverAuthError(
         ? target.pathname
         : target.pathname.includes("/accept-invite")
           ? target.pathname
-          : "/login";
+          : target.pathname.includes("/signup")
+            ? target.pathname
+            : "/login";
       const errorUrl = new URL(errorPath, target.origin);
       for (const [key, value] of target.searchParams) {
         if (key !== "error" && key !== "message") {

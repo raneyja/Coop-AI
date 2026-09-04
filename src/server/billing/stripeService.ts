@@ -36,6 +36,8 @@ export class StripeService {
     upgrade?: boolean;
     priceId?: string;
     usageTier?: UsageTier;
+    intent?: "individual" | "team";
+    googleSub?: string;
   }): Promise<StripeSession> {
     const priceId = input.priceId?.trim() || this.config.stripePriceIdPro;
     if (!priceId) {
@@ -54,6 +56,12 @@ export class StripeService {
     params.set("metadata[seat_count]", String(Math.max(1, input.seats)));
     params.set("metadata[usage_tier]", usageTier);
     params.set("metadata[stripe_price_id]", priceId);
+    if (input.intent) {
+      params.set("metadata[checkout_intent]", input.intent);
+    }
+    if (input.googleSub) {
+      params.set("metadata[google_sub]", input.googleSub);
+    }
     params.set("subscription_data[metadata][org_name]", input.orgName);
     params.set("subscription_data[metadata][usage_tier]", usageTier);
     if (input.existingOrgId) {

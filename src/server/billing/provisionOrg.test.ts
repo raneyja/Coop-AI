@@ -138,3 +138,65 @@ test("existing checkout email user gets sign-in welcome without activate link", 
 
   assert.equal(welcome?.activateAccountUrl, undefined);
 });
+
+test("Google checkout attaches Google identity and skips password invite", async () => {
+  const created: { userId?: string; googleSub?: string } = {};
+  const orgStore = {
+    findOrganizationByStripeCustomerId: async () => undefined,
+    createOrganization: async (name: string) => ({
+      id: "org-g",
+      name,
+      plan: "pro" as const,
+      createdAt: new Date()
+    }),
+    updateOrganizationBilling: async () => undefined
+  };
+  const userStore = {
+    findActiveUserByEmail: async () => undefined,
+    createUser: async () => ({
+      id: "user-g",
+      orgId: "org-g",
+      email: "buyer@gmail.com",
+      role: "admin" as const,
+      createdAt: new Date()
+    })
+  };
+  const authIdentityStore = {
+    createGoogleIdentity: async (userId: string, googleSub: string) => {
+      created.userId = userId;
+      created.googleSub = googleSub;
+      return { id: "id-g", userId, provider: "google" as const, createdAt: new Date() };
+    }
+  };
+  let welcome: { activateAccountUrl?: string } | undefined;
+  const emailService = {
+    sendWelcome: async (params: typeof welcome) => {
+      welcome = params;
+    }
+  };
+
+  await provisionOrgFromCheckout(
+    orgStore as never,
+    userStore as never,
+    emailService as never,
+    billingConfig as never,
+    {
+      orgName: "Acme",
+      adminEmail: "buyer@gmail.com",
+      seatCount: 1,
+      stripeCustomerId: "cus_g",
+      stripeSubscriptionId: "sub_g",
+      googleSub: "google-sub-1"
+    },
+    {
+      createToken: async () => {
+        throw new Error("should not mint password invite for Google checkout");
+      }
+    } as never,
+    authIdentityStore as never
+  );
+
+  assert.equal(created.userId, "user-g");
+  assert.equal(created.googleSub, "google-sub-1");
+  assert.equal(welcome?.activateAccountUrl, undefined);
+});

@@ -45,7 +45,7 @@ export function resolvePlanNudge(options: {
   if (plan === "free") {
     return {
       title: "Upgrade to Pro",
-      body: "Upgrade for unlimited Deep-Indexed repos, additional models, team seats, and higher usage limits.",
+      body: "Upgrade for unlimited Deep-Indexed repos, additional models, higher usage limits, and the option to add team seats.",
       ctaLabel: "Upgrade to Pro",
       nextName: "Pro",
       action: "checkout"

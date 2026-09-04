@@ -219,7 +219,8 @@ export default function BillingPage() {
         ) : isFree ? (
           <div className="space-y-3">
             <p className="text-sm text-coop-muted">
-              Upgrade to Pro for unlimited Deep-Indexed repos, additional models, and team seats (up to 5 users).
+              Upgrade to Pro for unlimited Deep-Indexed repos, additional models, and the option to add
+              team seats.
             </p>
             <button
               type="button"

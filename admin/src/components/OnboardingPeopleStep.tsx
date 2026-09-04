@@ -132,7 +132,7 @@ export function OnboardingPeopleStep({ memberCount }: OnboardingPeopleStepProps)
         <h3 className="text-lg font-semibold text-white">People &amp; access</h3>
         <p className="mt-2 text-sm leading-relaxed text-coop-muted">
           Deep-Indexed repos are ready to open only after people have access. Choose who gets them,
-          invite teammates, and assign repos when you use per-user grants.
+          then assign repos when you use per-user grants. Invite others from Users when you have seats.
           {memberCount !== null
             ? ` ${memberCount} member${memberCount === 1 ? "" : "s"} in your org.`
             : ""}
@@ -184,7 +184,7 @@ export function OnboardingPeopleStep({ memberCount }: OnboardingPeopleStepProps)
                 {usableRepoIds.length === 1 ? "" : "s"} (Deep-Indexed).{" "}
                 {selfGranted
                   ? "You already have access — invite others or manage grants on Users."
-                  : "Grant yourself access so you can open them in the extension, then invite your team."}
+                  : "Grant yourself access so you can open them in the extension."}
               </>
             ) : (
               <>No Deep-Indexed repos yet — finish Indexing first, then come back to assign people.</>

@@ -21,6 +21,10 @@ import {
 } from "./sessionDelivery";
 import { authClientKey, consumeAuthRateLimit } from "./authRateLimit";
 import { adminPortalFreshLoginUrl, adminPortalLoginUrl } from "../billing/adminPortalUrl";
+import { loadBillingConfig } from "../billing/billingConfig";
+import { StripeService } from "../billing/stripeService";
+import { parseCheckoutIntent, parseCheckoutUsageTier, stripeUsagePriceIds } from "../billing/billingApi";
+import { displayPlanName, stripePriceIdForUsageTier } from "../usageTiers";
 import type { Pool } from "pg";
 import { getDbPool } from "../db";
 
@@ -530,12 +534,22 @@ async function handleGoogleStart(
     authRedirectAllowlistFromConfig(deps.authConfig)
   );
   const modeParam = parsed.query?.get("mode");
-  const mode = modeParam === "signup" ? "signup" : modeParam === "invite" ? "invite" : "login";
+  const mode =
+    modeParam === "signup"
+      ? "signup"
+      : modeParam === "invite"
+        ? "invite"
+        : modeParam === "checkout"
+          ? "checkout"
+          : "login";
   const orgName = parsed.query?.get("orgName")?.trim() || undefined;
   const inviteToken = parsed.query?.get("inviteToken")?.trim() || undefined;
   const firstName = parsed.query?.get("firstName")?.trim() || undefined;
   const lastName = parsed.query?.get("lastName")?.trim() || undefined;
   const timezone = parsed.query?.get("timezone")?.trim() || undefined;
+  const usageTier = parseCheckoutUsageTier(parsed.query?.get("tier"));
+  const intent = parseCheckoutIntent(parsed.query?.get("intent")) ?? "individual";
+  const seats = Math.max(1, Number(parsed.query?.get("seats") ?? 1) || 1);
   const callbackUri = resolveGoogleCallbackUri(parsed, deps.authConfig);
   if (!callbackUri) {
     writeJson(response, 400, {
@@ -552,15 +566,25 @@ async function handleGoogleStart(
     });
     return true;
   }
+  if (mode === "checkout" && intent === "team" && !orgName) {
+    writeJson(response, 400, {
+      error: "org_name_required",
+      message: "Organization name is required when buying seats for a team."
+    });
+    return true;
+  }
   const url = deps.googleAuth.buildAuthorizeUrl(callbackUri, {
     redirect,
     mode,
     orgName: mode === "invite" ? undefined : orgName,
-    plan: mode === "invite" ? undefined : "free",
+    plan: mode === "checkout" ? "pro" : mode === "invite" ? undefined : "free",
     inviteToken: mode === "invite" ? inviteToken : undefined,
     firstName,
     lastName,
-    timezone
+    timezone,
+    usageTier: mode === "checkout" ? usageTier : undefined,
+    intent: mode === "checkout" ? intent : undefined,
+    seats: mode === "checkout" ? (intent === "individual" ? 1 : seats) : undefined
   });
   response.writeHead(302, { location: url });
   response.end();
@@ -577,6 +601,11 @@ async function handleGoogleCallback(
   const result = await completeGoogleOAuth(parsed, deps, callbackUri, fallbackLogin);
   if (!result.ok) {
     deliverAuthError(response, result.redirect, result.error, result.message, result.status);
+    return true;
+  }
+  if ("checkoutUrl" in result) {
+    response.writeHead(302, { location: result.checkoutUrl });
+    response.end();
     return true;
   }
   deliverSessionToken(response, result.accessToken, result.clientRedirect, result.refreshToken);
@@ -625,6 +654,10 @@ async function handleGoogleExchange(
     });
     return true;
   }
+  if ("checkoutUrl" in result) {
+    writeJson(response, 200, { url: result.checkoutUrl });
+    return true;
+  }
 
   writeJson(response, 200, {
     accessToken: result.accessToken,
@@ -652,6 +685,10 @@ type GoogleOAuthResult =
       accessToken: string;
       refreshToken: string;
       clientRedirect?: string;
+    }
+  | {
+      ok: true;
+      checkoutUrl: string;
     }
   | {
       ok: false;
@@ -727,7 +764,17 @@ async function completeGoogleOAuth(
 
   let sessionResult;
   try {
-    sessionResult = await resolveGoogleUser(deps, profile, state);
+    if (state.mode === "checkout") {
+      return await startGooglePaidCheckout(deps, profile, state, errorRedirect);
+    }
+    sessionResult = await resolveGoogleUser(deps, profile, {
+      mode: state.mode,
+      orgName: state.orgName,
+      inviteToken: state.inviteToken,
+      firstName: state.firstName,
+      lastName: state.lastName,
+      timezone: state.timezone
+    });
   } catch (err) {
     console.error("[auth] google sign-in failed after token exchange:", err);
     return {
@@ -768,7 +815,113 @@ function googleOAuthErrorRedirect(
     url.searchParams.set("token", state.inviteToken);
     return url.toString();
   }
+  if (state.mode === "checkout" && clientRedirect) {
+    return clientRedirect;
+  }
   return clientRedirect ?? fallbackLogin;
+}
+
+async function startGooglePaidCheckout(
+  deps: UserAuthApiDeps,
+  profile: { sub: string; email: string; emailVerified: boolean },
+  state: {
+    orgName?: string;
+    usageTier?: "pro" | "pro_plus" | "max";
+    intent?: "individual" | "team";
+    seats?: number;
+  },
+  errorRedirect: string
+): Promise<GoogleOAuthResult> {
+  if (!profile.emailVerified) {
+    return {
+      ok: false,
+      status: 403,
+      error: "email_not_verified",
+      message: "Verify your Google email address, then try again.",
+      redirect: errorRedirect
+    };
+  }
+
+  const existingUser = await deps.userStore?.findActiveUserByEmail(profile.email);
+  const existingGoogle = await deps.authIdentityStore?.findGoogleIdentity(profile.sub);
+  if (existingUser || existingGoogle) {
+    return {
+      ok: false,
+      status: 409,
+      error: "account_exists",
+      message: "This Google account already has a CoopAI account. Sign in and upgrade or add seats from Billing.",
+      redirect: errorRedirect
+    };
+  }
+
+  const intent = state.intent === "team" ? "team" : "individual";
+  const requestedOrgName = state.orgName?.trim() ?? "";
+  if (intent === "team" && !requestedOrgName) {
+    return {
+      ok: false,
+      status: 400,
+      error: "org_name_required",
+      message: "Organization name is required when buying seats for a team.",
+      redirect: errorRedirect
+    };
+  }
+
+  const billingConfig = loadBillingConfig();
+  const stripe = new StripeService(billingConfig);
+  if (!stripe.isConfigured()) {
+    return {
+      ok: false,
+      status: 503,
+      error: "billing_unavailable",
+      message: "Stripe is not configured on this server.",
+      redirect: errorRedirect
+    };
+  }
+
+  const usageTier = parseCheckoutUsageTier(state.usageTier);
+  const priceId = stripePriceIdForUsageTier(usageTier, stripeUsagePriceIds(billingConfig));
+  if (!priceId) {
+    return {
+      ok: false,
+      status: 400,
+      error: "tier_unavailable",
+      message: `${displayPlanName(usageTier)} checkout is not configured.`,
+      redirect: errorRedirect
+    };
+  }
+
+  const orgName = requestedOrgName || profile.email.split("@")[0]?.trim() || "My Workspace";
+  const seats = intent === "individual" ? 1 : Math.max(1, Number(state.seats ?? 1) || 1);
+
+  try {
+    const session = await stripe.createCheckoutSession({
+      orgName,
+      email: profile.email,
+      seats,
+      priceId,
+      usageTier,
+      intent,
+      googleSub: profile.sub
+    });
+    if (!session.url) {
+      return {
+        ok: false,
+        status: 502,
+        error: "stripe_error",
+        message: "Checkout failed",
+        redirect: errorRedirect
+      };
+    }
+    return { ok: true, checkoutUrl: session.url };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 502,
+      error: "stripe_error",
+      message: error instanceof Error ? error.message : "Checkout failed",
+      redirect: errorRedirect
+    };
+  }
 }
 
 async function handleExchangeCode(

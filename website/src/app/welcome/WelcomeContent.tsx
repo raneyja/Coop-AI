@@ -12,9 +12,9 @@ type WelcomeContentProps = {
 
 const STEPS = [
   "Open the Activate your account link in your welcome email and set a password.",
-  "Connect GitHub, Slack, and other tools once for your whole org.",
-  "Invite teammates from the Users page.",
-  "Developers install the CoopAI VS Code extension and sign in."
+  "Sign in to the admin portal — you already have admin access.",
+  "Connect GitHub and other tools.",
+  "Install the CoopAI VS Code extension and sign in."
 ] as const;
 
 const POLL_INTERVAL_MS = 3000;
@@ -106,7 +106,7 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
         {showProvisioning ? (
           <div className="border-l-2 border-l-coop-index pl-4">
             <p className="text-sm font-medium text-gray-900">
-              {state === "verifying" ? "Confirming your payment…" : "Setting up your organization…"}
+              {state === "verifying" ? "Confirming your payment…" : "Setting up your workspace…"}
             </p>
             <p className="mt-1 text-sm leading-relaxed text-coop-muted">
               {orgName
@@ -119,7 +119,7 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
         {state === "ready" ? (
           <div className="border-l-2 border-l-coop-index pl-4">
             <p className="text-sm font-medium text-gray-900">
-              {orgName ? `${orgName} is ready` : "Your organization is ready"}
+              {orgName ? `${orgName} is ready` : "Your workspace is ready"}
             </p>
             <p className="mt-1 text-sm leading-relaxed text-coop-muted">
               Check your email for <span className="font-medium text-gray-900">Activate your account</span>{" "}
@@ -152,6 +152,9 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
               </li>
             ))}
           </ol>
+          <p className="mt-4 text-xs leading-relaxed text-coop-muted">
+            Buying for a team? Add seats in Billing, then invite people from Users.
+          </p>
         </div>
 
         <div className="space-y-3 border-t border-coop-border pt-6">

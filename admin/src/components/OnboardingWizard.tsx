@@ -266,7 +266,7 @@ export function OnboardingWizard({
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">
                   {isFreePlan
                     ? "Connect your personal developer tools once, then keep coding in the Coop VS Code extension with your own API key."
-                    : "Connect your organization's tools once — every developer inherits access in the VS Code extension."}
+                    : "Connect your tools once. You have admin access. Invite teammates later if you add seats."}
                 </p>
               </div>
               <ul className="space-y-2 text-sm text-coop-muted">
@@ -281,7 +281,7 @@ export function OnboardingWizard({
                     <li>1. Connect at least one code host (collaboration tools optional)</li>
                     <li>2. Choose repos to Deep-Index</li>
                     <li>3. Set collaboration access scope</li>
-                    <li>4. Choose who can open repos, then invite your team</li>
+                    <li>4. Choose who can open repos. Invite others later if you add seats.</li>
                   </>
                 )}
               </ul>

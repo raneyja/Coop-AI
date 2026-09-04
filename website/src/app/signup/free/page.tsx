@@ -152,11 +152,14 @@ export default function FreeSignupPage() {
                     id="orgName"
                     type="text"
                     autoComplete="organization"
-                    placeholder="My team"
+                    placeholder="Your workspace"
                     className={authInputClassName}
                     value={orgName}
                     onChange={(e) => setOrgName(e.target.value)}
                   />
+                  <p className="mt-1 text-xs text-coop-muted">
+                    Leave blank and we&apos;ll name it from your email.
+                  </p>
                 </div>
 
                 {error ? <p className={authErrorClassName}>{error}</p> : null}

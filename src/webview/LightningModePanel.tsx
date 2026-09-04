@@ -288,7 +288,7 @@ function FreeTierBody({ onViewPlans }: { onViewPlans?: () => void }): React.Reac
             <p className="coop-context-mode-details-title">Pro</p>
             <ul className="coop-context-mode-details-list">
               <li>Unlimited Deep-Indexed repos (no 3-repo org cap).</li>
-              <li>Team seats — invite teammates.</li>
+              <li>Team seats when you need them — invite teammates from the admin portal.</li>
               <li>Higher AI limits and usage analytics.</li>
               <li>Collections for advanced cross-repo groupings.</li>
             </ul>

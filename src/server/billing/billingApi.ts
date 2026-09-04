@@ -62,6 +62,7 @@ export async function handleBillingApiRequest(
       {
         method: parsed.method,
         pathname: parsed.pathname,
+        headers: parsed.headers,
         body: parsed.body
       },
       response,
@@ -79,7 +80,7 @@ export async function handleBillingApiRequest(
   }
 
   if (parsed.method === "POST" && parsed.pathname === "/v1/billing/checkout-session") {
-    return handleCreateCheckout(parsed, response, stripe, billingConfig);
+    return handleCreateCheckout(parsed, response, deps, stripe, billingConfig);
   }
 
   if (parsed.method === "POST" && parsed.pathname === "/v1/billing/upgrade-checkout-session") {
@@ -104,6 +105,7 @@ export async function handleBillingApiRequest(
 async function handleCreateCheckout(
   parsed: ParsedRequest,
   response: ServerResponse,
+  deps: BillingApiDeps,
   stripe: StripeService,
   billingConfig: BillingConfig
 ): Promise<boolean> {
@@ -113,14 +115,14 @@ async function handleCreateCheckout(
   }
 
   const body = asRecord(parsed.body);
-  const orgName = String(body.orgName ?? "").trim();
   const email = String(body.email ?? "").trim();
-  const seats = Math.max(1, Number(body.seats ?? 1) || 1);
+  const intent = parseCheckoutIntent(body.intent);
+  const requestedOrgName = String(body.orgName ?? "").trim();
   const usageTier = parseCheckoutUsageTier(body.tier);
   const priceId = stripePriceIdForUsageTier(usageTier, stripeUsagePriceIds(billingConfig));
 
-  if (!orgName || !email) {
-    writeJson(response, 400, { error: "orgName and email are required" });
+  if (!email) {
+    writeJson(response, 400, { error: "email is required" });
     return true;
   }
 
@@ -128,6 +130,17 @@ async function handleCreateCheckout(
     writeJson(response, 400, { error: "invalid_email", message: "Enter a valid email address." });
     return true;
   }
+
+  if (intent === "team" && !requestedOrgName) {
+    writeJson(response, 400, {
+      error: "org_name_required",
+      message: "Organization name is required when buying seats for a team."
+    });
+    return true;
+  }
+
+  const orgName = deriveCheckoutOrgName(requestedOrgName, email);
+  const seats = intent === "individual" ? 1 : Math.max(1, Number(body.seats ?? 1) || 1);
 
   if (orgName.length > 120) {
     writeJson(response, 400, { error: "orgName too long" });
@@ -142,8 +155,27 @@ async function handleCreateCheckout(
     return true;
   }
 
+  if (deps.userStore) {
+    const existingUser = await deps.userStore.findActiveUserByEmail(email);
+    if (existingUser) {
+      writeJson(response, 409, {
+        error: "account_exists",
+        message:
+          "This email already has a CoopAI account. Sign in and upgrade or add seats from Billing."
+      });
+      return true;
+    }
+  }
+
   try {
-    const session = await stripe.createCheckoutSession({ orgName, email, seats, priceId, usageTier });
+    const session = await stripe.createCheckoutSession({
+      orgName,
+      email,
+      seats,
+      priceId,
+      usageTier,
+      intent
+    });
     writeJson(response, 200, { sessionId: session.id, url: session.url });
   } catch (error) {
     writeJson(response, 502, {
@@ -603,6 +635,7 @@ async function handleCheckoutCompleted(event: Record<string, unknown>, deps: Bil
     .toLowerCase() === "true";
   const usageTier = parseUsageTier(String(metadata.usage_tier ?? "")) ?? "pro";
   const stripePriceId = String(metadata.stripe_price_id ?? "").trim() || undefined;
+  const googleSub = String(metadata.google_sub ?? "").trim() || undefined;
 
   if (!customerId || !adminEmail) {
     console.warn("[stripe] checkout.session.completed skipped: missing customer or admin email", {
@@ -627,9 +660,11 @@ async function handleCheckoutCompleted(event: Record<string, unknown>, deps: Bil
       existingOrgId: existingOrgId || undefined,
       upgrade,
       usageTier,
-      stripePriceId
+      stripePriceId,
+      googleSub
     },
-    deps.authTokenStore
+    deps.authTokenStore,
+    deps.authIdentityStore
   );
 
   await deps.auditLogger?.record({
@@ -722,6 +757,22 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 export function parseCheckoutUsageTier(value: unknown): UsageTier {
   return parseUsageTier(typeof value === "string" ? value : "") ?? "pro";
+}
+
+export function parseCheckoutIntent(value: unknown): "individual" | "team" | undefined {
+  const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (raw === "individual" || raw === "team") {
+    return raw;
+  }
+  return undefined;
+}
+
+function deriveCheckoutOrgName(orgName: string, email: string): string {
+  if (orgName) {
+    return orgName;
+  }
+  const local = email.split("@")[0]?.trim();
+  return local || "My Workspace";
 }
 
 export function stripeUsagePriceIds(config: BillingConfig): {

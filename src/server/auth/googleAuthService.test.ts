@@ -40,6 +40,33 @@ test("Google auth state accepts fresh payloads", () => {
   assert.equal(parsed!.redirect, "https://admin.coop-ai.dev/auth/callback");
 });
 
+test("Google auth state round-trips checkout mode fields", () => {
+  const service = new GoogleAuthService({
+    clientId: "client",
+    clientSecret: "secret",
+    stateSecret: "state-secret-for-tests"
+  });
+  const url = new URL(
+    service.buildAuthorizeUrl("https://api.coop-ai.dev/v1/auth/google/callback", {
+      mode: "checkout",
+      usageTier: "pro_plus",
+      intent: "team",
+      seats: 8,
+      orgName: "Acme",
+      redirect: "http://localhost:3003/signup?tier=pro_plus&for=team"
+    })
+  );
+  const state = url.searchParams.get("state");
+  assert.ok(state);
+  const parsed = service.parseState(state!);
+  assert.ok(parsed);
+  assert.equal(parsed!.mode, "checkout");
+  assert.equal(parsed!.usageTier, "pro_plus");
+  assert.equal(parsed!.intent, "team");
+  assert.equal(parsed!.seats, 8);
+  assert.equal(parsed!.orgName, "Acme");
+});
+
 test("Google auth state round-trips invite mode fields", () => {
   const service = new GoogleAuthService({
     clientId: "client",

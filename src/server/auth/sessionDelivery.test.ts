@@ -108,6 +108,22 @@ test("deliverAuthError redirects browser flows to portal login", () => {
   assert.equal(url.searchParams.get("message"), "Assertion was rejected.");
 });
 
+test("deliverAuthError preserves marketing signup path and query", () => {
+  const { response, state } = mockRedirectResponse();
+  deliverAuthError(
+    response,
+    "http://localhost:3003/signup?tier=pro_plus&for=team",
+    "account_exists",
+    "This Google account already has a CoopAI account."
+  );
+  assert.equal(state.statusCode, 302);
+  const url = new URL(state.location!);
+  assert.equal(url.pathname, "/signup");
+  assert.equal(url.searchParams.get("tier"), "pro_plus");
+  assert.equal(url.searchParams.get("for"), "team");
+  assert.equal(url.searchParams.get("error"), "account_exists");
+});
+
 test("deliverAuthError preserves accept-invite path and token", () => {
   const { response, state } = mockRedirectResponse();
   deliverAuthError(
