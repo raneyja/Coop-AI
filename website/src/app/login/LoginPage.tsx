@@ -9,18 +9,12 @@ export default function LoginPage() {
       <PageHeader
         eyebrow="Account"
         title="Sign in"
-        description="Sign in happens in the CoopAI extension in VS Code — not in the browser."
+        description="Open VS Code and sign in from Settings → Account."
         tight
       />
 
       <section className="mx-auto max-w-lg px-6 pb-24">
         <div className="coop-panel space-y-6 p-6">
-          <ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-coop-muted">
-            <li>Install the extension if you do not have it yet.</li>
-            <li>Open CoopAI in VS Code. Your browser will ask to open VS Code.</li>
-            <li>Sign in from Settings → Account (Google, email, or SSO).</li>
-          </ol>
-
           <OpenVsCodeSignInButton />
           <InstallExtensionButton variant="secondary" className="w-full" />
 

@@ -4,7 +4,7 @@ import { buildPageMetadata, noIndexRobots } from "@/lib/pageMetadata";
 export const metadata: Metadata = buildPageMetadata(
   "/login",
   "Sign in",
-  "Sign in to CoopAI in the VS Code extension.",
+  "Sign in to CoopAI from the VS Code extension.",
   { robots: noIndexRobots }
 );
 

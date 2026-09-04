@@ -19,7 +19,7 @@ export function OpenVsCodeSignInButton() {
       </a>
       {showFallback ? (
         <p className="text-center text-sm text-coop-muted">
-          If VS Code did not open, install the extension first, then click again.
+          Didn't open? Install the extension, then try again.
         </p>
       ) : null}
     </div>
