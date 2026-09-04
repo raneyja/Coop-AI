@@ -414,23 +414,6 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         }
       }
 
-      if (parsed.method === "GET" && parsed.pathname === "/health") {
-        const jobStats = jobs.monitor.getStats(jobs.queue);
-        writeJson(response, 200, {
-          ok: true,
-          commit: deployedCommitSha(),
-          cache: {
-            backend: config.cache.backend,
-            repos: cache.listRepoIds().length
-          },
-          webhooks: monitor.getAllHealth(),
-          jobs: jobStats,
-          llm: llmHealthPayload(chatRouter),
-          orgDb: Boolean(orgStore)
-        });
-        return;
-      }
-
       const orgParsed = {
         method: parsed.method,
         pathname: parsed.pathname,
@@ -446,6 +429,27 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         serverConfig.requireApiAuth,
         userStore
       );
+
+      if (parsed.method === "GET" && parsed.pathname === "/health") {
+        const publicProbe = { ok: true as const, commit: deployedCommitSha() };
+        if (!requireAuth(auth, serverConfig.requireApiAuth)) {
+          writeJson(response, 200, publicProbe);
+          return;
+        }
+        const jobStats = jobs.monitor.getStats(jobs.queue);
+        writeJson(response, 200, {
+          ...publicProbe,
+          cache: {
+            backend: config.cache.backend,
+            repos: cache.listRepoIds().length
+          },
+          webhooks: monitor.getAllHealth(),
+          jobs: jobStats,
+          llm: llmHealthPayload(chatRouter),
+          orgDb: Boolean(orgStore)
+        });
+        return;
+      }
 
       if (orgSuspended && !parsed.pathname.startsWith("/v1/operator/")) {
         writeOrgSuspended(response);
@@ -760,6 +764,10 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       }
 
       if (parsed.method === "GET" && parsed.pathname === "/webhooks/health") {
+        if (!requireAuth(auth, serverConfig.requireApiAuth)) {
+          writeJson(response, 401, { error: "unauthorized" });
+          return;
+        }
         writeJson(response, 200, {
           webhooks: monitor.getAllHealth(),
           deliveries: monitor.recentDeliveries(25),

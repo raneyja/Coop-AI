@@ -6,6 +6,7 @@ import type { AuthIdentityStore } from "./auth/authIdentityStore";
 import type { AuthTokenStore } from "./auth/authTokenStore";
 import type { AuthConfig } from "./auth/authConfig";
 import { hashPassword, validatePasswordStrength } from "./auth/passwordCrypto";
+import { authClientKey, consumeAuthRateLimit } from "./auth/authRateLimit";
 import { loadBillingConfig } from "./billing/billingConfig";
 import { adminPortalFreshLoginUrl, adminPortalLoginUrl } from "./billing/adminPortalUrl";
 
@@ -51,6 +52,13 @@ export async function handleFreeSignupApiRequest(
     .trim()
     .toLowerCase();
   const password = String(body.password ?? "");
+  if (!consumeAuthRateLimit(authClientKey(parsed.headers ?? {}))) {
+    writeJson(response, 429, {
+      error: "rate_limited",
+      message: "Too many attempts. Try again in a few minutes."
+    });
+    return true;
+  }
   if (!isValidEmail(email)) {
     writeJson(response, 400, { error: "invalid_email", message: "Enter a valid email address." });
     return true;

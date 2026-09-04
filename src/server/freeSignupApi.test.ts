@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { ServerResponse } from "node:http";
+import { AUTH_RATE_LIMIT_MAX, resetAuthRateLimitForTests } from "./auth/authRateLimit";
 import { handleFreeSignupApiRequest } from "./freeSignupApi";
 
 function mockResponse(): ServerResponse & { statusCode?: number; body?: unknown } {
@@ -204,4 +205,50 @@ test("free signup rejects weak password", async () => {
   assert.equal(handled, true);
   assert.equal(response.statusCode, 400);
   assert.equal((response.body as { error?: string }).error, "weak_password");
+});
+
+test("free signup rate-limits repeated attempts from the same client", async () => {
+  resetAuthRateLimitForTests();
+  const orgStore = {
+    createOrganization: async () => {
+      throw new Error("should not create after rate limit");
+    }
+  };
+  const headers = { "x-forwarded-for": "203.0.113.9" };
+  const deps = {
+    orgStore: orgStore as never,
+    userStore: { findActiveUserByEmail: async () => undefined } as never,
+    authIdentityStore: {} as never,
+    authTokenStore: {} as never,
+    emailService: {} as never,
+    authConfig
+  };
+  for (let i = 0; i < AUTH_RATE_LIMIT_MAX; i++) {
+    const allowed = mockResponse();
+    await handleFreeSignupApiRequest(
+      {
+        method: "POST",
+        pathname: "/v1/signup/free",
+        headers,
+        body: { email: `burst-${i}@example.com`, password: "short" }
+      },
+      allowed,
+      deps
+    );
+    assert.equal(allowed.statusCode, 400);
+  }
+  const limited = mockResponse();
+  const handled = await handleFreeSignupApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/signup/free",
+      headers,
+      body: { email: "burst-final@example.com", password: "validpassword12" }
+    },
+    limited,
+    deps
+  );
+  assert.equal(handled, true);
+  assert.equal(limited.statusCode, 429);
+  assert.equal((limited.body as { error?: string }).error, "rate_limited");
 });

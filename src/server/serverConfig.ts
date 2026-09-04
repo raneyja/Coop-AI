@@ -16,9 +16,13 @@ export type ServerConfig = {
 export function loadServerConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   const nodeEnv = env.NODE_ENV ?? "development";
   const legacyApiToken = env.COOP_JOBS_API_TOKEN ?? env.COOP_API_TOKEN;
+  const authFlag = readBoolean(env.COOP_REQUIRE_API_AUTH, nodeEnv === "production");
+  if (nodeEnv === "production" && env.COOP_REQUIRE_API_AUTH !== undefined && !authFlag) {
+    console.error("[config] COOP_REQUIRE_API_AUTH=false is ignored when NODE_ENV=production");
+  }
   return {
     nodeEnv,
-    requireApiAuth: readBoolean(env.COOP_REQUIRE_API_AUTH, nodeEnv === "production"),
+    requireApiAuth: nodeEnv === "production" ? true : authFlag,
     legacyApiToken,
     credentialsEncryptionKey: env.CREDENTIALS_ENCRYPTION_KEY,
     jobsWorkersEnabled: readBoolean(env.JOBS_WORKERS, env.JOBS_WORKERS !== "0"),
