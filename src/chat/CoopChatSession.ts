@@ -33,6 +33,7 @@ import { setLastEditUserMessage, getPatchRecord, listPatchCards } from "../edit/
 import { summarizePrNotes, type PrNotesCompleteFn } from "../edit/prNotesSummary";
 import { activeThemeMode } from "./themeMode";
 import { coopSessionRegistry } from "./CoopSessionRegistry";
+import { authIdentityKey } from "./authIdentity";
 import {
   readDegradationConfiguration,
   readConflictConfiguration,
@@ -551,6 +552,8 @@ export class CoopChatSession {
   private settingsMessageDisposable?: vscode.Disposable;
   /** Sidebar/session hydrate runs once; later resolveWebviewView only re-attaches the iframe. */
   private sessionHydrated = false;
+  /** Last non-empty auth identity — used to start a fresh thread when a different account signs in. */
+  private lastSignedInIdentity = "";
   private closeSettingsHandler?: () => void;
   private pendingSettingsScreen?: SettingsScreen;
   private readonly chatHistory: ChatMessage[] = [];
@@ -772,6 +775,7 @@ export class CoopChatSession {
       this.options.codeHostSecrets,
       this.options.integrationSecrets
     );
+    this.lastSignedInIdentity = authIdentityKey(this.preferences);
     // Drop legacy cross-window global chip seed (owner/repo leaked across VS Code windows).
     void this.options.extensionContext.globalState.update("coopAI.lastRepoContext", undefined);
     const startBlank = this.options.startBlank === true;
@@ -882,11 +886,13 @@ export class CoopChatSession {
     this.refreshIntentConfiguration();
     this.conflictConfig = readConflictConfiguration();
     this.degradationConfig = readDegradationConfiguration();
+    const previousIdentity = authIdentityKey(this.preferences);
     this.preferences = await readPreferences(
       this.options.api,
       this.options.codeHostSecrets,
       this.options.integrationSecrets
     );
+    const nextIdentity = authIdentityKey(this.preferences);
     this.applyDefaultRepoToContext();
     if (this.preferences.plan === "free" && !isFreeQuotaExhausted(this.preferences.quotaCredits)) {
       this.post({ type: "chat:quota-cleared" });
@@ -894,6 +900,24 @@ export class CoopChatSession {
       this.post({ type: "chat:quota-cleared" });
     }
     await this.pushSettingsState();
+    if (previousIdentity !== nextIdentity) {
+      this.syncSurfacesAfterAuthChange(previousIdentity, nextIdentity);
+    }
+  }
+
+  private syncSurfacesAfterAuthChange(previousIdentity: string, nextIdentity: string): void {
+    if (nextIdentity) {
+      if (this.lastSignedInIdentity && this.lastSignedInIdentity !== nextIdentity) {
+        this.newChat();
+      } else {
+        this.postChatHistory();
+        this.pushThreadsList();
+      }
+      this.lastSignedInIdentity = nextIdentity;
+    } else if (previousIdentity) {
+      this.lastSignedInIdentity = previousIdentity;
+    }
+    this.postContext();
   }
 
   public refreshEditorContext(

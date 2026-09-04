@@ -10,6 +10,9 @@ import { ChatProse } from "./components/ChatProse";
 import { CitationNavigationProvider } from "./components/CitationNavigationContext";
 import { ChatLinkProvider } from "./components/ChatLinkContext";
 import { EmptyState } from "./components/EmptyState";
+import { ChatSignedOutHome } from "./components/ChatSignedOutHome";
+import { chatRequiresSignIn } from "./lib/chatAuthGate";
+import { preferencesSignedIn } from "./components/settings/connectionCopy";
 import { WorkflowsMenu } from "./components/WorkflowsMenu";
 import { AgentsMdStatusChip, ProjectInstructionsNotice } from "./components/ProjectInstructionsNotice";
 import { shouldPromptForAgentsMd } from "./lib/agentsMdStatus";
@@ -427,6 +430,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [suppressedPatchTimestamps, setSuppressedPatchTimestamps] = useState<number[]>([]);
   const [degradationNotification, setDegradationNotification] = useState<DegradationNotificationPayload | undefined>();
   const [usageLabel, setUsageLabel] = useState<string | undefined>();
+  const [signedIn, setSignedIn] = useState<boolean | undefined>();
   const [pickerPrefs, setPickerPrefs] = useState<{
     plan?: "free" | "pro" | "enterprise";
     usageTier?: string | null;
@@ -1179,6 +1183,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           applyThemeMode(message.payload.mode);
           break;
         case "settings:state":
+          setSignedIn(preferencesSignedIn(message.payload));
           setPickerPrefs({
             plan: message.payload.plan,
             usageTier: message.payload.usageTier,
@@ -1691,6 +1696,18 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     }
   }, [isStreaming]);
 
+  useEffect(() => {
+    if (!chatRequiresSignIn(signedIn)) {
+      return;
+    }
+    setIsExplorerOpen(false);
+    setPromptModalOpen(false);
+    setPromptMenuOpen(false);
+    setCommandConfirm(undefined);
+    setSavePromptOpen(false);
+    resetEphemeralChatState();
+  }, [signedIn, resetEphemeralChatState]);
+
   const submitPrompt = useCallback(
     (
       prompt: string,
@@ -1700,7 +1717,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       options?: { slashUserArgs?: string }
     ) => {
       const message = prompt.trim();
-      if (inFlightSendRef.current) {
+      if (chatRequiresSignIn(signedIn) || inFlightSendRef.current) {
         return;
       }
       if (!message && pendingAttachments.length === 0 && pendingMentions.length === 0 && !quickAction) {
@@ -1736,7 +1753,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setMentionError("");
       setPendingPromptActionId(undefined);
     },
-    [attachments, mentions, post]
+    [attachments, mentions, post, signedIn]
   );
 
   const handleMentionSearch = useCallback(
@@ -2162,11 +2179,34 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         event.preventDefault();
       }}
       onDrop={(event) => {
+        if (chatRequiresSignIn(signedIn)) {
+          return;
+        }
         void handlePanelDrop(event);
       }}
     >
       <CitationNavigationProvider>
       <ChatLinkProvider onOpenFile={handleOpenFile} onOpenLink={handleOpenLink}>
+      {chatRequiresSignIn(signedIn) ? (
+        <>
+          <div className="flex shrink-0 items-center gap-2 border-b border-[var(--coop-composer-border)] px-3 py-2">
+            <span className="text-[13px] font-semibold tracking-tight">CoopAI</span>
+          </div>
+          <p className="coop-panel-narrow-notice" role="status">
+            Widen the sidebar for the best experience.
+          </p>
+          <ChatSignedOutHome
+            onSignInGoogle={() => post({ type: "settings:sign-in-google" })}
+            onSignInPassword={(email, password) =>
+              post({ type: "settings:sign-in-password", payload: { email, password } })
+            }
+            onSignInSso={(org) => post({ type: "settings:sign-in-sso", payload: org ? { org } : undefined })}
+            onForgotPassword={(email) => post({ type: "settings:forgot-password", payload: { email } })}
+          />
+          <PanelWidthEnforcer vscode={vscode} />
+        </>
+      ) : (
+        <>
       <div className="flex shrink-0 items-center gap-2 border-b border-[var(--coop-composer-border)] px-3 py-2">
         {threadsState ? (
           <ThreadHeaderSwitcher
@@ -2449,6 +2489,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         />
       ) : null}
       <PanelWidthEnforcer vscode={vscode} />
+        </>
+      )}
       </ChatLinkProvider>
       </CitationNavigationProvider>
     </div>
