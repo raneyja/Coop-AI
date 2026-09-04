@@ -206,14 +206,28 @@ export function accountHubSubtitle(prefs: Preferences): string {
   return "Signed in";
 }
 
-export function formatQuotaUsageSummary(quota: {
-  usedCredits: number;
-  limitCredits: number;
-  remainingCredits: number;
-  windowHours: number;
-}): string {
+export function formatQuotaUsageSummary(
+  quota: {
+    usedCredits: number;
+    limitCredits: number;
+    remainingCredits: number;
+    windowHours: number;
+  },
+  options?: { exhausted?: boolean }
+): string {
   const used = quota.usedCredits ?? Math.max(0, quota.limitCredits - quota.remainingCredits);
-  return `${used}K of ${quota.limitCredits}K AI credits used - ${quota.windowHours}-hour rolling window`;
+  const counts = `${used}K of ${quota.limitCredits}K AI credits used`;
+  if (options?.exhausted) {
+    return counts;
+  }
+  return `${counts} - ${quota.windowHours}-hour rolling window`;
+}
+
+export function quotaUsedPercent(used: number, limit: number): number {
+  if (!Number.isFinite(used) || !Number.isFinite(limit) || limit <= 0) {
+    return 0;
+  }
+  return Math.max(0, Math.min(100, Math.round((used / limit) * 100)));
 }
 
 export function planUsageHubSubtitle(prefs: Preferences): string {

@@ -120,8 +120,9 @@ export async function handleAdminApiRequest(
       plan,
       usageTier: org?.usageTier ?? (plan === "pro" ? "pro" : null),
       unlimited: false,
+      ...(quota ?? {}),
       quota,
-      usageMeters
+      usageMeters: usageMeters ?? null
     });
     return true;
   }

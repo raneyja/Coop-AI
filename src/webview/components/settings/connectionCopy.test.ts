@@ -6,7 +6,8 @@ import {
   displayPlanLabel,
   formatQuotaUsageSummary,
   indexingHubSubtitle,
-  planUsageHubSubtitle
+  planUsageHubSubtitle,
+  quotaUsedPercent
 } from "./connectionCopy";
 import type { Preferences } from "./types";
 
@@ -120,6 +121,22 @@ test("formatQuotaUsageSummary shows used credits in K format", () => {
     }),
     "56K of 80K AI credits used - 5-hour rolling window"
   );
+  assert.equal(
+    formatQuotaUsageSummary(
+      {
+        usedCredits: 80,
+        limitCredits: 80,
+        remainingCredits: 0,
+        windowHours: 5
+      },
+      { exhausted: true }
+    ),
+    "80K of 80K AI credits used"
+  );
+  assert.equal(quotaUsedPercent(12, 80), 15);
+  assert.equal(quotaUsedPercent(80, 80), 100);
+  assert.equal(quotaUsedPercent(0, 80), 0);
+  assert.equal(quotaUsedPercent(12, 0), 0);
 });
 
 test("indexingHubSubtitle summarizes lightning state", () => {

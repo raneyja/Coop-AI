@@ -11,6 +11,7 @@ import type {
 import type { StoredMe } from "./auth";
 import { ensureAccessToken, restoreSessionFromCookie } from "./auth";
 import { markOrgSuspended, clearOrgSuspended } from "./orgSuspendedState";
+import { normalizeQuotaSnapshot } from "./quotaSnapshot";
 
 export type ApiError = {
   error?: string;
@@ -944,53 +945,15 @@ export type QuotaSnapshot = {
 };
 
 export async function fetchQuota(): Promise<ApiResult<QuotaSnapshot>> {
-  const result = await coopFetch<QuotaSnapshot>("/v1/admin/quota");
+  const result = await coopFetch<QuotaSnapshot & { quota?: QuotaSnapshot }>("/v1/admin/quota");
   if (!result.ok) {
     return result;
   }
 
-  const data = result.data;
-  const plan = typeof data?.plan === "string" && data.plan.trim() ? data.plan.trim() : "free";
-  const usedCredits =
-    typeof data?.usedCredits === "number" && Number.isFinite(data.usedCredits)
-      ? Math.max(0, data.usedCredits)
-      : undefined;
-  const limitCredits =
-    typeof data?.limitCredits === "number" && Number.isFinite(data.limitCredits)
-      ? Math.max(0, data.limitCredits)
-      : undefined;
-  const usedTokens =
-    typeof data?.usedTokens === "number" && Number.isFinite(data.usedTokens)
-      ? Math.max(0, data.usedTokens)
-      : undefined;
-  const limitTokens =
-    typeof data?.limitTokens === "number" && Number.isFinite(data.limitTokens)
-      ? Math.max(0, data.limitTokens)
-      : undefined;
-  const remainingTokens =
-    typeof data?.remainingTokens === "number" && Number.isFinite(data.remainingTokens)
-      ? Math.max(0, data.remainingTokens)
-      : undefined;
-  const remainingCredits =
-    typeof data?.remainingCredits === "number" && Number.isFinite(data.remainingCredits)
-      ? Math.max(0, data.remainingCredits)
-      : typeof usedCredits === "number" && typeof limitCredits === "number"
-        ? Math.max(0, limitCredits - usedCredits)
-        : undefined;
-
   return {
     ok: true,
     status: result.status,
-    data: {
-      ...data,
-      plan,
-      usedTokens,
-      limitTokens,
-      remainingTokens,
-      usedCredits,
-      limitCredits,
-      remainingCredits
-    }
+    data: normalizeQuotaSnapshot(result.data) as QuotaSnapshot
   };
 }
 

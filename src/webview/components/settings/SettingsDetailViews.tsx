@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { formatPaidUsageResetCopy } from "../../../chat/quotaNotice";
+import {
+  formatFreeQuotaResumeParts,
+  formatPaidUsageResetParts,
+  isFreeQuotaExhausted,
+  type PaidUsageResetParts
+} from "../../../chat/quotaNotice";
 import {
   assignedModelsHubSubtitle,
   COOP_FEATURE_MODEL_ASSIGNMENTS,
@@ -27,7 +32,8 @@ import {
   displayPlanLabel,
   formatQuotaUsageSummary,
   integrationListSubtitle,
-  preferencesSignedIn
+  preferencesSignedIn,
+  quotaUsedPercent
 } from "./connectionCopy";
 import type { SettingsLightningSummary } from "./SettingsHub";
 import { SettingsCheckboxRow, SettingsSection } from "./SettingsShared";
@@ -420,7 +426,12 @@ function stackedUsagePercents(autoRatio: number, frontierRatio: number): { auto:
   return { auto: auto * scale, frontier: frontier * scale };
 }
 
-function monthlyUsageBar(autoRatio: number, frontierRatio: number, usedRatio: number): React.ReactElement {
+function monthlyUsageBar(
+  autoRatio: number,
+  frontierRatio: number,
+  usedRatio: number,
+  resetParts: PaidUsageResetParts | null
+): React.ReactElement {
   const pct = Math.max(0, Math.min(100, Math.round(usedRatio * 100)));
   const segments = stackedUsagePercents(autoRatio, frontierRatio);
   return (
@@ -454,7 +465,66 @@ function monthlyUsageBar(autoRatio: number, frontierRatio: number, usedRatio: nu
       <p className="coop-settings-card-desc mt-1">
         Chat, quick actions, and models you pick share one bar. Frontier models fill it faster.
       </p>
+      {resetParts ? (
+        <p className="mt-2 text-[13px]">
+          Resets on <span className="font-medium">{resetParts.dateLabel}</span>
+          <span className="text-[var(--coop-panel-muted)]"> ({resetParts.countdown})</span>
+        </p>
+      ) : null}
     </div>
+  );
+}
+
+function FreePlanUsageMeter({
+  quota,
+  timezone
+}: {
+  quota: NonNullable<Preferences["quotaCredits"]>;
+  timezone?: string;
+}): React.ReactElement {
+  const exhausted = isFreeQuotaExhausted(quota);
+  const used = quota.usedCredits ?? Math.max(0, quota.limitCredits - quota.remainingCredits);
+  const pct = quotaUsedPercent(used, quota.limitCredits);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    if (!exhausted) {
+      return;
+    }
+    const id = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(id);
+  }, [exhausted]);
+
+  const resume = exhausted
+    ? formatFreeQuotaResumeParts(
+        { resetsAt: quota.resetsAt, windowHours: quota.windowHours, timezone },
+        now
+      )
+    : null;
+
+  return (
+    <>
+      <div
+        className="coop-usage-track !mt-0"
+        role="img"
+        aria-label={`${pct}% of free AI credits used`}
+      >
+        {pct > 0 ? (
+          <div className="coop-usage-seg coop-usage-seg--auto" style={{ width: `${pct}%` }} />
+        ) : null}
+      </div>
+      <p className="text-[11px] text-[var(--coop-panel-muted)]">
+        {formatQuotaUsageSummary(quota, { exhausted })}
+      </p>
+      {resume ? (
+        <p className="text-[13px]" aria-live="polite">
+          Paused at <span className="font-medium">{resume.pausedAtLabel}</span>
+          {" · resumes at "}
+          <span className="font-medium">{resume.resumesAtLabel}</span>
+          <span className="text-[var(--coop-panel-muted)]"> ({resume.countdown})</span>
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -462,7 +532,7 @@ function PlanUsageDetail({ prefs }: SettingsDetailProps): React.ReactElement {
   const orgName = displayOrgName(prefs);
   const adminBase = (prefs.adminPortalUrl ?? "https://admin.coop-ai.dev").replace(/\/$/, "");
   const meters = prefs.usageMeters;
-  const resetCopy = formatPaidUsageResetCopy(meters?.periodEnd);
+  const resetParts = formatPaidUsageResetParts(meters?.periodEnd);
 
   if (!preferencesSignedIn(prefs)) {
     return (
@@ -480,15 +550,19 @@ function PlanUsageDetail({ prefs }: SettingsDetailProps): React.ReactElement {
       <div className="mt-3 grid gap-2">
         <div className="coop-settings-card p-3">
           <p className="text-[10px] uppercase tracking-wide text-[var(--coop-panel-muted)]">Current plan</p>
-          <p className="mt-1 text-[15px] font-medium">
-            {displayPlanLabel(prefs)}
-            {meters ? ` $${meters.seatPriceUsd}/mo` : ""}
-          </p>
-          {resetCopy ? <p className="coop-settings-card-desc mt-1">{resetCopy}</p> : null}
-          <div className="coop-settings-actions mt-2">
-            <a className="coop-settings-action-btn" href={`${adminBase}/billing`} target="_blank" rel="noreferrer">
-              Adjust plan
-            </a>
+          <div className="space-y-2">
+            <p className="text-[15px] font-medium">
+              {displayPlanLabel(prefs)}
+              {meters ? ` $${meters.seatPriceUsd}/mo` : ""}
+            </p>
+            {prefs.plan === "free" && prefs.quotaCredits ? (
+              <FreePlanUsageMeter quota={prefs.quotaCredits} timezone={prefs.timezone} />
+            ) : resetParts ? (
+              <p className="text-[13px]">
+                Resets on <span className="font-medium">{resetParts.dateLabel}</span>
+                <span className="text-[var(--coop-panel-muted)]"> · {resetParts.countdown}</span>
+              </p>
+            ) : null}
           </div>
         </div>
         {meters?.nextTier ? (
@@ -520,12 +594,6 @@ function PlanUsageDetail({ prefs }: SettingsDetailProps): React.ReactElement {
         ) : null}
       </div>
 
-      {prefs.plan === "free" && prefs.quotaCredits ? (
-        <p className="mt-3 text-[11px] text-[var(--coop-panel-muted)]">
-          {formatQuotaUsageSummary(prefs.quotaCredits)}
-        </p>
-      ) : null}
-
       {meters ? (
         <>
           <p className="coop-prompt-modal-section-title mt-4">Included in {meters.displayName}</p>
@@ -534,7 +602,8 @@ function PlanUsageDetail({ prefs }: SettingsDetailProps): React.ReactElement {
             meters.frontier.usedRatio,
             typeof meters.usedRatio === "number"
               ? meters.usedRatio
-              : Math.min(1, meters.auto.usedRatio + meters.frontier.usedRatio)
+              : Math.min(1, meters.auto.usedRatio + meters.frontier.usedRatio),
+            resetParts
           )}
         </>
       ) : null}

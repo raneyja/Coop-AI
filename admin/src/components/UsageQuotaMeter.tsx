@@ -1,39 +1,24 @@
+"use client";
+
+import { useEffect, useState, type ReactElement } from "react";
 import Link from "next/link";
 import type { QuotaSnapshot } from "@/lib/coopApi";
-import { formatPaidUsageResetCopy } from "@/lib/usageResetCopy";
+import {
+  isFreeQuotaExhausted,
+  quotaUsedPercent,
+  resolveFreeQuotaCredits
+} from "@/lib/quotaSnapshot";
+import {
+  formatFreeQuotaResumeParts,
+  formatPaidUsageResetCopy,
+  formatQuotaUsageSummary
+} from "@/lib/usageResetCopy";
 
 type UsageQuotaMeterProps = {
   snapshot?: QuotaSnapshot;
   loading?: boolean;
   showUpgradeLink?: boolean;
 };
-
-function formatCreditCount(value: number | undefined): string {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return "—";
-  }
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.max(0, value));
-}
-
-function formatResetTime(resetsAt: string | undefined): string | null {
-  if (!resetsAt) return null;
-  const parsed = new Date(resetsAt);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit"
-  });
-}
-
-function percentUsed(used: number | undefined, limit: number | undefined): number {
-  if (typeof used !== "number" || typeof limit !== "number" || limit <= 0) {
-    return 0;
-  }
-  const ratio = (used / limit) * 100;
-  return Math.max(0, Math.min(100, ratio));
-}
 
 function stackedPercents(autoRatio: number, frontierRatio: number): { auto: number; frontier: number } {
   const auto = Math.max(0, autoRatio) * 100;
@@ -46,53 +31,65 @@ function stackedPercents(autoRatio: number, frontierRatio: number): { auto: numb
   return { auto: auto * scale, frontier: frontier * scale };
 }
 
-function resolveTokenFields(snapshot?: QuotaSnapshot): {
-  usedTokens?: number;
-  limitTokens?: number;
-  remainingTokens?: number;
-} {
-  const limitTokens =
-    typeof snapshot?.limitTokens === "number"
-      ? snapshot.limitTokens
-      : typeof snapshot?.limitCredits === "number"
-        ? snapshot.limitCredits * 1000
-        : undefined;
-  const usedTokens =
-    typeof snapshot?.usedTokens === "number"
-      ? snapshot.usedTokens
-      : typeof snapshot?.usedCredits === "number"
-        ? snapshot.usedCredits * 1000
-        : undefined;
-  const remainingTokens =
-    typeof snapshot?.remainingTokens === "number"
-      ? snapshot.remainingTokens
-      : typeof limitTokens === "number" && typeof usedTokens === "number"
-        ? Math.max(0, limitTokens - usedTokens)
-        : typeof snapshot?.remainingCredits === "number"
-          ? snapshot.remainingCredits * 1000
-          : undefined;
-  return { usedTokens, limitTokens, remainingTokens };
+function FreeUsageMeter({
+  credits
+}: {
+  credits: NonNullable<ReturnType<typeof resolveFreeQuotaCredits>>;
+}): ReactElement {
+  const exhausted = isFreeQuotaExhausted(credits);
+  const pct = quotaUsedPercent(credits.usedCredits, credits.limitCredits);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    if (!exhausted) {
+      return;
+    }
+    const id = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(id);
+  }, [exhausted]);
+
+  const resume = exhausted
+    ? formatFreeQuotaResumeParts(
+        { resetsAt: credits.resetsAt, windowHours: credits.windowHours },
+        now
+      )
+    : null;
+
+  return (
+    <div className="space-y-2">
+      <div
+        className="flex h-2 overflow-hidden rounded-full bg-white/10"
+        role="img"
+        aria-label={`${pct}% of free AI credits used`}
+      >
+        {pct > 0 ? <div className="h-full bg-coop-index" style={{ width: `${pct}%` }} /> : null}
+      </div>
+      <p className="text-sm text-coop-muted">{formatQuotaUsageSummary(credits, { exhausted })}</p>
+      {resume ? (
+        <p className="text-sm text-white" aria-live="polite">
+          Paused at <span className="font-medium">{resume.pausedAtLabel}</span>
+          {" · resumes at "}
+          <span className="font-medium">{resume.resumesAtLabel}</span>
+          <span className="text-coop-muted"> ({resume.countdown})</span>
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: UsageQuotaMeterProps) {
-  const { usedTokens, limitTokens, remainingTokens } = resolveTokenFields(snapshot);
   const meters = snapshot?.usageMeters;
   const paidResetLabel = formatPaidUsageResetCopy(meters?.periodEnd);
-  const freeResetLabel = formatResetTime(snapshot?.resetsAt);
-  const exhausted = typeof remainingTokens === "number" && remainingTokens <= 0;
-  const displayUsed =
-    exhausted && typeof limitTokens === "number" ? limitTokens : (usedTokens ?? 0);
-  const displayRemaining = exhausted ? 0 : (remainingTokens ?? 0);
-  const usedPercent = percentUsed(displayUsed, limitTokens);
   const unlimited = Boolean(snapshot?.unlimited);
-  const windowHours = snapshot?.windowHours ?? 5;
   const isPaidMeters = Boolean(meters) && !unlimited;
+  const freeCredits = !isPaidMeters && !unlimited ? resolveFreeQuotaCredits(snapshot) : null;
   const autoRatio = meters?.auto.usedRatio ?? 0;
   const frontierRatio = meters?.frontier.usedRatio ?? 0;
   const totalRatio =
     typeof meters?.usedRatio === "number" ? meters.usedRatio : Math.min(1, autoRatio + frontierRatio);
   const segments = stackedPercents(autoRatio, frontierRatio);
   const totalPct = Math.round(Math.max(0, Math.min(100, totalRatio * 100)));
+  const windowHours = freeCredits?.windowHours ?? snapshot?.windowHours ?? 5;
 
   return (
     <section className="admin-card space-y-3">
@@ -102,12 +99,12 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: U
           <p className="mt-1 text-sm text-coop-muted">
             {isPaidMeters
               ? `${meters?.displayName ?? "Pro"} includes monthly usage that resets on your signup anniversary.`
-              : `Free plan includes ${formatCreditCount(limitTokens ?? 80_000)} AI credits per ${windowHours}-hour window (GPT-4o mini).`}
+              : `Free includes ${freeCredits?.limitCredits ?? 80}K AI credits per ${windowHours}-hour window.`}
           </p>
         </div>
         {showUpgradeLink ? (
           <Link href="/billing" className="admin-link text-sm">
-            {isPaidMeters ? "Adjust plan" : "Upgrade plan"}
+            {isPaidMeters ? "Adjust plan" : "Upgrade to Pro"}
           </Link>
         ) : null}
       </div>
@@ -129,7 +126,11 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: U
             <p className="text-sm font-medium text-white">Monthly usage</p>
             <p className="text-xs text-coop-muted">{totalPct}% used</p>
           </div>
-          <div className="flex h-2 overflow-hidden rounded-full bg-white/10" role="img" aria-label={`${totalPct}% of monthly usage used`}>
+          <div
+            className="flex h-2 overflow-hidden rounded-full bg-white/10"
+            role="img"
+            aria-label={`${totalPct}% of monthly usage used`}
+          >
             {segments.auto > 0 ? (
               <div className="h-full bg-coop-index" style={{ width: `${segments.auto}%` }} />
             ) : null}
@@ -152,31 +153,8 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: U
           </p>
           {paidResetLabel ? <p className="text-xs text-coop-muted">{paidResetLabel}</p> : null}
         </div>
-      ) : typeof limitTokens === "number" ? (
-        <div className="space-y-2">
-          <p className="text-2xl font-semibold tabular-nums text-white">
-            {formatCreditCount(displayUsed)}
-            <span className="text-base font-medium text-coop-muted">
-              {" "}
-              / {formatCreditCount(limitTokens)} AI credits
-            </span>
-          </p>
-          <div className="h-2 overflow-hidden rounded-full bg-white/10">
-            <div
-              className="h-full rounded-full bg-coop-index transition-[width] duration-300 ease-out"
-              style={{ width: `${usedPercent}%` }}
-            />
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-coop-muted">
-            <span>{formatCreditCount(displayRemaining)} AI credits remaining</span>
-            <span>{Math.round(usedPercent)}% used</span>
-          </div>
-          <p className="text-xs text-coop-muted">
-            {exhausted && freeResetLabel
-              ? `Account paused · resets at ${freeResetLabel}`
-              : "Account pauses when exhausted"}
-          </p>
-        </div>
+      ) : freeCredits ? (
+        <FreeUsageMeter credits={freeCredits} />
       ) : (
         <div className="space-y-2">
           <p className="text-sm text-coop-muted">Usage limits are not available for this organization yet.</p>
