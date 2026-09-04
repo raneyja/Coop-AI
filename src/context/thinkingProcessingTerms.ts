@@ -98,18 +98,11 @@ export function stripThinkingProcessingTerms(messages: string[]): string[] {
   return messages.filter((message) => !isThinkingProcessingTermMessage(message));
 }
 
+/** No-op — fake Distilling/Aggregating rotation is off. */
 export function appendThinkingProcessingTerms(
   messages: string[],
-  seed: string,
-  count = 5
+  _seed: string,
+  _count = 5
 ): string[] {
-  const seen = new Set(messages);
-  const enriched = [...messages];
-  for (const message of buildProcessingTermMessages(seed, count)) {
-    if (!seen.has(message)) {
-      seen.add(message);
-      enriched.push(message);
-    }
-  }
-  return enriched;
+  return [...messages];
 }

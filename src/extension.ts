@@ -8,6 +8,7 @@ import { getWebviewOptions } from "./chat/renderWebviewHtml";
 import { readConfiguration, readDegradationConfiguration, SecureApiClient } from "./chat/SecureApiClient";
 import { resolveSearchScopeForPlan } from "./license/planSearchScope";
 import { classifyCoopUriPath } from "./extension/coopUriRoutes";
+import { resolveUserAuthApiBase } from "./config/authApiBase";
 import { registerQuickActionCommands } from "./extension/quickActionCommands";
 import {
   registerCoopAutocomplete,
@@ -557,7 +558,7 @@ export function activate(context: vscode.ExtensionContext): void {
         void (async () => {
           try {
             await api.storeSession(token, refreshToken);
-            await api.fetchMe(readConfiguration().apiBaseUrl);
+            await api.fetchMe(resolveUserAuthApiBase(readConfiguration().apiBaseUrl));
             await refreshAllSessions();
             void vscode.window.showInformationMessage("Signed in to Coop.");
           } catch {
@@ -799,9 +800,9 @@ export function activate(context: vscode.ExtensionContext): void {
       session.reloadChatWebviewHtml();
     }
   };
-  reloadAllChatWebviews();
-  setTimeout(reloadAllChatWebviews, 0);
-  setTimeout(reloadAllChatWebviews, 250);
+  // One delayed pass covers activate-before-resolve. Immediate extra html
+  // assignments cancel the first iframe load and leave a black sidebar.
+  setTimeout(reloadAllChatWebviews, 400);
 }
 
 export function deactivate(): void {}

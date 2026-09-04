@@ -123,6 +123,7 @@ type SettingsPanelProps = {
   onAttachAgentsMd: () => void;
   onOpenAgentsMd: () => void;
   onStartFromAgentsMdTemplate: () => void;
+  onDetachAgentsMd?: () => void;
   onAddVisibleMemory?: (fact: { text: string; source: string; repoId?: string }) => void;
   onClearVisibleMemory?: (id?: string) => void;
   onCompleteOnboarding?: () => void;

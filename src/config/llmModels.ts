@@ -359,3 +359,12 @@ export function formatModelCreditWeight(weight: number): string {
 export function formatModelOptionLabel(def: ModelDefinition): string {
   return def.label;
 }
+
+/** Status while waiting on the first token from a picked catalog model. */
+export function formatWaitingOnModelMessage(model: string): string {
+  if (isAutoModelSelection(model)) {
+    return "Waiting on Auto…";
+  }
+  const label = getCatalogModelById(model)?.label ?? model.trim() ?? "the model";
+  return `Waiting on ${label}…`;
+}

@@ -10,7 +10,7 @@ import { selectFimProvider } from "./fimRouter";
 import { buildUserMessageWithContext, buildProjectInstructionsSystemBlock, systemPromptForUseCase } from "../prompts/systemPrompts";
 import { REPO_SUMMARY_LOCATE_ONLY_MARKER } from "../prompts/repoSummarySynthesis";
 import { appendUserPaperclipAttachmentsPrompt } from "../chat/paperclipAttachments";
-import { resolveAnthropicThinkingBudget } from "../config/chatThinkingBudget";
+import { resolveProviderThinking } from "../config/modelThinking";
 
 // The enterprise-confidential retention preamble is owned solely by
 // requestFormatter.injectZeroRetentionSystemPrompt, so it is prepended once at
@@ -117,10 +117,9 @@ export class ModelRouter {
     let inputTokens = 0;
     let outputTokens = 0;
 
-    const thinkingBudget =
-      request.enableThinking && provider === "anthropic"
-        ? resolveAnthropicThinkingBudget(request.modelConfig.maxTokens)
-        : undefined;
+    const thinking = request.enableThinking
+      ? resolveProviderThinking(provider, request.modelConfig.model, request.modelConfig.maxTokens)
+      : undefined;
 
     try {
       for await (const chunk of client.streamCompletion({
@@ -130,7 +129,7 @@ export class ModelRouter {
         maxTokens: request.modelConfig.maxTokens,
         signal,
         requestId: request.requestId,
-        thinking: thinkingBudget ? { budgetTokens: thinkingBudget } : undefined
+        thinking
       })) {
         if (chunk.type === "done") {
           inputTokens = chunk.usage.inputTokens;

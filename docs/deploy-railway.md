@@ -99,6 +99,8 @@ Set these on the **Coop-AI** service (**Variables** tab). Source for integration
 | `RESEND_API_KEY` | From local `.env.backend` |
 | `EMAIL_FROM` | `CoopAI <hello@coop-ai.dev>` |
 | `COOP_EMAIL_MOCK` | `false` |
+| `SENTRY_DSN` | Sentry → Project Settings → Client Keys (DSN). Leave unset until the project exists. |
+| `SENTRY_ENVIRONMENT` | `production` (optional; defaults to `NODE_ENV`) |
 
 `DATABASE_URL` — reference from Postgres (Part A3). **`PORT`** — leave unset; Railway sets it automatically.
 

@@ -106,7 +106,7 @@ export type StreamChunk =
   /** Model reasoning / extended thinking — display-only; never replayed as history. */
   | { type: "thinking"; text: string }
   | { type: "done"; usage: TokenUsage; model: string; provider: LlmProvider; finishReason: FinishReason }
-  | { type: "error"; message: string; code?: string };
+  | { type: "error"; message: string; code?: string; requestId?: string };
 
 export type V1ChatRequestBody = {
   message: string;
@@ -125,8 +125,11 @@ export type V1ChatRequestBody = {
 };
 
 export type ProviderThinkingOptions = {
+  mode?: "adaptive" | "extended" | "openai-reasoning" | "gemini-thoughts";
   /** Anthropic extended thinking budget (must be < effective max_tokens). */
-  budgetTokens: number;
+  budgetTokens?: number;
+  /** Anthropic adaptive effort, or OpenAI Chat Completions reasoning_effort. */
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
 };
 
 export type ProviderStreamOptions = {
@@ -136,7 +139,7 @@ export type ProviderStreamOptions = {
   maxTokens: number;
   signal?: AbortSignal;
   requestId: string;
-  /** When set, Anthropic requests include a thinking block and may emit thinking chunks. */
+  /** When set, the provider request enables native thinking and may emit thinking chunks. */
   thinking?: ProviderThinkingOptions;
 };
 

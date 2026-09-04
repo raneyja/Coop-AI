@@ -10,6 +10,28 @@ function AppShell({ children }: { children: React.ReactNode }): React.ReactEleme
   return <>{children}</>;
 }
 
+class BootErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error?: Error }
+> {
+  public state: { error?: Error } = {};
+
+  public static getDerivedStateFromError(error: Error): { error: Error } {
+    return { error };
+  }
+
+  public render(): React.ReactNode {
+    if (this.state.error) {
+      return (
+        <pre style={{ color: "#d4d4d4", padding: 16, whiteSpace: "pre-wrap", font: "12px/1.4 monospace" }}>
+          {`CoopAI failed to load.\n${this.state.error.stack ?? this.state.error.message}`}
+        </pre>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 declare global {
   interface Window {
     acquireVsCodeApi: () => {
@@ -17,17 +39,43 @@ declare global {
       getState: () => unknown;
       setState: (state: unknown) => void;
     };
+    __coopVscodeApi?: ReturnType<Window["acquireVsCodeApi"]>;
     __COOP_VIEW__?: "chat" | "settings";
   }
 }
 
-const vscode = window.acquireVsCodeApi();
-const view = window.__COOP_VIEW__ ?? "chat";
-startVscodeThemeSync();
-const root = createRoot(document.getElementById("root") as HTMLElement);
+function showBootError(error: unknown): void {
+  const root = document.getElementById("root");
+  if (!root) {
+    return;
+  }
+  const message = error instanceof Error ? error.stack ?? error.message : String(error);
+  root.textContent = `CoopAI failed to load.\n${message}`;
+}
 
-root.render(
-  <AppShell>
-    {view === "settings" ? <SettingsView vscode={vscode} /> : <ChatPanel vscode={vscode} />}
-  </AppShell>
-);
+function getVsCodeApi(): ReturnType<Window["acquireVsCodeApi"]> {
+  if (!window.__coopVscodeApi) {
+    window.__coopVscodeApi = window.acquireVsCodeApi();
+  }
+  return window.__coopVscodeApi;
+}
+
+try {
+  const vscode = getVsCodeApi();
+  const view = window.__COOP_VIEW__ ?? "chat";
+  startVscodeThemeSync();
+  const mount = document.getElementById("root");
+  if (!mount) {
+    throw new Error("Missing #root");
+  }
+  const root = createRoot(mount);
+  root.render(
+    <BootErrorBoundary>
+      <AppShell>
+        {view === "settings" ? <SettingsView vscode={vscode} /> : <ChatPanel vscode={vscode} />}
+      </AppShell>
+    </BootErrorBoundary>
+  );
+} catch (error) {
+  showBootError(error);
+}

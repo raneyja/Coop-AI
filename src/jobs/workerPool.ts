@@ -13,6 +13,7 @@ import { executeJob, type JobExecutionContext } from "./executors";
 import type { JobMonitor } from "./monitoring";
 import type { JobQueue } from "./jobQueue";
 import type { Job } from "./types";
+import { captureException } from "../server/observability/errorReporter";
 
 export type WorkerPoolConfig = {
   concurrency: number;
@@ -148,6 +149,13 @@ export class WorkerPool extends EventEmitter {
       this.monitor?.recordFailure(failed);
       this.monitor?.recordCompletion(failed, Date.now() - startedAt);
       this.emit("job:done", failed);
+      const orgId = typeof failed.params.orgId === "string" ? failed.params.orgId : undefined;
+      captureException(error, {
+        jobId: failed.id,
+        jobType: failed.type,
+        orgId,
+        route: "job"
+      });
     }
     if (error instanceof JobTimeoutError) {
       this.monitor?.recordWorkerCrash(error);

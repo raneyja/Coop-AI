@@ -9,6 +9,7 @@ import { resumeEmbeddingFailuresForAllOrgs } from "../server/queueOrgRepoIndex";
 import { getDbPool, closeDbPool } from "../server/db";
 import { OrgStore } from "../server/orgStore";
 import { loadServerConfig } from "../server/serverConfig";
+import { initErrorReporter } from "../server/observability/errorReporter";
 import { loadGitHubAppConfig } from "../server/githubAppConfig";
 import { createGithubAppService } from "../server/codeHostCredentialResolver";
 import { GitHubConnector } from "../server/codeHostConnectors/githubConnector";
@@ -39,6 +40,7 @@ function startWorkerHealthServer(port: number): ReturnType<typeof createServer> 
 }
 
 async function main(): Promise<void> {
+  initErrorReporter({ service: "worker" });
   const webhookConfig = loadWebhookConfig();
   const jobConfig = loadJobQueueConfig();
   const serverConfig = loadServerConfig();

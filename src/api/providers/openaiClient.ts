@@ -10,7 +10,7 @@ export class OpenAiProviderClient extends BaseProviderClient {
         method: "POST",
         headers: { ...headers, "content-type": "application/json" },
         body: JSON.stringify({
-          ...body,
+          ...applyOpenAiThinking(body, options.thinking),
           stream: true,
           stream_options: { include_usage: true }
         })
@@ -19,6 +19,19 @@ export class OpenAiProviderClient extends BaseProviderClient {
       (line, state) => parseOpenAiSseLine(line, state)
     );
   }
+}
+
+export function applyOpenAiThinking(
+  body: Record<string, unknown>,
+  thinking?: ProviderStreamOptions["thinking"]
+): Record<string, unknown> {
+  if (thinking?.mode !== "openai-reasoning") {
+    return body;
+  }
+  return {
+    ...body,
+    reasoning_effort: thinking.effort ?? "medium"
+  };
 }
 
 export function parseOpenAiSseLine(line: string, state: ParseState): StreamChunk | undefined {

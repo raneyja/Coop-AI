@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { createRequestId, ModelRouter } from "./ModelRouter";
+import { ModelRouter } from "./ModelRouter";
 import type { LlmServerConfig } from "./llmServerConfig";
 import { loadLlmServerConfig } from "./llmServerConfig";
 import type { LlmProvider } from "./zeroRetentionConfig";
@@ -19,6 +19,8 @@ import { AuditLogger, auditActor } from "../server/audit/auditLogger";
 import type { UsageTracker } from "../server/usageTracker";
 import type { UserStore } from "../server/users/userStore";
 import { loadServerConfig, type ServerConfig } from "../server/serverConfig";
+import { captureException } from "../server/observability/errorReporter";
+import { resolveHttpRequestId } from "../server/observability/requestId";
 import {
   createPlanQuotaService,
   estimateChatRequestTokens,
@@ -225,12 +227,13 @@ export async function handleChatApiRequest(
   }
 
   const router = createChatRouter(deps);
-  const requestId = createRequestId();
+  const requestId = resolveHttpRequestId(parsed.headers);
 
   response.writeHead(200, {
     "content-type": "text/event-stream; charset=utf-8",
     "cache-control": "no-cache",
-    connection: "keep-alive"
+    connection: "keep-alive",
+    "x-request-id": requestId
   });
 
   const abortController = new AbortController();
@@ -272,9 +275,16 @@ export async function handleChatApiRequest(
       }
     }
   } catch (error) {
+    captureException(error, {
+      service: "api",
+      orgId: org.orgId,
+      requestId,
+      route: "/v1/chat"
+    });
     writeSse(response, {
       type: "error",
-      message: error instanceof Error ? error.message : "Chat stream failed."
+      message: error instanceof Error ? error.message : "Chat stream failed.",
+      requestId
     });
   }
 

@@ -14,6 +14,8 @@ export type TimeoutResult = {
 export type ResilientRequestOptions<T> = {
   policy?: Partial<RetryPolicy>;
   timeoutMs?: number;
+  /** Caller abort (user Stop). Combined with `timeoutMs` so TTFB still has a ceiling. */
+  signal?: AbortSignal;
   shouldRetryError?: (error: unknown) => boolean;
   onRetry?: (attempt: number, delayMs: number, error?: unknown) => void;
   run: (signal?: AbortSignal) => Promise<T>;
@@ -92,9 +94,35 @@ export async function retryWithBackoff<T>(
   throw lastError;
 }
 
+export function combineAbortSignals(
+  ...signals: Array<AbortSignal | undefined>
+): AbortSignal | undefined {
+  const live = signals.filter((signal): signal is AbortSignal => Boolean(signal));
+  if (live.length === 0) {
+    return undefined;
+  }
+  if (live.length === 1) {
+    return live[0];
+  }
+  if (typeof AbortSignal.any === "function") {
+    return AbortSignal.any(live);
+  }
+  const combined = new AbortController();
+  const forward = () => combined.abort();
+  for (const signal of live) {
+    if (signal.aborted) {
+      combined.abort();
+      return combined.signal;
+    }
+    signal.addEventListener("abort", forward, { once: true });
+  }
+  return combined.signal;
+}
+
 export async function runResilientRequest<T>({
   policy,
   timeoutMs,
+  signal: userSignal,
   shouldRetryError,
   onRetry,
   run
@@ -102,14 +130,18 @@ export async function runResilientRequest<T>({
   return retryWithBackoff(
     async () => {
       if (!timeoutMs || timeoutMs <= 0) {
-        return run();
+        return run(userSignal);
       }
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      const combined = combineAbortSignals(userSignal, controller.signal);
       try {
-        return await run(controller.signal);
+        return await run(combined);
       } catch (error) {
         if (isAbortError(error)) {
+          if (userSignal?.aborted) {
+            throw error;
+          }
           throw new NetworkResilienceError(
             `Request timed out after ${Math.round(timeoutMs / 1000)} seconds`,
             error,

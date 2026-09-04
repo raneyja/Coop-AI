@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from "axios";
 import { assertCoopEndpoint } from "./resolveBaseUrl";
+import { resolveUserAuthApiBase } from "../config/authApiBase";
 import { isRetryableError, runResilientRequest } from "./networkResilience";
 import { formatCoopApiError, type CoopApiErrorBody } from "./userFacingErrors";
 import { MAX_USER_FACING_RESPONSE_MS } from "../config/responseDeadline";
@@ -199,6 +200,10 @@ export class CoopBackendClient {
 
   public constructor(private readonly options: CoopBackendClientOptions) {}
 
+  private userAuthBase(baseUrl: string): string {
+    return resolveUserAuthApiBase(baseUrl);
+  }
+
   public setBaseUrl(baseUrl: string): void {
     this.http = axios.create({
       baseURL: baseUrl.replace(/\/$/, ""),
@@ -347,12 +352,12 @@ export class CoopBackendClient {
     email: string,
     password: string
   ): Promise<AuthSessionResponse> {
-    assertCoopEndpoint(baseUrl);
+    assertCoopEndpoint(this.userAuthBase(baseUrl));
     const response = await this.http.post<AuthSessionResponse & CoopApiErrorBody>(
       "/v1/auth/login",
       { email, password },
       {
-        baseURL: baseUrl.replace(/\/$/, ""),
+        baseURL: this.userAuthBase(baseUrl),
         validateStatus: () => true
       }
     );
@@ -368,13 +373,14 @@ export class CoopBackendClient {
   }
 
   public startGoogleAuthUrl(baseUrl: string, redirect?: string): string {
-    assertCoopEndpoint(baseUrl);
+    const authBase = this.userAuthBase(baseUrl);
+    assertCoopEndpoint(authBase);
     const params = new URLSearchParams({ mode: "login" });
     const sanitized = redirect?.trim();
     if (sanitized) {
       params.set("redirect", sanitized);
     }
-    return `${baseUrl.replace(/\/$/, "")}/v1/auth/google/start?${params.toString()}`;
+    return `${authBase}/v1/auth/google/start?${params.toString()}`;
   }
 
   public async refreshSession(baseUrl: string, refreshToken: string): Promise<AuthSessionResponse> {
@@ -412,12 +418,12 @@ export class CoopBackendClient {
   }
 
   public async forgotPassword(baseUrl: string, email: string): Promise<{ ok: boolean; message?: string }> {
-    assertCoopEndpoint(baseUrl);
+    assertCoopEndpoint(this.userAuthBase(baseUrl));
     const response = await this.http.post<{ ok?: boolean; message?: string } & CoopApiErrorBody>(
       "/v1/auth/forgot-password",
       { email },
       {
-        baseURL: baseUrl.replace(/\/$/, ""),
+        baseURL: this.userAuthBase(baseUrl),
         validateStatus: () => true
       }
     );
@@ -735,7 +741,8 @@ export class CoopBackendClient {
     baseUrl: string,
     options: { orgId?: string; org?: string; redirect?: string }
   ): Promise<string> {
-    assertCoopEndpoint(baseUrl);
+    const authBase = this.userAuthBase(baseUrl);
+    assertCoopEndpoint(authBase);
     const params = new URLSearchParams({ format: "json" });
     if (options.orgId?.trim()) {
       params.set("orgId", options.orgId.trim());
@@ -749,7 +756,7 @@ export class CoopBackendClient {
     const response = await this.http.get<{ redirectUrl?: string } & CoopApiErrorBody>(
       `/v1/auth/saml/start?${params.toString()}`,
       {
-        baseURL: baseUrl.replace(/\/$/, ""),
+        baseURL: authBase,
         validateStatus: () => true
       }
     );

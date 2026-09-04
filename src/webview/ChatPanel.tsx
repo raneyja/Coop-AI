@@ -47,7 +47,6 @@ import {
   hasVisibleAssistantResponse,
   isSynthesisActivityPhase,
   pickRotatingThinkingMessage,
-  pickSynthesisThinkingLine,
   shouldResetThinkingRotationStep,
   shouldShowThinkingIndicator,
   THINKING_ROTATION_STEP_MS
@@ -642,17 +641,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     ]
   );
 
-  // Prefer real model CoT; during synthesis keep Thinking alive with rotating copy.
-  // Same start delay as todos so Thinking doesn't pop in the instant you send.
-  const showSynthesisThinking =
-    synthesisPhase &&
-    synthesisElapsedMs >= ACTIVITY_START_DELAY_MS &&
-    !hasVisibleAssistantResponse(messages, streamMessage);
-  const visibleModelThinking =
-    thinkingBuffer.trim() ||
-    (showSynthesisThinking ? pickSynthesisThinkingLine(thinkingRotationStep) : undefined);
-  const modelThinkingStreaming =
-    showSynthesisThinking || Boolean(isStreaming && !streamMessage && thinkingBuffer.trim());
+  // Real model CoT only — never invent “Distilling sources…” while waiting.
+  const visibleModelThinking = thinkingBuffer.trim();
+  const modelThinkingStreaming = Boolean(isStreaming && !streamMessage && thinkingBuffer.trim());
 
   const activityFromFeedback = useMemo<AgentActivityState>(() => {
     // Do not invent tool rows from status todos — that produced fake "N explored" counts.
@@ -670,8 +661,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     (agentActivity.todos.length > 0 ||
       Boolean(visibleModelThinking) ||
       Boolean(visibleThinkingMessage) ||
-      agentActivity.tools.length > 0 ||
-      synthesisPhase);
+      agentActivity.tools.length > 0);
 
   const activityInFlight =
     showAgentActivity ||
@@ -1294,6 +1284,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
             break;
           }
+          setIntentFeedback(undefined);
           setIsStreaming(true);
           setThinkingBuffer((prev) => prev + message.payload.chunk);
           break;
@@ -2124,7 +2115,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           onSeeAll={openPromptLibrary}
         />
         <AgentsMdStatusChip
-          state={context.fileSource === "remote" ? undefined : context.projectInstructions}
+          state={context.projectInstructions}
           disabled={isStreaming}
           onCreate={() => post({ type: "agents:start-from-template" })}
           onOpen={() => post({ type: "agents:open" })}

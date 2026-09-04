@@ -25,6 +25,7 @@ export function AdminDashboard() {
   const { plan, usageTier, capabilities, loading: planLoading } = useOrgPlan();
   const { integrations, initialLoading, error: integrationsError } = useIntegrations({ poll: true });
   const [userCount, setUserCount] = useState<number | null>(null);
+  const [seatCount, setSeatCount] = useState<number | null>(null);
   const [quota, setQuota] = useState<QuotaSnapshot | undefined>();
   const [quotaLoading, setQuotaLoading] = useState(capabilities.showUsageQuota);
   const [usersLoading, setUsersLoading] = useState(true);
@@ -52,8 +53,10 @@ export function AdminDashboard() {
     }
     if (usersResult.ok && usersResult.data?.users) {
       setUserCount(usersResult.data.users.length);
+      setSeatCount(usersResult.data.seats ?? null);
     } else {
       setUserCount(null);
+      setSeatCount(null);
       if (!usersResult.ok && !isOrgSuspendedResult(usersResult)) {
         setError(usersResult.error ?? "Failed to load users.");
       }
@@ -74,7 +77,7 @@ export function AdminDashboard() {
   const nudge =
     plan === "pro" && planLoading && !effectiveUsageTier
       ? null
-      : resolvePlanNudge({ plan, usageTier: effectiveUsageTier });
+      : resolvePlanNudge({ plan, usageTier: effectiveUsageTier, seats: seatCount });
 
   async function handleUpgrade() {
     setUpgrading(true);

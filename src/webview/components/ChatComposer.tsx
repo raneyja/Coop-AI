@@ -467,7 +467,7 @@ export function ChatComposer({
                 ) : (
                   <p className="coop-prompt-modal-muted px-3 py-2 text-xs">
                     {(mentionHint && mentionHint.trim()) ||
-                      `No files match "${mentionQuery}". Check Workspace → Search scope, or open the repo folder locally.`}
+                      `No files match "${mentionQuery}". Check GitHub connection, or open the repo folder locally.`}
                   </p>
                 )
               ) : (

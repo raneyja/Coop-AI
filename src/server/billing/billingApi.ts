@@ -22,6 +22,7 @@ import {
 import type { AuthIdentityStore } from "../auth/authIdentityStore";
 import type { AuthTokenStore } from "../auth/authTokenStore";
 import type { AuthConfig } from "../auth/authConfig";
+import { captureException } from "../observability/errorReporter";
 
 type ParsedRequest = {
   method: string;
@@ -613,6 +614,7 @@ async function handleStripeWebhook(
     }
   } catch (error) {
     console.error("[stripe] webhook handler error:", error);
+    captureException(error, { service: "api", route: "/webhooks/stripe" });
     writeJson(response, 500, { error: "webhook_handler_failed" });
     return true;
   }

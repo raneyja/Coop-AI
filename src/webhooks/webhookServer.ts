@@ -98,6 +98,8 @@ import { AuthIdentityStore } from "../server/auth/authIdentityStore";
 import { AuthTokenStore } from "../server/auth/authTokenStore";
 import { GoogleAuthService } from "../server/auth/googleAuthService";
 import { handleUserAuthApiRequest } from "../server/auth/userAuthApi";
+import { initErrorReporter, reportServerError } from "../server/observability/errorReporter";
+import { resolveHttpRequestId } from "../server/observability/requestId";
 
 export type WebhookServerOptions = {
   config?: WebhookConfig;
@@ -141,6 +143,7 @@ type ParsedRequest = {
 const MAX_BODY_BYTES = 5 * 1024 * 1024;
 
 export async function createWebhookServer(options: WebhookServerOptions = {}): Promise<WebhookServerRuntime> {
+  initErrorReporter({ service: "api" });
   const config = options.config ?? loadWebhookConfig();
   const serverConfig = options.serverConfig ?? loadServerConfig();
   const pool = await getDbPool(config.cache.connectionString);
@@ -402,8 +405,11 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
   const corsOrigins = loadCorsOrigins();
 
   const server = createServer(async (request, response) => {
+    const requestId = resolveHttpRequestId(normalizeHeaders(request.headers));
+    response.setHeader("x-request-id", requestId);
     try {
       const parsed = await parseRequest(request);
+      parsed.headers["x-request-id"] = requestId;
       if (
         parsed.pathname.startsWith("/v1/") ||
         parsed.pathname === "/health" ||
@@ -988,8 +994,12 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
 
       writeJson(response, 404, { error: "not found" });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "unexpected server error";
-      writeJson(response, 500, { error: message });
+      const route = (request.url ?? "").split("?")[0];
+      if (response.headersSent) {
+        reportServerError(error, { requestId, route, service: "api" });
+        return;
+      }
+      writeJson(response, 500, reportServerError(error, { requestId, route, service: "api" }));
     }
   });
 
@@ -1083,7 +1093,12 @@ function deployedCommitSha(): string {
 }
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
-  response.writeHead(statusCode, { "content-type": "application/json; charset=utf-8" });
+  const requestId = response.getHeader("x-request-id");
+  const headers: Record<string, string> = { "content-type": "application/json; charset=utf-8" };
+  if (typeof requestId === "string" && requestId) {
+    headers["x-request-id"] = requestId;
+  }
+  response.writeHead(statusCode, headers);
   response.end(JSON.stringify(body, dateReplacer));
 }
 

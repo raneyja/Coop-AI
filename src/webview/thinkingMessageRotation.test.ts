@@ -35,18 +35,12 @@ test("buildProcessingTermMessages shuffles terms per seed", () => {
   assert.ok(first.every((message) => /…$/.test(message)));
 });
 
-test("appendThinkingProcessingTerms preserves tool lines and adds varied verbs", () => {
-  const enriched = appendThinkingProcessingTerms(
-    ["Searching GitHub estate index…", "Reviewing Jira tickets…"],
-    "seed-c",
-    4
-  );
-  assert.ok(enriched.includes("Searching GitHub estate index…"));
-  assert.ok(enriched.includes("Reviewing Jira tickets…"));
-  assert.ok(enriched.length >= 6);
+test("appendThinkingProcessingTerms does not add Distilling filler", () => {
+  const source = ["Searching GitHub estate index…", "Reviewing Jira tickets…"];
+  assert.deepEqual(appendThinkingProcessingTerms(source, "seed-c", 4), source);
 });
 
-test("buildThinkingMessageSequence merges integrations and processing terms", () => {
+test("buildThinkingMessageSequence keeps only concrete gather/job lines", () => {
   const sequence = buildThinkingMessageSequence(
     {
       status: "loading",
@@ -66,12 +60,20 @@ test("buildThinkingMessageSequence merges integrations and processing terms", ()
       deliverable: "chat"
     } satisfies JobProgressState
   );
-  assert.ok(sequence.includes("Searching GitHub estate index…"));
-  assert.ok(sequence.includes("Pulling in Slack messages…"));
-  assert.ok(sequence.includes("Building dependency graph…"));
-  // Terminal "preparing answer" lines are excluded from the checklist sequence.
-  assert.ok(!sequence.some((line) => /preparing answer/i.test(line)));
-  assert.ok(sequence.length >= 7);
+  assert.deepEqual(sequence, [
+    "Searching GitHub estate index…",
+    "Pulling in Slack messages…",
+    "Reviewing Jira tickets…",
+    "Building dependency graph…"
+  ]);
+  assert.ok(!sequence.some((line) => /preparing answer|distilling|aggregating/i.test(line)));
+});
+
+test("buildThinkingMessageSequence stays empty while awaiting a model with no gather work", () => {
+  assert.deepEqual(
+    buildThinkingMessageSequence(undefined, undefined, { awaitingResponse: true }),
+    []
+  );
 });
 
 test("pickRotatingThinkingMessage cycles without repeating order immediately", () => {

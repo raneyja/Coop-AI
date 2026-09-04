@@ -85,7 +85,7 @@ See also [Enterprise deployment](/docs/enterprise-deployment) and [Security arch
 **Admin portal → Billing** (paid):
 
 - View invoices and payment method via Stripe customer portal
-- Add seats
+- 1-seat plans: add a teammate (buys another seat, then invite from Users). Teams: add seats
 - Upgrade plan (Pro → Pro+ → Max)
 
 ## Usage limits

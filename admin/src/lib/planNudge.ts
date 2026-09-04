@@ -1,3 +1,5 @@
+import { isSoloSeatCount } from "./billingCopy";
+
 export type OrgPlan = "free" | "pro" | "enterprise";
 export type UsageTier = "pro" | "pro_plus" | "max";
 
@@ -33,12 +35,15 @@ export function displayUsageTierName(tier: UsageTier | "enterprise"): string {
 /**
  * Next-plan CTA for dashboard/billing. Never asks a Pro org to "upgrade to Pro".
  * Enterprise has no nudge. Max nudges to Enterprise via Billing.
+ * Pass `seats` when known so 1-seat orgs do not get team-seat copy.
  */
 export function resolvePlanNudge(options: {
   plan: string | null | undefined;
   usageTier?: string | null;
+  seats?: number | null;
 }): PlanNudge | null {
   const plan = options.plan === "enterprise" || options.plan === "pro" ? options.plan : "free";
+  const solo = options.seats != null && isSoloSeatCount(options.seats);
   if (plan === "enterprise") {
     return null;
   }
@@ -55,7 +60,9 @@ export function resolvePlanNudge(options: {
   if (tier === "pro") {
     return {
       title: "Upgrade to Pro+",
-      body: "Pro+ includes a larger monthly usage bar. Same team seats and unlimited Deep-Index.",
+      body: solo
+        ? "Pro+ includes a larger monthly usage bar for you. Unlimited Deep-Index."
+        : "Pro+ includes a larger monthly usage bar. Same team seats and unlimited Deep-Index.",
       ctaLabel: "Upgrade to Pro+",
       nextName: "Pro+",
       action: "billing"
@@ -64,7 +71,9 @@ export function resolvePlanNudge(options: {
   if (tier === "pro_plus") {
     return {
       title: "Upgrade to Max",
-      body: "Max is the highest self-serve usage before Enterprise. Same team seats and unlimited Deep-Index.",
+      body: solo
+        ? "Max is the highest self-serve usage before Enterprise. Unlimited Deep-Index."
+        : "Max is the highest self-serve usage before Enterprise. Same team seats and unlimited Deep-Index.",
       ctaLabel: "Upgrade to Max",
       nextName: "Max",
       action: "billing"

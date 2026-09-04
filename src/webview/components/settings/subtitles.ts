@@ -146,7 +146,7 @@ export function workspaceHubSubtitle(prefs: Preferences): string {
   const branch = prefs.branch || "main";
   const agentsHint = prefs.projectInstructions?.hasAgentsMd
     ? " · AGENTS.md ✓"
-    : prefs.projectInstructions?.status !== "disabled" && prefs.projectInstructions?.status !== "no_git"
+    : prefs.projectInstructions?.status !== "disabled"
       ? " · Add AGENTS.md"
       : "";
   return `${repo} · ${branch}${agentsHint}`;
