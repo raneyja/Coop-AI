@@ -124,17 +124,7 @@ function providerBody(
     case "openai":
       return openAiBody(commonBody, messages);
     case "deepseek":
-      // DeepSeek is OpenAI-compatible and uses the classic chat-completions params.
-      return {
-        model: commonBody.model,
-        temperature: commonBody.temperature,
-        max_tokens: commonBody.max_tokens,
-        messages: messages.map((message) => ({
-          role: message.role,
-          content: formatOpenAiContent(message)
-        })),
-        store: false
-      };
+      return deepSeekBody(commonBody, messages);
     case "anthropic":
       return anthropicBody(commonBody, messages);
     case "gemini":
@@ -167,6 +157,24 @@ function openAiBody(commonBody: Record<string, unknown>, messages: ChatRequestMe
     );
   } else {
     body.max_tokens = commonBody.max_tokens;
+    body.temperature = commonBody.temperature;
+  }
+  return body;
+}
+
+function deepSeekBody(commonBody: Record<string, unknown>, messages: ChatRequestMessage[]): Record<string, unknown> {
+  const model = String(commonBody.model ?? "");
+  const body: Record<string, unknown> = {
+    model,
+    max_tokens: commonBody.max_tokens,
+    messages: messages.map((message) => ({
+      role: message.role,
+      content: formatOpenAiContent(message)
+    })),
+    store: false
+  };
+  // Reasoner rejects custom temperature the same way GPT-5 / o-series do.
+  if (!model.toLowerCase().includes("reasoner")) {
     body.temperature = commonBody.temperature;
   }
   return body;

@@ -28,10 +28,12 @@ test("parseOpenAiSseLine still yields content deltas", () => {
 });
 
 test("applyOpenAiThinking only sets reasoning_effort for GPT-5 thinking mode", () => {
-  assert.deepEqual(
-    applyOpenAiThinking({ model: "gpt-5.1" }, { mode: "openai-reasoning", effort: "medium" }).reasoning_effort,
-    "medium"
+  const withThinking = applyOpenAiThinking(
+    { model: "gpt-5.1", temperature: 0.5 },
+    { mode: "openai-reasoning", effort: "medium" }
   );
+  assert.equal(withThinking.reasoning_effort, "medium");
+  assert.equal("temperature" in withThinking, false);
   assert.equal(
     "reasoning_effort" in applyOpenAiThinking({ model: "gpt-4o-mini" }, { mode: "adaptive" }),
     false

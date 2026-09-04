@@ -96,7 +96,35 @@ const gpt5Body = formatZeroRetentionRequest({
   allowUnapprovedProvider: true
 }).body;
 assert.equal("max_tokens" in gpt5Body, false);
+assert.equal("temperature" in gpt5Body, false);
 assert.equal(gpt5Body.max_completion_tokens, 8192 + 4096);
+
+const gpt4oBody = formatZeroRetentionRequest({
+  provider: "openai",
+  model: "gpt-4o-mini",
+  messages: baseMessages,
+  temperature: 0.5,
+  allowUnapprovedProvider: true
+}).body;
+assert.equal(gpt4oBody.temperature, 0.5);
+
+const deepseekChatBody = formatZeroRetentionRequest({
+  provider: "deepseek",
+  model: "deepseek-chat",
+  messages: baseMessages,
+  temperature: 0.5,
+  allowUnapprovedProvider: true
+}).body;
+assert.equal(deepseekChatBody.temperature, 0.5);
+
+const deepseekReasonerBody = formatZeroRetentionRequest({
+  provider: "deepseek",
+  model: "deepseek-reasoner",
+  messages: baseMessages,
+  temperature: 0.5,
+  allowUnapprovedProvider: true
+}).body;
+assert.equal("temperature" in deepseekReasonerBody, false);
 
 const plannerBody = formatZeroRetentionRequest({
   provider: "openai",

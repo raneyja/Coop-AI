@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyAnthropicThinking, parseAnthropicLine } from "./anthropicClient";
+import { applyAnthropicThinking, buildAnthropicInferenceBody, parseAnthropicLine } from "./anthropicClient";
 import type { ParseState } from "./baseClient";
 
 function state(): ParseState {
@@ -88,6 +88,27 @@ test("applyAnthropicThinking ignores OpenAI/Gemini thinking modes", () => {
   );
   assert.equal(applied.body.thinking, undefined);
   assert.equal(applied.forceTemperature, undefined);
+});
+
+test("buildAnthropicInferenceBody clamps chat temperature to 1 when thinking is on", () => {
+  const body = buildAnthropicInferenceBody({
+    formattedBody: { model: "claude-sonnet-4-6", temperature: 0.5, max_tokens: 16_000 },
+    model: "claude-sonnet-4-6",
+    maxTokens: 16_000,
+    thinking: { mode: "adaptive", effort: "high" }
+  });
+  assert.equal(body.temperature, 1);
+  assert.deepEqual(body.thinking, { type: "adaptive" });
+});
+
+test("buildAnthropicInferenceBody keeps custom temperature when thinking is off", () => {
+  const body = buildAnthropicInferenceBody({
+    formattedBody: { model: "claude-sonnet-4-6", temperature: 0.5, max_tokens: 16_000 },
+    model: "claude-sonnet-4-6",
+    maxTokens: 16_000
+  });
+  assert.equal(body.temperature, 0.5);
+  assert.equal(body.thinking, undefined);
 });
 
 test("parseAnthropicLine ignores signature_delta", () => {

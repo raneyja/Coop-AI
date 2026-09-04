@@ -28,10 +28,13 @@ export function applyOpenAiThinking(
   if (thinking?.mode !== "openai-reasoning") {
     return body;
   }
-  return {
+  const next: Record<string, unknown> = {
     ...body,
     reasoning_effort: thinking.effort ?? "medium"
   };
+  // GPT-5 / o-series reject a custom temperature even when reasoning_effort is set.
+  delete next.temperature;
+  return next;
 }
 
 export function parseOpenAiSseLine(line: string, state: ParseState): StreamChunk | undefined {
