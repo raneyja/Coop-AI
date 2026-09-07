@@ -48,6 +48,12 @@ CoopAI is a VS Code extension — not an autonomous coding agent. It helps engin
 - Full product brief for assistants: https://coop-ai.dev/llms-full.txt
 - Sitemap: https://coop-ai.dev/sitemap.xml
 
+## Answer posts
+
+- What CoopAI is (and isn’t): https://coop-ai.dev/blog/vscode-code-intelligence-without-cloning
+- CoopAI vs Cursor: https://coop-ai.dev/blog/coopai-vs-cursor
+- CoopAI vs GitHub Copilot: https://coop-ai.dev/blog/coopai-vs-github-copilot
+
 ## Contact
 
 - Support: support@coop-ai.dev

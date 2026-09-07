@@ -165,6 +165,26 @@ export function HomeStackContextSection({ tone = "light" }: HomeStackContextSect
               How CoopAI works →
             </Link>
             <Link
+              href="/docs/what-is-coopai"
+              className={
+                dark
+                  ? "text-sm font-medium text-white/80 underline-offset-4 hover:text-white hover:underline"
+                  : "text-sm font-medium text-gray-900 underline-offset-4 hover:underline"
+              }
+            >
+              What is CoopAI? →
+            </Link>
+            <Link
+              href="/docs/compare"
+              className={
+                dark
+                  ? "text-sm font-medium text-white/80 underline-offset-4 hover:text-white hover:underline"
+                  : "text-sm font-medium text-gray-900 underline-offset-4 hover:underline"
+              }
+            >
+              Compare CoopAI →
+            </Link>
+            <Link
               href="/product"
               className={
                 dark

@@ -149,7 +149,15 @@ export default function HowItWorksPage() {
             ))}
           </dl>
           <p className="mt-10 text-sm text-coop-muted">
-            Architecture and retention detail:{" "}
+            Short definition:{" "}
+            <Link href="/docs/what-is-coopai" className="font-medium text-gray-900 hover:underline">
+              What is CoopAI?
+            </Link>
+            . Versus other tools:{" "}
+            <Link href="/docs/compare" className="font-medium text-gray-900 hover:underline">
+              Compare
+            </Link>
+            . Architecture and retention:{" "}
             <Link href="/security" className="font-medium text-gray-900 hover:underline">
               Security
             </Link>
