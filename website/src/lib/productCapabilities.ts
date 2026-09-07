@@ -47,8 +47,8 @@ export const productCapabilityGroups: CapabilityGroup[] = [
         body: "Save and share team prompts in `.coop/prompts.json`. Run common workflows from the sidebar or context menu with one click."
       },
       {
-        title: "Slack & ticket context",
-        body: "CoopAI pulls Slack threads, tickets, and PR history so answers reflect how the decision was actually made."
+        title: "Company Slack & ticket context",
+        body: "CoopAI pulls company Slack threads, tickets, and PR history — admin-connected for the org — so answers reflect how the decision was actually made across the team."
       }
     ]
   },

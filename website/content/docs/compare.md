@@ -6,13 +6,13 @@ order: 1
 lastUpdated: "2026-09-07"
 ---
 
-CoopAI is **VS Code code intelligence** for production teams: Deep-Index the repo graph, query Slack and Jira live when you ask, then ask, complete, and edit without cloning the monorepo onto every laptop.
+CoopAI is **VS Code code intelligence** for production teams: Deep-Index the repo graph, query company Slack and Jira live when you ask, then ask, complete, and edit without cloning the monorepo onto every laptop.
 
-Most tools in this category optimize for generating code. CoopAI optimizes for **understanding the stack you already have** — find a code owner, check blast radius, pull Slack and Jira context in VS Code, then stay in the file while you review the diff.
+Most tools in this category optimize for generating code. CoopAI optimizes for **understanding the stack you already have** — find a code owner, check blast radius, pull company Slack and Jira context in VS Code, then stay in the file while you review the diff.
 
 ## How to read the matrices
 
-Rows describe the job. Cells describe how each product handles it. Copilot and Cursor are strong at generating and editing code. ChatGPT, Claude, Grok, and Perplexity are strong at general Q&A. CoopAI is built for remote repo understanding, ownership and blast-radius workflows, and live Slack / Jira / docs inside VS Code.
+Rows describe the job. Cells describe how each product handles it. Copilot and Cursor are strong at generating and editing code. ChatGPT, Claude, Grok, and Perplexity are strong at general Q&A. CoopAI is built for remote repo understanding, ownership and blast-radius workflows, and company Slack / Jira / docs inside VS Code (admin-connected for the whole org).
 
 ## How to use these pages
 
@@ -47,9 +47,9 @@ These themes show up on every comparison page because they are the product:
 | Differentiator | What it means in practice |
 | --- | --- |
 | **Zero-clone Deep-Index** | Understand a codebase without cloning. Transient clone → graph → clone deleted. File bodies fetch from the code host on demand. |
-| **Live stack context** | Slack, Jira, Confluence, Notion, Google Docs, and Teams are queried when you ask — not mirrored into a second wiki. |
+| **Company stack context** | Shared Slack, Jira, Confluence, Notion, Google Docs, and Teams — connected once by an admin, queried when you ask (not each developer’s personal accounts). |
 | **Decision workflows** | Understand Repo, Trace Decision, Find Owner, Blast Radius, Knowledge Gaps — not just freeform chat. |
 | **Stay in the file** | Complete and edit with reviewable diffs. Coop does not rewrite the tree on its own. |
-| **Org-wide connect** | Admins connect integrations once. Developers sign in — no token pasting for Slack or GitHub. |
+| **Org-wide connect** | Admins connect the company workspace once. Developers sign in and get that shared context — no personal OAuth paste. |
 
 For the product loop, see [How CoopAI works](/how-it-works). For plans, see [Pricing](/pricing).

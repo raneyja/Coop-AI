@@ -13,7 +13,7 @@ That distinction matters for production teams that want **trust and blast radius
 ## Where CoopAI stands apart
 
 - **Product law: no silent tree rewrites** — Coop completes and proposes patches; you apply.
-- **Org stack in the editor** — Slack, Jira, Confluence, Notion, Docs, Teams next to the symbol graph.
+- **Company stack in the editor** — shared Slack, Jira, Confluence, Notion, Docs, and Teams next to the symbol graph.
 - **Named engineering workflows** — Find Owner, Blast Radius, Trace Decision, Understand Repo, Knowledge Gaps.
 - **Zero-clone** — understand a codebase without cloning every service locally.
 
@@ -25,10 +25,10 @@ That distinction matters for production teams that want **trust and blast radius
 | Understand a codebase without cloning the monorepo | Deep-Index remote graph; no local monorepo required | Works on a local checkout |
 | Find a code owner / CODEOWNERS | Find Owner + CODEOWNERS graph | No ownership workflow |
 | Blast radius of a change | Blast Radius quick action | No impact workflow |
-| Slack and Jira context in VS Code | Live Slack & Jira at ask time | No Slack or Jira integration |
-| Confluence / Notion / Google Docs next to code | Live Confluence, Notion, and Google Docs | No docs-tool integrations |
+| Company Slack and Jira in VS Code | Company workspace (admin-connected), live at ask time | No Slack or Jira integration |
+| Company Confluence / Notion / Google Docs next to code | Company docs tools (admin-connected), live at ask time | No docs-tool integrations |
 | Inline complete + reviewable edit diffs | Inline complete + reviewable patches | Strong autonomous multi-step changes |
-| Org-wide integrations (admin connects once) | Admin connects once for the whole org | Anthropic / Claude account |
+| Org-wide integrations (admin connects once) | Yes — shared company stack, not each developer’s personal accounts | Anthropic / Claude account |
 | Autonomous coding agent | Human applies patches | Core strength |
 | Default interface | VS Code | Terminal |
 

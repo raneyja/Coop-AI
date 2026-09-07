@@ -14,7 +14,7 @@ CoopAI is for **internal engineering truth**: repos, tickets, threads, and patch
 
 - **Private org graph** — not the public web as the primary corpus.
 - **Editor-native complete/edit**.
-- **Live internal tools** — Slack/Jira/docs.
+- **Company internal tools** — Slack/Jira/docs.
 - **Ownership and blast radius** on your services.
 
 ## Comparison matrix
@@ -25,10 +25,10 @@ CoopAI is for **internal engineering truth**: repos, tickets, threads, and patch
 | Understand a codebase without cloning the monorepo | Deep-Index remote graph; no local monorepo required | Public web, not your private repos |
 | Find a code owner / CODEOWNERS | Find Owner + CODEOWNERS graph | No |
 | Blast radius of a change | Blast Radius quick action | No |
-| Slack and Jira context in VS Code | Live Slack & Jira at ask time | No |
-| Confluence / Notion / Google Docs next to code | Live Confluence, Notion, and Google Docs | No private wiki tools |
+| Company Slack and Jira in VS Code | Company workspace (admin-connected), live at ask time | No |
+| Company Confluence / Notion / Google Docs next to code | Company docs tools (admin-connected), live at ask time | No private wiki tools |
 | Inline complete + reviewable edit diffs | Inline complete + reviewable patches | No |
-| Org-wide integrations (admin connects once) | Admin connects once for the whole org | Consumer / team web product |
+| Org-wide integrations (admin connects once) | Yes — shared company stack, not each developer’s personal accounts | Consumer / team web product |
 | Cited answers from the public web | Secondary | Core strength |
 | Internal symbol graph and CODEOWNERS | Yes | No |
 

@@ -14,7 +14,7 @@ If an agent is a junior who types fast, CoopAI is the senior who already read th
 
 - **Not an autonomous rewrite product** — reviewable patches.
 - **Find Owner / Blast Radius / Trace Decision** before large changes.
-- **Live Slack, Jira, Confluence, Notion, Docs, Teams**.
+- **Company Slack, Jira, Confluence, Notion, Docs, and Teams**.
 - **Zero-clone** understanding for big monorepos and multi-service orgs.
 
 ## Comparison matrix
@@ -25,10 +25,10 @@ If an agent is a junior who types fast, CoopAI is the senior who already read th
 | Understand a codebase without cloning the monorepo | Deep-Index remote graph; no local monorepo required | Local / agent workspace |
 | Find a code owner / CODEOWNERS | Find Owner + CODEOWNERS graph | No ownership workflow |
 | Blast radius of a change | Blast Radius quick action | No impact workflow |
-| Slack and Jira context in VS Code | Live Slack & Jira at ask time | No Slack or Jira integration |
-| Confluence / Notion / Google Docs next to code | Live Confluence, Notion, and Google Docs | No docs-tool integrations |
+| Company Slack and Jira in VS Code | Company workspace (admin-connected), live at ask time | No Slack or Jira integration |
+| Company Confluence / Notion / Google Docs next to code | Company docs tools (admin-connected), live at ask time | No docs-tool integrations |
 | Inline complete + reviewable edit diffs | Inline complete + reviewable patches | Agent-led multi-step implementation |
-| Org-wide integrations (admin connects once) | Admin connects once for the whole org | Product account / team plans |
+| Org-wide integrations (admin connects once) | Yes — shared company stack, not each developer’s personal accounts | Product account / team plans |
 | Headline experience | Ask, complete, review | Let the agent implement |
 | Human applies every patch | Yes | Agent-led by default |
 

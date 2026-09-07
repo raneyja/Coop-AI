@@ -6,7 +6,7 @@ order: 3
 lastUpdated: "2026-09-07"
 ---
 
-Cursor is an AI-first IDE built for agentic editing and multi-file generation. CoopAI is a **VS Code extension** that Deep-Indexes your repos, queries Slack and Jira live, and helps you ask, complete, and edit with reviewable diffs — without switching IDEs or cloning the whole monorepo.
+Cursor is an AI-first IDE built for agentic editing and multi-file generation. CoopAI is a **VS Code extension** that Deep-Indexes your repos, queries company Slack and Jira live, and helps you ask, complete, and edit with reviewable diffs — without switching IDEs or cloning the whole monorepo.
 
 Teams comparing them are usually choosing between **“change a lot of files fast”** and **“know the stack before you touch a line.”** CoopAI is built for the second.
 
@@ -25,10 +25,10 @@ Teams comparing them are usually choosing between **“change a lot of files fas
 | Understand a codebase without cloning the monorepo | Deep-Index remote graph; no local monorepo required | Indexes the project on disk |
 | Find a code owner / CODEOWNERS | Find Owner + CODEOWNERS graph | No built-in ownership workflow |
 | Blast radius of a change | Blast Radius quick action | No impact / dependents workflow |
-| Slack and Jira context in VS Code | Live Slack & Jira at ask time | No Slack or Jira integration |
-| Confluence / Notion / Google Docs next to code | Live Confluence, Notion, and Google Docs | No Confluence, Notion, or Docs integration |
+| Company Slack and Jira in VS Code | Company workspace (admin-connected), live at ask time | No Slack or Jira integration |
+| Company Confluence / Notion / Google Docs next to code | Company docs tools (admin-connected), live at ask time | No Confluence, Notion, or Docs integration |
 | Inline complete + reviewable edit diffs | Inline complete + reviewable patches | Excellent agentic multi-file edits |
-| Org-wide integrations (admin connects once) | Admin connects once for the whole org | Cursor Teams / Business plans |
+| Org-wide integrations (admin connects once) | Yes — shared company stack, not each developer’s personal accounts | Cursor Teams / Business plans |
 | Agent rewrites many files by default | You review every patch | Core strength |
 | Keep stock VS Code | Yes | No — migrate to Cursor |
 

@@ -31,32 +31,32 @@ const integrationCards = [
   },
   {
     name: "Slack",
-    description: "Pull live thread context into Trace Decision and Knowledge Gaps, next to the code graph in VS Code.",
+    description: "Pull live company Slack threads into Trace Decision and Knowledge Gaps — shared org workspace, next to the code graph in VS Code.",
     href: "/docs/slack"
   },
   {
     name: "Microsoft Teams",
-    description: "Live channel message context for decision archaeology and knowledge gap detection.",
+    description: "Live company channel context for decision archaeology and knowledge gap detection.",
     href: "/docs/teams"
   },
   {
     name: "Jira",
-    description: "Link tickets to code paths for decision history and escalation workflows — queried when you ask.",
+    description: "Link company tickets to code paths for decision history and escalation — queried when you ask.",
     href: "/docs/jira"
   },
   {
     name: "Confluence",
-    description: "Fetch ADRs, runbooks, and wiki pages live when a question needs them — not copied into a second index.",
+    description: "Fetch company ADRs, runbooks, and wiki pages live when a question needs them — not copied into a second index.",
     href: "/docs/connect-integrations"
   },
   {
     name: "Notion",
-    description: "Cross-reference internal documentation in CoopAI answers at chat time.",
+    description: "Cross-reference company documentation in CoopAI answers at chat time.",
     href: "/docs/notion"
   },
   {
     name: "Google Docs",
-    description: "Include runbooks and architecture docs in graph-grounded responses when you ask.",
+    description: "Include company runbooks and architecture docs in graph-grounded responses when you ask.",
     href: "/docs/google-docs"
   }
 ] as const;
@@ -68,7 +68,7 @@ export default function IntegrationsPage() {
         tight
         eyebrow="Integrations"
         title="Connect your entire stack"
-        description="CoopAI Deep-Indexes your repositories and queries Slack, Jira, Confluence, and docs live when you ask. Every developer gets that stack context inside VS Code."
+        description="CoopAI Deep-Indexes your repositories and queries company Slack, Jira, Confluence, and docs live when you ask. An admin connects once; every developer gets that shared stack context inside VS Code — not personal accounts."
       />
 
       <section className="border-b border-coop-border py-12 md:py-14">
@@ -82,7 +82,7 @@ export default function IntegrationsPage() {
           <SectionHeading
             label="connect"
             title="Supported integrations"
-            description="Org admins connect integrations once in the admin portal. Developers sign in and query organizational context without pasting OAuth tokens."
+            description="Org admins connect the company workspace once in the admin portal. Developers sign in and get shared Slack, Jira, and docs context — no personal OAuth tokens."
           />
           <div className="mt-10 grid gap-6 md:grid-cols-2">
             {integrationCards.map((integration) => (

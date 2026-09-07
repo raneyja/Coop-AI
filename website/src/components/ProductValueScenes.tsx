@@ -33,7 +33,7 @@ const INDEX_TRUST = [
   },
   {
     title: "Cross-tool context",
-    body: "Slack and Jira context in VS Code sits next to PRs and CODEOWNERS — so you can find a code owner and see blast radius before you merge."
+    body: "Company Slack and Jira in VS Code sit next to PRs and CODEOWNERS — shared org context your admin connected — so you can find a code owner and see blast radius before you merge."
   },
   {
     title: "Honest when incomplete",
@@ -49,7 +49,7 @@ export function ProductAskScene() {
         <SectionHeading
           label="ask"
           title="Questions that used to take a Slack archaeology dig"
-          description="Architecture, find a code owner, blast radius of a change, and the ticket that explains why — with Slack and Jira context in VS Code, across the repo graph."
+          description="Architecture, find a code owner, blast radius of a change, and the ticket that explains why — with company Slack and Jira in VS Code, across the repo graph."
         />
 
         <QuickActionPromptCarousel />

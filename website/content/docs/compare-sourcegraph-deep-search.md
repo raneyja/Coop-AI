@@ -25,10 +25,10 @@ If Deep Search is a destination you open in the browser, CoopAI is the assistant
 | Understand a codebase without cloning the monorepo | Deep-Index remote graph; no local monorepo required | Searches an indexed Sourcegraph instance |
 | Find a code owner / CODEOWNERS | Find Owner + CODEOWNERS graph | Findable via search |
 | Blast radius of a change | Blast Radius quick action | References via search |
-| Slack and Jira context in VS Code | Live Slack & Jira at ask time | No |
-| Confluence / Notion / Google Docs next to code | Live Confluence, Notion, and Google Docs | No |
+| Company Slack and Jira in VS Code | Company workspace (admin-connected), live at ask time | No |
+| Company Confluence / Notion / Google Docs next to code | Company docs tools (admin-connected), live at ask time | No |
 | Inline complete + reviewable edit diffs | Inline complete + reviewable patches | No in-editor complete or patch apply |
-| Org-wide integrations (admin connects once) | Admin connects once for the whole org | Sourcegraph deployment |
+| Org-wide integrations (admin connects once) | Yes — shared company stack, not each developer’s personal accounts | Sourcegraph deployment |
 | Primary surface | VS Code sidebar | Browser search / Q&A |
 | Apply a patch in the open file | Yes | No |
 
@@ -39,7 +39,7 @@ Choose Deep Search when the job is **enterprise code search and Q&A** as a stand
 
 ## When CoopAI is the better fit
 
-Choose CoopAI when engineers need **VS Code code intelligence** that turns search-quality understanding into ownership answers, blast radius, and safe edits — with Slack/Jira in the same pane.
+Choose CoopAI when engineers need **VS Code code intelligence** that turns search-quality understanding into ownership answers, blast radius, and safe edits — with company Slack/Jira in the same pane.
 
 ## Related
 

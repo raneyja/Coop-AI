@@ -55,7 +55,7 @@ export default function HowItWorksPage() {
       <PageHeader
         eyebrow="how_it_works"
         title="Index the code. Query the stack. Stay in the file."
-        description="VS Code code intelligence that Deep-Indexes your repositories once, pulls Slack and Jira when you ask, then lets you find owners, check blast radius, complete, and edit — without cloning the monorepo."
+        description="VS Code code intelligence that Deep-Indexes your repositories once, pulls company Slack and Jira when you ask, then lets you find owners, check blast radius, complete, and edit — without cloning the monorepo."
       />
 
       <section className="border-b border-coop-border pb-16 md:pb-20">
@@ -69,7 +69,7 @@ export default function HowItWorksPage() {
           <SectionHeading
             label="the_split"
             title="What we keep vs what we fetch"
-            description="Only repositories are Deep-Indexed. Slack, tickets, and docs are queried live so Coop does not store a second copy of those tools."
+            description="Only repositories are Deep-Indexed. Company Slack, tickets, and docs are queried live from the admin-connected workspace so Coop does not store a second copy — and does not use each developer’s personal accounts."
           />
           <div className="mt-10 grid gap-4 sm:grid-cols-2">
             <CompareColumn
@@ -183,9 +183,10 @@ function LiveToolsDetail() {
       <li className="flex gap-3">
         <span className="mt-0.5 shrink-0 font-mono text-xs text-coop-index">02</span>
         <span>
-          <span className="font-medium text-gray-900">Collaboration tools</span> (Slack, Jira,
-          Confluence, Notion, Google Docs, Teams) are fetched for Trace Decision, Knowledge Gaps,
-          and slash commands.
+          <span className="font-medium text-gray-900">Company collaboration tools</span> (Slack, Jira,
+          Confluence, Notion, Google Docs, Teams) are admin-connected once for the org, then fetched
+          live for Trace Decision, Knowledge Gaps, and slash commands — shared team context, not
+          personal accounts.
         </span>
       </li>
       <li className="flex gap-3">

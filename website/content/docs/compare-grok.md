@@ -25,10 +25,10 @@ The comparison is less “which model is smarter” and more “which product br
 | Understand a codebase without cloning the monorepo | Deep-Index remote graph; no local monorepo required | Only what you paste |
 | Find a code owner / CODEOWNERS | Find Owner + CODEOWNERS graph | Only if you paste context |
 | Blast radius of a change | Blast Radius quick action | No |
-| Slack and Jira context in VS Code | Live Slack & Jira at ask time | No |
-| Confluence / Notion / Google Docs next to code | Live Confluence, Notion, and Google Docs | No |
+| Company Slack and Jira in VS Code | Company workspace (admin-connected), live at ask time | No |
+| Company Confluence / Notion / Google Docs next to code | Company docs tools (admin-connected), live at ask time | No |
 | Inline complete + reviewable edit diffs | Inline complete + reviewable patches | Copy/paste from chat |
-| Org-wide integrations (admin connects once) | Admin connects once for the whole org | xAI / consumer plans |
+| Org-wide integrations (admin connects once) | Yes — shared company stack, not each developer’s personal accounts | xAI / consumer plans |
 | General chat and brainstorming | Secondary | Core strength |
 | Private company repo index | Yes | No |
 
