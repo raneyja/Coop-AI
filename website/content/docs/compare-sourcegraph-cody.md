@@ -21,15 +21,17 @@ Both care about understanding code. CoopAI’s wedge is **stack context next to 
 
 | Capability | CoopAI | Sourcegraph Cody |
 | --- | --- | --- |
-| VS Code code intelligence in the editor you already use | Yes — extension for VS Code | Yes — VS Code extension |
-| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | Deep-Index / zero-clone |
-| Find a code owner / CODEOWNERS | Find Owner workflow + ownership graph | Find Owner + CODEOWNERS graph |
-| Blast radius of a change | Blast Radius quick action | Blast Radius quick action |
-| Slack and Jira context in VS Code | Live fetch at chat time | First-class live Slack/Jira |
-| Confluence / Notion / Google Docs next to code | Live fetch when you ask | First-class live docs tools |
-| Inline complete + reviewable edit diffs | Yes — stay in the open file | Yes |
-| Org-wide integrations (admin connects once) | Yes | Yes — Coop admin portal |
-| Deep Sourcegraph code search ecosystem | Graph + Zoekt-style index inside Coop | Often paired with Sourcegraph Search |
+| VS Code code intelligence in the editor you already use | Yes — VS Code extension | Yes — VS Code extension |
+| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | Codebase context via Sourcegraph index — not Coop Deep-Index |
+| Find a code owner / CODEOWNERS | Find Owner workflow + CODEOWNERS graph | Codebase chat can help — not Coop’s Find Owner workflow |
+| Blast radius of a change | Blast Radius quick action | Search/callers via Sourcegraph — not Coop’s Blast Radius action |
+| Slack and Jira context in VS Code | Live fetch at chat time (org-wide) | No — not first-class live Slack/Jira in Cody |
+| Confluence / Notion / Google Docs next to code | Live Confluence / Notion / Google Docs when you ask | No — not first-class live Confluence/Notion/Docs |
+| Inline complete + reviewable edit diffs | Complete + reviewable patches in the open file | Yes — completions and edits |
+| Org-wide integrations (admin connects once) | Yes — admin connects integrations once | Via Sourcegraph — different admin model than Coop |
+| Deep Sourcegraph code search ecosystem | Graph + search inside Coop | Often paired with Sourcegraph Search |
+| Decision workflows (Trace / Gaps / Owner / Blast) | First-class quick actions | Mostly freeform chat / search |
+
 
 ## When Sourcegraph Cody is a better fit
 

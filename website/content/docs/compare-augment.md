@@ -21,15 +21,17 @@ Evaluate both on whether they keep answers honest when graph data is missing, an
 
 | Capability | CoopAI | Augment |
 | --- | --- | --- |
-| VS Code code intelligence in the editor you already use | Yes — extension for VS Code | Yes — VS Code |
-| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | Yes |
-| Find a code owner / CODEOWNERS | Find Owner workflow + ownership graph | Yes |
-| Blast radius of a change | Blast Radius quick action | Yes |
-| Slack and Jira context in VS Code | Live fetch at chat time | Yes — first-class |
-| Confluence / Notion / Google Docs next to code | Live fetch when you ask | Yes — first-class |
-| Inline complete + reviewable edit diffs | Yes — stay in the open file | Yes |
-| Org-wide integrations (admin connects once) | Yes | Yes |
+| VS Code code intelligence in the editor you already use | Yes — VS Code extension | Yes — codebase assistant in the IDE |
+| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | Indexes your codebase for chat/edits — not Coop zero-clone Deep-Index |
+| Find a code owner / CODEOWNERS | Find Owner workflow + CODEOWNERS graph | No dedicated Find Owner workflow like Coop |
+| Blast radius of a change | Blast Radius quick action | No dedicated Blast Radius quick action |
+| Slack and Jira context in VS Code | Live fetch at chat time (org-wide) | Not Coop-style first-class live Slack/Jira fetch |
+| Confluence / Notion / Google Docs next to code | Live Confluence / Notion / Google Docs when you ask | Not Coop-style first-class live Confluence/Notion/Docs |
+| Inline complete + reviewable edit diffs | Complete + reviewable patches in the open file | Yes — codebase-aware chat and edits |
+| Org-wide integrations (admin connects once) | Yes — admin connects integrations once | Their team/admin model — different from Coop’s portal |
 | Codebase-aware chat & edits | Yes — plus decision workflows | Core category overlap |
+| Live Slack + tickets + docs beside the graph | Yes — product wedge | Not the same stack-context story |
+
 
 ## When Augment is a better fit
 

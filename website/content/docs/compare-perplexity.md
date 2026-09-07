@@ -21,16 +21,17 @@ CoopAI is for **internal engineering truth**: repos, tickets, threads, and patch
 
 | Capability | CoopAI | Perplexity |
 | --- | --- | --- |
-| VS Code code intelligence in the editor you already use | Yes — extension for VS Code | Yes — VS Code |
-| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | Yes — private Deep-Index |
-| Find a code owner / CODEOWNERS | Find Owner workflow + ownership graph | Yes |
-| Blast radius of a change | Blast Radius quick action | Yes |
-| Slack and Jira context in VS Code | Live fetch at chat time | Yes — your Slack/Jira |
-| Confluence / Notion / Google Docs next to code | Live fetch when you ask | Yes — your docs tools |
-| Inline complete + reviewable edit diffs | Yes — stay in the open file | Yes |
-| Org-wide integrations (admin connects once) | Yes | Yes |
+| VS Code code intelligence in the editor you already use | Yes — VS Code extension | No — web answer engine, not a VS Code extension |
+| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | No — public web corpus, not your private Deep-Index |
+| Find a code owner / CODEOWNERS | Find Owner workflow + CODEOWNERS graph | No |
+| Blast radius of a change | Blast Radius quick action | No |
+| Slack and Jira context in VS Code | Live fetch at chat time (org-wide) | No — not your private Slack/Jira |
+| Confluence / Notion / Google Docs next to code | Live Confluence / Notion / Google Docs when you ask | No — not your private Confluence/Notion/Docs |
+| Inline complete + reviewable edit diffs | Complete + reviewable patches in the open file | No — not in-editor complete/edit |
+| Org-wide integrations (admin connects once) | Yes — admin connects integrations once | No Coop-style engineering integrations |
 | Cited answers from the public web | Not primary | Core strength |
-| Internal CODEOWNERS / PR graph | Yes | No |
+| Internal CODEOWNERS / PR / symbol graph | Yes | No |
+
 
 ## When Perplexity is a better fit
 

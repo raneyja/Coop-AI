@@ -21,16 +21,17 @@ If Deep Search is a destination you open in the browser, CoopAI is the assistant
 
 | Capability | CoopAI | Sourcegraph Deep Search |
 | --- | --- | --- |
-| VS Code code intelligence in the editor you already use | Yes — extension for VS Code | Yes — VS Code |
-| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | Yes — Deep-Index |
-| Find a code owner / CODEOWNERS | Find Owner workflow + ownership graph | Yes — Find Owner |
-| Blast radius of a change | Blast Radius quick action | Yes — Blast Radius |
-| Slack and Jira context in VS Code | Live fetch at chat time | Yes — live |
-| Confluence / Notion / Google Docs next to code | Live fetch when you ask | Yes — live |
-| Inline complete + reviewable edit diffs | Yes — stay in the open file | Yes — complete + edit |
-| Org-wide integrations (admin connects once) | Yes | Yes |
-| Standalone web search / Q&A product | Secondary — chat is in VS Code | Primary surface |
+| VS Code code intelligence in the editor you already use | Yes — VS Code extension | No — primarily a search / Q&A product |
+| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | Searches indexed code in Sourcegraph — not Coop Deep-Index |
+| Find a code owner / CODEOWNERS | Find Owner workflow + CODEOWNERS graph | Can find CODEOWNERS via search — not Find Owner in VS Code |
+| Blast radius of a change | Blast Radius quick action | Can find references via search — not Blast Radius in VS Code |
+| Slack and Jira context in VS Code | Live fetch at chat time (org-wide) | No |
+| Confluence / Notion / Google Docs next to code | Live Confluence / Notion / Google Docs when you ask | No — not live Slack/Jira/docs in the editor |
+| Inline complete + reviewable edit diffs | Complete + reviewable patches in the open file | No — not in-editor complete / apply patch |
+| Org-wide integrations (admin connects once) | Yes — admin connects integrations once | Via Sourcegraph |
+| Standalone web search / Q&A | Secondary — answers live in VS Code | Primary surface |
 | Apply a reviewable patch in the open file | Yes | Not the core product |
+
 
 ## When Sourcegraph Deep Search is a better fit
 

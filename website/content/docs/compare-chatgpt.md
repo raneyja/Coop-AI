@@ -21,16 +21,17 @@ CoopAI is for teams that need **private, org-grounded VS Code code intelligence*
 
 | Capability | CoopAI | ChatGPT |
 | --- | --- | --- |
-| VS Code code intelligence in the editor you already use | Yes — extension for VS Code | Yes |
-| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | Yes |
-| Find a code owner / CODEOWNERS | Find Owner workflow + ownership graph | Yes |
-| Blast radius of a change | Blast Radius quick action | Yes |
-| Slack and Jira context in VS Code | Live fetch at chat time | Yes |
-| Confluence / Notion / Google Docs next to code | Live fetch when you ask | Yes |
-| Inline complete + reviewable edit diffs | Yes — stay in the open file | Yes |
-| Org-wide integrations (admin connects once) | Yes | Yes |
+| VS Code code intelligence in the editor you already use | Yes — VS Code extension | No — ChatGPT app / web (IDE plugins are not Coop) |
+| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | No — only what you paste or attach |
+| Find a code owner / CODEOWNERS | Find Owner workflow + CODEOWNERS graph | No — unless you paste ownership context |
+| Blast radius of a change | Blast Radius quick action | No — unless you paste the dependency picture |
+| Slack and Jira context in VS Code | Live fetch at chat time (org-wide) | No — not your org Slack/Jira in VS Code |
+| Confluence / Notion / Google Docs next to code | Live Confluence / Notion / Google Docs when you ask | No — not live Confluence/Notion/Docs in VS Code |
+| Inline complete + reviewable edit diffs | Complete + reviewable patches in the open file | No native Coop-style reviewable patch in VS Code |
+| Org-wide integrations (admin connects once) | Yes — admin connects integrations once | ChatGPT Business/Enterprise — not Coop admin-connected stack |
 | Public web / general knowledge chat | Not the product | Core strength |
-| Org SSO + admin-connected Slack/Jira | Yes | Custom / enterprise add-ons vary |
+| Private Deep-Index of company repos | Yes | No |
+
 
 ## When ChatGPT is a better fit
 

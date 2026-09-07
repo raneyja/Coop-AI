@@ -21,16 +21,17 @@ Teams comparing them are usually choosing between **“change a lot of files fas
 
 | Capability | CoopAI | Cursor |
 | --- | --- | --- |
-| VS Code code intelligence in the editor you already use | Yes — extension for VS Code | Yes — stays in VS Code |
-| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | Deep-Index / zero-clone |
-| Find a code owner / CODEOWNERS | Find Owner workflow + ownership graph | Find Owner workflow |
-| Blast radius of a change | Blast Radius quick action | Blast Radius workflow |
-| Slack and Jira context in VS Code | Live fetch at chat time | Live Slack/Jira fetch |
-| Confluence / Notion / Google Docs next to code | Live fetch when you ask | Live docs fetch |
-| Inline complete + reviewable edit diffs | Yes — stay in the open file | Yes — reviewable patches |
-| Org-wide integrations (admin connects once) | Yes | Yes — admin portal |
-| Agentic multi-file rewrites as default | Not the product promise — you review diffs | Core strength |
-| Switch away from VS Code | No | Yes — Cursor IDE |
+| VS Code code intelligence in the editor you already use | Yes — VS Code extension | No — Cursor is its own IDE (VS Code fork) |
+| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | No — agent works on the local project / open workspace |
+| Find a code owner / CODEOWNERS | Find Owner workflow + CODEOWNERS graph | No dedicated Find Owner / CODEOWNERS workflow |
+| Blast radius of a change | Blast Radius quick action | No dedicated Blast Radius workflow |
+| Slack and Jira context in VS Code | Live fetch at chat time (org-wide) | No — not first-class org Slack/Jira in VS Code |
+| Confluence / Notion / Google Docs next to code | Live Confluence / Notion / Google Docs when you ask | No — not first-class live Confluence/Notion/Docs |
+| Inline complete + reviewable edit diffs | Complete + reviewable patches in the open file | Yes — strong agentic multi-file edits |
+| Org-wide integrations (admin connects once) | Yes — admin connects integrations once | Cursor account / team plans — not Coop admin portal for Slack/Jira |
+| Agentic multi-file rewrites as the default | Not the product promise — you review every diff | Core strength |
+| Stay in stock VS Code | Yes | No — switch to Cursor |
+
 
 ## When Cursor is a better fit
 

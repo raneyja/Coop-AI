@@ -10,6 +10,10 @@ CoopAI is **VS Code code intelligence** for production teams: Deep-Index the rep
 
 Most tools in this category optimize for generating code. CoopAI optimizes for **understanding the stack you already have** — find a code owner, check blast radius, pull Slack and Jira context in VS Code, then stay in the file while you review the diff.
 
+## How to read the matrices
+
+Each matrix is written to show **where CoopAI differs**, not to claim competitors are empty products. Copilot and Cursor win on generation speed and agentic editing. Claude, ChatGPT, Grok, and Perplexity win as general chat / research tools. CoopAI wins when you need **zero-clone Deep-Index**, **Find Owner / Blast Radius / Trace Decision**, and **live Slack, Jira, and docs in VS Code**.
+
 ## How to use these pages
 
 Each page is a full comparison with:

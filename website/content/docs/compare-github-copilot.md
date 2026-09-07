@@ -23,16 +23,17 @@ Copilot optimizes for **generation speed**. CoopAI optimizes for **organizationa
 
 | Capability | CoopAI | GitHub Copilot |
 | --- | --- | --- |
-| VS Code code intelligence in the editor you already use | Yes — extension for VS Code | Strong autocomplete & chat in VS Code |
-| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | Usually local workspace / open files |
-| Find a code owner / CODEOWNERS | Find Owner workflow + ownership graph | Limited — not a dedicated ownership workflow |
-| Blast radius of a change | Blast Radius quick action | Not a dedicated blast-radius workflow |
-| Slack and Jira context in VS Code | Live fetch at chat time | Not a first-class Slack/Jira product surface |
-| Confluence / Notion / Google Docs next to code | Live fetch when you ask | Not a first-class docs product surface |
-| Inline complete + reviewable edit diffs | Yes — stay in the open file | Yes — Copilot strength |
-| Org-wide integrations (admin connects once) | Yes | Per-user GitHub account; not Coop-style org portal |
+| VS Code code intelligence in the editor you already use | Yes — VS Code extension | Strong autocomplete & chat in VS Code |
+| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | No — usually the local workspace / open files |
+| Find a code owner / CODEOWNERS | Find Owner workflow + CODEOWNERS graph | No dedicated Find Owner workflow |
+| Blast radius of a change | Blast Radius quick action | No dedicated Blast Radius workflow |
+| Slack and Jira context in VS Code | Live fetch at chat time (org-wide) | No — not a first-class Slack/Jira product surface |
+| Confluence / Notion / Google Docs next to code | Live Confluence / Notion / Google Docs when you ask | No — not a first-class docs product surface |
+| Inline complete + reviewable edit diffs | Complete + reviewable patches in the open file | Yes — Copilot’s core strength |
+| Org-wide integrations (admin connects once) | Yes — admin connects integrations once | Per-user GitHub account — not Coop-style org Slack/Jira connect |
 | Trace why a decision shipped (PR + ticket + Slack) | Trace Decision + live tools | Manual paste / separate tabs |
 | Knowledge gaps across runbooks and code | Knowledge Gaps workflow | Ad hoc chat |
+
 
 ## When GitHub Copilot is a better fit
 

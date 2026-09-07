@@ -21,15 +21,17 @@ Generation matters — Coop completes and edits — but only after the graph and
 
 | Capability | CoopAI | Codex |
 | --- | --- | --- |
-| VS Code code intelligence in the editor you already use | Yes — extension for VS Code | Yes — VS Code |
-| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | Yes — zero-clone Deep-Index |
-| Find a code owner / CODEOWNERS | Find Owner workflow + ownership graph | Yes |
-| Blast radius of a change | Blast Radius quick action | Yes |
-| Slack and Jira context in VS Code | Live fetch at chat time | Yes |
-| Confluence / Notion / Google Docs next to code | Live fetch when you ask | Yes |
-| Inline complete + reviewable edit diffs | Yes — stay in the open file | Yes |
-| Org-wide integrations (admin connects once) | Yes | Yes |
-| Generation-first coding assistant heritage | Context-first + complete/edit | Generation-first |
+| VS Code code intelligence in the editor you already use | Yes — VS Code extension | Coding agent / IDE coding features — generation-first, not Coop workflows |
+| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | No — not Coop Deep-Index / zero-clone remote graph |
+| Find a code owner / CODEOWNERS | Find Owner workflow + CODEOWNERS graph | No dedicated Find Owner / CODEOWNERS workflow |
+| Blast radius of a change | Blast Radius quick action | No dedicated Blast Radius workflow |
+| Slack and Jira context in VS Code | Live fetch at chat time (org-wide) | No — not live org Slack/Jira in VS Code |
+| Confluence / Notion / Google Docs next to code | Live Confluence / Notion / Google Docs when you ask | No — not live Confluence/Notion/Docs next to code |
+| Inline complete + reviewable edit diffs | Complete + reviewable patches in the open file | Yes — strong prompt-to-code / agent generation |
+| Org-wide integrations (admin connects once) | Yes — admin connects integrations once | OpenAI account / enterprise — not Coop admin portal |
+| Generation-first coding assistant | Context-first, then complete/edit | Generation-first |
+| Decision workflows (Owner / Blast / Trace / Gaps) | First-class | Not the product focus |
+
 
 ## When Codex is a better fit
 

@@ -21,15 +21,17 @@ If an agent is a junior who types fast, CoopAI is the senior who already read th
 
 | Capability | CoopAI | Ampcode |
 | --- | --- | --- |
-| VS Code code intelligence in the editor you already use | Yes — extension for VS Code | Yes |
-| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | Yes |
-| Find a code owner / CODEOWNERS | Find Owner workflow + ownership graph | Yes |
-| Blast radius of a change | Blast Radius quick action | Yes |
-| Slack and Jira context in VS Code | Live fetch at chat time | Yes |
-| Confluence / Notion / Google Docs next to code | Live fetch when you ask | Yes |
-| Inline complete + reviewable edit diffs | Yes — stay in the open file | Yes — human apply |
-| Org-wide integrations (admin connects once) | Yes | Yes |
+| VS Code code intelligence in the editor you already use | Yes — VS Code extension | Agentic coding product — not Coop’s VS Code workflow set |
+| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | No — not Coop Deep-Index / zero-clone remote graph |
+| Find a code owner / CODEOWNERS | Find Owner workflow + CODEOWNERS graph | No dedicated Find Owner workflow |
+| Blast radius of a change | Blast Radius quick action | No dedicated Blast Radius workflow |
+| Slack and Jira context in VS Code | Live fetch at chat time (org-wide) | No — not live org Slack/Jira in VS Code |
+| Confluence / Notion / Google Docs next to code | Live Confluence / Notion / Google Docs when you ask | No — not live Confluence/Notion/Docs product surface |
+| Inline complete + reviewable edit diffs | Complete + reviewable patches in the open file | Yes — agent-led multi-step implementation |
+| Org-wide integrations (admin connects once) | Yes — admin connects integrations once | No Coop-style admin-connected Slack/Jira/repos |
 | Agentic multi-step coding as the headline | Context + workflows as the headline | Often the headline |
+| Human reviews every patch before apply | Yes — product law | Agent-led changes are the default bet |
+
 
 ## When Ampcode is a better fit
 
