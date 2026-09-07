@@ -390,7 +390,7 @@ test("mergeFocusSearchResults round-robins unique paths from topic searches", ()
         ]
       }
     ],
-    { query: "API auth | states", rankQuery: "where does API auth live", maxFiles: 5 }
+    { query: "API auth | states", rankQuery: "API auth states", maxFiles: 5 }
   );
   assert.ok(merged);
   assert.equal(merged!.files.length, 2);
