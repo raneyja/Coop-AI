@@ -90,18 +90,46 @@ export default function DocsHubPage() {
                 <h2 className="text-base font-semibold text-gray-900">Quick links</h2>
                 <ul className="mt-4 space-y-2 text-sm">
                   <li>
+                    <Link href="/how-it-works" className={docsInlineLinkClassName}>
+                      How CoopAI works
+                    </Link>
+                  </li>
+                  <li>
                     <Link href="/manual#get-started" className={docsInlineLinkClassName}>
                       Install guide (Owner&apos;s Manual)
                     </Link>
                   </li>
                   <li>
-                    <Link href="/pricing" className={docsInlineLinkClassName}>
-                      Plans & pricing
+                    <Link href="/docs/connect-integrations" className={docsInlineLinkClassName}>
+                      Connect integrations
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/docs/extension-settings" className={docsInlineLinkClassName}>
+                      Extension settings
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/docs/sso" className={docsInlineLinkClassName}>
+                      Single Sign On (SSO)
                     </Link>
                   </li>
                   <li>
                     <Link href="/security" className={docsInlineLinkClassName}>
                       Security architecture
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/blog/coop-ai-for-support-engineers-unblock-yourself"
+                      className={docsInlineLinkClassName}
+                    >
+                      CoopAI for support engineers
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/pricing" className={docsInlineLinkClassName}>
+                      Plans & pricing
                     </Link>
                   </li>
                   <li>

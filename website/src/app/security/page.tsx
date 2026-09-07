@@ -193,7 +193,8 @@ export default function SecurityPage() {
           Human sign-in uses email and password (minimum 12 characters), optional Google OAuth, and
           Enterprise SAML 2.0 SSO. Session tokens are issued server-side and handed off to the admin
           portal over HTTPS: they are stored as hashes in the database, not as plaintext API keys in
-          email.
+          email. Setup detail:{" "}
+          <a href="/docs/sso">Single Sign On (SSO)</a>.
         </p>
         <p>
           Programmatic API access to the Coop server uses bearer token authentication (

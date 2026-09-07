@@ -32,6 +32,11 @@ const securityFeatures = [
     title: "Audit-ready logging",
     body: "Every context query is logged for compliance and debugging.",
     link: { href: "/security", label: "Security details →" }
+  },
+  {
+    title: "SAML single sign-on",
+    body: "Enterprise orgs sign in with Okta, Entra ID, or any SAML 2.0 IdP. Admins configure SSO once in the admin portal.",
+    link: { href: "/docs/sso", label: "SSO setup guide →" }
   }
 ];
 
@@ -106,6 +111,10 @@ export default function EnterprisePage() {
             Read our full security posture on the{" "}
             <Link href="/security" className="font-medium text-gray-900 hover:underline">
               Security page
+            </Link>
+            , or set up{" "}
+            <Link href="/docs/sso" className="font-medium text-gray-900 hover:underline">
+              SAML SSO
             </Link>
             .
           </p>

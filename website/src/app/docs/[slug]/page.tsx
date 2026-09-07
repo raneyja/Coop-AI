@@ -9,6 +9,7 @@ import { buildPageMetadata } from "@/lib/pageMetadata";
 
 const nextStepsBySlug: Record<string, { href: string; label: string }[]> = {
   "getting-started": [
+    { href: "/how-it-works", label: "How CoopAI works" },
     { href: "/docs/install-extension", label: "Install the VS Code extension" },
     { href: "/docs/extension-settings", label: "Extension settings reference" },
     { href: "/manual#quick-actions", label: "Quick actions in the Owner's Manual" }
@@ -23,11 +24,13 @@ const nextStepsBySlug: Record<string, { href: string; label: string }[]> = {
   ],
   "admin-portal": [
     { href: "/docs/connect-integrations", label: "Connect integrations" },
+    { href: "/docs/sso", label: "Configure SAML SSO" },
     { href: "/docs/integration-scope", label: "Configure integration scope" }
   ],
   "connect-integrations": [
     { href: "/docs/github", label: "GitHub setup" },
-    { href: "/docs/slack", label: "Slack setup" }
+    { href: "/docs/slack", label: "Slack setup" },
+    { href: "/docs/teams", label: "Microsoft Teams setup" }
   ],
   "integration-scope": [
     { href: "/docs/admin-portal", label: "Admin portal overview" },
@@ -46,6 +49,7 @@ const nextStepsBySlug: Record<string, { href: string; label: string }[]> = {
     { href: "/docs/create-pull-request", label: "Create a pull request from Coop" }
   ],
   "slack": [{ href: "/docs/integration-scope", label: "Slack scope configuration" }],
+  "teams": [{ href: "/docs/connect-integrations", label: "Integration overview" }],
   "jira": [{ href: "/docs/connect-integrations", label: "Integration overview" }],
   "notion": [{ href: "/docs/connect-integrations", label: "Integration overview" }],
   "google-docs": [{ href: "/docs/connect-integrations", label: "Integration overview" }],
@@ -59,15 +63,25 @@ const nextStepsBySlug: Record<string, { href: string; label: string }[]> = {
   ],
   "security-architecture": [
     { href: "/security", label: "Full security page" },
+    { href: "/docs/sso", label: "Single Sign On (SSO)" },
     { href: "/docs/zero-retention", label: "Zero-retention configuration" }
+  ],
+  "sso": [
+    { href: "/docs/saml-sso-troubleshooting", label: "SAML SSO troubleshooting" },
+    { href: "/enterprise", label: "Enterprise product page" },
+    { href: "/security", label: "Security overview" }
   ],
   "zero-retention": [{ href: "/docs/enterprise-deployment", label: "Enterprise deployment" }],
   "enterprise-deployment": [
+    { href: "/docs/sso", label: "Configure SAML SSO" },
     { href: "/docs/security-architecture", label: "Security architecture" },
     { href: "/enterprise", label: "Enterprise product page" }
   ],
   troubleshooting: [{ href: "/docs/faq", label: "Frequently asked questions" }],
-  faq: [{ href: "/demo", label: "Contact support" }]
+  faq: [
+    { href: "/how-it-works", label: "How CoopAI works" },
+    { href: "/demo", label: "Contact support" }
+  ]
 };
 
 type PageProps = {

@@ -48,12 +48,20 @@ export default function ProductPage() {
           <p className="text-sm text-coop-muted">
             Want the loop, not the feature tour? Index → query live → stay in the file.
           </p>
-          <Link
-            href="/how-it-works"
-            className="shrink-0 text-sm font-medium text-gray-900 underline-offset-4 hover:underline"
-          >
-            How CoopAI works →
-          </Link>
+          <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+            <Link
+              href="/how-it-works"
+              className="text-sm font-medium text-gray-900 underline-offset-4 hover:underline"
+            >
+              How CoopAI works →
+            </Link>
+            <Link
+              href="/security"
+              className="text-sm font-medium text-gray-900 underline-offset-4 hover:underline"
+            >
+              Security →
+            </Link>
+          </div>
         </div>
       </section>
 
