@@ -21,15 +21,17 @@ Both care about understanding code. CoopAI’s wedge is **stack context next to 
 
 | Capability | CoopAI | Sourcegraph Cody |
 | --- | --- | --- |
-| VS Code code intelligence in the editor you already use | Yes — extension for VS Code | Yes — VS Code extension |
-| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | Deep-Index / zero-clone |
-| Find a code owner / CODEOWNERS | Find Owner workflow + ownership graph | Find Owner + CODEOWNERS graph |
-| Blast radius of a change | Blast Radius quick action | Blast Radius quick action |
-| Slack and Jira context in VS Code | Live fetch at chat time | First-class live Slack/Jira |
-| Confluence / Notion / Google Docs next to code | Live fetch when you ask | First-class live docs tools |
-| Inline complete + reviewable edit diffs | Yes — stay in the open file | Yes |
-| Org-wide integrations (admin connects once) | Yes | Yes — Coop admin portal |
-| Deep Sourcegraph code search ecosystem | Graph + Zoekt-style index inside Coop | Often paired with Sourcegraph Search |
+| VS Code code intelligence in the editor you already use | VS Code extension | Yes — VS Code and JetBrains |
+| Understand a codebase without cloning the monorepo | Deep-Index remote graph; no local monorepo required | Sourcegraph code graph / search index |
+| Find a code owner / CODEOWNERS | Find Owner + CODEOWNERS graph | Ask in chat; no Find Owner action |
+| Blast radius of a change | Blast Radius quick action | Search and callers; no Blast Radius action |
+| Slack and Jira context in VS Code | Live Slack & Jira at ask time | Optional OpenCtx providers; not the default loop |
+| Confluence / Notion / Google Docs next to code | Live Confluence, Notion, and Google Docs | Optional providers; not the default loop |
+| Inline complete + reviewable edit diffs | Inline complete + reviewable patches | Completions, chat, and edits |
+| Org-wide integrations (admin connects once) | Admin connects once for the whole org | Sourcegraph Enterprise admin |
+| Enterprise code search platform | Built into Coop indexing | Often paired with Sourcegraph Search |
+| Named workflows (Owner, Blast, Trace, Gaps) | Yes | Mostly freeform chat |
+
 
 ## When Sourcegraph Cody is a better fit
 

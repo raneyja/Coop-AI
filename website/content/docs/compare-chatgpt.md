@@ -21,16 +21,17 @@ CoopAI is for teams that need **private, org-grounded VS Code code intelligence*
 
 | Capability | CoopAI | ChatGPT |
 | --- | --- | --- |
-| VS Code code intelligence in the editor you already use | Yes — extension for VS Code | Yes |
-| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | Yes |
-| Find a code owner / CODEOWNERS | Find Owner workflow + ownership graph | Yes |
-| Blast radius of a change | Blast Radius quick action | Yes |
-| Slack and Jira context in VS Code | Live fetch at chat time | Yes |
-| Confluence / Notion / Google Docs next to code | Live fetch when you ask | Yes |
-| Inline complete + reviewable edit diffs | Yes — stay in the open file | Yes |
-| Org-wide integrations (admin connects once) | Yes | Yes |
-| Public web / general knowledge chat | Not the product | Core strength |
-| Org SSO + admin-connected Slack/Jira | Yes | Custom / enterprise add-ons vary |
+| VS Code code intelligence in the editor you already use | VS Code extension | Web and apps; IDE plugins vary |
+| Understand a codebase without cloning the monorepo | Deep-Index remote graph; no local monorepo required | Only what you paste or attach |
+| Find a code owner / CODEOWNERS | Find Owner + CODEOWNERS graph | Only if you paste ownership context |
+| Blast radius of a change | Blast Radius quick action | Only if you paste the dependency picture |
+| Slack and Jira context in VS Code | Live Slack & Jira at ask time | No org Slack/Jira in the editor |
+| Confluence / Notion / Google Docs next to code | Live Confluence, Notion, and Google Docs | No live org docs tools |
+| Inline complete + reviewable edit diffs | Inline complete + reviewable patches | Copy/paste from chat |
+| Org-wide integrations (admin connects once) | Admin connects once for the whole org | ChatGPT Business / Enterprise |
+| General knowledge and drafting | Secondary | Core strength |
+| Private company repo index | Yes | No |
+
 
 ## When ChatGPT is a better fit
 

@@ -21,16 +21,17 @@ If Deep Search is a destination you open in the browser, CoopAI is the assistant
 
 | Capability | CoopAI | Sourcegraph Deep Search |
 | --- | --- | --- |
-| VS Code code intelligence in the editor you already use | Yes — extension for VS Code | Yes — VS Code |
-| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | Yes — Deep-Index |
-| Find a code owner / CODEOWNERS | Find Owner workflow + ownership graph | Yes — Find Owner |
-| Blast radius of a change | Blast Radius quick action | Yes — Blast Radius |
-| Slack and Jira context in VS Code | Live fetch at chat time | Yes — live |
-| Confluence / Notion / Google Docs next to code | Live fetch when you ask | Yes — live |
-| Inline complete + reviewable edit diffs | Yes — stay in the open file | Yes — complete + edit |
-| Org-wide integrations (admin connects once) | Yes | Yes |
-| Standalone web search / Q&A product | Secondary — chat is in VS Code | Primary surface |
-| Apply a reviewable patch in the open file | Yes | Not the core product |
+| VS Code code intelligence in the editor you already use | VS Code extension | Web / search product |
+| Understand a codebase without cloning the monorepo | Deep-Index remote graph; no local monorepo required | Searches an indexed Sourcegraph instance |
+| Find a code owner / CODEOWNERS | Find Owner + CODEOWNERS graph | Findable via search |
+| Blast radius of a change | Blast Radius quick action | References via search |
+| Slack and Jira context in VS Code | Live Slack & Jira at ask time | No |
+| Confluence / Notion / Google Docs next to code | Live Confluence, Notion, and Google Docs | No |
+| Inline complete + reviewable edit diffs | Inline complete + reviewable patches | No in-editor complete or patch apply |
+| Org-wide integrations (admin connects once) | Admin connects once for the whole org | Sourcegraph deployment |
+| Primary surface | VS Code sidebar | Browser search / Q&A |
+| Apply a patch in the open file | Yes | No |
+
 
 ## When Sourcegraph Deep Search is a better fit
 
