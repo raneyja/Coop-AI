@@ -34,6 +34,11 @@ export function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/how-it-works" className={link}>
+                  How it works
+                </Link>
+              </li>
+              <li>
                 <Link href="/integrations" className={link}>
                   Integrations
                 </Link>
@@ -72,6 +77,11 @@ export function Footer() {
               <li>
                 <Link href="/security" className={link}>
                   Security
+                </Link>
+              </li>
+              <li>
+                <Link href="/docs/sso" className={link}>
+                  Single sign-on
                 </Link>
               </li>
               <li>

@@ -3,11 +3,20 @@ import { getAllPosts } from "@/lib/blog";
 import { getAllDocs } from "@/lib/docs";
 import { siteConfig } from "@/lib/site.config";
 
-const HIGH_PRIORITY_PATHS = new Set(["/", "/product", "/enterprise", "/pricing", "/integrations", "/manual"]);
+const HIGH_PRIORITY_PATHS = new Set([
+  "/",
+  "/product",
+  "/how-it-works",
+  "/enterprise",
+  "/pricing",
+  "/integrations",
+  "/manual"
+]);
 
 const STATIC_PATHS = [
   "/",
   "/product",
+  "/how-it-works",
   "/enterprise",
   "/integrations",
   "/pricing",
@@ -22,15 +31,16 @@ const STATIC_PATHS = [
 
 /** Approximate last-updated dates for static marketing pages. Update when page content changes. */
 const STATIC_LAST_MODIFIED: Partial<Record<(typeof STATIC_PATHS)[number], string>> = {
-  "/": "2026-07-06",
-  "/product": "2026-07-06",
-  "/enterprise": "2026-07-06",
+  "/": "2026-09-07",
+  "/product": "2026-09-07",
+  "/how-it-works": "2026-09-07",
+  "/enterprise": "2026-09-07",
   "/integrations": "2026-07-06",
   "/pricing": "2026-07-06",
   "/manual": "2026-08-21",
-  "/docs": "2026-08-21",
-  "/security": "2026-07-06",
-  "/blog": "2026-07-06",
+  "/docs": "2026-09-07",
+  "/security": "2026-09-07",
+  "/blog": "2026-09-07",
   "/privacy": "2026-05-29",
   "/terms": "2026-05-29",
   "/demo": "2026-06-29"

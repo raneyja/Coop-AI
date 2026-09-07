@@ -144,19 +144,31 @@ export function HomeStackContextSection({ tone = "light" }: HomeStackContextSect
           }`}
         >
           <p className={`max-w-xl text-sm leading-relaxed ${dark ? "text-white/45" : "text-coop-muted"}`}>
-            Product walks through Ask, Change, and Indexed: how stack context shows up in questions
-            and in the editor.
+            How it works is the loop: index the code, query tools live, then ask, complete, and edit
+            in VS Code. Product walks through Ask, Change, and Indexed.
           </p>
-          <Link
-            href="/product"
-            className={
-              dark
-                ? "shrink-0 text-sm font-medium text-white/80 underline-offset-4 hover:text-white hover:underline"
-                : "shrink-0 text-sm font-medium text-gray-900 underline-offset-4 hover:underline"
-            }
-          >
-            Explore the product →
-          </Link>
+          <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+            <Link
+              href="/how-it-works"
+              className={
+                dark
+                  ? "text-sm font-medium text-white/80 underline-offset-4 hover:text-white hover:underline"
+                  : "text-sm font-medium text-gray-900 underline-offset-4 hover:underline"
+              }
+            >
+              How CoopAI works →
+            </Link>
+            <Link
+              href="/product"
+              className={
+                dark
+                  ? "text-sm font-medium text-white/80 underline-offset-4 hover:text-white hover:underline"
+                  : "text-sm font-medium text-gray-900 underline-offset-4 hover:underline"
+              }
+            >
+              Explore the product →
+            </Link>
+          </div>
         </div>
       </div>
     </section>

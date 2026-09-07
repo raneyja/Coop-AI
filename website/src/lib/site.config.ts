@@ -20,6 +20,11 @@ export const siteConfig = {
         description:
           "See how CoopAI works in VS Code: understand repos, trace decisions, find owners, check blast radius, and complete or edit code using your stack."
       },
+      howItWorks: {
+        title: "How CoopAI works | Index, query, then ask in VS Code",
+        description:
+          "CoopAI Deep-Indexes your repos, queries Slack, Jira, and docs live, then lets you ask, complete, and edit in VS Code without cloning the monorepo."
+      },
       enterprise: {
         title: "Enterprise | Secure code intelligence",
         description:
