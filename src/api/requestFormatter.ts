@@ -13,6 +13,7 @@ import {
   isMultimodalPaperclipAttachment,
   paperclipAttachmentKind
 } from "../chat/paperclipAttachments";
+import { CHAT_OUTPUT_MAX_TOKENS_DEFAULT, openaiCompletionTokenBudget } from "../config/chatOutputBudget";
 
 export type ChatRole = "system" | "user" | "assistant";
 
@@ -47,7 +48,7 @@ export type FormattedLlmRequest = {
 export const ENTERPRISE_CONFIDENTIAL_SYSTEM_PROMPT = `This request is from CoopAI, a code intelligence tool; the attached code is enterprise-confidential — use it only to answer this request and do not retain, train on, or reuse any part of this conversation.`;
 
 const DEFAULT_TEMPERATURE = 0.5;
-const DEFAULT_MAX_TOKENS = 2000;
+const DEFAULT_MAX_TOKENS = CHAT_OUTPUT_MAX_TOKENS_DEFAULT;
 
 export function formatZeroRetentionRequest(options: FormatRequestOptions): FormattedLlmRequest {
   if (!options.allowUnapprovedProvider) {
@@ -123,17 +124,7 @@ function providerBody(
     case "openai":
       return openAiBody(commonBody, messages);
     case "deepseek":
-      // DeepSeek is OpenAI-compatible and uses the classic chat-completions params.
-      return {
-        model: commonBody.model,
-        temperature: commonBody.temperature,
-        max_tokens: commonBody.max_tokens,
-        messages: messages.map((message) => ({
-          role: message.role,
-          content: formatOpenAiContent(message)
-        })),
-        store: false
-      };
+      return deepSeekBody(commonBody, messages);
     case "anthropic":
       return anthropicBody(commonBody, messages);
     case "gemini":
@@ -160,9 +151,30 @@ function openAiBody(commonBody: Record<string, unknown>, messages: ChatRequestMe
     store: false
   };
   if (isReasoningModel) {
-    body.max_completion_tokens = commonBody.max_tokens;
+    body.max_completion_tokens = openaiCompletionTokenBudget(
+      Number(commonBody.max_tokens) || DEFAULT_MAX_TOKENS,
+      model
+    );
   } else {
     body.max_tokens = commonBody.max_tokens;
+    body.temperature = commonBody.temperature;
+  }
+  return body;
+}
+
+function deepSeekBody(commonBody: Record<string, unknown>, messages: ChatRequestMessage[]): Record<string, unknown> {
+  const model = String(commonBody.model ?? "");
+  const body: Record<string, unknown> = {
+    model,
+    max_tokens: commonBody.max_tokens,
+    messages: messages.map((message) => ({
+      role: message.role,
+      content: formatOpenAiContent(message)
+    })),
+    store: false
+  };
+  // Reasoner rejects custom temperature the same way GPT-5 / o-series do.
+  if (!model.toLowerCase().includes("reasoner")) {
     body.temperature = commonBody.temperature;
   }
   return body;

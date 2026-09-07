@@ -12,9 +12,17 @@ import { adminPortalFreshLoginUrl } from "./adminPortalUrl";
 import { StripeService } from "./stripeService";
 import { handleFreeSignupApiRequest } from "../freeSignupApi";
 import { provisionOrgFromCheckout } from "./provisionOrg";
+import {
+  displayPlanName,
+  parseUsageTier,
+  stripePriceIdForUsageTier,
+  usageTierFromStripePriceId,
+  type UsageTier
+} from "../usageTiers";
 import type { AuthIdentityStore } from "../auth/authIdentityStore";
 import type { AuthTokenStore } from "../auth/authTokenStore";
 import type { AuthConfig } from "../auth/authConfig";
+import { captureException } from "../observability/errorReporter";
 
 type ParsedRequest = {
   method: string;
@@ -55,6 +63,7 @@ export async function handleBillingApiRequest(
       {
         method: parsed.method,
         pathname: parsed.pathname,
+        headers: parsed.headers,
         body: parsed.body
       },
       response,
@@ -72,7 +81,7 @@ export async function handleBillingApiRequest(
   }
 
   if (parsed.method === "POST" && parsed.pathname === "/v1/billing/checkout-session") {
-    return handleCreateCheckout(parsed, response, stripe);
+    return handleCreateCheckout(parsed, response, deps, stripe, billingConfig);
   }
 
   if (parsed.method === "POST" && parsed.pathname === "/v1/billing/upgrade-checkout-session") {
@@ -97,7 +106,9 @@ export async function handleBillingApiRequest(
 async function handleCreateCheckout(
   parsed: ParsedRequest,
   response: ServerResponse,
-  stripe: StripeService
+  deps: BillingApiDeps,
+  stripe: StripeService,
+  billingConfig: BillingConfig
 ): Promise<boolean> {
   if (!stripe.isConfigured()) {
     writeJson(response, 503, { error: "billing_unavailable", message: "Stripe is not configured on this server." });
@@ -105,12 +116,14 @@ async function handleCreateCheckout(
   }
 
   const body = asRecord(parsed.body);
-  const orgName = String(body.orgName ?? "").trim();
   const email = String(body.email ?? "").trim();
-  const seats = Math.max(1, Number(body.seats ?? 1) || 1);
+  const intent = parseCheckoutIntent(body.intent);
+  const requestedOrgName = String(body.orgName ?? "").trim();
+  const usageTier = parseCheckoutUsageTier(body.tier);
+  const priceId = stripePriceIdForUsageTier(usageTier, stripeUsagePriceIds(billingConfig));
 
-  if (!orgName || !email) {
-    writeJson(response, 400, { error: "orgName and email are required" });
+  if (!email) {
+    writeJson(response, 400, { error: "email is required" });
     return true;
   }
 
@@ -119,13 +132,51 @@ async function handleCreateCheckout(
     return true;
   }
 
+  if (intent === "team" && !requestedOrgName) {
+    writeJson(response, 400, {
+      error: "org_name_required",
+      message: "Organization name is required when buying seats for a team."
+    });
+    return true;
+  }
+
+  const orgName = deriveCheckoutOrgName(requestedOrgName, email);
+  const seats = intent === "individual" ? 1 : Math.max(1, Number(body.seats ?? 1) || 1);
+
   if (orgName.length > 120) {
     writeJson(response, 400, { error: "orgName too long" });
     return true;
   }
 
+  if (!priceId) {
+    writeJson(response, 400, {
+      error: "tier_unavailable",
+      message: `${displayPlanName(usageTier)} checkout is not configured.`
+    });
+    return true;
+  }
+
+  if (deps.userStore) {
+    const existingUser = await deps.userStore.findActiveUserByEmail(email);
+    if (existingUser) {
+      writeJson(response, 409, {
+        error: "account_exists",
+        message:
+          "This email already has a CoopAI account. Sign in and upgrade or add seats from Billing."
+      });
+      return true;
+    }
+  }
+
   try {
-    const session = await stripe.createCheckoutSession({ orgName, email, seats });
+    const session = await stripe.createCheckoutSession({
+      orgName,
+      email,
+      seats,
+      priceId,
+      usageTier,
+      intent
+    });
     writeJson(response, 200, { sessionId: session.id, url: session.url });
   } catch (error) {
     writeJson(response, 502, {
@@ -172,6 +223,8 @@ async function handleCreateUpgradeCheckout(
   }
 
   const body = asRecord(parsed.body);
+  const usageTier = parseCheckoutUsageTier(body.tier);
+  const priceId = stripePriceIdForUsageTier(usageTier, stripeUsagePriceIds(loadBillingConfig()));
   const org = await deps.orgStore.getOrganization(auth.orgId);
   const billing = await deps.orgStore.getOrganizationBilling(auth.orgId);
   const requestedEmail = String(body.email ?? "")
@@ -199,13 +252,23 @@ async function handleCreateUpgradeCheckout(
     return true;
   }
 
+  if (!priceId) {
+    writeJson(response, 400, {
+      error: "tier_unavailable",
+      message: `${displayPlanName(usageTier)} checkout is not configured.`
+    });
+    return true;
+  }
+
   try {
     const session = await stripe.createCheckoutSession({
       orgName: org?.name ?? auth.orgName,
       email: adminEmail,
       seats,
       existingOrgId: auth.orgId,
-      upgrade: true
+      upgrade: true,
+      priceId,
+      usageTier
     });
     writeJson(response, 200, { sessionId: session.id, url: session.url });
   } catch (error) {
@@ -551,6 +614,7 @@ async function handleStripeWebhook(
     }
   } catch (error) {
     console.error("[stripe] webhook handler error:", error);
+    captureException(error, { service: "api", route: "/webhooks/stripe" });
     writeJson(response, 500, { error: "webhook_handler_failed" });
     return true;
   }
@@ -571,6 +635,9 @@ async function handleCheckoutCompleted(event: Record<string, unknown>, deps: Bil
   const upgrade = String(metadata.upgrade ?? "")
     .trim()
     .toLowerCase() === "true";
+  const usageTier = parseUsageTier(String(metadata.usage_tier ?? "")) ?? "pro";
+  const stripePriceId = String(metadata.stripe_price_id ?? "").trim() || undefined;
+  const googleSub = String(metadata.google_sub ?? "").trim() || undefined;
 
   if (!customerId || !adminEmail) {
     console.warn("[stripe] checkout.session.completed skipped: missing customer or admin email", {
@@ -593,9 +660,13 @@ async function handleCheckoutCompleted(event: Record<string, unknown>, deps: Bil
       stripeCustomerId: customerId,
       stripeSubscriptionId: subscriptionId,
       existingOrgId: existingOrgId || undefined,
-      upgrade
+      upgrade,
+      usageTier,
+      stripePriceId,
+      googleSub
     },
-    deps.authTokenStore
+    deps.authTokenStore,
+    deps.authIdentityStore
   );
 
   await deps.auditLogger?.record({
@@ -613,17 +684,25 @@ async function handleSubscriptionChange(event: Record<string, unknown>, deps: Bi
   if (!org) return;
 
   const quantity = readSubscriptionQuantity(object);
+  const priceId = readStripePriceIdFromSubscription(object);
+  const usageTier = usageTierForStripePrice(priceId, loadBillingConfig());
 
   if (status === "active" || status === "trialing") {
     await deps.orgStore!.setOrganizationPlan(org.id, "pro");
     await deps.orgStore!.updateOrganizationBilling(org.id, {
       billingStatus: "active",
       stripeSubscriptionId: String(object.id ?? ""),
-      seatCount: quantity
+      seatCount: quantity,
+      usageTier,
+      stripePriceId: priceId ?? null
     });
   } else if (status === "canceled" || status === "unpaid") {
     await deps.orgStore!.setOrganizationPlan(org.id, "free");
-    await deps.orgStore!.updateOrganizationBilling(org.id, { billingStatus: status });
+    await deps.orgStore!.updateOrganizationBilling(org.id, {
+      billingStatus: status,
+      usageTier: null,
+      stripePriceId: null
+    });
   }
 }
 
@@ -676,6 +755,68 @@ function readSubscriptionQuantity(object: Record<string, unknown>): number {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+export function parseCheckoutUsageTier(value: unknown): UsageTier {
+  return parseUsageTier(typeof value === "string" ? value : "") ?? "pro";
+}
+
+export function parseCheckoutIntent(value: unknown): "individual" | "team" | undefined {
+  const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (raw === "individual" || raw === "team") {
+    return raw;
+  }
+  return undefined;
+}
+
+function deriveCheckoutOrgName(orgName: string, email: string): string {
+  if (orgName) {
+    return orgName;
+  }
+  const local = email.split("@")[0]?.trim();
+  return local || "My Workspace";
+}
+
+export function stripeUsagePriceIds(config: BillingConfig): {
+  pro?: string;
+  proPlus?: string;
+  max?: string;
+} {
+  return {
+    pro: config.stripePriceIdPro,
+    proPlus: config.stripePriceIdProPlus,
+    max: config.stripePriceIdMax
+  };
+}
+
+export function readStripePriceIdFromSubscription(object: Record<string, unknown>): string | undefined {
+  const items = asRecord(object.items);
+  const data = Array.isArray(items.data) ? items.data : [];
+  const first = data[0];
+  if (typeof first !== "object" || first === null) {
+    return undefined;
+  }
+  const price = (first as Record<string, unknown>).price;
+  if (typeof price === "string" && price.trim()) {
+    return price.trim();
+  }
+  if (typeof price === "object" && price !== null) {
+    const id = (price as Record<string, unknown>).id;
+    if (typeof id === "string" && id.trim()) {
+      return id.trim();
+    }
+  }
+  return undefined;
+}
+
+/** Unknown / legacy prices map to Pro so existing subscriptions stay billed. */
+export function usageTierForStripePrice(priceId: string | undefined, config: BillingConfig): UsageTier {
+  const prices = stripeUsagePriceIds(config);
+  const known = [prices.pro, prices.proPlus, prices.max].filter(Boolean);
+  if (priceId && known.length > 0 && !known.includes(priceId)) {
+    console.warn("[stripe] unknown price id; mapping usage_tier to pro", { priceId });
+  }
+  return usageTierFromStripePriceId(priceId, prices);
 }
 
 function isValidEmail(email: string): boolean {

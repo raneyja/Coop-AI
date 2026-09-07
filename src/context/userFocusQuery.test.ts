@@ -130,8 +130,35 @@ test("mergeFocusFilesIntoEntryFiles appends new focus bodies", () => {
       { path: "package.json", content: "duplicate" }
     ]
   );
-  assert.equal(merged.length, 2);
-  assert.equal(merged[1]?.path, "apps/api/issue/views.py");
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0]?.path, "apps/api/issue/views.py");
+});
+
+test("mergeFocusFilesIntoEntryFiles displaces README/compose when domain hits exist", () => {
+  const merged = mergeFocusFilesIntoEntryFiles(
+    [
+      { path: "README.md", content: "# Plane" },
+      { path: "package.json", content: "{}" },
+      { path: "docker-compose.yml", content: "services:" },
+      { path: "AGENTS.md", content: "# agents" }
+    ],
+    [
+      { path: "apps/api/plane/api/middleware/api_authentication.py", content: "class APIKeyAuthentication:" },
+      { path: "apps/api/plane/db/models/issue.py", content: "class Issue:" },
+      { path: "apps/api/plane/db/models/state.py", content: "class State:" }
+    ]
+  );
+  assert.ok(
+    merged.some((file) => file.path.includes("api_authentication.py")),
+    `merged=${merged.map((f) => f.path).join(",")}`
+  );
+  assert.ok(merged.some((file) => file.path.includes("issue.py")));
+  assert.ok(merged.some((file) => file.path.includes("state.py")));
+  assert.ok(!merged.some((file) => file.path === "package.json"));
+  assert.ok(!merged.some((file) => file.path === "docker-compose.yml"));
+  assert.ok(!merged.some((file) => file.path === "AGENTS.md"));
+  const readmeIndex = merged.findIndex((file) => file.path === "README.md");
+  assert.ok(readmeIndex === -1 || readmeIndex > 0, "domain files must precede README");
 });
 
 test("tokenizeFocusTerms drops stop words", () => {

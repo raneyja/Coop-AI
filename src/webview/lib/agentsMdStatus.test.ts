@@ -22,3 +22,18 @@ test("shouldPromptForAgentsMd when AGENTS.md is missing", () => {
   assert.equal(shouldPromptForAgentsMd({ status: "no_git", hasAgentsMd: false }), true);
   assert.equal(shouldPromptForAgentsMd({ status: "disabled" }), false);
 });
+
+test("shouldPromptForAgentsMd stays off for Use-repo and signed-out accounts", () => {
+  assert.equal(
+    shouldPromptForAgentsMd({ status: "missing", source: "repo", hasAgentsMd: false, canMutate: false }),
+    false
+  );
+  assert.equal(
+    shouldPromptForAgentsMd({ status: "missing", source: "attached", hasAgentsMd: false, canMutate: false }),
+    false
+  );
+  assert.equal(
+    shouldPromptForAgentsMd({ status: "missing", source: "attached", hasAgentsMd: false, canMutate: true }),
+    true
+  );
+});

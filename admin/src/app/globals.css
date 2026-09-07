@@ -90,6 +90,10 @@
     @apply text-coop-muted;
   }
 
+  .admin-status--reconnect {
+    @apply text-red-400;
+  }
+
   .admin-status-dot {
     @apply inline-block h-1.5 w-1.5 shrink-0 rounded-full;
   }
@@ -100,6 +104,10 @@
 
   .admin-status--available .admin-status-dot {
     @apply bg-coop-muted/50;
+  }
+
+  .admin-status--reconnect .admin-status-dot {
+    @apply bg-red-400;
   }
 
   .admin-index-dot {

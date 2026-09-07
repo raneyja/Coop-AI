@@ -1,3 +1,5 @@
+import { isRepoStructureQuery } from "../workspace/repoFactIntent";
+
 /**
  * Does this turn need the repository's code, and what does the user want done?
  *
@@ -23,14 +25,14 @@ const NONE: RepoCodeIntent = { action: "none", confidence: "low", reason: "no re
 
 /** Acknowledgements and small talk. */
 const CONVERSATIONAL =
-  /^(?:thanks|thank\s+you|ty|ok|okay|k|got\s+it|nice|cool|great|perfect|yes|yep|no|nope|sure|sounds\s+good|never\s+mind)\b/i;
+  /^(?:hi|hello|hey(?:\s+there)?|yo|howdy|greetings|good\s+(?:morning|afternoon|evening)|thanks|thank\s+you|ty|ok|okay|k|got\s+it|nice|cool|great|perfect|yes|yep|no|nope|sure|sounds\s+good|never\s+mind)\b/i;
 
 /**
  * True when the whole message is small talk ("Thanks"), not "ok now add logging".
  * Prefix-only matching would steal real change asks that start with "ok".
  */
 export function isConversationalChat(message: string): boolean {
-  return /^(?:thanks|thank\s+you|ty|ok(?:ay)?|k|got\s+it|nice|cool|great|perfect|yes|yep|no|nope|sure|sounds\s+good|never\s+mind)(?:\s+thanks?)?(?:\s+that(?:'s|\s+is)?\s+worked)?[.!?]*$/i.test(
+  return /^(?:hi|hello|hey(?:\s+there)?|yo|howdy|greetings|good\s+(?:morning|afternoon|evening)|thanks|thank\s+you|ty|ok(?:ay)?|k|got\s+it|nice|cool|great|perfect|yes|yep|no|nope|sure|sounds\s+good|never\s+mind)(?:\s+thanks?)?(?:\s+that(?:'s|\s+is)?\s+worked)?[.!?]*$/i.test(
     message.trim()
   );
 }
@@ -44,6 +46,10 @@ const IDENTIFIER =
   /\b(?:[a-z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]*|[A-Z][a-z0-9]+[A-Z][a-zA-Z0-9]*|[a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/;
 const FILE_PATH = /(?:^|\s)[\w.-]+\/[\w./-]+|\.\w{1,4}\b(?:\s|$)/;
 const BACKTICKED = /`[^`]+`/;
+
+/** A path the user typed, e.g. `src/server/authMiddleware.ts` — always a repo reference. */
+const NAMED_SOURCE_FILE =
+  /(?:^|\s)(?:[\w.-]+\/)+[\w.-]+\.(?:ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|rb|md|json|yml|yaml)\b/i;
 
 /** Words that name a role in a system rather than a specific product. */
 const ROLE_NOUN =
@@ -65,7 +71,7 @@ const CHANGE_VERB =
  * `calls?` — that matched "who is on call this week".
  */
 const LOCATE =
-  /\b(where|which\s+file|what\s+file|find|defined|declared|located|lives?|live\s+in|show\s+me|point\s+me|list\s+all|callers?|called\s+by|(?:who|what|which)\s+calls?|references?|usages?|used\s+by|implemented|exists?)\b/i;
+  /\b(where|which\s+file|what\s+file|find|defined|declared|located|lives?|live\s+in|show\s+me|point\s+me|list\s+all|callers?|called\s+by|(?:who|what|which)\s+calls?|(?:who|what|which)\s+(?:in\s+(?:this\s+)?repo\s+)?(?:still\s+)?owns?|references?|usages?|used\s+by|implemented|exists?|picking\s+up)\b/i;
 
 /** "Does the project …?" — an existence question, answerable only from code. */
 const EXISTENCE_START = /^(?:does|do|is|are|has|have)\b/i;
@@ -81,8 +87,79 @@ const EXPLAIN_VERB =
 const META_REFERENCE =
   /\b(you\s+just|your\s+(?:last|previous)\s+(?:answer|message|response|change|edit)|what\s+you\s+did|that\s+again)\b/i;
 
-/** "why …" / "how …" is an explanation request even when it also says "do we have". */
-const EXPLANATION_START = /^(?:why|how)\b/i;
+/**
+ * How/why that is not a request to hunt the code.
+ * "How does session refresh work?" still hunts; "How do I run the tests?" does not.
+ */
+const NON_CODE_HOW_WHY =
+  /^(?:how\s+(?:much|old|long|big|large|often|soon|far|come)\b|how\s+(?:do|can|could|should|would)\s+i\b|how\s+can\s+you\b|why\s+am\s+i\b|why\s+(?:is|are)\s+(?:this|it|chat)\s+so\b|why\s+(?:is|does)\s+(?:this|it|chat)\s+tak(?:e|ing)\b|how\s+is\s+(?:the\s+)?(?:project|it|everything)\s+going\b)/i;
+
+/** True when How/Why is a how-to, status, or product question — not a code hunt. */
+export function isNonCodeHowWhyAsk(message: string): boolean {
+  return NON_CODE_HOW_WHY.test(message.trim());
+}
+
+/**
+ * "Don't search the repo", "without checking the codebase".
+ * The negation must sit directly on the search verb — "don't just search the
+ * repo, read the file too" is still a hunt.
+ */
+const NO_REPO_SEARCH =
+  /\b(?:don'?t|do\s+not|no\s+need\s+to|without|avoid|skip)\s+(?:(?:bother\s+)?to\s+)?(?:search(?:ing)?|look(?:ing)?\s+(?:up|in|at|through)|check(?:ing)?|scan(?:ning)?|hunt(?:ing)?|grep(?:ping)?|index(?:ing)?)\s+(?:\w+\s+){0,2}?(?:repo|repository|codebase|code\s?base|index|project)\b/i;
+
+/** "Don't invent a Coop file" — an honesty instruction, not a hunt request. */
+const NO_INVENTED_FILE =
+  /\b(?:don'?t|do\s+not|never)\s+(?:\w+\s+){0,2}?(?:invent|make\s+up|fabricate|guess)\b/i;
+
+/** Programming and query languages. Frameworks are excluded on purpose — "how do we do React here" is a repo ask. */
+const LANGUAGE_NAME =
+  /\b(?:type\s?script|java\s?script|python|java|kotlin|swift|golang|rust|ruby|php|c\+\+|c#|objective-c|scala|elixir|erlang|clojure|haskell|perl|lua|dart|sql|bash|zsh|shell|powershell|html|css|sass|scss|regexp?|node\.?js|deno|bun)\b/i;
+
+/** Bare `go` is a language only when the ask is scoped to it ("in Go, …"). */
+const SCOPED_GO_LANGUAGE = /\b(?:in|with|using|for)\s+go\b/i;
+
+/** Asking how something is written, not where it lives here. */
+const SYNTAX_QUESTION =
+  /\b(?:how\s+(?:do|can|could|would|should)\s+(?:i|you|we)\b|how\s+to\b|what'?s\s+the\s+(?:best\s+|correct\s+|right\s+|idiomatic\s+|proper\s+)?way\b|what\s+is\s+the\s+(?:best\s+|correct\s+|right\s+|idiomatic\s+|proper\s+)?way\b|is\s+there\s+a\s+way\b|what'?s\s+the\s+syntax\b|syntax\s+for\b|idiomatic\s+way\b)/i;
+
+/** True when the user explicitly told Coop not to search the repository. */
+export function isExplicitNoRepoSearchAsk(message: string): boolean {
+  return NO_REPO_SEARCH.test(message.trim());
+}
+
+/**
+ * Sentences that only tell Coop what not to do. They mention "repo" and "file"
+ * without making the ask repo-scoped, so they are dropped before scope detection.
+ */
+function stripGroundingInstructions(message: string): string {
+  return message
+    // Only terminal punctuation — splitting on every dot would break `authMiddleware.ts`.
+    .split(/[.?!]+(?=\s|$)/)
+    .filter((sentence) => {
+      const part = sentence.trim();
+      return part.length > 0 && !NO_REPO_SEARCH.test(part) && !NO_INVENTED_FILE.test(part);
+    })
+    .join(" ")
+    .trim();
+}
+
+/**
+ * "In TypeScript, how do I make every property optional except one?"
+ *
+ * Language recall — the answer is the same in every repository, so hunting the
+ * index can only produce a miss. Naming the repo, a path, or the open buffer
+ * takes it back to a repo question.
+ */
+export function isGeneralLanguageQuestion(message: string): boolean {
+  const scoped = stripGroundingInstructions(message);
+  if (!scoped || !SYNTAX_QUESTION.test(scoped)) {
+    return false;
+  }
+  if (!LANGUAGE_NAME.test(scoped) && !SCOPED_GO_LANGUAGE.test(scoped)) {
+    return false;
+  }
+  return !REPO_SCOPE.test(scoped) && !LOCAL_SCOPE.test(scoped) && !NAMED_SOURCE_FILE.test(scoped);
+}
 
 /** Imperative change request: starts with the verb, or is politely prefixed. */
 function looksLikeChangeRequest(message: string): boolean {
@@ -104,6 +181,22 @@ export function classifyRepoCodeIntent(message: string): RepoCodeIntent {
   const trimmed = message?.trim() ?? "";
   if (trimmed.length < 8 || CONVERSATIONAL.test(trimmed) || META_REFERENCE.test(trimmed)) {
     return NONE;
+  }
+  // Inventory / layout facts use IndexedRepoWorkspace, not a hunt.
+  if (isRepoStructureQuery(trimmed)) {
+    return { action: "none", confidence: "high", reason: "indexed inventory or layout fact, not a code hunt" };
+  }
+  // "How do I…", "how old", "why is chat so slow" — not "how does this code work".
+  if (isNonCodeHowWhyAsk(trimmed)) {
+    return { action: "none", confidence: "high", reason: "how-to or product question, not a code hunt" };
+  }
+  // An explicit opt-out beats every hunt heuristic below it.
+  if (isExplicitNoRepoSearchAsk(trimmed)) {
+    return { action: "none", confidence: "high", reason: "user asked not to search the repository" };
+  }
+  // "In TypeScript, how do I…" — language recall. The index can only miss.
+  if (isGeneralLanguageQuestion(trimmed)) {
+    return { action: "none", confidence: "high", reason: "general language question, not a code hunt" };
   }
 
   const hasEntity = IDENTIFIER.test(trimmed) || FILE_PATH.test(trimmed) || BACKTICKED.test(trimmed);
@@ -141,11 +234,17 @@ export function classifyRepoCodeIntent(message: string): RepoCodeIntent {
   if (looksLikeChangeRequest(trimmed)) {
     return { action: "change", confidence, reason: `change request that ${subject}` };
   }
-  if (EXPLANATION_START.test(trimmed) && weakFormAllowed) {
-    return { action: "understand", confidence, reason: `asks why or how and ${subject}` };
+  // Inventory "how many files in this repo" already returned none. Remaining
+  // "how many files import X" is a search, not a total.
+  if (/\bhow many files\b/i.test(trimmed)) {
+    return { action: "locate", confidence, reason: `asks how many files match a condition and ${subject}` };
   }
   if (LOCATE.test(trimmed)) {
     return { action: "locate", confidence, reason: `asks where something is and ${subject}` };
+  }
+  // "Read src/server/authMiddleware.ts" — a named file is a hunt, not small talk.
+  if (NAMED_SOURCE_FILE.test(trimmed)) {
+    return { action: "locate", confidence: "high", reason: "names a source file" };
   }
   if (EXISTENCE_START.test(trimmed) && weakFormAllowed) {
     return { action: "locate", confidence, reason: `asks whether code exists and ${subject}` };
@@ -162,4 +261,13 @@ export function classifyRepoCodeIntent(message: string): RepoCodeIntent {
 /** Whether this turn should gather evidence from the repository at all. */
 export function needsRepoCode(message: string): boolean {
   return classifyRepoCodeIntent(message).action !== "none";
+}
+
+/** Understand Repo / slash focus that is a "where does this live" locate, not an architecture overview. */
+export function isLocateShapedRepoAsk(message: string | undefined): boolean {
+  const trimmed = message?.trim() ?? "";
+  if (!trimmed) {
+    return false;
+  }
+  return classifyRepoCodeIntent(trimmed).action === "locate";
 }

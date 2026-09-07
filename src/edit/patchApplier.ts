@@ -1,8 +1,10 @@
 import * as vscode from "vscode";
 import type { ParsedPatchSet } from "./patchParser";
 import { applyHunksToContent } from "./patchContent";
+import { lookupPatchFileContent } from "./patchFileContents";
 import {
   ensureEditablePatchTarget,
+  languageIdForPatchPath,
   undoSnapshotPathForUri,
   uriFromUndoSnapshotPath,
   type EnsurePatchTargetOptions
@@ -19,7 +21,13 @@ export type FileUndoSnapshot = {
 };
 
 export type ApplyPatchesResult =
-  | { ok: true; undo: FileUndoSnapshot[]; filesChanged: number; usedRemoteEditor: boolean }
+  | {
+      ok: true;
+      undo: FileUndoSnapshot[];
+      filesChanged: number;
+      usedRemoteEditor: boolean;
+      appliedFiles: Array<{ path: string; content: string }>;
+    }
   | { ok: false; error: string; file?: string };
 
 export type ApplyPatchesOptions = {
@@ -30,6 +38,8 @@ export type ApplyPatchesOptions = {
   matchIndicesByFileHunk?: Readonly<Record<string, readonly number[]>>;
   repo?: EnsurePatchTargetOptions["repo"];
   openRemoteFile?: EnsurePatchTargetOptions["openRemoteFile"];
+  /** Captured full-file bytes when the live tab cannot be read. */
+  fileContents?: Readonly<Record<string, string>>;
 };
 
 function fileHunkKey(relativePath: string, hunkIndex: number): string {
@@ -57,7 +67,9 @@ export async function applyPatchesToWorkspace(
   for (const filePatch of patches.files) {
     const resolved = await ensureEditablePatchTarget(filePatch.relativePath, {
       repo: options?.repo,
-      openRemoteFile: options?.openRemoteFile
+      openRemoteFile: options?.openRemoteFile,
+      fileContents: options?.fileContents,
+      search: filePatch.hunks[0]?.search
     });
     if (!resolved.ok) {
       return {
@@ -72,7 +84,9 @@ export async function applyPatchesToWorkspace(
       usedRemoteEditor = true;
     }
 
-    const originalContent = target.readText();
+    const live = target.readText();
+    const captured = lookupPatchFileContent(filePatch.relativePath, options?.fileContents);
+    const originalContent = live?.trim() ? live : captured;
     if (originalContent === undefined) {
       return { ok: false, error: `Could not read file: ${filePatch.relativePath}`, file: filePatch.relativePath };
     }
@@ -122,6 +136,10 @@ export async function applyPatchesToWorkspace(
     ok: true,
     filesChanged: planned.length,
     usedRemoteEditor,
+    appliedFiles: planned.map((item) => ({
+      path: item.relativePath,
+      content: item.nextContent
+    })),
     undo: planned.map((item) => ({
       absolutePath: undoSnapshotPathForUri(item.uri),
       relativePath: item.relativePath,
@@ -139,9 +157,8 @@ export async function undoPatchApplication(
 
   const edits = new vscode.WorkspaceEdit();
   for (const snapshot of undo) {
-    const uri = uriFromUndoSnapshotPath(snapshot.absolutePath);
-    const document = await vscode.workspace.openTextDocument(uri);
-    edits.replace(uri, fullDocumentRange(document), snapshot.originalContent);
+    const document = await openDocumentForUndo(snapshot);
+    edits.replace(document.uri, fullDocumentRange(document), snapshot.originalContent);
   }
 
   const success = await vscode.workspace.applyEdit(edits);
@@ -150,4 +167,27 @@ export async function undoPatchApplication(
   }
 
   return { ok: true };
+}
+
+async function openDocumentForUndo(snapshot: FileUndoSnapshot): Promise<vscode.TextDocument> {
+  const uri = uriFromUndoSnapshotPath(snapshot.absolutePath);
+  const open = vscode.workspace.textDocuments.find(
+    (doc) =>
+      doc.uri.toString() === uri.toString() ||
+      doc.uri.toString() === snapshot.absolutePath ||
+      (uri.scheme === "untitled" &&
+        doc.uri.scheme === "untitled" &&
+        doc.uri.path.replace(/^\/+/, "") === uri.path.replace(/^\/+/, ""))
+  );
+  if (open) {
+    return open;
+  }
+  try {
+    return await vscode.workspace.openTextDocument(uri);
+  } catch {
+    return vscode.workspace.openTextDocument({
+      content: snapshot.originalContent,
+      language: languageIdForPatchPath(snapshot.relativePath)
+    });
+  }
 }

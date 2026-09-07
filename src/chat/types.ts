@@ -26,10 +26,14 @@ export type ProjectInstructionsState = {
   gitRoot?: string;
   /** Instruction file paths loaded on each chat turn. */
   sources?: string[];
-  /** True when AGENTS.md is present (attached or in repo). */
+  /** True when AGENTS.md will be loaded (Use-repo file or this account's upload). */
   hasAgentsMd?: boolean;
   /** Basename of a user-attached AGENTS.md file, when set. */
   attachedAgentsMdLabel?: string;
+  /** repo = Use-repo file; attached = this signed-in account's upload/create. */
+  source?: "repo" | "attached";
+  /** Signed-in account can create, upload, or remove a personal file (no Use-repo). */
+  canMutate?: boolean;
 };
 
 /** Settings-visible fact. Injected only when `source` is non-empty. */
@@ -97,6 +101,36 @@ export type ChatSuggestPayload = {
   resolved?: boolean;
 };
 
+export type ChatTurnActivityTodo = {
+  id: string;
+  content: string;
+  status: "pending" | "in_progress" | "completed";
+  /** Expandable hit list / error under a real search row. */
+  detail?: string;
+};
+
+export type ChatTurnActivityTool = {
+  id: string;
+  kind: "search" | "read" | "explore" | "generic";
+  label: string;
+  status: "active" | "done";
+};
+
+export type ChatTurnActivityFile = {
+  path: string;
+  action: "read" | "searched" | "explored";
+};
+
+/** Cursor-style trail persisted on an assistant message after the turn finishes. */
+export type ChatTurnActivity = {
+  durationMs: number;
+  thinkingMs?: number;
+  thinkingText?: string;
+  tools: ChatTurnActivityTool[];
+  files: ChatTurnActivityFile[];
+  steps?: ChatTurnActivityTodo[];
+};
+
 export type ChatMessage = {
   role: "user" | "assistant" | "system";
   content: string;
@@ -108,6 +142,8 @@ export type ChatMessage = {
   relatedArtifactId?: string;
   /** Clarifying suggest chips under an assistant message. */
   suggest?: ChatSuggestPayload;
+  /** Collapsed “Worked for…” trail. Display-only — never sent back to the model. */
+  activity?: ChatTurnActivity;
 };
 
 /** Serializable evidence card stored with chat thread history. */
@@ -127,6 +163,9 @@ export type ChatPersistedArtifact = {
 export type ChatHistoryPayload = {
   messages: ChatMessage[];
   artifacts: ChatPersistedArtifact[];
+  /** Restored with the thread so /edit chrome is not lost on reopen. */
+  patchCards?: PatchCardState[];
+  suppressedMessageTimestamps?: number[];
 };
 
 export type PatchDiffLineKind = "context" | "remove" | "add";
@@ -192,6 +231,12 @@ export type PatchPreviewHunk = {
   resolvedMatchIndices?: number[];
   /** Per-edit review state — defaults to pending when omitted. */
   status?: PatchPreviewHunkStatus;
+  /** Class.method (or function) that contains this edit. */
+  anchorLabel?: string;
+  /** 1-based SEARCH start in the file. */
+  startLine?: number;
+  /** 1-based SEARCH end (inclusive). */
+  endLine?: number;
 };
 
 export type PatchPreviewFile = {
@@ -287,6 +332,23 @@ export type UserPreferences = {
   /** Signed-in account email from /v1/me (when available). */
   userEmail?: string;
   plan?: "free" | "pro" | "enterprise";
+  usageTier?: "pro" | "pro_plus" | "max" | null;
+  usageMeters?: {
+    usageTier: "pro" | "pro_plus" | "max";
+    displayName: string;
+    seatPriceUsd: number;
+    periodStart: string;
+    periodEnd: string;
+    usedCents: number;
+    limitCents: number;
+    remainingCents: number;
+    usedRatio: number;
+    auto: { usedCents: number; limitCents: number; remainingCents: number; usedRatio: number };
+    frontier: { usedCents: number; limitCents: number; remainingCents: number; usedRatio: number };
+    nextTier?: "pro" | "pro_plus" | "max";
+    nextTierName?: string;
+    nextTierPriceUsd?: number;
+  };
   userRole?: string;
   authMethod?: "api_key" | "sso_session" | "password" | "google_oauth";
   canInstallIntegrations?: boolean;
@@ -595,10 +657,12 @@ export type WebviewInbound =
       };
     }
   | { type: "context:dismiss-warning" }
+  | { type: "context:clear" }
   | { type: "agents:create-skeleton" }
   | { type: "agents:start-from-template" }
   | { type: "agents:attach" }
   | { type: "agents:open" }
+  | { type: "agents:detach" }
   | { type: "memory:add"; payload: { text: string; source: string; repoId?: string } }
   | { type: "memory:clear"; payload?: { id?: string } }
   | { type: "degradation:refresh"; payload?: { feature?: string; retrace?: boolean } }
@@ -658,6 +722,14 @@ export type WebviewInbound =
         body?: string;
         base?: string;
         files: Array<{ path: string; content: string }>;
+      };
+    }
+  | {
+      type: "patch:summarize-pr";
+      payload: {
+        messageTimestamp?: number;
+        title: string;
+        diff: string;
       };
     }
   | { type: "ownership:copy-draft"; payload: { text: string } }
@@ -720,6 +792,8 @@ export type WebviewOutbound =
         upgradeUrl: string;
         timezone?: string;
         retryAfterMs?: number;
+        message?: string;
+        pool?: "paid" | "auto" | "frontier" | "free";
       };
     }
   | { type: "chat:quota-cleared" }
@@ -752,6 +826,32 @@ export type WebviewOutbound =
   | { type: "intent:feedback"; payload: IntentFeedbackState }
   | { type: "conflict:update"; payload: ConflictResolutionState }
   | { type: "patch:update"; payload: PatchCardsUpdatePayload }
+  | {
+      /** Open the existing Create PR confirm modal for applied patches or editor changes. */
+      type: "patch:open-create-pr";
+      payload: {
+        messageTimestamp: number;
+        files?: Array<{ path: string; content: string }>;
+        diff?: string;
+      };
+    }
+  | {
+      type: "patch:pr-notes";
+      payload: { messageTimestamp?: number; notes?: string };
+    }
+  | {
+      type: "patch:pr-created";
+      payload: {
+        messageTimestamp?: number;
+        htmlUrl: string;
+        number: number;
+        provider?: CodeHostProviderPreference;
+      };
+    }
+  | {
+      type: "patch:pr-error";
+      payload: { messageTimestamp?: number; error: string };
+    }
   | { type: "settings:state"; payload: SettingsStatePayload }
   | { type: "settings:navigate"; payload: { screen: string } }
   | { type: "settings:test-result"; payload: { ok: boolean; message: string } }

@@ -1,4 +1,9 @@
-import { INTEGRATIONS, type IntegrationStatus } from "@/lib/integrations";
+import {
+  INTEGRATIONS,
+  integrationIsConnected,
+  integrationStatusLabel,
+  type IntegrationStatus
+} from "@/lib/integrations";
 import { StatusBadge } from "./StatusBadge";
 
 type IntegrationStatusListProps = {
@@ -11,7 +16,8 @@ export function IntegrationStatusList({ integrations, loading }: IntegrationStat
     <div className="admin-list">
       {INTEGRATIONS.map((def) => {
         const status = integrations.find((s) => s.provider === def.id);
-        const installed = status?.installed ?? false;
+        const connected = integrationIsConnected(status);
+        const needsReconnect = Boolean(status?.needsReconnect);
         return (
           <div key={def.id} className="admin-list-row !justify-start gap-3">
             <p className="min-w-[9rem] font-medium">{def.name}</p>
@@ -19,9 +25,10 @@ export function IntegrationStatusList({ integrations, loading }: IntegrationStat
               <span className="text-xs text-coop-muted">…</span>
             ) : (
               <StatusBadge
-                connected={installed}
-                showWhenDisconnected={!installed}
-                label={installed ? "Connected" : "Available"}
+                connected={connected}
+                showWhenDisconnected
+                label={integrationStatusLabel(status)}
+                tone={needsReconnect ? "reconnect" : connected ? "connected" : "available"}
               />
             )}
           </div>

@@ -10,6 +10,7 @@ import {
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 import { buildIntegrationSearchTermList } from "./integrationSearchTerms";
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
+import { filterDocPagesForUseRepo } from "./integrationDocRelevance";
 
 export type NotionSearchPage = {
   id: string;
@@ -97,7 +98,15 @@ export async function fetchNotionSearchContext(options: {
   const client = new NotionClient({ token: creds.notionToken });
   try {
     const rawPages = await searchNotionPagesForTerms(client, terms, options.limit ?? 20);
-    const pages = filterScopedNotionPages(rawPages, options.integrationScope);
+    const pages = filterDocPagesForUseRepo(
+      filterScopedNotionPages(rawPages, options.integrationScope),
+      {
+        owner: options.owner,
+        repo: options.repo,
+        focusTerms: options.extraTerms,
+        limit: options.limit ?? 20
+      }
+    );
     const repoQuery =
       options.owner?.trim() && options.repo?.trim()
         ? `${options.owner.trim()}/${options.repo.trim()}`

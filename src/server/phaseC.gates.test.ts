@@ -1,11 +1,10 @@
 import assert from "node:assert/strict";
 import type { ServerResponse } from "node:http";
-import { CodeHostError, type CreatePullRequestResult, type RepoCoordinates } from "../api/codeHosts/types";
+import { CodeHostError, type CreatePullRequestResult } from "../api/codeHosts/types";
 import {
   GITHUB_WRITE_PERMISSION_MESSAGE,
   PHASE_C_FIXTURE_FILES,
   PR_HANDOFF_AUDIT_ACTION,
-  pullRequestWriteNotYetMessage,
   resetPullCreateLocks
 } from "../api/codeHosts/pullRequestWrite";
 import { handleOrgApiRequest, type OrgApiDeps } from "./orgApi";
@@ -125,8 +124,23 @@ const fixtureBody = {
   files: PHASE_C_FIXTURE_FILES
 };
 
+/** Readiness probe runs before create; keep it offline and permissive in route tests. */
+function installReadinessMock(): void {
+  globalThis.fetch = (async (input: string | URL) => {
+    const url = String(input);
+    if (/\/repos\/acme\/plane$/.test(url)) {
+      return new Response(JSON.stringify({ default_branch: "main" }), {
+        status: 200,
+        headers: { "content-type": "application/json", "x-oauth-scopes": "repo" }
+      });
+    }
+    return new Response(JSON.stringify({ message: "unexpected" }), { status: 500 });
+  }) as typeof fetch;
+}
+
 void (async () => {
   resetPullCreateLocks();
+  installReadinessMock();
 
   const created: CreatePullRequestResult = {
     number: 42,
@@ -171,15 +185,13 @@ void (async () => {
   assert.equal(empty.statusCode, 400, "C-P5 empty file list blocked at API");
 
   const gitlab = await request(
-    baseDeps(async (coords: RepoCoordinates) => {
-      throw new CodeHostError(pullRequestWriteNotYetMessage(coords.provider), "unsupported", 501, coords.provider);
-    }),
+    baseDeps(async () => created),
     "POST",
     "/v1/orgs/repos/gitlab%3Aacme%2Fplane/pulls",
     fixtureBody
   );
-  assert.equal(gitlab.statusCode, 501, "C-G4 / C-P4 GitLab is not yet");
-  assert.match(String(gitlab.json.error), /not yet available for GitLab/);
+  assert.equal(gitlab.statusCode, 201, "C-G4 GitLab Create PR uses the same write path");
+  assert.equal(gitlab.json.number, created.number);
 
   const deniedAudit: Array<{ action: string; metadata?: Record<string, unknown> }> = [];
   const denied = await request(
@@ -221,6 +233,21 @@ void (async () => {
       fixtureBody
     );
     assert.equal(injected.statusCode, 201);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  installReadinessMock();
+  try {
+    const check = await request(
+      baseDeps(async () => created),
+      "GET",
+      "/v1/orgs/repos/github%3Aacme%2Fplane/pull-write-check"
+    );
+    assert.equal(check.statusCode, 200, "pull-write-check answers without creating anything");
+    assert.equal(check.json.ok, true);
+    assert.equal(check.json.reason, "ready");
+    assert.equal(check.json.token, undefined, "diagnostic never returns a token");
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -7,6 +7,10 @@ import {
   PATCH_SESSION_MAX_FILES
 } from "../../../edit/patchParser";
 import { findAllSearchMatches } from "../../../edit/patchContent";
+import {
+  REPLACE_DUPLICATES_SEARCH_ERROR,
+  replaceDuplicatesSearch
+} from "../../../edit/patchHunkGuards";
 import type { AgentToolContext } from "../agentToolContext";
 import { stripReadLinePrefixes } from "./readFile";
 
@@ -168,31 +172,13 @@ function hunkFromPair(
   if (!search.length) {
     return { ok: false, error: "Malformed SEARCH/REPLACE: search block is empty" };
   }
-  if (search.trim().length >= 12 && countOccurrences(replace, search.trim()) > 1) {
+  if (replaceDuplicatesSearch(replace, search)) {
     return {
       ok: false,
-      error:
-        "REPLACE duplicates the SEARCH block. To add a comment above a line, SEARCH is the existing line once; REPLACE is the comment plus that line once."
+      error: REPLACE_DUPLICATES_SEARCH_ERROR
     };
   }
   return { ok: true, hunk: { search, replace } };
-}
-
-function countOccurrences(haystack: string, needle: string): number {
-  if (!needle) {
-    return 0;
-  }
-  let count = 0;
-  let from = 0;
-  while (from <= haystack.length) {
-    const index = haystack.indexOf(needle, from);
-    if (index < 0) {
-      break;
-    }
-    count += 1;
-    from = index + needle.length;
-  }
-  return count;
 }
 
 function formatProposedPatches(files: ProposedFile[]): string {

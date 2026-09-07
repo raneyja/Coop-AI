@@ -27,7 +27,7 @@ Real customers pay on [coop-ai.dev/pricing](https://coop-ai.dev/pricing), Stripe
 2. Create or open your **Coop AI Pro** product
 3. Add or copy the **live** recurring price ID → starts with `price_` (not the test price ID)
 
-**Success looks like:** you have a live `price_…` ID for $20/mo (or your chosen amount).
+**Success looks like:** you have a live `price_…` ID for $25/mo (or your chosen amount).
 
 ### 1.3 Live API keys
 

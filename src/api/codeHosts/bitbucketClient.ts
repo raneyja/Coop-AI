@@ -1,6 +1,23 @@
 import { RateLimitTracker } from "../rateLimitTracker";
-import { codeHostRequestJson, decodeContent, linesFromText, paginatedCodeHostFetch } from "./codeHostHttp";
-import { throwPullRequestWriteNotYet } from "./pullRequestWrite";
+import {
+  codeHostRequest,
+  codeHostRequestJson,
+  codeHostRequestOk,
+  decodeContent,
+  linesFromText,
+  paginatedCodeHostFetch
+} from "./codeHostHttp";
+import {
+  BITBUCKET_PR_REJECTED_MESSAGE,
+  BITBUCKET_PR_WRITE_FAILED_MESSAGE,
+  explainPullCreateFailure,
+  bitbucketScopesAllowPullWrite,
+  normalizeWriteFiles,
+  parseOAuthScopeSet,
+  sanitizeBranchName,
+  validateCreatePullRequestInput,
+  writePermissionMessage
+} from "./pullRequestWrite";
 import type {
   BlameData,
   CodeHostClient,
@@ -32,6 +49,7 @@ type BitbucketClientOptions = {
 export class BitbucketClient implements CodeHostClient {
   public readonly provider = "bitbucket" as const;
   private readonly headers: Record<string, string>;
+  private bitbucketPullWriteGranted: boolean | undefined;
 
   public constructor(private readonly options: BitbucketClientOptions) {
     if (options.token) {
@@ -562,10 +580,212 @@ export class BitbucketClient implements CodeHostClient {
   }
 
   public async createPullFromFiles(
-    _coords: RepoCoordinates,
-    _input: CreatePullRequestInput
+    coords: RepoCoordinates,
+    input: CreatePullRequestInput
   ): Promise<CreatePullRequestResult> {
-    throwPullRequestWriteNotYet(this.provider);
+    const files = normalizeWriteFiles(input.files);
+    const branch = sanitizeBranchName(input.branch);
+    const title = input.title.trim();
+    const validationError = validateCreatePullRequestInput({ ...input, branch: branch ?? "", title, files });
+    if (validationError || !branch) {
+      throw new CodeHostError(validationError ?? "Enter a valid branch name.", "unsupported", 400, this.provider);
+    }
+
+    this.bitbucketPullWriteGranted = undefined;
+    await this.assertWriteGrant(coords);
+
+    const base = (input.base ?? coords.branch)?.trim() || (await this.resolveBranch({ ...coords, branch: undefined }));
+    const parent = await this.resolveSrcParent(coords, branch, base);
+
+    try {
+      const form = new FormData();
+      form.append("message", title);
+      form.append("branch", branch);
+      form.append("parents", parent);
+      for (const file of files) {
+        appendBitbucketSrcFile(form, file);
+      }
+
+      const commitSha = await this.commitSrcFiles(coords, { form, branch });
+
+      const pull = await this.writeJson<{ id: number; links?: { html?: { href?: string } } }>(
+        `${this.repoUrl(coords)}/pullrequests`,
+        {
+          title,
+          description: input.body ?? "",
+          source: { branch: { name: branch } },
+          destination: { branch: { name: base } }
+        }
+      );
+      return {
+        number: pull.id,
+        htmlUrl: pull.links?.html?.href ?? "",
+        branch,
+        commitSha,
+        title
+      };
+    } catch (error) {
+      if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
+        throw this.writeFailure(error);
+      }
+      if (error instanceof CodeHostError && (error.status === 400 || error.status === 409)) {
+        throw this.rejectedPullError(error);
+      }
+      throw error;
+    }
+  }
+
+  private async assertWriteGrant(coords: RepoCoordinates): Promise<void> {
+    const grant = await this.readBitbucketWriteGrant(coords);
+    if (grant === "insufficient") {
+      this.bitbucketPullWriteGranted = false;
+      throw this.writePermissionError(403);
+    }
+    if (grant === "sufficient") {
+      this.bitbucketPullWriteGranted = true;
+    }
+  }
+
+  private async readBitbucketWriteGrant(
+    coords: RepoCoordinates
+  ): Promise<"sufficient" | "insufficient" | "unknown"> {
+    try {
+      const response = await codeHostRequest(this.repoUrl(coords), {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      });
+      if (!response.ok) {
+        return "unknown";
+      }
+      // Only trust x-oauth-scopes (what the token has). x-accepted-oauth-scopes is
+      // what THIS GET requires — usually `repository` — and must not fail a write.
+      const header = response.headers.get("x-oauth-scopes");
+      if (!header?.trim()) {
+        return "unknown";
+      }
+      return bitbucketScopesAllowPullWrite(parseOAuthScopeSet(header)) ? "sufficient" : "insufficient";
+    } catch {
+      return "unknown";
+    }
+  }
+
+  private writeFailure(error: CodeHostError | number): CodeHostError {
+    const status = typeof error === "number" ? error : error.status;
+    const authStatus = status === 401 ? 401 : 403;
+    if (this.bitbucketPullWriteGranted === false) {
+      return this.writePermissionError(authStatus);
+    }
+    const extra =
+      typeof error === "number"
+        ? BITBUCKET_PR_WRITE_FAILED_MESSAGE
+        : error.message;
+    return new CodeHostError(
+      explainPullCreateFailure("bitbucket", extra),
+      "auth",
+      authStatus,
+      this.provider
+    );
+  }
+
+  /**
+   * POST /src often returns 201 with an empty body and a Location header.
+   * Parsing that as JSON threw "Unexpected end of JSON input" after a successful commit.
+   */
+  private async commitSrcFiles(
+    coords: RepoCoordinates,
+    options: { form: FormData; branch: string }
+  ): Promise<string> {
+    try {
+      const response = await codeHostRequestOk(`${this.repoUrl(coords)}/src`, {
+        method: "POST",
+        headers: this.headers,
+        body: options.form,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      });
+      const hash =
+        commitHashFromBitbucketSrcResponse(response, await response.text()) ??
+        (await this.branchHeadSha(coords, options.branch));
+      if (!hash) {
+        throw new CodeHostError(
+          "Bitbucket accepted the commit but did not return a commit id.",
+          "network",
+          502,
+          this.provider
+        );
+      }
+      return hash;
+    } catch (error) {
+      if (error instanceof CodeHostError && isBitbucketNoChangesError(error)) {
+        const existing = await this.branchHeadSha(coords, options.branch);
+        if (existing) {
+          return existing;
+        }
+      }
+      throw error;
+    }
+  }
+
+  private async writeJson<T>(url: string, body: unknown): Promise<T> {
+    try {
+      return await codeHostRequestJson<T>(url, {
+        method: "POST",
+        headers: { ...this.headers, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      });
+    } catch (error) {
+      if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
+        throw this.writeFailure(error);
+      }
+      throw error;
+    }
+  }
+
+  private rejectedPullError(error: CodeHostError): CodeHostError {
+    const extra = error.message.replace(/^Request failed \(\d+\)\.?\s*/i, "").trim();
+    return new CodeHostError(
+      extra ? `${BITBUCKET_PR_REJECTED_MESSAGE} ${extra}` : BITBUCKET_PR_REJECTED_MESSAGE,
+      "network",
+      error.status,
+      this.provider
+    );
+  }
+
+  private async resolveSrcParent(coords: RepoCoordinates, branch: string, base: string): Promise<string> {
+    const baseSha = await this.branchHeadSha(coords, base);
+    if (!baseSha) {
+      throw new CodeHostError("Could not read the base branch for this pull request.", "not_found", 404, this.provider);
+    }
+    if (branch === base) {
+      return baseSha;
+    }
+    try {
+      return (await this.branchHeadSha(coords, branch)) ?? baseSha;
+    } catch (error) {
+      if (error instanceof CodeHostError && error.code === "not_found") {
+        return baseSha;
+      }
+      throw error;
+    }
+  }
+
+  private async branchHeadSha(coords: RepoCoordinates, branch: string): Promise<string | undefined> {
+    const data = await codeHostRequestJson<{ target?: { hash?: string } }>(
+      `${this.repoUrl(coords)}/refs/branches/${encodeURIComponent(branch)}`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    );
+    return data.target?.hash?.trim() || undefined;
+  }
+
+  private writePermissionError(status: number): CodeHostError {
+    return new CodeHostError(writePermissionMessage(this.provider), "auth", status === 401 ? 401 : 403, this.provider);
   }
 
   public async listIssues(
@@ -685,6 +905,51 @@ function mapBitbucketCommit(commit: BitbucketCommit): CommitInfo {
     message: commit.message ?? "",
     htmlUrl: commit.links?.html?.href
   };
+}
+
+/**
+ * Bitbucket only treats multipart parts with a filename as file uploads.
+ * A string field is metadata, so the commit has no file changes and the PR
+ * is rejected as empty.
+ */
+function appendBitbucketSrcFile(form: FormData, file: { path: string; content: string }): void {
+  const repoPath = file.path.replace(/^\/+/, "");
+  const filename = repoPath.split("/").pop() || repoPath;
+  form.append(`/${repoPath}`, new Blob([file.content], { type: "text/plain; charset=utf-8" }), filename);
+}
+
+export function hashFromBitbucketCommitUrl(value: string): string | undefined {
+  const match = /\/commits?\/([a-fA-F0-9]{7,40})(?:\/|$|\?|#)/i.exec(value);
+  return match?.[1];
+}
+
+export function commitHashFromBitbucketSrcResponse(response: Response, bodyText: string): string | undefined {
+  const fromLocation = hashFromBitbucketCommitUrl(response.headers.get("location") ?? "");
+  if (fromLocation) {
+    return fromLocation;
+  }
+  if (!bodyText.trim()) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(bodyText) as { hash?: unknown; target?: { hash?: unknown } };
+    if (typeof parsed.hash === "string" && parsed.hash.trim()) {
+      return parsed.hash.trim();
+    }
+    if (typeof parsed.target?.hash === "string" && parsed.target.hash.trim()) {
+      return parsed.target.hash.trim();
+    }
+  } catch {
+    return hashFromBitbucketCommitUrl(bodyText);
+  }
+  return undefined;
+}
+
+function isBitbucketNoChangesError(error: CodeHostError): boolean {
+  if (error.status !== 400 && error.status !== 409) {
+    return false;
+  }
+  return /no changes/i.test(error.message);
 }
 
 function normalizePath(value: string): string {

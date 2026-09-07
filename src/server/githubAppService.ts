@@ -1,11 +1,40 @@
 import { createHmac, createSign, timingSafeEqual } from "node:crypto";
+import { githubAppInstallationHasPullWrite } from "../api/codeHosts/pullRequestWrite";
 
 const GITHUB_API = "https://api.github.com";
+
+export const GITHUB_APP_PULL_WRITE_PERMISSIONS = {
+  contents: "write",
+  pull_requests: "write"
+} as const;
 
 export type InstallationTokenResponse = {
   token: string;
   expiresAt: Date;
+  permissions?: Record<string, string>;
 };
+
+export type PullWriteTokenAttempt =
+  | { ok: true; token: string; expiresAt: Date; permissions?: Record<string, string> }
+  | { ok: false; githubMessage?: string; permissions?: Record<string, string> };
+
+/** GitHub 422 on a scoped token mint: the installation has not accepted these permissions. */
+class PullWritePermissionRefused extends Error {
+  public constructor(public readonly githubMessage?: string) {
+    super(githubMessage ?? "GitHub refused the requested installation permissions");
+    this.name = "PullWritePermissionRefused";
+  }
+}
+
+async function readGithubMessage(response: Response): Promise<string | undefined> {
+  try {
+    const text = await response.text();
+    const parsed = JSON.parse(text) as { message?: unknown };
+    return typeof parsed.message === "string" && parsed.message.trim() ? parsed.message.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export type GitHubAppServiceOptions = {
   appId: string;
@@ -47,29 +76,75 @@ export class GitHubAppService {
     return `${orgId}.${issuedAt}.${signature}`;
   }
 
-  public async createInstallationAccessToken(installationId: number): Promise<InstallationTokenResponse> {
+  public async createInstallationAccessToken(
+    installationId: number,
+    options?: { permissions?: Record<string, "read" | "write"> }
+  ): Promise<InstallationTokenResponse> {
     const jwt = this.createAppJwt();
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${jwt}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "coop-ai-backend"
+    };
+    const body = options?.permissions ? JSON.stringify({ permissions: options.permissions }) : undefined;
+    if (body) {
+      headers["Content-Type"] = "application/json";
+    }
     const response = await fetch(`${GITHUB_API}/app/installations/${installationId}/access_tokens`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${jwt}`,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "coop-ai-backend"
-      }
+      headers,
+      body
     });
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`GitHub installation token exchange failed (${response.status}): ${body}`);
+    if (response.status === 422 && options?.permissions) {
+      throw new PullWritePermissionRefused(await readGithubMessage(response));
     }
-    const data = (await response.json()) as { token?: string; expires_at?: string };
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`GitHub installation token exchange failed (${response.status}): ${errorBody}`);
+    }
+    const data = (await response.json()) as {
+      token?: string;
+      expires_at?: string;
+      permissions?: Record<string, string>;
+    };
     if (!data.token || !data.expires_at) {
       throw new Error("GitHub installation token response missing fields");
     }
     return {
       token: data.token,
-      expiresAt: new Date(data.expires_at)
+      expiresAt: new Date(data.expires_at),
+      permissions: data.permissions
     };
+  }
+
+  /**
+   * Ask GitHub for a token scoped to Contents + Pull requests write. GitHub answers
+   * 422 when the installation has not accepted those permissions, which is the only
+   * trustworthy “Accept the App update” signal.
+   */
+  public async tryCreatePullWriteAccessToken(
+    installationId: number
+  ): Promise<PullWriteTokenAttempt> {
+    let minted: InstallationTokenResponse;
+    try {
+      minted = await this.createInstallationAccessToken(installationId, {
+        permissions: { ...GITHUB_APP_PULL_WRITE_PERMISSIONS }
+      });
+    } catch (error) {
+      if (error instanceof PullWritePermissionRefused) {
+        return { ok: false, githubMessage: error.githubMessage };
+      }
+      throw error;
+    }
+    if (minted.permissions && !githubAppInstallationHasPullWrite(minted.permissions)) {
+      return {
+        ok: false,
+        githubMessage: `Installation ${installationId} granted contents=${minted.permissions.contents ?? "none"}, pull_requests=${minted.permissions.pull_requests ?? "none"}.`,
+        permissions: minted.permissions
+      };
+    }
+    return { ok: true, token: minted.token, expiresAt: minted.expiresAt, permissions: minted.permissions };
   }
 
   /** Paginate GET /installation/repositories — returns normalized github:owner/repo ids. */
@@ -157,9 +232,18 @@ export class GitHubAppService {
     return catalog;
   }
 
-  public async getInstallation(
-    installationId: number
-  ): Promise<{ id: number; htmlUrl?: string; suspendedAt?: string | null; accountLogin?: string; accountType?: string } | undefined> {
+  public async getInstallation(installationId: number): Promise<
+    | {
+        id: number;
+        htmlUrl?: string;
+        suspendedAt?: string | null;
+        accountLogin?: string;
+        accountType?: string;
+        permissions?: Record<string, string>;
+        repositorySelection?: string;
+      }
+    | undefined
+  > {
     const jwt = this.createAppJwt();
     const response = await fetch(`${GITHUB_API}/app/installations/${installationId}`, {
       headers: {
@@ -181,6 +265,8 @@ export class GitHubAppService {
       html_url?: string;
       suspended_at?: string | null;
       account?: { login?: string; type?: string };
+      permissions?: Record<string, string>;
+      repository_selection?: string;
     };
     if (!data.id) {
       return undefined;
@@ -190,7 +276,66 @@ export class GitHubAppService {
       htmlUrl: data.html_url,
       suspendedAt: data.suspended_at ?? null,
       accountLogin: data.account?.login,
-      accountType: data.account?.type
+      accountType: data.account?.type,
+      permissions: data.permissions,
+      repositorySelection: data.repository_selection
+    };
+  }
+
+  /**
+   * GET /repos/{owner}/{repo}/installation. 404 when this App is not on that repo —
+   * including public repos that any installation token can still GET.
+   */
+  public async getRepositoryInstallation(
+    owner: string,
+    repo: string
+  ): Promise<
+    | {
+        id: number;
+        htmlUrl?: string;
+        accountLogin?: string;
+        accountType?: string;
+        permissions?: Record<string, string>;
+        repositorySelection?: string;
+      }
+    | undefined
+  > {
+    const jwt = this.createAppJwt();
+    const response = await fetch(
+      `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/installation`,
+      {
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "coop-ai-backend"
+        }
+      }
+    );
+    if (response.status === 404) {
+      return undefined;
+    }
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`GitHub get repository installation failed (${response.status}): ${body}`);
+    }
+    const data = (await response.json()) as {
+      id?: number;
+      html_url?: string;
+      account?: { login?: string; type?: string };
+      permissions?: Record<string, string>;
+      repository_selection?: string;
+    };
+    if (!data.id) {
+      return undefined;
+    }
+    return {
+      id: data.id,
+      htmlUrl: data.html_url,
+      accountLogin: data.account?.login,
+      accountType: data.account?.type,
+      permissions: data.permissions,
+      repositorySelection: data.repository_selection
     };
   }
 
@@ -221,23 +366,8 @@ export class GitHubAppService {
         throw new Error(`GitHub list app installations failed (${response.status}): ${body}`);
       }
 
-      const data = (await response.json()) as {
-        installations?: Array<{
-          id?: number;
-          account?: { login?: string; type?: string };
-        }>;
-      };
-      const batch = data.installations ?? [];
-      for (const row of batch) {
-        if (!row.id || !row.account?.login || !row.account?.type) {
-          continue;
-        }
-        installations.push({
-          id: row.id,
-          accountLogin: row.account.login,
-          accountType: row.account.type
-        });
-      }
+      const batch = parseGithubAppInstallationList(await response.json());
+      installations.push(...batch);
 
       if (batch.length < 100) {
         break;
@@ -274,6 +404,35 @@ export class GitHubAppService {
       .update(`${orgId}:${issuedAt}`)
       .digest("hex");
   }
+}
+
+/**
+ * GitHub GET /app/installations returns a JSON array, not `{ installations: [...] }`.
+ * Treat both shapes so a parser bug cannot hide every other install of the App.
+ */
+export function parseGithubAppInstallationList(
+  payload: unknown
+): Array<{ id: number; accountLogin: string; accountType: string }> {
+  const rows = Array.isArray(payload)
+    ? payload
+    : payload && typeof payload === "object" && Array.isArray((payload as { installations?: unknown }).installations)
+      ? ((payload as { installations: unknown[] }).installations)
+      : [];
+  const installations: Array<{ id: number; accountLogin: string; accountType: string }> = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") {
+      continue;
+    }
+    const record = row as { id?: unknown; account?: { login?: unknown; type?: unknown } };
+    const id = typeof record.id === "number" ? record.id : Number(record.id);
+    const accountLogin = typeof record.account?.login === "string" ? record.account.login : "";
+    const accountType = typeof record.account?.type === "string" ? record.account.type : "";
+    if (!Number.isFinite(id) || id <= 0 || !accountLogin || !accountType) {
+      continue;
+    }
+    installations.push({ id, accountLogin, accountType });
+  }
+  return installations;
 }
 
 function base64UrlJson(value: Record<string, unknown>): string {

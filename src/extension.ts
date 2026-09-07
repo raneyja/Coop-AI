@@ -7,6 +7,8 @@ import { coopSessionRegistry } from "./chat/CoopSessionRegistry";
 import { getWebviewOptions } from "./chat/renderWebviewHtml";
 import { readConfiguration, readDegradationConfiguration, SecureApiClient } from "./chat/SecureApiClient";
 import { resolveSearchScopeForPlan } from "./license/planSearchScope";
+import { classifyCoopUriPath } from "./extension/coopUriRoutes";
+import { resolveUserAuthApiBase } from "./config/authApiBase";
 import { registerQuickActionCommands } from "./extension/quickActionCommands";
 import {
   registerCoopAutocomplete,
@@ -14,6 +16,7 @@ import {
   registerAutocompleteIndexNotifier,
   createAutocompleteUsageTelemetryHandler
 } from "./autocomplete/registerAutocomplete";
+import { snapshotAlreadyOpenDocuments, snapshotOpenDocument } from "./edit/editorWorkingCopy";
 import { registerPatchCommands } from "./edit/registerPatchCommands";
 import { readAutocompleteSettings, clearAutocompleteWorkspaceOverrides, restoreAutocompleteUnlessUserOptedOut } from "./autocomplete/autocompleteConfig";
 import { LayeredDegradationCache } from "./cache/degradationCache";
@@ -483,7 +486,18 @@ export function activate(context: vscode.ExtensionContext): void {
         api,
         apiBaseUrl: getApiBaseUrl(),
         codeHostRouter
-      }).readFile({ repoId }, filePath)
+      }).readFile({ repoId }, filePath),
+    findFiles: async ({ query: fileQuery, repoId }) => {
+      const coords = repoId
+        ? coordinatesFromRepoId(repoId.includes(":") ? repoId : `github:${repoId}`)
+        : undefined;
+      const hits = await codeHostRouter.searchRepositoryFiles(
+        fileQuery,
+        coords ?? undefined,
+        20
+      );
+      return hits.map((hit) => hit.path);
+    }
   });
   const services = {
     healthMonitor,
@@ -508,7 +522,15 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.window.registerUriHandler({
       handleUri(uri: vscode.Uri) {
-        if (uri.path !== "/auth/callback") {
+        const kind = classifyCoopUriPath(uri.path);
+        if (kind === "sign-in") {
+          void (async () => {
+            await vscode.commands.executeCommand("workbench.view.extension.coopAI");
+            resolveSession(provider.session).openSettings("account");
+          })();
+          return;
+        }
+        if (kind !== "auth-callback") {
           return;
         }
         const fragmentParams = new URLSearchParams(uri.fragment);
@@ -536,7 +558,7 @@ export function activate(context: vscode.ExtensionContext): void {
         void (async () => {
           try {
             await api.storeSession(token, refreshToken);
-            await api.fetchMe(readConfiguration().apiBaseUrl);
+            await api.fetchMe(resolveUserAuthApiBase(readConfiguration().apiBaseUrl));
             await refreshAllSessions();
             void vscode.window.showInformationMessage("Signed in to Coop.");
           } catch {
@@ -554,8 +576,10 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     lightningStatusBar,
     vscode.window.registerWebviewViewProvider("coopAI.sidebar", provider, {
+      // Sidebar WebviewView + Extension Host reload (Cmd+R) leaves a blank panel when
+      // context is retained — VS Code skips resolveWebviewView and never gets HTML.
       webviewOptions: {
-        retainContextWhenHidden: true
+        retainContextWhenHidden: false
       }
     }),
     provider,
@@ -654,6 +678,7 @@ export function activate(context: vscode.ExtensionContext): void {
           repo: payload.repo,
           branch: payload.branch
         });
+        panel.getSession().markKeepRepoOnFreshWindow();
         panel.panel.title = `${payload.owner}/${payload.repo}`;
       }
     ),
@@ -663,7 +688,9 @@ export function activate(context: vscode.ExtensionContext): void {
       coopSessionRegistry.getActive()?.refreshEditorContext(editor);
     }),
     vscode.window.onDidChangeTextEditorSelection((event) => {
-      coopSessionRegistry.getActive()?.refreshEditorContext(event.textEditor);
+      coopSessionRegistry.getActive()?.refreshEditorContext(event.textEditor, {
+        selectionChangeKind: event.kind
+      });
     }),
     vscode.workspace.onDidCloseTextDocument(() => {
       for (const session of coopSessionRegistry.getAll()) {
@@ -674,6 +701,9 @@ export function activate(context: vscode.ExtensionContext): void {
       for (const session of coopSessionRegistry.getAll()) {
         session.reconcileEditorFileChips();
       }
+    }),
+    vscode.workspace.onDidOpenTextDocument((doc) => {
+      snapshotOpenDocument(doc);
     }),
     vscode.window.onDidChangeActiveColorTheme(() => {
       for (const session of coopSessionRegistry.getAll()) {
@@ -699,6 +729,8 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     })
   );
+
+  snapshotAlreadyOpenDocuments();
 
   registerQuickActionCommands(context, () => provider.session);
 
@@ -763,12 +795,14 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   const reloadAllChatWebviews = (): void => {
+    provider.ensureSidebarWebviewLoaded();
     for (const session of coopSessionRegistry.getAll()) {
       session.reloadChatWebviewHtml();
     }
   };
-  reloadAllChatWebviews();
-  setTimeout(reloadAllChatWebviews, 0);
+  // One delayed pass covers activate-before-resolve. Immediate extra html
+  // assignments cancel the first iframe load and leave a black sidebar.
+  setTimeout(reloadAllChatWebviews, 400);
 }
 
 export function deactivate(): void {}

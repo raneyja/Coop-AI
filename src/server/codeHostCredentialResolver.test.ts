@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { assessGithubConnection } from "./codeHostCredentialResolver";
+import { assessGithubConnection, resolveCodeHostTokenForOrg } from "./codeHostCredentialResolver";
 import {
   githubOAuthSyntheticInstallationId,
   isGithubOAuthInstallation
@@ -84,4 +84,41 @@ test("assessGithubConnection returns disconnected when no installation", async (
     needsReconnect: false,
     hasRefreshToken: false
   });
+});
+
+test("resolveCodeHostTokenForOrg forceRefresh mints a new GitHub App token", async () => {
+  let storedToken = "ghs_cached";
+  const orgStore = {
+    getCodeHostInstallation: async () => ({
+      installationId: APP_INSTALLATION_ID,
+      tokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      createdAt: new Date()
+    }),
+    getInstallationToken: async () => storedToken,
+    upsertCodeHostInstallation: async (
+      _orgId: string,
+      _provider: string,
+      _installationId: number,
+      token: string
+    ) => {
+      storedToken = token;
+    },
+    getCredential: async () => undefined
+  } as unknown as OrgStore;
+
+  const token = await resolveCodeHostTokenForOrg(ORG_ID, "github", {
+    orgStore,
+    allowPatFallback: false,
+    connector: {
+      provider: "github",
+      buildInstallUrl: () => "",
+      refreshInstallationToken: async () => ({
+        token: "ghs_fresh",
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000)
+      })
+    }
+  }, { forceRefresh: true });
+
+  assert.equal(token, "ghs_fresh");
+  assert.equal(storedToken, "ghs_fresh");
 });

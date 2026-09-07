@@ -486,9 +486,12 @@ export function summarizeBlastRadius(
   }
 
   const displayGraphSource = verifiedSource ?? graphSource;
+  const namedCaller = evidence.namedAskSymbols?.[0]?.trim();
   const primaryFinding =
     dependentCount > 0
-      ? `${file} has ${directCount} code dependent(s)${transitiveCount ? ` and ${transitiveCount} transitive code dependent(s)` : ""}${docsCount ? ` plus ${docsCount} docs/reference hit(s)` : ""}${displayGraphSource ? ` (source: ${displayGraphSource})` : ""}.`
+      ? namedCaller
+        ? `${file}: ${directCount} caller(s) of ${namedCaller}${transitiveCount ? ` and ${transitiveCount} transitive` : ""}${displayGraphSource ? ` (source: ${displayGraphSource})` : ""}.`
+        : `${file} has ${directCount} code dependent(s)${transitiveCount ? ` and ${transitiveCount} transitive code dependent(s)` : ""}${docsCount ? ` plus ${docsCount} docs/reference hit(s)` : ""}${displayGraphSource ? ` (source: ${displayGraphSource})` : ""}.`
       : docsCount > 0
         ? `${file} has no code dependents in the index, but ${docsCount} docs/reference file(s) mention it.`
         : `Impact unverified — no indexed dependents found for ${file}.`;

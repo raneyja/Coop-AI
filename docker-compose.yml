@@ -25,8 +25,8 @@ services:
       JOBS_BACKEND: postgres
       GRAPH_CACHE_BACKEND: memory
       JOBS_WORKERS: "0"
-      NODE_ENV: production
-      # COOP_REQUIRE_API_AUTH: set in .env.backend (must be true for production deploys)
+      NODE_ENV: development
+      # Production (Railway) sets NODE_ENV=production, which forces API auth on.
       # Zoekt HTTP endpoint — used by lightningSearch for parallel full-text queries
       ZOEKT_URL: http://zoekt:6070
     depends_on:
@@ -43,7 +43,7 @@ services:
       DATABASE_URL: postgres://coop:coop@postgres:5432/coopai
       JOBS_BACKEND: postgres
       GRAPH_CACHE_BACKEND: memory
-      NODE_ENV: production
+      NODE_ENV: development
       # Path on the shared volume where Zoekt index shards are written after each repo clone
       ZOEKT_INDEX_PATH: /zoekt-indexes
       ZOEKT_URL: http://zoekt:6070

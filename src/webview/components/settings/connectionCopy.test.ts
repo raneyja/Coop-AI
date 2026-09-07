@@ -6,7 +6,8 @@ import {
   displayPlanLabel,
   formatQuotaUsageSummary,
   indexingHubSubtitle,
-  planUsageHubSubtitle
+  planUsageHubSubtitle,
+  quotaUsedPercent
 } from "./connectionCopy";
 import type { Preferences } from "./types";
 
@@ -38,16 +39,22 @@ test("displayOrgName returns org name and hides legacy placeholder", () => {
 });
 
 test("displayPlanLabel maps plan ids to product names", () => {
-  assert.equal(displayPlanLabel({ plan: "free" }), "Developer (free)");
+  assert.equal(displayPlanLabel({ plan: "free" }), "Free");
   assert.equal(displayPlanLabel({ plan: "pro" }), "Pro");
+  assert.equal(displayPlanLabel({ plan: "pro", usageTier: "pro_plus" }), "Pro+");
+  assert.equal(displayPlanLabel({ plan: "pro", usageTier: "max" }), "Max");
   assert.equal(displayPlanLabel({ plan: "enterprise" }), "Enterprise");
-  assert.equal(displayPlanLabel({}), "Developer (free)");
+  assert.equal(displayPlanLabel({}), "");
 });
 
 test("displayIdentitySubtitle combines org and plan when signed in", () => {
   assert.equal(
     displayIdentitySubtitle({ ...basePrefs, orgName: "Acme Corp", plan: "pro" }),
     "Acme Corp · Pro"
+  );
+  assert.equal(
+    displayIdentitySubtitle({ ...basePrefs, orgName: "Acme Corp" }),
+    "Acme Corp"
   );
   assert.equal(displayIdentitySubtitle({ ...basePrefs, hasApiKey: false, isSignedIn: false }), undefined);
 });
@@ -78,9 +85,30 @@ test("planUsageHubSubtitle shows plan and used credits", () => {
       plan: "free",
       quotaCredits: { remainingCredits: 24, limitCredits: 80, usedCredits: 56, windowHours: 5, resetsAt: "", retryAfterMs: 0 }
     }),
-    "Developer (free) · 56K of 80K used"
+    "Free · 56K of 80K used"
   );
   assert.equal(planUsageHubSubtitle({ ...basePrefs, hasApiKey: false, isSignedIn: false }), "Sign in to view plan");
+  assert.equal(
+    planUsageHubSubtitle({
+      ...basePrefs,
+      plan: "pro",
+      usageTier: "pro",
+      usageMeters: {
+        usageTier: "pro",
+        displayName: "Pro",
+        seatPriceUsd: 25,
+        periodStart: "2026-09-01T00:00:00.000Z",
+        periodEnd: "2026-10-01T00:00:00.000Z",
+        usedCents: 750,
+        limitCents: 1500,
+        remainingCents: 750,
+        usedRatio: 0.5,
+        auto: { usedCents: 750, limitCents: 1500, remainingCents: 750, usedRatio: 0.5 },
+        frontier: { usedCents: 0, limitCents: 1500, remainingCents: 1500, usedRatio: 0 }
+      }
+    }),
+    "Pro · 50% used"
+  );
 });
 
 test("formatQuotaUsageSummary shows used credits in K format", () => {
@@ -93,6 +121,22 @@ test("formatQuotaUsageSummary shows used credits in K format", () => {
     }),
     "56K of 80K AI credits used - 5-hour rolling window"
   );
+  assert.equal(
+    formatQuotaUsageSummary(
+      {
+        usedCredits: 80,
+        limitCredits: 80,
+        remainingCredits: 0,
+        windowHours: 5
+      },
+      { exhausted: true }
+    ),
+    "80K of 80K AI credits used"
+  );
+  assert.equal(quotaUsedPercent(12, 80), 15);
+  assert.equal(quotaUsedPercent(80, 80), 100);
+  assert.equal(quotaUsedPercent(0, 80), 0);
+  assert.equal(quotaUsedPercent(12, 0), 0);
 });
 
 test("indexingHubSubtitle summarizes lightning state", () => {

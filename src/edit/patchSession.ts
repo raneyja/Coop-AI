@@ -6,6 +6,8 @@ export type PatchRecord = {
   patches: ParsedPatchSet;
   card: PatchCardState;
   undo?: FileUndoSnapshot[];
+  /** Full file bodies used to preview/apply when the live editor is not readable. */
+  fileContents?: Record<string, string>;
 };
 
 let patchRecordsByMessage = new Map<number, PatchRecord>();
@@ -58,12 +60,18 @@ export function getSuppressedMessageTimestamps(): number[] {
   return suppressedMessageTimestamps;
 }
 
-export function upsertPatchRecord(timestamp: number, patches: ParsedPatchSet, card: PatchCardState): void {
+export function upsertPatchRecord(
+  timestamp: number,
+  patches: ParsedPatchSet,
+  card: PatchCardState,
+  extras?: { fileContents?: Record<string, string> }
+): void {
   const existing = patchRecordsByMessage.get(timestamp);
   patchRecordsByMessage.set(timestamp, {
     patches,
     card: { ...card, messageTimestamp: timestamp, suppressMarkdown: true },
-    undo: existing?.undo
+    undo: existing?.undo,
+    fileContents: extras?.fileContents ?? existing?.fileContents
   });
   markMessageMarkdownSuppressed(timestamp);
   lastPatchMessageTimestamp = timestamp;

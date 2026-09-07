@@ -1,6 +1,4 @@
 import {
-  appendThinkingProcessingTerms,
-  buildProcessingTermMessages,
   stripThinkingProcessingTerms
 } from "../context/thinkingProcessingTerms";
 import {
@@ -16,22 +14,8 @@ export const ACTIVITY_START_DELAY_MS = 900;
 /** How long each todo stays active before the next one is revealed (one-by-one). */
 export const ACTIVITY_PHASE_MS = 3_200;
 
-/** Checklist lines paced during model synthesis (after gather/job). */
-export const SYNTHESIS_TODO_MESSAGES = [
-  "Weighing gathered evidence…",
-  "Connecting docs and code signals…",
-  "Drafting findings…",
-  "Checking ownership and open questions…",
-  "Prioritizing what matters…",
-  "Writing your answer…"
-] as const;
-
-const SYNTHESIS_THINKING_LINES = [
-  "Comparing repo signals with docs and conversations…",
-  "Looking for undocumented paths, weak ownership, and open follow-ups…",
-  "Organizing the strongest gaps before answering…",
-  "Cross-checking evidence so the answer stays grounded…"
-] as const;
+/** Kept empty — fake Distilling/Aggregating synthesis todos are off. */
+export const SYNTHESIS_TODO_MESSAGES = [] as const;
 
 /** Terminal job copy — not a checklist step; the long model wait starts here. */
 export function isTerminalPreparingMessage(message: string): boolean {
@@ -58,8 +42,7 @@ export type ThinkingRotationOptions = {
   awaitingResponse?: boolean;
   rotationSeed?: string;
   /**
-   * When false, skip filler "Synthesizing…" terms so todos map to real work only.
-   * Default true for legacy single-line status rotation.
+   * Ignored — fake “Aggregating…” rotation is off. Real gather/search lines only.
    */
   includeProcessingTerms?: boolean;
 };
@@ -102,18 +85,13 @@ export function buildConcreteActivityMessages(
   return uniqueMessages(messages).filter((message) => !isTerminalPreparingMessage(message));
 }
 
-/** Soft waiting labels rotated on the *active* todo while the model/job still runs. */
+/** Soft waiting labels — unused. Fake Distilling/Aggregating rotation is off. */
 export function buildWaitingActivityLabels(
-  intentFeedback: IntentFeedbackState | undefined,
-  jobProgress: JobProgressState | undefined,
-  options: ThinkingRotationOptions = {}
+  _intentFeedback: IntentFeedbackState | undefined,
+  _jobProgress: JobProgressState | undefined,
+  _options: ThinkingRotationOptions = {}
 ): string[] {
-  const seed =
-    options.rotationSeed ??
-    intentFeedback?.actionId ??
-    jobProgress?.jobId ??
-    "waiting";
-  return buildProcessingTermMessages(seed, 6);
+  return [];
 }
 
 /** Elapsed time used for pacing after the post-send start delay. */
@@ -151,9 +129,9 @@ export function isSynthesisActivityPhase(options: {
   return false;
 }
 
-/** Rotating narrative shown in the Thinking block when the provider sends no CoT. */
-export function pickSynthesisThinkingLine(step: number): string {
-  return SYNTHESIS_THINKING_LINES[step % SYNTHESIS_THINKING_LINES.length] ?? "Writing your answer…";
+/** Unused — fake Distilling/Aggregating CoT is off. Real model thinking only. */
+export function pickSynthesisThinkingLine(_step: number): string {
+  return "";
 }
 
 /**
@@ -183,38 +161,13 @@ export function resolvePacedActivityIndex(options: {
   return Math.min(lastIndex, Math.floor(paceElapsed / ACTIVITY_PHASE_MS));
 }
 
-/** Merge tool-connection, job, and processing lines into one rotation sequence. */
+/** Merge tool-connection and job lines only — no fake processing verbs. */
 export function buildThinkingMessageSequence(
   intentFeedback: IntentFeedbackState | undefined,
   jobProgress: JobProgressState | undefined,
-  options: ThinkingRotationOptions = {}
+  _options: ThinkingRotationOptions = {}
 ): string[] {
-  const seed =
-    options.rotationSeed ??
-    intentFeedback?.actionId ??
-    jobProgress?.jobId ??
-    String(Date.now());
-  const includeProcessingTerms = options.includeProcessingTerms !== false;
-  const concrete = buildConcreteActivityMessages(intentFeedback, jobProgress);
-
-  if (options.awaitingResponse && concrete.length === 0) {
-    return includeProcessingTerms ? appendThinkingProcessingTerms([], seed, 6) : [];
-  }
-
-  if (concrete.length === 0) {
-    return [];
-  }
-
-  const activelyLoading =
-    options.awaitingResponse ||
-    (intentFeedback && isIntentInlineLoading(intentFeedback)) ||
-    (jobProgress && isJobInlineLoading(jobProgress));
-
-  if (!activelyLoading || !includeProcessingTerms) {
-    return concrete;
-  }
-
-  return appendThinkingProcessingTerms(concrete, `${seed}:tail`, 4);
+  return buildConcreteActivityMessages(intentFeedback, jobProgress);
 }
 
 export function pickRotatingThinkingMessage(messages: string[], step: number): string | undefined {

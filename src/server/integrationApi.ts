@@ -146,7 +146,8 @@ async function resolveAccessToken(
   }
 
   const expiresAt = connection.tokenExpiresAt?.getTime();
-  if (!expiresAt || expiresAt - Date.now() > TOKEN_REFRESH_BUFFER_MS) {
+  const stillValid = !expiresAt || expiresAt - Date.now() > TOKEN_REFRESH_BUFFER_MS;
+  if (stillValid) {
     const cached = await store.getAccessToken(orgId, provider);
     if (cached) {
       return cached;
@@ -155,59 +156,63 @@ async function resolveAccessToken(
 
   const refreshToken = await store.getRefreshToken(orgId, provider);
   if (!refreshToken) {
-    return store.getAccessToken(orgId, provider);
+    return stillValid ? store.getAccessToken(orgId, provider) : undefined;
   }
 
-  if (provider === "atlassian" && deps.atlassianApp) {
-    const refreshed = await deps.atlassianApp.refreshAccessToken(refreshToken);
-    await store.upsert(orgId, provider, refreshed.accessToken, {
-      refreshToken: refreshed.refreshToken,
-      expiresAt: refreshed.expiresAt,
-      metadata: connection.metadata
-    });
-    return refreshed.accessToken;
+  try {
+    if (provider === "atlassian" && deps.atlassianApp) {
+      const refreshed = await deps.atlassianApp.refreshAccessToken(refreshToken);
+      await store.upsert(orgId, provider, refreshed.accessToken, {
+        refreshToken: refreshed.refreshToken,
+        expiresAt: refreshed.expiresAt,
+        metadata: connection.metadata
+      });
+      return refreshed.accessToken;
+    }
+
+    if (provider === "notion" && deps.notionApp) {
+      const refreshed = await deps.notionApp.refreshAccessToken(refreshToken);
+      await store.upsert(orgId, provider, refreshed.accessToken, {
+        refreshToken: refreshed.refreshToken,
+        metadata: connection.metadata
+      });
+      return refreshed.accessToken;
+    }
+
+    if (provider === "google-docs" && deps.googleDocsApp) {
+      const refreshed = await deps.googleDocsApp.refreshAccessToken(refreshToken);
+      await store.upsert(orgId, provider, refreshed.accessToken, {
+        refreshToken: refreshed.refreshToken,
+        expiresAt: refreshed.expiresAt,
+        metadata: connection.metadata
+      });
+      return refreshed.accessToken;
+    }
+
+    if (provider === "teams" && deps.teamsApp) {
+      const refreshed = await deps.teamsApp.refreshAccessToken(refreshToken);
+      await store.upsert(orgId, provider, refreshed.accessToken, {
+        refreshToken: refreshed.refreshToken,
+        expiresAt: refreshed.expiresAt,
+        metadata: connection.metadata
+      });
+      return refreshed.accessToken;
+    }
+
+    if (provider === "slack" && deps.slackApp) {
+      const refreshed = await deps.slackApp.refreshAccessToken(refreshToken);
+      await store.upsert(orgId, provider, refreshed.accessToken, {
+        refreshToken: refreshed.refreshToken,
+        expiresAt: refreshed.expiresAt,
+        metadata: connection.metadata
+      });
+      return refreshed.accessToken;
+    }
+  } catch {
+    return undefined;
   }
 
-  if (provider === "notion" && deps.notionApp) {
-    const refreshed = await deps.notionApp.refreshAccessToken(refreshToken);
-    await store.upsert(orgId, provider, refreshed.accessToken, {
-      refreshToken: refreshed.refreshToken,
-      metadata: connection.metadata
-    });
-    return refreshed.accessToken;
-  }
-
-  if (provider === "google-docs" && deps.googleDocsApp) {
-    const refreshed = await deps.googleDocsApp.refreshAccessToken(refreshToken);
-    await store.upsert(orgId, provider, refreshed.accessToken, {
-      refreshToken: refreshed.refreshToken,
-      expiresAt: refreshed.expiresAt,
-      metadata: connection.metadata
-    });
-    return refreshed.accessToken;
-  }
-
-  if (provider === "teams" && deps.teamsApp) {
-    const refreshed = await deps.teamsApp.refreshAccessToken(refreshToken);
-    await store.upsert(orgId, provider, refreshed.accessToken, {
-      refreshToken: refreshed.refreshToken,
-      expiresAt: refreshed.expiresAt,
-      metadata: connection.metadata
-    });
-    return refreshed.accessToken;
-  }
-
-  if (provider === "slack" && deps.slackApp) {
-    const refreshed = await deps.slackApp.refreshAccessToken(refreshToken);
-    await store.upsert(orgId, provider, refreshed.accessToken, {
-      refreshToken: refreshed.refreshToken,
-      expiresAt: refreshed.expiresAt,
-      metadata: connection.metadata
-    });
-    return refreshed.accessToken;
-  }
-
-  return store.getAccessToken(orgId, provider);
+  return stillValid ? store.getAccessToken(orgId, provider) : undefined;
 }
 
 /** Used by admin integration health tests — same as internal credential resolution. */

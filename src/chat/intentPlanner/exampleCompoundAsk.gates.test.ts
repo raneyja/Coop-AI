@@ -81,3 +81,13 @@ test("Example ask: blast impact + Jira → silent workflow with tools (all phase
 
   assertAllGatesPass(results, "Example compound ask");
 });
+
+test("Ticket pickup + named symbol + Jira is locate, not tools-only codeIntent none (3b)", () => {
+  const plan = planChatIntentFromRules({
+    message:
+      "I'm picking up COOP-101 — peel auth into coop-backend. What in this repo still owns requireAuth / request auth, and what's the safest first extraction boundary so we don't break every VS Code session?",
+    connectedTools: ["jira"]
+  });
+  assert.ok(plan.tools.includes("jira"));
+  assert.equal(plan.codeIntent?.action, "locate");
+});

@@ -8,12 +8,16 @@ import type {
   PatchSharedMatchGroup,
   PatchSharedMatchLocation
 } from "../chat/types";
+import { enclosingDefinitionAnchor } from "../context/enclosingDefinitionRange";
 import { findAllSearchMatches, findSearchMatch, type SearchMatchHit } from "./patchContent";
+import { extractInsertedPrefix } from "./snapPatchToSelection";
 import { countHunks, countUniqueFiles, type ParsedPatchSet, type PatchHunk } from "./patchParser";
 import { getSuppressedMessageTimestamps, markMessageMarkdownSuppressed } from "./patchSession";
-import { resolveEditablePatchTarget } from "./patchTarget";
+import { lookupPatchFileContent } from "./patchFileContents";
+import { collectOpenPatchFileBytes } from "./patchTarget";
 
 const CONTEXT_LINES = 2;
+const ANCHOR_LOOKBACK = 12;
 
 export type PatchStatePublisher = (state: PatchCardState) => void;
 
@@ -46,12 +50,16 @@ function splitLines(text: string): string[] {
   return text.split(/\r?\n/);
 }
 
-function readWorkspaceFile(relativePath: string, overrides?: Readonly<Record<string, string>>): string {
-  if (overrides && relativePath in overrides) {
-    return overrides[relativePath] ?? "";
+function readWorkspaceFile(
+  relativePath: string,
+  overrides?: Readonly<Record<string, string>>,
+  search?: string
+): string {
+  const live = collectOpenPatchFileBytes(relativePath, { search });
+  if (live?.trim()) {
+    return live;
   }
-  const target = resolveEditablePatchTarget(relativePath);
-  return target?.readText() ?? "";
+  return lookupPatchFileContent(relativePath, overrides) ?? "";
 }
 
 function lineIndexAtOffset(content: string, offset: number): number {
@@ -98,40 +106,118 @@ function buildUnmatchedHunkPreview(hunk: PatchHunk, hunkId: string): PatchPrevie
   return { id: hunkId, lines, matchStatus: "not_found", status: "pending" };
 }
 
+function insertAbovePrefix(hunk: PatchHunk): string | undefined {
+  const search = hunk.search;
+  const replace = hunk.replace;
+  if (!search || replace.length <= search.length) {
+    return undefined;
+  }
+  if (replace.endsWith(search)) {
+    return extractInsertedPrefix(replace, search);
+  }
+  const replaceLines = splitLines(replace);
+  const searchLines = splitLines(search);
+  if (replaceLines.length <= searchLines.length) {
+    return undefined;
+  }
+  const extraCount = replaceLines.length - searchLines.length;
+  const rest = replaceLines.slice(extraCount).join("\n");
+  if (rest !== search) {
+    return undefined;
+  }
+  return extractInsertedPrefix(replace, search);
+}
+
+/**
+ * Bytes apply() splices before SEARCH, including blank lines.
+ * extractInsertedPrefix strips trailing newlines — that made the card
+ * number `run()` one line earlier than the buffer after Apply.
+ */
+function appliedInsertPrefix(hunk: PatchHunk): string | undefined {
+  const search = hunk.search;
+  const replace = hunk.replace;
+  if (search && replace.endsWith(search) && replace.length > search.length) {
+    return replace.slice(0, replace.length - search.length);
+  }
+  return insertAbovePrefix(hunk);
+}
+
+function splitAppliedInsertLines(prefix: string): string[] {
+  const lines = splitLines(prefix);
+  if ((prefix.endsWith("\n") || prefix.endsWith("\r\n")) && lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+  return lines;
+}
+
 function buildLocationPreviewLines(
   content: string,
   hit: SearchMatchHit,
   hunk: PatchHunk
-): { lines: PatchDiffLine[]; startLine: number; endLine: number } {
+): {
+  lines: PatchDiffLine[];
+  startLine: number;
+  endLine: number;
+  anchorLabel?: string;
+} {
   const contentLines = splitLines(content);
   const matchedLines = splitLines(hit.matched);
   const startLineIdx = lineIndexAtOffset(content, hit.start);
   const endLineIdx = startLineIdx + Math.max(matchedLines.length, 1) - 1;
-  const contextStart = Math.max(0, startLineIdx - CONTEXT_LINES);
+  const fallbackStart = Math.max(0, startLineIdx - CONTEXT_LINES);
+  const anchor = enclosingDefinitionAnchor(content, startLineIdx + 1);
+  const fromAnchor = anchor
+    ? Math.max(0, anchor.contextLine - 1)
+    : fallbackStart;
+  const contextStart = Math.max(
+    Math.max(0, startLineIdx - ANCHOR_LOOKBACK),
+    Math.min(fallbackStart, fromAnchor)
+  );
   const contextEnd = Math.min(contentLines.length - 1, endLineIdx + CONTEXT_LINES);
 
   const lines: PatchDiffLine[] = [];
   for (let i = contextStart; i < startLineIdx; i++) {
     lines.push({ kind: "context", text: contentLines[i] ?? "", lineNumber: i + 1 });
   }
-  for (let i = 0; i < matchedLines.length; i++) {
-    lines.push({
-      kind: "remove",
-      text: matchedLines[i] ?? "",
-      lineNumber: startLineIdx + i + 1
-    });
-  }
-  for (const line of buildReplaceLines(hunk)) {
-    lines.push(line);
+  const inserted = insertAbovePrefix(hunk);
+  let newLine = startLineIdx + 1;
+  if (inserted !== undefined) {
+    const insertLines = splitAppliedInsertLines(appliedInsertPrefix(hunk) ?? inserted);
+    for (const line of insertLines) {
+      lines.push({ kind: "add", text: line, lineNumber: newLine });
+      newLine += 1;
+    }
+    for (let i = 0; i < matchedLines.length; i++) {
+      lines.push({
+        kind: "context",
+        text: matchedLines[i] ?? "",
+        lineNumber: newLine
+      });
+      newLine += 1;
+    }
+  } else {
+    for (let i = 0; i < matchedLines.length; i++) {
+      lines.push({
+        kind: "remove",
+        text: matchedLines[i] ?? "",
+        lineNumber: startLineIdx + i + 1
+      });
+    }
+    for (const line of buildReplaceLines(hunk)) {
+      lines.push({ ...line, lineNumber: newLine });
+      newLine += 1;
+    }
   }
   for (let i = endLineIdx + 1; i <= contextEnd; i++) {
-    lines.push({ kind: "context", text: contentLines[i] ?? "", lineNumber: i + 1 });
+    lines.push({ kind: "context", text: contentLines[i] ?? "", lineNumber: newLine });
+    newLine += 1;
   }
 
   return {
     lines,
     startLine: startLineIdx + 1,
-    endLine: endLineIdx + 1
+    endLine: endLineIdx + 1,
+    anchorLabel: anchor?.label
   };
 }
 
@@ -142,7 +228,15 @@ function buildMatchedHunkPreview(content: string, hunk: PatchHunk, hunkId: strin
   }
 
   const preview = buildLocationPreviewLines(content, match, hunk);
-  return { id: hunkId, lines: preview.lines, matchStatus: "matched", status: "pending" };
+  return {
+    id: hunkId,
+    lines: preview.lines,
+    matchStatus: "matched",
+    status: "pending",
+    anchorLabel: preview.anchorLabel,
+    startLine: preview.startLine,
+    endLine: preview.endLine
+  };
 }
 
 function buildAmbiguousHunkPreview(
@@ -186,7 +280,10 @@ function buildPairedHunkPreview(
     lines: preview.lines,
     matchStatus: "matched",
     resolvedMatchIndices: [matchIndex],
-    status: "pending"
+    status: "pending",
+    anchorLabel: preview.anchorLabel,
+    startLine: preview.startLine,
+    endLine: preview.endLine
   };
 }
 
@@ -395,7 +492,11 @@ export function buildPatchCardState(
   let hunkCounter = 0;
 
   for (const filePatch of patches.files) {
-    const content = readWorkspaceFile(filePatch.relativePath, options.fileContents);
+    const content = readWorkspaceFile(
+      filePatch.relativePath,
+      options.fileContents,
+      filePatch.hunks[0]?.search
+    );
     const rawPreviews: PatchPreviewHunk[] = [];
 
     for (const hunk of filePatch.hunks) {

@@ -27,7 +27,7 @@ const CONFLUENCE_REVIEWED_HEADING = "**Confluence pages reviewed**";
 const NOTION_REVIEWED_HEADING = "**Notion pages reviewed**";
 const GOOGLE_DOCS_REVIEWED_HEADING = "**Google Docs reviewed**";
 
-const DOCUMENTATION_SCAN_GAP_TYPES = new Set(["missing_docs", "impact_unknown"]);
+const DOCUMENTATION_SCAN_GAP_TYPES = new Set(["missing_docs", "impact_unknown", "default_on_risk"]);
 const INTEGRATION_SCAN_GAP_TYPES = new Set([
   "integration_unknown",
   "ops_unknown",

@@ -3,7 +3,7 @@ title: Extension settings
 description: Account, Tools, Workspace, and Preferences in the CoopAI extension.
 section: extension
 order: 1
-lastUpdated: "2026-07-23"
+lastUpdated: "2026-09-03"
 ---
 
 Open settings from the **gear icon** in the Coop sidebar title bar. Settings open in a dedicated editor tab — Account, Tools, Workspace, Indexing, and Preferences. You can also run **CoopAI: Open Settings** from the Command Palette.
@@ -114,8 +114,7 @@ Profile and chat defaults — moved out of Account:
 | Item | Purpose |
 | --- | --- |
 | **Timezone** | Usage reset times and scheduling context in chat |
-| **Identity links** | Linked GitHub, Slack, Jira, and email profiles for ownership answers |
-| **Model & chat** | Read-only assigned models, **Enable inline autocomplete** |
+| **Model & chat** | What Auto uses, models by maker, **Enable inline autocomplete** |
 | **Prompt library** | Pin up to 5 prompts for the composer footer — see [Prompt library](/manual#prompt-library) |
 
 The Preferences hub subtitle shows **Assigned models** plus autocomplete status.
@@ -126,26 +125,21 @@ The Preferences hub subtitle shows **Assigned models** plus autocomplete status.
 
 ## Model & chat
 
-**Preferences → Model & chat** shows how Coop routes each feature in production:
+**Preferences → Model & chat** explains how models work. The page does **not** change when you pick a model in chat. There is no picker here — Pro, Pro+, Max, and Enterprise choose a model from the **model menu in chat**.
 
-| Row | Assignment |
-| --- | --- |
-| Chat | OpenAI · GPT-5 mini |
-| Quick actions | Anthropic · Claude Sonnet 4.6 |
-| /edit patches | OpenAI · GPT-5.1 |
-| Autocomplete | Mistral · Codestral |
+The page always shows:
 
-Production users see these rows as **read-only** with **On** / **Off** badges. Copy on the screen:
+1. How Auto works
+2. What Auto uses (feature → model, with a link to the maker’s docs)
+3. Models you can pick, grouped by OpenAI, Anthropic, and Gemini (each linked to docs)
 
-> Models are assigned by Coop for chat, quick actions, and edit mode. Custom model selection is an Enterprise capability (coming soon).
-
-**What you can change:**
+**What you can change here:**
 
 | Toggle | Setting | Default |
 | --- | --- | --- |
 | **Enable inline autocomplete** | `coopAI.autocomplete.enabled` (global scope) | `true` |
 
-Chat, quick actions, and edit mode are always enabled. Click **Save model settings** to persist the autocomplete toggle. Provider and model fields are not writable in production — the extension blocks updates to `coopAI.llmProvider` and `coopAI.defaultModel` unless `coopAI.devMode: true`.
+Click **Save model settings** to persist the autocomplete toggle. Chat, quick actions, and edit mode stay on.
 
 Full table and routing details: [Model assignments](/docs/model-assignments).
 
@@ -166,10 +160,10 @@ Inline ghost-text completions are **on by default**. Turn them off from the chat
 | `coopAI.autocomplete.debounceMs` | `300` | Ms after typing before auto-trigger (0–2000) |
 | `coopAI.autocomplete.requestTimeoutMs` | `1500` | Drop slow requests after this many ms (100–5000) |
 | `coopAI.autocomplete.maxSuggestionLength` | `200` | Max characters per suggestion (8–500) |
-| `coopAI.autocomplete.showMultipleSuggestions` | `false` | Cycle alternatives with Alt+[ / Alt+] |
+| `coopAI.autocomplete.showMultipleSuggestions` | `false` | Cycle distinct alternatives with Alt+[ / Alt+]; near-duplicates stay one suggestion |
 | `coopAI.autocomplete.projectImports` | `[]` | Extra import paths to bias completions |
 
-Production routing uses **Mistral Codestral** — not user-selected models. See [Model assignments](/docs/model-assignments).
+Autocomplete always uses **Mistral Codestral** and does not follow the **model menu in chat**. See [Model assignments](/docs/model-assignments).
 
 **Command Palette:** **CoopAI: Toggle Autocomplete**, **CoopAI: Show Autocomplete Help**
 
@@ -192,4 +186,4 @@ Enterprise customers should keep dev mode **off** in workspace settings.
 | **CoopAI: Understand Repo** | Run Understand Repo — requires **Use repo** first (blocked if a file chip is active) |
 | **CoopAI: Trace Decision** | Run Trace Decision (file required) |
 
-See the [Owner's Manual](/manual#using-the-extension) for chat composer and slash commands. For model routing and inline autocomplete, see [Model assignments](/docs/model-assignments) and [Inline autocomplete](/docs/autocomplete).
+See the [Owner's Manual](/manual#using-the-extension) for chat composer and slash commands. After `/edit` Apply or any Use-repo editor change, see [Create pull request](/docs/create-pull-request) (patch card or **Create a PR** in chat). For model routing and inline autocomplete, see [Model assignments](/docs/model-assignments) and [Inline autocomplete](/docs/autocomplete).

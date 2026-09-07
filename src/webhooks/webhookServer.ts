@@ -98,6 +98,8 @@ import { AuthIdentityStore } from "../server/auth/authIdentityStore";
 import { AuthTokenStore } from "../server/auth/authTokenStore";
 import { GoogleAuthService } from "../server/auth/googleAuthService";
 import { handleUserAuthApiRequest } from "../server/auth/userAuthApi";
+import { initErrorReporter, reportServerError } from "../server/observability/errorReporter";
+import { resolveHttpRequestId } from "../server/observability/requestId";
 
 export type WebhookServerOptions = {
   config?: WebhookConfig;
@@ -141,6 +143,7 @@ type ParsedRequest = {
 const MAX_BODY_BYTES = 5 * 1024 * 1024;
 
 export async function createWebhookServer(options: WebhookServerOptions = {}): Promise<WebhookServerRuntime> {
+  initErrorReporter({ service: "api" });
   const config = options.config ?? loadWebhookConfig();
   const serverConfig = options.serverConfig ?? loadServerConfig();
   const pool = await getDbPool(config.cache.connectionString);
@@ -402,8 +405,11 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
   const corsOrigins = loadCorsOrigins();
 
   const server = createServer(async (request, response) => {
+    const requestId = resolveHttpRequestId(normalizeHeaders(request.headers));
+    response.setHeader("x-request-id", requestId);
     try {
       const parsed = await parseRequest(request);
+      parsed.headers["x-request-id"] = requestId;
       if (
         parsed.pathname.startsWith("/v1/") ||
         parsed.pathname === "/health" ||
@@ -412,22 +418,6 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         if (applyCors(request, response, corsOrigins)) {
           return;
         }
-      }
-
-      if (parsed.method === "GET" && parsed.pathname === "/health") {
-        const jobStats = jobs.monitor.getStats(jobs.queue);
-        writeJson(response, 200, {
-          ok: true,
-          cache: {
-            backend: config.cache.backend,
-            repos: cache.listRepoIds().length
-          },
-          webhooks: monitor.getAllHealth(),
-          jobs: jobStats,
-          llm: llmHealthPayload(chatRouter),
-          orgDb: Boolean(orgStore)
-        });
-        return;
       }
 
       const orgParsed = {
@@ -445,6 +435,27 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         serverConfig.requireApiAuth,
         userStore
       );
+
+      if (parsed.method === "GET" && parsed.pathname === "/health") {
+        const publicProbe = { ok: true as const, commit: deployedCommitSha() };
+        if (!requireAuth(auth, serverConfig.requireApiAuth)) {
+          writeJson(response, 200, publicProbe);
+          return;
+        }
+        const jobStats = jobs.monitor.getStats(jobs.queue);
+        writeJson(response, 200, {
+          ...publicProbe,
+          cache: {
+            backend: config.cache.backend,
+            repos: cache.listRepoIds().length
+          },
+          webhooks: monitor.getAllHealth(),
+          jobs: jobStats,
+          llm: llmHealthPayload(chatRouter),
+          orgDb: Boolean(orgStore)
+        });
+        return;
+      }
 
       if (orgSuspended && !parsed.pathname.startsWith("/v1/operator/")) {
         writeOrgSuspended(response);
@@ -686,7 +697,12 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           operatorStore,
           serverConfig,
           auditLogger,
-          usageTracker
+          usageTracker,
+          atlassianApp,
+          notionApp,
+          googleDocsApp,
+          teamsApp,
+          slackApp
         })
       ) {
         return;
@@ -719,7 +735,12 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         auditLogger,
         usageTracker,
         integrationStore,
-        scopePolicyStore
+        scopePolicyStore,
+        atlassianApp,
+        notionApp,
+        googleDocsApp,
+        teamsApp,
+        slackApp
       })) {
         return;
       }
@@ -749,6 +770,10 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       }
 
       if (parsed.method === "GET" && parsed.pathname === "/webhooks/health") {
+        if (!requireAuth(auth, serverConfig.requireApiAuth)) {
+          writeJson(response, 401, { error: "unauthorized" });
+          return;
+        }
         writeJson(response, 200, {
           webhooks: monitor.getAllHealth(),
           deliveries: monitor.recentDeliveries(25),
@@ -969,8 +994,12 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
 
       writeJson(response, 404, { error: "not found" });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "unexpected server error";
-      writeJson(response, 500, { error: message });
+      const route = (request.url ?? "").split("?")[0];
+      if (response.headersSent) {
+        reportServerError(error, { requestId, route, service: "api" });
+        return;
+      }
+      writeJson(response, 500, reportServerError(error, { requestId, route, service: "api" }));
     }
   });
 
@@ -1053,8 +1082,23 @@ function normalizeHeaders(headers: IncomingMessage["headers"]): Record<string, s
   return normalized;
 }
 
+/** Lets an operator confirm which build answered, instead of guessing at deploy timing. */
+function deployedCommitSha(): string {
+  const raw =
+    process.env.COOP_BUILD_SHA ??
+    process.env.RAILWAY_GIT_COMMIT_SHA ??
+    process.env.GIT_COMMIT_SHA ??
+    "";
+  return raw.trim().slice(0, 12) || "unknown";
+}
+
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
-  response.writeHead(statusCode, { "content-type": "application/json; charset=utf-8" });
+  const requestId = response.getHeader("x-request-id");
+  const headers: Record<string, string> = { "content-type": "application/json; charset=utf-8" };
+  if (typeof requestId === "string" && requestId) {
+    headers["x-request-id"] = requestId;
+  }
+  response.writeHead(statusCode, headers);
   response.end(JSON.stringify(body, dateReplacer));
 }
 

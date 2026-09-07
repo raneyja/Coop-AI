@@ -1,4 +1,4 @@
-import type { ChatPersistedArtifact } from "../chat/types";
+import type { ChatHistoryPayload, ChatPersistedArtifact, PatchCardState } from "../chat/types";
 import type { IntegrationChatProvider } from "../chat/types";
 import type {
   BlastRadiusEvidence,
@@ -14,6 +14,20 @@ import type {
 import type { ChatInlineArtifact } from "./components/ChatStream";
 import type { DecisionTimelinePayload } from "./DecisionTimeline";
 import type { OwnershipCardPayload } from "./OwnershipCard";
+
+export function patchCardsFromHistoryPayload(
+  payload: ChatHistoryPayload | readonly unknown[]
+): { cards: PatchCardState[]; suppressed: number[] } | undefined {
+  if (Array.isArray(payload) || !("patchCards" in payload) || !Array.isArray(payload.patchCards)) {
+    return undefined;
+  }
+  const stamps = Array.isArray(payload.suppressedMessageTimestamps)
+    ? payload.suppressedMessageTimestamps
+    : payload.patchCards
+        .map((card) => card.messageTimestamp)
+        .filter((value): value is number => typeof value === "number");
+  return { cards: payload.patchCards, suppressed: stamps };
+}
 
 export function inlineArtifactsFromHistory(
   artifacts: ChatPersistedArtifact[] | undefined

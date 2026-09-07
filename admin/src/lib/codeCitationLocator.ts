@@ -11,6 +11,8 @@ export type CodeCitationLocator = {
 const NUMERIC_LOCATOR_RE = /^(\d+):(\d+):(.+)$/;
 const PLACEHOLDER_LOCATOR_RE =
   /^(?:startLine|start)\s*:\s*(?:endLine|end)\s*:\s*(.+)$/i;
+const PATH_RANGE_LOCATOR_RE = /^(.+):(\d+)-(\d+)$/;
+const PATH_LINE_LOCATOR_RE = /^(.+):(\d+)$/;
 const PATH_ONLY_LOCATOR_RE =
   /^(?:\.\/)?(?:[\w.@+-]+\/)+[\w.@+-]+\.[A-Za-z0-9]{1,12}$/;
 const LANGUAGE_TAG_RE = /^[A-Za-z][A-Za-z0-9_+#-]*$/;
@@ -57,11 +59,42 @@ export function looksLikeRepoFilePath(path: string): boolean {
   if (trimmed.startsWith("http:") || trimmed.startsWith("https:")) {
     return false;
   }
+  if (/^\d+:\d+:/.test(trimmed)) {
+    return false;
+  }
   return PATH_ONLY_LOCATOR_RE.test(trimmed) || /\/[^/]+\.[A-Za-z0-9]{1,12}$/.test(trimmed);
 }
 
-export function tryParseCitationLocator(value: string): CodeCitationLocator | null {
-  const trimmed = value.trim();
+function unwrapLocatorText(value: string): string {
+  let trimmed = value.trim().replace(/[.,;:]+$/, "").trim();
+  const bold = trimmed.match(/^\*\*(.+)\*\*$/);
+  if (bold) {
+    trimmed = bold[1]!.trim();
+  }
+  const tick = trimmed.match(/^`([^`]+)`$/);
+  if (tick) {
+    trimmed = tick[1]!.trim();
+  }
+  return trimmed.replace(/[.,;:]+$/, "").trim();
+}
+
+function locatorFromPathAndLines(
+  path: string,
+  startRaw: string,
+  endRaw?: string
+): CodeCitationLocator | null {
+  if (!looksLikeRepoFilePath(path)) {
+    return null;
+  }
+  const startLine = Number(startRaw);
+  const endLine = endRaw == null || endRaw === "" ? startLine : Number(endRaw);
+  if (!Number.isFinite(startLine) || !Number.isFinite(endLine) || startLine < 1 || endLine < startLine) {
+    return null;
+  }
+  return { startLine, endLine, path: path.replace(/^\.\//, "") };
+}
+
+function parseLocatorCore(trimmed: string): CodeCitationLocator | null {
   if (!trimmed) {
     return null;
   }
@@ -70,16 +103,7 @@ export function tryParseCitationLocator(value: string): CodeCitationLocator | nu
   }
   const numeric = trimmed.match(NUMERIC_LOCATOR_RE);
   if (numeric) {
-    const path = numeric[3]!.trim();
-    if (!looksLikeRepoFilePath(path)) {
-      return null;
-    }
-    const startLine = Number(numeric[1]);
-    const endLine = Number(numeric[2]);
-    if (!Number.isFinite(startLine) || !Number.isFinite(endLine) || startLine < 1 || endLine < startLine) {
-      return null;
-    }
-    return { startLine, endLine, path };
+    return locatorFromPathAndLines(numeric[3]!.trim(), numeric[1]!, numeric[2]);
   }
   const placeholder = trimmed.match(PLACEHOLDER_LOCATOR_RE);
   if (placeholder) {
@@ -87,12 +111,64 @@ export function tryParseCitationLocator(value: string): CodeCitationLocator | nu
     if (!looksLikeRepoFilePath(path)) {
       return null;
     }
-    return { path };
+    return { path: path.replace(/^\.\//, "") };
+  }
+  const pathRange = trimmed.match(PATH_RANGE_LOCATOR_RE);
+  if (pathRange) {
+    return locatorFromPathAndLines(pathRange[1]!.trim(), pathRange[2]!, pathRange[3]);
+  }
+  const pathLine = trimmed.match(PATH_LINE_LOCATOR_RE);
+  if (pathLine) {
+    return locatorFromPathAndLines(pathLine[1]!.trim(), pathLine[2]!);
   }
   if (looksLikeRepoFilePath(trimmed)) {
     return { path: trimmed.replace(/^\.\//, "") };
   }
   return null;
+}
+
+export function tryParseCitationLocator(value: string): CodeCitationLocator | null {
+  const trimmed = unwrapLocatorText(value);
+  if (!trimmed) {
+    return null;
+  }
+  return parseLocatorCore(trimmed);
+}
+
+export function tryParseFenceInfoLocator(value: string): CodeCitationLocator | null {
+  const trimmed = unwrapLocatorText(value);
+  if (!trimmed) {
+    return null;
+  }
+  const direct = parseLocatorCore(trimmed);
+  if (direct) {
+    return direct;
+  }
+  const langPrefixed = trimmed.match(/^([A-Za-z][A-Za-z0-9_+#-]*)\s+(.+)$/);
+  if (langPrefixed && LANGUAGE_TAG_RE.test(langPrefixed[1]!) && !langPrefixed[1]!.includes("/")) {
+    return parseLocatorCore(unwrapLocatorText(langPrefixed[2]!));
+  }
+  return null;
+}
+
+export function locatorFromProseLine(line: string): CodeCitationLocator | null {
+  const trimmed = line.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (/^[-*]\s+/.test(trimmed) || /^\d+\.\s+/.test(trimmed)) {
+    return null;
+  }
+  const filePrefixed = trimmed.match(/^File:\s+(.+)$/i);
+  if (filePrefixed) {
+    return tryParseCitationLocator(filePrefixed[1]!);
+  }
+  return tryParseCitationLocator(trimmed);
+}
+
+export function isUnfencedCitationStartLine(line: string): boolean {
+  const locator = locatorFromProseLine(line);
+  return locator != null && locator.startLine != null;
 }
 
 export function languageFromFilePath(path: string): string | undefined {
@@ -205,11 +281,30 @@ function proseNearFenceMentionsBasename(
   return false;
 }
 
-export function findRepoPathNearFence(
+function locatorFromToken(
+  token: string,
+  activeFilePath?: string,
+  activeBase?: string
+): CodeCitationLocator | null {
+  const cleaned = token.replace(/^[("'\[]+|[)"'\],]+$/g, "").trim();
+  if (!cleaned) {
+    return null;
+  }
+  const locator = tryParseCitationLocator(cleaned);
+  if (locator) {
+    return locator;
+  }
+  if (activeFilePath && activeBase && cleaned === activeBase) {
+    return { path: activeFilePath.trim() };
+  }
+  return null;
+}
+
+export function findCitationNearFence(
   lines: string[],
   fenceStartIndex: number,
   activeFilePath?: string
-): string | undefined {
+): CodeCitationLocator | undefined {
   const activeBase = activeFilePath?.trim() ? fileBasename(activeFilePath.trim()) : undefined;
   let seen = 0;
   for (let i = fenceStartIndex - 1; i >= 0 && seen < 24; i -= 1) {
@@ -218,27 +313,31 @@ export function findRepoPathNearFence(
       continue;
     }
     seen += 1;
+    const wholeLine = locatorFromProseLine(line);
+    if (wholeLine) {
+      return wholeLine;
+    }
     const tickMatches = line.matchAll(/`([^`\n]+)`/g);
     for (const match of tickMatches) {
-      const inner = (match[1] ?? "").trim();
-      const pathPart = inner.replace(/:\d+(?:-\d+)?$/, "");
-      if (looksLikeRepoFilePath(pathPart)) {
-        return pathPart.replace(/^\.\//, "");
-      }
-      if (activeFilePath && activeBase && pathPart === activeBase) {
-        return activeFilePath.trim();
+      const inner = locatorFromToken(match[1] ?? "", activeFilePath, activeBase);
+      if (inner) {
+        return inner;
       }
     }
     for (const token of line.split(/\s+/)) {
-      const cleaned = token.replace(/^[("'\[]+|[)"'\],.:;]+$/g, "");
-      const pathPart = cleaned.replace(/:\d+(?:-\d+)?$/, "");
-      if (looksLikeRepoFilePath(pathPart)) {
-        return pathPart.replace(/^\.\//, "");
-      }
-      if (activeFilePath && activeBase && pathPart === activeBase) {
-        return activeFilePath.trim();
+      const fromToken = locatorFromToken(token, activeFilePath, activeBase);
+      if (fromToken) {
+        return fromToken;
       }
     }
   }
   return undefined;
+}
+
+export function findRepoPathNearFence(
+  lines: string[],
+  fenceStartIndex: number,
+  activeFilePath?: string
+): string | undefined {
+  return findCitationNearFence(lines, fenceStartIndex, activeFilePath)?.path;
 }

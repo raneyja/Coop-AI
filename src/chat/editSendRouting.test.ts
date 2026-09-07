@@ -36,6 +36,10 @@ test("isConcreteFileEditAsk detects applyable identifier validation asks", () =>
   );
 });
 
+test("isConcreteFileEditAsk does not treat bare fix this as a patch spec", () => {
+  assert.equal(isConcreteFileEditAsk("fix this"), false);
+});
+
 test("isConcreteFileEditAsk rejects advisory where/which questions", () => {
   assert.equal(
     isConcreteFileEditAsk(
@@ -63,6 +67,52 @@ test("isConcreteFileEditAsk rejects blast-shaped what-breaks asks with change/re
   assert.equal(
     isConcreteFileEditAsk("What breaks if I change this handler?"),
     false
+  );
+});
+
+test("isConcreteFileEditAsk accepts a named symbol as the target (Copilot /fix shape)", () => {
+  assert.equal(
+    isConcreteFileEditAsk(
+      "fix extractBearerToken throws if headers is missing. Guard it so undefined headers return undefined. Don't change requireAuth."
+    ),
+    true
+  );
+  assert.equal(isConcreteFileEditAsk("add a guard to get_queryset for missing workspace"), true);
+  assert.equal(isConcreteFileEditAsk("update AuthContext to carry the org plan"), true);
+});
+
+test("isConcreteFileEditAsk leaves repo-wide changes to the agent hunt", () => {
+  assert.equal(
+    isConcreteFileEditAsk("Rename verifyToken to validateToken across the repo"),
+    false
+  );
+  assert.equal(isConcreteFileEditAsk("Remove legacyApiToken everywhere"), false);
+});
+
+test("isConcreteFileEditAsk still rejects a named symbol inside an advisory ask", () => {
+  assert.equal(
+    isConcreteFileEditAsk("Why do we change requireInProduction in requireAuth?"),
+    false
+  );
+  assert.equal(isConcreteFileEditAsk("What breaks if we rename extractBearerToken?"), false);
+});
+
+test("named symbol without an edit verb is not an edit ask", () => {
+  assert.equal(isConcreteFileEditAsk("Where is extractBearerToken defined?"), false);
+  assert.equal(isConcreteFileEditAsk("Explain requireAuth in this file"), false);
+});
+
+test("J4: prose fix + open file lands on the anchored Patch card, not the hunt", () => {
+  const ask =
+    "fix extractBearerToken throws if headers is missing. Guard it so undefined headers return undefined.";
+  assert.deepEqual(
+    resolveChangeSendRouting({
+      explicitEdit: false,
+      concreteEditAsk: isConcreteFileEditAsk(ask),
+      hasEditTarget: hasEditTargetInScope({ file: "src/server/authMiddleware.ts" }),
+      agentCanOwnChange: true
+    }),
+    { kind: "anchored-edit" }
   );
 });
 

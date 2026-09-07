@@ -1,7 +1,7 @@
 ---
 title: "CoopAI Owner's Manual"
 description: "Install, configure, and use CoopAI in VS Code: Workflows, prompt library, and team conventions."
-lastUpdated: "2026-08-12"
+lastUpdated: "2026-09-03"
 ---
 
 Congratulations on choosing CoopAI. This manual helps you get the most out of it, from your first chat to team-wide prompt libraries.
@@ -51,7 +51,7 @@ See the [Security page](/security) for architecture details.
 3. **Extension UI** — Install the VS Code extension (see below) and sign in under **Settings → Account** — **Continue with Google** or **Continue with email** (same address as signup).
 4. **Browser** — Optional: open the [admin portal](https://admin.coop-ai.dev/login) with the same email/password or Google to manage your personal account.
 
-> **Website login has no SSO.** SAML sign-in is available on the [admin portal](https://admin.coop-ai.dev/login) and in the VS Code extension only — not on [coop-ai.dev/login](https://coop-ai.dev/login). Enterprise developers use **Sign in with SSO** in the extension; org admins use **Continue with SSO** on the admin portal login page.
+> **Marketing Sign in opens VS Code.** [coop-ai.dev/login](https://coop-ai.dev/login) does not sign you in on the web. Enterprise developers use **Sign in with SSO** in the extension; org admins use **Continue with SSO** on the [admin portal](https://admin.coop-ai.dev/login).
 
 > **Forgot your password?** Use [Forgot password](https://coop-ai.dev/forgot-password) on the website or admin portal, or the **Forgot password?** link in the extension.
 
@@ -60,7 +60,7 @@ See the [Security page](/security) for architecture details.
 1. **Browser** — Choose a plan on [Pricing](/pricing) and complete Stripe checkout.
 2. **Browser** — On the [Welcome page](/welcome), wait for provisioning (usually under a minute).
 3. **Email** — Check your inbox for your account welcome email.
-4. **Browser — Admin portal** — Open [admin.coop-ai.dev/login](https://admin.coop-ai.dev/login). Sign in with email/password, **Continue with Google**, or (Enterprise) enter **Organization name** → **Continue with SSO**. The marketing site login at [coop-ai.dev/login](https://coop-ai.dev/login) does **not** offer SSO — use the admin portal for SAML.
+4. **Browser — Admin portal** — Open [admin.coop-ai.dev/login](https://admin.coop-ai.dev/login). Sign in with email/password, **Continue with Google**, or (Enterprise) enter **Organization name** → **Continue with SSO**. The marketing [Sign in](https://coop-ai.dev/login) page opens VS Code — it is not a web login.
 5. **Admin portal** — Connect GitHub (GitHub App on company org — use **Send link to GitHub admin** if IT owns GitHub), Slack, and other tools once for your whole org.
 6. **Admin portal** — Invite teammates from the Users page (or rely on IdP JIT after SSO is configured).
 7. **Extension UI** — Developers install CoopAI in VS Code and sign in with **Continue with Google**, email/password, or **Organization name** + **Sign in with SSO** (Enterprise).
@@ -88,7 +88,7 @@ Use this when **Require SSO** is enabled in **Settings → Single sign-on → Si
 2. **Browser — Admin portal** — **Settings → Single sign-on** → complete steps 1–2 (SP values into IdP, paste IdP Entity ID / SSO URL / cert) → **Save SSO** → **Test connection** with your admin identity.
 3. **Browser — Admin portal** — Step 3: enable **Require SSO** only after a successful test. Coop shows a confirmation — a misconfigured IdP can lock everyone out. Enabling **Require SSO** also ends existing password/Google sessions for the org (SAML sessions stay). **Allow email and password** and **Allow Google** are hidden while **Require SSO** is on.
 4. **Browser — Admin portal** — **Users** → promote at least one SSO user to **admin** if JIT created them as **member** (first SAML login defaults to **member**).
-5. **Browser — Admin portal login** — All admins and members sign in at [admin.coop-ai.dev/login](https://admin.coop-ai.dev/login) with **Organization name** + **Continue with SSO**. Do not send users to [coop-ai.dev/login](https://coop-ai.dev/login) — it has no SSO and returns `sso_required` for password attempts.
+5. **Browser — Admin portal login** — All admins and members sign in at [admin.coop-ai.dev/login](https://admin.coop-ai.dev/login) with **Organization name** + **Continue with SSO**. Do not expect [coop-ai.dev/login](https://coop-ai.dev/login) to be a web SSO form — it opens the extension.
 6. **Extension UI** — Developers use **Settings → Account** → **Organization name** + **Sign in with SSO** (browser handoff; VS Code completes automatically). No password invite required for SSO-only orgs.
 7. **Offboarding** — Deactivate in **Users**, or automate `POST /v1/auth/saml/offboard` from your IdP provisioning job.
 
@@ -137,7 +137,7 @@ Three sign-in paths appear on one screen:
 2. Enter your password and click **Sign in**.
 3. Use **Forgot password?** to reset, or **← Use a different email** to go back.
 
-**Enterprise SSO** requires your **organization name** before you click **Sign in with SSO**. Coop opens your system browser for IdP sign-in; when you finish, VS Code completes the session automatically. Organization name matching is case-insensitive. SSO is **not** available on [coop-ai.dev/login](https://coop-ai.dev/login) — use the [admin portal login](https://admin.coop-ai.dev/login) for browser-based SAML.
+**Enterprise SSO** requires your **organization name** before you click **Sign in with SSO**. Coop opens your system browser for IdP sign-in; when you finish, VS Code completes the session automatically. Organization name matching is case-insensitive. [coop-ai.dev/login](https://coop-ai.dev/login) opens VS Code — for browser-based SAML, use the [admin portal login](https://admin.coop-ai.dev/login).
 
 **After sign-in:** Account shows your org and plan summary, plus **Sign out**.
 
@@ -184,7 +184,7 @@ Enterprise orgs sign in with SAML 2.0 through your company identity provider (Ok
 | --- | --- | --- |
 | **Admin portal** | Yes | [admin.coop-ai.dev/login](https://admin.coop-ai.dev/login) → **Organization name** → **Continue with SSO** |
 | **VS Code extension** | Yes | **Settings → Account** → **Organization name** → **Sign in with SSO** (browser handoff) |
-| **Marketing site** ([coop-ai.dev/login](https://coop-ai.dev/login)) | **No** | Email/password and Google only — if your org requires SSO, use the admin portal or extension |
+| **Marketing site** ([coop-ai.dev/login](https://coop-ai.dev/login)) | Opens VS Code | Sign in in the extension (SSO included). Org admins use the admin portal for browser SAML. |
 
 Organization name matching is case-insensitive on both surfaces. IdP setup detail (Okta, Entra, generic): [Single Sign On (SSO)](/docs/sso). Error codes and known limits: [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting).
 
@@ -269,7 +269,7 @@ If a past thread was working on a specific file, **switching back to that thread
 
 ### Chat composer
 
-Type free-form questions in the composer. Coop streams answers grounded in your code graph and connected integrations. Free-form chat uses **OpenAI GPT-5 mini** — assigned by Coop, not user-selected.
+Type free-form questions in the composer. Coop streams answers grounded in your code graph and connected integrations. On Auto, free-form chat uses **OpenAI GPT-5 mini**. Paid plans can pick from the **model menu in chat**.
 
 - Press **Enter** to send (Shift+Enter for a new line).
 - Responses stream in real time with markdown formatting.
@@ -324,7 +324,7 @@ Type `/` in the composer to see available commands. Quick actions:
 | `/owner` | Find Owner |
 | `/blast` | Blast Radius |
 | `/gaps` | Knowledge Gaps |
-| `/edit` | Edit code — GPT-5.1 (aliases: `/patch`, `/fix`) |
+| `/edit` | Edit code — GPT-5.1 (aliases: `/patch`, `/fix`). After **Apply**, click **Create pull request** on the card, or type **Create a PR** in chat (also works after you type in the file) |
 
 Integration commands: `/slack`, `/jira`, `/teams`, `/confluence`, `/notion`, `/docs`.
 
@@ -347,30 +347,32 @@ Open **CoopAI Settings** from the gear icon in the sidebar title bar (opens a de
 | **Tools** | Code hosts and integrations (production: read-only status; dev mode: PAT entry) |
 | **Workspace** | Owner, repo, branch defaults |
 | **Indexing** | Lightning Mode status and indexed repos (all plans; free capped at 3) |
-| **Preferences** | Assigned models, prompt library, identity links, timezone |
+| **Preferences** | Assigned models, prompt library, timezone |
 
 Right-click any selection in the editor for **Trace Decision**, **Find Owner**, **Blast Radius**, or **Knowledge Gaps**. **Understand Repo** is repo-wide only — use **Workflows → Understand Repo** or `/understand` after **Use repo** in the Remote workspace picker.
 
 ### Model assignments
 
-Coop assigns a model per feature — you do **not** pick provider or model on Pro. Open **Settings → Preferences → Model & chat** to see four read-only assignment rows with **On** / **Off** badges.
+**Auto** (the default) means Coop picks a model per job. Open **Settings → Preferences → Model & chat** to see what Auto uses.
 
-| Feature | Assigned model |
+On **Pro, Pro+, Max, and Enterprise**, pick a specific OpenAI, Anthropic, or Gemini model from the **model menu in chat**. Chat, quick actions, and /edit follow that pick. Autocomplete stays on Codestral. **Free** stays Auto-only.
+
+| Feature | What Auto uses |
 | --- | --- |
 | **Chat** | OpenAI GPT-5 mini |
 | **Quick actions** + integration chat (`/slack`, `/jira`, …) | Anthropic Claude Sonnet 4.6 |
 | **`/edit`, `/patch`, `/fix`** | OpenAI GPT-5.1 |
 | **Autocomplete** | Mistral Codestral |
 
-Enterprise custom model selection is coming soon. With `coopAI.devMode: true`, provider and model **dev overrides** apply to local testing only — not production routing.
+Create pull request **Notes** use **OpenAI GPT-4o mini** and are labeled **(AI Generated)** — you can edit them before submit.
 
-One toggle remains editable:
+One toggle remains editable on this page:
 
 | Toggle | Effect |
 | --- | --- |
 | **Enable inline autocomplete** | Inline ghost text (syncs with the header **Autocomplete** toggle) |
 
-Chat, quick actions, and edit patches are always on. Click **Save model settings** after changing the autocomplete toggle.
+Chat, quick actions, and edit patches are always on. Click **Save model settings** after changing the autocomplete toggle. Change models from chat, not from this page.
 
 ### Inline complete and edit selection
 
@@ -410,11 +412,11 @@ Toggle **Autocomplete** in the chat header — **On** / **Off** — for a quick 
 
 Full guide: [Inline autocomplete](/docs/autocomplete).
 
-**Edit selection** — Shipped. Highlight code, describe the change in chat with `/edit`, `/patch`, or `/fix`, then **Apply** the generated patch from the VS Code notification. Coop routes edit patches through **OpenAI GPT-5.1**, attaches the **full active file** (selection is a focus hint, not a context window cut), and includes your editor selection text when present (`coopAI.includeSelection`, default `true`).
+**Edit selection** — Shipped. Highlight code, send `/edit`, `/patch`, or `/fix` with a **named change** (the defect or desired behavior), then **Apply** the generated patch from the VS Code notification. A highlight plus `fix this` is not a spec. Coop routes edit patches through **OpenAI GPT-5.1**, attaches the **full active file** (selection is a focus hint, not a context window cut), and includes your editor selection text when present (`coopAI.includeSelection`, default `true`).
 
 | Step | Surface | Action |
 | --- | --- | --- |
-| Generate | **Extension UI** — chat composer | `/edit <instruction>` (or `/patch`, `/fix`) with a selection or open file |
+| Generate | **Extension UI** — chat composer | `/edit <instruction>` (or `/patch`, `/fix`) with a **named change** plus a selection or open file. Example: `/edit if headers is undefined, return undefined. do not touch requireAuth`. |
 | Apply | **Extension UI** — notification | Click **Apply** on "Patch ready — …" |
 | Or apply | **Extension UI** — Command Palette | **CoopAI: Apply Patch** (`coopAI.applyPatch`) |
 | Undo | **Extension UI** — notification or Command Palette | **Undo** after apply, or **CoopAI: Undo Last Patch** (`coopAI.undoLastPatch`) |
@@ -423,9 +425,44 @@ Full guide: [Edit mode](/docs/edit-mode).
 
 **Completion-only routing** — Inline requests use a separate zero-retention path (`x-use-case: code-completion-only`), distinct from chat.
 
+## Create a pull request
+
+You can open a pull request for your team without leaving VS Code.
+
+Three ways — all open the same confirm step. Cancel, Escape, or clicking away creates nothing.
+
+- Click **Create pull request** on a patch card — that Apply only.
+- Type **Create a PR** in chat after Apply — **every** `/edit` you Applied in this thread.
+- Type **Create a PR** in chat after editing a Use-repo file — dirty buffers, **no Apply required**. Unsaved is fine.
+
+There is no `/pr` slash command.
+
+<!-- figures lg -->
+![Create pull request — confirm branch, title, and AI-generated notes](/screenshots/docs/extension-create-pull-request.png)
+<!-- /figures -->
+
+### Open a pull request
+
+1. Select the repository with **Use repo**.
+2. Either Apply an `/edit`, **or** type in a Use-repo file.
+3. Click **Create pull request** on a card, **or** type **Create a PR** in chat.
+4. Review **Branch** (default `coop/patch`), **Title**, and **Notes (AI Generated)**. Edit anything you want.
+5. Click **Create pull request**. Coop shows a link — open it to see the PR. Or **Cancel**.
+
+| Field | Default |
+| --- | --- |
+| **Branch** | `coop/patch` |
+| **Title** | `Update path/to/file` (or `Update N files`) |
+| **Notes (AI Generated)** | A short summary you can edit or clear |
+| **Files** | That card, every Apply in this thread, or dirty Use-repo tabs |
+
+**Undo** restores the editor. It does not close the PR.
+
+Full guide: [Create pull request](/docs/create-pull-request).
+
 ## Quick Actions
 
-Run quick actions from the **Workflows** menu in the chat header, **slash commands** in chat (`/understand`, `/trace`, `/owner`, …), or the **editor context menu**. Right-click a selection for **Trace Decision**, **Find Owner**, **Blast Radius**, or **Knowledge Gaps** — **Understand Repo** is not file-scoped; use **Workflows → Understand Repo** or `/understand` after **Use repo**. Structured quick actions and integration slash commands (`/slack`, `/jira`, …) use **Anthropic Claude Sonnet 4.6** — assigned by Coop for reliable, evidence-backed outputs.
+Run quick actions from the **Workflows** menu in the chat header, **slash commands** in chat (`/understand`, `/trace`, `/owner`, …), or the **editor context menu**. Right-click a selection for **Trace Decision**, **Find Owner**, **Blast Radius**, or **Knowledge Gaps** — **Understand Repo** is not file-scoped; use **Workflows → Understand Repo** or `/understand` after **Use repo**. On Auto, structured quick actions and integration slash commands (`/slack`, `/jira`, …) use **Anthropic Claude Sonnet 4.6**. A paid pick from the **model menu in chat** applies here too.
 
 <!-- figures -->
 ![VS Code editor context menu — CoopAI quick actions for the current selection](/screenshots/docs/context-menu-quick-actions-dark.png)
@@ -569,7 +606,7 @@ Before I ship changes to GraphConsistencyManager.applyEvent(), what am I missing
 
 ### Integration slash commands
 
-Integration commands query connected tools with the same **Anthropic Claude Sonnet 4.6** routing as quick actions.
+On Auto, integration commands query connected tools with the same **Anthropic Claude Sonnet 4.6** routing as quick actions.
 
 | Slash | Description |
 | --- | --- |
@@ -578,7 +615,7 @@ Integration commands query connected tools with the same **Anthropic Claude Sonn
 | `/teams` | Answer using Microsoft Teams threads |
 | `/confluence` or `/wiki` | Answer using Confluence pages |
 | `/notion` | Answer using Notion pages |
-| `/docs`, `/googledocs` | Answer using Google Docs |
+| `/docs`, `/googledocs` | Search Google Docs only — not the repository |
 
 **Example:** `/slack what did #platform-auth decide about session TTL?`
 
@@ -739,7 +776,7 @@ Ask Coop: "Update AGENTS.md based on what I told you in this thread" to generate
 | --- | --- | --- |
 | Local workspace context | Yes | Yes |
 | AI usage | 80k tokens / 5-hour window | Higher limits (seat-based billing) |
-| Model selection | Coop-assigned per feature | Coop-assigned per feature (Enterprise custom: coming soon) |
+| Model selection | Auto only | Model menu in chat (OpenAI, Anthropic, Gemini). Auto still available. |
 | Code hosts & integrations | Yes (admin portal) | Yes |
 | Deep-Index / Lightning Mode | Yes (3 repos org-wide) | Yes (unlimited) |
 | Team seats | Individual only (1 seat) | Multi-seat |
@@ -771,7 +808,7 @@ Full admin setup is covered in the [Documentation hub](/docs).
 | **No Slack/Jira context** | Ask admin to connect integrations in admin portal |
 | **Forgot password** | [coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password) or **Forgot password?** on the password step |
 | **Can't sign in** | Verify email is verified; try Google; Enterprise: enter org name → **Sign in with SSO** (browser handoff) |
-| **`sso_required`** | Org enforces SSO — use **Continue with SSO** on [admin portal login](https://admin.coop-ai.dev/login) or **Sign in with SSO** in the extension; website login has no SSO |
+| **`sso_required`** | Org enforces SSO — use **Continue with SSO** on [admin portal login](https://admin.coop-ai.dev/login) or **Sign in with SSO** in the extension |
 | **`sso_not_configured`** | Admin: **Settings → Single sign-on** → save IdP config with **Enable SSO** checked |
 | **`missing_org`** | Enter **Organization name** before starting SSO |
 | **`saml_validation_failed`** | Check IdP cert expiry, clock skew, Entity ID / ACS URL match — see [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting) |
@@ -781,7 +818,7 @@ Full admin setup is covered in the [Documentation hub](/docs).
 
 ## Support
 
-- **Email:** [hello@coop-ai.dev](mailto:hello@coop-ai.dev)
+- **Email:** [support@coop-ai.dev](mailto:support@coop-ai.dev)
 - **Demo / enterprise:** [Book a demo](/demo)
 - **Documentation:** [Docs hub](/docs) for admin portal, integrations, API reference, and enterprise deployment
 - **Enterprise SSO:** [Single Sign On (SSO)](/docs/sso) setup · [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting) error codes

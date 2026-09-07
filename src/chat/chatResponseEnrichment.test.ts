@@ -75,6 +75,26 @@ RELATION_TYPE_MAP = {
   assert.ok(/\bextend\b/i.test(enriched));
 });
 
+test("/docs answers that invent repo files are rewritten to titles only", () => {
+  const enriched = enrichChatResponseForAction({
+    content:
+      "The authentication middleware is in src/middleware/auth.js, where it implements token validation.",
+    integrationProvider: "google-docs",
+    contextBundle: [
+      {
+        data: {
+          googleDocsSearch: {
+            documents: [{ title: "Coop AI — Architecture Overview", htmlUrl: "https://docs.google.com/x" }]
+          }
+        }
+      }
+    ]
+  });
+  assert.ok(!enriched.includes("src/middleware/auth.js"));
+  assert.match(enriched, /\/docs searches Google Docs only/);
+  assert.ok(enriched.includes("Coop AI — Architecture Overview"));
+});
+
 const total = passed + failed;
 console.log(`\nchatResponseEnrichment: ${passed}/${total} tests passed`);
 if (failed > 0) {

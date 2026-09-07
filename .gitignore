@@ -49,3 +49,6 @@ coverage/
 
 # Packaged extension installs (rebuild with npm run package)
 *.vsix
+
+# Local Stripe Projects / editor tooling cache
+.projects/

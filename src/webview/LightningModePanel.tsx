@@ -288,14 +288,14 @@ function FreeTierBody({ onViewPlans }: { onViewPlans?: () => void }): React.Reac
             <p className="coop-context-mode-details-title">Pro</p>
             <ul className="coop-context-mode-details-list">
               <li>Unlimited Deep-Indexed repos (no 3-repo org cap).</li>
-              <li>Team seats — invite teammates.</li>
+              <li>Team seats when you need them — invite teammates from the admin portal.</li>
               <li>Higher AI limits and usage analytics.</li>
               <li>Collections for advanced cross-repo groupings.</li>
             </ul>
             {onViewPlans ? (
               <p className="mt-2">
                 <button type="button" className="coop-text-btn !inline !px-0 !py-0" onClick={onViewPlans}>
-                  Pro — $20/user/month
+                  Pro — $25/user/month
                 </button>
               </p>
             ) : null}
@@ -492,7 +492,7 @@ export function ProUpgradeChip({ onClick }: { onClick: () => void }): React.Reac
       type="button"
       className="coop-quick-action-pill"
       onClick={onClick}
-      title="Deep-Code Graph indexing, cross-repo search, and workspace repos — Pro $20/user/mo."
+      title="Deep-Code Graph indexing, cross-repo search, and workspace repos — Pro $25/user/mo."
       aria-label="Upgrade to Pro for Deep-Code Graph indexing"
     >
       Upgrade to Pro

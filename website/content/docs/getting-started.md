@@ -3,7 +3,7 @@ title: Getting started
 description: Install CoopAI and run your first chat in five minutes.
 section: start
 order: 1
-lastUpdated: "2026-07-23"
+lastUpdated: "2026-09-03"
 ---
 
 This guide gets you from signup to your first useful chat in CoopAI.
@@ -67,7 +67,7 @@ Open the Coop icon in the activity bar. Type in the composer, open **Workflows**
 2. **Extension UI** — Type a question in the chat composer (plain chat works with a file chip).
 3. Try: `Explain this file. What are the main entry points nearby?`
 
-Coop streams an answer grounded in your workspace files and any connected integrations. Plain chat uses **GPT-5 mini** — see [Model assignments](/docs/model-assignments).
+Coop streams an answer grounded in your workspace files and any connected integrations. On Auto, plain chat uses **GPT-5 mini** — see [Model assignments](/docs/model-assignments).
 
 ## Step 5 — Try a quick action
 
@@ -99,7 +99,7 @@ Coop streams an answer grounded in your workspace files and any connected integr
 *3 — Repo chipped — run **Workflows → Understand Repo** or `/understand`*
 <!-- /figures -->
 
-Quick actions route to **Claude Sonnet 4.6** for structured, repo-grounded answers. Full detail: [Owner's Manual — Understand Repo](/manual#understand-repo).
+On Auto, quick actions use **Claude Sonnet 4.6** for structured, repo-grounded answers. Full detail: [Owner's Manual — Understand Repo](/manual#understand-repo).
 
 ## Inline autocomplete
 
@@ -126,12 +126,13 @@ After sign-in, confirm the hot path:
 | Check | Success looks like |
 | --- | --- |
 | **API health** | **Browser** → [api.coop-ai.dev/health](https://api.coop-ai.dev/health) returns OK |
-| **Model & chat** | **Settings → Preferences → Model & chat** — four assigned models (Chat, Quick actions, /edit, Autocomplete), no provider picker |
+| **Model & chat** | **Settings → Preferences → Model & chat** — how Auto works, what Auto uses, models by maker |
 | **Autocomplete** | Sidebar **Autocomplete On** → type in `.ts` → ghost text → **Tab** accepts |
 | **Edit mode** | `/edit add a comment above this function` → **Apply** / **Undo** on the patch notification |
+| **Create pull request** | After Apply or after typing in a Use-repo file, click **Create pull request** or type **Create a PR** in chat → confirm branch, title, and notes → a link to the PR |
 | **Quick action (file)** | `/trace` on a selection → structured answer with sources |
 | **Understand Repo** | **Use repo** on the repository → **Workflows → Understand Repo** or `/understand` → repo-wide overview |
-| **Plain chat** | Composer question → grounded reply (GPT-5 mini) |
+| **Plain chat** | Composer question → grounded reply (GPT-5 mini on Auto) |
 
 More fixes: [Troubleshooting](/docs/troubleshooting).
 
@@ -140,7 +141,7 @@ More fixes: [Troubleshooting](/docs/troubleshooting).
 | Plan | Best for |
 | --- | --- |
 | **Developer (free)** | Individual use — full integrations, 3-repo Deep-Index cap, solo seat |
-| **Pro** | Teams — unlimited indexing, team seats ($20/seat/month), usage analytics |
+| **Pro** | You or a team — unlimited indexing, $25/seat/month, usage analytics |
 | **Enterprise** | Self-hosted, BYOK, zero-retention, SAML SSO, compliance |
 
 **Enterprise org admins:** configure SAML in the admin portal before rolling SSO to your team — see [Single Sign On (SSO)](/docs/sso).
@@ -151,5 +152,7 @@ See [Plans & billing](/docs/plans-billing) for details.
 
 - [Model assignments](/docs/model-assignments) — per-feature models and settings UI
 - [Inline autocomplete](/docs/autocomplete) — ghost-text completions
+- [Edit mode](/docs/edit-mode) — `/edit` patches with apply and undo
+- [Create pull request](/docs/create-pull-request) — open a PR from the patch card or by asking in chat
 - [Extension settings](/docs/extension-settings) — workspace, tools, preferences
 - [Owner's Manual](/manual) — daily use, quick actions, prompt library

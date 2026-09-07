@@ -1,10 +1,11 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { createRequestId, ModelRouter } from "./ModelRouter";
+import { ModelRouter } from "./ModelRouter";
 import type { LlmServerConfig } from "./llmServerConfig";
 import { loadLlmServerConfig } from "./llmServerConfig";
 import type { LlmProvider } from "./zeroRetentionConfig";
 import { DEFAULT_MODEL_BY_PROVIDER } from "../config/llmModels";
-import { resolveAssignedModelForUseCase } from "../config/featureModelAssignments";
+import { resolveHonoredChatModel } from "../config/featureModelAssignments";
+import { resolveChatOutputMaxTokens } from "../config/chatOutputBudget";
 import { handleInlineCompletionRequest, defaultInlineModelFor } from "./inlineCompletionApi";
 import type { ChatOrgPlan, UseCase, V1ChatRequestBody } from "./types";
 import {
@@ -18,13 +19,18 @@ import { AuditLogger, auditActor } from "../server/audit/auditLogger";
 import type { UsageTracker } from "../server/usageTracker";
 import type { UserStore } from "../server/users/userStore";
 import { loadServerConfig, type ServerConfig } from "../server/serverConfig";
+import { captureException } from "../server/observability/errorReporter";
+import { resolveHttpRequestId } from "../server/observability/requestId";
 import {
   createPlanQuotaService,
   estimateChatRequestTokens,
   PlanQuotaExceededError,
+  PlanQuotaUnavailableError,
   type PlanQuotaService,
-  writePlanQuotaExceededResponse
+  writePlanQuotaExceededResponse,
+  writePlanQuotaUnavailableResponse
 } from "../server/planQuota";
+import type { UsageTier } from "../server/usageTiers";
 import { isValidPaperclipDataUrl, isAcceptedPaperclipMimeType, isVisionWeightedPaperclipAttachment } from "../chat/paperclipAttachments";
 
 import type { GraphQueryApi } from "./graphQuery";
@@ -55,6 +61,8 @@ type ChatOrgContext = {
   plan: ChatOrgPlan;
   userId?: string;
   principal: string;
+  usageTier?: UsageTier | null;
+  createdAt?: Date;
 };
 
 export function createChatRouter(deps: ChatApiDeps = {}): ModelRouter {
@@ -99,11 +107,24 @@ export async function handleChatApiRequest(
           maxTokens,
           provider,
           model
-        })
+        }),
+        undefined,
+        {
+          usageTier: org.usageTier,
+          selection: "auto",
+          provider,
+          model,
+          forceAutoBucket: true,
+          periodAnchor: org.createdAt
+        }
       );
     } catch (error) {
       if (error instanceof PlanQuotaExceededError) {
         writePlanQuotaExceededResponse(response, error);
+        return true;
+      }
+      if (error instanceof PlanQuotaUnavailableError) {
+        writePlanQuotaUnavailableResponse(response, error);
         return true;
       }
       throw error;
@@ -151,20 +172,27 @@ export async function handleChatApiRequest(
   }
 
   const planQuota = resolvePlanQuota(deps);
-  const maxTokens = typeof body.maxTokens === "number" ? body.maxTokens : 2000;
+  const maxTokens = resolveChatOutputMaxTokens(
+    typeof body.maxTokens === "number" ? body.maxTokens : undefined
+  );
   const history = Array.isArray(body.history) ? body.history.filter(isHistoryMessage) : [];
   const visionAttachmentCount = countVisionWeightedAttachments(attachments);
   const visionWeighted =
     visionAttachmentCount > 0 ||
     history.some((entry) => countVisionWeightedAttachments(entry.attachments) > 0);
   const useCase = readUseCase(body.useCase);
-  let provider = readProvider(body.provider, config.defaultProvider);
-  let model = typeof body.model === "string" && body.model ? body.model : defaultModelFor(provider);
-  if (!config.allowUnapprovedProvider) {
-    const assigned = resolveAssignedModelForUseCase(useCase);
-    provider = assigned.provider;
-    model = assigned.model;
-  }
+  const clientProvider = readProvider(body.provider, config.defaultProvider);
+  const clientModel = typeof body.model === "string" && body.model ? body.model : undefined;
+  const honored = resolveHonoredChatModel({
+    allowUnapprovedProvider: config.allowUnapprovedProvider,
+    plan: org.plan,
+    useCase,
+    clientProvider,
+    clientModel
+  });
+  const provider = honored.provider;
+  const model = honored.model;
+  const selection = honored.selection;
   try {
     await planQuota.check(
       org.orgId,
@@ -176,23 +204,36 @@ export async function handleChatApiRequest(
         imageAttachmentCount: visionAttachmentCount,
         provider,
         model
-      })
+      }),
+      undefined,
+      {
+        usageTier: org.usageTier,
+        selection,
+        provider,
+        model,
+        periodAnchor: org.createdAt
+      }
     );
   } catch (error) {
     if (error instanceof PlanQuotaExceededError) {
       writePlanQuotaExceededResponse(response, error);
       return true;
     }
+    if (error instanceof PlanQuotaUnavailableError) {
+      writePlanQuotaUnavailableResponse(response, error);
+      return true;
+    }
     throw error;
   }
 
   const router = createChatRouter(deps);
-  const requestId = createRequestId();
+  const requestId = resolveHttpRequestId(parsed.headers);
 
   response.writeHead(200, {
     "content-type": "text/event-stream; charset=utf-8",
     "cache-control": "no-cache",
-    connection: "keep-alive"
+    connection: "keep-alive",
+    "x-request-id": requestId
   });
 
   const abortController = new AbortController();
@@ -234,9 +275,16 @@ export async function handleChatApiRequest(
       }
     }
   } catch (error) {
+    captureException(error, {
+      service: "api",
+      orgId: org.orgId,
+      requestId,
+      route: "/v1/chat"
+    });
     writeSse(response, {
       type: "error",
-      message: error instanceof Error ? error.message : "Chat stream failed."
+      message: error instanceof Error ? error.message : "Chat stream failed.",
+      requestId
     });
   }
 
@@ -257,7 +305,9 @@ export async function handleChatApiRequest(
       userId: org.userId,
       principal: org.principal,
       metadata: { requestId },
-      visionWeighted
+      visionWeighted,
+      selection,
+      usageTier: org.usageTier
     });
   }
 
@@ -301,7 +351,15 @@ async function resolveChatOrg(
 
   const plan = (await resolveOrgPlanFromDb(deps.orgStore, auth)) ?? auth.plan;
   const actor = auditActor(auth);
-  return { orgId: auth.orgId, plan, userId: actor.userId, principal: actor.principal };
+  const stored = auth.orgId !== "legacy" ? await deps.orgStore?.getOrganization(auth.orgId) : undefined;
+  return {
+    orgId: auth.orgId,
+    plan,
+    userId: actor.userId,
+    principal: actor.principal,
+    usageTier: stored?.usageTier,
+    createdAt: stored?.createdAt
+  };
 }
 
 function writeSse(response: ServerResponse, payload: unknown): void {
@@ -387,7 +445,8 @@ function readUseCase(value: unknown): UseCase {
     "code_edit",
     "inline_completion",
     "intent_suggest",
-    "evidence_preview"
+    "evidence_preview",
+    "pr_summary"
   ];
   if (typeof value === "string" && (allowed as string[]).includes(value)) {
     return value as UseCase;

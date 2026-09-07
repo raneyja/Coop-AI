@@ -8,16 +8,6 @@ import { ProductCreationMock } from "@/components/ProductCreationMock";
 import { ContextConstellation } from "@/components/ContextConstellation";
 import { CODE_CREATION_STORIES } from "@/lib/codeCreationScenarios";
 
-const ASK_COMMANDS = [
-  "/understand",
-  "/trace",
-  "/blast",
-  "/owner",
-  "/gaps",
-  "/jira",
-  "/slack"
-] as const;
-
 const WRITE_PILLARS = [
   {
     id: "complete",
@@ -54,7 +44,7 @@ const INDEX_TRUST = [
 /** Scene: Ask — slash commands + rotating prompt/outcome (no feature encyclopedia). */
 export function ProductAskScene() {
   return (
-    <section className="border-t border-coop-border py-20 md:py-24">
+    <section id="ask" className="scroll-mt-20 border-t border-coop-border py-20 md:py-24">
       <div className="mx-auto max-w-6xl px-6">
         <SectionHeading
           label="ask"
@@ -62,20 +52,7 @@ export function ProductAskScene() {
           description="Architecture, owners, blast radius, and the ticket that explains why. One place, across the repo graph and the tools you already use."
         />
 
-        <div className="mt-8 flex flex-wrap gap-2" aria-label="Quick action commands">
-          {ASK_COMMANDS.map((cmd) => (
-            <span
-              key={cmd}
-              className="rounded-full border border-coop-border bg-white px-3 py-1.5 font-mono text-xs text-gray-800"
-            >
-              {cmd}
-            </span>
-          ))}
-        </div>
-
-        <div className="mt-12">
-          <QuickActionPromptCarousel />
-        </div>
+        <QuickActionPromptCarousel />
       </div>
     </section>
   );
@@ -93,7 +70,7 @@ export function ProductChangeScene() {
   }, []);
 
   return (
-    <section className="border-t border-coop-border bg-gray-50 py-20 md:py-24">
+    <section id="change" className="scroll-mt-20 border-t border-coop-border py-20 md:py-24">
       <div className="mx-auto max-w-6xl px-6">
         <div className="xl:grid xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] xl:items-center xl:gap-14">
           <div className="min-w-0">
@@ -147,7 +124,7 @@ export function ProductChangeScene() {
 /** Scene: Indexed — Lightning / deep-index as the substrate story. */
 export function ProductIndexedScene() {
   return (
-    <section className="border-t border-coop-border py-20 md:py-24" id="lightning-mode">
+    <section className="scroll-mt-20 border-t border-coop-border py-20 md:py-24" id="lightning-mode">
       <div className="mx-auto max-w-7xl px-6 xl:grid xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] xl:items-center xl:gap-12">
         <div className="min-w-0">
           <SectionHeading

@@ -64,6 +64,18 @@ test("resolveMemberToolStatus marks installed slack with active scope as ready",
   assert.equal(resolveMemberToolStatus(prefs, "slack"), "ready");
 });
 
+test("resolveMemberToolStatus marks google-docs needsReconnect as pending admin setup", () => {
+  const prefs = {
+    ...basePrefs,
+    orgIntegrationStatuses: [
+      { provider: "google-docs" as const, installed: true, needsReconnect: true }
+    ]
+  };
+  assert.equal(resolveMemberToolStatus(prefs, "google-docs"), "pending_admin_setup");
+  assert.equal(integrationConfigured(prefs, "google-docs"), true);
+  assert.equal(integrationReady(prefs, "google-docs"), false);
+});
+
 test("integrationConfigured stays installed while integrationReady waits for scope", () => {
   const prefs = {
     ...basePrefs,

@@ -40,10 +40,16 @@ export function renderWebviewHtml(
     <title>CoopAI</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root" style="color:#d4d4d4;padding:16px;font:13px/1.4 -apple-system,BlinkMacSystemFont,sans-serif">Starting CoopAI…</div>
     <script nonce="${nonce}">
       window.__COOP_VIEW__ = "${view}";
       window.__COOP_ENFORCE_MIN_WIDTH__ = ${enforceMinWidth ? "true" : "false"};
+      window.addEventListener("error", function (event) {
+        var root = document.getElementById("root");
+        if (!root) { return; }
+        var loc = event.filename ? (event.filename + ":" + event.lineno) : "";
+        root.textContent = "CoopAI failed to load. " + (event.message || "Unknown error") + (loc ? "\\n" + loc : "");
+      });
     </script>
     <script nonce="${nonce}" src="${scriptUri}"></script>
   </body>

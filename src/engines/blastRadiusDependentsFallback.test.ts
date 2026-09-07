@@ -12,7 +12,10 @@ import {
   isDocsReferencePath,
   isGenericBlastImpactAsk,
   isVerifiedCallerSearchSource,
+  contentUsesNamedSymbol,
+  resolveNamedBlastSymbols,
   mergeDurableDependentsIntoContextData,
+  mergeDurableWithNamedSymbolSearch,
   mergeSearchDependentsFallbackIntoDependenciesData,
   rankCodeDependentsByRisk,
   resolveTrustedRemoteDependents,
@@ -222,6 +225,99 @@ test("extractBlastSearchSymbols skips default blast ask (no Estimate noise)", ()
   );
 });
 
+test("extractBlastSearchSymbols takes camelCase and snake_case from the ask", () => {
+  assert.ok(
+    extractBlastSearchSymbols(
+      "If we change requireAuth so unauthenticated requests always 401, what else breaks?",
+      "src/server/authMiddleware.ts"
+    ).includes("requireAuth")
+  );
+  assert.ok(
+    extractBlastSearchSymbols(
+      "What breaks if we change extractBearerToken?",
+      "src/server/authMiddleware.ts"
+    ).includes("extractBearerToken")
+  );
+  assert.ok(
+    extractBlastSearchSymbols(
+      "If we change require_install_admin, which call sites break?",
+      "src/server/authMiddleware.ts"
+    ).includes("require_install_admin")
+  );
+});
+
+test("extractBlastSearchSymbols ignores English TitleCase from a list-callers ask", () => {
+  const symbols = extractBlastSearchSymbols(
+    "What breaks if we change requireAuth to return 401 for unauthenticated production requests? Only list call sites of requireAuth.",
+    "src/server/authMiddleware.ts"
+  );
+  assert.ok(symbols.includes("requireAuth"));
+  assert.ok(!symbols.some((symbol) => /^only$/i.test(symbol)));
+  assert.ok(!symbols.some((symbol) => /^list$/i.test(symbol)));
+  assert.ok(!symbols.some((symbol) => /^sites$/i.test(symbol)));
+});
+
+test("named-symbol blast drops file importers that only use a sibling export", () => {
+  const fileImporters: BlastRadiusDependentDetail[] = [
+    { path: "src/jobs/jobsApi.ts", depth: 1, source: "import-parse" },
+    { path: "src/server/adminOrgApi.ts", depth: 1, source: "import-parse" },
+    { path: "src/server/atlassianAppApi.ts", depth: 1, source: "import-parse" }
+  ];
+  const requireAuthHits: BlastRadiusDependentDetail[] = [
+    { path: "src/jobs/jobsApi.ts", depth: 1, source: "zoekt" },
+    { path: "src/server/samlAuth.ts", depth: 1, source: "zoekt" }
+  ];
+  const authCallers = mergeDurableWithNamedSymbolSearch(fileImporters, requireAuthHits, [
+    "requireAuth"
+  ]);
+  assert.ok(authCallers.some((entry) => entry.path === "src/jobs/jobsApi.ts"));
+  assert.ok(authCallers.some((entry) => entry.path === "src/server/samlAuth.ts"));
+  assert.ok(!authCallers.some((entry) => entry.path === "src/server/adminOrgApi.ts"));
+  assert.ok(!authCallers.some((entry) => entry.path === "src/server/atlassianAppApi.ts"));
+
+  const emptyHits = mergeDurableWithNamedSymbolSearch(fileImporters, [], ["requireAuth"]);
+  assert.equal(emptyHits.length, 0);
+
+  const installHits: BlastRadiusDependentDetail[] = [
+    { path: "src/server/adminOrgApi.ts", depth: 1, source: "zoekt" }
+  ];
+  const installCallers = mergeDurableWithNamedSymbolSearch(fileImporters, installHits, [
+    "requireInstallAdmin"
+  ]);
+  assert.ok(installCallers.some((entry) => entry.path === "src/server/adminOrgApi.ts"));
+  assert.ok(!installCallers.some((entry) => entry.path === "src/jobs/jobsApi.ts"));
+});
+
+test("named-symbol hits require the identifier, not a path-only file import", () => {
+  assert.equal(
+    hitLooksLikeReferenceToTarget(
+      { fileName: "src/server/adminOrgApi.ts", content: `import { requireInstallAdmin } from "./authMiddleware";` },
+      "src/server/authMiddleware.ts",
+      ["requireAuth"],
+      ["requireAuth"]
+    ),
+    false
+  );
+  assert.equal(
+    hitLooksLikeReferenceToTarget(
+      { fileName: "src/jobs/jobsApi.ts", content: `router.use(requireAuth);` },
+      "src/server/authMiddleware.ts",
+      ["requireAuth"],
+      ["requireAuth"]
+    ),
+    true
+  );
+  assert.equal(
+    hitLooksLikeReferenceToTarget(
+      { fileName: "src/server/adminOrgApi.ts", content: "src/server/adminOrgApi.ts" },
+      "src/server/authMiddleware.ts",
+      ["requireAuth"],
+      ["requireAuth"]
+    ),
+    false
+  );
+});
+
 test("isVerifiedCallerSearchSource rejects embedding and fallback", () => {
   assert.equal(isVerifiedCallerSearchSource("zoekt"), true);
   assert.equal(isVerifiedCallerSearchSource("scip"), true);
@@ -254,6 +350,14 @@ test("buildImportSearchPatterns includes path suffixes for relative imports", ()
   assert.ok(patterns.includes("config/responseDeadline"));
   assert.ok(patterns.includes("src/config/responseDeadline"));
   assert.ok(patterns.indexOf("config/responseDeadline") < 10);
+});
+
+test("extractExportNamesFromSource includes Python class names", () => {
+  const names = extractExportNamesFromSource(`
+class StateGroup(models.TextChoices):
+    BACKLOG = "backlog", "Backlog"
+`);
+  assert.ok(names.includes("StateGroup"));
 });
 
 test("extractExportNamesFromSource prefers distinctive exports", () => {
@@ -387,6 +491,56 @@ test("mergeSearchDependentsFallbackIntoDependenciesData can keep filtered job ed
     { keepFilteredJobDependentsIfSearchEmpty: true }
   );
   assert.deepEqual(merged.directDependents, ["test/app.test.js"]);
+});
+
+test("named-function blast does not fail-open to file importers when search is empty", () => {
+  const merged = mergeSearchDependentsFallbackIntoDependenciesData(
+    {
+      file: "auth/gates.ts",
+      directDependents: ["http/jobs.ts", "http/webhooks.ts", "http/install.ts"]
+    },
+    { dependents: [], source: "remote", warnings: [] },
+    {
+      keepFilteredJobDependentsIfSearchEmpty: true,
+      namedAskSymbols: ["gateRequest"]
+    }
+  );
+  assert.deepEqual(merged.directDependents, []);
+  assert.ok((merged.warnings as string[]).some((w) => /Named function blast/i.test(w)));
+});
+
+test("contentUsesNamedSymbol requires the named export, not a sibling import", () => {
+  assert.equal(
+    contentUsesNamedSymbol(
+      `import { parseToken } from "./gates";\nexport function ready() { return parseToken(); }`,
+      "gateRequest"
+    ),
+    false
+  );
+  assert.equal(
+    contentUsesNamedSymbol(
+      `import { gateRequest } from "./gates";\nif (!gateRequest(auth)) { return; }`,
+      "gateRequest"
+    ),
+    true
+  );
+  assert.equal(
+    contentUsesNamedSymbol(`router.use(gateRequest);`, "gateRequest"),
+    true
+  );
+});
+
+test("resolveNamedBlastSymbols unions the editor chip with the ask", () => {
+  const fromChip = resolveNamedBlastSymbols("Estimate the impact of changing this code.", {
+    file: "auth/gates.ts",
+    selectedSymbol: "gateRequest"
+  });
+  assert.deepEqual(fromChip, ["gateRequest"]);
+  const fromAsk = resolveNamedBlastSymbols(
+    "If we make gateRequest return 401, which call sites break?",
+    { file: "auth/gates.ts" }
+  );
+  assert.ok(fromAsk.includes("gateRequest"));
 });
 
 test("mergeDurableDependentsIntoContextData sets directDependents + import-parse source", () => {

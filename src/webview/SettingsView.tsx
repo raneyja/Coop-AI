@@ -88,7 +88,7 @@ const DEFAULT_PREFS: Preferences = {
   model: "claude-sonnet-4-6",
   llmProvider: "anthropic",
   temperature: 0.5,
-  maxTokens: 2000,
+  maxTokens: 8192,
   llmEnabled: true,
   autocompleteEnabled: true,
   useCachedResponses: true,
@@ -845,10 +845,6 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           setGoogleDocsTokenDraft("");
         }}
         onTestIntegration={testIntegration}
-        onSaveIdentityDirectory={(directory) => {
-          post({ type: "settings:save-identity-directory", payload: { directory } });
-          flashSaved("team");
-        }}
         onClearChat={() => post({ type: "chat:clear" })}
         collections={collections}
         collectionsError={collectionsError}
@@ -860,6 +856,7 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         onAttachAgentsMd={() => post({ type: "agents:attach" })}
         onOpenAgentsMd={() => post({ type: "agents:open" })}
         onStartFromAgentsMdTemplate={() => post({ type: "agents:start-from-template" })}
+        onDetachAgentsMd={() => post({ type: "agents:detach" })}
         onAddVisibleMemory={(fact) => post({ type: "memory:add", payload: fact })}
         onClearVisibleMemory={(id) => post({ type: "memory:clear", payload: id ? { id } : {} })}
         onCompleteOnboarding={() => {

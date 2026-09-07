@@ -192,7 +192,7 @@ const localWrapped = buildUserMessageWithContext("Explain this", {
     }
   ]
 });
-if (!localWrapped.includes("Answer ONLY from this code")) {
+if (!localWrapped.includes("Treat every attached file as source of truth")) {
   console.error("FAIL: local_files block missing stronger authority line");
   process.exit(1);
 }

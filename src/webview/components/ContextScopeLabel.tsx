@@ -17,10 +17,35 @@ function RepoIcon(): React.ReactElement {
   );
 }
 
+function ChipDismissButton({
+  label,
+  onClear
+}: {
+  label: string;
+  onClear: () => void;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      className="coop-source-chip-dismiss shrink-0 rounded-full px-0.5 text-[11px] leading-none text-[var(--coop-panel-muted)] hover:text-[var(--coop-panel-foreground)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-[var(--vscode-focusBorder)]"
+      title="Remove from this chat"
+      aria-label={label}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onClear();
+      }}
+    >
+      ×
+    </button>
+  );
+}
+
 type ContextScopeLabelProps = {
   context: RepoContext;
   onOpenExplorer?: () => void;
   onOpenFile?: () => void;
+  onClear?: () => void;
 };
 
 /**
@@ -32,7 +57,8 @@ type ContextScopeLabelProps = {
 export function ContextScopeLabel({
   context,
   onOpenExplorer,
-  onOpenFile
+  onOpenFile,
+  onClear
 }: ContextScopeLabelProps): React.ReactElement | null {
   const filePath = context.file?.trim();
   const showRepoChip =
@@ -94,27 +120,23 @@ export function ContextScopeLabel({
       </>
     );
 
-    if (!onOpenFile) {
-      return (
-        <span className={className} title={title} data-context-source={remote ? "remote" : "local"}>
-          {body}
-        </span>
-      );
-    }
-
     return (
-      <button
-        type="button"
-        className={`${className} cursor-pointer transition-opacity hover:opacity-85 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-[var(--vscode-focusBorder)]`}
-        title={`${title} — click to open in editor`}
-        aria-label={remote ? `Open remote file ${filePath}` : `Open local file ${filePath}`}
-        data-context-source={remote ? "remote" : "local"}
-        onClick={onOpenFile}
-      >
-        <span className="inline-flex min-w-0 items-center gap-1 underline decoration-transparent underline-offset-2 hover:decoration-current">
-          {body}
-        </span>
-      </button>
+      <span className={className} title={title} data-context-source={remote ? "remote" : "local"}>
+        {onOpenFile ? (
+          <button
+            type="button"
+            className="inline-flex min-w-0 cursor-pointer items-center gap-1 underline decoration-transparent underline-offset-2 hover:decoration-current focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-[var(--vscode-focusBorder)]"
+            title={`${title} — click to open in editor`}
+            aria-label={remote ? `Open remote file ${filePath}` : `Open local file ${filePath}`}
+            onClick={onOpenFile}
+          >
+            {body}
+          </button>
+        ) : (
+          body
+        )}
+        {onClear ? <ChipDismissButton label={`Remove ${label} from this chat`} onClear={onClear} /> : null}
+      </span>
     );
   }
 
@@ -126,28 +148,8 @@ export function ContextScopeLabel({
   const className =
     "coop-source-chip ml-auto min-w-0 max-w-[min(100%,16rem)] !gap-1 !px-2 !py-0.5 leading-none font-normal";
 
-  if (!onOpenExplorer) {
-    return (
-      <span className={className} title={repoTitle}>
-        <RepoIcon />
-        <span className="truncate">{repoLabel}</span>
-        {branch ? (
-          <span className="shrink-0 max-w-[72px] truncate text-[10px] text-[var(--coop-panel-muted)]">
-            {branch}
-          </span>
-        ) : null}
-      </span>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      className={`${className} cursor-pointer transition-opacity hover:opacity-85 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-[var(--vscode-focusBorder)]`}
-      title={repoTitle}
-      aria-label={`Open ${repoTitle} in explorer`}
-      onClick={onOpenExplorer}
-    >
+  const repoBody = (
+    <>
       <RepoIcon />
       <span className="truncate underline decoration-transparent underline-offset-2 hover:decoration-current">
         {repoLabel}
@@ -157,6 +159,33 @@ export function ContextScopeLabel({
           {branch}
         </span>
       ) : null}
-    </button>
+    </>
+  );
+
+  return (
+    <span className={className} title={repoTitle} role="group">
+      {onOpenExplorer ? (
+        <button
+          type="button"
+          className="inline-flex min-w-0 cursor-pointer items-center gap-1 transition-opacity hover:opacity-85 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-[var(--vscode-focusBorder)]"
+          title={repoTitle}
+          aria-label={`Open ${repoTitle} in explorer`}
+          onClick={onOpenExplorer}
+        >
+          {repoBody}
+        </button>
+      ) : (
+        <span className="inline-flex min-w-0 items-center gap-1">
+          <RepoIcon />
+          <span className="truncate">{repoLabel}</span>
+          {branch ? (
+            <span className="shrink-0 max-w-[72px] truncate text-[10px] text-[var(--coop-panel-muted)]">
+              {branch}
+            </span>
+          ) : null}
+        </span>
+      )}
+      {onClear ? <ChipDismissButton label={`Remove ${repoTitle} from this chat`} onClear={onClear} /> : null}
+    </span>
   );
 }

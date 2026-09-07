@@ -13,9 +13,11 @@ import {
   type BlastRadiusDependentDetail,
   type GraphEdgeSource,
   codePathsFromDependentDetails,
-  extractBlastSearchSymbols,
   extractExportNamesFromSource,
+  resolveNamedBlastSymbols,
+  hitLooksLikeReferenceToTarget,
   isTrustedBlastGraphSource,
+  mergeDurableWithNamedSymbolSearch,
   normalizeGraphRepoId,
   searchCiWorkflowReferences,
   searchCrossRepoConsumers,
@@ -93,6 +95,7 @@ export type BlastRadiusReport = {
   includeTransitive: boolean;
   warnings: string[];
   completeness: "full" | "partial" | "minimal";
+  namedAskSymbols?: string[];
 };
 
 export type BlastRadiusAnalysisOptions = {
@@ -115,8 +118,9 @@ export type BlastRadiusAnalysisParams = {
    * never hang, never schedule a hard 15s abort / timeout bubble.
    */
   gatherStartedAt?: number;
-  /** User ask text — used to extract symbols (StateGroup, DocumentStatus) for fallback search. */
   askText?: string;
+  /** Editor chip / caret identifier (requireAuth) when the ask is generic. */
+  selectedSymbol?: string;
   /** Explicit symbols to search when graph dependents are empty. */
   symbols?: string[];
 };
@@ -150,6 +154,10 @@ export class BlastRadiusAnalysisEngine {
 
     const repoId = normalizeGraphRepoId(repoIdFromCoordinates(resolved));
     const includeTransitive = params.includeTransitive !== false;
+    const askSymbols = resolveNamedBlastSymbols(params.askText, {
+      file,
+      selectedSymbol: params.selectedSymbol
+    });
 
     let directDependents: string[] = [];
     let transitiveDependents: string[] = [];
@@ -203,33 +211,35 @@ export class BlastRadiusAnalysisEngine {
           const symbols = [
             ...exportSymbols,
             ...(params.symbols ?? []),
-            ...extractBlastSearchSymbols(params.askText, file)
+            ...askSymbols
           ];
+          const searchSymbols = askSymbols.length > 0 ? askSymbols : [...new Set(symbols)];
           const fallback = await searchDependentsFallback(this.options.indexBackend, repoId, file, {
-            maxPatterns: softBudgetExhausted() ? 4 : 12,
-            symbols: [...new Set(symbols)],
+            maxPatterns: softBudgetExhausted() ? 4 : askSymbols.length > 0 ? 8 : 12,
+            symbols: searchSymbols,
+            namedAskSymbols: askSymbols,
             remoteOnly: true
           });
           warnings.push(...fallback.warnings);
           if (durableTrusted) {
-            // Keep durable import-parse/SCIP as provenance; merge any extra remote hits.
-            const seen = new Set(directDependents);
-            for (const entry of fallback.dependents) {
-              if (!seen.has(entry.path)) {
-                seen.add(entry.path);
-                directDependents.push(entry.path);
-                dependentDetails.push({
-                  ...entry,
-                  source: result.source as GraphEdgeSource
-                });
-              }
-            }
-            const ranked = sortDependentsProductionFirst(
-              dependentDetails.map((entry) => ({
-                ...entry,
-                source: result.source as GraphEdgeSource
-              }))
+            const durableList = dependentDetails.map((entry) => ({
+              ...entry,
+              source: result.source as GraphEdgeSource
+            }));
+            let ranked = mergeDurableWithNamedSymbolSearch(
+              durableList,
+              fallback.source === "workspace" ? [] : fallback.dependents,
+              askSymbols
             );
+            if (askSymbols.length > 0 && ranked.length === 0 && !softBudgetExhausted()) {
+              ranked = await this.verifyDurableImportersMentionSymbol(
+                durableList,
+                file,
+                askSymbols,
+                resolved,
+                gatherStartedAt
+              );
+            }
             directDependents = ranked.map((entry) => entry.path);
             dependentDetails = ranked;
             graphMeta = { ...graphMeta, source: result.source as GraphEdgeSource };
@@ -404,7 +414,8 @@ export class BlastRadiusAnalysisEngine {
       graphMeta,
       includeTransitive,
       warnings,
-      completeness
+      completeness,
+      namedAskSymbols: askSymbols.length ? askSymbols : undefined
     };
   }
 
@@ -449,6 +460,52 @@ export class BlastRadiusAnalysisEngine {
     }
 
     return { paths: transitive, details };
+  }
+
+  /**
+   * When Zoekt snippets are path-only, named-symbol search returns empty and
+   * we must not list every file importer. Read importer bodies (remote) and
+   * keep files that actually mention the asked function.
+   */
+  private async verifyDurableImportersMentionSymbol(
+    durable: BlastRadiusDependentDetail[],
+    targetFile: string,
+    namedAskSymbols: string[],
+    resolved: RepoCoordinates,
+    gatherStartedAt: number
+  ): Promise<BlastRadiusDependentDetail[]> {
+    const kept: BlastRadiusDependentDetail[] = [];
+    const candidates = sortDependentsProductionFirst(durable).slice(0, 16);
+    for (const entry of candidates) {
+      if (remainingContextGatherBudgetMs(gatherStartedAt) <= 0) {
+        break;
+      }
+      try {
+        const fileContent = await this.options.codeHostRouter.getFileContent(entry.path, {
+          provider: resolved.provider,
+          owner: resolved.owner,
+          repo: resolved.repo,
+          branch: resolved.branch
+        });
+        const text =
+          fileContent.content?.trim() ||
+          fileContent.lines?.map((line) => line.text).join("\n") ||
+          "";
+        if (
+          hitLooksLikeReferenceToTarget(
+            { fileName: entry.path, content: text },
+            targetFile,
+            namedAskSymbols,
+            namedAskSymbols
+          )
+        ) {
+          kept.push(entry);
+        }
+      } catch {
+        continue;
+      }
+    }
+    return kept;
   }
 
   private async resolveOwners(

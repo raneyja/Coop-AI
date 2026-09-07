@@ -3,7 +3,7 @@ title: Troubleshooting
 description: Common issues and fixes for CoopAI extension, admin portal, and integrations.
 section: help
 order: 1
-lastUpdated: "2026-07-23"
+lastUpdated: "2026-09-03"
 ---
 
 ## Extension
@@ -14,7 +14,7 @@ lastUpdated: "2026-07-23"
 | **401 unauthorized** | Sign out and sign in again; reset password at [forgot-password](https://coop-ai.dev/forgot-password) |
 | **SSO required** | Your org requires SAML — extension: **Sign in with SSO** (enter org name); admin portal: **Organization name** + **Continue with SSO** on `/login` |
 | **Chat returns empty** | Set Workspace owner/repo/branch; open a file for context; confirm you are signed in under Account |
-| **No model picker in settings** | Expected in production — models are Coop-assigned; see [Model assignments](/docs/model-assignments) |
+| **No model picker in settings** | Expected — Settings explains Auto. Pro and above choose from the **model menu in chat**. See [Model assignments](/docs/model-assignments) |
 | **/trace or /blast disabled** | Open a file in the editor first |
 | **/understand or Understand Repo blocked** | Click **Use repo** on the **repository** in the Remote workspace picker (not a file). Clear any file chip first — Understand Repo is repo-wide only |
 | **Repo-wide /owner or /gaps fails** | Click **Use repo** in the Remote workspace picker, or open a file so a file chip is active. Settings → Workspace alone is not enough |
@@ -28,9 +28,10 @@ lastUpdated: "2026-07-23"
 | Check | Success looks like |
 | --- | --- |
 | **API** | [api.coop-ai.dev/health](https://api.coop-ai.dev/health) returns OK |
-| **Model & chat** | Four assigned models, no provider picker |
+| **Model & chat** | How Auto works, what Auto uses, models by maker; autocomplete toggle |
 | **Autocomplete** | Ghost text on type → **Tab** accepts |
 | **/edit** | Patch notification with **Apply** / **Undo** |
+| **Create pull request** | After Apply or after typing in a Use-repo file, click **Create pull request** or type **Create a PR** → confirm → a link to the PR |
 | **Quick action** | Structured answer with repo/integration context |
 | **Plain chat** | Grounded reply in composer |
 
@@ -108,6 +109,6 @@ Coop **operators** (self-hosted or support): post-deploy validation steps in [En
 
 ## Still stuck?
 
-- Email [hello@coop-ai.dev](mailto:hello@coop-ai.dev)
+- Email [support@coop-ai.dev](mailto:support@coop-ai.dev)
 - [Book a demo](/demo) for enterprise support
 - See [FAQ](/docs/faq)

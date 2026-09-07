@@ -10,17 +10,37 @@ import { ChatProse } from "./components/ChatProse";
 import { CitationNavigationProvider } from "./components/CitationNavigationContext";
 import { ChatLinkProvider } from "./components/ChatLinkContext";
 import { EmptyState } from "./components/EmptyState";
+import { ChatSignedOutHome } from "./components/ChatSignedOutHome";
+import { chatRequiresSignIn } from "./lib/chatAuthGate";
+import { preferencesSignedIn } from "./components/settings/connectionCopy";
 import { WorkflowsMenu } from "./components/WorkflowsMenu";
 import { AgentsMdStatusChip, ProjectInstructionsNotice } from "./components/ProjectInstructionsNotice";
 import { shouldPromptForAgentsMd } from "./lib/agentsMdStatus";
 import { ConflictResolution } from "./ConflictResolution";
 import { PatchCard, shouldHidePatchMarkdownForMessage, shouldRenderPatchCardForMessage } from "./PatchCard";
+import { compactPatchDiffForPrNotes } from "./prNotesDiff";
+import { CreatePullRequestModal } from "./components/CreatePullRequestModal";
+import {
+  createdPullRequestFromResult,
+  createConfirmSubmitGuard,
+  defaultPrBranchName,
+  defaultPrTitle,
+  prCreateErrorFromResult
+} from "./createPullRequestConfirm";
+import { mergeAppliedPrPreviewFiles } from "../chat/createPrChatRouting";
 import { isEditHistoryContent, looksLikePatchStreamingContent } from "./lib/patchStreamDisplay";
 import { DegradationNotification } from "./DegradationNotification";
 import { IntentFeedback } from "./IntentFeedback";
-import type { ChatHistoryPayload, GithubRepoOption, PatchCardState, PatchCardsUpdatePayload } from "../chat/types";
+import type {
+  ChatHistoryPayload,
+  CodeHostProviderPreference,
+  GithubRepoOption,
+  PatchCardState,
+  PatchCardsUpdatePayload,
+  SettingsStatePayload
+} from "../chat/types";
 import { CHAT_STOPPED_MESSAGE } from "../chat/chatStopped";
-import { inlineArtifactsFromHistory } from "./restoreInlineArtifacts";
+import { inlineArtifactsFromHistory, patchCardsFromHistoryPayload } from "./restoreInlineArtifacts";
 import { applyThemeMode } from "./theme";
 import {
   ACTIVITY_PHASE_MS,
@@ -30,7 +50,6 @@ import {
   hasVisibleAssistantResponse,
   isSynthesisActivityPhase,
   pickRotatingThinkingMessage,
-  pickSynthesisThinkingLine,
   shouldResetThinkingRotationStep,
   shouldShowThinkingIndicator,
   THINKING_ROTATION_STEP_MS
@@ -62,7 +81,7 @@ import type { LightningModeState } from "../indexing/lightningTypes";
 import type { EvidenceActionContext } from "./evidenceCardActionHandler";
 import { SLASH_COMMANDS, slashCommandHistoryContent } from "../context/slashCommands";
 import { ProUpgradeChip } from "./LightningModePanel";
-import type { ChatFileMention, ChatImageAttachment, MentionSearchResult } from "../chat/types";
+import type { ChatFileMention, ChatImageAttachment, MentionSearchResult, LlmProviderPreference } from "../chat/types";
 import { inferActionIdFromTemplate } from "./lib/inferPromptActionId";
 import { resolvePromptLibraryRun } from "../prompts/promptLibraryRun";
 import { useLaunchTypewriter } from "./hooks/useLaunchTypewriter";
@@ -118,9 +137,12 @@ type InboundMessage =
         upgradeUrl: string;
         timezone?: string;
         retryAfterMs?: number;
+        message?: string;
+        pool?: "paid" | "auto" | "frontier" | "free";
       };
     }
   | { type: "chat:quota-cleared" }
+  | { type: "settings:state"; payload: SettingsStatePayload }
   | {
       type: "repo:tree";
       payload: {
@@ -147,6 +169,21 @@ type InboundMessage =
   | { type: "intent:feedback"; payload: IntentFeedbackState }
   | { type: "conflict:update"; payload: ConflictResolutionState }
   | { type: "patch:update"; payload: PatchCardsUpdatePayload | PatchCardState }
+  | {
+      type: "patch:open-create-pr";
+      payload: { messageTimestamp: number; files?: Array<{ path: string; content: string }>; diff?: string };
+    }
+  | { type: "patch:pr-notes"; payload: { messageTimestamp?: number; notes?: string } }
+  | {
+      type: "patch:pr-created";
+      payload: {
+        messageTimestamp?: number;
+        htmlUrl: string;
+        number: number;
+        provider?: CodeHostProviderPreference;
+      };
+    }
+  | { type: "patch:pr-error"; payload: { messageTimestamp?: number; error: string } }
   | { type: "degradation:notification"; payload: DegradationNotificationPayload }
   | { type: "trace:autoload"; payload: { message: string } }
   | {
@@ -370,9 +407,37 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   } | undefined>();
   const [conflictState, setConflictState] = useState<ConflictResolutionState | undefined>();
   const [patchCards, setPatchCards] = useState<PatchCardState[]>([]);
+  const [prNotesByTimestamp, setPrNotesByTimestamp] = useState<
+    Record<number, { text?: string; loading?: boolean }>
+  >({});
+  const [openCreatePrTimestamp, setOpenCreatePrTimestamp] = useState<number | undefined>();
+  const [createPrFilesByTimestamp, setCreatePrFilesByTimestamp] = useState<
+    Record<number, Array<{ path: string; content: string }>>
+  >({});
+  const [createPrDiffByTimestamp, setCreatePrDiffByTimestamp] = useState<Record<number, string>>({});
+  const [standaloneCreatePr, setStandaloneCreatePr] = useState<
+    { timestamp: number; files: Array<{ path: string; content: string }> } | undefined
+  >();
+  const [standalonePrSubmitting, setStandalonePrSubmitting] = useState(false);
+  const standalonePrSubmitGuard = useMemo(() => createConfirmSubmitGuard(), []);
+  const [prCreateByTimestamp, setPrCreateByTimestamp] = useState<
+    Record<
+      number,
+      | { htmlUrl: string; number: number; provider?: CodeHostProviderPreference }
+      | { error: string }
+    >
+  >({});
   const [suppressedPatchTimestamps, setSuppressedPatchTimestamps] = useState<number[]>([]);
   const [degradationNotification, setDegradationNotification] = useState<DegradationNotificationPayload | undefined>();
   const [usageLabel, setUsageLabel] = useState<string | undefined>();
+  const [signedIn, setSignedIn] = useState<boolean | undefined>();
+  const [pickerPrefs, setPickerPrefs] = useState<{
+    plan?: "free" | "pro" | "enterprise";
+    usageTier?: string | null;
+    devMode?: boolean;
+    model: string;
+    llmProvider: LlmProviderPreference;
+  }>({ model: "auto", llmProvider: "openai" });
   const [promptLibrary, setPromptLibrary] = useState<{
     prompts: PromptLibraryItem[];
     pinnedIds: string[];
@@ -393,6 +458,10 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   threadsStateRef.current = threadsState;
   /** After Stop, ignore late host deltas/feedback until the next send. */
   const userStoppedRef = useRef(false);
+  /** After complete/error, ignore leftover chat:delta (batched tokens after done). */
+  const liveStreamRef = useRef(false);
+  /** Sync lock so Enter-repeat / double-click cannot post chat:send twice. */
+  const inFlightSendRef = useRef(false);
   const [lightningState, setLightningState] = useState<LightningModeState | null>(null);
   const [chatHistorySynced, setChatHistorySynced] = useState(false);
   const [launchIntroConsumed, setLaunchIntroConsumed] = useState(false);
@@ -402,6 +471,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
 
   const resetEphemeralChatState = useCallback(() => {
     userStoppedRef.current = false;
+    liveStreamRef.current = false;
+    inFlightSendRef.current = false;
     setStreamingBuffer("");
     setThinkingBuffer("");
     setAgentOverlay(undefined);
@@ -574,17 +645,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     ]
   );
 
-  // Prefer real model CoT; during synthesis keep Thinking alive with rotating copy.
-  // Same start delay as todos so Thinking doesn't pop in the instant you send.
-  const showSynthesisThinking =
-    synthesisPhase &&
-    synthesisElapsedMs >= ACTIVITY_START_DELAY_MS &&
-    !hasVisibleAssistantResponse(messages, streamMessage);
-  const visibleModelThinking =
-    thinkingBuffer.trim() ||
-    (showSynthesisThinking ? pickSynthesisThinkingLine(thinkingRotationStep) : undefined);
-  const modelThinkingStreaming =
-    showSynthesisThinking || Boolean(isStreaming && !streamMessage && thinkingBuffer.trim());
+  // Real model CoT only — never invent “Distilling sources…” while waiting.
+  const visibleModelThinking = thinkingBuffer.trim();
+  const modelThinkingStreaming = Boolean(isStreaming && !streamMessage && thinkingBuffer.trim());
 
   const activityFromFeedback = useMemo<AgentActivityState>(() => {
     // Do not invent tool rows from status todos — that produced fake "N explored" counts.
@@ -602,8 +665,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     (agentActivity.todos.length > 0 ||
       Boolean(visibleModelThinking) ||
       Boolean(visibleThinkingMessage) ||
-      agentActivity.tools.length > 0 ||
-      synthesisPhase);
+      agentActivity.tools.length > 0);
 
   const activityInFlight =
     showAgentActivity ||
@@ -713,6 +775,16 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           shouldHidePatchMarkdownForMessage(patchCards, messageTimestamp, suppressedPatchTimestamps));
 
       const elements: React.ReactElement[] = [];
+      // Prose first — "replace the following" must sit above the Patch card, not below it.
+      elements.push(
+        <ChatProse
+          key="chat-prose"
+          content={content}
+          relatedArtifactId={relatedArtifactId}
+          hidePatchFences={hidePatchFences}
+          activeFilePath={context.file}
+        />
+      );
       if (showPatchCard && card) {
         elements.push(
           <PatchCard
@@ -763,6 +835,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             codeHostProvider={context.provider}
             defaultBranch={context.branch}
             onCreatePullRequest={(draft) => {
+              if (typeof messageTimestamp === "number") {
+                setPrCreateByTimestamp((current) => {
+                  const next = { ...current };
+                  delete next[messageTimestamp];
+                  return next;
+                });
+              }
               const repoId =
                 context.owner && context.repo
                   ? `${draft.provider ?? context.provider ?? "github"}:${context.owner}/${context.repo}`
@@ -781,22 +860,150 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
                 }
               });
             }}
+            onOpenPrLink={handleOpenLink}
+            onClearPrResult={() => {
+              if (typeof messageTimestamp !== "number") {
+                return;
+              }
+              setPrCreateByTimestamp((current) => {
+                const next = { ...current };
+                delete next[messageTimestamp];
+                return next;
+              });
+              setCreatePrFilesByTimestamp((current) => {
+                if (!(messageTimestamp in current)) {
+                  return current;
+                }
+                const next = { ...current };
+                delete next[messageTimestamp];
+                return next;
+              });
+            }}
+            prCreated={
+              typeof messageTimestamp === "number"
+                ? createdPullRequestFromResult(prCreateByTimestamp[messageTimestamp])
+                : undefined
+            }
+            prCreateError={
+              typeof messageTimestamp === "number"
+                ? prCreateErrorFromResult(prCreateByTimestamp[messageTimestamp], context.provider)
+                : undefined
+            }
+            onRequestPrNotes={() => {
+              if (typeof messageTimestamp !== "number") {
+                return;
+              }
+              const override = createPrFilesByTimestamp[messageTimestamp];
+              const titlePaths = (override ?? card.prFiles)?.map((file) => file.path) ?? [];
+              const preview = override ? mergeAppliedPrPreviewFiles(patchCards) : card.files;
+              const diff =
+                createPrDiffByTimestamp[messageTimestamp] || compactPatchDiffForPrNotes(preview);
+              setPrNotesByTimestamp((current) => ({
+                ...current,
+                [messageTimestamp]: { ...current[messageTimestamp], loading: true }
+              }));
+              post({
+                type: "patch:summarize-pr",
+                payload: {
+                  messageTimestamp,
+                  title: defaultPrTitle(titlePaths),
+                  diff
+                }
+              });
+            }}
+            createPrFilesOverride={
+              typeof messageTimestamp === "number"
+                ? createPrFilesByTimestamp[messageTimestamp]
+                : undefined
+            }
+            openCreatePrRequested={
+              typeof messageTimestamp === "number" && openCreatePrTimestamp === messageTimestamp
+            }
+            onOpenCreatePrConsumed={() => {
+              if (typeof messageTimestamp === "number" && openCreatePrTimestamp === messageTimestamp) {
+                setOpenCreatePrTimestamp(undefined);
+              }
+            }}
+            prNotesLoading={
+              typeof messageTimestamp === "number"
+                ? Boolean(prNotesByTimestamp[messageTimestamp]?.loading)
+                : false
+            }
+            generatedPrNotes={
+              typeof messageTimestamp === "number"
+                ? prNotesByTimestamp[messageTimestamp]?.text
+                : undefined
+            }
           />
         );
       }
-      elements.push(
-        <ChatProse
-          key="chat-prose"
-          content={content}
-          relatedArtifactId={relatedArtifactId}
-          hidePatchFences={hidePatchFences}
-          activeFilePath={context.file}
-        />
-      );
       return elements;
     },
-    [context.branch, context.file, context.owner, context.provider, context.repo, patchCards, post, suppressedPatchTimestamps]
+    [
+      context.branch,
+      context.file,
+      context.owner,
+      context.provider,
+      context.repo,
+      createPrDiffByTimestamp,
+      createPrFilesByTimestamp,
+      handleOpenLink,
+      openCreatePrTimestamp,
+      patchCards,
+      post,
+      prCreateByTimestamp,
+      prNotesByTimestamp,
+      suppressedPatchTimestamps
+    ]
   );
+
+  useEffect(() => {
+    if (openCreatePrTimestamp === undefined) {
+      return;
+    }
+    const timestamp = openCreatePrTimestamp;
+    const files = createPrFilesByTimestamp[timestamp];
+    const hasCard = shouldRenderPatchCardForMessage(patchCards, timestamp);
+    if (hasCard) {
+      return;
+    }
+    if (!files?.length) {
+      return;
+    }
+    setStandaloneCreatePr({ timestamp, files });
+    setStandalonePrSubmitting(false);
+    setPrNotesByTimestamp((current) => ({
+      ...current,
+      [timestamp]: { ...current[timestamp], loading: true }
+    }));
+    post({
+      type: "patch:summarize-pr",
+      payload: {
+        messageTimestamp: timestamp,
+        title: defaultPrTitle(files.map((file) => file.path)),
+        diff:
+          createPrDiffByTimestamp[timestamp] ||
+          files.map((file) => `${file.path}\n(editor changes)`).join("\n\n")
+      }
+    });
+    setOpenCreatePrTimestamp(undefined);
+  }, [
+    createPrDiffByTimestamp,
+    createPrFilesByTimestamp,
+    openCreatePrTimestamp,
+    patchCards,
+    post
+  ]);
+
+  useEffect(() => {
+    if (!standaloneCreatePr) {
+      return;
+    }
+    const result = prCreateByTimestamp[standaloneCreatePr.timestamp];
+    if (result && ("htmlUrl" in result || "error" in result)) {
+      setStandalonePrSubmitting(false);
+    }
+  }, [prCreateByTimestamp, standaloneCreatePr]);
 
   const handleCopyEvidenceText = useCallback(
     (text: string, toast?: string) => {
@@ -828,6 +1035,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setThinkingBuffer("");
       setAgentOverlay(undefined);
       userStoppedRef.current = false;
+      liveStreamRef.current = true;
       post({
         type: "chat:send",
         payload: { message: prompt }
@@ -855,6 +1063,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
 
       setError("");
       userStoppedRef.current = false;
+      liveStreamRef.current = true;
       setIsStreaming(true);
       setStreamingBuffer("");
       setThinkingBuffer("");
@@ -881,6 +1090,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     (choice: { choice: "plain" } | { choice: "action"; actionId: string }) => {
       setError("");
       userStoppedRef.current = false;
+      liveStreamRef.current = true;
       setIsStreaming(true);
       setStreamingBuffer("");
       setThinkingBuffer("");
@@ -972,6 +1182,16 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         case "theme:update":
           applyThemeMode(message.payload.mode);
           break;
+        case "settings:state":
+          setSignedIn(preferencesSignedIn(message.payload));
+          setPickerPrefs({
+            plan: message.payload.plan,
+            usageTier: message.payload.usageTier,
+            devMode: message.payload.devMode,
+            model: message.payload.model || "auto",
+            llmProvider: message.payload.llmProvider
+          });
+          break;
         case "context:update":
           setContext(message.payload);
           if (message.payload.projectInstructions?.hasAgentsMd) {
@@ -984,8 +1204,21 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           const historyArtifacts = Array.isArray(payload)
             ? []
             : inlineArtifactsFromHistory(payload.artifacts);
+          const historyPatches = Array.isArray(payload)
+            ? undefined
+            : patchCardsFromHistoryPayload(payload);
           setMessages(historyMessages);
           setInlineArtifacts(historyArtifacts);
+          if (historyPatches) {
+            setPatchCards(historyPatches.cards);
+            setSuppressedPatchTimestamps(historyPatches.suppressed);
+          } else if (historyMessages.length === 0) {
+            setPatchCards([]);
+            setSuppressedPatchTimestamps([]);
+          }
+          setPrCreateByTimestamp({});
+          setCreatePrDiffByTimestamp({});
+          setStandaloneCreatePr(undefined);
           setChatHistorySynced(true);
           // Do not clear isStreaming on mid-turn history echoes. Only clear when
           // the thread is emptied (new/clear chat without a stream-resume).
@@ -1015,6 +1248,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             return next;
           });
           resetEphemeralChatState();
+          setPrCreateByTimestamp({});
+          setCreatePrDiffByTimestamp({});
+          setStandaloneCreatePr(undefined);
           setScrollEpoch((epoch) => epoch + 1);
           setInput("");
           setAttachments([]);
@@ -1037,6 +1273,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             break;
           }
           userStoppedRef.current = false;
+          liveStreamRef.current = true;
           setIntentFeedback(undefined);
           setThinkingBuffer("");
           setAgentOverlay(undefined);
@@ -1045,19 +1282,20 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         }
         case "chat:thinking-delta": {
-          if (userStoppedRef.current) {
+          if (userStoppedRef.current || !liveStreamRef.current) {
             break;
           }
           const activeId = threadsStateRef.current?.activeId;
           if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
             break;
           }
+          setIntentFeedback(undefined);
           setIsStreaming(true);
           setThinkingBuffer((prev) => prev + message.payload.chunk);
           break;
         }
         case "agent:activity": {
-          if (userStoppedRef.current) {
+          if (userStoppedRef.current || !liveStreamRef.current) {
             break;
           }
           const activeId = threadsStateRef.current?.activeId;
@@ -1069,7 +1307,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         }
         case "chat:delta": {
-          if (userStoppedRef.current) {
+          if (userStoppedRef.current || !liveStreamRef.current) {
             break;
           }
           const activeId = threadsStateRef.current?.activeId;
@@ -1087,6 +1325,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             break;
           }
           userStoppedRef.current = false;
+          liveStreamRef.current = false;
           setMessages((prev) => [...prev, message.payload.message]);
           setIntentFeedback(undefined);
           setJobProgress((current) =>
@@ -1104,6 +1343,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             break;
           }
           userStoppedRef.current = true;
+          liveStreamRef.current = false;
           setIntentFeedback(undefined);
           setJobProgress(undefined);
           setDegradationNotification(undefined);
@@ -1134,6 +1374,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             break;
           }
           userStoppedRef.current = false;
+          liveStreamRef.current = false;
           setIntentFeedback(undefined);
           setJobProgress((current) =>
             current?.deliverable === "standalone" ? current : undefined
@@ -1146,6 +1387,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         }
         case "chat:quota-exceeded":
+          liveStreamRef.current = false;
           setIntentFeedback(undefined);
           setJobProgress((current) =>
             current?.deliverable === "standalone" ? current : undefined
@@ -1154,7 +1396,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setQuotaNotice({
             resetsAt: message.payload.resetsAt,
             upgradeUrl: message.payload.upgradeUrl,
-            timezone: message.payload.timezone
+            timezone: message.payload.timezone,
+            message: message.payload.message,
+            pool: message.payload.pool
           });
           setIsStreaming(false);
           setStreamingBuffer("");
@@ -1236,6 +1480,60 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               });
             }
           }
+          break;
+        }
+        case "patch:open-create-pr": {
+          const timestamp = message.payload.messageTimestamp;
+          if (typeof timestamp !== "number") {
+            break;
+          }
+          const files = (message.payload.files ?? []).filter(
+            (file) => file.path.trim() && file.content.length > 0
+          );
+          if (files.length > 0) {
+            setCreatePrFilesByTimestamp((current) => ({ ...current, [timestamp]: files }));
+          }
+          if (message.payload.diff?.trim()) {
+            setCreatePrDiffByTimestamp((current) => ({ ...current, [timestamp]: message.payload.diff as string }));
+          }
+          setOpenCreatePrTimestamp(timestamp);
+          break;
+        }
+        case "patch:pr-notes": {
+          const timestamp = message.payload.messageTimestamp;
+          if (typeof timestamp !== "number") {
+            break;
+          }
+          setPrNotesByTimestamp((current) => ({
+            ...current,
+            [timestamp]: { text: message.payload.notes, loading: false }
+          }));
+          break;
+        }
+        case "patch:pr-created": {
+          const timestamp = message.payload.messageTimestamp;
+          if (typeof timestamp !== "number" || !message.payload.htmlUrl) {
+            break;
+          }
+          setPrCreateByTimestamp((current) => ({
+            ...current,
+            [timestamp]: {
+              htmlUrl: message.payload.htmlUrl,
+              number: message.payload.number,
+              provider: message.payload.provider
+            }
+          }));
+          break;
+        }
+        case "patch:pr-error": {
+          const timestamp = message.payload.messageTimestamp;
+          if (typeof timestamp !== "number" || !message.payload.error) {
+            break;
+          }
+          setPrCreateByTimestamp((current) => ({
+            ...current,
+            [timestamp]: { error: message.payload.error }
+          }));
           break;
         }
         case "degradation:notification":
@@ -1392,6 +1690,24 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     vscode.setState({ draftInput: input } satisfies PersistedWebviewState);
   }, [input, vscode]);
 
+  useEffect(() => {
+    if (!isStreaming) {
+      inFlightSendRef.current = false;
+    }
+  }, [isStreaming]);
+
+  useEffect(() => {
+    if (!chatRequiresSignIn(signedIn)) {
+      return;
+    }
+    setIsExplorerOpen(false);
+    setPromptModalOpen(false);
+    setPromptMenuOpen(false);
+    setCommandConfirm(undefined);
+    setSavePromptOpen(false);
+    resetEphemeralChatState();
+  }, [signedIn, resetEphemeralChatState]);
+
   const submitPrompt = useCallback(
     (
       prompt: string,
@@ -1401,6 +1717,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       options?: { slashUserArgs?: string }
     ) => {
       const message = prompt.trim();
+      if (chatRequiresSignIn(signedIn) || inFlightSendRef.current) {
+        return;
+      }
       if (!message && pendingAttachments.length === 0 && pendingMentions.length === 0 && !quickAction) {
         return;
       }
@@ -1408,9 +1727,11 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         setError(`Prompt exceeds ${INPUT_MAX} characters.`);
         return;
       }
+      inFlightSendRef.current = true;
       setError("");
       setAttachmentError("");
       userStoppedRef.current = false;
+      liveStreamRef.current = true;
       setIsStreaming(true);
       setStreamingBuffer("");
       setThinkingBuffer("");
@@ -1432,7 +1753,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setMentionError("");
       setPendingPromptActionId(undefined);
     },
-    [attachments, mentions, post]
+    [attachments, mentions, post, signedIn]
   );
 
   const handleMentionSearch = useCallback(
@@ -1520,6 +1841,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       }
       setError("");
       userStoppedRef.current = false;
+      liveStreamRef.current = true;
       setIsStreaming(true);
       setStreamingBuffer("");
       setThinkingBuffer("");
@@ -1531,6 +1853,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
 
   const handleStopStreaming = useCallback(() => {
     userStoppedRef.current = true;
+    liveStreamRef.current = false;
     post({ type: "chat:stream-cancel" });
     setIsStreaming(false);
     setThinkingBuffer("");
@@ -1754,6 +2077,15 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         launchIntroVisibleLength={launchIntro.visibleLength}
         launchIntroFlashIndex={launchIntro.flashIndex}
         onLaunchIntroSkip={launchIntro.skip}
+        plan={pickerPrefs.plan}
+        usageTier={pickerPrefs.usageTier}
+        devMode={pickerPrefs.devMode}
+        model={pickerPrefs.model}
+        llmProvider={pickerPrefs.llmProvider}
+        onModelChange={(next) => {
+          setPickerPrefs((current) => ({ ...current, ...next }));
+          post({ type: "settings:update", payload: next });
+        }}
       />
     </div>
   );
@@ -1800,7 +2132,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           onSeeAll={openPromptLibrary}
         />
         <AgentsMdStatusChip
-          state={context.fileSource === "remote" ? undefined : context.projectInstructions}
+          state={context.projectInstructions}
           disabled={isStreaming}
           onCreate={() => post({ type: "agents:start-from-template" })}
           onOpen={() => post({ type: "agents:open" })}
@@ -1822,6 +2154,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             <ContextScopeLabel
               context={context}
               onOpenExplorer={openExplorer}
+              onClear={() => post({ type: "context:clear" })}
               onOpenFile={
                 context.file
                   ? () => {
@@ -1846,11 +2179,34 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         event.preventDefault();
       }}
       onDrop={(event) => {
+        if (chatRequiresSignIn(signedIn)) {
+          return;
+        }
         void handlePanelDrop(event);
       }}
     >
       <CitationNavigationProvider>
       <ChatLinkProvider onOpenFile={handleOpenFile} onOpenLink={handleOpenLink}>
+      {chatRequiresSignIn(signedIn) ? (
+        <>
+          <div className="flex shrink-0 items-center gap-2 border-b border-[var(--coop-composer-border)] px-3 py-2">
+            <span className="text-[13px] font-semibold tracking-tight">CoopAI</span>
+          </div>
+          <p className="coop-panel-narrow-notice" role="status">
+            Widen the sidebar for the best experience.
+          </p>
+          <ChatSignedOutHome
+            onSignInGoogle={() => post({ type: "settings:sign-in-google" })}
+            onSignInPassword={(email, password) =>
+              post({ type: "settings:sign-in-password", payload: { email, password } })
+            }
+            onSignInSso={(org) => post({ type: "settings:sign-in-sso", payload: org ? { org } : undefined })}
+            onForgotPassword={(email) => post({ type: "settings:forgot-password", payload: { email } })}
+          />
+          <PanelWidthEnforcer vscode={vscode} />
+        </>
+      ) : (
+        <>
       <div className="flex shrink-0 items-center gap-2 border-b border-[var(--coop-composer-border)] px-3 py-2">
         {threadsState ? (
           <ThreadHeaderSwitcher
@@ -2041,6 +2397,71 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           })
         }
       />
+      <CreatePullRequestModal
+        open={Boolean(standaloneCreatePr)}
+        provider={context.provider}
+        branch={defaultPrBranchName()}
+        title={defaultPrTitle(standaloneCreatePr?.files.map((file) => file.path) ?? [])}
+        files={standaloneCreatePr?.files ?? []}
+        submitting={standalonePrSubmitting}
+        error={
+          standaloneCreatePr
+            ? prCreateErrorFromResult(prCreateByTimestamp[standaloneCreatePr.timestamp], context.provider)
+            : undefined
+        }
+        notesLoading={
+          standaloneCreatePr
+            ? Boolean(prNotesByTimestamp[standaloneCreatePr.timestamp]?.loading)
+            : false
+        }
+        generatedNotes={
+          standaloneCreatePr ? prNotesByTimestamp[standaloneCreatePr.timestamp]?.text : undefined
+        }
+        created={
+          standaloneCreatePr
+            ? createdPullRequestFromResult(prCreateByTimestamp[standaloneCreatePr.timestamp])
+            : undefined
+        }
+        onOpenLink={handleOpenLink}
+        onClose={() => {
+          if (standalonePrSubmitting) {
+            return;
+          }
+          setStandaloneCreatePr(undefined);
+        }}
+        onConfirm={(draft) => {
+          if (!standaloneCreatePr) {
+            return;
+          }
+          const timestamp = standaloneCreatePr.timestamp;
+          void standalonePrSubmitGuard(async () => {
+            setStandalonePrSubmitting(true);
+            setPrCreateByTimestamp((current) => {
+              const next = { ...current };
+              delete next[timestamp];
+              return next;
+            });
+            const provider = draft.provider ?? context.provider;
+            const repoId =
+              context.owner && context.repo
+                ? `${provider ?? "github"}:${context.owner}/${context.repo}`
+                : undefined;
+            post({
+              type: "patch:create-pr",
+              payload: {
+                messageTimestamp: timestamp,
+                repoId,
+                provider,
+                branch: draft.branch,
+                title: draft.title,
+                body: draft.body,
+                base: draft.base ?? context.branch,
+                files: draft.files
+              }
+            });
+          });
+        }}
+      />
       {savePromptOpen ? (
         <PromptDetailOverlay
           headerTitle="Save to library"
@@ -2068,6 +2489,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         />
       ) : null}
       <PanelWidthEnforcer vscode={vscode} />
+        </>
+      )}
       </ChatLinkProvider>
       </CitationNavigationProvider>
     </div>

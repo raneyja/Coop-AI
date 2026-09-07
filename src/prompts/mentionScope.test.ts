@@ -266,6 +266,23 @@ test("withContextChipLine upgrades a bare /edit history line with selection", ()
   );
 });
 
+test("withContextChipLine stamps /edit comment ask with L56–61 on state.py", () => {
+  const stamped = withContextChipLine(
+    "/edit add a one-line comment above the selected function.",
+    {
+      file: "apps/api/plane/db/models/state.py",
+      selectedLines: [56, 61],
+      owner: "coop-ai",
+      repo: "plane",
+      branch: "preview"
+    }
+  );
+  assert.equal(
+    stamped,
+    "/edit add a one-line comment above the selected function.\nfile: apps/api/plane/db/models/state.py · selection: L56–61 · repo: coop-ai/plane · branch: preview"
+  );
+});
+
 test("plainChatHistoryContent can omit chips when includeContextChips is false", () => {
   const history = plainChatHistoryContent("Tell me more", [], {
     includeContextChips: false,
@@ -277,7 +294,7 @@ test("plainChatHistoryContent can omit chips when includeContextChips is false",
 test("plainChatHistoryContent stamps repo/branch chips on follow-up messages", () => {
   const history = plainChatHistoryContent("Tell me more", [], {
     includeContextChips: true,
-    context: { owner: "CoopAI-Corp", repo: "documenso", branch: "main" }
+    context: { owner: "CoopAI-Corp", repo: "documenso", branch: "main", scope: "repo" }
   });
   assert.equal(
     history,
@@ -285,11 +302,20 @@ test("plainChatHistoryContent stamps repo/branch chips on follow-up messages", (
   );
 });
 
+test("plainChatHistoryContent omits prefs-only owner/repo chips", () => {
+  const history = plainChatHistoryContent("test", [], {
+    includeContextChips: true,
+    context: { owner: "raneyja", repo: "Coop-AI", branch: "main" }
+  });
+  assert.equal(history, "test");
+});
+
 test("withContextChipLine stamps scope onto bare slash history lines", () => {
   const stamped = withContextChipLine("/slack who decided redis", {
     owner: "CoopAI-Corp",
     repo: "plane",
-    branch: "preview"
+    branch: "preview",
+    scope: "repo"
   });
   assert.equal(
     stamped,
@@ -308,10 +334,35 @@ test("historyContentHasScopeChips detects repo/file footers and ignores attached
   assert.equal(historyContentHasScopeChips("/slack who decided redis"), false);
 });
 
-test("plainChatContextChips skips missing file and keeps repo scope", () => {
-  const chips = plainChatContextChips({ owner: "raneyja", repo: "Coop-AI", branch: "main" });
+test("plainChatContextChips keeps repo scope for explicit Use-repo", () => {
+  const chips = plainChatContextChips({
+    owner: "raneyja",
+    repo: "Coop-AI",
+    branch: "main",
+    scope: "repo"
+  });
   assert.deepEqual(chips, [
     { key: "repo", value: "raneyja/Coop-AI" },
+    { key: "branch", value: "main" }
+  ]);
+});
+
+test("plainChatContextChips omits prefs-only owner/repo without Use-repo or file", () => {
+  const chips = plainChatContextChips({ owner: "raneyja", repo: "Coop-AI", branch: "main" });
+  assert.deepEqual(chips, []);
+});
+
+test("plainChatContextChips keeps repo when a file is bound", () => {
+  const chips = plainChatContextChips({
+    owner: "coopai-group",
+    repo: "InspectIQ",
+    branch: "main",
+    file: "README.md",
+    scope: "file"
+  });
+  assert.deepEqual(chips, [
+    { key: "file", value: "README.md" },
+    { key: "repo", value: "coopai-group/InspectIQ" },
     { key: "branch", value: "main" }
   ]);
 });

@@ -28,10 +28,10 @@ export function FeatureCardGrid({
           key={item.label}
           className={
             compact
-              ? "rounded-sm border border-coop-border bg-white px-2.5 py-1 font-mono text-[11px] text-coop-muted"
+              ? "rounded-sm border border-coop-border bg-white/75 px-2.5 py-1 font-mono text-[11px] text-coop-muted backdrop-blur-sm"
               : small
-                ? "rounded-sm border border-coop-border bg-white p-2.5"
-                : "rounded-sm border border-coop-border bg-white p-5"
+                ? "rounded-sm border border-coop-border bg-white/75 p-2.5 backdrop-blur-sm"
+                : "rounded-sm border border-coop-border bg-white/75 p-5 backdrop-blur-sm"
           }
         >
           <p

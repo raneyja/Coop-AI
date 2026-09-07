@@ -1,9 +1,11 @@
+import type { AuthIdentityStore } from "../auth/authIdentityStore";
 import type { AuthTokenStore } from "../auth/authTokenStore";
 import type { EmailService } from "../email/emailService";
 import type { OrgStore } from "../orgStore";
 import type { UserStore } from "../users/userStore";
 import type { BillingConfig } from "./billingConfig";
 import { adminPortalAcceptInviteUrl, adminPortalFreshLoginUrl } from "./adminPortalUrl";
+import type { UsageTier } from "../usageTiers";
 
 export type ProvisionInput = {
   orgName: string;
@@ -13,6 +15,9 @@ export type ProvisionInput = {
   stripeSubscriptionId: string;
   existingOrgId?: string;
   upgrade?: boolean;
+  usageTier?: UsageTier;
+  stripePriceId?: string;
+  googleSub?: string;
 };
 
 export type ProvisionResult = {
@@ -26,7 +31,8 @@ export async function provisionOrgFromCheckout(
   emailService: EmailService,
   billingConfig: BillingConfig,
   input: ProvisionInput,
-  authTokenStore?: AuthTokenStore
+  authTokenStore?: AuthTokenStore,
+  authIdentityStore?: AuthIdentityStore
 ): Promise<ProvisionResult> {
   const loginUrl = adminPortalFreshLoginUrl(billingConfig.adminPortalUrl, {
     email: input.adminEmail
@@ -43,7 +49,9 @@ export async function provisionOrgFromCheckout(
       stripeCustomerId: input.stripeCustomerId,
       stripeSubscriptionId: input.stripeSubscriptionId,
       seatCount: input.seatCount,
-      billingStatus: "active"
+      billingStatus: "active",
+      usageTier: input.usageTier ?? "pro",
+      stripePriceId: input.stripePriceId ?? null
     });
     await emailService.sendProUpgradeWelcome({
       to: input.adminEmail,
@@ -70,7 +78,9 @@ export async function provisionOrgFromCheckout(
     stripeCustomerId: input.stripeCustomerId,
     stripeSubscriptionId: input.stripeSubscriptionId,
     seatCount: input.seatCount,
-    billingStatus: "active"
+    billingStatus: "active",
+    usageTier: input.usageTier ?? "pro",
+    stripePriceId: input.stripePriceId ?? null
   });
 
   const existingUser = await userStore.findActiveUserByEmail(input.adminEmail);
@@ -78,8 +88,10 @@ export async function provisionOrgFromCheckout(
 
   if (!existingUser) {
     const user = await userStore.createUser(org.id, input.adminEmail, "admin");
-    // Industry-standard paid signup: activate account (set password) before first sign-in.
-    if (authTokenStore) {
+    if (input.googleSub && authIdentityStore) {
+      await authIdentityStore.createGoogleIdentity(user.id, input.googleSub, new Date());
+    } else if (authTokenStore) {
+      // Email checkout: activate account (set password) before first sign-in.
       const inviteToken = await authTokenStore.createToken(
         user.id,
         "user_invite",

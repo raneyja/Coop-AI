@@ -43,6 +43,6 @@ CoopAI helps engineering teams understand existing codebases, trace decisions, f
 
 ## Contact
 
-- General: hello@coop-ai.dev
+- Support: support@coop-ai.dev
 - Security: security@coop-ai.dev
 - Privacy: privacy@coop-ai.dev

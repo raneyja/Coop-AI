@@ -149,6 +149,65 @@ test("D-P gather miss with no budget does not invent instructions", async () => 
   assert.equal(reads, 0);
 });
 
+test("D-P7 no Use-repo does not inject open-folder AGENTS.md", async () => {
+  clearProjectInstructionsCache();
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "coop-phase-d-local-"));
+  try {
+    fs.mkdirSync(path.join(root, ".git"));
+    fs.writeFileSync(path.join(root, "AGENTS.md"), "Coop-AI local folder rules — do not leak.");
+    const block = await buildProjectInstructionsPromptBlock({
+      enabled: true,
+      localGitRoot: root,
+      remainingGatherMs: 2_000
+    });
+    assert.equal(block, undefined);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("D-P8 no Use-repo injects only a user-attached AGENTS.md", async () => {
+  clearProjectInstructionsCache();
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "coop-phase-d-attach-"));
+  try {
+    fs.mkdirSync(path.join(root, ".git"));
+    fs.writeFileSync(path.join(root, "AGENTS.md"), "Coop-AI local folder rules — do not leak.");
+    const attached = path.join(root, "my-guide.md");
+    fs.writeFileSync(attached, "My starter AGENTS.md for this account.");
+    const block = await buildProjectInstructionsPromptBlock({
+      enabled: true,
+      localGitRoot: root,
+      attachedAgentsMdPath: attached,
+      remainingGatherMs: 2_000
+    });
+    assert.ok(block?.includes("My starter AGENTS.md for this account."));
+    assert.equal(block?.includes("Coop-AI local folder rules"), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("D-P9 Use-repo does not fall back to another account's attached AGENTS.md", async () => {
+  clearProjectInstructionsCache();
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "coop-phase-d-account-"));
+  try {
+    fs.mkdirSync(path.join(root, ".git"));
+    const attached = path.join(root, "other-user.md");
+    fs.writeFileSync(attached, "Previous account leftover — do not leak.");
+    const block = await buildProjectInstructionsPromptBlock({
+      enabled: true,
+      useRepo: { repoId: "github:acme/plane", branch: "main", version: "main" },
+      localGitRoot: root,
+      attachedAgentsMdPath: attached,
+      remainingGatherMs: 2_000,
+      readRemoteFile: async () => undefined
+    });
+    assert.equal(block, undefined);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 void (async () => {
   for (const item of queue) {
     await item();

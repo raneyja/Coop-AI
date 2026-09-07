@@ -4,19 +4,25 @@ import Link from "next/link";
 import { getGoogleAuthStartUrl } from "@/lib/auth";
 
 type GoogleAuthButtonProps = {
-  mode: "signup" | "login";
+  mode: "signup" | "login" | "checkout";
   orgName?: string;
   disabled?: boolean;
+  checkout?: {
+    tier: "pro" | "pro_plus" | "max";
+    intent: "individual" | "team";
+    seats?: number;
+  };
 };
 
-export function GoogleAuthButton({ mode, orgName, disabled }: GoogleAuthButtonProps) {
-  const label = mode === "signup" ? "Sign up with Google" : "Sign in with Google";
+export function GoogleAuthButton({ mode, orgName, disabled, checkout }: GoogleAuthButtonProps) {
+  const label =
+    mode === "checkout" ? "Continue with Google" : mode === "signup" ? "Sign up with Google" : "Sign in with Google";
 
   function handleClick() {
     if (disabled) {
       return;
     }
-    window.location.href = getGoogleAuthStartUrl({ mode, orgName });
+    window.location.href = getGoogleAuthStartUrl({ mode, orgName, checkout });
   }
 
   return (

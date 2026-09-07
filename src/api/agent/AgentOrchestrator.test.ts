@@ -5,6 +5,7 @@ import * as path from "node:path";
 import type { IndexBackend } from "../../indexing/indexBackend";
 import type { LocalSearchResult } from "../../indexing/types";
 import { createAgentOrchestrator, pickTopSearchHit } from "./AgentOrchestrator";
+import { COPILOT_C1_ASK, COPILOT_C2_ASK, COPILOT_T2_ASK } from "./dogfoodContract";
 
 let passed = 0;
 let failed = 0;
@@ -383,7 +384,7 @@ async function run(): Promise<void> {
     const result = await orchestrator.run({ message: "where is the auth adapter?", repoId: "acme/demo" });
     const readFile = result.context?.read_file as { files?: Array<{ content: string }> };
     const lines = (readFile.files?.[0]?.content ?? "").split("\n");
-    assert.equal(lines[0], "line 1");
+    assert.equal(lines[0], "1|line 1");
     assert.ok(lines.length > 26 && lines.length <= 120);
   });
 
@@ -643,7 +644,7 @@ async function run(): Promise<void> {
       }
     );
     assert.equal(streamed, 0, "must not call the answer model on an empty hunt");
-    assert.match(result.answer ?? "", /will not guess a path/i);
+    assert.match(result.answer ?? "", /usable match/i);
     assert.doesNotMatch(result.answer ?? "", /Your question/);
   });
 
@@ -720,6 +721,1368 @@ async function run(): Promise<void> {
     assert.equal(reads.includes(collabPath), true);
     assert.equal(reads.includes(middlewarePath), true);
     assert.match(result.answer ?? "", /middleware\.py/);
+  });
+
+  await test("feature-add with open file seeds read_file and does not post INDEX_HUNT_MISS", async () => {
+    const mapper = "apps/api/plane/utils/issue_relation_mapper.py";
+    const ask =
+      "We're adding a blocked_by issue link type this sprint. Where should validation live, and which existing link types in this mapper should I mirror so we don't fork a second relation model?";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) =>
+        rel === mapper
+          ? {
+              path: rel,
+              content: "RELATION_MAP = {\n  'blocking': 'blocked_by',\n  'related': 'related',\n}\n"
+            }
+          : undefined
+    });
+    let planCalls = 0;
+    const result = await orchestrator.run(
+      {
+        message: ask,
+        repoId: "github:coop-ai/plane",
+        action: "locate",
+        openFile: mapper
+      },
+      {
+        planTurn: async () => {
+          planCalls += 1;
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async () =>
+          "Validation belongs in issue_relation_mapper.py next to blocking / related."
+      }
+    );
+    assert.equal(result.steps[0]?.tool, "read_file");
+    assert.equal(planCalls >= 1, true);
+    assert.match(result.answer ?? "", /issue_relation_mapper/);
+    assert.doesNotMatch(result.answer ?? "", /usable match/i);
+  });
+
+  await test("named filename seeds read_file even when the body uses a different export", async () => {
+    const filePath = "src/server/authMiddleware.ts";
+    const body = "export function extractBearerToken(header) {\n  return header;\n}\n";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      findFiles: async ({ query }) =>
+        query.toLowerCase().includes("authmiddleware") ? [filePath] : [],
+      readRemoteFile: async ({ path: rel }) =>
+        rel === filePath ? { path: rel, content: body } : undefined
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Find authMiddleware.ts and show me the export.",
+        repoId: "github:acme/demo",
+        action: "locate"
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async ({ conversation }) => {
+          const blob = JSON.stringify(conversation);
+          assert.match(blob, /extractBearerToken/);
+          return "The export in src/server/authMiddleware.ts is extractBearerToken.";
+        }
+      }
+    );
+    assert.equal(result.steps[0]?.tool, "read_file");
+    assert.match(result.steps[0]?.summary ?? "", /authMiddleware\.ts/);
+    assert.doesNotMatch(result.answer ?? "", /usable match/i);
+    assert.match(result.answer ?? "", /extractBearerToken/);
+  });
+
+  await test("named path seeds the same read as a follow-up Read prompt", async () => {
+    const filePath = "src/server/authMiddleware.ts";
+    const body = "export function extractBearerToken(header) {\n  return header;\n}\n";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) =>
+        rel === filePath ? { path: rel, content: body } : undefined
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Read src/server/authMiddleware.ts and show me the export.",
+        repoId: "github:acme/demo",
+        action: "locate"
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async () => "The export is extractBearerToken."
+      }
+    );
+    assert.equal(result.steps[0]?.tool, "read_file");
+    assert.match(result.answer ?? "", /extractBearerToken/);
+  });
+
+  await test("planTurn startLine:1 still reads the class, not only the copyright line", async () => {
+    const body = [
+      "# Copyright (c) 2023-present Plane Software, Inc. and contributors",
+      ...Array.from({ length: 15 }, (_, i) => `# filler ${i + 2}`),
+      "class APIKeyAuthentication:",
+      "    def authenticate(self, request):",
+      "        return True"
+    ].join("\n");
+    const authPath = "apps/api/plane/api/middleware/api_authentication.py";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "scip",
+          stale: false,
+          hits: [
+            {
+              fileName: authPath,
+              lineNumber: 1,
+              content: "# Copyright (c) 2023-present Plane Software, Inc. and contributors",
+              score: 1
+            }
+          ],
+          symbols: [
+            {
+              symbol: "APIKeyAuthentication",
+              kind: "class",
+              file: authPath,
+              line: 17,
+              character: 0,
+              displayName: "APIKeyAuthentication"
+            }
+          ]
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => ({ path: rel, content: body })
+    });
+    let round = 0;
+    const result = await orchestrator.run(
+      {
+        message: "Where is APIKeyAuthentication defined, and what requests does it actually authenticate?",
+        repoId: "coop-ai/plane"
+      },
+      {
+        planTurn: async () => {
+          round += 1;
+          if (round === 1) {
+            return JSON.stringify({ tool: "search_code", args: { query: "APIKeyAuthentication" } });
+          }
+          if (round === 2) {
+            return JSON.stringify({
+              tool: "read_file",
+              args: { path: authPath, startLine: 1, endLine: 1 }
+            });
+          }
+          return JSON.stringify({ done: true });
+        }
+      }
+    );
+    const readFile = result.context?.read_file as { files?: Array<{ content: string }> };
+    const content = readFile?.files?.[0]?.content ?? "";
+    assert.match(content, /17\|class APIKeyAuthentication:/);
+    assert.equal(content.trim() === "1|# Copyright (c) 2023-present Plane Software, Inc. and contributors", false);
+  });
+
+  await test("C1 Authorization-Bearer ask streams when the index has a Bearer hit", async () => {
+    const filePath = "src/server/authMiddleware.ts";
+    const body =
+      'export function extractBearerToken(headers) {\n  const header = headers.authorization ?? "";\n  if (!header.startsWith("Bearer ")) {\n    return undefined;\n  }\n  return header.slice(7).trim() || undefined;\n}\n';
+    let streamed = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: filePath,
+              lineNumber: 10,
+              content: 'if (!header.startsWith("Bearer ")) {',
+              score: 0.9
+            }
+          ],
+          symbols: [
+            {
+              symbol: "extractBearerToken",
+              kind: "function",
+              file: filePath,
+              line: 10,
+              character: 0,
+              displayName: "extractBearerToken"
+            }
+          ]
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) =>
+        rel === filePath ? { path: rel, content: body } : undefined
+    });
+    let round = 0;
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_C1_ASK,
+        repoId: "github:raneyja/Coop-AI",
+        action: "locate",
+        maxSteps: 6
+      },
+      {
+        planTurn: async () => {
+          round += 1;
+          if (round === 1) {
+            return JSON.stringify({ tool: "search_code", args: { query: "Authorization" } });
+          }
+          if (round === 2) {
+            return JSON.stringify({ tool: "read_file", args: { path: filePath } });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async () => {
+          streamed += 1;
+          return "extractBearerToken in src/server/authMiddleware.ts parses the Bearer token.";
+        }
+      }
+    );
+    assert.equal(streamed, 1);
+    assert.doesNotMatch(result.answer ?? "", /usable match/i);
+    assert.match(result.answer ?? "", /extractBearerToken/);
+  });
+
+  await test("C2 work-item ask streams when the index has a transition hit", async () => {
+    const filePath = "apps/api/issues/work_item_state.py";
+    const body =
+      'def write_work_item_state(item, new_state):\n    if not is_valid_transition(item.state, new_state):\n        raise ValueError("cannot move work item out of backlog")\n    item.state = new_state\n';
+    let streamed = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: filePath,
+              lineNumber: 12,
+              content: "def write_work_item_state(item, new_state):",
+              score: 0.8
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) =>
+        rel === filePath ? { path: rel, content: body } : undefined
+    });
+    let round = 0;
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_C2_ASK,
+        repoId: "github:coop-ai/plane",
+        action: "locate",
+        maxSteps: 6
+      },
+      {
+        planTurn: async () => {
+          round += 1;
+          if (round === 1) {
+            return JSON.stringify({ tool: "search_code", args: { query: "Users" } });
+          }
+          if (round === 2) {
+            return JSON.stringify({ tool: "read_file", args: { path: filePath } });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async () => {
+          streamed += 1;
+          return "write_work_item_state in apps/api/issues/work_item_state.py rejects a bad transition.";
+        }
+      }
+    );
+    assert.equal(streamed, 1);
+    assert.doesNotMatch(result.answer ?? "", /usable match/i);
+    assert.match(result.answer ?? "", /work_item_state/);
+  });
+
+  await test("C2 auto-reads the hit when the model only searches", async () => {
+    const filePath = "apps/api/issues/work_item_state.py";
+    const body =
+      'def write_work_item_state(item, new_state):\n    if not is_valid_transition(item.state, new_state):\n        raise ValueError("cannot move work item out of backlog")\n    item.state = new_state\n';
+    let streamed = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: filePath,
+              lineNumber: 12,
+              content: "def write_work_item_state(item, new_state):",
+              score: 0.8
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) =>
+        rel === filePath ? { path: rel, content: body } : undefined
+    });
+    let round = 0;
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_C2_ASK,
+        repoId: "github:coop-ai/plane",
+        action: "locate",
+        maxSteps: 4
+      },
+      {
+        planTurn: async () => {
+          round += 1;
+          if (round === 1) {
+            return JSON.stringify({ tool: "search_code", args: { query: "Users" } });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async () => {
+          streamed += 1;
+          return "write_work_item_state in apps/api/issues/work_item_state.py rejects a bad transition.";
+        }
+      }
+    );
+    assert.equal(streamed, 1);
+    assert.doesNotMatch(result.answer ?? "", /usable match/i);
+    assert.ok(
+      result.steps.some((s) => s.tool === "read_file" && s.summary.includes(filePath)),
+      `expected auto read of ${filePath}, got ${result.steps.map((s) => s.summary).join(" | ")}`
+    );
+  });
+
+  await test("C2 auto-read prefers API writer over locale and client grouping hits", async () => {
+    const filePath = "apps/api/issues/work_item_state.py";
+    const body =
+      'def write_work_item_state(item, new_state):\n    if not is_valid_transition(item.state, new_state):\n        raise ValueError("cannot move work item out of backlog")\n    item.state = new_state\n';
+    const reads: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: "apps/api/issues/seeds/issues.json",
+              lineNumber: 3,
+              content: '"state_id": 3,',
+              score: 0.98
+            },
+            {
+              fileName: "apps/api/issues/serializers/issue.py",
+              lineNumber: 2,
+              content: "state_detail = StateLiteSerializer(read_only=True, source=\"state\")",
+              score: 0.97
+            },
+            {
+              fileName: "apps/api/issues/models/state.py",
+              lineNumber: 8,
+              content: 'DEFAULT_STATES = [{"name": "Backlog", "group": "backlog"}]',
+              score: 0.99
+            },
+            {
+              fileName: "web/components/work-item/commands.ts",
+              lineNumber: 10,
+              content: "handleUpdateEntity({ state_id: stateId });",
+              score: 0.9
+            },
+            {
+              fileName: "web/locales/en/workItem.json",
+              lineNumber: 3,
+              content: '"cannotMoveOutOfBacklog": "Users cannot move a work item out of backlog"',
+              score: 0.99
+            },
+            {
+              fileName: "packages/utils/src/work-item/state.ts",
+              lineNumber: 4,
+              content: "export function groupWorkItemByState(items) {",
+              score: 0.95
+            },
+            {
+              fileName: filePath,
+              lineNumber: 12,
+              content: "def write_work_item_state(item, new_state):",
+              score: 0.35
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        return rel === filePath ? { path: rel, content: body } : { path: rel, content: "noise" };
+      }
+    });
+    let round = 0;
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_C2_ASK,
+        repoId: "github:coop-ai/plane",
+        action: "locate",
+        maxSteps: 4
+      },
+      {
+        planTurn: async () => {
+          round += 1;
+          if (round === 1) {
+            return JSON.stringify({ tool: "search_code", args: { query: "work-item state" } });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async () => "write_work_item_state rejects a bad transition."
+      }
+    );
+    const attached = (
+      result.context?.read_file as { files?: Array<{ path: string; content: string }> } | undefined
+    )?.files
+      ?.map((file) => file.content)
+      .join("\n") ?? "";
+    assert.ok(reads.includes(filePath), `must read the API writer, got ${reads.join(", ")}`);
+    assert.match(attached, /write_work_item_state/);
+    assert.equal(
+      reads.some((p) => /locales|i18n|seeds\//.test(p)),
+      false
+    );
+    assert.ok(
+      result.steps.some((s) => s.tool === "read_file" && s.summary.includes(filePath)),
+      `expected auto read of ${filePath}, got ${result.steps.map((s) => s.summary).join(" | ")}`
+    );
+  });
+
+  await test("C2 jumps from a read-only serializer class to validate() in the same file", async () => {
+    const filePath = "apps/api/issues/serializers/issue.py";
+    const body = [
+      "class IssueSerializer:",
+      "    def validate(self, data):",
+      '        if data.get("state"):',
+      '            raise serializers.ValidationError("State is not valid please pass a valid state_id")',
+      "",
+      "class IssueStateFlatSerializer:",
+      "    state_detail = StateLiteSerializer(read_only=True, source=\"state\")"
+    ].join("\n");
+    const reads: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: filePath,
+              lineNumber: 6,
+              content: "state_detail = StateLiteSerializer(read_only=True, source=\"state\")",
+              score: 0.99
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        return rel === filePath ? { path: rel, content: body } : undefined;
+      }
+    });
+    let round = 0;
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_C2_ASK,
+        repoId: "github:coop-ai/plane",
+        action: "locate",
+        maxSteps: 4
+      },
+      {
+        planTurn: async () => {
+          round += 1;
+          if (round === 1) {
+            return JSON.stringify({ tool: "search_code", args: { query: "work-item state" } });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async () => "IssueSerializer.validate rejects an invalid state_id."
+      }
+    );
+    const readFile = result.context?.read_file as
+      | { files?: Array<{ path: string; content: string }> }
+      | undefined;
+    const attached = readFile?.files?.map((file) => file.content).join("\n") ?? "";
+    assert.match(attached, /State is not valid/);
+    assert.equal(reads.includes(filePath), true);
+  });
+
+  await test("C2 model read of a serializer class still jumps to validate()", async () => {
+    const filePath = "apps/api/issues/serializers/issue.py";
+    const body = [
+      "class IssueSerializer:",
+      "    def validate(self, data):",
+      '        if data.get("state"):',
+      '            raise serializers.ValidationError("State is not valid please pass a valid state_id")',
+      "",
+      "class IssueStateFlatSerializer:",
+      "    state_detail = StateLiteSerializer(read_only=True, source=\"state\")"
+    ].join("\n");
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: filePath,
+              lineNumber: 6,
+              content: "state_detail = StateLiteSerializer(read_only=True, source=\"state\")",
+              score: 0.99
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) =>
+        rel === filePath ? { path: rel, content: body } : undefined
+    });
+    let round = 0;
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_C2_ASK,
+        repoId: "github:coop-ai/plane",
+        action: "locate",
+        maxSteps: 6
+      },
+      {
+        planTurn: async () => {
+          round += 1;
+          if (round === 1) {
+            return JSON.stringify({ tool: "search_code", args: { query: "work-item state" } });
+          }
+          if (round === 2) {
+            return JSON.stringify({
+              tool: "read_file",
+              args: { path: filePath, startLine: 6, endLine: 12 }
+            });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async () => "IssueSerializer.validate rejects an invalid state_id."
+      }
+    );
+    const attached = (
+      result.context?.read_file as { files?: Array<{ content: string }> } | undefined
+    )?.files
+      ?.map((file) => file.content)
+      .join("\n") ?? "";
+    assert.match(attached, /State is not valid/);
+    assert.doesNotMatch(attached, /Work Item Comments/);
+  });
+
+  await test("C2 synthesis conversation excludes OpenAPI and read-only serializer windows", async () => {
+    const filePath = "apps/api/plane/app/serializers/issue.py";
+    const body = [
+      "class IssueSerializer:",
+      "    def validate(self, data):",
+      '        if data.get("state_id"):',
+      '            raise serializers.ValidationError("State is not valid please pass a valid state_id")',
+      ...Array.from({ length: 80 }, () => ""),
+      "class IssueStateFlatSerializer:",
+      "        state_detail = StateLiteSerializer(read_only=True, source=\"state\")"
+    ].join("\n");
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: "apps/api/plane/settings/openapi.py",
+              lineNumber: 1,
+              content: "Work Items & Tasks",
+              score: 0.99
+            },
+            {
+              fileName: filePath,
+              lineNumber: 7,
+              content: "state_detail = StateLiteSerializer(read_only=True, source=\"state\")",
+              score: 0.9
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        if (rel === filePath) {
+          return { path: rel, content: body };
+        }
+        if (rel.includes("openapi")) {
+          return { path: rel, content: "Work Items & Tasks\npaths: /api/v1/issues/" };
+        }
+        return undefined;
+      }
+    });
+    let synthesis = "";
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_C2_ASK,
+        repoId: "github:coop-ai/plane",
+        action: "locate",
+        maxSteps: 6
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async ({ conversation }) => {
+          synthesis = conversation.map((m) => m.content).join("\n");
+          return "IssueSerializer.validate rejects an invalid state_id.";
+        }
+      }
+    );
+    assert.match(synthesis, /State is not valid/);
+    assert.doesNotMatch(synthesis, /Work Items & Tasks/);
+    assert.doesNotMatch(synthesis, /IssueStateFlatSerializer/);
+    const attached = (
+      result.context?.read_file as { files?: Array<{ content: string }> } | undefined
+    )?.files
+      ?.map((file) => file.content)
+      .join("\n") ?? "";
+    assert.match(attached, /State is not valid/);
+    assert.doesNotMatch(attached, /IssueStateFlatSerializer/);
+  });
+
+  await test("C2 hunt skips filter converters and attaches serializer validate()", async () => {
+    const writerPath = "apps/api/issues/serializers/issue.py";
+    const writer = [
+      "class IssueSerializer:",
+      "    def validate(self, data):",
+      '        if data.get("state_id"):',
+      '            raise serializers.ValidationError("State is not valid please pass a valid state_id")'
+    ].join("\n");
+    const converter = [
+      "class FilterConverter:",
+      "    def _validate_value(self, rich_field_name, value):",
+      "        if rich_field_name in self.UUID_FIELDS:",
+      "            return self._validate_uuid(value)",
+      '        raise ValidationError("Invalid filter value")',
+      "        return True"
+    ].join("\n");
+    const reads: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: "apps/api/plane/utils/filters/converters.py",
+              lineNumber: 184,
+              content: "def _validate_value(self, rich_field_name: str, value: Any) -> bool:",
+              score: 0.99
+            },
+            {
+              fileName: writerPath,
+              lineNumber: 4,
+              content:
+                'raise serializers.ValidationError("State is not valid please pass a valid state_id")',
+              score: 0.2
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        if (rel === writerPath) {
+          return { path: rel, content: writer };
+        }
+        if (/converters\.py$/.test(rel)) {
+          return { path: rel, content: converter };
+        }
+        return undefined;
+      }
+    });
+    let synthesis = "";
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_C2_ASK,
+        repoId: "github:coop-ai/plane",
+        action: "locate",
+        maxSteps: 6
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async ({ conversation }) => {
+          synthesis = conversation.map((m) => m.content).join("\n");
+          return "IssueSerializer.validate rejects an invalid state_id.";
+        }
+      }
+    );
+    assert.equal(
+      reads.some((p) => /filters\/converters/.test(p)),
+      false,
+      `must not read filter converters, got ${reads.join(", ")}`
+    );
+    assert.match(synthesis, /State is not valid/);
+    assert.doesNotMatch(synthesis, /_validate_value/);
+    assert.doesNotMatch(synthesis, /Invalid filter value/);
+    const attached = (
+      result.context?.read_file as { files?: Array<{ content: string }> } | undefined
+    )?.files
+      ?.map((file) => file.content)
+      .join("\n") ?? "";
+    assert.match(attached, /State is not valid/);
+  });
+
+  await test("C1 empty index still posts INDEX_HUNT_MISS", async () => {
+    let streamed = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({ source: "zoekt", stale: false, hits: [], symbols: [] })
+      }),
+      resolveAbsolutePath: () => undefined
+    });
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_C1_ASK,
+        repoId: "github:raneyja/Coop-AI",
+        action: "locate",
+        maxSteps: 4
+      },
+      {
+        planTurn: async () => JSON.stringify({ tool: "search_code", args: { query: "Bearer" } }),
+        streamAnswer: async () => {
+          streamed += 1;
+          return "should not stream";
+        }
+      }
+    );
+    assert.equal(streamed, 0);
+    assert.match(result.answer ?? "", /usable match/i);
+  });
+
+  await test("T2 hunt attaches parent ValidationError, not converters", async () => {
+    const writerPath = "apps/api/plane/app/serializers/issue.py";
+    const writer = [
+      "class IssueSerializer:",
+      "    def validate(self, data):",
+      '        if data.get("parent"):',
+      '            raise serializers.ValidationError("Parent is not valid issue_id")'
+    ].join("\n");
+    const converter = [
+      "class FilterConverter:",
+      "    def _validate_value(self, rich_field_name, value):",
+      '        raise ValidationError("Invalid filter value")'
+    ].join("\n");
+    const searches: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async (_repo, query) => {
+          searches.push(query);
+          if (/parent is not valid/i.test(query) || /invalid parent/i.test(query)) {
+            return {
+              source: "zoekt",
+              stale: false,
+              hits: [
+                {
+                  fileName: writerPath,
+                  lineNumber: 4,
+                  content:
+                    'raise serializers.ValidationError("Parent is not valid issue_id")',
+                  score: 0.9
+                }
+              ],
+              symbols: []
+            };
+          }
+          return {
+            source: "zoekt",
+            stale: false,
+            hits: [
+              {
+                fileName: "apps/api/plane/utils/filters/converters.py",
+                lineNumber: 184,
+                content: "def _validate_value(self, rich_field_name: str, value: Any) -> bool:",
+                score: 0.99
+              }
+            ],
+            symbols: []
+          };
+        }
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        if (rel === writerPath) {
+          return { path: rel, content: writer };
+        }
+        if (/converters\.py$/.test(rel)) {
+          return { path: rel, content: converter };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: COPILOT_T2_ASK,
+        repoId: "github:coop-ai/plane",
+        action: "locate",
+        maxSteps: 4
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async () =>
+          "IssueSerializer.validate rejects a parent that is not a valid issue_id."
+      }
+    );
+    assert.equal(
+      searches.some((q) => /parent is not valid/i.test(q)),
+      true,
+      `T2 must search parent is not valid, got ${searches.join(", ")}`
+    );
+    const attached =
+      (result.context?.read_file as { files?: Array<{ content: string }> } | undefined)?.files
+        ?.map((file) => file.content)
+        .join("\n") ?? "";
+    assert.match(attached, /Parent is not valid issue_id/);
+    assert.doesNotMatch(result.answer ?? "", /usable match/i);
+  });
+
+  await test("API-reject hunt does not answer from a different field's validate()", async () => {
+    const htmlPath = "api/serializers/item.py";
+    const html = [
+      "class ItemCommentSerializer:",
+      "    def validate(self, data):",
+      '        if "comment_html" in data:',
+      '            raise serializers.ValidationError({"comment_html": "HTML content is not valid"})',
+      "        return data"
+    ].join("\n");
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: htmlPath,
+              lineNumber: 2,
+              content: "def validate(self, data):",
+              score: 0.99
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) =>
+        rel === htmlPath ? { path: rel, content: html } : undefined
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where does the API reject a bad parent issue_id?",
+        repoId: "github:acme/app",
+        action: "locate",
+        maxSteps: 4
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async () => "should not stream a wrong-field validate"
+      }
+    );
+    assert.match(result.answer ?? "", /couldn.t find where the API rejects/i);
+    assert.doesNotMatch(result.answer ?? "", /comment_html/);
+    assert.doesNotMatch(result.answer ?? "", /casing aliases/i);
+  });
+
+  await test("API-reject hunt jumps in-file from a wrong-field validate() to the asked field", async () => {
+    const writerPath = "api/serializers/item.py";
+    const writer = [
+      "class ItemSerializer:",
+      "    def validate(self, data):",
+      '        if data.get("comment_html"):',
+      '            raise serializers.ValidationError({"comment_html": "HTML content is not valid"})',
+      '        if data.get("parent"):',
+      '            raise serializers.ValidationError("Parent is not valid issue_id")',
+      "        return data"
+    ].join("\n");
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: writerPath,
+              lineNumber: 3,
+              content:
+                'raise serializers.ValidationError({"comment_html": "HTML content is not valid"})',
+              score: 0.99
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) =>
+        rel === writerPath ? { path: rel, content: writer } : undefined
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where does the API reject a bad parent issue_id?",
+        repoId: "github:acme/app",
+        action: "locate",
+        maxSteps: 4
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async () =>
+          "validate() rejects a parent that is not a valid issue_id."
+      }
+    );
+    const attached =
+      (result.context?.read_file as { files?: Array<{ content: string }> } | undefined)?.files
+        ?.map((file) => file.content)
+        .join("\n") ?? "";
+    assert.match(attached, /Parent is not valid issue_id/);
+    assert.doesNotMatch(result.answer ?? "", /usable match/i);
+  });
+
+  await test("API-reject hunt finds a field raise whose message is not “is not valid”", async () => {
+    const htmlPath = "api/serializers/note.py";
+    const writerPath = "app/serializers/review.py";
+    const html = [
+      "class NoteSerializer:",
+      "    def validate(self, data):",
+      '        if data.get("comment_html"):',
+      '            raise serializers.ValidationError({"comment_html": "HTML content is not valid"})',
+      "        return data"
+    ].join("\n");
+    const writer = [
+      "class ReviewSerializer:",
+      "    def validate(self, data):",
+      '        if data.get("reviewer"):',
+      '            raise serializers.ValidationError("user not in project")',
+      "        return data"
+    ].join("\n");
+    const ask =
+      "A client sent a reviewer that isn’t on the team — the API returns an error. Where does the API reject a bad reviewer_id?";
+    const searches: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async (_repo, query) => {
+          searches.push(query);
+          if (/get\("reviewer"\)/.test(query) || /^reviewer(_id)?$/i.test(query)) {
+            return {
+              source: "zoekt",
+              stale: false,
+              hits: [
+                {
+                  fileName: writerPath,
+                  lineNumber: 4,
+                  content:
+                    'if data.get("reviewer"):\n            raise serializers.ValidationError("user not in project")',
+                  score: 0.4
+                }
+              ],
+              symbols: []
+            };
+          }
+          return {
+            source: "zoekt",
+            stale: false,
+            hits: [
+              {
+                fileName: htmlPath,
+                lineNumber: 3,
+                content:
+                  'raise serializers.ValidationError({"comment_html": "HTML content is not valid"})',
+                score: 0.99
+              }
+            ],
+            symbols: []
+          };
+        }
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        if (rel === writerPath) {
+          return { path: rel, content: writer };
+        }
+        if (rel === htmlPath) {
+          return { path: rel, content: html };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: ask,
+        repoId: "github:acme/app",
+        action: "locate",
+        maxSteps: 6
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async () =>
+          "ReviewSerializer.validate raises when the reviewer is not on the team."
+      }
+    );
+    assert.equal(
+      searches.some((q) => /get\("reviewer"\)/.test(q) || /^reviewer(_id)?$/i.test(q)),
+      true,
+      `must search reviewer access, got ${searches.join(", ")}`
+    );
+    const attached =
+      (result.context?.read_file as { files?: Array<{ content: string }> } | undefined)?.files
+        ?.map((file) => file.content)
+        .join("\n") ?? "";
+    assert.match(attached, /user not in project/);
+    assert.doesNotMatch(attached, /comment_html/);
+    assert.doesNotMatch(result.answer ?? "", /casing aliases/i);
+    assert.doesNotMatch(result.answer ?? "", /couldn.t find where the API rejects/i);
+  });
+
+  await test("API-reject hunt attaches invite email, not a signup email 400", async () => {
+    const signupPath = "app/signup_api.py";
+    const invitePath = "app/invite_user.py";
+    const signup = [
+      "export function handleSignup(body) {",
+      "  if (!isValidEmail(body.email)) {",
+      '    raise ValidationError({"email": "Enter a valid email address."});',
+      "  }",
+      "}"
+    ].join("\n");
+    const invite = [
+      "export async function inviteUser(input) {",
+      "  const email = input.email.trim();",
+      "  if (!email) {",
+      '    throw new Error("email is required");',
+      "  }",
+      "}"
+    ].join("\n");
+    const ask =
+      "A client sent an org invite with a blank email — the API returns an error. Where does the API reject a bad email?";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async (_repo, query) => {
+          if (/invite/i.test(query)) {
+            return {
+              source: "zoekt",
+              stale: false,
+              hits: [
+                {
+                  fileName: invitePath,
+                  lineNumber: 4,
+                  content: 'throw new Error("email is required")',
+                  score: 0.8
+                }
+              ],
+              symbols: []
+            };
+          }
+          return {
+            source: "zoekt",
+            stale: false,
+            hits: [
+              {
+                fileName: signupPath,
+                lineNumber: 3,
+                content: 'raise ValidationError({"email": "Enter a valid email address."})',
+                score: 0.99
+              },
+              {
+                fileName: "app/signup_api.test.ts",
+                lineNumber: 20,
+                content: 'assert.equal(body.error, "invalid_email")',
+                score: 0.95
+              }
+            ],
+            symbols: []
+          };
+        }
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        if (rel === invitePath) {
+          return { path: rel, content: invite };
+        }
+        if (rel === signupPath) {
+          return { path: rel, content: signup };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: ask,
+        repoId: "github:acme/app",
+        action: "locate",
+        maxSteps: 6
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async () => "inviteUser throws when email is missing."
+      }
+    );
+    const attached =
+      (result.context?.read_file as { files?: Array<{ path?: string; content: string }> } | undefined)
+        ?.files ?? [];
+    assert.equal(
+      attached.some((file) => file.path === invitePath),
+      true,
+      `must attach invite_user, got ${attached.map((file) => file.path).join(", ")}`
+    );
+    assert.equal(
+      attached.some((file) => /signup/i.test(file.path ?? "")),
+      false
+    );
+    assert.match(attached.map((file) => file.content).join("\n"), /email is required/);
+    assert.doesNotMatch(result.answer ?? "", /Enter a valid email address/);
+  });
+
+  await test("API-reject hunt skips invite callers that rethrow and attaches the email check", async () => {
+    const callerPath = "app/org_api.ts";
+    const invitePath = "app/invite_user.ts";
+    const caller = [
+      "    try {",
+      "      inviteResult = await inviteUser({ email: adminEmail, role: \"admin\" });",
+      "    } catch (error) {",
+      "      if (isSeatLimitError(error)) {",
+      "        writeJson(response, 403, { error: error.code, seats: error.seats, used: error.used });",
+      "        return true;",
+      "      }",
+      "      throw error;",
+      "    }"
+    ].join("\n");
+    const invite = [
+      "export async function inviteUser(input) {",
+      "  const email = input.email.trim();",
+      "  if (!email) {",
+      '    throw new Error("email is required");',
+      "  }",
+      "}"
+    ].join("\n");
+    const ask =
+      "A client sent an org invite with a blank email — the API returns an error. Where does the API reject a bad email?";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: callerPath,
+              lineNumber: 2,
+              content: caller,
+              score: 0.99
+            },
+            {
+              fileName: invitePath,
+              lineNumber: 4,
+              content: 'throw new Error("email is required")',
+              score: 0.2
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        if (rel === callerPath) {
+          return { path: rel, content: caller };
+        }
+        if (rel === invitePath) {
+          return { path: rel, content: invite };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: ask,
+        repoId: "github:acme/app",
+        action: "locate",
+        maxSteps: 6
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async () => "inviteUser throws when email is missing."
+      }
+    );
+    const attached =
+      (result.context?.read_file as { files?: Array<{ path?: string; content: string }> } | undefined)
+        ?.files ?? [];
+    assert.equal(
+      attached.some((file) => file.path === invitePath),
+      true,
+      `must attach invite_user, got ${attached.map((file) => file.path).join(", ")}`
+    );
+    assert.equal(
+      attached.some((file) => file.path === callerPath),
+      false,
+      "must not stop on the invite caller rethrow"
+    );
+    assert.match(attached.map((file) => file.content).join("\n"), /email is required/);
+    assert.doesNotMatch(attached.map((file) => file.content).join("\n"), /adminEmail/);
+  });
+
+  await test("API-reject hunt jumps in-file from an invite caller to the email 400", async () => {
+    const apiPath = "src/server/org_api.ts";
+    const filler = Array.from({ length: 40 }, (_, i) => `  const unused${i} = ${i};`).join("\n");
+    const body = [
+      "    try {",
+      "      inviteResult = await inviteUser({ email: adminEmail, role: \"admin\" });",
+      "    } catch (error) {",
+      "      if (isSeatLimitError(error)) {",
+      "        writeJson(response, 403, { error: error.code, seats: error.seats, used: error.used });",
+      "        return true;",
+      "      }",
+      "      throw error;",
+      "    }",
+      filler,
+      "async function handleInviteUser(body, response) {",
+      "  const email = String(body.email ?? \"\").trim();",
+      "  if (!email) {",
+      '    writeJson(response, 400, { error: "email is required" });',
+      "    return true;",
+      "  }",
+      "}"
+    ].join("\n");
+    const ask =
+      "A client sent an org invite with a blank email — the API returns an error. Where does the API reject a bad email?";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: apiPath,
+              lineNumber: 2,
+              content:
+                "inviteResult = await inviteUser({ email: adminEmail, role: \"admin\" });",
+              score: 0.99
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        if (rel !== apiPath) {
+          return undefined;
+        }
+        return { path: rel, content: body };
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: ask,
+        repoId: "github:acme/app",
+        action: "locate",
+        maxSteps: 6
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async () => "The invite handler returns 400 when email is missing."
+      }
+    );
+    const attached =
+      (result.context?.read_file as { files?: Array<{ path?: string; content: string }> } | undefined)
+        ?.files ?? [];
+    const text = attached.map((file) => file.content).join("\n");
+    assert.match(text, /email is required/);
+    assert.doesNotMatch(text, /throw error/);
+  });
+
+  await test("API-reject miss is one pass: no second hunt, no re-read of skipped files", async () => {
+    const junk = [
+      "api/utils/item_filters.py",
+      "web/components/item-chip.tsx",
+      "api/db/migrations/0045_props.py"
+    ];
+    const searches: string[] = [];
+    const reads: string[] = [];
+    let planTurns = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async (_repo, query) => {
+          searches.push(query);
+          return {
+            source: "zoekt",
+            stale: false,
+            hits: junk.map((fileName, index) => ({
+              fileName,
+              lineNumber: 1,
+              content: `export const LABEL = "${query}";`,
+              score: 0.9 - index * 0.1
+            })),
+            symbols: []
+          };
+        }
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        return { path: rel, content: 'export const LABEL = "chip";\n' };
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message:
+          "A client sent a reviewer that isn’t on the team — the API returns an error. Where does the API reject a bad reviewer_id?",
+        repoId: "github:acme/app",
+        action: "locate",
+        maxSteps: 8
+      },
+      {
+        planTurn: async () => {
+          planTurns += 1;
+          return JSON.stringify({ tool: "search_code", args: { query: "reviewer" } });
+        },
+        streamAnswer: async () => "should not stream after an exhausted hunt"
+      }
+    );
+    assert.equal(planTurns, 0, `must not start a second hunt, planTurns=${planTurns}`);
+    assert.equal(
+      searches.length,
+      new Set(searches.map((q) => q.toLowerCase())).size,
+      `must not repeat search queries, got ${searches.join(" | ")}`
+    );
+    assert.ok(
+      reads.length < junk.length * 4,
+      `skipped files must not be re-read every query, reads=${reads.length} (${reads.join(", ")})`
+    );
+    for (const path of junk) {
+      const n = reads.filter((r) => r === path).length;
+      assert.ok(n <= 3, `${path} re-read ${n} times`);
+    }
+    assert.match(result.answer ?? "", /couldn.t find where the API rejects/i);
+    assert.doesNotMatch(result.answer ?? "", /casing aliases/i);
+    assert.doesNotMatch(result.answer ?? "", /should not stream/i);
   });
 
   console.log(`\nAgentOrchestrator: ${passed}/${passed + failed} tests passed`);

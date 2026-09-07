@@ -4,8 +4,10 @@ import { createHmac } from "node:crypto";
 import { BitbucketWebhookHandler, verifyBitbucketSignature } from "./bitbucketWebhookHandler";
 import { WebhookMonitor } from "../webhookMonitor";
 
-test("verifyBitbucketSignature accepts missing secret", () => {
-  assert.equal(verifyBitbucketSignature(undefined, Buffer.from("{}"), undefined).ok, true);
+test("verifyBitbucketSignature rejects missing secret", () => {
+  const result = verifyBitbucketSignature(undefined, Buffer.from("{}"), undefined);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "missing Bitbucket webhook secret");
 });
 
 test("verifyBitbucketSignature rejects bad signature when secret set", () => {
@@ -50,4 +52,19 @@ test("BitbucketWebhookHandler accepts repo:push", async () => {
   assert.equal(result.accepted, true);
   assert.equal(result.statusCode, 202);
   assert.equal(events.length, 1);
+});
+
+test("BitbucketWebhookHandler rejects when secret is unset", async () => {
+  const handler = new BitbucketWebhookHandler({
+    monitor: new WebhookMonitor(),
+    queue: { enqueue: async () => undefined }
+  });
+  const result = await handler.handle({
+    headers: { "x-event-key": "repo:push", "x-request-uuid": "delivery-unsigned" },
+    rawBody: Buffer.from("{}"),
+    body: {}
+  });
+  assert.equal(result.accepted, false);
+  assert.equal(result.statusCode, 401);
+  assert.match(result.message, /missing Bitbucket webhook secret/);
 });

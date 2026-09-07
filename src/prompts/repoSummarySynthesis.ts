@@ -24,6 +24,10 @@ import {
   repoSummarySourceLabelDependencies,
   repoSummarySourceLabelOwnership
 } from "./repoSummarySourceLabels";
+import { isLocateShapedRepoAsk } from "../chat/repoCodeIntent";
+
+/** Marker ModelRouter uses to rebuild the comprehension system prompt without the syllabus. */
+export const REPO_SUMMARY_LOCATE_ONLY_MARKER = "## Locate-only response";
 
 export const REPO_SUMMARY_EVIDENCE_SYSTEM = `You are an expert code architect helping engineers understand a repository.
 Summarize architecture, key systems, boundaries, and risks. Prefer evidence from the attached Sources card over speculation.
@@ -68,25 +72,42 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
   }
   lines.push("");
   lines.push("## Instructions");
-  if (input.userFocus?.trim()) {
+  const locateOnly = isLocateShapedRepoAsk(input.userFocus);
+  if (locateOnly) {
+    lines.push(REPO_SUMMARY_LOCATE_ONLY_MARKER);
+    lines.push(
+      "This ask is where something lives. Answer **Summary** + **Your question** with the attached implementation path chain. Omit **Architecture**, **Key subsystems**, **Entry points**, **Risks & unknowns**, and **Suggested next steps**. Do not cite Confluence or Notion. Do not pad a repo syllabus."
+    );
+  } else if (input.userFocus?.trim()) {
     lines.push(
       "Answer the ## User focus ask first (Summary + **Your question**). Then synthesize a **repository-wide** overview weighted toward that focus using `<repo_entry_files>`, `<graph_context>`, and manifest metadata in attached context."
+    );
+    lines.push(
+      "When the focus asks where something lives or how a flow works: **Your question** must name the attached files/symbols that answer that ask, before Architecture. If they also asked for files to read first: list the attached **domain** paths that support the answer — however many that is (2 is fine; 6 is fine). Do **not** pad to 5, repeat a file, or invent paths to fill a count. There is no official reading list. README / docker-compose / package.json only if that is the only evidence. Tests/migrations only if that is the only attached evidence. Never name a path that is not attached (no invented `models.py`). If the ask has multiple topics, cover each topic that has attached evidence. Architecture / Key subsystems FAIL if they are only compose service names (web, api, postgres, redis) with no domain path."
+    );
+    lines.push(
+      "If the focus asks where **the API** creates, writes, or rejects something: name attached serializer/view/handler/API paths in **Your question**. A frontend modal, store, or widget is not the API — do not call it that. If no API-layer files are attached, say the API path was not in attached evidence; never invent one."
+    );
+    lines.push(
+      "A `types.ts`, `interfaces/`, or `.d.ts` file defines shapes. It is not where a message is sent, handled, or dispatched. If the focus asks where something happens and the only attached files are type declarations, say the implementation path was not in attached evidence — do not name the types file as the send/handle path, and do not pad a reading list. If implementation files are attached, name those first."
     );
   } else {
     lines.push(
       "Synthesize a **repository-wide** overview using `<repo_entry_files>`, `<graph_context>`, and manifest metadata in attached context."
     );
   }
-  lines.push("Cover major subsystems, entry points, data/backend boundaries, integrations, and top risks.");
-  lines.push(
-    "For enterprise onboarding, call out deploy/CI entry points (workflows, Docker, deploy docs), external integrations (Slack, Jira, Confluence, OAuth/connect config), and configuration boundaries (env files, secrets handling, feature flags) — only when attached evidence supports them."
-  );
-  if (activeFile) {
+  if (!locateOnly) {
+    lines.push("Cover major subsystems, entry points, data/backend boundaries, integrations, and top risks.");
     lines.push(
-      `Include the required **How the open file fits** section for \`${activeFile}\` after **Key subsystems** — role, dependencies, dependents, integration surface, and owners from ## Active file context below. Keep **Architecture** and **Key subsystems** repo-wide; do not turn the whole answer into a file-only deep dive.`
+      "For enterprise onboarding, call out deploy/CI entry points (workflows, Docker, deploy docs), external integrations (Slack, Jira, Confluence, OAuth/connect config), and configuration boundaries (env files, secrets handling, feature flags) — only when attached evidence supports them."
     );
-  } else {
-    lines.push("Do **not** include **How the open file fits** — no active editor file is in scope.");
+    if (activeFile) {
+      lines.push(
+        `Include the required **How the open file fits** section for \`${activeFile}\` after **Key subsystems** — role, dependencies, dependents, integration surface, and owners from ## Active file context below. Keep **Architecture** and **Key subsystems** repo-wide; do not turn the whole answer into a file-only deep dive.`
+      );
+    } else {
+      lines.push("Do **not** include **How the open file fits** — no active editor file is in scope.");
+    }
   }
   appendMentionScopeSection(lines, input);
   if (activeFile) {
@@ -102,20 +123,26 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
   appendCitationKeysSection(lines, listRepoSummarySourceLabels(summaryEvidence));
   const sourcesChecklist = listRepoSummarySourcesChecklist(summaryEvidence);
   appendSourcesChecklistSection(lines, sourcesChecklist);
-  appendIntegrationDocsResponseContract(lines, integrationDocsFromRepoSummary(summaryEvidence));
+  if (!locateOnly) {
+    appendIntegrationDocsResponseContract(lines, integrationDocsFromRepoSummary(summaryEvidence));
+  }
   appendSupplementarySourceCitationGuardrails(lines, sourcesChecklist, [
     repoSummarySourceLabelOwnership(),
     repoSummarySourceLabelDependencies(),
     ...supplementaryKeysOmittedFromChecklist(listRepoSummarySourceLabels(summaryEvidence), sourcesChecklist)
   ]);
-  appendRepoSummaryCraftInstructions(lines, summaryEvidence);
+  if (!locateOnly) {
+    appendRepoSummaryCraftInstructions(lines, summaryEvidence);
+  }
   lines.push("Synthesize from evidence only. Follow the required response structure in your system instructions.");
   lines.push(
     "Every **Sources** bullet MUST start with an exact citation key from the checklist and keep the concrete fact after the em dash (or an equally specific fact from that source). Never leave the label blank; never use filler like \"contributed insights\" or \"provided details\"."
   );
-  lines.push(
-    "Close with a one-line pointer to the matching quick action for paths that need deeper follow-up: **Trace Decision** for decision history, **Find Owner** for CODEOWNERS and escalation, **Blast Radius** before editing a hot path, **Knowledge Gaps** for documentation holes."
-  );
+  if (!locateOnly) {
+    lines.push(
+      "Close with a one-line pointer to the matching quick action for paths that need deeper follow-up: **Trace Decision** for decision history, **Find Owner** for CODEOWNERS and escalation, **Blast Radius** before editing a hot path, **Knowledge Gaps** for documentation holes."
+    );
+  }
   return lines.join("\n");
 }
 
@@ -137,7 +164,7 @@ function appendRepoSummaryCraftInstructions(lines: string[], summary: RepoSummar
     "- **Risks & unknowns**: only path-tied or evidence-tied risks (config, deploy, missing docs *in the repo*). Do **not** treat disconnected or empty Coop integrations (Slack, Jira, Confluence, etc.) as repository risks unless the user asked about those tools or code evidence shows they are required."
   );
   lines.push(
-    "- **Suggested next steps**: 2–4 numbered items that name concrete paths from ## Repository evidence (e.g. `apps/api`, `packages/…`, `deployments/…`, a compose file, a workflow). Avoid generic \"read the README\" unless that is the only onboarding path in evidence."
+    "- **Suggested next steps**: 2–4 numbered items that name concrete paths from ## Repository evidence (e.g. `apps/api`, `packages/…`, `deployments/…`, a compose file, a workflow). When ## User focus asked for files to read first, list those attached domain files — the same paths as **Your question**, covering each attached topic. Avoid generic \"read the README\" unless that is the only onboarding path in evidence."
   );
   lines.push(
     "- **Sources** bullets: after each `[Sources: …]` label, keep one concrete fact (counts, top-level dirs, named anchors). Forbidden filler: \"contributed insights\", \"provided details\", \"offered information\"."

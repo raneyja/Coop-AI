@@ -13,7 +13,6 @@ export type SettingsScreen =
   | "integration-confluence"
   | "integration-notion"
   | "integration-google-docs"
-  | "team"
   | "workspace"
   | "preferences"
   | "model"
@@ -43,7 +42,6 @@ export const SETTINGS_SCREEN_TITLES: Record<SettingsDetailScreen, string> = {
   "integration-confluence": "Confluence",
   "integration-notion": "Notion",
   "integration-google-docs": "Google Docs",
-  team: "Identity links",
   workspace: "Workspace",
   preferences: "Preferences",
   model: "Model & chat",
@@ -55,7 +53,7 @@ const LEGACY_SCREEN_MAP: Record<string, SettingsScreen> = {
   "code-hosts": "tools",
   integrations: "tools",
   connections: "tools",
-  "identity-links": "team"
+  "identity-links": "preferences"
 };
 
 const PROVIDER_SETTINGS_SCREEN: Record<string, SettingsScreen> = {
@@ -93,7 +91,7 @@ export function settingsScreenParent(screen: SettingsScreen): SettingsScreen {
   ) {
     return "tools";
   }
-  if (screen === "model" || screen === "prompts" || screen === "team") {
+  if (screen === "model" || screen === "prompts") {
     return "preferences";
   }
   return "hub";

@@ -27,6 +27,11 @@ export type AgentToolContext = {
     repoId?: string;
   }) => Promise<{ path: string; content: string } | undefined>;
   /**
+   * Resolve a filename the user typed (`authMiddleware.ts`) to repo paths.
+   * Code-host / graph search — not a local workspace walk.
+   */
+  findFiles?: (options: { query: string; repoId?: string }) => Promise<string[]>;
+  /**
    * Mid-loop integration search. Only providers on {@link allowedIntegrations}
    * (or the per-run allowlist) may be called.
    */

@@ -231,6 +231,34 @@ export function loadProjectInstructions(options: LoadProjectInstructionsOptions)
   return { files, sourcePaths };
 }
 
+/**
+ * User-uploaded or Coop-created AGENTS.md. Never used to scan the open folder.
+ */
+export function loadAttachedAgentsMdFile(
+  fsPath: string,
+  readFile: ReadFileFn = (absolutePath) => {
+    try {
+      return fs.readFileSync(absolutePath, "utf8");
+    } catch {
+      return undefined;
+    }
+  }
+): ProjectInstructionFile | undefined {
+  const trimmed = fsPath.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const raw = readFile(trimmed);
+  if (raw === undefined || !raw.trim()) {
+    return undefined;
+  }
+  return {
+    path: path.basename(trimmed),
+    content: capInstructionContent(raw).content,
+    kind: "agents-md"
+  };
+}
+
 export function formatProjectInstructionsBlock(files: ProjectInstructionFile[]): string {
   if (!files.length) {
     return "";

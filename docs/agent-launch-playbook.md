@@ -503,7 +503,7 @@ Do these while agents run. Secrets go in `.env.backend` (gitignored) and Vercel 
 |----------|--------|
 | `STRIPE_SECRET_KEY` | Stripe Dashboard → Developers → API keys |
 | `STRIPE_WEBHOOK_SECRET` | Stripe Dashboard → Webhooks → signing secret |
-| `STRIPE_PRICE_ID_PRO` | Stripe Dashboard → Products → $20/mo price ID |
+| `STRIPE_PRICE_ID_PRO` | Stripe Dashboard → Products → $25/mo price ID |
 | `RESEND_API_KEY` | resend.com → API Keys |
 | `COOP_EMAIL_MOCK=false` | Set after Resend key added |
 | `COOP_REQUIRE_API_AUTH=true` | Production |

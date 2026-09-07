@@ -24,9 +24,9 @@ export function PanelWidthEnforcer({ vscode }: { vscode: VsCodeApi }): null {
     }
 
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
-    const root = document.documentElement;
 
-    const reportIfTooNarrow = (width: number) => {
+    const reportIfTooNarrow = () => {
+      const width = window.innerWidth;
       if (width >= COOP_PANEL_MIN_WIDTH) {
         return;
       }
@@ -39,16 +39,12 @@ export function PanelWidthEnforcer({ vscode }: { vscode: VsCodeApi }): null {
       }, ENFORCE_DEBOUNCE_MS);
     };
 
-    const observer = new ResizeObserver(([entry]) => {
-      reportIfTooNarrow(entry.contentRect.width);
-    });
-
-    observer.observe(root);
-    reportIfTooNarrow(root.clientWidth);
+    window.addEventListener("resize", reportIfTooNarrow);
+    reportIfTooNarrow();
 
     return () => {
       clearTimeout(debounceTimer);
-      observer.disconnect();
+      window.removeEventListener("resize", reportIfTooNarrow);
     };
   }, [vscode]);
 

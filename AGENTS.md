@@ -44,14 +44,14 @@ Use existing patterns (`coop-prompt-modal`, `coop-settings-card`, `coop-quick-ac
 
 ## Model assignments (operator-controlled)
 
-Production users do **not** pick provider or model. Assignments live in `src/config/featureModelAssignments.ts` and must be wired through settings UI, extension runtime, config writes, and server APIs. See `.cursor/rules/model-assignments.mdc` and `website/content/docs/model-assignments.md`. **Do not** add provider/model pickers without `canUserSelectModels({ devMode: true })` gating.
+Paid users can pick a catalog model (default **Auto**) from the **chat composer**. Settings → Model & chat explains Auto vs a picked model — it is not a second picker. Auto still follows `src/config/featureModelAssignments.ts`. Free stays Auto-only. Autocomplete, intent, evidence, and PR notes always use the assignment. See `.cursor/rules/model-assignments.mdc` and `website/content/docs/model-assignments.md`.
 
 ## Other areas
 
 - Marketing site: `website/` (separate Tailwind stack; not shared with the extension webview)
 - **Marketing site canonical:** production is [https://coop-ai.dev](https://coop-ai.dev) (`main`). Homepage hero = `HeroDemoArtifact.tsx` (light theme, `// question` → `// response`). Legacy dark mock = `FileContextStoryDemo.tsx` — not the live homepage. Local dev: `cd website && npm run dev` → **http://localhost:3001**. See `.cursor/rules/website-canonical.mdc`.
 - Backend/docs: `docs/`
-- **Agent dogfood (Jon):** [docs/agent-dogfood.md](docs/agent-dogfood.md) — Extension Host checklist (always-on agent, hunt + Slack/Jira, Apply → PR)
+- **Agent dogfood (Jon):** [docs/agent-dogfood.md](docs/agent-dogfood.md) — Extension Host checklist. Plane = locate/Stop/`/edit` (no Slack/Jira). Coop-AI = hunt + Slack/Jira on **COOP-101**.
 - Enterprise integration onboarding: `docs/enterprise-integration-onboarding.md` (operator vs org admin vs developer)
 - Production Connect checklist: `docs/connect-integrations-production.md`
 - API deploy (Railway): `docs/deploy-railway.md`

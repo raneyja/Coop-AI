@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { completeOnboarding, fetchOrg, fetchOrgRepos, fetchUsers } from "@/lib/coopApi";
 import { displayOrgName, getStoredMe } from "@/lib/auth";
-import type { IntegrationStatus } from "@/lib/integrations";
+import { integrationIsConnected, type IntegrationStatus } from "@/lib/integrations";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { isFullyUsable } from "@/lib/indexingProgress";
 import { IntegrationsStep } from "./IntegrationsStep";
@@ -58,7 +58,9 @@ function stepsForPlan(plan: string) {
 
 function collaborationConnected(integrations: IntegrationStatus[]): boolean {
   const collab = ["slack", "atlassian", "notion", "google-docs"] as const;
-  return collab.some((provider) => integrations.find((i) => i.provider === provider)?.installed);
+  return collab.some((provider) =>
+    integrationIsConnected(integrations.find((entry) => entry.provider === provider))
+  );
 }
 
 export function OnboardingWizard({
@@ -91,9 +93,15 @@ export function OnboardingWizard({
   const [usableRepoCount, setUsableRepoCount] = useState(0);
   const [repoAccessMode, setRepoAccessMode] = useState<"all_indexed" | "per_user">("all_indexed");
 
-  const githubConnected = integrations.find((i) => i.provider === "github")?.installed;
-  const gitlabConnected = integrations.find((i) => i.provider === "gitlab")?.installed;
-  const bitbucketConnected = integrations.find((i) => i.provider === "bitbucket")?.installed;
+  const githubConnected = integrationIsConnected(
+    integrations.find((entry) => entry.provider === "github")
+  );
+  const gitlabConnected = integrationIsConnected(
+    integrations.find((entry) => entry.provider === "gitlab")
+  );
+  const bitbucketConnected = integrationIsConnected(
+    integrations.find((entry) => entry.provider === "bitbucket")
+  );
   const anyCodeHostConnected = githubConnected || gitlabConnected || bitbucketConnected;
   const wideStep = currentStepId === "tools";
 
@@ -258,7 +266,7 @@ export function OnboardingWizard({
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">
                   {isFreePlan
                     ? "Connect your personal developer tools once, then keep coding in the Coop VS Code extension with your own API key."
-                    : "Connect your organization's tools once — every developer inherits access in the VS Code extension."}
+                    : "Connect your tools once. You have admin access. Invite teammates later if you add seats."}
                 </p>
               </div>
               <ul className="space-y-2 text-sm text-coop-muted">
@@ -273,7 +281,7 @@ export function OnboardingWizard({
                     <li>1. Connect at least one code host (collaboration tools optional)</li>
                     <li>2. Choose repos to Deep-Index</li>
                     <li>3. Set collaboration access scope</li>
-                    <li>4. Choose who can open repos, then invite your team</li>
+                    <li>4. Choose who can open repos. Invite others later if you add seats.</li>
                   </>
                 )}
               </ul>

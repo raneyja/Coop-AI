@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { lightHighlight } from "./lightHighlight";
+import { lightHighlight, MAX_HIGHLIGHT_CHARS, splitTokensByLine } from "./lightHighlight";
 
 let passed = 0;
 let failed = 0;
@@ -52,6 +52,32 @@ test("property access after a dot is classified", () => {
   const kinds = kindsFor(`req.headers.authorization`, "typescript");
   assert.equal(kinds.headers, "property");
   assert.equal(kinds.authorization, "property");
+});
+
+test("bash fences color strings and hash comments, not monochrome", () => {
+  const kinds = kindsFor("find . -type f -printf '%s %p\\n' # sizes\n", "bash");
+  assert.equal(kinds["'%s %p\\n'"], "string");
+  assert.equal(kinds["# sizes"], "comment");
+});
+
+test("splitTokensByLine keeps kind across wrapped lines", () => {
+  const lines = splitTokensByLine([
+    { text: "foo\nbar", kind: "keyword" },
+    { text: "\nbaz", kind: "plain" }
+  ]);
+  assert.equal(lines.length, 3);
+  assert.equal(lines[0]![0]?.text, "foo");
+  assert.equal(lines[1]![0]?.text, "bar");
+  assert.equal(lines[2]![0]?.text, "baz");
+});
+
+test("huge code blocks highlight without hanging the webview", () => {
+  const started = Date.now();
+  const code = `${"x = 1\n".repeat(80)}${"a" + "b".repeat(MAX_HIGHLIGHT_CHARS)}`;
+  const tokens = lightHighlight(code, "python");
+  assert.ok(Date.now() - started < 500, "highlighter hung on a huge block");
+  assert.ok(tokens.length >= 1);
+  assert.equal(tokens[tokens.length - 1]?.kind, "plain");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

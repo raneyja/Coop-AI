@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { CodeHostProviderPreference, PatchCardState, PatchPreviewHunk } from "../chat/types";
 import { PatchDiffView } from "./PatchDiffView";
 import { CreatePullRequestModal } from "./components/CreatePullRequestModal";
@@ -15,8 +15,11 @@ import {
   defaultPrBranchName,
   defaultPrTitle,
   filesWithContent,
-  type CreatePullRequestDraft
+  type CreatePullRequestCreated,
+  type CreatePullRequestDraft,
+  type CreatePullRequestFile
 } from "./createPullRequestConfirm";
+import { formatPatchLandingCopy } from "./patchLocationLabel";
 
 type PatchCardProps = {
   state: PatchCardState;
@@ -36,6 +39,18 @@ type PatchCardProps = {
     proposalId: string | null
   ) => void;
   onCreatePullRequest?: (draft: CreatePullRequestDraft) => void | Promise<void>;
+  onRequestPrNotes?: () => void;
+  onOpenPrLink?: (url: string) => void;
+  onClearPrResult?: () => void;
+  prNotesLoading?: boolean;
+  generatedPrNotes?: string;
+  prCreated?: CreatePullRequestCreated;
+  prCreateError?: string;
+  /** Host asked to open the same confirm modal as the Create pull request button. */
+  openCreatePrRequested?: boolean;
+  onOpenCreatePrConsumed?: () => void;
+  /** Thread-level Create a PR — every Applied /edit, not only this card. */
+  createPrFilesOverride?: CreatePullRequestFile[];
 };
 
 function pendingEditCount(state: PatchCardState): number {
@@ -107,13 +122,55 @@ export function PatchCard({
   onRejectHunk,
   onToggleMatchLocation,
   onSelectSharedProposal,
-  onCreatePullRequest
+  onCreatePullRequest,
+  onRequestPrNotes,
+  onOpenPrLink,
+  onClearPrResult,
+  prNotesLoading,
+  generatedPrNotes,
+  prCreated,
+  prCreateError,
+  openCreatePrRequested,
+  onOpenCreatePrConsumed,
+  createPrFilesOverride
 }: PatchCardProps): React.ReactElement | null {
   const [prModalOpen, setPrModalOpen] = useState(false);
   const [prSubmitting, setPrSubmitting] = useState(false);
   const [prError, setPrError] = useState<string | undefined>();
+  const [modalFiles, setModalFiles] = useState<CreatePullRequestFile[] | undefined>();
   const submitGuard = useMemo(() => createConfirmSubmitGuard(), []);
-  const prFiles = filesWithContent(state.prFiles);
+  const prFiles = filesWithContent(modalFiles ?? state.prFiles);
+
+  useEffect(() => {
+    if (!prCreated?.htmlUrl) {
+      return;
+    }
+    setPrSubmitting(false);
+  }, [prCreated?.htmlUrl]);
+
+  useEffect(() => {
+    if (!openCreatePrRequested) {
+      return;
+    }
+    if (!showCreatePullRequestButton(state)) {
+      onOpenCreatePrConsumed?.();
+      return;
+    }
+    setPrError(undefined);
+    onClearPrResult?.();
+    setModalFiles(createPrFilesOverride);
+    setPrModalOpen(true);
+    onRequestPrNotes?.();
+    onOpenCreatePrConsumed?.();
+  }, [openCreatePrRequested]);
+
+  useEffect(() => {
+    if (!prCreateError) {
+      return;
+    }
+    setPrSubmitting(false);
+    setPrError(prCreateError);
+  }, [prCreateError]);
 
   if (!shouldRenderPatchCard(state)) {
     return null;
@@ -157,18 +214,21 @@ export function PatchCard({
             ? "warning"
             : "default";
 
+  const landingCopy =
+    state.status === "applied" ? formatPatchLandingCopy(state.files, state.status) : undefined;
   const reviewCopy =
-    state.status === "applied"
-      ? "Changes are in your workspace. Undo restores the files and brings back Apply / Reject."
+    landingCopy ??
+    (state.status === "applied"
+      ? "Undo if this is the wrong spot."
       : state.status === "rejected"
-        ? "Rejected patches stay in this thread. Undo returns Apply / Reject without regenerating."
+        ? "Not applied. Undo to review again."
         : state.status === "failed"
           ? "Select match locations or regenerate with /edit, then try again."
           : hasAmbiguous
             ? "This edit matches multiple places — select one or more options below, then Apply."
             : multiEdit
               ? "Review each edit below — Apply or Reject individually, or apply all remaining."
-              : "Review the diff below, then apply changes to your workspace.";
+              : undefined);
 
   const showBulkActions = (state.status === "pending" || state.status === "failed") && pending > 1;
   const showSingleActions =
@@ -199,9 +259,9 @@ export function PatchCard({
       <IntegrationResultSection className="coop-patch-card-section">
         {state.error ? (
           <IntegrationResultText muted>{state.error}</IntegrationResultText>
-        ) : (
+        ) : reviewCopy ? (
           <IntegrationResultText muted>{reviewCopy}</IntegrationResultText>
-        )}
+        ) : null}
         {state.files.length > 0 ? (
           <div className="coop-patch-diff-scroll">
             <PatchDiffView
@@ -262,7 +322,10 @@ export function PatchCard({
             <CreatePullRequestButton
               onClick={() => {
                 setPrError(undefined);
+                onClearPrResult?.();
+                setModalFiles(undefined);
                 setPrModalOpen(true);
+                onRequestPrNotes?.();
               }}
             />
           ) : null}
@@ -281,9 +344,15 @@ export function PatchCard({
         files={prFiles}
         submitting={prSubmitting}
         error={prError}
+        notesLoading={prNotesLoading}
+        generatedNotes={generatedPrNotes}
+        created={prCreated}
+        onOpenLink={onOpenPrLink}
         onClose={() => {
           if (!prSubmitting) {
             setPrModalOpen(false);
+            setModalFiles(undefined);
+            onClearPrResult?.();
           }
         }}
         onConfirm={(draft) => {
@@ -292,10 +361,8 @@ export function PatchCard({
             setPrError(undefined);
             try {
               await onCreatePullRequest?.({ ...draft, base: defaultBranch, provider: codeHostProvider });
-              setPrModalOpen(false);
             } catch (error) {
               setPrError(error instanceof Error ? error.message : "Could not create the pull request.");
-            } finally {
               setPrSubmitting(false);
             }
           });
@@ -327,7 +394,13 @@ export function shouldRenderPatchCard(state: PatchCardState | undefined): boolea
 
 /** UX-G4: one quiet Create PR after Apply — not on the pending Apply/Reject row. */
 export function showCreatePullRequestButton(state: PatchCardState): boolean {
-  return state.status === "applied" && state.canCreatePr === true;
+  if (state.status !== "applied") {
+    return false;
+  }
+  if (state.canCreatePr === true) {
+    return true;
+  }
+  return (state.prFiles ?? []).some((file) => file.path.trim() && file.content.length > 0);
 }
 
 export function findPatchCardForMessage(

@@ -51,7 +51,7 @@ export class CoopChatPanel {
       api,
       services,
       sessionId,
-      { startBlank: options?.moveToNewWindow === true }
+      { startBlank: true }
     );
     CoopChatPanel.panels.set(sessionId, instance);
     panel.reveal(vscode.ViewColumn.Active, true);

@@ -7,12 +7,12 @@ export const siteConfig = {
   tagline: "From your stack, to your codebase.",
   subheadline:
     "Slack threads, Jira tickets, and symbol graphs in every answer and every line you write.",
-  contactEmail: "hello@coop-ai.dev",
+  contactEmail: "support@coop-ai.dev",
   privacyEmail: "privacy@coop-ai.dev",
   securityEmail: "security@coop-ai.dev",
   seo: {
     defaultDescription:
-      "CoopAI is code intelligence for VS Code. Understand code, trace decisions, and find owners using context from your repo, Slack, and Jira in every answer.",
+      "CoopAI is a code intelligence agent for VS Code. Understand and write code, using context from your entire code stack.",
     ogImageAlt: "CoopAI: code intelligence for VS Code",
     pages: {
       product: {
@@ -33,7 +33,7 @@ export const siteConfig = {
       pricing: {
         title: "Pricing | Plans for engineering teams",
         description:
-          "CoopAI pricing: free Developer plan, Pro at $20/user/month, and Enterprise with org-wide context and deployment options."
+          "CoopAI pricing: free Developer plan, Pro at $25/user/month, and Enterprise with org-wide context and deployment options."
       },
       security: {
         title: "Security | Zero-clone architecture",

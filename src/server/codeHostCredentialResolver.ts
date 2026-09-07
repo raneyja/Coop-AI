@@ -120,18 +120,35 @@ export function createGithubAppService(
  * resolveGithubTokenForOrg but works for any provider stored in
  * code_host_installations:
  *
- *   1. Valid cached installation token (not near expiry) → return immediately.
- *   2. Near-expiry or missing token but connector present → refresh and store.
- *   3. No installation record and allowPatFallback → read from org_credentials.
- *   4. Otherwise → undefined (caller should surface an auth error).
+ *   1. forceRefresh + connector → mint a new token (Create PR after App permission upgrades).
+ *   2. Valid cached installation token (not near expiry) → return immediately.
+ *   3. Near-expiry or missing token but connector present → refresh and store.
+ *   4. No installation record and allowPatFallback → read from org_credentials.
+ *   5. Otherwise → undefined (caller should surface an auth error).
  */
 export async function resolveCodeHostTokenForOrg(
   orgId: string,
   provider: CodeHostProvider,
-  deps: GenericCredentialResolverDeps
+  deps: GenericCredentialResolverDeps,
+  options?: { forceRefresh?: boolean }
 ): Promise<string | undefined> {
   const installation = await deps.orgStore.getCodeHostInstallation(orgId, provider);
   if (installation) {
+    if (options?.forceRefresh && deps.connector) {
+      try {
+        const refreshed = await deps.connector.refreshInstallationToken(installation.installationId);
+        await deps.orgStore.upsertCodeHostInstallation(
+          orgId,
+          provider,
+          installation.installationId,
+          refreshed.token,
+          refreshed.expiresAt
+        );
+        return refreshed.token;
+      } catch {
+        // Fall through to a still-valid cached token.
+      }
+    }
     const expiresAt = installation.tokenExpiresAt.getTime();
     if (expiresAt - Date.now() > TOKEN_REFRESH_BUFFER_MS) {
       const token = await deps.orgStore.getInstallationToken(orgId, provider);

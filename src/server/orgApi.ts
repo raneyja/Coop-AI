@@ -30,6 +30,12 @@ import { ORG_INDEXING_PLANS, requireCodeHostPlan, requireRemoteCodePlan } from "
 import { AuditLogger, auditActor } from "./audit/auditLogger";
 import { resolveCodeHostTokenForOrg } from "./codeHostCredentialResolver";
 import { getConnector } from "./codeHostConnectors/registry";
+import { githubOAuthSyntheticInstallationId } from "./codeHostConnectors/githubOAuthConnector";
+import {
+  httpStatusForPullWriteReason,
+  inspectGithubPullWrite,
+  type InspectGithubPullWriteOptions
+} from "./githubPullWriteReadiness";
 import { CollectionStore } from "./collectionStore";
 import { normalizeIdentityDirectory } from "../identity/identityDirectory";
 import { mergeSelfIdentityHints } from "../identity/identityAutoSeed";
@@ -38,6 +44,7 @@ import { OrgIdentityDirectoryStore } from "./orgIdentityDirectoryStore";
 import { buildIdentityConnectionHints } from "./identityHintsService";
 import type { IntegrationConnectionStore } from "./integrationConnectionStore";
 import type { IntegrationScopePolicyStore } from "./integrationScopePolicyStore";
+import type { IntegrationApiDeps } from "./integrationApi";
 import type { ServerConfig } from "./serverConfig";
 import { createPlanQuotaService } from "./planQuota";
 import type { EstateSyncService } from "./estateSyncService";
@@ -51,7 +58,6 @@ import {
 } from "./resolveAccessibleRepos";
 import { usesAdminRepoAccessPolicy } from "./repoAccessTypes";
 import type { GitHubAppService } from "./githubAppService";
-import { githubOAuthSyntheticInstallationId } from "./codeHostConnectors/githubOAuthConnector";
 import { repoIdFromCoordinates, coordinatesFromRepoId, type CodeHostProvider } from "../api/codeHosts/types";
 import { loadGitLabAppConfig, gitlabApiBaseUrl } from "./gitlabAppConfig";
 import { runCatalogSyncForProvider, CatalogSyncError, codeHostDisplayName } from "./catalogSyncService";
@@ -78,6 +84,10 @@ export type OrgApiDeps = {
   usageTracker?: UsageTracker;
   integrationStore?: IntegrationConnectionStore;
   scopePolicyStore?: IntegrationScopePolicyStore;
+} & Pick<
+  IntegrationApiDeps,
+  "atlassianApp" | "notionApp" | "googleDocsApp" | "teamsApp" | "slackApp"
+> & {
   createPullFromFiles?: (
     coords: RepoCoordinates,
     input: CreatePullRequestInput,
@@ -212,7 +222,15 @@ export async function handleOrgApiRequest(
   if (parsed.method === "GET" && parsed.pathname === "/v1/me") {
     const plan = (await resolveOrgPlanFromDb(deps.orgStore, auth!)) ?? auth!.plan;
     const planQuota = createPlanQuotaService(deps.usageTracker);
+    const storedOrg = deps.orgStore ? await deps.orgStore.getOrganization(auth.orgId) : undefined;
     const quota = await planQuota.getSnapshot(auth.orgId, plan);
+    const usageMeters = await planQuota.getUsageMeters(
+      auth.orgId,
+      plan,
+      storedOrg?.usageTier,
+      new Date(),
+      storedOrg?.createdAt
+    );
     const indexedRepoQuota =
       deps.orgStore && auth.orgId !== "legacy"
         ? await getIndexedRepoQuota(deps.orgStore, auth.orgId, plan)
@@ -264,7 +282,9 @@ export async function handleOrgApiRequest(
       workspaceRepoLimit: workspaceRepoQuota?.limit,
       canAddMoreWorkspaceRepos: workspaceRepoQuota?.canAddMore,
       primaryWorkspaceRepoId: workspaceRepoQuota?.primaryRepoId,
-      quota
+      quota,
+      usageMeters,
+      usageTier: storedOrg?.usageTier ?? undefined
     });
     return true;
   }
@@ -576,7 +596,7 @@ export async function handleOrgApiRequest(
 
   const remoteRepoApiMatch =
     parsed.method === "GET" &&
-    /^\/v1\/orgs\/repos\/[^/]+\/(manifest|inventory|metadata|files|tree|file-count|search|blame|history|commits|pulls|issues)/.test(
+    /^\/v1\/orgs\/repos\/[^/]+\/(manifest|inventory|metadata|files|tree|file-count|search|blame|history|commits|pulls|pull-write-check|issues)/.test(
       parsed.pathname
     );
   if (remoteRepoApiMatch) {
@@ -677,6 +697,14 @@ export async function handleOrgApiRequest(
     const repoId = decodeURIComponent(repoIssuesMatch[1]);
     await handleGetRepoIssues(repoId, parsed, response, deps, auth!);
     await audit(deps, auth!, "repo.issues.fetch", { repoId, state: parsed.query?.get("state") ?? undefined });
+    return true;
+  }
+
+  const pullWriteCheckMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\/pull-write-check$/);
+  if (parsed.method === "GET" && pullWriteCheckMatch) {
+    const repoId = decodeURIComponent(pullWriteCheckMatch[1]);
+    await handleRepoPullWriteCheck(repoId, response, deps, auth!);
+    await audit(deps, auth!, "repo.pull.write_check", { repoId });
     return true;
   }
 
@@ -1128,6 +1156,96 @@ async function handleStoreGithubCredential(
   }
 }
 
+function inspectPullWriteOptions(
+  orgId: string,
+  target: { owner: string; repo: string },
+  deps: OrgApiDeps
+): InspectGithubPullWriteOptions {
+  return {
+    orgId,
+    owner: target.owner,
+    repo: target.repo,
+    orgStore: deps.orgStore!,
+    githubApp: deps.githubApp,
+    allowPatFallback: deps.serverConfig.devMode
+  };
+}
+
+/**
+ * GitHub goes through the readiness inspector so a refusal names its own cause.
+ * Other hosts keep the shared credential resolver.
+ */
+async function resolveTokenForCreatePull(
+  orgId: string,
+  target: { provider: CodeHostProvider; owner: string; repo: string },
+  deps: OrgApiDeps
+): Promise<string | undefined> {
+  if (target.provider === "github") {
+    const readiness = await inspectGithubPullWrite(inspectPullWriteOptions(orgId, target, deps));
+    if (!readiness.ok || !readiness.token) {
+      throw new CodeHostError(
+        readiness.githubDetail ? `${readiness.message} (${readiness.githubDetail})` : readiness.message,
+        "auth",
+        httpStatusForPullWriteReason(readiness.reason),
+        "github"
+      );
+    }
+    return readiness.token;
+  }
+  return resolveCodeHostTokenForOrg(
+    orgId,
+    target.provider,
+    {
+      orgStore: deps.orgStore!,
+      connector: getConnector(target.provider),
+      allowPatFallback: deps.serverConfig.devMode
+    },
+    { forceRefresh: true }
+  );
+}
+
+async function handleRepoPullWriteCheck(
+  repoId: string,
+  response: ServerResponse,
+  deps: OrgApiDeps,
+  auth: NonNullable<Awaited<ReturnType<typeof resolveAuthContext>>>
+): Promise<void> {
+  if (!deps.orgStore) {
+    writeJson(response, 503, { error: "organization database not configured" });
+    return;
+  }
+  let target: ReturnType<typeof parseRepoId>;
+  try {
+    target = parseRepoId(repoId);
+  } catch (error) {
+    writeJson(response, 400, { error: error instanceof Error ? error.message : "Invalid repoId" });
+    return;
+  }
+  if (target.provider !== "github") {
+    writeJson(response, 400, { error: "pull-write-check is only available for GitHub repos." });
+    return;
+  }
+  try {
+    const readiness = await inspectGithubPullWrite(inspectPullWriteOptions(auth.orgId, target, deps));
+    writeJson(response, 200, {
+      repoId,
+      provider: target.provider,
+      ok: readiness.ok,
+      reason: readiness.reason,
+      message: readiness.message,
+      tokenKind: readiness.tokenKind,
+      installationId: readiness.installationId,
+      accountLogin: readiness.accountLogin,
+      installationUrl: readiness.installationUrl,
+      grantedPermissions: readiness.grantedPermissions,
+      switchedFromInstallationId: readiness.switchedFromInstallationId,
+      githubDetail: readiness.githubDetail
+    });
+  } catch (error) {
+    writeCodeHostError(response, error, "failed to check pull request write access");
+  }
+}
+
 async function handleCreateRepoPull(
   repoId: string,
   parsed: ParsedRequest,
@@ -1155,11 +1273,18 @@ async function handleCreateRepoPull(
     return;
   }
 
-  const token = await resolveCodeHostTokenForOrg(auth.orgId, target.provider, {
-    orgStore: deps.orgStore,
-    connector: getConnector(target.provider),
-    allowPatFallback: deps.serverConfig.devMode
-  });
+  let token: string | undefined;
+  try {
+    token = await resolveTokenForCreatePull(auth.orgId, target, deps);
+  } catch (error) {
+    if (error instanceof CodeHostError) {
+      writeJson(response, error.status ?? 502, { error: error.message, code: error.code });
+      return;
+    }
+    const message = error instanceof Error ? error.message : "failed to create pull request";
+    writeJson(response, 502, { error: message });
+    return;
+  }
   if (!token) {
     writeJson(response, 401, {
       error: `${target.provider} App is not installed for this organization. Install it from CoopAI settings.`

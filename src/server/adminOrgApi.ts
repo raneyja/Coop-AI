@@ -47,6 +47,7 @@ export async function handleAdminOrgRequest(
       id: org.id,
       name: org.name,
       plan,
+      usageTier: org.usageTier ?? (plan === "pro" ? "pro" : null),
       repoAccessMode: org.repoAccessMode,
       createdAt: org.createdAt,
       memberCount: activeMemberCount,
@@ -104,6 +105,7 @@ export async function handleAdminOrgRequest(
 
     writeJson(response, 200, {
       plan,
+      usageTier: billing?.usageTier ?? (plan === "pro" ? "pro" : null),
       seats,
       stripeSeats,
       status: billing?.billingStatus ?? "manual",

@@ -206,7 +206,7 @@ Set `GOOGLE_SHEETS_WEBHOOK_URL` to that URL in Vercel environment variables (and
 2. **Confirm the variable** in Vercel → Settings → Environment Variables → Production (not only Preview, if you test on production domain).
 3. **Web app access** must be **Anyone** (not “Anyone with a Google account”) or server POSTs from Vercel will fail.
 4. **Use the `/exec` URL** from Deploy → Manage deployments (not an old `/dev` test URL).
-5. **Browser check:** DevTools → Network → submit the form → click `submit` → Response should be `{"ok":true}`. If `503`, the env var is missing on that deployment.
+5. **Browser check:** DevTools → Network → submit the form → click `submit` → Response should be `{"ok":true}`. If `503`, the env var is missing on that deployment. If `502` with Google **405**, the webhook helper must GET the Apps Script redirect (not POST it again).
 6. **Test Google directly** (replace URL):
 
 ```bash

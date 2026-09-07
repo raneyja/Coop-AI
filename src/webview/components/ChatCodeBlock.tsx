@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { lightHighlight } from "../lib/lightHighlight";
+import React, { useEffect, useState } from "react";
+import { ChatCodeSurfaceBody } from "./ChatCodeSurfaceBody";
 
 type ChatCodeBlockProps = {
   language?: string;
@@ -7,15 +7,25 @@ type ChatCodeBlockProps = {
   className?: string;
 };
 
+const HIDDEN_ANONYMOUS_LABELS = new Set(["text", "plaintext"]);
+
+/** Header label for invented examples. Never TEXT — that was the old markdown card. */
+export function anonymousCodeSurfaceLabel(language?: string): string | undefined {
+  const lang = language?.trim().toLowerCase();
+  if (!lang || HIDDEN_ANONYMOUS_LABELS.has(lang)) {
+    return undefined;
+  }
+  return lang;
+}
+
 /**
  * Anonymous / invented example fences only.
- * Still uses IDE chrome + token colors — never a bland monochrome markdown dump.
- * Repo references must use ChatCodeCitation (cite surface).
+ * Same coop-patch-file family as cite — not a ChatGPT language-badge + Copy card.
  */
 export function ChatCodeBlock({ language, code, className }: ChatCodeBlockProps): React.ReactElement {
   const [copied, setCopied] = useState(false);
-  const tokens = useMemo(() => lightHighlight(code, language), [code, language]);
-  const languageLabel = language?.trim().toLowerCase() || undefined;
+  const label = anonymousCodeSurfaceLabel(language);
+  const hasPreview = code.trim().length > 0;
 
   useEffect(() => {
     if (!copied) {
@@ -24,10 +34,6 @@ export function ChatCodeBlock({ language, code, className }: ChatCodeBlockProps)
     const timer = window.setTimeout(() => setCopied(false), 1200);
     return () => window.clearTimeout(timer);
   }, [copied]);
-
-  const rootClassName = className
-    ? `coop-chat-code-block coop-chat-code-block--ide ${className}`
-    : "coop-chat-code-block coop-chat-code-block--ide";
 
   const handleCopy = async (): Promise<void> => {
     try {
@@ -38,28 +44,19 @@ export function ChatCodeBlock({ language, code, className }: ChatCodeBlockProps)
     }
   };
 
+  const rootClassName = ["coop-patch-file", "coop-chat-citation", className].filter(Boolean).join(" ");
+
   return (
-    <div className={rootClassName} data-code-surface="anonymous">
-      <div className="coop-chat-code-header coop-chat-code-header--ide">
-        {languageLabel ? <span className="coop-chat-code-lang">{languageLabel}</span> : <span />}
-        <button type="button" className="coop-text-btn coop-chat-code-copy" onClick={handleCopy}>
-          {copied ? "Copied" : "Copy"}
-        </button>
+    <section className={rootClassName} data-code-surface="anonymous">
+      <div className="coop-patch-file-header">
+        {label ? <span className="coop-patch-file-lang">{label}</span> : <span />}
+        {hasPreview ? (
+          <button type="button" className="coop-text-btn" onClick={handleCopy}>
+            {copied ? "Copied" : "Copy"}
+          </button>
+        ) : null}
       </div>
-      <pre>
-        <code>
-          {tokens.map((token, index) => (
-            <span
-              key={`token-${index}`}
-              className={
-                token.kind === "plain" ? undefined : `coop-chat-code-token coop-chat-code-token--${token.kind}`
-              }
-            >
-              {token.text}
-            </span>
-          ))}
-        </code>
-      </pre>
-    </div>
+      <ChatCodeSurfaceBody code={code} language={language} />
+    </section>
   );
 }

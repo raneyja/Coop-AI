@@ -18,6 +18,21 @@ const APPLY_LANGUAGE_RE =
 const EDIT_TARGET_HINT_RE =
   /\b(in this (?:file|function|method|class)|this (?:file|function|method)|validate_\w+|def \w+|function \w+|method)\b/i;
 
+/**
+ * A symbol the user typed: `extractBearerToken`, `AuthContext`, `get_queryset`.
+ * Copilot's /fix ask names the broken function and nothing else, so a bare
+ * identifier is as concrete a target as "this function".
+ */
+const NAMED_CODE_SYMBOL_RE =
+  /\b(?:[a-z][a-z0-9]*[A-Z][a-zA-Z0-9]*|[A-Z][a-z0-9]+[A-Z][a-zA-Z0-9]*|[a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/;
+
+/**
+ * Repo-wide changes ("rename verifyToken across the repo") must reach the agent
+ * hunt instead of anchoring to whatever tab happens to be open.
+ */
+const REPO_WIDE_CHANGE_RE =
+  /\b(?:across|throughout)\s+(?:the\s+|this\s+|our\s+)?(?:repo|repository|codebase|code\s?base|project|app)\b|\b(?:repo|repository|project)-wide\b|\beverywhere\b|\bin\s+(?:every|all)\s+\w+/i;
+
 /** Shown when explicit /edit has no open file / @mention to anchor a patch. */
 export const EDIT_NO_TARGET_FILE_ERROR =
   "Open a file in the editor (or @mention one), then use /edit so Coop can emit an apply-able patch for that path.";
@@ -90,7 +105,10 @@ export function isConcreteFileEditAsk(message: string): boolean {
     return false;
   }
   // Edit verb alone is too broad ("add context about X"); require a code/apply target hint.
-  return EDIT_TARGET_HINT_RE.test(text) || /`[^`]+`/.test(text) || /\bValidationError\b/.test(text);
+  if (EDIT_TARGET_HINT_RE.test(text) || /`[^`]+`/.test(text) || /\bValidationError\b/.test(text)) {
+    return true;
+  }
+  return NAMED_CODE_SYMBOL_RE.test(text) && !REPO_WIDE_CHANGE_RE.test(text);
 }
 
 /** True when an edit-mode send should record edit.requested and patch retry context. */

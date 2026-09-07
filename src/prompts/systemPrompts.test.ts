@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { buildUserMessageWithContext, formatChatMessageWithLocalFiles, systemPromptForUseCase } from "./systemPrompts";
+import { buildUserMessageWithContext, formatChatMessageWithLocalFiles, OPEN_FILE_PR_REVIEW_DIRECTIVE, systemPromptForUseCase } from "./systemPrompts";
+import { COPILOT_C4_ASK } from "../api/agent/dogfoodContract";
 
 let passed = 0;
 let failed = 0;
@@ -36,6 +37,27 @@ test("chat use case includes audience and output contract", () => {
   assert.ok(prompt.includes("## Required response structure"));
 });
 
+test("chat use case asks for right-sized dense answers that still finish", () => {
+  const prompt = systemPromptForUseCase("chat");
+  assert.ok(prompt.includes("Be dense, not thin"));
+  assert.ok(prompt.includes("Extra citations and 15+ peer bullets are fatigue, not density"));
+  assert.ok(prompt.includes("Match depth to the ask"));
+  assert.ok(prompt.includes("Finish the answer"));
+  assert.ok(prompt.includes("one screen"));
+  assert.ok(prompt.includes("Complete the last thought"));
+  assert.ok(prompt.includes("only what the ask requires"));
+  assert.ok(prompt.includes("Greetings and pings are not overview requests"));
+  assert.ok(prompt.includes("Do not lead with a census because inventory is present"));
+});
+
+test("comprehension keeps its full required section list (not thinned by chat density rules)", () => {
+  const prompt = systemPromptForUseCase("comprehension");
+  assert.ok(prompt.includes("**Architecture**"));
+  assert.ok(prompt.includes("**Key subsystems**"));
+  assert.ok(prompt.includes("**Entry points**"));
+  assert.ok(prompt.includes("Be dense, not thin"));
+});
+
 test("chat use case requires answer-style Your question and applyable edit patches", () => {
   const prompt = systemPromptForUseCase("chat");
   assert.ok(prompt.includes("Never restate, paraphrase, or truncate the user's question text"));
@@ -43,8 +65,34 @@ test("chat use case requires answer-style Your question and applyable edit patch
   assert.ok(prompt.includes("## Concrete file edits (when recommending code to apply)"));
   assert.ok(prompt.includes("<<<<<<< SEARCH"));
   assert.ok(prompt.includes("Multiple edits → multiple patch blocks"));
-  assert.ok(prompt.includes("emit `File:` + ```patch SEARCH/REPLACE blocks"));
+  assert.ok(prompt.includes("emit applyable patches"));
   assert.ok(prompt.includes("not literal `startLine:endLine:…` placeholders"));
+});
+
+test("chat PR-review contract stays in the file and forbids A8 headings", () => {
+  const prompt = systemPromptForUseCase("chat");
+  assert.ok(prompt.includes("**Block:**"));
+  assert.ok(prompt.includes("**Fine because:**"));
+  assert.ok(prompt.includes("**Ask the author:**"));
+  assert.ok(prompt.includes("Never **Next-status WRITE path**"));
+  assert.ok(prompt.includes("**Hard errors that abort this attempt**"));
+  assert.ok(prompt.includes("No OWASP dump"));
+  assert.ok(prompt.includes("omit **Summary**, **Answer**, and **Your question**"));
+  assert.ok(prompt.includes("Do not use **Summary**"));
+  assert.ok(prompt.includes("Do not invent a follow-up about tests"));
+  assert.ok(prompt.includes("named function"));
+  assert.ok(prompt.includes("not \"add logging\""));
+});
+
+test("chat open-file explain is a one-screen briefing, not a walkthrough dump", () => {
+  const prompt = systemPromptForUseCase("chat");
+  assert.ok(prompt.includes("one screen"));
+  assert.ok(prompt.includes("25-bullet reviewer list"));
+  assert.ok(prompt.includes("at most **two** citation fences") || prompt.includes("≤2 citation fences"));
+  assert.equal(prompt.includes("a walkthrough can be thorough"), false);
+  const comprehension = systemPromptForUseCase("comprehension");
+  assert.ok(comprehension.includes("**Architecture**"));
+  assert.ok(comprehension.includes("**Key subsystems**"));
 });
 
 test("paperclip attachment rule is gated on hasPaperclipAttachments (B6)", () => {
@@ -83,13 +131,29 @@ test("comprehension use case includes audience block via withOutputContract", ()
   assert.ok(prompt.includes("PASS:"));
   assert.ok(prompt.includes("FAIL:"));
   assert.ok(prompt.includes("generic form→API→DB"));
+  assert.ok(prompt.includes("attached domain paths"));
+  assert.ok(prompt.includes("Do not pad to N"));
+  assert.ok(prompt.includes("padding or repeating files to hit a count"));
+  assert.ok(prompt.includes("each topic that has attached evidence"));
+  assert.ok(prompt.includes("invented paths"));
+  assert.ok(prompt.includes("models.py"));
+  assert.ok(prompt.includes("tests/migrations"));
+  assert.ok(prompt.includes("compose service names"));
   assert.ok(prompt.includes("**How the open file fits**"));
   assert.ok(prompt.includes("Omit entirely for repo-wide runs with no open file"));
   assert.ok(prompt.includes("Based on inventory + anchors; no Confluence/Jira"));
   assert.ok(prompt.includes("Do not treat disconnected or empty Coop integrations"));
-  assert.ok(prompt.includes('Avoid generic "read the README"'));
+  assert.ok(prompt.includes('generic "read the README"'));
   assert.ok(prompt.includes("one concrete fact"));
   assert.ok(prompt.includes("answer that ask explicitly"));
+});
+
+test("comprehension locate-only omits architecture syllabus", () => {
+  const prompt = systemPromptForUseCase("comprehension", { locateOnly: true });
+  assert.ok(prompt.includes("this is a locate answer, not a repo syllabus"));
+  assert.ok(prompt.includes("Omit **Architecture**"));
+  assert.ok(!prompt.includes("How major pieces connect"));
+  assert.ok(!prompt.includes("One bullet per subsystem"));
 });
 
 test("comprehension use case requires active file section when activeFile is set", () => {
@@ -126,6 +190,8 @@ test("inline_completion excludes audience and output contract", () => {
   assert.equal(prompt.includes(AUDIENCE_MARKER), false);
   assert.equal(prompt.includes(OUTPUT_CONTRACT_MARKER), false);
   assert.ok(prompt.includes("code completion engine"));
+  assert.match(prompt, /full remaining function\/block body/i);
+  assert.match(prompt, /extractBearerToken/i);
 });
 
 test("code_edit use case uses patch output contract without Summary template", () => {
@@ -137,9 +203,14 @@ test("code_edit use case uses patch output contract without Summary template", (
   assert.ok(prompt.includes("edit mode"));
   assert.ok(prompt.includes("## Completeness (required)"));
   assert.ok(prompt.includes("## Editor selection (required when present)"));
-  assert.ok(prompt.includes("fully implement"));
+  assert.ok(prompt.includes("a request to rewrite"));
   assert.ok(prompt.includes("exact copy of the entire"));
   assert.ok(prompt.includes("PENDING/OPEN"));
+  assert.ok(prompt.includes("assertions must agree with the attached SUT"));
+  assert.ok(prompt.includes("sibling tests in this file"));
+  assert.ok(prompt.includes("sut_assertions"));
+  assert.ok(prompt.includes("Changing only a parameter type"));
+  assert.ok(prompt.includes("is not a guard"));
   assert.equal(prompt.includes("Uniform response template"), false);
   assert.equal(prompt.includes("1. **Summary** or **Answer**"), false);
   assert.equal(prompt.includes("Selection or focus hints mark where to start looking"), false);
@@ -297,6 +368,29 @@ test("formatChatMessageWithLocalFiles embeds authoritative file_content", () => 
   assert.ok(message.includes("Quote the 503 condition."));
 });
 
+test("C4 open-file review appends Reviewer-checks-only directive", () => {
+  const message = formatChatMessageWithLocalFiles({
+    message: COPILOT_C4_ASK,
+    file: "src/server/authMiddleware.ts",
+    files: [
+      {
+        path: "src/server/authMiddleware.ts",
+        content: "export function requireAuth(req: Request): req is AuthedRequest { return true; }"
+      }
+    ]
+  });
+  assert.ok(message.includes(OPEN_FILE_PR_REVIEW_DIRECTIVE));
+  assert.ok(OPEN_FILE_PR_REVIEW_DIRECTIVE.includes("named function"));
+  assert.ok(OPEN_FILE_PR_REVIEW_DIRECTIVE.includes("add logging"));
+  assert.ok(message.indexOf(COPILOT_C4_ASK) < message.indexOf("## Turn directive (PR review)"));
+  const unrelated = formatChatMessageWithLocalFiles({
+    message: "Quote the 503 condition.",
+    file: "src/server/githubAppApi.ts",
+    files: [{ path: "src/server/githubAppApi.ts", content: "if (!deps.githubApp) {" }]
+  });
+  assert.equal(unrelated.includes("## Turn directive (PR review)"), false);
+});
+
 test("formatChatMessageWithLocalFiles includes editor_selection for highlighted range", () => {
   const message = formatChatMessageWithLocalFiles({
     message: "/edit shorten this highlighted block",
@@ -342,7 +436,41 @@ test("formatChatMessageWithLocalFiles includes editor_selection for highlighted 
   assert.ok(message.includes("class APIKeyAuthentication:"));
   assert.ok(message.includes("def get_api_token"));
   assert.ok(message.includes("Edit directive:"));
+  assert.ok(message.includes("explicitly asked to rewrite"));
   assert.ok(message.includes("character-for-character"));
+  assert.ok(message.includes("Do not substitute a different function"));
+});
+
+test("formatChatMessageWithLocalFiles keeps L56–61 even when the full file is attached", () => {
+  const rows = Array.from({ length: 90 }, (_, i) => {
+    const line = i + 1;
+    if (line === 56) return "    def validate_name(self):";
+    if (line >= 57 && line <= 61) return `        # selected body ${line}`;
+    if (line === 80) return "    def get_queryset(self):";
+    return `# filler ${line}`;
+  });
+  const message = formatChatMessageWithLocalFiles({
+    message: "/edit add a one-line comment above the selected function.",
+    file: "apps/api/plane/db/models/state.py",
+    selectedLines: [56, 61],
+    files: [
+      {
+        path: "apps/api/plane/db/models/state.py",
+        content: rows.join("\n")
+      }
+    ]
+  });
+
+  assert.ok(message.includes('<editor_selection path="apps/api/plane/db/models/state.py" lines="56-61">'));
+  assert.ok(message.includes("def validate_name(self):"));
+  assert.ok(message.includes("Do not substitute a different function"));
+  assert.ok(message.includes("Comment-only"));
+  assert.equal(message.includes("explicitly asked to rewrite"), false);
+  const selectionBlock = message.slice(
+    message.indexOf("<editor_selection"),
+    message.indexOf("</editor_selection>")
+  );
+  assert.equal(selectionBlock.includes("def get_queryset"), false);
 });
 
 test("buildUserMessageWithContext renders local_files from context bundle", () => {
@@ -560,7 +688,8 @@ test("buildUserMessageWithContext renders line_count for LOC questions", () => {
   assert.ok(message.includes('source="index-stats"'));
   assert.ok(message.includes('line_count="66934"'));
   assert.ok(message.includes('file_count="1233"'));
-  assert.ok(message.includes("66934 line(s) of code"));
+  assert.equal(message.includes("The repository contains"), false);
+  assert.equal(message.includes("66934 line(s) of code"), false);
 });
 
 test("buildUserMessageWithContext forbids estimating a missing line count", () => {
@@ -703,6 +832,13 @@ test("buildUserMessageWithContext renders live tree overview", () => {
   assert.ok(message.includes("<repo_tree_overview>"));
   assert.ok(message.includes("directories: src, docs"));
   assert.ok(message.includes("files: package.json, README.md"));
+});
+
+test("pr_summary use case is short notes without the chat output contract", () => {
+  const prompt = systemPromptForUseCase("pr_summary");
+  assert.ok(prompt.includes("pull request notes"));
+  assert.equal(prompt.includes(AUDIENCE_MARKER), false);
+  assert.equal(prompt.includes(OUTPUT_CONTRACT_MARKER), false);
 });
 
 // ── Summary ──────────────────────────────────────────────────────────────────

@@ -1,5 +1,12 @@
+import { hasRepoFactNeed, repoFactNeeds } from "../workspace/repoFactIntent";
+import { needsRepoCode } from "./repoCodeIntent";
+
 const INTENT_WORD_RE =
-  /\b(what|how|why|where|when|who|which|explain|describe|show|find|trace|help|summarize|summarise|list|tell|debug|fix|review|compare|search|lookup|check|analyze|analyse|understand|owner|owners|decision|impact|blast|radius|gaps|error|fail|broken|issue|ticket|jira|slack|teams|confluence|notion|docs?|file|repo|repository|function|class|method|test|auth|login|deploy|build|docker|api|endpoint|route|handler|middleware|config|env|bug|refactor|migrate|implement|add|remove|update|change|does|is|are|can|could|should|would|will)\b/i;
+  /\b(what|how|why|where|when|who|which|explain|describe|show|find|trace|help|summarize|summarise|list|tell|debug|fix|review|compare|search|lookup|check|analyze|analyse|understand|owner|owners|decision|impact|blast|radius|gaps|error|fail|broken|issue|ticket|jira|slack|teams|confluence|notion|docs?|file|repo|repository|function|class|method|auth|login|deploy|build|docker|api|endpoint|route|handler|middleware|config|env|bug|refactor|migrate|implement|add|remove|update|change|does|is|are|can|could|should|would|will)\b/i;
+
+/** Single-token pings — not a repo question. Multi-word "write a test" still counts via word count. */
+const GENERIC_PING_RE =
+  /^(?:test|hi|hello|hey|yo|ping|ok|okay|k|sup|hmm+|huh|wow|nice|cool|great|perfect|yes|yep|no|nope|sure|thanks|ty)[.!?]*$/i;
 
 const COMMON_ENGLISH_BIGRAMS = new Set([
   "th",
@@ -88,7 +95,7 @@ function looksLikeKeyboardMash(token: string): boolean {
   return bigramHits < minHits;
 }
 
-/** True when plain chat text looks like a real question or task (not keyboard mash). */
+/** True when plain chat text looks like a real question or task (not a ping or keyboard mash). */
 export function hasDiscernibleChatIntent(message: string): boolean {
   const trimmed = message.trim();
   if (!trimmed) {
@@ -100,6 +107,9 @@ export function hasDiscernibleChatIntent(message: string): boolean {
   }
   if (/@[\w./-]/.test(trimmed)) {
     return true;
+  }
+  if (GENERIC_PING_RE.test(trimmed)) {
+    return false;
   }
   if (trimmed.includes("?") && /[a-zA-Z0-9]/.test(trimmed)) {
     return true;
@@ -127,7 +137,7 @@ export function hasDiscernibleChatIntent(message: string): boolean {
   return false;
 }
 
-/** First turn in a new chat thread with no explicit action should clarify instead of summarizing context. */
+/** Plain chat with no discernible ask should clarify instead of summarizing context. */
 export function shouldClarifyFirstChatTurn(options: ClarifyFirstChatTurnOptions): boolean {
   if (options.hasQuickAction) {
     return false;
@@ -172,5 +182,33 @@ export function buildMissingIntentClarificationResponse(context?: {
     "- How does authentication work here?",
     "",
     "You can also run **Understand Repo** or type `/understand` for a guided overview."
+  ].join("\n");
+}
+
+const THIS_REPO_RE = /\b(this|the|my)\s+(repo|repository|codebase|code\s*base)\b/i;
+const WHICH_REPO_RE =
+  /\b(what|which)\s+(repo|repository|codebase|code\s*base)\b|\brepo(?:sitory)?\s+(are\s+you|am\s+i|is)\s+looking\s+at\b/i;
+
+/** True when the ask only makes sense against a selected Use-repo (or bound file). */
+export function messageNeedsSelectedRepo(message: string): boolean {
+  const trimmed = message.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (THIS_REPO_RE.test(trimmed) || WHICH_REPO_RE.test(trimmed)) {
+    return true;
+  }
+  if (hasRepoFactNeed(repoFactNeeds(trimmed))) {
+    return true;
+  }
+  return needsRepoCode(trimmed);
+}
+
+export function buildMissingRepoSelectionResponse(): string {
+  return [
+    "**Answer**",
+    "No repository is selected in this chat, so I can't inspect a codebase yet.",
+    "",
+    "Click **Use repo** in the Remote workspace picker, then ask again."
   ].join("\n");
 }

@@ -92,6 +92,7 @@ export function ThreadHeaderSwitcher({
   }, [open]);
 
   const activeRunning = threads.some((thread) => thread.id === activeId && thread.isRunning);
+  const savedThreads = threads.filter((thread) => thread.messageCount > 0);
 
   return (
     <div ref={rootRef} className="thread-switcher min-w-0 flex-1">
@@ -127,11 +128,11 @@ export function ThreadHeaderSwitcher({
       </div>
       {open ? (
         <div className="thread-switcher-menu" role="listbox" aria-label="Chat threads">
-          {threads.length === 0 ? (
+          {savedThreads.length === 0 ? (
             <p className="thread-switcher-empty">No saved threads yet.</p>
           ) : (
             <ul className="thread-switcher-list">
-              {threads.map((thread) => {
+              {savedThreads.map((thread) => {
                 const isActive = thread.id === activeId;
                 return (
                   <li key={thread.id}>

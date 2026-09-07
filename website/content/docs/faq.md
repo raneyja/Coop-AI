@@ -3,7 +3,7 @@ title: FAQ
 description: Frequently asked questions about CoopAI plans, privacy, security, and features.
 section: help
 order: 2
-lastUpdated: "2026-07-23"
+lastUpdated: "2026-09-03"
 ---
 
 ## General
@@ -14,7 +14,7 @@ CoopAI is a VS Code extension that connects your code graph, Slack, Jira, and do
 
 ### How is CoopAI different from GitHub Copilot or Cursor?
 
-CoopAI focuses on **understanding existing codebases**: ownership, decision history, blast radius, knowledge gaps, plus Slack and tickets. Inline complete and edit stay in the open file. You review the diff. Nothing rewrites the tree on its own.
+CoopAI focuses on **understanding existing codebases**: ownership, decision history, blast radius, knowledge gaps, plus Slack and tickets. Inline complete and edit stay in the open file. You review the diff, then you can [open a pull request](/docs/create-pull-request) from applied `/edit`s or from any editor change — from the patch card or by typing **Create a PR** in chat. Nothing rewrites the tree or creates a PR on its own.
 
 ### Is my code used to train models?
 
@@ -32,7 +32,7 @@ Full tool connectivity (GitHub, GitLab, Bitbucket, Slack, Jira, Notion, Google D
 
 ### Do you offer Enterprise self-hosting?
 
-Yes. Contact [hello@coop-ai.dev](mailto:hello@coop-ai.dev). See [Enterprise deployment](/docs/enterprise-deployment).
+Yes. Contact [support@coop-ai.dev](mailto:support@coop-ai.dev). See [Enterprise deployment](/docs/enterprise-deployment).
 
 ## Setup
 
@@ -44,6 +44,7 @@ Create an account at [free signup](/signup/free) (email + password or Google), o
 | --- | --- |
 | **Extension** → Settings → Account | **Continue with Google** · email (two-step) · **Sign in with SSO** |
 | **Admin portal** | Email/password · Google · **Organization name** + **Continue with SSO** (Enterprise) |
+| **Marketing site** ([coop-ai.dev/login](/login)) | Opens VS Code. Sign in in the extension, not in the browser. |
 
 Email in the extension is two steps: enter email → **Continue with email** → password → **Sign in**.
 
@@ -63,13 +64,13 @@ In production mode, **org admins** connect integrations once in the [admin porta
 
 ### What are quick actions?
 
-Five built-in actions: Understand Repo, Trace Decision, Find Owner, Blast Radius, Knowledge Gaps. Run them from the **Workflows** menu in the chat header, slash commands (`/understand`, `/trace`, …), or the editor context menu. They route to **Claude Sonnet 4.6** in production.
+Five built-in actions: Understand Repo, Trace Decision, Find Owner, Blast Radius, Knowledge Gaps. Run them from the **Workflows** menu in the chat header, slash commands (`/understand`, `/trace`, …), or the editor context menu. On Auto, they use **Claude Sonnet 4.6**.
 
 **Understand Repo** / `/understand` is **repo-wide only** — click **Use repo** on the repository in the Remote workspace picker. A file chip blocks it. The other actions use a file selection and/or **Use repo** as documented in the [Owner's Manual](/manual#quick-actions). See also [Model assignments](/docs/model-assignments).
 
 ### Can I choose the LLM provider or model?
 
-Not on Developer or Pro. Coop assigns models per feature (chat, quick actions, edit, autocomplete) — see [Model assignments](/docs/model-assignments). **Settings → Preferences → Model & chat** shows read-only assignments plus toggles for chat and autocomplete. Custom model selection is an Enterprise capability (coming soon). Set `coopAI.devMode: true` only for local testing overrides.
+**Free** stays on Auto — Coop picks a model per job. **Pro, Pro+, Max, and Enterprise** choose OpenAI, Anthropic, or Gemini from the **model menu in chat**. Autocomplete, intent chips, source previews, and PR notes always stay on Coop’s assigned models. **Settings → Preferences → Model & chat** explains Auto vs a picked model; it is not a second picker. See [Model assignments](/docs/model-assignments).
 
 ### What is Lightning Mode?
 
@@ -83,6 +84,10 @@ That is the **active file context chip** — which file Coop is using for chat. 
 
 Yes. Commit `.coop/prompts.json` to your repo. See [Owner's Manual — Prompt Library](/manual#prompt-library).
 
+### Can I create a pull request from Coop?
+
+Yes. After you **Apply** an `/edit`, click **Create pull request** on the patch card. Or type **Create a PR** in chat — that works after Apply **or** after you type in a Use-repo file (no Apply required). Confirm the branch, title, and notes, then submit. Cancel or Escape creates nothing. See [Create pull request](/docs/create-pull-request).
+
 ## Enterprise SSO
 
 ### Does Coop support SAML single sign-on?
@@ -95,7 +100,7 @@ Yes, on the **Enterprise** plan. Org admins configure SAML in the admin portal u
 | --- | --- |
 | **Admin portal** ([admin.coop-ai.dev/login](https://admin.coop-ai.dev/login)) | Yes — **Organization name** + **Continue with SSO** |
 | **VS Code extension** → Settings → Account | Yes — **Sign in with SSO** (browser handoff) |
-| **Marketing site** ([coop-ai.dev/login](https://coop-ai.dev/login)) | No — email/password or Google only |
+| **Marketing site** ([coop-ai.dev/login](https://coop-ai.dev/login)) | Sends you to the VS Code extension — sign in there (SSO included) |
 
 ### What happens when my org requires SSO?
 
@@ -117,7 +122,7 @@ No. Coop sends a verification link on password signup but does **not** hard-bloc
 
 ### How do I contact support?
 
-Email [hello@coop-ai.dev](mailto:hello@coop-ai.dev) or [book a demo](/demo).
+Email [support@coop-ai.dev](mailto:support@coop-ai.dev) or [book a demo](/demo).
 
 ### Where is the install guide?
 

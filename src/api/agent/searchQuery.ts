@@ -1,6 +1,14 @@
 import {
   isBarrelPath,
+  isClientUiPath,
   isGeneratedOrVendorPath,
+  isLocaleCatalogPath,
+  isMutationHandlerPath,
+  isSchemaCatalogPath,
+  isSeedOrFixturePath,
+  isDocOrSpecPath,
+  isQueryFilterPath,
+  isServerWritePath,
   isTestPath,
   normalizePath
 } from "../../indexing/evidencePathNoise";
@@ -42,7 +50,15 @@ const STOP = new Set(
 const IDENTIFIER =
   /\b(?:[a-z][a-zA-Z]*[A-Z][a-zA-Z0-9]*|[A-Z][a-z]+[A-Z][a-zA-Z0-9]*|[a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/g;
 const MAX_SEARCH_CHARS = 48;
-const MAX_FALLBACK_QUERIES = 5;
+const MAX_FALLBACK_QUERIES = 9;
+/** API-reject hunts need field-access queries, not only “is not valid” slogans. */
+const MAX_API_REJECT_FALLBACK_QUERIES = 12;
+const SOURCE_FILE_EXT =
+  "ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|rb|md|json|yml|yaml|css|html|vue|svelte|c|h|cpp|cc|kt|swift";
+const NAMED_SOURCE_FILE = new RegExp(
+  `(?:^|[\\s\`'"(\\[]|/)((?:[\\w.-]+/)*[\\w.-]+\\.(?:${SOURCE_FILE_EXT}))(?=$|[\\s\`'")\\],:;!?])`,
+  "gi"
+);
 
 export {
   isBarrelPath,
@@ -68,6 +84,85 @@ const ROLE_HINTS = [
   "validator"
 ] as const;
 
+/** Question words — never a component/symbol name. */
+const DENIED_PASCAL =
+  /^(Where|What|Which|How|Why|Show|Find|Please|Define|Explain|This|That|When|After|Before)$/i;
+
+/**
+ * Single-hump Pascal that is English or HTTP, not a code symbol. "Button" and
+ * "LoginForm" stay eligible for search; these must not become the hunt key.
+ */
+const PROSE_PASCAL = new Set(
+  [
+    "Authorization",
+    "Bearer",
+    "Users",
+    "User",
+    "Token",
+    "Request",
+    "Response",
+    "Header",
+    "Headers",
+    "Error",
+    "Client",
+    "Server",
+    "Message",
+    "File",
+    "Data",
+    "Type",
+    "Status",
+    "State",
+    "Item",
+    "Issue",
+    "Work",
+    "Api"
+  ].map((w) => w.toLowerCase())
+);
+
+/** Fallback tokens that burn the 3-try budget without finding a definition. */
+const JUNK_SEARCH_TOKEN = new Set(
+  [
+    "existing",
+    "helper",
+    "write",
+    "point",
+    "cloned",
+    "returns",
+    "error",
+    "move",
+    "out",
+    "bad",
+    "new",
+    "dont",
+    "have",
+    "can",
+    "cant",
+    "cannot",
+    "wont",
+    "just",
+    "really",
+    "function",
+    "ask",
+    "our",
+    "not",
+    "any",
+    "other",
+    "line",
+    "body",
+    "open",
+    "add",
+    "two",
+    "tests",
+    "match",
+    "style",
+    "rewrite",
+    "suite",
+    "missing",
+    "returns",
+    "undefined"
+  ].map((w) => w.toLowerCase())
+);
+
 export type RankedSearchHit = {
   fileName: string;
   lineNumber: number;
@@ -85,18 +180,33 @@ export function extractAgentSearchQuery(userMessage: string): string {
     return trimmed;
   }
 
+  // On-call API reject: search the field's ValidationError, not `issue_id`
+  // (that query floods converters / OpenAPI and never opens the serializer).
+  if (isApiRejectAsk(trimmed)) {
+    const rejectQuery = apiRejectSearchQueries(trimmed)[0];
+    if (rejectQuery) {
+      return clip(rejectQuery);
+    }
+  }
+
   const identifier = firstIdentifier(trimmed);
-  if (identifier) {
+  if (identifier && !(isApiRejectAsk(trimmed) && isApiFieldIdToken(identifier))) {
     return clip(identifier);
   }
 
   // "Where is the Button component" — prefer Button over the role phrase.
-  const deniedPascal = /^(Where|What|Which|How|Why|Show|Find|Please|Define|Explain|This|That|When|After|Before)$/i;
-  const pascalName = [...trimmed.matchAll(/\b([A-Z][a-z][a-zA-Z0-9]+)\b/g)]
+  // Do not use HTTP/English Pascal (Authorization, Users) or a sentence-initial
+  // subject ("Users can't move…") as the hunt key.
+  const pascalName = [...trimmed.matchAll(/\b([A-Z][a-z][a-zA-Z0-9]+)(?!['’])\b/g)]
     .map((match) => match[1]!)
-    .find((word) => !deniedPascal.test(word));
+    .find((word) => isSearchablePascal(word, trimmed));
   if (pascalName) {
     return clip(pascalName);
+  }
+
+  const locate = locateObjectPhrase(trimmed);
+  if (locate) {
+    return clip(locate);
   }
 
   const role = trimmed.match(ROLE_NOUN);
@@ -104,7 +214,7 @@ export function extractAgentSearchQuery(userMessage: string): string {
     return clip(role[0]);
   }
 
-  const tokens = significantTokens(trimmed);
+  const tokens = significantTokens(trimmed).filter((token) => !isJunkSearchToken(token));
   if (tokens.length === 0) {
     return clip(trimmed);
   }
@@ -118,6 +228,10 @@ export function sanitizeAgentSearchQuery(query: string, userMessage: string): st
     return extracted;
   }
   if (q.length > MAX_SEARCH_CHARS || q === userMessage.trim() || looksLikeFullQuestion(q)) {
+    return extracted;
+  }
+  // Sentence-subject English ("Users can't…") is not a hunt key.
+  if (PROSE_PASCAL.has(q.toLowerCase())) {
     return extracted;
   }
   return clip(q);
@@ -161,6 +275,36 @@ export function shouldSkipEvidencePath(fileName: string, userMessage?: string): 
   if (isBarrelPath(fileName) || isGeneratedOrVendorPath(fileName)) {
     return true;
   }
+  if (
+    userMessage &&
+    isLocaleCatalogPath(fileName) &&
+    !userAskedAboutLocales(userMessage)
+  ) {
+    return true;
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && isClientUiPath(fileName)) {
+    return true;
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && isSchemaCatalogPath(fileName)) {
+    return true;
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && isSeedOrFixturePath(fileName)) {
+    return true;
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && isDocOrSpecPath(fileName)) {
+    return true;
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && isQueryFilterPath(fileName)) {
+    return true;
+  }
+  if (
+    userMessage &&
+    isApiRejectAsk(userMessage) &&
+    isTestPath(fileName) &&
+    !userAskedAboutTests(userMessage)
+  ) {
+    return true;
+  }
   // Named symbol + change/locate: skip tests unless the user asked about tests.
   // Otherwise contract tests that say "require_authentication" steal requireAuth.
   if (
@@ -176,7 +320,9 @@ export function shouldSkipEvidencePath(fileName: string, userMessage?: string): 
 
 /**
  * Progressively broader index queries, tried in order when the first search
- * returns nothing readable. Derived from the question's own words only.
+ * returns nothing readable. Starts from the question's own words, then
+ * English aliases (work item → issue/state) so a prose locate can hit the
+ * names the repo actually uses.
  *
  * Identifier aliases matter: users often write `requireAuth` while the repo
  * defines `require_auth` (or the reverse). A single casing miss returns empty
@@ -200,7 +346,26 @@ export function fallbackAgentSearchQueries(userMessage: string): string[] {
     unique.push(clipped);
   };
 
+  for (const file of extractNamedSourceFiles(userMessage)) {
+    push(file);
+    const base = file.split("/").pop();
+    if (base && base !== file) {
+      push(base);
+    }
+  }
+  if (isApiRejectAsk(userMessage)) {
+    for (const rejectQuery of apiRejectSearchQueries(userMessage)) {
+      push(rejectQuery);
+    }
+    for (const alias of proseLocateSearchAliases(userMessage)) {
+      push(alias);
+    }
+    return unique.slice(0, MAX_API_REJECT_FALLBACK_QUERIES);
+  }
   push(primary);
+  for (const alias of proseLocateSearchAliases(userMessage)) {
+    push(alias);
+  }
   for (const id of identifiers) {
     push(id);
     for (const alias of identifierSearchAliases(id)) {
@@ -212,6 +377,9 @@ export function fallbackAgentSearchQueries(userMessage: string): string[] {
   }
   push(role);
   for (const token of tokens) {
+    if (isJunkSearchToken(token)) {
+      continue;
+    }
     push(token);
     if (unique.length >= MAX_FALLBACK_QUERIES) {
       break;
@@ -275,9 +443,15 @@ export function pickSearchHitsToRead<T extends RankedSearchHit & { content?: str
   const keys = userMessage ? namedSymbolKeys(userMessage) : [];
   // Named symbol in the ask → only keep hits that actually mention it. Empty is
   // better than reading a UI form that merely shares the word "auth".
+  // Exception: the user named this file (authMiddleware.ts) — keep it even if
+  // the body exports a different identifier.
   let pool =
     keys.length > 0
-      ? ranked.filter((hit) => hitMentionsNamedSymbol(hit, userMessage!))
+      ? ranked.filter(
+          (hit) =>
+            hitMentionsNamedSymbol(hit, userMessage!) ||
+            Boolean(userMessage && queryNamesSourceFile(hit.fileName, userMessage))
+        )
       : ranked;
   if (keys.length === 0 && userMessage && queryRoleHints(userMessage).length > 0) {
     const roleHits = pool.filter((hit) =>
@@ -292,6 +466,33 @@ export function pickSearchHitsToRead<T extends RankedSearchHit & { content?: str
     const decls = pool.filter((hit) => contentLooksLikeDeclaration(hit.content ?? "", userMessage));
     if (decls.length > 0) {
       pool = [...decls, ...pool.filter((hit) => !decls.includes(hit))];
+    }
+  }
+  if (userMessage && isApiRejectAsk(userMessage)) {
+    const writers = pool.filter((hit) => isServerWritePath(hit.fileName));
+    if (writers.length > 0) {
+      pool = [...writers, ...pool.filter((hit) => !writers.includes(hit))];
+    }
+    const fieldHits = pool.filter((hit) =>
+      contentLooksLikeAskedFieldReject(hit.content ?? "", userMessage, hit.fileName)
+    );
+    if (fieldHits.length > 0) {
+      pool = fieldHits;
+    } else {
+      pool = pool.filter((hit) => {
+        const snippet = hit.content ?? "";
+        if (contentLooksLikeWrongFieldReject(snippet, userMessage)) {
+          const path = normalizePath(hit.fileName);
+          return (
+            /(^|\/)serializers?\//.test(path) || /\.serializer\.(py|ts|go|rb)$/.test(path)
+          );
+        }
+        return isActionableApiRejectHit(hit);
+      });
+    }
+    const mutators = pool.filter((hit) => contentLooksLikeWriteReject(hit.content ?? ""));
+    if (mutators.length > 0) {
+      pool = [...mutators, ...pool.filter((hit) => !mutators.includes(hit))];
     }
   }
   const picked: T[] = [];
@@ -385,20 +586,16 @@ function symbolNameScore(
 }
 
 /**
- * camelCase / snake_case token the user likely meant as a code symbol.
- * Plain words like "logging" are not specific enough to filter hits.
+ * camelCase / snake_case / multi-hump Pascal the user likely meant as a code
+ * symbol. Single-hump Pascal (Authorization, Users, Button) is not specific
+ * enough to require that token in every read — that latched C1/C2 onto prose.
  */
 export function isSpecificCodeIdentifier(value: string): boolean {
   const trimmed = value.trim();
   if (trimmed.length < 4 || /\s/.test(trimmed)) {
     return false;
   }
-  return (
-    /_/.test(trimmed) ||
-    /[a-z][A-Z]/.test(trimmed) ||
-    /^[A-Z][a-z]+[A-Z]/.test(trimmed) ||
-    /^[A-Z][a-z]{2,}$/.test(trimmed)
-  );
+  return /_/.test(trimmed) || /[a-z][A-Z]/.test(trimmed) || /^[A-Z][a-z]+[A-Z]/.test(trimmed);
 }
 
 /** True when the user named a specific identifier (requireAuth), not a broad ask. */
@@ -406,10 +603,61 @@ export function queryHasNamedSymbol(userMessage: string): boolean {
   return namedSymbolKeys(userMessage).length > 0;
 }
 
+/**
+ * Source files the user typed (`authMiddleware.ts`, `src/server/auth.ts`).
+ * File hunts are not the same as symbol hunts — the file may export other names.
+ */
+export function extractNamedSourceFiles(userMessage: string): string[] {
+  const named: string[] = [];
+  const seen = new Set<string>();
+  NAMED_SOURCE_FILE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = NAMED_SOURCE_FILE.exec(userMessage)) !== null) {
+    const value = (match[1] ?? "").replace(/^\/+/, "").trim();
+    const key = value.toLowerCase();
+    if (!value || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    named.push(value);
+  }
+  return named;
+}
+
+/** True when `fileName` is a file the user typed (basename or full path). */
+export function queryNamesSourceFile(fileName: string, userMessage: string): boolean {
+  const named = extractNamedSourceFiles(userMessage);
+  if (!named.length) {
+    return false;
+  }
+  const path = normalizePath(fileName).toLowerCase();
+  return named.some((ref) => {
+    const n = ref.toLowerCase();
+    return path === n || path.endsWith(`/${n}`) || path.endsWith(n);
+  });
+}
+
+/** API payload field (`issue_id`, `parent_id`) — not a function to ground a hunt. */
+export function isApiFieldIdToken(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed.length < 4) {
+    return false;
+  }
+  return /_id$/i.test(trimmed) || /[a-z]Id$/.test(trimmed);
+}
+
 /** Normalized keys for the symbol the user named + casing aliases. */
 export function namedSymbolKeys(userMessage: string): string[] {
   const primary = extractAgentSearchQuery(userMessage);
   if (!isSpecificCodeIdentifier(primary)) {
+    return [];
+  }
+  // "Find authMiddleware.ts" names a file, not a required in-body symbol.
+  if (isStemOfNamedSourceFile(primary, userMessage)) {
+    return [];
+  }
+  // On-call API reject: issue_id is the field, not a C1-style symbol latch.
+  if (isApiRejectAsk(userMessage) && isApiFieldIdToken(primary)) {
     return [];
   }
   const keys = new Set<string>([normalizeSymbol(primary)]);
@@ -420,6 +668,23 @@ export function namedSymbolKeys(userMessage: string): string[] {
     }
   }
   return [...keys];
+}
+
+function sourceFileStem(file: string): string {
+  const base = (file.split("/").pop() ?? file).replace(/^\/+/, "");
+  return base
+    .replace(/\.(test|spec)\.[^.]+$/i, "")
+    .replace(/_test\.[^.]+$/i, "")
+    .replace(/\.[^.]+$/, "");
+}
+
+function isStemOfNamedSourceFile(identifier: string, userMessage: string): boolean {
+  const stem = identifier.replace(/\.[^.]+$/, "").toLowerCase();
+  const identNorm = normalizeSymbol(identifier);
+  return extractNamedSourceFiles(userMessage).some((file) => {
+    const base = sourceFileStem(file);
+    return base.toLowerCase() === stem || normalizeSymbol(base) === identNorm;
+  });
 }
 
 /**
@@ -506,6 +771,457 @@ function userAskedAboutTests(userMessage: string): boolean {
   return /\b(tests?|specs?|unit\s*tests?|contract\s*tests?)\b/i.test(userMessage);
 }
 
+function userAskedAboutLocales(userMessage: string): boolean {
+  return /\b(i18n|l10n|locale|locales|translation|translations|copy catalog)\b/i.test(
+    userMessage
+  );
+}
+
+/** On-call paste: API error / write / reject — not board grouping or i18n. */
+export function isApiRejectAsk(userMessage: string): boolean {
+  const text = userMessage.toLowerCase();
+  const apiOrError = /\b(api|4xx|rejects?|rejecting|illegal|invalid)\b/.test(text);
+  const writeOrTransition = /\b(written|writes?|transition|backlog|work[-\s]?item)\b/.test(
+    text
+  );
+  const fieldReject =
+    /\b[a-z][a-z0-9]*_id\b/.test(text) ||
+    /\b(parent|assignee|estimate)\b/.test(text) ||
+    /\bbad\s+[a-z][a-z0-9_]*\b/.test(text) ||
+    /\b(isn'?t|is not|not valid)\b/.test(text);
+  return apiOrError && (writeOrTransition || fieldReject);
+}
+
+/**
+ * Index queries that land on the asked field's ValidationError — not a bare
+ * `issue_id` / `parent_id` token (those match converters and OpenAPI first).
+ */
+export function apiRejectSearchQueries(userMessage: string): string[] {
+  if (!isApiRejectAsk(userMessage)) {
+    return [];
+  }
+  const unique: string[] = [];
+  const push = (candidate: string | undefined): void => {
+    const clipped = clip(candidate ?? "");
+    if (!clipped) {
+      return;
+    }
+    if (unique.some((seen) => seen.toLowerCase() === clipped.toLowerCase())) {
+      return;
+    }
+    unique.push(clipped);
+  };
+  const fields = askedRejectFieldTokens(userMessage);
+  const jobs = askedRejectJobTokens(userMessage);
+  const stems = [...new Set(fields.map((field) => field.replace(/_id$/i, "")))];
+  const preferred = ["parent", "assignee", "state", "estimate", "transition"];
+  const orderedStems = [
+    ...preferred.filter((stem) => stems.includes(stem)),
+    ...stems.filter((stem) => !preferred.includes(stem))
+  ];
+  for (const job of jobs) {
+    push(job);
+    for (const stem of orderedStems) {
+      if (stem.length >= 3) {
+        push(`${job} ${stem}`);
+      }
+    }
+  }
+  for (const stem of orderedStems) {
+    if (stem.length < 3) {
+      continue;
+    }
+    // Field access first — many APIs raise “user not in project”, not “X is not valid”.
+    push(`get("${stem}")`);
+    push(`get("${stem}_id")`);
+    push(`["${stem}"]`);
+    push(stem);
+    push(`${stem}_id`);
+    push(`${stem} is not valid`);
+    push(`${stem} is required`);
+    push(`not valid ${stem}`);
+    push(`invalid ${stem}`);
+    push(`ValidationError ${stem}`);
+  }
+  for (const field of fields) {
+    if (/_id$/i.test(field)) {
+      push(`not valid ${field}`);
+    }
+  }
+  push("ValidationError");
+  return unique;
+}
+
+/**
+ * Qualifier stems for API-reject hunts. "bad parent issue_id" is about parent,
+ * not a generic issue_id token that every issue serializer mentions.
+ */
+const REJECT_QUALIFIER_STEMS = [
+  "parent",
+  "assignee",
+  "estimate",
+  "owner",
+  "label",
+  "priority"
+] as const;
+
+function addRejectFieldStem(tokens: Set<string>, raw: string): void {
+  let field = raw.toLowerCase();
+  if (field.endsWith("_id")) {
+    field = field.slice(0, -3);
+  } else if (field.length > 4 && /[a-z]id$/.test(field)) {
+    field = field.slice(0, -2);
+  }
+  if (field.length < 3) {
+    return;
+  }
+  tokens.add(field);
+  tokens.add(`${field}_id`);
+}
+
+/**
+ * Field names the user asked the API to reject. Qualifiers win: "parent issue_id"
+ * → parent, not issue_id. Bare `*_id` only when no qualifier is present.
+ */
+export function askedRejectFieldTokens(userMessage: string): string[] {
+  const tokens = new Set<string>();
+  const text = userMessage.toLowerCase();
+
+  for (const stem of REJECT_QUALIFIER_STEMS) {
+    if (new RegExp(`\\b${stem}(?:_id)?\\b`, "i").test(text)) {
+      addRejectFieldStem(tokens, stem);
+    }
+  }
+
+  const bad = text.match(/\bbad\s+([a-z][a-z0-9_]*)\b/);
+  if (bad?.[1] && bad[1].length >= 3) {
+    addRejectFieldStem(tokens, bad[1]);
+  }
+
+  if (/\b(state|transition|backlog)(?:_id)?\b/.test(text)) {
+    tokens.add("state");
+    tokens.add("state_id");
+    tokens.add("transition");
+  }
+
+  if (tokens.size === 0) {
+    for (const id of allIdentifiers(userMessage)) {
+      if (isApiFieldIdToken(id)) {
+        addRejectFieldStem(tokens, id);
+      }
+    }
+  }
+
+  return [...tokens].filter((token) => token.length >= 3);
+}
+
+/**
+ * Workflow the user named (invite vs signup vs checkout). Empty when the ask
+ * is only a field. Repo-agnostic nouns — not product paths.
+ */
+const REJECT_JOB_STEMS = ["invite", "signup", "register", "checkout", "login"] as const;
+
+function compactJobText(text: string): string {
+  return text.toLowerCase().replace(/[_-\s]/g, "");
+}
+
+export function askedRejectJobTokens(userMessage: string): string[] {
+  const compact = compactJobText(userMessage);
+  const jobs: string[] = [];
+  for (const stem of REJECT_JOB_STEMS) {
+    if (compact.includes(stem)) {
+      jobs.push(stem);
+    }
+  }
+  const spaced = userMessage.toLowerCase();
+  if (/\bsign\s*up\b/.test(spaced) && !jobs.includes("signup")) {
+    jobs.push("signup");
+  }
+  if (/\bsign\s*in\b/.test(spaced) && !jobs.includes("login")) {
+    jobs.push("login");
+  }
+  return jobs;
+}
+
+function contentMentionsAskedJob(content: string, fileName: string, jobs: string[]): boolean {
+  if (jobs.length === 0) {
+    return true;
+  }
+  const hay = compactJobText(`${fileName}\n${content}`);
+  return jobs.some((job) => hay.includes(job));
+}
+
+/** Rethrow of a caught error — not the check that rejected the request. */
+function isRethrowLine(line: string): boolean {
+  return /\b(throw|raise)\s+(error|err|e|ex|exc|exception)\s*;?\s*$/i.test(line.trim());
+}
+
+function lineLooksLikeClientValidationReject(line: string): boolean {
+  return (
+    /\bwriteJson\s*\([^)]*\b(400|422)\b/i.test(line) ||
+    /\b(res\.status|abort)\s*\(\s*(400|422)\b/i.test(line) ||
+    /\bstatus\s*[:=]\s*(400|422)\b/i.test(line)
+  );
+}
+
+function lineLooksLikeWriteReject(line: string): boolean {
+  const text = line.replace(/^\d+\|/, "");
+  if (isRethrowLine(text)) {
+    return false;
+  }
+  if (
+    /\b(raise |throw |ValidationError|ValueError|Forbidden|is_valid_transition|invalid.{0,16}transition|validate_state)\b/i.test(
+      text
+    )
+  ) {
+    return true;
+  }
+  return lineLooksLikeClientValidationReject(text);
+}
+
+/** Hit body assigns/rejects — not a group enum, seed row, rethrow, or read-only serializer. */
+export function contentLooksLikeWriteReject(content: string): boolean {
+  return content.split("\n").some((row) => lineLooksLikeWriteReject(row));
+}
+
+/**
+ * Reject that is actually about work-item state — not UUID/choice filter
+ * validation that happens to live under apps/api.
+ */
+export function contentLooksLikeStateTransitionReject(content: string): boolean {
+  if (!contentLooksLikeWriteReject(content)) {
+    return false;
+  }
+  return (
+    /\b(state_id|is_valid_transition|validate_state)\b/i.test(content) ||
+    /invalid.{0,16}transition/i.test(content) ||
+    /valid state/i.test(content)
+  );
+}
+
+function validationErrorMessages(content: string): string {
+  const chunks: string[] = [];
+  const quoted = /ValidationError\(\s*(?:serializers\.)?["']([^"']+)["']/gi;
+  let match: RegExpExecArray | null;
+  while ((match = quoted.exec(content)) !== null) {
+    chunks.push(match[1] ?? "");
+  }
+  const dict = /ValidationError\(\s*\{([^}]*)\}/gi;
+  while ((match = dict.exec(content)) !== null) {
+    chunks.push(match[1] ?? "");
+  }
+  return chunks.join("\n");
+}
+
+function fieldTokenInText(text: string, field: string): boolean {
+  const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp(`\\b${escaped}\\b`, "i").test(text)) {
+    return true;
+  }
+  if (!/_/.test(field)) {
+    return false;
+  }
+  const camel = field.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
+  return new RegExp(`\\b${camel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text);
+}
+
+/** Guard on the asked field — not `email: adminEmail` passed into a callee. */
+function contentHasAskedFieldGuard(content: string, fields: string[]): boolean {
+  return fields.some((field) => {
+    const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return (
+      new RegExp(`\\.get\\(\\s*['"]${escaped}['"]`, "i").test(content) ||
+      new RegExp(`\\[\\s*['"]${escaped}['"]\\s*\\]`, "i").test(content) ||
+      new RegExp(`if\\s*\\(\\s*!+\\s*(?:[\\w$]+\\.)*${escaped}\\b`, "i").test(content) ||
+      new RegExp(`if\\s+not\\s+(?:[\\w$]+\\.)*${escaped}\\b`, "i").test(content) ||
+      new RegExp(`\\b${escaped}\\s*(?:===|!==|==|!=)\\s*(?:['"]['']|null|undefined|None)`, "i").test(
+        content
+      )
+    );
+  });
+}
+
+function quotedRejectText(content: string): string {
+  const quotes = [...content.matchAll(/["']([^"']{2,})["']/g)].map((match) => match[1] ?? "");
+  return `${validationErrorMessages(content)}\n${quotes.join("\n")}`;
+}
+
+/** ±12 lines around each raise/throw so a sibling field's validate() does not count. */
+function rejectWindows(content: string): string[] {
+  const rows = content.split("\n");
+  const windows: string[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    if (!contentLooksLikeWriteReject(rows[i] ?? "")) {
+      continue;
+    }
+    windows.push(rows.slice(Math.max(0, i - 12), i + 8).join("\n"));
+  }
+  if (windows.length === 0 && contentLooksLikeWriteReject(content)) {
+    windows.push(content);
+  }
+  return windows;
+}
+
+function contentMentionsAskedField(content: string, fields: string[]): boolean {
+  if (fields.length === 0) {
+    return false;
+  }
+  const messages = quotedRejectText(content);
+  if (fields.some((field) => fieldTokenInText(messages, field))) {
+    return true;
+  }
+  return contentHasAskedFieldGuard(content, fields);
+}
+
+/**
+ * Serializer/view reject for the field the user asked about — parent, state,
+ * assignee, or any `*_id`. Generic filter ValidationError does not count.
+ */
+export function contentLooksLikeAskedFieldReject(
+  content: string,
+  userMessage: string,
+  fileName = ""
+): boolean {
+  if (!contentLooksLikeWriteReject(content)) {
+    return false;
+  }
+  const jobs = askedRejectJobTokens(userMessage);
+  if (!contentMentionsAskedJob(content, fileName, jobs)) {
+    return false;
+  }
+  const fields = askedRejectFieldTokens(userMessage);
+  if (fields.length === 0) {
+    return contentLooksLikeStateTransitionReject(content);
+  }
+  if (rejectWindows(content).some((window) => contentMentionsAskedField(window, fields))) {
+    return true;
+  }
+  if (fields.some((field) => field === "state" || field === "transition" || field === "state_id")) {
+    return contentLooksLikeStateTransitionReject(content);
+  }
+  return false;
+}
+
+/**
+ * A ValidationError that is clearly about a different payload field than the
+ * one the user asked about (comment_html vs parent). Generic write/reject
+ * snippets without a sibling field stay eligible.
+ */
+export function contentLooksLikeWrongFieldReject(
+  content: string,
+  userMessage: string
+): boolean {
+  if (!contentLooksLikeWriteReject(content)) {
+    return false;
+  }
+  if (contentLooksLikeAskedFieldReject(content, userMessage)) {
+    return false;
+  }
+  const asked = new Set(askedRejectFieldTokens(userMessage).map((field) => field.toLowerCase()));
+  if (asked.size === 0) {
+    return false;
+  }
+  const haystack = content.toLowerCase();
+  const compact = haystack.replace(/_/g, "");
+  for (const stem of REJECT_QUALIFIER_STEMS) {
+    if (asked.has(stem) || asked.has(`${stem}_id`)) {
+      continue;
+    }
+    if (new RegExp(`\\b${stem}\\b`).test(haystack) || compact.includes(`${stem}id`)) {
+      return true;
+    }
+  }
+  if (!asked.has("comment") && !asked.has("comment_html") && compact.includes("commenthtml")) {
+    return true;
+  }
+  return false;
+}
+
+/** Read-side serializer / seed snippet — represents state, does not reject a transition. */
+export function contentLooksLikeReadOnlyState(content: string): boolean {
+  if (contentLooksLikeWriteReject(content)) {
+    return false;
+  }
+  return /read_only\s*=\s*True/.test(content) || /"state_id"\s*:/.test(content);
+}
+
+export function isActionableApiRejectHit(hit: {
+  fileName: string;
+  content?: string;
+}): boolean {
+  const content = hit.content ?? "";
+  if (
+    isSeedOrFixturePath(hit.fileName) ||
+    isSchemaCatalogPath(hit.fileName) ||
+    isClientUiPath(hit.fileName) ||
+    isDocOrSpecPath(hit.fileName) ||
+    isQueryFilterPath(hit.fileName)
+  ) {
+    return false;
+  }
+  if (contentLooksLikeWriteReject(content)) {
+    return true;
+  }
+  const path = normalizePath(hit.fileName);
+  // Open serializer files even when the hit is a read-only class — validate()
+  // in the same file is the reject. Seeds/clients stay skipped.
+  if (/(^|\/)serializers?\//.test(path) || /\.serializer\.(py|ts|go|rb)$/.test(path)) {
+    return true;
+  }
+  if (contentLooksLikeReadOnlyState(content)) {
+    return false;
+  }
+  // Views/services without a reject in the snippet are permission checks and
+  // fetches — not the write. Do not spend a read on them.
+  if (isMutationHandlerPath(hit.fileName)) {
+    return false;
+  }
+  return isServerWritePath(hit.fileName);
+}
+
+/** Keep only file bodies that actually reject/write — drop OpenAPI and read-only classes. */
+export function filterWriteRejectFiles<T extends { path?: string; content?: string }>(
+  files: T[],
+  userMessage: string
+): T[] {
+  return files.filter((file) => {
+    const path = file.path ?? "";
+    if (path && shouldSkipEvidencePath(path, userMessage)) {
+      return false;
+    }
+    return contentLooksLikeAskedFieldReject(file.content ?? "", userMessage, path);
+  });
+}
+
+export function lineNumberOfWriteReject(
+  content: string,
+  userMessage?: string,
+  fileName?: string
+): number | undefined {
+  const rows = content.split("\n").map((row) => row.replace(/^\d+\|/, ""));
+  const fields = userMessage ? askedRejectFieldTokens(userMessage) : [];
+  for (let i = 0; i < rows.length; i++) {
+    if (!contentLooksLikeWriteReject(rows[i])) {
+      continue;
+    }
+    const nearby = rows.slice(Math.max(0, i - 12), i + 8).join("\n");
+    if (userMessage && fields.length > 0) {
+      if (contentLooksLikeAskedFieldReject(nearby, userMessage, fileName ?? "")) {
+        return i + 1;
+      }
+      continue;
+    }
+    if (
+      /\b(state_id|is_valid_transition|validate_state)\b/i.test(nearby) ||
+      /invalid.{0,16}transition/i.test(nearby) ||
+      /valid state/i.test(nearby)
+    ) {
+      return i + 1;
+    }
+  }
+  return undefined;
+}
+
 function normalizeSymbol(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
@@ -546,6 +1262,29 @@ function rankHit(hit: RankedSearchHit, terms: string[], userMessage?: string): n
   }
   if (isGeneratedOrVendorPath(hit.fileName)) {
     rank -= 6;
+  }
+  if (isLocaleCatalogPath(hit.fileName) && !(userMessage && userAskedAboutLocales(userMessage))) {
+    rank -= 18;
+  }
+  if (userMessage && isApiRejectAsk(userMessage)) {
+    const snippet = (hit as { content?: string }).content ?? "";
+    if (contentLooksLikeAskedFieldReject(snippet, userMessage, hit.fileName)) {
+      rank += 24;
+    } else if (contentLooksLikeWriteReject(snippet)) {
+      rank -= 12;
+    }
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && isServerWritePath(hit.fileName)) {
+    rank += 18;
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && isMutationHandlerPath(hit.fileName)) {
+    rank += 12;
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && isSchemaCatalogPath(hit.fileName)) {
+    rank -= 16;
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && isClientUiPath(hit.fileName)) {
+    rank -= 16;
   }
   if (
     userMessage &&
@@ -593,11 +1332,90 @@ function userNamedPath(fileName: string, userMessage: string): boolean {
 }
 
 function firstIdentifier(text: string): string | undefined {
-  return allIdentifiers(text)[0];
+  return allIdentifiers(text).find((id) => !isStemOfNamedSourceFile(id, text));
 }
 
 function allIdentifiers(text: string): string[] {
-  return [...text.matchAll(IDENTIFIER)].map((m) => m[0]).filter((id) => !STOP.has(id.toLowerCase()));
+  return [...text.matchAll(IDENTIFIER)]
+    .map((m) => m[0])
+    .filter((id) => !STOP.has(id.toLowerCase()));
+}
+
+function isSearchablePascal(word: string, text: string): boolean {
+  if (DENIED_PASCAL.test(word) || PROSE_PASCAL.has(word.toLowerCase())) {
+    return false;
+  }
+  if (/^(where|what|which|how|find|who)\b/i.test(text.trim())) {
+    return true;
+  }
+  return !new RegExp(`^${word}\\b`).test(text.trim());
+}
+
+/**
+ * English the user typed mapped to words repos actually use.
+ * "work item" / backlog / transition → issue / state / workflow.
+ * Repo-agnostic — no product or folder names.
+ */
+export function proseLocateSearchAliases(userMessage: string): string[] {
+  const text = userMessage.toLowerCase();
+  const hasWorkItem = /\bwork[-\s]?items?\b/.test(text);
+  const hasTransition = /\btransitions?\b/.test(text);
+  const hasBacklog = /\bbacklog\b/.test(text);
+  const aliases: string[] = [];
+  if (isApiRejectAsk(userMessage)) {
+    aliases.push("ValidationError");
+    const fields = askedRejectFieldTokens(userMessage);
+    if (fields.some((field) => field === "parent" || field === "parent_id")) {
+      aliases.push("invalid parent");
+      aliases.push("parent_id");
+    }
+    for (const field of fields) {
+      if (/_id$/.test(field)) {
+        aliases.push(field);
+      }
+    }
+  }
+  if (hasWorkItem || hasTransition) {
+    aliases.push("validate_state");
+    aliases.push("invalid state");
+  }
+  if (hasWorkItem || hasBacklog) {
+    aliases.push("issue state");
+  }
+  if (hasTransition || hasWorkItem) {
+    aliases.push("state transition");
+  }
+  if (hasWorkItem || hasTransition) {
+    aliases.push("state validation");
+    aliases.push("state_id");
+  }
+  if (isApiRejectAsk(userMessage)) {
+    aliases.push("ValidationError");
+  }
+  return aliases;
+}
+
+/** Noun phrase after "where is / where do we parse" — not the complaint subject. */
+function locateObjectPhrase(text: string): string | undefined {
+  const match = text.match(
+    /\bwhere\s+(?:is|are|do\s+we|does)\s+(?:(?:we\s+)?(?:parse|find|write|store|define|enforce|read)\s+)?(?:(?:the|a|an)\s+)?(.+?)(?:\?|,|\s+and\s+what|\s+and\s+how|$)/i
+  );
+  if (!match?.[1]) {
+    return undefined;
+  }
+  const cleaned = match[1]
+    .replace(/\b(defined|written|enforced|in this repo|in the codebase)\b.*$/i, "")
+    .trim();
+  const tokens = significantTokens(cleaned).filter((token) => !isJunkSearchToken(token));
+  if (tokens.length === 0) {
+    return undefined;
+  }
+  return tokens.slice(0, 4).join(" ");
+}
+
+function isJunkSearchToken(token: string): boolean {
+  const normalized = token.toLowerCase().replace(/[./]+$/g, "");
+  return normalized.length < 3 || JUNK_SEARCH_TOKEN.has(normalized);
 }
 
 function significantTokens(text: string): string[] {

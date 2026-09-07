@@ -9,6 +9,7 @@ import {
 } from "./codeHostHttp";
 import {
   GITHUB_PR_REJECTED_MESSAGE,
+  explainPullCreateFailure,
   GITHUB_WRITE_PERMISSION_MESSAGE,
   githubTokenHasWriteScopes,
   normalizeWriteFiles,
@@ -651,54 +652,49 @@ export class GitHubClient implements CodeHostClient {
       throw new CodeHostError(validationError ?? "Enter a valid branch name.", "unsupported", 400, this.provider);
     }
 
-    await this.assertWritePermissions(coords);
+    await this.assertClassicOAuthWriteScopesIfPresent(coords);
 
     const base = (input.base ?? coords.branch)?.trim() || (await this.resolveBranch({ ...coords, branch: undefined }));
-    const baseRef = await codeHostRequestJson<{ object: { sha: string } }>(
-      `${this.repoUrl(coords)}/git/ref/heads/${encodeURIComponent(base)}`,
-      {
-        headers: this.headers,
-        provider: this.provider,
-        rateLimitTracker: this.options.rateLimitTracker
-      }
-    );
-    const baseCommit = await codeHostRequestJson<{ tree: { sha: string } }>(
-      `${this.repoUrl(coords)}/git/commits/${baseRef.object.sha}`,
-      {
-        headers: this.headers,
-        provider: this.provider,
-        rateLimitTracker: this.options.rateLimitTracker
-      }
-    );
-
-    const blobShas: Array<{ path: string; sha: string }> = [];
-    for (const file of files) {
-      blobShas.push({ path: file.path, sha: await this.createBlob(coords, file.content) });
-    }
-    const treeSha = await this.createTree(coords, baseCommit.tree.sha, blobShas);
-    const commitSha = await this.createCommit(coords, {
-      message: title,
-      treeSha,
-      parentSha: baseRef.object.sha
-    });
-    await this.createRef(coords, branch, commitSha);
     try {
-      const pull = await this.createPull(coords, {
-        title,
-        body: input.body,
-        head: branch,
-        base
-      });
-      return {
-        number: pull.number,
-        htmlUrl: pull.htmlUrl,
-        branch,
-        commitSha,
-        title
-      };
+      await this.ensureBranchFromBase(coords, branch, base);
+      let commitSha = "";
+      for (const file of files) {
+        commitSha = await this.putContentsFile(coords, {
+          path: file.path,
+          content: file.content,
+          branch,
+          base,
+          message: title
+        });
+      }
+      try {
+        const pull = await this.createPull(coords, {
+          title,
+          body: input.body,
+          head: branch,
+          base
+        });
+        return {
+          number: pull.number,
+          htmlUrl: pull.htmlUrl,
+          branch,
+          commitSha,
+          title
+        };
+      } catch (error) {
+        if (error instanceof CodeHostError && error.status === 422) {
+          throw new CodeHostError(GITHUB_PR_REJECTED_MESSAGE, "network", 422, this.provider);
+        }
+        throw error;
+      }
     } catch (error) {
-      if (error instanceof CodeHostError && error.status === 422) {
-        throw new CodeHostError(GITHUB_PR_REJECTED_MESSAGE, "network", 422, this.provider);
+      if (error instanceof CodeHostError && error.code === "not_found" && error.message === "Resource not found.") {
+        throw new CodeHostError(
+          `GitHub could not find the repository or branch needed to open this pull request (${branch} from ${base}). Nothing was created.`,
+          "not_found",
+          404,
+          this.provider
+        );
       }
       throw error;
     }
@@ -731,7 +727,12 @@ export class GitHubClient implements CodeHostClient {
     return { filePaths, truncated: Boolean(tree.truncated) };
   }
 
-  private async assertWritePermissions(coords: RepoCoordinates): Promise<void> {
+  /**
+   * Classic OAuth tokens advertise scopes on GET /repos. GitHub App installation
+   * tokens omit that header — do not treat a missing header (or GET /installation)
+   * as “Accept the App update.” Write failures use GitHub’s own 403 body.
+   */
+  private async assertClassicOAuthWriteScopesIfPresent(coords: RepoCoordinates): Promise<void> {
     let response: Response;
     try {
       response = await codeHostRequest(this.repoUrl(coords), {
@@ -739,33 +740,175 @@ export class GitHubClient implements CodeHostClient {
         provider: this.provider,
         rateLimitTracker: this.options.rateLimitTracker
       });
-    } catch (error) {
-      if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
-        throw this.writePermissionError(error.status);
-      }
-      throw error;
+    } catch {
+      return;
     }
     if (!response.ok) {
-      throw this.writePermissionError(response.status);
+      return;
     }
     const scopeOk = githubTokenHasWriteScopes(response.headers.get("x-oauth-scopes"));
+    await response.json().catch(() => undefined);
     if (scopeOk === false) {
       throw this.writePermissionError(403);
     }
-    const repo = (await response.json()) as { permissions?: { push?: boolean } };
-    if (repo.permissions && repo.permissions.push === false) {
-      throw this.writePermissionError(403);
+  }
+
+  /**
+   * GitHub Contents PUT cannot create a branch. GitLab/Bitbucket can, via
+   * start_branch / parents. Without this, writing to `coop/patch` 404s with
+   * "Resource not found."
+   */
+  private async ensureBranchFromBase(coords: RepoCoordinates, branch: string, base: string): Promise<void> {
+    if (branch === base) {
+      return;
     }
+    try {
+      await this.getBranchHeadSha(coords, branch);
+      return;
+    } catch (error) {
+      if (!(error instanceof CodeHostError && error.code === "not_found")) {
+        throw error;
+      }
+    }
+    let baseSha: string;
+    try {
+      baseSha = await this.getBranchHeadSha(coords, base);
+    } catch (error) {
+      if (error instanceof CodeHostError && error.code === "not_found") {
+        throw new CodeHostError(
+          `GitHub could not find base branch ${base}. Nothing was created.`,
+          "not_found",
+          404,
+          this.provider
+        );
+      }
+      throw error;
+    }
+    try {
+      await this.createRef(coords, branch, baseSha);
+    } catch (error) {
+      if (error instanceof CodeHostError && error.status === 422) {
+        await this.getBranchHeadSha(coords, branch);
+        return;
+      }
+      if (error instanceof CodeHostError && error.code === "not_found") {
+        throw new CodeHostError(
+          `GitHub could not create branch ${branch}. Nothing was created.`,
+          "not_found",
+          404,
+          this.provider
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async getBranchHeadSha(coords: RepoCoordinates, branch: string): Promise<string> {
+    const name = branch.replace(/^refs\/heads\//, "");
+    const wanted = `refs/heads/${name}`;
+    const refPath = `heads/${name}`
+      .split("/")
+      .map((segment) => encodeURIComponent(segment))
+      .join("/");
+    const matches = await codeHostRequestJson<Array<{ ref?: string; object?: { sha?: string } }>>(
+      `${this.repoUrl(coords)}/git/matching-refs/${refPath}`,
+      {
+        headers: this.headers,
+        provider: this.provider,
+        rateLimitTracker: this.options.rateLimitTracker
+      }
+    );
+    const exact = Array.isArray(matches)
+      ? matches.find((row) => row.ref === wanted) ?? matches.find((row) => row.object?.sha?.trim())
+      : undefined;
+    const sha = exact?.object?.sha?.trim();
+    if (!sha) {
+      throw new CodeHostError("Could not read the base branch for this pull request.", "not_found", 404, this.provider);
+    }
+    return sha;
+  }
+
+  private contentsUrl(coords: RepoCoordinates, filePath: string): string {
+    return `${this.repoUrl(coords)}/contents/${pathSegments(filePath)}`;
+  }
+
+  private async readContentSha(
+    coords: RepoCoordinates,
+    filePath: string,
+    ref: string
+  ): Promise<string | undefined> {
+    try {
+      const data = await codeHostRequestJson<{ sha?: string }>(
+        `${this.contentsUrl(coords, filePath)}?ref=${encodeURIComponent(ref)}`,
+        {
+          headers: this.headers,
+          provider: this.provider,
+          rateLimitTracker: this.options.rateLimitTracker
+        }
+      );
+      return typeof data.sha === "string" && data.sha.trim() ? data.sha : undefined;
+    } catch (error) {
+      if (error instanceof CodeHostError && error.code === "not_found") {
+        return undefined;
+      }
+      throw error;
+    }
+  }
+
+  private async putContentsFile(
+    coords: RepoCoordinates,
+    input: { path: string; content: string; branch: string; base: string; message: string }
+  ): Promise<string> {
+    const sha =
+      (await this.readContentSha(coords, input.path, input.branch)) ??
+      (input.branch !== input.base ? await this.readContentSha(coords, input.path, input.base) : undefined);
+    let data: { commit?: { sha?: string } };
+    try {
+      data = await this.writeJson<{ commit?: { sha?: string } }>(
+        this.contentsUrl(coords, input.path),
+        {
+          message: input.message,
+          content: Buffer.from(input.content, "utf8").toString("base64"),
+          branch: input.branch,
+          ...(sha ? { sha } : {})
+        },
+        "PUT"
+      );
+    } catch (error) {
+      if (error instanceof CodeHostError && error.code === "not_found") {
+        throw new CodeHostError(
+          `GitHub could not write ${input.path} on ${input.branch}. Nothing was created.`,
+          "not_found",
+          404,
+          this.provider
+        );
+      }
+      throw error;
+    }
+    const commitSha = data.commit?.sha?.trim();
+    if (!commitSha) {
+      throw new CodeHostError("GitHub did not return a commit SHA.", "network", 502, this.provider);
+    }
+    return commitSha;
   }
 
   private writePermissionError(status: number): CodeHostError {
     return new CodeHostError(GITHUB_WRITE_PERMISSION_MESSAGE, "auth", status === 401 ? 401 : 403, this.provider);
   }
 
-  private async writeJson<T>(url: string, body: unknown): Promise<T> {
+  private writeFailureError(error: CodeHostError): CodeHostError {
+    return new CodeHostError(
+      explainPullCreateFailure("github", error.message),
+      "auth",
+      error.status === 401 ? 401 : 403,
+      this.provider
+    );
+  }
+
+  private async writeJson<T>(url: string, body: unknown, method = "POST"): Promise<T> {
     try {
       return await codeHostRequestJson<T>(url, {
-        method: "POST",
+        method,
         headers: { ...this.headers, "Content-Type": "application/json" },
         body: JSON.stringify(body),
         provider: this.provider,
@@ -773,10 +916,7 @@ export class GitHubClient implements CodeHostClient {
       });
     } catch (error) {
       if (error instanceof CodeHostError && (error.status === 401 || error.status === 403)) {
-        throw this.writePermissionError(error.status);
-      }
-      if (error instanceof CodeHostError && error.status === 422) {
-        throw new CodeHostError(GITHUB_PR_REJECTED_MESSAGE, "network", 422, this.provider);
+        throw this.writeFailureError(error);
       }
       throw error;
     }

@@ -102,4 +102,4 @@ Support engineering is context work. The faster you can reconstruct ownership, h
 
 **Team leads and managers:** [Book a demo](https://coop-ai.dev/demo) for a walkthrough with your stack and integrations.
 
-**Security reviewers:** Read the [security architecture docs](/docs/security-architecture) or reach us at [hello@coop-ai.dev](mailto:hello@coop-ai.dev).
+**Security reviewers:** Read the [security architecture docs](/docs/security-architecture) or reach us at [support@coop-ai.dev](mailto:support@coop-ai.dev).

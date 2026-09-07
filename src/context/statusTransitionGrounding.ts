@@ -1,4 +1,5 @@
 import { isIncidentShapedQuery, isStatusTransitionIntent } from "./incidentIntent";
+import { isOpenFileReviewAsk } from "../chat/plainChatExplain";
 
 /**
  * Status-transition / stuck-status grounding for plain chat.
@@ -58,11 +59,13 @@ export type FollowedStatusFile = {
   content: string;
 };
 
-const STATUS_TRANSITION_ASK_RE =
-  /\b(?:stuck\s+(?:in\s+)?[A-Z_]{2,}|(?:where|how)\s+(?:does|do|is|can)\s+(?:\w+\s+){0,6}status\s+(?:move|change|become|transition|advance|get\s+(?:to|updated)|go)|(?:status|state)\s+(?:move|transition|change|advance)|(?:moves?|transitions?|changes?)\s+(?:to|into|from)\s+[A-Z_]{2,}|(?:from\s+)?[A-Z_]{2,}\s*(?:→|->|to)\s*[A-Z_]{2,}|(?:why\s+(?:is|are|does|do).{0,40}\b(?:pending|stuck|still)\b)|(?:waiting\s+(?:on|for|in)\s+).{0,20}\b(?:status|pending|state)\b)\b/i;
-
 const KNOWN_STATUS_TOKEN =
   "PENDING|COMPLETED|COMPLETE|SIGNED|REJECTED|DRAFT|CANCELLED|CANCELED|FAILED|PROCESSING|ACTIVE|INACTIVE|OPEN|CLOSED|RUNNING|SUCCESS|ERROR";
+
+const STATUS_TRANSITION_ASK_RE = new RegExp(
+  String.raw`\b(?:stuck\s+(?:in\s+)?(?:${KNOWN_STATUS_TOKEN})|(?:where|how)\s+(?:does|do|is|can)\s+(?:\w+\s+){0,6}status\s+(?:move|change|become|transition|advance|get\s+(?:to|updated)|go)|(?:status|state)\s+(?:move|transition|change|advance)|(?:moves?|transitions?|changes?)\s+(?:to|into|from)\s+(?:${KNOWN_STATUS_TOKEN})|(?:from\s+)?(?:${KNOWN_STATUS_TOKEN})\s*(?:→|->|to)\s*(?:${KNOWN_STATUS_TOKEN})|(?:why\s+(?:is|are|does|do).{0,40}\b(?:pending|stuck|still)\b)|(?:waiting\s+(?:on|for|in)\s+).{0,20}\b(?:status|pending|state)\b)\b`,
+  "i"
+);
 
 const STATUS_WORD_RE = new RegExp(`\\b(${KNOWN_STATUS_TOKEN})\\b`, "gi");
 
@@ -88,6 +91,11 @@ const RECIPIENT_STATUS_TYPES = new Set([
 
 /** Detect stuck-status / status-transition asks for plain chat. */
 export function isStatusTransitionAsk(message: string | undefined): boolean {
+  // PR / code review of the open function is not a stuck-status job.
+  // "PR touching" used to match WORD-to-WORD and steal the turn into A8.
+  if (isOpenFileReviewAsk(message)) {
+    return false;
+  }
   // Incident / on-call reconstruction owns failure asks. "What's still open?" on a
   // webhook failure must not become A8 status-machine synthesis (OPEN is a status token).
   // Clear PENDING→COMPLETED / stuck-status asks still use A8 via isStatusTransitionIntent.

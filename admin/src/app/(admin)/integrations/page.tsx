@@ -34,7 +34,7 @@ export default function IntegrationsPage() {
     refreshSuccessProvider,
     error,
     load
-  } = useIntegrations();
+  } = useIntegrations({ poll: true });
 
   useEffect(() => {
     for (const entry of OAUTH_RETURN_BANNERS) {

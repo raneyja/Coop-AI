@@ -5,7 +5,6 @@ import type { PromptLibraryItem } from "./promptLibraryTypes";
 import type { CodeHostProviderPreference, GithubRepoOption, IntegrationChatProvider } from "../../chat/types";
 import { SettingsHub, SettingsNavHeader, type SettingsLightningSummary } from "./settings/SettingsHub";
 import { SettingsDetailView } from "./settings/SettingsDetailViews";
-import type { IdentityDirectory } from "../../identity/types";
 import type { Preferences, SettingsDetailScreen, SettingsScreen } from "./settings/types";
 import { settingsScreenParent } from "./settings/types";
 
@@ -106,7 +105,6 @@ type SettingsPanelProps = {
   };
   onUpdatePinnedPrompts: (pinnedIds: string[]) => void;
   onManagePromptLibrary: () => void;
-  onSaveIdentityDirectory: (directory: IdentityDirectory) => void;
   collections: import("./settings/types").SettingsCollectionSummary[];
   collectionsError?: string;
   onRequestCollections: () => void;
@@ -125,6 +123,7 @@ type SettingsPanelProps = {
   onAttachAgentsMd: () => void;
   onOpenAgentsMd: () => void;
   onStartFromAgentsMdTemplate: () => void;
+  onDetachAgentsMd?: () => void;
   onAddVisibleMemory?: (fact: { text: string; source: string; repoId?: string }) => void;
   onClearVisibleMemory?: (id?: string) => void;
   onCompleteOnboarding?: () => void;

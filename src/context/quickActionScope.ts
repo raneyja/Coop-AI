@@ -2,6 +2,7 @@ import type { RepoContext } from "../chat/types";
 import type { QuickActionId } from "../webview/types";
 import { shouldSkipLocalEditorAttachForRepoScope } from "../workspace/repoEvidenceIsolation";
 import { isExplicitRepoScope } from "./contextScope";
+import { openFileRelatedToGapsFocus } from "./knowledgeGapsFocus";
 import { isExternalFileContext } from "./outsideWorkspaceFile";
 
 /** Display path for repo-wide ownership analysis (not a real file path). */
@@ -43,6 +44,7 @@ export function shouldSkipOpenFileAttach(options: {
   quickAction?: string;
   hasIntegrationProvider?: boolean;
   allMentionsOutOfScope?: boolean;
+  userFocus?: string;
   context: Pick<RepoContext, "file" | "scope" | "owner" | "repo">;
 }): boolean {
   if (options.quickAction === "understand-repo") {
@@ -56,6 +58,15 @@ export function shouldSkipOpenFileAttach(options: {
   }
   // Gaps / Owner / sticky Use-repo with no file chip: leftover tabs are not evidence.
   if (isRepoWideQuickActionId(options.quickAction) && !options.context.file?.trim()) {
+    return true;
+  }
+  // Gaps + typed focus: an unrelated sticky chip is not Strong hunt evidence.
+  if (
+    options.quickAction === "knowledge-gaps" &&
+    options.userFocus?.trim() &&
+    options.context.file?.trim() &&
+    !openFileRelatedToGapsFocus(options.context.file, options.userFocus)
+  ) {
     return true;
   }
   return shouldSkipLocalEditorAttachForRepoScope(options.context);
@@ -147,6 +158,44 @@ export function hasExplicitRepoSelection(context: RepoContext): boolean {
   return (
     isExplicitRepoScope(context) && Boolean(context.owner?.trim() && context.repo?.trim())
   );
+}
+
+/**
+ * Indexed gather and repo chips: the user picked Use-repo or a file bound to
+ * owner/repo. Settings defaults and workspace-membership alone do not count.
+ */
+export function isHonestRepoIntelligenceScope(
+  context: RepoContext,
+  requestFile?: string
+): boolean {
+  if (hasExplicitRepoSelection(context)) {
+    return true;
+  }
+  const file = requestFile?.trim() || context.file?.trim();
+  return Boolean(file && context.owner?.trim() && context.repo?.trim());
+}
+
+/**
+ * What a thread may restore into chat. Owner/repo without Use-repo or a file
+ * is leftover Settings/ghost context — drop it.
+ */
+export function repoContextForActivatedThread(threadRepo: RepoContext | undefined): RepoContext {
+  if (!threadRepo) {
+    return {};
+  }
+  if (threadRepo.file?.trim()) {
+    return threadRepo;
+  }
+  if (hasExplicitRepoSelection(threadRepo)) {
+    return {
+      provider: threadRepo.provider,
+      owner: threadRepo.owner,
+      repo: threadRepo.repo,
+      branch: threadRepo.branch,
+      scope: "repo"
+    };
+  }
+  return {};
 }
 
 export function quickActionBlockedMessage(actionId: QuickActionId, context: RepoContext): string {

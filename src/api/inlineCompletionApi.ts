@@ -20,6 +20,7 @@ export type InlineCompletionOrg = {
   userId?: string;
   principal?: string;
   planQuota?: PlanQuotaService;
+  usageTier?: import("../server/usageTiers").UsageTier | null;
 };
 
 export type V1InlineCompletionBody = {
@@ -191,7 +192,10 @@ export async function handleInlineCompletionRequest(
           stream: true,
           fim: route.mode === "fim",
           latencyMs: Date.now() - started
-        }
+        },
+        selection: "auto",
+        usageTier: org.usageTier,
+        forceAutoBucket: true
       });
     }
 
@@ -226,7 +230,10 @@ export async function handleInlineCompletionRequest(
       model: result.model,
       userId: org.userId,
       principal: org.principal ?? "anonymous",
-      metadata: { source: "inline", fim: route.mode === "fim", latencyMs }
+      metadata: { source: "inline", fim: route.mode === "fim", latencyMs },
+      selection: "auto",
+      usageTier: org.usageTier,
+      forceAutoBucket: true
     });
   } catch (error) {
     writeJson(response, 502, {

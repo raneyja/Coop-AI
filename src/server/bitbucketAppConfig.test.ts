@@ -31,7 +31,7 @@ test("BitbucketAppService authorize URL includes repository scopes", () => {
   const parsed = new URL(url);
   assert.equal(parsed.origin + parsed.pathname, "https://bitbucket.org/site/oauth2/authorize");
   assert.equal(parsed.searchParams.get("client_id"), "bb-id");
-  assert.match(parsed.searchParams.get("scope") ?? "", /repository/);
-  assert.match(parsed.searchParams.get("scope") ?? "", /pullrequest/);
+  assert.match(parsed.searchParams.get("scope") ?? "", /repository:write/);
+  assert.match(parsed.searchParams.get("scope") ?? "", /pullrequest:write/);
   assert.ok(parsed.searchParams.get("state"));
 });

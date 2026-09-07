@@ -12,6 +12,22 @@ import {
   setLastPatchMessageTimestamp,
   upsertPatchRecord
 } from "./patchSession";
+import {
+  isTestSourcePath,
+  parseExportedSutLiterals,
+  rewritePatchSetToMatchConstants,
+  rewritePatchSetToMatchSut,
+  sutNumericExpectation,
+  sutPathForEditAsk
+} from "./editSutAttach";
+import { collectOpenPatchFileBytes } from "./patchTarget";
+import { normalizeRelativePath } from "../context/localFileContext";
+import { lookupPatchFileContent } from "./patchFileContents";
+import {
+  COMMENT_ONLY_REWRITE_REJECTED_ERROR,
+  snapPatchSetToSelection,
+  type LineRange
+} from "./snapPatchToSelection";
 
 function patchReadyLabel(patches: ParsedPatchSet): string {
   const fileCount = countUniqueFiles(patches);
@@ -45,7 +61,57 @@ export type HandlePatchCompleteOptions = {
    * this unset so parse failures still surface.
    */
   ignoreParseFailure?: boolean;
+  /** Highlighted 1-based inclusive range — SEARCH is snapped to these bytes. */
+  selectedLines?: LineRange;
+  /** Open file chip path so we only retarget hunks on that file. */
+  file?: string;
+  /** Exact highlighted text, used when the live buffer cannot be read. */
+  selectionText?: string;
+  /** File bodies already loaded for this turn (pending attach / open tab). */
+  fileContents?: Readonly<Record<string, string>>;
+  /** User asked for a comment/summary only — do not apply signature rewrites. */
+  commentOnly?: boolean;
+  /** /edit ask — used to encode attached SUT numbers instead of user English. */
+  ask?: string;
 };
+
+function lookupAttachedFileContent(
+  relativePath: string,
+  fileContents: Readonly<Record<string, string>> | undefined
+): string | undefined {
+  return lookupPatchFileContent(relativePath, fileContents);
+}
+
+/** Test-file /edit: include the sibling implementation so assertions encode the SUT. */
+function filesForSutGrounding(
+  options: HandlePatchCompleteOptions
+): Array<{ path: string; content: string }> {
+  const files: Array<{ path: string; content: string }> = [];
+  const seen = new Set<string>();
+  const push = (path: string, content: string): void => {
+    const key = normalizeRelativePath(path);
+    if (!key || seen.has(key) || !content.trim()) {
+      return;
+    }
+    seen.add(key);
+    files.push({ path: key, content });
+  };
+  for (const [path, content] of Object.entries(options.fileContents ?? {})) {
+    push(path, content);
+  }
+  const sibling = sutPathForEditAsk(options.file);
+  if (sibling) {
+    const fromDocs = collectOpenPatchFileBytes(sibling);
+    if (fromDocs?.trim()) {
+      push(sibling, fromDocs);
+    }
+    const attached = lookupAttachedFileContent(sibling, options.fileContents);
+    if (attached?.trim()) {
+      push(sibling, attached);
+    }
+  }
+  return files;
+}
 
 export async function handlePatchComplete(
   content: string,
@@ -85,19 +151,64 @@ export async function handlePatchComplete(
   setLastPatchApplyError(undefined);
   setLastPatchMessageTimestamp(options.messageTimestamp);
 
-  const fileCount = countUniqueFiles(parsed.patches);
-  const hunkCount = countHunks(parsed.patches);
+  const patches = snapPatchSetToSelection(parsed.patches, {
+    selectedLines: options.selectedLines,
+    preferredFile: options.file,
+    selectionText: options.selectionText,
+    commentOnly: options.commentOnly,
+    readContent: (relativePath) =>
+      lookupAttachedFileContent(relativePath, options.fileContents) ??
+      collectOpenPatchFileBytes(relativePath)
+  });
+  const sutFiles = filesForSutGrounding(options);
+  const expectation = options.ask ? sutNumericExpectation(options.ask, sutFiles) : undefined;
+  let grounded = expectation
+    ? rewritePatchSetToMatchSut(patches, expectation.actual)
+    : patches;
+  const sutBody = sutFiles
+    .filter((file) => file.path && !isTestSourcePath(file.path))
+    .map((file) => file.content)
+    .join("\n");
+  grounded = rewritePatchSetToMatchConstants(grounded, parseExportedSutLiterals(sutBody));
+
+  if (options.commentOnly && countHunks(grounded) === 0) {
+    setLastAssistantPatchContent(content);
+    setLastPatchApplyError(COMMENT_ONLY_REWRITE_REJECTED_ERROR);
+    setLastPatchMessageTimestamp(options.messageTimestamp);
+    emitPatchEvent("edit.patch_failed", { phase: "comment_only", error: COMMENT_ONLY_REWRITE_REJECTED_ERROR });
+    const failed: PatchCardState = {
+      status: "failed",
+      messageTimestamp: options.messageTimestamp,
+      fileCount: 0,
+      hunkCount: 0,
+      files: [],
+      error: COMMENT_ONLY_REWRITE_REJECTED_ERROR,
+      suppressMarkdown: true
+    };
+    options.publish?.({
+      cards: [],
+      activeMessageTimestamp: options.messageTimestamp,
+      suppressedMessageTimestamps: options.messageTimestamp ? [options.messageTimestamp] : []
+    });
+    return failed;
+  }
+
+  const fileCount = countUniqueFiles(grounded);
+  const hunkCount = countHunks(grounded);
   void vscode.commands.executeCommand("setContext", "coopAI.patchPending", true);
   emitPatchEvent("edit.patch_parsed", { fileCount, hunkCount });
 
-  const pending = buildPatchCardState(parsed.patches, {
+  const pending = buildPatchCardState(grounded, {
     status: "pending",
-    messageTimestamp: options.messageTimestamp
+    messageTimestamp: options.messageTimestamp,
+    fileContents: options.fileContents
   });
   const pendingWithSuppress = withSuppressionRegistry({ ...pending, suppressMarkdown: true });
 
   if (options.messageTimestamp !== undefined) {
-    upsertPatchRecord(options.messageTimestamp, parsed.patches, pendingWithSuppress);
+    upsertPatchRecord(options.messageTimestamp, grounded, pendingWithSuppress, {
+      fileContents: options.fileContents ? { ...options.fileContents } : undefined
+    });
   }
 
   if (options.publish) {
@@ -107,7 +218,7 @@ export async function handlePatchComplete(
       activeMessageTimestamp: options.messageTimestamp
     });
   } else {
-    showPatchReadyNotification(parsed.patches);
+    showPatchReadyNotification(grounded);
   }
 
   return pendingWithSuppress;

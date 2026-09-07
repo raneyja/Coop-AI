@@ -3,7 +3,7 @@ title: Inline autocomplete
 description: Ghost-text code completions in VS Code — default on, FIM, graph context, and Copilot coexistence.
 section: extension
 order: 3
-lastUpdated: "2026-07-12"
+lastUpdated: "2026-09-03"
 ---
 
 CoopAI inline autocomplete shows **ghost-text suggestions** as you type in the editor. Suggestions stream from the Coop API and appear via VS Code's `InlineCompletionItemProvider`.
@@ -25,7 +25,7 @@ Autocomplete is controlled from **Settings → Preferences → Model & chat** �
 ![Model & chat — assigned models and Enable inline autocomplete](/screenshots/docs/extension-autocomplete-settings-on-and-off.png)
 <!-- /figures -->
 
-The **Autocomplete** row in the read-only assignment list shows **On** or **Off** based on that checkbox. Chat, quick actions, and edit mode are always on. There is no provider or model picker in production — see [Model assignments](/docs/model-assignments).
+The **Autocomplete** row in the read-only assignment list shows **On** or **Off** based on that checkbox. Chat, quick actions, and edit mode are always on. Autocomplete always uses the assigned **Codestral** model and does not follow the **model menu in chat** — see [Model assignments](/docs/model-assignments).
 
 **Success:** With **Enable inline autocomplete** checked and saved, typing in an eligible file (e.g. `.ts`) shows ghost text after a short pause.
 
@@ -117,7 +117,7 @@ Run **CoopAI: Show Autocomplete Help** from the Command Palette for a quick refe
 | `coopAI.autocomplete.debounceMs` | `300` | Pause after typing before auto-trigger (0–2000) |
 | `coopAI.autocomplete.requestTimeoutMs` | `1500` | Drop slow requests after this many ms (100–5000) |
 | `coopAI.autocomplete.maxSuggestionLength` | `200` | Max characters in one suggestion (8–500) |
-| `coopAI.autocomplete.showMultipleSuggestions` | `false` | Request and cycle ranked alternatives (Alt+[ / Alt+]) |
+| `coopAI.autocomplete.showMultipleSuggestions` | `false` | Cycle **distinct** ranked suggestions (Alt+[ / Alt+]). Near-duplicates (`||` vs `??`) stay one ghost. |
 | `coopAI.autocomplete.projectImports` | `[]` | Extra import paths to bias project-style completions |
 
 Advanced `coopAI.autocomplete.model` presets exist for developer tuning; production inline routing uses the assigned **Codestral** model regardless. See [Extension settings](/docs/extension-settings).
@@ -199,3 +199,4 @@ Direct API usage: [API reference — Inline completion](/docs/api-reference#inli
 - [Extension settings](/docs/extension-settings)
 - [Getting started](/docs/getting-started)
 - [Edit mode](/docs/edit-mode) — `/edit` patches with apply and undo
+- [Create pull request](/docs/create-pull-request) — open a PR from the patch card or by asking in chat

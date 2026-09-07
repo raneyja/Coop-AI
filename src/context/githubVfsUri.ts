@@ -1,7 +1,8 @@
 import { normalizeRelativePath } from "./localFileContext";
 
 export function parseGithubVfsUri(raw: string): { owner: string; repo: string; file: string } | undefined {
-  const normalized = raw
+  const withoutQuery = (raw.split("#")[0] ?? raw).split("?")[0] ?? raw;
+  const normalized = withoutQuery
     .replace(/^vscode-vfs:\/\/github/i, "")
     .replace(/^github:\/\//i, "")
     .replace(/^\//, "");

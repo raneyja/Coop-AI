@@ -5,19 +5,18 @@ import {
   ACTIVITY_START_DELAY_MS,
   activityPaceElapsedMs,
   buildConcreteActivityMessages,
-  buildWaitingActivityLabels,
   hasTerminalPreparingSignal,
   isSynthesisActivityPhase,
   resolvePacedActivityIndex,
-  SYNTHESIS_TODO_MESSAGES,
   type ThinkingRotationOptions
 } from "./thinkingMessageRotation";
 import type { IntentFeedbackState, JobProgressState } from "./types";
+import { activityFromAgentSteps, extractFileChipsFromLabels } from "../chat/chatTurnActivity";
+
+export { extractFileChipsFromLabels };
 
 /** Keep the checklist short so timed reveal stays feelable during long jobs. */
 const MAX_ACTIVITY_TODOS = 5;
-/** UX-G2: extra agent tool steps fold; Sources stay above the answer. */
-const MAX_VISIBLE_AGENT_STEPS = 3;
 
 export type AgentTodoStatus = "pending" | "in_progress" | "completed";
 
@@ -25,6 +24,8 @@ export type AgentTodoItem = {
   id: string;
   content: string;
   status: AgentTodoStatus;
+  /** Expandable hit list / error under a real search row. */
+  detail?: string;
 };
 
 export type AgentToolRow = {
@@ -92,12 +93,7 @@ export function buildActivityTodosFromFeedback(
   }
 
   if (!prep.length) {
-    const waiting = buildWaitingActivityLabels(intentFeedback, jobProgress, options);
-    if (!waiting.length) {
-      return [];
-    }
-    const label = waiting[waitingLabelStep % waiting.length] ?? waiting[0];
-    return [{ id: `wait:0:${label}`, content: label, status: "in_progress" }];
+    return [];
   }
 
   const activeIndex = resolvePacedActivityIndex({
@@ -135,11 +131,11 @@ function revealActivityMessages(prep: string[], activeIndex: number): string[] {
 
 function buildSynthesisActivityTodos(
   prep: string[],
-  intentFeedback: IntentFeedbackState | undefined,
-  jobProgress: JobProgressState | undefined,
-  options: ThinkingRotationOptions,
+  _intentFeedback: IntentFeedbackState | undefined,
+  _jobProgress: JobProgressState | undefined,
+  _options: ThinkingRotationOptions,
   synthesisElapsedMs: number,
-  waitingLabelStep: number,
+  _waitingLabelStep: number,
   gatherElapsedMs: number
 ): AgentTodoItem[] {
   // Timed prep + every live tool line that already ran (Slack must stay visible).
@@ -163,39 +159,7 @@ function buildSynthesisActivityTodos(
     return [...completedPrep.slice(0, -1), { ...last, status: "in_progress" }];
   }
 
-  const synthesisMessages = [...SYNTHESIS_TODO_MESSAGES];
-  const activeIndex = resolvePacedActivityIndex({
-    concreteCount: synthesisMessages.length,
-    elapsedMs: synthPace,
-    paced: true
-  });
-  const revealed = synthesisMessages.slice(0, activeIndex + 1);
-  const synthesisTodos = buildNarrativeTimeline(revealed, activeIndex).map((entry) => ({
-    id: `synth:${entry.id}`,
-    content: entry.label,
-    status: narrativeStatusToTodo(entry.status)
-  }));
-
-  // After the synthesis list is exhausted, keep the last row alive by rotating soft labels.
-  const onFinalSynthesis = activeIndex >= synthesisMessages.length - 1;
-  if (onFinalSynthesis && synthesisTodos.length) {
-    const waiting = buildWaitingActivityLabels(intentFeedback, jobProgress, {
-      ...options,
-      rotationSeed: `${options.rotationSeed ?? "synthesis"}:live`
-    });
-    const whisper = waiting[waitingLabelStep % waiting.length];
-    const last = synthesisTodos[synthesisTodos.length - 1];
-    if (last && whisper) {
-      synthesisTodos[synthesisTodos.length - 1] = {
-        ...last,
-        content: whisper,
-        status: "in_progress"
-      };
-    }
-  }
-
-  // At most one newly active synthesis row plus previously shown prep — never a sudden pile.
-  return [...completedPrep.slice(-2), ...synthesisTodos];
+  return completedPrep;
 }
 
 function narrativeStatusToTodo(status: NarrativeStep["status"]): AgentTodoStatus {
@@ -222,35 +186,6 @@ export function toolRowsFromTodos(todos: AgentTodoItem[]): AgentToolRow[] {
     });
 }
 
-/** Pull `path`-like tokens from status lines for the files toolbar. */
-export function extractFileChipsFromLabels(labels: string[]): AgentFileChip[] {
-  const chips: AgentFileChip[] = [];
-  const seen = new Set<string>();
-  for (const label of labels) {
-    const backtick = [...label.matchAll(/`([^`]+)`/g)];
-    for (const match of backtick) {
-      const path = (match[1] ?? "").trim();
-      if (!path || seen.has(path)) {
-        continue;
-      }
-      seen.add(path);
-      const lower = label.toLowerCase();
-      const action: AgentFileChip["action"] = lower.includes("read")
-        ? "read"
-        : lower.includes("search")
-          ? "searched"
-          : "explored";
-      chips.push({ path, action });
-    }
-    const pathLike = label.match(/\b([\w./-]+\.(?:ts|tsx|js|jsx|py|go|rs|java|md|json|yml|yaml))\b/);
-    if (pathLike?.[1] && !seen.has(pathLike[1])) {
-      seen.add(pathLike[1]);
-      chips.push({ path: pathLike[1], action: "explored" });
-    }
-  }
-  return chips.slice(0, 40);
-}
-
 export function mergeAgentActivity(
   base: AgentActivityState,
   overlay?: Partial<AgentActivityState>
@@ -266,80 +201,54 @@ export function mergeAgentActivity(
   };
 }
 
+export type AgentExplorationSummary = {
+  explored?: string;
+  exploring?: string;
+};
+
+/** Cursor-style tally: finished work vs current work — never “N more steps remaining.” */
+export function summarizeAgentExploration(tools: AgentToolRow[]): AgentExplorationSummary | null {
+  if (!tools.length) {
+    return null;
+  }
+  const explored = phraseForTools(
+    "Explored",
+    tools.filter((tool) => tool.status === "done")
+  );
+  const exploring = phraseForTools(
+    "Exploring",
+    tools.filter((tool) => tool.status === "active")
+  );
+  if (!explored && !exploring) {
+    return null;
+  }
+  return { explored, exploring };
+}
+
+function phraseForTools(verb: "Explored" | "Exploring", tools: AgentToolRow[]): string | undefined {
+  if (!tools.length) {
+    return undefined;
+  }
+  const searches = tools.filter((tool) => tool.kind === "search").length;
+  const files = tools.filter((tool) => tool.kind === "read" || tool.kind === "explore").length;
+  const parts: string[] = [];
+  if (files > 0) {
+    parts.push(`${files} ${files === 1 ? "file" : "files"}`);
+  }
+  if (searches > 0) {
+    parts.push(`${searches} ${searches === 1 ? "search" : "searches"}`);
+  }
+  if (!parts.length) {
+    const n = tools.length;
+    parts.push(`${n} ${n === 1 ? "action" : "actions"}`);
+  }
+  return `${verb} ${parts.join(", ")}`;
+}
+
 export function agentStepsToActivity(
   steps: Array<{ index: number; tool: string; summary: string; completed: boolean }>
 ): AgentActivityState {
-  const extra = Math.max(0, steps.length - MAX_VISIBLE_AGENT_STEPS);
-  const visible = extra > 0 ? steps.slice(0, MAX_VISIBLE_AGENT_STEPS) : steps;
-  const todos: AgentTodoItem[] = visible.map((step) => ({
-    id: `agent-${step.index}-${step.tool}`,
-    content: humanizeAgentSummary(step.tool, step.summary),
-    status: step.completed ? "completed" : "in_progress"
-  }));
-  if (extra > 0) {
-    todos.push({
-      id: "agent-more",
-      content: `${extra} more step${extra === 1 ? "" : "s"}`,
-      status: "pending"
-    });
-  }
-  const tools: AgentToolRow[] = visible.map((step) => ({
-    id: `agent-tool-${step.index}`,
-    kind: toolKindFromName(step.tool),
-    label: humanizeAgentSummary(step.tool, step.summary),
-    status: step.completed ? "done" : "active"
-  }));
-  const files = extractFileChipsFromLabels(steps.map((step) => step.summary));
-  return { todos, tools, files };
-}
-
-function toolKindFromName(tool: string): AgentToolRow["kind"] {
-  if (tool.includes("search")) {
-    return "search";
-  }
-  if (tool.includes("read")) {
-    return "read";
-  }
-  if (tool.includes("list") || tool.includes("directory")) {
-    return "explore";
-  }
-  return "generic";
-}
-
-function humanizeAgentSummary(tool: string, summary: string): string {
-  const trimmed = summary.trim();
-  if (tool === "search_code") {
-    const q = trimmed.replace(/^search_code:\s*/i, "");
-    return q ? `Searched for \`${q}\`` : "Searched the codebase";
-  }
-  if (tool === "read_file") {
-    const path = trimmed.replace(/^read_file:\s*/i, "");
-    return path ? `Read \`${path}\`` : "Read a file";
-  }
-  if (tool === "list_directory") {
-    const path = trimmed.replace(/^list_directory:\s*/i, "") || "/";
-    return `Explored \`${path}\``;
-  }
-  if (tool === "git_blame") {
-    return trimmed.replace(/^git_blame:\s*/i, "Traced blame for ");
-  }
-  if (tool.startsWith("search_")) {
-    const label =
-      tool === "search_slack"
-        ? "Slack"
-        : tool === "search_jira"
-          ? "Jira"
-          : tool === "search_teams"
-            ? "Teams"
-            : tool === "search_notion"
-              ? "Notion"
-              : tool === "search_confluence"
-                ? "Confluence"
-                : tool === "search_google_docs"
-                  ? "Google Docs"
-                  : tool.replace(/^search_/, "");
-    const q = trimmed.replace(new RegExp(`^${tool}:\\s*`, "i"), "");
-    return q ? `Searched ${label} for \`${q}\`` : `Searched ${label}`;
-  }
-  return trimmed || tool;
+  // Keep every real tool row. The panel folds them behind Explored / Exploring;
+  // do not cap to the first three or invent a growing “N more steps” leftover.
+  return activityFromAgentSteps(steps);
 }

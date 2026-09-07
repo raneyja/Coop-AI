@@ -2,6 +2,7 @@ import "./test/vscodeMockSetup";
 import assert from "node:assert/strict";
 import {
   buildKnownSymbolsFromContext,
+  clampCompletionToMaxLength,
   ensureInsertSpacing,
   filterAndRankCompletions,
   normalizeCompletionText,
@@ -326,6 +327,75 @@ test("symbolPlausibilityAdjustment rewards known identifiers", () => {
     manifestSymbols: new Set(["createSessionId"])
   });
   assert.ok(bonus > 0);
+});
+
+const EXTRACT_BEARER_BODY = [
+  "const header = headers.authorization ?? \"\";",
+  "if (!header.startsWith(\"Bearer \")) {",
+  "  return undefined;",
+  "}",
+  "const token = header.slice(\"Bearer \".length).trim();",
+  "return token || undefined;"
+].join("\n");
+
+const GENERIC_HEADER_LOOKUP = "const header = headers[\"authorization\"] || headers[\"Authorization\"];";
+const GENERIC_HEADER_LOOKUP_QQ = "const header = headers[\"authorization\"] ?? headers[\"Authorization\"];";
+
+const emptyBearerHole: ExtractedCodeContext = {
+  ...context,
+  currentLinePrefix: "  ",
+  currentLineSuffix: "",
+  suffixWindow: "}\n\nexport type AuthResolveResult = {\n  auth?: AuthContext;\n};",
+  previousLines:
+    "export function extractBearerToken(headers: Record<string, string | undefined>): string | undefined {",
+  parentSignature:
+    "export function extractBearerToken(headers: Record<string, string | undefined>): string | undefined {",
+  indent: "  ",
+  filePath: "/workspace/src/server/authMiddleware.ts"
+};
+
+test("empty-block hole keeps a ~194 char Bearer body when maxSuggestionLength is 200", () => {
+  assert.ok(EXTRACT_BEARER_BODY.length > 180);
+  assert.ok(EXTRACT_BEARER_BODY.length < 480);
+  const ranked = filterAndRankCompletions([EXTRACT_BEARER_BODY], emptyBearerHole, settings);
+  assert.equal(ranked.length, 1);
+  assert.match(ranked[0]?.text ?? "", /startsWith\("Bearer /);
+  assert.match(ranked[0]?.text ?? "", /header\.slice\("Bearer /);
+});
+
+test("empty-block hole ranks Bearer reconstruction over generic header case-fold", () => {
+  const ranked = filterAndRankCompletions(
+    [GENERIC_HEADER_LOOKUP, GENERIC_HEADER_LOOKUP_QQ, EXTRACT_BEARER_BODY],
+    emptyBearerHole,
+    { ...settings, showMultipleSuggestions: true }
+  );
+  assert.ok(ranked.length >= 1);
+  assert.match(ranked[0]?.text ?? "", /headers\.authorization/);
+  assert.match(ranked[0]?.text ?? "", /Bearer /);
+  assert.equal(ranked[0]?.text?.includes("[\"Authorization\"]"), false);
+});
+
+test("empty-block hole collapses || vs ?? header lookups to one suggestion", () => {
+  const ranked = filterAndRankCompletions(
+    [GENERIC_HEADER_LOOKUP, GENERIC_HEADER_LOOKUP_QQ],
+    emptyBearerHole,
+    { ...settings, showMultipleSuggestions: true }
+  );
+  assert.equal(ranked.length, 1);
+});
+
+test("clampCompletionToMaxLength truncates on a line boundary instead of dropping", () => {
+  const longBody = Array.from({ length: 12 }, (_, i) => `  step${i}();`).join("\n");
+  const clamped = clampCompletionToMaxLength(longBody, 80);
+  assert.ok(clamped.length <= 80);
+  assert.ok(clamped.includes("step0();"));
+  assert.equal(clamped.includes("\n") || clamped.startsWith("  step"), true);
+});
+
+test("normalizeCompletionText keeps a 7-line empty-block body", () => {
+  const normalized = normalizeCompletionText(EXTRACT_BEARER_BODY, emptyBearerHole);
+  assert.equal(normalized.split("\n").length, 6);
+  assert.match(normalized, /return token \|\| undefined;/);
 });
 
 console.log(`\ncompletionFilter: ${passed} passed, ${failed} failed`);

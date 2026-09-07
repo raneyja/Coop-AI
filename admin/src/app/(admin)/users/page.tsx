@@ -15,6 +15,14 @@ import {
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 import { InviteUserModal } from "@/components/InviteUserModal";
 import { UserRepoGrantsModal } from "@/components/UserRepoGrantsModal";
+import {
+  isSoloSeatCount,
+  usersBillingLink,
+  usersInviteDisabledTitle,
+  usersPageSubtitle,
+  usersRepoAccessHint,
+  usersSeatsPanelCopy
+} from "@/lib/billingCopy";
 
 const TABLE_ROLES = ["member", "admin"];
 
@@ -75,6 +83,21 @@ export default function UsersPage() {
   const perUserAccess = repoAccessMode === "per_user";
   const seatsAvailable = Math.max(0, seats - seatsUsed);
   const atSeatCapacity = !loading && seatsUsed >= seats;
+  const solo = !teamInvitesBlocked && isSoloSeatCount(seats);
+  const pageSubtitle = usersPageSubtitle({ free: teamInvitesBlocked, solo });
+  const seatsPanel = usersSeatsPanelCopy({
+    free: teamInvitesBlocked,
+    solo,
+    seats,
+    seatsUsed,
+    seatsAvailable,
+    atCapacity: atSeatCapacity
+  });
+  const billingLink = usersBillingLink({
+    free: teamInvitesBlocked,
+    solo,
+    atCapacity: atSeatCapacity
+  });
 
   useEffect(() => {
     void load();
@@ -128,56 +151,49 @@ export default function UsersPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="admin-page-title">Users</h1>
-          <p className="mt-1 text-sm text-coop-muted">
-            {teamInvitesBlocked
-              ? "Free plan is individual only — upgrade to Pro to invite teammates."
-              : "Manage team members, roles, and access."}
-          </p>
+          <p className="mt-1 text-sm text-coop-muted">{pageSubtitle}</p>
         </div>
         {!teamInvitesBlocked ? (
-          <button
-            type="button"
-            className="admin-btn-primary"
-            disabled={unavailable || loading || atSeatCapacity}
-            title={atSeatCapacity ? "All seats are assigned — add seats in Billing first." : undefined}
-            onClick={() => setInviteOpen(true)}
-          >
-            Invite a new user
-          </button>
+          solo && atSeatCapacity ? (
+            <Link href="/billing" className="admin-btn-primary">
+              Add a teammate
+            </Link>
+          ) : (
+            <button
+              type="button"
+              className="admin-btn-primary"
+              disabled={unavailable || loading || atSeatCapacity}
+              title={atSeatCapacity ? usersInviteDisabledTitle(solo) : undefined}
+              onClick={() => setInviteOpen(true)}
+            >
+              Invite a new user
+            </button>
+          )
         ) : null}
       </div>
 
       {!unavailable && !loading ? (
         <div className="admin-panel-inset flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="admin-section-label">Seats</p>
-            <p className="mt-1 text-sm text-white">
-              <span className="font-semibold tabular-nums">{seatsUsed}</span>
-              <span className="text-coop-muted"> of </span>
-              <span className="font-semibold tabular-nums">{seats}</span>
-              <span className="text-coop-muted"> assigned</span>
-            </p>
-            <p className="mt-0.5 text-xs text-coop-muted">
-              {atSeatCapacity
-                ? "No seats left — add seats in Billing before inviting anyone else."
-                : `${seatsAvailable} available`}
-            </p>
+            <p className="admin-section-label">{seatsPanel.heading}</p>
+            {seatsPanel.justYou ? (
+              <p className="mt-1 text-sm text-white">Just you</p>
+            ) : seatsPanel.assignedLine ? (
+              <p className="mt-1 text-sm text-white">
+                <span className="font-semibold tabular-nums">{seatsPanel.assignedLine.used}</span>
+                <span className="text-coop-muted">{seatsPanel.assignedLine.of}</span>
+                <span className="font-semibold tabular-nums">{seatsPanel.assignedLine.total}</span>
+                <span className="text-coop-muted">{seatsPanel.assignedLine.suffix}</span>
+              </p>
+            ) : null}
+            <p className="mt-0.5 text-xs text-coop-muted">{seatsPanel.hint}</p>
           </div>
-          {!teamInvitesBlocked ? (
-            atSeatCapacity ? (
-              <Link href="/billing" className="admin-btn-secondary text-xs">
-                Add seats
-              </Link>
-            ) : (
-              <Link href="/billing" className="admin-link text-xs">
-                Manage billing →
-              </Link>
-            )
-          ) : (
-            <Link href="/billing" className="admin-link text-xs">
-              Upgrade for team seats →
-            </Link>
-          )}
+          <Link
+            href="/billing"
+            className={billingLink.emphasized ? "admin-btn-secondary text-xs" : "admin-link text-xs"}
+          >
+            {billingLink.label}
+          </Link>
         </div>
       ) : null}
 
@@ -189,14 +205,14 @@ export default function UsersPage() {
               <>
                 <p className="mt-1 text-sm text-white">Per-user grants</p>
                 <p className="mt-0.5 text-xs text-coop-muted">
-                  Assign repos when inviting, or with Manage repos on each user row.
+                  {usersRepoAccessHint({ solo, perUserAccess: true })}
                 </p>
               </>
             ) : (
               <>
                 <p className="mt-1 text-sm text-white">All indexed repos</p>
                 <p className="mt-0.5 text-xs text-coop-muted">
-                  Every team member automatically sees all Deep-Indexed repos in the extension.
+                  {usersRepoAccessHint({ solo, perUserAccess: false })}
                 </p>
               </>
             )}

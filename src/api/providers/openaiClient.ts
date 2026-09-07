@@ -10,7 +10,7 @@ export class OpenAiProviderClient extends BaseProviderClient {
         method: "POST",
         headers: { ...headers, "content-type": "application/json" },
         body: JSON.stringify({
-          ...body,
+          ...applyOpenAiThinking(body, options.thinking),
           stream: true,
           stream_options: { include_usage: true }
         })
@@ -19,6 +19,22 @@ export class OpenAiProviderClient extends BaseProviderClient {
       (line, state) => parseOpenAiSseLine(line, state)
     );
   }
+}
+
+export function applyOpenAiThinking(
+  body: Record<string, unknown>,
+  thinking?: ProviderStreamOptions["thinking"]
+): Record<string, unknown> {
+  if (thinking?.mode !== "openai-reasoning") {
+    return body;
+  }
+  const next: Record<string, unknown> = {
+    ...body,
+    reasoning_effort: thinking.effort ?? "medium"
+  };
+  // GPT-5 / o-series reject a custom temperature even when reasoning_effort is set.
+  delete next.temperature;
+  return next;
 }
 
 export function parseOpenAiSseLine(line: string, state: ParseState): StreamChunk | undefined {

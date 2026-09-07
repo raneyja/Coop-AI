@@ -198,7 +198,10 @@ async function run(): Promise<void> {
 
     const raw = await registry.read_file!({ path: "src/remote.ts", startLine: 2, endLine: 3 });
     const parsed = JSON.parse(raw) as { files: Array<{ content: string }> };
-    assert.equal(parsed.files[0]?.content, "line2\nline3");
+    const content = parsed.files[0]?.content ?? "";
+    assert.match(content, /^2\|line2/m);
+    assert.match(content, /line5/);
+    assert.doesNotMatch(content, /^1\|line1/m);
   });
 
   await test("read_file errors plainly when neither local nor remote can serve the file", async () => {

@@ -33,7 +33,7 @@ export class LightningStatusBar implements vscode.Disposable {
       }
       this.item.text = "$(star-empty) Upgrade to Pro";
       this.item.tooltip =
-        "Deep-Code Graph indexing, cross-repo search, and workspace repos — Pro $20/user/mo.";
+        "Deep-Code Graph indexing, cross-repo search, and workspace repos — Pro $25/user/mo.";
       this.item.show();
     } catch {
       this.item.text = "$(cloud) CoopAI";

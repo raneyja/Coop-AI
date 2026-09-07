@@ -11,9 +11,11 @@ import type { RepoTarget } from "../workspace/indexedRepoWorkspaceTypes";
 import { resolveActiveRepoTarget } from "../workspace/repoTargetResolver";
 import {
   FOCUS_MAX_ENTRY_PATHS,
+  FOCUS_MAX_INJECTED_PATHS,
   focusQueryForRetrieval,
   mergeFocusEntryPaths
 } from "./userFocusQuery";
+import { onboardingIndexQueries, selectOnboardingEvidencePaths } from "./onboardingSearchQueries";
 
 const MAX_ENTRY_FILES = 6;
 const MAX_FILE_CHARS = 12_000;
@@ -221,19 +223,26 @@ export function pickEntryPaths(options: {
     push(options.activeFile, true);
   }
 
-  for (const candidate of ENTRY_POINT_CANDIDATES) {
+  const focusQueryEarly = focusQueryForRetrieval(options.userFocus);
+  const candidates = focusQueryEarly
+    ? ENTRY_POINT_CANDIDATES.filter((candidate) => /^readme\.md$/i.test(candidate))
+    : ENTRY_POINT_CANDIDATES;
+
+  for (const candidate of candidates) {
     push(candidate, allowBlindCandidates);
     if (picked.length >= MAX_ENTRY_FILES) {
       break;
     }
   }
 
-  for (const path of manifestPaths) {
-    if (picked.length >= MAX_ENTRY_FILES) {
-      break;
-    }
-    if (/^(src\/|docs\/|README)/i.test(path) && /\.(ts|tsx|js|jsx|md|json|yml|yaml)$/i.test(path)) {
-      push(path);
+  if (!focusQueryEarly) {
+    for (const path of manifestPaths) {
+      if (picked.length >= MAX_ENTRY_FILES) {
+        break;
+      }
+      if (/^(src\/|docs\/|README)/i.test(path) && /\.(ts|tsx|js|jsx|md|json|yml|yaml)$/i.test(path)) {
+        push(path);
+      }
     }
   }
 
@@ -243,12 +252,14 @@ export function pickEntryPaths(options: {
     return anchors;
   }
 
-  const focusPaths = topManifestPaths(
-    focusQuery,
+  const topicQuery = onboardingIndexQueries(options.userFocus).join(" ") || focusQuery;
+  const ranked = topManifestPaths(
+    topicQuery,
     { activeFile: options.activeFile },
     options.manifest,
-    FOCUS_MAX_ENTRY_PATHS
+    Math.max(FOCUS_MAX_ENTRY_PATHS * 4, 18)
   );
+  const focusPaths = selectOnboardingEvidencePaths(ranked, topicQuery, FOCUS_MAX_INJECTED_PATHS);
   if (focusPaths.length === 0) {
     return anchors;
   }
@@ -256,29 +267,38 @@ export function pickEntryPaths(options: {
   return mergeFocusEntryPaths({
     anchorPaths: anchors,
     focusPaths,
-    maxPaths: MAX_ENTRY_FILES
+    maxPaths: MAX_ENTRY_FILES,
+    minAnchors: 1
   });
 }
 
+/**
+ * Anchor bodies come from the code host (Zero-Clone), so this is six remote
+ * round trips. Sequentially they stack inside the soft gather budget, and a
+ * slow host silently reduced the summary to whichever file returned first —
+ * that is how a repo overview ends up anchored on a single types file.
+ */
 async function fetchEntryFiles(
   router: CodeHostRouter,
   coords: RepoCoordinates,
   paths: string[]
 ): Promise<RepoSummaryEntryFile[]> {
+  const settled = await Promise.allSettled(
+    paths.map((path) => router.getFileContent(path, coords))
+  );
   const files: RepoSummaryEntryFile[] = [];
-  for (const path of paths) {
-    try {
-      const remote = await router.getFileContent(path, coords);
-      const content = remote.content ?? "";
-      const truncated = content.length > MAX_FILE_CHARS;
-      files.push({
-        path: remote.path,
-        content: truncated ? `${content.slice(0, MAX_FILE_CHARS)}\n… [truncated]` : content,
-        truncated
-      });
-    } catch {
-      // Skip unreadable paths; remaining entry files still anchor the summary.
+  for (const result of settled) {
+    // Skip unreadable paths; remaining entry files still anchor the summary.
+    if (result.status !== "fulfilled") {
+      continue;
     }
+    const content = result.value.content ?? "";
+    const truncated = content.length > MAX_FILE_CHARS;
+    files.push({
+      path: result.value.path,
+      content: truncated ? `${content.slice(0, MAX_FILE_CHARS)}\n… [truncated]` : content,
+      truncated
+    });
   }
   return files;
 }

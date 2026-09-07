@@ -78,6 +78,7 @@ test("LOC questions are inventory + structure questions, so they never route to 
 test("isRepoStructureQuery covers monorepo / top-level structure questions", () => {
   assert.equal(isRepoStructureQuery("is this a monorepo?"), true);
   assert.equal(isRepoStructureQuery("what's the structure of this repo?"), true);
+  assert.equal(isRepoStructureQuery("how is this repo organized?"), true);
   assert.equal(isRepoStructureQuery("list the top-level directories"), true);
   assert.equal(isRepoStructureQuery("how does auth work?"), false);
 });

@@ -25,7 +25,7 @@ export type BitbucketWebhookHandlerOptions = {
 
 /**
  * Bitbucket Cloud webhook handler.
- * Verify via X-Hub-Signature (HMAC SHA256) when BITBUCKET_WEBHOOK_SECRET is set.
+ * Verify via X-Hub-Signature (HMAC SHA256). Rejects when BITBUCKET_WEBHOOK_SECRET is unset.
  */
 export class BitbucketWebhookHandler {
   public constructor(private readonly options: BitbucketWebhookHandlerOptions) {}
@@ -92,7 +92,7 @@ export function verifyBitbucketSignature(
   secret: string | undefined
 ): WebhookVerificationResult {
   if (!secret) {
-    return { ok: true };
+    return { ok: false, reason: "missing Bitbucket webhook secret" };
   }
   if (!header) {
     return { ok: false, reason: "missing X-Hub-Signature" };

@@ -8,8 +8,18 @@ import {
   fetchBilling,
   openBillingPortal
 } from "@/lib/coopApi";
+import {
+  addSeatsCopy,
+  billingAccountRow,
+  billingPageSubtitle,
+  isSoloSeatCount,
+  newSeatTotalPreview,
+  normalizeSeatCount,
+  upgradeSeatCountNote
+} from "@/lib/billingCopy";
 import { PlanBadge } from "@/components/PlanBadge";
 import { EnterpriseUpgradeRequestForm } from "@/components/EnterpriseUpgradeRequestForm";
+import { displayUsageTierName, resolvePlanNudge } from "@/lib/planNudge";
 
 export default function BillingPage() {
   const me = getStoredMe();
@@ -79,22 +89,80 @@ export default function BillingPage() {
   }
 
   const plan = billing?.plan ?? me?.plan ?? "free";
+  const usageTier = billing?.usageTier ?? (plan === "pro" ? "pro" : null);
+  const currentSeats = normalizeSeatCount(billing?.seats);
+  const solo = Boolean(billing) && isSoloSeatCount(currentSeats);
+  const nudge = resolvePlanNudge({ plan, usageTier, seats: billing ? currentSeats : null });
   const isFree = plan === "free";
   const isPro = plan === "pro";
   const isEnterprise = plan === "enterprise";
-  const currentSeats = Math.max(1, Math.floor(billing?.seats ?? 1));
-  const newTotalPreview = currentSeats + Math.max(0, Math.floor(Number(seatInput)) || 0);
+  const addCount = Math.floor(Number(seatInput));
+  const seatsCopy = addSeatsCopy({ solo, currentSeats, addCount });
+  const accountRow = billingAccountRow(currentSeats, solo);
+  const totalPreview = newSeatTotalPreview(currentSeats, addCount);
+  const currentPlanName =
+    plan === "enterprise"
+      ? "Enterprise"
+      : plan === "pro"
+        ? displayUsageTierName(usageTier === "pro_plus" || usageTier === "max" ? usageTier : "pro")
+        : "Free";
+  const paidNextIsEnterprise = nudge?.nextName === "Enterprise";
+
+  const addSeatsBlock = isPro ? (
+    <div className="admin-panel-inset space-y-3">
+      <div>
+        <p className="admin-section-label">{seatsCopy.title}</p>
+        <p className="mt-1 text-sm text-coop-muted">{seatsCopy.body}</p>
+      </div>
+      <div className="flex items-end gap-3">
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-coop-muted">{seatsCopy.inputLabel}</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step={1}
+            className="admin-input max-w-[120px]"
+            value={seatInput}
+            onChange={(event) => setSeatInput(event.target.value)}
+            disabled={addingSeats}
+          />
+        </label>
+        <button
+          type="button"
+          className={solo ? "admin-btn-secondary" : "admin-btn-primary"}
+          onClick={() => void handleAddSeats()}
+          disabled={addingSeats}
+        >
+          {addingSeats ? "Opening…" : seatsCopy.cta}
+        </button>
+      </div>
+      {totalPreview ? <p className="text-xs text-coop-muted">{totalPreview}</p> : null}
+      {seatsCopy.showReduceNote ? (
+        <p className="text-xs text-coop-muted">
+          To reduce seats, contact Coop support at{" "}
+          <a href="mailto:support@coop-ai.dev" className="admin-link">
+            support@coop-ai.dev
+          </a>
+          .
+        </p>
+      ) : null}
+    </div>
+  ) : null;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="admin-page-title">Billing</h1>
-        <p className="mt-1 text-sm text-coop-muted">Plan, seats, and subscription management.</p>
+        <p className="mt-1 text-sm text-coop-muted">
+          {billing ? billingPageSubtitle(solo || isFree) : "Plan and subscription."}
+        </p>
       </div>
 
       {upgraded && (
         <div className="admin-panel-inset text-sm text-coop-index">
-          Upgrade complete — your organization is now on Pro. Refresh if plan details look stale.
+          Upgrade complete — your organization is now on {currentPlanName}. Refresh if plan details look
+          stale.
         </div>
       )}
 
@@ -102,7 +170,7 @@ export default function BillingPage() {
         <div>
           <p className="admin-section-label">Current plan</p>
           <div className="mt-3 flex items-center gap-3">
-            <PlanBadge plan={plan} />
+            <PlanBadge plan={plan} usageTier={usageTier} />
             <span className="text-sm text-coop-muted">{displayOrgName(me)}</span>
           </div>
         </div>
@@ -114,8 +182,8 @@ export default function BillingPage() {
               <dd className="mt-1 capitalize">{billing.status}</dd>
             </div>
             <div>
-              <dt className="text-coop-muted">Seats</dt>
-              <dd className="mt-1">{billing.seats ?? "—"}</dd>
+              <dt className="text-coop-muted">{accountRow.label}</dt>
+              <dd className="mt-1">{accountRow.value}</dd>
             </div>
             {billing.billingEmail && (
               <div className="col-span-2">
@@ -130,69 +198,40 @@ export default function BillingPage() {
 
         {isEnterprise ? null : billing?.hasStripeCustomer ? (
           <div className="space-y-4">
-            {isPro ? (
-              <div className="admin-panel-inset space-y-3">
-                <div>
-                  <p className="admin-section-label">Add seats</p>
-                  <p className="mt-1 text-sm text-coop-muted">
-                    You currently have {currentSeats} seat{currentSeats === 1 ? "" : "s"}. Enter how many
-                    to add — you&apos;ll confirm and pay the prorated amount in Stripe.
-                  </p>
-                </div>
-                <div className="flex items-end gap-3">
-                  <label className="flex flex-col gap-1 text-sm">
-                    <span className="text-coop-muted">Seats to add</span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={1}
-                      step={1}
-                      className="admin-input max-w-[120px]"
-                      value={seatInput}
-                      onChange={(event) => setSeatInput(event.target.value)}
-                      disabled={addingSeats}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="admin-btn-primary"
-                    onClick={() => void handleAddSeats()}
-                    disabled={addingSeats}
-                  >
-                    {addingSeats ? "Opening…" : "Add seats"}
-                  </button>
-                </div>
-                {Number.isFinite(Number(seatInput)) && Number(seatInput) >= 1 ? (
-                  <p className="text-xs text-coop-muted">
-                    New total after confirm: {newTotalPreview} seat{newTotalPreview === 1 ? "" : "s"}.
-                  </p>
-                ) : null}
-                <p className="text-xs text-coop-muted">
-                  To reduce seats, contact Coop support at{" "}
-                  <a href="mailto:support@coop-ai.dev" className="admin-link">
-                    support@coop-ai.dev
-                  </a>
-                  .
-                </p>
-              </div>
-            ) : null}
+            {!solo ? addSeatsBlock : null}
             <button type="button" className="admin-btn-secondary" onClick={() => void handlePortal()} disabled={opening}>
               {opening ? "Opening…" : "Payment methods & invoices"}
             </button>
+            {nudge && !paidNextIsEnterprise ? (
+              <div className="space-y-2">
+                <p className="text-sm text-coop-muted">{nudge.body}</p>
+                <button
+                  type="button"
+                  className="admin-btn-primary"
+                  onClick={() => void handlePortal()}
+                  disabled={opening}
+                >
+                  {opening ? "Opening…" : nudge.ctaLabel}
+                </button>
+                <p className="text-xs text-coop-muted">{upgradeSeatCountNote(solo, nudge.nextName)}</p>
+              </div>
+            ) : null}
+            {solo ? addSeatsBlock : null}
             {isPro ? (
               <button
                 type="button"
-                className="admin-btn-secondary"
+                className={paidNextIsEnterprise ? "admin-btn-primary" : "admin-btn-secondary"}
                 onClick={() => setEnterpriseFormOpen(true)}
               >
-                Request Upgrade to Enterprise
+                {paidNextIsEnterprise ? nudge?.ctaLabel ?? "Request Enterprise" : "Request Upgrade to Enterprise"}
               </button>
             ) : null}
           </div>
         ) : isFree ? (
           <div className="space-y-3">
             <p className="text-sm text-coop-muted">
-              Upgrade to Pro for unlimited Deep-Indexed repos, additional models, and team seats (up to 5 users).
+              Upgrade to Pro for unlimited Deep-Indexed repos, additional models, and the option to add
+              team seats.
             </p>
             <button
               type="button"
@@ -205,11 +244,9 @@ export default function BillingPage() {
           </div>
         ) : isPro ? (
           <div className="space-y-3">
-            <p className="text-sm text-coop-muted">
-              Enterprise adds SAML SSO, integration scope controls, 5 workspace repos per seat, and uncapped org indexing.
-            </p>
+            {nudge ? <p className="text-sm text-coop-muted">{nudge.body}</p> : null}
             <button type="button" className="admin-btn-primary" onClick={() => setEnterpriseFormOpen(true)}>
-              Request Upgrade to Enterprise
+              {paidNextIsEnterprise ? "Request Enterprise" : "Request a plan change"}
             </button>
           </div>
         ) : (

@@ -6,6 +6,7 @@ import {
   integrationConfigured,
   integrationReady
 } from "./subtitles";
+import { findOrgIntegrationStatus, integrationToOrgProvider } from "./integrationStatus";
 
 type CodeHostProvider = "github" | "gitlab" | "bitbucket";
 type IntegrationProvider = IntegrationChatProvider;
@@ -66,7 +67,11 @@ export function codeHostListSubtitle(prefs: Preferences, provider: CodeHostProvi
 
 export function integrationConnectionMeta(prefs: Preferences, provider: IntegrationProvider): string {
   const name = INTEGRATION_NAMES[provider];
+  const orgStatus = findOrgIntegrationStatus(prefs, integrationToOrgProvider(provider));
   if (provider === "slack" && prefs.slackNeedsReconnect) {
+    return "Reconnect required — finish in the Coop admin portal";
+  }
+  if (orgStatus?.needsReconnect || orgStatus?.scopeNeedsReconnect) {
     return "Reconnect required — finish in the Coop admin portal";
   }
   if (!integrationConfigured(prefs, provider)) {
@@ -152,14 +157,25 @@ export function displayOrgName(prefs: Pick<Preferences, "orgName">): string | un
   return name;
 }
 
-export function displayPlanLabel(prefs: Pick<Preferences, "plan">): string {
+export function displayPlanLabel(
+  prefs: Pick<{ plan?: "free" | "pro" | "enterprise"; usageTier?: "pro" | "pro_plus" | "max" | null }, "plan" | "usageTier">
+): string {
+  if (prefs.plan === "enterprise") {
+    return "Enterprise";
+  }
+  if (prefs.usageTier === "pro_plus") {
+    return "Pro+";
+  }
+  if (prefs.usageTier === "max") {
+    return "Max";
+  }
   switch (prefs.plan) {
-    case "enterprise":
-      return "Enterprise";
     case "pro":
       return "Pro";
+    case "free":
+      return "Free";
     default:
-      return "Developer (free)";
+      return "";
   }
 }
 
@@ -173,7 +189,10 @@ export function displayIdentitySubtitle(prefs: Preferences): string | undefined 
   }
   const orgName = displayOrgName(prefs);
   const plan = displayPlanLabel(prefs);
-  return orgName ? `${orgName} · ${plan}` : plan;
+  if (orgName && plan) {
+    return `${orgName} · ${plan}`;
+  }
+  return orgName ?? (plan || undefined);
 }
 
 export function accountHubSubtitle(prefs: Preferences): string {
@@ -187,14 +206,28 @@ export function accountHubSubtitle(prefs: Preferences): string {
   return "Signed in";
 }
 
-export function formatQuotaUsageSummary(quota: {
-  usedCredits: number;
-  limitCredits: number;
-  remainingCredits: number;
-  windowHours: number;
-}): string {
+export function formatQuotaUsageSummary(
+  quota: {
+    usedCredits: number;
+    limitCredits: number;
+    remainingCredits: number;
+    windowHours: number;
+  },
+  options?: { exhausted?: boolean }
+): string {
   const used = quota.usedCredits ?? Math.max(0, quota.limitCredits - quota.remainingCredits);
-  return `${used}K of ${quota.limitCredits}K AI credits used - ${quota.windowHours}-hour rolling window`;
+  const counts = `${used}K of ${quota.limitCredits}K AI credits used`;
+  if (options?.exhausted) {
+    return counts;
+  }
+  return `${counts} - ${quota.windowHours}-hour rolling window`;
+}
+
+export function quotaUsedPercent(used: number, limit: number): number {
+  if (!Number.isFinite(used) || !Number.isFinite(limit) || limit <= 0) {
+    return 0;
+  }
+  return Math.max(0, Math.min(100, Math.round((used / limit) * 100)));
 }
 
 export function planUsageHubSubtitle(prefs: Preferences): string {
@@ -207,6 +240,14 @@ export function planUsageHubSubtitle(prefs: Preferences): string {
       prefs.quotaCredits.usedCredits ??
       Math.max(0, prefs.quotaCredits.limitCredits - prefs.quotaCredits.remainingCredits);
     return `${plan} · ${used}K of ${prefs.quotaCredits.limitCredits}K used`;
+  }
+  if (prefs.usageMeters) {
+    const usedRatio =
+      typeof prefs.usageMeters.usedRatio === "number"
+        ? prefs.usageMeters.usedRatio
+        : prefs.usageMeters.auto.usedRatio + prefs.usageMeters.frontier.usedRatio;
+    const pct = Math.round(Math.max(0, Math.min(1, usedRatio)) * 100);
+    return `${plan} · ${pct}% used`;
   }
   return plan;
 }

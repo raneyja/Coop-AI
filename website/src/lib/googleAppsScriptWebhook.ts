@@ -1,15 +1,19 @@
 /**
- * POST to a Google Apps Script web app URL.
- * GAS responds with 302; default fetch may turn the follow-up into GET and skip doPost.
+ * POST JSON to a Google Apps Script web app.
+ *
+ * GAS runs doPost on the first /exec request, then 302s to a
+ * script.googleusercontent.com echo URL. That echo URL is GET-only —
+ * POSTing it returns 405 HTML and we never see `{ ok: true }`.
  */
 export async function postToGoogleAppsScript(
   webAppUrl: string,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  fetchImpl: typeof fetch = fetch
 ): Promise<{ ok: boolean; status: number; text: string; parsed?: { ok?: boolean; error?: string; lastRow?: number } }> {
   const body = JSON.stringify(payload);
   const headers = { "Content-Type": "application/json" };
 
-  let response = await fetch(webAppUrl, {
+  let response = await fetchImpl(webAppUrl, {
     method: "POST",
     headers,
     body,
@@ -21,10 +25,9 @@ export async function postToGoogleAppsScript(
     if (!location) {
       return { ok: false, status: response.status, text: "Redirect without Location header" };
     }
-    response = await fetch(location, {
-      method: "POST",
-      headers,
-      body,
+    const redirectUrl = new URL(location, webAppUrl).toString();
+    response = await fetchImpl(redirectUrl, {
+      method: "GET",
       redirect: "follow"
     });
   }

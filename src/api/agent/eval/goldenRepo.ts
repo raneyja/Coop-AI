@@ -32,7 +32,10 @@ const FILLER_LINES: Record<string, number> = {
   "packages/ui/src/button.tsx": 140,
   "services/gateway/router.go": 260,
   "services/gateway/health.go": 175,
-  "core/src/main/java/com/acme/PaymentProcessor.java": 210
+  "core/src/main/java/com/acme/PaymentProcessor.java": 210,
+  "server/http/bearer.py": 160,
+  "apps/api/issues/work_item_state.py": 150,
+  "apps/api/issues/models/state.py": 40
 };
 
 function commentToken(path: string): string {
@@ -158,6 +161,89 @@ const SOURCES: Record<string, string> = {
     "public class PaymentProcessor {",
     "    public void charge(long cents) {}",
     "}"
+  ].join("\n"),
+
+  "server/http/bearer.py": [
+    '"""Parse Authorization Bearer tokens from request headers."""',
+    "",
+    "",
+    "def parse_authorization_header(headers):",
+    '    header = headers.get("authorization") or ""',
+    '    if not header.startswith("Bearer "):',
+    "        return None",
+    '    token = header[len("Bearer "):].strip()',
+    "    return token or None"
+  ].join("\n"),
+
+  "apps/api/issues/work_item_state.py": [
+    '"""Write work-item state and reject a bad transition."""',
+    "",
+    "ALLOWED_FROM_BACKLOG = frozenset({\"todo\", \"in_progress\"})",
+    "",
+    "",
+    "def is_valid_transition(current, new_state):",
+    '    if current == "backlog" and new_state not in ALLOWED_FROM_BACKLOG:',
+    "        return False",
+    "    return True",
+    "",
+    "",
+    "def write_work_item_state(item, new_state):",
+    "    if not is_valid_transition(item.state, new_state):",
+    '        raise ValueError("cannot move work item out of backlog")',
+    "    item.state = new_state",
+    "    return item"
+  ].join("\n"),
+
+  // Catalog + client POST — steal C2 unless ranking skips them.
+  "apps/api/issues/models/state.py": [
+    '"""Work-item state groups. Not the write path."""',
+    "",
+    "class StateGroup:",
+    '    BACKLOG = "backlog"',
+    '    UNSTARTED = "unstarted"',
+    "",
+    "DEFAULT_STATES = [",
+    '    {"name": "Backlog", "group": "backlog", "default": True}',
+    "]"
+  ].join("\n"),
+
+  "web/components/work-item/commands.ts": [
+    "export function changeWorkItemState(entityDetails: { state_id: string }, stateId: string) {",
+    "  if (entityDetails?.state_id === stateId) return;",
+    "  handleUpdateEntity({ state_id: stateId });",
+    "}"
+  ].join("\n"),
+
+  // Client grouping + locale copy — steal C2 unless ranking skips/demotes them.
+  "packages/utils/src/work-item/state.ts": [
+    "export const WORK_ITEM_STATES = [\"backlog\", \"todo\", \"in_progress\"] as const;",
+    "",
+    "export function groupWorkItemByState(items: Array<{ state: string }>) {",
+    "  return items.filter((item) => item.state !== \"backlog\");",
+    "}"
+  ].join("\n"),
+
+  "web/locales/en/workItem.json": [
+    "{",
+    '  "workItem": "Work item",',
+    '  "cannotMoveOutOfBacklog": "Users cannot move a work item out of backlog",',
+    '  "apiError": "The API returns an error on a bad transition"',
+    "}"
+  ].join("\n"),
+
+  "apps/api/issues/seeds/issues.json": [
+    "{",
+    '  "name": "Sample work item",',
+    '  "state_id": 3,',
+    '  "priority": "high"',
+    "}"
+  ].join("\n"),
+
+  "apps/api/issues/serializers/issue.py": [
+    "class IssueStateSerializer:",
+    "    state_detail = StateLiteSerializer(read_only=True, source=\"state\")",
+    '    class Meta:',
+    "        fields = [\"id\", \"name\", \"state_detail\"]"
   ].join("\n"),
 
   // --- Noise that must never win ---

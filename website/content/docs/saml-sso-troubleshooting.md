@@ -61,7 +61,7 @@ Self-hosted deployments must use HTTPS in production so IdPs accept the ACS URL.
 | **Shared SP** | One Entity ID and ACS URL for all Enterprise tenants; org resolved via RelayState — each IdP app must use the same SP values. |
 | **No session refresh** | SAML sessions expire after TTL (default 12h); users re-authenticate through the IdP — no silent refresh token. |
 | **JIT default role** | First SAML login creates a **member** user; promote admins in **Users** or pre-create accounts. |
-| **Marketing site has no SSO** | [coop-ai.dev/login](https://coop-ai.dev/login) does not offer SSO — use admin portal or extension only. |
+| **Marketing site opens the extension** | [coop-ai.dev/login](https://coop-ai.dev/login) does not sign you in on the web — it opens VS Code. Use the admin portal for browser SAML, or **Sign in with SSO** in the extension. |
 | **IdP cert storage** | X.509 signing certificates are stored in plaintext in `org_sso_config` (unlike encrypted OAuth integration tokens) |
 
 ## Related

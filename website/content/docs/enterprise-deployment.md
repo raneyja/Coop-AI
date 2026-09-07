@@ -16,7 +16,7 @@ Enterprise customers can deploy CoopAI on their own infrastructure with full con
 | **Self-hosted (Railway)** | Single-tenant on Railway with your env vars |
 | **Self-hosted (Docker)** | Full control on your VPC |
 
-Contact [hello@coop-ai.dev](mailto:hello@coop-ai.dev) for Enterprise licensing and deployment support.
+Contact [support@coop-ai.dev](mailto:support@coop-ai.dev) for Enterprise licensing and deployment support.
 
 ## Core components
 

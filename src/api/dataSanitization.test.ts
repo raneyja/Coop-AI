@@ -101,6 +101,97 @@ test("sanitizeLlmRequestPayload still redacts sk_ tokens inside file_content", (
   assert.ok(out.includes("sk_***"));
 });
 
+function s1ReadFileToolJson(): string {
+  const body = [
+    "# Copyright (c) 2023-present Plane Software, Inc. and contributors",
+    "",
+    "class APIKeyAuthentication:",
+    "    \"\"\"Authenticate API requests with an X-Api-Key header.\"\"\"",
+    "    def authenticate(self, request):",
+    "        token = request.headers.get(\"X-Api-Key\")",
+    "        return True"
+  ].join("\n");
+  const numbered = body.split("\n").map((row, i) => `${i + 1}|${row}`).join("\n");
+  return JSON.stringify({
+    path: "apps/api/plane/api/middleware/api_authentication.py",
+    startLine: 1,
+    files: [
+      {
+        path: "apps/api/plane/api/middleware/api_authentication.py",
+        content: numbered
+      }
+    ]
+  });
+}
+
+test("sanitizeLlmRequestPayload keeps APIKeyAuthentication in agent read_file JSON (S1)", () => {
+  const payload = sanitizeLlmRequestPayload({
+    messages: [{ role: "user", content: s1ReadFileToolJson() }]
+  });
+  const out = payload.payload.messages?.[0]?.content ?? "";
+  assert.ok(out.includes("class APIKeyAuthentication:"), "model must see the class, not a wiped file");
+  assert.ok(out.includes("X-Api-Key"), "model must see what the class authenticates");
+  assert.equal(out.includes("REDACTED_SENSITIVE_COMMENT"), false);
+});
+
+test("sanitizeLlmRequestPayload keeps APIKeyAuthentication in search_code JSON snippets", () => {
+  const toolJson = JSON.stringify({
+    hits: [
+      {
+        fileName: "apps/api/plane/api/middleware/api_authentication.py",
+        lineNumber: 1,
+        content: "# APIKeyAuthentication middleware\nclass APIKeyAuthentication:"
+      }
+    ],
+    symbols: [
+      {
+        file: "apps/api/plane/api/middleware/api_authentication.py",
+        line: 17,
+        symbol: "APIKeyAuthentication",
+        kind: "class"
+      }
+    ]
+  });
+  const payload = sanitizeLlmRequestPayload({
+    messages: [{ role: "user", content: toolJson }]
+  });
+  const out = payload.payload.messages?.[0]?.content ?? "";
+  assert.ok(out.includes("class APIKeyAuthentication:"));
+  assert.ok(out.includes("\"line\":17") || out.includes('"line": 17'));
+  assert.equal(out.includes("REDACTED_SENSITIVE_COMMENT"), false);
+});
+
+test("sanitizeLlmRequestPayload still redacts sk_live inside agent read_file JSON", () => {
+  const toolJson = JSON.stringify({
+    files: [
+      {
+        path: "apps/api/plane/api/middleware/api_authentication.py",
+        content: "1|# demo\n2|KEY = \"sk_live_abcdefghijklmnopqrstuv\""
+      }
+    ]
+  });
+  const payload = sanitizeLlmRequestPayload({
+    messages: [{ role: "user", content: toolJson }]
+  });
+  const out = payload.payload.messages?.[0]?.content ?? "";
+  assert.ok(!out.includes("sk_live_abcdefghijklmnopqrstuv"));
+  assert.ok(out.includes("sk_***"));
+});
+
+test("sanitizeCode does not wipe APIKeyAuthentication comments; still redacts assigned secrets", () => {
+  const source = [
+    "# APIKeyAuthentication authenticates API token headers",
+    "class APIKeyAuthentication:",
+    "    pass",
+    "# password: hunter2"
+  ].join("\n");
+  const sanitized = sanitizeCode(source);
+  assert.ok(sanitized.includes("class APIKeyAuthentication:"));
+  assert.ok(sanitized.includes("APIKeyAuthentication authenticates"));
+  assert.ok(sanitized.includes("[REDACTED_SENSITIVE_COMMENT]"));
+  assert.ok(!sanitized.includes("hunter2"));
+});
+
 console.log(`\ndataSanitization: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);

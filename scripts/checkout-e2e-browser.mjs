@@ -56,7 +56,7 @@ async function main() {
     const browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
 
-    await page.goto(`${WEBSITE}/signup`, { waitUntil: "networkidle" });
+    await page.goto(`${WEBSITE}/signup?for=team`, { waitUntil: "networkidle" });
     await page.fill("#orgName", TEST_ORG);
     await page.fill("#email", TEST_EMAIL);
     await page.fill("#seats", "2");

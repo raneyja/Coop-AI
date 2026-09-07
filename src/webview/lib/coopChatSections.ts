@@ -2,6 +2,10 @@
 export const COOP_MAIN_SECTIONS = new Set([
   "summary",
   "answer",
+  "your question",
+  "how it works",
+  "reviewer checks",
+  "what a reviewer should check",
   "documentation gaps",
   "open questions",
   "key unknowns",
@@ -34,5 +38,6 @@ export const COOP_MAIN_SECTIONS = new Set([
 ]);
 
 export function isCoopMainSection(text: string): boolean {
-  return COOP_MAIN_SECTIONS.has(text.trim().toLowerCase());
+  const normalized = text.trim().toLowerCase().replace(/\.+$/, "");
+  return COOP_MAIN_SECTIONS.has(normalized);
 }

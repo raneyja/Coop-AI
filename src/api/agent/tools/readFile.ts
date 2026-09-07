@@ -2,6 +2,25 @@ import { normalizeRelativePath } from "../../../context/localFileContext";
 import type { AgentToolContext } from "../agentToolContext";
 import { optionalPositiveInt, requireStringArg } from "./toolArgs";
 
+/** Minimum lines to return when the model asked for a window. A 1-line
+ *  `startLine: 1` read is the copyright header — never a definition. */
+export const MIN_READ_SPAN = 50;
+
+/**
+ * Expand a thin or one-sided line window. Omit both to read the whole file.
+ */
+export function expandReadLineRange(
+  startLine?: number,
+  endLine?: number
+): { start: number; end: number } | undefined {
+  if (startLine === undefined && endLine === undefined) {
+    return undefined;
+  }
+  const start = startLine !== undefined && startLine >= 1 ? startLine : 1;
+  const rawEnd = endLine !== undefined && endLine >= start ? endLine : start;
+  return { start, end: Math.max(rawEnd, start + MIN_READ_SPAN - 1) };
+}
+
 export async function handleReadFile(
   ctx: AgentToolContext,
   args: Record<string, unknown>
@@ -9,10 +28,7 @@ export async function handleReadFile(
   const path = normalizeRelativePath(requireStringArg(args, "path"));
   const startLine = optionalPositiveInt(args, "startLine");
   const endLine = optionalPositiveInt(args, "endLine");
-  const lines =
-    startLine !== undefined || endLine !== undefined
-      ? { start: startLine ?? 1, end: endLine ?? startLine ?? 1 }
-      : undefined;
+  const lines = expandReadLineRange(startLine, endLine);
 
   // Zero-Clone: indexed / codehost only — never workspace absolute paths.
   const remote = await ctx.readRemoteFile?.({ path, repoId: args.repoId as string | undefined });

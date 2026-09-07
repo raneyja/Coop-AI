@@ -55,11 +55,9 @@ export function EnterpriseIntegrationGraph() {
 
   return (
     <div
-      className="enterprise-graph relative w-full bg-gray-50"
+      className="enterprise-graph relative w-full overflow-visible"
       aria-label="Knowledge graph connecting repositories, code, collaboration tools, and LLM providers to CoopAI"
     >
-      <div className="enterprise-graph-dots pointer-events-none absolute inset-0 opacity-80" aria-hidden />
-
       <div className="relative w-full py-0">
         <div
           className="enterprise-graph-canvas relative mx-auto w-full"
@@ -117,7 +115,7 @@ export function EnterpriseIntegrationGraph() {
               animationDelay: "0.05s"
             }}
           >
-            <div className="enterprise-graph-hub-ring flex h-full items-center justify-center rounded-sm border-2 border-coop-index bg-white px-4 font-mono">
+            <div className="enterprise-graph-hub-ring flex h-full items-center justify-center rounded-xl border-2 border-coop-index bg-white/90 px-4 font-mono shadow-sm backdrop-blur-sm">
               <p className="whitespace-nowrap text-[1.65cqw] font-semibold text-gray-900">
                 coop<span className="text-coop-index">index</span>
               </p>
@@ -159,7 +157,7 @@ function GraphNodeCard({
       aria-label={`${node.label}: ${node.categoryLabel}`}
     >
       <div
-        className="group flex h-full w-full items-stretch overflow-hidden rounded-sm border border-gray-200 bg-white transition duration-200 hover:border-gray-300"
+        className="group flex h-full w-full items-stretch overflow-hidden rounded-xl border border-gray-200/80 bg-white/85 shadow-sm backdrop-blur-sm transition duration-200 hover:border-gray-300 hover:bg-white"
         style={{
           borderLeftWidth: 3,
           borderLeftColor: theme.accent

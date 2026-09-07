@@ -1,4 +1,3 @@
-import { identityDirectorySummary } from "../../../identity/identityDirectory";
 import type { IntegrationChatProvider } from "../../../chat/types";
 import { assignedModelsHubSubtitle } from "../../../config/featureModelAssignments";
 import type { Preferences } from "./types";
@@ -147,18 +146,11 @@ export function workspaceHubSubtitle(prefs: Preferences): string {
   const branch = prefs.branch || "main";
   const agentsHint = prefs.projectInstructions?.hasAgentsMd
     ? " · AGENTS.md ✓"
-    : prefs.projectInstructions?.status !== "disabled" && prefs.projectInstructions?.status !== "no_git"
+    : prefs.projectInstructions?.status !== "disabled"
       ? " · Add AGENTS.md"
       : "";
   return `${repo} · ${branch}${agentsHint}`;
 }
-
-export function identityLinksHubSubtitle(prefs: Preferences): string {
-  return identityDirectorySummary(prefs.identityDirectory);
-}
-
-/** @deprecated Use identityLinksHubSubtitle */
-export const teamHubSubtitle = identityLinksHubSubtitle;
 
 export function promptsHubSubtitle(pinnedCount: number): string {
   if (pinnedCount === 0) {
@@ -202,12 +194,12 @@ export function integrationConfigured(
   prefs: Preferences,
   provider: IntegrationChatProvider
 ): boolean {
-  if (prefs.devMode) {
-    return integrationConfiguredFromFlags(prefs, provider);
-  }
   const orgStatus = findOrgIntegrationStatus(prefs, integrationToOrgProvider(provider));
   if (orgStatus) {
     return orgStatus.installed;
+  }
+  if (prefs.devMode) {
+    return integrationConfiguredFromFlags(prefs, provider);
   }
   if (provider === "slack") {
     return prefs.hasSlackInstalled;

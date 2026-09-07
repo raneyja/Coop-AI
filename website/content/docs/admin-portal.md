@@ -127,9 +127,9 @@ API keys are **not** the primary sign-in method. Developers and admins sign in w
 
 **Billing** page (Pro/Enterprise, admin only):
 
-- View current plan and seat count
+- View current plan (1-seat plans show as just you; teams show seat count)
 - Open Stripe customer portal for invoices and payment method
-- Upgrade or add seats
+- Upgrade, or add a teammate / seats
 
 ## Audit log
 

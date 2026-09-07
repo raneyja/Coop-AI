@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ChatFileMention, ChatImageAttachment, MentionSearchResult } from "../../chat/types";
+import type { ChatFileMention, ChatImageAttachment, MentionSearchResult, LlmProviderPreference } from "../../chat/types";
 import {
   INDEXED_REPOS_MENTION_TITLE,
   LOCAL_WORKSPACE_MENTION_TITLE,
@@ -24,6 +24,7 @@ import {
 import { paperclipAttachmentKind } from "../../chat/paperclipAttachments";
 import { MentionAttachmentChip } from "./MentionAttachmentChip";
 import { ContextPreviewStrip } from "./ContextPreviewStrip";
+import { ModelPickerSelect } from "./ModelPickerSelect";
 import type { RepoContext } from "../types";
 
 type ChatComposerProps = {
@@ -55,6 +56,12 @@ type ChatComposerProps = {
   mentionHint?: string;
   repoContext?: RepoContext;
   showContextPreview?: boolean;
+  plan?: "free" | "pro" | "enterprise";
+  usageTier?: string | null;
+  devMode?: boolean;
+  model?: string;
+  llmProvider?: LlmProviderPreference;
+  onModelChange?: (next: { model: string; llmProvider: LlmProviderPreference }) => void;
 };
 
 const MAX_MENTIONS = 3;
@@ -162,7 +169,13 @@ export function ChatComposer({
   mentionError,
   mentionHint,
   repoContext,
-  showContextPreview = true
+  showContextPreview = true,
+  plan,
+  usageTier,
+  devMode,
+  model,
+  llmProvider,
+  onModelChange
 }: ChatComposerProps): React.ReactElement {
   const isChat = variant === "chat";
   const launchIntroActive = !isChat && launchIntroPhase !== "done";
@@ -416,6 +429,9 @@ export function ChatComposer({
     }
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
+      if (event.repeat) {
+        return;
+      }
       if (canSend && !isStreaming) {
         onSend();
       }
@@ -451,7 +467,7 @@ export function ChatComposer({
                 ) : (
                   <p className="coop-prompt-modal-muted px-3 py-2 text-xs">
                     {(mentionHint && mentionHint.trim()) ||
-                      `No files match "${mentionQuery}". Check Workspace → Search scope, or open the repo folder locally.`}
+                      `No files match "${mentionQuery}". Check GitHub connection, or open the repo folder locally.`}
                   </p>
                 )
               ) : (
@@ -651,6 +667,16 @@ export function ChatComposer({
               </span>
             ) : null}
             <div className="flex items-center gap-0.5">
+              {model && llmProvider && onModelChange ? (
+                <ModelPickerSelect
+                  plan={plan}
+                  usageTier={usageTier}
+                  devMode={devMode}
+                  model={model}
+                  llmProvider={llmProvider}
+                  onChange={onModelChange}
+                />
+              ) : null}
               <button
                 type="button"
                 title="Remote workspace"

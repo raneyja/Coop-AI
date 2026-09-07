@@ -178,7 +178,9 @@ void (async () => {
     modelWeight: 4,
     visionMultiplier: 2,
     visionWeighted: true,
-    plan: "free"
+    plan: "free",
+    bucket: "auto",
+    usdCents: 2
   });
 
   assert.equal(DEFAULT_FREE_TOKEN_LIMIT, 80_000);
@@ -214,6 +216,135 @@ void (async () => {
   const recovered = await rollingQuota.getSnapshot("org-free", "free", afterReset);
   assert.equal(recovered?.usedTokens, 0);
   assert.equal(recovered?.remainingTokens, 10_000);
+
+  const paidNow = new Date("2026-09-15T12:00:00.000Z");
+  const centsByBucket = { auto: 0, frontier: 0 };
+  const paidTrackerPool = {
+    query: async (sql: string, params: unknown[]) => {
+      if (sql.includes("INSERT INTO usage_events")) {
+        const metadata = JSON.parse(String(params[4]));
+        const bucket = metadata.bucket === "frontier" ? "frontier" : "auto";
+        centsByBucket[bucket] += Number(metadata.usdCents ?? 0);
+        return { rows: [] };
+      }
+      if (sql.includes("usdCents") && sql.includes("metadata->>'bucket'")) {
+        const bucket = String(params[4]) === "frontier" ? "frontier" : "auto";
+        return { rows: [{ total: centsByBucket[bucket] }] };
+      }
+      return { rows: [] };
+    }
+  };
+  const paidQuota = new PlanQuotaService(new UsageTracker(paidTrackerPool as never), config);
+
+  await paidQuota.check("org-pro", "pro", 0, paidNow, {
+    usageTier: "pro",
+    selection: "auto",
+    provider: "openai",
+    model: "gpt-5-mini"
+  });
+
+  centsByBucket.auto = 1000;
+  centsByBucket.frontier = 0;
+  await paidQuota.check("org-pro", "pro", 0, paidNow, {
+    usageTier: "pro",
+    selection: "auto",
+    provider: "openai",
+    model: "gpt-5-mini"
+  });
+
+  centsByBucket.auto = 1000;
+  centsByBucket.frontier = 500;
+  try {
+    await paidQuota.check("org-pro", "pro", 0, paidNow, {
+      usageTier: "pro",
+      selection: "auto",
+      provider: "openai",
+      model: "gpt-5-mini",
+      periodAnchor: new Date("2026-09-04T17:00:00.000Z")
+    });
+    assert.fail("expected paid cap exhaustion to 429");
+  } catch (error) {
+    assert.ok(error instanceof PlanQuotaExceededError);
+    assert.equal(error.pool, "paid");
+    assert.equal(error.upgradePlan, "pro_plus");
+    assert.equal(error.resetsAt.toISOString(), "2026-10-04T17:00:00.000Z");
+    assert.match(error.message, /Upgrade to Pro\+/);
+  }
+
+  try {
+    await paidQuota.check("org-pro", "pro", 0, paidNow, {
+      usageTier: "pro",
+      selection: "claude-opus-4-8",
+      provider: "anthropic",
+      model: "claude-opus-4-8"
+    });
+    assert.fail("expected paid cap to block Frontier picks too");
+  } catch (error) {
+    assert.ok(error instanceof PlanQuotaExceededError);
+    assert.equal(error.pool, "paid");
+  }
+
+  const unavailable = new PlanQuotaService(undefined, config);
+  try {
+    await unavailable.check("org-pro", "pro", 0, paidNow, {
+      usageTier: "pro",
+      selection: "auto",
+      provider: "openai",
+      model: "gpt-5-mini"
+    });
+    assert.fail("expected paid check without tracker to fail closed");
+  } catch (error) {
+    assert.equal((error as Error).name, "PlanQuotaUnavailableError");
+  }
+
+  const meters = await paidQuota.getUsageMeters(
+    "org-pro",
+    "pro",
+    "pro",
+    paidNow,
+    new Date("2026-09-04T17:00:00.000Z")
+  );
+  assert.ok(meters);
+  assert.equal(meters?.displayName, "Pro");
+  assert.equal(meters?.periodStart, "2026-09-04T17:00:00.000Z");
+  assert.equal(meters?.periodEnd, "2026-10-04T17:00:00.000Z");
+  assert.equal(meters?.limitCents, 1500);
+  assert.equal(meters?.usedCents, 1500);
+  assert.equal(meters?.remainingCents, 0);
+  assert.equal(meters?.auto.limitCents, 1500);
+  assert.equal(meters?.frontier.limitCents, 1500);
+  assert.equal(meters?.auto.usedCents, 1000);
+  assert.equal(meters?.frontier.usedCents, 500);
+
+  centsByBucket.auto = 100;
+  centsByBucket.frontier = 50;
+  let recordedMeta: Record<string, unknown> | undefined;
+  const recordPool = {
+    query: async (sql: string, params: unknown[]) => {
+      if (sql.includes("INSERT INTO usage_events")) {
+        recordedMeta = JSON.parse(String(params[4]));
+        return { rows: [] };
+      }
+      if (sql.includes("usdCents") && sql.includes("metadata->>'bucket'")) {
+        const bucket = String(params[4]) === "frontier" ? "frontier" : "auto";
+        return { rows: [{ total: centsByBucket[bucket] }] };
+      }
+      return { rows: [] };
+    }
+  };
+  const recordQuota = new PlanQuotaService(new UsageTracker(recordPool as never), config);
+  await recordQuota.recordTokens("org-pro", "pro", {
+    eventType: "chat.message",
+    inputTokens: 1000,
+    outputTokens: 0,
+    provider: "anthropic",
+    model: "claude-sonnet-4-6",
+    principal: "user:test",
+    selection: "auto",
+    usageTier: "pro"
+  });
+  assert.equal(recordedMeta?.bucket, "auto");
+  assert.equal(recordedMeta?.overflowedFromAuto, undefined);
 
   console.log("planQuota: 1/1 tests passed");
 })();

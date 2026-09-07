@@ -1,7 +1,9 @@
 import "../autocomplete/test/vscodeMockSetup";
 import assert from "node:assert/strict";
+import * as vscode from "vscode";
 import { buildPatchCardState } from "./patchDiffPreview";
 import type { ParsedPatchSet } from "./patchParser";
+import { clearRemotePatchBuffersForTests } from "./patchTarget";
 
 let passed = 0;
 let failed = 0;
@@ -57,8 +59,12 @@ test("buildPatchCardState includes add/remove diff lines", () => {
   const hunk = state.files[0]?.hunks[0];
   assert.ok(hunk);
   assert.equal(hunk.matchStatus, "matched");
-  assert.ok(hunk.lines.some((line) => line.kind === "remove"));
   assert.ok(hunk.lines.some((line) => line.kind === "add"));
+  assert.equal(
+    hunk.lines.some((line) => line.kind === "remove" && line.text.includes("bindSession")),
+    false
+  );
+  assert.ok(hunk.lines.some((line) => line.kind === "context" && line.text.includes("bindSession")));
 });
 
 test("buildPatchCardState lists all locations when SEARCH is ambiguous", () => {
@@ -237,6 +243,204 @@ test("pairs ambiguous hunks that hit the same spans even when SEARCH text differ
   assert.equal(state.files[0]?.hunks[1]?.matchStatus, "matched");
   assert.deepEqual(state.files[0]?.hunks[0]?.resolvedMatchIndices, [0]);
   assert.deepEqual(state.files[0]?.hunks[1]?.resolvedMatchIndices, [1]);
+});
+
+test("buildPatchCardState matches SEARCH using an aliased fileContents key", () => {
+  const body = [
+    "    {",
+    '        "name": "In Progress",',
+    '        "color": "#F59E0B",',
+    "        \"sequence\": 35000,",
+    "        \"group\": StateGroup.STARTED.value,",
+    "    },"
+  ].join("\n");
+  const state = buildPatchCardState(
+    {
+      files: [
+        {
+          relativePath: "apps/api/plane/db/models/state.py",
+          hunks: [
+            {
+              search: body,
+              replace: `    # ongoing\n${body}`
+            }
+          ]
+        }
+      ]
+    },
+    {
+      status: "pending",
+      fileContents: { "plane/apps/api/plane/db/models/state.py": `${body}\n` }
+    }
+  );
+  assert.equal(state.files[0]?.hunks[0]?.matchStatus, "matched");
+});
+
+const STATE_GROUP = [
+  "class StateGroup(models.TextChoices):",
+  '    BACKLOG = "backlog", "Backlog"',
+  '    UNSTARTED = "unstarted", "Unstarted"',
+  '    STARTED = "started", "Started"',
+  '    COMPLETED = "completed", "Completed"',
+  '    CANCELLED = "cancelled", "Cancelled"',
+  '    TRIAGE = "triage", "Triage"'
+].join("\n");
+
+function fakeUntitledDoc(uriString: string, text: string): vscode.TextDocument {
+  const uri = vscode.Uri.parse(uriString);
+  return {
+    uri,
+    getText: () => text,
+    lineCount: Math.max(1, text.split("\n").length),
+    lineAt: (n: number) => ({ text: text.split("\n")[n] ?? "" })
+  } as unknown as vscode.TextDocument;
+}
+
+test("buildPatchCardState matches SEARCH in an untitled Zero-Clone tab without fileContents", () => {
+  (vscode.workspace.textDocuments as unknown[]).length = 0;
+  clearRemotePatchBuffersForTests();
+  const untitled = fakeUntitledDoc(
+    "untitled:Untitled-1",
+    `from django.db import models\n\n${STATE_GROUP}\n`
+  );
+  (vscode.workspace.textDocuments as unknown as vscode.TextDocument[]).push(untitled);
+  const state = buildPatchCardState(
+    {
+      files: [
+        {
+          relativePath: "apps/api/plane/db/models/state.py",
+          hunks: [
+            {
+              search: STATE_GROUP,
+              replace: `class StateGroup(models.TextChoices):\n    """Workflow state choices, not US state definitions."""\n    BACKLOG = "backlog", "Backlog"`
+            }
+          ]
+        }
+      ]
+    },
+    { status: "pending" }
+  );
+  assert.equal(state.files[0]?.hunks[0]?.matchStatus, "matched");
+  (vscode.workspace.textDocuments as unknown[]).length = 0;
+});
+
+test("buildPatchCardState prefers the live untitled tab over stale captured bytes", () => {
+  (vscode.workspace.textDocuments as unknown[]).length = 0;
+  clearRemotePatchBuffersForTests();
+  const untitled = fakeUntitledDoc(
+    "untitled:Untitled-2",
+    `from django.db import models\n\n${STATE_GROUP}\n`
+  );
+  (vscode.workspace.textDocuments as unknown as vscode.TextDocument[]).push(untitled);
+  const state = buildPatchCardState(
+    {
+      files: [
+        {
+          relativePath: "apps/api/plane/db/models/state.py",
+          hunks: [{ search: STATE_GROUP, replace: `${STATE_GROUP}\n` }]
+        }
+      ]
+    },
+    {
+      status: "pending",
+      fileContents: { "apps/api/plane/db/models/state.py": "unrelated captured bytes\n" }
+    }
+  );
+  assert.equal(state.files[0]?.hunks[0]?.matchStatus, "matched");
+  (vscode.workspace.textDocuments as unknown[]).length = 0;
+});
+
+test("preview names StateManager.get_queryset and includes the class line", () => {
+  const fileBody = [
+    "DEFAULT_STATES = [",
+    "    {",
+    '        "name": "In Progress",',
+    "    },",
+    "]",
+    "",
+    "class StateManager(SoftDeletionManager):",
+    '    """Default manager"""',
+    "",
+    "    def get_queryset(self):",
+    "        return super().get_queryset().exclude(group=StateGroup.TRIAGE.value)",
+    "",
+    "class TriageStateManager(SoftDeletionManager):",
+    "    pass"
+  ].join("\n");
+  const search = "        return super().get_queryset().exclude(group=StateGroup.TRIAGE.value)";
+  const state = buildPatchCardState(
+    {
+      files: [
+        {
+          relativePath: "apps/api/plane/db/models/state.py",
+          hunks: [
+            {
+              search,
+              replace: `        # Returns a queryset excluding triage states\n${search}`
+            }
+          ]
+        }
+      ]
+    },
+    {
+      status: "pending",
+      fileContents: { "apps/api/plane/db/models/state.py": fileBody }
+    }
+  );
+  const hunk = state.files[0]?.hunks[0];
+  assert.equal(hunk?.anchorLabel, "StateManager.get_queryset");
+  assert.equal(
+    hunk?.lines.some((line) => line.kind === "context" && line.text.includes("class StateManager")),
+    true
+  );
+  assert.equal(
+    hunk?.lines.some((line) => line.kind === "add" && line.text.includes("Returns a queryset")),
+    true
+  );
+  assert.equal(
+    hunk?.lines.some((line) => line.kind === "remove" && line.text.includes("return super()")),
+    false
+  );
+  assert.equal(
+    hunk?.lines.some((line) => line.kind === "context" && line.text.includes("return super()")),
+    true
+  );
+});
+
+test("insert-above preview line numbers include the blank line Apply will write", () => {
+  const fileBody = [
+    "}",
+    "",
+    "async function run() {",
+    "  await testProOrgCatalogUncapped();",
+    "}"
+  ].join("\n");
+  const inserted =
+    "async function testFreeMaxIndexedRepos() {\n  assert.equal(FREE_MAX_INDEXED_REPOS, 3);\n}\n\n";
+  const state = buildPatchCardState(
+    {
+      files: [
+        {
+          relativePath: "src/server/indexedRepoQuota.test.ts",
+          hunks: [
+            {
+              search: "async function run() {",
+              replace: `${inserted}async function run() {`
+            }
+          ]
+        }
+      ]
+    },
+    {
+      status: "pending",
+      fileContents: { "src/server/indexedRepoQuota.test.ts": fileBody }
+    }
+  );
+  const hunk = state.files[0]?.hunks[0];
+  const runLine = hunk?.lines.find(
+    (line) => line.kind === "context" && line.text.includes("async function run()")
+  );
+  assert.equal(runLine?.lineNumber, 7);
 });
 
 console.log(`\npatchDiffPreview: ${passed} passed, ${failed} failed`);

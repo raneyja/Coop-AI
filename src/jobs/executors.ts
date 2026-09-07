@@ -92,7 +92,7 @@ export async function executeKnowledgeGapScan(
     }
   }
 
-  await report(95, "Aggregating results");
+  await report(95, "Summarizing scan results");
   const summary = aggregateGaps(gaps);
 
   if (failedRepos.length > 0 && completedRepos.length > 0) {

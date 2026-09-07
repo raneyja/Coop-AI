@@ -94,6 +94,28 @@ test("synthesizeMessageFromSegments builds chat-fallback prompt from FIM segment
   assert.match(message, /Do NOT invent string literals/i);
 });
 
+test("synthesizeMessageFromSegments asks for a full body on empty-block holes", () => {
+  const emptyHole: ExtractedCodeContext = {
+    ...sampleContext,
+    currentLinePrefix: "  ",
+    currentLineSuffix: "",
+    suffixWindow: "}",
+    previousLines:
+      "export function extractBearerToken(headers: Record<string, string | undefined>): string | undefined {",
+    parentSignature:
+      "export function extractBearerToken(headers: Record<string, string | undefined>): string | undefined {"
+  };
+  const message = synthesizeMessageFromSegments(
+    {
+      prefix: `${emptyHole.previousLines}\n${emptyHole.currentLinePrefix}`,
+      suffix: emptyHole.suffixWindow
+    },
+    emptyHole,
+    "fallback"
+  );
+  assert.match(message, /FULL function\/block body/i);
+});
+
 async function runAsyncTests(): Promise<void> {
   await asyncTest("reuses in-flight promise for prefix-compatible extension", async () => {
     let requestCount = 0;
@@ -144,6 +166,46 @@ async function runAsyncTests(): Promise<void> {
 
     await router.fetchCompletions(braceContext, autocompleteSettings);
     assert.equal(capturedMaxTokens, 200);
+  });
+
+  await asyncTest("keeps a 7-line empty-block body instead of the 4-line stream cap", async () => {
+    const body = [
+      "const header = headers.authorization ?? \"\";",
+      "if (!header.startsWith(\"Bearer \")) {",
+      "  return undefined;",
+      "}",
+      "const token = header.slice(\"Bearer \".length).trim();",
+      "return token || undefined;"
+    ].join("\n");
+    const api = {
+      streamInlineCompletion: async (
+        _base: string,
+        _req: Record<string, unknown>,
+        onChunk?: (chunk: string) => void
+      ) => {
+        onChunk?.(body);
+        return { text: body, alternatives: [], model: "test", provider: "mistral" };
+      }
+    };
+    const performance = new AutocompletePerformanceMonitor();
+    const router = new CompletionRouter({ api: api as never, performance });
+    const hole: ExtractedCodeContext = {
+      ...sampleContext,
+      contextHash: "hash-bearer-hole",
+      currentLinePrefix: "  ",
+      currentLineSuffix: "",
+      suffixWindow: "}",
+      previousLines:
+        "export function extractBearerToken(headers: Record<string, string | undefined>): string | undefined {",
+      parentSignature:
+        "export function extractBearerToken(headers: Record<string, string | undefined>): string | undefined {",
+      indent: "  "
+    };
+
+    const result = await router.fetchCompletions(hole, autocompleteSettings);
+    const text = result.completions[0]?.text ?? "";
+    assert.match(text, /startsWith\("Bearer /);
+    assert.match(text, /return token \|\| undefined;/);
   });
 
   await asyncTest("starts new request when prefix is not compatible", async () => {

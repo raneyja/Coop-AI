@@ -6,6 +6,7 @@ import { assessGithubConnection } from "./codeHostCredentialResolver";
 import { isGithubOAuthInstallation } from "./codeHostConnectors/githubOAuthConnector";
 import { storeGithubInstallHint } from "./githubRelinkService";
 import { requiresIntegrationScope } from "../license/planSearchScope";
+import { resolveOrgIntegrationAccessToken } from "./integrationApi";
 import { writeJson, type AdminApiDeps } from "./adminApiShared";
 import { resolveScopeStatusForIntegration } from "./adminIntegrationScopeApi";
 import { testAdminIntegration } from "./adminIntegrationTest";
@@ -199,7 +200,18 @@ export async function handleAdminIntegrationsRequest(
 }
 
 export async function listOrgIntegrations(
-  deps: Pick<AdminApiDeps, "orgStore" | "integrationStore" | "scopePolicyStore" | "serverConfig">,
+  deps: Pick<
+    AdminApiDeps,
+    | "orgStore"
+    | "integrationStore"
+    | "scopePolicyStore"
+    | "serverConfig"
+    | "atlassianApp"
+    | "notionApp"
+    | "googleDocsApp"
+    | "teamsApp"
+    | "slackApp"
+  >,
   orgId: string,
   options?: { refresh?: boolean }
 ) {
@@ -310,6 +322,16 @@ async function loadIntegrationStatus(
   if (provider === "slack" && installed && deps.integrationStore) {
     const accessToken = await deps.integrationStore.getAccessToken(orgId, "slack");
     if (accessToken && isSlackBotAccessToken(accessToken)) {
+      needsReconnect = true;
+    }
+  }
+  if (installed && !needsReconnect) {
+    try {
+      const accessToken = await resolveOrgIntegrationAccessToken(orgId, provider, deps);
+      if (!accessToken) {
+        needsReconnect = true;
+      }
+    } catch {
       needsReconnect = true;
     }
   }

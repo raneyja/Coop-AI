@@ -34,13 +34,14 @@ export abstract class BaseProviderClient {
     let response: Response;
     try {
       response = await runResilientRequest({
-        // TTFB only — never tied to the soft 15s gather guideline. User Stop uses options.signal.
-        timeoutMs: options.signal ? undefined : LLM_STREAM_CONNECT_TIMEOUT_MS,
+        // TTFB ceiling — not the 15s gather guideline. Combined with user Stop in runResilientRequest.
+        timeoutMs: LLM_STREAM_CONNECT_TIMEOUT_MS,
+        signal: options.signal,
         policy: { maxRetries: 0 },
         run: async (signal) =>
           this.fetchImpl(url, {
             ...init,
-            signal: options.signal ?? signal
+            signal
           })
       });
     } catch (error) {

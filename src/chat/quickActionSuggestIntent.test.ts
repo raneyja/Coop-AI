@@ -171,8 +171,13 @@ test("filter: understand offered even with sticky file (repo-wide chip)", () => 
   assert.equal(raw[0]?.actionId, "understand-repo");
   const filtered = filterSuggestableActions(raw, repoWithFile);
   assert.equal(filtered[0]?.actionId, "understand-repo");
+  // Layout/inventory phrasing answers in plain chat (no chip). Architecture overview still chips.
+  assert.equal(
+    shouldOfferQuickActionSuggest("How is this repository structured?", repoWithFile),
+    undefined
+  );
   const offer = shouldOfferQuickActionSuggest(
-    "How is this repository structured?",
+    "Explain this codebase architecture",
     repoWithFile
   );
   assert.ok(offer);

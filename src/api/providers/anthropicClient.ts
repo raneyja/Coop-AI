@@ -1,9 +1,81 @@
 import { getZeroRetentionConfig } from "../zeroRetentionConfig";
 import { BaseProviderClient, parseSseDataLine, resolveUsage, type ParseState } from "./baseClient";
 import { formatZeroRetentionRequest } from "../requestFormatter";
-import type { ProviderStreamOptions, StreamChunk } from "../types";
+import type { ProviderStreamOptions, ProviderThinkingOptions, StreamChunk } from "../types";
 import { runResilientRequest } from "../networkResilience";
 import { LLM_STREAM_CONNECT_TIMEOUT_MS } from "../../config/responseDeadline";
+import { anthropicUsesAdaptiveThinking } from "../../config/chatThinkingBudget";
+
+export function applyAnthropicThinking(
+  body: Record<string, unknown>,
+  options: {
+    model: string;
+    maxTokens: number;
+    thinking?: ProviderThinkingOptions;
+  }
+): { body: Record<string, unknown>; maxTokens: number; forceTemperature?: number } {
+  const thinking = options.thinking;
+  if (!thinking || (thinking.mode !== "adaptive" && thinking.mode !== "extended" && thinking.mode != null)) {
+    return { body, maxTokens: options.maxTokens };
+  }
+  const useAdaptive =
+    thinking.mode === "adaptive" ||
+    (thinking.mode == null && anthropicUsesAdaptiveThinking(options.model));
+  if (useAdaptive) {
+    return {
+      body: {
+        ...body,
+        thinking: { type: "adaptive" },
+        output_config: { effort: thinking.effort ?? "high" }
+      },
+      maxTokens: options.maxTokens,
+      // Anthropic rejects any temperature other than 1 when thinking is on
+      // (extended `enabled` or adaptive). Default chat temp is 0.5.
+      forceTemperature: 1
+    };
+  }
+  const budget = thinking.budgetTokens;
+  if (typeof budget !== "number" || budget <= 0) {
+    return { body, maxTokens: options.maxTokens };
+  }
+  return {
+    body: {
+      ...body,
+      thinking: { type: "enabled", budget_tokens: budget }
+    },
+    maxTokens: Math.max(options.maxTokens, budget + 512),
+    forceTemperature: 1
+  };
+}
+
+/** Final Anthropic Messages body — thinking + temperature clamp live here, not at call sites. */
+export function buildAnthropicInferenceBody(options: {
+  formattedBody: Record<string, unknown>;
+  model: string;
+  maxTokens: number;
+  thinking?: ProviderThinkingOptions;
+}): Record<string, unknown> {
+  const applied = applyAnthropicThinking(
+    {
+      ...options.formattedBody,
+      model: options.model,
+      stream: true
+    },
+    {
+      model: options.model,
+      maxTokens: options.maxTokens,
+      thinking: options.thinking
+    }
+  );
+  const body: Record<string, unknown> = {
+    ...applied.body,
+    max_tokens: applied.maxTokens
+  };
+  if (applied.forceTemperature === 1) {
+    body.temperature = 1;
+  }
+  return body;
+}
 
 export class AnthropicProviderClient extends BaseProviderClient {
   public async *streamCompletion(options: ProviderStreamOptions): AsyncGenerator<StreamChunk> {
@@ -28,35 +100,26 @@ export class AnthropicProviderClient extends BaseProviderClient {
       headers[key.toLowerCase()] = String(value);
     }
 
-    const thinkingBudget = options.thinking?.budgetTokens;
-    const useThinking = typeof thinkingBudget === "number" && thinkingBudget > 0;
-    // Anthropic: max_tokens must exceed budget_tokens; temperature must be 1 with thinking.
-    const maxTokens = useThinking
-      ? Math.max(options.maxTokens, thinkingBudget + 512)
-      : options.maxTokens;
-    const body: Record<string, unknown> = {
-      ...formatted.body,
+    const body = buildAnthropicInferenceBody({
+      formattedBody: formatted.body,
       model: options.model,
-      max_tokens: maxTokens,
-      stream: true
-    };
-    if (useThinking) {
-      body.temperature = 1;
-      body.thinking = { type: "enabled", budget_tokens: thinkingBudget };
-    }
+      maxTokens: options.maxTokens,
+      thinking: options.thinking
+    });
 
     const state: ParseState = { text: "" };
     let response: Response;
     try {
       response = await runResilientRequest({
-        timeoutMs: options.signal ? undefined : LLM_STREAM_CONNECT_TIMEOUT_MS,
+        timeoutMs: LLM_STREAM_CONNECT_TIMEOUT_MS,
+        signal: options.signal,
         policy: { maxRetries: 0 },
         run: async (signal) =>
           this.fetchImpl(url, {
             method: "POST",
             headers,
             body: JSON.stringify(body),
-            signal: options.signal ?? signal
+            signal
           })
       });
     } catch (error) {

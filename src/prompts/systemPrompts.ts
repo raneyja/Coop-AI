@@ -1,5 +1,7 @@
 import type { UseCase } from "../api/types";
 import type { IntegrationChatProvider } from "../chat/types";
+import { resolveEditAskKind, type EditAskKind } from "../chat/editAskKind";
+import { isOpenFileReviewAsk } from "../chat/plainChatExplain";
 import { DECISION_HISTORIAN_SYSTEM } from "./decisionSynthesis";
 import { OWNERSHIP_INTELLIGENCE_SYSTEM } from "./ownershipSynthesis";
 import { REPO_SUMMARY_EVIDENCE_SYSTEM } from "./repoSummarySynthesis";
@@ -13,6 +15,7 @@ import {
   formatDualRepoCompareForLlm
 } from "../context/dualRepoCompare";
 import { shouldSkipEvidencePath } from "../api/agent/searchQuery";
+import { sutAssertionGrounding } from "../edit/editSutAttach";
 import { extractAgentProposedPatchText as extractAgentProposedPatch } from "../chat/agentProposedPatch";
 
 // Audience assumes professional engineers. If we add non-engineer seats (admin, eval),
@@ -22,10 +25,13 @@ export const OPERATING_CONTEXT = `
 - The user is a professional software engineer using CoopAI inside their code editor.
 - Assume strong technical fluency; skip basic explanations unless asked.
 - Favor concrete, actionable answers: real file paths, code, and specifics over generic advice.
-- Be concise and direct. This is a working tool, not a tutorial.
+- Be dense, not thin: include the evidence a teammate needs to act, in as little prose as that takes. Do not pad. Extra citations and 15+ peer bullets are fatigue, not density.
+- Match depth to the ask. Cover what they asked; skip adjacent subsystems they did not ask about. If two sections would say the same thing, keep one.
+- Open-file explain / walk-through: a one-screen briefing. One citation of the named symbol, at most three reviewer bullets if they asked, then stop. Related files are backtick paths — not extra code cards.
+- Finish the answer. Never stop mid-sentence or mid-list. If you must cut, drop repetition and extra citations first — not the concluding point.
 - Do not open with filler ("Great question", "Certainly", or restating the request).
 - Omit sections with no evidence — never pad with generic advice.
-- When the user states a specific question or focus (text after a slash command, a custom prompt, or a direct ask in chat), answer that ask explicitly. If the message includes ## User focus (required), include **Your question** immediately after **Summary**/**Answer** and treat the focus as the primary deliverable — never bury it under a generic template overview.
+- When the user states a specific question or focus (text after a slash command, a custom prompt, or a direct ask in chat), answer that ask explicitly. If the message includes ## User focus (required), include **Your question** immediately after **Summary**/**Answer** and treat the focus as the primary deliverable — never bury it under a generic template overview. Exception: a PR review of an attached file uses **Reviewer checks** only — omit **Summary**, **Answer**, and **Your question**.
 - **Your question** must answer the ask with concrete evidence. Never restate, paraphrase, or truncate the user's question text as the section body.
 `;
 
@@ -41,7 +47,7 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
 - Repo code you are explaining or highlighting (not changing): use a **citation fence** (cite intent) — never a language-tagged fence.
   - Preferred: plain \`\`\` fence (no language tag); first body line is REAL integers + path, e.g. \`42:68:apps/api/plane/api/middleware/api_authentication.py\`; then only the relevant lines.
   - Also accepted: fence info-string \`\`\`42:68:path/to/file.py\` with the snippet as the body (no duplicate location line).
-  - Keep slices short (about 5–40 lines). Prefer one tight citation over pasting a whole function.
+  - Keep slices short (about 5–20 lines). Prefer one tight citation over pasting a whole function. For explain/walkthrough of the open file: at most **two** citation fences; name other files as backtick paths — do not paste their bodies.
   - Citation body must be copied **verbatim** from attached evidence / open-file content: same characters, indentation width, and call style. Do **not** reindent (2-space ↔ 4-space), rewrite, or invent a cleaner version.
   - Do **not** abbreviate repo code with \`// ...\`, \`# ...\`, or "summary" comments that replace real lines. If a line is not needed, omit it from the line range instead of ellipsis-substituting.
   - PASS example first line: \`120:145:packages/lib/server-only/document/complete-document-with-token.ts\`
@@ -59,7 +65,8 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
 - Then the main sections from the use-case structure below, in order — each **Title** on its own line, an optional one-line lead, then \`-\` bullets or \`1.\` numbered items.
 - Multi-item audits (gaps, risks, alternatives, owners): one **subsection title** per item followed by 2-4 bullets — never a flat peer list. Field labels (**Open question:**, **What to check:**, **Risk:**, **Owner:**) are bullets inside a subsection, never section titles and never top-level bullets without a subsection title directly above them.
 - One theme per subsection; category labels (e.g. **Dependency configuration**) are subsection titles, not bullets.
-- Complete sentences; prefer 4-8 topical sections over 15+ peer-level bullets. No fabricated URLs or paths.
+- Complete sentences. When the required structure below lists named sections, follow that list. Otherwise prefer 2–4 short sections — not 15+ peer-level bullets. No fabricated URLs or paths.
+- Spend output on new evidence, not restating **Answer** / **Your question** in later sections. Extra citations of the same snippet do not make the answer better.
 `;
 
 export const PATCH_OUTPUT_CONTRACT = `
@@ -90,8 +97,12 @@ Rules:
 - Inline \`backticks\` for identifiers in the lead sentence only; patch bodies are raw code.
 
 ## Editor selection (required when present)
-- When \`<editor_selection>\` is attached, that is the user's highlighted code. Treat it as the primary edit target.
-- If the user asks to shorten, replace, rewrite, refactor, or make "this" / "the selection" / "highlighted" / "this block" more efficient: SEARCH must be an **exact copy of the entire** \`<editor_selection>\` body (same characters, indentation, and call style such as \`request=request\` vs \`request\`). REPLACE is the new version of that whole block.
+- \`/edit\` names the target (this highlight / file / repo). It is **not** a request to rewrite, improve, or complete the code.
+- When \`<editor_selection>\` is attached, that is the patch target. Do **not** pick a different function or block from the same file.
+- Do **exactly** the user's words. Never add drive-by cleanups (private/readonly, extra parameters, reformatting, signature rewrites) unless they asked for that change.
+- If the user asks to add, leave, or write a comment, JSDoc, docstring, or a summary of what the highlighted code does: that is **comment-only**. SEARCH is an exact copy of the selection. REPLACE is the comment line(s) followed by that same SEARCH text **unchanged**. Do not modify any existing token.
+- A follow-up like "just make it one sentence" after a comment ask still means: change only the comment. Do not rewrite the code.
+- **Only** if the user explicitly asks to shorten, replace, rewrite, refactor, or make "this" / "the selection" / "highlighted" / "this block" more efficient: SEARCH must be an **exact copy of the entire** \`<editor_selection>\` body (same characters, indentation, and call style such as \`request=request\` vs \`request\`). REPLACE is the new version of that whole block.
 - Only use a smaller contiguous subset when the user clearly names a smaller part (e.g. "just the if check"). That subset must still be copied verbatim from the attachment — never paraphrased.
 - Expand beyond the selection **only** when the request clearly requires other lines (rename all call sites, wire up a new helper, fix imports the change needs). Say nothing extra; just include those necessary hunks.
 - Prefer one tight patch on the selection over "helpful" drive-by cleanups outside it.
@@ -99,6 +110,7 @@ Rules:
 
 ## Completeness (required)
 - Satisfy the **entire** request in this response — every necessary hunk, not just the first obvious insert.
+- Do **not** expand the request. If they asked for a comment, do not also "fix" the constructor or nearby code.
 - If you introduce a helper, symbol, or extracted function, also emit the call-site / wire-up hunks so the new code is used (unless the user asked only to define it).
 - Extract / rename / move / refactor requests that touch definition and usage need **all** those hunks before you stop.
 - Prefer one complete multi-block patch over a partial patch that leaves the file inconsistent.
@@ -118,8 +130,24 @@ Keep this section brief (4-6 bullets max) — contextualize the open editor file
 - **Integration surface** — routes, HTTP handlers, or external APIs visible in anchor file content (omit if none)
 - **Owners** — primary owner when ownership evidence is scoped to this path (omit if none)`;
 
-function comprehensionResponseStructure(activeFile?: string): string {
+function comprehensionResponseStructure(activeFile?: string, locateOnly = false): string {
   const trimmed = activeFile?.trim();
+  if (locateOnly) {
+    return `
+## Required response structure
+Use these sections in order (**Title** on its own line; blank line before each; omit empty sections):
+
+**Summary**
+1-3 sentences naming where the asked-about code lives, from attached files only.
+
+**Your question**
+Required. Name the attached implementation path chain that answers the locate ask (UI click → apply logic, middleware file, etc.). Cite real paths/symbols from attached entry or focus-search files. Do not pad a reading list. Do not name Confluence or Notion pages.
+
+**Sources**
+Include **at most 3 bullets**. Each bullet must start with a plain \`[Sources: …]\` label, then an em dash, then **one concrete fact** from GitHub/index evidence. Do not cite Confluence or Notion.
+
+Omit **Architecture**, **Key subsystems**, **Entry points**, **Risks & unknowns**, and **Suggested next steps** — this is a locate answer, not a repo syllabus.`;
+  }
   const activeFileSection = trimmed
     ? `${COMPREHENSION_ACTIVE_FILE_SECTION}
 
@@ -137,14 +165,14 @@ Use these sections in order (**Title** on its own line; blank line before each; 
 
 **Your question**
 Include **only** when the user message has ## User focus (required). Place immediately after **Summary**.
-PASS: ≥1 concrete path/symbol from attached entry or focus-search files; answers the ask with that evidence.
-FAIL: restating or truncating the user's question; generic form→API→DB story; invented endpoints; section omitted, folded into Architecture, or left until the end.
+PASS: ≥1 concrete path/symbol from attached entry or focus-search files; answers the ask with that evidence. When the ask requests files to read first, list the attached domain paths that support the answer — however many that is. Do not pad to N. Not README / docker-compose / package.json unless that is the only evidence. If the ask has multiple topics, cover **each topic that has attached evidence**. Never name a path that is not in attached entry/focus-search files.
+FAIL: restating or truncating the user's question; generic form→API→DB story; invented endpoints or invented paths (e.g. collapsing a models package into models.py); padding or repeating files to hit a count; compose service names (web / api / postgres / redis) as a reading list; tests/migrations unless that is the only attached evidence; one topic filling the list when other topics have attached files; section omitted, folded into Architecture, or left until the end.
 
 **Architecture**
-How major pieces connect; boundaries and data flow. When ## User focus is present, weight toward the focus — PASS names real paths from evidence; FAIL is a generic monorepo lecture.
+How major pieces connect; boundaries and data flow. When ## User focus is present, weight toward the focus — PASS names real paths from evidence; FAIL is a generic monorepo lecture or docker-compose service names (web / api / postgres / redis) with no domain path.
 
 **Key subsystems**
-One bullet per subsystem with supporting file paths.
+One bullet per subsystem with supporting file paths. FAIL: compose service names as subsystems with no domain path from attached entry/focus files.
 ${activeFileSection}
 
 **Entry points**
@@ -157,7 +185,7 @@ Concrete risks tied to paths, config, or missing docs *in the repository*. Do no
 Include only when the user message ## @ attachments section lists out-of-repo paths. Name each skipped path and suggest fixes. **Never** include this section when all @ files are in scope or to confirm in-scope files.
 
 **Suggested next steps**
-Numbered list of 2-4 actions that name concrete paths from attached evidence (apps/, packages/, deployments/, compose files, workflows). Avoid generic "read the README" unless that is the only onboarding path in evidence.
+Numbered list of 2-4 actions that name concrete paths from attached evidence (apps/, packages/, deployments/, compose files, workflows). When ## User focus asked for files to read first, those steps must be the same attached domain files — not generic "read the README" unless that is the only onboarding path in evidence.
 
 **Sources**
 Include **at most 3 bullets**. Each bullet must start with a plain \`[Sources: …]\` label, then an em dash, then **one concrete fact** from that source (file counts, top-level dirs, named anchors) — never filler like "contributed insights into the structure." Full detail is in the Sources evidence card.`;
@@ -279,10 +307,10 @@ Group each gap as a subsection with nested bullets — never a flat peer list of
 
 **Your question**
 Include **only** when the user message has ## User focus (required). Place immediately after **Summary**.
-PASS: answers the ask from scan/docs evidence (or states scan unavailable). FAIL: invents gaps; omits the section.
+PASS: answers the ask from scan/docs/focus-file evidence (or states scan unavailable). When focus file excerpts are attached, say the subsystems exist and name docs/ownership/default-on risks visible in those excerpts. FAIL: invents gaps; claims indexed code is missing when excerpts are attached; omits the section.
 
 **Documentation gaps**
-When \`<knowledge_gap_scan>\` is missing or contains \`<empty>\`: write one sentence that structured scan evidence is unavailable — **do not** invent gap subsections from code inspection.
+When \`<knowledge_gap_scan>\` is missing or contains \`<empty>\`: write one sentence that structured scan evidence is unavailable — **do not** invent gap subsections from code inspection unless focus file excerpts are attached in the user message.
 
 For each attached documentation source with \`count\` > 0, add its subsection first in this section, in this order: Notion (\`<notion_pages count="N">\` → **Notion pages reviewed**), Confluence (\`<confluence_pages count="N">\` → **Confluence pages reviewed**), then Google Docs (\`<google_docs count="N">\` → **Google Docs reviewed**). Under each, list exactly N bullets — one per \`<page>\`/\`<doc>\` title, in the same order as the XML:
 
@@ -325,17 +353,37 @@ ${SOURCES_FOOTER_OUTPUT_RULE} Include Confluence scan and job-scan items when pr
 Use these sections in order (**Title** on its own line; blank line before each; omit empty sections):
 
 **Answer**
-Direct 1-2 sentence answer first. When the user asked something specific, that ask is the answer — do not open with a generic overview that ignores it.
+2–4 sentences that fully answer the ask (values, when it allows through, reviewer flags — whatever they asked). A teammate should not have to scroll.
+Omit **Answer** when they asked to review as a PR — start at **Reviewer checks**.
 
 **Your question**
-Include when the user asked something specific beyond a yes/no. Place immediately after **Answer**.
+Include when the user asked something specific beyond a yes/no **and** **Answer** did not already cover it. Place immediately after **Answer**.
 PASS: answers the ask with concrete paths, symbols, or evidence from attachments (enough that a teammate could act).
 FAIL: restating, paraphrasing, or truncating the user's question; repeating **Answer** with no added evidence; burying the ask under later sections.
-Omit only when **Answer** already fully covers a short yes/no or one-liner ask.
+Omit when **Answer** already fully covers the ask (typical for open-file explain). Omit for PR review of an attached file.
 
-Then add focused topic sections as needed. Under each section: optional one-line lead, then bullets or a numbered list — not one long undifferentiated list.
+**How it works** (open-file explain only)
+At most **one** citation fence — the named function or type in the open file. Then 3 bullets max.
+
+**Reviewer checks** (if they asked to review as a PR / what you'd block / what's fine / what a reviewer would flag)
+This is the **only** section for that ask. Do not use **Summary**. Do not invent a follow-up about tests unless the attached file is a test file.
+Exactly **3** one-line bullets, in this order:
+- **Block:** a concrete issue in the **named function**, or "none — fine because …" with a specific condition
+- **Fine because:** a specific behavior in that function (not "looks good", not "add logging")
+- **Ask the author:** one question about that function's contract
+Stay in the named function. Sibling helpers in the same file are out of scope unless it calls them. No OWASP dump. Never **Next-status WRITE path**, **Hard errors that abort this attempt**, or stuck-status playbook headings.
+
+For open-file explain: then stop. Do not add extra sections, extra citations, or consumer file dumps.
+PASS: one screen; ≤2 citation fences total; consumers named as \`path\` backticks.
+FAIL: four code cards; a 25-bullet reviewer list; pasting jobsApi / samlApi / DEFAULT_STATES / i18n after the open-file citation.
+
+For other chat: add focused topic sections as needed — only what the ask requires. Skip adjacent files they did not ask about.
+
+Under each section: optional one-line lead, then bullets — not essay paragraphs that restate the bullets.
 
 For multi-item answers (risks, options, gaps): use a **subsection title** per item with bullets beneath.
+
+Depth: fit an open-file explain on **one screen** (~20 lines of prose, ≤2 citation fences). "Walk me through" means a tight briefing, not a dump of DEFAULT_STATES, i18n JSON, or every frontend consumer. Name extra files as \`path\` backticks. Complete the last thought — never trail off mid-sentence.
 
 ## Concrete file edits (when recommending code to apply)
 When you recommend changes the user should put into an open or attached file:
@@ -391,11 +439,15 @@ function withOutputContract(
   return `${prompt}\n\n${OPERATING_CONTEXT}\n\n${paperclip}${CURSOR_STYLE_OUTPUT_CONTRACT}${structure}`;
 }
 
-export function buildComprehensionSystem(activeFile?: string, hasPaperclipAttachments = false): string {
+export function buildComprehensionSystem(
+  activeFile?: string,
+  hasPaperclipAttachments = false,
+  locateOnly = false
+): string {
   return withOutputContract(
     REPO_SUMMARY_EVIDENCE_SYSTEM,
     "comprehension",
-    comprehensionResponseStructure(activeFile),
+    comprehensionResponseStructure(activeFile, locateOnly),
     hasPaperclipAttachments
   );
 }
@@ -414,13 +466,13 @@ export const INTEGRATION_SYSTEM = withOutputContract(INTEGRATION_EVIDENCE_SYSTEM
 
 const GENERAL_CHAT_BODY = `You are CoopAI, an enterprise code intelligence assistant.
 Answer clearly using supplied repository and organizational context. Cite concrete paths when evidence is attached; do not fabricate external links, ticket keys, or PR numbers.
-When the user message has no discernible question or task, ask a brief clarifying question. Do not summarize attached files or repository context unless the user asked for that.
+When the user message has no discernible question or task, ask a brief clarifying question. Do not summarize attached files or repository context unless the user asked for that. Greetings and pings are not overview requests.
 When drawing conclusions from attached evidence, state strength (strong / medium / weak / limited) and distinguish provenance from inference.
 When integration blocks show <empty>, say clearly that the search found nothing — do not invent tickets, messages, or pages.
 When \`<local_files>\` / \`<file_content>\` blocks are attached, treat them as the authoritative source code. Quote exact conditions and identifiers from that code only — never invent functions, variables, or branches that are not present in the attachment.
-When \`<repo_semantic_files>\` is attached, treat it as a small retrieval sample for implementation detail — never as a complete file list or inventory. Do not answer file-count or "what's in the repo" questions from that sample alone.
+When \`<repo_semantic_paths>\` is attached, those are related-path hits only — name them in backticks. Do not invent file bodies or paste guessed implementations.
 When \`<repo_compare>\` is attached, the user asked to compare exactly two indexed repositories. Cite evidence from both \`<repo>\` sides and contrast them. If a side has a \`<note>\` about missing evidence, say so for that side. Never use a third repository, sticky Use-repo outside those two, or the local Extension Host workspace as primary evidence.
-When \`<repo_inventory>\` is attached, use it as the only source for repository totals (files, lines of code, size). Report those numbers exactly as given; when a total is absent or source="unavailable", say that total is unavailable and never estimate, extrapolate, or reuse a number from an earlier turn. Never mention XML-like tag names (\`repo_inventory\`, \`repo_semantic_files\`, etc.) in the user-visible answer — say "indexed inventory" or "repository totals" in plain language.
+When \`<repo_inventory>\` is attached, it is the only valid source for repository totals (files, lines of code, size) — and only when the user asked for those totals or a repository overview. Do not lead with a census because inventory is present. When you do report totals, use the attached numbers exactly; when a total is absent or source="unavailable", say that total is unavailable and never estimate, extrapolate, or reuse a number from an earlier turn. Never mention XML-like tag names (\`repo_inventory\`, \`repo_semantic_files\`, etc.) in the user-visible answer — say "indexed inventory" or "repository totals" in plain language.
 When \`<repo_tree_overview>\` or \`<repo_entry_files>\` are attached for structure / package-boundary / monorepo-layout questions: cite only those Use-repo paths (e.g. apps/web, apps/api, package.json). Never cite paths from another repository or the local Extension Host workspace (especially Coop-AI \`src/chat/*\`). If tree and package manifests are missing or a package-boundary note says unavailable, say the layout is unavailable — do not invent apps/ or packages/ from training alone presented as fact.
 When \`<repo_package_structure>\` is attached, list the concrete package/app paths from that block (e.g. apps/remix, packages/signing). Do not answer with only workspace globs like \`apps/*\` / \`packages/*\` when concrete names are present. Workspace globs in that block are informational — expand from the listed paths.
 When \`<jira_tickets>\` is attached, respect the match attribute: match="none" means no repo-linked tickets were found — say so clearly and do not describe other tickets as related; match="git" means keys came from commit/PR history; match="text" means Jira text mentions the repo; match="key" means the user named a specific key.
@@ -433,25 +485,35 @@ export const GENERAL_CHAT_SYSTEM = withOutputContract(GENERAL_CHAT_BODY, "chat")
 
 const CODE_EDIT_BODY = `You are CoopAI in edit mode — a code generation assistant inside the user's editor.
 
-TASK: Produce minimal, correct patches that fully implement the user's request using the search-replace block format below.
+TASK: Produce a patch that does exactly what the user asked, against the current file or highlight. \`/edit\` only names that target — it is not a rewrite, cleanup, or "improve this code" request.
 
 RULES:
+- The user's words are the spec for the change requested. When the open file is a test, attached SUT, existing tests in this file, and a sut_assertions block beat a false numeric claim in those words.
+- Never add drive-by cleanups (private/readonly, extra refactors, signature rewrites) unless they asked.
+- When the user asks to guard against missing or undefined input: the REPLACE body must include a runtime check or optional chaining so that value does not throw. Changing only a parameter type, or adding ? on the signature, is not a guard.
 - Prefer the smallest change that still completes the request; match surrounding style and conventions.
-- When \`<editor_selection>\` is present, that highlighted block is the edit target. For "rewrite / shorten / replace / make more efficient the highlighted lines", SEARCH must be the **full** selection text copied exactly — not a 1–2 line paraphrase, and not code remembered from earlier chat turns.
+- When \`<editor_selection>\` is present, that highlighted block is the patch target. Do **not** pick a different function from the same file.
+- Rewrite, shorten, replace, or make the highlighted lines more efficient **only** when the user explicitly asks for that. Then SEARCH must be the **full** selection text copied exactly — not a 1–2 line paraphrase, and not code remembered from earlier chat turns.
+- Comment / summary-of-what-it-does asks: SEARCH is the selection copied exactly; REPLACE is one comment (or JSDoc) followed by that same SEARCH text unchanged. Do not modify any existing line.
 - Never invent SEARCH from memory or prior assistant rewrites. Copy bytes from \`<editor_selection>\` or \`<file_content>\` only.
 - Attach the full file so SEARCH can match; selection marks the target, not a license to rewrite unrelated methods.
 - When the active editor file is in scope but content is missing, say what file content you need — do not guess.
+- When adding tests or calls for a symbol not defined in the open file, copy arity and types from an attached sibling / \`<repo_semantic_files>\` / \`<file_content>\` for that symbol. Always include the import hunk the change needs. Do not invent a string or undefined API from the user's English example.
+- When the open file is a test: assertions must agree with the attached SUT and sibling tests in this file. Encode constants from those attachments. Do not copy an inequality, timeout, or expected value that the SUT or existing tests prove false. If SUT fetch failed, do not invent numbers. Match this file's runner (node:test, pytest, go test, …) — do not switch frameworks or rewrite the suite.
 - Output patches only (see Patch output format); no **Summary** section, no ask-mode response template, and never invent PENDING/OPEN status-transition stories about unrelated files.`;
 
 export const CODE_EDIT_SYSTEM = withPatchOutputContract(CODE_EDIT_BODY);
 
 const INLINE_COMPLETION_PROMPT = `You are a code completion engine. The user is typing code.
 
-TASK: Complete the current line or the next 2-3 lines of code.
+TASK: Complete the current line, or the full remaining function/block body when the cursor sits in an empty block (opening brace above, closing brace in SUFFIX).
 
 RULES:
 - Match indentation and style of surrounding code
-- Complete ONE logical statement (not multiple unrelated blocks)
+- Empty function/block hole: fill the FULL body until the suffix closing brace — not one statement
+- Otherwise complete ONE logical statement (not multiple unrelated blocks)
+- Prefer identifiers and property access from PREFIX (headers.authorization), not invented bracket/case-fold lookups
+- Use the function name in PREFIX (extractBearerToken → Bearer token extraction)
 - If uncertain, return JUST the most likely completion
 - Never explain, never add comments, just code
 - Respect language syntax and conventions
@@ -483,6 +545,14 @@ Rules:
 - Do not invent facts missing from the source text.
 - Reply with ONLY the overview text.`;
 
+export const PR_SUMMARY_SYSTEM = `You write pull request notes for a software engineer.
+Summarize the applied code change so a reviewer understands what changed and why.
+Rules:
+- 2–4 short sentences, or a short paragraph plus up to 4 bullets.
+- Name the files that changed. Describe the behavior change, not a line-by-line dump.
+- Do not invent tickets, reviewers, tests, or motivation that is not in the diff.
+- No markdown headings. Reply with ONLY the notes text.`;
+
 const USE_CASE_PROMPTS: Record<UseCase, string> = {
   comprehension: COMPREHENSION_SYSTEM,
   decision_archaeology: DECISION_ARCHAEOLOGY_SYSTEM,
@@ -494,7 +564,8 @@ const USE_CASE_PROMPTS: Record<UseCase, string> = {
   code_edit: CODE_EDIT_SYSTEM,
   inline_completion: INLINE_COMPLETION_PROMPT,
   intent_suggest: INTENT_SUGGEST_SYSTEM,
-  evidence_preview: EVIDENCE_PREVIEW_SYSTEM
+  evidence_preview: EVIDENCE_PREVIEW_SYSTEM,
+  pr_summary: PR_SUMMARY_SYSTEM
 };
 
 /**
@@ -505,7 +576,7 @@ function buildUseCaseSystemPrompt(useCase: UseCase, options?: SystemPromptOption
   const hasPaperclip = options?.hasPaperclipAttachments ?? false;
   switch (useCase) {
     case "comprehension":
-      return buildComprehensionSystem(options?.activeFile, hasPaperclip);
+      return buildComprehensionSystem(options?.activeFile, hasPaperclip, options?.locateOnly);
     case "decision_archaeology":
       return withOutputContract(DECISION_HISTORIAN_SYSTEM, "decision_archaeology", undefined, hasPaperclip);
     case "ownership":
@@ -526,6 +597,8 @@ function buildUseCaseSystemPrompt(useCase: UseCase, options?: SystemPromptOption
       return INTENT_SUGGEST_SYSTEM;
     case "evidence_preview":
       return EVIDENCE_PREVIEW_SYSTEM;
+    case "pr_summary":
+      return PR_SUMMARY_SYSTEM;
   }
 }
 
@@ -533,6 +606,8 @@ export type SystemPromptOptions = {
   activeFile?: string;
   /** Inject the paperclip-attachment system rule only when the turn has such uploads. */
   hasPaperclipAttachments?: boolean;
+  /** Understand Repo locate ask — skip architecture syllabus in the system contract. */
+  locateOnly?: boolean;
 };
 
 export function buildProjectInstructionsSystemBlock(hasInstructions: boolean): string {
@@ -544,8 +619,12 @@ export function buildProjectInstructionsSystemBlock(hasInstructions: boolean): s
 
 export function systemPromptForUseCase(useCase: UseCase, options?: SystemPromptOptions): string {
   // Rebuild per request only when we must vary from the precomputed constants —
-  // an active file for comprehension, or a turn carrying paperclip attachments.
-  if (options?.hasPaperclipAttachments || (useCase === "comprehension" && options?.activeFile?.trim())) {
+  // an active file for comprehension, locate-only Understand Repo, or paperclip attachments.
+  if (
+    options?.hasPaperclipAttachments ||
+    options?.locateOnly ||
+    (useCase === "comprehension" && options?.activeFile?.trim())
+  ) {
     return buildUseCaseSystemPrompt(useCase, options);
   }
   return USE_CASE_PROMPTS[useCase] ?? GENERAL_CHAT_SYSTEM;
@@ -586,10 +665,16 @@ type ManifestSnippet = { path: string; content: string; lineRange?: [number, num
 type MentionFileSnippet = ManifestSnippet & { repoId: string };
 
 /** Shared `<local_files>` block with the authoritative-source guardrail — single owner for both user-turn builders. */
-function emitLocalFilesBlock(lines: string[], files: ManifestSnippet[]): void {
+function emitLocalFilesBlock(
+  lines: string[],
+  files: ManifestSnippet[],
+  userMessage?: string
+): void {
   lines.push("<local_files>");
   lines.push("The file_content blocks below are authoritative source code from the user's workspace.");
-  lines.push("Answer ONLY from this code. Quote exact conditions; do not invent identifiers.");
+  lines.push(
+    "Treat every attached file as source of truth. If a callee is defined in another attached file, copy that signature and add the import — do not invent identifiers, arity, or types from the user's English example."
+  );
   for (const file of files) {
     const range =
       file.lineRange && file.lineRange.length === 2
@@ -600,6 +685,22 @@ function emitLocalFilesBlock(lines: string[], files: ManifestSnippet[]): void {
     lines.push("</file_content>");
   }
   lines.push("</local_files>");
+  const grounding = sutAssertionGrounding(userMessage ?? "", files);
+  if (grounding) {
+    lines.push("<sut_assertions>");
+    lines.push(grounding);
+    lines.push("</sut_assertions>");
+  }
+}
+
+export function selectionEditDirective(kind: EditAskKind): string {
+  if (kind === "comment") {
+    return "Edit directive: Comment-only. /edit named this highlight as the target — not a rewrite. SEARCH is an exact copy of the <editor_selection> body. REPLACE is one comment (or JSDoc) line, then that same SEARCH text unchanged. Do not add private/readonly, do not change parameter lists, types, or any existing line.";
+  }
+  if (kind === "rewrite") {
+    return "Edit directive: The user explicitly asked to rewrite/replace/shorten the highlight. SEARCH must equal the <editor_selection> body above character-for-character (including kwargs like request=request). REPLACE is the new version of that whole block. Do not paraphrase from earlier chat.";
+  }
+  return "Edit directive: /edit named this highlight as the patch target — not a license to rewrite or improve it. Do exactly the user's request. Do not add private/readonly, extra refactors, or signature changes unless they asked.";
 }
 
 /** Highlighted editor range — primary /edit target when the user refers to "this" / selection. */
@@ -609,6 +710,7 @@ export function emitEditorSelectionBlock(
     selectedLines?: [number, number];
     selectionText?: string;
     file?: string;
+    userMessage?: string;
   }
 ): void {
   if (!options.selectedLines || options.selectedLines.length !== 2) {
@@ -626,11 +728,10 @@ export function emitEditorSelectionBlock(
     );
   }
   lines.push("</editor_selection>");
-  if (snippet) {
-    lines.push(
-      "Edit directive: For rewrite/replace/efficiency asks about the highlight, SEARCH must equal the <editor_selection> body above character-for-character (including kwargs like request=request). Do not paraphrase from earlier chat."
-    );
-  }
+  lines.push(
+    `Edit target: only the highlighted lines ${start}-${end}${options.file?.trim() ? ` in ${options.file.trim()}` : ""}. Do not substitute a different function from the same file.`
+  );
+  lines.push(selectionEditDirective(resolveEditAskKind(options.userMessage ?? "")));
 }
 
 /** Slice line-numbered content for a 1-based inclusive selection range. */
@@ -673,6 +774,14 @@ function resolveSelectionTextForAttach(options: {
   return sliced || undefined;
 }
 
+/** Last lines of a C4 turn — models follow this over the long chat template. */
+export const OPEN_FILE_PR_REVIEW_DIRECTIVE = `## Turn directive (PR review)
+This turn is a PR review of the **named function** in the attached file (the identifier in the user ask — e.g. requireAuth), not every helper in the file.
+- Output **only** **Reviewer checks** with exactly three bullets: **Block:** / **Fine because:** / **Ask the author:**
+- Omit **Answer**, **Summary**, and **Your question**. Do not invent a follow-up about tests unless the attached file is a test file.
+- Block must be a concrete behavior in that function (type predicate, requireInProduction bypass, missing status write). Never "add logging" or "improve error messages" unless that function writes user-facing errors.
+- Fine because / Ask the author must also be about that function. Sibling helpers (extractBearerToken, resolveAuthContext, 401/403 writers) are out of scope unless the named function calls them.`;
+
 /** Build the user turn when local file bytes are already loaded (extension-side). */
 export function formatChatMessageWithLocalFiles(options: {
   message: string;
@@ -702,10 +811,14 @@ export function formatChatMessageWithLocalFiles(options: {
   emitEditorSelectionBlock(lines, {
     selectedLines: options.selectedLines,
     selectionText: resolveSelectionTextForAttach(options),
-    file: options.file
+    file: options.file,
+    userMessage: options.message
   });
-  emitLocalFilesBlock(lines, options.files);
+  emitLocalFilesBlock(lines, options.files, options.message);
   lines.push("</attached_context>", "", options.message.trim());
+  if (isOpenFileReviewAsk(options.message)) {
+    lines.push("", OPEN_FILE_PR_REVIEW_DIRECTIVE);
+  }
   return lines.join("\n");
 }
 
@@ -814,6 +927,7 @@ export function buildUserMessageWithContext(
   const agentSearch = extractAgentSearchSummary(context?.contextBundle);
   const agentProposedPatch = extractAgentProposedPatch(context?.contextBundle);
   const repoSemanticSnippets = extractRepoSemanticSnippets(context?.contextBundle);
+  const repoSemanticPathHits = extractRepoSemanticPathHits(context?.contextBundle);
   const dualRepoCompare = extractDualRepoCompareEvidence(context?.contextBundle);
   const repoInventory = extractRepoInventory(context?.contextBundle);
   const localSnippets = extractLocalFileSnippets(context?.contextBundle);
@@ -832,6 +946,7 @@ export function buildUserMessageWithContext(
     projectInstructions.length === 0 &&
     repoSummarySnippets.length === 0 &&
     repoSemanticSnippets.length === 0 &&
+    repoSemanticPathHits.length === 0 &&
     !dualRepoCompare &&
     !repoInventory &&
     agentFileSnippets.length === 0 &&
@@ -877,7 +992,8 @@ export function buildUserMessageWithContext(
       files: localSnippets,
       file: context?.file
     }),
-    file: context?.file
+    file: context?.file,
+    userMessage: message
   });
   if (projectInstructions.length > 0) {
     lines.push(...formatProjectInstructionsBlock(projectInstructions));
@@ -903,7 +1019,7 @@ export function buildUserMessageWithContext(
     lines.push(...formatPackageStructureForLlm(packageStructure));
   }
   if (localSnippets.length > 0 && !dualRepoCompare) {
-    emitLocalFilesBlock(lines, localSnippets);
+    emitLocalFilesBlock(lines, localSnippets, message);
   }
   if (repoSummarySnippets.length > 0 && !dualRepoCompare) {
     lines.push("<repo_entry_files>");
@@ -937,6 +1053,16 @@ export function buildUserMessageWithContext(
       lines.push("</file_content>");
     }
     lines.push("</repo_semantic_files>");
+  }
+  if (repoSemanticPathHits.length > 0 && !dualRepoCompare) {
+    lines.push("<repo_semantic_paths>");
+    lines.push(
+      "Related paths from search (no file bodies). Name them as backtick paths in the answer. Do not invent or paste their contents."
+    );
+    for (const path of repoSemanticPathHits) {
+      lines.push(`- ${path}`);
+    }
+    lines.push("</repo_semantic_paths>");
   }
   if (dualRepoCompare) {
     lines.push(...formatDualRepoCompareForLlm(dualRepoCompare));
@@ -1005,6 +1131,9 @@ export function buildUserMessageWithContext(
     lines.push("</graph_context>");
   }
   lines.push("</attached_context>", "", message.trim());
+  if (isOpenFileReviewAsk(message)) {
+    lines.push("", OPEN_FILE_PR_REVIEW_DIRECTIVE);
+  }
   return lines.join("\n");
 }
 
@@ -1194,6 +1323,25 @@ function extractRepoSemanticSnippets(bundle: unknown): RepoSemanticSnippet[] {
   return [];
 }
 
+function extractRepoSemanticPathHits(bundle: unknown): string[] {
+  if (!Array.isArray(bundle)) {
+    return [];
+  }
+  for (const entry of bundle) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const hits = (
+      entry as { data?: { repoSemanticSearch?: { pathHits?: unknown } } }
+    ).data?.repoSemanticSearch?.pathHits;
+    if (!Array.isArray(hits)) {
+      continue;
+    }
+    return hits.filter((path): path is string => typeof path === "string" && path.trim().length > 0);
+  }
+  return [];
+}
+
 function extractRepoSemanticMeta(
   bundle: unknown
 ): { matchedPathCount?: number; attachmentCap?: number } | undefined {
@@ -1207,11 +1355,16 @@ function extractRepoSemanticMeta(
     const semantic = (
       entry as {
         data?: {
-          repoSemanticSearch?: { matchedPathCount?: number; attachmentCap?: number; files?: unknown[] };
+          repoSemanticSearch?: {
+            matchedPathCount?: number;
+            attachmentCap?: number;
+            files?: unknown[];
+            pathHits?: unknown[];
+          };
         };
       }
     ).data?.repoSemanticSearch;
-    if (semantic?.files?.length) {
+    if (semantic?.files?.length || semantic?.pathHits?.length) {
       return {
         matchedPathCount: semantic.matchedPathCount,
         attachmentCap: semantic.attachmentCap
@@ -1269,17 +1422,6 @@ function formatRepoInventoryForLlm(inventory: RepoInventorySnippet): string[] {
   } else if (inventory.source === "unavailable") {
     lines.push(
       "Inventory is unavailable. Say so clearly — do not estimate totals from semantic search samples or attached file snippets."
-    );
-  } else if (typeof inventory.fileCount === "number") {
-    const caveat = inventory.truncated
-      ? " The host reported a truncated tree; treat this as a lower bound."
-      : "";
-    const linePart =
-      typeof inventory.lineCount === "number"
-        ? ` and ${inventory.lineCount} line(s) of code`
-        : "";
-    lines.push(
-      `The repository contains ${inventory.fileCount} file(s)${linePart} according to the ${inventory.source}.${caveat}`
     );
   }
   lines.push("</repo_inventory>");

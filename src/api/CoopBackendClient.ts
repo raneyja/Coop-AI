@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from "axios";
 import { assertCoopEndpoint } from "./resolveBaseUrl";
+import { resolveUserAuthApiBase } from "../config/authApiBase";
 import { isRetryableError, runResilientRequest } from "./networkResilience";
 import { formatCoopApiError, type CoopApiErrorBody } from "./userFacingErrors";
 import { MAX_USER_FACING_RESPONSE_MS } from "../config/responseDeadline";
@@ -71,6 +72,30 @@ export type PlanQuotaCredits = {
   retryAfterMs: number;
 };
 
+export type UsagePoolMeter = {
+  usedCents: number;
+  limitCents: number;
+  remainingCents: number;
+  usedRatio: number;
+};
+
+export type PaidUsageMeters = {
+  usageTier: "pro" | "pro_plus" | "max";
+  displayName: string;
+  seatPriceUsd: number;
+  periodStart: string;
+  periodEnd: string;
+  usedCents: number;
+  limitCents: number;
+  remainingCents: number;
+  usedRatio: number;
+  auto: UsagePoolMeter;
+  frontier: UsagePoolMeter;
+  nextTier?: "pro" | "pro_plus" | "max";
+  nextTierName?: string;
+  nextTierPriceUsd?: number;
+};
+
 export type ChatQuotaExceededPayload = {
   message: string;
   retryAfterMs?: number;
@@ -78,6 +103,8 @@ export type ChatQuotaExceededPayload = {
   upgradeUrl?: string;
   usedCredits?: number;
   limitCredits?: number;
+  pool?: "paid" | "auto" | "frontier" | "free";
+  upgradePlan?: "pro" | "pro_plus" | "max";
 };
 
 export class ChatQuotaExceededError extends Error {
@@ -93,6 +120,10 @@ export class ChatQuotaExceededError extends Error {
 
   public readonly limitCredits?: number;
 
+  public readonly pool?: "paid" | "auto" | "frontier" | "free";
+
+  public readonly upgradePlan?: "pro" | "pro_plus" | "max";
+
   public constructor(payload: ChatQuotaExceededPayload) {
     super(payload.message);
     this.name = "ChatQuotaExceededError";
@@ -101,6 +132,8 @@ export class ChatQuotaExceededError extends Error {
     this.upgradeUrl = payload.upgradeUrl;
     this.usedCredits = payload.usedCredits;
     this.limitCredits = payload.limitCredits;
+    this.pool = payload.pool;
+    this.upgradePlan = payload.upgradePlan;
   }
 }
 
@@ -132,6 +165,8 @@ export type MeResponse = {
   primaryWorkspaceRepoId?: string;
   repoAccessMode?: "all_indexed" | "per_user";
   quota?: PlanQuotaCredits;
+  usageMeters?: PaidUsageMeters;
+  usageTier?: "pro" | "pro_plus" | "max" | null;
 };
 
 export type MeIntegrationsResponse = {
@@ -164,6 +199,10 @@ export class CoopBackendClient {
   private http: AxiosInstance = axios.create({ timeout: 120_000 });
 
   public constructor(private readonly options: CoopBackendClientOptions) {}
+
+  private userAuthBase(baseUrl: string): string {
+    return resolveUserAuthApiBase(baseUrl);
+  }
 
   public setBaseUrl(baseUrl: string): void {
     this.http = axios.create({
@@ -313,12 +352,12 @@ export class CoopBackendClient {
     email: string,
     password: string
   ): Promise<AuthSessionResponse> {
-    assertCoopEndpoint(baseUrl);
+    assertCoopEndpoint(this.userAuthBase(baseUrl));
     const response = await this.http.post<AuthSessionResponse & CoopApiErrorBody>(
       "/v1/auth/login",
       { email, password },
       {
-        baseURL: baseUrl.replace(/\/$/, ""),
+        baseURL: this.userAuthBase(baseUrl),
         validateStatus: () => true
       }
     );
@@ -334,13 +373,14 @@ export class CoopBackendClient {
   }
 
   public startGoogleAuthUrl(baseUrl: string, redirect?: string): string {
-    assertCoopEndpoint(baseUrl);
+    const authBase = this.userAuthBase(baseUrl);
+    assertCoopEndpoint(authBase);
     const params = new URLSearchParams({ mode: "login" });
     const sanitized = redirect?.trim();
     if (sanitized) {
       params.set("redirect", sanitized);
     }
-    return `${baseUrl.replace(/\/$/, "")}/v1/auth/google/start?${params.toString()}`;
+    return `${authBase}/v1/auth/google/start?${params.toString()}`;
   }
 
   public async refreshSession(baseUrl: string, refreshToken: string): Promise<AuthSessionResponse> {
@@ -378,12 +418,12 @@ export class CoopBackendClient {
   }
 
   public async forgotPassword(baseUrl: string, email: string): Promise<{ ok: boolean; message?: string }> {
-    assertCoopEndpoint(baseUrl);
+    assertCoopEndpoint(this.userAuthBase(baseUrl));
     const response = await this.http.post<{ ok?: boolean; message?: string } & CoopApiErrorBody>(
       "/v1/auth/forgot-password",
       { email },
       {
-        baseURL: baseUrl.replace(/\/$/, ""),
+        baseURL: this.userAuthBase(baseUrl),
         validateStatus: () => true
       }
     );
@@ -701,7 +741,8 @@ export class CoopBackendClient {
     baseUrl: string,
     options: { orgId?: string; org?: string; redirect?: string }
   ): Promise<string> {
-    assertCoopEndpoint(baseUrl);
+    const authBase = this.userAuthBase(baseUrl);
+    assertCoopEndpoint(authBase);
     const params = new URLSearchParams({ format: "json" });
     if (options.orgId?.trim()) {
       params.set("orgId", options.orgId.trim());
@@ -715,7 +756,7 @@ export class CoopBackendClient {
     const response = await this.http.get<{ redirectUrl?: string } & CoopApiErrorBody>(
       `/v1/auth/saml/start?${params.toString()}`,
       {
-        baseURL: baseUrl.replace(/\/$/, ""),
+        baseURL: authBase,
         validateStatus: () => true
       }
     );
@@ -1685,8 +1726,14 @@ export class CoopBackendClient {
       } catch {
         errorBody = undefined;
       }
-      if (response.status === 429 && errorBody?.message) {
-        throw new Error(errorBody.message);
+      if (response.status === 429) {
+        const quota = readChatQuotaExceededPayload(response.status, errorBody as Record<string, unknown> | undefined);
+        if (quota) {
+          throw new ChatQuotaExceededError(quota);
+        }
+        if (errorBody?.message) {
+          throw new Error(errorBody.message);
+        }
       }
       throw new Error(
         `Inline completion API returned ${response.status}${text ? `: ${text.slice(0, 200)}` : ""}`
@@ -1781,8 +1828,14 @@ export class CoopBackendClient {
       } catch {
         body = undefined;
       }
-      if (response.status === 429 && body?.message) {
-        throw new Error(body.message);
+      if (response.status === 429) {
+        const quota = readChatQuotaExceededPayload(response.status, body as Record<string, unknown> | undefined);
+        if (quota) {
+          throw new ChatQuotaExceededError(quota);
+        }
+        if (body?.message) {
+          throw new Error(body.message);
+        }
       }
       throw new Error(
         `Inline completion API returned ${response.status}${text ? `: ${text.slice(0, 200)}` : ""}`
@@ -1897,6 +1950,14 @@ function readChatQuotaExceededPayload(
     resetsAt: typeof body.resetsAt === "string" ? body.resetsAt : undefined,
     upgradeUrl: typeof body.upgradeUrl === "string" ? body.upgradeUrl : undefined,
     usedCredits: typeof body.usedCredits === "number" ? body.usedCredits : undefined,
-    limitCredits: typeof body.limitCredits === "number" ? body.limitCredits : undefined
+    limitCredits: typeof body.limitCredits === "number" ? body.limitCredits : undefined,
+    pool:
+      body.pool === "paid" || body.pool === "auto" || body.pool === "frontier" || body.pool === "free"
+        ? body.pool
+        : undefined,
+    upgradePlan:
+      body.upgradePlan === "pro" || body.upgradePlan === "pro_plus" || body.upgradePlan === "max"
+        ? body.upgradePlan
+        : undefined
   };
 }

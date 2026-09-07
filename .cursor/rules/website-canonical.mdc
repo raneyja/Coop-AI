@@ -8,18 +8,27 @@ alwaysApply: false
 
 **Production truth:** [https://coop-ai.dev](https://coop-ai.dev) (deployed from `main`).
 
-When editing the homepage, hero, or marketing demos, use the **current** light-theme stack — not legacy dark-theme components.
+When editing the homepage, hero, or marketing demos, use the **current** stack — not legacy dark-theme VS Code mock carousels.
 
-## Current homepage hero (production)
+## Current homepage (local mock)
+
+Dark environment with **deployed page order**: hero → the gap → logos → quotes → close. Inner pages stay light.
 
 | Piece | File |
 |-------|------|
-| Hero layout | `website/src/components/Hero.tsx` → `<HeroDemoArtifact />` |
-| 4 demo artefacts | `website/src/components/HeroDemoArtifact.tsx` |
-| Site copy | `website/src/lib/site.config.ts` |
-| Light theme | `website/src/app/layout.tsx` (`className` without `dark`), `website/tailwind.config.ts` |
+| Page theme | `website/src/components/HomePageTheme.tsx` (`body.home-page`) |
+| Hero layout | `website/src/components/Hero.tsx` → galaxy bg + `<HeroDemoArtifact tone="dark" />` |
+| Hero space | `website/src/components/HeroGalaxyBackground.tsx` |
+| The gap | `website/src/components/HomeStackContextSection.tsx` |
+| Quotes | `website/src/components/Testimonial.tsx` |
+| Demo artefacts | `website/src/components/HeroDemoArtifact.tsx` |
+| Home close | `website/src/components/HomeCloseSection.tsx` (no zsh terminal) |
+| Site copy | `website/src/lib/site.config.ts` (`tagline`, `subheadline`) |
+| Light inner pages | `website/src/components/SiteAtmosphere.tsx` + `layout.tsx` (paper, grid, wash) |
 
-Demo flow labels: `// question` → `// pulling context from` → `// context found` → `// response`.
+Ask / Change / Indexed live on `/product`, not the homepage.
+
+Demo flow labels: `// question` → `// pulling context from` → `// context found` → `// response` / `// edit` / `// complete`. Scenario dots on the artifact must stay clickable.
 
 ## Legacy — do NOT treat as production homepage
 
@@ -28,6 +37,7 @@ Demo flow labels: `// question` → `// pulling context from` → `// context fo
 | Dark VS Code mock carousel | `website/src/components/FileContextStoryDemo.tsx` | `/file-context-demo` preview only |
 | Old hero mock | `website/src/components/HeroProductMock.tsx` | Unused on production hero |
 | Product page carousel | `website/src/components/ProductShowcaseCarousel.tsx` | `/product` only |
+| Fake terminal CTA | `website/src/components/CTASection.tsx` | Inner pages only (`/product`, `/enterprise`, …) |
 
 Before changing hero demo behavior, **confirm `Hero.tsx` imports `HeroDemoArtifact`**, not `FileContextStoryDemo`.
 
@@ -46,6 +56,6 @@ Feature branches may lag `main` on `website/` (missing `HeroDemoArtifact.tsx`, o
 | Port | **3001** — `website/package.json` → `"dev": "next dev -p 3001"` |
 | URL | `http://localhost:3001` (not 3000) |
 | Command | `cd website && npm run dev` |
-| Success | Light background, centered hero, `// response` box with 4 carousel dots |
+| Success | Dark home, galaxy hero, **the gap** then logos then quotes. Inner pages stay **light paper** (grid + wash), not flat white. Ask / Change / Indexed on `/product`. |
 
 Never point users at `localhost:3000` for the marketing site unless they explicitly started Next on that port.

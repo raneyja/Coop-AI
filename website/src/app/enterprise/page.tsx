@@ -72,7 +72,7 @@ export default function EnterprisePage() {
         </div>
       </section>
 
-      <section className="border-y border-coop-border bg-gray-50 py-16">
+      <section className="border-y border-coop-border bg-white/40 py-16">
         <div className="mx-auto max-w-3xl px-6">
           <SectionHeading
             label="leadership"

@@ -1,7 +1,7 @@
 import "./test/vscodeMockSetup";
 import assert from "node:assert/strict";
 import * as vscode from "vscode";
-import { analyzeDocumentContext, isFileEligible, languageSpecificHints, wantsMultiLineCompletion, autocompleteGroundingRules } from "./contextAnalyzer";
+import { analyzeDocumentContext, isEmptyBlockHole, isFileEligible, languageSpecificHints, wantsMultiLineCompletion, autocompleteGroundingRules } from "./contextAnalyzer";
 import { createMockDocument } from "./test/vscodeMockSetup";
 
 let passed = 0;
@@ -82,6 +82,15 @@ test("isFileEligible accepts typescript source files", () => {
   assert.equal(isFileEligible(doc as never), true);
 });
 
+test("isFileEligible accepts github VFS remote buffers", () => {
+  const doc = createMockDocument("class StateGroup:\n    pass\n", {
+    path: "/github/coop-ai/plane/apps/api/plane/db/models/state.py",
+    languageId: "python",
+    scheme: "vscode-vfs"
+  });
+  assert.equal(isFileEligible(doc as never), true);
+});
+
 test("wantsMultiLineCompletion after opening brace", () => {
   const doc = createMockDocument("function run() {");
   const context = analyzeDocumentContext(doc as never, new vscode.Position(0, doc.getText().length));
@@ -106,6 +115,52 @@ test("wantsMultiLineCompletion on empty line inside block", () => {
     new vscode.Position(1, 2)
   );
   assert.equal(wantsMultiLineCompletion(context), true);
+});
+
+test("wantsMultiLineCompletion on unindented empty line in function body", () => {
+  const context = analyzeDocumentContext(
+    createMockDocument("function run() {\n\n}") as never,
+    new vscode.Position(1, 0)
+  );
+  assert.equal(wantsMultiLineCompletion(context), true);
+});
+
+test("isEmptyBlockHole detects extractBearerToken deleted-body fixture", () => {
+  const source = [
+    "export function extractBearerToken(headers: Record<string, string | undefined>): string | undefined {",
+    "  ",
+    "}",
+    "",
+    "export type AuthResolveResult = {",
+    "  auth?: AuthContext;",
+    "};"
+  ].join("\n");
+  const context = analyzeDocumentContext(
+    createMockDocument(source, { path: "/workspace/src/server/authMiddleware.ts" }) as never,
+    new vscode.Position(1, 2)
+  );
+  assert.equal(isEmptyBlockHole(context), true);
+  assert.equal(wantsMultiLineCompletion(context), true);
+  assert.match(languageSpecificHints(context), /FULL body/i);
+});
+
+test("empty-block hole keeps imports beyond the 10-line prefix window", () => {
+  const consts = Array.from({ length: 18 }, (_, i) => `export const marker${i} = ${i};`);
+  const source = [
+    "import type { AuthContext } from \"./orgStore\";",
+    ...consts,
+    "export function extractBearerToken(headers: Record<string, string | undefined>): string | undefined {",
+    "  ",
+    "}"
+  ].join("\n");
+  const holeLine = 1 + consts.length + 1;
+  const context = analyzeDocumentContext(
+    createMockDocument(source, { path: "/workspace/src/server/authMiddleware.ts" }) as never,
+    new vscode.Position(holeLine, 2)
+  );
+  assert.equal(isEmptyBlockHole(context), true);
+  assert.match(context.previousLines, /import type \{ AuthContext \}/);
+  assert.match(context.previousLines, /extractBearerToken/);
 });
 
 console.log(`\ncontextAnalyzer: ${passed} passed, ${failed} failed`);

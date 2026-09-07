@@ -238,7 +238,22 @@ function normalizeFamily(language?: string): HighlightFamily {
   if (["json", "jsonc"].includes(normalized)) {
     return "json";
   }
-  if (["rb", "ruby", "pyi"].includes(normalized)) {
+  if (
+    [
+      "rb",
+      "ruby",
+      "pyi",
+      "bash",
+      "sh",
+      "zsh",
+      "shell",
+      "console",
+      "terminal",
+      "fish",
+      "powershell",
+      "ps1"
+    ].includes(normalized)
+  ) {
     return "hash-comment";
   }
   if (
@@ -301,6 +316,23 @@ function tokenizeWithRegex(
   return tokens;
 }
 
+/** Split highlighter output into per-line token lists for citation / anonymous chrome. */
+export function splitTokensByLine(tokens: HighlightToken[]): HighlightToken[][] {
+  const lines: HighlightToken[][] = [[]];
+  for (const token of tokens) {
+    const parts = token.text.split("\n");
+    for (let i = 0; i < parts.length; i++) {
+      if (i > 0) {
+        lines.push([]);
+      }
+      if (parts[i] !== "") {
+        lines[lines.length - 1].push({ text: parts[i], kind: token.kind });
+      }
+    }
+  }
+  return lines;
+}
+
 function highlightWithKeywords(
   code: string,
   keywords: readonly string[],
@@ -359,9 +391,17 @@ function highlightWithKeywords(
   });
 }
 
+export const MAX_HIGHLIGHT_CHARS = 24_000;
+
 export function lightHighlight(code: string, language?: string): HighlightToken[] {
   if (!code) {
     return [];
+  }
+  if (code.length > MAX_HIGHLIGHT_CHARS) {
+    return [
+      ...lightHighlight(code.slice(0, MAX_HIGHLIGHT_CHARS), language),
+      { text: code.slice(MAX_HIGHLIGHT_CHARS), kind: "plain" }
+    ];
   }
 
   const family = normalizeFamily(language);

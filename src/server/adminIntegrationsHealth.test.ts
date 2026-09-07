@@ -256,3 +256,77 @@ test("integrations health refresh marks github degraded and blocks onboarding", 
   assert.equal(body.onboardingGates.githubOrToolConnected, false);
   assert.equal(body.onboardingGates.canCompleteOnboarding, false);
 });
+
+test("integrations list marks google-docs needsReconnect when access expired and refresh is missing", async () => {
+  const orgStore = {
+    getOrganization: async () => ({ id: "org-1", name: "Acme", plan: "pro", createdAt: new Date() }),
+    getCodeHostInstallation: async () => undefined
+  };
+  const integrationStore = {
+    get: async (_orgId: string, provider: string) =>
+      provider === "google-docs"
+        ? {
+            metadata: { displayName: "Jon" },
+            tokenExpiresAt: new Date(Date.now() - 60_000),
+            updatedAt: new Date()
+          }
+        : undefined,
+    getAccessToken: async () => "expired-access",
+    getRefreshToken: async () => undefined
+  };
+  const response = mockResponse();
+  const handled = await handleAdminIntegrationsRequest(
+    { method: "GET", pathname: "/v1/admin/integrations" },
+    response,
+    {
+      orgStore: orgStore as never,
+      integrationStore: integrationStore as never,
+      serverConfig: testServerConfig
+    },
+    auth
+  );
+  assert.equal(handled, true);
+  const body = response.body as {
+    integrations: Array<{ provider: string; installed?: boolean; needsReconnect?: boolean }>;
+  };
+  const googleDocs = body.integrations.find((entry) => entry.provider === "google-docs");
+  assert.equal(googleDocs?.installed, true);
+  assert.equal(googleDocs?.needsReconnect, true);
+});
+
+test("integrations list keeps google-docs connected when token is still valid", async () => {
+  const orgStore = {
+    getOrganization: async () => ({ id: "org-1", name: "Acme", plan: "pro", createdAt: new Date() }),
+    getCodeHostInstallation: async () => undefined
+  };
+  const integrationStore = {
+    get: async (_orgId: string, provider: string) =>
+      provider === "google-docs"
+        ? {
+            metadata: { displayName: "Jon" },
+            tokenExpiresAt: new Date(Date.now() + 3_600_000),
+            updatedAt: new Date()
+          }
+        : undefined,
+    getAccessToken: async () => "live-access",
+    getRefreshToken: async () => "refresh-token"
+  };
+  const response = mockResponse();
+  const handled = await handleAdminIntegrationsRequest(
+    { method: "GET", pathname: "/v1/admin/integrations" },
+    response,
+    {
+      orgStore: orgStore as never,
+      integrationStore: integrationStore as never,
+      serverConfig: testServerConfig
+    },
+    auth
+  );
+  assert.equal(handled, true);
+  const body = response.body as {
+    integrations: Array<{ provider: string; installed?: boolean; needsReconnect?: boolean }>;
+  };
+  const googleDocs = body.integrations.find((entry) => entry.provider === "google-docs");
+  assert.equal(googleDocs?.installed, true);
+  assert.equal(googleDocs?.needsReconnect, undefined);
+});

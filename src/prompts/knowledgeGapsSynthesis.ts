@@ -8,6 +8,7 @@ import type {
   TeamsSearchEvidence
 } from "../context/contextBundleEvidence";
 import {
+  isHuntLocateGapsAsk,
   knowledgeGapsGatherQuery,
   resolveKnowledgeGapsAuditScope
 } from "../context/knowledgeGapsFocus";
@@ -45,8 +46,9 @@ import { ownershipTierLabel } from "./ownershipSourceLabels";
 import { ORG_DOCS_EVIDENCE_LABEL, orgDocsSynthesisGuardrail } from "../workspace/repoEvidenceIsolation";
 
 export const KNOWLEDGE_GAPS_EVIDENCE_SYSTEM = `You audit engineering health using only attached evidence from the Sources card and synthesis bundle.
-List scan-backed gaps and integration hits — never invent gap subsections from code inspection or generic framework knowledge.
-Documentation gap subsections must come from knowledge gap scan entries, Confluence/Notion/Google Docs page lists, or explicit integration errors in the bundle.
+When ### Focus file excerpts are attached, you MAY name documentation, ownership, or default-on risks that are visible in those excerpts (allowlists, call caps, missing confirmation). Cite the path. Still fail: inventing files not attached, foreign-repo paths, or a 40-bullet dump.
+When focus excerpts are absent, list scan-backed gaps and integration hits only — never invent gap subsections from code inspection or generic framework knowledge.
+Documentation gap subsections must come from knowledge gap scan entries, Confluence/Notion/Google Docs page lists, explicit integration errors in the bundle, or attached focus file excerpts.
 The primary audit target is stated in ## Task — do not center the audit on out-of-scope @ attachments.
 When ## User focus / ## Primary topic is present, audit those subsystems first — leftover open-editor ownership is secondary at most.
 Org Confluence/Notion hits are org-wide supplementary docs — never the active repository's architecture source of truth.
@@ -234,10 +236,26 @@ function appendKnowledgeGapsResponseContract(
   input: KnowledgeGapsSynthesisInput,
   focusPrimary = false
 ): void {
-  const scanGaps = input.evidence.jobScan?.gaps ?? [];
-  const documentationGaps = scanGaps.filter(
-    (gap) => gap.type === "missing_docs" || gap.type === "impact_unknown"
+  const hasFocusExcerpts = Boolean(
+    input.evidence.focusFiles?.some((file) => (file.content ?? "").trim())
   );
+  const scanGaps = input.evidence.jobScan?.gaps ?? [];
+  const documentationGaps = scanGaps.filter((gap) => {
+    if (gap.type === "focus_search_miss") {
+      return false;
+    }
+    if (String(gap.message ?? "").includes("No indexed code")) {
+      return false;
+    }
+    return (
+      gap.type === "missing_docs" ||
+      gap.type === "impact_unknown" ||
+      gap.type === "default_on_risk" ||
+      gap.type === "wrong_file_evidence" ||
+      gap.type === "canned_miss" ||
+      gap.type === "ui_for_api"
+    );
+  });
   const ownerGaps = scanGaps.filter((gap) => gap.type === "missing_owner");
   const integrationGaps = scanGaps.filter(
     (gap) =>
@@ -251,6 +269,16 @@ function appendKnowledgeGapsResponseContract(
   if (focusPrimary) {
     lines.push(
       "**Summary** must lead with the ## Primary topic focus subsystems (docs/ownership gaps or explicit no-evidence). Do not make ownership of an unrelated open editor the Summary headline."
+    );
+  }
+  if (hasFocusExcerpts) {
+    lines.push(
+      "**Your question** — PASS: the subsystems exist if focus paths/excerpts are attached; then name docs/ownership/default-on risks visible in those excerpts. FAIL: claiming no indexed code; empty “looks good”; a 40-bullet dump."
+    );
+  }
+  if (isHuntLocateGapsAsk(`${input.userFocus ?? ""} ${input.userQuestion ?? ""} ${input.evidence.userFocus ?? ""}`)) {
+    lines.push(
+      "**Your question** — PASS: name hunt evidence-class risks from attached hunt code (wrong-file ranking, canned miss, UI-as-API, default-on). FAIL: echo the ask; “docs/runbook may be thin” as the only answer. Do not invent plane paths."
     );
   }
   lines.push("**Documentation gaps** must include, in order (after the attached page titles above):");
@@ -380,6 +408,10 @@ function formatKnowledgeGapsForPrompt(
           : "")
     );
   }
+  const excerpts = formatFocusFileExcerpts(evidence.focusFiles);
+  if (excerpts) {
+    sections.push(excerpts);
+  }
   if (evidence.jobScan) {
     const scan = evidence.jobScan;
     sections.push(
@@ -393,11 +425,17 @@ function formatKnowledgeGapsForPrompt(
               .join("\n") + truncationNote(scan.gaps.length, 20)
           : "- (scan completed with no structured gaps in this pass)")
     );
-  } else {
+  } else if (!(evidence.focusFiles?.some((file) => (file.content ?? "").trim()))) {
     sections.push(
       `### ${knowledgeGapsSourceLabelScan()}\n` +
         "- No automated knowledge-gap scan attached.\n" +
         "- Do not invent Documentation gaps subsections from code inspection; state that scan evidence is unavailable."
+    );
+  } else {
+    sections.push(
+      `### ${knowledgeGapsSourceLabelScan()}\n` +
+        "- No automated knowledge-gap scan attached.\n" +
+        "- Focus file excerpts are attached — audit docs/ownership/default-on risks visible in those excerpts. Do not claim the code is missing."
     );
   }
   if (confluence) {
@@ -507,4 +545,24 @@ function formatKnowledgeGapsForPrompt(
     sections.push("### Warnings\n" + evidence.warnings.map((warning) => `- ${warning}`).join("\n"));
   }
   return sections.join("\n\n");
+}
+
+const FOCUS_EXCERPT_CHARS = 4_000;
+
+function formatFocusFileExcerpts(
+  files: KnowledgeGapsEvidence["focusFiles"]
+): string | undefined {
+  const excerpts = (files ?? [])
+    .filter((file) => file.path.trim() && (file.content ?? "").trim())
+    .slice(0, 6)
+    .map((file) => {
+      const body = (file.content ?? "").trim();
+      const truncated = body.length > FOCUS_EXCERPT_CHARS;
+      const shown = truncated ? `${body.slice(0, FOCUS_EXCERPT_CHARS)}\n… [truncated]` : body;
+      return `#### ${file.path}\n${shown}`;
+    });
+  if (excerpts.length === 0) {
+    return undefined;
+  }
+  return `### Focus file excerpts\n${excerpts.join("\n\n")}`;
 }

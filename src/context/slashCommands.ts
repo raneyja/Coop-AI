@@ -116,10 +116,17 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
   },
   {
     name: "edit",
-    aliases: ["patch", "fix"],
+    aliases: ["patch"],
     target: { kind: "composer-mode", mode: "edit" },
     label: "Edit code",
     description: "Generate search-replace patches for code changes"
+  },
+  {
+    name: "fix",
+    aliases: ["repair"],
+    target: { kind: "composer-mode", mode: "edit" },
+    label: "Fix code",
+    description: "Patch the open file — name the bug or the behavior you want"
   },
   {
     name: "compare",
@@ -168,7 +175,7 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
     aliases: ["googledocs", "google-docs"],
     target: { kind: "integration", provider: "google-docs" },
     label: "Google Docs",
-    description: "Answer using Google Docs as primary evidence"
+    description: "Search Google Docs only — not the repository"
   }
 ];
 

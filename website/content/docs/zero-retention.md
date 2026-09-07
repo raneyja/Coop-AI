@@ -53,7 +53,7 @@ Enterprise plans include a zero-retention attestation document describing:
 - Provider retention policies referenced
 - Data flow from extension → API → LLM provider
 
-Contact [hello@coop-ai.dev](mailto:hello@coop-ai.dev) for attestation copies.
+Contact [support@coop-ai.dev](mailto:support@coop-ai.dev) for attestation copies.
 
 ## Next steps
 

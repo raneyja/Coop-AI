@@ -11,6 +11,7 @@ import type {
 import type { StoredMe } from "./auth";
 import { ensureAccessToken, restoreSessionFromCookie } from "./auth";
 import { markOrgSuspended, clearOrgSuspended } from "./orgSuspendedState";
+import { normalizeQuotaSnapshot } from "./quotaSnapshot";
 
 export type ApiError = {
   error?: string;
@@ -761,6 +762,7 @@ export type OrgSummary = {
   id: string;
   name: string;
   plan: string;
+  usageTier?: string | null;
   repoAccessMode?: "all_indexed" | "per_user";
   onboardingCompleted?: boolean;
   memberCount?: number;
@@ -905,6 +907,8 @@ export async function testIntegrationScope(
 
 export type BillingInfo = {
   plan: string;
+  /** Paid usage bucket. Capability plan stays free | pro | enterprise. */
+  usageTier?: string | null;
   seats: number | null;
   /** Stripe subscription quantity when available (may briefly differ from Coop seats). */
   stripeSeats?: number | null;
@@ -915,6 +919,7 @@ export type BillingInfo = {
 
 export type QuotaSnapshot = {
   plan: string;
+  usageTier?: string | null;
   unlimited?: boolean;
   usedTokens?: number;
   limitTokens?: number;
@@ -925,56 +930,30 @@ export type QuotaSnapshot = {
   windowHours?: number;
   resetsAt?: string;
   retryAfterMs?: number;
+  usageMeters?: {
+    displayName: string;
+    seatPriceUsd: number;
+    periodEnd: string;
+    usedCents?: number;
+    limitCents?: number;
+    remainingCents?: number;
+    usedRatio?: number;
+    auto: { usedCents: number; limitCents: number; remainingCents: number; usedRatio: number };
+    frontier: { usedCents: number; limitCents: number; remainingCents: number; usedRatio: number };
+    nextTierName?: string;
+  } | null;
 };
 
 export async function fetchQuota(): Promise<ApiResult<QuotaSnapshot>> {
-  const result = await coopFetch<QuotaSnapshot>("/v1/admin/quota");
+  const result = await coopFetch<QuotaSnapshot & { quota?: QuotaSnapshot }>("/v1/admin/quota");
   if (!result.ok) {
     return result;
   }
 
-  const data = result.data;
-  const plan = typeof data?.plan === "string" && data.plan.trim() ? data.plan.trim() : "free";
-  const usedCredits =
-    typeof data?.usedCredits === "number" && Number.isFinite(data.usedCredits)
-      ? Math.max(0, data.usedCredits)
-      : undefined;
-  const limitCredits =
-    typeof data?.limitCredits === "number" && Number.isFinite(data.limitCredits)
-      ? Math.max(0, data.limitCredits)
-      : undefined;
-  const usedTokens =
-    typeof data?.usedTokens === "number" && Number.isFinite(data.usedTokens)
-      ? Math.max(0, data.usedTokens)
-      : undefined;
-  const limitTokens =
-    typeof data?.limitTokens === "number" && Number.isFinite(data.limitTokens)
-      ? Math.max(0, data.limitTokens)
-      : undefined;
-  const remainingTokens =
-    typeof data?.remainingTokens === "number" && Number.isFinite(data.remainingTokens)
-      ? Math.max(0, data.remainingTokens)
-      : undefined;
-  const remainingCredits =
-    typeof data?.remainingCredits === "number" && Number.isFinite(data.remainingCredits)
-      ? Math.max(0, data.remainingCredits)
-      : typeof usedCredits === "number" && typeof limitCredits === "number"
-        ? Math.max(0, limitCredits - usedCredits)
-        : undefined;
-
   return {
     ok: true,
     status: result.status,
-    data: {
-      ...data,
-      plan,
-      usedTokens,
-      limitTokens,
-      remainingTokens,
-      usedCredits,
-      limitCredits,
-      remainingCredits
-    }
+    data: normalizeQuotaSnapshot(result.data) as QuotaSnapshot
   };
 }
 
@@ -1233,26 +1212,33 @@ export async function fetchSamlMetadataXml(): Promise<ApiResult<string>> {
   }
 }
 
-export function planLabel(plan: string): string {
-  switch (plan) {
-    case "enterprise":
-      return "Enterprise";
-    case "pro":
-      return "Pro";
-    default:
-      return "Free";
+export function planLabel(plan: string, usageTier?: string | null): string {
+  if (plan === "enterprise") {
+    return "Enterprise";
   }
+  if (plan === "free" || !plan) {
+    return "Free";
+  }
+  if (usageTier === "pro_plus" || plan === "pro_plus") {
+    return "Pro+";
+  }
+  if (usageTier === "max" || plan === "max") {
+    return "Max";
+  }
+  if (plan === "pro") {
+    return "Pro";
+  }
+  return "Free";
 }
 
-export function planBadgeClass(plan: string): string {
-  switch (plan) {
-    case "enterprise":
-      return "admin-chip admin-chip--plan-enterprise";
-    case "pro":
-      return "admin-chip admin-chip--plan-pro";
-    default:
-      return "admin-chip admin-chip--plan-free";
+export function planBadgeClass(plan: string, usageTier?: string | null): string {
+  if (plan === "enterprise") {
+    return "admin-chip admin-chip--plan-enterprise";
   }
+  if (plan === "pro" || plan === "pro_plus" || plan === "max" || usageTier === "pro" || usageTier === "pro_plus" || usageTier === "max") {
+    return "admin-chip admin-chip--plan-pro";
+  }
+  return "admin-chip admin-chip--plan-free";
 }
 
 export type AnalyticsRange = "7d" | "30d" | "90d";

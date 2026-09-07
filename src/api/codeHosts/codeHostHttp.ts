@@ -13,7 +13,7 @@ export type CodeHostRateLimitProvider = CodeHostProvider;
 export type HttpRequestOptions = {
   method?: string;
   headers?: Record<string, string>;
-  body?: string;
+  body?: string | FormData;
   timeoutMs?: number;
 };
 
@@ -31,6 +31,33 @@ export type PaginatedFetchOptions<T> = {
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_FILE_BYTES = 1_024 * 1_024;
 
+export async function codeHostRequestOk(
+  url: string,
+  options: HttpRequestOptions & {
+    provider: CodeHostProvider;
+    rateLimitTracker?: RateLimitTracker;
+  }
+): Promise<Response> {
+  const response = await codeHostRequest(url, options);
+  if (!response.ok) {
+    throw await mapHttpError(response, options.provider);
+  }
+  return response;
+}
+
+/** Empty 201 bodies (Bitbucket src commit) must not throw SyntaxError. */
+export async function parseResponseJson<T>(response: Response): Promise<T | undefined> {
+  const text = await response.text();
+  if (!text.trim()) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function codeHostRequestJson<T>(
   url: string,
   options: HttpRequestOptions & {
@@ -38,11 +65,17 @@ export async function codeHostRequestJson<T>(
     rateLimitTracker?: RateLimitTracker;
   }
 ): Promise<T> {
-  const response = await codeHostRequest(url, options);
-  if (!response.ok) {
-    throw mapHttpError(response, options.provider);
+  const response = await codeHostRequestOk(url, options);
+  const parsed = await parseResponseJson<T>(response);
+  if (parsed === undefined) {
+    throw new CodeHostError(
+      "The code host returned an empty response.",
+      "network",
+      response.status,
+      options.provider
+    );
   }
-  return (await response.json()) as T;
+  return parsed;
 }
 
 export async function codeHostRequest(
@@ -80,7 +113,7 @@ export async function codeHostRequest(
       }
       options.rateLimitTracker?.updateFromHeaders(options.provider, headersToRecord(result.headers));
       if (result.status === 401 || result.status === 403) {
-        throw new CodeHostError("Authentication failed. Update your token in settings.", "auth", result.status, options.provider);
+        throw await authErrorFromResponse(result, options.provider);
       }
       if (result.status === 429) {
         throw new CodeHostError("Rate limit exceeded. Requests will retry shortly.", "rate_limit", result.status, options.provider);
@@ -106,7 +139,7 @@ export async function paginatedCodeHostFetch<T>(options: PaginatedFetchOptions<T
       timeoutMs: options.timeoutMs
     });
     if (!response.ok) {
-      throw mapHttpError(response, options.provider);
+      throw await mapHttpError(response, options.provider);
     }
     const payload = (await response.json()) as unknown;
     items.push(...options.mapPage(payload));
@@ -147,7 +180,52 @@ export function linesFromText(text: string): Array<{ number: number; text: strin
   return parts.map((line, index) => ({ number: index + 1, text: line }));
 }
 
-function mapHttpError(response: Response, provider: CodeHostProvider): CodeHostError {
+async function authErrorFromResponse(response: Response, provider: CodeHostProvider): Promise<CodeHostError> {
+  const detail = await readJsonErrorMessage(response);
+  const base = "Authentication failed. Update your token in settings.";
+  return new CodeHostError(detail ? `${base} ${detail}` : base, "auth", response.status, provider);
+}
+
+async function readJsonErrorMessage(response: Response): Promise<string | undefined> {
+  try {
+    const text = await response.text();
+    if (!text.trim()) {
+      return undefined;
+    }
+    const parsed = JSON.parse(text) as { message?: unknown; error?: unknown };
+    return flattenHostErrorText(parsed.message) ?? flattenHostErrorText(parsed.error);
+  } catch {
+    return undefined;
+  }
+}
+
+/** GitLab often returns `message` as a string array; Bitbucket nests `error.message`. */
+function flattenHostErrorText(value: unknown): string | undefined {
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+  if (Array.isArray(value)) {
+    const parts = value
+      .map((entry) => flattenHostErrorText(entry))
+      .filter((entry): entry is string => Boolean(entry));
+    return parts.length ? parts.join(" ") : undefined;
+  }
+  if (value && typeof value === "object") {
+    if ("message" in value) {
+      const nested = flattenHostErrorText((value as { message?: unknown }).message);
+      if (nested) {
+        return nested;
+      }
+    }
+    const parts = Object.values(value)
+      .map((entry) => flattenHostErrorText(entry))
+      .filter((entry): entry is string => Boolean(entry));
+    return parts.length ? parts.join(" ") : undefined;
+  }
+  return undefined;
+}
+
+async function mapHttpError(response: Response, provider: CodeHostProvider): Promise<CodeHostError> {
   if (response.status === 401 || response.status === 403) {
     return new CodeHostError("Authentication failed. Update your token in settings.", "auth", response.status, provider);
   }
@@ -157,7 +235,13 @@ function mapHttpError(response: Response, provider: CodeHostProvider): CodeHostE
   if (response.status === 404) {
     return new CodeHostError("Resource not found.", "not_found", response.status, provider);
   }
-  return new CodeHostError(`Request failed (${response.status}).`, "network", response.status, provider);
+  const detail = await readJsonErrorMessage(response);
+  return new CodeHostError(
+    detail ? `Request failed (${response.status}). ${detail}` : `Request failed (${response.status}).`,
+    "network",
+    response.status,
+    provider
+  );
 }
 
 function headersToRecord(headers: Headers): Record<string, string> {

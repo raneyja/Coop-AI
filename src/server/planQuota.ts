@@ -1,11 +1,24 @@
 import { estimateTokensFromText } from "../api/costEstimate";
 import type { ChatOrgPlan } from "../api/types";
 import type { LlmProvider } from "../api/zeroRetentionConfig";
-import { billTokensForQuota } from "../config/modelCreditWeights";
-import { PRICING_PAGE_URL } from "../config/siteConfig";
+import {
+  billTokensForQuota,
+  billUsdCents,
+  classifyRequestBucket,
+  type UsageBucket
+} from "../config/modelCreditWeights";
+import { DEMO_PAGE_URL, PRICING_PAGE_URL } from "../config/siteConfig";
 import { formatWaitTime } from "../jobs/types";
 import type { OrgPlan } from "./orgStore";
 import type { TokenUsageEvent, UsageTracker } from "./usageTracker";
+import {
+  USAGE_TIER_LIMITS,
+  displayUsageTierName,
+  effectiveUsageTier,
+  nextUsageTier,
+  paidUsagePeriodRange,
+  type UsageTier
+} from "./usageTiers";
 
 export const LLM_USAGE_EVENT_TYPES = ["chat.message", "completion.requested"] as const;
 
@@ -40,18 +53,81 @@ export type PlanQuotaSnapshot = {
   retryAfterMs: number;
 };
 
+export type UsagePoolMeter = {
+  usedCents: number;
+  limitCents: number;
+  remainingCents: number;
+  usedRatio: number;
+};
+
+export type PaidUsageMeters = {
+  usageTier: UsageTier;
+  displayName: string;
+  seatPriceUsd: number;
+  periodStart: string;
+  periodEnd: string;
+  usedCents: number;
+  limitCents: number;
+  remainingCents: number;
+  usedRatio: number;
+  /** Share of the one monthly cap (not a second cap). */
+  auto: UsagePoolMeter;
+  frontier: UsagePoolMeter;
+  nextTier?: UsageTier;
+  nextTierName?: string;
+  nextTierPriceUsd?: number;
+};
+
+export type PaidQuotaContext = {
+  usageTier?: UsageTier | null;
+  selection?: string | null;
+  provider: LlmProvider;
+  model: string;
+  forceAutoBucket?: boolean;
+  /** Org signup time — monthly usage window is this anniversary, not the calendar month. */
+  periodAnchor?: Date;
+};
+
+export type QuotaPool = "paid" | "free";
+
+export type PlanQuotaExceededExtras = {
+  pool?: QuotaPool;
+  upgradePlan?: UsageTier;
+  usedCents?: number;
+  limitCents?: number;
+  message?: string;
+};
+
 export class PlanQuotaExceededError extends Error {
   public readonly code = "quota_limit_reached";
+  public readonly pool: QuotaPool;
+  public readonly upgradePlan?: UsageTier;
+  public readonly usedCents?: number;
+  public readonly limitCents?: number;
 
   public constructor(
     public readonly retryAfterMs: number,
     public readonly usedTokens: number,
     public readonly limitTokens: number,
     public readonly upgradeUrl: string,
-    public readonly resetsAt: Date
+    public readonly resetsAt: Date,
+    extras: PlanQuotaExceededExtras = {}
   ) {
-    super(buildQuotaLimitMessage(retryAfterMs, resetsAt, upgradeUrl));
+    super(extras.message ?? buildQuotaLimitMessage(retryAfterMs, resetsAt, upgradeUrl));
     this.name = "PlanQuotaExceededError";
+    this.pool = extras.pool ?? "free";
+    this.upgradePlan = extras.upgradePlan;
+    this.usedCents = extras.usedCents;
+    this.limitCents = extras.limitCents;
+  }
+}
+
+export class PlanQuotaUnavailableError extends Error {
+  public readonly code = "quota_metering_unavailable";
+
+  public constructor() {
+    super("Usage metering is temporarily unavailable. Try again in a moment.");
+    this.name = "PlanQuotaUnavailableError";
   }
 }
 
@@ -63,6 +139,10 @@ export class PlanQuotaService {
 
   public appliesToPlan(plan: OrgPlan | ChatOrgPlan): boolean {
     return plan === "free" && this.config.enabled;
+  }
+
+  public appliesPaidCaps(plan: OrgPlan | ChatOrgPlan, usageTier?: UsageTier | null): boolean {
+    return effectiveUsageTier(plan, usageTier) != null;
   }
 
   public async getSnapshot(
@@ -77,13 +157,40 @@ export class PlanQuotaService {
     return buildSnapshot(usage.usedTokens, this.config.freeTokenLimit, usage.resetsAt, this.config.rollingWindowMs);
   }
 
+  public async getUsageMeters(
+    orgId: string,
+    plan: OrgPlan | ChatOrgPlan,
+    usageTier?: UsageTier | null,
+    now = new Date(),
+    periodAnchor?: Date
+  ): Promise<PaidUsageMeters | undefined> {
+    const tier = effectiveUsageTier(plan, usageTier);
+    if (!tier || orgId === "dev") {
+      return undefined;
+    }
+    if (!this.usageTracker?.canRead()) {
+      return undefined;
+    }
+    const pools = await this.getPaidPoolUsage(orgId, now, periodAnchor);
+    return buildPaidUsageMeters(tier, pools, now, periodAnchor);
+  }
+
   public async check(
     orgId: string,
     plan: OrgPlan | ChatOrgPlan,
     _estimatedAdditionalTokens = 0,
-    now = new Date()
+    now = new Date(),
+    paid?: PaidQuotaContext
   ): Promise<void> {
-    if (!this.appliesToPlan(plan) || orgId === "dev") {
+    if (orgId === "dev") {
+      return;
+    }
+    const tier = effectiveUsageTier(plan, paid?.usageTier);
+    if (tier) {
+      await this.checkPaid(orgId, tier, now, paid?.periodAnchor);
+      return;
+    }
+    if (!this.appliesToPlan(plan)) {
       return;
     }
     const usage = await this.getRollingUsage(orgId, now);
@@ -97,7 +204,8 @@ export class PlanQuotaService {
         usage.usedTokens,
         this.config.freeTokenLimit,
         this.config.upgradeUrl,
-        usage.resetsAt
+        usage.resetsAt,
+        { pool: "free", upgradePlan: "pro" }
       );
     }
   }
@@ -115,6 +223,9 @@ export class PlanQuotaService {
       principal: string;
       metadata?: Record<string, unknown>;
       visionWeighted?: boolean;
+      selection?: string | null;
+      usageTier?: UsageTier | null;
+      forceAutoBucket?: boolean;
     }
   ): Promise<void> {
     if (orgId === "dev") {
@@ -128,6 +239,21 @@ export class PlanQuotaService {
       visionWeighted: entry.visionWeighted,
       visionMultiplier: this.config.visionTokenMultiplier
     });
+    const usd = billUsdCents({
+      inputTokens: entry.inputTokens,
+      outputTokens: entry.outputTokens,
+      provider: entry.provider,
+      model: entry.model,
+      visionWeighted: entry.visionWeighted,
+      visionMultiplier: this.config.visionTokenMultiplier
+    });
+    const bucket: UsageBucket = classifyRequestBucket({
+      selection: entry.selection,
+      provider: entry.provider,
+      resolvedModel: entry.model,
+      forceAutoBucket: entry.forceAutoBucket
+    });
+    const tier = effectiveUsageTier(plan, entry.usageTier);
     await this.usageTracker?.record({
       orgId,
       userId: entry.userId,
@@ -145,9 +271,50 @@ export class PlanQuotaService {
         modelWeight: billed.modelWeight,
         visionMultiplier: billed.visionMultiplier,
         visionWeighted: Boolean(entry.visionWeighted),
-        plan
+        plan,
+        bucket,
+        usdCents: usd.usdCents,
+        usageTier: tier ?? undefined
       }
     });
+  }
+
+  private async checkPaid(orgId: string, tier: UsageTier, now: Date, periodAnchor?: Date): Promise<void> {
+    if (!this.usageTracker?.canRead()) {
+      throw new PlanQuotaUnavailableError();
+    }
+    const limits = USAGE_TIER_LIMITS[tier];
+    const pools = await this.getPaidPoolUsage(orgId, now, periodAnchor);
+    const usedCents = pools.autoCents + pools.frontierCents;
+    if (usedCents < limits.costCents) {
+      return;
+    }
+    const period = paidUsagePeriodRange(periodAnchor, now);
+    const retryAfterMs = Math.max(0, period.to.getTime() - now.getTime());
+    const next = nextUsageTier(tier);
+    const upgradePlan = next === "enterprise" ? undefined : next;
+    const upgradeUrl = next === "enterprise" ? DEMO_PAGE_URL : this.config.upgradeUrl;
+    throw new PlanQuotaExceededError(retryAfterMs, 0, 0, upgradeUrl, period.to, {
+      pool: "paid",
+      upgradePlan,
+      usedCents,
+      limitCents: limits.costCents,
+      message: buildPaidCapMessage(upgradePlan)
+    });
+  }
+
+  private async getPaidPoolUsage(
+    orgId: string,
+    now = new Date(),
+    periodAnchor?: Date
+  ): Promise<{ autoCents: number; frontierCents: number }> {
+    const range = paidUsagePeriodRange(periodAnchor, now);
+    const eventTypes = [...LLM_USAGE_EVENT_TYPES];
+    const [autoCents, frontierCents] = await Promise.all([
+      this.usageTracker!.sumUsdCentsForOrg(orgId, range, eventTypes, "auto"),
+      this.usageTracker!.sumUsdCentsForOrg(orgId, range, eventTypes, "frontier")
+    ]);
+    return { autoCents, frontierCents };
   }
 
   private async getRollingUsage(orgId: string, now = new Date()): Promise<{
@@ -268,9 +435,21 @@ export function writePlanQuotaExceededResponse(
       limitTokens: error.limitTokens,
       usedCredits: tokensToCredits(error.usedTokens),
       limitCredits: tokensToCredits(error.limitTokens),
-      upgradeUrl: error.upgradeUrl
+      upgradeUrl: error.upgradeUrl,
+      pool: error.pool,
+      upgradePlan: error.upgradePlan,
+      usedCents: error.usedCents,
+      limitCents: error.limitCents
     })
   );
+}
+
+export function writePlanQuotaUnavailableResponse(
+  response: import("node:http").ServerResponse,
+  error: PlanQuotaUnavailableError
+): void {
+  response.writeHead(503, { "content-type": "application/json; charset=utf-8" });
+  response.end(JSON.stringify({ error: error.code, message: error.message }));
 }
 
 export function tokensToCredits(tokens: number): number {
@@ -314,7 +493,50 @@ function buildSnapshot(
 
 function buildQuotaLimitMessage(_retryAfterMs: number, resetsAt: Date, _upgradeUrl: string): string {
   const atLabel = formatResetsAtLocal(resetsAt);
-  return `You've reached your free AI credits limit. Try again at ${atLabel} or upgrade to Pro for unlimited usage.`;
+  return `You've reached your free AI credits limit. Try again at ${atLabel} or upgrade to Pro for a monthly allowance.`;
+}
+
+export function buildPaidCapMessage(upgradePlan?: UsageTier): string {
+  if (!upgradePlan) {
+    return "You've used this month's included usage. Contact us about Enterprise to continue.";
+  }
+  return `You've used this month's included usage. Upgrade to ${displayUsageTierName(upgradePlan)} to continue.`;
+}
+
+function buildPaidUsageMeters(
+  tier: UsageTier,
+  pools: { autoCents: number; frontierCents: number },
+  now: Date,
+  periodAnchor?: Date
+): PaidUsageMeters {
+  const limits = USAGE_TIER_LIMITS[tier];
+  const period = paidUsagePeriodRange(periodAnchor, now);
+  const next = nextUsageTier(tier);
+  const usedCents = pools.autoCents + pools.frontierCents;
+  const total = toPoolMeter(usedCents, limits.costCents);
+  return {
+    usageTier: tier,
+    displayName: displayUsageTierName(tier),
+    seatPriceUsd: limits.seatPriceUsd,
+    periodStart: period.from.toISOString(),
+    periodEnd: period.to.toISOString(),
+    ...total,
+    auto: toPoolMeter(pools.autoCents, limits.costCents),
+    frontier: toPoolMeter(pools.frontierCents, limits.costCents),
+    nextTier: next === "enterprise" ? undefined : next,
+    nextTierName: next === "enterprise" ? "Enterprise" : displayUsageTierName(next),
+    nextTierPriceUsd: next === "enterprise" ? undefined : USAGE_TIER_LIMITS[next].seatPriceUsd
+  };
+}
+
+function toPoolMeter(usedCents: number, limitCents: number): UsagePoolMeter {
+  const remainingCents = Math.max(0, limitCents - usedCents);
+  return {
+    usedCents,
+    limitCents,
+    remainingCents,
+    usedRatio: limitCents <= 0 ? 1 : Math.min(1, usedCents / limitCents)
+  };
 }
 
 function formatResetsAtLocal(resetsAt: Date): string {

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { parseChatProse } from "../lib/chatProseParser";
+import { anonymousCodeSurfaceLabel } from "./ChatCodeBlock";
 import { shouldHidePatchBlock } from "./ChatProse";
 
 let passed = 0;
@@ -104,6 +105,13 @@ test("hides unfenced SEARCH/REPLACE paragraphs when patch card suppresses markdo
   const doc = parseChatProse(content);
   const hidden = doc.blocks.map(shouldHidePatchBlock);
   assert.ok(hidden.every(Boolean), "File header and unfenced patch body should hide");
+});
+
+test("anonymous header keeps bash and drops TEXT", () => {
+  assert.equal(anonymousCodeSurfaceLabel("bash"), "bash");
+  assert.equal(anonymousCodeSurfaceLabel("TEXT"), undefined);
+  assert.equal(anonymousCodeSurfaceLabel("plaintext"), undefined);
+  assert.equal(anonymousCodeSurfaceLabel(undefined), undefined);
 });
 
 console.log(`\nChatProse: ${passed} passed, ${failed} failed`);

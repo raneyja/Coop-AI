@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
-import type { ChatImageAttachment } from "../../chat/types";
+import type { ChatImageAttachment, ChatSuggestPayload, ChatTurnActivity } from "../../chat/types";
+import { hasChatTurnActivity } from "../../chat/chatTurnActivity";
 import { paperclipAttachmentKind } from "../../chat/paperclipAttachments";
 import type { ConflictSummary } from "../types";
 import type { EvidenceActionContext } from "../evidenceCardActionHandler";
@@ -45,7 +46,8 @@ export type ChatMessage = {
   links?: Array<{ label: string; url: string }>;
   attachments?: ChatImageAttachment[];
   relatedArtifactId?: string;
-  suggest?: import("../../chat/types").ChatSuggestPayload;
+  suggest?: ChatSuggestPayload;
+  activity?: ChatTurnActivity;
 };
 
 export type ChatInlineArtifact =
@@ -119,7 +121,7 @@ type ChatStreamProps = {
   /** Cursor-like todos / tools / files + thinking. */
   agentActivity?: AgentActivityState;
   showAgentActivity?: boolean;
-  /** Live-only model thinking text (not persisted). */
+  /** Live model thinking text (also persisted on the completed message). */
   modelThinkingText?: string;
   modelThinkingStreaming?: boolean;
   onStopStreaming?: () => void;
@@ -356,8 +358,22 @@ function MessageBlock({
   const parsed = isUser ? parseQuickActionTag(message.content) : { body: message.content };
   const isStoppedNotice =
     !isUser && !isStreaming && message.content.trim() === CHAT_STOPPED_MESSAGE;
+  const completedActivity =
+    !isUser && !isStreaming && hasChatTurnActivity(message.activity) ? message.activity : undefined;
 
   return (
+    <>
+      {completedActivity ? (
+        <AgentActivityPanel
+          mode="complete"
+          durationMs={completedActivity.durationMs}
+          thinkingMs={completedActivity.thinkingMs}
+          todos={completedActivity.steps ?? []}
+          tools={completedActivity.tools}
+          files={completedActivity.files}
+          thinkingText={completedActivity.thinkingText}
+        />
+      ) : null}
     <article
       className={`chat-message ${isUser ? "chat-message--user" : "chat-message--assistant group"}${isStreaming ? " chat-message--streaming" : ""}${isStoppedNotice ? " chat-message--stopped" : ""}`}
       data-role={message.role}
@@ -429,6 +445,7 @@ function MessageBlock({
         ) : null}
       </div>
     </article>
+    </>
   );
 }
 

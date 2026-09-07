@@ -34,7 +34,9 @@ export type LicenseStatus = {
   canEnableMoreRepos?: boolean;
 };
 
-export const PRO_PLAN_PRICE_USD = 20;
+/** Lowest self-serve paid seat price (Pro). Pro+ is $60, Max is $100. */
+export const PRO_PLAN_PRICE_USD = 25;
+export const PAID_SEAT_PRICES_USD = { pro: 25, pro_plus: 60, max: 100 } as const;
 
 const SECRET_KEY_LICENSE = "coopAI.licenseKey";
 
@@ -68,6 +70,13 @@ export async function resolveLicenseStatus(
 ): Promise<LicenseStatus> {
   if (secrets && apiBaseUrl) {
     const apiStatus = await resolveLicenseStatusFromApi(secrets, apiBaseUrl, clientFactory);
+    if (apiStatus === "unverified") {
+      return {
+        plan: "free",
+        isActive: false,
+        source: "default"
+      };
+    }
     if (apiStatus) {
       return apiStatus;
     }
@@ -110,7 +119,7 @@ async function resolveLicenseStatusFromApi(
   secrets: vscode.SecretStorage,
   apiBaseUrl: string,
   clientFactory?: () => import("../api/CoopBackendClient").CoopBackendClient | undefined
-): Promise<LicenseStatus | undefined> {
+): Promise<LicenseStatus | "unverified" | undefined> {
   const token = await secrets.get("coopAI.apiToken");
   if (!token?.trim()) {
     return undefined;
@@ -129,7 +138,7 @@ async function resolveLicenseStatusFromApi(
       canEnableMoreRepos: me.canEnableMoreRepos
     };
   } catch {
-    return undefined;
+    return "unverified";
   }
 }
 

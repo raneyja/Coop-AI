@@ -26,18 +26,20 @@ export class GeminiProviderClient extends BaseProviderClient {
       headers[key.toLowerCase()] = String(value);
     }
 
+    const applied = applyGeminiThinking(formatted.body, options.thinking);
     const state: ParseState = { text: "" };
     let response: Response;
     try {
       response = await runResilientRequest({
-        timeoutMs: options.signal ? undefined : LLM_STREAM_CONNECT_TIMEOUT_MS,
+        timeoutMs: LLM_STREAM_CONNECT_TIMEOUT_MS,
+        signal: options.signal,
         policy: { maxRetries: 0 },
         run: async (signal) =>
           this.fetchImpl(url, {
             method: "POST",
             headers,
-            body: JSON.stringify(formatted.body),
-            signal: options.signal ?? signal
+            body: JSON.stringify(applied),
+            signal
           })
       });
     } catch (error) {
@@ -92,10 +94,11 @@ export class GeminiProviderClient extends BaseProviderClient {
             const candidates = data.candidates as Array<Record<string, unknown>> | undefined;
             const content = candidates?.[0]?.content as Record<string, unknown> | undefined;
             const partsOut = content?.parts as Array<Record<string, unknown>> | undefined;
-            const text = partsOut?.map((part) => String(part.text ?? "")).join("") ?? "";
-            if (text) {
-              state.text += text;
-              yield { type: "delta", text };
+            for (const chunk of parseGeminiParts(partsOut)) {
+              if (chunk.type === "delta") {
+                state.text += chunk.text;
+              }
+              yield chunk;
             }
           } catch {
             // ignore malformed chunks
@@ -114,6 +117,37 @@ export class GeminiProviderClient extends BaseProviderClient {
       finishReason: "stop"
     };
   }
+}
+
+export function applyGeminiThinking(
+  body: Record<string, unknown>,
+  thinking?: { mode?: string }
+): Record<string, unknown> {
+  if (thinking?.mode !== "gemini-thoughts") {
+    return body;
+  }
+  const generationConfig = {
+    ...((body.generationConfig as Record<string, unknown> | undefined) ?? {}),
+    thinkingConfig: { includeThoughts: true }
+  };
+  return { ...body, generationConfig };
+}
+
+export function parseGeminiParts(
+  parts: Array<Record<string, unknown>> | undefined
+): Array<{ type: "thinking" | "delta"; text: string }> {
+  if (!parts?.length) {
+    return [];
+  }
+  const chunks: Array<{ type: "thinking" | "delta"; text: string }> = [];
+  for (const part of parts) {
+    const text = typeof part.text === "string" ? part.text : "";
+    if (!text) {
+      continue;
+    }
+    chunks.push(part.thought === true ? { type: "thinking", text } : { type: "delta", text });
+  }
+  return chunks;
 }
 
 function readUsageInt(value: unknown): number | undefined {

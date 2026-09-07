@@ -53,17 +53,32 @@ export class CoopSidebarProvider implements vscode.WebviewViewProvider {
     this.view = webviewView;
     webviewView.webview.options = getWebviewOptions(this.extensionUri);
     this.session.attachWebview(webviewView.webview);
-    await this.session.initialize();
-    // initialize already snaps when allowed; refresh again after view attaches.
     this.session.refreshEditorContext(vscode.window.activeTextEditor);
+    void this.session.initialize().catch((error) => {
+      console.error("[CoopAI] sidebar initialize failed:", error);
+    });
+
+    webviewView.onDidDispose(() => {
+      this.view = undefined;
+    });
 
     webviewView.onDidChangeVisibility(() => {
       if (webviewView.visible) {
+        // After Extension Host reload the iframe can stay blank until HTML is re-injected.
+        this.session.reloadChatWebviewHtml();
         this.session.touch();
-        // Visibility restore often leaves focus on the webview — re-chip open tabs.
         this.session.refreshEditorContext(vscode.window.activeTextEditor);
       }
     });
+  }
+
+  /** Re-attach HTML when activate runs before resolveWebviewView (EH reload race). */
+  public ensureSidebarWebviewLoaded(): void {
+    if (!this.view?.visible) {
+      return;
+    }
+    this.view.webview.options = getWebviewOptions(this.extensionUri);
+    this.session.attachWebview(this.view.webview);
   }
 
   public refreshEditorContext(editor: vscode.TextEditor | undefined): void {

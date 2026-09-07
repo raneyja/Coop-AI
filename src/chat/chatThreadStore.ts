@@ -33,6 +33,17 @@ function createThreadId(): string {
   return `thread-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** True until the user submits a prompt (or the thread otherwise has content). */
+export function isDraftChatThread(thread: {
+  messages: unknown[];
+  artifacts?: unknown[];
+  messageCount?: number;
+}): boolean {
+  const messageCount = thread.messageCount ?? thread.messages.length;
+  const artifactCount = thread.artifacts?.length ?? 0;
+  return messageCount === 0 && artifactCount === 0;
+}
+
 function emptyThread(id = createThreadId()): ChatThreadRecord {
   const now = Date.now();
   return {
@@ -64,6 +75,10 @@ function snapshotThreadRepoContext(ctx: RepoContext): RepoContext | undefined {
     fileSource: ctx.fileSource,
     languageId: ctx.languageId
   };
+}
+
+function threadHasPersistedRepo(thread: ChatThreadRecord): boolean {
+  return Boolean(snapshotThreadRepoContext(thread.repoContext ?? {}));
 }
 
 export function resolveThreadScopeKey(): string {
@@ -124,6 +139,7 @@ export class ChatThreadStore {
 
   public listSummaries(): ChatThreadSummary[] {
     return [...this.snapshot.threads]
+      .filter((thread) => !isDraftChatThread(thread))
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .map((thread) => ({
         id: thread.id,
@@ -167,7 +183,7 @@ export class ChatThreadStore {
     thread.title = title;
     thread.messageCount = messages.length;
     thread.updatedAt = Date.now();
-    if (repoContext) {
+    if (repoContext !== undefined) {
       thread.repoContext = snapshotThreadRepoContext(repoContext);
     }
     if (threadId === this.snapshot.activeThreadId) {
@@ -217,15 +233,35 @@ export class ChatThreadStore {
     if (!this.getThread(threadId)) {
       return undefined;
     }
+    const previousId = this.snapshot.activeThreadId;
     this.snapshot.activeThreadId = threadId;
     this.snapshot.lastActiveAt = Date.now();
+    if (previousId !== threadId) {
+      this.removeIfDraft(previousId);
+    }
+    this.discardInactiveDrafts();
     this.writeSnapshot();
     return this.getActiveThread();
   }
 
   public startNewThread(inheritContext?: RepoContext): ChatThreadRecord {
-    const thread = emptyThread();
+    this.discardInactiveDrafts();
     const inherited = inheritContext ? snapshotThreadRepoContext(inheritContext) : undefined;
+    const active = this.getThread(this.snapshot.activeThreadId);
+    // Reuse only a truly blank draft. A New Chat that still has Use-repo must
+    // not be recycled — that left InspectIQ stuck on the next thread.
+    const canReuseDraft =
+      active && isDraftChatThread(active) && !threadHasPersistedRepo(active);
+    if (canReuseDraft) {
+      active.title = "New Chat";
+      active.repoContext = inherited;
+      active.updatedAt = Date.now();
+      this.snapshot.lastActiveAt = Date.now();
+      this.writeSnapshot();
+      return active;
+    }
+
+    const thread = emptyThread();
     if (inherited) {
       thread.repoContext = inherited;
     }
@@ -243,6 +279,7 @@ export class ChatThreadStore {
     thread.sessionCostUsd = 0;
     thread.title = "New Chat";
     thread.messageCount = 0;
+    thread.repoContext = undefined;
     thread.updatedAt = Date.now();
     this.writeSnapshot();
     return thread;
@@ -252,7 +289,25 @@ export class ChatThreadStore {
     return this.snapshot.threads.find((thread) => thread.id === threadId);
   }
 
+  private removeIfDraft(threadId: string): void {
+    const thread = this.getThread(threadId);
+    if (!thread || !isDraftChatThread(thread)) {
+      return;
+    }
+    this.snapshot.threads = this.snapshot.threads.filter((item) => item.id !== threadId);
+  }
+
+  private discardInactiveDrafts(): void {
+    const activeId = this.snapshot.activeThreadId;
+    this.snapshot.threads = this.snapshot.threads.filter(
+      (thread) => thread.id === activeId || !isDraftChatThread(thread)
+    );
+  }
+
   private ensureActiveThread(): void {
+    const before = this.snapshot.threads.length;
+    this.discardInactiveDrafts();
+    let dirty = this.snapshot.threads.length !== before;
     if (this.snapshot.threads.length === 0) {
       const thread = emptyThread();
       const now = Date.now();
@@ -262,6 +317,9 @@ export class ChatThreadStore {
     }
     if (!this.getThread(this.snapshot.activeThreadId)) {
       this.snapshot.activeThreadId = this.snapshot.threads[0].id;
+      dirty = true;
+    }
+    if (dirty) {
       this.writeSnapshot();
     }
   }
@@ -300,11 +358,15 @@ export class ChatThreadStore {
       artifacts: Array.isArray(thread.artifacts) ? thread.artifacts : [],
       sessionCostUsd: thread.sessionCostUsd ?? 0
     }));
-    return {
+    const snapshot: ThreadStoreSnapshot = {
       activeThreadId: raw.activeThreadId,
       threads,
       lastActiveAt: resolveLastActiveAt(raw.lastActiveAt, threads)
     };
+    snapshot.threads = snapshot.threads.filter(
+      (thread) => thread.id === snapshot.activeThreadId || !isDraftChatThread(thread)
+    );
+    return snapshot;
   }
 
   private writeSnapshot(): void {

@@ -94,7 +94,8 @@ export async function blastRadius(context: FeatureExecutionContext) {
           branch: params.branch,
           includeTransitive: !directOnly,
           gatherStartedAt,
-          askText: context.request.intent?.context?.queryText
+          askText: context.request.intent?.context?.queryText,
+          selectedSymbol: context.request.intent?.context?.selectedSymbol
         }),
         new Promise<undefined>((resolve) => {
           setTimeout(() => resolve(undefined), budgetMs);
@@ -124,6 +125,7 @@ export async function blastRadius(context: FeatureExecutionContext) {
         includeTransitive: report.includeTransitive,
         warnings: report.warnings,
         completeness: report.completeness,
+        namedAskSymbols: report.namedAskSymbols,
         fallbackLevel: directOnly ? "partial" : context.status.level,
         partial: directOnly || report.completeness !== "full"
       };

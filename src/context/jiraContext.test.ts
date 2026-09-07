@@ -8,6 +8,7 @@ import {
   rankJiraIssuesForFocus,
   shouldFetchJiraContext,
   shouldMergeRepoWideJiraHits,
+  shouldRunJiraFocusTextSearch,
   wantsJiraContext,
   wantsOpenTickets,
   wantsRepoLinkedJiraDiscovery
@@ -195,6 +196,11 @@ test("shouldFetchJiraContext respects jira-only allowlist on blast-radius", () =
 test("focused Jira asks do not fail-open to a repo-wide dump", () => {
   assert.equal(shouldMergeRepoWideJiraHits({ hasFocusJql: true }), false);
   assert.equal(shouldMergeRepoWideJiraHits({ hasFocusJql: false }), true);
+});
+
+test("named issue keys skip the 20-ticket focus text search", () => {
+  assert.equal(shouldRunJiraFocusTextSearch(["COOP-101"]), false);
+  assert.equal(shouldRunJiraFocusTextSearch([]), true);
 });
 
 const total = passed + failed;

@@ -1,11 +1,11 @@
+import * as fs from "node:fs";
 import { readProjectInstructionsEnabled } from "../config/projectInstructionsConfig";
 import type { ProjectInstructionsState } from "../chat/types";
-import { attachedAgentsMdLabel } from "./agentsMdAttachmentStore";
+import { attachedAgentsMdLabel } from "./agentsMdAttachmentRecord";
 import {
-  resolveProjectInstructionsGitRoot,
-  type ProjectInstructionFile
+  loadAttachedAgentsMdFile,
+  resolveProjectInstructionsGitRoot
 } from "./projectInstructionsLoader";
-import { loadProjectInstructionsCached } from "./projectInstructionsCache";
 
 export function resolveProjectInstructionsState(options: {
   activeFile?: string;
@@ -13,57 +13,71 @@ export function resolveProjectInstructionsState(options: {
   workspaceRoots?: string[];
   resolveAbsolutePath?: (relativePath: string) => string | undefined;
   attachedAgentsMdPath?: string;
+  exists?: (absolutePath: string) => boolean;
+  /** When set, AGENTS.md comes from this Use-repo — never a personal upload. */
+  useRepoId?: string;
+  remoteHasAgentsMd?: boolean;
+  canMutate?: boolean;
 }): ProjectInstructionsState {
   const enabled = options.enabled ?? readProjectInstructionsEnabled();
   if (!enabled) {
     return { status: "disabled" };
   }
 
-  const attachedLabel = attachedAgentsMdLabel(options.attachedAgentsMdPath);
+  const exists = options.exists ?? fs.existsSync;
   const gitRoot = resolveProjectInstructionsGitRoot({
     activeFile: options.activeFile,
     resolveAbsolutePath: options.resolveAbsolutePath,
-    workspaceRoots: options.workspaceRoots
+    workspaceRoots: options.workspaceRoots,
+    exists
   });
+  const canMutate = Boolean(options.canMutate);
 
-  const files = gitRoot
-    ? loadProjectInstructionsCached({
-        enabled: true,
+  if (options.useRepoId?.trim()) {
+    if (options.remoteHasAgentsMd) {
+      return {
+        status: "loaded",
         gitRoot,
-        activeFile: options.activeFile,
-        attachedAgentsMdPath: options.attachedAgentsMdPath
-      })
-    : ([] as ProjectInstructionFile[]);
-  const sources = files.map((file) => formatInstructionSourceLabel(file));
-  const hasRepoAgentsMd = sources.some(isAgentsMdPath);
-  const hasAgentsMd = hasRepoAgentsMd || Boolean(attachedLabel);
-
-  if (!gitRoot && !hasAgentsMd) {
-    return { status: "no_git", hasAgentsMd: false, attachedAgentsMdLabel: attachedLabel };
-  }
-
-  if (!files.length && !attachedLabel) {
+        sources: ["AGENTS.md"],
+        hasAgentsMd: true,
+        source: "repo",
+        canMutate: false
+      };
+    }
     return {
       status: "missing",
       gitRoot,
       hasAgentsMd: false,
-      attachedAgentsMdLabel: attachedLabel
+      source: "repo",
+      canMutate: false
     };
   }
 
+  const attachedPath = options.attachedAgentsMdPath?.trim();
+  const attachedFile = attachedPath && exists(attachedPath) ? loadAttachedAgentsMdFile(attachedPath) : undefined;
+  const attachedLabel = attachedFile ? attachedAgentsMdLabel(attachedPath) : undefined;
+
+  if (attachedFile && attachedLabel) {
+    return {
+      status: "loaded",
+      gitRoot,
+      sources: [attachedFile.path],
+      hasAgentsMd: true,
+      attachedAgentsMdLabel: attachedLabel,
+      source: "attached",
+      canMutate
+    };
+  }
+
+  if (!gitRoot) {
+    return { status: "no_git", hasAgentsMd: false, source: "attached", canMutate };
+  }
+
   return {
-    status: "loaded",
+    status: "missing",
     gitRoot,
-    sources,
-    hasAgentsMd,
-    attachedAgentsMdLabel: attachedLabel
+    hasAgentsMd: false,
+    source: "attached",
+    canMutate
   };
-}
-
-export function formatInstructionSourceLabel(file: ProjectInstructionFile): string {
-  return file.path;
-}
-
-function isAgentsMdPath(path: string): boolean {
-  return path === "AGENTS.md" || path.endsWith("/AGENTS.md") || path.toLowerCase().endsWith("agents.md");
 }

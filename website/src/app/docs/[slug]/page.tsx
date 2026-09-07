@@ -33,7 +33,18 @@ const nextStepsBySlug: Record<string, { href: string; label: string }[]> = {
     { href: "/docs/admin-portal", label: "Admin portal overview" },
     { href: "/docs/troubleshooting", label: "Troubleshooting" }
   ],
-  "github": [{ href: "/docs/connect-integrations", label: "Integration overview" }],
+  "edit-mode": [
+    { href: "/docs/create-pull-request", label: "Create a pull request from chat or the patch card" },
+    { href: "/manual#create-a-pull-request", label: "Owner's Manual — Create a pull request" }
+  ],
+  "create-pull-request": [
+    { href: "/docs/edit-mode", label: "Edit mode — generate and apply patches" },
+    { href: "/manual#create-a-pull-request", label: "Owner's Manual — Create a pull request" }
+  ],
+  "github": [
+    { href: "/docs/connect-integrations", label: "Integration overview" },
+    { href: "/docs/create-pull-request", label: "Create a pull request from Coop" }
+  ],
   "slack": [{ href: "/docs/integration-scope", label: "Slack scope configuration" }],
   "jira": [{ href: "/docs/connect-integrations", label: "Integration overview" }],
   "notion": [{ href: "/docs/connect-integrations", label: "Integration overview" }],

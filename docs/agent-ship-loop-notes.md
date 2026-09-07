@@ -1,7 +1,7 @@
 # Agent ship loop — stage notes
 
 **Required log** for [agent-ship-loop-build-plan.md](./agent-ship-loop-build-plan.md).  
-**Jon’s dogfood checklist:** [agent-dogfood.md](./agent-dogfood.md).
+**Jon’s live dogfood:** [agent-dogfood.md](./agent-dogfood.md) — Plane = `APIKeyAuthentication`; Slack/Jira = Coop-AI + **COOP-101**. Older “What Jon re-runs” lines that ask `requireAuth` on plane are stale.
 
 A stage with no entry here is **FAIL**, even if tests are green.
 
@@ -32,7 +32,7 @@ Copy this block. Do not edit older entries except to fix a factual error.
 - **Commands run:** `npm run lint`; `npx tsx src/api/agent/integrationMidLoop.test.ts`; phaseA gates
 - **Gate IDs:** S-G8b — PASS. Mid-loop `search_jira` / `search_slack` / etc. only when on planner allowlist; capped at 3 calls; results promote to `jiraSearch` / `slackSearch` for synthesis.
 - **What we tried:** Prefetch stays first-pass; agent may follow a ticket key / thread topic discovered in code with a focused query.
-- **What Jon re-runs:** Ask *Where is requireAuth, and check Jira for related tickets?* Success = Searched/Read, then optional Searched Jira for a key, answer cites both.
+- **What Jon re-runs:** Use-repo **raneyja/Coop-AI**. Ask *Where is requireAuth defined, and check Jira for COOP-101?* Success = Searched/Read + COOP-101 on the same turn. Do not run this on plane.
 
 ### 2026-08-17 — Agent always on + hunt/Slack compound — PASS (automated)
 

@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import {
   buildRepoSummarySynthesisUserPrompt,
   formatActiveFileContextForPrompt,
-  formatRepoSummaryForPrompt
+  formatRepoSummaryForPrompt,
+  REPO_SUMMARY_LOCATE_ONLY_MARKER
 } from "./repoSummarySynthesis";
 
 async function run(): Promise<void> {
@@ -202,6 +203,15 @@ async function run(): Promise<void> {
     assert.ok(prompt.includes("what are the main services and how does a work item flow from create → board?"));
     assert.ok(prompt.includes("**Your question**"));
     assert.ok(prompt.includes("Answer the ## User focus ask first"));
+    assert.ok(prompt.includes("however many that is"));
+    assert.ok(prompt.includes("Do **not** pad to 5"));
+    assert.ok(prompt.includes("no invented `models.py`"));
+    assert.ok(prompt.includes("cover each topic that has attached evidence"));
+    assert.ok(prompt.includes("Tests/migrations only if"));
+    assert.ok(prompt.includes("compose service names"));
+    assert.ok(prompt.includes("A frontend modal, store, or widget is not the API"));
+    assert.ok(prompt.includes("not where a message is sent"));
+    assert.ok(prompt.includes("do not name the types file as the send/handle path"));
     assert.ok(prompt.includes("## Section quality gates (strict pass / fail)"));
     assert.ok(prompt.includes("### Focus-search evidence"));
     assert.ok(prompt.includes("apps/api/issue/views.py"));
@@ -215,6 +225,28 @@ async function run(): Promise<void> {
     });
     assert.ok(!prompt.includes("## User focus (required)"));
     assert.ok(prompt.includes("Synthesize a **repository-wide** overview"));
+  });
+
+  test("locate-shaped Understand Repo skips architecture syllabus", () => {
+    const prompt = buildRepoSummarySynthesisUserPrompt({
+      owner: "raneyja",
+      repo: "Coop-AI",
+      summary: {
+        entryFiles: [
+          { path: "src/webview/PatchCard.tsx" },
+          { path: "src/edit/patchActions.ts" }
+        ],
+        notion: {
+          pages: [{ id: "1", title: "Architecture Overview", url: "https://notion.example/1" }]
+        }
+      },
+      userFocus: "where does Apply on a patch card become an editor change?"
+    });
+    assert.ok(prompt.includes(REPO_SUMMARY_LOCATE_ONLY_MARKER));
+    assert.ok(prompt.includes("Do not cite Confluence or Notion"));
+    assert.ok(!prompt.includes("Cover major subsystems"));
+    assert.ok(!prompt.includes("## Attached documentation (required in response)"));
+    assert.ok(!prompt.includes("Close with a one-line pointer"));
   });
 
   const total = passed + failed;

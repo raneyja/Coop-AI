@@ -15,14 +15,17 @@ type HeroPatchDemoCardProps = {
   /** How many diff lines are revealed (context always fully visible once building starts). */
   revealedDiffLines: number;
   phase: HeroPatchPhase;
+  tone?: "light" | "dark";
 };
 
-function lineClass(kind: HeroPatchLine["kind"], applied: boolean) {
+function lineClass(kind: HeroPatchLine["kind"], applied: boolean, dark: boolean) {
   if (applied && kind === "remove") return "hidden";
-  if (applied && kind === "add") return "bg-emerald-50 text-emerald-900";
-  if (kind === "remove") return "bg-red-50 text-red-800";
-  if (kind === "add") return "bg-emerald-50 text-emerald-900";
-  return "text-gray-700";
+  if (applied && kind === "add") {
+    return dark ? "bg-emerald-950/70 text-emerald-200" : "bg-emerald-50 text-emerald-900";
+  }
+  if (kind === "remove") return dark ? "bg-red-950/70 text-red-200" : "bg-red-50 text-red-800";
+  if (kind === "add") return dark ? "bg-emerald-950/70 text-emerald-200" : "bg-emerald-50 text-emerald-900";
+  return dark ? "text-neutral-300" : "text-gray-700";
 }
 
 function marker(kind: HeroPatchLine["kind"]) {
@@ -36,16 +39,22 @@ export function HeroPatchDemoCard({
   meta,
   lines,
   revealedDiffLines,
-  phase
+  phase,
+  tone = "light"
 }: HeroPatchDemoCardProps) {
   const applied = phase === "applied";
   const showActions = phase === "ready" || phase === "clicking" || phase === "applied";
   const diffLines = lines.filter((l) => l.kind !== "context");
   const visibleDiff = new Set(diffLines.slice(0, revealedDiffLines).map((l) => `${l.kind}:${l.n}:${l.text}`));
+  const dark = tone === "dark";
 
   return (
     <div
-      className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
+      className={
+        dark
+          ? "overflow-hidden rounded-lg border border-white/10 bg-neutral-900"
+          : "overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
+      }
       role="img"
       aria-label={
         applied
@@ -53,33 +62,55 @@ export function HeroPatchDemoCard({
           : `Patch ready for ${file}. Review the diff, then apply`
       }
     >
-      <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-3">
-        <h3 className="text-base font-semibold text-gray-900">
+      <div
+        className={`flex flex-wrap items-center gap-2 px-4 py-3 ${
+          dark ? "border-b border-white/10" : "border-b border-gray-100"
+        }`}
+      >
+        <h3 className={`text-base font-semibold ${dark ? "text-white" : "text-gray-900"}`}>
           {applied ? "Patch applied" : "Patch ready"}
         </h3>
         <span
           className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-            applied ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"
+            applied
+              ? dark
+                ? "bg-emerald-900/80 text-emerald-200"
+                : "bg-emerald-100 text-emerald-800"
+              : dark
+                ? "bg-white/10 text-white/70"
+                : "bg-gray-100 text-gray-600"
           }`}
         >
           {applied ? "Applied" : "Review"}
         </span>
-        <span className="text-xs text-gray-500">{meta}</span>
+        <span className={`text-xs ${dark ? "text-white/45" : "text-gray-500"}`}>{meta}</span>
       </div>
 
-      <p className="border-b border-gray-100 px-4 py-2 text-xs text-gray-500">
+      <p
+        className={`px-4 py-2 text-xs ${
+          dark ? "border-b border-white/10 text-white/45" : "border-b border-gray-100 text-gray-500"
+        }`}
+      >
         {applied
           ? "Changes applied to your workspace."
           : "Review the diff below, then apply changes to your workspace."}
       </p>
 
-      <div className="border-b border-gray-100 px-4 py-2">
-        <div className="overflow-hidden rounded-md border border-gray-200">
-          <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-3 py-1.5">
-            <span className="truncate font-mono text-[11px] text-gray-700">{file}</span>
-            <span className="shrink-0 text-[11px] text-blue-500">Open file</span>
+      <div className={`px-4 py-2 ${dark ? "border-b border-white/10" : "border-b border-gray-100"}`}>
+        <div
+          className={`overflow-hidden rounded-md border ${dark ? "border-white/10" : "border-gray-200"}`}
+        >
+          <div
+            className={`flex items-center justify-between px-3 py-1.5 ${
+              dark ? "border-b border-white/10 bg-white/[0.04]" : "border-b border-gray-100 bg-gray-50"
+            }`}
+          >
+            <span className={`truncate font-mono text-[11px] ${dark ? "text-white/80" : "text-gray-700"}`}>
+              {file}
+            </span>
+            <span className={`shrink-0 text-[11px] ${dark ? "text-sky-400" : "text-blue-500"}`}>Open file</span>
           </div>
-          <pre className="overflow-x-auto bg-white py-1 font-mono text-[11px] leading-[1.55]">
+          <pre className={`overflow-x-auto py-1 font-mono text-[11px] leading-[1.55] ${dark ? "bg-neutral-950" : "bg-white"}`}>
             {lines.map((line) => {
               const isDiff = line.kind !== "context";
               const key = `${line.kind}:${line.n}:${line.text}`;
@@ -90,11 +121,10 @@ export function HeroPatchDemoCard({
                 return null;
               }
               return (
-                <div
-                  key={key}
-                  className={`flex gap-2 px-2 ${lineClass(line.kind, applied)}`}
-                >
-                  <span className="w-6 shrink-0 select-none text-right text-gray-400">
+                <div key={key} className={`flex gap-2 px-2 ${lineClass(line.kind, applied, dark)}`}>
+                  <span
+                    className={`w-6 shrink-0 select-none text-right ${dark ? "text-white/30" : "text-gray-400"}`}
+                  >
                     {applied && line.kind === "add" ? line.n : line.n}
                   </span>
                   <span className="w-3 shrink-0 select-none opacity-70">{marker(line.kind)}</span>
@@ -117,30 +147,39 @@ export function HeroPatchDemoCard({
                 applied
                   ? "bg-emerald-700 text-white"
                   : phase === "clicking"
-                    ? "scale-95 bg-gray-800 text-white"
-                    : "bg-gray-900 text-white"
+                    ? dark
+                      ? "scale-95 bg-white text-neutral-950"
+                      : "scale-95 bg-gray-800 text-white"
+                    : dark
+                      ? "bg-white text-neutral-950"
+                      : "bg-gray-900 text-white"
               }`}
             >
               {applied ? "Applied ✓" : "Apply patch"}
             </button>
             {phase === "clicking" || phase === "ready" ? (
               <span
-                className={`hero-patch-pointer pointer-events-none absolute left-[70%] top-[58%] h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-gray-900 bg-white ${
-                  phase === "clicking" ? "hero-patch-pointer-press" : "hero-patch-pointer-aim"
-                }`}
+                className={`hero-patch-pointer pointer-events-none absolute left-[70%] top-[58%] h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 ${
+                  dark ? "border-white bg-neutral-300" : "border-gray-900 bg-white"
+                } ${phase === "clicking" ? "hero-patch-pointer-press" : "hero-patch-pointer-aim"}`}
                 aria-hidden
               />
             ) : null}
           </div>
           {!applied ? (
-            <span className="text-sm font-medium text-gray-600">Reject</span>
+            <span className={`text-sm font-medium ${dark ? "text-white/50" : "text-gray-600"}`}>Reject</span>
           ) : (
-            <span className="text-xs text-gray-500">Stay in the file · undo anytime</span>
+            <span className={`text-xs ${dark ? "text-white/40" : "text-gray-500"}`}>
+              Stay in the file · undo anytime
+            </span>
           )}
         </div>
       ) : (
         <div className="px-4 py-3">
-          <div className="h-9 w-28 animate-pulse rounded-md bg-gray-100" aria-hidden />
+          <div
+            className={`h-9 w-28 animate-pulse rounded-md ${dark ? "bg-white/10" : "bg-gray-100"}`}
+            aria-hidden
+          />
         </div>
       )}
     </div>

@@ -77,7 +77,7 @@ Automation API keys (`coop_…`) are for CI and scripts only — create them in 
 | GitLab token | Personal Access Token (`glpat-…`) |
 | GitLab API base URL | `https://gitlab.com/api/v4` or self-hosted URL |
 
-**Suggested scopes:** `read_api`, `read_repository`.
+**Suggested scopes:** `api`, `write_repository`.
 
 **Test:** **Test GitLab**
 
@@ -88,7 +88,7 @@ Automation API keys (`coop_…`) are for CI and scripts only — create them in 
 | Bitbucket username | Atlassian account username |
 | App password | Bitbucket app password (not account password) |
 
-**Suggested permissions:** Repositories — Read; Pull requests — Read.
+**Suggested permissions:** Repositories — Write; Pull requests — Write.
 
 **Test:** **Test Bitbucket**
 

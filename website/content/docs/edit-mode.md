@@ -1,9 +1,9 @@
 ---
 title: Edit mode
-description: Generate search-replace patches from chat — slash commands, apply, undo, and selection context.
+description: Generate search-replace patches from chat — slash commands, apply, undo, and open a pull request.
 section: extension
 order: 4
-lastUpdated: "2026-07-10"
+lastUpdated: "2026-09-03"
 ---
 
 <!-- figures lg -->
@@ -24,7 +24,7 @@ Edit mode ships in production. It uses the same chat composer as quick actions �
 
 Edit mode routes to the `code_edit` use case and expects **patch blocks** in the model response — not prose-only answers.
 
-**Model:** Coop assigns **OpenAI GPT-5.1** for `/edit`, `/patch`, and `/fix` in production (balanced mutation model). See [Model assignments](/docs/model-assignments).
+**Model:** On Auto, `/edit`, `/patch`, and `/fix` use **OpenAI GPT-5.1**. See [Model assignments](/docs/model-assignments).
 
 ## Slash commands
 
@@ -48,7 +48,9 @@ Type `/` in the composer to see edit commands:
 /fix off-by-one in the loop bounds
 ```
 
-All three resolve to the same **edit** composer mode. Text after the command is your instruction.
+All three resolve to the same **edit** composer mode. Text after the command **is the spec** — that is what pass means. Highlighting code is not enough.
+
+Do **not** send `fix this` or bare `/edit` with no named change. There is nothing to score: Coop cannot know the intended bug.
 
 ## Selection and file context
 
@@ -59,7 +61,7 @@ Coop attaches editor context automatically:
 | **Selected lines** | `coopAI.includeSelection` | `true` |
 | **Active file path** | `coopAI.includeActiveFile` | `true` |
 
-**Best practice:** highlight the code you want changed, then run `/edit <instruction>`. Selection focuses the model; edit mode still attaches the **full active file** (up to the local-file byte limit) so multi-hunk refactors can wire call sites. With no selection, Coop uses the active file and your instruction.
+**Best practice:** highlight the code you want changed, then run `/edit <instruction>` that states the defect or desired behavior. Selection focuses the model; edit mode still attaches the **full active file** (up to the local-file byte limit) so multi-hunk refactors can wire call sites. With no selection, Coop uses the active file and your instruction.
 
 Workspace **owner / repo / branch** (Settings → Workspace) help resolve indexed-repo context when the repo is Deep-Indexed.
 
@@ -80,7 +82,8 @@ flowchart LR
 3. **Review** — A VS Code notification shows **Patch ready — N file(s) (M edits)** with **Apply** and **Reject**. Dismissing the notification (X) keeps the patch pending — run **CoopAI: Apply Patch** later.
 4. **Apply** — Click **Apply** or run **CoopAI: Apply Patch** (`coopAI.applyPatch`). Changed files are written in the workspace. SEARCH blocks tolerate minor whitespace drift (indent/trim) when an exact match is not found.
 5. **Undo** — After apply, the success notification includes **Undo**, or run **CoopAI: Undo Last Patch** (`coopAI.undoLastPatch`).
-6. **Retry** — If apply fails, click **Retry** on the error notification or run **CoopAI: Retry Last Patch** (`coopAI.retryLastPatch`). Coop re-opens the pending patch or sends a follow-up `/edit` turn asking the model to fix SEARCH blocks.
+6. **Create a pull request** — After Apply, click **Create pull request** on the patch card, or type **Create a PR** in chat. Chat also works if you typed in the file yourself (no Apply). Confirm branch, title, and notes — nothing is created on GitHub until you submit. See [Create pull request](/docs/create-pull-request).
+7. **Retry** — If apply fails, click **Retry** on the error notification or run **CoopAI: Retry Last Patch** (`coopAI.retryLastPatch`). Coop re-opens the pending patch or sends a follow-up `/edit` turn asking the model to fix SEARCH blocks.
 
 If parsing fails, no patch is staged — check the chat response for valid patch formatting.
 
@@ -121,7 +124,7 @@ Multi-file edits include multiple `File:` sections. Each file can have multiple 
 | **CoopAI: Reject Patch** | Command Palette (`coopAI.rejectPatch`) |
 | **CoopAI: Retry Last Patch** | Command Palette (`coopAI.retryLastPatch`) — re-show pending patch or regenerate after apply failure |
 
-**Success:** Notification shows `Applied patch to N file(s).` with an **Undo** action.
+**Success:** Notification shows `Applied patch to N file(s).` with an **Undo** action. The patch card then shows **Create pull request**, or type **Create a PR** in chat — [open a pull request](/docs/create-pull-request) without leaving VS Code.
 
 ### Undo
 
@@ -168,6 +171,7 @@ More fixes: [Troubleshooting](/docs/troubleshooting).
 
 ## Next steps
 
+- [Create pull request](/docs/create-pull-request) — open a pull request from the patch card or by asking in chat
 - [Inline autocomplete](/docs/autocomplete) — ghost-text completions (on by default)
 - [Extension settings](/docs/extension-settings)
 - [Owner's Manual — Edit selection](/manual#inline-complete-and-edit-selection)

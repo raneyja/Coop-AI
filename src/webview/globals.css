@@ -25,7 +25,7 @@
     --chat-user-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     --coop-pill-text: var(--coop-panel-foreground);
     --coop-slash-command: #a78bfa;
-    /* Comfortable sidebar width; below this we reflow (not clamp) via @container coop-shell */
+    /* Comfortable sidebar width; below this we reflow via html[data-coop-narrow] */
     --coop-panel-min-width: 320px;
     --coop-prompt-panel-width: 480px;
     /* ~4-word prompt title at 12px before ellipsis */
@@ -138,8 +138,13 @@
   }
 
   body {
-    /* Fluid layout: shrink with the panel/window instead of forcing a min width
-       and showing a horizontal scrollbar. Content reflows via @container coop-shell. */
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    /* Fill the VS Code webview iframe — do not shrink-wrap to content width. */
     overflow-x: hidden;
     overflow-y: hidden;
     background: var(--coop-panel-canvas);
@@ -147,6 +152,16 @@
     font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
     font-size: var(--vscode-font-size, 13px);
     -webkit-font-smoothing: antialiased;
+  }
+
+  #root {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
   }
 
   * {
@@ -214,8 +229,14 @@
 @layer components {
   .coop-panel,
   .coop-settings-shell {
-    container-type: inline-size;
-    container-name: coop-shell;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
     font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
     font-size: var(--vscode-font-size, 13px);
     -webkit-font-smoothing: antialiased;
@@ -864,6 +885,31 @@
     color: var(--coop-panel-foreground);
   }
 
+  /* Chromium paints type=search clear as the OS accent (blue). Match the panel close X. */
+  .coop-prompt-modal-search::-webkit-search-decoration {
+    -webkit-appearance: none;
+  }
+
+  .coop-prompt-modal-search::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    width: 12px;
+    height: 12px;
+    margin-left: 4px;
+    cursor: pointer;
+    background-color: var(--coop-panel-foreground);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 6l12 12M18 6L6 18' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 6l12 12M18 6L6 18' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+    opacity: 0.8;
+  }
+
+  .coop-prompt-modal-search::-webkit-search-cancel-button:hover {
+    opacity: 1;
+  }
+
   .coop-prompt-modal-view-text {
     @apply box-border max-w-full min-w-0 whitespace-pre-wrap rounded-md border px-2.5 py-2 text-[12px] leading-relaxed;
     border-color: var(--coop-settings-field-border, var(--coop-composer-border));
@@ -1307,6 +1353,26 @@
     @apply flex items-start gap-2.5 text-[13px] leading-[1.45];
   }
 
+  .coop-agent-todo--expandable {
+    @apply flex-col gap-1;
+  }
+
+  .coop-agent-todo-toggle {
+    @apply flex w-full items-start gap-2.5 border-0 bg-transparent p-0 text-left text-[13px] leading-[1.45];
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .coop-agent-todo-toggle .coop-agent-chevron {
+    @apply ml-auto mt-[3px] shrink-0;
+    opacity: 0.55;
+  }
+
+  .coop-agent-todo-detail {
+    @apply m-0 ml-[22px] whitespace-pre-wrap font-sans text-[12px] leading-[1.45];
+    color: color-mix(in srgb, var(--coop-panel-muted) 42%, var(--coop-panel-foreground) 58%);
+  }
+
   .coop-agent-todo--pending {
     opacity: 0.55;
   }
@@ -1333,6 +1399,25 @@
     );
   }
 
+  .coop-agent-todo-glyph-spin {
+    transform-origin: center;
+    transform-box: fill-box;
+    animation: coop-agent-todo-spin 0.85s linear infinite;
+  }
+
+  @keyframes coop-agent-todo-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .coop-agent-todo-glyph-spin {
+      animation: none;
+      stroke-dasharray: 28 8;
+    }
+  }
+
   .coop-agent-todo-glyph--done {
     color: color-mix(in srgb, var(--coop-panel-muted) 55%, var(--coop-panel-foreground) 45%);
   }
@@ -1353,6 +1438,16 @@
     color: color-mix(in srgb, var(--coop-panel-muted) 55%, var(--coop-panel-foreground) 45%);
   }
 
+  .coop-agent-explore {
+    @apply flex flex-col gap-1.5;
+  }
+
+  .coop-agent-explore-body {
+    @apply pl-3;
+    max-height: 16rem;
+    overflow-y: auto;
+  }
+
   .coop-agent-thinking {
     @apply flex flex-col gap-1.5 border-l py-0.5 pl-3;
     border-color: color-mix(in srgb, var(--coop-panel-muted) 40%, transparent);
@@ -1364,7 +1459,32 @@
     cursor: pointer;
   }
 
+  .coop-agent-worked-toggle {
+    @apply flex items-center gap-1.5 border-0 bg-transparent p-0 text-left text-[12.5px] font-medium;
+    color: color-mix(in srgb, var(--coop-panel-muted) 62%, var(--coop-panel-foreground) 38%);
+    cursor: pointer;
+  }
+
+  .coop-agent-worked-toggle:hover,
   .coop-agent-thinking-toggle:hover {
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-agent-worked-body {
+    @apply flex flex-col gap-1.5 pt-1;
+  }
+
+  .chat-message--agent-activity-complete {
+    @apply mb-1;
+  }
+
+  .coop-agent-path-btn {
+    @apply inline cursor-pointer border-0 bg-transparent p-0 text-left;
+    font: inherit;
+  }
+
+  .coop-agent-path-btn:hover {
+    text-decoration: underline;
     color: var(--coop-panel-foreground);
   }
 
@@ -1757,9 +1877,33 @@
     );
   }
 
+  .coop-patch-file-heading {
+    @apply flex min-w-0 flex-1 flex-col gap-0.5;
+  }
+
   .coop-patch-file-path {
-    @apply min-w-0 flex-1 truncate text-left font-medium;
+    @apply min-w-0 truncate text-left font-medium;
     color: var(--vscode-textLink-foreground);
+  }
+
+  .coop-patch-file-lang {
+    @apply min-w-0 flex-1 truncate text-left font-medium;
+    color: var(--coop-panel-foreground);
+    font-family: var(--vscode-editor-font-family, Menlo, Monaco, monospace);
+  }
+
+  .coop-patch-file-header > .coop-patch-file-path {
+    @apply flex-1;
+  }
+
+  .coop-patch-file-anchor {
+    @apply truncate font-normal;
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-patch-hunk-where {
+    @apply px-2.5 pt-1.5 text-[11px];
+    color: var(--coop-panel-muted);
   }
 
   button.coop-patch-file-path {
@@ -1783,7 +1927,6 @@
     border-color: color-mix(in srgb, var(--coop-border) 70%, transparent);
   }
 
-  .coop-patch-hunk--applied,
   .coop-patch-hunk--rejected {
     opacity: 0.72;
   }
@@ -2142,6 +2285,107 @@
     color: var(--coop-panel-muted);
   }
 
+  .coop-usage-track {
+    @apply mt-1 flex h-1.5 overflow-hidden rounded-full;
+    background: var(--coop-composer-surface);
+  }
+
+  .coop-usage-seg {
+    @apply h-full shrink-0;
+  }
+
+  .coop-usage-seg--auto {
+    background: var(--vscode-charts-green, #3fb950);
+  }
+
+  .coop-usage-seg--frontier {
+    background: var(--vscode-charts-blue, #58a6ff);
+  }
+
+  .coop-usage-legend {
+    @apply mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px];
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-usage-swatch {
+    @apply mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle;
+  }
+
+  .coop-usage-swatch--auto {
+    background: var(--vscode-charts-green, #3fb950);
+  }
+
+  .coop-usage-swatch--frontier {
+    background: var(--vscode-charts-blue, #58a6ff);
+  }
+
+  .coop-settings-model-list {
+    @apply m-0 list-none p-0;
+  }
+
+  .coop-settings-model-list li {
+    @apply flex items-center justify-between gap-3 py-2 text-[12px];
+    border-bottom: 1px solid var(--coop-settings-divider);
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-settings-model-list li:first-child {
+    padding-top: 0;
+  }
+
+  .coop-settings-model-list li:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+  .coop-settings-model-list-feature {
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-settings-maker-stack {
+    @apply flex flex-col gap-3.5;
+  }
+
+  .coop-settings-maker-block {
+    @apply flex flex-col gap-1.5;
+  }
+
+  .coop-settings-maker-heading {
+    @apply text-[12px] font-medium;
+    color: var(--coop-panel-foreground);
+    text-decoration: none;
+  }
+
+  .coop-settings-maker-heading:hover {
+    color: var(--vscode-textLink-foreground);
+    text-decoration: underline;
+  }
+
+  .coop-settings-maker-models {
+    @apply flex flex-wrap gap-1.5;
+  }
+
+  .coop-settings-model-chip {
+    @apply inline-flex h-[22px] max-w-full items-center truncate rounded-full border px-2.5 text-[11px] font-medium no-underline transition-colors duration-150;
+    background-color: color-mix(in srgb, var(--coop-pill-surface) 70%, var(--coop-composer-surface) 30%);
+    border-color: var(--coop-pill-border);
+    color: var(--coop-panel-foreground);
+  }
+
+  .coop-settings-model-chip:hover {
+    background-color: var(--coop-pill-surface-hover);
+    border-color: var(--coop-pill-border-hover);
+  }
+
+  .coop-settings-docs-link {
+    color: var(--vscode-textLink-foreground);
+    text-decoration: underline;
+  }
+
+  .coop-settings-docs-link:hover {
+    text-decoration: underline;
+  }
+
   .coop-settings-label {
     @apply text-[11px] font-normal;
     color: var(--coop-panel-muted);
@@ -2474,6 +2718,11 @@
       var(--vscode-inputValidation-errorBorder, #f87171) 6%,
       var(--coop-settings-card) 94%
     );
+  }
+
+  .coop-notice--error .coop-notice-title,
+  .coop-notice--error .coop-notice-body {
+    color: var(--vscode-errorForeground, var(--vscode-inputValidation-errorForeground, #f87171));
   }
 
   .coop-notice-title {
@@ -3136,6 +3385,15 @@
     color: var(--coop-panel-foreground);
   }
 
+  .coop-source-chip-dismiss {
+    @apply shrink-0 rounded-full leading-none;
+    color: var(--coop-panel-muted);
+  }
+
+  .coop-source-chip-dismiss:hover {
+    color: var(--coop-panel-foreground);
+  }
+
   .coop-source-chip-label {
     @apply font-semibold;
   }
@@ -3226,19 +3484,17 @@
     border-color: var(--vscode-contrastBorder, var(--vscode-widget-border));
   }
 
-  @container coop-shell (max-width: 319px) {
-    .coop-panel-narrow-notice {
-      @apply block shrink-0 px-3 pb-1 text-center text-[10px] leading-snug;
-      color: var(--coop-panel-muted);
-    }
+  html[data-coop-narrow="true"] .coop-panel-narrow-notice {
+    @apply block shrink-0 px-3 pb-1 text-center text-[10px] leading-snug;
+    color: var(--coop-panel-muted);
+  }
 
-    .coop-composer-toolbar {
-      @apply flex-wrap gap-y-1.5;
-    }
+  html[data-coop-narrow="true"] .coop-composer-toolbar {
+    @apply flex-wrap gap-y-1.5;
+  }
 
-    .coop-composer-toolbar-actions {
-      @apply ml-auto shrink-0;
-    }
+  html[data-coop-narrow="true"] .coop-composer-toolbar-actions {
+    @apply ml-auto shrink-0;
   }
 
   /* Launch typewriter intro */
@@ -3391,6 +3647,140 @@
 }
 .coop-chat-citation .coop-chat-code-token--type {
   color: #4ec9b0;
+}
+
+.coop-model-picker {
+  display: inline-flex;
+  width: max-content;
+  max-width: none;
+  flex-shrink: 0;
+  height: 1.75rem;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0 0.5rem 0 0.7rem;
+  border-radius: 9999px;
+  border: 1px solid var(--coop-pill-border);
+  background-color: color-mix(in srgb, var(--coop-pill-surface) 70%, var(--coop-composer-surface) 30%);
+  color: var(--coop-pill-text);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.coop-model-picker-label {
+  flex: none;
+  white-space: nowrap;
+}
+
+.coop-model-picker:hover {
+  background-color: var(--coop-pill-surface-hover);
+  border-color: var(--coop-pill-border-hover);
+}
+
+.coop-model-picker:focus {
+  outline: none;
+  border-color: var(--coop-composer-border-focus);
+}
+
+.coop-model-picker-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  width: max-content;
+}
+
+.coop-model-picker-insight {
+  width: 220px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--coop-panel-foreground) 34%, transparent);
+  background: var(--vscode-editorWidget-background, var(--coop-composer-surface));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--coop-panel-canvas) 55%, black 45%),
+    0 10px 28px rgba(0, 0, 0, 0.5);
+}
+
+.coop-model-picker-insight-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--coop-panel-foreground);
+}
+
+.coop-model-picker-insight-summary {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--coop-panel-muted);
+}
+
+.coop-model-picker-insight-meta {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--coop-panel-muted);
+}
+
+.coop-model-picker-menu-panel {
+  width: 220px;
+  max-height: min(50vh, 320px);
+  overflow-y: auto;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--coop-panel-foreground) 34%, transparent);
+  background: var(--vscode-editorWidget-background, var(--coop-composer-surface));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--coop-panel-canvas) 55%, black 45%),
+    0 10px 28px rgba(0, 0, 0, 0.5);
+  padding: 4px 0;
+}
+
+[data-theme="light"] .coop-model-picker-insight,
+[data-theme="light"] .coop-model-picker-menu-panel {
+  border-color: color-mix(in srgb, var(--coop-panel-foreground) 22%, var(--coop-border) 78%);
+  box-shadow:
+    0 0 0 1px #fff,
+    0 8px 24px rgba(0, 0, 0, 0.16);
+}
+
+[data-theme="high-contrast"] .coop-model-picker-insight,
+[data-theme="high-contrast"] .coop-model-picker-menu-panel {
+  border-color: var(--vscode-contrastBorder, var(--vscode-widget-border));
+  box-shadow: none;
+}
+
+.coop-model-picker-group {
+  margin-top: 2px;
+}
+
+.coop-model-picker-group-label {
+  margin: 0;
+  padding: 6px 10px 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--coop-panel-muted);
+}
+
+.coop-model-picker-child {
+  padding-left: 1.4rem;
+}
+
+.coop-model-picker-pool {
+  margin-left: 0.5rem;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--coop-panel-muted);
+}
+
+.coop-model-picker-check {
+  margin-left: 0.35rem;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--coop-panel-muted);
 }
 .coop-chat-citation .coop-chat-code-token--function {
   color: #dcdcaa;

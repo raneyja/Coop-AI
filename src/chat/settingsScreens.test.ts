@@ -21,7 +21,7 @@ test("migrateSettingsScreen maps legacy hub screens", () => {
   assert.equal(migrateSettingsScreen("code-hosts"), "tools");
   assert.equal(migrateSettingsScreen("integrations"), "tools");
   assert.equal(migrateSettingsScreen("connections"), "tools");
-  assert.equal(migrateSettingsScreen("identity-links"), "team");
+  assert.equal(migrateSettingsScreen("identity-links"), "preferences");
 });
 
 test("settingsScreenParent routes provider screens to tools", () => {
@@ -32,7 +32,6 @@ test("settingsScreenParent routes provider screens to tools", () => {
 test("settingsScreenParent routes preferences children", () => {
   assert.equal(settingsScreenParent("model"), "preferences");
   assert.equal(settingsScreenParent("prompts"), "preferences");
-  assert.equal(settingsScreenParent("team"), "preferences");
 });
 
 test("settingsScreenParent routes plan and indexing to hub", () => {

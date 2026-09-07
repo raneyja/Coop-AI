@@ -3,6 +3,8 @@ import {
   matchSlashCommands,
   parseSlashCommand,
   segmentComposerSlashHighlights,
+  SLASH_COMMANDS,
+  slashCommandDisplayToken,
   slashCommandHistoryContent,
   slashMenuQuery
 } from "./slashCommands";
@@ -150,6 +152,18 @@ test("parses integration commands", () => {
   assert.equal(parsed!.args, "who decided to drop redis");
 });
 
+test("/docs is Google Docs, not a repo explain", () => {
+  const parsed = parseSlashCommand("/docs summarize auth middleware behavior");
+  assert.ok(parsed);
+  assert.equal(parsed!.def.target.kind, "integration");
+  if (parsed!.def.target.kind === "integration") {
+    assert.equal(parsed!.def.target.provider, "google-docs");
+  }
+  assert.equal(slashCommandDisplayToken(parsed!.def), "docs");
+  assert.equal(parsed!.def.description, "Search Google Docs only — not the repository");
+  assert.equal(parsed!.args, "summarize auth middleware behavior");
+});
+
 test("parses edit composer-mode command with args", () => {
   const parsed = parseSlashCommand("/edit add null check to login handler");
   assert.ok(parsed);
@@ -164,6 +178,25 @@ test("parses edit alias patch", () => {
   const parsed = parseSlashCommand("/patch fix typo");
   assert.ok(parsed);
   assert.equal(parsed!.def.name, "edit");
+});
+
+test("/fix is its own command on the patch path (Copilot muscle memory)", () => {
+  const parsed = parseSlashCommand("/fix extractBearerToken throws on missing headers");
+  assert.ok(parsed);
+  assert.equal(parsed!.def.name, "fix");
+  assert.equal(parsed!.def.target.kind, "composer-mode");
+  if (parsed!.def.target.kind === "composer-mode") {
+    assert.equal(parsed!.def.target.mode, "edit");
+  }
+  assert.equal(parsed!.args, "extractBearerToken throws on missing headers");
+});
+
+test("/fix is discoverable in the typeahead with its own label", () => {
+  const matches = matchSlashCommands("fi");
+  const fix = matches.find((def) => def.name === "fix");
+  assert.ok(fix, "typing /fi must offer /fix");
+  assert.equal(fix!.label, "Fix code");
+  assert.equal(slashCommandDisplayToken(fix!), "fix");
 });
 
 test("parses compare command with two repos and topic", () => {
@@ -235,7 +268,8 @@ test("slashMenuQuery returns null once a space is typed or not slash-prefixed", 
 
 // ── matchSlashCommands ───────────────────────────────────────────────────────
 test("matchSlashCommands returns all commands for an empty query", () => {
-  assert.equal(matchSlashCommands("").length, 13);
+  assert.equal(matchSlashCommands("").length, SLASH_COMMANDS.length);
+  assert.ok(SLASH_COMMANDS.length >= 13);
 });
 
 test("matchSlashCommands includes integration commands like slack", () => {

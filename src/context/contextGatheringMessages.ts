@@ -57,8 +57,8 @@ function uniqueMessages(messages: string[]): string[] {
 }
 
 function finalizeActivityMessages(_event: IntentEvent, messages: string[]): string[] {
-  // Keep activityMessages concrete (gather/job work). Soft "Synthesizing…" filler is
-  // rotated on the active todo in the webview while waiting — not burned as checklist steps.
+  // Keep activityMessages concrete (gather/job work). Do not append fake
+  // Distilling/Aggregating rotation — the webview shows real search/thinking only.
   return uniqueMessages(messages);
 }
 

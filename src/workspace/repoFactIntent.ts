@@ -100,7 +100,8 @@ export function isRepoStructureQuery(queryText: string | undefined): boolean {
   }
   if (
     /\b(repo|repository|project|codebase)\s+structure\b/.test(q) ||
-    /\bstructure of (this |the )?(repo|repository|project|codebase)\b/.test(q)
+    /\bstructure of (this |the )?(repo|repository|project|codebase)\b/.test(q) ||
+    /\bhow\s+is\s+(this\s+|the\s+)?(repo|repository|codebase|project)\s+(organized|structured|laid\s+out)\b/.test(q)
   ) {
     return true;
   }

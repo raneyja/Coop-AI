@@ -1,4 +1,5 @@
 import { getAdminPortalAuthCallbackUrl } from "./adminPortal";
+import { marketingGoogleAuthStartUrl } from "./googleAuthStart";
 
 export const PASSWORD_MIN_LENGTH = 12;
 
@@ -49,22 +50,24 @@ export function validatePasswordClient(password: string): string | null {
 }
 
 export function getGoogleAuthStartUrl(options: {
-  mode: "signup" | "login";
+  mode: "signup" | "login" | "checkout";
   orgName?: string;
+  checkout?: {
+    tier: "pro" | "pro_plus" | "max";
+    intent: "individual" | "team";
+    seats?: number;
+  };
 }): string {
-  const apiBase =
-    process.env.NEXT_PUBLIC_COOP_API_BASE?.trim() ||
-    process.env.NEXT_PUBLIC_API_BASE?.trim() ||
-    "http://localhost:8787";
-  const redirect = getAdminPortalAuthCallbackUrl();
-  const params = new URLSearchParams({
+  const redirect =
+    options.mode === "checkout" && typeof window !== "undefined"
+      ? window.location.href
+      : getAdminPortalAuthCallbackUrl();
+  return marketingGoogleAuthStartUrl({
     mode: options.mode,
-    redirect
+    orgName: options.orgName,
+    redirect,
+    checkout: options.checkout
   });
-  if (options.orgName?.trim()) {
-    params.set("orgName", options.orgName.trim());
-  }
-  return `${apiBase.replace(/\/$/, "")}/v1/auth/google/start?${params.toString()}`;
 }
 
 export const authInputClassName =
