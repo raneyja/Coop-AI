@@ -6,7 +6,7 @@ order: 7
 lastUpdated: "2026-09-07"
 ---
 
-Claude is an outstanding general model for reasoning and writing. Pasting a file into claude.ai is not the same as **VS Code code intelligence** on your Deep-Indexed graph with live Slack and Jira.
+Claude is an outstanding general model for reasoning and writing. Pasting a file into claude.ai is not the same as **VS Code code intelligence** on your Deep-Indexed graph with live company Slack and Jira.
 
 CoopAI uses strong models under the hood (including Anthropic on Auto/Pro), but the product is the **context system and workflows**, not a chat website.
 
@@ -25,10 +25,10 @@ CoopAI uses strong models under the hood (including Anthropic on Auto/Pro), but 
 | Understand a codebase without cloning the monorepo | Deep-Index remote graph; no local monorepo required | Only what you paste or attach |
 | Find a code owner / CODEOWNERS | Find Owner + CODEOWNERS graph | Only if you paste ownership context |
 | Blast radius of a change | Blast Radius quick action | Only if you paste the dependency picture |
-| Slack and Jira context in VS Code | Live Slack & Jira at ask time | No org Slack/Jira in the editor |
-| Confluence / Notion / Google Docs next to code | Live Confluence, Notion, and Google Docs | No live org docs tools |
+| Company Slack and Jira in VS Code | Company workspace (admin-connected), live at ask time | No org Slack/Jira in the editor |
+| Company Confluence / Notion / Google Docs next to code | Company docs tools (admin-connected), live at ask time | No live org docs tools |
 | Inline complete + reviewable edit diffs | Inline complete + reviewable patches | Copy/paste from chat |
-| Org-wide integrations (admin connects once) | Admin connects once for the whole org | Claude Team / Enterprise |
+| Org-wide integrations (admin connects once) | Yes — shared company stack, not each developer’s personal accounts | Claude Team / Enterprise |
 | General writing and reasoning | Secondary | Core strength |
 | Private repo graph | Yes | No |
 

@@ -15,8 +15,8 @@ export const HOW_IT_WORKS_LOOP = [
     step: "02",
     label: "query_live",
     title: "Query the stack live",
-    summary: "Slack and Jira context in VS Code — fetched when you ask, not copied into a second wiki.",
-    body: "Slack threads, Jira tickets, Confluence, Notion, Google Docs, and Teams are not background-indexed. When a question needs them, Coop fetches them at that moment and places them next to the code graph so you have Slack and Jira context in VS Code. Your conversations are not stored as a standing search index."
+    summary: "Company Slack, Jira, and docs in VS Code — shared org context, fetched when you ask.",
+    body: "An org admin connects Slack, Jira, Confluence, Notion, Google Docs, and Teams once for the company. Those tools are not background-indexed, and they are not each developer’s personal accounts. When a question needs them, Coop fetches from the shared company workspace and places that context next to the code graph. Your conversations are not stored as a standing search index."
   },
   {
     id: "in-vscode",
@@ -42,14 +42,14 @@ export const INDEXED_VS_LIVE = {
   },
   live: {
     label: "Fetched when you ask",
-    title: "Your tools",
+    title: "Your company tools",
     items: [
-      "Slack threads and Microsoft Teams messages",
-      "Jira tickets",
-      "Confluence, Notion, and Google Docs",
+      "Company Slack threads and Microsoft Teams messages",
+      "Company Jira tickets",
+      "Company Confluence, Notion, and Google Docs",
       "The current file body from the code host"
     ],
-    note: "Live fetch keeps tickets and threads current without copying them into a second index."
+    note: "Admin-connected for the org. Live fetch keeps tickets and threads current without copying them into a second index — and without using each developer’s personal accounts."
   }
 } as const;
 
@@ -76,7 +76,7 @@ export const WHO_DOES_WHAT = {
     title: "Org admin (once)",
     items: [
       "Connect GitHub, GitLab, or Bitbucket in the admin portal",
-      "Connect Slack, Jira, Confluence, Notion, Google Docs, and Teams",
+      "Connect company Slack, Jira, Confluence, Notion, Google Docs, and Teams",
       "Deep-Index the company repos the team should see",
       "Invite teammates (Pro and Enterprise)"
     ]
@@ -86,8 +86,8 @@ export const WHO_DOES_WHAT = {
     items: [
       "Install the VS Code extension and sign in",
       "Pick Use repo on an indexed repository",
-      "Ask, complete, and edit in the sidebar and editor",
-      "No tokens to paste — integrations are org-wide"
+      "Ask, complete, and edit with shared company stack context",
+      "No tokens to paste — integrations are org-wide, not personal"
     ]
   }
 } as const;
@@ -101,12 +101,12 @@ export const HOW_IT_WORKS_FAQS: FaqPair[] = [
   {
     question: "Does CoopAI index Slack, Jira, and docs?",
     answer:
-      "No. Only code repositories are Deep-Indexed. Slack, Jira, Confluence, Notion, Google Docs, and Teams are queried live at chat time so Coop does not keep a standing copy of those tools."
+      "No. Only code repositories are Deep-Indexed. Company Slack, Jira, Confluence, Notion, Google Docs, and Teams are queried live at chat time from the admin-connected workspace — shared across the org, not each developer’s personal accounts — so Coop does not keep a standing copy of those tools."
   },
   {
     question: "Who connects GitHub and Slack?",
     answer:
-      "Org admins connect integrations once in the admin portal. Developers sign in to the extension and query that org context. They do not paste OAuth tokens in production."
+      "Org admins connect the company integrations once in the admin portal. Developers sign in to the extension and query that shared org context. They do not paste personal OAuth tokens in production."
   },
   {
     question: "What if graph or ticket context is missing?",

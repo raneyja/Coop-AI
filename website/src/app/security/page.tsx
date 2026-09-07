@@ -83,10 +83,11 @@ export default function SecurityPage() {
           </li>
         </ul>
         <p>
-          <strong>Queried live at chat time (not background-indexed):</strong> Slack threads, Jira
-          issues, Confluence pages, Notion docs, Google Docs, and Microsoft Teams messages. CoopAI
-          fetches integration content on demand when a workflow or chat command needs it: so ticket
-          and conversation data is not copied into a standing index.
+          <strong>Queried live at chat time (not background-indexed):</strong> company Slack threads,
+          Jira issues, Confluence pages, Notion docs, Google Docs, and Microsoft Teams messages —
+          from the admin-connected org workspace (shared across developers, not personal accounts).
+          CoopAI fetches integration content on demand when a workflow or chat command needs it, so
+          ticket and conversation data is not copied into a standing index.
         </p>
         <p>
           Slack webhook processing may extract decision keywords and repository references for graph

@@ -10,11 +10,11 @@ lastUpdated: "2026-09-03"
 
 ### What is CoopAI?
 
-CoopAI is a VS Code extension that connects your code graph, Slack, Jira, and docs so you can answer hard engineering questions and complete or edit code without cloning entire monorepos.
+CoopAI is a VS Code extension that connects your code graph to your **company** Slack, Jira, and docs — admin-connected for the org, not each developer’s personal accounts — so you can answer hard engineering questions and complete or edit code without cloning entire monorepos.
 
 ### How is CoopAI different from GitHub Copilot or Cursor?
 
-CoopAI focuses on **understanding existing codebases**: ownership, decision history, blast radius, knowledge gaps, plus Slack and tickets. Inline complete and edit stay in the open file. You review the diff, then you can [open a pull request](/docs/create-pull-request) from applied `/edit`s or from any editor change — from the patch card or by typing **Create a PR** in chat. Nothing rewrites the tree or creates a PR on its own.
+CoopAI focuses on **understanding existing codebases**: ownership, decision history, blast radius, knowledge gaps, plus company Slack and tickets. Inline complete and edit stay in the open file. You review the diff, then you can [open a pull request](/docs/create-pull-request) from applied `/edit`s or from any editor change — from the patch card or by typing **Create a PR** in chat. Nothing rewrites the tree or creates a PR on its own.
 
 Full side-by-side matrices: [Compare CoopAI](/docs/compare) — including [vs GitHub Copilot](/docs/compare-github-copilot), [vs Cursor](/docs/compare-cursor), [vs Claude Code](/docs/compare-claude-code), and [vs Sourcegraph Cody](/docs/compare-sourcegraph-cody).
 

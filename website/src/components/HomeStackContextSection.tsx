@@ -11,7 +11,7 @@ const WITHOUT = [
 const WITH_STACK = [
   { source: "Symbol graph", detail: "Dependents, callers, real types" },
   { source: "GitHub / GitLab", detail: "PRs, blame, the pattern that shipped" },
-  { source: "Slack & tickets", detail: "Live stack context in VS Code" },
+  { source: "Slack & tickets", detail: "Company workspace, shared in VS Code" },
   { source: "CODEOWNERS", detail: "Find the code owner before you merge" },
   { source: "Blast radius", detail: "What else breaks if this changes" }
 ] as const;
@@ -57,9 +57,10 @@ export function HomeStackContextSection({ tone = "light" }: HomeStackContextSect
             dark ? "text-white/55" : "text-gray-700"
           }`}
         >
-          The hard part isn&apos;t generating code. It&apos;s having Slack and Jira context in VS Code, the
-          same CODEOWNERS signal you use to find a code owner, and the blast radius of a change —
-          plus the last few PRs —{" "}
+          The hard part isn&apos;t generating code. It&apos;s having company Slack and Jira in VS Code —
+          shared org context your admin connected, not each person&apos;s private chat — plus the same
+          CODEOWNERS signal you use to find a code owner, and the blast radius of a change — plus the
+          last few PRs —{" "}
           <span className={`font-medium ${dark ? "text-white" : "text-gray-900"}`}>
             before they touch a line
           </span>
@@ -149,7 +150,7 @@ export function HomeStackContextSection({ tone = "light" }: HomeStackContextSect
         >
           <p className={`max-w-xl text-sm leading-relaxed ${dark ? "text-white/45" : "text-coop-muted"}`}>
             How it works is the loop: Deep-Index the code so you can understand the codebase without
-            cloning, query Slack and Jira live, then ask, complete, and edit in VS Code. Product
+            cloning, query company Slack and Jira live, then ask, complete, and edit in VS Code. Product
             walks through Ask, Change, and Indexed.
           </p>
           <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">

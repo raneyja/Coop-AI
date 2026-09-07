@@ -16,6 +16,11 @@ export const metadata: Metadata = buildPageMetadata(
 
 const hubCards = [
   {
+    title: "What is CoopAI?",
+    description: "Zero-clone Deep-Index, company Slack/Jira context, and reviewable edits in VS Code.",
+    href: "/docs/what-is-coopai"
+  },
+  {
     title: "Getting started",
     description: "Install the extension, sign in with email or Google, and run your first chat in five minutes.",
     href: "/docs/getting-started"
@@ -94,6 +99,11 @@ export default function DocsHubPage() {
               <div className="coop-panel mt-8 p-6">
                 <h2 className="text-base font-semibold text-gray-900">Quick links</h2>
                 <ul className="mt-4 space-y-2 text-sm">
+                  <li>
+                    <Link href="/docs/what-is-coopai" className={docsInlineLinkClassName}>
+                      What is CoopAI?
+                    </Link>
+                  </li>
                   <li>
                     <Link href="/how-it-works" className={docsInlineLinkClassName}>
                       How CoopAI works

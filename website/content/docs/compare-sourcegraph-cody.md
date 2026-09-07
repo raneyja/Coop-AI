@@ -12,7 +12,7 @@ Both care about understanding code. CoopAI’s wedge is **stack context next to 
 
 ## Where CoopAI stands apart
 
-- **Live collaboration tools** — Slack/Jira/Confluence/Notion/Docs/Teams at ask time, org-wide.
+- **Company collaboration tools** — Slack/Jira/Confluence/Notion/Docs/Teams at ask time, shared across the org.
 - **Decision and ownership workflows** — dedicated quick actions, not only “ask Cody.”
 - **Zero-clone product law** — remote index + on-demand file bodies; designed so Use-repo answers do not quietly fall back to a local disk clone of the wrong repo.
 - **Edit that stays reviewable** — complete and patch in the open file; nothing rewrites the tree alone.
@@ -25,10 +25,10 @@ Both care about understanding code. CoopAI’s wedge is **stack context next to 
 | Understand a codebase without cloning the monorepo | Deep-Index remote graph; no local monorepo required | Sourcegraph code graph / search index |
 | Find a code owner / CODEOWNERS | Find Owner + CODEOWNERS graph | Ask in chat; no Find Owner action |
 | Blast radius of a change | Blast Radius quick action | Search and callers; no Blast Radius action |
-| Slack and Jira context in VS Code | Live Slack & Jira at ask time | Optional OpenCtx providers; not the default loop |
-| Confluence / Notion / Google Docs next to code | Live Confluence, Notion, and Google Docs | Optional providers; not the default loop |
+| Company Slack and Jira in VS Code | Company workspace (admin-connected), live at ask time | Optional OpenCtx providers; not the default loop |
+| Company Confluence / Notion / Google Docs next to code | Company docs tools (admin-connected), live at ask time | Optional providers; not the default loop |
 | Inline complete + reviewable edit diffs | Inline complete + reviewable patches | Completions, chat, and edits |
-| Org-wide integrations (admin connects once) | Admin connects once for the whole org | Sourcegraph Enterprise admin |
+| Org-wide integrations (admin connects once) | Yes — shared company stack, not each developer’s personal accounts | Sourcegraph Enterprise admin |
 | Enterprise code search platform | Built into Coop indexing | Often paired with Sourcegraph Search |
 | Named workflows (Owner, Blast, Trace, Gaps) | Yes | Mostly freeform chat |
 
@@ -39,7 +39,7 @@ Choose Cody when your org is already standardized on **Sourcegraph** for search 
 
 ## When CoopAI is the better fit
 
-Choose CoopAI when you need **Slack and Jira context in VS Code**, ownership and blast-radius workflows, and zero-clone Deep-Index without adopting Sourcegraph as the center of gravity.
+Choose CoopAI when you need **Company Slack and Jira in VS Code**, ownership and blast-radius workflows, and zero-clone Deep-Index without adopting Sourcegraph as the center of gravity.
 
 ## Related
 

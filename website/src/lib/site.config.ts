@@ -3,27 +3,27 @@ export const siteConfig = {
   domain: "coop-ai.dev",
   url: "https://coop-ai.dev",
   description:
-    "CoopAI is code intelligence for VS Code. Understand production code with your repo graph, Slack, and tickets, then complete and edit the way your team already writes.",
+    "CoopAI is VS Code code intelligence. Understand production code with your repo graph and company Slack, Jira, and docs, then complete and edit the way your team already writes.",
   tagline: "From your stack, to your codebase.",
   subheadline:
-    "Slack threads, Jira tickets, and symbol graphs in every answer and every line you write.",
+    "Company Slack, Jira, and symbol graphs in every answer and every line you write — shared org context, not personal accounts.",
   contactEmail: "support@coop-ai.dev",
   privacyEmail: "privacy@coop-ai.dev",
   securityEmail: "security@coop-ai.dev",
   seo: {
     defaultDescription:
-      "CoopAI is a code intelligence agent for VS Code. Understand and write code, using context from your entire code stack.",
+      "CoopAI is VS Code code intelligence: Deep-Index repos without cloning, query company Slack and Jira live, then ask, complete, and edit with reviewable diffs.",
     ogImageAlt: "CoopAI: code intelligence for VS Code",
     pages: {
       product: {
         title: "Product | Code intelligence for VS Code",
         description:
-          "VS Code code intelligence: understand a codebase without cloning, find a code owner, check blast radius, and use Slack and Jira context in VS Code to complete or edit."
+          "VS Code code intelligence: understand a codebase without cloning, find a code owner, check blast radius, and use company Slack and Jira in VS Code to complete or edit."
       },
       howItWorks: {
         title: "How CoopAI works | Index, query, then ask in VS Code",
         description:
-          "How CoopAI Deep-Indexes repos so you can understand a codebase without cloning, queries Slack and Jira live, then lets you ask, complete, and edit in VS Code."
+          "How CoopAI Deep-Indexes repos so you can understand a codebase without cloning, queries company Slack and Jira live, then lets you ask, complete, and edit in VS Code."
       },
       enterprise: {
         title: "Enterprise | Secure code intelligence",
@@ -58,7 +58,7 @@ export const siteConfig = {
       integrations: {
         title: "Integrations | GitHub, Slack, Jira, and more",
         description:
-          "Connect CoopAI to GitHub, GitLab, Slack, Jira, Confluence, Notion, Google Docs, and Microsoft Teams so VS Code has Slack and ticket context next to your code graph."
+          "Connect CoopAI to GitHub, GitLab, Slack, Jira, Confluence, Notion, Google Docs, and Microsoft Teams once for the company so every developer gets shared stack context next to the code graph — not personal accounts."
       },
       privacy: {
         title: "Privacy Policy",
@@ -178,7 +178,7 @@ export const siteConfig = {
       {
         label: "Cross-tool context",
         description:
-          "Slack, Jira, and tickets sit next to the code graph, instead of living in someone's head."
+          "Company Slack, Jira, and tickets sit next to the code graph — shared org context, not personal accounts."
       },
       {
         label: "Secure by design",
