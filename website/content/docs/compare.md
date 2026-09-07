@@ -12,7 +12,7 @@ Most tools in this category optimize for generating code. CoopAI optimizes for *
 
 ## How to read the matrices
 
-Each matrix is written to show **where CoopAI differs**, not to claim competitors are empty products. Copilot and Cursor win on generation speed and agentic editing. Claude, ChatGPT, Grok, and Perplexity win as general chat / research tools. CoopAI wins when you need **zero-clone Deep-Index**, **Find Owner / Blast Radius / Trace Decision**, and **live Slack, Jira, and docs in VS Code**.
+Rows describe the job. Cells describe how each product handles it. Copilot and Cursor are strong at generating and editing code. ChatGPT, Claude, Grok, and Perplexity are strong at general Q&A. CoopAI is built for remote repo understanding, ownership and blast-radius workflows, and live Slack / Jira / docs inside VS Code.
 
 ## How to use these pages
 

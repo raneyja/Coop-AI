@@ -21,16 +21,16 @@ Generation matters — Coop completes and edits — but only after the graph and
 
 | Capability | CoopAI | Codex |
 | --- | --- | --- |
-| VS Code code intelligence in the editor you already use | Yes — VS Code extension | Coding agent / IDE coding features — generation-first, not Coop workflows |
-| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | No — not Coop Deep-Index / zero-clone remote graph |
-| Find a code owner / CODEOWNERS | Find Owner workflow + CODEOWNERS graph | No dedicated Find Owner / CODEOWNERS workflow |
-| Blast radius of a change | Blast Radius quick action | No dedicated Blast Radius workflow |
-| Slack and Jira context in VS Code | Live fetch at chat time (org-wide) | No — not live org Slack/Jira in VS Code |
-| Confluence / Notion / Google Docs next to code | Live Confluence / Notion / Google Docs when you ask | No — not live Confluence/Notion/Docs next to code |
-| Inline complete + reviewable edit diffs | Complete + reviewable patches in the open file | Yes — strong prompt-to-code / agent generation |
-| Org-wide integrations (admin connects once) | Yes — admin connects integrations once | OpenAI account / enterprise — not Coop admin portal |
-| Generation-first coding assistant | Context-first, then complete/edit | Generation-first |
-| Decision workflows (Owner / Blast / Trace / Gaps) | First-class | Not the product focus |
+| VS Code code intelligence in the editor you already use | VS Code extension | Coding agent / IDE coding features |
+| Understand a codebase without cloning the monorepo | Deep-Index remote graph; no local monorepo required | Local project or attached context |
+| Find a code owner / CODEOWNERS | Find Owner + CODEOWNERS graph | No ownership workflow |
+| Blast radius of a change | Blast Radius quick action | No impact workflow |
+| Slack and Jira context in VS Code | Live Slack & Jira at ask time | No Slack or Jira integration |
+| Confluence / Notion / Google Docs next to code | Live Confluence, Notion, and Google Docs | No Confluence, Notion, or Docs integration |
+| Inline complete + reviewable edit diffs | Inline complete + reviewable patches | Strong prompt-to-code generation |
+| Org-wide integrations (admin connects once) | Admin connects once for the whole org | OpenAI account / enterprise |
+| Primary bet | Context, then complete/edit | Generate code fast |
+| Owner / Blast / Trace / Gaps workflows | Yes | No |
 
 
 ## When Codex is a better fit

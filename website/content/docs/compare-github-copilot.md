@@ -23,16 +23,16 @@ Copilot optimizes for **generation speed**. CoopAI optimizes for **organizationa
 
 | Capability | CoopAI | GitHub Copilot |
 | --- | --- | --- |
-| VS Code code intelligence in the editor you already use | Yes — VS Code extension | Strong autocomplete & chat in VS Code |
-| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | No — usually the local workspace / open files |
-| Find a code owner / CODEOWNERS | Find Owner workflow + CODEOWNERS graph | No dedicated Find Owner workflow |
-| Blast radius of a change | Blast Radius quick action | No dedicated Blast Radius workflow |
-| Slack and Jira context in VS Code | Live fetch at chat time (org-wide) | No — not a first-class Slack/Jira product surface |
-| Confluence / Notion / Google Docs next to code | Live Confluence / Notion / Google Docs when you ask | No — not a first-class docs product surface |
-| Inline complete + reviewable edit diffs | Complete + reviewable patches in the open file | Yes — Copilot’s core strength |
-| Org-wide integrations (admin connects once) | Yes — admin connects integrations once | Per-user GitHub account — not Coop-style org Slack/Jira connect |
-| Trace why a decision shipped (PR + ticket + Slack) | Trace Decision + live tools | Manual paste / separate tabs |
-| Knowledge gaps across runbooks and code | Knowledge Gaps workflow | Ad hoc chat |
+| VS Code code intelligence in the editor you already use | VS Code extension | Yes — VS Code, JetBrains, and more |
+| Understand a codebase without cloning the monorepo | Deep-Index remote graph; no local monorepo required | Open files and workspace context |
+| Find a code owner / CODEOWNERS | Find Owner + CODEOWNERS graph | No built-in ownership workflow |
+| Blast radius of a change | Blast Radius quick action | No impact / dependents workflow |
+| Slack and Jira context in VS Code | Live Slack & Jira at ask time | No Slack or Jira integration |
+| Confluence / Notion / Google Docs next to code | Live Confluence, Notion, and Google Docs | No Confluence, Notion, or Docs integration |
+| Inline complete + reviewable edit diffs | Inline complete + reviewable patches | Strong autocomplete, chat, and edits |
+| Org-wide integrations (admin connects once) | Admin connects once for the whole org | GitHub org / Business / Enterprise seats |
+| Trace a decision across PRs, tickets, and Slack | Trace Decision | Paste context or leave the editor |
+| Surface missing runbooks and docs gaps | Knowledge Gaps | Ad hoc chat |
 
 
 ## When GitHub Copilot is a better fit

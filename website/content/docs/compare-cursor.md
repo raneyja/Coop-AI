@@ -21,16 +21,16 @@ Teams comparing them are usually choosing between **“change a lot of files fas
 
 | Capability | CoopAI | Cursor |
 | --- | --- | --- |
-| VS Code code intelligence in the editor you already use | Yes — VS Code extension | No — Cursor is its own IDE (VS Code fork) |
-| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | No — agent works on the local project / open workspace |
-| Find a code owner / CODEOWNERS | Find Owner workflow + CODEOWNERS graph | No dedicated Find Owner / CODEOWNERS workflow |
-| Blast radius of a change | Blast Radius quick action | No dedicated Blast Radius workflow |
-| Slack and Jira context in VS Code | Live fetch at chat time (org-wide) | No — not first-class org Slack/Jira in VS Code |
-| Confluence / Notion / Google Docs next to code | Live Confluence / Notion / Google Docs when you ask | No — not first-class live Confluence/Notion/Docs |
-| Inline complete + reviewable edit diffs | Complete + reviewable patches in the open file | Yes — strong agentic multi-file edits |
-| Org-wide integrations (admin connects once) | Yes — admin connects integrations once | Cursor account / team plans — not Coop admin portal for Slack/Jira |
-| Agentic multi-file rewrites as the default | Not the product promise — you review every diff | Core strength |
-| Stay in stock VS Code | Yes | No — switch to Cursor |
+| VS Code code intelligence in the editor you already use | VS Code extension | Separate IDE (VS Code fork) |
+| Understand a codebase without cloning the monorepo | Deep-Index remote graph; no local monorepo required | Indexes the project on disk |
+| Find a code owner / CODEOWNERS | Find Owner + CODEOWNERS graph | No built-in ownership workflow |
+| Blast radius of a change | Blast Radius quick action | No impact / dependents workflow |
+| Slack and Jira context in VS Code | Live Slack & Jira at ask time | No Slack or Jira integration |
+| Confluence / Notion / Google Docs next to code | Live Confluence, Notion, and Google Docs | No Confluence, Notion, or Docs integration |
+| Inline complete + reviewable edit diffs | Inline complete + reviewable patches | Excellent agentic multi-file edits |
+| Org-wide integrations (admin connects once) | Admin connects once for the whole org | Cursor Teams / Business plans |
+| Agent rewrites many files by default | You review every patch | Core strength |
+| Keep stock VS Code | Yes | No — migrate to Cursor |
 
 
 ## When Cursor is a better fit

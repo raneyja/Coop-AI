@@ -21,16 +21,16 @@ If an agent is a junior who types fast, CoopAI is the senior who already read th
 
 | Capability | CoopAI | Ampcode |
 | --- | --- | --- |
-| VS Code code intelligence in the editor you already use | Yes — VS Code extension | Agentic coding product — not Coop’s VS Code workflow set |
-| Understand a codebase without cloning the monorepo | Deep-Index / zero-clone remote graph | No — not Coop Deep-Index / zero-clone remote graph |
-| Find a code owner / CODEOWNERS | Find Owner workflow + CODEOWNERS graph | No dedicated Find Owner workflow |
-| Blast radius of a change | Blast Radius quick action | No dedicated Blast Radius workflow |
-| Slack and Jira context in VS Code | Live fetch at chat time (org-wide) | No — not live org Slack/Jira in VS Code |
-| Confluence / Notion / Google Docs next to code | Live Confluence / Notion / Google Docs when you ask | No — not live Confluence/Notion/Docs product surface |
-| Inline complete + reviewable edit diffs | Complete + reviewable patches in the open file | Yes — agent-led multi-step implementation |
-| Org-wide integrations (admin connects once) | Yes — admin connects integrations once | No Coop-style admin-connected Slack/Jira/repos |
-| Agentic multi-step coding as the headline | Context + workflows as the headline | Often the headline |
-| Human reviews every patch before apply | Yes — product law | Agent-led changes are the default bet |
+| VS Code code intelligence in the editor you already use | VS Code extension | Agentic coding product |
+| Understand a codebase without cloning the monorepo | Deep-Index remote graph; no local monorepo required | Local / agent workspace |
+| Find a code owner / CODEOWNERS | Find Owner + CODEOWNERS graph | No ownership workflow |
+| Blast radius of a change | Blast Radius quick action | No impact workflow |
+| Slack and Jira context in VS Code | Live Slack & Jira at ask time | No Slack or Jira integration |
+| Confluence / Notion / Google Docs next to code | Live Confluence, Notion, and Google Docs | No docs-tool integrations |
+| Inline complete + reviewable edit diffs | Inline complete + reviewable patches | Agent-led multi-step implementation |
+| Org-wide integrations (admin connects once) | Admin connects once for the whole org | Product account / team plans |
+| Headline experience | Ask, complete, review | Let the agent implement |
+| Human applies every patch | Yes | Agent-led by default |
 
 
 ## When Ampcode is a better fit
