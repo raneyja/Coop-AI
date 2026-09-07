@@ -18,12 +18,12 @@ export const siteConfig = {
       product: {
         title: "Product | Code intelligence for VS Code",
         description:
-          "See how CoopAI works in VS Code: understand repos, trace decisions, find owners, check blast radius, and complete or edit code using your stack."
+          "VS Code code intelligence: understand a codebase without cloning, find a code owner, check blast radius, and use Slack and Jira context in VS Code to complete or edit."
       },
       howItWorks: {
         title: "How CoopAI works | Index, query, then ask in VS Code",
         description:
-          "CoopAI Deep-Indexes your repos, queries Slack, Jira, and docs live, then lets you ask, complete, and edit in VS Code without cloning the monorepo."
+          "How CoopAI Deep-Indexes repos so you can understand a codebase without cloning, queries Slack and Jira live, then lets you ask, complete, and edit in VS Code."
       },
       enterprise: {
         title: "Enterprise | Secure code intelligence",
@@ -48,7 +48,7 @@ export const siteConfig = {
       docs: {
         title: "Documentation | Get started",
         description:
-          "Install CoopAI, connect integrations, use the admin portal, and read the API, security, and enterprise deployment guides."
+          "Install CoopAI, connect integrations, compare CoopAI to Copilot and Cursor, and read API, security, and enterprise guides."
       },
       demo: {
         title: "Book a demo | See CoopAI on your codebase",
@@ -58,7 +58,7 @@ export const siteConfig = {
       integrations: {
         title: "Integrations | GitHub, Slack, Jira, and more",
         description:
-          "Connect CoopAI to GitHub, GitLab, Slack, Jira, Notion, Google Docs, and Microsoft Teams so VS Code has the same context your team already uses."
+          "Connect CoopAI to GitHub, GitLab, Slack, Jira, Confluence, Notion, Google Docs, and Microsoft Teams so VS Code has Slack and ticket context next to your code graph."
       },
       privacy: {
         title: "Privacy Policy",

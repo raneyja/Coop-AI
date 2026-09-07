@@ -27,8 +27,13 @@ const hubCards = [
   },
   {
     title: "Integrations",
-    description: "GitHub, Slack, Jira, Notion, Google Docs, and more. Setup and scope.",
+    description: "GitHub, Slack, Jira, Confluence, Notion, Google Docs, and more. Setup and scope.",
     href: "/docs/connect-integrations"
+  },
+  {
+    title: "Compare CoopAI",
+    description: "Side-by-side matrices vs Copilot, Cursor, Claude Code, Cody, ChatGPT, and more.",
+    href: "/docs/compare"
   },
   {
     title: "API reference",
@@ -92,6 +97,11 @@ export default function DocsHubPage() {
                   <li>
                     <Link href="/how-it-works" className={docsInlineLinkClassName}>
                       How CoopAI works
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/docs/compare" className={docsInlineLinkClassName}>
+                      Compare CoopAI
                     </Link>
                   </li>
                   <li>

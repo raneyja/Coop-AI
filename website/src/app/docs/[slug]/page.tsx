@@ -79,8 +79,64 @@ const nextStepsBySlug: Record<string, { href: string; label: string }[]> = {
   ],
   troubleshooting: [{ href: "/docs/faq", label: "Frequently asked questions" }],
   faq: [
+    { href: "/docs/compare", label: "Compare CoopAI" },
     { href: "/how-it-works", label: "How CoopAI works" },
     { href: "/demo", label: "Contact support" }
+  ],
+  compare: [
+    { href: "/docs/compare-github-copilot", label: "CoopAI vs GitHub Copilot" },
+    { href: "/docs/compare-cursor", label: "CoopAI vs Cursor" },
+    { href: "/how-it-works", label: "How CoopAI works" }
+  ],
+  "compare-github-copilot": [
+    { href: "/docs/compare", label: "All comparisons" },
+    { href: "/docs/compare-cursor", label: "CoopAI vs Cursor" },
+    { href: "/how-it-works", label: "How CoopAI works" }
+  ],
+  "compare-cursor": [
+    { href: "/docs/compare", label: "All comparisons" },
+    { href: "/docs/compare-claude-code", label: "CoopAI vs Claude Code" },
+    { href: "/how-it-works", label: "How CoopAI works" }
+  ],
+  "compare-sourcegraph-cody": [
+    { href: "/docs/compare", label: "All comparisons" },
+    { href: "/docs/compare-sourcegraph-deep-search", label: "CoopAI vs Deep Search" }
+  ],
+  "compare-sourcegraph-deep-search": [
+    { href: "/docs/compare", label: "All comparisons" },
+    { href: "/docs/compare-sourcegraph-cody", label: "CoopAI vs Cody" }
+  ],
+  "compare-claude-code": [
+    { href: "/docs/compare", label: "All comparisons" },
+    { href: "/docs/compare-claude", label: "CoopAI vs Claude" }
+  ],
+  "compare-claude": [
+    { href: "/docs/compare", label: "All comparisons" },
+    { href: "/docs/compare-chatgpt", label: "CoopAI vs ChatGPT" }
+  ],
+  "compare-chatgpt": [
+    { href: "/docs/compare", label: "All comparisons" },
+    { href: "/docs/compare-codex", label: "CoopAI vs Codex" }
+  ],
+  "compare-codex": [
+    { href: "/docs/compare", label: "All comparisons" },
+    { href: "/docs/compare-augment", label: "CoopAI vs Augment" }
+  ],
+  "compare-augment": [
+    { href: "/docs/compare", label: "All comparisons" },
+    { href: "/docs/compare-ampcode", label: "CoopAI vs Ampcode" }
+  ],
+  "compare-ampcode": [
+    { href: "/docs/compare", label: "All comparisons" },
+    { href: "/docs/compare-perplexity", label: "CoopAI vs Perplexity" }
+  ],
+  "compare-perplexity": [
+    { href: "/docs/compare", label: "All comparisons" },
+    { href: "/docs/compare-grok", label: "CoopAI vs Grok" }
+  ],
+  "compare-grok": [
+    { href: "/docs/compare", label: "All comparisons" },
+    { href: "/how-it-works", label: "How CoopAI works" }
   ]
 };
 

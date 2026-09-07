@@ -29,11 +29,11 @@ const WRITE_PILLARS = [
 const INDEX_TRUST = [
   {
     title: "Remote knowledge graph",
-    body: "Index via webhooks and jobs: ownership, dependents, and decisions, without a full local clone."
+    body: "Understand a codebase without cloning: ownership, dependents, and decisions stay on Coop infrastructure — file bodies fetch from the code host when you need them."
   },
   {
     title: "Cross-tool context",
-    body: "Slack, Jira, PRs, and CODEOWNERS sit next to the symbol graph, not in someone's head."
+    body: "Slack and Jira context in VS Code sits next to PRs and CODEOWNERS — so you can find a code owner and see blast radius before you merge."
   },
   {
     title: "Honest when incomplete",
@@ -49,7 +49,7 @@ export function ProductAskScene() {
         <SectionHeading
           label="ask"
           title="Questions that used to take a Slack archaeology dig"
-          description="Architecture, owners, blast radius, and the ticket that explains why. One place, across the repo graph and the tools you already use."
+          description="Architecture, find a code owner, blast radius of a change, and the ticket that explains why — with Slack and Jira context in VS Code, across the repo graph."
         />
 
         <QuickActionPromptCarousel />
@@ -130,10 +130,11 @@ export function ProductIndexedScene() {
           <SectionHeading
             label="indexed"
             title="Cross-repo context without cloning the monorepo"
-            description="Lightning Mode indexes a knowledge graph across services so you get context without cloning the monorepo onto every laptop."
+            description="Lightning Mode Deep-Indexes a knowledge graph across services so you can understand the codebase without cloning the monorepo onto every laptop."
           />
           <p className="mt-6 text-sm leading-relaxed text-coop-muted">
-            Built for teams with interconnected services, where cloning everything isn't practical.
+            Built for teams with interconnected services — VS Code code intelligence where cloning
+            everything isn&apos;t practical, and blast radius spans more than one repo.
           </p>
           <p className="mt-4 font-mono text-xs text-gray-700">
             Free: up to 3 Deep-Indexed repos · Pro: unlimited

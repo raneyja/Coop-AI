@@ -16,6 +16,8 @@ CoopAI is a VS Code extension that connects your code graph, Slack, Jira, and do
 
 CoopAI focuses on **understanding existing codebases**: ownership, decision history, blast radius, knowledge gaps, plus Slack and tickets. Inline complete and edit stay in the open file. You review the diff, then you can [open a pull request](/docs/create-pull-request) from applied `/edit`s or from any editor change — from the patch card or by typing **Create a PR** in chat. Nothing rewrites the tree or creates a PR on its own.
 
+Full side-by-side matrices: [Compare CoopAI](/docs/compare) — including [vs GitHub Copilot](/docs/compare-github-copilot), [vs Cursor](/docs/compare-cursor), [vs Claude Code](/docs/compare-claude-code), and [vs Sourcegraph Cody](/docs/compare-sourcegraph-cody).
+
 ### Is my code used to train models?
 
 No. Your code and prompts are never used to train foundation models. See [Security architecture](/docs/security-architecture).

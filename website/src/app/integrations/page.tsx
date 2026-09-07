@@ -16,7 +16,7 @@ export const metadata: Metadata = buildPageMetadata(
 const integrationCards = [
   {
     name: "GitHub",
-    description: "Index repositories, PR history, CODEOWNERS, and commit context for graph-grounded answers.",
+    description: "Deep-Index repositories, PR history, CODEOWNERS, and commit context for graph-grounded answers.",
     href: "/docs/github"
   },
   {
@@ -26,32 +26,37 @@ const integrationCards = [
   },
   {
     name: "Bitbucket",
-    description: "Index Bitbucket repositories for cross-repo context without local monorepo clones.",
+    description: "Deep-Index Bitbucket repositories for cross-repo context without local monorepo clones.",
     href: "/docs/connect-integrations"
   },
   {
     name: "Slack",
-    description: "Pull thread context into Trace Decision and Knowledge Gaps, next to the code.",
+    description: "Pull live thread context into Trace Decision and Knowledge Gaps, next to the code graph in VS Code.",
     href: "/docs/slack"
   },
   {
     name: "Microsoft Teams",
-    description: "Channel message context for decision archaeology and knowledge gap detection.",
+    description: "Live channel message context for decision archaeology and knowledge gap detection.",
     href: "/docs/teams"
   },
   {
     name: "Jira",
-    description: "Link tickets to code paths for decision history and escalation workflows.",
+    description: "Link tickets to code paths for decision history and escalation workflows — queried when you ask.",
     href: "/docs/jira"
   },
   {
+    name: "Confluence",
+    description: "Fetch ADRs, runbooks, and wiki pages live when a question needs them — not copied into a second index.",
+    href: "/docs/connect-integrations"
+  },
+  {
     name: "Notion",
-    description: "Cross-reference internal documentation in CoopAI answers.",
+    description: "Cross-reference internal documentation in CoopAI answers at chat time.",
     href: "/docs/notion"
   },
   {
     name: "Google Docs",
-    description: "Include runbooks and architecture docs in graph-grounded responses.",
+    description: "Include runbooks and architecture docs in graph-grounded responses when you ask.",
     href: "/docs/google-docs"
   }
 ] as const;
@@ -63,7 +68,7 @@ export default function IntegrationsPage() {
         tight
         eyebrow="Integrations"
         title="Connect your entire stack"
-        description="CoopAI indexes code and collaboration tools once at the org. Every developer gets Slack, Jira, and repo context inside VS Code."
+        description="CoopAI Deep-Indexes your repositories and queries Slack, Jira, Confluence, and docs live when you ask. Every developer gets that stack context inside VS Code."
       />
 
       <section className="border-b border-coop-border py-12 md:py-14">

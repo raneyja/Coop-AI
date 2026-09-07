@@ -11,8 +11,9 @@ const WITHOUT = [
 const WITH_STACK = [
   { source: "Symbol graph", detail: "Dependents, callers, real types" },
   { source: "GitHub / GitLab", detail: "PRs, blame, the pattern that shipped" },
-  { source: "Slack & tickets", detail: "Why the decision was made" },
-  { source: "CODEOWNERS", detail: "Who to loop in before you merge" }
+  { source: "Slack & tickets", detail: "Live stack context in VS Code" },
+  { source: "CODEOWNERS", detail: "Find the code owner before you merge" },
+  { source: "Blast radius", detail: "What else breaks if this changes" }
 ] as const;
 
 type HomeStackContextSectionProps = {
@@ -39,7 +40,7 @@ export function HomeStackContextSection({ tone = "light" }: HomeStackContextSect
           tone={tone}
           label="the_gap"
           title="Your team doesn't need another coding agent"
-          description="They need AI that already knows the repo, the tickets, and the people who own the code."
+          description="They need VS Code code intelligence that already knows the repo, the tickets, and the people who own the code."
         />
 
         <p
@@ -48,15 +49,17 @@ export function HomeStackContextSection({ tone = "light" }: HomeStackContextSect
           }`}
         >
           Most copilots only see the file you have open. Agents will happily rewrite a tree they
-          don&apos;t understand. That&apos;s a demo, not how you ship production software.
+          don&apos;t understand. That&apos;s a demo, not how you ship production software — and it is not
+          how you understand a codebase without cloning the monorepo onto every laptop.
         </p>
         <p
           className={`mt-4 max-w-2xl text-base leading-relaxed md:text-lg ${
             dark ? "text-white/55" : "text-gray-700"
           }`}
         >
-          The hard part isn&apos;t generating code. It&apos;s having the same context a senior engineer would
-          pull from Slack, Jira, CODEOWNERS, and the last few PRs{" "}
+          The hard part isn&apos;t generating code. It&apos;s having Slack and Jira context in VS Code, the
+          same CODEOWNERS signal you use to find a code owner, and the blast radius of a change —
+          plus the last few PRs —{" "}
           <span className={`font-medium ${dark ? "text-white" : "text-gray-900"}`}>
             before they touch a line
           </span>
@@ -121,8 +124,9 @@ export function HomeStackContextSection({ tone = "light" }: HomeStackContextSect
               Know the stack. Stay in the file.
             </h3>
             <p className="relative mt-3 text-sm leading-relaxed text-white/65">
-              Ask, complete, and edit with the same graph your team already uses. No greenfield toy.
-              Nothing chewing through the tree on its own.
+              Ask, complete, and edit with the same graph your team already uses — VS Code code
+              intelligence that stays in the file. No greenfield toy. Nothing chewing through the
+              tree on its own.
             </p>
             <ul className="relative mt-8 space-y-4">
               {WITH_STACK.map((item) => (
@@ -144,8 +148,9 @@ export function HomeStackContextSection({ tone = "light" }: HomeStackContextSect
           }`}
         >
           <p className={`max-w-xl text-sm leading-relaxed ${dark ? "text-white/45" : "text-coop-muted"}`}>
-            How it works is the loop: index the code, query tools live, then ask, complete, and edit
-            in VS Code. Product walks through Ask, Change, and Indexed.
+            How it works is the loop: Deep-Index the code so you can understand the codebase without
+            cloning, query Slack and Jira live, then ask, complete, and edit in VS Code. Product
+            walks through Ask, Change, and Indexed.
           </p>
           <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
             <Link

@@ -24,7 +24,7 @@ export default function ProductPage() {
       <PageHeader
         eyebrow="Product"
         title="Context from your entire stack (not just your codebase)"
-        description="CoopAI indexes your codebase and the tools your team already uses, then uses that context in every answer and every line you write."
+        description="VS Code code intelligence that Deep-Indexes your repos, pulls Slack and Jira context when you ask, and helps you find owners, check blast radius, and edit — without cloning the monorepo."
       />
 
       <section className="border-b border-coop-border pb-16 pt-4 md:pb-20">

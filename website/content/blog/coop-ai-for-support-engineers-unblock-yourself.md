@@ -38,7 +38,7 @@ The examples below use a fictional payments platform (`api-gateway`, `billing-wo
 
 > When a customer enables async webhook indexing on our platform, does your runbook document how to monitor Postgres volume growth for the graph cache?
 
-Support teams live in documentation: runbooks, architecture guides, deployment references, and the internal wiki page that hasn't been updated since the last major release. CoopAI indexes connected Confluence spaces, Notion pages, and Google Docs alongside your repositories, so you can ask natural-language questions and get answers grounded in what your organization actually wrote.
+Support teams live in documentation: runbooks, architecture guides, deployment references, and the internal wiki page that hasn't been updated since the last major release. CoopAI queries connected Confluence spaces, Notion pages, and Google Docs live when you ask — next to your Deep-Indexed repositories — so you can ask natural-language questions and get answers grounded in what your organization actually wrote.
 
 That same workflow doubles as a **knowledge gap detector**. If CoopAI cannot find a credible answer to a core product question (graph cache persistence, index volume paths, or which services need a shared volume), that is often a signal the docs are hard to discover, outdated, or never written. Support teams feel those gaps first; CoopAI makes them visible before a customer hits them.
 

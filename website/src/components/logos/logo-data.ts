@@ -1,6 +1,7 @@
 import {
   AnthropicIcon,
   BitbucketIcon,
+  ConfluenceIcon,
   FireworksIcon,
   GitHubIcon,
   GitLabIcon,
@@ -27,7 +28,8 @@ export const INTEGRATION_LOGOS: BrandLogoItem[] = [
   { name: "Bitbucket", Icon: BitbucketIcon },
   { name: "Slack", Icon: SlackIcon },
   { name: "Teams", Icon: TeamsIcon },
+  { name: "Jira", Icon: JiraIcon },
+  { name: "Confluence", Icon: ConfluenceIcon },
   { name: "Notion", Icon: NotionIcon },
-  { name: "Google Docs", Icon: GoogleDocsIcon, colored: true },
-  { name: "Jira", Icon: JiraIcon }
+  { name: "Google Docs", Icon: GoogleDocsIcon, colored: true }
 ];
