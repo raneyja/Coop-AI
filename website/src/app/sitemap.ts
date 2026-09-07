@@ -35,7 +35,7 @@ const STATIC_LAST_MODIFIED: Partial<Record<(typeof STATIC_PATHS)[number], string
   "/product": "2026-09-07",
   "/how-it-works": "2026-09-07",
   "/enterprise": "2026-09-07",
-  "/integrations": "2026-07-06",
+  "/integrations": "2026-09-07",
   "/pricing": "2026-07-06",
   "/manual": "2026-08-21",
   "/docs": "2026-09-07",

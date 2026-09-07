@@ -53,3 +53,21 @@ These themes show up on every comparison page because they are the product:
 | **Org-wide connect** | Admins connect the company workspace once. Developers sign in and get that shared context — no personal OAuth paste. |
 
 For the product loop, see [How CoopAI works](/how-it-works). For plans, see [Pricing](/pricing).
+
+## FAQ
+
+### What is CoopAI?
+
+CoopAI is VS Code code intelligence: Deep-Index your repos (zero-clone), query company Slack, Jira, and docs live from an admin-connected workspace, then ask, complete, and edit with reviewable diffs.
+
+### Is CoopAI an autonomous coding agent?
+
+No. CoopAI stays in VS Code with reviewable patches. It does not rewrite the repository tree on its own. Agents like Cursor or Claude Code optimize for multi-step generation; CoopAI optimizes for understanding the stack first.
+
+### Does Coop use company Slack or personal Slack?
+
+Company Slack (and Jira, Teams, docs) — connected once by an org admin for the shared workspace. Developers sign in and get that org context, not each person’s personal accounts.
+
+### Where should I start comparing tools?
+
+Start at this hub, then open the page for the tool you already use — especially [vs GitHub Copilot](/docs/compare-github-copilot), [vs Cursor](/docs/compare-cursor), or [vs Claude Code](/docs/compare-claude-code).

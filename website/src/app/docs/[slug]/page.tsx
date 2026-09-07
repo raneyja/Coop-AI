@@ -9,10 +9,16 @@ import { buildPageMetadata } from "@/lib/pageMetadata";
 
 const nextStepsBySlug: Record<string, { href: string; label: string }[]> = {
   "getting-started": [
+    { href: "/docs/what-is-coopai", label: "What is CoopAI?" },
     { href: "/how-it-works", label: "How CoopAI works" },
     { href: "/docs/install-extension", label: "Install the VS Code extension" },
     { href: "/docs/extension-settings", label: "Extension settings reference" },
     { href: "/manual#quick-actions", label: "Quick actions in the Owner's Manual" }
+  ],
+  "what-is-coopai": [
+    { href: "/how-it-works", label: "How CoopAI works" },
+    { href: "/docs/compare", label: "Compare CoopAI" },
+    { href: "/docs/getting-started", label: "Getting started" }
   ],
   "install-extension": [
     { href: "/docs/extension-settings", label: "Configure extension settings" },
@@ -84,6 +90,7 @@ const nextStepsBySlug: Record<string, { href: string; label: string }[]> = {
     { href: "/demo", label: "Contact support" }
   ],
   compare: [
+    { href: "/docs/what-is-coopai", label: "What is CoopAI?" },
     { href: "/docs/compare-github-copilot", label: "CoopAI vs GitHub Copilot" },
     { href: "/docs/compare-cursor", label: "CoopAI vs Cursor" },
     { href: "/how-it-works", label: "How CoopAI works" }
@@ -169,7 +176,10 @@ export default async function DocsArticlePage({ params }: PageProps) {
   const sections = getDocsSections();
   const navPages = getDocNav();
   const { prev, next } = getAdjacentDocs(docSlug);
-  const faqPairs = docSlug === "faq" ? extractFaqPairs(doc.content) : [];
+  const faqPairs =
+    docSlug === "faq" || docSlug === "what-is-coopai" || docSlug === "compare"
+      ? extractFaqPairs(doc.content)
+      : [];
 
   return (
     <>

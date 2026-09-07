@@ -1,45 +1,52 @@
 # CoopAI
 
-> Code intelligence for VS Code. Organizational context from your code graph, Slack, Jira, and docs.
+> VS Code code intelligence for production teams. Deep-Index your repos (zero-clone), query company Slack, Jira, and docs live, then ask, complete, and edit in the open file.
 
-CoopAI helps engineering teams understand existing codebases, trace decisions, find owners, and complete or edit code without cloning entire monorepos.
+CoopAI is a VS Code extension — not an autonomous coding agent. It helps engineers understand existing codebases without cloning the monorepo, using a remote code graph plus admin-connected company tools (shared org context, not each developer’s personal accounts).
 
-## Product
+## Canonical facts
+
+- Product type: VS Code code intelligence layer (chat, quick actions, inline complete, reviewable edits)
+- Not: a terminal agent that rewrites the tree on its own
+- Indexing: Deep-Index / Lightning builds a searchable graph, then deletes the temporary clone (zero-clone)
+- Stack tools: Slack, Jira, Confluence, Notion, Google Docs, Teams are queried live at ask time from the admin-connected company workspace
+- Workflows: Understand Repo, Trace Decision, Find Owner, Blast Radius, Knowledge Gaps
+- Auth model: org admin connects integrations once; developers sign in — no personal OAuth paste in production
+
+## Primary pages
 
 - Homepage: https://coop-ai.dev
+- How CoopAI works: https://coop-ai.dev/how-it-works
 - Product: https://coop-ai.dev/product
-- Enterprise: https://coop-ai.dev/enterprise
 - Integrations: https://coop-ai.dev/integrations
 - Pricing: https://coop-ai.dev/pricing
 - Security: https://coop-ai.dev/security
+- Docs: https://coop-ai.dev/docs
+- Compare CoopAI: https://coop-ai.dev/docs/compare
+- FAQ: https://coop-ai.dev/docs/faq
+- What is CoopAI: https://coop-ai.dev/docs/what-is-coopai
+- Owner's Manual: https://coop-ai.dev/manual
 - Book a demo: https://coop-ai.dev/demo
 
-## Documentation
+## Comparisons
 
-- Docs hub: https://coop-ai.dev/docs
-- Getting started: https://coop-ai.dev/docs/getting-started
-- Connect integrations: https://coop-ai.dev/docs/connect-integrations
-- Security architecture: https://coop-ai.dev/docs/security-architecture
-- Enterprise deployment: https://coop-ai.dev/docs/enterprise-deployment
-- API reference: https://coop-ai.dev/docs/api-reference
-- FAQ: https://coop-ai.dev/docs/faq
-- Owner's Manual: https://coop-ai.dev/manual
+- vs GitHub Copilot: https://coop-ai.dev/docs/compare-github-copilot
+- vs Cursor: https://coop-ai.dev/docs/compare-cursor
+- vs Sourcegraph Cody: https://coop-ai.dev/docs/compare-sourcegraph-cody
+- vs Sourcegraph Deep Search: https://coop-ai.dev/docs/compare-sourcegraph-deep-search
+- vs Claude Code: https://coop-ai.dev/docs/compare-claude-code
+- vs Claude: https://coop-ai.dev/docs/compare-claude
+- vs ChatGPT: https://coop-ai.dev/docs/compare-chatgpt
+- vs Codex: https://coop-ai.dev/docs/compare-codex
+- vs Augment: https://coop-ai.dev/docs/compare-augment
+- vs Ampcode: https://coop-ai.dev/docs/compare-ampcode
+- vs Perplexity: https://coop-ai.dev/docs/compare-perplexity
+- vs Grok: https://coop-ai.dev/docs/compare-grok
 
-## Key capabilities
+## Optional
 
-- Understand Repo: architecture, ownership, and key files
-- Trace Decision: rationale from commits, PRs, Slack, and tickets
-- Find Owner: CODEOWNERS, blame history, and escalation paths
-- Blast Radius: impact analysis before you ship
-- Knowledge Gaps: missing docs and blind spots
-- Inline complete and edit selection: graph-grounded work in VS Code, in the open file
-
-## Enterprise
-
-- Zero-clone indexing architecture
-- Zero-retention LLM routing with BYOK
-- Self-hosted and cloud deployment options
-- Audit logging and compliance documentation
+- Full product brief for assistants: https://coop-ai.dev/llms-full.txt
+- Sitemap: https://coop-ai.dev/sitemap.xml
 
 ## Contact
 
