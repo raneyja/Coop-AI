@@ -63,6 +63,11 @@ export function Footer() {
                   Documentation
                 </Link>
               </li>
+              <li>
+                <Link href="/docs/compare" className={link}>
+                  Compare CoopAI
+                </Link>
+              </li>
             </ul>
           </div>
 

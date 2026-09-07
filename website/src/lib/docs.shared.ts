@@ -31,6 +31,7 @@ export const docsSections: { id: string; title: string }[] = [
   { id: "extension", title: "Extension" },
   { id: "admin", title: "Admin portal" },
   { id: "integrations", title: "Integrations" },
+  { id: "compare", title: "Compare" },
   { id: "plans", title: "Plans & billing" },
   { id: "api", title: "API reference" },
   { id: "enterprise", title: "Enterprise" },

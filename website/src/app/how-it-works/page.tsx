@@ -55,7 +55,7 @@ export default function HowItWorksPage() {
       <PageHeader
         eyebrow="how_it_works"
         title="Index the code. Query the stack. Stay in the file."
-        description="CoopAI maps your repositories once, pulls Slack and tickets when you ask, then lets you complete and edit in VS Code — without cloning the monorepo."
+        description="VS Code code intelligence that Deep-Indexes your repositories once, pulls Slack and Jira when you ask, then lets you find owners, check blast radius, complete, and edit — without cloning the monorepo."
       />
 
       <section className="border-b border-coop-border pb-16 md:pb-20">
