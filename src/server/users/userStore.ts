@@ -208,6 +208,49 @@ export class UserStore {
     return row ? rowToUser(row) : undefined;
   }
 
+  public async findOrgUserByEmail(orgId: string, email: string): Promise<UserRecord | undefined> {
+    const trimmed = email.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+    const result = await this.pool.query(
+      `SELECT ${USER_COLUMNS}
+       FROM users
+       WHERE org_id = $1 AND lower(email) = lower($2)
+       LIMIT 1`,
+      [orgId, trimmed]
+    );
+    const found = result.rows[0];
+    return found ? rowToUser(found) : undefined;
+  }
+
+  /**
+   * Re-open a cancelled invite (never joined). Joined people keep their named
+   * seat and cannot be invited as someone new.
+   */
+  public async reopenCancelledInvite(
+    userId: string,
+    role: UserRole,
+    usageTier: UsageTier
+  ): Promise<UserRecord | undefined> {
+    const updated = await this.pool.query(
+      `UPDATE users
+       SET deactivated_at = NULL, role = $2, usage_tier = $3
+       WHERE id = $1
+         AND last_login_at IS NULL
+         AND deactivated_at IS NOT NULL
+       RETURNING ${USER_COLUMNS}`,
+      [userId, role, usageTier]
+    );
+    const reopened = updated.rows[0];
+    if (!reopened) {
+      return undefined;
+    }
+    const user = rowToUser(reopened);
+    await this.ensureMembership(user.id, user.orgId, user.role);
+    return user;
+  }
+
   public async createUser(
     orgId: string,
     email: string,
@@ -239,15 +282,23 @@ export class UserStore {
   }
 
   /**
-   * Occupied named seats, including deactivated users. Empty purchased seats
-   * are purchased minus this count — not a pool to hand to someone else.
+   * Occupied named seats: pending invites hold a seat; after join the seat
+   * stays even if deactivated; deactivate before accept frees it.
+   * Missing usage_tier still counts (as Pro) so an invite cannot be ignored.
    */
   public async countOccupiedSeatsByTier(orgId: string): Promise<SeatInventory> {
     const result = await this.pool.query(
-      `SELECT usage_tier, COUNT(*)::int AS count
-       FROM users
-       WHERE org_id = $1 AND usage_tier IS NOT NULL
-       GROUP BY usage_tier`,
+      `SELECT COALESCE(u.usage_tier, 'pro') AS usage_tier, COUNT(*)::int AS count
+       FROM users u
+       WHERE u.org_id = $1
+         AND (
+           COALESCE(
+             u.last_login_at,
+             (SELECT MAX(s.last_active_at) FROM user_sessions s WHERE s.user_id = u.id)
+           ) IS NOT NULL
+           OR u.deactivated_at IS NULL
+         )
+       GROUP BY COALESCE(u.usage_tier, 'pro')`,
       [orgId]
     );
     const occupied = emptySeatInventory();

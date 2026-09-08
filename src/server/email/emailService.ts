@@ -214,7 +214,10 @@ export class EmailService {
 
     if (this.config.emailMock || !this.config.resendApiKey) {
       console.log(`[email:mock] to=${to} subject=${subject}`);
-      if (text) {
+      const link = text?.match(/https?:\/\/[^\s]+/)?.[0];
+      if (link) {
+        console.log(`[email:mock] link=${link}`);
+      } else if (text) {
         console.log(`[email:mock] text=${text.slice(0, 200)}`);
       }
       return;

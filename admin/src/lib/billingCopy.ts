@@ -154,7 +154,7 @@ export function usersSeatsPanelCopy(options: {
     },
     justYou: false,
     hint: options.atCapacity
-      ? "No unused seats left — add seats in Billing before inviting anyone else. Deactivated people still occupy their seats."
+      ? "No unused seats left — add seats in Billing first. People who have joined keep their seat if deactivated. Cancel an unused invite to free that seat."
       : `${options.seatsAvailable} unused ${options.seatsAvailable === 1 ? "seat" : "seats"} available to invite`
   };
 }

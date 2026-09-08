@@ -16,7 +16,9 @@ import { convertMemberUsageTier, mapStripeConvertError, SeatConvertError } from 
 import { SeatUpgradeRequestStore } from "./billing/seatUpgradeRequestStore";
 import { StripeService } from "./billing/stripeService";
 import { neverFilledSeats, displaySeatMix, isMixedSeatInventory, seatInventoryTotal } from "./billing/seatInventory";
+import { namedSeatStatus } from "./billing/seatOccupancy";
 import { parseUsageTier, displayUsageTierName, seatPricesUsd, type UsageTier } from "./usageTiers";
+import { resolveInviteTarget, isInviteUserConflictError } from "./users/inviteOrgUser";
 
 type ParsedRequest = {
   method: string;
@@ -124,7 +126,24 @@ export async function handleAdminUsersRequest(
         return true;
       }
     }
-    const user = await deps.userStore.createUser(auth.orgId, email, role, inviteTier);
+    let user;
+    try {
+      user = await resolveInviteTarget(deps.userStore, {
+        orgId: auth.orgId,
+        email,
+        role,
+        usageTier: inviteTier
+      });
+    } catch (error) {
+      if (isInviteUserConflictError(error)) {
+        writeJson(response, 409, { error: error.code, message: error.message });
+        return true;
+      }
+      throw error;
+    }
+    if (deps.authTokenStore) {
+      await deps.authTokenStore.revokeUnusedTokens(user.id, "user_invite");
+    }
     await audit(deps, auth, "admin.user.invite", { userId: user.id, email: user.email, role });
 
     const org = await deps.orgStore!.getOrganization(auth.orgId);
@@ -345,6 +364,9 @@ async function handlePatchUser(
   }
 
   if (body.active === false) {
+    if (deps.authTokenStore && !existing.lastLoginAt) {
+      await deps.authTokenStore.revokeUnusedTokens(userId, "user_invite");
+    }
     const deactivated = await deps.userStore.deactivateUser(userId);
     if (!deactivated && !existing.deactivatedAt) {
       writeJson(response, 404, { error: "user not found" });
@@ -376,6 +398,9 @@ async function handleDeleteUser(
     writeJson(response, 404, { error: "user not found" });
     return true;
   }
+  if (deps.authTokenStore && !existing.lastLoginAt) {
+    await deps.authTokenStore.revokeUnusedTokens(userId, "user_invite");
+  }
   await deps.userStore.deactivateUser(userId);
   await audit(deps, auth, "admin.user.deactivate", { userId });
   writeJson(response, 200, { ok: true, userId });
@@ -386,15 +411,19 @@ function toUserSummary(user: {
   id: string;
   email: string;
   role: string;
+  lastLoginAt?: Date;
   deactivatedAt?: Date;
   createdAt: Date;
   usageTier?: UsageTier | null;
 }) {
+  const status = namedSeatStatus(user);
   return {
     id: user.id,
     email: user.email,
     role: normalizeUserRole(user.role),
-    active: !user.deactivatedAt,
+    active: status !== "deactivated",
+    status,
+    lastLoginAt: user.lastLoginAt ?? null,
     createdAt: user.createdAt,
     usageTier: user.usageTier ?? null
   };

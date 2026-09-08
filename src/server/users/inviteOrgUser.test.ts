@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
-import { inviteOrgUser, isSeatLimitError } from "./inviteOrgUser";
+import {
+  inviteOrgUser,
+  isInviteUserConflictError,
+  isSeatLimitError,
+  resolveInviteTarget
+} from "./inviteOrgUser";
 import type { OrgStore } from "../orgStore";
-import type { UserStore } from "./userStore";
+import type { UserRecord, UserStore } from "./userStore";
 
 function billing(inventory: { pro: number; pro_plus: number; max: number }) {
   return {
@@ -23,6 +28,15 @@ function users(occupied: { pro: number; pro_plus: number; max: number }) {
   } as unknown as UserStore;
 }
 
+const cancelled: UserRecord = {
+  id: "user-1",
+  orgId: "org-1",
+  email: "bob@example.com",
+  role: "member",
+  createdAt: new Date("2026-01-01T00:00:00Z"),
+  deactivatedAt: new Date("2026-02-01T00:00:00Z")
+};
+
 void (async () => {
   const noMaxEmpty = await inviteOrgUser(
     { orgStore: billing({ pro: 10, pro_plus: 0, max: 0 }), userStore: users({ pro: 10, pro_plus: 0, max: 0 }) },
@@ -36,6 +50,37 @@ void (async () => {
     { orgId: "org-1", email: "bob@example.com", usageTier: "max" }
   ).catch((caught: unknown) => caught);
   assert.equal(isSeatLimitError(deactivatedStillOccupies), true);
+
+  const reopened = await resolveInviteTarget(
+    {
+      findOrgUserByEmail: async () => cancelled,
+      reopenCancelledInvite: async () => ({ ...cancelled, deactivatedAt: undefined, usageTier: "pro" as const }),
+      createUser: async () => {
+        throw new Error("createUser should not run for a cancelled invite");
+      }
+    } as unknown as UserStore,
+    { orgId: "org-1", email: "bob@example.com", role: "member", usageTier: "pro" }
+  );
+  assert.equal(reopened.deactivatedAt, undefined);
+  assert.equal(reopened.email, "bob@example.com");
+
+  const joinedConflict = await resolveInviteTarget(
+    {
+      findOrgUserByEmail: async () => ({
+        ...cancelled,
+        lastLoginAt: new Date("2026-01-15T00:00:00Z"),
+        deactivatedAt: undefined
+      }),
+      createUser: async () => {
+        throw new Error("createUser should not run");
+      }
+    } as unknown as UserStore,
+    { orgId: "org-1", email: "bob@example.com", role: "member", usageTier: "pro" }
+  ).catch((caught: unknown) => caught);
+  assert.equal(isInviteUserConflictError(joinedConflict), true);
+  if (isInviteUserConflictError(joinedConflict)) {
+    assert.equal(joinedConflict.code, "already_on_team");
+  }
 
   console.log("inviteOrgUser: 1/1 tests passed");
 })();

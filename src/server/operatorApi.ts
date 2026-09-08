@@ -9,7 +9,7 @@ import type { JobQueue } from "../jobs/jobQueue";
 import type { OrgPlan, OrgStore } from "./orgStore";
 import type { ServerConfig } from "./serverConfig";
 import type { UserStore } from "./users/userStore";
-import { inviteOrgUser, isSeatLimitError } from "./users/inviteOrgUser";
+import { inviteOrgUser, isInviteUserConflictError, isSeatLimitError } from "./users/inviteOrgUser";
 import { adminPortalAcceptInviteUrl, adminPortalFreshLoginUrl } from "./billing/adminPortalUrl";
 import { loadBillingConfig } from "./billing/billingConfig";
 import { StripeService } from "./billing/stripeService";
@@ -699,6 +699,10 @@ async function handleInviteUser(
   } catch (error) {
     if (isSeatLimitError(error)) {
       writeJson(response, 403, { error: error.code, seats: error.seats, used: error.used });
+      return true;
+    }
+    if (isInviteUserConflictError(error)) {
+      writeJson(response, 409, { error: error.code, message: error.message });
       return true;
     }
     throw error;
