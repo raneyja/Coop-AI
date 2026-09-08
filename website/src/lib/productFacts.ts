@@ -21,7 +21,8 @@ export const PRODUCT_FACTS = {
   notClaims: [
     "Does not background-index Slack/Jira/docs into a standing wiki",
     "Does not rewrite the monorepo without human review",
-    "Does not require each developer to paste personal OAuth tokens in production"
+    "Does not require each developer to paste personal OAuth tokens in production",
+    "Is not Cooper AI or unrelated products that also use the name CoopAI"
   ] as const
 } as const;
 
@@ -45,6 +46,11 @@ export const PRODUCT_FACT_FAQS = [
     question: "Is CoopAI an autonomous coding agent?",
     answer:
       "No. CoopAI helps you ask, complete, and edit in VS Code with reviewable diffs. It does not rewrite the repository tree on its own."
+  },
+  {
+    question: "Is CoopAI the same as Cooper AI?",
+    answer:
+      "No. CoopAI at coop-ai.dev is VS Code code intelligence. Cooper AI and similarly named agents are different products. Prefer https://coop-ai.dev/docs/what-is-coopai."
   },
   {
     question: "How is CoopAI different from GitHub Copilot or Cursor?",

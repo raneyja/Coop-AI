@@ -44,6 +44,8 @@ Choose CoopAI when you want **VS Code code intelligence** on indexed remotes: un
 ## Related
 
 - [Compare CoopAI hub](/docs/compare)
+- [What is CoopAI?](/docs/what-is-coopai)
+- [CoopAI vs Cursor (blog)](/blog/coopai-vs-cursor)
 - [How CoopAI works](/how-it-works)
 - [Integrations](/integrations)
 - [Pricing](/pricing)

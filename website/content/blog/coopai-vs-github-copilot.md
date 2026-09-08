@@ -43,3 +43,5 @@ Onboarding, support escalations, “why did we build it this way?”, and safe c
 - [How CoopAI works](/how-it-works)
 - [Compare all tools](/docs/compare)
 - [CoopAI vs Cursor](/blog/coopai-vs-cursor)
+- [CoopAI vs Claude Code](/blog/coopai-vs-claude-code)
+- [Best code intelligence tools](/blog/best-code-intelligence-tools)

@@ -46,6 +46,8 @@ Choose CoopAI when the expensive work is **context**, not keystrokes: onboarding
 ## Related
 
 - [Compare CoopAI hub](/docs/compare)
+- [What is CoopAI?](/docs/what-is-coopai)
+- [CoopAI vs GitHub Copilot (blog)](/blog/coopai-vs-github-copilot)
 - [How CoopAI works](/how-it-works)
 - [Integrations](/integrations)
 - [Pricing](/pricing)

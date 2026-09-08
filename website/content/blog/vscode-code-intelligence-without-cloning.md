@@ -49,7 +49,7 @@ If your bottleneck is “generate a large diff fast,” evaluate agentic IDEs. I
 
 ## Next steps
 
-1. Read [What is CoopAI?](/docs/what-is-coopai)
+1. Read [What is CoopAI?](/docs/what-is-coopai) (includes name disambiguation)
 2. Skim [How CoopAI works](/how-it-works)
-3. Compare your current tool at [docs/compare](/docs/compare)
+3. Compare your current tool at [docs/compare](/docs/compare) or the [2026 roundup](/blog/best-code-intelligence-tools)
 4. [Install the extension](/docs/install-extension) or [book a demo](/demo)

@@ -52,7 +52,14 @@ These themes show up on every comparison page because they are the product:
 | **Stay in the file** | Complete and edit with reviewable diffs. Coop does not rewrite the tree on its own. |
 | **Org-wide connect** | Admins connect the company workspace once. Developers sign in and get that shared context — no personal OAuth paste. |
 
-For the product loop, see [How CoopAI works](/how-it-works). For plans, see [Pricing](/pricing).
+For the product loop, see [How CoopAI works](/how-it-works). Short definition: [What is CoopAI?](/docs/what-is-coopai). For plans, see [Pricing](/pricing).
+
+Answer-shaped posts:
+
+- [CoopAI vs Cursor](/blog/coopai-vs-cursor)
+- [CoopAI vs GitHub Copilot](/blog/coopai-vs-github-copilot)
+- [CoopAI vs Claude Code](/blog/coopai-vs-claude-code)
+- [Best code intelligence tools](/blog/best-code-intelligence-tools)
 
 ## FAQ
 

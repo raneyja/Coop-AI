@@ -44,6 +44,8 @@ Choose CoopAI when the value is **knowing the stack in VS Code** — owners, tic
 ## Related
 
 - [Compare CoopAI hub](/docs/compare)
+- [What is CoopAI?](/docs/what-is-coopai)
+- [CoopAI vs Claude Code (blog)](/blog/coopai-vs-claude-code)
 - [How CoopAI works](/how-it-works)
 - [Integrations](/integrations)
 - [Pricing](/pricing)
