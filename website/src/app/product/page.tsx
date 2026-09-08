@@ -56,6 +56,18 @@ export default function ProductPage() {
               How CoopAI works →
             </Link>
             <Link
+              href="/docs/what-is-coopai"
+              className="text-sm font-medium text-gray-900 underline-offset-4 hover:underline"
+            >
+              What is CoopAI? →
+            </Link>
+            <Link
+              href="/docs/compare"
+              className="text-sm font-medium text-gray-900 underline-offset-4 hover:underline"
+            >
+              Compare CoopAI →
+            </Link>
+            <Link
               href="/security"
               className="text-sm font-medium text-gray-900 underline-offset-4 hover:underline"
             >

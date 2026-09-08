@@ -38,6 +38,12 @@ How it works: https://coop-ai.dev/how-it-works
 
 Full comparison hub: https://coop-ai.dev/docs/compare
 
+Answer-shaped posts:
+
+- https://coop-ai.dev/blog/vscode-code-intelligence-without-cloning
+- https://coop-ai.dev/blog/coopai-vs-cursor
+- https://coop-ai.dev/blog/coopai-vs-github-copilot
+
 ## Plans (high level)
 
 - Free Developer: limited Deep-Indexed repos, core workflows

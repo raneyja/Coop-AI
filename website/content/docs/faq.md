@@ -10,7 +10,7 @@ lastUpdated: "2026-09-03"
 
 ### What is CoopAI?
 
-CoopAI is a VS Code extension that connects your code graph to your **company** Slack, Jira, and docs — admin-connected for the org, not each developer’s personal accounts — so you can answer hard engineering questions and complete or edit code without cloning entire monorepos.
+CoopAI is a VS Code extension that connects your code graph to your **company** Slack, Jira, and docs — admin-connected for the org, not each developer’s personal accounts — so you can answer hard engineering questions and complete or edit code without cloning entire monorepos. See [What is CoopAI?](/docs/what-is-coopai).
 
 ### How is CoopAI different from GitHub Copilot or Cursor?
 
