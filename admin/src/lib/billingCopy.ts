@@ -73,7 +73,7 @@ function convertSeatDelta(fromUsd?: number, toUsd?: number): string {
 }
 
 export function convertSeatPreview(fromName: string, toName: string, fromUsd?: number, toUsd?: number): string {
-  return `Converts this person's seat from ${fromName} to ${toName}${convertSeatDelta(fromUsd, toUsd)}. Does not move the old plan to someone else.`;
+  return `Convert this person's seat from ${fromName} to ${toName}${convertSeatDelta(fromUsd, toUsd)}.`;
 }
 
 export function convertSeatModalCopy(options: {
@@ -88,7 +88,7 @@ export function convertSeatModalCopy(options: {
     : "this person's seat";
   return {
     title: "Convert this seat",
-    body: `Converts ${whose} from ${options.fromName} to ${options.toName}${convertSeatDelta(options.fromUsd, options.toUsd)}. Does not move the old plan to someone else.`,
+    body: `Convert ${whose} from ${options.fromName} to ${options.toName}${convertSeatDelta(options.fromUsd, options.toUsd)}.`,
     confirmLabel: "Convert",
     cancelLabel: "Cancel"
   };
