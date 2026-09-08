@@ -3,7 +3,7 @@ import { loadBillingConfig } from "../billing/billingConfig";
 import { EmailService } from "../email/emailService";
 import type { AuthTokenStore } from "../auth/authTokenStore";
 import type { OrgStore } from "../orgStore";
-import type { UserRole, UserStore } from "../users/userStore";
+import type { UserRecord, UserRole, UserStore } from "./userStore";
 import { neverFilledSeats, seatInventoryTotal } from "../billing/seatInventory";
 import { displayUsageTierName, parseUsageTier, type UsageTier } from "../usageTiers";
 
@@ -36,6 +36,66 @@ export type InviteOrgUserResult = {
 
 const USER_ROLES = new Set<UserRole>(["admin", "member"]);
 
+export class InviteUserConflictError extends Error {
+  public readonly code: "already_on_team" | "already_invited";
+
+  public constructor(code: InviteUserConflictError["code"], message: string) {
+    super(message);
+    this.name = "InviteUserConflictError";
+    this.code = code;
+  }
+}
+
+export function isInviteUserConflictError(error: unknown): error is InviteUserConflictError {
+  return error instanceof InviteUserConflictError;
+}
+
+function isUniqueOrgEmailError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /uq_users_org_email|duplicate key.*users/i.test(message);
+}
+
+/** Create a new invitee, or reopen a cancelled invite for the same email. */
+export async function resolveInviteTarget(
+  userStore: UserStore,
+  input: { orgId: string; email: string; role: UserRole; usageTier: UsageTier }
+): Promise<UserRecord> {
+  const existing = await userStore.findOrgUserByEmail(input.orgId, input.email);
+  if (!existing) {
+    try {
+      return await userStore.createUser(input.orgId, input.email, input.role, input.usageTier);
+    } catch (error) {
+      if (isUniqueOrgEmailError(error)) {
+        throw new InviteUserConflictError(
+          "already_on_team",
+          "This person already has a seat on this team."
+        );
+      }
+      throw error;
+    }
+  }
+  if (existing.lastLoginAt) {
+    throw new InviteUserConflictError(
+      "already_on_team",
+      "This person already has a seat on this team."
+    );
+  }
+  if (!existing.deactivatedAt) {
+    throw new InviteUserConflictError(
+      "already_invited",
+      "This person already has a pending invite."
+    );
+  }
+  const reopened = await userStore.reopenCancelledInvite(existing.id, input.role, input.usageTier);
+  if (!reopened) {
+    throw new InviteUserConflictError(
+      "already_on_team",
+      "This person already has a seat on this team."
+    );
+  }
+  return reopened;
+}
+
 export async function inviteOrgUser(
   deps: InviteOrgUserDeps,
   input: InviteOrgUserInput
@@ -67,7 +127,15 @@ export async function inviteOrgUser(
     throw error;
   }
 
-  const user = await deps.userStore.createUser(input.orgId, email, role, inviteTier);
+  const user = await resolveInviteTarget(deps.userStore, {
+    orgId: input.orgId,
+    email,
+    role,
+    usageTier: inviteTier
+  });
+  if (deps.authTokenStore) {
+    await deps.authTokenStore.revokeUnusedTokens(user.id, "user_invite");
+  }
   const org = await deps.orgStore.getOrganization(input.orgId);
   const orgName = org?.name ?? "your organization";
 

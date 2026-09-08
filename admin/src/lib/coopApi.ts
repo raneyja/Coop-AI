@@ -70,6 +70,7 @@ export type AdminUser = {
   role: string;
   status: "active" | "invited" | "deactivated";
   createdAt?: string;
+  lastLoginAt?: string;
   usageTier?: string | null;
 };
 
@@ -80,13 +81,14 @@ type BackendUser = {
   active?: boolean;
   status?: AdminUser["status"];
   createdAt?: string;
+  lastLoginAt?: string | null;
   usageTier?: string | null;
 };
 
 function normalizeUser(user: BackendUser): AdminUser {
   const status =
     user.status ??
-    (user.active === false ? "deactivated" : "active");
+    (user.active === false ? "deactivated" : user.lastLoginAt ? "active" : "invited");
   const role = user.role === "owner" ? "admin" : user.role;
   return {
     id: user.id,
@@ -94,6 +96,7 @@ function normalizeUser(user: BackendUser): AdminUser {
     role,
     status,
     createdAt: user.createdAt,
+    lastLoginAt: user.lastLoginAt ?? undefined,
     usageTier: user.usageTier ?? null
   };
 }
@@ -674,7 +677,7 @@ export type UsersListResponse = {
   users: AdminUser[];
   /** Purchased seats (Stripe/Coop). */
   seats: number;
-  /** Occupied named seats, including deactivated users. */
+  /** Occupied named seats: pending invites hold a seat; joined people keep it if deactivated. */
   seatsUsed: number;
   seatInventory?: SeatInventory;
   occupiedSeats?: SeatInventory;

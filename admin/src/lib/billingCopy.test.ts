@@ -92,6 +92,17 @@ assert.equal(teamSeats.assignedLine?.used, "3");
 assert.equal(teamSeats.assignedLine?.total, "8");
 assert.equal(teamSeats.hint, "5 unused seats available to invite");
 
+const teamFull = usersSeatsPanelCopy({
+  free: false,
+  solo: false,
+  seats: 2,
+  seatsUsed: 2,
+  seatsAvailable: 0,
+  atCapacity: true
+});
+assert.match(teamFull.hint, /Cancel an unused invite/);
+assert.match(teamFull.hint, /keep their seat if deactivated/);
+
 assert.deepEqual(usersBillingLink({ free: true, solo: true, atCapacity: true }), {
   label: "Upgrade for team seats →",
   emphasized: false

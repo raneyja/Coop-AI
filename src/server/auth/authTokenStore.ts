@@ -24,6 +24,14 @@ export class AuthTokenStore {
     return raw;
   }
 
+  public async revokeUnusedTokens(userId: string, purpose: AuthTokenPurpose): Promise<void> {
+    await this.pool.query(
+      `UPDATE auth_tokens SET used_at = NOW()
+       WHERE user_id = $1 AND purpose = $2 AND used_at IS NULL`,
+      [userId, purpose]
+    );
+  }
+
   public async peekToken(
     rawToken: string,
     purpose: AuthTokenPurpose

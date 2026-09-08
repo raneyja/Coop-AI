@@ -442,7 +442,7 @@ export default function UsersPage() {
                           onClick={() => handleDeactivate(user.id)}
                           disabled={actionId === user.id}
                         >
-                          Deactivate
+                          {user.status === "invited" ? "Cancel invite" : "Deactivate"}
                         </button>
                       ) : null}
                     </div>
