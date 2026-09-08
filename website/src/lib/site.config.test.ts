@@ -16,16 +16,20 @@ function test(name: string, fn: () => void): void {
   }
 }
 
-test("footer slogan names Coop as a code intelligence agent", () => {
-  assert.equal(
-    siteConfig.seo.defaultDescription,
-    "CoopAI is a code intelligence agent for VS Code. Understand and write code, using context from your entire code stack."
-  );
+test("footer blurb is human-readable code intelligence copy", () => {
+  assert.match(siteConfig.footerBlurb, /VS Code code intelligence/i);
+  assert.match(siteConfig.footerBlurb, /review/i);
+  assert.equal(siteConfig.footerBlurb.includes(": Deep-Index"), false);
+  assert.equal(siteConfig.footerBlurb.includes("query company Slack and Jira live"), false);
+});
+
+test("footer does not reuse the dense SEO meta string", () => {
+  assert.notEqual(siteConfig.footerBlurb, siteConfig.seo.defaultDescription);
 });
 
 test("footer slogan does not keep the old trace-and-owners line", () => {
-  assert.equal(siteConfig.seo.defaultDescription.includes("trace decisions"), false);
-  assert.equal(siteConfig.seo.defaultDescription.includes("find owners"), false);
+  assert.equal(siteConfig.footerBlurb.includes("trace decisions"), false);
+  assert.equal(siteConfig.footerBlurb.includes("find owners"), false);
 });
 
 console.log(`\nsite.config: ${passed} passed, ${failed} failed`);

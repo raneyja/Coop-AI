@@ -21,7 +21,7 @@ export function Footer() {
               <BrandMark size="sm" inverted={dark} />
             </Link>
             <p className={`mt-4 text-sm leading-relaxed ${dark ? "text-white/45" : "text-coop-muted"}`}>
-              {siteConfig.seo.defaultDescription}
+              {siteConfig.footerBlurb}
             </p>
           </div>
 

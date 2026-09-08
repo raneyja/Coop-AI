@@ -4,6 +4,9 @@ export const siteConfig = {
   url: "https://coop-ai.dev",
   description:
     "CoopAI is VS Code code intelligence. Understand production code with your repo graph and company Slack, Jira, and docs, then complete and edit the way your team already writes.",
+  /** Human-facing footer blurb — keep readable; dense SEO facts live in docs / llms.txt. */
+  footerBlurb:
+    "VS Code code intelligence for production teams — understand the repo and company stack, then write with diffs you review.",
   tagline: "From your stack, to your codebase.",
   subheadline:
     "Company Slack, Jira, and symbol graphs in every answer and every line you write — shared org context, not personal accounts.",
@@ -12,7 +15,7 @@ export const siteConfig = {
   securityEmail: "security@coop-ai.dev",
   seo: {
     defaultDescription:
-      "CoopAI is VS Code code intelligence: Deep-Index repos without cloning, query company Slack and Jira live, then ask, complete, and edit with reviewable diffs.",
+      "CoopAI is code intelligence for VS Code. Deep-Index repos without cloning, pull company Slack and Jira into the editor, and complete or edit with reviewable diffs.",
     ogImageAlt: "CoopAI: code intelligence for VS Code",
     pages: {
       product: {
