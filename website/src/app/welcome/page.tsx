@@ -7,7 +7,7 @@ import { WelcomeContent } from "./WelcomeContent";
 export const metadata: Metadata = buildPageMetadata(
   "/welcome",
   "Welcome",
-  "Your CoopAI organization is ready.",
+  "Check your email to activate your CoopAI account.",
   { robots: noIndexRobots }
 );
 
@@ -24,8 +24,8 @@ export default async function WelcomePage({ searchParams }: WelcomePageProps) {
     <>
       <PageHeader
         eyebrow="Checkout complete"
-        title="You're all set"
-        description="We emailed your admin portal link. Sign in with Google, or use Forgot password to set one."
+        title="Check your email"
+        description="Look for Activate your account. Set a password there."
         tight
       />
 

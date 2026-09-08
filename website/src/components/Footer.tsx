@@ -6,11 +6,31 @@ import { BrandMark } from "@/components/BrandMark";
 import { siteConfig } from "@/lib/site.config";
 
 export function Footer() {
-  const dark = usePathname() === "/";
+  const pathname = usePathname();
+  const dark = pathname === "/";
+  const quiet = pathname === "/welcome";
   const heading = dark ? "text-sm font-medium text-white" : "text-sm font-medium text-gray-900";
   const link = dark
     ? "text-sm text-white/50 hover:text-white"
     : "text-sm text-coop-muted hover:text-gray-900";
+
+  if (quiet) {
+    return (
+      <footer className="border-t border-coop-border/80 bg-transparent">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-10 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-coop-muted">© {new Date().getFullYear()} CoopAI. All rights reserved.</p>
+          <div className="flex gap-6">
+            <Link href="/privacy" className="text-sm text-coop-muted hover:text-gray-900">
+              Privacy Policy
+            </Link>
+            <Link href="/terms" className="text-sm text-coop-muted hover:text-gray-900">
+              Terms of Service
+            </Link>
+          </div>
+        </div>
+      </footer>
+    );
+  }
 
   return (
     <footer className={dark ? "border-t border-white/10 bg-neutral-950" : "border-t border-coop-border/80 bg-transparent"}>

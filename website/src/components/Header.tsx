@@ -13,6 +13,7 @@ export function Header() {
   const pathname = usePathname();
   const dark = pathname === "/";
   const wide = pathname === "/pricing";
+  const quiet = pathname === "/welcome";
   const shellClass = wide
     ? "mx-auto flex h-16 w-full max-w-[100rem] items-center justify-between px-4 sm:px-6 lg:px-10"
     : "mx-auto flex h-16 max-w-6xl items-center justify-between px-6";
@@ -32,59 +33,63 @@ export function Header() {
           <BrandMark inverted={dark} />
         </Link>
 
-        <nav className="hidden items-center gap-8 md:flex">
-          {siteConfig.nav.map((item) => (
+        {quiet ? null : (
+          <nav className="hidden items-center gap-8 md:flex">
+            {siteConfig.nav.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={
+                  dark
+                    ? "text-sm text-white/55 transition-colors hover:text-white"
+                    : "text-sm text-coop-muted transition-colors hover:text-gray-900"
+                }
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        )}
+
+        {quiet ? null : (
+          <div className="flex items-center gap-3">
             <Link
-              key={item.href}
-              href={item.href}
+              href="/demo"
               className={
                 dark
-                  ? "text-sm text-white/55 transition-colors hover:text-white"
-                  : "text-sm text-coop-muted transition-colors hover:text-gray-900"
+                  ? "hidden text-xs font-medium text-white/55 transition hover:text-white sm:inline-flex"
+                  : "hidden text-xs font-medium text-coop-muted transition hover:text-gray-900 sm:inline-flex"
               }
             >
-              {item.label}
+              Book a demo
             </Link>
-          ))}
-        </nav>
-
-        <div className="flex items-center gap-3">
-          <Link
-            href="/demo"
-            className={
-              dark
-                ? "hidden text-xs font-medium text-white/55 transition hover:text-white sm:inline-flex"
-                : "hidden text-xs font-medium text-coop-muted transition hover:text-gray-900 sm:inline-flex"
-            }
-          >
-            Book a demo
-          </Link>
-          <InstallExtensionButton
-            variant={dark ? "inverse" : "primary"}
-            size="sm"
-            className="hidden sm:inline-flex"
-          />
-          <button
-            type="button"
-            className={
-              dark
-                ? "inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/30 md:hidden"
-                : "inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-gray-900 transition hover:border-gray-300 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300 md:hidden"
-            }
-            aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
-            aria-controls="mobile-site-menu"
-            aria-expanded={isMobileMenuOpen}
-            onClick={() => setIsMobileMenuOpen((isOpen) => !isOpen)}
-          >
-            {isMobileMenuOpen ? (
-              <X className="h-5 w-5" aria-hidden="true" />
-            ) : (
-              <Menu className="h-5 w-5" aria-hidden="true" />
-            )}
-          </button>
-        </div>
+            <InstallExtensionButton
+              variant={dark ? "inverse" : "primary"}
+              size="sm"
+              className="hidden sm:inline-flex"
+            />
+            <button
+              type="button"
+              className={
+                dark
+                  ? "inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/30 md:hidden"
+                  : "inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-gray-900 transition hover:border-gray-300 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300 md:hidden"
+              }
+              aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+              aria-controls="mobile-site-menu"
+              aria-expanded={isMobileMenuOpen}
+              onClick={() => setIsMobileMenuOpen((isOpen) => !isOpen)}
+            >
+              {isMobileMenuOpen ? (
+                <X className="h-5 w-5" aria-hidden="true" />
+              ) : (
+                <Menu className="h-5 w-5" aria-hidden="true" />
+              )}
+            </button>
+          </div>
+        )}
       </div>
-      {isMobileMenuOpen ? (
+      {!quiet && isMobileMenuOpen ? (
         <div
           id="mobile-site-menu"
           className={
