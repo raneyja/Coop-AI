@@ -111,6 +111,7 @@ export async function handleChatApiRequest(
         undefined,
         {
           usageTier: org.usageTier,
+          userId: org.userId,
           selection: "auto",
           provider,
           model,
@@ -208,6 +209,7 @@ export async function handleChatApiRequest(
       undefined,
       {
         usageTier: org.usageTier,
+        userId: org.userId,
         selection,
         provider,
         model,
@@ -352,12 +354,17 @@ async function resolveChatOrg(
   const plan = (await resolveOrgPlanFromDb(deps.orgStore, auth)) ?? auth.plan;
   const actor = auditActor(auth);
   const stored = auth.orgId !== "legacy" ? await deps.orgStore?.getOrganization(auth.orgId) : undefined;
+  let usageTier = stored?.usageTier;
+  if (actor.userId && deps.userStore) {
+    const user = await deps.userStore.getUser(actor.userId);
+    usageTier = user?.usageTier ?? stored?.usageTier;
+  }
   return {
     orgId: auth.orgId,
     plan,
     userId: actor.userId,
     principal: actor.principal,
-    usageTier: stored?.usageTier,
+    usageTier,
     createdAt: stored?.createdAt
   };
 }

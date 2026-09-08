@@ -3,9 +3,11 @@ import {
   addSeatsCopy,
   billingAccountRow,
   billingPageSubtitle,
+  convertSeatPreview,
   isSoloSeatCount,
   newSeatTotalPreview,
   normalizeSeatCount,
+  seatMixLine,
   upgradeSeatCountNote,
   usersBillingLink,
   usersInviteDisabledTitle,
@@ -43,6 +45,7 @@ assert.equal(teamAdd.title, "Add seats");
 assert.equal(teamAdd.cta, "Add seats");
 assert.equal(teamAdd.showReduceNote, true);
 assert.match(teamAdd.body, /8 seats/);
+assert.match(teamAdd.body, /Unused seats/);
 
 assert.equal(newSeatTotalPreview(1, 1), "New total after confirm: 2 seats.");
 assert.equal(newSeatTotalPreview(8, 0), null);
@@ -60,6 +63,7 @@ assert.equal(
 assert.match(usersPageSubtitle({ free: true, solo: true }), /individual only/);
 assert.match(usersPageSubtitle({ free: false, solo: true }), /Just you/);
 assert.match(usersPageSubtitle({ free: false, solo: false }), /team members/);
+assert.match(usersPageSubtitle({ free: false, solo: false }), /stay with the person/);
 
 const soloSeats = usersSeatsPanelCopy({
   free: false,
@@ -85,7 +89,7 @@ const teamSeats = usersSeatsPanelCopy({
 assert.equal(teamSeats.justYou, false);
 assert.equal(teamSeats.assignedLine?.used, "3");
 assert.equal(teamSeats.assignedLine?.total, "8");
-assert.equal(teamSeats.hint, "5 available");
+assert.equal(teamSeats.hint, "5 unused seats available to invite");
 
 assert.deepEqual(usersBillingLink({ free: true, solo: true, atCapacity: true }), {
   label: "Upgrade for team seats →",
@@ -105,10 +109,15 @@ assert.deepEqual(usersBillingLink({ free: false, solo: false, atCapacity: false 
 });
 
 assert.match(usersInviteDisabledTitle(true), /Add a seat/);
-assert.match(usersInviteDisabledTitle(false), /All seats are assigned/);
+assert.match(usersInviteDisabledTitle(false), /named seats are occupied/);
 
 assert.match(usersRepoAccessHint({ solo: true, perUserAccess: false }), /Your Deep-Indexed repos/);
 assert.match(usersRepoAccessHint({ solo: false, perUserAccess: false }), /Every team member/);
 assert.match(usersRepoAccessHint({ solo: true, perUserAccess: true }), /Assign repos/);
+
+assert.equal(seatMixLine("Mixed (8 Pro · 2 Max)"), "Mixed (8 Pro · 2 Max)");
+assert.equal(seatMixLine("  "), null);
+assert.match(convertSeatPreview("Pro", "Max", 25, 100), /this person's seat/);
+assert.match(convertSeatPreview("Pro", "Max", 25, 100), /\+\$75/);
 
 console.log("billingCopy: 1/1 tests passed");

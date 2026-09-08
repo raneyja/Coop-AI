@@ -14,14 +14,23 @@ type InviteUserModalProps = {
   open: boolean;
   perUserAccess: boolean;
   indexedRepos: OrgRepoRecord[];
+  neverFilledSeats?: { pro: number; pro_plus: number; max: number };
+  defaultUsageTier?: string;
   onClose: () => void;
-  onInvite: (payload: { email: string; role: InviteRole; repoIds?: string[] }) => Promise<void>;
+  onInvite: (payload: {
+    email: string;
+    role: InviteRole;
+    repoIds?: string[];
+    usageTier?: "pro" | "pro_plus" | "max";
+  }) => Promise<void>;
 };
 
 export function InviteUserModal({
   open,
   perUserAccess,
   indexedRepos,
+  neverFilledSeats,
+  defaultUsageTier,
   onClose,
   onInvite
 }: InviteUserModalProps): React.ReactElement | null {
@@ -29,6 +38,7 @@ export function InviteUserModal({
   const [step, setStep] = useState<1 | 2>(1);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<InviteRole>("member");
+  const [usageTier, setUsageTier] = useState<"pro" | "pro_plus" | "max">("pro");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -60,6 +70,11 @@ export function InviteUserModal({
       setStep(1);
       setEmail("");
       setRole("member");
+      setUsageTier(
+        defaultUsageTier === "pro_plus" || defaultUsageTier === "max" || defaultUsageTier === "pro"
+          ? defaultUsageTier
+          : "pro"
+      );
       setSelected(new Set());
       setQuery("");
       setError(null);
@@ -135,7 +150,8 @@ export function InviteUserModal({
       await onInvite({
         email: trimmed,
         role,
-        repoIds: perUserAccess ? Array.from(selected) : undefined
+        repoIds: perUserAccess ? Array.from(selected) : undefined,
+        usageTier
       });
       onClose();
     } catch (err) {
@@ -217,6 +233,38 @@ export function InviteUserModal({
                 </select>
                 <p className="mt-1.5 text-xs text-coop-muted">
                   Admins can manage integrations, indexing, and team access. Members use assigned repos in VS Code.
+                </p>
+              </div>
+              <div>
+                <label htmlFor="invite-modal-tier" className="admin-label">
+                  Plan
+                </label>
+                <select
+                  id="invite-modal-tier"
+                  className="admin-input"
+                  value={usageTier}
+                  onChange={(event) => setUsageTier(event.target.value as "pro" | "pro_plus" | "max")}
+                  disabled={submitting}
+                >
+                  {(
+                    [
+                      ["pro", "Pro"],
+                      ["pro_plus", "Pro+"],
+                      ["max", "Max"]
+                    ] as const
+                  ).map(([value, label]) => {
+                    const empty = neverFilledSeats?.[value] ?? 1;
+                    return (
+                      <option key={value} value={value} disabled={empty < 1}>
+                        {label}
+                        {neverFilledSeats ? ` (${empty} unused)` : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+                <p className="mt-1.5 text-xs text-coop-muted">
+                  Uses an unused purchased seat of that plan. Convert an existing person from their row — don&apos;t
+                  take someone else&apos;s seat.
                 </p>
               </div>
             </div>

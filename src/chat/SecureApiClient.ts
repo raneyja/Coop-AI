@@ -303,6 +303,10 @@ export class SecureApiClient {
     await this.backend.completeOrgOnboarding(baseUrl);
   }
 
+  public async requestSeatUpgrade(baseUrl: string, usageTier: "pro_plus" | "max") {
+    return this.backend.requestSeatUpgrade(baseUrl, usageTier);
+  }
+
   public async fetchMeIntegrations(baseUrl: string) {
     return this.backend.fetchMeIntegrations(baseUrl);
   }
@@ -1025,6 +1029,7 @@ export async function readPreferences(
   let quotaCredits: UserPreferences["quotaCredits"];
   let usageMeters: UserPreferences["usageMeters"];
   let usageTier: UserPreferences["usageTier"];
+  let pendingSeatUpgrade: UserPreferences["pendingSeatUpgrade"];
   const me = await verifyStoredSession(api, base.apiBaseUrl);
   if (me) {
     orgName = me.orgName;
@@ -1045,7 +1050,7 @@ export async function readPreferences(
     quotaCredits = me.quota;
     usageMeters = me.usageMeters;
     usageTier = me.usageTier;
-    usageTier = me.usageTier;
+    pendingSeatUpgrade = me.pendingSeatUpgrade;
     try {
       const integrations = await api.fetchMeIntegrations(base.apiBaseUrl);
       orgIntegrationStatuses = normalizeOrgIntegrationStatuses(integrations.integrations ?? []);
@@ -1214,7 +1219,8 @@ export async function readPreferences(
     adminControlledRepos,
     quotaCredits,
     usageMeters,
-    usageTier
+    usageTier,
+    pendingSeatUpgrade
   };
 }
 

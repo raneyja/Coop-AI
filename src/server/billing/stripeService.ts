@@ -1,15 +1,23 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { BillingConfig } from "./billingConfig";
 import type { UsageTier } from "../usageTiers";
+import type { SubscriptionItemUpdate } from "./seatInventory";
+
+export type StripeSubscriptionItem = {
+  id: string;
+  quantity: number;
+  priceId?: string;
+};
 
 type StripeSession = { id: string; url: string | null };
 type StripePortal = { url: string };
-type StripeSubscription = {
+export type StripeSubscription = {
   id: string;
   status: string;
   quantity?: number;
   itemId?: string;
   priceId?: string;
+  items: StripeSubscriptionItem[];
 };
 
 export type StripeCheckoutSession = {
@@ -145,16 +153,56 @@ export class StripeService {
     if (!response.ok) {
       throw new Error(json.error?.message ?? `Stripe request failed (${response.status})`);
     }
-    const item = json.items?.data?.[0];
-    const price = item?.price;
-    const priceId = typeof price === "string" ? price : price?.id;
+    const items = (json.items?.data ?? [])
+      .map((item) => {
+        const price = item.price;
+        const priceId = typeof price === "string" ? price : price?.id;
+        return {
+          id: String(item.id ?? ""),
+          quantity: Math.max(0, Math.floor(Number(item.quantity ?? 0) || 0)),
+          priceId
+        };
+      })
+      .filter((item) => item.id);
+    const first = items[0];
+    const quantity = items.reduce((sum, item) => sum + item.quantity, 0);
     return {
       id: json.id,
       status: json.status,
-      quantity: item?.quantity ?? json.quantity,
-      itemId: item?.id,
-      priceId
+      quantity: quantity || first?.quantity || json.quantity,
+      itemId: first?.id,
+      priceId: first?.priceId,
+      items
     };
+  }
+
+  public async updateSubscriptionItems(
+    subscriptionId: string,
+    items: SubscriptionItemUpdate[]
+  ): Promise<StripeSubscription> {
+    if (!this.config.stripeSecretKey) {
+      throw new Error("STRIPE_SECRET_KEY is not configured");
+    }
+    if (items.length === 0) {
+      return this.retrieveSubscription(subscriptionId);
+    }
+    const params = new URLSearchParams();
+    params.set("proration_behavior", "create_prorations");
+    items.forEach((item, index) => {
+      if (item.id) {
+        params.set(`items[${index}][id]`, item.id);
+      }
+      if (item.priceId) {
+        params.set(`items[${index}][price]`, item.priceId);
+      }
+      if (item.deleted) {
+        params.set(`items[${index}][deleted]`, "true");
+      } else if (item.quantity != null) {
+        params.set(`items[${index}][quantity]`, String(Math.max(0, Math.floor(item.quantity))));
+      }
+    });
+    await this.postForm(`/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, params);
+    return this.retrieveSubscription(subscriptionId);
   }
 
   public verifyWebhookSignature(rawBody: string, signatureHeader: string | undefined): unknown {

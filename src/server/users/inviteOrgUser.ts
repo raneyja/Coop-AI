@@ -4,6 +4,8 @@ import { EmailService } from "../email/emailService";
 import type { AuthTokenStore } from "../auth/authTokenStore";
 import type { OrgStore } from "../orgStore";
 import type { UserRole, UserStore } from "../users/userStore";
+import { neverFilledSeats, seatInventoryTotal } from "../billing/seatInventory";
+import { displayUsageTierName, parseUsageTier, type UsageTier } from "../usageTiers";
 
 export type InviteOrgUserDeps = {
   orgStore: OrgStore;
@@ -17,6 +19,7 @@ export type InviteOrgUserInput = {
   role?: UserRole;
   invitedByEmail?: string;
   repoIds?: string[];
+  usageTier?: UsageTier;
 };
 
 export type InviteOrgUserResult = {
@@ -46,19 +49,25 @@ export async function inviteOrgUser(
     throw new Error("role must be admin or member");
   }
 
-  const users = await deps.userStore.listOrgUsers(input.orgId);
-  const activeUsers = users.filter((u) => !u.deactivatedAt).length;
   const billing = await deps.orgStore.getOrganizationBilling(input.orgId);
-  const seats = billing?.seatCount ?? 1;
-  if (activeUsers >= seats) {
+  const inviteTier =
+    parseUsageTier(input.usageTier) ?? parseUsageTier(billing?.usageTier) ?? "pro";
+  const occupied = await deps.userStore.countOccupiedSeatsByTier(input.orgId);
+  const purchased = billing?.seatInventory ?? occupied;
+  const neverFilled = neverFilledSeats(purchased, occupied);
+  if (neverFilled[inviteTier] < 1) {
     const error = new Error("seat_limit_reached");
-    (error as Error & { code: string; seats: number; used: number }).code = "seat_limit_reached";
-    (error as Error & { seats: number }).seats = seats;
-    (error as Error & { used: number }).used = activeUsers;
+    (error as Error & { code: string; seats: number; used: number; usageTier: UsageTier }).code =
+      "seat_limit_reached";
+    (error as Error & { seats: number }).seats = seatInventoryTotal(purchased);
+    (error as Error & { used: number }).used = seatInventoryTotal(occupied);
+    (error as Error & { usageTier: UsageTier }).usageTier = inviteTier;
+    (error as Error & { message: string }).message =
+      `No unused ${displayUsageTierName(inviteTier)} seat is available to invite into.`;
     throw error;
   }
 
-  const user = await deps.userStore.createUser(input.orgId, email, role);
+  const user = await deps.userStore.createUser(input.orgId, email, role, inviteTier);
   const org = await deps.orgStore.getOrganization(input.orgId);
   const orgName = org?.name ?? "your organization";
 

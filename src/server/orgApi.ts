@@ -65,6 +65,9 @@ import { queueOrgRepoIndex, reindexEmbeddingFailures } from "./queueOrgRepoIndex
 import type { UsageTracker } from "./usageTracker";
 import type { UserStore } from "./users/userStore";
 import { loadBillingConfig } from "./billing/billingConfig";
+import { EmailService } from "./email/emailService";
+import { SeatUpgradeRequestStore } from "./billing/seatUpgradeRequestStore";
+import { isUsageTierUpgrade, parseUsageTier } from "./usageTiers";
 import { resolveIntegrationScope } from "./resolveIntegrationScope";
 import type { IntegrationProvider } from "./integrationConnectionStore";
 import { handleMeAnalyticsRequest } from "./meAnalyticsApi";
@@ -223,13 +226,17 @@ export async function handleOrgApiRequest(
     const plan = (await resolveOrgPlanFromDb(deps.orgStore, auth!)) ?? auth!.plan;
     const planQuota = createPlanQuotaService(deps.usageTracker);
     const storedOrg = deps.orgStore ? await deps.orgStore.getOrganization(auth.orgId) : undefined;
+    const profileUser =
+      deps.userStore && auth.userId ? await deps.userStore.getUser(auth.userId) : undefined;
+    const usageTier = profileUser?.usageTier ?? storedOrg?.usageTier ?? (plan === "pro" ? "pro" : null);
     const quota = await planQuota.getSnapshot(auth.orgId, plan);
     const usageMeters = await planQuota.getUsageMeters(
       auth.orgId,
       plan,
-      storedOrg?.usageTier,
+      usageTier,
       new Date(),
-      storedOrg?.createdAt
+      storedOrg?.createdAt,
+      auth.userId
     );
     const indexedRepoQuota =
       deps.orgStore && auth.orgId !== "legacy"
@@ -253,8 +260,27 @@ export async function handleOrgApiRequest(
         // Non-fatal when workspace table is unavailable (pre-migration environments).
       }
     }
-    const profileUser =
-      deps.userStore && auth.userId ? await deps.userStore.getUser(auth.userId) : undefined;
+    let pendingSeatUpgrade:
+      | { id: string; fromTier: string; toTier: string; createdAt: string }
+      | undefined;
+    if (auth.userId) {
+      try {
+        const pool = await getDbPool();
+        if (pool) {
+          const pending = await new SeatUpgradeRequestStore(pool).getPendingForUser(auth.userId);
+          if (pending) {
+            pendingSeatUpgrade = {
+              id: pending.id,
+              fromTier: pending.fromTier,
+              toTier: pending.toTier,
+              createdAt: pending.createdAt.toISOString()
+            };
+          }
+        }
+      } catch {
+        pendingSeatUpgrade = undefined;
+      }
+    }
     writeJson(response, 200, {
       orgId: auth.orgId,
       orgName: auth.orgName,
@@ -284,7 +310,81 @@ export async function handleOrgApiRequest(
       primaryWorkspaceRepoId: workspaceRepoQuota?.primaryRepoId,
       quota,
       usageMeters,
-      usageTier: storedOrg?.usageTier ?? undefined
+      usageTier: usageTier ?? undefined,
+      pendingSeatUpgrade
+    });
+    return true;
+  }
+
+  if (parsed.method === "POST" && parsed.pathname === "/v1/me/seat-upgrade-request") {
+    if (!deps.userStore || !auth.userId) {
+      writeJson(response, 400, { error: "not_applicable", message: "Sign in to request a seat upgrade." });
+      return true;
+    }
+    const plan = (await resolveOrgPlanFromDb(deps.orgStore, auth)) ?? auth.plan;
+    if (plan === "free" || plan === "enterprise") {
+      writeJson(response, 400, {
+        error: "not_applicable",
+        message: "Seat upgrades apply to Pro, Pro+, and Max seats."
+      });
+      return true;
+    }
+    const body = asRecord(parsed.body);
+    const toTier = parseUsageTier(typeof body.usageTier === "string" ? body.usageTier : "");
+    if (!toTier) {
+      writeJson(response, 400, { error: "invalid_tier", message: "usageTier must be pro_plus or max." });
+      return true;
+    }
+    const storedOrg = deps.orgStore ? await deps.orgStore.getOrganization(auth.orgId) : undefined;
+    const profileUser = await deps.userStore.getUser(auth.userId);
+    const fromTier = parseUsageTier(profileUser?.usageTier) ?? parseUsageTier(storedOrg?.usageTier) ?? "pro";
+    if (!isUsageTierUpgrade(fromTier, toTier)) {
+      writeJson(response, 400, {
+        error: "not_an_upgrade",
+        message: "You can only request a higher plan for your own seat."
+      });
+      return true;
+    }
+    const pool = await getDbPool();
+    if (!pool) {
+      writeJson(response, 503, { error: "database not configured" });
+      return true;
+    }
+    const requestStore = new SeatUpgradeRequestStore(pool);
+    const request = await requestStore.createPending({
+      orgId: auth.orgId,
+      userId: auth.userId,
+      fromTier,
+      toTier
+    });
+    const billingConfig = loadBillingConfig();
+    const emailService = new EmailService(billingConfig);
+    const reviewUrl = `${billingConfig.adminPortalUrl.replace(/\/+$/, "")}/users`;
+    try {
+      const admins = (await deps.userStore.listOrgUsers(auth.orgId)).filter(
+        (user) => !user.deactivatedAt && (user.role === "admin" || user.role === "owner")
+      );
+      for (const admin of admins) {
+        await emailService.sendSeatUpgradeRequest({
+          to: admin.email,
+          orgName: auth.orgName,
+          memberEmail: auth.email ?? profileUser?.email ?? "",
+          fromTier,
+          toTier,
+          reviewUrl
+        });
+      }
+    } catch (error) {
+      console.warn("[seat-upgrade] admin email failed:", error);
+    }
+    writeJson(response, 200, {
+      request: {
+        id: request.id,
+        fromTier: request.fromTier,
+        toTier: request.toTier,
+        status: request.status,
+        createdAt: request.createdAt
+      }
     });
     return true;
   }

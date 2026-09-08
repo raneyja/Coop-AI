@@ -14,6 +14,15 @@ export const USAGE_TIER_LIMITS: Record<UsageTier, UsageTierLimits> = {
   max: { seatPriceUsd: 100, costCents: 6500 }
 };
 
+export function includedCentsForTier(tier: UsageTier): number {
+  return USAGE_TIER_LIMITS[tier].costCents;
+}
+
+export function isUsageTierUpgrade(from: UsageTier, to: UsageTier): boolean {
+  const rank: Record<UsageTier, number> = { pro: 0, pro_plus: 1, max: 2 };
+  return rank[to] > rank[from];
+}
+
 const USAGE_TIER_SET = new Set<UsageTier>(["pro", "pro_plus", "max"]);
 
 export function parseUsageTier(value: string | null | undefined): UsageTier | null {

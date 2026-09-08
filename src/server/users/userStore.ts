@@ -2,6 +2,9 @@ import { randomBytes } from "node:crypto";
 import type { Pool } from "pg";
 import { hashApiKey } from "../credentialCrypto";
 import type { OrgPlan } from "../orgStore";
+import { parseUsageTier, type UsageTier } from "../usageTiers";
+import type { SeatInventory } from "../billing/seatInventory";
+import { emptySeatInventory } from "../billing/seatInventory";
 
 export type UserRole = "admin" | "member";
 
@@ -27,6 +30,7 @@ export type UserRecord = {
   lastLoginAt?: Date;
   deactivatedAt?: Date;
   createdAt: Date;
+  usageTier?: UsageTier | null;
 };
 
 export type UserProfileUpdate = {
@@ -74,7 +78,7 @@ function generateSessionToken(): string {
 }
 
 const USER_COLUMNS =
-  "id, org_id, email, first_name, last_name, timezone, member_onboarding_completed_at, idp_subject, idp_provider, role, last_login_at, deactivated_at, created_at";
+  "id, org_id, email, first_name, last_name, timezone, member_onboarding_completed_at, idp_subject, idp_provider, role, last_login_at, deactivated_at, created_at, usage_tier";
 
 export class UserStore {
   public constructor(private readonly pool: Pool) {}
@@ -177,7 +181,7 @@ export class UserStore {
                 u.last_login_at,
                 (SELECT MAX(s.last_active_at) FROM user_sessions s WHERE s.user_id = u.id)
               ) AS last_login_at,
-              u.deactivated_at, u.created_at
+              u.deactivated_at, u.created_at, u.usage_tier
        FROM users u
        WHERE u.org_id = $1
        ORDER BY u.created_at ASC`,
@@ -204,16 +208,65 @@ export class UserStore {
     return row ? rowToUser(row) : undefined;
   }
 
-  public async createUser(orgId: string, email: string, role: UserRole = "member"): Promise<UserRecord> {
+  public async createUser(
+    orgId: string,
+    email: string,
+    role: UserRole = "member",
+    usageTier?: UsageTier | null
+  ): Promise<UserRecord> {
     const inserted = await this.pool.query(
-      `INSERT INTO users (org_id, email, role)
-       VALUES ($1, $2, $3)
-       RETURNING id, org_id, email, idp_subject, idp_provider, role, last_login_at, deactivated_at, created_at`,
-      [orgId, email.trim(), role]
+      `INSERT INTO users (org_id, email, role, usage_tier)
+       VALUES ($1, $2, $3, $4)
+       RETURNING ${USER_COLUMNS}`,
+      [orgId, email.trim(), role, usageTier ?? null]
     );
     const user = rowToUser(inserted.rows[0]);
     await this.ensureMembership(user.id, user.orgId, user.role);
     return user;
+  }
+
+  public async setUserUsageTier(
+    userId: string,
+    usageTier: UsageTier | null
+  ): Promise<UserRecord | undefined> {
+    const updated = await this.pool.query(
+      `UPDATE users SET usage_tier = $2 WHERE id = $1
+       RETURNING ${USER_COLUMNS}`,
+      [userId, usageTier]
+    );
+    const row = updated.rows[0];
+    return row ? rowToUser(row) : undefined;
+  }
+
+  /**
+   * Occupied named seats, including deactivated users. Empty purchased seats
+   * are purchased minus this count — not a pool to hand to someone else.
+   */
+  public async countOccupiedSeatsByTier(orgId: string): Promise<SeatInventory> {
+    const result = await this.pool.query(
+      `SELECT usage_tier, COUNT(*)::int AS count
+       FROM users
+       WHERE org_id = $1 AND usage_tier IS NOT NULL
+       GROUP BY usage_tier`,
+      [orgId]
+    );
+    const occupied = emptySeatInventory();
+    for (const row of result.rows) {
+      const tier = parseUsageTier(row.usage_tier != null ? String(row.usage_tier) : null);
+      if (tier) {
+        occupied[tier] += Number(row.count ?? 0);
+      }
+    }
+    return occupied;
+  }
+
+  public async backfillOrgUsersUsageTier(orgId: string, usageTier: UsageTier): Promise<number> {
+    const result = await this.pool.query(
+      `UPDATE users SET usage_tier = $2
+       WHERE org_id = $1 AND usage_tier IS NULL`,
+      [orgId, usageTier]
+    );
+    return result.rowCount ?? 0;
   }
 
   public async setUserRole(userId: string, role: UserRole): Promise<UserRecord | undefined> {
@@ -405,6 +458,7 @@ function rowToUser(row: Record<string, unknown>): UserRecord {
     role: String(row.role),
     lastLoginAt: row.last_login_at ? new Date(String(row.last_login_at)) : undefined,
     deactivatedAt: row.deactivated_at ? new Date(String(row.deactivated_at)) : undefined,
-    createdAt: new Date(String(row.created_at))
+    createdAt: new Date(String(row.created_at)),
+    usageTier: parseUsageTier(row.usage_tier != null ? String(row.usage_tier) : null)
   };
 }

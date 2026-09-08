@@ -3,7 +3,7 @@ title: Plans & billing
 description: Free, Pro, Pro+, Max, and Enterprise — seats, included usage, and upgrade paths.
 section: plans
 order: 1
-lastUpdated: "2026-09-04"
+lastUpdated: "2026-09-08"
 ---
 
 ## Plan comparison
@@ -28,7 +28,7 @@ lastUpdated: "2026-09-04"
 
 See current pricing at [coop-ai.dev/pricing](/pricing).
 
-Paid seats include a monthly usage bar. **Auto** (green) is Coop-assigned models. **Frontier** (blue) starts after Auto and is models you pick — those fill the bar faster. Together they are utilization. When the bar is full, requests stop until you upgrade — there is no on-demand spend. The bar shows a percent, not a second dollar price.
+Paid seats include a monthly usage bar **for that person**. **Auto** (green) is Coop-assigned models. **Frontier** (blue) starts after Auto and is models you pick — those fill the bar faster. Together they are utilization. When the bar is full, requests stop until you upgrade that seat — there is no on-demand spend. The bar shows a percent, not a second dollar price. Unused empty seats do not add usage to anyone else.
 
 Capability gates (team invites, Collections, Deep-Index) stay on the `pro` plan. Usage amounts come from the usage tier (Pro / Pro+ / Max).
 
@@ -49,7 +49,9 @@ Free includes the same tool connectivity and cloud indexing as Pro. Limits are t
 4. You already have admin portal access. Connect GitHub and integrations (same flow as free)
 5. If you bought seats for a team, invite people from the admin portal
 
-These plans are **seat-based**. An individual buys one seat. A team buys several at checkout, or adds seats later from Billing. Each paid seat includes the extension, unlimited Deep-Indexed repos, Collections, and monthly included usage. Hit the cap and you must upgrade — Coop does not sell extra usage on demand.
+These plans are **seat-based**. An individual buys one seat. A team buys several at checkout, or adds seats later from Billing. Each paid seat includes the extension, unlimited Deep-Indexed repos, Collections, and **that person's** monthly included usage. A teammate hitting their cap does not stop everyone else. Unused empty seats do not spill usage to anyone. Hit the cap and you must upgrade that seat — Coop does not sell extra usage on demand.
+
+Checkout is still **one plan × N**. After you start a team, an admin can convert a person's seat to Pro+ or Max (or confirm a member's request) without upgrading the whole team. Occupied seats stay with that person — deactivating someone does not free their seat for someone else.
 
 If you already have a free account, sign in and upgrade from **Admin portal → Billing**. Do not start a second checkout with the same email.
 
@@ -85,15 +87,17 @@ See also [Enterprise deployment](/docs/enterprise-deployment) and [Security arch
 **Admin portal → Billing** (paid):
 
 - View invoices and payment method via Stripe customer portal
-- 1-seat plans: add a teammate (buys another seat, then invite from Users). Teams: add seats
-- Upgrade plan (Pro → Pro+ → Max)
+- 1-seat plans: add a teammate (buys another seat, then invite from Users). Teams: add seats of a chosen plan
+- Mix Pro / Pro+ / Max after checkout: convert **that person's** seat from Users (or confirm their request)
+- Occupied seats are not transferable. Unused empty seats can be invited into later
+- Payment methods, invoices, and cancel stay in Stripe. After a mix exists, do not switch the whole subscription to one price in the portal
 
 ## Usage limits
 
 | Plan | What you see |
 | --- | --- |
 | **Free** | Rolling 5-hour Auto window in the extension and admin portal |
-| **Pro / Pro+ / Max** | One stacked bar — Auto (green) then Frontier (blue) — resetting monthly on the organization signup anniversary |
+| **Pro / Pro+ / Max** | That person's stacked bar — Auto (green) then Frontier (blue) — resetting monthly on the organization signup anniversary. Not a shared team pool. |
 | **Enterprise** | Custom contract; no hard stop in v1 |
 
 The bar shows a percent, not a second dollar amount. Frontier models fill it faster because they cost more to run.

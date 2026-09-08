@@ -167,6 +167,12 @@ export type MeResponse = {
   quota?: PlanQuotaCredits;
   usageMeters?: PaidUsageMeters;
   usageTier?: "pro" | "pro_plus" | "max" | null;
+  pendingSeatUpgrade?: {
+    id: string;
+    fromTier: string;
+    toTier: string;
+    createdAt?: string;
+  };
 };
 
 export type MeIntegrationsResponse = {
@@ -332,6 +338,33 @@ export class CoopBackendClient {
     if (response.status >= 400) {
       throw new Error(formatCoopApiError(response.status, response.data));
     }
+  }
+
+  public async requestSeatUpgrade(
+    baseUrl: string,
+    usageTier: "pro_plus" | "max"
+  ): Promise<{
+    request: { id: string; fromTier: string; toTier: string; status: string; createdAt?: string };
+  }> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.post<
+      { request: { id: string; fromTier: string; toTier: string; status: string; createdAt?: string } } & CoopApiErrorBody
+    >(
+      "/v1/me/seat-upgrade-request",
+      { usageTier },
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        headers: await this.authHeaders(),
+        validateStatus: () => true
+      }
+    );
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    if (!response.data?.request?.id) {
+      throw new Error("Upgrade request was not created.");
+    }
+    return { request: response.data.request };
   }
 
   public async fetchMeIntegrations(baseUrl: string): Promise<MeIntegrationsResponse> {

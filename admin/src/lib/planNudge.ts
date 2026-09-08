@@ -41,6 +41,7 @@ export function resolvePlanNudge(options: {
   plan: string | null | undefined;
   usageTier?: string | null;
   seats?: number | null;
+  mixedSeats?: boolean;
 }): PlanNudge | null {
   const plan = options.plan === "enterprise" || options.plan === "pro" ? options.plan : "free";
   const solo = options.seats != null && isSoloSeatCount(options.seats);
@@ -57,6 +58,9 @@ export function resolvePlanNudge(options: {
     };
   }
   const tier = parseUsageTier(options.usageTier) ?? "pro";
+  if (options.mixedSeats && tier !== "max") {
+    return null;
+  }
   if (tier === "pro") {
     return {
       title: "Upgrade to Pro+",

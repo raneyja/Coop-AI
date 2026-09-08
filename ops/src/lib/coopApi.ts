@@ -101,6 +101,9 @@ export type CustomerDetail = CustomerSummary & {
     seats?: number | null;
     status?: string;
     billingEmail?: string;
+    usageTier?: string | null;
+    seatMix?: string;
+    mixedSeats?: boolean;
   };
   health?: CustomerHealth;
 };
@@ -265,7 +268,10 @@ function normalizeCustomerDetail(raw: RawRecord): CustomerDetail {
       plan: summary.plan,
       seats: billing.seatCount != null ? Number(billing.seatCount) : summary.seats,
       status: String(billing.status ?? "none"),
-      billingEmail: billing.email ? String(billing.email) : summary.billingEmail
+      billingEmail: billing.email ? String(billing.email) : summary.billingEmail,
+      usageTier: billing.usageTier ? String(billing.usageTier) : undefined,
+      seatMix: billing.seatMix ? String(billing.seatMix) : undefined,
+      mixedSeats: Boolean(billing.mixedSeats)
     },
     stripe: stripeDrift.hasStripe
       ? {

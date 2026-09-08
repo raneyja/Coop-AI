@@ -182,7 +182,8 @@ export default function PricingPage() {
           <p className="mt-12 text-center text-sm text-coop-muted">
             Usage is included with your seat. Hit the cap and upgrade to continue — there is no on-demand
             spend. A team can buy Pro, Pro+, or Max: pick the plan, then choose{" "}
-            <span className="font-medium text-gray-900">Start a team</span> at checkout.{" "}
+            <span className="font-medium text-gray-900">Start a team</span> at checkout. Mix seats after you
+            start a team — most people can stay on Pro while a few use Pro+ or Max.{" "}
             <Link href="/login" className="font-medium text-gray-900 hover:underline">
               Already have an account? Sign in
             </Link>

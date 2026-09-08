@@ -18,6 +18,7 @@ import { PlanBadge } from "@/components/PlanBadge";
 import { IntegrationStatusList } from "@/components/IntegrationStatusList";
 import { UsageQuotaMeter } from "@/components/UsageQuotaMeter";
 import { UpgradeCTA } from "@/components/UpgradeCTA";
+import { seatMixLine } from "@/lib/billingCopy";
 import { resolvePlanNudge } from "@/lib/planNudge";
 
 export function AdminDashboard() {
@@ -26,6 +27,8 @@ export function AdminDashboard() {
   const { integrations, initialLoading, error: integrationsError } = useIntegrations({ poll: true });
   const [userCount, setUserCount] = useState<number | null>(null);
   const [seatCount, setSeatCount] = useState<number | null>(null);
+  const [mixLine, setMixLine] = useState<string | null>(null);
+  const [mixedSeats, setMixedSeats] = useState(false);
   const [quota, setQuota] = useState<QuotaSnapshot | undefined>();
   const [quotaLoading, setQuotaLoading] = useState(capabilities.showUsageQuota);
   const [usersLoading, setUsersLoading] = useState(true);
@@ -54,9 +57,13 @@ export function AdminDashboard() {
     if (usersResult.ok && usersResult.data?.users) {
       setUserCount(usersResult.data.users.length);
       setSeatCount(usersResult.data.seats ?? null);
+      setMixLine(seatMixLine(usersResult.data.seatMix));
+      setMixedSeats(Boolean(usersResult.data.mixedSeats));
     } else {
       setUserCount(null);
       setSeatCount(null);
+      setMixLine(null);
+      setMixedSeats(false);
       if (!usersResult.ok && !isOrgSuspendedResult(usersResult)) {
         setError(usersResult.error ?? "Failed to load users.");
       }
@@ -77,7 +84,12 @@ export function AdminDashboard() {
   const nudge =
     plan === "pro" && planLoading && !effectiveUsageTier
       ? null
-      : resolvePlanNudge({ plan, usageTier: effectiveUsageTier, seats: seatCount });
+      : resolvePlanNudge({
+          plan,
+          usageTier: effectiveUsageTier,
+          seats: seatCount,
+          mixedSeats
+        });
 
   async function handleUpgrade() {
     setUpgrading(true);
@@ -120,6 +132,7 @@ export function AdminDashboard() {
           <div className="mt-2">
             <PlanBadge plan={plan} usageTier={effectiveUsageTier} />
           </div>
+          {mixLine ? <p className="mt-1 text-xs text-coop-muted">{mixLine}</p> : null}
         </div>
         <AdminStat
           label="Connected integrations"
@@ -140,7 +153,12 @@ export function AdminDashboard() {
       </AdminStatRow>
 
       {capabilities.showUsageQuota ? (
-        <UsageQuotaMeter snapshot={quota} loading={quotaLoading} showUpgradeLink={false} />
+        <UsageQuotaMeter
+          snapshot={quota}
+          loading={quotaLoading}
+          showUpgradeLink={false}
+          mixLine={mixLine}
+        />
       ) : null}
 
       <section className="space-y-4">

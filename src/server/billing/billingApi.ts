@@ -19,6 +19,13 @@ import {
   usageTierFromStripePriceId,
   type UsageTier
 } from "../usageTiers";
+import {
+  addSeatsToInventory,
+  homogeneousUsageTier,
+  isMixedSeatInventory,
+  parseStripeItemsToInventory,
+  seatInventoryTotal
+} from "./seatInventory";
 import type { AuthIdentityStore } from "../auth/authIdentityStore";
 import type { AuthTokenStore } from "../auth/authTokenStore";
 import type { AuthConfig } from "../auth/authConfig";
@@ -459,6 +466,8 @@ async function handleSeatIncrease(
   const hasAddSeats = addSeatsRaw !== undefined && addSeatsRaw !== null && String(addSeatsRaw).trim() !== "";
   const hasAbsoluteSeats =
     absoluteSeatsRaw !== undefined && absoluteSeatsRaw !== null && String(absoluteSeatsRaw).trim() !== "";
+  const requestedTier =
+    parseUsageTier(typeof body.tier === "string" ? body.tier : "") ?? billing.usageTier ?? "pro";
 
   if (!hasAddSeats && !hasAbsoluteSeats) {
     writeJson(response, 400, {
@@ -479,7 +488,14 @@ async function handleSeatIncrease(
     return true;
   }
 
-  if (!subscription.itemId) {
+  const prices = stripeUsagePriceIds(billingConfig);
+  const items =
+    subscription.items?.length > 0
+      ? subscription.items
+      : subscription.itemId
+        ? [{ id: subscription.itemId, quantity: subscription.quantity ?? coopSeats, priceId: subscription.priceId }]
+        : [];
+  if (items.length === 0 || !items[0]?.id) {
     writeJson(response, 502, {
       error: "stripe_item_missing",
       message: "Stripe subscription has no line item to update."
@@ -487,13 +503,13 @@ async function handleSeatIncrease(
     return true;
   }
 
-  // Floor on BOTH Coop and Stripe so a lagged Coop seatCount cannot be used to
-  // "increase" to a value that is actually a Stripe decrease.
-  const stripeSeats = Math.max(1, Math.floor(Number(subscription.quantity ?? coopSeats) || coopSeats));
-  const currentSeats = Math.max(coopSeats, stripeSeats);
+  const purchased = parseStripeItemsToInventory(items, prices);
+  const purchasedTotal = Math.max(seatInventoryTotal(purchased), coopSeats);
+  const targetItem = items.find(
+    (item) => usageTierForStripePrice(item.priceId, billingConfig) === requestedTier
+  );
 
-  let requestedSeats: number;
-  let addedSeats: number | undefined;
+  let addedSeats: number;
   if (hasAddSeats) {
     addedSeats = Math.floor(Number(addSeatsRaw));
     if (!Number.isFinite(addedSeats) || addedSeats < 1) {
@@ -503,9 +519,8 @@ async function handleSeatIncrease(
       });
       return true;
     }
-    requestedSeats = currentSeats + addedSeats;
   } else {
-    requestedSeats = Math.floor(Number(absoluteSeatsRaw));
+    const requestedSeats = Math.floor(Number(absoluteSeatsRaw));
     if (!Number.isFinite(requestedSeats) || requestedSeats < 1) {
       writeJson(response, 400, {
         error: "invalid_seats",
@@ -513,51 +528,114 @@ async function handleSeatIncrease(
       });
       return true;
     }
-    if (requestedSeats <= currentSeats) {
+    if (requestedSeats <= purchasedTotal) {
       writeJson(response, 400, {
         error: "seats_not_increased",
-        message: `Requested seats (${requestedSeats}) must be greater than your current ${currentSeats}. To reduce seats, contact Coop support.`
+        message: `Requested seats (${requestedSeats}) must be greater than your current ${purchasedTotal}. To reduce seats, contact Coop support.`
       });
       return true;
     }
-    addedSeats = requestedSeats - currentSeats;
+    addedSeats = requestedSeats - purchasedTotal;
   }
 
-  // Heal Coop when Stripe is ahead so subsequent UI reads match.
-  if (stripeSeats > coopSeats) {
-    await deps.orgStore.updateOrganizationBilling(auth.orgId, { seatCount: stripeSeats });
-  }
+  const nextInventory = addSeatsToInventory(purchased, requestedTier, addedSeats);
+  const requestedSeats = seatInventoryTotal(nextInventory);
+  const currentSeats = purchasedTotal;
 
-  let portal;
-  try {
-    portal = await stripe.createBillingPortalSession(billing.stripeCustomerId, {
-      subscriptionId: subscription.id,
-      subscriptionItemId: subscription.itemId,
-      quantity: requestedSeats,
-      // Prefer the seats configuration (quantity edits enabled) so the confirm
-      // flow works even when the account default portal disables them.
-      configurationId: billingConfig.stripePortalConfigSeats
+  if (seatInventoryTotal(purchased) > coopSeats) {
+    await deps.orgStore.updateOrganizationBilling(auth.orgId, {
+      seatCount: seatInventoryTotal(purchased),
+      seatInventory: purchased
     });
-  } catch (error) {
-    const raw = error instanceof Error ? error.message : "";
-    const portalUpdateDisabled = /subscription update feature in the portal configuration is disabled/i.test(raw);
-    writeJson(response, 502, {
-      error: portalUpdateDisabled ? "stripe_portal_subscription_update_disabled" : "stripe_error",
-      message: portalUpdateDisabled
-        ? "Stripe Customer Portal has subscription updates disabled. Ask Coop to enable quantity updates on the seats portal configuration, then retry."
-        : raw || "Could not create Stripe seat-increase link."
+  }
+
+  const itemQuantity = targetItem?.quantity ?? 0;
+  const nextItemQuantity = itemQuantity + addedSeats;
+
+  if (targetItem?.id) {
+    let portal;
+    try {
+      portal = await stripe.createBillingPortalSession(billing.stripeCustomerId, {
+        subscriptionId: subscription.id,
+        subscriptionItemId: targetItem.id,
+        quantity: nextItemQuantity,
+        configurationId: billingConfig.stripePortalConfigSeats
+      });
+    } catch (error) {
+      const raw = error instanceof Error ? error.message : "";
+      const portalUpdateDisabled = /subscription update feature in the portal configuration is disabled/i.test(raw);
+      writeJson(response, 502, {
+        error: portalUpdateDisabled ? "stripe_portal_subscription_update_disabled" : "stripe_error",
+        message: portalUpdateDisabled
+          ? "Stripe Customer Portal has subscription updates disabled. Ask Coop to enable quantity updates on the seats portal configuration, then retry."
+          : raw || "Could not create Stripe seat-increase link."
+      });
+      return true;
+    }
+
+    await deps.auditLogger?.record({
+      orgId: auth.orgId,
+      action: "billing.seat_increase.link_created",
+      principal: auth.userId ? `user:${auth.userId}` : `apikey:${auth.apiKeyId}`,
+      metadata: {
+        fromSeats: currentSeats,
+        toSeats: requestedSeats,
+        addedSeats,
+        tier: requestedTier,
+        stripeSubscriptionId: subscription.id
+      }
+    });
+
+    writeJson(response, 200, {
+      url: portal.url,
+      currentSeats,
+      requestedSeats,
+      addedSeats,
+      tier: requestedTier
     });
     return true;
   }
 
+  const priceId = stripePriceIdForUsageTier(requestedTier, prices);
+  if (!priceId) {
+    writeJson(response, 400, {
+      error: "tier_not_configured",
+      message: `${displayPlanName(requestedTier)} is not configured for this server.`
+    });
+    return true;
+  }
+
+  try {
+    await stripe.updateSubscriptionItems(subscription.id, [
+      ...items.map((item) => ({ id: item.id, quantity: item.quantity })),
+      { priceId, quantity: addedSeats }
+    ]);
+  } catch (error) {
+    writeJson(response, 502, {
+      error: "stripe_error",
+      message: error instanceof Error ? error.message : "Could not add seats of that plan."
+    });
+    return true;
+  }
+
+  await deps.orgStore.updateOrganizationBilling(auth.orgId, {
+    seatCount: requestedSeats,
+    seatInventory: nextInventory
+  });
+
+  const portal = await stripe.createBillingPortalSession(billing.stripeCustomerId, {
+    configurationId: billingConfig.stripePortalConfigManage
+  });
+
   await deps.auditLogger?.record({
     orgId: auth.orgId,
-    action: "billing.seat_increase.link_created",
+    action: "billing.seat_increase.applied",
     principal: auth.userId ? `user:${auth.userId}` : `apikey:${auth.apiKeyId}`,
     metadata: {
       fromSeats: currentSeats,
       toSeats: requestedSeats,
       addedSeats,
+      tier: requestedTier,
       stripeSubscriptionId: subscription.id
     }
   });
@@ -566,7 +644,9 @@ async function handleSeatIncrease(
     url: portal.url,
     currentSeats,
     requestedSeats,
-    addedSeats
+    addedSeats,
+    tier: requestedTier,
+    applied: true
   });
   return true;
 }
@@ -683,9 +763,18 @@ async function handleSubscriptionChange(event: Record<string, unknown>, deps: Bi
   const org = customerId ? await deps.orgStore!.findOrganizationByStripeCustomerId(customerId) : undefined;
   if (!org) return;
 
-  const quantity = readSubscriptionQuantity(object);
-  const priceId = readStripePriceIdFromSubscription(object);
-  const usageTier = usageTierForStripePrice(priceId, loadBillingConfig());
+  const config = loadBillingConfig();
+  const items = readStripeSubscriptionItems(object);
+  const inventory = parseStripeItemsToInventory(items, stripeUsagePriceIds(config));
+  const quantity = Math.max(1, seatInventoryTotal(inventory) || readSubscriptionQuantity(object));
+  const mixed = isMixedSeatInventory(inventory);
+  const homogeneous = homogeneousUsageTier(inventory);
+  const usageTier = mixed
+    ? (org.usageTier ?? "pro")
+    : (homogeneous ?? usageTierForStripePrice(items[0]?.priceId, config));
+  const priceId = mixed
+    ? stripePriceIdForUsageTier(usageTier, stripeUsagePriceIds(config)) ?? items[0]?.priceId
+    : items[0]?.priceId ?? readStripePriceIdFromSubscription(object);
 
   if (status === "active" || status === "trialing") {
     await deps.orgStore!.setOrganizationPlan(org.id, "pro");
@@ -694,14 +783,16 @@ async function handleSubscriptionChange(event: Record<string, unknown>, deps: Bi
       stripeSubscriptionId: String(object.id ?? ""),
       seatCount: quantity,
       usageTier,
-      stripePriceId: priceId ?? null
+      stripePriceId: priceId ?? null,
+      seatInventory: inventory
     });
   } else if (status === "canceled" || status === "unpaid") {
     await deps.orgStore!.setOrganizationPlan(org.id, "free");
     await deps.orgStore!.updateOrganizationBilling(org.id, {
       billingStatus: status,
       usageTier: null,
-      stripePriceId: null
+      stripePriceId: null,
+      seatInventory: { pro: 0, pro_plus: 0, max: 0 }
     });
   }
 }
@@ -739,15 +830,41 @@ async function claimStripeWebhookEvent(
   }
 }
 
-function readSubscriptionQuantity(object: Record<string, unknown>): number {
+function readStripeSubscriptionItems(object: Record<string, unknown>): Array<{
+  id?: string;
+  quantity?: number;
+  priceId?: string;
+}> {
   const items = asRecord(object.items);
   const data = Array.isArray(items.data) ? items.data : [];
-  const first = data[0];
-  if (typeof first === "object" && first !== null) {
-    const qty = Number((first as Record<string, unknown>).quantity);
-    if (Number.isFinite(qty) && qty > 0) {
-      return Math.floor(qty);
+  return data.map((entry) => {
+    const row = asRecord(entry);
+    const price = row.price;
+    let priceId: string | undefined;
+    if (typeof price === "string" && price.trim()) {
+      priceId = price.trim();
+    } else if (typeof price === "object" && price !== null) {
+      const id = (price as Record<string, unknown>).id;
+      if (typeof id === "string" && id.trim()) {
+        priceId = id.trim();
+      }
     }
+    return {
+      id: typeof row.id === "string" ? row.id : undefined,
+      quantity: Number(row.quantity),
+      priceId
+    };
+  });
+}
+
+function readSubscriptionQuantity(object: Record<string, unknown>): number {
+  const items = readStripeSubscriptionItems(object);
+  const summed = items.reduce((total, item) => {
+    const qty = Number(item.quantity);
+    return total + (Number.isFinite(qty) && qty > 0 ? Math.floor(qty) : 0);
+  }, 0);
+  if (summed > 0) {
+    return summed;
   }
   const direct = Number(object.quantity);
   return Number.isFinite(direct) && direct > 0 ? Math.floor(direct) : 1;
@@ -790,23 +907,8 @@ export function stripeUsagePriceIds(config: BillingConfig): {
 }
 
 export function readStripePriceIdFromSubscription(object: Record<string, unknown>): string | undefined {
-  const items = asRecord(object.items);
-  const data = Array.isArray(items.data) ? items.data : [];
-  const first = data[0];
-  if (typeof first !== "object" || first === null) {
-    return undefined;
-  }
-  const price = (first as Record<string, unknown>).price;
-  if (typeof price === "string" && price.trim()) {
-    return price.trim();
-  }
-  if (typeof price === "object" && price !== null) {
-    const id = (price as Record<string, unknown>).id;
-    if (typeof id === "string" && id.trim()) {
-      return id.trim();
-    }
-  }
-  return undefined;
+  const items = readStripeSubscriptionItems(object);
+  return items[0]?.priceId;
 }
 
 /** Unknown / legacy prices map to Pro so existing subscriptions stay billed. */

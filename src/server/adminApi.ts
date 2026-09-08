@@ -104,13 +104,17 @@ export async function handleAdminApiRequest(
     const org = await deps.orgStore.getOrganization(auth.orgId);
     const plan = org?.plan ?? auth.plan;
     const planQuota = createPlanQuotaService(deps.usageTracker);
+    const profileUser =
+      deps.userStore && auth.userId ? await deps.userStore.getUser(auth.userId) : undefined;
+    const usageTier = profileUser?.usageTier ?? org?.usageTier ?? (plan === "pro" ? "pro" : null);
     const quota = await planQuota.getSnapshot(auth.orgId, plan);
     const usageMeters = await planQuota.getUsageMeters(
       auth.orgId,
       plan,
-      org?.usageTier,
+      usageTier,
       new Date(),
-      org?.createdAt
+      org?.createdAt,
+      auth.userId
     );
     if (plan === "enterprise") {
       writeJson(response, 200, { plan, unlimited: true, usageMeters: null });
@@ -118,7 +122,7 @@ export async function handleAdminApiRequest(
     }
     writeJson(response, 200, {
       plan,
-      usageTier: org?.usageTier ?? (plan === "pro" ? "pro" : null),
+      usageTier,
       unlimited: false,
       ...(quota ?? {}),
       quota,

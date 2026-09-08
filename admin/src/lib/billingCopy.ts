@@ -51,11 +51,22 @@ export function addSeatsCopy(options: {
   }
   return {
     title: "Add seats",
-    body: `You currently have ${currentSeats} seat${currentSeats === 1 ? "" : "s"}. Enter how many to add — you'll confirm and pay the prorated amount in Stripe.`,
+    body: `You currently have ${currentSeats} seat${currentSeats === 1 ? "" : "s"}. Pick a plan and how many to add — you'll confirm and pay the prorated amount in Stripe. Unused seats stay available to invite later.`,
     inputLabel: "Seats to add",
     cta: "Add seats",
     showReduceNote: true
   };
+}
+
+export function seatMixLine(mix?: string | null): string | null {
+  const value = mix?.trim();
+  return value ? value : null;
+}
+
+export function convertSeatPreview(fromName: string, toName: string, fromUsd: number, toUsd: number): string {
+  const delta = toUsd - fromUsd;
+  const signed = delta >= 0 ? `+$${delta}` : `-$${Math.abs(delta)}`;
+  return `Converts this person's seat from ${fromName} to ${toName} (${signed}/mo, prorated in Stripe). Does not move the old plan to someone else.`;
 }
 
 export function newSeatTotalPreview(currentSeats: number, addCount: number): string | null {
@@ -79,7 +90,7 @@ export function usersPageSubtitle(options: { free: boolean; solo: boolean }): st
   if (options.solo) {
     return "Just you for now. Add a teammate from Billing when you're ready.";
   }
-  return "Manage team members, roles, and access.";
+  return "Manage team members, each person's plan, and access. Seats stay with the person.";
 }
 
 export type UsersSeatsPanelCopy = {
@@ -114,12 +125,12 @@ export function usersSeatsPanelCopy(options: {
       used: String(options.seatsUsed),
       of: " of ",
       total: String(seats),
-      suffix: " assigned"
+      suffix: " occupied"
     },
     justYou: false,
     hint: options.atCapacity
-      ? "No seats left — add seats in Billing before inviting anyone else."
-      : `${options.seatsAvailable} available`
+      ? "No unused seats left — add seats in Billing before inviting anyone else. Deactivated people still occupy their seats."
+      : `${options.seatsAvailable} unused ${options.seatsAvailable === 1 ? "seat" : "seats"} available to invite`
   };
 }
 
@@ -148,7 +159,7 @@ export function usersBillingLink(options: {
 export function usersInviteDisabledTitle(solo: boolean): string {
   return solo
     ? "Add a seat in Billing before inviting a teammate."
-    : "All seats are assigned — add seats in Billing first.";
+    : "All named seats are occupied — add seats in Billing first.";
 }
 
 export function usersRepoAccessHint(options: { solo: boolean; perUserAccess: boolean }): string {

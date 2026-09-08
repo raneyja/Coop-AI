@@ -2226,6 +2226,9 @@ export class CoopChatSession {
       case "settings:complete-onboarding":
         await this.handleCompleteOnboarding();
         return;
+      case "settings:request-seat-upgrade":
+        await this.handleRequestSeatUpgrade(message.payload.usageTier);
+        return;
       case "settings:install-github-app":
         await this.handleInstallGithubApp();
         return;
@@ -5191,6 +5194,19 @@ export class CoopChatSession {
     } catch (error) {
       // Banner already hid permanently in the webview; surface a soft warning only.
       const message = error instanceof Error ? error.message : "Could not mark org setup complete.";
+      void vscode.window.showWarningMessage(message);
+    }
+  }
+
+  private async handleRequestSeatUpgrade(usageTier: "pro_plus" | "max"): Promise<void> {
+    try {
+      await this.options.api.requestSeatUpgrade(this.preferences.apiBaseUrl, usageTier);
+      await this.refreshAllSessionsPreferences();
+      void vscode.window.showInformationMessage(
+        "Upgrade request sent. An admin will confirm before the company is charged."
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not send upgrade request.";
       void vscode.window.showWarningMessage(message);
     }
   }

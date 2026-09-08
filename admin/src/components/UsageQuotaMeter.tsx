@@ -18,6 +18,7 @@ type UsageQuotaMeterProps = {
   snapshot?: QuotaSnapshot;
   loading?: boolean;
   showUpgradeLink?: boolean;
+  mixLine?: string | null;
 };
 
 function stackedPercents(autoRatio: number, frontierRatio: number): { auto: number; frontier: number } {
@@ -77,7 +78,7 @@ function FreeUsageMeter({
   );
 }
 
-export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: UsageQuotaMeterProps) {
+export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true, mixLine }: UsageQuotaMeterProps) {
   const meters = snapshot?.usageMeters;
   const paidResetLabel = formatPaidUsageResetCopy(meters?.periodEnd);
   const unlimited = Boolean(snapshot?.unlimited);
@@ -98,9 +99,10 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: U
           <h2 className="admin-section-label">Usage quota</h2>
           <p className="mt-1 text-sm text-coop-muted">
             {isPaidMeters
-              ? `${meters?.displayName ?? "Pro"} includes monthly usage that resets on your signup anniversary.`
+              ? `${meters?.displayName ?? "Pro"} includes monthly usage that resets on your signup anniversary. This bar is your seat, not a shared team pool.`
               : `Free includes ${freeCredits?.limitCredits ?? 80}K AI credits per ${windowHours}-hour window.`}
           </p>
+          {mixLine ? <p className="mt-1 text-xs text-coop-muted">{mixLine}</p> : null}
         </div>
         {showUpgradeLink ? (
           <Link href="/billing" className="admin-link text-sm">
@@ -149,7 +151,8 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true }: U
             </span>
           </div>
           <p className="text-xs text-coop-muted">
-            Chat, quick actions, and models you pick share one bar. Frontier models fill it faster.
+            This is your seat. Chat, quick actions, and models you pick share this bar. Frontier models fill it
+            faster.
           </p>
           {paidResetLabel ? <p className="text-xs text-coop-muted">{paidResetLabel}</p> : null}
         </div>

@@ -15,6 +15,7 @@ import {
   isSoloSeatCount,
   newSeatTotalPreview,
   normalizeSeatCount,
+  seatMixLine,
   upgradeSeatCountNote
 } from "@/lib/billingCopy";
 import { PlanBadge } from "@/components/PlanBadge";
@@ -31,6 +32,7 @@ export default function BillingPage() {
   const [upgraded, setUpgraded] = useState(false);
   const [enterpriseFormOpen, setEnterpriseFormOpen] = useState(false);
   const [seatInput, setSeatInput] = useState("1");
+  const [addTier, setAddTier] = useState<"pro" | "pro_plus" | "max">("pro");
   const [addingSeats, setAddingSeats] = useState(false);
 
   const load = useCallback(async () => {
@@ -46,6 +48,12 @@ export default function BillingPage() {
       setUpgraded(new URLSearchParams(window.location.search).get("upgraded") === "1");
     }
   }, [load]);
+
+  useEffect(() => {
+    if (billing?.usageTier === "pro" || billing?.usageTier === "pro_plus" || billing?.usageTier === "max") {
+      setAddTier(billing.usageTier);
+    }
+  }, [billing?.usageTier]);
 
   async function handlePortal() {
     setOpening(true);
@@ -79,7 +87,7 @@ export default function BillingPage() {
       return;
     }
     setAddingSeats(true);
-    const result = await createSeatIncreaseSession(addSeats);
+    const result = await createSeatIncreaseSession(addSeats, addTier);
     setAddingSeats(false);
     if (!result.ok || !result.data?.url) {
       setError(result.error ?? "Could not start seat increase.");
@@ -92,7 +100,14 @@ export default function BillingPage() {
   const usageTier = billing?.usageTier ?? (plan === "pro" ? "pro" : null);
   const currentSeats = normalizeSeatCount(billing?.seats);
   const solo = Boolean(billing) && isSoloSeatCount(currentSeats);
-  const nudge = resolvePlanNudge({ plan, usageTier, seats: billing ? currentSeats : null });
+  const mixed = Boolean(billing?.mixedSeats);
+  const mixLine = seatMixLine(billing?.seatMix);
+  const nudge = resolvePlanNudge({
+    plan,
+    usageTier,
+    seats: billing ? currentSeats : null,
+    mixedSeats: mixed
+  });
   const isFree = plan === "free";
   const isPro = plan === "pro";
   const isEnterprise = plan === "enterprise";
@@ -104,7 +119,9 @@ export default function BillingPage() {
     plan === "enterprise"
       ? "Enterprise"
       : plan === "pro"
-        ? displayUsageTierName(usageTier === "pro_plus" || usageTier === "max" ? usageTier : "pro")
+        ? mixed && mixLine
+          ? mixLine
+          : displayUsageTierName(usageTier === "pro_plus" || usageTier === "max" ? usageTier : "pro")
         : "Free";
   const paidNextIsEnterprise = nudge?.nextName === "Enterprise";
 
@@ -115,6 +132,19 @@ export default function BillingPage() {
         <p className="mt-1 text-sm text-coop-muted">{seatsCopy.body}</p>
       </div>
       <div className="flex items-end gap-3">
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-coop-muted">Plan</span>
+          <select
+            className="admin-input"
+            value={addTier}
+            onChange={(event) => setAddTier(event.target.value as "pro" | "pro_plus" | "max")}
+            disabled={addingSeats}
+          >
+            <option value="pro">Pro</option>
+            <option value="pro_plus">Pro+</option>
+            <option value="max">Max</option>
+          </select>
+        </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-coop-muted">{seatsCopy.inputLabel}</span>
           <input
@@ -185,6 +215,12 @@ export default function BillingPage() {
               <dt className="text-coop-muted">{accountRow.label}</dt>
               <dd className="mt-1">{accountRow.value}</dd>
             </div>
+            {mixLine ? (
+              <div className="col-span-2">
+                <dt className="text-coop-muted">Seat mix</dt>
+                <dd className="mt-1">{mixLine}</dd>
+              </div>
+            ) : null}
             {billing.billingEmail && (
               <div className="col-span-2">
                 <dt className="text-coop-muted">Billing email</dt>
@@ -202,7 +238,7 @@ export default function BillingPage() {
             <button type="button" className="admin-btn-secondary" onClick={() => void handlePortal()} disabled={opening}>
               {opening ? "Opening…" : "Payment methods & invoices"}
             </button>
-            {nudge && !paidNextIsEnterprise ? (
+            {nudge && !paidNextIsEnterprise && !mixed ? (
               <div className="space-y-2">
                 <p className="text-sm text-coop-muted">{nudge.body}</p>
                 <button

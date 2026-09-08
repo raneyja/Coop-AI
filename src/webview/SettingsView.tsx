@@ -863,6 +863,9 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           setPrefs((current) => ({ ...current, onboardingCompleted: true }));
           post({ type: "settings:complete-onboarding" });
         }}
+        onRequestSeatUpgrade={(usageTier) =>
+          post({ type: "settings:request-seat-upgrade", payload: { usageTier } })
+        }
       />
       </div>
       <PromptLibraryModal
