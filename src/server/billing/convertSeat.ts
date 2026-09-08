@@ -25,6 +25,32 @@ export class SeatConvertError extends Error {
   }
 }
 
+export const STRIPE_MODE_MISMATCH_MESSAGE =
+  "This organization's billing doesn't match production Stripe. The seat was not changed. Contact Coop support.";
+
+export function isStripeModeMismatch(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("similar object exists") &&
+    (lower.includes("test mode") || lower.includes("live mode"))
+  );
+}
+
+export function mapStripeConvertError(error: unknown): SeatConvertError {
+  if (error instanceof SeatConvertError) {
+    return error;
+  }
+  const message = error instanceof Error ? error.message : "";
+  if (isStripeModeMismatch(message)) {
+    return new SeatConvertError("stripe_mode_mismatch", STRIPE_MODE_MISMATCH_MESSAGE, 409);
+  }
+  return new SeatConvertError(
+    "convert_failed",
+    message.trim() || "Could not update this seat in Stripe.",
+    502
+  );
+}
+
 export type ConvertMemberResult = {
   from: UsageTier;
   to: UsageTier;
@@ -67,21 +93,25 @@ export async function convertMemberUsageTier(input: {
   };
 
   if (billing?.stripeSubscriptionId && input.stripe.isConfigured()) {
-    const subscription = await input.stripe.retrieveSubscription(billing.stripeSubscriptionId);
-    stripeItems =
-      subscription.items?.length > 0
-        ? subscription.items
-        : subscription.itemId
-          ? [
-              {
-                id: subscription.itemId,
-                quantity: subscription.quantity,
-                priceId: subscription.priceId
-              }
-            ]
-          : [];
-    if (stripeItems.length > 0) {
-      purchased = parseStripeItemsToInventory(stripeItems, prices);
+    try {
+      const subscription = await input.stripe.retrieveSubscription(billing.stripeSubscriptionId);
+      stripeItems =
+        subscription.items?.length > 0
+          ? subscription.items
+          : subscription.itemId
+            ? [
+                {
+                  id: subscription.itemId,
+                  quantity: subscription.quantity,
+                  priceId: subscription.priceId
+                }
+              ]
+            : [];
+      if (stripeItems.length > 0) {
+        purchased = parseStripeItemsToInventory(stripeItems, prices);
+      }
+    } catch (error) {
+      throw mapStripeConvertError(error);
     }
   }
 
@@ -109,8 +139,12 @@ export async function convertMemberUsageTier(input: {
   void leftover;
 
   if (billing?.stripeSubscriptionId && input.stripe.isConfigured() && stripeItems.length > 0) {
-    const updates = stripeItemUpdatesForInventory(stripeItems, nextPurchased, prices);
-    await input.stripe.updateSubscriptionItems(billing.stripeSubscriptionId, updates);
+    try {
+      const updates = stripeItemUpdatesForInventory(stripeItems, nextPurchased, prices);
+      await input.stripe.updateSubscriptionItems(billing.stripeSubscriptionId, updates);
+    } catch (error) {
+      throw mapStripeConvertError(error);
+    }
   }
 
   const updated = await input.userStore.setUserUsageTier(input.userId, to);

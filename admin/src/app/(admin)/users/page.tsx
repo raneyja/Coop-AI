@@ -16,10 +16,11 @@ import {
   type SeatInventory,
   type SeatUpgradeRequest
 } from "@/lib/coopApi";
-import { convertSeatPreview } from "@/lib/billingCopy";
+import { convertSeatModalCopy } from "@/lib/billingCopy";
 import { displayUsageTierName } from "@/lib/planNudge";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 import { InviteUserModal } from "@/components/InviteUserModal";
+import { Modal } from "@/components/Modal";
 import { UserRepoGrantsModal } from "@/components/UserRepoGrantsModal";
 import {
   isSoloSeatCount,
@@ -31,8 +32,14 @@ import {
 } from "@/lib/billingCopy";
 
 const TABLE_ROLES = ["member", "admin"];
-const TIER_PRICES = { pro: 25, pro_plus: 60, max: 100 } as const;
 const TIER_OPTIONS = ["pro", "pro_plus", "max"] as const;
+
+type PendingConvert = {
+  userId: string;
+  email: string;
+  from: "pro" | "pro_plus" | "max";
+  to: "pro" | "pro_plus" | "max";
+};
 
 export default function UsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -52,6 +59,10 @@ export default function UsersPage() {
   const [repoAccessMode, setRepoAccessMode] = useState<OrgRepoAccessMode>("all_indexed");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [grantsUser, setGrantsUser] = useState<AdminUser | null>(null);
+  const [seatPrices, setSeatPrices] = useState<SeatInventory | undefined>();
+  const [pendingConvert, setPendingConvert] = useState<PendingConvert | null>(null);
+  const [converting, setConverting] = useState(false);
+  const [convertError, setConvertError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,6 +102,7 @@ export default function UsersPage() {
     setSeatsUsed(result.data?.seatsUsed ?? 0);
     setSeatMix(result.data?.seatMix);
     setNeverFilled(result.data?.neverFilledSeats);
+    setSeatPrices(result.data?.seatPrices);
     setPendingRequests(result.data?.pendingUpgradeRequests ?? []);
     const inventory = result.data?.seatInventory;
     setDefaultInviteTier(
@@ -121,6 +133,15 @@ export default function UsersPage() {
     solo,
     atCapacity: atSeatCapacity
   });
+  const convertCopy = pendingConvert
+    ? convertSeatModalCopy({
+        fromName: displayUsageTierName(pendingConvert.from),
+        toName: displayUsageTierName(pendingConvert.to),
+        fromUsd: seatPrices?.[pendingConvert.from],
+        toUsd: seatPrices?.[pendingConvert.to],
+        memberEmail: pendingConvert.email
+      })
+    : null;
 
   useEffect(() => {
     void load();
@@ -170,26 +191,39 @@ export default function UsersPage() {
     void load();
   }
 
-  async function handleConvertTier(userId: string, usageTier: string, fromTier?: string | null) {
-    const from = fromTier === "pro_plus" || fromTier === "max" ? fromTier : "pro";
+  function closeConvertModal() {
+    if (converting) {
+      return;
+    }
+    setPendingConvert(null);
+    setConvertError(null);
+  }
+
+  function requestConvertTier(user: AdminUser, usageTier: string) {
+    const from = user.usageTier === "pro_plus" || user.usageTier === "max" ? user.usageTier : "pro";
     const to = usageTier === "pro_plus" || usageTier === "max" ? usageTier : "pro";
     if (from === to) {
       return;
     }
-    const fromName = displayUsageTierName(from);
-    const toName = displayUsageTierName(to);
-    const fromUsd = TIER_PRICES[from];
-    const toUsd = TIER_PRICES[to];
-    if (!window.confirm(convertSeatPreview(fromName, toName, fromUsd, toUsd))) {
+    setError(null);
+    setConvertError(null);
+    setPendingConvert({ userId: user.id, email: user.email, from, to });
+  }
+
+  async function confirmConvertTier() {
+    if (!pendingConvert) {
       return;
     }
-    setActionId(userId);
-    const result = await convertUserUsageTier(userId, usageTier);
-    setActionId(null);
+    setConverting(true);
+    setConvertError(null);
+    const result = await convertUserUsageTier(pendingConvert.userId, pendingConvert.to);
+    setConverting(false);
     if (!result.ok) {
-      setError(result.error ?? "Could not convert this seat.");
+      setConvertError(result.error ?? "Could not convert this seat.");
       return;
     }
+    const toName = displayUsageTierName(pendingConvert.to);
+    setPendingConvert(null);
     setSuccessMessage(`Converted this person's seat to ${toName}.`);
     void load();
   }
@@ -374,8 +408,8 @@ export default function UsersPage() {
                       <select
                         className="admin-input max-w-[120px] py-1"
                         value={user.usageTier === "pro_plus" || user.usageTier === "max" ? user.usageTier : "pro"}
-                        onChange={(e) => void handleConvertTier(user.id, e.target.value, user.usageTier)}
-                        disabled={actionId === user.id}
+                        onChange={(e) => requestConvertTier(user, e.target.value)}
+                        disabled={actionId === user.id || converting}
                       >
                         {TIER_OPTIONS.map((tier) => (
                           <option key={tier} value={tier}>
@@ -438,6 +472,33 @@ export default function UsersPage() {
           onClose={() => setGrantsUser(null)}
           onSaved={() => void load()}
         />
+      ) : null}
+
+      {convertCopy && pendingConvert ? (
+        <Modal open title={convertCopy.title} onClose={closeConvertModal}>
+          <div className="space-y-4">
+            <p className="text-sm text-coop-muted">{convertCopy.body}</p>
+            {convertError ? <p className="text-sm text-red-400">{convertError}</p> : null}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="admin-btn-secondary"
+                onClick={closeConvertModal}
+                disabled={converting}
+              >
+                {convertCopy.cancelLabel}
+              </button>
+              <button
+                type="button"
+                className="admin-btn-primary"
+                onClick={() => void confirmConvertTier()}
+                disabled={converting}
+              >
+                {converting ? "Converting…" : convertCopy.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </Modal>
       ) : null}
     </div>
   );
