@@ -40,7 +40,10 @@ const max = resolvePlanNudge({ plan: "pro", usageTier: "max" });
 assert.equal(max?.title, "Need more than Max?");
 assert.equal(max?.ctaLabel, "Request Enterprise");
 
-assert.equal(displayUsageTierName("pro_plus"), "Pro+");
-assert.equal(displayUsageTierName("max"), "Max");
+const mixed = resolvePlanNudge({ plan: "pro", usageTier: "pro", seats: 10, mixedSeats: true });
+assert.equal(mixed, null);
+
+const mixedMax = resolvePlanNudge({ plan: "pro", usageTier: "max", seats: 10, mixedSeats: true });
+assert.equal(mixedMax?.title, "Need more than Max?");
 
 console.log("planNudge: 1/1 tests passed");

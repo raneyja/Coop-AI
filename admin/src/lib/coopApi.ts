@@ -70,6 +70,7 @@ export type AdminUser = {
   role: string;
   status: "active" | "invited" | "deactivated";
   createdAt?: string;
+  usageTier?: string | null;
 };
 
 type BackendUser = {
@@ -79,6 +80,7 @@ type BackendUser = {
   active?: boolean;
   status?: AdminUser["status"];
   createdAt?: string;
+  usageTier?: string | null;
 };
 
 function normalizeUser(user: BackendUser): AdminUser {
@@ -86,7 +88,14 @@ function normalizeUser(user: BackendUser): AdminUser {
     user.status ??
     (user.active === false ? "deactivated" : "active");
   const role = user.role === "owner" ? "admin" : user.role;
-  return { id: user.id, email: user.email, role, status, createdAt: user.createdAt };
+  return {
+    id: user.id,
+    email: user.email,
+    role,
+    status,
+    createdAt: user.createdAt,
+    usageTier: user.usageTier ?? null
+  };
 }
 
 export type AdminApiKey = {
@@ -634,12 +643,32 @@ export async function fetchInstallUrl(
   }
 }
 
+export type SeatInventory = {
+  pro: number;
+  pro_plus: number;
+  max: number;
+};
+
+export type SeatUpgradeRequest = {
+  id: string;
+  userId: string;
+  fromTier: string;
+  toTier: string;
+  createdAt?: string;
+};
+
 export type UsersListResponse = {
   users: AdminUser[];
   /** Purchased seats (Stripe/Coop). */
   seats: number;
-  /** Active + invited users occupying seats. */
+  /** Occupied named seats, including deactivated users. */
   seatsUsed: number;
+  seatInventory?: SeatInventory;
+  occupiedSeats?: SeatInventory;
+  neverFilledSeats?: SeatInventory;
+  seatMix?: string;
+  mixedSeats?: boolean;
+  pendingUpgradeRequests?: SeatUpgradeRequest[];
 };
 
 export async function fetchUsers(): Promise<ApiResult<UsersListResponse>> {
@@ -647,6 +676,12 @@ export async function fetchUsers(): Promise<ApiResult<UsersListResponse>> {
     users: BackendUser[];
     seats?: number;
     seatsUsed?: number;
+    seatInventory?: SeatInventory;
+    occupiedSeats?: SeatInventory;
+    neverFilledSeats?: SeatInventory;
+    seatMix?: string;
+    mixedSeats?: boolean;
+    pendingUpgradeRequests?: SeatUpgradeRequest[];
   }>("/v1/admin/users");
   if (!result.ok) {
     return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
@@ -659,7 +694,13 @@ export async function fetchUsers(): Promise<ApiResult<UsersListResponse>> {
     data: {
       users: (result.data?.users ?? []).map(normalizeUser),
       seats,
-      seatsUsed
+      seatsUsed,
+      seatInventory: result.data?.seatInventory,
+      occupiedSeats: result.data?.occupiedSeats,
+      neverFilledSeats: result.data?.neverFilledSeats,
+      seatMix: result.data?.seatMix,
+      mixedSeats: Boolean(result.data?.mixedSeats),
+      pendingUpgradeRequests: result.data?.pendingUpgradeRequests ?? []
     }
   };
 }
@@ -667,14 +708,16 @@ export async function fetchUsers(): Promise<ApiResult<UsersListResponse>> {
 export async function inviteUser(
   email: string,
   role: string,
-  repoIds?: string[]
+  repoIds?: string[],
+  usageTier?: string
 ): Promise<ApiResult<{ user: AdminUser }>> {
   const result = await coopFetch<{ user: BackendUser }>("/v1/admin/users/invite", {
     method: "POST",
     body: JSON.stringify({
       email,
       role,
-      ...(repoIds && repoIds.length > 0 ? { repoIds } : {})
+      ...(repoIds && repoIds.length > 0 ? { repoIds } : {}),
+      ...(usageTier ? { usageTier } : {})
     })
   });
   if (!result.ok || !result.data?.user) {
@@ -701,6 +744,38 @@ export async function saveUserRepoGrants(
       method: "PUT",
       body: JSON.stringify({ repoIds })
     }
+  );
+}
+
+export async function convertUserUsageTier(
+  userId: string,
+  usageTier: string
+): Promise<ApiResult<{ user?: AdminUser; from?: string; to?: string }>> {
+  const result = await coopFetch<{ user?: BackendUser; from?: string; to?: string }>(
+    `/v1/admin/users/${encodeURIComponent(userId)}/usage-tier`,
+    { method: "POST", body: JSON.stringify({ usageTier }) }
+  );
+  if (!result.ok) {
+    return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
+  }
+  return {
+    ok: true,
+    status: result.status,
+    data: {
+      user: result.data?.user ? normalizeUser(result.data.user) : undefined,
+      from: result.data?.from,
+      to: result.data?.to
+    }
+  };
+}
+
+export async function resolveSeatUpgradeRequest(
+  requestId: string,
+  action: "confirm" | "deny"
+): Promise<ApiResult<{ ok: boolean }>> {
+  return coopFetch<{ ok: boolean }>(
+    `/v1/admin/seat-upgrade-requests/${encodeURIComponent(requestId)}/${action}`,
+    { method: "POST", body: "{}" }
   );
 }
 
@@ -915,6 +990,9 @@ export type BillingInfo = {
   status: string;
   billingEmail?: string;
   hasStripeCustomer?: boolean;
+  seatInventory?: SeatInventory;
+  seatMix?: string;
+  mixedSeats?: boolean;
 };
 
 export type QuotaSnapshot = {
@@ -971,7 +1049,8 @@ export async function openBillingPortal(): Promise<ApiResult<{ url: string }>> {
  * for the new total. Coop seats update only after Stripe confirms (via webhook).
  */
 export async function createSeatIncreaseSession(
-  addSeats: number
+  addSeats: number,
+  tier?: string
 ): Promise<
   ApiResult<{ url: string; currentSeats: number; requestedSeats: number; addedSeats: number }>
 > {
@@ -982,7 +1061,7 @@ export async function createSeatIncreaseSession(
     addedSeats: number;
   }>("/v1/admin/billing/seat-increase", {
     method: "POST",
-    body: JSON.stringify({ addSeats })
+    body: JSON.stringify({ addSeats, ...(tier ? { tier } : {}) })
   });
 }
 

@@ -12,6 +12,11 @@ import { resolveEffectiveSeatCount } from "./billing/resolveSeatCount";
 import { getDbPool } from "./db";
 import { UserRepoGrantStore } from "./userRepoGrantStore";
 import { indexedOrgRepoIds } from "./resolveAccessibleRepos";
+import { convertMemberUsageTier, SeatConvertError } from "./billing/convertSeat";
+import { SeatUpgradeRequestStore } from "./billing/seatUpgradeRequestStore";
+import { StripeService } from "./billing/stripeService";
+import { neverFilledSeats, displaySeatMix, isMixedSeatInventory, seatInventoryTotal } from "./billing/seatInventory";
+import { parseUsageTier, displayUsageTierName, type UsageTier } from "./usageTiers";
 
 type ParsedRequest = {
   method: string;
@@ -33,15 +38,44 @@ export async function handleAdminUsersRequest(
       return true;
     }
     const users = await deps.userStore.listOrgUsers(auth.orgId);
-    const activeUsers = users.filter((u) => !u.deactivatedAt).length;
     const billing = deps.orgStore ? await deps.orgStore.getOrganizationBilling(auth.orgId) : undefined;
+    const occupied = await deps.userStore.countOccupiedSeatsByTier(auth.orgId);
+    const purchased = billing?.seatInventory ?? occupied;
+    const neverFilled = neverFilledSeats(purchased, occupied);
     const seats = deps.orgStore
-      ? await resolveEffectiveSeatCount(deps.orgStore, auth.orgId, billing)
-      : Math.max(1, Math.floor(Number(billing?.seatCount ?? 1) || 1));
+      ? Math.max(
+          await resolveEffectiveSeatCount(deps.orgStore, auth.orgId, billing),
+          seatInventoryTotal(purchased)
+        )
+      : Math.max(1, seatInventoryTotal(purchased) || Math.floor(Number(billing?.seatCount ?? 1) || 1));
+    const seatsUsed = seatInventoryTotal(occupied);
+    let pendingRequests: Array<Record<string, unknown>> = [];
+    try {
+      const pool = await getDbPool();
+      if (pool) {
+        const requestStore = new SeatUpgradeRequestStore(pool);
+        const pending = await requestStore.listPendingForOrg(auth.orgId);
+        pendingRequests = pending.map((request) => ({
+          id: request.id,
+          userId: request.userId,
+          fromTier: request.fromTier,
+          toTier: request.toTier,
+          createdAt: request.createdAt
+        }));
+      }
+    } catch {
+      pendingRequests = [];
+    }
     writeJson(response, 200, {
       users: users.map(toUserSummary),
       seats,
-      seatsUsed: activeUsers
+      seatsUsed,
+      seatInventory: purchased,
+      occupiedSeats: occupied,
+      neverFilledSeats: neverFilled,
+      seatMix: displaySeatMix(purchased),
+      mixedSeats: isMixedSeatInventory(purchased),
+      pendingUpgradeRequests: pendingRequests
     });
     return true;
   }
@@ -69,21 +103,27 @@ export async function handleAdminUsersRequest(
       writeJson(response, 400, { error: "role must be admin or member" });
       return true;
     }
+    const billing = deps.orgStore ? await deps.orgStore.getOrganizationBilling(auth.orgId) : undefined;
+    const inviteTier =
+      parseUsageTier(typeof body.usageTier === "string" ? body.usageTier : "") ??
+      billing?.usageTier ??
+      "pro";
     if (deps.orgStore) {
-      const users = await deps.userStore.listOrgUsers(auth.orgId);
-      const activeUsers = users.filter((u) => !u.deactivatedAt).length;
-      const billing = await deps.orgStore.getOrganizationBilling(auth.orgId);
-      const seats = await resolveEffectiveSeatCount(deps.orgStore, auth.orgId, billing);
-      if (activeUsers >= seats) {
+      const occupied = await deps.userStore.countOccupiedSeatsByTier(auth.orgId);
+      const purchased = billing?.seatInventory ?? occupied;
+      const neverFilled = neverFilledSeats(purchased, occupied);
+      if (neverFilled[inviteTier] < 1) {
         writeJson(response, 403, {
           error: "seat_limit_reached",
-          seats,
-          used: activeUsers
+          message: `No unused ${displayUsageTierName(inviteTier)} seat is available to invite into. Buy another seat from Billing first.`,
+          seats: seatInventoryTotal(purchased),
+          used: seatInventoryTotal(occupied),
+          usageTier: inviteTier
         });
         return true;
       }
     }
-    const user = await deps.userStore.createUser(auth.orgId, email, role);
+    const user = await deps.userStore.createUser(auth.orgId, email, role, inviteTier);
     await audit(deps, auth, "admin.user.invite", { userId: user.id, email: user.email, role });
 
     const org = await deps.orgStore!.getOrganization(auth.orgId);
@@ -129,6 +169,21 @@ export async function handleAdminUsersRequest(
       inviteStatus: "created"
     });
     return true;
+  }
+
+  const convertMatch = parsed.pathname.match(/^\/v1\/admin\/users\/([^/]+)\/usage-tier$/);
+  if (convertMatch && parsed.method === "POST") {
+    return handleConvertUserTier(decodeURIComponent(convertMatch[1]), parsed, response, deps, auth);
+  }
+
+  const confirmMatch = parsed.pathname.match(/^\/v1\/admin\/seat-upgrade-requests\/([^/]+)\/confirm$/);
+  if (confirmMatch && parsed.method === "POST") {
+    return handleResolveUpgradeRequest(decodeURIComponent(confirmMatch[1]), "confirmed", response, deps, auth);
+  }
+
+  const denyMatch = parsed.pathname.match(/^\/v1\/admin\/seat-upgrade-requests\/([^/]+)\/deny$/);
+  if (denyMatch && parsed.method === "POST") {
+    return handleResolveUpgradeRequest(decodeURIComponent(denyMatch[1]), "denied", response, deps, auth);
   }
 
   const patchMatch = parsed.pathname.match(/^\/v1\/admin\/users\/([^/]+)$/);
@@ -332,14 +387,127 @@ function toUserSummary(user: {
   role: string;
   deactivatedAt?: Date;
   createdAt: Date;
+  usageTier?: UsageTier | null;
 }) {
   return {
     id: user.id,
     email: user.email,
     role: normalizeUserRole(user.role),
     active: !user.deactivatedAt,
-    createdAt: user.createdAt
+    createdAt: user.createdAt,
+    usageTier: user.usageTier ?? null
   };
+}
+
+async function handleConvertUserTier(
+  userId: string,
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: AdminApiDeps,
+  auth: AuthContext
+): Promise<boolean> {
+  if (!deps.userStore || !deps.orgStore) {
+    writeJson(response, 503, { error: "user store not configured" });
+    return true;
+  }
+  const body = asRecord(parsed.body);
+  const toTier = parseUsageTier(typeof body.usageTier === "string" ? body.usageTier : "");
+  if (!toTier) {
+    writeJson(response, 400, { error: "invalid_tier", message: "usageTier must be pro, pro_plus, or max." });
+    return true;
+  }
+  try {
+    const result = await convertMemberUsageTier({
+      orgId: auth.orgId,
+      userId,
+      toTier,
+      orgStore: deps.orgStore,
+      userStore: deps.userStore,
+      stripe: new StripeService(loadBillingConfig()),
+      billingConfig: loadBillingConfig()
+    });
+    const user = await deps.userStore.getUser(userId);
+    await audit(deps, auth, "admin.user.usage_tier.convert", {
+      userId,
+      from: result.from,
+      to: result.to
+    });
+    writeJson(response, 200, {
+      user: user ? toUserSummary(user) : undefined,
+      from: result.from,
+      to: result.to,
+      seatInventory: result.inventory
+    });
+  } catch (error) {
+    if (error instanceof SeatConvertError) {
+      writeJson(response, error.statusCode, { error: error.code, message: error.message });
+      return true;
+    }
+    const message = error instanceof Error ? error.message : "Could not convert seat.";
+    writeJson(response, 502, { error: "convert_failed", message });
+  }
+  return true;
+}
+
+async function handleResolveUpgradeRequest(
+  requestId: string,
+  action: "confirmed" | "denied",
+  response: ServerResponse,
+  deps: AdminApiDeps,
+  auth: AuthContext
+): Promise<boolean> {
+  if (!deps.userStore || !deps.orgStore) {
+    writeJson(response, 503, { error: "user store not configured" });
+    return true;
+  }
+  const pool = await getDbPool();
+  if (!pool) {
+    writeJson(response, 503, { error: "database not configured" });
+    return true;
+  }
+  const requestStore = new SeatUpgradeRequestStore(pool);
+  const pending = await requestStore.getById(requestId);
+  if (!pending || pending.orgId !== auth.orgId) {
+    writeJson(response, 404, { error: "request_not_found" });
+    return true;
+  }
+  if (pending.status !== "pending") {
+    writeJson(response, 409, { error: "request_not_pending", message: "This request was already resolved." });
+    return true;
+  }
+  if (action === "denied") {
+    await requestStore.resolve(requestId, "denied", auth.userId);
+    await audit(deps, auth, "admin.seat_upgrade.denied", { requestId, userId: pending.userId });
+    writeJson(response, 200, { ok: true, status: "denied" });
+    return true;
+  }
+  try {
+    const result = await convertMemberUsageTier({
+      orgId: auth.orgId,
+      userId: pending.userId,
+      toTier: pending.toTier,
+      orgStore: deps.orgStore,
+      userStore: deps.userStore,
+      stripe: new StripeService(loadBillingConfig()),
+      billingConfig: loadBillingConfig()
+    });
+    await requestStore.resolve(requestId, "confirmed", auth.userId);
+    await audit(deps, auth, "admin.seat_upgrade.confirmed", {
+      requestId,
+      userId: pending.userId,
+      from: result.from,
+      to: result.to
+    });
+    writeJson(response, 200, { ok: true, status: "confirmed", from: result.from, to: result.to });
+  } catch (error) {
+    if (error instanceof SeatConvertError) {
+      writeJson(response, error.statusCode, { error: error.code, message: error.message });
+      return true;
+    }
+    const message = error instanceof Error ? error.message : "Could not confirm upgrade.";
+    writeJson(response, 502, { error: "convert_failed", message });
+  }
+  return true;
 }
 
 async function audit(

@@ -7,6 +7,7 @@ import { writeJson, type AdminApiDeps } from "./adminApiShared";
 import { resolveEffectiveSeatCount } from "./billing/resolveSeatCount";
 import { loadBillingConfig } from "./billing/billingConfig";
 import { StripeService } from "./billing/stripeService";
+import { displaySeatMix, isMixedSeatInventory } from "./billing/seatInventory";
 
 type ParsedRequest = {
   method: string;
@@ -110,7 +111,10 @@ export async function handleAdminOrgRequest(
       stripeSeats,
       status: billing?.billingStatus ?? "manual",
       billingEmail: billing?.billingEmail,
-      hasStripeCustomer: Boolean(billing?.stripeCustomerId)
+      hasStripeCustomer: Boolean(billing?.stripeCustomerId),
+      seatInventory: billing?.seatInventory,
+      seatMix: billing?.seatInventory ? displaySeatMix(billing.seatInventory) : undefined,
+      mixedSeats: billing?.seatInventory ? isMixedSeatInventory(billing.seatInventory) : false
     });
     return true;
   }

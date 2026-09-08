@@ -3,6 +3,8 @@ import {
   USAGE_TIER_LIMITS,
   displayPlanName,
   effectiveUsageTier,
+  includedCentsForTier,
+  isUsageTierUpgrade,
   nextUsageTier,
   parseUsageTier,
   usageTierFromStripePriceId,
@@ -28,6 +30,11 @@ assert.equal(USAGE_TIER_LIMITS.pro.costCents, 1500);
 assert.equal(USAGE_TIER_LIMITS.pro_plus.costCents, 3750);
 assert.equal(USAGE_TIER_LIMITS.max.costCents, 6500);
 assert.equal(USAGE_TIER_LIMITS.max.seatPriceUsd, 100);
+assert.equal(includedCentsForTier("pro"), 1500);
+assert.equal(includedCentsForTier("max"), 6500);
+assert.equal(isUsageTierUpgrade("pro", "max"), true);
+assert.equal(isUsageTierUpgrade("max", "pro"), false);
+assert.equal(isUsageTierUpgrade("pro_plus", "pro_plus"), false);
 
 assert.equal(
   usageTierFromStripePriceId("price_plus", { pro: "price_pro", proPlus: "price_plus", max: "price_max" }),

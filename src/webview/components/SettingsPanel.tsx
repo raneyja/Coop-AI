@@ -127,6 +127,7 @@ type SettingsPanelProps = {
   onAddVisibleMemory?: (fact: { text: string; source: string; repoId?: string }) => void;
   onClearVisibleMemory?: (id?: string) => void;
   onCompleteOnboarding?: () => void;
+  onRequestSeatUpgrade?: (usageTier: "pro_plus" | "max") => void;
 };
 
 export function SettingsPanel({

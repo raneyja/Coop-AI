@@ -45,6 +45,12 @@ export type Preferences = {
   userEmail?: string;
   plan?: "free" | "pro" | "enterprise";
   usageTier?: "pro" | "pro_plus" | "max" | null;
+  pendingSeatUpgrade?: {
+    id: string;
+    fromTier: string;
+    toTier: string;
+    createdAt?: string;
+  };
   usageMeters?: import("../../../api/CoopBackendClient").PaidUsageMeters;
   quotaCredits?: {
     usedCredits: number;

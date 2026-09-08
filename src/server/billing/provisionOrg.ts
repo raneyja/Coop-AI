@@ -51,8 +51,14 @@ export async function provisionOrgFromCheckout(
       seatCount: input.seatCount,
       billingStatus: "active",
       usageTier: input.usageTier ?? "pro",
-      stripePriceId: input.stripePriceId ?? null
+      stripePriceId: input.stripePriceId ?? null,
+      seatInventory: {
+        pro: (input.usageTier ?? "pro") === "pro" ? input.seatCount : 0,
+        pro_plus: (input.usageTier ?? "pro") === "pro_plus" ? input.seatCount : 0,
+        max: (input.usageTier ?? "pro") === "max" ? input.seatCount : 0
+      }
     });
+    await userStore.backfillOrgUsersUsageTier(org.id, input.usageTier ?? "pro");
     await emailService.sendProUpgradeWelcome({
       to: input.adminEmail,
       orgName: org.name,
@@ -80,14 +86,19 @@ export async function provisionOrgFromCheckout(
     seatCount: input.seatCount,
     billingStatus: "active",
     usageTier: input.usageTier ?? "pro",
-    stripePriceId: input.stripePriceId ?? null
+    stripePriceId: input.stripePriceId ?? null,
+    seatInventory: {
+      pro: (input.usageTier ?? "pro") === "pro" ? input.seatCount : 0,
+      pro_plus: (input.usageTier ?? "pro") === "pro_plus" ? input.seatCount : 0,
+      max: (input.usageTier ?? "pro") === "max" ? input.seatCount : 0
+    }
   });
 
   const existingUser = await userStore.findActiveUserByEmail(input.adminEmail);
   let activateAccountUrl: string | undefined;
 
   if (!existingUser) {
-    const user = await userStore.createUser(org.id, input.adminEmail, "admin");
+    const user = await userStore.createUser(org.id, input.adminEmail, "admin", input.usageTier ?? "pro");
     if (input.googleSub && authIdentityStore) {
       await authIdentityStore.createGoogleIdentity(user.id, input.googleSub, new Date());
     } else if (authTokenStore) {

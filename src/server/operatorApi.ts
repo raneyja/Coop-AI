@@ -13,6 +13,7 @@ import { inviteOrgUser, isSeatLimitError } from "./users/inviteOrgUser";
 import { adminPortalAcceptInviteUrl, adminPortalFreshLoginUrl } from "./billing/adminPortalUrl";
 import { loadBillingConfig } from "./billing/billingConfig";
 import { StripeService } from "./billing/stripeService";
+import { displaySeatMix, isMixedSeatInventory, seatInventoryTotal } from "./billing/seatInventory";
 import { syncOrgCatalog } from "./catalogSyncService";
 import { clampSeatCountForPlan } from "./planGates";
 import type { OperatorAuthConfig } from "./operators/operatorAuthConfig";
@@ -443,6 +444,11 @@ async function handleOrgDetail(
   const operatorMeta = await deps.orgStore!.getOrgOperatorMetadata(orgId);
   const users = deps.userStore ? await deps.userStore.listOrgUsers(orgId) : [];
   const activeUsers = users.filter((u) => !u.deactivatedAt);
+  const occupied =
+    deps.userStore && typeof deps.userStore.countOccupiedSeatsByTier === "function"
+      ? await deps.userStore.countOccupiedSeatsByTier(orgId)
+      : undefined;
+  const purchased = billing?.seatInventory;
   const integrationSummary = await buildIntegrationSummary(deps, orgId);
   const indexingSummary = await buildIndexingSummary(deps, orgId);
   const lastAdminLogin = activeUsers
@@ -462,10 +468,14 @@ async function handleOrgDetail(
       email: billing?.billingEmail,
       status: billing?.billingStatus ?? "none",
       seatCount: billing?.seatCount ?? 1,
-      seatsUsed: activeUsers.length,
+      seatsUsed: occupied ? seatInventoryTotal(occupied) : users.length,
       stripeCustomerId: billing?.stripeCustomerId,
       stripeSubscriptionId: billing?.stripeSubscriptionId,
-      onboardingCompleted: Boolean(billing?.onboardingCompletedAt)
+      onboardingCompleted: Boolean(billing?.onboardingCompletedAt),
+      usageTier: billing?.usageTier ?? null,
+      seatInventory: purchased,
+      seatMix: purchased ? displaySeatMix(purchased) : undefined,
+      mixedSeats: purchased ? isMixedSeatInventory(purchased) : false
     },
     operator: operatorMeta,
     health: {

@@ -9,6 +9,8 @@ import { clampSeatCountForPlan } from "./planGates";
 import type { OrgRepoAccessMode } from "./repoAccessTypes";
 import { parseOrgRepoAccessMode } from "./repoAccessTypes";
 import { parseUsageTier, type UsageTier } from "./usageTiers";
+import type { SeatInventory } from "./billing/seatInventory";
+import { inventoryFromOrgColumns, seatInventoryTotal } from "./billing/seatInventory";
 
 export type OrgPlan = "free" | "pro" | "enterprise";
 export type IndexStatus = "idle" | "queued" | "indexing" | "cloning" | "ready" | "error" | "disabled";
@@ -31,6 +33,7 @@ export type OrgBilling = {
   onboardingCompletedAt?: Date;
   usageTier?: UsageTier | null;
   stripePriceId?: string;
+  seatInventory?: SeatInventory;
 };
 
 export type ApiKeyRecord = {
@@ -495,7 +498,8 @@ export class OrgStore {
   public async getOrganizationBilling(orgId: string): Promise<OrgBilling | undefined> {
     const result = await this.pool.query(
       `SELECT billing_email, stripe_customer_id, stripe_subscription_id, seat_count, billing_status,
-              onboarding_completed_at, usage_tier, stripe_price_id
+              onboarding_completed_at, usage_tier, stripe_price_id,
+              seat_inventory_pro, seat_inventory_pro_plus, seat_inventory_max
        FROM organizations WHERE id = $1`,
       [orgId]
     );
@@ -506,7 +510,7 @@ export class OrgStore {
 
   public async findOrganizationByStripeCustomerId(customerId: string): Promise<Organization | undefined> {
     const result = await this.pool.query(
-      `SELECT id, name, plan, created_at FROM organizations WHERE stripe_customer_id = $1 LIMIT 1`,
+      `SELECT id, name, plan, created_at, usage_tier FROM organizations WHERE stripe_customer_id = $1 LIMIT 1`,
       [customerId]
     );
     const row = result.rows[0];
@@ -523,6 +527,7 @@ export class OrgStore {
       billingStatus: string;
       usageTier: UsageTier | null;
       stripePriceId: string | null;
+      seatInventory: SeatInventory;
     }>
   ): Promise<void> {
     const fields: string[] = [];
@@ -557,6 +562,14 @@ export class OrgStore {
     if (patch.stripePriceId !== undefined) {
       fields.push(`stripe_price_id = $${idx++}`);
       values.push(patch.stripePriceId);
+    }
+    if (patch.seatInventory !== undefined) {
+      fields.push(`seat_inventory_pro = $${idx++}`);
+      values.push(Math.max(0, Math.floor(patch.seatInventory.pro)));
+      fields.push(`seat_inventory_pro_plus = $${idx++}`);
+      values.push(Math.max(0, Math.floor(patch.seatInventory.pro_plus)));
+      fields.push(`seat_inventory_max = $${idx++}`);
+      values.push(Math.max(0, Math.floor(patch.seatInventory.max)));
     }
     if (fields.length === 0) return;
     await this.pool.query(`UPDATE organizations SET ${fields.join(", ")} WHERE id = $1`, values);
@@ -756,17 +769,27 @@ export function buildOperatorOrgSearchClause(
 }
 
 function rowToBilling(row: Record<string, unknown>): OrgBilling {
+  const usageTier = parseUsageTier(row.usage_tier != null ? String(row.usage_tier) : null);
+  const seatCount = Number(row.seat_count ?? 1);
+  const seatInventory = inventoryFromOrgColumns({
+    seatInventoryPro: row.seat_inventory_pro != null ? Number(row.seat_inventory_pro) : null,
+    seatInventoryProPlus: row.seat_inventory_pro_plus != null ? Number(row.seat_inventory_pro_plus) : null,
+    seatInventoryMax: row.seat_inventory_max != null ? Number(row.seat_inventory_max) : null,
+    seatCount,
+    usageTier
+  });
   return {
     billingEmail: row.billing_email ? String(row.billing_email) : undefined,
     stripeCustomerId: row.stripe_customer_id ? String(row.stripe_customer_id) : undefined,
     stripeSubscriptionId: row.stripe_subscription_id ? String(row.stripe_subscription_id) : undefined,
-    seatCount: Number(row.seat_count ?? 1),
+    seatCount: seatInventoryTotal(seatInventory) > 0 ? seatInventoryTotal(seatInventory) : seatCount,
     billingStatus: String(row.billing_status ?? "none"),
     onboardingCompletedAt: row.onboarding_completed_at
       ? new Date(String(row.onboarding_completed_at))
       : undefined,
-    usageTier: parseUsageTier(row.usage_tier != null ? String(row.usage_tier) : null),
-    stripePriceId: row.stripe_price_id ? String(row.stripe_price_id) : undefined
+    usageTier,
+    stripePriceId: row.stripe_price_id ? String(row.stripe_price_id) : undefined,
+    seatInventory
   };
 }
 

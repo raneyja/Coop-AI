@@ -333,6 +333,12 @@ export type UserPreferences = {
   userEmail?: string;
   plan?: "free" | "pro" | "enterprise";
   usageTier?: "pro" | "pro_plus" | "max" | null;
+  pendingSeatUpgrade?: {
+    id: string;
+    fromTier: string;
+    toTier: string;
+    createdAt?: string;
+  };
   usageMeters?: {
     usageTier: "pro" | "pro_plus" | "max";
     displayName: string;
@@ -603,6 +609,7 @@ export type WebviewInbound =
   | { type: "settings:sign-out" }
   | { type: "settings:test-connection" }
   | { type: "settings:complete-onboarding" }
+  | { type: "settings:request-seat-upgrade"; payload: { usageTier: "pro_plus" | "max" } }
   | { type: "settings:update-github-token"; payload: { token: string } }
   | { type: "settings:clear-github-token" }
   | { type: "settings:install-github-app" }

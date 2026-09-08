@@ -1,5 +1,6 @@
 import type { BillingConfig } from "../billing/billingConfig";
 import { assertSafePublicEmailUrl } from "../../config/publicUrls";
+import { displayUsageTierName, type UsageTier } from "../usageTiers";
 
 export type WelcomeEmailParams = {
   to: string;
@@ -170,6 +171,40 @@ export class EmailService {
       params.resetUrl,
       "",
       "This link expires in 1 hour. If you didn't request this, ignore this email."
+    ].join("\n");
+    await this.send(params.to, subject, html, text);
+  }
+
+  public async sendSeatUpgradeRequest(params: {
+    to: string;
+    orgName: string;
+    memberEmail: string;
+    fromTier: UsageTier;
+    toTier: UsageTier;
+    reviewUrl: string;
+  }): Promise<void> {
+    const fromName = displayUsageTierName(params.fromTier);
+    const toName = displayUsageTierName(params.toTier);
+    const subject = `${params.memberEmail} requested ${toName} on ${params.orgName}`;
+    const html = emailShell({
+      title: subject,
+      body: `
+        <p style="margin:0 0 16px;font-size:16px;">Hi,</p>
+        <p style="margin:0 0 16px;font-size:16px;">
+          <strong>${escapeHtml(params.memberEmail)}</strong> asked to convert their seat from
+          ${escapeHtml(fromName)} to ${escapeHtml(toName)}. Your organization pays for this change.
+        </p>
+        ${primaryButton("Review in Users", params.reviewUrl)}
+        <p style="margin:0;font-size:14px;color:#57606a;">Confirm or deny the request. Quota does not change until you confirm.</p>
+      `
+    });
+    const text = [
+      `${params.memberEmail} requested ${toName} (from ${fromName}) for ${params.orgName}.`,
+      "",
+      "Review in Users:",
+      params.reviewUrl,
+      "",
+      "Quota does not change until you confirm."
     ].join("\n");
     await this.send(params.to, subject, html, text);
   }

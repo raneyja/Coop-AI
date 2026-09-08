@@ -221,6 +221,7 @@ export type SettingsDetailProps = {
   onStartFromAgentsMdTemplate: () => void;
   onAddVisibleMemory?: (fact: { text: string; source: string; repoId?: string }) => void;
   onClearVisibleMemory?: (id?: string) => void;
+  onRequestSeatUpgrade?: (usageTier: "pro_plus" | "max") => void;
 };
 
 export function SettingsDetailView({
@@ -464,7 +465,7 @@ function monthlyUsageBar(
         </span>
       </div>
       <p className="coop-settings-card-desc mt-1">
-        Chat, quick actions, and models you pick share one bar. Frontier models fill it faster.
+        This is your seat. Chat, quick actions, and models you pick share this bar. Frontier models fill it faster.
       </p>
       {resetParts ? (
         <p className="mt-2 text-[13px]">
@@ -529,11 +530,15 @@ function FreePlanUsageMeter({
   );
 }
 
-function PlanUsageDetail({ prefs }: SettingsDetailProps): React.ReactElement {
+function PlanUsageDetail({ prefs, onRequestSeatUpgrade }: SettingsDetailProps): React.ReactElement {
   const orgName = displayOrgName(prefs);
   const adminBase = (prefs.adminPortalUrl ?? "https://admin.coop-ai.dev").replace(/\/$/, "");
   const meters = prefs.usageMeters;
   const resetParts = formatPaidUsageResetParts(meters?.periodEnd);
+  const pending = prefs.pendingSeatUpgrade;
+  const isAdmin = prefs.userRole === "admin" || prefs.userRole === "owner";
+  const requestTier =
+    meters?.nextTier === "pro_plus" || meters?.nextTier === "max" ? meters.nextTier : null;
 
   if (!preferencesSignedIn(prefs)) {
     return (
@@ -566,21 +571,44 @@ function PlanUsageDetail({ prefs }: SettingsDetailProps): React.ReactElement {
             ) : null}
           </div>
         </div>
-        {meters?.nextTier ? (
+        {prefs.plan === "pro" && (pending || requestTier) ? (
           <div className="coop-settings-card p-3">
-            <p className="text-[10px] uppercase tracking-wide text-[var(--coop-panel-muted)]">Upgrade available</p>
-            <p className="mt-1 text-[15px] font-medium">
-              {meters.nextTierName}
-              {meters.nextTierPriceUsd != null ? ` $${meters.nextTierPriceUsd}/mo` : ""}
+            <p className="text-[10px] uppercase tracking-wide text-[var(--coop-panel-muted)]">
+              {pending ? "Upgrade requested" : "Upgrade this seat"}
             </p>
-            <p className="coop-settings-card-desc mt-1">
-              More monthly usage when you hit this month&apos;s cap.
-            </p>
-            <div className="coop-settings-actions mt-2">
-              <a className="coop-settings-action-btn" href={`${adminBase}/billing`} target="_blank" rel="noreferrer">
-                Upgrade
-              </a>
-            </div>
+            {pending ? (
+              <p className="coop-settings-card-desc mt-1">
+                Request pending for {pending.toTier === "max" ? "Max" : "Pro+"}. Quota stays the same until an
+                admin confirms. The company pays after that.
+              </p>
+            ) : (
+              <>
+                <p className="mt-1 text-[15px] font-medium">
+                  {meters?.nextTierName}
+                  {meters?.nextTierPriceUsd != null ? ` $${meters.nextTierPriceUsd}/mo` : ""}
+                </p>
+                <p className="coop-settings-card-desc mt-1">
+                  This is your seat. {isAdmin
+                    ? "Convert it from Users in the admin portal — that does not upgrade the rest of the team."
+                    : "Ask an admin to convert it. They confirm, then the company is charged."}
+                </p>
+                <div className="coop-settings-actions mt-2">
+                  {isAdmin ? (
+                    <a className="coop-settings-action-btn" href={`${adminBase}/users`} target="_blank" rel="noreferrer">
+                      Convert in Users
+                    </a>
+                  ) : requestTier ? (
+                    <button
+                      type="button"
+                      className="coop-settings-action-btn"
+                      onClick={() => onRequestSeatUpgrade?.(requestTier)}
+                    >
+                      Request {meters?.nextTierName ?? "upgrade"}
+                    </button>
+                  ) : null}
+                </div>
+              </>
+            )}
           </div>
         ) : prefs.plan === "pro" || prefs.plan === "enterprise" ? (
           <div className="coop-settings-card p-3">

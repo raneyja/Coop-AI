@@ -434,6 +434,9 @@ export default function CustomerDetailPage() {
             <p className="mt-2">
               {planLabel(detail.coopBilling?.plan ?? detail.plan)} · {detail.coopBilling?.seats ?? detail.seats ?? "—"} seats
             </p>
+            {detail.coopBilling?.seatMix ? (
+              <p className="text-sm text-coop-muted">{detail.coopBilling.seatMix}</p>
+            ) : null}
             <p className="text-sm text-coop-muted">Status: {detail.coopBilling?.status ?? detail.billingStatus ?? "—"}</p>
             {detail.coopBilling?.billingEmail && (
               <p className="text-sm text-coop-muted">{detail.coopBilling.billingEmail}</p>

@@ -153,8 +153,28 @@ export class UsageTracker {
     eventTypes: string[],
     bucket: "auto" | "frontier"
   ): Promise<number> {
+    return this.sumUsdCentsForSubject(orgId, range, eventTypes, bucket, "org");
+  }
+
+  /**
+   * Paid usage for one person (`userId`) or unattributed org-key traffic (`null`).
+   * Pass `"org"` to keep the historical org-wide sum (analytics).
+   */
+  public async sumUsdCentsForSubject(
+    orgId: string,
+    range: UsageDateRange,
+    eventTypes: string[],
+    bucket: "auto" | "frontier",
+    subject: string | null | "org"
+  ): Promise<number> {
     if (!this.pool || eventTypes.length === 0) {
       return 0;
+    }
+    const userFilter =
+      subject === "org" ? "" : subject ? " AND user_id = $6" : " AND user_id IS NULL";
+    const params: unknown[] = [orgId, range.from, range.to, eventTypes, bucket];
+    if (subject && subject !== "org") {
+      params.push(subject);
     }
     const result = await this.pool.query(
       `SELECT COALESCE(SUM(
@@ -168,8 +188,8 @@ export class UsageTracker {
          AND created_at >= $2
          AND created_at < $3
          AND event_type = ANY($4::text[])
-         AND metadata->>'bucket' = $5`,
-      [orgId, range.from, range.to, eventTypes, bucket]
+         AND metadata->>'bucket' = $5${userFilter}`,
+      params
     );
     return Number(result.rows[0]?.total ?? 0);
   }

@@ -218,18 +218,31 @@ void (async () => {
   assert.equal(recovered?.remainingTokens, 10_000);
 
   const paidNow = new Date("2026-09-15T12:00:00.000Z");
-  const centsByBucket = { auto: 0, frontier: 0 };
+  const centsByKey = new Map<string, { auto: number; frontier: number }>();
+  function bucketKey(sql: string, params: unknown[]): string {
+    if (sql.includes("user_id IS NULL")) {
+      return "null";
+    }
+    if (sql.includes("user_id = $6")) {
+      return String(params[5] ?? "null");
+    }
+    return "org";
+  }
   const paidTrackerPool = {
     query: async (sql: string, params: unknown[]) => {
       if (sql.includes("INSERT INTO usage_events")) {
         const metadata = JSON.parse(String(params[4]));
         const bucket = metadata.bucket === "frontier" ? "frontier" : "auto";
-        centsByBucket[bucket] += Number(metadata.usdCents ?? 0);
+        const key = params[1] ? String(params[1]) : "null";
+        const current = centsByKey.get(key) ?? { auto: 0, frontier: 0 };
+        current[bucket] += Number(metadata.usdCents ?? 0);
+        centsByKey.set(key, current);
         return { rows: [] };
       }
       if (sql.includes("usdCents") && sql.includes("metadata->>'bucket'")) {
         const bucket = String(params[4]) === "frontier" ? "frontier" : "auto";
-        return { rows: [{ total: centsByBucket[bucket] }] };
+        const key = bucketKey(sql, params);
+        return { rows: [{ total: (centsByKey.get(key) ?? { auto: 0, frontier: 0 })[bucket] }] };
       }
       return { rows: [] };
     }
@@ -238,25 +251,26 @@ void (async () => {
 
   await paidQuota.check("org-pro", "pro", 0, paidNow, {
     usageTier: "pro",
+    userId: "user-a",
     selection: "auto",
     provider: "openai",
     model: "gpt-5-mini"
   });
 
-  centsByBucket.auto = 1000;
-  centsByBucket.frontier = 0;
+  centsByKey.set("user-a", { auto: 1000, frontier: 0 });
   await paidQuota.check("org-pro", "pro", 0, paidNow, {
     usageTier: "pro",
+    userId: "user-a",
     selection: "auto",
     provider: "openai",
     model: "gpt-5-mini"
   });
 
-  centsByBucket.auto = 1000;
-  centsByBucket.frontier = 500;
+  centsByKey.set("user-a", { auto: 1000, frontier: 500 });
   try {
     await paidQuota.check("org-pro", "pro", 0, paidNow, {
       usageTier: "pro",
+      userId: "user-a",
       selection: "auto",
       provider: "openai",
       model: "gpt-5-mini",
@@ -271,9 +285,20 @@ void (async () => {
     assert.match(error.message, /Upgrade to Pro\+/);
   }
 
+  centsByKey.set("user-b", { auto: 0, frontier: 0 });
+  await paidQuota.check("org-pro", "pro", 0, paidNow, {
+    usageTier: "pro",
+    userId: "user-b",
+    selection: "auto",
+    provider: "openai",
+    model: "gpt-5-mini",
+    periodAnchor: new Date("2026-09-04T17:00:00.000Z")
+  });
+
   try {
     await paidQuota.check("org-pro", "pro", 0, paidNow, {
       usageTier: "pro",
+      userId: "user-a",
       selection: "claude-opus-4-8",
       provider: "anthropic",
       model: "claude-opus-4-8"
@@ -302,7 +327,8 @@ void (async () => {
     "pro",
     "pro",
     paidNow,
-    new Date("2026-09-04T17:00:00.000Z")
+    new Date("2026-09-04T17:00:00.000Z"),
+    "user-a"
   );
   assert.ok(meters);
   assert.equal(meters?.displayName, "Pro");
@@ -316,8 +342,7 @@ void (async () => {
   assert.equal(meters?.auto.usedCents, 1000);
   assert.equal(meters?.frontier.usedCents, 500);
 
-  centsByBucket.auto = 100;
-  centsByBucket.frontier = 50;
+  centsByKey.set("user-record", { auto: 100, frontier: 50 });
   let recordedMeta: Record<string, unknown> | undefined;
   const recordPool = {
     query: async (sql: string, params: unknown[]) => {
@@ -327,7 +352,7 @@ void (async () => {
       }
       if (sql.includes("usdCents") && sql.includes("metadata->>'bucket'")) {
         const bucket = String(params[4]) === "frontier" ? "frontier" : "auto";
-        return { rows: [{ total: centsByBucket[bucket] }] };
+        return { rows: [{ total: (centsByKey.get("user-record") ?? { auto: 0, frontier: 0 })[bucket] }] };
       }
       return { rows: [] };
     }
