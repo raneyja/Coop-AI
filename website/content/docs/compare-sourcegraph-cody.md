@@ -44,6 +44,8 @@ Choose CoopAI when you need **Company Slack and Jira in VS Code**, ownership and
 ## Related
 
 - [Compare CoopAI hub](/docs/compare)
+- [What is CoopAI?](/docs/what-is-coopai)
+- [Best code intelligence tools](/blog/best-code-intelligence-tools)
 - [How CoopAI works](/how-it-works)
 - [Integrations](/integrations)
 - [Pricing](/pricing)

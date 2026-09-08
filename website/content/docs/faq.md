@@ -16,7 +16,11 @@ CoopAI is a VS Code extension that connects your code graph to your **company** 
 
 CoopAI focuses on **understanding existing codebases**: ownership, decision history, blast radius, knowledge gaps, plus company Slack and tickets. Inline complete and edit stay in the open file. You review the diff, then you can [open a pull request](/docs/create-pull-request) from applied `/edit`s or from any editor change — from the patch card or by typing **Create a PR** in chat. Nothing rewrites the tree or creates a PR on its own.
 
-Full side-by-side matrices: [Compare CoopAI](/docs/compare) — including [vs GitHub Copilot](/docs/compare-github-copilot), [vs Cursor](/docs/compare-cursor), [vs Claude Code](/docs/compare-claude-code), and [vs Sourcegraph Cody](/docs/compare-sourcegraph-cody).
+Full side-by-side matrices: [Compare CoopAI](/docs/compare) — including [vs GitHub Copilot](/docs/compare-github-copilot), [vs Cursor](/docs/compare-cursor), [vs Claude Code](/docs/compare-claude-code), and [vs Sourcegraph Cody](/docs/compare-sourcegraph-cody). Answer posts: [vs Cursor](/blog/coopai-vs-cursor), [vs Copilot](/blog/coopai-vs-github-copilot), [vs Claude Code](/blog/coopai-vs-claude-code), [roundup](/blog/best-code-intelligence-tools).
+
+### Is CoopAI the same as Cooper AI?
+
+No. CoopAI at [coop-ai.dev](https://coop-ai.dev) is VS Code code intelligence. Cooper AI and similarly named agents are different products. See [What is CoopAI?](/docs/what-is-coopai).
 
 ### Is my code used to train models?
 

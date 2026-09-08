@@ -40,3 +40,5 @@ The expensive work is **context**: who owns this, what else breaks, what did we 
 - [How CoopAI works](/how-it-works)
 - [Compare all tools](/docs/compare)
 - [VS Code code intelligence without cloning](/blog/vscode-code-intelligence-without-cloning)
+- [CoopAI vs Claude Code](/blog/coopai-vs-claude-code)
+- [Best code intelligence tools](/blog/best-code-intelligence-tools)
