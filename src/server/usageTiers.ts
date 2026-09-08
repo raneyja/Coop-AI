@@ -18,6 +18,15 @@ export function includedCentsForTier(tier: UsageTier): number {
   return USAGE_TIER_LIMITS[tier].costCents;
 }
 
+/** List prices from the single usage-tier table. Admin convert preview must use this, not a second map. */
+export function seatPricesUsd(): Record<UsageTier, number> {
+  return {
+    pro: USAGE_TIER_LIMITS.pro.seatPriceUsd,
+    pro_plus: USAGE_TIER_LIMITS.pro_plus.seatPriceUsd,
+    max: USAGE_TIER_LIMITS.max.seatPriceUsd
+  };
+}
+
 export function isUsageTierUpgrade(from: UsageTier, to: UsageTier): boolean {
   const rank: Record<UsageTier, number> = { pro: 0, pro_plus: 1, max: 2 };
   return rank[to] > rank[from];

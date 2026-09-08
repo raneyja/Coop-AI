@@ -649,6 +649,19 @@ export type SeatInventory = {
   max: number;
 };
 
+function parseSeatPrices(value: SeatInventory | undefined): SeatInventory | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const pro = Number(value.pro);
+  const proPlus = Number(value.pro_plus);
+  const max = Number(value.max);
+  if (![pro, proPlus, max].every((price) => Number.isFinite(price) && price >= 0)) {
+    return undefined;
+  }
+  return { pro, pro_plus: proPlus, max };
+}
+
 export type SeatUpgradeRequest = {
   id: string;
   userId: string;
@@ -668,6 +681,7 @@ export type UsersListResponse = {
   neverFilledSeats?: SeatInventory;
   seatMix?: string;
   mixedSeats?: boolean;
+  seatPrices?: SeatInventory;
   pendingUpgradeRequests?: SeatUpgradeRequest[];
 };
 
@@ -681,6 +695,7 @@ export async function fetchUsers(): Promise<ApiResult<UsersListResponse>> {
     neverFilledSeats?: SeatInventory;
     seatMix?: string;
     mixedSeats?: boolean;
+    seatPrices?: SeatInventory;
     pendingUpgradeRequests?: SeatUpgradeRequest[];
   }>("/v1/admin/users");
   if (!result.ok) {
@@ -700,6 +715,7 @@ export async function fetchUsers(): Promise<ApiResult<UsersListResponse>> {
       neverFilledSeats: result.data?.neverFilledSeats,
       seatMix: result.data?.seatMix,
       mixedSeats: Boolean(result.data?.mixedSeats),
+      seatPrices: parseSeatPrices(result.data?.seatPrices),
       pendingUpgradeRequests: result.data?.pendingUpgradeRequests ?? []
     }
   };

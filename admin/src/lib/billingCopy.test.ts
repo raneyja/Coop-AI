@@ -3,6 +3,7 @@ import {
   addSeatsCopy,
   billingAccountRow,
   billingPageSubtitle,
+  convertSeatModalCopy,
   convertSeatPreview,
   isSoloSeatCount,
   newSeatTotalPreview,
@@ -119,5 +120,21 @@ assert.equal(seatMixLine("Mixed (8 Pro · 2 Max)"), "Mixed (8 Pro · 2 Max)");
 assert.equal(seatMixLine("  "), null);
 assert.match(convertSeatPreview("Pro", "Max", 25, 100), /this person's seat/);
 assert.match(convertSeatPreview("Pro", "Max", 25, 100), /\+\$75/);
+assert.match(convertSeatPreview("Pro", "Pro+"), /prorated in Stripe/);
+assert.doesNotMatch(convertSeatPreview("Pro", "Pro+"), /\$/);
+
+const modal = convertSeatModalCopy({
+  fromName: "Pro",
+  toName: "Pro+",
+  fromUsd: 25,
+  toUsd: 60,
+  memberEmail: "alice@example.com"
+});
+assert.equal(modal.title, "Convert this seat");
+assert.equal(modal.confirmLabel, "Convert");
+assert.equal(modal.cancelLabel, "Cancel");
+assert.match(modal.body, /alice@example.com's seat/);
+assert.match(modal.body, /\+\$35/);
+assert.doesNotMatch(modal.body, /window\.confirm/);
 
 console.log("billingCopy: 1/1 tests passed");

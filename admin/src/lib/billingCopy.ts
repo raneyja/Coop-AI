@@ -63,10 +63,35 @@ export function seatMixLine(mix?: string | null): string | null {
   return value ? value : null;
 }
 
-export function convertSeatPreview(fromName: string, toName: string, fromUsd: number, toUsd: number): string {
-  const delta = toUsd - fromUsd;
+function convertSeatDelta(fromUsd?: number, toUsd?: number): string {
+  if (!Number.isFinite(fromUsd) || !Number.isFinite(toUsd)) {
+    return ", prorated in Stripe";
+  }
+  const delta = (toUsd as number) - (fromUsd as number);
   const signed = delta >= 0 ? `+$${delta}` : `-$${Math.abs(delta)}`;
-  return `Converts this person's seat from ${fromName} to ${toName} (${signed}/mo, prorated in Stripe). Does not move the old plan to someone else.`;
+  return ` (${signed}/mo, prorated in Stripe)`;
+}
+
+export function convertSeatPreview(fromName: string, toName: string, fromUsd?: number, toUsd?: number): string {
+  return `Converts this person's seat from ${fromName} to ${toName}${convertSeatDelta(fromUsd, toUsd)}. Does not move the old plan to someone else.`;
+}
+
+export function convertSeatModalCopy(options: {
+  fromName: string;
+  toName: string;
+  fromUsd?: number;
+  toUsd?: number;
+  memberEmail?: string;
+}): { title: string; body: string; confirmLabel: string; cancelLabel: string } {
+  const whose = options.memberEmail?.trim()
+    ? `${options.memberEmail.trim()}'s seat`
+    : "this person's seat";
+  return {
+    title: "Convert this seat",
+    body: `Converts ${whose} from ${options.fromName} to ${options.toName}${convertSeatDelta(options.fromUsd, options.toUsd)}. Does not move the old plan to someone else.`,
+    confirmLabel: "Convert",
+    cancelLabel: "Cancel"
+  };
 }
 
 export function newSeatTotalPreview(currentSeats: number, addCount: number): string | null {

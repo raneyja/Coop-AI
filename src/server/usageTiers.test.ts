@@ -7,6 +7,7 @@ import {
   isUsageTierUpgrade,
   nextUsageTier,
   parseUsageTier,
+  seatPricesUsd,
   usageTierFromStripePriceId,
   anniversaryMonthRange,
   paidUsagePeriodRange,
@@ -30,6 +31,7 @@ assert.equal(USAGE_TIER_LIMITS.pro.costCents, 1500);
 assert.equal(USAGE_TIER_LIMITS.pro_plus.costCents, 3750);
 assert.equal(USAGE_TIER_LIMITS.max.costCents, 6500);
 assert.equal(USAGE_TIER_LIMITS.max.seatPriceUsd, 100);
+assert.deepEqual(seatPricesUsd(), { pro: 25, pro_plus: 60, max: 100 });
 assert.equal(includedCentsForTier("pro"), 1500);
 assert.equal(includedCentsForTier("max"), 6500);
 assert.equal(isUsageTierUpgrade("pro", "max"), true);

@@ -12,11 +12,11 @@ import { resolveEffectiveSeatCount } from "./billing/resolveSeatCount";
 import { getDbPool } from "./db";
 import { UserRepoGrantStore } from "./userRepoGrantStore";
 import { indexedOrgRepoIds } from "./resolveAccessibleRepos";
-import { convertMemberUsageTier, SeatConvertError } from "./billing/convertSeat";
+import { convertMemberUsageTier, mapStripeConvertError, SeatConvertError } from "./billing/convertSeat";
 import { SeatUpgradeRequestStore } from "./billing/seatUpgradeRequestStore";
 import { StripeService } from "./billing/stripeService";
 import { neverFilledSeats, displaySeatMix, isMixedSeatInventory, seatInventoryTotal } from "./billing/seatInventory";
-import { parseUsageTier, displayUsageTierName, type UsageTier } from "./usageTiers";
+import { parseUsageTier, displayUsageTierName, seatPricesUsd, type UsageTier } from "./usageTiers";
 
 type ParsedRequest = {
   method: string;
@@ -75,6 +75,7 @@ export async function handleAdminUsersRequest(
       neverFilledSeats: neverFilled,
       seatMix: displaySeatMix(purchased),
       mixedSeats: isMixedSeatInventory(purchased),
+      seatPrices: seatPricesUsd(),
       pendingUpgradeRequests: pendingRequests
     });
     return true;
@@ -439,12 +440,8 @@ async function handleConvertUserTier(
       seatInventory: result.inventory
     });
   } catch (error) {
-    if (error instanceof SeatConvertError) {
-      writeJson(response, error.statusCode, { error: error.code, message: error.message });
-      return true;
-    }
-    const message = error instanceof Error ? error.message : "Could not convert seat.";
-    writeJson(response, 502, { error: "convert_failed", message });
+    const mapped = error instanceof SeatConvertError ? error : mapStripeConvertError(error);
+    writeJson(response, mapped.statusCode, { error: mapped.code, message: mapped.message });
   }
   return true;
 }
