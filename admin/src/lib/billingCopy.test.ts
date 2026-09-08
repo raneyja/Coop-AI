@@ -118,10 +118,13 @@ assert.match(usersRepoAccessHint({ solo: true, perUserAccess: true }), /Assign r
 
 assert.equal(seatMixLine("Mixed (8 Pro · 2 Max)"), "Mixed (8 Pro · 2 Max)");
 assert.equal(seatMixLine("  "), null);
-assert.match(convertSeatPreview("Pro", "Max", 25, 100), /this person's seat/);
-assert.match(convertSeatPreview("Pro", "Max", 25, 100), /\+\$75/);
+assert.equal(
+  convertSeatPreview("Pro", "Max", 25, 100),
+  "Convert this person's seat from Pro to Max (+$75/mo, prorated in Stripe)."
+);
 assert.match(convertSeatPreview("Pro", "Pro+"), /prorated in Stripe/);
 assert.doesNotMatch(convertSeatPreview("Pro", "Pro+"), /\$/);
+assert.doesNotMatch(convertSeatPreview("Pro", "Max", 25, 100), /Does not move/);
 
 const modal = convertSeatModalCopy({
   fromName: "Pro",
@@ -133,8 +136,9 @@ const modal = convertSeatModalCopy({
 assert.equal(modal.title, "Convert this seat");
 assert.equal(modal.confirmLabel, "Convert");
 assert.equal(modal.cancelLabel, "Cancel");
-assert.match(modal.body, /alice@example.com's seat/);
-assert.match(modal.body, /\+\$35/);
-assert.doesNotMatch(modal.body, /window\.confirm/);
+assert.equal(
+  modal.body,
+  "Convert alice@example.com's seat from Pro to Pro+ (+$35/mo, prorated in Stripe)."
+);
 
 console.log("billingCopy: 1/1 tests passed");
