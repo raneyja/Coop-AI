@@ -5,8 +5,9 @@ type BrandMarkProps = {
   inverted?: boolean;
 };
 
-const DARK_MARK = { src: "/coop-wordmark.png", ratio: 990 / 332 };
-const LIGHT_MARK = { src: "/coop-wordmark-white.png", ratio: 824 / 280 };
+const WORDMARK_RATIO = 824 / 280;
+const DARK_MARK = { src: "/coop-wordmark.png", ratio: WORDMARK_RATIO };
+const LIGHT_MARK = { src: "/coop-wordmark-white.png", ratio: WORDMARK_RATIO };
 
 export function BrandMark({ size = "md", inverted = false }: BrandMarkProps) {
   const height = size === "sm" ? 22 : 28;

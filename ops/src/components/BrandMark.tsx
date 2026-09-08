@@ -11,7 +11,7 @@ export function BrandMark({ size = "md" }: BrandMarkProps) {
     <Image
       src="/coop-wordmark.png"
       alt="CoopAI"
-      width={Math.round(height * 3)}
+      width={Math.round(height * (824 / 280))}
       height={height}
       className="coop-logo-mark h-auto w-auto"
       style={{ height }}
