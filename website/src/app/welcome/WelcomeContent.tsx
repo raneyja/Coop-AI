@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Button } from "@/components/Button";
 
 type CheckoutState = "idle" | "verifying" | "pending" | "ready" | "invalid";
 
@@ -9,13 +10,6 @@ type WelcomeContentProps = {
   sessionId?: string;
   fallbackAdminPortalLoginUrl: string;
 };
-
-const STEPS = [
-  "Open the Activate your account link in your welcome email and set a password.",
-  "Sign in to the admin portal — you already have admin access.",
-  "Connect GitHub and other tools.",
-  "Install the CoopAI VS Code extension and sign in."
-] as const;
 
 const POLL_INTERVAL_MS = 3000;
 const MAX_POLL_ATTEMPTS = 40;
@@ -86,19 +80,16 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
   }, [sessionId]);
 
   const showProvisioning = state === "verifying" || state === "pending";
+  const showSignIn = state === "ready" || state === "idle" || state === "pending";
 
   return (
     <section className="mx-auto max-w-lg px-6 pb-24">
-      <div className="coop-panel space-y-8 p-6 md:p-8">
+      <div className="coop-panel space-y-6 p-6 md:p-8">
         {state === "invalid" ? (
           <div className="border-l-2 border-l-red-500 pl-4">
             <p className="text-sm font-medium text-gray-900">We couldn&apos;t verify this checkout</p>
             <p className="mt-1 text-sm leading-relaxed text-coop-muted">
-              If you just paid, check your email for the activate account link or{" "}
-              <Link href="/demo" className="font-medium text-gray-900 underline-offset-2 hover:underline">
-                contact support
-              </Link>
-              .
+              If you just paid, check your email for Activate your account, or contact support.
             </p>
           </div>
         ) : null}
@@ -121,53 +112,11 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
             <p className="text-sm font-medium text-gray-900">
               {orgName ? `${orgName} is ready` : "Your workspace is ready"}
             </p>
-            <p className="mt-1 text-sm leading-relaxed text-coop-muted">
-              Check your email for <span className="font-medium text-gray-900">Activate your account</span>{" "}
-             : set a password there, then you&apos;ll be signed in. This is not a Sign in link yet.
-            </p>
           </div>
         ) : null}
 
-        {state === "idle" ? (
-          <div className="border-l-2 border-l-coop-index pl-4">
-            <p className="text-sm font-medium text-gray-900">Finish setup from your email</p>
-            <p className="mt-1 text-sm leading-relaxed text-coop-muted">
-              After Pro checkout, open the activate link we sent: create a password before signing in.
-            </p>
-          </div>
-        ) : null}
-
-        <div>
-          <h2 className="text-sm font-semibold text-gray-900">Next steps</h2>
-          <ol className="mt-4 space-y-3">
-            {STEPS.map((step, index) => (
-              <li key={step} className="flex gap-3 text-sm leading-relaxed text-coop-muted">
-                <span
-                  aria-hidden
-                  className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-coop-border font-mono text-xs text-coop-index"
-                >
-                  {index + 1}
-                </span>
-                <span>{step}</span>
-              </li>
-            ))}
-          </ol>
-          <p className="mt-4 text-xs leading-relaxed text-coop-muted">
-            Buying for a team? Add seats in Billing, then invite people from Users.
-          </p>
-        </div>
-
-        <div className="space-y-3 border-t border-coop-border pt-6">
-          {showProvisioning ? (
-            <p className="text-center text-sm leading-relaxed text-coop-muted">
-              We&apos;re emailing your activate link as soon as provisioning finishes.
-            </p>
-          ) : (
-            <p className="text-center text-sm leading-relaxed text-coop-muted">
-              Prefer to wait in the inbox: the activate link is the first step.
-            </p>
-          )}
-          <p className="text-center text-xs leading-relaxed text-coop-muted">
+        {showSignIn ? (
+          <p className="text-center text-sm leading-relaxed text-coop-muted">
             Already activated?{" "}
             <a
               href={adminPortalLoginUrl}
@@ -175,23 +124,24 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
               rel="noreferrer"
               target="_blank"
             >
-              Sign in to the admin portal
+              Sign in
             </a>
           </p>
-          <p className="text-center text-xs leading-relaxed text-coop-muted">
-            Didn&apos;t get the email? Check spam or{" "}
-            <Link href="/demo" className="font-medium text-gray-900 underline-offset-2 hover:underline">
-              contact support
-            </Link>
-            .{" "}
-            <Link
-              href="/manual#get-started"
-              className="font-medium text-gray-900 underline-offset-2 hover:underline"
-            >
-              Owner&apos;s Manual
-            </Link>
-          </p>
-        </div>
+        ) : null}
+
+        {state === "invalid" ? (
+          <Button href="/demo" variant="primary" className="w-full">
+            Contact support
+          </Button>
+        ) : null}
+
+        <p className="text-center text-xs leading-relaxed text-coop-muted">
+          Didn&apos;t get the email? Check spam or{" "}
+          <Link href="/demo" className="font-medium text-gray-900 underline-offset-2 hover:underline">
+            contact support
+          </Link>
+          .
+        </p>
       </div>
     </section>
   );
