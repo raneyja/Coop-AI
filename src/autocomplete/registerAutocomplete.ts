@@ -21,11 +21,12 @@ import { syncSuggestWidgetCoexistenceWithCoopAutocomplete } from "./suggestWidge
 const AUTOCOMPLETE_HELP = [
   "CoopAI inline autocomplete",
   "",
+  "Enable it in Settings → Preferences → Model & chat (off by default).",
   "Tab — accept full suggestion",
   "Escape — reject suggestion",
   "Alt+] — next suggestion (when multiple enabled)",
   "Alt+[ — previous suggestion",
-  "Cmd+Shift+\\ — manual trigger"
+  "Command Palette — CoopAI: Trigger Inline Autocomplete"
 ].join("\n");
 
 export function createAutocompleteUsageTelemetryHandler(

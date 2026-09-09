@@ -93,6 +93,10 @@ export function createMockExtensionContext(): {
 }
 
 const vscodeMock = {
+  env: {
+    isTelemetryEnabled: true,
+    onDidChangeTelemetryEnabled: () => ({ dispose: () => undefined })
+  },
   InlineCompletionTriggerKind: { Automatic: 0, Invoke: 1 },
   ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
   CompletionItemKind: {

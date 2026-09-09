@@ -18,7 +18,7 @@ export const AUTOCOMPLETE_INDEX_DISCOVERY_SHOWN_KEY = "coopAI.autocomplete.index
 export function readAutocompleteSettings(): AutocompleteSettings {
   const config = vscode.workspace.getConfiguration(SECTION);
   return {
-    enabled: config.get<boolean>("enabled", true),
+    enabled: config.get<boolean>("enabled", false),
     trigger: config.get<AutocompleteTriggerMode>("trigger", "auto"),
     maxSuggestionLength: config.get<number>("maxSuggestionLength", 200),
     debounceMs: config.get<number>("debounceMs", 300),
@@ -126,20 +126,6 @@ export async function clearAutocompleteWorkspaceOverrides(): Promise<void> {
   if (inspected?.workspaceFolderValue === false) {
     await config.update("enabled", undefined, vscode.ConfigurationTarget.WorkspaceFolder);
   }
-}
-
-/** Turn autocomplete on globally unless the user explicitly opted out. */
-export async function restoreAutocompleteUnlessUserOptedOut(
-  context: vscode.ExtensionContext
-): Promise<void> {
-  if (isAutocompleteUserDisabled(context)) {
-    return;
-  }
-  const config = vscode.workspace.getConfiguration(SECTION);
-  if (config.get<boolean>("enabled", true)) {
-    return;
-  }
-  await config.update("enabled", true, vscode.ConfigurationTarget.Global);
 }
 
 /** Explicit setting forces graph on; otherwise auto-enable when the repo index is healthy. */

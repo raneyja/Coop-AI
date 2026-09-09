@@ -3,6 +3,12 @@
 const Module = require("node:module");
 
 const stub = {
+  env: {
+    isTelemetryEnabled: true,
+    onDidChangeTelemetryEnabled() {
+      return { dispose() {} };
+    }
+  },
   workspace: {
     workspaceFolders: [],
     getConfiguration(section) {

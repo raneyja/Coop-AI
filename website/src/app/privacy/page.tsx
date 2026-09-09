@@ -62,7 +62,9 @@ export default function PrivacyPage() {
         </li>
         <li>
           <strong>Usage metadata</strong>: token counts, model selection, request timestamps, and
-          cost estimates for billing and monitoring
+          cost estimates for billing and your org&apos;s Admin usage views. Optional product-analytics
+          events (for example, suggested next-step pills in chat) respect VS Code&apos;s telemetry
+          setting; they are not sent when telemetry is off.
         </li>
       </ul>
 

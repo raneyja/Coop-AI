@@ -39,9 +39,9 @@ lastUpdated: "2026-09-03"
 
 | Problem | Fix |
 | --- | --- |
-| **No ghost text** | Confirm sidebar **Autocomplete On** or **Enable inline autocomplete** in Model & chat; sign in under **Settings → Account** |
-| **Manual trigger does nothing** | Enable autocomplete first; use Ctrl+Shift+\\ (Cmd+Shift+\\ on macOS) |
-| **Competing suggestions with Copilot** | Turn Coop autocomplete off, or leave it on — Coop automatically disables Copilot inline when enabled |
+| **No ghost text** | Confirm **Enable inline autocomplete** in Model & chat is checked and saved; sign in under **Settings → Account** |
+| **Manual trigger does nothing** | Enable autocomplete first; Command Palette → **CoopAI: Trigger Inline Autocomplete** |
+| **Competing suggestions with Copilot** | Keep Coop autocomplete off (the default), or turn Copilot inline off yourself if you enable Coop complete |
 | **Slow or dropped completions** | Increase `requestTimeoutMs` (default 1500); check API latency; self-hosted API needs `MISTRAL_API_KEY` for Codestral FIM |
 | **401 on completions** | Sign in again under **Settings → Account**; automation API keys do not replace user sign-in |
 | **Graph context not applied** | Deep-Index the repo in admin portal; set `coopAI.autocomplete.useGraphContext` to `true`; set Workspace owner/repo/branch |

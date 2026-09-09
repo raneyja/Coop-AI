@@ -376,11 +376,9 @@ Chat, quick actions, and edit patches are always on. Click **Save model settings
 
 ### Inline complete and edit selection
 
-**Inline complete** — Ghost-text autocomplete as you type. **On by default** for new installs. Coop routes completions to **Mistral Codestral** (FIM).
+**Inline complete** — Ghost-text autocomplete as you type. **Off by default** for new installs. Coop routes completions to **Mistral Codestral** (FIM).
 
-Toggle **Autocomplete** in the chat header — **On** / **Off** — for a quick switch while you code. For a persistent preference, use **Settings → Preferences → Model & chat** → **Enable inline autocomplete**. The header toggle and this checkbox stay in sync. Preferences persist at **global scope** — workspace `.vscode/settings.json` cannot silently override your choice.
-
-**Settings path:** Open **CoopAI Settings** → **Preferences** → **Model & chat** → check or uncheck **Enable inline autocomplete** → **Save model settings**. The header toggle and this checkbox stay in sync.
+Turn it on from **Settings → Preferences → Model & chat** → **Enable inline autocomplete** → **Save model settings**. Preferences persist at **global scope**.
 
 <!-- figures -->
 ![Model & chat — Enable inline autocomplete checkbox](/screenshots/docs/extension-autocomplete-settings-on-and-off.png)
@@ -392,13 +390,11 @@ Toggle **Autocomplete** in the chat header — **On** / **Off** — for a quick 
 
 | Step | Surface | Action |
 | --- | --- | --- |
-| Quick toggle | **Extension UI** — chat header | Click **Autocomplete** → **On** or **Off** |
 | Settings | **Extension UI** — Settings → Preferences → Model & chat | **Enable inline autocomplete** → **Save model settings** |
 | Enable | **File** — VS Code settings | Set `"coopAI.autocomplete.enabled": true` |
-| Or toggle | **Extension UI** — Command Palette | **CoopAI: Toggle Autocomplete** |
+| Manual trigger | **Extension UI** — Command Palette | **CoopAI: Trigger Inline Autocomplete** |
 | Accept | Editor | **Tab** |
 | Reject | Editor | **Escape** |
-| Manual trigger | Editor | **Ctrl+Shift+\\** (Windows/Linux) or **Cmd+Shift+\\** (macOS) |
 
 **How it works:**
 
@@ -406,7 +402,7 @@ Toggle **Autocomplete** in the chat header — **On** / **Off** — for a quick 
 - **FIM** (fill-in-the-middle) sends `prefix` + `suffix` segments when `coopAI.autocomplete.useFim` is `true` (default) — routed to assigned **Mistral Codestral**
 - **Hot Streak** keeps completions snappy after Tab-accept; **Smart Throttle** adapts debounce to typing speed and latency
 - **Multi-line** completions activate after `{`, `=>`, `(`, or inside blocks (up to 200 tokens)
-- **Indexed repos:** when the workspace repo is **Deep-Indexed** and index status is **ready**, graph context (dependents and ownership) is attached automatically — no extra setting required. A one-time toast may confirm autocomplete is available with graph context. Set `coopAI.autocomplete.useGraphContext` to `true` to force graph on; leave at `false` (default) for auto when indexed (all plans)
+- **Indexed repos:** when the workspace repo is **Deep-Indexed** and index status is **ready**, graph context (dependents and ownership) is attached automatically if autocomplete is on. Set `coopAI.autocomplete.useGraphContext` to `true` to force graph on; leave at `false` (default) for auto when indexed (all plans)
 
 **Copilot:** when Coop autocomplete is **on**, Coop automatically disables Copilot **inline** ghost text (`github.copilot.enable`) and restores your prior setting when you turn Coop autocomplete off. Copilot chat and other features stay available.
 

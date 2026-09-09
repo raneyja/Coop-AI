@@ -157,14 +157,6 @@
     ],
     "keybindings": [
       {
-        "command": "coopAI.triggerAutocomplete",
-        "key": "cmd+shift+\\",
-        "mac": "cmd+shift+\\",
-        "win": "ctrl+shift+\\",
-        "linux": "ctrl+shift+\\",
-        "when": "editorTextFocus"
-      },
-      {
         "command": "coopAI.autocompleteNext",
         "key": "alt+]",
         "when": "editorTextFocus && coopAI.autocomplete.enabled"
@@ -346,8 +338,8 @@
         },
         "coopAI.autocomplete.enabled": {
           "type": "boolean",
-          "default": true,
-          "description": "Enable inline ghost-text autocomplete in the editor."
+          "default": false,
+          "description": "Enable inline ghost-text autocomplete in the editor. Off by default so GitHub Copilot and other inline providers keep working until you opt in."
         },
         "coopAI.autocomplete.trigger": {
           "type": "string",
@@ -899,10 +891,11 @@
     "test:indexing-progress": "cd admin && npx tsx --tsconfig tsconfig.json src/lib/indexingProgress.test.ts && npx tsx --tsconfig tsconfig.json src/lib/integrationStatus.test.ts",
     "test:repo-grants-ui": "cd admin && npx tsx --tsconfig tsconfig.json src/lib/activeGrantRepoIds.test.ts",
     "test:user-facing-errors": "npx tsx src/api/userFacingErrors.test.ts && npx tsx src/api/networkResilience.test.ts && npx tsx src/api/providers/anthropicClient.test.ts && npx tsx src/api/providers/openaiClient.test.ts && npx tsx src/api/providers/geminiClient.test.ts && npx tsx src/api/providers/thinkingRequestContract.test.ts && npx tsx src/config/chatThinkingConfig.test.ts && npx tsx src/config/modelThinking.test.ts",
+    "test:usage-telemetry": "npx tsx src/telemetry/usageEventPolicy.test.ts",
     "test:observability": "npx tsx --test src/server/observability/errorReporter.test.ts src/server/observability/requestId.test.ts",
     "test:sso": "npx tsx --test src/server/auth/sessionDelivery.test.ts src/server/auth/authRateLimit.test.ts src/server/auth/googleAuthService.test.ts src/server/auth/userAuthApi.inviteGoogle.test.ts src/server/auth/userAuthApi.googleLogin.test.ts && npx tsx src/server/enterpriseApi.test.ts && npx tsx src/server/sso/x509Cert.test.ts && npx tsx src/server/sso/samlService.test.ts && npx tsx src/server/sso/samlApi.test.ts && npx tsx src/server/auth/userAuthApi.policy.test.ts",
     "test:integration-scope": "npx tsx src/server/resolveIntegrationScope.test.ts && npx tsx src/integrationScope/slackQuery.test.ts && npx tsx src/integrationScope/atlassianQuery.test.ts && npx tsx src/integrationScope/notionQuery.test.ts && npx tsx src/integrationScope/googleDocsQuery.test.ts && npx tsx src/context/integrationScopeContext.test.ts && npx tsx src/server/slackAppService.test.ts && npx tsx src/api/slack/slackClient.scopePicker.test.ts && npx tsx src/server/codeHostCredentialResolver.test.ts && npx tsx src/server/codeHostConnectors/routingGithubConnector.test.ts && npx tsx src/server/adminIntegrationsHealth.test.ts",
-    "test:ci": "npm run test:chat-prose && npm run test:slash-commands && npm run test:chat-intent && npm run test:response-deadline && npm run test:agent-routing && npm run test:chat-message-intent && npm run test:context-gathering-messages && npm run test:indexed-repo-workspace && npm run test:system-prompts && npm run test:quick-action-prompts && npm run test:knowledge-gaps-enrichment && npm run test:format-chat-copy && npm run test:effective-quick-action && npm run test:chat-threads && npm run test:autocomplete && npm run test:inline-completion && npm run test:autocomplete-smoke && npm run test:sso && npm run test:user-facing-errors && npm run test:observability && npm run test:billing && npm run test:operator && npm run test:agent-ship:b && npm run test:agent-ship:c && npm run test:agent-ship:d && npm run test:agent-ship:e && npm run test:estate-indexing && npm run test:integration-scope && npm run test:auth && npm run test:patch",
+    "test:ci": "npm run test:chat-prose && npm run test:slash-commands && npm run test:chat-intent && npm run test:response-deadline && npm run test:agent-routing && npm run test:chat-message-intent && npm run test:context-gathering-messages && npm run test:indexed-repo-workspace && npm run test:system-prompts && npm run test:quick-action-prompts && npm run test:knowledge-gaps-enrichment && npm run test:format-chat-copy && npm run test:effective-quick-action && npm run test:chat-threads && npm run test:autocomplete && npm run test:inline-completion && npm run test:autocomplete-smoke && npm run test:sso && npm run test:user-facing-errors && npm run test:observability && npm run test:usage-telemetry && npm run test:billing && npm run test:operator && npm run test:agent-ship:b && npm run test:agent-ship:c && npm run test:agent-ship:d && npm run test:agent-ship:e && npm run test:estate-indexing && npm run test:integration-scope && npm run test:auth && npm run test:patch",
     "test": "npm run test:ci",
     "test:estate-indexing": "npm run test:indexed-repo-quota && npm run test:estate-sync && npm run test:lightning-search-scope && npm run test:graph-search-scope && npm run test:org-api-indexing && npm run test:org-api-index-rate-limit && npm run test:repo-symbol-index && npm run test:embeddings-client && npm run test:embedding-rate-limiter && npm run test:error-handling && npm run test:indexing-progress && npm run test:user-facing-errors",
     "smoke:estate-indexing": "bash scripts/smoke-estate-indexing.sh",
@@ -935,7 +928,7 @@
     "@node-saml/node-saml": "^5.1.0",
     "@scip-code/scip": "^0.8.0",
     "@sentry/node": "^10.73.0",
-    "axios": "^1.9.0",
+    "axios": "^1.20.0",
     "lucide-react": "^1.16.0",
     "node-cron": "^3.0.3",
     "pg": "^8.16.0",

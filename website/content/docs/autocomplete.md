@@ -1,14 +1,14 @@
 ---
 title: Inline autocomplete
-description: Ghost-text code completions in VS Code — default on, FIM, graph context, and Copilot coexistence.
+description: Ghost-text code completions in VS Code — off by default, FIM, graph context, and Copilot coexistence.
 section: extension
 order: 3
-lastUpdated: "2026-09-03"
+lastUpdated: "2026-09-09"
 ---
 
 CoopAI inline autocomplete shows **ghost-text suggestions** as you type in the editor. Suggestions stream from the Coop API and appear via VS Code's `InlineCompletionItemProvider`.
 
-The feature ships in production and is **on by default** (`coopAI.autocomplete.enabled: true`). Coop assigns **Mistral Codestral** for inline completions — see [Model assignments](/docs/model-assignments). Turn autocomplete off if you prefer not to use it; your choice is saved **globally** (User scope) so workspace folders cannot silently override it.
+The feature ships **off by default** (`coopAI.autocomplete.enabled: false`) so GitHub Copilot and other inline providers keep working until you opt in. Coop assigns **Mistral Codestral** for inline completions — see [Model assignments](/docs/model-assignments). Your choice is saved **globally** (User scope) so workspace folders cannot silently override it.
 
 ## Turn autocomplete off (or back on)
 
@@ -27,7 +27,7 @@ Autocomplete is controlled from **Settings → Preferences → Model & chat** �
 
 The **Autocomplete** row in the read-only assignment list shows **On** or **Off** based on that checkbox. Chat, quick actions, and edit mode are always on. Autocomplete always uses the assigned **Codestral** model and does not follow the **model menu in chat** — see [Model assignments](/docs/model-assignments).
 
-**Success:** With **Enable inline autocomplete** checked and saved, typing in an eligible file (e.g. `.ts`) shows ghost text after a short pause.
+**Success:** With **Enable inline autocomplete** checked and saved, typing in an eligible file (e.g. `.ts`) shows ghost text after a short pause. With it unchecked and saved, Coop does not request ghost text.
 
 ### File — VS Code User settings
 
@@ -98,7 +98,6 @@ When the cursor is after `{`, `=>`, `(`, or on an empty line inside a block, the
 | --- | --- | --- |
 | **Accept** suggestion | Tab | Tab |
 | **Reject** suggestion | Escape | Escape |
-| **Manual trigger** | Cmd+Shift+\\ | Ctrl+Shift+\\ |
 | **Next** suggestion | Alt+] | Alt+] |
 | **Previous** suggestion | Alt+[ | Alt+[ |
 
@@ -110,8 +109,8 @@ Run **CoopAI: Show Autocomplete Help** from the Command Palette for a quick refe
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `coopAI.autocomplete.enabled` | `true` | Master switch — persisted at **global** scope |
-| `coopAI.autocomplete.trigger` | `auto` | `auto` — debounced while typing; `manual` — hotkey only; `off` — no requests |
+| `coopAI.autocomplete.enabled` | `false` | Master switch — persisted at **global** scope |
+| `coopAI.autocomplete.trigger` | `auto` | `auto` — debounced while typing; `manual` — Command Palette **CoopAI: Trigger Inline Autocomplete** only; `off` — no requests |
 | `coopAI.autocomplete.useFim` | `true` | Send FIM `segments` for Codestral routing |
 | `coopAI.autocomplete.useGraphContext` | `false` | Force indexed graph context on; when `false`, graph is still auto-attached when Deep-Index is ready (see below) |
 | `coopAI.autocomplete.debounceMs` | `300` | Pause after typing before auto-trigger (0–2000) |
@@ -176,12 +175,14 @@ See [Zero-retention LLM routing](/docs/zero-retention).
 
 Org admins can view org completion metrics in the [admin portal](https://admin.coop-ai.dev/analytics) → **Completions** tab. Members see personal usage on **My Usage** → **Completions**.
 
+Suggested next-step pills in chat (`suggest_chip.*`, `suggest_intent.*`, `chat_intent.*`) follow VS Code's telemetry setting and are not used for Admin usage charts.
+
 ## Troubleshooting
 
 | Problem | Fix |
 | --- | --- |
 | **No ghost text** | Confirm **Enable inline autocomplete** is checked in **Settings → Preferences → Model & chat** and saved; sign in under **Settings → Account** |
-| **Nothing on manual trigger** | Enable autocomplete first; use Ctrl+Shift+\\ (Cmd+Shift+\\ on macOS) |
+| **Nothing on manual trigger** | Enable autocomplete first; Command Palette → **CoopAI: Trigger Inline Autocomplete** |
 | **Slow or missing suggestions** | Increase `requestTimeoutMs`; check network; self-hosted API needs `MISTRAL_API_KEY` for Codestral FIM |
 | **Completions in strings/comments** | By design — trigger detector skips comment and string contexts |
 | **Graph context empty** | Deep-Index the repo in admin portal; confirm index status is **ready** in Settings → Indexing; check Workspace owner/repo/branch; set `coopAI.autocomplete.useGraphContext` to `true` to force on |

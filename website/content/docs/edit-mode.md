@@ -172,6 +172,6 @@ More fixes: [Troubleshooting](/docs/troubleshooting).
 ## Next steps
 
 - [Create pull request](/docs/create-pull-request) — open a pull request from the patch card or by asking in chat
-- [Inline autocomplete](/docs/autocomplete) — ghost-text completions (on by default)
+- [Inline autocomplete](/docs/autocomplete) — ghost-text completions (off by default)
 - [Extension settings](/docs/extension-settings)
 - [Owner's Manual — Edit selection](/manual#inline-complete-and-edit-selection)

@@ -73,18 +73,8 @@ export function registerAutocompleteIndexNotifier(
     }
 
     notified = true;
-    const settings = readAutocompleteSettings();
-    if (!settings.enabled) {
-      await vscode.commands.executeCommand("coopAI.setAutocompleteEnabled", true);
-    }
     await markAutocompleteDiscoveryShown(context);
-    const choice = await vscode.window.showInformationMessage(
-      "Coop autocomplete enabled — repo is Deep-Indexed",
-      "Turn off"
-    );
-    if (choice === "Turn off") {
-      await vscode.commands.executeCommand("coopAI.setAutocompleteEnabled", false);
-    }
+    // Stay off until the user opts in via Settings. Do not steal Copilot / IntelliSense.
   };
 
   void poll();

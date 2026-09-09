@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from "axios";
+import { shouldRecordUsageEvent } from "../telemetry/usageEventPolicy";
 import * as vscode from "vscode";
 import {
   DegradationConfig,
@@ -847,6 +848,9 @@ export class SecureApiClient {
     eventType: string,
     metadata?: Record<string, unknown>
   ): Promise<void> {
+    if (!shouldRecordUsageEvent(eventType, vscode.env.isTelemetryEnabled)) {
+      return;
+    }
     const baseUrl = readConfiguration().apiBaseUrl;
     if (!baseUrl) {
       return;
@@ -885,7 +889,7 @@ export function readConfiguration(): Omit<
     temperature: config.get<number>("temperature", 0.5),
     maxTokens: config.get<number>("maxTokens", 8192),
     llmEnabled: true,
-    autocompleteEnabled: config.get<boolean>("autocomplete.enabled", true),
+    autocompleteEnabled: config.get<boolean>("autocomplete.enabled", false),
     useCachedResponses: config.get<boolean>("useCachedResponses", true),
     includeSelection: config.get<boolean>("includeSelection", true),
     includeActiveFile: config.get<boolean>("includeActiveFile", true),

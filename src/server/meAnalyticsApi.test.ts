@@ -24,6 +24,7 @@ function mockResponse(): ServerResponse & { statusCode?: number; body?: string }
 function mockOrgStore(orgId: string): OrgStore {
   return {
     resolveAuth: async () => undefined,
+    isOrgSuspended: async () => false,
     getOrganization: async (id: string) => ({
       id,
       name: "Test Org",

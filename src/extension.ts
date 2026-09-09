@@ -18,7 +18,7 @@ import {
 } from "./autocomplete/registerAutocomplete";
 import { snapshotAlreadyOpenDocuments, snapshotOpenDocument } from "./edit/editorWorkingCopy";
 import { registerPatchCommands } from "./edit/registerPatchCommands";
-import { readAutocompleteSettings, clearAutocompleteWorkspaceOverrides, restoreAutocompleteUnlessUserOptedOut } from "./autocomplete/autocompleteConfig";
+import { readAutocompleteSettings, clearAutocompleteWorkspaceOverrides } from "./autocomplete/autocompleteConfig";
 import { LayeredDegradationCache } from "./cache/degradationCache";
 import { CacheManager } from "./cache/CacheManager";
 import { CodeHostRouter } from "./api/codeHosts/codeHostRouter";
@@ -748,7 +748,6 @@ export function activate(context: vscode.ExtensionContext): void {
 
   void (async () => {
     await clearAutocompleteWorkspaceOverrides();
-    await restoreAutocompleteUnlessUserOptedOut(context);
     const enabled = readAutocompleteSettings().enabled;
     await vscode.commands.executeCommand("setContext", "coopAI.autocomplete.enabled", enabled);
     await refreshAllSessions();

@@ -137,7 +137,7 @@ The page always shows:
 
 | Toggle | Setting | Default |
 | --- | --- | --- |
-| **Enable inline autocomplete** | `coopAI.autocomplete.enabled` (global scope) | `true` |
+| **Enable inline autocomplete** | `coopAI.autocomplete.enabled` (global scope) | `false` |
 
 Click **Save model settings** to persist the autocomplete toggle. Chat, quick actions, and edit mode stay on.
 
@@ -149,11 +149,11 @@ Full table and routing details: [Model assignments](/docs/model-assignments).
 
 ## Autocomplete
 
-Inline ghost-text completions are **on by default**. Turn them off from the chat header (**Autocomplete On/Off**) or **Preferences → Model & chat** → **Enable inline autocomplete** → **Save model settings**. Autocomplete toggles persist at **global** (User) scope. See the full guide: [Inline autocomplete](/docs/autocomplete).
+Inline ghost-text completions are **off by default**. Turn them on from **Preferences → Model & chat** → **Enable inline autocomplete** → **Save model settings**. Autocomplete toggles persist at **global** (User) scope. See the full guide: [Inline autocomplete](/docs/autocomplete).
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `coopAI.autocomplete.enabled` | `true` | Enable inline ghost-text autocomplete (global scope) |
+| `coopAI.autocomplete.enabled` | `false` | Enable inline ghost-text autocomplete (global scope) |
 | `coopAI.autocomplete.trigger` | `auto` | `auto` \| `manual` \| `off` — when to request completions |
 | `coopAI.autocomplete.useFim` | `true` | FIM `segments` for Codestral routing |
 | `coopAI.autocomplete.useGraphContext` | `false` | Indexed graph context (auto when Deep-Index is ready) |
@@ -165,7 +165,7 @@ Inline ghost-text completions are **on by default**. Turn them off from the chat
 
 Autocomplete always uses **Mistral Codestral** and does not follow the **model menu in chat**. See [Model assignments](/docs/model-assignments).
 
-**Command Palette:** **CoopAI: Toggle Autocomplete**, **CoopAI: Show Autocomplete Help**
+**Command Palette:** **CoopAI: Trigger Inline Autocomplete**, **CoopAI: Show Autocomplete Help**
 
 ## Production vs developer mode
 

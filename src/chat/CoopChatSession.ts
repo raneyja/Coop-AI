@@ -659,7 +659,7 @@ export class CoopChatSession {
       temperature: 0.5,
       maxTokens: 8192,
       llmEnabled: true,
-      autocompleteEnabled: true,
+      autocompleteEnabled: false,
       useCachedResponses: true,
       includeSelection: true,
       includeActiveFile: true,

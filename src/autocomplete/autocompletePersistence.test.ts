@@ -32,13 +32,13 @@ function readRepoFile(relativePath: string): string {
   return readFileSync(join(repoRoot, relativePath), "utf8");
 }
 
-test("package.json defaults autocomplete to enabled", () => {
+test("package.json defaults autocomplete to disabled", () => {
   const setting = packageJson.contributes?.configuration?.properties?.["coopAI.autocomplete.enabled"];
-  assert.equal(setting?.default, true, "coopAI.autocomplete.enabled default must stay true");
+  assert.equal(setting?.default, false, "coopAI.autocomplete.enabled default must stay false");
 });
 
-test("readConfiguration falls back to autocomplete enabled when unset", () => {
-  assert.equal(readConfiguration().autocompleteEnabled, true);
+test("readConfiguration falls back to autocomplete disabled when unset", () => {
+  assert.equal(readConfiguration().autocompleteEnabled, false);
 });
 
 test("registerAutocomplete persists enabled at Global scope", () => {
@@ -47,16 +47,22 @@ test("registerAutocomplete persists enabled at Global scope", () => {
   assert.match(source, /await config\.update\("enabled", enabled, updateTarget\)/);
 });
 
-test("index notifier routes toggles through setAutocompleteEnabled command", () => {
+test("index notifier does not toggle autocomplete from Deep-Index readiness", () => {
   const source = readRepoFile("src/autocomplete/coopAutocompleteProvider.ts");
-  assert.match(source, /coopAI\.setAutocompleteEnabled/);
+  assert.doesNotMatch(source, /coopAI\.setAutocompleteEnabled/);
   assert.doesNotMatch(source, /ConfigurationTarget\.Workspace/);
 });
 
-test("extension activates autocomplete restore on startup", () => {
+test("extension does not force-enable autocomplete on startup", () => {
   const source = readRepoFile("src/extension.ts");
   assert.match(source, /clearAutocompleteWorkspaceOverrides/);
-  assert.match(source, /restoreAutocompleteUnlessUserOptedOut/);
+  assert.doesNotMatch(source, /restoreAutocompleteUnlessUserOptedOut/);
+});
+
+test("package.json does not steal Jump to Bracket for autocomplete trigger", () => {
+  const keybindings = packageJson.contributes?.keybindings ?? [];
+  const trigger = keybindings.find((binding: { command?: string }) => binding.command === "coopAI.triggerAutocomplete");
+  assert.equal(trigger, undefined);
 });
 
 console.log(`\nautocompletePersistence: ${passed} passed, ${failed} failed`);

@@ -52,7 +52,7 @@ npm run smoke:autocomplete:live    # live API only (same as smoke script step 1)
 
 ## Rollout ladder
 
-Extension default is **on** (`coopAI.autocomplete.enabled: true` in `package.json` and `autocompleteConfig.ts`). User opt-out is persisted globally; workspace `false` overrides are stripped on activate.
+Extension default is **off** (`coopAI.autocomplete.enabled: false` in `package.json` and `autocompleteConfig.ts`). Opt-in is persisted globally.
 
 | Stage | Gate | Action |
 |-------|------|--------|
@@ -83,7 +83,7 @@ function autocompleteDefaultOnForOrg(orgId: string): boolean {
 }
 ```
 
-Extension: on activate, if user has not set `coopAI.autocomplete.enabled` explicitly, apply server default when `autocompleteDefaultOn` is true. User/workspace setting always wins.
+User/workspace setting always wins. There is no server `autocompleteDefaultOn` force-on on activate.
 
 ## References
 

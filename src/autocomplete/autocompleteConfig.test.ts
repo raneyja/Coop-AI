@@ -50,7 +50,7 @@ async function asyncTest(name: string, fn: () => Promise<void>): Promise<void> {
 
 test("readAutocompleteSettings returns package defaults when unset", () => {
   const settings = readAutocompleteSettings();
-  assert.equal(settings.enabled, true);
+  assert.equal(settings.enabled, false);
   assert.equal(settings.trigger, "auto");
   assert.equal(settings.model, "chat");
   assert.equal(settings.requestTimeoutMs, 3000);
@@ -77,6 +77,8 @@ test("readAutocompleteSettings reads coopAI.autocomplete overrides", () => {
 });
 
 test("isAutocompleteGloballyEnabled reflects enabled flag", () => {
+  assert.equal(isAutocompleteGloballyEnabled(), false);
+  setMockConfiguration("coopAI.autocomplete", "enabled", true);
   assert.equal(isAutocompleteGloballyEnabled(), true);
   setMockConfiguration("coopAI.autocomplete", "enabled", false);
   assert.equal(isAutocompleteGloballyEnabled(), false);

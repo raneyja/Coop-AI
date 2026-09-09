@@ -58,14 +58,14 @@ Set `coopAI.devMode: true` in VS Code User settings to unlock local `coopAI.llmP
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `coopAI.defaultModel` | `auto` | Global picker sentinel; catalog ids on paid plans |
-| `coopAI.autocomplete.enabled` | `true` | Same as **Enable inline autocomplete** (global scope) |
+| `coopAI.autocomplete.enabled` | `false` | Same as **Enable inline autocomplete** (global scope) |
 | `coopAI.devMode` | `false` | Unlock provider/model overrides and local PAT flows |
 
 See [Extension settings](/docs/extension-settings) for the full settings hub.
 
 ## Next steps
 
-- [Inline autocomplete](/docs/autocomplete) — default on, global persistence, turn off intentionally
+- [Inline autocomplete](/docs/autocomplete) — off by default, global persistence, opt in from Settings
 - [Edit mode](/docs/edit-mode) — `/edit` uses GPT-5.1 on Auto
 - [Create pull request](/docs/create-pull-request) — notes use GPT-4o mini
 - [Plans & billing](/docs/plans-billing) — seat-based Pro / Pro+ / Max usage

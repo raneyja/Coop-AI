@@ -5,8 +5,7 @@ import {
   createMockExtensionContext,
   getMockExecutedCommands,
   resetMockConfiguration,
-  setMockConfiguration,
-  setMockInformationMessageChoice
+  setMockConfiguration
 } from "./test/vscodeMockSetup";
 import type { IndexBackend, IndexRepoStatus } from "../indexing/indexBackend";
 
@@ -68,7 +67,7 @@ const readyStatus: IndexRepoStatus = {
 };
 
 void (async () => {
-  await asyncTest("index notifier auto-enables autocomplete globally when index becomes healthy", async () => {
+  await asyncTest("index notifier does not auto-enable autocomplete when index becomes healthy", async () => {
     setMockConfiguration("coopAI.autocomplete", "enabled", false);
     setMockConfiguration("coopAI", "defaultOwner", "acme");
     setMockConfiguration("coopAI", "defaultRepo", "widgets");
@@ -81,32 +80,8 @@ void (async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     disposable.dispose();
 
-    const commands = getMockExecutedCommands();
-    assert.equal(commands.length, 1);
-    assert.equal(commands[0]?.[0], "coopAI.setAutocompleteEnabled");
-    assert.equal(commands[0]?.[1], true);
+    assert.equal(getMockExecutedCommands().length, 0);
     assert.equal(context.globalState.get("coopAI.autocomplete.indexReadyToastShown"), true);
-  });
-
-  await asyncTest("index notifier Turn off disables autocomplete globally", async () => {
-    setMockConfiguration("coopAI.autocomplete", "enabled", false);
-    setMockConfiguration("coopAI", "defaultOwner", "acme");
-    setMockConfiguration("coopAI", "defaultRepo", "widgets");
-    setMockInformationMessageChoice("Turn off");
-
-    const context = createMockExtensionContext();
-    const disposable = registerAutocompleteIndexNotifier(
-      context,
-      createMockIndexBackend([readyStatus])
-    );
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    disposable.dispose();
-
-    const commands = getMockExecutedCommands();
-    assert.equal(commands.length, 2);
-    assert.equal(commands[0]?.[1], true);
-    assert.equal(commands[1]?.[0], "coopAI.setAutocompleteEnabled");
-    assert.equal(commands[1]?.[1], false);
   });
 
   await asyncTest("index notifier skips when user previously disabled autocomplete", async () => {
