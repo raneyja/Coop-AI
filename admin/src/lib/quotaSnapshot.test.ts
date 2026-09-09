@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import {
   isFreeQuotaExhausted,
   normalizeQuotaSnapshot,
+  paidSeatUsedPercent,
   quotaUsedPercent,
-  resolveFreeQuotaCredits
+  resolveFreeQuotaCredits,
+  seatStatValue
 } from "./quotaSnapshot";
 
 const nestedFree = {
@@ -49,5 +51,34 @@ assert.equal(isFreeQuotaExhausted(fromTokensOnly!), false);
 
 assert.equal(resolveFreeQuotaCredits({ plan: "free", unlimited: false }), null);
 assert.equal(resolveFreeQuotaCredits(undefined), null);
+
+assert.equal(paidSeatUsedPercent(undefined), null);
+assert.equal(
+  paidSeatUsedPercent({
+    usageMeters: {
+      usedRatio: 0.41,
+      auto: { usedRatio: 0.2 },
+      frontier: { usedRatio: 0.21 }
+    }
+  }),
+  41
+);
+assert.equal(
+  paidSeatUsedPercent({
+    usageMeters: {
+      auto: { usedRatio: 0.1 },
+      frontier: { usedRatio: 0.05 }
+    }
+  }),
+  15
+);
+assert.equal(seatStatValue({ unlimited: true }), "No cap");
+assert.equal(
+  seatStatValue({
+    usageMeters: { usedRatio: 0.04, auto: { usedRatio: 0.04 }, frontier: { usedRatio: 0 } }
+  }),
+  "4%"
+);
+assert.equal(seatStatValue({ plan: "free", usedCredits: 12, limitCredits: 80 }), "15%");
 
 console.log("quotaSnapshot: 1/1 tests passed");

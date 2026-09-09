@@ -15,12 +15,14 @@ import {
 } from "@/lib/usageResetCopy";
 import { stackedUsagePercents } from "@/lib/stackedUsagePercents";
 import { SeatUsageHelper, SeatUsageLegend } from "@/components/SeatUsageBar";
+import { USAGE_METER_YOUR_SEAT_BODY, USAGE_METER_YOUR_SEAT_TITLE } from "@/lib/usageMeterCopy";
 
 type UsageQuotaMeterProps = {
   snapshot?: QuotaSnapshot;
   loading?: boolean;
   showUpgradeLink?: boolean;
-  mixLine?: string | null;
+  /** Signed-in email, shown so this cannot be read as a company total. */
+  seatLabel?: string | null;
 };
 
 function FreeUsageMeter({
@@ -69,7 +71,7 @@ function FreeUsageMeter({
   );
 }
 
-export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true, mixLine }: UsageQuotaMeterProps) {
+export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true, seatLabel }: UsageQuotaMeterProps) {
   const meters = snapshot?.usageMeters;
   const paidResetLabel = formatPaidUsageResetCopy(meters?.periodEnd);
   const unlimited = Boolean(snapshot?.unlimited);
@@ -82,18 +84,19 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true, mix
   const segments = stackedUsagePercents(autoRatio, frontierRatio);
   const totalPct = Math.round(Math.max(0, Math.min(100, totalRatio * 100)));
   const windowHours = freeCredits?.windowHours ?? snapshot?.windowHours ?? 5;
+  const signedInAs = seatLabel?.trim() ? `Signed in as ${seatLabel.trim()}.` : null;
 
   return (
     <section className="admin-card space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="admin-section-label">Usage quota</h2>
+          <h2 className="admin-section-label">{USAGE_METER_YOUR_SEAT_TITLE}</h2>
           <p className="mt-1 text-sm text-coop-muted">
             {isPaidMeters
-              ? `${meters?.displayName ?? "Pro"} includes monthly usage that resets on your signup anniversary. This bar is your seat, not a shared team pool.`
-              : `Free includes ${freeCredits?.limitCredits ?? 80}K AI credits per ${windowHours}-hour window.`}
+              ? USAGE_METER_YOUR_SEAT_BODY
+              : `Free credits for you — ${freeCredits?.limitCredits ?? 80}K every ${windowHours} hours. Not a company pool.`}
           </p>
-          {mixLine ? <p className="mt-1 text-xs text-coop-muted">{mixLine}</p> : null}
+          {signedInAs ? <p className="mt-1 text-xs text-coop-muted">{signedInAs}</p> : null}
         </div>
         {showUpgradeLink ? (
           <Link href="/billing" className="admin-link text-sm">
@@ -116,13 +119,13 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true, mix
       ) : meters ? (
         <div className="space-y-2">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <p className="text-sm font-medium text-white">Monthly usage</p>
+            <p className="text-sm font-medium text-white">Your monthly usage</p>
             <p className="text-xs text-coop-muted">{totalPct}% used</p>
           </div>
           <div
             className="flex h-2 overflow-hidden rounded-full bg-white/10"
             role="img"
-            aria-label={`${totalPct}% of monthly usage used`}
+            aria-label={`${totalPct}% of your monthly usage used`}
           >
             {segments.auto > 0 ? (
               <div className="h-full bg-coop-index" style={{ width: `${segments.auto}%` }} />
@@ -139,7 +142,7 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true, mix
         <FreeUsageMeter credits={freeCredits} />
       ) : (
         <div className="space-y-2">
-          <p className="text-sm text-coop-muted">Usage limits are not available for this organization yet.</p>
+          <p className="text-sm text-coop-muted">Usage for your seat is not available yet.</p>
         </div>
       )}
     </section>

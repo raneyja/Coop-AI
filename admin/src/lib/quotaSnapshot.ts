@@ -111,3 +111,48 @@ export function quotaUsedPercent(used: number, limit: number): number {
   }
   return Math.max(0, Math.min(100, Math.round((used / limit) * 100)));
 }
+
+function usageMeterRatios(meters: unknown): { usedRatio: number } | null {
+  if (!meters || typeof meters !== "object") {
+    return null;
+  }
+  const record = meters as {
+    usedRatio?: unknown;
+    auto?: { usedRatio?: unknown };
+    frontier?: { usedRatio?: unknown };
+  };
+  const auto = typeof record.auto?.usedRatio === "number" ? record.auto.usedRatio : 0;
+  const frontier = typeof record.frontier?.usedRatio === "number" ? record.frontier.usedRatio : 0;
+  const usedRatio =
+    typeof record.usedRatio === "number" ? record.usedRatio : Math.min(1, auto + frontier);
+  if (!Number.isFinite(usedRatio)) {
+    return null;
+  }
+  return { usedRatio: Math.max(0, Math.min(1, usedRatio)) };
+}
+
+/** Whole-bar percent for a paid seat (Base + Frontier). */
+export function paidSeatUsedPercent(snapshot?: QuotaSnapshotFields | null): number | null {
+  const meters = usageMeterRatios(normalizeQuotaSnapshot(snapshot ?? undefined).usageMeters);
+  if (!meters) {
+    return null;
+  }
+  return Math.round(meters.usedRatio * 100);
+}
+
+/** Compact Dashboard value: `4%`, `No cap`, or free-credit percent. */
+export function seatStatValue(snapshot?: QuotaSnapshotFields | null): string | null {
+  const normalized = normalizeQuotaSnapshot(snapshot ?? undefined);
+  if (normalized.unlimited) {
+    return "No cap";
+  }
+  const paid = paidSeatUsedPercent(normalized);
+  if (paid != null) {
+    return `${paid}%`;
+  }
+  const credits = resolveFreeQuotaCredits(normalized);
+  if (!credits) {
+    return null;
+  }
+  return `${quotaUsedPercent(credits.usedCredits, credits.limitCredits)}%`;
+}

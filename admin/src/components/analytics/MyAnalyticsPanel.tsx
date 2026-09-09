@@ -3,16 +3,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   analyticsRangeParams,
+  fetchMe,
   fetchMeAnalyticsChat,
   fetchMeAnalyticsCompletions,
   fetchMeAnalyticsOverview,
+  quotaSnapshotFromMe,
   type AnalyticsCompletions,
   type AnalyticsRange,
   type MeAnalyticsChat,
   type MeAnalyticsOverview,
-  type MeAnalyticsProductMixItem
+  type MeAnalyticsProductMixItem,
+  type QuotaSnapshot
 } from "@/lib/coopApi";
+import { getStoredMe } from "@/lib/auth";
+import { useOrgPlan } from "@/hooks/useOrgPlan";
 import { AdminStat, AdminStatRow } from "@/components/AdminStatRow";
+import { UsageQuotaMeter } from "@/components/UsageQuotaMeter";
 import { quickActionLabelFromEventType } from "@/lib/quickActionLabels";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 import {
@@ -162,11 +168,15 @@ function CarHero({
 }
 
 export function MyAnalyticsPanel() {
+  const me = getStoredMe();
+  const { capabilities } = useOrgPlan();
   const [range, setRange] = useState<AnalyticsRange>("30d");
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [overview, setOverview] = useState<MeAnalyticsOverview | null>(null);
   const [chat, setChat] = useState<MeAnalyticsChat | null>(null);
   const [completions, setCompletions] = useState<AnalyticsCompletions | null>(null);
+  const [quota, setQuota] = useState<QuotaSnapshot | undefined>();
+  const [quotaLoading, setQuotaLoading] = useState(capabilities.showUsageQuota);
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -221,6 +231,34 @@ export function MyAnalyticsPanel() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!capabilities.showUsageQuota) {
+      setQuotaLoading(false);
+      setQuota(undefined);
+      return;
+    }
+    let cancelled = false;
+    setQuotaLoading(true);
+    void fetchMe()
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+        setQuotaLoading(false);
+        if (result.ok && result.data) {
+          setQuota(quotaSnapshotFromMe(result.data));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setQuotaLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [capabilities.showUsageQuota]);
+
   const quickActionTotal = useMemo(
     () => (chat?.quickActions ?? []).reduce((sum, row) => sum + row.count, 0),
     [chat]
@@ -257,14 +295,46 @@ export function MyAnalyticsPanel() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="admin-page-title">My Analytics</h1>
-          <p className="mt-1 text-sm text-coop-muted">
-            Your personal Coop activity — chat, completions, quick actions, and edits.
-          </p>
+      <div>
+        <h1 className="admin-page-title">My Analytics</h1>
+        <p className="mt-1 text-sm text-coop-muted">
+          Your personal Coop activity — chat, completions, quick actions, and edits.
+        </p>
+      </div>
+
+      {capabilities.showUsageQuota ? (
+        <UsageQuotaMeter
+          snapshot={quota}
+          loading={quotaLoading}
+          showUpgradeLink={false}
+          seatLabel={me?.email}
+        />
+      ) : null}
+
+      {unavailable && (
+        <UnavailableBanner message="Usage analytics API is unavailable. Ensure migrations are applied and the API is running with usage tracking enabled." />
+      )}
+
+      {error && <p className="text-sm text-red-400">{error}</p>}
+
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-coop-border">
+        <div className="flex flex-wrap gap-1">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`admin-btn border-b-2 px-4 py-2 text-sm ${
+                activeTab === tab.id
+                  ? "border-coop-index text-white"
+                  : "border-transparent text-coop-muted hover:text-white"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
-        <div className="flex rounded-sm border border-coop-border">
+        <div className="mb-1 flex rounded-sm border border-coop-border">
           {(["7d", "30d", "90d"] as AnalyticsRange[]).map((option) => (
             <button
               key={option}
@@ -280,29 +350,6 @@ export function MyAnalyticsPanel() {
             </button>
           ))}
         </div>
-      </div>
-
-      {unavailable && (
-        <UnavailableBanner message="Usage analytics API is unavailable. Ensure migrations are applied and the API is running with usage tracking enabled." />
-      )}
-
-      {error && <p className="text-sm text-red-400">{error}</p>}
-
-      <div className="flex flex-wrap gap-1 border-b border-coop-border">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id)}
-            className={`admin-btn border-b-2 px-4 py-2 text-sm ${
-              activeTab === tab.id
-                ? "border-coop-index text-white"
-                : "border-transparent text-coop-muted hover:text-white"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
       </div>
 
       {activeTab === "overview" && (

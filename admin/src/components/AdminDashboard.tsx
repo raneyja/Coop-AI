@@ -16,10 +16,11 @@ import { useOrgPlan } from "@/hooks/useOrgPlan";
 import { AdminStat, AdminStatRow } from "@/components/AdminStatRow";
 import { PlanBadge } from "@/components/PlanBadge";
 import { IntegrationStatusList } from "@/components/IntegrationStatusList";
-import { UsageQuotaMeter } from "@/components/UsageQuotaMeter";
 import { UpgradeCTA } from "@/components/UpgradeCTA";
 import { seatMixLine } from "@/lib/billingCopy";
 import { resolvePlanNudge } from "@/lib/planNudge";
+import { seatStatValue } from "@/lib/quotaSnapshot";
+import { USAGE_METER_YOUR_SEAT_TITLE } from "@/lib/usageMeterCopy";
 
 export function AdminDashboard() {
   const me = getStoredMe();
@@ -165,16 +166,23 @@ export function AdminDashboard() {
             </Link>
           </p>
         </div>
+        {capabilities.showUsageQuota ? (
+          <div className="admin-stat">
+            <p className="text-xs font-medium uppercase tracking-wide text-coop-muted">
+              {USAGE_METER_YOUR_SEAT_TITLE}
+            </p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-white">
+              {quotaLoading ? "—" : seatStatValue(quota) ?? "—"}
+            </p>
+            <p className="mt-0.5 text-xs text-coop-muted">
+              You, not the company.{" "}
+              <Link href="/analytics/my" className="admin-link text-xs">
+                My Analytics →
+              </Link>
+            </p>
+          </div>
+        ) : null}
       </AdminStatRow>
-
-      {capabilities.showUsageQuota ? (
-        <UsageQuotaMeter
-          snapshot={quota}
-          loading={quotaLoading}
-          showUpgradeLink={false}
-          mixLine={mixLine}
-        />
-      ) : null}
 
       <section className="space-y-4">
         <div className="flex items-center justify-between">

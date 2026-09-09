@@ -53,6 +53,10 @@ export type MeResponse = StoredMe & {
   canUseLightning?: boolean;
   userId?: string;
   isSignedIn?: boolean;
+  unlimited?: boolean;
+  usageTier?: string | null;
+  usageMeters?: QuotaSnapshot["usageMeters"];
+  quota?: QuotaSnapshot;
 };
 
 export type LoginResponse = {
@@ -1080,6 +1084,16 @@ export async function fetchQuota(): Promise<ApiResult<QuotaSnapshot>> {
     status: result.status,
     data: normalizeQuotaSnapshot(result.data) as QuotaSnapshot
   };
+}
+
+export function quotaSnapshotFromMe(me: MeResponse): QuotaSnapshot {
+  return normalizeQuotaSnapshot({
+    plan: me.plan,
+    usageTier: me.usageTier,
+    unlimited: me.unlimited,
+    usageMeters: me.usageMeters,
+    quota: me.quota
+  }) as QuotaSnapshot;
 }
 
 export async function fetchBilling(): Promise<ApiResult<BillingInfo>> {
