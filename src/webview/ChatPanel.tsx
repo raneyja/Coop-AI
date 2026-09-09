@@ -87,6 +87,13 @@ import { resolvePromptLibraryRun } from "../prompts/promptLibraryRun";
 import { useLaunchTypewriter } from "./hooks/useLaunchTypewriter";
 import { useDebouncedProse } from "./hooks/useDebouncedProse";
 import { attachmentsFromDataTransfer, mergeAttachments } from "./attachmentUtils";
+import {
+  dequeueFollowUp,
+  enqueueFollowUp,
+  removeFollowUp,
+  shouldAutoFlushFollowUpQueue,
+  type QueuedFollowUp
+} from "./lib/chatFollowUpQueue";
 import type {
   ConflictActionId,
   ConflictResolutionState,
@@ -385,6 +392,10 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [thinkingBuffer, setThinkingBuffer] = useState("");
   const [agentOverlay, setAgentOverlay] = useState<AgentActivityState | undefined>();
   const [isStreaming, setIsStreaming] = useState(false);
+  const [followUpQueue, setFollowUpQueue] = useState<QueuedFollowUp[]>([]);
+  const followUpQueueRef = useRef<QueuedFollowUp[]>([]);
+  followUpQueueRef.current = followUpQueue;
+  const pendingFlushRef = useRef(false);
   const [isExplorerOpen, setIsExplorerOpen] = useState(false);
   const explorerRepoRef = useRef<{
     provider: import("../chat/types").CodeHostProviderPreference;
@@ -485,6 +496,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     setDegradationNotification(undefined);
     setCommandConfirm(undefined);
     setAttachmentError("");
+    pendingFlushRef.current = false;
+    followUpQueueRef.current = [];
+    setFollowUpQueue([]);
   }, []);
 
   useEffect(() => {
@@ -1334,12 +1348,20 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setStreamingBuffer("");
           setThinkingBuffer("");
           setAgentOverlay(undefined);
+          pendingFlushRef.current = shouldAutoFlushFollowUpQueue({
+            reason: "complete",
+            queueLength: followUpQueueRef.current.length
+          });
           setIsStreaming(false);
           break;
         }
         case "chat:cancelled": {
           const activeId = threadsStateRef.current?.activeId;
           if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
+            break;
+          }
+          if (liveStreamRef.current) {
+            // Queued follow-up already started a new turn; ignore the previous Stop.
             break;
           }
           userStoppedRef.current = true;
@@ -1380,6 +1402,10 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             current?.deliverable === "standalone" ? current : undefined
           );
           setError(message.payload.message);
+          pendingFlushRef.current = shouldAutoFlushFollowUpQueue({
+            reason: "error",
+            queueLength: followUpQueueRef.current.length
+          });
           setIsStreaming(false);
           setStreamingBuffer("");
           setThinkingBuffer("");
@@ -1756,6 +1782,104 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     [attachments, mentions, post, signedIn]
   );
 
+  const submitQueuedFollowUp = useCallback(
+    (item: QueuedFollowUp) => {
+      if (item.pendingPromptActionId) {
+        const plan = resolvePromptLibraryRun(item.text, item.pendingPromptActionId as QuickActionId);
+        switch (plan.kind) {
+          case "quick-action":
+            submitPrompt("", plan.actionId, item.attachments, item.mentions, {
+              slashUserArgs: plan.slashUserArgs
+            });
+            return;
+          case "chat":
+            submitPrompt(plan.message, undefined, item.attachments, item.mentions);
+            return;
+          case "slash":
+            submitPrompt(item.text, undefined, item.attachments, item.mentions);
+            return;
+        }
+      }
+      submitPrompt(item.text, undefined, item.attachments, item.mentions);
+    },
+    [submitPrompt]
+  );
+
+  const flushNextFollowUp = useCallback(() => {
+    if (chatRequiresSignIn(signedIn) || quotaNotice) {
+      return;
+    }
+    const { next, rest } = dequeueFollowUp(followUpQueueRef.current);
+    if (!next) {
+      return;
+    }
+    followUpQueueRef.current = rest;
+    setFollowUpQueue(rest);
+    inFlightSendRef.current = false;
+    submitQueuedFollowUp(next);
+  }, [quotaNotice, signedIn, submitQueuedFollowUp]);
+
+  const flushNextFollowUpRef = useRef(flushNextFollowUp);
+  flushNextFollowUpRef.current = flushNextFollowUp;
+
+  useEffect(() => {
+    if (isStreaming) {
+      return;
+    }
+    inFlightSendRef.current = false;
+    if (!pendingFlushRef.current) {
+      return;
+    }
+    pendingFlushRef.current = false;
+    flushNextFollowUpRef.current();
+  }, [isStreaming]);
+
+  const clearComposerDraft = useCallback(() => {
+    setInput("");
+    setAttachments([]);
+    setMentions([]);
+    setMentionResults([]);
+    setMentionError("");
+    setPendingPromptActionId(undefined);
+  }, []);
+
+  const enqueueComposerFollowUp = useCallback(
+    (front = false): boolean => {
+      if (
+        !input.trim() &&
+        attachments.length === 0 &&
+        mentions.length === 0 &&
+        !pendingPromptActionId
+      ) {
+        return false;
+      }
+      if (input.trim().length > INPUT_MAX) {
+        setError(`Prompt exceeds ${INPUT_MAX} characters.`);
+        return false;
+      }
+      const result = enqueueFollowUp(
+        followUpQueueRef.current,
+        {
+          text: input,
+          attachments: [...attachments],
+          mentions: [...mentions],
+          pendingPromptActionId
+        },
+        { front }
+      );
+      if (!result.enqueued) {
+        setError("Already have 3 follow-ups queued.");
+        return false;
+      }
+      followUpQueueRef.current = result.queue;
+      setFollowUpQueue(result.queue);
+      setError("");
+      clearComposerDraft();
+      return true;
+    },
+    [attachments, clearComposerDraft, input, mentions, pendingPromptActionId]
+  );
+
   const handleMentionSearch = useCallback(
     (pattern: string) => {
       setMentionLoading(true);
@@ -1766,6 +1890,19 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   );
 
   const handleSend = useCallback(() => {
+    if (isStreaming) {
+      enqueueComposerFollowUp();
+      return;
+    }
+    if (
+      !input.trim() &&
+      attachments.length === 0 &&
+      mentions.length === 0 &&
+      followUpQueueRef.current.length > 0
+    ) {
+      flushNextFollowUp();
+      return;
+    }
     if (pendingPromptActionId) {
       const plan = resolvePromptLibraryRun(input, pendingPromptActionId);
       switch (plan.kind) {
@@ -1781,7 +1918,16 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       }
     }
     submitPrompt(input);
-  }, [attachments, input, mentions, pendingPromptActionId, submitPrompt]);
+  }, [
+    attachments,
+    enqueueComposerFollowUp,
+    flushNextFollowUp,
+    input,
+    isStreaming,
+    mentions,
+    pendingPromptActionId,
+    submitPrompt
+  ]);
 
   const insertPromptLibraryEntry = useCallback(
     (id: string) => {
@@ -1798,9 +1944,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
 
   const handlePanelDrop = useCallback(
     async (event: React.DragEvent<HTMLDivElement>) => {
-      if (isStreaming) {
-        return;
-      }
       const target = event.target as HTMLElement;
       if (target.closest(".coop-composer")) {
         return;
@@ -1817,7 +1960,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         setAttachmentError(error instanceof Error ? error.message : "Could not attach file.");
       }
     },
-    [isStreaming]
+    []
   );
 
   const handleQuickAction = useCallback(
@@ -1879,6 +2022,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       return "";
     });
   }, [post]);
+
+  const handleStopAndSend = useCallback(() => {
+    if (enqueueComposerFollowUp(true)) {
+      pendingFlushRef.current = true;
+    }
+    handleStopStreaming();
+  }, [enqueueComposerFollowUp, handleStopStreaming]);
 
   const syncExplorerRepoFromContext = useCallback(() => {
     const owner = context.owner?.trim();
@@ -2072,6 +2222,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         onAttachmentError={setAttachmentError}
         onSend={handleSend}
         onStop={handleStopStreaming}
+        onStopAndSend={handleStopAndSend}
+        queuedFollowUps={followUpQueue}
+        onRemoveQueuedFollowUp={(id) => {
+          const next = removeFollowUp(followUpQueueRef.current, id);
+          followUpQueueRef.current = next;
+          setFollowUpQueue(next);
+        }}
         onToggleExplorer={toggleExplorer}
         launchIntroPhase={launchIntro.phase}
         launchIntroVisibleLength={launchIntro.visibleLength}
@@ -2125,7 +2282,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           prompts={promptLibrary.prompts}
           pinnedIds={promptLibrary.pinnedIds}
           hasWorkspace={promptLibrary.hasWorkspace}
-          disabled={isStreaming}
           open={promptMenuOpen}
           onOpenChange={setPromptMenuOpen}
           onRun={insertPromptLibraryEntry}
@@ -2138,7 +2294,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           onOpen={() => post({ type: "agents:open" })}
         />
         <div className="ml-auto flex min-w-0 items-center gap-2">
-          {promptLibrary.hasWorkspace && input.trim() && !isStreaming ? (
+          {promptLibrary.hasWorkspace && input.trim() ? (
             <button
               type="button"
               className="coop-text-btn shrink-0"

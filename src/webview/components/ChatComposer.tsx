@@ -26,6 +26,12 @@ import { MentionAttachmentChip } from "./MentionAttachmentChip";
 import { ContextPreviewStrip } from "./ContextPreviewStrip";
 import { ModelPickerSelect } from "./ModelPickerSelect";
 import type { RepoContext } from "../types";
+import {
+  MAX_QUEUED_FOLLOW_UPS,
+  previewQueuedFollowUp,
+  resolveFollowUpSubmitAction,
+  type QueuedFollowUp
+} from "../lib/chatFollowUpQueue";
 
 type ChatComposerProps = {
   value: string;
@@ -33,6 +39,10 @@ type ChatComposerProps = {
   isStreaming: boolean;
   /** When true, send is disabled but stop/streaming UI is unchanged. */
   submitDisabled?: boolean;
+  queuedFollowUps?: QueuedFollowUp[];
+  onRemoveQueuedFollowUp?: (id: string) => void;
+  /** Cmd/Ctrl+Enter while streaming: stop the current answer and send now. */
+  onStopAndSend?: () => void;
   variant?: "landing" | "chat";
   usageLabel?: string;
   attachments: ChatImageAttachment[];
@@ -147,6 +157,9 @@ export function ChatComposer({
   maxLength,
   isStreaming,
   submitDisabled = false,
+  queuedFollowUps = [],
+  onRemoveQueuedFollowUp,
+  onStopAndSend,
   variant = "landing",
   usageLabel,
   attachments,
@@ -183,7 +196,10 @@ export function ChatComposer({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const mirrorRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const canSend = Boolean(value.trim() || attachments.length || mentions.length);
+  const canSendDraft = Boolean(value.trim() || attachments.length || mentions.length);
+  const queueFull = queuedFollowUps.length >= MAX_QUEUED_FOLLOW_UPS;
+  const canSend = canSendDraft || (!isStreaming && queuedFollowUps.length > 0);
+  const sendEnabled = !submitDisabled && (isStreaming ? canSendDraft && !queueFull : canSend);
   const highlightSegments = useMemo(() => segmentComposerSlashHighlights(value), [value]);
 
   const [slashDismissed, setSlashDismissed] = useState(false);
@@ -196,14 +212,13 @@ export function ChatComposer({
     }
     return matchSlashCommands(slashQuery);
   }, [slashQuery]);
-  const showSlashMenu = !isStreaming && !slashDismissed && slashMatches.length > 0;
+  const showSlashMenu = !slashDismissed && slashMatches.length > 0;
   const mentionQuery = mentionMenuQuery(value, cursorPosition);
   const mentionSections = useMemo(() => groupMentionResults(mentionResults), [mentionResults]);
   const groupedMentionResults = mentionSections.flat;
   const [mentionDismissed, setMentionDismissed] = useState(false);
   const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
   const showMentionMenu =
-    !isStreaming &&
     !mentionDismissed &&
     mentionQuery !== null &&
     mentions.length < MAX_MENTIONS;
@@ -333,9 +348,6 @@ export function ChatComposer({
     async (event: React.DragEvent<HTMLDivElement>) => {
       event.preventDefault();
       event.stopPropagation();
-      if (isStreaming) {
-        return;
-      }
       try {
         const incoming = await attachmentsFromDataTransfer(event.dataTransfer);
         if (!incoming.length) {
@@ -347,7 +359,7 @@ export function ChatComposer({
         onAttachmentError(error instanceof Error ? error.message : "Could not attach file.");
       }
     },
-    [attachments, isStreaming, onAttachmentError, onAttachmentsChange]
+    [attachments, onAttachmentError, onAttachmentsChange]
   );
 
   const applyMention = useCallback(
@@ -428,11 +440,23 @@ export function ChatComposer({
       }
     }
     if (event.key === "Enter" && !event.shiftKey) {
+      if (event.nativeEvent.isComposing) {
+        return;
+      }
       event.preventDefault();
       if (event.repeat) {
         return;
       }
-      if (canSend && !isStreaming) {
+      const action = resolveFollowUpSubmitAction({
+        isStreaming,
+        canSend: sendEnabled,
+        modifierSend: event.metaKey || event.ctrlKey
+      });
+      if (action === "stop-and-send") {
+        onStopAndSend?.();
+        return;
+      }
+      if (action === "queue" || action === "send") {
         onSend();
       }
     }
@@ -548,6 +572,34 @@ export function ChatComposer({
         {showContextPreview && repoContext ? (
           <ContextPreviewStrip context={repoContext} draftMessage={value} mentions={mentions} />
         ) : null}
+        {queuedFollowUps.length > 0 ? (
+          <div
+            className="flex flex-col gap-1 border-b px-3 py-2"
+            style={{ borderColor: "var(--coop-composer-border)" }}
+            aria-live="polite"
+          >
+            {queuedFollowUps.map((item, index) => (
+              <div key={item.id} className="coop-queued-followup">
+                <span className="coop-queued-followup-label">
+                  {queuedFollowUps.length > 1 ? `Queued ${index + 1}` : "Queued"}
+                </span>
+                <span className="coop-queued-followup-text" title={item.text.trim() || previewQueuedFollowUp(item)}>
+                  {previewQueuedFollowUp(item)}
+                </span>
+                {onRemoveQueuedFollowUp ? (
+                  <button
+                    type="button"
+                    className="coop-queued-followup-remove"
+                    aria-label={`Remove queued follow-up: ${previewQueuedFollowUp(item)}`}
+                    onClick={() => onRemoveQueuedFollowUp(item.id)}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
         {mentions.length > 0 ? (
           <div
             className="flex flex-wrap gap-1.5 border-b px-3 py-2"
@@ -563,7 +615,6 @@ export function ChatComposer({
                   basename={basename}
                   isLocal={isLocal}
                   title={isLocal ? `${mention.path} · local workspace` : `${mention.repoId} · ${mention.path}`}
-                  disabled={isStreaming}
                   onRemove={() =>
                     onMentionsChange?.(
                       mentions.filter(
@@ -599,7 +650,6 @@ export function ChatComposer({
                 <button
                   type="button"
                   aria-label={`Remove ${attachment.name}`}
-                  disabled={isStreaming}
                   onClick={() => onAttachmentsChange(attachments.filter((item) => item.id !== attachment.id))}
                   className="absolute right-0.5 top-0.5 rounded bg-black/60 px-1 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-40"
                 >
@@ -632,8 +682,15 @@ export function ChatComposer({
             ref={textareaRef}
             value={value}
             rows={1}
-            disabled={isStreaming}
-            placeholder={isChat ? "Ask a follow-up, or type /…" : "Ask Coop, or type / for commands"}
+            placeholder={
+              isStreaming
+                ? queueFull
+                  ? "Follow-up queue is full"
+                  : "Queue a follow-up…"
+                : isChat
+                  ? "Ask a follow-up, or type /…"
+                  : "Ask Coop, or type / for commands"
+            }
             aria-label="Chat input"
             onChange={(e) => {
               onChange(e.target.value);
@@ -692,7 +749,6 @@ export function ChatComposer({
                 type="button"
                 title="Attach file"
                 aria-label="Attach file"
-                disabled={isStreaming}
                 onClick={() => fileInputRef.current?.click()}
                 className="coop-icon-btn"
               >
@@ -724,9 +780,9 @@ export function ChatComposer({
             <button
               type="button"
               onClick={onSend}
-              disabled={isStreaming || submitDisabled || !canSend}
-              title="Send"
-              aria-label="Send"
+              disabled={!sendEnabled}
+              title={isStreaming ? "Queue" : "Send"}
+              aria-label={isStreaming ? "Queue follow-up" : "Send"}
               className="
                 flex h-7 w-7 items-center justify-center rounded
                 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)]
