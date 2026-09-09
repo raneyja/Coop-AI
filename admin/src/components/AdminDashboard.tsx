@@ -116,6 +116,7 @@ export function AdminDashboard() {
       {pendingUpgradeCount > 0 ? (
         <UpgradeCTA
           variant="banner"
+          tone="request"
           title={
             pendingUpgradeCount === 1
               ? "1 teammate asked to upgrade"
@@ -131,6 +132,7 @@ export function AdminDashboard() {
         <>
           <UpgradeCTA
             variant="banner"
+            tone="plan"
             title={nudge.title}
             body={nudge.body}
             ctaLabel={nudge.ctaLabel}

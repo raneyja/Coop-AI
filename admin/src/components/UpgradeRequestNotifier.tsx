@@ -2,37 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { canAccessAdminPages, getStoredMe } from "@/lib/auth";
+import {
+  canAccessAdminPages,
+  clearUpgradePopupDismissed,
+  getStoredMe,
+  isUpgradePopupDismissed,
+  markUpgradePopupDismissed
+} from "@/lib/auth";
 import { fetchSeatUpgradeRequests, resolveSeatUpgradeRequest, type SeatUpgradeRequest } from "@/lib/coopApi";
 import { convertSeatModalCopy, upgradeRequestNoticeCopy } from "@/lib/billingCopy";
 import { displayUsageTierName } from "@/lib/planNudge";
 import { Modal } from "./Modal";
-
-const DISMISS_KEY = "coop-upgrade-popup-dismissed";
-
-function readDismissed(): boolean {
-  try {
-    return sessionStorage.getItem(DISMISS_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function writeDismissed(): void {
-  try {
-    sessionStorage.setItem(DISMISS_KEY, "1");
-  } catch {
-    // Ignore quota / private mode.
-  }
-}
-
-function clearDismissed(): void {
-  try {
-    sessionStorage.removeItem(DISMISS_KEY);
-  } catch {
-    // Ignore quota / private mode.
-  }
-}
 
 function tierName(value: string): string {
   if (value === "pro_plus" || value === "max" || value === "pro") {
@@ -68,23 +48,18 @@ export function UpgradeRequestNotifier() {
       return;
     }
 
-    async function poll(opts?: { forcePopup?: boolean }) {
+    async function poll() {
       const result = await fetchSeatUpgradeRequests();
       if (!result.ok) {
         return;
       }
       const next = (result.data?.requests ?? []).filter((request) => (request.status ?? "pending") === "pending");
       setPending(next);
-      if (opts?.forcePopup) {
-        clearDismissed();
-        showPopup(next);
-        return;
-      }
       if (next.length === 0) {
         setOpen(false);
         return;
       }
-      if (!readDismissed()) {
+      if (!isUpgradePopupDismissed()) {
         showPopup(next);
       }
     }
@@ -140,7 +115,7 @@ export function UpgradeRequestNotifier() {
   }
 
   function dismiss() {
-    writeDismissed();
+    markUpgradePopupDismissed();
     setOpen(false);
     setError(null);
   }
@@ -152,7 +127,7 @@ export function UpgradeRequestNotifier() {
           type="button"
           className="admin-btn-secondary inline-flex items-center gap-2 text-xs"
           onClick={() => {
-            clearDismissed();
+            clearUpgradePopupDismissed();
             setError(null);
             showPopup(pending);
           }}
@@ -167,6 +142,10 @@ export function UpgradeRequestNotifier() {
             <p className="text-sm text-white">{notice.body}</p>
             <p className="text-sm text-coop-muted">{convertCopy.body}</p>
             {error ? <p className="text-sm text-red-400">{error}</p> : null}
+            <p className="text-xs text-coop-muted">
+              Later hides this until you sign in again. The request stays open. Use the red dot in the header to
+              bring it back now.
+            </p>
             <div className="flex flex-wrap justify-end gap-2">
               <button type="button" className="admin-btn-secondary" onClick={dismiss} disabled={busy}>
                 Later

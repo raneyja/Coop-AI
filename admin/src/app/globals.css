@@ -138,6 +138,10 @@
     @apply admin-btn bg-coop-index text-coop-dark hover:bg-[#46c35a];
   }
 
+  .admin-btn-accent {
+    @apply admin-btn bg-coop-accent text-coop-dark hover:bg-[#b9a8fc];
+  }
+
   .admin-btn-secondary {
     @apply admin-btn border border-coop-border bg-transparent text-white/90 hover:border-coop-muted/50 hover:bg-white/[0.03];
   }

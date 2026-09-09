@@ -4,6 +4,7 @@ const TOKEN_KEY = "coop_admin_api_token";
 const REFRESH_TOKEN_KEY = "coop_admin_refresh_token";
 const ORG_NAME_KEY = "coop_admin_org_name";
 const ME_KEY = "coop_admin_me";
+const UPGRADE_POPUP_DISMISS_KEY = "coop-upgrade-popup-dismissed";
 
 export type StoredMe = {
   orgId: string;
@@ -70,6 +71,7 @@ export function saveSession(
   }
   // Successful sign-in for this org — clear any prior suspended-org latch.
   clearOrgSuspended();
+  clearUpgradePopupDismissed();
 }
 
 /** Update cached /v1/me profile without touching tokens. */
@@ -82,7 +84,35 @@ export function clearSession(): void {
   sessionStorage.removeItem(REFRESH_TOKEN_KEY);
   sessionStorage.removeItem(ME_KEY);
   sessionStorage.removeItem(ORG_NAME_KEY);
+  clearUpgradePopupDismissed();
   clearOrgSuspended();
+}
+
+export function isUpgradePopupDismissed(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return sessionStorage.getItem(UPGRADE_POPUP_DISMISS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function markUpgradePopupDismissed(): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(UPGRADE_POPUP_DISMISS_KEY, "1");
+  } catch {
+    // Ignore quota / private mode.
+  }
+}
+
+export function clearUpgradePopupDismissed(): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.removeItem(UPGRADE_POPUP_DISMISS_KEY);
+  } catch {
+    // Ignore quota / private mode.
+  }
 }
 
 export async function restoreSessionFromCookie(): Promise<StoredMe | null> {

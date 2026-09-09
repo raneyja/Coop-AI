@@ -7,6 +7,7 @@ const config: Config = {
       colors: {
         coop: {
           index: "#3FB950",
+          accent: "#A78BFA",
           warn: "#D29922",
           dark: "#0D1117",
           surface: "#161B22",
