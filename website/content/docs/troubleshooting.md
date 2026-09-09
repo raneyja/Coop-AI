@@ -46,7 +46,7 @@ lastUpdated: "2026-09-03"
 | **401 on completions** | Sign in again under **Settings → Account**; automation API keys do not replace user sign-in |
 | **Graph context not applied** | Deep-Index the repo in admin portal; set `coopAI.autocomplete.useGraphContext` to `true`; set Workspace owner/repo/branch |
 | **FIM not used** | Ensure `coopAI.autocomplete.useFim` is `true`; operator sets `MISTRAL_API_KEY` on API server for Codestral |
-| **Workspace kept autocomplete off** | Coop clears workspace `false` overrides on activate; set `coopAI.autocomplete.enabled` in **User** settings |
+| **Save unchecks, then the box checks itself** | A workspace file was forcing it on. Reload after this fix, then save again. |
 
 Full guide: [Inline autocomplete](/docs/autocomplete).
 

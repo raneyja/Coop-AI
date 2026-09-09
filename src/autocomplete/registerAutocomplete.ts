@@ -9,6 +9,7 @@ import {
   readAutocompleteSettings,
   onAutocompleteSettingsChanged,
   markAutocompleteUserDisabled,
+  clearAutocompleteWorkspaceOverrides
 } from "./autocompleteConfig";
 import type { AutocompleteTelemetryEvent } from "./types";
 import {
@@ -127,14 +128,13 @@ export function registerAutocompleteCommands(
     vscode.commands.registerCommand(
       "coopAI.setAutocompleteEnabled",
       async (enabled: boolean, _target?: vscode.ConfigurationTarget) => {
+      await clearAutocompleteWorkspaceOverrides();
       const config = vscode.workspace.getConfiguration("coopAI.autocomplete");
       const current = config.get<boolean>("enabled", false);
-      if (current === enabled) {
-        return;
-      }
-      const updateTarget = vscode.ConfigurationTarget.Global;
       await markAutocompleteUserDisabled(context, !enabled);
-      await config.update("enabled", enabled, updateTarget);
+      if (current !== enabled) {
+        await config.update("enabled", enabled, vscode.ConfigurationTarget.Global);
+      }
       void vscode.commands.executeCommand("setContext", "coopAI.autocomplete.enabled", enabled);
       await syncCopilotInline(enabled);
       await syncSuggestWidgetCoexistence(enabled);

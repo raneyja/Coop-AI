@@ -43,8 +43,9 @@ test("readConfiguration falls back to autocomplete disabled when unset", () => {
 
 test("registerAutocomplete persists enabled at Global scope", () => {
   const source = readRepoFile("src/autocomplete/registerAutocomplete.ts");
+  assert.match(source, /clearAutocompleteWorkspaceOverrides/);
   assert.match(source, /ConfigurationTarget\.Global/);
-  assert.match(source, /await config\.update\("enabled", enabled, updateTarget\)/);
+  assert.match(source, /await config\.update\("enabled", enabled, vscode\.ConfigurationTarget\.Global\)/);
 });
 
 test("index notifier does not toggle autocomplete from Deep-Index readiness", () => {

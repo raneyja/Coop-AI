@@ -116,14 +116,14 @@ export function resolveAutocompleteEnabledUpdateTarget(
   return vscode.ConfigurationTarget.Global;
 }
 
-/** Remove stale workspace-scoped `enabled: false` overrides left by older builds. */
+/** Workspace files must not override the global autocomplete toggle. */
 export async function clearAutocompleteWorkspaceOverrides(): Promise<void> {
   const config = vscode.workspace.getConfiguration(SECTION);
   const inspected = config.inspect<boolean>("enabled");
-  if (inspected?.workspaceValue === false) {
+  if (inspected?.workspaceValue !== undefined) {
     await config.update("enabled", undefined, vscode.ConfigurationTarget.Workspace);
   }
-  if (inspected?.workspaceFolderValue === false) {
+  if (inspected?.workspaceFolderValue !== undefined) {
     await config.update("enabled", undefined, vscode.ConfigurationTarget.WorkspaceFolder);
   }
 }

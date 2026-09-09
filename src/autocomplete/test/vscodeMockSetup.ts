@@ -16,6 +16,10 @@ type MockExtension = {
 };
 
 const mockConfigValues = new Map<string, unknown>();
+const mockInspectValues = new Map<
+  string,
+  { workspaceValue?: unknown; workspaceFolderValue?: unknown }
+>();
 const mockExtensions = new Map<string, MockExtension>();
 const configUpdates: Array<{ key: string; value: unknown; target: unknown }> = [];
 const globalState = new Map<string, unknown>();
@@ -45,8 +49,17 @@ export function setMockConfiguration(section: string | undefined, key: string, v
   mockConfigValues.set(configKey(section, key), value);
 }
 
+export function setMockInspect(
+  section: string | undefined,
+  key: string,
+  inspect: { workspaceValue?: unknown; workspaceFolderValue?: unknown }
+): void {
+  mockInspectValues.set(configKey(section, key), inspect);
+}
+
 export function resetMockConfiguration(): void {
   mockConfigValues.clear();
+  mockInspectValues.clear();
   mockExtensions.clear();
   configUpdates.length = 0;
   globalState.clear();
@@ -191,16 +204,18 @@ const vscodeMock = {
         return stored !== undefined ? (stored as T) : defaultValue;
       },
       inspect: <T>(key: string) => {
-        const value = mockConfigValues.get(configKey(section, key));
-        if (value === undefined) {
+        const inspectKey = configKey(section, key);
+        const value = mockConfigValues.get(inspectKey);
+        const inspect = mockInspectValues.get(inspectKey);
+        if (value === undefined && inspect === undefined) {
           return undefined;
         }
         return {
           key,
           defaultValue: undefined,
           globalValue: value as T,
-          workspaceValue: undefined,
-          workspaceFolderValue: undefined
+          workspaceValue: inspect?.workspaceValue as T | undefined,
+          workspaceFolderValue: inspect?.workspaceFolderValue as T | undefined
         };
       },
       async update(key: string, value: unknown, target: unknown): Promise<void> {

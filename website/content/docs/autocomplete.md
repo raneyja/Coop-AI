@@ -37,7 +37,7 @@ Prefer **User** settings (not Workspace) so the preference stays consistent acro
 "coopAI.autocomplete.enabled": false
 ```
 
-Coop strips legacy **workspace** `false` overrides on activate so an old folder setting cannot keep autocomplete off without your intent.
+Coop strips **workspace** overrides on activate and on Save so a folder or `.code-workspace` file cannot keep autocomplete on or off against your Settings choice.
 
 ### Extension UI — Command Palette (optional)
 
@@ -186,7 +186,7 @@ Suggested next-step pills in chat (`suggest_chip.*`, `suggest_intent.*`, `chat_i
 | **Slow or missing suggestions** | Increase `requestTimeoutMs`; check network; self-hosted API needs `MISTRAL_API_KEY` for Codestral FIM |
 | **Completions in strings/comments** | By design — trigger detector skips comment and string contexts |
 | **Graph context empty** | Deep-Index the repo in admin portal; confirm index status is **ready** in Settings → Indexing; check Workspace owner/repo/branch; set `coopAI.autocomplete.useGraphContext` to `true` to force on |
-| **Workspace kept it off** | Coop clears workspace `false` overrides on activate; set `coopAI.autocomplete.enabled` in **User** settings |
+| **Save unchecks, then the box checks itself** | A workspace file was forcing it on. Coop now clears that on Save. Reload the Extension Host, then save again. |
 
 More fixes: [Troubleshooting](/docs/troubleshooting#autocomplete).
 

@@ -1,9 +1,15 @@
 import "./test/vscodeMockSetup";
 import assert from "node:assert/strict";
-import { resetMockConfiguration, setMockConfiguration } from "./test/vscodeMockSetup";
+import {
+  getMockConfigUpdates,
+  resetMockConfiguration,
+  setMockConfiguration,
+  setMockInspect
+} from "./test/vscodeMockSetup";
 import {
   AUTOCOMPLETE_INDEX_DISCOVERY_SHOWN_KEY,
   AUTOCOMPLETE_USER_DISABLED_KEY,
+  clearAutocompleteWorkspaceOverrides,
   findActiveRepoBecameHealthy,
   hasAutocompleteDiscoveryBeenShown,
   isAutocompleteGloballyEnabled,
@@ -171,6 +177,22 @@ test("isAutocompleteUserDisabled and discovery shown persist in globalState", ()
 });
 
 void (async () => {
+  await asyncTest("clearAutocompleteWorkspaceOverrides removes workspace true and false", async () => {
+    setMockInspect("coopAI.autocomplete", "enabled", { workspaceValue: true });
+    await clearAutocompleteWorkspaceOverrides();
+    assert.deepEqual(getMockConfigUpdates(), [
+      { key: "enabled", value: undefined, target: 2 }
+    ]);
+
+    resetMockConfiguration();
+    setMockInspect("coopAI.autocomplete", "enabled", { workspaceValue: false, workspaceFolderValue: true });
+    await clearAutocompleteWorkspaceOverrides();
+    assert.deepEqual(getMockConfigUpdates(), [
+      { key: "enabled", value: undefined, target: 2 },
+      { key: "enabled", value: undefined, target: 3 }
+    ]);
+  });
+
   await asyncTest("shouldAutoEnableAutocompleteOnIndexReady respects userDisabled and shown flags", async () => {
     const context = createMockExtensionContext();
     assert.equal(shouldAutoEnableAutocompleteOnIndexReady(context), true);
