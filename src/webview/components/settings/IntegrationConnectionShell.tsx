@@ -2,7 +2,7 @@ import React from "react";
 import type { IntegrationChatProvider } from "../../../chat/types";
 import { ConnectionCard } from "./ConnectionCard";
 import { integrationConnectionMeta, integrationDisplayName } from "./connectionCopy";
-import { integrationConfigured, integrationOrgInstalled } from "./subtitles";
+import { integrationConfigured } from "./subtitles";
 import { findOrgIntegrationStatus, integrationToOrgProvider } from "./integrationStatus";
 import type { Preferences } from "./types";
 import type { SettingsTestKey } from "../TestButton";
@@ -19,8 +19,6 @@ type IntegrationConnectionShellProps = {
   testResult?: { key: SettingsTestKey; ok: boolean } | null;
   pendingRefresh?: SettingsTestKey | null;
   refreshResult?: { key: SettingsTestKey; ok: boolean } | null;
-  devFallback?: React.ReactNode;
-  extraFields?: React.ReactNode;
 };
 
 export function IntegrationConnectionShell({
@@ -34,9 +32,7 @@ export function IntegrationConnectionShell({
   pendingTest,
   testResult,
   pendingRefresh,
-  refreshResult,
-  devFallback,
-  extraFields
+  refreshResult
 }: IntegrationConnectionShellProps): React.ReactElement {
   const name = integrationDisplayName(provider);
   const connected = integrationConfigured(prefs, provider);
@@ -46,43 +42,38 @@ export function IntegrationConnectionShell({
       orgStatus?.scopeNeedsReconnect ||
       (provider === "slack" && prefs.slackNeedsReconnect)
   );
-  const showDevFallback = Boolean(prefs.devMode && devFallback && !integrationOrgInstalled(prefs, provider));
 
   return (
-    <>
-      <ConnectionCard
-        name={name}
-        meta={integrationConnectionMeta(prefs, provider)}
-        connected={connected && !needsReconnect}
-        needsReconnect={needsReconnect}
-        description={description}
-        connectLabel={
-          needsReconnect ? `Manage ${name}` : connected ? `Manage ${name}` : `Connect ${name}`
-        }
-        onConnect={onConnect}
-        onRefresh={onRefresh}
-        refreshKey={testKey}
-        pendingRefresh={pendingRefresh}
-        refreshResult={refreshResult}
-        onTest={onTest}
-        testKey={testKey}
-        testLabel={`Test ${name}`}
-        pendingTest={pendingTest}
-        testResult={testResult}
-        footer={
-          <p className="coop-settings-card-desc coop-prompt-modal-muted">
-            {needsReconnect
-              ? provider === "slack"
-                ? `Slack is linked but search isn’t ready. In the admin portal: Disconnect Slack, then Connect again. Return here and click Refresh status.`
-                : `${name} is linked but access expired. Reconnect it in the Coop admin portal, then return here and click Refresh status.`
-              : connected
-                ? `Manage ${name} opens the Coop admin portal — that’s where tools are connected and scoped.`
-                : `Connect ${name} opens the Coop admin portal. Organization credentials stay on the Coop server, not in VS Code.`}
-          </p>
-        }
-      />
-      {extraFields}
-      {showDevFallback ? devFallback : null}
-    </>
+    <ConnectionCard
+      name={name}
+      meta={integrationConnectionMeta(prefs, provider)}
+      connected={connected && !needsReconnect}
+      needsReconnect={needsReconnect}
+      description={description}
+      connectLabel={
+        needsReconnect ? `Manage ${name}` : connected ? `Manage ${name}` : `Connect ${name}`
+      }
+      onConnect={onConnect}
+      onRefresh={onRefresh}
+      refreshKey={testKey}
+      pendingRefresh={pendingRefresh}
+      refreshResult={refreshResult}
+      onTest={onTest}
+      testKey={testKey}
+      testLabel={`Test ${name}`}
+      pendingTest={pendingTest}
+      testResult={testResult}
+      footer={
+        <p className="coop-settings-card-desc coop-prompt-modal-muted">
+          {needsReconnect
+            ? provider === "slack"
+              ? `Slack is linked but search isn’t ready. In the admin portal: Disconnect Slack, then Connect again. Return here and click Refresh status.`
+              : `${name} is linked but access expired. Reconnect it in the Coop admin portal, then return here and click Refresh status.`
+            : connected
+              ? `Manage ${name} opens the Coop admin portal — that’s where tools are connected and scoped.`
+              : `Connect ${name} opens the Coop admin portal. Organization credentials stay on the Coop server, not in VS Code.`}
+        </p>
+      }
+    />
   );
 }

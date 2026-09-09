@@ -2,10 +2,8 @@ import type { IntegrationChatProvider } from "../../../chat/types";
 import { assignedModelsHubSubtitle } from "../../../config/featureModelAssignments";
 import type { Preferences } from "./types";
 import {
-  codeHostConfiguredFromFlags,
   codeHostReady,
   findOrgIntegrationStatus,
-  integrationConfiguredFromFlags,
   integrationReady,
   integrationToOrgProvider
 } from "./integrationStatus";
@@ -68,20 +66,22 @@ export function apiHubSubtitle(prefs: Preferences): string {
 }
 
 export function gitlabIsConfigured(prefs: Preferences): boolean {
-  if (prefs.devMode) {
-    return prefs.hasGitLabAppInstalled || prefs.hasGitLabToken;
+  const orgStatus = findOrgIntegrationStatus(prefs, "gitlab");
+  if (orgStatus) {
+    return orgStatus.installed;
   }
   return prefs.hasGitLabAppInstalled;
 }
 
 export function bitbucketIsConfigured(prefs: Preferences): boolean {
-  if (prefs.devMode) {
-    return prefs.hasBitbucketAppInstalled || prefs.hasBitbucketCredentials;
+  const orgStatus = findOrgIntegrationStatus(prefs, "bitbucket");
+  if (orgStatus) {
+    return orgStatus.installed;
   }
   return prefs.hasBitbucketAppInstalled;
 }
 
-/** Org App / OAuth only — used to hide local PAT fallback UI when already connected. */
+/** Org App / OAuth only. */
 export function codeHostOrgInstalled(
   prefs: Preferences,
   provider: Preferences["defaultCodeHost"]
@@ -93,30 +93,6 @@ export function codeHostOrgInstalled(
     return prefs.hasGitLabAppInstalled;
   }
   return prefs.hasBitbucketAppInstalled;
-}
-
-/** Org install only — hide local token fallback when the browser OAuth path is live. */
-export function integrationOrgInstalled(
-  prefs: Preferences,
-  provider: IntegrationChatProvider
-): boolean {
-  const orgStatus = findOrgIntegrationStatus(prefs, integrationToOrgProvider(provider));
-  if (orgStatus) {
-    return orgStatus.installed;
-  }
-  if (provider === "slack") {
-    return prefs.hasSlackInstalled;
-  }
-  if (provider === "jira" || provider === "confluence") {
-    return prefs.hasAtlassianInstalled;
-  }
-  if (provider === "teams") {
-    return prefs.hasTeamsInstalled;
-  }
-  if (provider === "notion") {
-    return prefs.hasNotionInstalled;
-  }
-  return prefs.hasGoogleDocsInstalled;
 }
 
 export function codeHostsHubSubtitle(prefs: Preferences): string {
@@ -160,27 +136,17 @@ export function promptsHubSubtitle(pinnedCount: number): string {
 }
 
 export function githubIsConfigured(prefs: Preferences): boolean {
-  if (prefs.devMode) {
-    return codeHostConfiguredFromFlags(prefs, "github");
+  if (prefs.githubNeedsReconnect) {
+    return false;
   }
   const orgStatus = findOrgIntegrationStatus(prefs, "github");
   if (orgStatus) {
     return orgStatus.installed;
   }
-  if (prefs.githubNeedsReconnect) {
-    return false;
-  }
   return prefs.hasGitHubAppInstalled;
 }
 
 export function codeHostConfigured(prefs: Preferences, provider: Preferences["defaultCodeHost"] | "github" | "gitlab" | "bitbucket"): boolean {
-  if (prefs.devMode) {
-    return codeHostConfiguredFromFlags(prefs, provider);
-  }
-  const orgStatus = findOrgIntegrationStatus(prefs, provider);
-  if (orgStatus) {
-    return orgStatus.installed;
-  }
   if (provider === "github") {
     return githubIsConfigured(prefs);
   }
@@ -197,9 +163,6 @@ export function integrationConfigured(
   const orgStatus = findOrgIntegrationStatus(prefs, integrationToOrgProvider(provider));
   if (orgStatus) {
     return orgStatus.installed;
-  }
-  if (prefs.devMode) {
-    return integrationConfiguredFromFlags(prefs, provider);
   }
   if (provider === "slack") {
     return prefs.hasSlackInstalled;

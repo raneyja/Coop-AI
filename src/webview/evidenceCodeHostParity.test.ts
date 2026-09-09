@@ -21,7 +21,7 @@ import {
   summarizeRepoSummary
 } from "./evidenceCardSummary";
 import { evidenceCodeHostConnection } from "./evidenceCodeHost";
-import { codeHostOrgInstalled } from "./components/settings/subtitles";
+import { bitbucketIsConfigured, codeHostOrgInstalled, githubIsConfigured, gitlabIsConfigured } from "./components/settings/subtitles";
 import type { Preferences } from "./components/settings/types";
 import type { BlastRadiusEvidence, KnowledgeGapsEvidence, RepoSummaryEvidence } from "../context/contextBundleEvidence";
 import type { DecisionTimeline } from "../types/decisionTimeline";
@@ -241,24 +241,22 @@ test("Knowledge Gaps source brands match each Use-repo host", () => {
   }
 });
 
-test("Settings hide developer fallback when org OAuth is installed", () => {
+test("Settings treat leftover local tokens as not connected", () => {
   const prefs = {
     devMode: true,
-    hasGitHubAppInstalled: true,
-    hasGitLabAppInstalled: true,
-    hasBitbucketAppInstalled: true,
+    hasGitHubAppInstalled: false,
+    hasGitLabAppInstalled: false,
+    hasBitbucketAppInstalled: false,
     hasGitHubToken: true,
-    hasGitLabToken: false,
-    hasBitbucketCredentials: false
+    hasGitLabToken: true,
+    hasBitbucketCredentials: true
   } as Preferences;
-  assert.equal(codeHostOrgInstalled(prefs, "github"), true);
-  assert.equal(codeHostOrgInstalled(prefs, "gitlab"), true);
-  assert.equal(codeHostOrgInstalled(prefs, "bitbucket"), true);
-  const disconnected = {
-    ...prefs,
-    hasBitbucketAppInstalled: false
-  } as Preferences;
-  assert.equal(codeHostOrgInstalled(disconnected, "bitbucket"), false);
+  assert.equal(codeHostOrgInstalled(prefs, "github"), false);
+  assert.equal(codeHostOrgInstalled(prefs, "gitlab"), false);
+  assert.equal(codeHostOrgInstalled(prefs, "bitbucket"), false);
+  assert.equal(githubIsConfigured(prefs), false);
+  assert.equal(gitlabIsConfigured(prefs), false);
+  assert.equal(bitbucketIsConfigured(prefs), false);
 });
 
 console.log(`\nevidenceCodeHostParity: ${passed}/${passed + failed} passed`);

@@ -37,17 +37,6 @@ export function codeHostConnectionMeta(prefs: Preferences, provider: CodeHostPro
     return "Not connected";
   }
 
-  if (prefs.devMode) {
-    const viaApp =
-      (provider === "github" && prefs.hasGitHubAppInstalled) ||
-      (provider === "gitlab" && prefs.hasGitLabAppInstalled) ||
-      (provider === "bitbucket" && prefs.hasBitbucketAppInstalled);
-    if (viaApp) {
-      return `Connected to ${name} for your organization`;
-    }
-    return `Connected via developer token`;
-  }
-
   if (provider === "github" && prefs.hasGitHubAppInstalled) {
     return "Connected to GitHub for your organization";
   }
@@ -91,9 +80,6 @@ export function integrationConnectionMeta(prefs: Preferences, provider: Integrat
   }
   if (provider === "google-docs" && prefs.googleDocsDisplayName) {
     return `Connected as ${prefs.googleDocsDisplayName}`;
-  }
-  if (prefs.devMode) {
-    return "Connected via developer token";
   }
   return `Connected to ${name}`;
 }

@@ -1,6 +1,7 @@
 {
   "debug.allowBreakpointsEverywhere": false,
   "coopAI.devMode": false,
+  "coopAI.apiBaseUrl": "https://api.coop-ai.dev",
   "coopAI.autocomplete.enabled": true,
   "editor.inlineSuggest.enabled": true
 }

@@ -18,7 +18,6 @@ import {
 import { listEuropeanTimezoneOptions, resolveTimezonePreference, US_TIMEZONE_OPTIONS } from "../../../chat/timezone";
 import { type SettingsTestKey } from "../TestButton";
 import { SaveFlashLabel, type SettingsSaveKey } from "../SaveFlashLabel";
-import { ConfiguredSecretInput } from "../ConfiguredSecretInput";
 import { PromptLibraryTop5Editor } from "../PromptLibraryTop5Editor";
 import type { PromptLibraryItem } from "../promptLibraryTypes";
 import type { CodeHostProviderPreference, IntegrationChatProvider, LlmProviderPreference } from "../../../chat/types";
@@ -49,7 +48,6 @@ import { AgentsMdTemplateGuide } from "../AgentsMdTemplateGuide";
 import { agentsMdAttached } from "../../lib/agentsMdStatus";
 import {
   codeHostConfigured,
-  codeHostOrgInstalled,
   integrationConfigured
 } from "./subtitles";
 import { IntegrationStatusCard, MemberAdminPortalLink } from "./IntegrationStatusCard";
@@ -64,51 +62,6 @@ import { SignInForm } from "../SignInForm";
 
 function isFreeDeveloperPlan(prefs: Preferences): boolean {
   return prefs.plan === "free";
-}
-
-/**
- * URL inputs bound directly to persisted prefs lose keystrokes: each change posts to the
- * extension host and the echoed `settings:state` re-renders the field back to the old value.
- * This keeps a local draft and only re-syncs from the persisted value while the field is not
- * focused, so typing is never clobbered mid-edit.
- */
-function SettingsUrlField({
-  value,
-  placeholder,
-  onCommit
-}: {
-  value: string;
-  placeholder?: string;
-  onCommit: (value: string) => void;
-}): React.ReactElement {
-  const [draft, setDraft] = useState(value);
-  const focusedRef = useRef(false);
-
-  useEffect(() => {
-    if (!focusedRef.current) {
-      setDraft(value);
-    }
-  }, [value]);
-
-  return (
-    <input
-      type="url"
-      value={draft}
-      placeholder={placeholder}
-      className="coop-settings-field"
-      onFocus={() => {
-        focusedRef.current = true;
-      }}
-      onChange={(e) => {
-        setDraft(e.target.value);
-        onCommit(e.target.value);
-      }}
-      onBlur={() => {
-        focusedRef.current = false;
-        onCommit(draft.trim());
-      }}
-    />
-  );
 }
 
 export type SettingsDetailProps = {
@@ -1048,14 +1001,9 @@ function PreferencesListDetail({ prefs, promptLibrary, onNavigate, onUpdate }: S
 
 function GitHubDetail({
   prefs,
-  githubTokenDraft,
-  onGithubTokenDraftChange,
-  onSaveGithubToken,
-  onClearGithubToken,
   onInstallGithubApp,
   onRefreshGithubInstallation,
   onTestCodeHost,
-  savedFlashKey,
   pendingTest,
   testResult,
   pendingRefresh,
@@ -1072,7 +1020,6 @@ function GitHubDetail({
     );
   }
   const connected = codeHostConfigured(prefs, "github");
-  const showDevFallback = prefs.devMode && !codeHostOrgInstalled(prefs, "github");
   return (
     <SettingsSection>
       <ConnectionCard
@@ -1100,53 +1047,15 @@ function GitHubDetail({
           ) : undefined
         }
       />
-      {showDevFallback ? (
-        <>
-          <p className="coop-prompt-modal-section-title">Developer fallback (PAT)</p>
-          <label className="coop-settings-field-row">
-            <span className="coop-settings-label">GitHub token {prefs.hasGitHubToken ? "(configured)" : ""}</span>
-            <ConfiguredSecretInput
-              configured={prefs.hasGitHubToken}
-              value={githubTokenDraft}
-              placeholder="ghp_…"
-              onChange={onGithubTokenDraftChange}
-              className="coop-settings-field"
-            />
-          </label>
-          <div className="coop-settings-actions">
-            <button type="button" className="coop-settings-action-btn" onClick={onSaveGithubToken}>
-              Save GitHub token
-            </button>
-            <button
-              type="button"
-              className="coop-settings-action-btn"
-              onClick={onClearGithubToken}
-              disabled={!prefs.hasGitHubToken}
-            >
-              Clear
-            </button>
-            <SaveFlashLabel show={savedFlashKey === "github"} />
-          </div>
-          <p className="coop-settings-card-desc coop-prompt-modal-muted">
-            For local Lightning experiments when the org GitHub App is not connected.
-          </p>
-        </>
-      ) : null}
     </SettingsSection>
   );
 }
 
 function GitLabDetail({
   prefs,
-  onUpdate,
-  gitlabTokenDraft,
-  onGitlabTokenDraftChange,
-  onSaveGitlabToken,
-  onClearGitlabToken,
   onInstallGitlabApp,
   onRefreshGitlabInstallation,
   onTestCodeHost,
-  savedFlashKey,
   pendingTest,
   testResult,
   pendingRefresh,
@@ -1163,7 +1072,6 @@ function GitLabDetail({
     );
   }
   const connected = codeHostConfigured(prefs, "gitlab");
-  const showDevFallback = prefs.devMode && !codeHostOrgInstalled(prefs, "gitlab");
   return (
     <SettingsSection>
       <ConnectionCard
@@ -1184,63 +1092,15 @@ function GitLabDetail({
         pendingTest={pendingTest}
         testResult={testResult}
       />
-      {showDevFallback ? (
-        <>
-          <p className="coop-prompt-modal-section-title">Developer fallback (PAT)</p>
-          <label className="coop-settings-field-row">
-            <span className="coop-settings-label">GitLab token {prefs.hasGitLabToken ? "(configured)" : ""}</span>
-            <ConfiguredSecretInput
-              configured={prefs.hasGitLabToken}
-              value={gitlabTokenDraft}
-              placeholder="glpat-…"
-              onChange={onGitlabTokenDraftChange}
-              className="coop-settings-field"
-            />
-          </label>
-          <div className="coop-settings-actions">
-            <button type="button" className="coop-settings-action-btn" onClick={onSaveGitlabToken}>
-              Save GitLab token
-            </button>
-            <button
-              type="button"
-              className="coop-settings-action-btn"
-              onClick={onClearGitlabToken}
-              disabled={!prefs.hasGitLabToken}
-            >
-              Clear
-            </button>
-            <SaveFlashLabel show={savedFlashKey === "gitlab"} />
-          </div>
-
-          <label className="coop-settings-field-row">
-            <span className="coop-settings-label">GitLab API base URL</span>
-            <SettingsUrlField
-              value={prefs.gitlabBaseUrl}
-              placeholder="https://gitlab.com/api/v4"
-              onCommit={(gitlabBaseUrl) => onUpdate({ gitlabBaseUrl })}
-            />
-          </label>
-          <p className="coop-settings-card-desc coop-prompt-modal-muted">
-            For local Lightning experiments when the org GitLab OAuth app is not connected.
-          </p>
-        </>
-      ) : null}
     </SettingsSection>
   );
 }
 
 function BitbucketDetail({
   prefs,
-  bitbucketUsernameDraft,
-  onBitbucketUsernameDraftChange,
-  bitbucketPasswordDraft,
-  onBitbucketPasswordDraftChange,
-  onSaveBitbucketCredentials,
-  onClearBitbucketCredentials,
   onInstallBitbucketApp,
   onRefreshBitbucketInstallation,
   onTestCodeHost,
-  savedFlashKey,
   pendingTest,
   testResult,
   pendingRefresh,
@@ -1257,7 +1117,6 @@ function BitbucketDetail({
     );
   }
   const connected = codeHostConfigured(prefs, "bitbucket");
-  const showDevFallback = prefs.devMode && !codeHostOrgInstalled(prefs, "bitbucket");
   return (
     <SettingsSection>
       <ConnectionCard
@@ -1278,64 +1137,15 @@ function BitbucketDetail({
         pendingTest={pendingTest}
         testResult={testResult}
       />
-      {showDevFallback ? (
-        <>
-          <p className="coop-prompt-modal-section-title">Developer fallback (app password)</p>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="coop-settings-field-row">
-              <span className="coop-settings-label">Bitbucket username</span>
-              <input
-                type="text"
-                value={bitbucketUsernameDraft}
-                onChange={(e) => onBitbucketUsernameDraftChange(e.target.value)}
-                className="coop-settings-field"
-              />
-            </label>
-            <label className="coop-settings-field-row">
-              <span className="coop-settings-label">
-                App password {prefs.hasBitbucketCredentials ? "(configured)" : ""}
-              </span>
-              <ConfiguredSecretInput
-                configured={prefs.hasBitbucketCredentials}
-                value={bitbucketPasswordDraft}
-                onChange={onBitbucketPasswordDraftChange}
-                className="coop-settings-field"
-              />
-            </label>
-          </div>
-          <div className="coop-settings-actions">
-            <button type="button" className="coop-settings-action-btn" onClick={onSaveBitbucketCredentials}>
-              Save Bitbucket credentials
-            </button>
-            <button
-              type="button"
-              className="coop-settings-action-btn"
-              onClick={onClearBitbucketCredentials}
-              disabled={!prefs.hasBitbucketCredentials}
-            >
-              Clear
-            </button>
-            <SaveFlashLabel show={savedFlashKey === "bitbucket"} />
-          </div>
-          <p className="coop-settings-card-desc coop-prompt-modal-muted">
-            For local Lightning experiments when the org Bitbucket OAuth app is not connected.
-          </p>
-        </>
-      ) : null}
     </SettingsSection>
   );
 }
 
 function SlackDetail({
   prefs,
-  slackTokenDraft,
-  onSlackTokenDraftChange,
-  onSaveSlackToken,
-  onClearSlackToken,
   onTestIntegration,
   onInstallSlackApp,
   onRefreshSlackInstallation,
-  savedFlashKey,
   pendingTest,
   testResult,
   pendingRefresh,
@@ -1365,38 +1175,6 @@ function SlackDetail({
         testResult={testResult}
         pendingRefresh={pendingRefresh}
         refreshResult={refreshResult}
-        devFallback={
-          <>
-            <p className="coop-prompt-modal-section-title">Developer fallback (token)</p>
-            <label className="coop-settings-field-row">
-              <span className="coop-settings-label">Slack token {prefs.hasSlackToken ? "(configured)" : ""}</span>
-              <ConfiguredSecretInput
-                configured={prefs.hasSlackToken}
-                value={slackTokenDraft}
-                placeholder="xoxp-… (channels:read, chat:read, users:read)"
-                onChange={onSlackTokenDraftChange}
-                className="coop-settings-field"
-              />
-            </label>
-            <div className="coop-settings-actions">
-              <button type="button" className="coop-settings-action-btn" onClick={onSaveSlackToken}>
-                Save Slack token
-              </button>
-              <button
-                type="button"
-                className="coop-settings-action-btn"
-                onClick={onClearSlackToken}
-                disabled={!prefs.hasSlackToken}
-              >
-                Clear
-              </button>
-              <SaveFlashLabel show={savedFlashKey === "slack"} />
-            </div>
-            <p className="coop-settings-card-desc coop-prompt-modal-muted">
-              Optional local token. Prefer the org Slack connection above when it is connected.
-            </p>
-          </>
-        }
       />
     </SettingsSection>
   );
@@ -1404,17 +1182,9 @@ function SlackDetail({
 
 function JiraDetail({
   prefs,
-  onUpdate,
-  jiraEmailDraft,
-  onJiraEmailDraftChange,
-  jiraTokenDraft,
-  onJiraTokenDraftChange,
-  onSaveJiraCredentials,
-  onClearJiraCredentials,
   onTestIntegration,
   onInstallAtlassianApp,
   onRefreshAtlassianInstallation,
-  savedFlashKey,
   pendingTest,
   testResult,
   pendingRefresh,
@@ -1444,55 +1214,6 @@ function JiraDetail({
         testResult={testResult}
         pendingRefresh={pendingRefresh}
         refreshResult={refreshResult}
-        devFallback={
-          <>
-            <p className="coop-prompt-modal-section-title">Developer fallback (token)</p>
-            <label className="coop-settings-field-row">
-              <span className="coop-settings-label">Jira site URL</span>
-              <SettingsUrlField
-                value={prefs.jiraBaseUrl}
-                placeholder="https://your-company.atlassian.net"
-                onCommit={(jiraBaseUrl) => onUpdate({ jiraBaseUrl })}
-              />
-            </label>
-            <label className="coop-settings-field-row">
-              <span className="coop-settings-label">
-                Jira account email {prefs.hasJiraCredentials ? "(configured)" : ""}
-              </span>
-              <input
-                type="email"
-                value={jiraEmailDraft}
-                placeholder="you@company.com"
-                onChange={(e) => onJiraEmailDraftChange(e.target.value)}
-                className="coop-settings-field"
-              />
-            </label>
-            <label className="coop-settings-field-row">
-              <span className="coop-settings-label">Jira API token</span>
-              <ConfiguredSecretInput
-                configured={prefs.hasJiraCredentials}
-                value={jiraTokenDraft}
-                placeholder="Atlassian API token"
-                onChange={onJiraTokenDraftChange}
-                className="coop-settings-field"
-              />
-            </label>
-            <div className="coop-settings-actions">
-              <button type="button" className="coop-settings-action-btn" onClick={onSaveJiraCredentials}>
-                Save Jira credentials
-              </button>
-              <button
-                type="button"
-                className="coop-settings-action-btn"
-                onClick={onClearJiraCredentials}
-                disabled={!prefs.hasJiraCredentials}
-              >
-                Clear
-              </button>
-              <SaveFlashLabel show={savedFlashKey === "jira"} />
-            </div>
-          </>
-        }
       />
     </SettingsSection>
   );
@@ -1500,14 +1221,9 @@ function JiraDetail({
 
 function TeamsDetail({
   prefs,
-  teamsTokenDraft,
-  onTeamsTokenDraftChange,
-  onSaveTeamsToken,
-  onClearTeamsToken,
   onTestIntegration,
   onInstallTeamsApp,
   onRefreshTeamsInstallation,
-  savedFlashKey,
   pendingTest,
   testResult,
   pendingRefresh,
@@ -1537,40 +1253,6 @@ function TeamsDetail({
         testResult={testResult}
         pendingRefresh={pendingRefresh}
         refreshResult={refreshResult}
-        devFallback={
-          <>
-            <p className="coop-prompt-modal-section-title">Developer fallback (token)</p>
-            <label className="coop-settings-field-row">
-              <span className="coop-settings-label">
-                Microsoft Graph access token {prefs.hasTeamsToken ? "(configured)" : ""}
-              </span>
-              <ConfiguredSecretInput
-                configured={prefs.hasTeamsToken}
-                value={teamsTokenDraft}
-                placeholder="Graph token with ChannelMessage.Read.All"
-                onChange={onTeamsTokenDraftChange}
-                className="coop-settings-field"
-              />
-            </label>
-            <div className="coop-settings-actions">
-              <button type="button" className="coop-settings-action-btn" onClick={onSaveTeamsToken}>
-                Save Teams token
-              </button>
-              <button
-                type="button"
-                className="coop-settings-action-btn"
-                onClick={onClearTeamsToken}
-                disabled={!prefs.hasTeamsToken}
-              >
-                Clear
-              </button>
-              <SaveFlashLabel show={savedFlashKey === "teams"} />
-            </div>
-            <p className="coop-settings-card-desc coop-prompt-modal-muted">
-              Optional local token. Prefer the org Teams connection above when it is connected.
-            </p>
-          </>
-        }
       />
     </SettingsSection>
   );
@@ -1578,18 +1260,9 @@ function TeamsDetail({
 
 function ConfluenceDetail({
   prefs,
-  onUpdate,
-  confluenceEmailDraft,
-  onConfluenceEmailDraftChange,
-  confluenceTokenDraft,
-  onConfluenceTokenDraftChange,
-  onSaveConfluenceCredentials,
-  onClearConfluenceCredentials,
-  onCopyJiraToConfluence,
   onTestIntegration,
   onInstallAtlassianApp,
   onRefreshAtlassianInstallation,
-  savedFlashKey,
   pendingTest,
   testResult,
   pendingRefresh,
@@ -1619,58 +1292,6 @@ function ConfluenceDetail({
         testResult={testResult}
         pendingRefresh={pendingRefresh}
         refreshResult={refreshResult}
-        devFallback={
-          <>
-            <p className="coop-prompt-modal-section-title">Developer fallback (token)</p>
-            <label className="coop-settings-field-row">
-              <span className="coop-settings-label">Confluence site URL</span>
-              <SettingsUrlField
-                value={prefs.confluenceBaseUrl}
-                placeholder="https://your-company.atlassian.net/wiki"
-                onCommit={(confluenceBaseUrl) => onUpdate({ confluenceBaseUrl })}
-              />
-            </label>
-            <label className="coop-settings-field-row">
-              <span className="coop-settings-label">
-                Confluence account email {prefs.hasConfluenceCredentials ? "(configured)" : ""}
-              </span>
-              <input
-                type="email"
-                value={confluenceEmailDraft}
-                placeholder="you@company.com"
-                onChange={(e) => onConfluenceEmailDraftChange(e.target.value)}
-                className="coop-settings-field"
-              />
-            </label>
-            <label className="coop-settings-field-row">
-              <span className="coop-settings-label">Confluence API token</span>
-              <ConfiguredSecretInput
-                configured={prefs.hasConfluenceCredentials}
-                value={confluenceTokenDraft}
-                placeholder="Atlassian API token"
-                onChange={onConfluenceTokenDraftChange}
-                className="coop-settings-field"
-              />
-            </label>
-            <div className="coop-settings-actions">
-              <button type="button" className="coop-settings-action-btn" onClick={onCopyJiraToConfluence}>
-                Use Jira credentials
-              </button>
-              <button type="button" className="coop-settings-action-btn" onClick={onSaveConfluenceCredentials}>
-                Save Confluence credentials
-              </button>
-              <button
-                type="button"
-                className="coop-settings-action-btn"
-                onClick={onClearConfluenceCredentials}
-                disabled={!prefs.hasConfluenceCredentials}
-              >
-                Clear
-              </button>
-              <SaveFlashLabel show={savedFlashKey === "confluence"} />
-            </div>
-          </>
-        }
       />
     </SettingsSection>
   );
@@ -1678,14 +1299,9 @@ function ConfluenceDetail({
 
 function NotionDetail({
   prefs,
-  notionTokenDraft,
-  onNotionTokenDraftChange,
-  onSaveNotionToken,
-  onClearNotionToken,
   onTestIntegration,
   onInstallNotionApp,
   onRefreshNotionInstallation,
-  savedFlashKey,
   pendingTest,
   testResult,
   pendingRefresh,
@@ -1715,37 +1331,6 @@ function NotionDetail({
         testResult={testResult}
         pendingRefresh={pendingRefresh}
         refreshResult={refreshResult}
-        devFallback={
-          <>
-            <p className="coop-prompt-modal-section-title">Developer fallback (token)</p>
-            <label className="coop-settings-field-row">
-              <span className="coop-settings-label">
-                Notion integration token {prefs.hasNotionToken ? "(configured)" : ""}
-              </span>
-              <ConfiguredSecretInput
-                configured={prefs.hasNotionToken}
-                value={notionTokenDraft}
-                placeholder="secret_…"
-                onChange={onNotionTokenDraftChange}
-                className="coop-settings-field"
-              />
-            </label>
-            <div className="coop-settings-actions">
-              <button type="button" className="coop-settings-action-btn" onClick={onSaveNotionToken}>
-                Save Notion token
-              </button>
-              <button
-                type="button"
-                className="coop-settings-action-btn"
-                onClick={onClearNotionToken}
-                disabled={!prefs.hasNotionToken}
-              >
-                Clear
-              </button>
-              <SaveFlashLabel show={savedFlashKey === "notion"} />
-            </div>
-          </>
-        }
       />
     </SettingsSection>
   );
@@ -1753,14 +1338,9 @@ function NotionDetail({
 
 function GoogleDocsDetail({
   prefs,
-  googleDocsTokenDraft,
-  onGoogleDocsTokenDraftChange,
-  onSaveGoogleDocsToken,
-  onClearGoogleDocsToken,
   onTestIntegration,
   onInstallGoogleDocsApp,
   onRefreshGoogleDocsInstallation,
-  savedFlashKey,
   pendingTest,
   testResult,
   pendingRefresh,
@@ -1790,37 +1370,6 @@ function GoogleDocsDetail({
         testResult={testResult}
         pendingRefresh={pendingRefresh}
         refreshResult={refreshResult}
-        devFallback={
-          <>
-            <p className="coop-prompt-modal-section-title">Developer fallback (token)</p>
-            <label className="coop-settings-field-row">
-              <span className="coop-settings-label">
-                Google Docs (Drive) access token {prefs.hasGoogleDocsToken ? "(configured)" : ""}
-              </span>
-              <ConfiguredSecretInput
-                configured={prefs.hasGoogleDocsToken}
-                value={googleDocsTokenDraft}
-                placeholder="OAuth access token with Drive read scope"
-                onChange={onGoogleDocsTokenDraftChange}
-                className="coop-settings-field"
-              />
-            </label>
-            <div className="coop-settings-actions">
-              <button type="button" className="coop-settings-action-btn" onClick={onSaveGoogleDocsToken}>
-                Save Google Docs token
-              </button>
-              <button
-                type="button"
-                className="coop-settings-action-btn"
-                onClick={onClearGoogleDocsToken}
-                disabled={!prefs.hasGoogleDocsToken}
-              >
-                Clear
-              </button>
-              <SaveFlashLabel show={savedFlashKey === "google-docs"} />
-            </div>
-          </>
-        }
       />
     </SettingsSection>
   );

@@ -123,53 +123,9 @@ export function codeHostReady(
   prefs: Preferences,
   provider: CodeHostProviderPreference | "github" | "gitlab" | "bitbucket"
 ): boolean {
-  if (prefs.devMode) {
-    return codeHostConfiguredFromFlags(prefs, provider);
-  }
   return resolveMemberToolStatus(prefs, provider) === "ready";
 }
 
 export function integrationReady(prefs: Preferences, provider: IntegrationChatProvider): boolean {
-  if (prefs.devMode) {
-    return integrationConfiguredFromFlags(prefs, provider);
-  }
   return resolveMemberToolStatus(prefs, integrationToOrgProvider(provider)) === "ready";
-}
-
-export function codeHostConfiguredFromFlags(
-  prefs: Preferences,
-  provider: CodeHostProviderPreference | "github" | "gitlab" | "bitbucket"
-): boolean {
-  if (provider === "github") {
-    if (prefs.githubNeedsReconnect) {
-      return false;
-    }
-    return prefs.hasGitHubAppInstalled || prefs.hasGitHubToken;
-  }
-  if (provider === "gitlab") {
-    return prefs.hasGitLabAppInstalled || prefs.hasGitLabToken;
-  }
-  return prefs.hasBitbucketAppInstalled || prefs.hasBitbucketCredentials;
-}
-
-export function integrationConfiguredFromFlags(
-  prefs: Preferences,
-  provider: IntegrationChatProvider
-): boolean {
-  if (provider === "slack") {
-    return prefs.hasSlackToken;
-  }
-  if (provider === "jira") {
-    return prefs.hasJiraCredentials;
-  }
-  if (provider === "teams") {
-    return prefs.hasTeamsToken;
-  }
-  if (provider === "confluence") {
-    return prefs.hasConfluenceCredentials;
-  }
-  if (provider === "notion") {
-    return prefs.hasNotionToken;
-  }
-  return prefs.hasGoogleDocsToken;
 }
