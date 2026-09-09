@@ -30,7 +30,7 @@ For scripts, CI, and direct HTTP calls to the API:
 Authorization: Bearer <org-api-key>
 ```
 
-Org API keys (`coop_…`) are created in the admin portal **API Keys** page. They are optional for developers using the VS Code extension.
+Org API keys (`coop_…`) are created in the admin portal under **Settings → API keys**. They are optional for developers using the VS Code extension.
 
 When `COOP_REQUIRE_API_AUTH=true` (production default), `/v1/chat` and `/v1/completions/inline` accept either a valid user session (extension) or a Bearer org API key (automation).
 

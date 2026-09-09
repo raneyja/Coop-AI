@@ -63,14 +63,14 @@ Login requires `canInstallIntegrations: true` or role `owner` / `admin` for admi
 | `/` | All | Dashboard — admin overview or member welcome + workspace repos |
 | `/integrations` | All | Connect GitHub, Slack, Jira/Confluence, Notion, Google Docs, Teams |
 | `/indexing` | Admin | Repo catalog, Deep-Index enable/disable, estate sync |
-| `/collections` | Pro/Ent admin | Repo groupings |
+| `/collections` | Pro/Ent admin | Repo groupings — linked from **Settings** (not sidebar) |
 | `/users` | Admin | Invite and manage users; per-user repo grants |
 | `/analytics` | Admin | Organization usage — DAU, chat, completions, CSV export |
 | `/analytics/my` | All signed-in users | Personal usage analytics (overview, chat, completions) |
 | `/my-usage` | — | Redirects to `/analytics/my` |
 | `/my-activity` | Member | Personal audit log |
 | `/feed` | All | Chat thread browser |
-| `/api-keys` | Admin | Create and revoke org API keys |
+| `/api-keys` | Admin | Create and revoke org API keys — linked from **Settings** (not sidebar) |
 | `/billing` | Admin | Plan, seats, and Stripe billing portal |
 | `/audit` | Admin | Org admin audit log |
 | `/settings` | All | Settings hub — links to nested pages below |

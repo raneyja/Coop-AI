@@ -1725,7 +1725,7 @@ function WorkspaceDetail({
             {!collectionsError && collections.length === 0 ? (
               <p className="coop-settings-card-desc text-xs">
                 No collections for {prefs.orgName ? `"${prefs.orgName}"` : "this org"}. Create one in
-                the admin portal (Collections), then{" "}
+                the admin portal under Settings → Collections, then{" "}
                 <button type="button" className="coop-text-btn" onClick={() => onRequestCollections()}>
                   refresh
                 </button>

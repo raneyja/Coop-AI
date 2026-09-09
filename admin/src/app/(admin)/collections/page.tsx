@@ -13,6 +13,7 @@ import {
   type AdminCollection,
   type OrgRepoRecord
 } from "@/lib/coopApi";
+import { SettingsSubpage } from "@/components/SettingsSubpage";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 
 function lightningLabel(repo: OrgRepoRecord): string {
@@ -144,14 +145,11 @@ export default function CollectionsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="admin-page-title">Collections</h1>
-        <p className="mt-1 text-sm text-coop-muted">
-          Group indexed repositories for cross-repo Lightning search and chat @ mentions.
-        </p>
-      </div>
-
+    <SettingsSubpage
+      title="Collections"
+      description="Group indexed repositories for cross-repo Lightning search and chat @ mentions."
+      wide
+    >
       {unavailable && <UnavailableBanner />}
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
@@ -309,6 +307,6 @@ export default function CollectionsPage() {
           </table>
         </div>
       </section>
-    </div>
+    </SettingsSubpage>
   );
 }

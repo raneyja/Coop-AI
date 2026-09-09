@@ -8,6 +8,7 @@ import {
   type AdminApiKey
 } from "@/lib/coopApi";
 import { Modal } from "@/components/Modal";
+import { SettingsSubpage } from "@/components/SettingsSubpage";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 
 export default function ApiKeysPage() {
@@ -87,14 +88,11 @@ export default function ApiKeysPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="admin-page-title">API Keys</h1>
-        <p className="mt-1 text-sm text-coop-muted">
-          Create keys for automation and service accounts. Raw keys are shown once at creation.
-        </p>
-      </div>
-
+    <SettingsSubpage
+      title="API keys"
+      description="Create keys for automation and service accounts. Raw keys are shown once at creation."
+      wide
+    >
       {unavailable && <UnavailableBanner />}
 
       <form onSubmit={handleCreate} className="admin-card flex flex-wrap items-end gap-3">
@@ -189,6 +187,6 @@ export default function ApiKeysPage() {
           Done
         </button>
       </Modal>
-    </div>
+    </SettingsSubpage>
   );
 }

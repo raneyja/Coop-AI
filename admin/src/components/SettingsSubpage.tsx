@@ -3,14 +3,16 @@ import Link from "next/link";
 export function SettingsSubpage({
   title,
   description,
-  children
+  children,
+  wide = false
 }: {
   title: string;
   description?: string;
   children: React.ReactNode;
+  wide?: boolean;
 }) {
   return (
-    <div className="max-w-2xl space-y-8">
+    <div className={wide ? "space-y-8" : "max-w-2xl space-y-8"}>
       <div>
         <Link href="/settings" className="admin-link text-sm">
           ← Settings

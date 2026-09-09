@@ -71,7 +71,7 @@ After sign-in, Account shows your **org and plan** summary and a **Sign out** bu
 
 ### Automation API keys
 
-Not in the extension UI. For CI and scripts, create keys in the admin portal **API Keys** page.
+Not in the extension UI. For CI and scripts, create keys in the admin portal under **Settings → API keys**.
 
 ## Tools
 

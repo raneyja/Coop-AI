@@ -143,7 +143,7 @@ Three sign-in paths appear on one screen:
 
 Use [coop-ai.dev/forgot-password](https://coop-ai.dev/forgot-password) if you need to reset your password outside the extension.
 
-**Automation API keys** (`coop_…`) are for CI and scripts only — create them in the [admin portal](https://admin.coop-ai.dev) **API Keys** page, not in the extension.
+**Automation API keys** (`coop_…`) are for CI and scripts only — create them in the [admin portal](https://admin.coop-ai.dev) under **Settings → API keys**, not in the extension.
 
 ### Set repository context
 

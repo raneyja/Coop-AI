@@ -74,12 +74,14 @@ Enterprise orgs configure which Slack channels, Jira projects, Notion workspaces
 
 ## Settings
 
-**Settings** (`/settings`) is a hub for org and account configuration:
+**Settings** (`/settings`) is a hub for org and account configuration. Collections and automation API keys live here too — they are not in the sidebar.
 
 | Section | Path | Who |
 | --- | --- | --- |
 | **Account & organization** | `/settings/account` | All members |
 | **Repository access** | `/settings/repository-access` | Pro / Enterprise admins |
+| **Collections** | `/collections` | Pro / Enterprise admins |
+| **API keys** | `/api-keys` | Admins (CI and scripts — not sign-in) |
 | **Single sign-on** | `/settings/single-sign-on` | Enterprise admins |
 
 ### SAML SSO (Enterprise)
@@ -115,7 +117,7 @@ Developers invited to the org see:
 
 ## API keys (automation only)
 
-**API Keys** page (admin only) — for scripts, CI, and headless automation:
+**Settings → API keys** (admin only) — for scripts, CI, and headless automation:
 
 - Create labeled keys for automation pipelines
 - Revoke compromised keys

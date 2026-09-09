@@ -56,7 +56,7 @@ Email in the extension is two steps: enter email → **Continue with email** →
 
 ### Do I need an API key?
 
-No for normal use. **Automation API keys** (`coop_…`) are optional — for CI and scripts only. Create them in the admin portal **API Keys** page if needed.
+No for normal use. **Automation API keys** (`coop_…`) are optional — for CI and scripts only. Create them in the admin portal under **Settings → API keys** if needed.
 
 ### Who connects Slack and GitHub?
 

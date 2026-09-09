@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { getStoredMe, isAdminRole } from "@/lib/auth";
 import { fetchOrg } from "@/lib/coopApi";
+import { planCapabilities } from "@/lib/planCapabilities";
 
 type SettingsNavItem = {
   href: string;
@@ -28,6 +29,7 @@ export default function SettingsPage() {
   }, [load]);
 
   const showRepoAccess = isAdmin && (orgPlan === "pro" || orgPlan === "enterprise");
+  const showCollections = isAdmin && planCapabilities(orgPlan).showCollections;
   const showSso = isAdmin && orgPlan === "enterprise";
 
   const items: SettingsNavItem[] = [
@@ -45,6 +47,22 @@ export default function SettingsPage() {
       href: "/settings/repository-access",
       title: "Repository access",
       description: "Control which Deep-Indexed repos developers can use in VS Code."
+    });
+  }
+
+  if (showCollections) {
+    items.push({
+      href: "/collections",
+      title: "Collections",
+      description: "Group indexed repositories for Lightning search and chat @ mentions."
+    });
+  }
+
+  if (isAdmin) {
+    items.push({
+      href: "/api-keys",
+      title: "API keys",
+      description: "Create keys for CI, scripts, and service accounts. Not used for sign-in."
     });
   }
 

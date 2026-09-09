@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { canAccessAdminPages, getStoredMe } from "@/lib/auth";
-import { planCapabilities } from "@/lib/planCapabilities";
 import { BrandMark } from "./BrandMark";
 
 type NavItem = {
@@ -26,20 +25,14 @@ const MEMBER_NAV_ITEMS: NavItem[] = [
 const ADMIN_NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard" },
   { href: "/indexing", label: "Indexing" },
-  {
-    href: "/collections",
-    label: "Collections",
-    hideWhen: (plan) => !planCapabilities(plan).showCollections
-  },
   { href: "/integrations", label: "Integrations" },
   { href: "/users", label: "Users" },
   { href: "/requests", label: "Requests" },
   { href: "/analytics", label: "Analytics" },
-  { href: "/api-keys", label: "API Keys" },
   { href: "/billing", label: "Billing" },
   { href: "/audit", label: "Audit" },
-  { href: "/settings", label: "Settings" },
-  { href: "/feed", label: "Chat Feed", indented: true }
+  { href: "/feed", label: "Chat Feed" },
+  { href: "/settings", label: "Settings" }
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -54,6 +47,15 @@ function isActive(pathname: string, href: string): boolean {
   }
   if (href === "/my-usage") {
     return pathname === "/my-usage" || pathname.startsWith("/analytics/my");
+  }
+  if (href === "/settings") {
+    return (
+      pathname.startsWith("/settings") ||
+      pathname === "/collections" ||
+      pathname.startsWith("/collections/") ||
+      pathname === "/api-keys" ||
+      pathname.startsWith("/api-keys/")
+    );
   }
   return pathname.startsWith(href);
 }
