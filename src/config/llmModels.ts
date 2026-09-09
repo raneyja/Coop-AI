@@ -21,7 +21,7 @@ export type ModelDefinition = {
   pool: ModelPool;
   /**
    * Approximate public list prices (USD per 1M tokens). Estimates for paid
-   * Auto/Frontier cents only — not invoices. Free-tier quota still uses creditWeight.
+   * Base/Frontier cents only — not invoices. Free-tier quota still uses creditWeight.
    */
   usdPerMillionIn: number;
   usdPerMillionOut: number;

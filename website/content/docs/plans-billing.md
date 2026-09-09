@@ -3,7 +3,7 @@ title: Plans & billing
 description: Free, Pro, Pro+, Max, and Enterprise — seats, included usage, and upgrade paths.
 section: plans
 order: 1
-lastUpdated: "2026-09-08"
+lastUpdated: "2026-09-09"
 ---
 
 ## Plan comparison
@@ -28,7 +28,7 @@ lastUpdated: "2026-09-08"
 
 See current pricing at [coop-ai.dev/pricing](/pricing).
 
-Paid seats include a monthly usage bar **for that person**. **Auto** (green) is Coop-assigned models. **Frontier** (blue) starts after Auto and is models you pick — those fill the bar faster. Together they are utilization. When the bar is full, requests stop until you upgrade that seat — there is no on-demand spend. The bar shows a percent, not a second dollar price. Unused empty seats do not add usage to anyone else.
+Paid seats include a monthly usage bar **for that person**. **Base model** (green) is cheaper models. **Frontier model** (blue) is more expensive models — those fill the bar faster. Auto in the picker can land in either slice. Together they are utilization. When the bar is full, requests stop until you upgrade that seat — there is no on-demand spend. The bar shows a percent, not a second dollar price. Unused empty seats do not add usage to anyone else.
 
 Capability gates (team invites, Collections, Deep-Index) stay on the `pro` plan. Usage amounts come from the usage tier (Pro / Pro+ / Max).
 
@@ -97,7 +97,7 @@ See also [Enterprise deployment](/docs/enterprise-deployment) and [Security arch
 | Plan | What you see |
 | --- | --- |
 | **Free** | Rolling 5-hour Auto window in the extension and admin portal |
-| **Pro / Pro+ / Max** | That person's stacked bar — Auto (green) then Frontier (blue) — resetting monthly on the organization signup anniversary. Not a shared team pool. |
+| **Pro / Pro+ / Max** | That person's stacked bar — Base model (green) then Frontier model (blue) — resetting monthly on the organization signup anniversary. Not a shared team pool. |
 | **Enterprise** | Custom contract; no hard stop in v1 |
 
 The bar shows a percent, not a second dollar amount. Frontier models fill it faster because they cost more to run.

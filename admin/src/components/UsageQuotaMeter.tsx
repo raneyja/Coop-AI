@@ -13,6 +13,11 @@ import {
   formatPaidUsageResetCopy,
   formatQuotaUsageSummary
 } from "@/lib/usageResetCopy";
+import {
+  USAGE_METER_BASE_LABEL,
+  USAGE_METER_FRONTIER_LABEL,
+  USAGE_METER_HELPER
+} from "@/lib/usageMeterCopy";
 
 type UsageQuotaMeterProps = {
   snapshot?: QuotaSnapshot;
@@ -143,17 +148,14 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true, mix
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-coop-muted">
             <span className="inline-flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-coop-index" aria-hidden />
-              Auto
+              {USAGE_METER_BASE_LABEL}
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-[#58a6ff]" aria-hidden />
-              Frontier
+              {USAGE_METER_FRONTIER_LABEL}
             </span>
           </div>
-          <p className="text-xs text-coop-muted">
-            This is your seat. Chat, quick actions, and models you pick share this bar. Frontier models fill it
-            faster.
-          </p>
+          <p className="text-xs text-coop-muted">{USAGE_METER_HELPER}</p>
           {paidResetLabel ? <p className="text-xs text-coop-muted">{paidResetLabel}</p> : null}
         </div>
       ) : freeCredits ? (

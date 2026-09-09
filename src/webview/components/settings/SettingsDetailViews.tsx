@@ -15,6 +15,12 @@ import {
   listPickerCatalogModels,
   PICKER_PROVIDER_GROUPS
 } from "../../../config/llmModels";
+import {
+  USAGE_METER_BASE_LABEL,
+  USAGE_METER_FRONTIER_LABEL,
+  USAGE_METER_HELPER,
+  USAGE_METER_PICKER_HINT
+} from "../../../config/usageMeterCopy";
 import { listEuropeanTimezoneOptions, resolveTimezonePreference, US_TIMEZONE_OPTIONS } from "../../../chat/timezone";
 import { type SettingsTestKey } from "../TestButton";
 import { SaveFlashLabel, type SettingsSaveKey } from "../SaveFlashLabel";
@@ -311,7 +317,7 @@ function ModelDetail({
 
       <SettingsSection
         title="Models you can pick"
-        description="OpenAI, Anthropic, and Gemini. Frontier models fill the monthly bar faster."
+        description={USAGE_METER_PICKER_HINT}
       >
         <div className="coop-settings-maker-stack">
           {PICKER_PROVIDER_GROUPS.map((group) => {
@@ -413,16 +419,14 @@ function monthlyUsageBar(
       <div className="coop-usage-legend">
         <span>
           <span className="coop-usage-swatch coop-usage-swatch--auto" aria-hidden />
-          Auto
+          {USAGE_METER_BASE_LABEL}
         </span>
         <span>
           <span className="coop-usage-swatch coop-usage-swatch--frontier" aria-hidden />
-          Frontier
+          {USAGE_METER_FRONTIER_LABEL}
         </span>
       </div>
-      <p className="coop-settings-card-desc mt-1">
-        This is your seat. Chat, quick actions, and models you pick share this bar. Frontier models fill it faster.
-      </p>
+      <p className="coop-settings-card-desc mt-1">{USAGE_METER_HELPER}</p>
       {resetParts ? (
         <p className="mt-2 text-[13px]">
           Resets on <span className="font-medium">{resetParts.dateLabel}</span>
