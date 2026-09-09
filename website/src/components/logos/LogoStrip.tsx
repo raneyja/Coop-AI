@@ -34,7 +34,7 @@ export function LogoStrip({
         {dark ? label : label.toLowerCase()}
       </p>
       <ul className="flex flex-wrap items-center justify-center gap-x-7 gap-y-4 md:gap-x-10">
-        {items.map(({ name, Icon, colored, wide }) => (
+        {items.map(({ name, Icon, wide }) => (
           <li
             key={name}
             className={
@@ -43,11 +43,9 @@ export function LogoStrip({
                 : "flex items-center gap-2 text-gray-400 opacity-70 transition-[opacity,color] duration-200 hover:text-gray-600 hover:opacity-100"
             }
           >
-            <span className={colored ? "opacity-90" : undefined}>
-              <Icon
-                className={`${wide ? "h-5 w-auto md:h-[22px]" : "h-5 w-5 md:h-[22px] md:w-[22px]"} shrink-0${colored ? "" : " text-inherit"}`}
-              />
-            </span>
+            <Icon
+              className={`${wide ? "h-5 w-auto md:h-[22px]" : "h-5 w-5 md:h-[22px] md:w-[22px]"} shrink-0 text-inherit`}
+            />
             <span
               className={`text-xs font-medium tracking-tight md:text-sm ${
                 dark ? "text-white/55" : "text-gray-600"

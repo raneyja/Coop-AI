@@ -18,7 +18,7 @@ import {
 export const MODEL_PROVIDER_LOGOS: BrandLogoItem[] = [
   { name: "Anthropic", Icon: AnthropicIcon },
   { name: "OpenAI", Icon: OpenAIIcon },
-  { name: "Google", Icon: GoogleIcon, colored: true },
+  { name: "Google", Icon: GoogleIcon },
   { name: "Fireworks.ai", Icon: FireworksIcon, wide: true }
 ];
 
@@ -31,5 +31,5 @@ export const INTEGRATION_LOGOS: BrandLogoItem[] = [
   { name: "Jira", Icon: JiraIcon },
   { name: "Confluence", Icon: ConfluenceIcon },
   { name: "Notion", Icon: NotionIcon },
-  { name: "Google Docs", Icon: GoogleDocsIcon, colored: true }
+  { name: "Google Docs", Icon: GoogleDocsIcon }
 ];
