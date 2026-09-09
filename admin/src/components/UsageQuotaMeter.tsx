@@ -13,11 +13,8 @@ import {
   formatPaidUsageResetCopy,
   formatQuotaUsageSummary
 } from "@/lib/usageResetCopy";
-import {
-  USAGE_METER_BASE_LABEL,
-  USAGE_METER_FRONTIER_LABEL,
-  USAGE_METER_HELPER
-} from "@/lib/usageMeterCopy";
+import { stackedUsagePercents } from "@/lib/stackedUsagePercents";
+import { SeatUsageHelper, SeatUsageLegend } from "@/components/SeatUsageBar";
 
 type UsageQuotaMeterProps = {
   snapshot?: QuotaSnapshot;
@@ -25,17 +22,6 @@ type UsageQuotaMeterProps = {
   showUpgradeLink?: boolean;
   mixLine?: string | null;
 };
-
-function stackedPercents(autoRatio: number, frontierRatio: number): { auto: number; frontier: number } {
-  const auto = Math.max(0, autoRatio) * 100;
-  const frontier = Math.max(0, frontierRatio) * 100;
-  const total = auto + frontier;
-  if (total <= 100) {
-    return { auto, frontier };
-  }
-  const scale = 100 / total;
-  return { auto: auto * scale, frontier: frontier * scale };
-}
 
 function FreeUsageMeter({
   credits
@@ -93,7 +79,7 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true, mix
   const frontierRatio = meters?.frontier.usedRatio ?? 0;
   const totalRatio =
     typeof meters?.usedRatio === "number" ? meters.usedRatio : Math.min(1, autoRatio + frontierRatio);
-  const segments = stackedPercents(autoRatio, frontierRatio);
+  const segments = stackedUsagePercents(autoRatio, frontierRatio);
   const totalPct = Math.round(Math.max(0, Math.min(100, totalRatio * 100)));
   const windowHours = freeCredits?.windowHours ?? snapshot?.windowHours ?? 5;
 
@@ -145,17 +131,8 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true, mix
               <div className="h-full bg-[#58a6ff]" style={{ width: `${segments.frontier}%` }} />
             ) : null}
           </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-coop-muted">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-coop-index" aria-hidden />
-              {USAGE_METER_BASE_LABEL}
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#58a6ff]" aria-hidden />
-              {USAGE_METER_FRONTIER_LABEL}
-            </span>
-          </div>
-          <p className="text-xs text-coop-muted">{USAGE_METER_HELPER}</p>
+          <SeatUsageLegend />
+          <SeatUsageHelper />
           {paidResetLabel ? <p className="text-xs text-coop-muted">{paidResetLabel}</p> : null}
         </div>
       ) : freeCredits ? (

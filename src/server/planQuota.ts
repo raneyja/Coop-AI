@@ -178,6 +178,44 @@ export class PlanQuotaService {
     return buildPaidUsageMeters(tier, pools, now, periodAnchor);
   }
 
+  /** Monthly Base/Frontier meters for each named seat. Free/Enterprise skip. */
+  public async getUsageMetersForUsers(
+    orgId: string,
+    plan: OrgPlan | ChatOrgPlan,
+    users: Array<{ id: string; usageTier?: UsageTier | string | null }>,
+    now = new Date(),
+    periodAnchor?: Date
+  ): Promise<Map<string, PaidUsageMeters>> {
+    const meters = new Map<string, PaidUsageMeters>();
+    if (orgId === "dev" || !this.usageTracker?.canRead()) {
+      return meters;
+    }
+    const ids = users.map((user) => user.id.trim()).filter(Boolean);
+    if (ids.length === 0) {
+      return meters;
+    }
+    const range = paidUsagePeriodRange(periodAnchor, now);
+    const pooled = await this.usageTracker.sumUsdCentsByUserIds(
+      orgId,
+      range,
+      [...LLM_USAGE_EVENT_TYPES],
+      ids
+    );
+    for (const user of users) {
+      const userId = user.id.trim();
+      if (!userId) {
+        continue;
+      }
+      const tier = effectiveUsageTier(plan, user.usageTier);
+      if (!tier) {
+        continue;
+      }
+      const pools = pooled.get(userId) ?? { autoCents: 0, frontierCents: 0 };
+      meters.set(userId, buildPaidUsageMeters(tier, pools, now, periodAnchor));
+    }
+    return meters;
+  }
+
   public async check(
     orgId: string,
     plan: OrgPlan | ChatOrgPlan,

@@ -371,5 +371,39 @@ void (async () => {
   assert.equal(recordedMeta?.bucket, "auto");
   assert.equal(recordedMeta?.overflowedFromAuto, undefined);
 
+  const groupedPool = {
+    query: async (sql: string) => {
+      if (sql.includes("GROUP BY user_id")) {
+        return {
+          rows: [
+            { user_id: "user-a", bucket: "auto", total: 200 },
+            { user_id: "user-a", bucket: "frontier", total: 50 }
+          ]
+        };
+      }
+      return { rows: [] };
+    }
+  };
+  const groupedQuota = new PlanQuotaService(new UsageTracker(groupedPool as never), config);
+  const byUser = await groupedQuota.getUsageMetersForUsers(
+    "org-pro",
+    "pro",
+    [
+      { id: "user-a", usageTier: "pro" },
+      { id: "user-b", usageTier: "pro_plus" }
+    ],
+    paidNow,
+    new Date("2026-09-04T17:00:00.000Z")
+  );
+  assert.equal(byUser.get("user-a")?.usedCents, 250);
+  assert.equal(byUser.get("user-a")?.auto.usedCents, 200);
+  assert.equal(byUser.get("user-a")?.frontier.usedCents, 50);
+  assert.equal(byUser.get("user-b")?.displayName, "Pro+");
+  assert.equal(byUser.get("user-b")?.usedCents, 0);
+  const enterpriseSeats = await groupedQuota.getUsageMetersForUsers("org-ent", "enterprise", [
+    { id: "user-a", usageTier: "pro" }
+  ]);
+  assert.equal(enterpriseSeats.size, 0);
+
   console.log("planQuota: 1/1 tests passed");
 })();

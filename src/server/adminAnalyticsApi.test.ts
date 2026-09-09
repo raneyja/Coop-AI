@@ -125,7 +125,13 @@ function mockUsageTracker(): UsageTracker {
     ) => (eventType === "lightning.search" ? [{ day: "2026-07-01", count: 3 }] : []),
     eventsByDayForEventTypes: async () => [{ day: "2026-07-01", count: 7 }],
     latencyPercentilesForEventType: async () => ({ p50: 100, p95: 300, sampleCount: 4 }),
-    exportCsv: async () => "created_at,event_type,principal,user_id,metadata\n"
+    exportCsv: async () => "created_at,event_type,principal,user_id,metadata\n",
+    canRead: () => true,
+    sumUsdCentsByUserIds: async () => {
+      const totals = new Map<string, { autoCents: number; frontierCents: number }>();
+      totals.set("u1", { autoCents: 150, frontierCents: 300 });
+      return totals;
+    }
   } as unknown as UsageTracker;
 }
 
@@ -235,6 +241,16 @@ void (async () => {
   assert.equal(usersBody.inactiveSeatCount, 1);
   assert.ok(Array.isArray(usersBody.users));
   assert.equal((usersBody.users as unknown[])[0] && (usersBody.users as Array<{ principal: string }>)[0]?.principal, "user:u1");
+  const seatUsage = usersBody.seatUsage as Array<Record<string, unknown>>;
+  assert.equal(seatUsage.length, 3);
+  const activeSeat = seatUsage.find((row) => row.userId === "u1");
+  assert.equal(activeSeat?.unlimited, false);
+  const meters = activeSeat?.usageMeters as { usedCents?: number; auto?: { usedCents?: number }; frontier?: { usedCents?: number } };
+  assert.equal(meters?.usedCents, 450);
+  assert.equal(meters?.auto?.usedCents, 150);
+  assert.equal(meters?.frontier?.usedCents, 300);
+  const idleSeat = seatUsage.find((row) => row.userId === "u2");
+  assert.equal((idleSeat?.usageMeters as { usedCents?: number })?.usedCents, 0);
 
   const noTracker = await request(baseDeps(undefined), "/v1/admin/analytics/overview");
   assert.equal(noTracker.statusCode, 503);

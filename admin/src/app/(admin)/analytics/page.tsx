@@ -15,10 +15,14 @@ import {
   type AnalyticsOverview,
   type AnalyticsRange,
   type AnalyticsUsers,
+  type AnalyticsSeatUsage,
   type AdminUser
 } from "@/lib/coopApi";
 import { AdminStat, AdminStatRow } from "@/components/AdminStatRow";
 import { AnalyticsBarChart, AnalyticsLineChart } from "@/components/analytics";
+import { SeatUsageBar, SeatUsageLegend } from "@/components/SeatUsageBar";
+import { resolveSeatUsageMeters } from "@/lib/demoSeatUsage";
+import { USAGE_METER_PERIOD_HINT } from "@/lib/usageMeterCopy";
 import { quickActionLabelFromEventType } from "@/lib/quickActionLabels";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 
@@ -198,6 +202,18 @@ export default function AnalyticsPage() {
     if (perUserCarMap.has(`user:${user.id}`)) return perUserCarMap.get(`user:${user.id}`);
     if (perUserCarMap.has(user.id)) return perUserCarMap.get(user.id);
     return undefined;
+  }
+
+  const seatUsageById = useMemo(() => {
+    const map = new Map<string, AnalyticsSeatUsage>();
+    for (const row of analyticsUsers?.seatUsage ?? []) {
+      map.set(row.userId, row);
+    }
+    return map;
+  }, [analyticsUsers]);
+
+  function seatUsageForUser(user: AdminUser): AnalyticsSeatUsage | undefined {
+    return seatUsageById.get(user.id);
   }
 
   const orgCar = useMemo(() => {
@@ -640,6 +656,10 @@ export default function AnalyticsPage() {
                 Manage users →
               </Link>
             </div>
+            <div className="mb-4 space-y-2">
+              <SeatUsageLegend />
+              <p className="text-xs text-coop-muted">{USAGE_METER_PERIOD_HINT}</p>
+            </div>
             <div className="admin-card--table">
               <table className="admin-table">
                 <thead>
@@ -665,12 +685,24 @@ export default function AnalyticsPage() {
                       </td>
                     </tr>
                   ) : (
-                    users.map((user) => {
+                    users.map((user, index) => {
                       const events = eventsForUser(user);
                       const car = carForUser(user);
+                      const seat = seatUsageForUser(user);
+                      const usage = resolveSeatUsageMeters({
+                        meters: seat?.usageMeters,
+                        index
+                      });
                       return (
                         <tr key={user.id}>
-                          <td>{user.email}</td>
+                          <td>
+                            <div>{user.email}</div>
+                            {seat?.unlimited ? (
+                              <p className="mt-1 text-[11px] text-coop-muted">No hard cap</p>
+                            ) : (
+                              <SeatUsageBar meters={usage.meters} sample={usage.sample} />
+                            )}
+                          </td>
                           <td className="capitalize">{user.role}</td>
                           <td className="capitalize">{user.status}</td>
                           <td className="tabular-nums">{events}</td>

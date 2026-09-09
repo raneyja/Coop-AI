@@ -194,6 +194,57 @@ export class UsageTracker {
     return Number(result.rows[0]?.total ?? 0);
   }
 
+  /**
+   * Paid Auto/Frontier cents for many seats in one query.
+   * Missing users are omitted (callers treat that as zero).
+   */
+  public async sumUsdCentsByUserIds(
+    orgId: string,
+    range: UsageDateRange,
+    eventTypes: string[],
+    userIds: string[]
+  ): Promise<Map<string, { autoCents: number; frontierCents: number }>> {
+    const totals = new Map<string, { autoCents: number; frontierCents: number }>();
+    const ids = [...new Set(userIds.map((id) => id.trim()).filter(Boolean))];
+    if (!this.pool || eventTypes.length === 0 || ids.length === 0) {
+      return totals;
+    }
+    const result = await this.pool.query(
+      `SELECT user_id,
+              metadata->>'bucket' AS bucket,
+              COALESCE(SUM(
+                CASE
+                  WHEN (metadata->>'usdCents') ~ '^\\d+$' THEN (metadata->>'usdCents')::bigint
+                  ELSE 0
+                END
+              ), 0)::int AS total
+       FROM usage_events
+       WHERE org_id = $1
+         AND created_at >= $2
+         AND created_at < $3
+         AND event_type = ANY($4::text[])
+         AND user_id = ANY($5::text[])
+         AND metadata->>'bucket' IN ('auto', 'frontier')
+       GROUP BY user_id, metadata->>'bucket'`,
+      [orgId, range.from, range.to, eventTypes, ids]
+    );
+    for (const row of result.rows as Array<{ user_id?: string; bucket?: string; total?: number }>) {
+      const userId = typeof row.user_id === "string" ? row.user_id : "";
+      if (!userId) {
+        continue;
+      }
+      const current = totals.get(userId) ?? { autoCents: 0, frontierCents: 0 };
+      const amount = Number(row.total ?? 0);
+      if (row.bucket === "frontier") {
+        current.frontierCents += amount;
+      } else if (row.bucket === "auto") {
+        current.autoCents += amount;
+      }
+      totals.set(userId, current);
+    }
+    return totals;
+  }
+
   public async countEvents(orgId: string, range: UsageDateRange): Promise<number> {
     if (!this.pool) {
       return 0;

@@ -1447,11 +1447,19 @@ export type AnalyticsUserActivity = {
   lastActiveAt?: string | null;
 };
 
+export type AnalyticsSeatUsage = {
+  userId: string;
+  email?: string;
+  unlimited?: boolean;
+  usageMeters?: QuotaSnapshot["usageMeters"];
+};
+
 export type AnalyticsUsers = {
   inactiveSeats?: number;
   inactiveSeatCount?: number;
   inactiveUsers?: AnalyticsInactiveUser[] | number;
   users?: AnalyticsUserActivity[];
+  seatUsage?: AnalyticsSeatUsage[];
 };
 
 export function analyticsRangeParams(range: AnalyticsRange): { from: string; to: string } {

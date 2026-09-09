@@ -13,6 +13,7 @@ import {
   type UsageTracker
 } from "./usageTracker";
 import { writeJson, type AdminApiDeps } from "./adminApiShared";
+import { createPlanQuotaService } from "./planQuota";
 
 type ParsedRequest = {
   method: string;
@@ -232,11 +233,23 @@ export async function handleAdminAnalyticsRequest(
 
   if (parsed.method === "GET" && parsed.pathname === "/v1/admin/analytics/users") {
     const users = deps.userStore ? await deps.userStore.listOrgUsers(auth.orgId) : [];
-    const [topUsers, carByPrincipal, lastActiveRows, inactiveUsers] = await Promise.all([
+    const org = deps.orgStore ? await deps.orgStore.getOrganization(auth.orgId) : undefined;
+    const plan = org?.plan ?? auth.plan;
+    const [topUsers, carByPrincipal, lastActiveRows, inactiveUsers, seatMeters] = await Promise.all([
       usageTracker.topPrincipals(auth.orgId, range, 100),
       usageTracker.completionAcceptanceByPrincipal(auth.orgId, range, 100),
       usageTracker.lastActiveAtByPrincipal(auth.orgId),
-      buildInactiveUsers(usageTracker, auth.orgId, range, users)
+      buildInactiveUsers(usageTracker, auth.orgId, range, users),
+      createPlanQuotaService(usageTracker).getUsageMetersForUsers(
+        auth.orgId,
+        plan,
+        users.map((user) => ({
+          id: user.id,
+          usageTier: user.usageTier ?? org?.usageTier
+        })),
+        new Date(),
+        org?.createdAt
+      )
     ]);
     const emailByPrincipal = new Map(
       users.map((user) => [principalForUser(user.id), user.email] as const)
@@ -258,11 +271,19 @@ export async function handleAdminAnalyticsRequest(
         lastActiveAt: lastActiveAt ? lastActiveAt.toISOString() : null
       };
     });
+    const unlimited = plan === "enterprise";
+    const seatUsage = users.map((user) => ({
+      userId: user.id,
+      email: user.email,
+      unlimited,
+      usageMeters: seatMeters.get(user.id) ?? null
+    }));
     writeJson(response, 200, {
       inactiveSeatCount: inactiveUsers.length,
       inactiveSeats: inactiveUsers.length,
       inactiveUsers,
-      users: activityUsers
+      users: activityUsers,
+      seatUsage
     });
     return true;
   }
