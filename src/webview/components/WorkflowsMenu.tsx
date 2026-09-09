@@ -5,7 +5,7 @@ import type { QuickActionId, RepoContext } from "../types";
 type WorkflowsMenuProps = {
   context: RepoContext;
   disabled?: boolean;
-  onAction: (actionId: QuickActionId, prompt: string) => void;
+  onInsert: (actionId: QuickActionId) => void;
 };
 
 function ChevronIcon({ open }: { open: boolean }): React.ReactElement {
@@ -25,12 +25,12 @@ function ChevronIcon({ open }: { open: boolean }): React.ReactElement {
 
 /**
  * Header entry point for the five structured quick actions.
- * Runs the same `onAction(id, prompt)` path as the former empty-state grid and slash commands.
+ * Inserts the matching slash command into the composer so the user can add a prompt before sending.
  */
 export function WorkflowsMenu({
   context,
   disabled,
-  onAction
+  onInsert
 }: WorkflowsMenuProps): React.ReactElement {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -64,7 +64,7 @@ export function WorkflowsMenu({
         type="button"
         className="coop-composer-pill"
         disabled={disabled}
-        title="Run a structured workflow"
+        title="Insert a workflow command"
         aria-label="Workflows"
         aria-expanded={open}
         aria-haspopup="menu"
@@ -91,7 +91,7 @@ export function WorkflowsMenu({
                   className={`coop-prompt-menu-row${action.dimmed ? " opacity-70" : ""}`}
                   onClick={() => {
                     setOpen(false);
-                    onAction(action.id, action.prompt(context));
+                    onInsert(action.id);
                   }}
                 >
                   <span className="coop-prompt-menu-row-label">{action.label}</span>

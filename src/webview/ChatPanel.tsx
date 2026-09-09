@@ -79,7 +79,11 @@ import { DecisionTimeline, type DecisionTimelinePayload } from "./DecisionTimeli
 import type { OwnershipCardPayload } from "./OwnershipCard";
 import type { LightningModeState } from "../indexing/lightningTypes";
 import type { EvidenceActionContext } from "./evidenceCardActionHandler";
-import { SLASH_COMMANDS, slashCommandHistoryContent } from "../context/slashCommands";
+import {
+  insertWorkflowSlashIntoComposer,
+  SLASH_COMMANDS,
+  slashCommandHistoryContent
+} from "../context/slashCommands";
 import { ProUpgradeChip } from "./LightningModePanel";
 import type { ChatFileMention, ChatImageAttachment, MentionSearchResult, LlmProviderPreference } from "../chat/types";
 import { inferActionIdFromTemplate } from "./lib/inferPromptActionId";
@@ -379,6 +383,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [context, setContext] = useState<RepoContext>({});
   const [dismissedAgentsNoticeFor, setDismissedAgentsNoticeFor] = useState<string | undefined>();
   const [input, setInput] = useState(cached?.draftInput || "");
+  const [composerFocusNonce, setComposerFocusNonce] = useState(0);
   const [attachments, setAttachments] = useState<ChatImageAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState("");
   const [mentions, setMentions] = useState<ChatFileMention[]>([]);
@@ -1963,12 +1968,10 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     []
   );
 
-  const handleQuickAction = useCallback(
-    (actionId: QuickActionId, prompt: string) => {
-      submitPrompt(prompt, actionId);
-    },
-    [submitPrompt]
-  );
+  const handleWorkflowInsert = useCallback((actionId: QuickActionId) => {
+    setInput((current) => insertWorkflowSlashIntoComposer(current, actionId));
+    setComposerFocusNonce((nonce) => nonce + 1);
+  }, []);
 
   const dismissJobProgress = useCallback(() => setJobProgress(undefined), []);
   const cancelJob = useCallback((jobId: string) => post({ type: "job:cancel", payload: { jobId } }), [post]);
@@ -2203,6 +2206,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       ) : null}
       <ChatComposer
         value={input}
+        focusNonce={composerFocusNonce}
         maxLength={INPUT_MAX}
         isStreaming={isStreaming}
         submitDisabled={Boolean(quotaNotice)}
@@ -2376,8 +2380,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <WorkflowsMenu
             context={context}
-            disabled={isStreaming}
-            onAction={handleQuickAction}
+            onInsert={handleWorkflowInsert}
           />
           {lightningState && !lightningState.canUseLightning ? (
             <ProUpgradeChip onClick={() => post({ type: "lightning:upgrade" })} />

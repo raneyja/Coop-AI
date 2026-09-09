@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import {
+  insertWorkflowSlashIntoComposer,
   matchSlashCommands,
   parseSlashCommand,
   segmentComposerSlashHighlights,
   SLASH_COMMANDS,
   slashCommandDisplayToken,
   slashCommandHistoryContent,
+  slashInsertTextForQuickAction,
   slashMenuQuery
 } from "./slashCommands";
 
@@ -325,6 +327,35 @@ test("segmentComposerSlashHighlights ignores unknown slash tokens", () => {
     { kind: "slash-command", text: "/jira" },
     { kind: "text", text: " ticket" }
   ]);
+});
+
+// ── Workflows menu composer insert ───────────────────────────────────────────
+test("slashInsertTextForQuickAction adds a trailing space for typing", () => {
+  assert.equal(slashInsertTextForQuickAction("understand-repo"), "/understand ");
+  assert.equal(slashInsertTextForQuickAction("trace-decision"), "/trace ");
+  assert.equal(slashInsertTextForQuickAction("find-owner"), "/owner ");
+  assert.equal(slashInsertTextForQuickAction("blast-radius"), "/blast ");
+  assert.equal(slashInsertTextForQuickAction("knowledge-gaps"), "/gaps ");
+});
+
+test("insertWorkflowSlashIntoComposer populates an empty composer", () => {
+  assert.equal(insertWorkflowSlashIntoComposer("", "understand-repo"), "/understand ");
+  assert.equal(insertWorkflowSlashIntoComposer("   ", "knowledge-gaps"), "/gaps ");
+});
+
+test("insertWorkflowSlashIntoComposer keeps existing prompt text after the command", () => {
+  assert.equal(
+    insertWorkflowSlashIntoComposer("I'm working on auth", "understand-repo"),
+    "/understand I'm working on auth"
+  );
+});
+
+test("insertWorkflowSlashIntoComposer swaps an existing slash token and keeps focus", () => {
+  assert.equal(
+    insertWorkflowSlashIntoComposer("/trace why was retry added", "understand-repo"),
+    "/understand why was retry added"
+  );
+  assert.equal(insertWorkflowSlashIntoComposer("/understand ", "blast-radius"), "/blast ");
 });
 
 // ── Summary ──────────────────────────────────────────────────────────────────

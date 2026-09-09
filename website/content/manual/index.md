@@ -256,7 +256,7 @@ Use the chat header at the top of the sidebar:
 | Control | Action |
 | --- | --- |
 | **+** (New chat) | Start a fresh thread — empty composer and homepage |
-| **Workflows** | Run Understand Repo, Trace Decision, Find Owner, Blast Radius, or Knowledge Gaps (same path as slash commands) |
+| **Workflows** | Insert `/understand`, `/trace`, `/owner`, `/blast`, or `/gaps` into the composer so you can add a prompt, then send |
 | **Thread title** dropdown | Switch between saved threads from this workspace |
 
 <!-- figures -->
@@ -315,7 +315,7 @@ Outside-workspace files (for example Downloads) stay **L** and work for plain ch
 
 ### Slash commands
 
-Type `/` in the composer to see available commands. Quick actions:
+Type `/` in the composer to see available commands. **Workflows** in the chat header inserts the same tokens (you add a prompt, then send). Quick actions:
 
 | Slash | Action |
 | --- | --- |
@@ -349,7 +349,7 @@ Open **CoopAI Settings** from the gear icon in the sidebar title bar (opens a de
 | **Indexing** | Lightning Mode status and indexed repos (all plans; free capped at 3) |
 | **Preferences** | Assigned models, prompt library, timezone |
 
-Right-click any selection in the editor for **Trace Decision**, **Find Owner**, **Blast Radius**, or **Knowledge Gaps**. **Understand Repo** is repo-wide only — use **Workflows → Understand Repo** or `/understand` after **Use repo** in the Remote workspace picker.
+Right-click any selection in the editor to run **Trace Decision**, **Find Owner**, **Blast Radius**, or **Knowledge Gaps** immediately. **Understand Repo** is repo-wide only — after **Use repo**, open **Workflows → Understand Repo** (inserts `/understand`) or type `/understand`, add what you’re working on, then send.
 
 ### Model assignments
 
@@ -458,7 +458,7 @@ Full guide: [Create pull request](/docs/create-pull-request).
 
 ## Quick Actions
 
-Run quick actions from the **Workflows** menu in the chat header, **slash commands** in chat (`/understand`, `/trace`, `/owner`, …), or the **editor context menu**. Right-click a selection for **Trace Decision**, **Find Owner**, **Blast Radius**, or **Knowledge Gaps** — **Understand Repo** is not file-scoped; use **Workflows → Understand Repo** or `/understand` after **Use repo**. On Auto, structured quick actions and integration slash commands (`/slack`, `/jira`, …) use **Anthropic Claude Sonnet 4.6**. A paid pick from the **model menu in chat** applies here too.
+Start quick actions from the **Workflows** menu in the chat header, **slash commands** in chat (`/understand`, `/trace`, `/owner`, …), or the **editor context menu**. **Workflows** inserts the matching slash command into the composer so you can add a prompt (for example `/understand focus on auth`) and then send. Right-click a selection to run **Trace Decision**, **Find Owner**, **Blast Radius**, or **Knowledge Gaps** immediately. **Understand Repo** is not file-scoped; after **Use repo**, use **Workflows → Understand Repo** or type `/understand`. On Auto, structured quick actions and integration slash commands (`/slack`, `/jira`, …) use **Anthropic Claude Sonnet 4.6**. A paid pick from the **model menu in chat** applies here too.
 
 <!-- figures -->
 ![VS Code editor context menu — CoopAI quick actions for the current selection](/screenshots/docs/context-menu-quick-actions-dark.png)
@@ -501,7 +501,7 @@ Run quick actions from the **Workflows** menu in the chat header, **slash comman
 <!-- figures sm -->
 ![Repo chip active — Understand Repo and /understand available](/screenshots/docs/extension-understand-repo-selected-success-v2.png)
 
-*3 — Repo chipped — run **Workflows → Understand Repo** or `/understand`*
+*3 — Repo chipped — **Workflows → Understand Repo** (inserts `/understand`) or type `/understand`, then send*
 <!-- /figures -->
 
 **Default prompt:** "Understand this repository's architecture, subsystems, and risks."

@@ -35,6 +35,8 @@ import {
 
 type ChatComposerProps = {
   value: string;
+  /** Increment to focus the textarea (e.g. after inserting a Workflows slash command). */
+  focusNonce?: number;
   maxLength: number;
   isStreaming: boolean;
   /** When true, send is disabled but stop/streaming UI is unchanged. */
@@ -154,6 +156,7 @@ function PaperclipIcon(): React.ReactElement {
 
 export function ChatComposer({
   value,
+  focusNonce,
   maxLength,
   isStreaming,
   submitDisabled = false,
@@ -309,6 +312,21 @@ export function ChatComposer({
   useEffect(() => {
     resize();
   }, [value, resize]);
+
+  useEffect(() => {
+    if (!focusNonce) {
+      return;
+    }
+    skipLaunchIntroIfNeeded();
+    const el = textareaRef.current;
+    if (!el) {
+      return;
+    }
+    el.focus();
+    const pos = el.value.length;
+    el.setSelectionRange(pos, pos);
+    setCursorPosition(pos);
+  }, [focusNonce, skipLaunchIntroIfNeeded]);
 
   const addAttachments = useCallback(
     async (files: FileList | File[]) => {

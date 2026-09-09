@@ -61,6 +61,30 @@ export function slashCommandDisplayToken(def: SlashCommandDef): string {
   return def.name;
 }
 
+/** Composer insert for a Workflows-menu click — trailing space so the user can add a prompt. */
+export function slashInsertTextForQuickAction(actionId: QuickActionId): string {
+  return `/${QUICK_ACTION_DISPLAY[actionId]} `;
+}
+
+/**
+ * Put a workflow slash command in the composer without sending.
+ * Empty input → `/understand `. Existing prompt text is kept after the command.
+ * If a slash command is already present, swap the token and keep the focus text.
+ */
+export function insertWorkflowSlashIntoComposer(current: string, actionId: QuickActionId): string {
+  const token = slashInsertTextForQuickAction(actionId);
+  const trimmed = current.trim();
+  if (!trimmed) {
+    return token;
+  }
+  const parsed = parseSlashCommand(trimmed);
+  if (parsed) {
+    const rest = parsed.focus.trim();
+    return rest ? `${token}${rest}` : token;
+  }
+  return `${token}${trimmed}`;
+}
+
 export function isQuickActionSlashCommand(def: SlashCommandDef): boolean {
   return def.target.kind === "action";
 }
