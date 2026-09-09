@@ -18,8 +18,7 @@ import {
 import {
   attachmentsFromClipboard,
   attachmentsFromDataTransfer,
-  mergeAttachments,
-  readAttachmentFiles
+  mergeAttachments
 } from "../attachmentUtils";
 import { paperclipAttachmentKind } from "../../chat/paperclipAttachments";
 import { MentionAttachmentChip } from "./MentionAttachmentChip";
@@ -140,20 +139,6 @@ function StopIcon(): React.ReactElement {
   );
 }
 
-function PaperclipIcon(): React.ReactElement {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M21.44 11.05l-8.49 8.49a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 1 1-2.83-2.83l8.49-8.48"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 export function ChatComposer({
   value,
   focusNonce,
@@ -198,7 +183,6 @@ export function ChatComposer({
   const launchIntroDone = !isChat && launchIntroPhase === "done";
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const mirrorRef = useRef<HTMLDivElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const canSendDraft = Boolean(value.trim() || attachments.length || mentions.length);
   const queueFull = queuedFollowUps.length >= MAX_QUEUED_FOLLOW_UPS;
   const canSend = canSendDraft || (!isStreaming && queuedFollowUps.length > 0);
@@ -327,23 +311,6 @@ export function ChatComposer({
     el.setSelectionRange(pos, pos);
     setCursorPosition(pos);
   }, [focusNonce, skipLaunchIntroIfNeeded]);
-
-  const addAttachments = useCallback(
-    async (files: FileList | File[]) => {
-      try {
-        const incoming = await readAttachmentFiles(files);
-        if (!incoming.length) {
-          onAttachmentError("Unsupported file type. Attach images, PDFs, or text files (e.g. .md, .txt, .json).");
-          return;
-        }
-        onAttachmentError("");
-        onAttachmentsChange(mergeAttachments(attachments, incoming, onAttachmentError));
-      } catch (error) {
-        onAttachmentError(error instanceof Error ? error.message : "Could not attach file.");
-      }
-    },
-    [attachments, onAttachmentError, onAttachmentsChange]
-  );
 
   const handlePaste = useCallback(
     async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -759,33 +726,10 @@ export function ChatComposer({
                 onClick={onToggleExplorer}
                 className="coop-icon-btn"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M3 7h5l2 2h11v8H3V7z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
                 </svg>
               </button>
-              <button
-                type="button"
-                title="Attach file"
-                aria-label="Attach file"
-                onClick={() => fileInputRef.current?.click()}
-                className="coop-icon-btn"
-              >
-                <PaperclipIcon />
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/*,.md,.markdown,.txt,.json,.yaml,.yml,.csv,.xml,.html,.css,.js,.ts,.tsx,.jsx,.py,.go,.rs,.java,.rb,.sql,.sh,.toml,.env"
-                multiple
-                className="hidden"
-                onChange={(event) => {
-                  const files = event.target.files;
-                  if (files?.length) {
-                    void addAttachments(files);
-                  }
-                  event.target.value = "";
-                }}
-              />
             </div>
           </div>
 
