@@ -12,6 +12,7 @@ import {
 } from "@/lib/operatorRbac";
 import {
   activateOrganization,
+  cancelOrganization,
   createOrganizationApiKey,
   fetchOrganization,
   fetchOrganizationApiKeys,
@@ -42,7 +43,7 @@ import {
 } from "@/lib/coopApi";
 import { ApiKeyRevealModal } from "@/components/ApiKeyRevealModal";
 import { ConfirmOrgNameModal } from "@/components/ConfirmOrgNameModal";
-import { StatusBadge } from "@/components/StatusBadge";
+import { OperatorOrgStatusBadge } from "@/components/StatusBadge";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 
 export default function CustomerDetailPage() {
@@ -74,6 +75,7 @@ export default function CustomerDetailPage() {
   const [seatChangeLink, setSeatChangeLink] = useState<string | null>(null);
 
   const [suspendModal, setSuspendModal] = useState(false);
+  const [cancelModal, setCancelModal] = useState(false);
   const [revokeAllModal, setRevokeAllModal] = useState(false);
   const [keyModal, setKeyModal] = useState<{ rawKey: string; label: string } | null>(null);
 
@@ -206,6 +208,23 @@ export default function CustomerDetailPage() {
     setBusy(null);
     if (!result.ok) {
       setActionError(result.error ?? "Failed to activate organization.");
+      return;
+    }
+    void load();
+  }
+
+  async function handleCancel() {
+    if (!me || !canSuperAdmin(me) || !detail) return;
+    setBusy("cancel");
+    setActionError(null);
+    const result = await cancelOrganization(orgId, {
+      confirmName: detail.name,
+      reason: "Cancelled by operator"
+    });
+    setBusy(null);
+    setCancelModal(false);
+    if (!result.ok) {
+      setActionError(result.error ?? "Failed to cancel organization.");
       return;
     }
     void load();
@@ -385,11 +404,10 @@ export default function CustomerDetailPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className={planBadgeClass(detail.plan)}>{planLabel(detail.plan)}</span>
-            {detail.operatorStatus === "suspended" ? (
-              <StatusBadge connected={false} label="Suspended" variant="danger" showWhenDisconnected />
-            ) : (
-              <StatusBadge connected label="Active" />
-            )}
+            <OperatorOrgStatusBadge
+              status={detail.operatorStatus}
+              onboardingIncomplete={detail.onboardingIncomplete}
+            />
             <span className="admin-chip admin-chip--muted">{provenanceLabel(detail.provenance)}</span>
           </div>
         </div>
@@ -766,21 +784,26 @@ export default function CustomerDetailPage() {
               </button>
             </>
           )}
-          {me && canSuperAdmin(me) && (
-            detail.operatorStatus === "suspended" ? (
-              <button
-                type="button"
-                className="admin-btn-primary"
-                onClick={handleActivate}
-                disabled={busy === "activate"}
-              >
-                Activate organization
+          {me && canSuperAdmin(me) && detail.operatorStatus !== "cancelled" && (
+            <>
+              {detail.operatorStatus === "suspended" ? (
+                <button
+                  type="button"
+                  className="admin-btn-primary"
+                  onClick={handleActivate}
+                  disabled={busy === "activate"}
+                >
+                  Activate organization
+                </button>
+              ) : (
+                <button type="button" className="admin-btn-danger" onClick={() => setSuspendModal(true)}>
+                  Suspend organization
+                </button>
+              )}
+              <button type="button" className="admin-btn-danger" onClick={() => setCancelModal(true)}>
+                Cancel customer
               </button>
-            ) : (
-              <button type="button" className="admin-btn-danger" onClick={() => setSuspendModal(true)}>
-                Suspend organization
-              </button>
-            )
+            </>
           )}
           {me && !canMutateSupport(me) && (
             <p className="text-sm text-coop-muted">
@@ -788,6 +811,13 @@ export default function CustomerDetailPage() {
             </p>
           )}
         </div>
+        {detail.operatorStatus === "cancelled" && (
+          <p className="mt-3 text-sm text-red-300">
+            This customer was cancelled. They can sign up again as a new customer. This organization cannot be
+            restored.
+            {detail.suspendedReason ? ` Reason: ${detail.suspendedReason}` : ""}
+          </p>
+        )}
         {detail.operatorStatus === "suspended" && detail.suspendedReason && (
           <p className="mt-3 text-sm text-red-300">Suspended: {detail.suspendedReason}</p>
         )}
@@ -831,11 +861,22 @@ export default function CustomerDetailPage() {
         open={suspendModal}
         title="Suspend organization"
         orgName={detail.name}
-        description="Suspended organizations lose API access immediately. Extension keys and admin sessions return 403."
+        description="Suspended organizations lose API access immediately. Their email stays on this account, so they cannot sign up again until you activate."
         confirmLabel="Suspend"
         onConfirm={handleSuspend}
         onClose={() => setSuspendModal(false)}
         loading={busy === "suspend"}
+      />
+
+      <ConfirmOrgNameModal
+        open={cancelModal}
+        title="Cancel customer"
+        orgName={detail.name}
+        description="Ends this customer. They lose access, billing stops, and they can sign up again later with the same email. We keep this record for history."
+        confirmLabel="Cancel customer"
+        onConfirm={handleCancel}
+        onClose={() => setCancelModal(false)}
+        loading={busy === "cancel"}
       />
 
       <ConfirmOrgNameModal

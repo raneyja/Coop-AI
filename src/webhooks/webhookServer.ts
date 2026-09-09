@@ -675,6 +675,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           orgStore,
           userStore,
           operatorStore,
+          authIdentityStore,
           authTokenStore,
           integrationStore,
           serverConfig,

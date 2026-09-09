@@ -115,6 +115,10 @@ void (async () => {
           repoAccessMode: "all_indexed",
           createdAt: new Date()
         }),
+        getOrgOperatorMetadata: async () => ({
+          operatorStatus: "active",
+          provenance: "manual_enterprise"
+        }),
         suspendOrganization: async () => ({
           id: "org-1",
           name: "Acme Corp",
@@ -324,6 +328,261 @@ void (async () => {
   assert.equal(seatPayload.requestedSeats, 3);
   assert.equal(sentQuantity, 3);
   assert.equal(seatCountUpdated, false);
+
+  // Viewer cannot cancel a customer.
+  const cancelDenied = mockResponse();
+  const cancelDeniedHandled = await handleOperatorApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/operator/organizations/org-1/cancel",
+      headers: { authorization: "Bearer ops-token" },
+      body: { confirmName: "Acme Corp" }
+    },
+    cancelDenied,
+    baseDeps({
+      orgStore: {
+        getOrganization: async () => ({
+          id: "org-1",
+          name: "Acme Corp",
+          plan: "pro",
+          repoAccessMode: "all_indexed",
+          createdAt: new Date()
+        })
+      } as unknown as OrgStore,
+      operatorStore: {
+        resolveSession: async () => viewer,
+        recordAudit: async () => {
+          throw new Error("audit should not run");
+        }
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(cancelDeniedHandled, true);
+  assert.equal(cancelDenied.statusCode, 403);
+  assert.match(cancelDenied.body ?? "", /operator_role_required/);
+
+  // Confirm-name mismatch does not cancel.
+  const cancelMismatch = mockResponse();
+  const cancelMismatchHandled = await handleOperatorApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/operator/organizations/org-1/cancel",
+      headers: { authorization: "Bearer ops-token" },
+      body: { confirmName: "Wrong Name" }
+    },
+    cancelMismatch,
+    baseDeps({
+      orgStore: {
+        getOrganization: async () => ({
+          id: "org-1",
+          name: "Acme Corp",
+          plan: "pro",
+          repoAccessMode: "all_indexed",
+          createdAt: new Date()
+        })
+      } as unknown as OrgStore,
+      operatorStore: {
+        resolveSession: async () => superAdmin,
+        recordAudit: async () => {
+          throw new Error("audit should not run");
+        }
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(cancelMismatchHandled, true);
+  assert.equal(cancelMismatch.statusCode, 400);
+  assert.match(cancelMismatch.body ?? "", /confirm_name_mismatch/);
+
+  // Stripe failure aborts before Coop offboard.
+  let cancelledOrg = false;
+  let deactivatedUsers = false;
+  const stripeFail = mockResponse();
+  const stripeFailHandled = await handleOperatorApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/operator/organizations/org-1/cancel",
+      headers: { authorization: "Bearer ops-token" },
+      body: { confirmName: "Acme Corp" }
+    },
+    stripeFail,
+    baseDeps({
+      orgStore: {
+        getOrganization: async () => ({
+          id: "org-1",
+          name: "Acme Corp",
+          plan: "pro",
+          repoAccessMode: "all_indexed",
+          createdAt: new Date()
+        }),
+        getOrgOperatorMetadata: async () => ({
+          operatorStatus: "active",
+          provenance: "stripe_checkout"
+        }),
+        getOrganizationBilling: async () => ({
+          stripeCustomerId: "cus_123",
+          stripeSubscriptionId: "sub_123",
+          billingStatus: "active"
+        }),
+        cancelOrganization: async () => {
+          cancelledOrg = true;
+          return {
+            id: "org-1",
+            name: "Acme Corp",
+            plan: "pro",
+            repoAccessMode: "all_indexed",
+            createdAt: new Date()
+          };
+        }
+      } as unknown as OrgStore,
+      userStore: {
+        deactivateOrgUsers: async () => {
+          deactivatedUsers = true;
+          return 1;
+        }
+      } as never,
+      authIdentityStore: {
+        deleteIdentitiesForOrg: async () => 1
+      } as never,
+      operatorStore: {
+        resolveSession: async () => superAdmin,
+        recordAudit: async () => {
+          throw new Error("audit should not run");
+        }
+      } as unknown as OperatorStore,
+      stripeService: {
+        isConfigured: () => true,
+        cancelSubscription: async () => {
+          throw new Error("Stripe is down");
+        }
+      } as never
+    })
+  );
+  assert.equal(stripeFailHandled, true);
+  assert.equal(stripeFail.statusCode, 502);
+  assert.match(stripeFail.body ?? "", /Stripe is down/);
+  assert.equal(cancelledOrg, false);
+  assert.equal(deactivatedUsers, false);
+
+  // Super-admin cancel offboards users, unlinks logins, cancels Stripe, and audits.
+  let cancelAudit = "";
+  let stripeCancelledId = "";
+  let billingCleared = false;
+  const cancelOk = mockResponse();
+  const cancelOkHandled = await handleOperatorApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/operator/organizations/org-1/cancel",
+      headers: { authorization: "Bearer ops-token" },
+      body: { confirmName: "Acme Corp", reason: "churn" }
+    },
+    cancelOk,
+    baseDeps({
+      orgStore: {
+        getOrganization: async () => ({
+          id: "org-1",
+          name: "Acme Corp",
+          plan: "pro",
+          repoAccessMode: "all_indexed",
+          createdAt: new Date()
+        }),
+        getOrgOperatorMetadata: async () => ({
+          operatorStatus: "active",
+          provenance: "stripe_checkout"
+        }),
+        getOrganizationBilling: async () => ({
+          stripeCustomerId: "cus_123",
+          stripeSubscriptionId: "sub_123",
+          billingStatus: "active"
+        }),
+        setOrganizationPlan: async () => undefined,
+        updateOrganizationBilling: async () => {
+          billingCleared = true;
+        },
+        revokeAllApiKeys: async () => 2,
+        cancelOrganization: async () => ({
+          id: "org-1",
+          name: "Acme Corp",
+          plan: "free",
+          repoAccessMode: "all_indexed",
+          createdAt: new Date()
+        })
+      } as unknown as OrgStore,
+      userStore: {
+        deactivateOrgUsers: async () => 3
+      } as never,
+      authIdentityStore: {
+        deleteIdentitiesForOrg: async () => 2
+      } as never,
+      authTokenStore: {
+        revokeUnusedTokensForOrg: async () => 4
+      } as never,
+      operatorStore: {
+        resolveSession: async () => superAdmin,
+        recordAudit: async (input: { action: string }) => {
+          cancelAudit = input.action;
+          return {
+            id: "3",
+            operatorId: superAdmin.operatorId,
+            action: input.action,
+            metadata: {},
+            createdAt: new Date()
+          };
+        }
+      } as unknown as OperatorStore,
+      stripeService: {
+        isConfigured: () => true,
+        cancelSubscription: async (id: string) => {
+          stripeCancelledId = id;
+          return { id, status: "canceled" };
+        }
+      } as never
+    })
+  );
+  assert.equal(cancelOkHandled, true);
+  assert.equal(cancelOk.statusCode, 200);
+  assert.equal(cancelAudit, "operator.org.cancel");
+  assert.equal(stripeCancelledId, "sub_123");
+  assert.equal(billingCleared, true);
+  const cancelPayload = JSON.parse(cancelOk.body ?? "{}");
+  assert.equal(cancelPayload.operatorStatus, "cancelled");
+  assert.equal(cancelPayload.deactivatedUsers, 3);
+  assert.equal(cancelPayload.deletedIdentities, 2);
+
+  // Cancelled orgs cannot be activated back into the same tenant.
+  const activateCancelled = mockResponse();
+  const activateCancelledHandled = await handleOperatorApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/operator/organizations/org-1/activate",
+      headers: { authorization: "Bearer ops-token" },
+      body: {}
+    },
+    activateCancelled,
+    baseDeps({
+      orgStore: {
+        getOrganization: async () => ({
+          id: "org-1",
+          name: "Acme Corp",
+          plan: "free",
+          repoAccessMode: "all_indexed",
+          createdAt: new Date()
+        }),
+        getOrgOperatorMetadata: async () => ({
+          operatorStatus: "cancelled",
+          provenance: "stripe_checkout"
+        })
+      } as unknown as OrgStore,
+      operatorStore: {
+        resolveSession: async () => superAdmin,
+        recordAudit: async () => {
+          throw new Error("audit should not run");
+        }
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(activateCancelledHandled, true);
+  assert.equal(activateCancelled.statusCode, 409);
+  assert.match(activateCancelled.body ?? "", /cancelled_not_restored/);
 
   // Suspended org returns org_suspended via auth middleware.
   const suspendedStore = {

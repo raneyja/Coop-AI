@@ -103,6 +103,16 @@ export class AuthIdentityStore {
     );
   }
 
+  /** Drop login identities for every user in the org so they can sign up again. */
+  public async deleteIdentitiesForOrg(orgId: string): Promise<number> {
+    const result = await this.pool.query(
+      `DELETE FROM auth_identities
+       WHERE user_id IN (SELECT id FROM users WHERE org_id = $1)`,
+      [orgId]
+    );
+    return result.rowCount ?? 0;
+  }
+
   public async isEmailVerified(userId: string): Promise<boolean> {
     const result = await this.pool.query(
       `SELECT email_verified_at FROM auth_identities

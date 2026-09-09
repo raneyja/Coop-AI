@@ -9,6 +9,7 @@ type ConfirmOrgNameModalProps = {
   orgName: string;
   description: string;
   confirmLabel: string;
+  dismissLabel?: string;
   onConfirm: () => void | Promise<void>;
   onClose: () => void;
   loading?: boolean;
@@ -20,6 +21,7 @@ export function ConfirmOrgNameModal({
   orgName,
   description,
   confirmLabel,
+  dismissLabel = "Go back",
   onConfirm,
   onClose,
   loading = false
@@ -58,7 +60,7 @@ export function ConfirmOrgNameModal({
         />
         <div className="flex gap-2">
           <button type="button" className="admin-btn-secondary flex-1" onClick={handleClose} disabled={loading}>
-            Cancel
+            {dismissLabel}
           </button>
           <button
             type="submit"

@@ -17,7 +17,7 @@ export type ApiResult<T> = {
 export type OperatorRole = StoredOperatorMe["role"];
 export type OrgPlan = "free" | "pro" | "enterprise";
 export type Provenance = "stripe_checkout" | "free_signup" | "manual_enterprise" | "manual_pro";
-export type OperatorStatus = "active" | "suspended";
+export type OperatorStatus = "active" | "suspended" | "cancelled";
 export type RepoAccessMode = "all_indexed" | "per_user";
 
 export type OperatorMe = StoredOperatorMe;
@@ -640,6 +640,19 @@ export async function suspendOrganization(
     body: JSON.stringify({
       confirmName: input.confirmName.trim(),
       reason: input.reason?.trim() || "Suspended by operator"
+    })
+  });
+}
+
+export async function cancelOrganization(
+  orgId: string,
+  input: { confirmName: string; reason?: string }
+): Promise<ApiResult<{ ok: boolean }>> {
+  return coopFetch<{ ok: boolean }>(`/v1/operator/organizations/${encodeURIComponent(orgId)}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({
+      confirmName: input.confirmName.trim(),
+      reason: input.reason?.trim() || "Cancelled by operator"
     })
   });
 }

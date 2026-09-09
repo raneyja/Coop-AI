@@ -439,6 +439,20 @@ export class UserStore {
 
   // -- Offboarding ------------------------------------------------------------
 
+  /** Deactivate every active user in the org, drop SSO bindings, and revoke sessions. */
+  public async deactivateOrgUsers(orgId: string): Promise<number> {
+    const result = await this.pool.query(
+      `UPDATE users
+       SET deactivated_at = NOW(),
+           idp_subject = NULL,
+           idp_provider = NULL
+       WHERE org_id = $1 AND deactivated_at IS NULL`,
+      [orgId]
+    );
+    await this.revokeOrgSessions(orgId);
+    return result.rowCount ?? 0;
+  }
+
   /** Deactivate a user and immediately revoke their sessions. */
   public async deactivateUser(userId: string): Promise<boolean> {
     const result = await this.pool.query(

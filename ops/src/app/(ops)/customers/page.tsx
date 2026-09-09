@@ -3,24 +3,36 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { getStoredMe } from "@/lib/auth";
+import { canSuperAdmin } from "@/lib/operatorRbac";
 import {
+  activateOrganization,
+  cancelOrganization,
   fetchOrganizations,
   formatDate,
   planBadgeClass,
   planLabel,
+  suspendOrganization,
   type CustomerSummary,
   type OrgPlan
 } from "@/lib/coopApi";
+import { ConfirmOrgNameModal } from "@/components/ConfirmOrgNameModal";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
-import { StatusBadge } from "@/components/StatusBadge";
+import { OperatorOrgStatusBadge } from "@/components/StatusBadge";
+
+type ConfirmAction = "suspend" | "cancel";
 
 export default function CustomersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const me = getStoredMe();
   const [organizations, setOrganizations] = useState<CustomerSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ action: ConfirmAction; org: CustomerSummary } | null>(null);
   const [q, setQ] = useState(searchParams.get("q") ?? "");
   const [plan, setPlan] = useState<OrgPlan | "">((searchParams.get("plan") as OrgPlan) ?? "");
   const [billingStatus, setBillingStatus] = useState(searchParams.get("billingStatus") ?? "");
@@ -69,6 +81,44 @@ export default function CustomersPage() {
     router.replace(query ? `/customers?${query}` : "/customers");
     void load();
   }
+
+  async function handleActivate(org: CustomerSummary) {
+    if (!me || !canSuperAdmin(me)) return;
+    setBusy(`activate-${org.id}`);
+    setActionError(null);
+    const result = await activateOrganization(org.id);
+    setBusy(null);
+    if (!result.ok) {
+      setActionError(result.error ?? "Failed to activate organization.");
+      return;
+    }
+    void load();
+  }
+
+  async function handleConfirm() {
+    if (!me || !canSuperAdmin(me) || !confirm) return;
+    setBusy(`${confirm.action}-${confirm.org.id}`);
+    setActionError(null);
+    const result =
+      confirm.action === "cancel"
+        ? await cancelOrganization(confirm.org.id, {
+            confirmName: confirm.org.name,
+            reason: "Cancelled by operator"
+          })
+        : await suspendOrganization(confirm.org.id, {
+            confirmName: confirm.org.name,
+            reason: "Suspended by operator"
+          });
+    setBusy(null);
+    setConfirm(null);
+    if (!result.ok) {
+      setActionError(result.error ?? `Failed to ${confirm.action} organization.`);
+      return;
+    }
+    void load();
+  }
+
+  const showActions = Boolean(me && canSuperAdmin(me));
 
   return (
     <div className="space-y-6">
@@ -147,6 +197,7 @@ export default function CustomersPage() {
 
       {unavailable && <UnavailableBanner />}
       {error && <p className="text-sm text-red-400">{error}</p>}
+      {actionError && <p className="text-sm text-red-400">{actionError}</p>}
 
       <div className="admin-card--table">
         <table className="admin-table">
@@ -158,18 +209,19 @@ export default function CustomersPage() {
               <th>Seats</th>
               <th>Status</th>
               <th>Created</th>
+              {showActions && <th>Actions</th>}
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-coop-muted">
+                <td colSpan={showActions ? 7 : 6} className="py-8 text-center text-coop-muted">
                   Loading…
                 </td>
               </tr>
             ) : organizations.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-coop-muted">
+                <td colSpan={showActions ? 7 : 6} className="py-8 text-center text-coop-muted">
                   {unavailable ? "Customer list unavailable until operator API is deployed." : "No customers match your filters."}
                 </td>
               </tr>
@@ -194,21 +246,70 @@ export default function CustomersPage() {
                       : org.seats ?? "—"}
                   </td>
                   <td>
-                    {org.operatorStatus === "suspended" ? (
-                      <StatusBadge connected={false} label="Suspended" variant="danger" showWhenDisconnected />
-                    ) : org.onboardingIncomplete ? (
-                      <StatusBadge connected={false} label="Onboarding" variant="warn" showWhenDisconnected />
-                    ) : (
-                      <StatusBadge connected label="Active" />
-                    )}
+                    <OperatorOrgStatusBadge
+                      status={org.operatorStatus}
+                      onboardingIncomplete={org.onboardingIncomplete}
+                    />
                   </td>
                   <td className="text-xs text-coop-muted">{formatDate(org.createdAt)}</td>
+                  {showActions && (
+                    <td className="whitespace-nowrap">
+                      {org.operatorStatus === "cancelled" ? (
+                        <span className="text-xs text-coop-muted">—</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {org.operatorStatus === "suspended" ? (
+                            <button
+                              type="button"
+                              className="admin-link text-xs"
+                              onClick={() => void handleActivate(org)}
+                              disabled={busy === `activate-${org.id}`}
+                            >
+                              {busy === `activate-${org.id}` ? "Activating…" : "Activate"}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="admin-link text-xs"
+                              onClick={() => setConfirm({ action: "suspend", org })}
+                              disabled={Boolean(busy)}
+                            >
+                              Suspend
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="admin-link text-xs text-red-300"
+                            onClick={() => setConfirm({ action: "cancel", org })}
+                            disabled={Boolean(busy)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))
             )}
           </tbody>
         </table>
       </div>
+
+      <ConfirmOrgNameModal
+        open={Boolean(confirm)}
+        title={confirm?.action === "cancel" ? "Cancel customer" : "Suspend organization"}
+        orgName={confirm?.org.name ?? ""}
+        description={
+          confirm?.action === "cancel"
+            ? "Ends this customer. They lose access, billing stops, and they can sign up again later with the same email. We keep this record for history."
+            : "Suspended organizations lose API access immediately. Their email stays on this account, so they cannot sign up again until you activate."
+        }
+        confirmLabel={confirm?.action === "cancel" ? "Cancel customer" : "Suspend"}
+        onConfirm={handleConfirm}
+        onClose={() => setConfirm(null)}
+        loading={Boolean(confirm && busy === `${confirm.action}-${confirm.org.id}`)}
+      />
     </div>
   );
 }

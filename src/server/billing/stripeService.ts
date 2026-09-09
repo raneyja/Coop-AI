@@ -136,6 +136,39 @@ export class StripeService {
     return this.postForm<StripePortal>("/v1/billing_portal/sessions", params);
   }
 
+  /**
+   * Immediately cancel a Stripe subscription. Missing / already-canceled
+   * subscriptions are treated as success so ops cancel can finish offboarding.
+   */
+  public async cancelSubscription(subscriptionId: string): Promise<{ id: string; status: string }> {
+    if (!this.config.stripeSecretKey) {
+      throw new Error("STRIPE_SECRET_KEY is not configured");
+    }
+    const response = await fetch(
+      `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${this.config.stripeSecretKey}` }
+      }
+    );
+    const json = (await response.json().catch(() => ({}))) as {
+      id?: string;
+      status?: string;
+      error?: { message?: string; code?: string };
+    };
+    if (response.status === 404) {
+      return { id: subscriptionId, status: "not_found" };
+    }
+    if (!response.ok) {
+      const message = json.error?.message ?? `Stripe request failed (${response.status})`;
+      if (/no such subscription/i.test(message)) {
+        return { id: subscriptionId, status: "not_found" };
+      }
+      throw new Error(message);
+    }
+    return { id: String(json.id ?? subscriptionId), status: String(json.status ?? "canceled") };
+  }
+
   public async retrieveSubscription(subscriptionId: string): Promise<StripeSubscription> {
     if (!this.config.stripeSecretKey) {
       throw new Error("STRIPE_SECRET_KEY is not configured");

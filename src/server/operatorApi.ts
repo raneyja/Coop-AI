@@ -2,6 +2,7 @@ import type { ServerResponse } from "node:http";
 import { extractBearerToken } from "./authMiddleware";
 import { writeJson } from "./adminApiShared";
 import type { AuditLogger } from "./audit/auditLogger";
+import type { AuthIdentityStore } from "./auth/authIdentityStore";
 import type { AuthTokenStore } from "./auth/authTokenStore";
 import type { EmailService } from "./email/emailService";
 import type { IntegrationConnectionStore } from "./integrationConnectionStore";
@@ -34,6 +35,7 @@ export type OperatorApiDeps = {
   orgStore?: OrgStore;
   userStore?: UserStore;
   operatorStore?: OperatorStore;
+  authIdentityStore?: AuthIdentityStore;
   authTokenStore?: AuthTokenStore;
   integrationStore?: IntegrationConnectionStore;
   serverConfig: ServerConfig;
@@ -378,6 +380,9 @@ async function handleOrgScopedRequest(
   if (suffix === "/suspend" && parsed.method === "POST") {
     return handleSuspendOrg(orgId, parsed, response, deps, operator);
   }
+  if (suffix === "/cancel" && parsed.method === "POST") {
+    return handleCancelOrg(orgId, parsed, response, deps, operator);
+  }
   if (suffix === "/activate" && parsed.method === "POST") {
     return handleActivateOrg(orgId, response, deps, operator);
   }
@@ -585,6 +590,15 @@ async function handleSuspendOrg(
     return true;
   }
 
+  const meta = await deps.orgStore!.getOrgOperatorMetadata(orgId);
+  if (meta?.operatorStatus === "cancelled") {
+    writeJson(response, 409, {
+      error: "already_cancelled",
+      message: "This customer is already cancelled. They can sign up again as a new customer."
+    });
+    return true;
+  }
+
   const body = asRecord(parsed.body);
   const reason = String(body.reason ?? "").trim();
   const confirmName = String(body.confirmName ?? "").trim();
@@ -625,9 +639,127 @@ async function handleActivateOrg(
     return true;
   }
 
-  await deps.orgStore!.activateOrganization(orgId);
+  const meta = await deps.orgStore!.getOrgOperatorMetadata(orgId);
+  if (meta?.operatorStatus === "cancelled") {
+    writeJson(response, 409, {
+      error: "cancelled_not_restored",
+      message: "Cancelled customers cannot be restored. They can sign up again as a new customer."
+    });
+    return true;
+  }
+
+  const activated = await deps.orgStore!.activateOrganization(orgId);
+  if (!activated) {
+    writeJson(response, 409, {
+      error: "not_suspended",
+      message: "Only a suspended organization can be activated."
+    });
+    return true;
+  }
   await operatorAudit(deps, operator, "operator.org.activate", orgId);
   writeJson(response, 200, { ok: true, orgId, operatorStatus: "active" });
+  return true;
+}
+
+async function handleCancelOrg(
+  orgId: string,
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: OperatorApiDeps,
+  operator: OperatorContext
+): Promise<boolean> {
+  if (!requireOperatorRole(operator, "super_admin", response)) {
+    return true;
+  }
+
+  const org = await deps.orgStore!.getOrganization(orgId);
+  if (!org) {
+    writeJson(response, 404, { error: "organization not found" });
+    return true;
+  }
+
+  const body = asRecord(parsed.body);
+  const reason = String(body.reason ?? "").trim() || "Cancelled by operator";
+  const confirmName = String(body.confirmName ?? "").trim();
+  if (confirmName !== org.name) {
+    writeJson(response, 400, {
+      error: "confirm_name_mismatch",
+      message: "Type the exact organization name to confirm."
+    });
+    return true;
+  }
+
+  const meta = await deps.orgStore!.getOrgOperatorMetadata(orgId);
+  if (meta?.operatorStatus === "cancelled") {
+    writeJson(response, 200, { ok: true, orgId, operatorStatus: "cancelled", alreadyCancelled: true });
+    return true;
+  }
+
+  if (!deps.userStore || !deps.authIdentityStore) {
+    writeJson(response, 503, {
+      error: "offboard_unavailable",
+      message: "User directory is not configured, so this customer cannot be cancelled without blocking a later signup."
+    });
+    return true;
+  }
+
+  const billing = await deps.orgStore!.getOrganizationBilling(orgId);
+  const stripeSubscriptionId = billing?.stripeSubscriptionId?.trim();
+  let stripeStatus: string | undefined;
+  if (stripeSubscriptionId) {
+    const billingConfig = loadBillingConfig();
+    const stripe = deps.stripeService ?? new StripeService(billingConfig);
+    if (!stripe.isConfigured()) {
+      writeJson(response, 503, {
+        error: "billing_unavailable",
+        message: "Stripe is not configured, so this paid subscription cannot be cancelled safely."
+      });
+      return true;
+    }
+    try {
+      const cancelled = await stripe.cancelSubscription(stripeSubscriptionId);
+      stripeStatus = cancelled.status;
+    } catch (error) {
+      writeJson(response, 502, {
+        error: "stripe_error",
+        message: error instanceof Error ? error.message : "Could not cancel the Stripe subscription."
+      });
+      return true;
+    }
+  }
+
+  const deactivatedUsers = await deps.userStore.deactivateOrgUsers(orgId);
+  const deletedIdentities = await deps.authIdentityStore.deleteIdentitiesForOrg(orgId);
+  const revokedTokens = deps.authTokenStore ? await deps.authTokenStore.revokeUnusedTokensForOrg(orgId) : 0;
+  const revokedKeys = await deps.orgStore!.revokeAllApiKeys(orgId);
+
+  await deps.orgStore!.setOrganizationPlan(orgId, "free");
+  await deps.orgStore!.updateOrganizationBilling(orgId, {
+    billingStatus: "canceled",
+    usageTier: null,
+    stripePriceId: null,
+    stripeCustomerId: null,
+    stripeSubscriptionId: null,
+    seatInventory: { pro: 0, pro_plus: 0, max: 0 }
+  });
+  await deps.orgStore!.cancelOrganization(orgId, reason);
+
+  await operatorAudit(deps, operator, "operator.org.cancel", orgId, {
+    reason,
+    deactivatedUsers,
+    deletedIdentities,
+    revokedTokens,
+    revokedKeys,
+    stripeSubscriptionId: stripeSubscriptionId || null,
+    stripeStatus: stripeStatus ?? null
+  });
+  writeJson(response, 200, {
+    ok: true,
+    orgId,
+    operatorStatus: "cancelled",
+    deactivatedUsers,
+    deletedIdentities
+  });
   return true;
 }
 

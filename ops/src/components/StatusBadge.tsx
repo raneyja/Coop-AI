@@ -1,3 +1,5 @@
+import type { OperatorStatus } from "@/lib/coopApi";
+
 type StatusBadgeProps = {
   connected: boolean;
   label?: string;
@@ -31,4 +33,23 @@ export function StatusBadge({
       <span>{text}</span>
     </span>
   );
+}
+
+export function OperatorOrgStatusBadge({
+  status,
+  onboardingIncomplete
+}: {
+  status?: OperatorStatus;
+  onboardingIncomplete?: boolean;
+}) {
+  if (status === "cancelled") {
+    return <StatusBadge connected={false} label="Cancelled" variant="danger" showWhenDisconnected />;
+  }
+  if (status === "suspended") {
+    return <StatusBadge connected={false} label="Suspended" variant="danger" showWhenDisconnected />;
+  }
+  if (onboardingIncomplete) {
+    return <StatusBadge connected={false} label="Onboarding" variant="warn" showWhenDisconnected />;
+  }
+  return <StatusBadge connected label="Active" />;
 }

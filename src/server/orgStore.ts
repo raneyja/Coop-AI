@@ -102,7 +102,7 @@ export type OrgOperatorProvenance =
   | "manual_enterprise"
   | "manual_pro";
 
-export type OrgOperatorStatus = "active" | "suspended";
+export type OrgOperatorStatus = "active" | "suspended" | "cancelled";
 
 export type OrgOperatorMetadata = {
   operatorStatus: OrgOperatorStatus;
@@ -510,7 +510,11 @@ export class OrgStore {
 
   public async findOrganizationByStripeCustomerId(customerId: string): Promise<Organization | undefined> {
     const result = await this.pool.query(
-      `SELECT id, name, plan, created_at, usage_tier FROM organizations WHERE stripe_customer_id = $1 LIMIT 1`,
+      `SELECT id, name, plan, created_at, usage_tier
+       FROM organizations
+       WHERE stripe_customer_id = $1
+         AND operator_status <> 'cancelled'
+       LIMIT 1`,
       [customerId]
     );
     const row = result.rows[0];
@@ -521,8 +525,8 @@ export class OrgStore {
     orgId: string,
     patch: Partial<{
       billingEmail: string;
-      stripeCustomerId: string;
-      stripeSubscriptionId: string;
+      stripeCustomerId: string | null;
+      stripeSubscriptionId: string | null;
       seatCount: number;
       billingStatus: string;
       usageTier: UsageTier | null;
@@ -588,7 +592,8 @@ export class OrgStore {
       [orgId]
     );
     const row = result.rows[0];
-    return row ? String(row.operator_status ?? "active") === "suspended" : false;
+    const status = String(row?.operator_status ?? "active");
+    return status === "suspended" || status === "cancelled";
   }
 
   public async getOrgOperatorMetadata(orgId: string): Promise<OrgOperatorMetadata | undefined> {
@@ -651,9 +656,22 @@ export class OrgStore {
     const result = await this.pool.query(
       `UPDATE organizations
        SET operator_status = 'active', suspended_at = NULL, suspended_reason = NULL
-       WHERE id = $1
+       WHERE id = $1 AND operator_status = 'suspended'
        RETURNING id, name, plan, repo_access_mode, created_at`,
       [orgId]
+    );
+    const row = result.rows[0];
+    return row ? rowToOrg(row) : undefined;
+  }
+
+  /** Ends the customer org without deleting it. Emails can sign up again as a new org. */
+  public async cancelOrganization(orgId: string, reason: string): Promise<Organization | undefined> {
+    const result = await this.pool.query(
+      `UPDATE organizations
+       SET operator_status = 'cancelled', suspended_at = NOW(), suspended_reason = $2
+       WHERE id = $1
+       RETURNING id, name, plan, repo_access_mode, created_at`,
+      [orgId, reason]
     );
     const row = result.rows[0];
     return row ? rowToOrg(row) : undefined;

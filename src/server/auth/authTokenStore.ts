@@ -81,6 +81,19 @@ export class AuthTokenStore {
     );
   }
 
+  /** Invalidate unused invites, refresh tokens, and similar for every user in the org. */
+  public async revokeUnusedTokensForOrg(orgId: string): Promise<number> {
+    const result = await this.pool.query(
+      `UPDATE auth_tokens t SET used_at = NOW()
+       FROM users u
+       WHERE t.user_id = u.id
+         AND u.org_id = $1
+         AND t.used_at IS NULL`,
+      [orgId]
+    );
+    return result.rowCount ?? 0;
+  }
+
   /** Revoke refresh tokens for every user in the org (Require SSO / method disable). */
   public async revokeRefreshTokensForOrg(orgId: string): Promise<number> {
     const result = await this.pool.query(
