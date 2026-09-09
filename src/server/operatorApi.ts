@@ -611,15 +611,57 @@ async function handleSuspendOrg(
     return true;
   }
 
+  const billing = await deps.orgStore!.getOrganizationBilling(orgId);
+  const stripeSubscriptionId = billing?.stripeSubscriptionId?.trim();
+  const continueBilling = parseOptionalBoolean(body.continueBilling);
+  let stripePaused = false;
+  if (stripeSubscriptionId) {
+    if (continueBilling === undefined) {
+      writeJson(response, 400, {
+        error: "billing_choice_required",
+        message: "Choose whether this customer should keep being billed in Stripe."
+      });
+      return true;
+    }
+    if (!continueBilling) {
+      const stripe = deps.stripeService ?? new StripeService(loadBillingConfig());
+      if (!stripe.isConfigured()) {
+        writeJson(response, 503, {
+          error: "billing_unavailable",
+          message: "Stripe is not configured, so billing cannot be paused safely."
+        });
+        return true;
+      }
+      try {
+        await stripe.pauseSubscription(stripeSubscriptionId);
+        stripePaused = true;
+      } catch (error) {
+        writeJson(response, 502, {
+          error: "stripe_error",
+          message: error instanceof Error ? error.message : "Could not pause the Stripe subscription."
+        });
+        return true;
+      }
+    }
+  }
+
   await deps.orgStore!.suspendOrganization(orgId, reason);
   const revokedSessions = deps.userStore
     ? await deps.userStore.revokeOrgSessions(orgId)
     : 0;
   await operatorAudit(deps, operator, "operator.org.suspend", orgId, {
     reason,
-    revokedSessions
+    revokedSessions,
+    continueBilling: stripeSubscriptionId ? continueBilling !== false : null,
+    stripePaused
   });
-  writeJson(response, 200, { ok: true, orgId, operatorStatus: "suspended", revokedSessions });
+  writeJson(response, 200, {
+    ok: true,
+    orgId,
+    operatorStatus: "suspended",
+    revokedSessions,
+    stripePaused
+  });
   return true;
 }
 
@@ -648,6 +690,28 @@ async function handleActivateOrg(
     return true;
   }
 
+  const billing = await deps.orgStore!.getOrganizationBilling(orgId);
+  const stripeSubscriptionId = billing?.stripeSubscriptionId?.trim();
+  let stripeResumed = false;
+  if (stripeSubscriptionId) {
+    const stripe = deps.stripeService ?? new StripeService(loadBillingConfig());
+    if (stripe.isConfigured()) {
+      try {
+        const subscription = await stripe.retrieveSubscription(stripeSubscriptionId);
+        if (subscription.paused) {
+          await stripe.resumeSubscription(stripeSubscriptionId);
+          stripeResumed = true;
+        }
+      } catch (error) {
+        writeJson(response, 502, {
+          error: "stripe_error",
+          message: error instanceof Error ? error.message : "Could not resume Stripe billing."
+        });
+        return true;
+      }
+    }
+  }
+
   const activated = await deps.orgStore!.activateOrganization(orgId);
   if (!activated) {
     writeJson(response, 409, {
@@ -656,8 +720,8 @@ async function handleActivateOrg(
     });
     return true;
   }
-  await operatorAudit(deps, operator, "operator.org.activate", orgId);
-  writeJson(response, 200, { ok: true, orgId, operatorStatus: "active" });
+  await operatorAudit(deps, operator, "operator.org.activate", orgId, { stripeResumed });
+  writeJson(response, 200, { ok: true, orgId, operatorStatus: "active", stripeResumed });
   return true;
 }
 
@@ -1410,4 +1474,10 @@ function parseSort(
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+function parseOptionalBoolean(value: unknown): boolean | undefined {
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  return undefined;
 }

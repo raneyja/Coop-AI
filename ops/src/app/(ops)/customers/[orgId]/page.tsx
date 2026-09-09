@@ -183,18 +183,19 @@ export default function CustomerDetailPage() {
     setSeatChangeLink(result.data.url);
   }
 
-  async function handleSuspend() {
+  async function handleSuspend(result: { continueBilling?: boolean }) {
     if (!me || !canSuperAdmin(me) || !detail) return;
     setBusy("suspend");
     setActionError(null);
-    const result = await suspendOrganization(orgId, {
+    const resultCall = await suspendOrganization(orgId, {
       confirmName: detail.name,
-      reason: "Suspended by operator"
+      reason: "Suspended by operator",
+      continueBilling: result.continueBilling
     });
     setBusy(null);
     setSuspendModal(false);
-    if (!result.ok) {
-      setActionError(result.error ?? "Failed to suspend organization.");
+    if (!resultCall.ok) {
+      setActionError(resultCall.error ?? "Failed to suspend organization.");
       return;
     }
     void load();
@@ -863,6 +864,7 @@ export default function CustomerDetailPage() {
         orgName={detail.name}
         description="Suspended organizations lose API access immediately. Their email stays on this account, so they cannot sign up again until you activate."
         confirmLabel="Suspend"
+        askContinueBilling={Boolean(detail.stripeCustomerId || detail.stripe?.customerId)}
         onConfirm={handleSuspend}
         onClose={() => setSuspendModal(false)}
         loading={busy === "suspend"}

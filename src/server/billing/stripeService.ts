@@ -18,6 +18,7 @@ export type StripeSubscription = {
   itemId?: string;
   priceId?: string;
   items: StripeSubscriptionItem[];
+  paused?: boolean;
 };
 
 export type StripeCheckoutSession = {
@@ -181,6 +182,7 @@ export class StripeService {
     );
     const json = (await response.json().catch(() => ({}))) as StripeSubscription & {
       error?: { message?: string };
+      pause_collection?: { behavior?: string } | null;
       items?: { data?: Array<{ id?: string; quantity?: number; price?: string | { id?: string } }> };
     };
     if (!response.ok) {
@@ -205,8 +207,25 @@ export class StripeService {
       quantity: quantity || first?.quantity || json.quantity,
       itemId: first?.id,
       priceId: first?.priceId,
-      items
+      items,
+      paused: Boolean(json.pause_collection)
     };
+  }
+
+  /** Stop invoicing without cancelling the subscription (reversible on activate). */
+  public async pauseSubscription(subscriptionId: string): Promise<StripeSubscription> {
+    const params = new URLSearchParams();
+    params.set("pause_collection[behavior]", "void");
+    await this.postForm(`/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, params);
+    return this.retrieveSubscription(subscriptionId);
+  }
+
+  /** Resume invoicing after a suspend-time pause. */
+  public async resumeSubscription(subscriptionId: string): Promise<StripeSubscription> {
+    const params = new URLSearchParams();
+    params.set("pause_collection", "");
+    await this.postForm(`/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, params);
+    return this.retrieveSubscription(subscriptionId);
   }
 
   public async updateSubscriptionItems(

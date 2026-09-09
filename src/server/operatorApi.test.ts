@@ -119,6 +119,9 @@ void (async () => {
           operatorStatus: "active",
           provenance: "manual_enterprise"
         }),
+        getOrganizationBilling: async () => ({
+          billingStatus: "none"
+        }),
         suspendOrganization: async () => ({
           id: "org-1",
           name: "Acme Corp",
@@ -145,6 +148,245 @@ void (async () => {
   assert.equal(suspendOkHandled, true);
   assert.equal(suspendOk.statusCode, 200);
   assert.equal(auditAction, "operator.org.suspend");
+
+  // Stripe-managed suspend without a billing choice is rejected.
+  const suspendNeedsChoice = mockResponse();
+  const suspendNeedsChoiceHandled = await handleOperatorApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/operator/organizations/org-1/suspend",
+      headers: { authorization: "Bearer ops-token" },
+      body: { reason: "abuse", confirmName: "Acme Corp" }
+    },
+    suspendNeedsChoice,
+    baseDeps({
+      orgStore: {
+        getOrganization: async () => ({
+          id: "org-1",
+          name: "Acme Corp",
+          plan: "pro",
+          repoAccessMode: "all_indexed",
+          createdAt: new Date()
+        }),
+        getOrgOperatorMetadata: async () => ({
+          operatorStatus: "active",
+          provenance: "stripe_checkout"
+        }),
+        getOrganizationBilling: async () => ({
+          stripeCustomerId: "cus_123",
+          stripeSubscriptionId: "sub_123",
+          billingStatus: "active"
+        }),
+        suspendOrganization: async () => {
+          throw new Error("should not suspend");
+        }
+      } as unknown as OrgStore,
+      operatorStore: {
+        resolveSession: async () => superAdmin,
+        recordAudit: async () => {
+          throw new Error("audit should not run");
+        }
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(suspendNeedsChoiceHandled, true);
+  assert.equal(suspendNeedsChoice.statusCode, 400);
+  assert.match(suspendNeedsChoice.body ?? "", /billing_choice_required/);
+
+  // Choosing not to bill pauses Stripe, then suspends.
+  let pausedSub = "";
+  let didSuspend = false;
+  const suspendPause = mockResponse();
+  const suspendPauseHandled = await handleOperatorApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/operator/organizations/org-1/suspend",
+      headers: { authorization: "Bearer ops-token" },
+      body: { reason: "abuse", confirmName: "Acme Corp", continueBilling: false }
+    },
+    suspendPause,
+    baseDeps({
+      orgStore: {
+        getOrganization: async () => ({
+          id: "org-1",
+          name: "Acme Corp",
+          plan: "pro",
+          repoAccessMode: "all_indexed",
+          createdAt: new Date()
+        }),
+        getOrgOperatorMetadata: async () => ({
+          operatorStatus: "active",
+          provenance: "stripe_checkout"
+        }),
+        getOrganizationBilling: async () => ({
+          stripeCustomerId: "cus_123",
+          stripeSubscriptionId: "sub_123",
+          billingStatus: "active"
+        }),
+        suspendOrganization: async () => {
+          didSuspend = true;
+          return {
+            id: "org-1",
+            name: "Acme Corp",
+            plan: "pro",
+            repoAccessMode: "all_indexed",
+            createdAt: new Date()
+          };
+        }
+      } as unknown as OrgStore,
+      operatorStore: {
+        resolveSession: async () => superAdmin,
+        recordAudit: async (input: { action: string }) => {
+          auditAction = input.action;
+          return {
+            id: "1b",
+            operatorId: superAdmin.operatorId,
+            action: input.action,
+            metadata: {},
+            createdAt: new Date()
+          };
+        }
+      } as unknown as OperatorStore,
+      stripeService: {
+        isConfigured: () => true,
+        pauseSubscription: async (id: string) => {
+          pausedSub = id;
+          return { id, status: "active", items: [], paused: true };
+        }
+      } as never
+    })
+  );
+  assert.equal(suspendPauseHandled, true);
+  assert.equal(suspendPause.statusCode, 200);
+  assert.equal(pausedSub, "sub_123");
+  assert.equal(didSuspend, true);
+  assert.equal(JSON.parse(suspendPause.body ?? "{}").stripePaused, true);
+
+  // Keep-billing suspend does not pause Stripe.
+  let pauseCalled = false;
+  const suspendKeep = mockResponse();
+  const suspendKeepHandled = await handleOperatorApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/operator/organizations/org-1/suspend",
+      headers: { authorization: "Bearer ops-token" },
+      body: { reason: "abuse", confirmName: "Acme Corp", continueBilling: true }
+    },
+    suspendKeep,
+    baseDeps({
+      orgStore: {
+        getOrganization: async () => ({
+          id: "org-1",
+          name: "Acme Corp",
+          plan: "pro",
+          repoAccessMode: "all_indexed",
+          createdAt: new Date()
+        }),
+        getOrgOperatorMetadata: async () => ({
+          operatorStatus: "active",
+          provenance: "stripe_checkout"
+        }),
+        getOrganizationBilling: async () => ({
+          stripeCustomerId: "cus_123",
+          stripeSubscriptionId: "sub_123",
+          billingStatus: "active"
+        }),
+        suspendOrganization: async () => ({
+          id: "org-1",
+          name: "Acme Corp",
+          plan: "pro",
+          repoAccessMode: "all_indexed",
+          createdAt: new Date()
+        })
+      } as unknown as OrgStore,
+      operatorStore: {
+        resolveSession: async () => superAdmin,
+        recordAudit: async () => ({
+          id: "1c",
+          operatorId: superAdmin.operatorId,
+          action: "operator.org.suspend",
+          metadata: {},
+          createdAt: new Date()
+        })
+      } as unknown as OperatorStore,
+      stripeService: {
+        isConfigured: () => true,
+        pauseSubscription: async () => {
+          pauseCalled = true;
+          return { id: "sub_123", status: "active", items: [], paused: true };
+        }
+      } as never
+    })
+  );
+  assert.equal(suspendKeepHandled, true);
+  assert.equal(suspendKeep.statusCode, 200);
+  assert.equal(pauseCalled, false);
+  assert.equal(JSON.parse(suspendKeep.body ?? "{}").stripePaused, false);
+
+  // Activate resumes a paused Stripe subscription.
+  let resumedSub = "";
+  const activateResume = mockResponse();
+  const activateResumeHandled = await handleOperatorApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/operator/organizations/org-1/activate",
+      headers: { authorization: "Bearer ops-token" },
+      body: {}
+    },
+    activateResume,
+    baseDeps({
+      orgStore: {
+        getOrganization: async () => ({
+          id: "org-1",
+          name: "Acme Corp",
+          plan: "pro",
+          repoAccessMode: "all_indexed",
+          createdAt: new Date()
+        }),
+        getOrgOperatorMetadata: async () => ({
+          operatorStatus: "suspended",
+          provenance: "stripe_checkout"
+        }),
+        getOrganizationBilling: async () => ({
+          stripeSubscriptionId: "sub_123"
+        }),
+        activateOrganization: async () => ({
+          id: "org-1",
+          name: "Acme Corp",
+          plan: "pro",
+          repoAccessMode: "all_indexed",
+          createdAt: new Date()
+        })
+      } as unknown as OrgStore,
+      operatorStore: {
+        resolveSession: async () => superAdmin,
+        recordAudit: async () => ({
+          id: "1d",
+          operatorId: superAdmin.operatorId,
+          action: "operator.org.activate",
+          metadata: {},
+          createdAt: new Date()
+        })
+      } as unknown as OperatorStore,
+      stripeService: {
+        isConfigured: () => true,
+        retrieveSubscription: async () => ({
+          id: "sub_123",
+          status: "active",
+          items: [],
+          paused: true
+        }),
+        resumeSubscription: async (id: string) => {
+          resumedSub = id;
+          return { id, status: "active", items: [], paused: false };
+        }
+      } as never
+    })
+  );
+  assert.equal(activateResumeHandled, true);
+  assert.equal(activateResume.statusCode, 200);
+  assert.equal(resumedSub, "sub_123");
+  assert.equal(JSON.parse(activateResume.body ?? "{}").stripeResumed, true);
 
   // Support can patch support metadata fields.
   const support: OpCtx = {

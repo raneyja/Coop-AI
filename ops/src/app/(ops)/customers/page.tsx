@@ -95,11 +95,11 @@ export default function CustomersPage() {
     void load();
   }
 
-  async function handleConfirm() {
+  async function handleConfirm(result: { continueBilling?: boolean }) {
     if (!me || !canSuperAdmin(me) || !confirm) return;
     setBusy(`${confirm.action}-${confirm.org.id}`);
     setActionError(null);
-    const result =
+    const apiResult =
       confirm.action === "cancel"
         ? await cancelOrganization(confirm.org.id, {
             confirmName: confirm.org.name,
@@ -107,12 +107,13 @@ export default function CustomersPage() {
           })
         : await suspendOrganization(confirm.org.id, {
             confirmName: confirm.org.name,
-            reason: "Suspended by operator"
+            reason: "Suspended by operator",
+            continueBilling: result.continueBilling
           });
     setBusy(null);
     setConfirm(null);
-    if (!result.ok) {
-      setActionError(result.error ?? `Failed to ${confirm.action} organization.`);
+    if (!apiResult.ok) {
+      setActionError(apiResult.error ?? `Failed to ${confirm.action} organization.`);
       return;
     }
     void load();
@@ -306,6 +307,7 @@ export default function CustomersPage() {
             : "Suspended organizations lose API access immediately. Their email stays on this account, so they cannot sign up again until you activate."
         }
         confirmLabel={confirm?.action === "cancel" ? "Cancel customer" : "Suspend"}
+        askContinueBilling={confirm?.action === "suspend" && Boolean(confirm.org.stripeCustomerId)}
         onConfirm={handleConfirm}
         onClose={() => setConfirm(null)}
         loading={Boolean(confirm && busy === `${confirm.action}-${confirm.org.id}`)}

@@ -633,13 +633,14 @@ export async function updateOrganization(
 
 export async function suspendOrganization(
   orgId: string,
-  input: { confirmName: string; reason?: string }
+  input: { confirmName: string; reason?: string; continueBilling?: boolean }
 ): Promise<ApiResult<{ ok: boolean }>> {
   return coopFetch<{ ok: boolean }>(`/v1/operator/organizations/${encodeURIComponent(orgId)}/suspend`, {
     method: "POST",
     body: JSON.stringify({
       confirmName: input.confirmName.trim(),
-      reason: input.reason?.trim() || "Suspended by operator"
+      reason: input.reason?.trim() || "Suspended by operator",
+      ...(input.continueBilling === undefined ? {} : { continueBilling: input.continueBilling })
     })
   });
 }
