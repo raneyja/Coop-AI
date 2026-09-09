@@ -103,6 +103,7 @@ const teamFull = usersSeatsPanelCopy({
 });
 assert.match(teamFull.hint, /Cancel an unused invite/);
 assert.match(teamFull.hint, /keep their seat if deactivated/);
+assert.match(teamFull.hint, /Reactivate lets them sign in again/);
 
 assert.deepEqual(usersBillingLink({ free: true, solo: true, atCapacity: true }), {
   label: "Upgrade for team seats →",

@@ -33,15 +33,14 @@ export function displayUsageTierName(tier: UsageTier | "enterprise"): string {
 }
 
 /**
- * Next-plan CTA for dashboard/billing. Never asks a Pro org to "upgrade to Pro".
- * Enterprise has no nudge. Max nudges to Enterprise via Billing.
- * Pass `seats` when known so 1-seat orgs do not get team-seat copy.
+ * Next-plan CTA from this seat's rung: Free → Pro → Pro+ → Max → Enterprise.
+ * Mixed team inventory does not hide the ladder — convert leftover Pro seats on Users.
+ * Enterprise has no nudge. Pass `seats` when known so 1-seat orgs do not get team-seat copy.
  */
 export function resolvePlanNudge(options: {
   plan: string | null | undefined;
   usageTier?: string | null;
   seats?: number | null;
-  mixedSeats?: boolean;
 }): PlanNudge | null {
   const plan = options.plan === "enterprise" || options.plan === "pro" ? options.plan : "free";
   const solo = options.seats != null && isSoloSeatCount(options.seats);
@@ -58,9 +57,6 @@ export function resolvePlanNudge(options: {
     };
   }
   const tier = parseUsageTier(options.usageTier) ?? "pro";
-  if (options.mixedSeats && tier !== "max") {
-    return null;
-  }
   if (tier === "pro") {
     return {
       title: "Upgrade to Pro+",

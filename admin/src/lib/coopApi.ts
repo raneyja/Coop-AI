@@ -832,6 +832,7 @@ export async function updateUser(
   const body: { role?: string; active?: boolean } = {};
   if (patch.role !== undefined) body.role = patch.role;
   if (patch.status === "deactivated") body.active = false;
+  if (patch.status === "active") body.active = true;
 
   const result = await coopFetch<{ user: BackendUser }>(`/v1/admin/users/${encodeURIComponent(userId)}`, {
     method: "PATCH",

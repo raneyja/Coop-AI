@@ -464,6 +464,18 @@ export class UserStore {
     return (result.rowCount ?? 0) > 0;
   }
 
+  /** Clear deactivation so a joined person can sign in again. Seat occupancy is unchanged. */
+  public async reactivateUser(userId: string): Promise<UserRecord | undefined> {
+    const updated = await this.pool.query(
+      `UPDATE users SET deactivated_at = NULL
+       WHERE id = $1 AND deactivated_at IS NOT NULL
+       RETURNING ${USER_COLUMNS}`,
+      [userId]
+    );
+    const row = updated.rows[0];
+    return row ? rowToUser(row) : undefined;
+  }
+
   /** Deactivate by IdP subject (how Okta/Azure deprovisioning identifies a user). */
   public async deactivateByIdpSubject(idpProvider: string, idpSubject: string): Promise<boolean> {
     const result = await this.pool.query(

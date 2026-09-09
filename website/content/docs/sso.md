@@ -166,7 +166,7 @@ To disable SAML while **Require SSO** is on, turn off **Require SSO** first — 
 | --- | --- |
 | **First SAML login** | Coop creates a user (JIT provisioning) with role **member** |
 | **Returning SAML login** | Matched by IdP subject or email within the org |
-| **Offboarding** | Deactivate via admin **Users** page, or automation API `POST /v1/auth/saml/offboard` |
+| **Offboarding** | Deactivate via admin **Users** page (Reactivate on the same row restores sign-in). Or automation API `POST /v1/auth/saml/offboard` |
 
 Invite links still work for orgs that allow password sign-in. SSO-only orgs should provision users through the IdP.
 

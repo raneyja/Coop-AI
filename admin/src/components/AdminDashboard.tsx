@@ -28,7 +28,6 @@ export function AdminDashboard() {
   const [userCount, setUserCount] = useState<number | null>(null);
   const [seatCount, setSeatCount] = useState<number | null>(null);
   const [mixLine, setMixLine] = useState<string | null>(null);
-  const [mixedSeats, setMixedSeats] = useState(false);
   const [pendingUpgradeCount, setPendingUpgradeCount] = useState(0);
   const [quota, setQuota] = useState<QuotaSnapshot | undefined>();
   const [quotaLoading, setQuotaLoading] = useState(capabilities.showUsageQuota);
@@ -59,13 +58,11 @@ export function AdminDashboard() {
       setUserCount(usersResult.data.users.length);
       setSeatCount(usersResult.data.seats ?? null);
       setMixLine(seatMixLine(usersResult.data.seatMix));
-      setMixedSeats(Boolean(usersResult.data.mixedSeats));
       setPendingUpgradeCount(usersResult.data.pendingUpgradeRequests?.length ?? 0);
     } else {
       setUserCount(null);
       setSeatCount(null);
       setMixLine(null);
-      setMixedSeats(false);
       setPendingUpgradeCount(0);
       if (!usersResult.ok && !isOrgSuspendedResult(usersResult)) {
         setError(usersResult.error ?? "Failed to load users.");
@@ -84,15 +81,14 @@ export function AdminDashboard() {
       ? integrationsError
       : null);
   const effectiveUsageTier = quota?.usageTier ?? usageTier;
-  const nudge =
-    plan === "pro" && planLoading && !effectiveUsageTier
-      ? null
-      : resolvePlanNudge({
-          plan,
-          usageTier: effectiveUsageTier,
-          seats: seatCount,
-          mixedSeats
-        });
+  const nudgeReady = !planLoading && (!capabilities.showUsageQuota || !quotaLoading);
+  const nudge = nudgeReady
+    ? resolvePlanNudge({
+        plan,
+        usageTier: effectiveUsageTier,
+        seats: seatCount
+      })
+    : null;
 
   async function handleUpgrade() {
     setUpgrading(true);

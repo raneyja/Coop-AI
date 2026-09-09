@@ -105,8 +105,7 @@ export default function BillingPage() {
   const nudge = resolvePlanNudge({
     plan,
     usageTier,
-    seats: billing ? currentSeats : null,
-    mixedSeats: mixed
+    seats: billing ? currentSeats : null
   });
   const isFree = plan === "free";
   const isPro = plan === "pro";

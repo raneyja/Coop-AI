@@ -90,7 +90,7 @@ Use this when **Require SSO** is enabled in **Settings → Single sign-on → Si
 4. **Browser — Admin portal** — **Users** → promote at least one SSO user to **admin** if JIT created them as **member** (first SAML login defaults to **member**).
 5. **Browser — Admin portal login** — All admins and members sign in at [admin.coop-ai.dev/login](https://admin.coop-ai.dev/login) with **Organization name** + **Continue with SSO**. Do not expect [coop-ai.dev/login](https://coop-ai.dev/login) to be a web SSO form — it opens the extension.
 6. **Extension UI** — Developers use **Settings → Account** → **Organization name** + **Sign in with SSO** (browser handoff; VS Code completes automatically). No password invite required for SSO-only orgs.
-7. **Offboarding** — Deactivate in **Users**, or automate `POST /v1/auth/saml/offboard` from your IdP provisioning job.
+7. **Offboarding** — Deactivate in **Users**. Reactivate on that row to let them sign in again (the seat stays theirs). Or automate `POST /v1/auth/saml/offboard` from your IdP provisioning job.
 
 **Known limits:** Enabling **Require SSO** revokes password/Google sessions and refresh tokens for that org (SAML sessions remain). Org API keys (`coop_…`) still authenticate automation under **Require SSO** — revoke keys when users leave. SAML sessions default to 12 hours with no silent refresh. Full error codes and limits: [SAML SSO troubleshooting](/docs/saml-sso-troubleshooting).
 

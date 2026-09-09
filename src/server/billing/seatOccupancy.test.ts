@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { namedSeatStatus, userOccupiesNamedSeat } from "./seatOccupancy";
+import { canReactivateNamedSeat, namedSeatStatus, userOccupiesNamedSeat } from "./seatOccupancy";
 
 const joined = new Date("2026-01-15T12:00:00Z");
 const deactivatedAt = new Date("2026-02-01T12:00:00Z");
@@ -12,8 +12,11 @@ assert.equal(namedSeatStatus({ lastLoginAt: joined, deactivatedAt: null }), "act
 
 assert.equal(userOccupiesNamedSeat({ lastLoginAt: joined, deactivatedAt }), true);
 assert.equal(namedSeatStatus({ lastLoginAt: joined, deactivatedAt }), "deactivated");
+assert.equal(canReactivateNamedSeat({ lastLoginAt: joined, deactivatedAt }), true);
 
 assert.equal(userOccupiesNamedSeat({ lastLoginAt: null, deactivatedAt }), false);
 assert.equal(namedSeatStatus({ lastLoginAt: null, deactivatedAt }), "deactivated");
+assert.equal(canReactivateNamedSeat({ lastLoginAt: null, deactivatedAt }), false);
+assert.equal(canReactivateNamedSeat({ lastLoginAt: joined, deactivatedAt: null }), false);
 
 console.log("seatOccupancy: 1/1 tests passed");

@@ -139,7 +139,8 @@
   }
 
   .admin-btn-accent {
-    @apply admin-btn bg-coop-accent text-coop-dark hover:bg-[#b9a8fc];
+    @apply admin-btn text-coop-dark hover:bg-[#b9a8fc];
+    background-color: #A78BFA;
   }
 
   .admin-btn-secondary {

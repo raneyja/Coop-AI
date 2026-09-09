@@ -214,6 +214,19 @@ export default function UsersPage() {
     void load();
   }
 
+  async function handleReactivate(userId: string) {
+    setActionId(userId);
+    setError(null);
+    const result = await updateUser(userId, { status: "active" });
+    setActionId(null);
+    if (!result.ok) {
+      setError(result.error ?? "Reactivate failed.");
+      return;
+    }
+    setSuccessMessage("They're back on the team. They can sign in again.");
+    void load();
+  }
+
   function closeConvertModal() {
     if (converting) {
       return;
@@ -492,6 +505,15 @@ export default function UsersPage() {
                           disabled={actionId === user.id}
                         >
                           {user.status === "invited" ? "Cancel invite" : "Deactivate"}
+                        </button>
+                      ) : user.lastLoginAt ? (
+                        <button
+                          type="button"
+                          className="admin-btn-secondary text-xs"
+                          onClick={() => handleReactivate(user.id)}
+                          disabled={actionId === user.id}
+                        >
+                          {actionId === user.id ? "Updating…" : "Reactivate"}
                         </button>
                       ) : null}
                     </div>

@@ -30,3 +30,11 @@ export function namedSeatStatus(user: {
   }
   return "invited";
 }
+
+/** Joined then deactivated — seat is still theirs; admin can turn sign-in back on. */
+export function canReactivateNamedSeat(user: {
+  lastLoginAt?: Date | string | null;
+  deactivatedAt?: Date | string | null;
+}): boolean {
+  return Boolean(user.deactivatedAt) && Boolean(user.lastLoginAt);
+}

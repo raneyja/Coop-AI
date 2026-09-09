@@ -16,7 +16,7 @@ import { convertMemberUsageTier, mapStripeConvertError, SeatConvertError } from 
 import { SeatUpgradeRequestStore } from "./billing/seatUpgradeRequestStore";
 import { StripeService } from "./billing/stripeService";
 import { neverFilledSeats, displaySeatMix, isMixedSeatInventory, seatInventoryTotal } from "./billing/seatInventory";
-import { namedSeatStatus } from "./billing/seatOccupancy";
+import { canReactivateNamedSeat, namedSeatStatus } from "./billing/seatOccupancy";
 import { parseUsageTier, displayUsageTierName, seatPricesUsd, type UsageTier } from "./usageTiers";
 import { resolveInviteTarget, isInviteUserConflictError } from "./users/inviteOrgUser";
 
@@ -409,6 +409,27 @@ async function handlePatchUser(
       updated = refreshed;
     }
     await audit(deps, auth, "admin.user.deactivate", { userId });
+  }
+
+  if (body.active === true) {
+    if (!existing.deactivatedAt) {
+      writeJson(response, 200, { user: toUserSummary(updated) });
+      return true;
+    }
+    if (!canReactivateNamedSeat(existing)) {
+      writeJson(response, 409, {
+        error: "invite_cancelled",
+        message: "This invite was cancelled. Invite them again from Users."
+      });
+      return true;
+    }
+    const reactivated = await deps.userStore.reactivateUser(userId);
+    if (!reactivated) {
+      writeJson(response, 404, { error: "user not found" });
+      return true;
+    }
+    updated = reactivated;
+    await audit(deps, auth, "admin.user.reactivate", { userId });
   }
 
   writeJson(response, 200, { user: toUserSummary(updated) });
