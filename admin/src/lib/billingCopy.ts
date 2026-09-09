@@ -94,6 +94,22 @@ export function convertSeatModalCopy(options: {
   };
 }
 
+export function upgradeRequestNoticeCopy(options: {
+  memberEmail?: string;
+  toName: string;
+  otherPendingCount: number;
+}): { heading: string; body: string } {
+  const who = options.memberEmail?.trim() || "A teammate";
+  const extra =
+    options.otherPendingCount > 0
+      ? ` ${options.otherPendingCount} more request${options.otherPendingCount === 1 ? " is" : "s are"} still open.`
+      : "";
+  return {
+    heading: options.otherPendingCount > 0 ? "Upgrade requests" : "Upgrade request",
+    body: `${who} asked to convert their seat to ${options.toName}.${extra}`
+  };
+}
+
 export function newSeatTotalPreview(currentSeats: number, addCount: number): string | null {
   if (!Number.isFinite(addCount) || addCount < 1) {
     return null;

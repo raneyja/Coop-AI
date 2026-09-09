@@ -67,6 +67,10 @@ import type { UserStore } from "./users/userStore";
 import { loadBillingConfig } from "./billing/billingConfig";
 import { EmailService } from "./email/emailService";
 import { SeatUpgradeRequestStore } from "./billing/seatUpgradeRequestStore";
+import { notifyOrgAdminsOfSeatUpgradeRequest } from "./billing/notifySeatUpgradeRequest";
+import { adminPortalSeatRequestsUrl } from "./billing/adminPortalUrl";
+import { convertMemberUsageTier, mapStripeConvertError, SeatConvertError } from "./billing/convertSeat";
+import { StripeService } from "./billing/stripeService";
 import { isUsageTierUpgrade, parseUsageTier } from "./usageTiers";
 import { resolveIntegrationScope } from "./resolveIntegrationScope";
 import type { IntegrationProvider } from "./integrationConnectionStore";
@@ -263,11 +267,15 @@ export async function handleOrgApiRequest(
     let pendingSeatUpgrade:
       | { id: string; fromTier: string; toTier: string; createdAt: string }
       | undefined;
+    let incomingSeatUpgradeRequests:
+      | Array<{ id: string; memberEmail: string; fromTier: string; toTier: string; createdAt: string }>
+      | undefined;
     if (auth.userId) {
       try {
         const pool = await getDbPool();
         if (pool) {
-          const pending = await new SeatUpgradeRequestStore(pool).getPendingForUser(auth.userId);
+          const requestStore = new SeatUpgradeRequestStore(pool);
+          const pending = await requestStore.getPendingForUser(auth.userId);
           if (pending) {
             pendingSeatUpgrade = {
               id: pending.id,
@@ -276,9 +284,24 @@ export async function handleOrgApiRequest(
               createdAt: pending.createdAt.toISOString()
             };
           }
+          if (canOrgAdmin(auth) && deps.userStore) {
+            const pendingForOrg = await requestStore.listPendingForOrg(auth.orgId);
+            if (pendingForOrg.length > 0) {
+              const users = await deps.userStore.listOrgUsers(auth.orgId);
+              const emailById = new Map(users.map((orgUser) => [orgUser.id, orgUser.email]));
+              incomingSeatUpgradeRequests = pendingForOrg.map((request) => ({
+                id: request.id,
+                memberEmail: emailById.get(request.userId) ?? request.userId,
+                fromTier: request.fromTier,
+                toTier: request.toTier,
+                createdAt: request.createdAt.toISOString()
+              }));
+            }
+          }
         }
       } catch {
         pendingSeatUpgrade = undefined;
+        incomingSeatUpgradeRequests = undefined;
       }
     }
     writeJson(response, 200, {
@@ -311,7 +334,8 @@ export async function handleOrgApiRequest(
       quota,
       usageMeters,
       usageTier: usageTier ?? undefined,
-      pendingSeatUpgrade
+      pendingSeatUpgrade,
+      incomingSeatUpgradeRequests
     });
     return true;
   }
@@ -359,24 +383,16 @@ export async function handleOrgApiRequest(
     });
     const billingConfig = loadBillingConfig();
     const emailService = new EmailService(billingConfig);
-    const reviewUrl = `${billingConfig.adminPortalUrl.replace(/\/+$/, "")}/users`;
-    try {
-      const admins = (await deps.userStore.listOrgUsers(auth.orgId)).filter(
-        (user) => !user.deactivatedAt && (user.role === "admin" || user.role === "owner")
-      );
-      for (const admin of admins) {
-        await emailService.sendSeatUpgradeRequest({
-          to: admin.email,
-          orgName: auth.orgName,
-          memberEmail: auth.email ?? profileUser?.email ?? "",
-          fromTier,
-          toTier,
-          reviewUrl
-        });
-      }
-    } catch (error) {
-      console.warn("[seat-upgrade] admin email failed:", error);
-    }
+    const reviewUrl = adminPortalSeatRequestsUrl(billingConfig.adminPortalUrl);
+    const notifiedAdmins = await notifyOrgAdminsOfSeatUpgradeRequest({
+      users: await deps.userStore.listOrgUsers(auth.orgId),
+      send: (params) => emailService.sendSeatUpgradeRequest(params),
+      orgName: auth.orgName,
+      memberEmail: auth.email ?? profileUser?.email ?? "",
+      fromTier,
+      toTier,
+      reviewUrl
+    });
     writeJson(response, 200, {
       request: {
         id: request.id,
@@ -384,8 +400,75 @@ export async function handleOrgApiRequest(
         toTier: request.toTier,
         status: request.status,
         createdAt: request.createdAt
-      }
+      },
+      notifiedAdmins
     });
+    return true;
+  }
+
+  if (parsed.method === "POST" && parsed.pathname === "/v1/me/seat-convert") {
+    if (!deps.userStore || !deps.orgStore || !auth.userId) {
+      writeJson(response, 400, { error: "not_applicable", message: "Sign in to upgrade your seat." });
+      return true;
+    }
+    if (!canOrgAdmin(auth)) {
+      writeJson(response, 403, {
+        error: "admin_required",
+        message: "Ask an admin to convert your seat, or send an upgrade request."
+      });
+      return true;
+    }
+    const plan = (await resolveOrgPlanFromDb(deps.orgStore, auth)) ?? auth.plan;
+    if (plan === "free" || plan === "enterprise") {
+      writeJson(response, 400, {
+        error: "not_applicable",
+        message: "Seat upgrades apply to Pro, Pro+, and Max seats."
+      });
+      return true;
+    }
+    const body = asRecord(parsed.body);
+    const toTier = parseUsageTier(typeof body.usageTier === "string" ? body.usageTier : "");
+    if (!toTier || (toTier !== "pro_plus" && toTier !== "max")) {
+      writeJson(response, 400, { error: "invalid_tier", message: "usageTier must be pro_plus or max." });
+      return true;
+    }
+    const storedOrg = await deps.orgStore.getOrganization(auth.orgId);
+    const profileUser = await deps.userStore.getUser(auth.userId);
+    const fromTier = parseUsageTier(profileUser?.usageTier) ?? parseUsageTier(storedOrg?.usageTier) ?? "pro";
+    if (!isUsageTierUpgrade(fromTier, toTier)) {
+      writeJson(response, 400, {
+        error: "not_an_upgrade",
+        message: "You can only convert your seat to a higher plan."
+      });
+      return true;
+    }
+    try {
+      const result = await convertMemberUsageTier({
+        orgId: auth.orgId,
+        userId: auth.userId,
+        toTier,
+        orgStore: deps.orgStore,
+        userStore: deps.userStore,
+        stripe: new StripeService(loadBillingConfig()),
+        billingConfig: loadBillingConfig()
+      });
+      try {
+        const pool = await getDbPool();
+        if (pool) {
+          const requestStore = new SeatUpgradeRequestStore(pool);
+          const pending = await requestStore.getPendingForUser(auth.userId);
+          if (pending) {
+            await requestStore.resolve(pending.id, "confirmed", auth.userId);
+          }
+        }
+      } catch (error) {
+        console.warn("[seat-convert] pending request resolve failed:", error);
+      }
+      writeJson(response, 200, { from: result.from, to: result.to, seatInventory: result.inventory });
+    } catch (error) {
+      const mapped = error instanceof SeatConvertError ? error : mapStripeConvertError(error);
+      writeJson(response, mapped.statusCode, { error: mapped.code, message: mapped.message });
+    }
     return true;
   }
 

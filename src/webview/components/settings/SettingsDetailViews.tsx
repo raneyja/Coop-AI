@@ -27,14 +27,19 @@ import { ConnectionCard } from "./ConnectionCard";
 import { IntegrationConnectionShell } from "./IntegrationConnectionShell";
 import {
   codeHostConnectionMeta,
+  codeHostDisplayName,
   codeHostListSubtitle,
   displayOrgName,
   displayPlanLabel,
   formatQuotaUsageSummary,
   integrationListSubtitle,
+  incomingSeatUpgradeCopy,
+  planAdminPortalHref,
+  planSeatUpgradeCta,
   preferencesSignedIn,
   quotaUsedPercent
 } from "./connectionCopy";
+import { ownSeatConvertCopy } from "../../../server/usageTiers";
 import type { SettingsLightningSummary } from "./SettingsHub";
 import { SettingsCheckboxRow, SettingsSection } from "./SettingsShared";
 import { WorkspaceReposPickerModal } from "../WorkspaceReposPickerModal";
@@ -53,9 +58,6 @@ import {
   memberToolsReadOnly,
   resolveMemberToolStatus
 } from "./integrationStatus";
-import {
-  codeHostDisplayName
-} from "./connectionCopy";
 import type { OrgIntegrationProvider } from "../../../chat/integrationStatusTypes";
 import { DEMO_PAGE_URL } from "../../../config/siteConfig";
 import { SignInForm } from "../SignInForm";
@@ -222,6 +224,7 @@ export type SettingsDetailProps = {
   onAddVisibleMemory?: (fact: { text: string; source: string; repoId?: string }) => void;
   onClearVisibleMemory?: (id?: string) => void;
   onRequestSeatUpgrade?: (usageTier: "pro_plus" | "max") => void;
+  onConvertOwnSeat?: (usageTier: "pro_plus" | "max") => void;
 };
 
 export function SettingsDetailView({
@@ -530,15 +533,20 @@ function FreePlanUsageMeter({
   );
 }
 
-function PlanUsageDetail({ prefs, onRequestSeatUpgrade }: SettingsDetailProps): React.ReactElement {
+function PlanUsageDetail({
+  prefs,
+  onRequestSeatUpgrade,
+  onConvertOwnSeat
+}: SettingsDetailProps): React.ReactElement {
   const orgName = displayOrgName(prefs);
   const adminBase = (prefs.adminPortalUrl ?? "https://admin.coop-ai.dev").replace(/\/$/, "");
+  const adminHref = planAdminPortalHref(prefs);
   const meters = prefs.usageMeters;
   const resetParts = formatPaidUsageResetParts(meters?.periodEnd);
-  const pending = prefs.pendingSeatUpgrade;
-  const isAdmin = prefs.userRole === "admin" || prefs.userRole === "owner";
-  const requestTier =
-    meters?.nextTier === "pro_plus" || meters?.nextTier === "max" ? meters.nextTier : null;
+  const upgradeCta = planSeatUpgradeCta(prefs);
+  const incomingCopy = incomingSeatUpgradeCopy(prefs);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [converting, setConverting] = useState(false);
 
   if (!preferencesSignedIn(prefs)) {
     return (
@@ -547,6 +555,16 @@ function PlanUsageDetail({ prefs, onRequestSeatUpgrade }: SettingsDetailProps): 
       </SettingsSection>
     );
   }
+
+  const convertCopy =
+    upgradeCta.kind === "admin-convert"
+      ? ownSeatConvertCopy({
+          fromName: displayPlanLabel(prefs),
+          toName: upgradeCta.nextLabel,
+          fromUsd: meters?.seatPriceUsd,
+          toUsd: meters?.nextTierPriceUsd
+        })
+      : null;
 
   return (
     <SettingsSection>
@@ -571,41 +589,48 @@ function PlanUsageDetail({ prefs, onRequestSeatUpgrade }: SettingsDetailProps): 
             ) : null}
           </div>
         </div>
-        {prefs.plan === "pro" && (pending || requestTier) ? (
+        {upgradeCta.kind === "pending" ||
+        upgradeCta.kind === "admin-convert" ||
+        upgradeCta.kind === "member-request" ? (
           <div className="coop-settings-card p-3">
             <p className="text-[10px] uppercase tracking-wide text-[var(--coop-panel-muted)]">
-              {pending ? "Upgrade requested" : "Upgrade this seat"}
+              {upgradeCta.kind === "pending" ? "Upgrade requested" : "Upgrade this seat"}
             </p>
-            {pending ? (
+            {upgradeCta.kind === "pending" ? (
               <p className="coop-settings-card-desc mt-1">
-                Request pending for {pending.toTier === "max" ? "Max" : "Pro+"}. Quota stays the same until an
-                admin confirms. The company pays after that.
+                Request pending for {upgradeCta.toLabel}. Every admin on this org was emailed. Quota stays
+                the same until they confirm. The company pays after that.
               </p>
             ) : (
               <>
                 <p className="mt-1 text-[15px] font-medium">
-                  {meters?.nextTierName}
+                  {upgradeCta.nextLabel}
                   {meters?.nextTierPriceUsd != null ? ` $${meters.nextTierPriceUsd}/mo` : ""}
                 </p>
                 <p className="coop-settings-card-desc mt-1">
-                  This is your seat. {isAdmin
-                    ? "Convert it from Users in the admin portal — that does not upgrade the rest of the team."
+                  This is your seat.{" "}
+                  {upgradeCta.kind === "admin-convert"
+                    ? "Confirm here to convert it. Stripe prorates the change on the card on file — the rest of the team stays on their seats."
                     : "Ask an admin to convert it. They confirm, then the company is charged."}
                 </p>
                 <div className="coop-settings-actions mt-2">
-                  {isAdmin ? (
-                    <a className="coop-settings-action-btn" href={`${adminBase}/users`} target="_blank" rel="noreferrer">
-                      Convert in Users
-                    </a>
-                  ) : requestTier ? (
+                  {upgradeCta.kind === "admin-convert" ? (
                     <button
                       type="button"
                       className="coop-settings-action-btn"
-                      onClick={() => onRequestSeatUpgrade?.(requestTier)}
+                      onClick={() => setConfirmOpen(true)}
                     >
-                      Request {meters?.nextTierName ?? "upgrade"}
+                      Upgrade this seat
                     </button>
-                  ) : null}
+                  ) : (
+                    <button
+                      type="button"
+                      className="coop-settings-action-btn"
+                      onClick={() => onRequestSeatUpgrade?.(upgradeCta.nextTier)}
+                    >
+                      Request {upgradeCta.nextLabel}
+                    </button>
+                  )}
                 </div>
               </>
             )}
@@ -623,6 +648,21 @@ function PlanUsageDetail({ prefs, onRequestSeatUpgrade }: SettingsDetailProps): 
         ) : null}
       </div>
 
+      {incomingCopy ? (
+        <div className="coop-settings-card mt-2 p-3">
+          <p className="text-[10px] uppercase tracking-wide text-[var(--coop-panel-muted)]">
+            Teammate upgrade request{incomingCopy.count === 1 ? "" : "s"}
+          </p>
+          <p className="coop-settings-card-desc mt-1">
+            {incomingCopy.newestEmail
+              ? `${incomingCopy.newestEmail} asked for ${incomingCopy.toLabel}.`
+              : `A teammate asked for ${incomingCopy.toLabel}.`}
+            {incomingCopy.count > 1 ? ` ${incomingCopy.count} requests are waiting.` : ""} Confirm in
+            the admin portal — Stripe prorates on the card on file.
+          </p>
+        </div>
+      ) : null}
+
       {meters ? (
         <>
           <p className="coop-prompt-modal-section-title mt-4">Included in {meters.displayName}</p>
@@ -638,7 +678,7 @@ function PlanUsageDetail({ prefs, onRequestSeatUpgrade }: SettingsDetailProps): 
       ) : null}
 
       <div className="coop-settings-actions mt-3">
-        <a className="coop-settings-action-btn" href={adminBase} target="_blank" rel="noreferrer">
+        <a className="coop-settings-action-btn" href={adminHref} target="_blank" rel="noreferrer">
           Open admin portal
         </a>
         {isFreeDeveloperPlan(prefs) ? (
@@ -647,6 +687,45 @@ function PlanUsageDetail({ prefs, onRequestSeatUpgrade }: SettingsDetailProps): 
           </a>
         ) : null}
       </div>
+
+      {confirmOpen && convertCopy && upgradeCta.kind === "admin-convert" ? (
+        <div className="coop-prompt-modal-backdrop" role="presentation">
+          <div
+            className="coop-prompt-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="coop-seat-convert-title"
+          >
+            <p id="coop-seat-convert-title" className="coop-prompt-modal-title">
+              {convertCopy.title}
+            </p>
+            <p className="coop-prompt-modal-muted mt-2">{convertCopy.body}</p>
+            <div className="coop-prompt-modal-footer">
+              <button
+                type="button"
+                className="coop-settings-action-btn"
+                disabled={converting}
+                onClick={() => setConfirmOpen(false)}
+              >
+                {convertCopy.cancelLabel}
+              </button>
+              <button
+                type="button"
+                className="coop-settings-action-btn"
+                disabled={converting}
+                onClick={() => {
+                  setConverting(true);
+                  onConvertOwnSeat?.(upgradeCta.nextTier);
+                  setConfirmOpen(false);
+                  setConverting(false);
+                }}
+              >
+                {converting ? "Updating…" : convertCopy.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </SettingsSection>
   );
 }

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   adminPortalAcceptInviteUrl,
   adminPortalFreshLoginUrl,
-  adminPortalLoginUrl
+  adminPortalLoginUrl,
+  adminPortalSeatRequestsUrl
 } from "./adminPortalUrl";
 
 describe("adminPortalLoginUrl", () => {
@@ -41,6 +42,14 @@ describe("adminPortalFreshLoginUrl", () => {
   it("ignores blank email", () => {
     expect(adminPortalFreshLoginUrl("https://admin.coop-ai.dev", { email: "  " })).toBe(
       "https://admin.coop-ai.dev/login?signedOut=1"
+    );
+  });
+});
+
+describe("adminPortalSeatRequestsUrl", () => {
+  it("appends /requests and strips /login", () => {
+    expect(adminPortalSeatRequestsUrl("https://admin.coop-ai.dev/login/")).toBe(
+      "https://admin.coop-ai.dev/requests"
     );
   });
 });

@@ -6,6 +6,7 @@ import {
   includedCentsForTier,
   isUsageTierUpgrade,
   nextUsageTier,
+  ownSeatConvertCopy,
   parseUsageTier,
   seatPricesUsd,
   usageTierFromStripePriceId,
@@ -69,5 +70,10 @@ assert.equal(jan31.to.toISOString(), "2026-02-28T00:00:00.000Z");
 
 const missingAnchor = paidUsagePeriodRange(undefined, new Date("2026-09-15T12:00:00.000Z"));
 assert.equal(missingAnchor.from.toISOString(), "2026-09-01T00:00:00.000Z");
+
+const ownCopy = ownSeatConvertCopy({ fromName: "Pro", toName: "Pro+", fromUsd: 25, toUsd: 60 });
+assert.equal(ownCopy.confirmLabel, "Confirm upgrade");
+assert.match(ownCopy.body, /prorated on the card on file/);
+assert.match(ownCopy.body, /\+\$35\/mo/);
 
 console.log("usageTiers: 1/1 tests passed");

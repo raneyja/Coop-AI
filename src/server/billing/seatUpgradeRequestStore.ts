@@ -71,6 +71,17 @@ export class SeatUpgradeRequestStore {
     return result.rows.map(rowToRequest);
   }
 
+  public async listForOrg(orgId: string): Promise<SeatUpgradeRequest[]> {
+    const result = await this.pool.query(
+      `SELECT id, org_id, user_id, from_tier, to_tier, status, created_at, resolved_at, resolved_by
+       FROM seat_upgrade_requests
+       WHERE org_id = $1
+       ORDER BY created_at DESC`,
+      [orgId]
+    );
+    return result.rows.map(rowToRequest);
+  }
+
   public async resolve(
     id: string,
     status: Exclude<SeatUpgradeRequestStatus, "pending">,

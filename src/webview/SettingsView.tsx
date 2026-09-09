@@ -866,6 +866,9 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         onRequestSeatUpgrade={(usageTier) =>
           post({ type: "settings:request-seat-upgrade", payload: { usageTier } })
         }
+        onConvertOwnSeat={(usageTier) =>
+          post({ type: "settings:convert-own-seat", payload: { usageTier } })
+        }
       />
       </div>
       <PromptLibraryModal

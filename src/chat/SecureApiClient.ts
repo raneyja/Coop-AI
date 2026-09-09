@@ -307,6 +307,10 @@ export class SecureApiClient {
     return this.backend.requestSeatUpgrade(baseUrl, usageTier);
   }
 
+  public async convertOwnSeat(baseUrl: string, usageTier: "pro_plus" | "max") {
+    return this.backend.convertOwnSeat(baseUrl, usageTier);
+  }
+
   public async fetchMeIntegrations(baseUrl: string) {
     return this.backend.fetchMeIntegrations(baseUrl);
   }
@@ -1030,6 +1034,7 @@ export async function readPreferences(
   let usageMeters: UserPreferences["usageMeters"];
   let usageTier: UserPreferences["usageTier"];
   let pendingSeatUpgrade: UserPreferences["pendingSeatUpgrade"];
+  let incomingSeatUpgradeRequests: UserPreferences["incomingSeatUpgradeRequests"];
   const me = await verifyStoredSession(api, base.apiBaseUrl);
   if (me) {
     orgName = me.orgName;
@@ -1051,6 +1056,7 @@ export async function readPreferences(
     usageMeters = me.usageMeters;
     usageTier = me.usageTier;
     pendingSeatUpgrade = me.pendingSeatUpgrade;
+    incomingSeatUpgradeRequests = me.incomingSeatUpgradeRequests;
     try {
       const integrations = await api.fetchMeIntegrations(base.apiBaseUrl);
       orgIntegrationStatuses = normalizeOrgIntegrationStatuses(integrations.integrations ?? []);
@@ -1220,7 +1226,8 @@ export async function readPreferences(
     quotaCredits,
     usageMeters,
     usageTier,
-    pendingSeatUpgrade
+    pendingSeatUpgrade,
+    incomingSeatUpgradeRequests
   };
 }
 

@@ -2229,6 +2229,9 @@ export class CoopChatSession {
       case "settings:request-seat-upgrade":
         await this.handleRequestSeatUpgrade(message.payload.usageTier);
         return;
+      case "settings:convert-own-seat":
+        await this.handleConvertOwnSeat(message.payload.usageTier);
+        return;
       case "settings:install-github-app":
         await this.handleInstallGithubApp();
         return;
@@ -5207,6 +5210,19 @@ export class CoopChatSession {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not send upgrade request.";
+      void vscode.window.showWarningMessage(message);
+    }
+  }
+
+  private async handleConvertOwnSeat(usageTier: "pro_plus" | "max"): Promise<void> {
+    try {
+      const result = await this.options.api.convertOwnSeat(this.preferences.apiBaseUrl, usageTier);
+      await this.refreshAllSessionsPreferences();
+      void vscode.window.showInformationMessage(
+        `Your seat is now ${result.to === "max" ? "Max" : "Pro+"}. Stripe prorated the change on the card on file.`
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not upgrade this seat.";
       void vscode.window.showWarningMessage(message);
     }
   }

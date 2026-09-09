@@ -51,6 +51,13 @@ export type Preferences = {
     toTier: string;
     createdAt?: string;
   };
+  incomingSeatUpgradeRequests?: Array<{
+    id: string;
+    memberEmail: string;
+    fromTier: string;
+    toTier: string;
+    createdAt?: string;
+  }>;
   usageMeters?: import("../../../api/CoopBackendClient").PaidUsageMeters;
   quotaCredits?: {
     usedCredits: number;

@@ -5,7 +5,10 @@ import {
   displayOrgName,
   displayPlanLabel,
   formatQuotaUsageSummary,
+  incomingSeatUpgradeCopy,
   indexingHubSubtitle,
+  planAdminPortalHref,
+  planSeatUpgradeCta,
   planUsageHubSubtitle,
   quotaUsedPercent
 } from "./connectionCopy";
@@ -151,6 +154,78 @@ test("accountHubSubtitle falls back without email", () => {
   assert.equal(accountHubSubtitle(basePrefs), "Signed in");
   assert.equal(accountHubSubtitle({ ...basePrefs, userEmail: "  " }), "Signed in");
   assert.equal(accountHubSubtitle({ ...basePrefs, hasApiKey: false, isSignedIn: false }), "Not signed in");
+});
+
+test("planSeatUpgradeCta is convert for admins and request for members", () => {
+  const meters = {
+    nextTier: "pro_plus" as const,
+    nextTierName: "Pro+",
+    displayName: "Pro",
+    seatPriceUsd: 25,
+    auto: { usedRatio: 0 },
+    frontier: { usedRatio: 0 }
+  };
+  assert.equal(planSeatUpgradeCta({ ...basePrefs, plan: "pro" }).kind, "none");
+  assert.equal(
+    planSeatUpgradeCta({
+      ...basePrefs,
+      plan: "pro",
+      userRole: "admin",
+      usageMeters: meters as Preferences["usageMeters"]
+    }).kind,
+    "admin-convert"
+  );
+  assert.equal(
+    planSeatUpgradeCta({
+      ...basePrefs,
+      plan: "pro",
+      userRole: "member",
+      usageMeters: meters as Preferences["usageMeters"]
+    }).kind,
+    "member-request"
+  );
+  assert.equal(
+    planSeatUpgradeCta({
+      ...basePrefs,
+      plan: "pro",
+      userRole: "member",
+      pendingSeatUpgrade: { id: "r1", fromTier: "pro", toTier: "pro_plus" }
+    }).kind,
+    "pending"
+  );
+});
+
+test("planAdminPortalHref deep-links admins with incoming requests", () => {
+  assert.equal(
+    planAdminPortalHref({ ...basePrefs, adminPortalUrl: "https://admin.coop-ai.dev/" }),
+    "https://admin.coop-ai.dev"
+  );
+  assert.equal(
+    planAdminPortalHref({
+      ...basePrefs,
+      userRole: "admin",
+      adminPortalUrl: "https://admin.coop-ai.dev",
+      incomingSeatUpgradeRequests: [
+        { id: "r1", memberEmail: "alex@acme.com", fromTier: "pro", toTier: "pro_plus" }
+      ]
+    }),
+    "https://admin.coop-ai.dev/requests"
+  );
+});
+
+test("incomingSeatUpgradeCopy is admin-only", () => {
+  const incoming = [
+    { id: "r1", memberEmail: "alex@acme.com", fromTier: "pro", toTier: "pro_plus" }
+  ];
+  assert.equal(incomingSeatUpgradeCopy({ ...basePrefs, userRole: "member", incomingSeatUpgradeRequests: incoming }), null);
+  const copy = incomingSeatUpgradeCopy({
+    ...basePrefs,
+    userRole: "admin",
+    incomingSeatUpgradeRequests: incoming
+  });
+  assert.equal(copy?.count, 1);
+  assert.equal(copy?.newestEmail, "alex@acme.com");
+  assert.equal(copy?.toLabel, "Pro+");
 });
 
 console.log(`\nconnectionCopy: ${passed} passed, ${failed} failed`);

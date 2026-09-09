@@ -8,6 +8,7 @@ import {
   signOutRemote
 } from "@/lib/auth";
 import { useRouter } from "next/navigation";
+import { UpgradeRequestNotifier } from "./UpgradeRequestNotifier";
 
 export function TopBar() {
   const router = useRouter();
@@ -29,9 +30,12 @@ export function TopBar() {
           </span>
         ) : null}
       </div>
-      <button type="button" onClick={() => void signOut()} className="admin-btn-secondary text-xs">
-        Sign out
-      </button>
+      <div className="flex items-center gap-3">
+        <UpgradeRequestNotifier />
+        <button type="button" onClick={() => void signOut()} className="admin-btn-secondary text-xs">
+          Sign out
+        </button>
+      </div>
     </header>
   );
 }

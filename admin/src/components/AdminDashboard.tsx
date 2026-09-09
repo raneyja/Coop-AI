@@ -29,6 +29,7 @@ export function AdminDashboard() {
   const [seatCount, setSeatCount] = useState<number | null>(null);
   const [mixLine, setMixLine] = useState<string | null>(null);
   const [mixedSeats, setMixedSeats] = useState(false);
+  const [pendingUpgradeCount, setPendingUpgradeCount] = useState(0);
   const [quota, setQuota] = useState<QuotaSnapshot | undefined>();
   const [quotaLoading, setQuotaLoading] = useState(capabilities.showUsageQuota);
   const [usersLoading, setUsersLoading] = useState(true);
@@ -59,11 +60,13 @@ export function AdminDashboard() {
       setSeatCount(usersResult.data.seats ?? null);
       setMixLine(seatMixLine(usersResult.data.seatMix));
       setMixedSeats(Boolean(usersResult.data.mixedSeats));
+      setPendingUpgradeCount(usersResult.data.pendingUpgradeRequests?.length ?? 0);
     } else {
       setUserCount(null);
       setSeatCount(null);
       setMixLine(null);
       setMixedSeats(false);
+      setPendingUpgradeCount(0);
       if (!usersResult.ok && !isOrgSuspendedResult(usersResult)) {
         setError(usersResult.error ?? "Failed to load users.");
       }
@@ -109,6 +112,20 @@ export function AdminDashboard() {
         <h1 className="admin-page-title">Dashboard</h1>
         <p className="mt-1 text-sm text-coop-muted">Overview for {displayOrgName(me)}</p>
       </div>
+
+      {pendingUpgradeCount > 0 ? (
+        <UpgradeCTA
+          variant="banner"
+          title={
+            pendingUpgradeCount === 1
+              ? "1 teammate asked to upgrade"
+              : `${pendingUpgradeCount} teammates asked to upgrade`
+          }
+          body="Confirm to convert their seat. Stripe prorates on the card on file. Quota does not change until you confirm."
+          ctaLabel="Review requests"
+          href="/requests"
+        />
+      ) : null}
 
       {nudge ? (
         <>

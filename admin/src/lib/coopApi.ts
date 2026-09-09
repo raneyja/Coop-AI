@@ -668,9 +668,13 @@ function parseSeatPrices(value: SeatInventory | undefined): SeatInventory | unde
 export type SeatUpgradeRequest = {
   id: string;
   userId: string;
+  memberEmail?: string;
   fromTier: string;
   toTier: string;
+  status?: "pending" | "confirmed" | "denied";
   createdAt?: string;
+  resolvedAt?: string | null;
+  resolvedBy?: string | null;
 };
 
 export type UsersListResponse = {
@@ -796,6 +800,29 @@ export async function resolveSeatUpgradeRequest(
     `/v1/admin/seat-upgrade-requests/${encodeURIComponent(requestId)}/${action}`,
     { method: "POST", body: "{}" }
   );
+}
+
+export async function fetchSeatUpgradeRequests(): Promise<ApiResult<{ requests: SeatUpgradeRequest[] }>> {
+  const result = await coopFetch<{ requests?: SeatUpgradeRequest[] }>("/v1/admin/seat-upgrade-requests");
+  if (result.ok) {
+    return {
+      ok: true,
+      status: result.status,
+      data: { requests: result.data?.requests ?? [] }
+    };
+  }
+  if (result.status === 404) {
+    const users = await fetchUsers();
+    if (!users.ok) {
+      return { ok: false, status: users.status, error: users.error, unavailable: users.unavailable };
+    }
+    const pending = (users.data?.pendingUpgradeRequests ?? []).map((request) => ({
+      ...request,
+      status: request.status ?? "pending"
+    }));
+    return { ok: true, status: 200, data: { requests: pending } };
+  }
+  return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
 }
 
 export async function updateUser(

@@ -182,7 +182,7 @@ export class EmailService {
     fromTier: UsageTier;
     toTier: UsageTier;
     reviewUrl: string;
-  }): Promise<void> {
+  }): Promise<{ mocked: boolean }> {
     const fromName = displayUsageTierName(params.fromTier);
     const toName = displayUsageTierName(params.toTier);
     const subject = `${params.memberEmail} requested ${toName} on ${params.orgName}`;
@@ -193,23 +193,25 @@ export class EmailService {
         <p style="margin:0 0 16px;font-size:16px;">
           <strong>${escapeHtml(params.memberEmail)}</strong> asked to convert their seat from
           ${escapeHtml(fromName)} to ${escapeHtml(toName)}. Your organization pays for this change.
+          Every admin on this org received this email.
         </p>
-        ${primaryButton("Review in Users", params.reviewUrl)}
-        <p style="margin:0;font-size:14px;color:#57606a;">Confirm or deny the request. Quota does not change until you confirm.</p>
+        ${primaryButton("Review request", params.reviewUrl)}
+        <p style="margin:0;font-size:14px;color:#57606a;">Confirm or deny. Quota does not change until you confirm. Stripe prorates on the card on file.</p>
       `
     });
     const text = [
       `${params.memberEmail} requested ${toName} (from ${fromName}) for ${params.orgName}.`,
+      "Every admin on this org received this email.",
       "",
-      "Review in Users:",
+      "Review request:",
       params.reviewUrl,
       "",
       "Quota does not change until you confirm."
     ].join("\n");
-    await this.send(params.to, subject, html, text);
+    return this.send(params.to, subject, html, text);
   }
 
-  private async send(to: string, subject: string, html: string, text?: string): Promise<void> {
+  private async send(to: string, subject: string, html: string, text?: string): Promise<{ mocked: boolean }> {
     assertEmailLinksArePublic(html, text);
 
     if (this.config.emailMock || !this.config.resendApiKey) {
@@ -220,7 +222,7 @@ export class EmailService {
       } else if (text) {
         console.log(`[email:mock] text=${text.slice(0, 200)}`);
       }
-      return;
+      return { mocked: true };
     }
 
     const response = await fetch("https://api.resend.com/emails", {
@@ -242,6 +244,7 @@ export class EmailService {
       const body = await response.text().catch(() => "");
       throw new Error(`Resend failed (${response.status}): ${body}`);
     }
+    return { mocked: false };
   }
 }
 

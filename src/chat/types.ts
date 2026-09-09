@@ -339,6 +339,13 @@ export type UserPreferences = {
     toTier: string;
     createdAt?: string;
   };
+  incomingSeatUpgradeRequests?: Array<{
+    id: string;
+    memberEmail: string;
+    fromTier: string;
+    toTier: string;
+    createdAt?: string;
+  }>;
   usageMeters?: {
     usageTier: "pro" | "pro_plus" | "max";
     displayName: string;
@@ -610,6 +617,8 @@ export type WebviewInbound =
   | { type: "settings:test-connection" }
   | { type: "settings:complete-onboarding" }
   | { type: "settings:request-seat-upgrade"; payload: { usageTier: "pro_plus" | "max" } }
+  | { type: "settings:convert-own-seat"; payload: { usageTier: "pro_plus" | "max" } }
+  | { type: "settings:auth-cancel" }
   | { type: "settings:update-github-token"; payload: { token: string } }
   | { type: "settings:clear-github-token" }
   | { type: "settings:install-github-app" }
@@ -860,6 +869,8 @@ export type WebviewOutbound =
       payload: { messageTimestamp?: number; error: string };
     }
   | { type: "settings:state"; payload: SettingsStatePayload }
+  | { type: "settings:auth-pending" }
+  | { type: "settings:auth-failed" }
   | { type: "settings:navigate"; payload: { screen: string } }
   | { type: "settings:test-result"; payload: { ok: boolean; message: string } }
   | { type: "settings:refresh-result"; payload: { ok: boolean; message: string } }

@@ -16,7 +16,7 @@ import {
   type SeatInventory,
   type SeatUpgradeRequest
 } from "@/lib/coopApi";
-import { convertSeatModalCopy } from "@/lib/billingCopy";
+import { convertSeatModalCopy, upgradeRequestNoticeCopy } from "@/lib/billingCopy";
 import { displayUsageTierName } from "@/lib/planNudge";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 import { InviteUserModal } from "@/components/InviteUserModal";
@@ -61,6 +61,7 @@ export default function UsersPage() {
   const [grantsUser, setGrantsUser] = useState<AdminUser | null>(null);
   const [seatPrices, setSeatPrices] = useState<SeatInventory | undefined>();
   const [pendingConvert, setPendingConvert] = useState<PendingConvert | null>(null);
+  const [pendingUpgradeConfirm, setPendingUpgradeConfirm] = useState<SeatUpgradeRequest | null>(null);
   const [converting, setConverting] = useState(false);
   const [convertError, setConvertError] = useState<string | null>(null);
 
@@ -141,7 +142,29 @@ export default function UsersPage() {
         toUsd: seatPrices?.[pendingConvert.to],
         memberEmail: pendingConvert.email
       })
-    : null;
+    : pendingUpgradeConfirm
+      ? convertSeatModalCopy({
+          fromName: displayUsageTierName(
+            pendingUpgradeConfirm.fromTier === "pro_plus" || pendingUpgradeConfirm.fromTier === "max"
+              ? pendingUpgradeConfirm.fromTier
+              : "pro"
+          ),
+          toName: displayUsageTierName(
+            pendingUpgradeConfirm.toTier === "pro_plus" || pendingUpgradeConfirm.toTier === "max"
+              ? pendingUpgradeConfirm.toTier
+              : "pro"
+          ),
+          fromUsd:
+            pendingUpgradeConfirm.fromTier === "pro_plus" || pendingUpgradeConfirm.fromTier === "max"
+              ? seatPrices?.[pendingUpgradeConfirm.fromTier]
+              : seatPrices?.pro,
+          toUsd:
+            pendingUpgradeConfirm.toTier === "pro_plus" || pendingUpgradeConfirm.toTier === "max"
+              ? seatPrices?.[pendingUpgradeConfirm.toTier]
+              : seatPrices?.pro,
+          memberEmail: pendingUpgradeConfirm.memberEmail
+        })
+      : null;
 
   useEffect(() => {
     void load();
@@ -196,6 +219,7 @@ export default function UsersPage() {
       return;
     }
     setPendingConvert(null);
+    setPendingUpgradeConfirm(null);
     setConvertError(null);
   }
 
@@ -210,7 +234,33 @@ export default function UsersPage() {
     setPendingConvert({ userId: user.id, email: user.email, from, to });
   }
 
+  async function handleDenyUpgrade(request: SeatUpgradeRequest) {
+    setActionId(request.id);
+    const result = await resolveSeatUpgradeRequest(request.id, "deny");
+    setActionId(null);
+    if (!result.ok) {
+      setError(result.error ?? "Could not deny this request.");
+      return;
+    }
+    setSuccessMessage("Request denied.");
+    void load();
+  }
+
   async function confirmConvertTier() {
+    if (pendingUpgradeConfirm) {
+      setConverting(true);
+      setConvertError(null);
+      const result = await resolveSeatUpgradeRequest(pendingUpgradeConfirm.id, "confirm");
+      setConverting(false);
+      if (!result.ok) {
+        setConvertError(result.error ?? "Could not confirm this upgrade.");
+        return;
+      }
+      setPendingUpgradeConfirm(null);
+      setSuccessMessage("Seat upgraded. Stripe prorated the change.");
+      void load();
+      return;
+    }
     if (!pendingConvert) {
       return;
     }
@@ -225,18 +275,6 @@ export default function UsersPage() {
     const toName = displayUsageTierName(pendingConvert.to);
     setPendingConvert(null);
     setSuccessMessage(`Converted this person's seat to ${toName}.`);
-    void load();
-  }
-
-  async function handleUpgradeRequest(requestId: string, action: "confirm" | "deny") {
-    setActionId(requestId);
-    const result = await resolveSeatUpgradeRequest(requestId, action);
-    setActionId(null);
-    if (!result.ok) {
-      setError(result.error ?? "Could not update that request.");
-      return;
-    }
-    setSuccessMessage(action === "confirm" ? "Seat upgrade confirmed." : "Seat upgrade denied.");
     void load();
   }
 
@@ -266,8 +304,57 @@ export default function UsersPage() {
         ) : null}
       </div>
 
+      {pendingRequests.length > 0 ? (
+        <div className="admin-panel-inset space-y-3">
+          <p className="admin-section-label flex items-center gap-2">
+            <span className="admin-notice-dot" aria-hidden />
+            Upgrade request{pendingRequests.length === 1 ? "" : "s"}
+          </p>
+          {pendingRequests.map((request, index) => {
+            const toName =
+              request.toTier === "pro_plus" || request.toTier === "max" || request.toTier === "pro"
+                ? displayUsageTierName(request.toTier)
+                : request.toTier;
+            const line = upgradeRequestNoticeCopy({
+              memberEmail: request.memberEmail,
+              toName,
+              otherPendingCount: 0
+            }).body;
+            return (
+              <div key={request.id} className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-white">
+                  {line}
+                  {index === 0 && pendingRequests.length > 1 ? ` ${pendingRequests.length - 1} more still open.` : ""}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="admin-btn-secondary text-xs"
+                    disabled={actionId === request.id || converting}
+                    onClick={() => void handleDenyUpgrade(request)}
+                  >
+                    Deny
+                  </button>
+                  <button
+                    type="button"
+                    className="admin-btn-primary text-xs"
+                    disabled={actionId === request.id || converting}
+                    onClick={() => {
+                      setConvertError(null);
+                      setPendingUpgradeConfirm(request);
+                    }}
+                  >
+                    Confirm
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
       {!unavailable && !loading ? (
-        <div className="admin-panel-inset flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="admin-section-label">{seatsPanel.heading}</p>
             {seatsPanel.justYou ? (
@@ -293,7 +380,7 @@ export default function UsersPage() {
       ) : null}
 
       {!teamInvitesBlocked && !unavailable && !loading ? (
-        <div className="admin-panel-inset flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
             <p className="admin-section-label">Repository access</p>
             {perUserAccess ? (
@@ -322,44 +409,6 @@ export default function UsersPage() {
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
       {successMessage ? <p className="text-sm text-emerald-300">{successMessage}</p> : null}
-
-      {pendingRequests.length > 0 ? (
-        <div className="admin-panel-inset space-y-3">
-          <p className="admin-section-label">Upgrade requests</p>
-          {pendingRequests.map((request) => {
-            const member = users.find((user) => user.id === request.userId);
-            return (
-              <div key={request.id} className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-white">
-                  {member?.email ?? request.userId} asked to convert their seat to{" "}
-                  {displayUsageTierName(
-                    request.toTier === "pro_plus" || request.toTier === "max" ? request.toTier : "pro"
-                  )}
-                  .
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    className="admin-btn-primary text-xs"
-                    disabled={actionId === request.id}
-                    onClick={() => void handleUpgradeRequest(request.id, "confirm")}
-                  >
-                    Confirm
-                  </button>
-                  <button
-                    type="button"
-                    className="admin-btn-secondary text-xs"
-                    disabled={actionId === request.id}
-                    onClick={() => void handleUpgradeRequest(request.id, "deny")}
-                  >
-                    Deny
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : null}
 
       <div className="admin-card--table">
         <table className="admin-table">
@@ -474,7 +523,7 @@ export default function UsersPage() {
         />
       ) : null}
 
-      {convertCopy && pendingConvert ? (
+      {convertCopy && (pendingConvert || pendingUpgradeConfirm) ? (
         <Modal open title={convertCopy.title} onClose={closeConvertModal}>
           <div className="space-y-4">
             <p className="text-sm text-coop-muted">{convertCopy.body}</p>

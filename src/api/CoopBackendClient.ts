@@ -173,6 +173,13 @@ export type MeResponse = {
     toTier: string;
     createdAt?: string;
   };
+  incomingSeatUpgradeRequests?: Array<{
+    id: string;
+    memberEmail: string;
+    fromTier: string;
+    toTier: string;
+    createdAt?: string;
+  }>;
 };
 
 export type MeIntegrationsResponse = {
@@ -365,6 +372,29 @@ export class CoopBackendClient {
       throw new Error("Upgrade request was not created.");
     }
     return { request: response.data.request };
+  }
+
+  public async convertOwnSeat(
+    baseUrl: string,
+    usageTier: "pro_plus" | "max"
+  ): Promise<{ from: string; to: string }> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.post<{ from?: string; to?: string } & CoopApiErrorBody>(
+      "/v1/me/seat-convert",
+      { usageTier },
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        headers: await this.authHeaders(),
+        validateStatus: () => true
+      }
+    );
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    if (!response.data?.to) {
+      throw new Error("Seat was not converted.");
+    }
+    return { from: response.data.from ?? "", to: response.data.to };
   }
 
   public async fetchMeIntegrations(baseUrl: string): Promise<MeIntegrationsResponse> {

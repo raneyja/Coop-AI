@@ -183,6 +183,62 @@ export function preferencesSignedIn(prefs: Pick<Preferences, "isSignedIn" | "has
   return prefs.isSignedIn ?? prefs.hasApiKey;
 }
 
+export function isPlanAdminRole(role?: string): boolean {
+  const normalized = String(role ?? "").toLowerCase();
+  return normalized === "admin" || normalized === "owner";
+}
+
+export type PlanSeatUpgradeCta =
+  | { kind: "pending"; toLabel: string }
+  | { kind: "admin-convert"; nextTier: "pro_plus" | "max"; nextLabel: string }
+  | { kind: "member-request"; nextTier: "pro_plus" | "max"; nextLabel: string }
+  | { kind: "none" };
+
+export function planSeatUpgradeCta(prefs: Preferences): PlanSeatUpgradeCta {
+  if (prefs.plan !== "pro") {
+    return { kind: "none" };
+  }
+  const pending = prefs.pendingSeatUpgrade;
+  if (pending) {
+    return { kind: "pending", toLabel: pending.toTier === "max" ? "Max" : "Pro+" };
+  }
+  const next = prefs.usageMeters?.nextTier;
+  if (next !== "pro_plus" && next !== "max") {
+    return { kind: "none" };
+  }
+  const nextLabel = prefs.usageMeters?.nextTierName ?? (next === "max" ? "Max" : "Pro+");
+  if (isPlanAdminRole(prefs.userRole)) {
+    return { kind: "admin-convert", nextTier: next, nextLabel };
+  }
+  return { kind: "member-request", nextTier: next, nextLabel };
+}
+
+export function planAdminPortalHref(prefs: Preferences): string {
+  const base = (prefs.adminPortalUrl ?? "https://admin.coop-ai.dev").replace(/\/$/, "");
+  if (isPlanAdminRole(prefs.userRole) && (prefs.incomingSeatUpgradeRequests?.length ?? 0) > 0) {
+    return `${base}/requests`;
+  }
+  return base;
+}
+
+export function incomingSeatUpgradeCopy(prefs: Preferences): {
+  count: number;
+  newestEmail?: string;
+  toLabel: string;
+} | null {
+  const incoming = prefs.incomingSeatUpgradeRequests ?? [];
+  if (!isPlanAdminRole(prefs.userRole) || incoming.length === 0) {
+    return null;
+  }
+  const newest = incoming[incoming.length - 1];
+  const toLabel = newest?.toTier === "max" ? "Max" : "Pro+";
+  return {
+    count: incoming.length,
+    newestEmail: newest?.memberEmail,
+    toLabel
+  };
+}
+
 export function displayIdentitySubtitle(prefs: Preferences): string | undefined {
   if (!preferencesSignedIn(prefs)) {
     return undefined;

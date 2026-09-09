@@ -33,6 +33,7 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
   },
   { href: "/integrations", label: "Integrations" },
   { href: "/users", label: "Users" },
+  { href: "/requests", label: "Requests" },
   { href: "/analytics", label: "Analytics" },
   { href: "/api-keys", label: "API Keys" },
   { href: "/billing", label: "Billing" },

@@ -91,6 +91,27 @@ export function displayUsageTierName(tier: UsageTier): string {
   return displayPlanName(tier);
 }
 
+/** Extension confirm copy when an org admin upgrades their own seat in place. */
+export function ownSeatConvertCopy(options: {
+  fromName: string;
+  toName: string;
+  fromUsd?: number;
+  toUsd?: number;
+}): { title: string; body: string; confirmLabel: string; cancelLabel: string } {
+  let delta = "";
+  if (typeof options.fromUsd === "number" && typeof options.toUsd === "number") {
+    const change = options.toUsd - options.fromUsd;
+    const signed = change >= 0 ? `+$${change}` : `-$${Math.abs(change)}`;
+    delta = ` (${signed}/mo, prorated on the card on file)`;
+  }
+  return {
+    title: "Upgrade this seat",
+    body: `Convert your seat from ${options.fromName} to ${options.toName}${delta}. This does not upgrade the rest of the team.`,
+    confirmLabel: "Confirm upgrade",
+    cancelLabel: "Cancel"
+  };
+}
+
 /** UTC calendar month — fallback only when signup date is missing. */
 export function utcCalendarMonthRange(now = new Date()): { from: Date; to: Date } {
   const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));

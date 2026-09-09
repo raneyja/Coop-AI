@@ -33,6 +33,12 @@ export function adminPortalFreshLoginUrl(
   return url.toString();
 }
 
+/** Inbox for pending / completed / denied seat-upgrade requests. */
+export function adminPortalSeatRequestsUrl(baseUrl: string): string {
+  const trimmed = normalizeAdminPortalBase(baseUrl) || ADMIN_PORTAL_URL;
+  return `${trimmed}/requests`;
+}
+
 /** Admin portal invite acceptance page (new teammates set a password here). */
 export function adminPortalAcceptInviteUrl(baseUrl: string, token: string): string {
   const trimmed = normalizeAdminPortalBase(baseUrl) || ADMIN_PORTAL_URL;

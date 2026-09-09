@@ -57,9 +57,11 @@ export async function handleAdminUsersRequest(
       if (pool) {
         const requestStore = new SeatUpgradeRequestStore(pool);
         const pending = await requestStore.listPendingForOrg(auth.orgId);
+        const emailById = new Map(users.map((orgUser) => [orgUser.id, orgUser.email]));
         pendingRequests = pending.map((request) => ({
           id: request.id,
           userId: request.userId,
+          memberEmail: emailById.get(request.userId) ?? request.userId,
           fromTier: request.fromTier,
           toTier: request.toTier,
           createdAt: request.createdAt
@@ -194,6 +196,36 @@ export async function handleAdminUsersRequest(
   const convertMatch = parsed.pathname.match(/^\/v1\/admin\/users\/([^/]+)\/usage-tier$/);
   if (convertMatch && parsed.method === "POST") {
     return handleConvertUserTier(decodeURIComponent(convertMatch[1]), parsed, response, deps, auth);
+  }
+
+  if (parsed.method === "GET" && parsed.pathname === "/v1/admin/seat-upgrade-requests") {
+    if (!deps.userStore) {
+      writeJson(response, 503, { error: "user store not configured" });
+      return true;
+    }
+    const pool = await getDbPool();
+    if (!pool) {
+      writeJson(response, 503, { error: "database not configured" });
+      return true;
+    }
+    const requestStore = new SeatUpgradeRequestStore(pool);
+    const requests = await requestStore.listForOrg(auth.orgId);
+    const users = await deps.userStore.listOrgUsers(auth.orgId);
+    const emailById = new Map(users.map((user) => [user.id, user.email]));
+    writeJson(response, 200, {
+      requests: requests.map((request) => ({
+        id: request.id,
+        userId: request.userId,
+        memberEmail: emailById.get(request.userId) ?? request.userId,
+        fromTier: request.fromTier,
+        toTier: request.toTier,
+        status: request.status,
+        createdAt: request.createdAt,
+        resolvedAt: request.resolvedAt ?? null,
+        resolvedBy: request.resolvedBy ?? null
+      }))
+    });
+    return true;
   }
 
   const confirmMatch = parsed.pathname.match(/^\/v1\/admin\/seat-upgrade-requests\/([^/]+)\/confirm$/);

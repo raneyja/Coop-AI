@@ -5,6 +5,7 @@ import {
   billingPageSubtitle,
   convertSeatModalCopy,
   convertSeatPreview,
+  upgradeRequestNoticeCopy,
   isSoloSeatCount,
   newSeatTotalPreview,
   normalizeSeatCount,
@@ -151,5 +152,21 @@ assert.equal(
   modal.body,
   "Convert alice@example.com's seat from Pro to Pro+ (+$35/mo, prorated in Stripe)."
 );
+
+const notice = upgradeRequestNoticeCopy({
+  memberEmail: "alex@acme.com",
+  toName: "Pro+",
+  otherPendingCount: 0
+});
+assert.equal(notice.heading, "Upgrade request");
+assert.equal(notice.body, "alex@acme.com asked to convert their seat to Pro+.");
+
+const noticeMany = upgradeRequestNoticeCopy({
+  memberEmail: "alex@acme.com",
+  toName: "Max",
+  otherPendingCount: 2
+});
+assert.equal(noticeMany.heading, "Upgrade requests");
+assert.match(noticeMany.body, /2 more requests are still open/);
 
 console.log("billingCopy: 1/1 tests passed");

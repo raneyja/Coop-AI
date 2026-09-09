@@ -38,6 +38,10 @@
     @apply border-l-2 border-l-coop-index py-1 pl-4;
   }
 
+  .admin-notice-dot {
+    @apply inline-block h-2 w-2 shrink-0 rounded-full bg-red-500;
+  }
+
   .admin-list {
     @apply divide-y divide-coop-border/40;
   }
