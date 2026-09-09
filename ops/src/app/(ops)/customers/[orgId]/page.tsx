@@ -400,7 +400,12 @@ export default function CustomerDetailPage() {
         </Link>
         <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="admin-page-title">{detail.name}</h1>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="admin-page-title">{detail.name}</h1>
+              {(detail.operatorStatus === "suspended" || detail.operatorStatus === "cancelled") && (
+                <OperatorOrgStatusBadge status={detail.operatorStatus} />
+              )}
+            </div>
             <p className="mt-1 font-mono text-xs text-coop-muted">{detail.id}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
