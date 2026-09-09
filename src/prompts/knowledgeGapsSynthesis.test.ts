@@ -28,7 +28,7 @@ test("knowledge-gaps synthesis includes primary target and out-of-scope @ attach
     ],
     activeRepoId: "github:coop-demo-lab/fastify"
   });
-  assert.ok(prompt.includes("## Primary target"));
+  assert.ok(prompt.includes("## Open file"));
   assert.ok(prompt.includes("## @ attachments"));
   assert.ok(prompt.includes("local workspace"));
   assert.ok(prompt.includes("Out-of-scope @ attachments"));
@@ -41,10 +41,10 @@ test("knowledge-gaps synthesis supports repository-wide scope without file", () 
     repo: "fastify"
   });
   assert.ok(prompt.includes("across coop-demo-lab/fastify"));
-  assert.ok(prompt.includes("## Primary target"));
-  assert.ok(prompt.includes("Repository: coop-demo-lab/fastify"));
+  assert.ok(prompt.includes("## Repository"));
+  assert.ok(prompt.includes("coop-demo-lab/fastify"));
   assert.ok(prompt.includes("repository-wide blind spots"));
-  assert.ok(!prompt.includes("primary target file only"));
+  assert.ok(!prompt.includes("primary target"));
 });
 
 test("knowledge-gaps synthesis forbids invented gaps when scan is missing", () => {
@@ -114,7 +114,7 @@ test("knowledge-gaps synthesis flags limited evidence when scan missing", () => 
 
 test("knowledge-gaps synthesis frames zero-gap scan with attached docs in response contract", () => {
   const prompt = buildKnowledgeGapsSynthesisUserPrompt({
-    evidence: { jobScan: { gaps: [], foundGaps: 0 } },
+    evidence: { jobScan: { gaps: [], foundGaps: 0, scanCoverage: "no_structured_gaps" } },
     confluence: {
       pages: [{ id: "1", title: "Coop AI — Architecture Overview", updated: "2026-01-01" }]
     },
@@ -124,6 +124,22 @@ test("knowledge-gaps synthesis frames zero-gap scan with attached docs in respon
   });
   assert.ok(prompt.includes("Automated scan found no structured gaps in this pass; attached doc review suggests"));
   assert.ok(prompt.includes("do not contradict the zero-gap scan"));
+});
+
+test("knowledge-gaps synthesis treats missing graph as incomplete not a docs gap", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({
+    evidence: {
+      jobScan: {
+        foundGaps: 1,
+        gaps: [{ type: "impact_unknown", message: "No indexed dependency graph for impact context" }]
+      }
+    },
+    owner: "raneyja",
+    repo: "Coop-AI"
+  });
+  assert.ok(prompt.includes("scan was incomplete"));
+  assert.ok(prompt.includes("GitHub Dependency Submission"));
+  assert.ok(!prompt.includes("Scan gap subsection from [Sources: Knowledge gap scan]: No indexed dependency graph"));
 });
 
 test("knowledge-gaps synthesis labels Confluence as org docs not repo architecture SoT", () => {

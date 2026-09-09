@@ -245,6 +245,22 @@ function phraseForTools(verb: "Explored" | "Exploring", tools: AgentToolRow[]): 
   return `${verb} ${parts.join(", ")}`;
 }
 
+/**
+ * Live Thinking auto-opens while tokens arrive. After the user toggles it,
+ * return null so new chunks cannot force it back open.
+ */
+export function nextLiveThinkingOpenState(input: {
+  isComplete: boolean;
+  userTouched: boolean;
+  streaming: boolean;
+  hasText: boolean;
+}): boolean | null {
+  if (input.isComplete || input.userTouched) {
+    return null;
+  }
+  return input.streaming || input.hasText;
+}
+
 export function agentStepsToActivity(
   steps: Array<{ index: number; tool: string; summary: string; completed: boolean }>
 ): AgentActivityState {

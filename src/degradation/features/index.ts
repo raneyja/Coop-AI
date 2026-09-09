@@ -24,6 +24,11 @@ export type FeatureDegradationOptions = {
 export async function runFeatureFallback(options: FeatureDegradationOptions): Promise<ContextFetchResult | undefined> {
   const action = options.request.params.quickAction as QuickActionFeatureId | undefined;
   if (!action) {
+    // Plain-chat PR review requests ownership without a Find Owner click.
+    if (options.request.type === "ownership") {
+      const status = fallbackStatusForFeature("find-owner", options.health);
+      return ownershipMap({ ...options, status });
+    }
     return undefined;
   }
   const feature = resolveFeatureForRequest(action, options.request.type);

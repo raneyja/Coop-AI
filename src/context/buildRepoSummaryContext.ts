@@ -13,9 +13,16 @@ import {
   FOCUS_MAX_ENTRY_PATHS,
   FOCUS_MAX_INJECTED_PATHS,
   focusQueryForRetrieval,
+  isLowValueAnchorPath,
+  isReadmeAnchorPath,
   mergeFocusEntryPaths
 } from "./userFocusQuery";
 import { onboardingIndexQueries, selectOnboardingEvidencePaths } from "./onboardingSearchQueries";
+import {
+  collectUnderstandDomainPaths,
+  filterComposeArchitectureFiles,
+  treeHasAppsLayout
+} from "./understandRepoDomainAttach";
 
 const MAX_ENTRY_FILES = 6;
 const MAX_FILE_CHARS = 12_000;
@@ -187,6 +194,36 @@ export function summarizeManifest(manifest: ManifestFileEntry[]): {
   };
 }
 
+const BARE_DOMAIN_QUERY = "authentication issue models views router middleware";
+
+function treeLooksLikeAppsMonorepo(options: {
+  treeOverview: { topLevelDirs: string[]; topLevelFiles: string[] };
+  manifest: ManifestFileEntry[];
+}): boolean {
+  const dirs = options.treeOverview.topLevelDirs.map((dir) => dir.replace(/\/$/, "").toLowerCase());
+  if (dirs.includes("apps") || dirs.includes("packages")) {
+    return true;
+  }
+  return options.manifest.some((entry) =>
+    /^(apps|packages)\//i.test(entry.filePath.replace(/\\/g, "/"))
+  );
+}
+
+function pickTreeAdaptiveDomainPaths(options: {
+  manifest: ManifestFileEntry[];
+}): string[] {
+  if (options.manifest.length === 0) {
+    return [];
+  }
+  const ranked = topManifestPaths(
+    BARE_DOMAIN_QUERY,
+    {},
+    options.manifest,
+    Math.max(FOCUS_MAX_ENTRY_PATHS * 4, 18)
+  );
+  return selectOnboardingEvidencePaths(ranked, BARE_DOMAIN_QUERY, FOCUS_MAX_INJECTED_PATHS);
+}
+
 export function pickEntryPaths(options: {
   manifest: ManifestFileEntry[];
   treeOverview: { topLevelDirs: string[]; topLevelFiles: string[] };
@@ -224,11 +261,15 @@ export function pickEntryPaths(options: {
   }
 
   const focusQueryEarly = focusQueryForRetrieval(options.userFocus);
+  const looksLikeApps = treeLooksLikeAppsMonorepo(options);
   const candidates = focusQueryEarly
     ? ENTRY_POINT_CANDIDATES.filter((candidate) => /^readme\.md$/i.test(candidate))
     : ENTRY_POINT_CANDIDATES;
 
   for (const candidate of candidates) {
+    if (looksLikeApps && isLowValueAnchorPath(candidate) && !isReadmeAnchorPath(candidate)) {
+      continue;
+    }
     push(candidate, allowBlindCandidates);
     if (picked.length >= MAX_ENTRY_FILES) {
       break;
@@ -246,9 +287,24 @@ export function pickEntryPaths(options: {
     }
   }
 
-  const anchors = picked.slice(0, MAX_ENTRY_FILES);
+  const domainPaths = pickTreeAdaptiveDomainPaths(options);
+  const anchors = (looksLikeApps
+    ? picked.filter((path) => !isLowValueAnchorPath(path) || isReadmeAnchorPath(path))
+    : picked
+  ).slice(0, MAX_ENTRY_FILES);
   const focusQuery = focusQueryForRetrieval(options.userFocus);
-  if (!focusQuery || options.manifest.length === 0) {
+  if (!focusQuery) {
+    if (domainPaths.length === 0) {
+      return anchors;
+    }
+    return mergeFocusEntryPaths({
+      anchorPaths: anchors,
+      focusPaths: domainPaths,
+      maxPaths: MAX_ENTRY_FILES,
+      minAnchors: anchors.length > 0 ? 1 : 0
+    });
+  }
+  if (options.manifest.length === 0) {
     return anchors;
   }
 
@@ -441,6 +497,8 @@ export type BuildIndexedRepoSummaryOptions = {
   provider?: CodeHostProviderPreference;
   activeFile?: string;
   userFocus?: string;
+  /** Stop the apps/ tree walk when this timestamp is reached (soft gather). */
+  deadlineAt?: number;
   resolveWorkspaceBranch?: (repoId: string) => Promise<string | undefined>;
 };
 
@@ -491,19 +549,36 @@ export async function buildIndexedRepoSummary(
     topLevelDirs: treeOverview?.topLevelDirs ?? [],
     topLevelFiles: treeOverview?.topLevelFiles ?? []
   };
-  const entryPaths = pickEntryPaths({
+  const domainPaths = await collectUnderstandDomainPaths({
+    topLevelDirs: treeForPick.topLevelDirs,
+    listDirectory: async (path) => workspace.listDirectory(resolvedTarget, path),
+    deadlineAt: options.deadlineAt
+  });
+  const genericPaths = pickEntryPaths({
     manifest,
     treeOverview: treeForPick,
     activeFile: options.activeFile,
     userFocus: options.userFocus
   });
+  const entryPaths =
+    domainPaths.length > 0
+      ? mergeFocusEntryPaths({
+          anchorPaths: genericPaths,
+          focusPaths: domainPaths,
+          maxPaths: MAX_ENTRY_FILES,
+          minAnchors: 0
+        })
+      : genericPaths;
 
+  const settled = await Promise.allSettled(
+    entryPaths.map((path) => workspace.readFile(resolvedTarget, path))
+  );
   const entryFiles: RepoSummaryEntryFile[] = [];
-  for (const path of entryPaths) {
-    const file = await workspace.readFile(resolvedTarget, path);
-    if (!file?.content?.trim()) {
+  for (const result of settled) {
+    if (result.status !== "fulfilled" || !result.value?.content?.trim()) {
       continue;
     }
+    const file = result.value;
     const truncated = file.content.length > MAX_FILE_CHARS;
     entryFiles.push({
       path: file.path,
@@ -511,8 +586,12 @@ export async function buildIndexedRepoSummary(
       truncated
     });
   }
+  const filteredEntryFiles = filterComposeArchitectureFiles(
+    entryFiles,
+    treeHasAppsLayout(treeForPick.topLevelDirs)
+  );
 
-  if (!manifestStats && entryFiles.length === 0 && !treeOverview) {
+  if (!manifestStats && filteredEntryFiles.length === 0 && !treeOverview) {
     return undefined;
   }
 
@@ -536,8 +615,8 @@ export async function buildIndexedRepoSummary(
       : inventory && typeof inventory.fileCount === "number"
         ? { fileCount: inventory.fileCount }
         : undefined,
-    entryFiles,
-    source: manifestStats ? "indexed-manifest" : entryFiles.length > 0 ? "indexed-files" : "indexed-tree"
+    entryFiles: filteredEntryFiles,
+    source: manifestStats ? "indexed-manifest" : filteredEntryFiles.length > 0 ? "indexed-files" : "indexed-tree"
   };
 }
 
@@ -553,6 +632,7 @@ export type BuildRepoSummaryEvidenceOptions = {
   activeFile?: string;
   /** Specific user ask — biases entry files via manifest scoring. */
   userFocus?: string;
+  deadlineAt?: number;
   resolveWorkspaceBranch?: (repoId: string) => Promise<string | undefined>;
 };
 
@@ -596,6 +676,7 @@ export async function buildRepoSummaryEvidence(
     repoId: options.repoId,
     activeFile: options.activeFile,
     userFocus,
+    deadlineAt: options.deadlineAt,
     provider: options.provider,
     resolveWorkspaceBranch: options.resolveWorkspaceBranch
   });

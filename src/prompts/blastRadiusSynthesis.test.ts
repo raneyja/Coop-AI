@@ -36,7 +36,7 @@ test("blast-radius synthesis includes primary target and out-of-scope @ attachme
     ],
     activeRepoId: "github:coop-demo-lab/fastify"
   });
-  assert.ok(prompt.includes("## Primary target"));
+  assert.ok(prompt.includes("## Open file"));
   assert.ok(prompt.includes("## @ attachments"));
   assert.ok(prompt.includes("local workspace"));
   assert.ok(prompt.includes("Out-of-scope @ attachments"));

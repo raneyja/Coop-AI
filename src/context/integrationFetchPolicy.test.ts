@@ -53,7 +53,6 @@ const DISCUSSION_INTEGRATIONS = [
 test("repo-wide quick actions are enumerated consistently", () => {
   assert.deepEqual([...REPO_WIDE_INTEGRATION_QUICK_ACTIONS], [
     "knowledge-gaps",
-    "understand-repo",
     "blast-radius"
   ]);
 });
@@ -72,6 +71,16 @@ test("understand-repo locate asks skip Confluence/Notion auto-fetch", () => {
   assert.equal(shouldFetchGoogleDocsContext(locateRequest), false);
   assert.equal(shouldFetchJiraContext(locateRequest), false);
   assert.equal(shouldFetchSlackContext(locateRequest), false);
+});
+
+test("understand-repo never auto-fetches org docs (architecture is the repo)", () => {
+  const overview = request("understand-repo", "file_metadata");
+  assert.equal(shouldFetchRepoWideIntegrations(overview), false);
+  assert.equal(shouldFetchConfluenceContext(overview), false);
+  assert.equal(shouldFetchNotionContext(overview), false);
+  assert.equal(shouldFetchGoogleDocsContext(overview), false);
+  assert.equal(shouldFetchJiraContext(overview), false);
+  assert.equal(shouldFetchSlackContext(overview), false);
 });
 
 for (const action of REPO_WIDE_INTEGRATION_QUICK_ACTIONS) {

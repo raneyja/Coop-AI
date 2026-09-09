@@ -57,6 +57,9 @@ void (async () => {
     const session = read("chat/CoopChatSession.ts");
     assert.match(session, /fetchUnderstandRepoEvidence/);
     assert.match(session, /buildRepoSummaryEvidence\(/);
+    assert.match(session, /understandRepoIndexQueries/);
+    assert.match(session, /isolateUnderstandRepoSummary/);
+    assert.match(session, /buttonClicked === "understand-repo"[\s\S]{0,80}\? \[\]/);
     assert.match(session, /COOP_EXTENSION_BUILD_ID/);
     assert.match(session, /isUnderstandRepo[\s\S]{0,400}?fetchUnderstandRepoEvidence/);
   });

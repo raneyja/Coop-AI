@@ -1228,16 +1228,18 @@ export function KnowledgeGapsEvidenceCard({
               onToggle={() => setExpanded((state) => ({ ...state, scan: !state.scan }))}
             >
               <IntegrationResultText muted>
-                Found {evidence.jobScan.foundGaps ?? evidence.jobScan.gaps?.length ?? 0} gaps — high / medium / low:{" "}
-                {evidence.jobScan.highPriority ?? 0} / {evidence.jobScan.mediumPriority ?? 0} /{" "}
-                {evidence.jobScan.lowPriority ?? 0}
+                Found {evidence.jobScan.foundGaps ?? evidence.jobScan.gaps?.length ?? 0} gaps
+                {Number(evidence.jobScan.highPriority ?? 0) > 0
+                  ? ` (${evidence.jobScan.highPriority} high priority)`
+                  : ""}
               </IntegrationResultText>
               {evidence.jobScan.gaps?.length ? (
                 <ul className="mt-2 space-y-1">
                   {evidence.jobScan.gaps.slice(0, 10).map((gap, index) => (
                     <li key={index} className="coop-result-text">
-                      {gap.file ? <code>{String(gap.file)}</code> : null}{" "}
-                      {String(gap.type ?? "gap")}: {String(gap.message ?? gap.summary ?? "")}
+                      {gap.file ? <code>{String(gap.file)}</code> : null}
+                      {gap.file ? " — " : null}
+                      {String(gap.message ?? gap.summary ?? "")}
                     </li>
                   ))}
                 </ul>

@@ -223,6 +223,8 @@ test("buildScanGapSubsection uses scan message for What to check", () => {
   );
   assert.ok(block.includes("No Confluence pages matched repo scope"));
   assert.ok(block.includes("**Open question:**"));
+  assert.ok(block.includes("`fastify.js`"));
+  assert.equal(block.includes("primary target"), false);
 });
 
 test("extractNotionPagesFromBundle and extractJobScanGapsFromBundle read bundle entries", () => {

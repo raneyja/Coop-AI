@@ -17,6 +17,7 @@ import { wantsConfluenceContext } from "../../context/confluenceContext";
 import { wantsNotionContext } from "../../context/notionContext";
 import { wantsGoogleDocsContext } from "../../context/googleDocsContext";
 import { isIncidentShapedQuery } from "../../context/incidentIntent";
+import { isOpenFileReviewAsk } from "../plainChatExplain";
 import { classifyRepoCodeIntent } from "../repoCodeIntent";
 import { queryHasNamedSymbol } from "../../api/agent/searchQuery";
 
@@ -195,6 +196,17 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
       focus,
       execution: "none",
       reason: "local code explanation — no tools"
+    };
+  }
+
+  if (isOpenFileReviewAsk(message) && tools.length === 0 && !workflow) {
+    return {
+      mode: "plain",
+      tools: [],
+      confidence: "high",
+      focus,
+      execution: "none",
+      reason: "open-file PR review — gather callers/owners; do not swap to Blast synthesis"
     };
   }
 

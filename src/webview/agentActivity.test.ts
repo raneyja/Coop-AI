@@ -4,6 +4,7 @@ import {
   agentStepsToActivity,
   buildActivityTodosFromFeedback,
   extractFileChipsFromLabels,
+  nextLiveThinkingOpenState,
   summarizeAgentExploration,
   toolRowsFromTodos,
   type AgentTodoItem
@@ -69,6 +70,36 @@ test("summarizeAgentExploration uses Explored / Exploring, not remaining steps",
 
 test("summarizeAgentExploration is null without real tools", () => {
   assert.equal(summarizeAgentExploration([]), null);
+});
+
+test("live thinking auto-opens until the user collapses it", () => {
+  assert.equal(
+    nextLiveThinkingOpenState({
+      isComplete: false,
+      userTouched: false,
+      streaming: true,
+      hasText: true
+    }),
+    true
+  );
+  assert.equal(
+    nextLiveThinkingOpenState({
+      isComplete: false,
+      userTouched: true,
+      streaming: true,
+      hasText: true
+    }),
+    null
+  );
+  assert.equal(
+    nextLiveThinkingOpenState({
+      isComplete: true,
+      userTouched: false,
+      streaming: false,
+      hasText: true
+    }),
+    null
+  );
 });
 
 test("synthesis wait does not invent Distilling/Aggregating todos", () => {

@@ -177,6 +177,31 @@ async function run(): Promise<void> {
     assert.ok(!paths.some((path) => /\/tests?\/|\/migrations?\//.test(path)));
   });
 
+  test("pickEntryPaths without focus still prefers Plane apps/ over compose", () => {
+    const manifest: ManifestFileEntry[] = [
+      { filePath: "package.json", symbols: [] },
+      { filePath: "README.md", symbols: [] },
+      { filePath: "docker-compose.yml", symbols: [] },
+      { filePath: "AGENTS.md", symbols: [] },
+      {
+        filePath: "apps/api/plane/api/middleware/api_authentication.py",
+        symbols: [{ name: "APIKeyAuthentication", kind: "class" }]
+      },
+      { filePath: "apps/api/plane/db/models/issue.py", symbols: [{ name: "Issue", kind: "class" }] },
+      { filePath: "apps/api/plane/db/models/state.py", symbols: [{ name: "State", kind: "class" }] }
+    ];
+    const paths = pickEntryPaths({
+      manifest,
+      treeOverview: { topLevelDirs: ["apps", "packages"], topLevelFiles: ["package.json", "README.md"] }
+    });
+    assert.ok(
+      paths.some((path) => /api_authentication|issue\.py|state\.py/i.test(path)),
+      `expected domain path among ${paths.join(", ")}`
+    );
+    assert.ok(!paths.includes("docker-compose.yml"));
+    assert.ok(!paths.includes("package.json"));
+  });
+
   test("summarizeManifest counts extensions and symbols", () => {
     const stats = summarizeManifest([
       { filePath: "src/a.ts", symbols: [{ name: "foo", kind: "function" }] },

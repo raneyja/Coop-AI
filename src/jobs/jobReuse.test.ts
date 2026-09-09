@@ -79,6 +79,19 @@ test("pickNewestReusableJob returns latest matching scan", () => {
   assert.equal(picked?.id, "newer");
 });
 
+test("isReusableJob rejects knowledge-gap scans that only report a missing graph", () => {
+  const infraOnly = baseJob({
+    result: {
+      foundGaps: 1,
+      gaps: [{ type: "impact_unknown", message: "No indexed dependency graph for impact context" }]
+    }
+  });
+  assert.equal(
+    isReusableJob(infraOnly, 2 * 60 * 60 * 1000, { repoId: "github:raneyja/Coop-AI", file: "src/a.ts" }),
+    false
+  );
+});
+
 const total = passed + failed;
 console.log(`\njobReuse: ${passed}/${total} tests passed`);
 if (failed > 0) {

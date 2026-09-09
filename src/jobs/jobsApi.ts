@@ -126,10 +126,14 @@ async function handleCreateJob(
         return;
       }
     }
+    const params = asRecord(body.params);
+    if (auth?.orgId) {
+      params.orgId = auth.orgId;
+    }
     const submit = await deps.queue.createJob({
       type: type as JobType,
       priority: readPriority(body.priority),
-      params: asRecord(body.params),
+      params,
       userId: auth ? authUserId(auth) : body.userId ? String(body.userId) : undefined,
       estimatedDurationMs: body.estimatedDurationMs ? Number(body.estimatedDurationMs) : undefined,
       scheduled: Boolean(body.scheduled)

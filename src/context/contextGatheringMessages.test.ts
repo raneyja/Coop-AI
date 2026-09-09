@@ -72,7 +72,7 @@ test("understand-repo skips code host estate line when code host is disconnected
     }
   );
   assert.ok(!messages.some((message) => message.includes("GitLab estate index")));
-  assert.ok(messages.includes("Reviewing Jira tickets…"));
+  assert.ok(!messages.includes("Reviewing Jira tickets…"));
 });
 
 test("trace-decision uses provider-specific PR search label", () => {

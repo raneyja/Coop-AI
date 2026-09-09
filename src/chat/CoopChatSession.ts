@@ -181,6 +181,7 @@ import {
   searchDependentsFallback
 } from "../engines/blastRadiusDependentsFallback";
 import { isFileCallerQuery } from "../context/fileCallerIntent";
+import { isOpenFileReviewAsk } from "./plainChatExplain";
 import {
   coordinatesFromRepoId,
   repoIdFromCoordinates,
@@ -354,8 +355,9 @@ import {
   focusQueryForRetrieval,
   mergeFocusFilesIntoEntryFiles
 } from "../context/userFocusQuery";
+import { isolateUnderstandRepoSummary } from "../context/understandRepoDomainAttach";
 import {
-  onboardingIndexQueries,
+  understandRepoIndexQueries,
   pickOnboardingTopicAttachPaths,
   rankOnboardingEntryFiles,
   uncoveredOnboardingTopics
@@ -369,6 +371,10 @@ import {
   openFileRelatedToGapsFocus,
   resolveKnowledgeGapsAuditScope
 } from "../context/knowledgeGapsFocus";
+import {
+  knowledgeGapScanCoverageFromJobScan,
+  knowledgeGapScanGapsWithoutInfra
+} from "../context/knowledgeGapScanCoverage";
 import { isCoopDevMode, readLightningBackend, updateLightningConfiguration } from "../config/lightningConfig";
 import type { IndexBackend } from "../indexing/indexBackend";
 import type { LightningStatusBar } from "../extension/lightningStatusBar";
@@ -474,7 +480,11 @@ import {
   understandRepoEmptyEvidenceMessage,
   understandRepoMissingEntryBodiesMessage
 } from "../context/indexedRepoContextEnrichment";
-import { hasRepoSummaryEvidence, buildRepoSummaryEvidence } from "../context/buildRepoSummaryContext";
+import { hasRepoSummaryEvidence, buildRepoSummaryEvidence, loadManifestEntries } from "../context/buildRepoSummaryContext";
+import { resolveInventoryRepoIds } from "../workspace/repoInventorySources";
+import { detectRepoKnowledgeGaps } from "../jobs/knowledgeGapDetector";
+import { hydrateKnowledgeGapGraphSlice } from "../jobs/hydrateKnowledgeGapGraph";
+import { collectKnowledgeGapTreePaths } from "../context/knowledgeGapTreePaths";
 import { coopBuildBanner, COOP_EXTENSION_BUILD_ID } from "../config/coopBuildId";
 import { fetchIndexedBranch } from "../context/resolveRepoBranch";
 import { resolveActiveRepoTarget } from "../workspace/repoTargetResolver";
@@ -2955,9 +2965,11 @@ export class CoopChatSession {
         }
         // Fresh Trace must not reuse a prior file's decision_history from the turn/session bundle.
         const priorBundle =
-          event.context.buttonClicked === "trace-decision"
-            ? turn.contextBundle.filter((entry) => entry.type !== "decision_history")
-            : turn.contextBundle;
+          event.context.buttonClicked === "understand-repo"
+            ? []
+            : event.context.buttonClicked === "trace-decision"
+              ? turn.contextBundle.filter((entry) => entry.type !== "decision_history")
+              : turn.contextBundle;
         turn.contextBundle = mergeContextBundleResults(priorBundle, results, event.context.file);
         if (this.isViewingThread(turn.threadId)) {
           this.lastContextBundle = turn.contextBundle;
@@ -2966,9 +2978,11 @@ export class CoopChatSession {
       }
 
       const priorSessionBundle =
-        event.context.buttonClicked === "trace-decision"
-          ? this.lastContextBundle.filter((entry) => entry.type !== "decision_history")
-          : this.lastContextBundle;
+        event.context.buttonClicked === "understand-repo"
+          ? []
+          : event.context.buttonClicked === "trace-decision"
+            ? this.lastContextBundle.filter((entry) => entry.type !== "decision_history")
+            : this.lastContextBundle;
       this.lastContextBundle = mergeContextBundleResults(
         priorSessionBundle,
         results,
@@ -3030,11 +3044,13 @@ export class CoopChatSession {
       result = await this.enrichKnowledgeGapsWithFocusSearch(request, result);
     }
 
-    // Plain chat "who calls / who imports" — durable remote dependents (same API as Blast).
+    // Plain chat "who calls / who imports" and open-file PR review —
+    // durable remote dependents (same API as Blast).
     if (
       request.type === "dependencies" &&
       !request.params.quickAction &&
-      isFileCallerQuery(request.intent.context?.queryText)
+      (isFileCallerQuery(request.intent.context?.queryText) ||
+        isOpenFileReviewAsk(request.intent.context?.queryText))
     ) {
       result = await this.enrichPlainChatWithDurableDependents(request, result);
     }
@@ -3222,7 +3238,7 @@ export class CoopChatSession {
         : this.preferences.defaultCodeHost;
 
     const userFocus = focusQueryForRetrieval(request.intent.context.queryText);
-    const topicQueries = onboardingIndexQueries(userFocus);
+    const topicQueries = understandRepoIndexQueries({ userFocus });
 
     try {
       const evidencePromise = buildRepoSummaryEvidence({
@@ -3236,12 +3252,14 @@ export class CoopChatSession {
         provider,
         activeFile: undefined,
         userFocus,
+        deadlineAt: Date.now() + budgetMs,
         resolveWorkspaceBranch: async (id) => this.resolveWorkspaceDefaultBranch(id)
       });
-      const focusSearchPromise = userFocus
-        ? searchRepoForFocusQuery({
+      const focusSearchPromise =
+        topicQueries.length > 0
+          ? searchRepoForFocusQuery({
             repoId,
-            query: userFocus,
+            query: userFocus ?? topicQueries.join(" "),
             indexQueries: topicQueries,
             maxFiles: 5,
             indexBackend: this.options.indexBackend,
@@ -3252,7 +3270,7 @@ export class CoopChatSession {
             repo,
             provider
           })
-        : Promise.resolve(undefined);
+          : Promise.resolve(undefined);
 
       const [evidence, initialFocusSearch] = await Promise.all([
         Promise.race([
@@ -3277,11 +3295,11 @@ export class CoopChatSession {
         evidence && typeof evidence === "object" ? (evidence as Record<string, unknown>) : {};
 
       let focusSearch = initialFocusSearch;
-      if (userFocus) {
+      if (topicQueries.length > 0) {
         const priorEntries = Array.isArray(evidenceData.entryFiles)
           ? (evidenceData.entryFiles as Array<{ path: string; content?: string; truncated?: boolean }>)
           : [];
-        const rankQuery = [userFocus, ...topicQueries].filter(Boolean).join(" ") || userFocus;
+        const rankQuery = [userFocus, ...topicQueries].filter(Boolean).join(" ") || topicQueries.join(" ");
         const collectHits = (
           search: typeof focusSearch
         ): string[] => [
@@ -3349,7 +3367,7 @@ export class CoopChatSession {
           const retrySearch = await Promise.race([
             searchRepoForFocusQuery({
               repoId,
-              query: userFocus,
+              query: userFocus ?? uncovered.join(" "),
               indexQueries: uncovered,
               maxFiles: 5,
               indexBackend: this.options.indexBackend,
@@ -3891,7 +3909,11 @@ export class CoopChatSession {
 
     if (this.degradationConfig.enableGracefulFallback) {
       const action = request.params.quickAction as QuickActionFeatureId | undefined;
-      const health = action ? await this.healthForQuickAction(action) : [];
+      const health = action
+        ? await this.healthForQuickAction(action)
+        : request.type === "ownership"
+          ? await this.healthForQuickAction("find-owner")
+          : [];
       const degraded = await runFeatureFallback({
         request,
         health,
@@ -4442,6 +4464,9 @@ export class CoopChatSession {
     result: ContextFetchResult,
     request: ContextFetchRequest
   ): Promise<ContextFetchResult> {
+    if (request.params.quickAction === "understand-repo") {
+      return result;
+    }
     const contextText = await this.integrationContextText(result, request);
     const integrationScopes = await this.resolveIntegrationScopes(request);
     const gapsFocus =
@@ -5894,7 +5919,28 @@ export class CoopChatSession {
       this.loadingFeedbackFor(prefetchIntentEvent, options?.intentPlan)
     );
 
-    if (quickAction && shouldUseAsyncJob(quickAction) && !(quickAction === "knowledge-gaps" && userFocus)) {
+    let skipKnowledgeGapJob = false;
+    if (quickAction === "knowledge-gaps") {
+      try {
+        await abortablePromise(
+          this.applyIndexedManifestKnowledgeGapScan(turn),
+          turn.streamAbort.signal
+        );
+        skipKnowledgeGapJob = this.knowledgeGapScanHasFileCoverage();
+      } catch (error) {
+        if (!this.threadRuns.isStreamActive(turn)) {
+          return;
+        }
+        throw error;
+      }
+    }
+
+    if (
+      quickAction &&
+      shouldUseAsyncJob(quickAction) &&
+      !skipKnowledgeGapJob &&
+      !(quickAction === "knowledge-gaps" && userFocus)
+    ) {
       try {
         const ranAsync = await abortablePromise(
           this.runAsyncQuickAction(quickAction, modelMessage, turn),
@@ -5919,7 +5965,10 @@ export class CoopChatSession {
           if (!this.threadRuns.isStreamActive(turn)) {
             return;
           }
-          this.enrichKnowledgeGapsBundle(quickAction, turn);
+          await abortablePromise(
+            this.enrichKnowledgeGapsBundle(quickAction, turn),
+            turn.streamAbort.signal
+          );
           if (quickAction === "blast-radius") {
             await abortablePromise(
               this.applyBlastRadiusJobResultToBundle(quickAction, turn),
@@ -6002,7 +6051,10 @@ export class CoopChatSession {
     if (!this.threadRuns.isStreamActive(turn)) {
       return;
     }
-    this.enrichKnowledgeGapsBundle(quickAction, turn);
+    await abortablePromise(
+      this.enrichKnowledgeGapsBundle(quickAction, turn),
+      turn.streamAbort.signal
+    );
     if (quickAction === "understand-repo") {
       // Don't block synthesis on graph enrichment for the evidence card.
       void this.postEvidenceCardsFromBundle(quickAction, integrationProvider, turn, fetchIntegrations);
@@ -6772,6 +6824,11 @@ export class CoopChatSession {
           this.postIntegrationEvidenceFromBundle(provider);
         }
       }
+      const reviewAsk = isOpenFileReviewAsk(turn?.modelMessage);
+      if (!quickAction && !integrationProvider && reviewAsk && this.currentContext.file?.trim()) {
+        this.postBlastRadiusEvidenceFromBundle();
+        this.postOwnershipCardFromBundle();
+      }
     });
   }
 
@@ -6870,6 +6927,7 @@ export class CoopChatSession {
     if (!evidence) {
       return;
     }
+    evidence = isolateUnderstandRepoSummary(evidence);
     evidence = await this.enrichRepoSummaryGraphEvidence(evidence);
     const artifactId = this.beginEvidenceArtifact();
     const payload = {
@@ -7218,6 +7276,18 @@ export class CoopChatSession {
         }
       }
     }
+    // Open-file PR review: keep the chat/reviewer-checks prompt, but use the
+    // assigned quick-actions model. Picker choice must not skip gather quality.
+    if (
+      !this.preferences.devMode &&
+      !effectiveQuickAction &&
+      !integrationProvider &&
+      !options?.composerMode &&
+      isOpenFileReviewAsk(options?.taskContent ?? content)
+    ) {
+      const qa = getFeatureModelAssignment("quickActions");
+      runtimeModel = { provider: qa.provider, model: qa.model };
+    }
     const cacheKey = JSON.stringify({
       content,
       attachments,
@@ -7345,7 +7415,11 @@ export class CoopChatSession {
           this.lastTraceDecisionTimeline = decisionTimeline;
         }
       }
-      const repoSummary = repoSummaryFromBundle(contextBundle);
+      const repoSummaryRaw = repoSummaryFromBundle(contextBundle);
+      const repoSummary =
+        effectiveQuickAction === "understand-repo" && repoSummaryRaw
+          ? isolateUnderstandRepoSummary(repoSummaryRaw)
+          : repoSummaryRaw;
       const blastRadiusEvidence = blastRadiusFromBundle(contextBundle);
       const knowledgeGapsEvidence = knowledgeGapsFromBundle(contextBundle);
       const confluenceEvidence = confluenceSearchFromBundle(contextBundle);
@@ -8623,15 +8697,22 @@ export class CoopChatSession {
         return;
       }
       const result = this.lastJobResult as Record<string, unknown>;
-      const gaps = Array.isArray(result.gaps) ? result.gaps : [];
+      const rawGaps = Array.isArray(result.gaps) ? result.gaps : [];
+      const gaps = knowledgeGapScanGapsWithoutInfra(rawGaps);
       const jobScan = {
         source: "knowledge-gap-job",
         cached: Boolean(result.cached),
-        foundGaps: typeof result.foundGaps === "number" ? result.foundGaps : gaps.length,
+        foundGaps: gaps.length,
         highPriority: Number(result.highPriority ?? 0),
         mediumPriority: Number(result.mediumPriority ?? 0),
         lowPriority: Number(result.lowPriority ?? 0),
-        gaps: gaps.slice(0, 50)
+        gaps: gaps.slice(0, 50),
+        scanCoverage: knowledgeGapScanCoverageFromJobScan({
+          gaps,
+          foundGaps: gaps.length,
+          scanCoverage: result.scanCoverage
+        }),
+        scannedFileCount: Number(result.scannedFileCount ?? 0)
       };
       this.mergeKnowledgeGapScanIntoBundle(jobScan);
     });
@@ -9003,12 +9084,18 @@ export class CoopChatSession {
     };
   }
 
-  private enrichKnowledgeGapsBundle(quickAction: string | undefined, turn?: ChatTurn): void {
+  private async enrichKnowledgeGapsBundle(
+    quickAction: string | undefined,
+    turn?: ChatTurn
+  ): Promise<void> {
     if (quickAction !== "knowledge-gaps") {
       return;
     }
-    this.withTurnSessionMirrors(turn, () => {
+    await this.withTurnSessionMirrors(turn, async () => {
       this.applyKnowledgeGapJobResultToBundle(quickAction);
+      if (!this.knowledgeGapScanHasFileCoverage()) {
+        await this.applyIndexedManifestKnowledgeGapScanUnlocked();
+      }
       if (!this.knowledgeGapScanInBundle()) {
         this.applyHeuristicKnowledgeGapScan();
       } else {
@@ -9016,6 +9103,83 @@ export class CoopChatSession {
         // merge focus stubs so Strong evidence + Confluence cannot hide a zero-gap card.
         this.mergeFocusTopicStubsIntoExistingScan();
       }
+    });
+  }
+
+  private knowledgeGapScanHasFileCoverage(): boolean {
+    const evidence = knowledgeGapsFromBundle(this.lastContextBundle);
+    const jobScan = evidence?.jobScan;
+    if (!jobScan) {
+      return false;
+    }
+    if (Number(jobScan.scannedFileCount ?? 0) > 0) {
+      return true;
+    }
+    return knowledgeGapScanCoverageFromJobScan(jobScan) === "gaps_found";
+  }
+
+  private async applyIndexedManifestKnowledgeGapScan(turn?: ChatTurn): Promise<void> {
+    await this.withTurnSessionMirrors(turn, () => this.applyIndexedManifestKnowledgeGapScanUnlocked());
+  }
+
+  private async applyIndexedManifestKnowledgeGapScanUnlocked(): Promise<void> {
+    if (this.knowledgeGapScanHasFileCoverage()) {
+      return;
+    }
+    const owner = this.currentContext.owner ?? this.preferences.owner;
+    const repo = this.currentContext.repo ?? this.preferences.repo;
+    if (!owner || !repo) {
+      return;
+    }
+    const repoId = buildRepoId(this.preferences, this.currentContext);
+    const { candidates } = resolveInventoryRepoIds(repoId, {
+      provider: this.currentContext.provider ?? this.preferences.defaultCodeHost,
+      owner,
+      repo,
+      branch: this.currentContext.branch ?? this.preferences.branch
+    });
+    const entries = await loadManifestEntries(
+      this.options.api,
+      this.preferences.apiBaseUrl,
+      candidates.length > 0 ? candidates : [repoId]
+    );
+    let paths = entries.map((entry) => entry.filePath);
+    if (paths.length === 0) {
+      const remainingMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
+      paths = await collectKnowledgeGapTreePaths({
+        workspace: this.indexedRepoWorkspace(),
+        target: {
+          repoId,
+          owner,
+          repo,
+          branch: this.currentContext.branch ?? this.preferences.branch,
+          provider: this.currentContext.provider ?? this.preferences.defaultCodeHost
+        },
+        deadlineAt: Date.now() + Math.max(4_000, remainingMs)
+      });
+    }
+    if (paths.length === 0) {
+      return;
+    }
+    const slice = hydrateKnowledgeGapGraphSlice({
+      manifestPaths: paths
+    });
+    const detected = detectRepoKnowledgeGaps(slice, {
+      file: this.currentContext.file?.trim()
+    });
+    if (detected.scannedFileCount === 0) {
+      return;
+    }
+    this.mergeKnowledgeGapScanIntoBundle({
+      source: "indexed-manifest",
+      cached: false,
+      foundGaps: detected.gaps.length,
+      highPriority: detected.gaps.filter((gap) => gap.priority === "high").length,
+      mediumPriority: detected.gaps.filter((gap) => gap.priority === "medium").length,
+      lowPriority: detected.gaps.filter((gap) => gap.priority === "low").length,
+      gaps: detected.gaps.slice(0, 50),
+      scanCoverage: detected.scanCoverage,
+      scannedFileCount: detected.scannedFileCount
     });
   }
 
@@ -9112,18 +9276,6 @@ export class CoopChatSession {
         message: "No ownership scores attached for this path"
       });
     }
-    if (
-      fileForOwnershipGaps &&
-      !evidence.dependencyGraph?.directDependents?.length &&
-      !evidence.dependencyGraph?.edgeCount
-    ) {
-      gaps.push({
-        file: fileForOwnershipGaps,
-        type: "impact_unknown",
-        priority: "medium",
-        message: "No indexed dependency graph for impact context"
-      });
-    }
     if (confluence && !confluence.error && !confluence.pages?.length) {
       gaps.push({
         file: target,
@@ -9166,7 +9318,8 @@ export class CoopChatSession {
       highPriority: gaps.filter((gap) => gap.priority === "high").length,
       mediumPriority: gaps.filter((gap) => gap.priority === "medium").length,
       lowPriority: gaps.filter((gap) => gap.priority === "low").length,
-      gaps
+      gaps,
+      scanCoverage: gaps.length > 0 ? "gaps_found" : "scan_incomplete"
     };
     this.mergeKnowledgeGapScanIntoBundle(jobScan);
   }
@@ -10728,8 +10881,8 @@ export class CoopChatSession {
     this.postDegradationNotification({
       id: `${request.id}:degradation`,
       severity: result.error ? "critical" : "warning",
-      title: result.error ? "Context unavailable" : "Using best-effort context",
-      message: result.message ?? result.error ?? "Showing degraded context.",
+      title: result.error ? "Context unavailable" : "Limited context",
+      message: result.message ?? result.error ?? "Some sources could not be loaded.",
       provider: this.inferOfflineProvider(
         typeof action === "string" ? (action as QuickActionFeatureId) : undefined,
         result.message ?? result.error

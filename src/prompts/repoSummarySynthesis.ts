@@ -95,11 +95,14 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
     lines.push(
       "Synthesize a **repository-wide** overview using `<repo_entry_files>`, `<graph_context>`, and manifest metadata in attached context."
     );
+    lines.push(
+      "Architecture / Key subsystems FAIL if they are only compose service names (web, api, postgres, redis, minio) with no attached domain path under apps/, packages/, or src/. **Entry points** must be attached source files a new hire would open (auth, models, views, app routers) — not docker-entrypoint scripts, compose files, or AGENTS.md unless those are the only attached files."
+    );
   }
   if (!locateOnly) {
     lines.push("Cover major subsystems, entry points, data/backend boundaries, integrations, and top risks.");
     lines.push(
-      "For enterprise onboarding, call out deploy/CI entry points (workflows, Docker, deploy docs), external integrations (Slack, Jira, Confluence, OAuth/connect config), and configuration boundaries (env files, secrets handling, feature flags) — only when attached evidence supports them."
+      "Deploy/CI, Docker, and compose belong in **Risks & unknowns** or **Suggested next steps** only — never as the Architecture story. External integrations and configuration boundaries only when attached evidence supports them."
     );
     if (activeFile) {
       lines.push(

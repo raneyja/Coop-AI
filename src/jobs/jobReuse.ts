@@ -1,5 +1,6 @@
 import type { Job, JobParams, JobType } from "./types";
 import { JobType as JobTypeEnum } from "./types";
+import { knowledgeGapScanGapsWithoutInfra } from "../context/knowledgeGapScanCoverage";
 
 /** Reuse a completed scan when the user re-runs the same action within this window. */
 export const KNOWLEDGE_GAPS_REUSE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -32,7 +33,29 @@ export function isReusableJob(job: Job, maxAgeMs: number, requestedParams: JobPa
   if (Date.now() - job.completedAt.getTime() > maxAgeMs) {
     return false;
   }
-  return jobParamsMatch(job.params, requestedParams);
+  if (!jobParamsMatch(job.params, requestedParams)) {
+    return false;
+  }
+  if (job.type === JobTypeEnum.SCAN_KNOWLEDGE_GAPS && !knowledgeGapJobResultIsReusable(job.result)) {
+    return false;
+  }
+  return true;
+}
+
+/** Do not reuse a scan whose only "gaps" are Coop missing a dependency graph. */
+export function knowledgeGapJobResultIsReusable(result: unknown): boolean {
+  if (!result || typeof result !== "object") {
+    return false;
+  }
+  const record = result as { gaps?: unknown[]; scanCoverage?: unknown; foundGaps?: number };
+  const gaps = Array.isArray(record.gaps) ? record.gaps : [];
+  if (gaps.length > 0) {
+    return knowledgeGapScanGapsWithoutInfra(gaps).length > 0;
+  }
+  if (record.scanCoverage === "scan_incomplete") {
+    return false;
+  }
+  return true;
 }
 
 export function pickNewestReusableJob(

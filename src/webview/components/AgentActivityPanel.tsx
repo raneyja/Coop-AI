@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentFileChip, AgentTodoItem, AgentToolRow } from "../agentActivity";
-import { summarizeAgentExploration } from "../agentActivity";
+import { nextLiveThinkingOpenState, summarizeAgentExploration } from "../agentActivity";
 import { splitNarrativeLabelParts } from "../agentNarrative";
 import {
   formatThoughtLabel,
@@ -256,13 +256,26 @@ export function AgentActivityPanel({
   const [exploringOpen, setExploringOpen] = useState(!isComplete);
   const [filesOpen, setFilesOpen] = useState(false);
   const exploredTouchedRef = useRef(isComplete);
+  const thinkingTouchedRef = useRef(false);
   const exploration = useMemo(() => summarizeAgentExploration(tools), [tools]);
 
   useEffect(() => {
-    if (isComplete) {
+    if (!trimmedThinking) {
+      thinkingTouchedRef.current = false;
+    }
+  }, [trimmedThinking]);
+
+  useEffect(() => {
+    const nextOpen = nextLiveThinkingOpenState({
+      isComplete,
+      userTouched: thinkingTouchedRef.current,
+      streaming: thinkingStreaming,
+      hasText: Boolean(trimmedThinking)
+    });
+    if (nextOpen === null) {
       return;
     }
-    setThinkingOpen(thinkingStreaming || Boolean(trimmedThinking));
+    setThinkingOpen(nextOpen);
   }, [isComplete, thinkingStreaming, trimmedThinking]);
 
   useEffect(() => {
@@ -355,7 +368,10 @@ export function AgentActivityPanel({
             type="button"
             className="coop-agent-thinking-toggle"
             aria-expanded={thinkingOpen}
-            onClick={() => setThinkingOpen((value) => !value)}
+            onClick={() => {
+              thinkingTouchedRef.current = true;
+              setThinkingOpen((value) => !value);
+            }}
           >
             <span className="coop-agent-thinking-title">
               {thinkingStreaming ? "Thinking" : formatThoughtLabel(isComplete ? thinkingMs : undefined)}

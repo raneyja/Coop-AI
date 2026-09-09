@@ -5,7 +5,6 @@ import { isLocateShapedRepoAsk } from "../chat/repoCodeIntent";
 /** Quick actions that auto-fetch all connected doc/discussion integrations. */
 export const REPO_WIDE_INTEGRATION_QUICK_ACTIONS = [
   "knowledge-gaps",
-  "understand-repo",
   "blast-radius"
 ] as const;
 
@@ -19,11 +18,7 @@ export type TraceDecisionIntegrationQuickAction = (typeof TRACE_DECISION_INTEGRA
 export function isRepoWideIntegrationQuickAction(
   quickAction: string | undefined
 ): quickAction is RepoWideIntegrationQuickAction {
-  return (
-    quickAction === "knowledge-gaps" ||
-    quickAction === "understand-repo" ||
-    quickAction === "blast-radius"
-  );
+  return quickAction === "knowledge-gaps" || quickAction === "blast-radius";
 }
 
 export function isTraceDecisionIntegrationQuickAction(

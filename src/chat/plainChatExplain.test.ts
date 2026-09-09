@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { isOpenFileExplainAsk, isOpenFileReviewAsk, semanticAttachModeForChat } from "./plainChatExplain";
 import { COPILOT_C4_ASK } from "../api/agent/dogfoodContract";
+import { planChatIntentFromRules } from "./intentPlanner/planChatIntent";
 
 let passed = 0;
 let failed = 0;
@@ -34,7 +35,7 @@ test("C4 PR review is an open-file review, not an explain briefing", () => {
       query: COPILOT_C4_ASK,
       openFile: "src/server/authMiddleware.ts"
     }),
-    "paths-only"
+    "bodies"
   );
 });
 
@@ -60,6 +61,17 @@ test("explain without an open file still attaches search bodies", () => {
     }),
     "bodies"
   );
+});
+
+test("C4 PR review stays plain chat — does not silent-promote to Blast", () => {
+  const plan = planChatIntentFromRules({
+    message: COPILOT_C4_ASK,
+    activeFile: "src/server/authMiddleware.ts",
+    connectedTools: []
+  });
+  assert.equal(plan.mode, "plain");
+  assert.equal(plan.execution, "none");
+  assert.equal(plan.workflow, undefined);
 });
 
 console.log(`\nplainChatExplain: ${passed}/${passed + failed} tests passed`);

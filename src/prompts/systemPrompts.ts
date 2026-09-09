@@ -67,6 +67,11 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
 - One theme per subsection; category labels (e.g. **Dependency configuration**) are subsection titles, not bullets.
 - Complete sentences. When the required structure below lists named sections, follow that list. Otherwise prefer 2–4 short sections — not 15+ peer-level bullets. No fabricated URLs or paths.
 - Spend output on new evidence, not restating **Answer** / **Your question** in later sections. Extra citations of the same snippet do not make the answer better.
+
+## User-facing language (all answers — chat and commands)
+The reader is the engineer in the IDE. Never write Coop pipeline jargon in the answer, Sources footer, or subsection copy.
+FAIL (do not emit): \`scan_incomplete\`, \`gaps_found\`, \`no_structured_gaps\`, \`jobScan\`, \`scanCoverage\`, soft gather, gather budget, indexed-manifest, primary target, \`missing_docs\`, \`missing_owner\`, \`impact_unknown\`, high-value code, high-fan-in, depcruise, Dependency Submission, best-effort context.
+Use ordinary English: "this file", "this folder", "the scan could not finish", "no listed owner", "no nearby docs".
 `;
 
 export const PATCH_OUTPUT_CONTRACT = `
@@ -346,7 +351,7 @@ Numbered list of 2-4 concrete actions.
 Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
 
 **Sources**
-${SOURCES_FOOTER_OUTPUT_RULE} Include Confluence scan and job-scan items when present.`,
+${SOURCES_FOOTER_OUTPUT_RULE} Include Confluence and knowledge-gap scan items when present.`,
 
   chat: `
 ## Required response structure
@@ -368,9 +373,10 @@ At most **one** citation fence — the named function or type in the open file. 
 **Reviewer checks** (if they asked to review as a PR / what you'd block / what's fine / what a reviewer would flag)
 This is the **only** section for that ask. Do not use **Summary**. Do not invent a follow-up about tests unless the attached file is a test file.
 Exactly **3** one-line bullets, in this order:
-- **Block:** a concrete issue in the **named function**, or "none — fine because …" with a specific condition
+- **Block:** a concrete issue in the **named function**, or "none — fine because …" with a specific condition. Never invent an HTTP status write if that function has no \`response\` / status call.
 - **Fine because:** a specific behavior in that function (not "looks good", not "add logging")
 - **Ask the author:** one question about that function's contract
+Cite attached callers (\`<file_dependents>\`) or say impact is unverified. Mention the owner if ownership evidence is present; otherwise owner unknown.
 Stay in the named function. Sibling helpers in the same file are out of scope unless it calls them. No OWASP dump. Never **Next-status WRITE path**, **Hard errors that abort this attempt**, or stuck-status playbook headings.
 
 For open-file explain: then stop. Do not add extra sections, extra citations, or consumer file dumps.
@@ -779,7 +785,9 @@ export const OPEN_FILE_PR_REVIEW_DIRECTIVE = `## Turn directive (PR review)
 This turn is a PR review of the **named function** in the attached file (the identifier in the user ask — e.g. requireAuth), not every helper in the file.
 - Output **only** **Reviewer checks** with exactly three bullets: **Block:** / **Fine because:** / **Ask the author:**
 - Omit **Answer**, **Summary**, and **Your question**. Do not invent a follow-up about tests unless the attached file is a test file.
-- Block must be a concrete behavior in that function (type predicate, requireInProduction bypass, missing status write). Never "add logging" or "improve error messages" unless that function writes user-facing errors.
+- Block must be a real contract in that function (type predicate, requireInProduction bypass, or a concrete caller impact). Never invent an HTTP status write if the function has no \`response\` / status call. Never "add logging" or "improve error messages" unless that function writes user-facing errors.
+- If <file_dependents> lists callers, cite a real path in Block or Ask. If it is missing or empty, say impact is unverified — do not invent callers.
+- If ownership evidence is present, mention the owner; if not, say owner unknown. Do not invent an owner.
 - Fine because / Ask the author must also be about that function. Sibling helpers (extractBearerToken, resolveAuthContext, 401/403 writers) are out of scope unless the named function calls them.`;
 
 /** Build the user turn when local file bytes are already loaded (extension-side). */
@@ -1984,7 +1992,7 @@ export function formatFileDependentsForLlm(evidence: FileDependentsEvidence): st
   const lines = [
     `<file_dependents${sourceAttr}${fileAttr} count="${paths.length}">`,
     "Trusted indexed callers from the durable import / symbol graph (Zero-Clone remote evidence).",
-    "When the user asks who calls or who imports this file, name these paths. Do not say callers are unknown, unspecified, or unavailable while this list is present."
+    "When the user asks who calls or who imports this file, or is reviewing it as a PR, name these paths. Do not say callers are unknown, unspecified, or unavailable while this list is present. If the list is empty, say impact is unverified."
   ];
   for (const path of paths) {
     lines.push(`- ${path}`);

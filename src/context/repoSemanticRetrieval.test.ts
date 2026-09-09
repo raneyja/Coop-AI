@@ -61,7 +61,7 @@ test("shouldRunRepoSemanticRetrieval allows plain chat with long query", () => {
   );
 });
 
-test("shouldRunRepoSemanticRetrieval skips open-file PR review", () => {
+test("shouldRunRepoSemanticRetrieval allows open-file PR review so callers can attach", () => {
   assert.equal(
     shouldRunRepoSemanticRetrieval({
       queryText:
@@ -71,7 +71,7 @@ test("shouldRunRepoSemanticRetrieval skips open-file PR review", () => {
       inScopeMentionCount: 0,
       enabled: true
     }),
-    false
+    true
   );
 });
 

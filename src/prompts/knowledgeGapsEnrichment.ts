@@ -27,7 +27,11 @@ const CONFLUENCE_REVIEWED_HEADING = "**Confluence pages reviewed**";
 const NOTION_REVIEWED_HEADING = "**Notion pages reviewed**";
 const GOOGLE_DOCS_REVIEWED_HEADING = "**Google Docs reviewed**";
 
-const DOCUMENTATION_SCAN_GAP_TYPES = new Set(["missing_docs", "impact_unknown", "default_on_risk"]);
+const DOCUMENTATION_SCAN_GAP_TYPES = new Set([
+  "missing_docs",
+  "tribal_knowledge",
+  "default_on_risk"
+]);
 const INTEGRATION_SCAN_GAP_TYPES = new Set([
   "integration_unknown",
   "ops_unknown",
@@ -152,7 +156,7 @@ function confluenceTitleHint(title: string, excerpt: string | undefined, activeF
   }
   return activeFile
     ? `Repo-linked page; title does not mention ${fileRef} directly.`
-    : "Repo-linked documentation page; relevance to the primary target is unclear.";
+    : "Repo-linked documentation page; relevance to this area is unclear.";
 }
 
 function integrationPageNote(page: IntegrationPageForEnrichment, activeFile?: string): string {
@@ -230,10 +234,10 @@ function scanGapSubsectionTitle(gap: KnowledgeGapScanGap): string {
 
 export function buildScanGapSubsection(gap: KnowledgeGapScanGap, activeFile?: string): string {
   const title = scanGapSubsectionTitle(gap);
-  const target = activeFile ? `\`${activeFile}\`` : "the primary target";
+  const target = scanGapAudienceTarget(gap, activeFile);
   const openQuestion =
     gap.type === "missing_docs"
-      ? `What documentation should cover ${target} in this repository?`
+      ? `What documentation should cover ${target}?`
       : gap.type === "impact_unknown"
         ? `What change-impact context is missing for ${target}?`
         : gap.type === "missing_owner"
@@ -241,6 +245,19 @@ export function buildScanGapSubsection(gap: KnowledgeGapScanGap, activeFile?: st
           : `What risk does this scan gap create for ${target}?`;
   const whatToCheck = gap.message?.trim() || "Review the attached Sources card evidence.";
   return `**${title}**\n\n- **Open question:** ${openQuestion}\n- **What to check:** ${whatToCheck}`;
+}
+
+function scanGapAudienceTarget(gap: KnowledgeGapScanGap, activeFile?: string): string {
+  const path = String(gap.file ?? "")
+    .replace(/\\/g, "/")
+    .trim();
+  if (path) {
+    const parts = path.split("/").filter(Boolean);
+    const area = parts.length >= 2 ? `${parts[0]}/${parts[1]}` : parts[0];
+    return `\`${area}\``;
+  }
+  const open = activeFile?.trim();
+  return open ? `\`${open}\`` : "this area";
 }
 
 function attachedDocPageCount(context?: KnowledgeGapsEnrichmentContext): number {

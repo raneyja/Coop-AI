@@ -188,7 +188,7 @@ export function explainFallback(
     return definition.fallback[`${offlineRequired.provider}_offline`] ?? `Showing cached ${displayFeature(canonicalFeature)} data.`;
   }
   if (level === "partial" && degradedRequired) {
-    return definition.fallback[`${degradedRequired.provider}_slow`] ?? `${displayFeature(canonicalFeature)} is running in partial mode.`;
+    return definition.fallback[`${degradedRequired.provider}_slow`] ?? `${displayFeature(canonicalFeature)} — some sources are slow or incomplete.`;
   }
   if (offlineOptional) {
     const isDocProvider = DOC_PROVIDERS.includes(offlineOptional.provider);
@@ -202,7 +202,7 @@ export function explainFallback(
       );
     }
   }
-  return `${displayFeature(canonicalFeature)} is running in best-effort mode.`;
+  return `${displayFeature(canonicalFeature)} — some sources could not be loaded.`;
 }
 
 export function normalizeFeatureId(feature: QuickActionFeatureId): FeatureId {

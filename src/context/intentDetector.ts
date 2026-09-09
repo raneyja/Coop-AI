@@ -8,6 +8,7 @@ import { enrichRepoContextWithEditorState } from "./editorManifestContext";
 import { looksLikeAbsoluteDiskPath } from "./outsideWorkspaceFile";
 import { toRepositoryRelativePath } from "./repoFilePath";
 import type { RepoContext, UserPreferences } from "../chat/types";
+import { isOpenFileReviewAsk } from "../chat/plainChatExplain";
 import { isFileCallerQuery } from "./fileCallerIntent";
 
 export enum UserIntent {
@@ -280,17 +281,10 @@ export function requestTypesForIntent(event: IntentEvent): ContextRequestType[] 
     return event.context.lines ? ["blame"] : [];
   }
   if (event.intent === UserIntent.MANUAL_CHAT_SUBMIT || event.intent === UserIntent.HOTKEY_TRIGGERED) {
-    // Caller/importer asks need durable dependents — same graph Blast uses — not chat_context alone.
-    if (event.context.file && isFileCallerQuery(event.context.queryText)) {
-      return ["chat_context", "dependencies"];
-    }
-    return ["chat_context"];
+    return requestTypesForPlainChat(event);
   }
   if (!action) {
-    if (event.context.file && isFileCallerQuery(event.context.queryText)) {
-      return ["chat_context", "dependencies"];
-    }
-    return ["chat_context"];
+    return requestTypesForPlainChat(event);
   }
   if (TRACE_ACTIONS.has(action)) {
     return ["decision_history", "blame"];
@@ -307,6 +301,23 @@ export function requestTypesForIntent(event: IntentEvent): ContextRequestType[] 
   if (action === "understand-repo") {
     // Always repo-wide — never hitch ownership/blast when an editor file is open.
     return ["file_metadata"];
+  }
+  return ["chat_context"];
+}
+
+function requestTypesForPlainChat(event: IntentEvent): ContextRequestType[] {
+  const file = event.context.file?.trim();
+  const query = event.context.queryText;
+  if (!file) {
+    return ["chat_context"];
+  }
+  // Open-file PR review needs the same caller graph Blast uses, plus ownership.
+  if (isOpenFileReviewAsk(query)) {
+    return ["chat_context", "dependencies", "ownership"];
+  }
+  // Caller/importer asks need durable dependents — not chat_context alone.
+  if (isFileCallerQuery(query)) {
+    return ["chat_context", "dependencies"];
   }
   return ["chat_context"];
 }

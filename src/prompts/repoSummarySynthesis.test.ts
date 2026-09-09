@@ -130,14 +130,16 @@ async function run(): Promise<void> {
     assert.ok(!prompt.includes("Required in your response"));
   });
 
-  test("buildRepoSummarySynthesisUserPrompt includes enterprise onboarding and quick-action links", () => {
+  test("buildRepoSummarySynthesisUserPrompt forbids compose-as-architecture on bare overview", () => {
     const prompt = buildRepoSummarySynthesisUserPrompt({
       owner: "raneyja",
       repo: "Coop-AI",
       summary: { entryFiles: [{ path: "package.json" }] }
     });
-    assert.ok(prompt.includes("enterprise onboarding"));
-    assert.ok(prompt.includes("deploy/CI"));
+    assert.ok(prompt.includes("compose service names"));
+    assert.ok(prompt.includes("docker-entrypoint"));
+    assert.ok(prompt.includes("Deploy/CI"));
+    assert.ok(prompt.includes("never as the Architecture story"));
     assert.ok(prompt.includes("**Find Owner**"));
     assert.ok(prompt.includes("**Blast Radius**"));
   });
@@ -225,6 +227,8 @@ async function run(): Promise<void> {
     });
     assert.ok(!prompt.includes("## User focus (required)"));
     assert.ok(prompt.includes("Synthesize a **repository-wide** overview"));
+    assert.ok(prompt.includes("compose service names"));
+    assert.ok(prompt.includes("docker-entrypoint"));
   });
 
   test("locate-shaped Understand Repo skips architecture syllabus", () => {

@@ -35,6 +35,19 @@ test("plain chat caller ask requests dependencies with chat_context", () => {
   assert.deepEqual(requestTypesForIntent(event), ["chat_context", "dependencies"]);
 });
 
+test("plain chat PR review requests dependencies and ownership", () => {
+  const event = detector.fromManualChatSubmit(
+    {
+      owner: "raneyja",
+      repo: "Coop-AI",
+      file: "src/server/authMiddleware.ts",
+      provider: "github"
+    },
+    "Review requireAuth as if this were a PR touching production auth. What would you block, what's fine, and what would you ask the author? Stay specific to this code."
+  );
+  assert.deepEqual(requestTypesForIntent(event), ["chat_context", "dependencies", "ownership"]);
+});
+
 test("plain chat explain-only stays chat_context", () => {
   const event = detector.fromManualChatSubmit(
     {

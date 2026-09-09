@@ -382,6 +382,9 @@ test("C4 open-file review appends Reviewer-checks-only directive", () => {
   assert.ok(message.includes(OPEN_FILE_PR_REVIEW_DIRECTIVE));
   assert.ok(OPEN_FILE_PR_REVIEW_DIRECTIVE.includes("named function"));
   assert.ok(OPEN_FILE_PR_REVIEW_DIRECTIVE.includes("add logging"));
+  assert.ok(OPEN_FILE_PR_REVIEW_DIRECTIVE.includes("impact is unverified"));
+  assert.ok(OPEN_FILE_PR_REVIEW_DIRECTIVE.includes("owner unknown"));
+  assert.equal(OPEN_FILE_PR_REVIEW_DIRECTIVE.includes("missing status write"), false);
   assert.ok(message.indexOf(COPILOT_C4_ASK) < message.indexOf("## Turn directive (PR review)"));
   const unrelated = formatChatMessageWithLocalFiles({
     message: "Quote the 503 condition.",

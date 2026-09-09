@@ -13,7 +13,7 @@ import {
   rankOnboardingEntryFiles,
   selectOnboardingEvidencePaths
 } from "./onboardingSearchQueries";
-import { semanticAttachModeForChat, isOpenFileReviewAsk } from "../chat/plainChatExplain";
+import { semanticAttachModeForChat } from "../chat/plainChatExplain";
 
 export const MAX_SEMANTIC_FILES = 3;
 export const MAX_SEMANTIC_BYTES = 80 * 1024;
@@ -52,7 +52,7 @@ export type RepoSemanticRetrievalGateOptions = {
   codeEditIntent?: boolean;
   inScopeMentionCount?: number;
   enabled?: boolean;
-  /** Chip / active file — open-file review must not attach estate bodies. */
+  /** Chip / active file — open-file explain stays paths-only; review attaches caller bodies. */
   openFile?: string;
   /** Slash /docs etc. — do not attach repo search hits. */
   integrationProvider?: string;
@@ -89,13 +89,6 @@ export function shouldRunRepoSemanticRetrieval(options: RepoSemanticRetrievalGat
   const query = semanticRetrievalQueryText(options);
   // Repo facts (counts, structure) come from IndexedRepoWorkspace, never a 3-file sample.
   if (!options.codeEditIntent && isRepoStructureQuery(query)) {
-    return false;
-  }
-  if (
-    isOpenFileReviewAsk(query) &&
-    Boolean(options.openFile?.trim()) &&
-    !options.codeEditIntent
-  ) {
     return false;
   }
   const minLength = options.codeEditIntent ? SEMANTIC_QUERY_MIN_LENGTH_EDIT : SEMANTIC_QUERY_MIN_LENGTH;
@@ -297,8 +290,9 @@ export type SearchRepoForFocusOptions = {
 
 /**
  * Focus-driven index search for quick actions.
- * Unlike {@link searchRepoForChat}, this is not gated off by `quickAction` —
- * callers must pass a real user focus query (never a canned prompt).
+ * Unlike {@link searchRepoForChat}, this is not gated off by `quickAction`.
+ * Pass a user focus query, or `indexQueries` from tree-seeded Understand.
+ * Never pass a canned prompt blob as `query`.
  *
  * When `indexQueries` is set (Understand / Gaps topics), those strings go to
  * the index as-is — never hunt-shortened to `"this service"` / `"Focus"`.
@@ -308,19 +302,20 @@ export async function searchRepoForFocusQuery(
 ): Promise<RepoSemanticSearchContext | undefined> {
   const userQuery = focusQueryForRetrieval(options.query);
   const repoId = options.repoId.trim();
-  if (!userQuery || !repoId) {
-    return undefined;
-  }
-
-  const maxFiles = options.maxFiles ?? FOCUS_MAX_INJECTED_PATHS;
   const topicQueries = (options.indexQueries ?? [])
     .map((query) => query.trim())
     .filter((query) => query.length >= 2 && !isWeakIndexQuery(query))
     .slice(0, 3);
+  const rankQuery = userQuery ?? topicQueries.join(" ");
+  if (!repoId || !rankQuery) {
+    return undefined;
+  }
+
+  const maxFiles = options.maxFiles ?? FOCUS_MAX_INJECTED_PATHS;
 
   const shared = {
     repoId,
-    rankQuery: userQuery,
+    rankQuery,
     indexBackend: options.indexBackend,
     api: options.api,
     apiBaseUrl: options.apiBaseUrl,
@@ -333,7 +328,7 @@ export async function searchRepoForFocusQuery(
   if (topicQueries.length === 0) {
     return loadSemanticSearchContext({
       ...shared,
-      query: indexQueryForRetrieval(userQuery),
+      query: indexQueryForRetrieval(rankQuery),
       maxFiles
     });
   }
@@ -344,7 +339,7 @@ export async function searchRepoForFocusQuery(
       loadSemanticSearchContext({
         ...shared,
         query,
-        rankQuery: [userQuery, ...topicQueries].filter(Boolean).join(" "),
+        rankQuery: [rankQuery, ...topicQueries].filter(Boolean).join(" "),
         rankMode: "onboarding",
         maxFiles: perQueryCap
       })
@@ -352,7 +347,7 @@ export async function searchRepoForFocusQuery(
   );
   return mergeFocusSearchResults(results, {
     query: topicQueries.join(" | "),
-    rankQuery: [userQuery, ...topicQueries].filter(Boolean).join(" "),
+    rankQuery: [rankQuery, ...topicQueries].filter(Boolean).join(" "),
     maxFiles
   });
 }

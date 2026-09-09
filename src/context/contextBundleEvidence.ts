@@ -90,6 +90,8 @@ export type KnowledgeGapsEvidence = {
     mediumPriority?: number;
     lowPriority?: number;
     gaps?: Array<Record<string, unknown>>;
+    scanCoverage?: "gaps_found" | "scan_incomplete" | "no_structured_gaps";
+    scannedFileCount?: number;
   };
   documentationCoverage?: Record<string, unknown> | null;
   fileStructure?: Record<string, unknown>;

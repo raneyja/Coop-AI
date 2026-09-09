@@ -78,7 +78,7 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
   );
   lines.push("");
   appendUserFocusInstructions(lines, input.userFocus);
-  lines.push("## Primary target");
+  lines.push("## Open file");
   lines.push(`- File: ${file}`);
   if (input.owner && input.repo) {
     lines.push(`- Repository: ${input.owner}/${input.repo}`);
@@ -117,7 +117,7 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
     );
   }
   lines.push(
-    "Synthesize impact for the primary target file only. Out-of-scope @ paths must not replace the dependency evidence for the open file."
+    "Audit impact for the open file only. Out-of-scope @ paths must not replace the dependency evidence for that file."
   );
   lines.push(
     "Keep the narrative short: lead with ## Top risk surfaces in **Summary** (production callers first), mirror them exactly in **Direct impact** (no extra paths), cite test/story/e2e files in **Testing surfaces**, treat docs references as secondary."

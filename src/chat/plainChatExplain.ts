@@ -40,7 +40,10 @@ export function isOpenFileReviewAsk(message: string | undefined): boolean {
   return false;
 }
 
-/** Explain or PR-review with an open file: search may return paths, but do not attach extra file bodies. */
+/**
+ * Explain with an open file: search may return paths, but do not attach extra file bodies.
+ * PR review needs caller bodies so Block can cite a real importer.
+ */
 export function semanticAttachModeForChat(options: {
   query: string;
   openFile?: string;
@@ -49,7 +52,7 @@ export function semanticAttachModeForChat(options: {
   if (!open) {
     return "bodies";
   }
-  if (isOpenFileExplainAsk(options.query) || isOpenFileReviewAsk(options.query)) {
+  if (isOpenFileExplainAsk(options.query) && !isOpenFileReviewAsk(options.query)) {
     return "paths-only";
   }
   return "bodies";

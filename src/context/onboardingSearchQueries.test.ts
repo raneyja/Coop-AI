@@ -13,6 +13,8 @@ import {
   onboardingTopicsCovered,
   pathMatchesOnboardingTopic,
   selectOnboardingEvidencePaths,
+  treeSeededOnboardingQueries,
+  understandRepoIndexQueries,
   uncoveredOnboardingTopics
 } from "./onboardingSearchQueries";
 
@@ -103,6 +105,9 @@ test("onboarding ranking prefers auth middleware and issue/state models over Ope
     isOnboardingNoisePath("apps/api/plane/api/middleware/api_authentication.py"),
     false
   );
+  assert.equal(isOnboardingNoisePath("docker-compose.yml"), true);
+  assert.equal(isOnboardingNoisePath("apps/api/bin/docker-entrypoint-api.sh"), true);
+  assert.equal(isOnboardingNoisePath("docker-compose.yml", "docker compose services"), false);
 
   const picked = selectOnboardingEvidencePaths(paths, query, 5);
   assert.ok(
@@ -463,6 +468,42 @@ test("J7: behavioural attach skips types.ts when the hit list has an implementat
     }),
     []
   );
+});
+
+test("treeSeededOnboardingQueries prefers domain terms over apps/packages folder names", () => {
+  const queries = treeSeededOnboardingQueries({
+    topLevelDirs: ["apps", "packages", ".github"],
+    topLevelFiles: ["package.json", "docker-compose.yml", "AGENTS.md"]
+  });
+  assert.ok(queries.includes("authentication"));
+  assert.ok(queries.includes("issue"));
+  assert.ok(queries.includes("models"));
+  assert.ok(!queries.some((query) => /^(admin|web|space|live|proxy)$/i.test(query)));
+});
+
+test("treeSeededOnboardingQueries uses Python markers not Coop extension paths", () => {
+  const queries = treeSeededOnboardingQueries(
+    { topLevelDirs: ["apps"], topLevelFiles: ["package.json"] },
+    ["apps/api/pyproject.toml", "apps/api/manage.py"]
+  );
+  assert.ok(queries.includes("issue"));
+  assert.ok(queries.includes("models"));
+  assert.ok(!queries.includes("middleware"));
+});
+
+test("understandRepoIndexQueries seeds Zoekt on bare understand from the tree", () => {
+  const queries = understandRepoIndexQueries({
+    treeOverview: {
+      topLevelDirs: ["apps", "packages"],
+      topLevelFiles: ["package.json"]
+    }
+  });
+  assert.deepEqual(queries, ["authentication", "issue", "models"]);
+  const fromAsk = understandRepoIndexQueries({
+    userFocus:
+      "I'm new to this service and I don't have it cloned. Where does API auth live, how do work items and states flow, and what are the 5 files I should read first?"
+  });
+  assert.ok(fromAsk.includes("authentication"));
 });
 
 const total = passed + failed;

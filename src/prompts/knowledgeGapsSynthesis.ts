@@ -8,6 +8,12 @@ import type {
   TeamsSearchEvidence
 } from "../context/contextBundleEvidence";
 import {
+  knowledgeGapScanCoverageFromJobScan,
+  knowledgeGapScanIncompleteCopy,
+  knowledgeGapScanCoverageAudienceLabel,
+  isInfraDependencyGraphGap
+} from "../context/knowledgeGapScanCoverage";
+import {
   isHuntLocateGapsAsk,
   knowledgeGapsGatherQuery,
   resolveKnowledgeGapsAuditScope
@@ -132,12 +138,12 @@ export function buildKnowledgeGapsSynthesisUserPrompt(input: KnowledgeGapsSynthe
     appendMentionScopeSection(lines, input);
     lines.push("");
   } else if (repoWide) {
-    lines.push("## Primary target");
-    lines.push(`- Repository: ${input.owner}/${input.repo}`);
+    lines.push("## Repository");
+    lines.push(`- ${input.owner}/${input.repo}`);
     appendMentionScopeSection(lines, input);
     lines.push("");
   } else if (input.file) {
-    lines.push("## Primary target");
+    lines.push("## Open file");
     lines.push(`- File: ${input.file}`);
     if (input.owner && input.repo) {
       lines.push(`- Repository: ${input.owner}/${input.repo}`);
@@ -224,7 +230,7 @@ export function buildKnowledgeGapsSynthesisUserPrompt(input: KnowledgeGapsSynthe
     lines.push(
       repoWide
         ? "Synthesize repository-wide blind spots from the evidence bundle — prioritize missing docs, unclear ownership, and orphaned areas across the repo."
-        : "Synthesize gaps for the primary target file only. Out-of-scope @ paths must not replace the audit for the open file."
+        : "Audit the open file only. Out-of-scope @ paths must not replace that audit."
     );
   }
   lines.push("Follow the required response structure in your system instructions.");
@@ -244,12 +250,15 @@ function appendKnowledgeGapsResponseContract(
     if (gap.type === "focus_search_miss") {
       return false;
     }
+    if (isInfraDependencyGraphGap(gap)) {
+      return false;
+    }
     if (String(gap.message ?? "").includes("No indexed code")) {
       return false;
     }
     return (
       gap.type === "missing_docs" ||
-      gap.type === "impact_unknown" ||
+      gap.type === "tribal_knowledge" ||
       gap.type === "default_on_risk" ||
       gap.type === "wrong_file_evidence" ||
       gap.type === "canned_miss" ||
@@ -316,12 +325,17 @@ function appendKnowledgeGapsResponseContract(
     );
   }
 
-  const scanGapCount = scanGaps.length;
+  const scanGapCount = documentationGaps.length + ownerGaps.length + integrationGaps.length;
+  const coverage = knowledgeGapScanCoverageFromJobScan(input.evidence.jobScan);
   const hasDocHits =
     Boolean(input.notion?.pages?.length) ||
     Boolean(input.confluence?.pages?.length) ||
     Boolean(input.googleDocs?.documents?.length);
-  if (scanGapCount === 0 && hasDocHits) {
+  if (coverage === "scan_incomplete") {
+    lines.push(
+      `- **Summary** must open: "${knowledgeGapScanIncompleteCopy()}" Name attached documentation or ownership gaps on real repo paths. FAIL: treating a missing Coop dependency graph as the documentation audit; recommending GitHub Dependency Submission API, depcruise, or inventing blast-radius. Do not quote raw API errors or internal coverage tokens.`
+    );
+  } else if (scanGapCount === 0 && hasDocHits) {
     lines.push(
       '- **Summary** must open: "Automated scan found no structured gaps in this pass; attached doc review suggests…" — summarize doc-review follow-ups; do not contradict the zero-gap scan or claim the scan reported documentation gaps.'
     );
@@ -414,14 +428,16 @@ function formatKnowledgeGapsForPrompt(
   }
   if (evidence.jobScan) {
     const scan = evidence.jobScan;
+    const coverage = knowledgeGapScanCoverageFromJobScan(scan);
     sections.push(
       `### ${knowledgeGapsSourceLabelScan()}\n` +
         `- Found gaps: ${scan.foundGaps ?? scan.gaps?.length ?? 0}\n` +
+        `- Scan status: ${knowledgeGapScanCoverageAudienceLabel(coverage)}\n` +
         `- High / medium / low: ${scan.highPriority ?? 0} / ${scan.mediumPriority ?? 0} / ${scan.lowPriority ?? 0}\n` +
         (scan.gaps?.length
           ? scan.gaps
               .slice(0, 20)
-              .map((gap) => `- ${String(gap.type ?? "gap")}: ${String(gap.message ?? gap.summary ?? gap.description ?? gap.type ?? "gap")}`)
+              .map((gap) => `- ${String(gap.message ?? gap.summary ?? gap.description ?? "gap")}`)
               .join("\n") + truncationNote(scan.gaps.length, 20)
           : "- (scan completed with no structured gaps in this pass)")
     );

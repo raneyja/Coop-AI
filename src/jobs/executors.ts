@@ -15,6 +15,14 @@ import type { GitHubAppService } from "../server/githubAppService";
 import { cloneRepository, parseRepoId, removeRepositoryClone } from "../server/gitCloneService";
 import { canUseLightningPlan, type OrgStore } from "../server/orgStore";
 import { JobType, type Job } from "./types";
+import { detectRepoKnowledgeGaps } from "./knowledgeGapDetector";
+import type { KnowledgeGapScanCoverage } from "../context/knowledgeGapScanCoverage";
+import { RepoManifestStore } from "../manifest/repoManifestStore";
+import {
+  hydrateKnowledgeGapGraphSlice,
+  knowledgeGapRepoIdCandidates,
+  type KnowledgeGapGraphSlice
+} from "./hydrateKnowledgeGapGraph";
 import { buildPartialFailure, JobCancelledError, normalizeJobError } from "./errorHandling";
 import { buildStructureManifest } from "./buildStructureManifest";
 import { runScipIndexer } from "./runScipIndexer";
@@ -70,6 +78,8 @@ export async function executeKnowledgeGapScan(
   const completedRepos: string[] = [];
   const failedRepos: string[] = [];
   const gaps: Array<Record<string, unknown>> = [];
+  let scanCoverage: KnowledgeGapScanCoverage = "no_structured_gaps";
+  let scannedFileCount = 0;
 
   for (let i = 0; i < repoIds.length; i += 1) {
     if (signal.aborted) {
@@ -80,9 +90,16 @@ export async function executeKnowledgeGapScan(
     await report(progress, `Scanning ${repoId}`);
 
     try {
-      ensureRepoGraph(ctx, repoId, job.params);
-      const scan = scanRepoKnowledgeGaps(ctx.cache, repoId, job.params);
+      // Never upsert an empty graph shell — that can persist over a durable snapshot.
+      const slice = await loadKnowledgeGapScanSlice(ctx, repoId, job.params);
+      const scan = scanRepoKnowledgeGaps(slice, job.params);
       gaps.push(...scan.gaps);
+      scannedFileCount += scan.scannedFileCount;
+      if (scan.scanCoverage === "gaps_found") {
+        scanCoverage = "gaps_found";
+      } else if (scanCoverage !== "gaps_found" && scan.scanCoverage === "scan_incomplete") {
+        scanCoverage = "scan_incomplete";
+      }
       completedRepos.push(repoId);
     } catch (error) {
       failedRepos.push(repoId);
@@ -104,7 +121,9 @@ export async function executeKnowledgeGapScan(
         highPriority: summary.high,
         mediumPriority: summary.medium,
         lowPriority: summary.low,
-        gaps: gaps.slice(0, 200)
+        gaps: gaps.slice(0, 200),
+        scanCoverage,
+        scannedFileCount
       },
       `Scanned ${completedRepos.length}/${repoIds.length} repos. ${failedRepos.join(", ")} failed.`
     );
@@ -117,7 +136,9 @@ export async function executeKnowledgeGapScan(
     mediumPriority: summary.medium,
     lowPriority: summary.low,
     gaps: gaps.slice(0, 200),
-    scannedRepos: completedRepos
+    scanCoverage,
+    scannedRepos: completedRepos,
+    scannedFileCount
   };
 }
 
@@ -533,60 +554,62 @@ function ensureRepoGraph(ctx: JobExecutionContext, repoId: string, params: Recor
   });
 }
 
-function scanRepoKnowledgeGaps(
-  cache: GraphCache,
+async function loadKnowledgeGapScanSlice(
+  ctx: JobExecutionContext,
   repoId: string,
   params: Record<string, unknown>
-): { gaps: Array<Record<string, unknown>> } {
-  const graph = cache.getGraph(repoId);
-  if (!graph) {
-    throw new Error(`404: Repository graph not found for ${repoId}`);
-  }
-
-  const gaps: Array<Record<string, unknown>> = [];
-  const focusFile = params.file ? String(params.file) : undefined;
-  const files = focusFile ? graph.fileTree.filter((f) => f.path === focusFile) : graph.fileTree;
-
-  for (const file of files) {
-    const hasOwner = graph.owners.some((o) => o.file === file.path && o.primaryOwner !== "unknown");
-    const hasDependents = graph.dependencies.some((d) => d.to === file.path);
-    const staleDays = daysSince(file.lastModified);
-
-    if (!hasOwner) {
-      gaps.push({
-        file: file.path,
-        type: "missing_owner",
-        priority: "high",
-        message: "No clear code owner"
-      });
-    }
-    if (!hasDependents && graph.fileTree.length > 20) {
-      gaps.push({
-        file: file.path,
-        type: "orphaned_file",
-        priority: "medium",
-        message: "No inbound dependencies detected"
-      });
-    }
-    if (staleDays > 365) {
-      gaps.push({
-        file: file.path,
-        type: "stale_file",
-        priority: "low",
-        message: `Not modified in ${staleDays} days`
-      });
-    }
-    if (file.path.includes("docs/") || file.path.endsWith(".md")) {
-      gaps.push({
-        file: file.path,
-        type: "documentation_coverage",
-        priority: "medium",
-        message: "Documentation file — verify coverage against implementation"
-      });
+): Promise<KnowledgeGapGraphSlice | undefined> {
+  const orgId = params.orgId ? String(params.orgId) : undefined;
+  const memory = ctx.cache.getGraph(repoId);
+  const candidateIds = knowledgeGapRepoIdCandidates(repoId, params);
+  let manifestPaths: string[] = [];
+  let durableEdges: DependencyEdge[] = [];
+  if (orgId) {
+    const pool = await getDbPool();
+    if (pool) {
+      const store = new RepoManifestStore(pool);
+      for (const candidate of candidateIds) {
+        const rows = await store.loadManifest(orgId, candidate);
+        if (rows.length > 0) {
+          manifestPaths = rows.map((row) => row.filePath);
+          break;
+        }
+      }
+      for (const candidate of candidateIds) {
+        const edges = await loadDurableDependencyEdges(orgId, candidate, new Set(), {
+          includeWhenTreeEmpty: true
+        });
+        if (edges.length > 0) {
+          durableEdges = edges;
+          break;
+        }
+      }
     }
   }
+  return hydrateKnowledgeGapGraphSlice({
+    fileTree: memory?.fileTree,
+    memoryEdges: memory?.dependencies,
+    manifestPaths,
+    durableEdges,
+    owners: memory?.owners
+  });
+}
 
-  return { gaps };
+function scanRepoKnowledgeGaps(
+  graph: KnowledgeGapGraphSlice | undefined,
+  params: Record<string, unknown>
+): {
+  gaps: Array<Record<string, unknown>>;
+  scanCoverage: KnowledgeGapScanCoverage;
+  scannedFileCount: number;
+} {
+  const file = params.file ? String(params.file) : undefined;
+  const detected = detectRepoKnowledgeGaps(graph, { file });
+  return {
+    gaps: detected.gaps,
+    scanCoverage: detected.scanCoverage,
+    scannedFileCount: detected.scannedFileCount
+  };
 }
 
 function aggregateGaps(gaps: Array<Record<string, unknown>>): {
@@ -628,7 +651,8 @@ function normalizeRepoIds(params: Record<string, unknown>): string[] {
 async function loadDurableDependencyEdges(
   orgId: string | undefined,
   repoId: string,
-  filePaths: Set<string>
+  filePaths: Set<string>,
+  options?: { includeWhenTreeEmpty?: boolean }
 ): Promise<DependencyEdge[]> {
   if (!orgId) {
     return [];
@@ -640,19 +664,21 @@ async function loadDurableDependencyEdges(
   try {
     const store = new RepoDependencyEdgesStore(pool);
     const rows = await store.loadAllEdges(orgId, repoId);
+    const mapped = rows.map((edge) => ({
+      from: edge.fromPath,
+      to: edge.toPath,
+      type:
+        edge.kind === "reference"
+          ? ("reference" as const)
+          : edge.kind === "require"
+            ? ("require" as const)
+            : ("import" as const)
+    }));
+    if (filePaths.size === 0) {
+      return options?.includeWhenTreeEmpty ? dedupeEdges(mapped) : [];
+    }
     return dedupeEdges(
-      rows
-        .filter((edge) => filePaths.has(edge.fromPath) && filePaths.has(edge.toPath))
-        .map((edge) => ({
-          from: edge.fromPath,
-          to: edge.toPath,
-          type:
-            edge.kind === "reference"
-              ? ("reference" as const)
-              : edge.kind === "require"
-                ? ("require" as const)
-                : ("import" as const)
-        }))
+      mapped.filter((edge) => filePaths.has(edge.from) && filePaths.has(edge.to))
     );
   } catch (error) {
     console.warn(
@@ -676,8 +702,4 @@ function dedupeEdges<T extends { from: string; to: string }>(edges: T[]): T[] {
     result.push(edge);
   }
   return result;
-}
-
-function daysSince(date: Date): number {
-  return Math.floor((Date.now() - date.getTime()) / 86_400_000);
 }

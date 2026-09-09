@@ -182,6 +182,49 @@ export function onboardingIndexQueries(focus: string | undefined): string[] {
   return out.slice(0, MAX_TOPIC_SEARCH_QUERIES);
 }
 
+/** Bare Understand: search domain nouns, never the first `apps/` folder names. */
+const BARE_UNDERSTAND_DOMAIN_QUERIES = ["authentication", "issue", "models"] as const;
+
+export function treeSeededOnboardingQueries(
+  tree?: { topLevelDirs?: string[]; topLevelFiles?: string[] },
+  extraPaths: string[] = []
+): string[] {
+  const dirs = (tree?.topLevelDirs ?? []).map((dir) => dir.replace(/\/$/, "").toLowerCase());
+  const files = (tree?.topLevelFiles ?? []).map((file) => file.toLowerCase());
+  const blob = extraPaths.join("\n").toLowerCase();
+  const hasTree =
+    (tree?.topLevelDirs?.length ?? 0) + (tree?.topLevelFiles?.length ?? 0) > 0;
+  const hasApps =
+    dirs.includes("apps") ||
+    dirs.includes("packages") ||
+    /(^|\n)(apps|packages)\//.test(`\n${blob}`);
+  const pythonish =
+    files.some((file) => /^(pyproject\.toml|manage\.py|setup\.py)$/.test(file)) ||
+    /(?:^|\/)(pyproject\.toml|manage\.py|apps\/api\/)/.test(blob);
+
+  // Unknown tree, apps/packages, or Python API: domain terms — not admin/web/space.
+  if (!hasTree || hasApps || pythonish) {
+    return [...BARE_UNDERSTAND_DOMAIN_QUERIES];
+  }
+  return ["authentication", "middleware", "handler"];
+}
+
+/** Index queries for Understand Repo — user ask if present, else tree-seeded domain terms. */
+export function understandRepoIndexQueries(options: {
+  userFocus?: string;
+  treeOverview?: { topLevelDirs?: string[]; topLevelFiles?: string[] };
+  manifestPaths?: string[];
+}): string[] {
+  const fromAsk = onboardingIndexQueries(options.userFocus);
+  if (fromAsk.length > 0) {
+    return fromAsk;
+  }
+  return treeSeededOnboardingQueries(options.treeOverview, options.manifestPaths ?? []).slice(
+    0,
+    MAX_TOPIC_SEARCH_QUERIES
+  );
+}
+
 function normalizeOnboardingPath(path: string): string {
   return path.replace(/\\/g, "/").replace(/^\.?\//, "").toLowerCase();
 }
@@ -197,12 +240,14 @@ export function isOnboardingNoisePath(path: string, query = ""): boolean {
   const askedOpenApi = /openapi|swagger/.test(q);
   const askedTests = /\btests?\b/.test(q);
   const askedMigrations = /\bmigrations?\b/.test(q);
+  const askedDocker = /\b(docker|compose|dockerfile|entrypoint)\b/.test(q);
   return (
     /(^|\/)(seeds?|fixtures?|factories|locales?|i18n|translations?|l10n)\//.test(n) ||
     /(^|\/)[^/]*seed[^/]*$/.test(n) ||
     (!askedOpenApi && /openapi|swagger/.test(n)) ||
     (!askedTests && isTestPath(n)) ||
-    (!askedMigrations && /(^|\/)migrations?\//.test(n))
+    (!askedMigrations && /(^|\/)migrations?\//.test(n)) ||
+    (!askedDocker && /(^|\/)(docker-compose[^/]*|dockerfile[^/]*|docker-entrypoint[^/]*)$/.test(n))
   );
 }
 
