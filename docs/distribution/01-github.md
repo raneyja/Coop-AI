@@ -20,7 +20,7 @@ https://coop-ai.dev
 5. In **Description**, paste:
 
 ```text
-VS Code extension that answers who owns this, what else breaks, and why it shipped — using your repo graph plus company Slack/Jira, without cloning the monorepo. You review every edit.
+VS Code extension that understands and edits production code with your full stack as context — repo graph plus company Slack/Jira. Find owners, check blast radius, write changes you review, without cloning the monorepo.
 ```
 
 6. Add topics if missing: `vscode`, `code-intelligence`, `ai`, `developer-tools`, `slack`, `jira`
@@ -31,7 +31,7 @@ VS Code extension that answers who owns this, what else breaks, and why it shipp
 **Only if blocked:** empty repos hide About — make sure the default branch has files. Or from a machine logged into `gh`:
 
 ```bash
-gh repo edit --homepage "https://coop-ai.dev" --description "VS Code extension that answers who owns this, what else breaks, and why it shipped — using your repo graph plus company Slack/Jira, without cloning the monorepo. You review every edit."
+gh repo edit --homepage "https://coop-ai.dev" --description "VS Code extension that understands and edits production code with your full stack as context — repo graph plus company Slack/Jira. Find owners, check blast radius, write changes you review, without cloning the monorepo."
 ```
 
 ### 3. Org profile (if you have a GitHub org)
@@ -41,7 +41,7 @@ gh repo edit --homepage "https://coop-ai.dev" --description "VS Code extension t
 - Bio:
 
 ```text
-Code intelligence for VS Code. Answer ownership, blast radius, and decision history with your repo graph + company Slack/Jira — without cloning the monorepo.
+Code intelligence for VS Code. Understand and edit production code with your full stack as context — repo graph + company Slack/Jira — without cloning the monorepo.
 ```
 
 ## Do this now — already in repo (after merge)

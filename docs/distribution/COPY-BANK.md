@@ -32,12 +32,12 @@ https://coop-ai.dev
 
 ### About description
 ```text
-VS Code extension that answers who owns this, what else breaks, and why it shipped — using your repo graph plus company Slack/Jira, without cloning the monorepo. You review every edit.
+VS Code extension that understands and edits production code with your full stack as context — repo graph plus company Slack/Jira. Find owners, check blast radius, write changes you review, without cloning the monorepo.
 ```
 
 ### Org bio
 ```text
-Code intelligence for VS Code. Answer ownership, blast radius, and decision history with your repo graph + company Slack/Jira — without cloning the monorepo.
+Code intelligence for VS Code. Understand and edit production code with your full stack as context — repo graph + company Slack/Jira — without cloning the monorepo.
 ```
 
 ### Discussions announcement
