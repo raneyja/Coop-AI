@@ -861,7 +861,7 @@
     "test:quick-action-prompts": "npx tsx src/prompts/quickActionPrompts.test.ts",
     "test:knowledge-gaps-enrichment": "npx tsx src/prompts/knowledgeGapsEnrichment.test.ts && npx tsx src/context/knowledgeGapsFocus.test.ts && npx tsx src/prompts/knowledgeGapsSynthesis.test.ts && npx tsx src/context/docSearchQuery.test.ts && npx tsx src/context/integrationDocRelevance.test.ts",
     "test:format-chat-copy": "npx tsx src/webview/lib/formatChatMessageForCopy.test.ts",
-    "test:prompt-library": "npx tsx src/webview/lib/inferPromptActionId.test.ts && npx tsx src/prompts/workspacePromptLibrary.test.ts",
+    "test:prompt-library": "npx tsx src/webview/lib/inferPromptActionId.test.ts && npx tsx src/prompts/workspacePromptLibrary.test.ts && npx tsx src/prompts/userPromptLibrary.test.ts",
     "test:effective-quick-action": "npx tsx src/chat/effectiveQuickAction.test.ts",
     "test:request-batcher": "NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/context/requestBatcher.test.ts",
     "test:chat-response-timing": "npx tsx src/chat/chatResponseTiming.test.ts && npx tsx src/chat/streamDeltaBatcher.test.ts && npx tsx src/config/chatOutputBudget.test.ts && npx tsx src/api/dataSanitization.test.ts && npx tsx src/api/requestFormatter.test.ts",

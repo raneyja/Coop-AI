@@ -219,7 +219,7 @@ export function PromptLibraryModal({
 
         {!hasWorkspace ? (
           <p className="coop-prompt-modal-empty">
-            Open a folder to save and run workspace prompts.
+            Sign in to save and run your prompts.
           </p>
         ) : (
           <>

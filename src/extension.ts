@@ -592,9 +592,9 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand("coopAI.runSavedPrompt", async () => {
       const session = resolveSession(provider.session);
-      const { loadWorkspacePrompts } = await import("./prompts/workspacePromptLibrary");
-      const { repoContextFromEditor } = await import("./context/intentDetector");
-      const prompts = await loadWorkspacePrompts();
+      const { loadUserPrompts } = await import("./prompts/userPromptLibrary");
+      const identity = session.promptLibraryIdentity();
+      const prompts = await loadUserPrompts(context.globalState, identity);
       if (prompts.length === 0) {
         void vscode.window.showInformationMessage("Add prompts in your prompt library to use saved prompts.");
         return;
@@ -608,10 +608,6 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       await vscode.commands.executeCommand("workbench.view.extension.coopAI");
       const editor = vscode.window.activeTextEditor;
-      const preferences = readConfiguration();
-      const context = editor
-        ? repoContextFromEditor(editor, preferences, {})
-        : { owner: preferences.owner, repo: preferences.repo, branch: preferences.branch };
       if (editor) {
         session.refreshEditorContext(editor);
       }
