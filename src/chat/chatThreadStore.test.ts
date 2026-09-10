@@ -1,17 +1,24 @@
 import assert from "node:assert/strict";
 import type * as vscode from "vscode";
-import { ChatThreadStore, isDraftChatThread } from "./chatThreadStore";
+import { ChatThreadStore, isDraftChatThread, threadStorageScopeKey } from "./chatThreadStore";
 import type { ChatMessage } from "./types";
 
 function userMessage(content: string): ChatMessage {
   return { role: "user", content, timestamp: Date.now() };
 }
 
-function createMemoryContext(initial?: unknown): vscode.ExtensionContext {
+function createMemoryContext(
+  initial?: unknown,
+  scopeKey = "test-scope"
+): vscode.ExtensionContext {
   const data = new Map<string, unknown>();
   if (initial !== undefined) {
-    data.set("coopAI.chatThreads.v1.test-scope", initial);
+    data.set(`coopAI.chatThreads.v1.${scopeKey}`, initial);
   }
+  return memoryContext(data);
+}
+
+function memoryContext(data: Map<string, unknown>): vscode.ExtensionContext {
   return {
     workspaceState: {
       get: (key: string) => data.get(key),
@@ -238,6 +245,56 @@ async function run(): Promise<void> {
     });
     store.setActiveThread([], 0, "New Chat", [], {});
     assert.equal(store.getActiveThread().repoContext, undefined);
+  });
+
+  await test("threadStorageScopeKey isolates accounts in the same folder", () => {
+    assert.equal(
+      threadStorageScopeKey("file:///ws", "Alice@Coop-AI.dev"),
+      "file:///ws::alice@coop-ai.dev"
+    );
+    assert.notEqual(
+      threadStorageScopeKey("file:///ws", "alice@coop-ai.dev"),
+      threadStorageScopeKey("file:///ws", "bob@doxel.ai")
+    );
+    assert.equal(threadStorageScopeKey("file:///ws", ""), "file:///ws::signed-out");
+    assert.notEqual(threadStorageScopeKey("file:///ws"), "file:///ws");
+  });
+
+  await test("Alice's chats are invisible after rebinding to Bob", () => {
+    const ctx = createMemoryContext();
+    const store = new ChatThreadStore(ctx, threadStorageScopeKey("ws", "alice@coop-ai.dev"));
+    store.setActiveThread([userMessage("alice secret SQL")], 0, "alice secret SQL");
+    store.rebindScope(threadStorageScopeKey("ws", "bob@doxel.ai"));
+    assert.equal(store.listSummaries().length, 0);
+    assert.equal(store.getActiveThread().messages.length, 0);
+    store.rebindScope(threadStorageScopeKey("ws", "alice@coop-ai.dev"));
+    assert.equal(store.listSummaries()[0]?.title, "alice secret SQL");
+  });
+
+  await test("signed-in store does not read the legacy unkeyed folder bucket", () => {
+    const data = new Map<string, unknown>();
+    data.set("coopAI.chatThreads.v1.file:///ws", {
+      activeThreadId: "thread-leak",
+      threads: [
+        {
+          id: "thread-leak",
+          title: "leaked chat",
+          messages: [userMessage("secret")],
+          artifacts: [],
+          sessionCostUsd: 0,
+          createdAt: 1,
+          updatedAt: 1,
+          messageCount: 1
+        }
+      ],
+      lastActiveAt: 1
+    });
+    const store = new ChatThreadStore(
+      memoryContext(data),
+      threadStorageScopeKey("file:///ws", "alice@coop-ai.dev")
+    );
+    assert.equal(store.listSummaries().length, 0);
+    assert.equal(store.getActiveThread().messages.length, 0);
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

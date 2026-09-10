@@ -81,9 +81,20 @@ function threadHasPersistedRepo(thread: ChatThreadRecord): boolean {
   return Boolean(snapshotThreadRepoContext(thread.repoContext ?? {}));
 }
 
-export function resolveThreadScopeKey(): string {
+export function threadStorageScopeKey(workspaceKey: string, identity?: string): string {
+  const workspace = workspaceKey.trim() || "global";
+  const user = (identity ?? "").trim().toLowerCase() || "signed-out";
+  return `${workspace}::${user}`;
+}
+
+export function resolveThreadWorkspaceKey(): string {
   const folder = vscode.workspace.workspaceFolders?.[0]?.uri.toString();
   return folder ?? "global";
+}
+
+/** Workspace folder plus signed-in account. Never share one bucket across users. */
+export function resolveThreadScopeKey(identity?: string): string {
+  return threadStorageScopeKey(resolveThreadWorkspaceKey(), identity);
 }
 
 export class ChatThreadStore {
@@ -91,8 +102,19 @@ export class ChatThreadStore {
 
   public constructor(
     private readonly extensionContext: vscode.ExtensionContext,
-    private readonly scopeKey: string
+    private scopeKey: string
   ) {
+    this.snapshot = this.readSnapshot();
+    this.ensureActiveThread();
+  }
+
+  /** Load another account's threads. Caller must persist the current snapshot first. */
+  public rebindScope(scopeKey: string): void {
+    const next = scopeKey.trim() || "global::signed-out";
+    if (next === this.scopeKey) {
+      return;
+    }
+    this.scopeKey = next;
     this.snapshot = this.readSnapshot();
     this.ensureActiveThread();
   }

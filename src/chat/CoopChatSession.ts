@@ -303,7 +303,7 @@ import {
 } from "../prompts/userPromptLibrary";
 import { prunePinnedPromptIds } from "../prompts/pinnedPrompts";
 import type { WorkspacePromptEntry } from "../prompts/workspacePromptLibrary";
-import { ChatThreadStore, isDraftChatThread } from "./chatThreadStore";
+import { ChatThreadStore, isDraftChatThread, resolveThreadScopeKey } from "./chatThreadStore";
 import { readChatSessionIdleMs } from "../config/chatSessionConfig";
 import { summarizeThreadTitle } from "./threadTitle";
 import { type SettingsScreen, isSettingsScreen, migrateSettingsScreen } from "./settingsScreens";
@@ -787,6 +787,7 @@ export class CoopChatSession {
       this.options.integrationSecrets
     );
     this.lastSignedInIdentity = authIdentityKey(this.preferences);
+    this.threadStore?.rebindScope(resolveThreadScopeKey(this.lastSignedInIdentity));
     // Drop legacy cross-window global chip seed (owner/repo leaked across VS Code windows).
     void this.options.extensionContext.globalState.update("coopAI.lastRepoContext", undefined);
     const startBlank = this.options.startBlank === true;
@@ -917,18 +918,29 @@ export class CoopChatSession {
     }
   }
 
-  private syncSurfacesAfterAuthChange(previousIdentity: string, nextIdentity: string): void {
-    if (nextIdentity) {
-      if (this.lastSignedInIdentity && this.lastSignedInIdentity !== nextIdentity) {
-        this.newChat();
-      } else {
-        this.postChatHistory();
-        this.pushThreadsList();
-      }
-      this.lastSignedInIdentity = nextIdentity;
-    } else if (previousIdentity) {
-      this.lastSignedInIdentity = previousIdentity;
+  private persistActiveThreadLocally(): void {
+    this.persistActiveThread({ syncBackend: false });
+  }
+
+  private rebindThreadStoreForIdentity(identity: string): void {
+    if (!this.threadStore) {
+      return;
     }
+    this.persistActiveThreadLocally();
+    this.threadStore.rebindScope(resolveThreadScopeKey(identity));
+  }
+
+  private syncSurfacesAfterAuthChange(previousIdentity: string, nextIdentity: string): void {
+    if (this.threadStore) {
+      this.rebindThreadStoreForIdentity(nextIdentity);
+      const thread = this.threadStore.getActiveThread();
+      this.activateThread(thread);
+      this.syncAllLocalThreadsToBackend();
+    } else if (previousIdentity && previousIdentity !== nextIdentity) {
+      this.resetChatState();
+      this.postChatHistory();
+    }
+    this.lastSignedInIdentity = nextIdentity;
     this.postContext();
   }
 
@@ -1341,7 +1353,7 @@ export class CoopChatSession {
     this.syncActiveThreadToBackend();
   }
 
-  private persistActiveThread(): void {
+  private persistActiveThread(options?: { syncBackend?: boolean }): void {
     if (!this.threadStore) {
       return;
     }
@@ -1355,7 +1367,9 @@ export class CoopChatSession {
       this.threadArtifacts,
       this.currentContext
     );
-    void this.syncActiveThreadToBackend();
+    if (options?.syncBackend !== false) {
+      void this.syncActiveThreadToBackend();
+    }
   }
 
   private persistTurnThread(turn: ChatTurn): void {

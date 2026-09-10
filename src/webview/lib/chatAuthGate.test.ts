@@ -18,4 +18,6 @@ test("ChatPanel swaps the homepage for a sign-in prompt when signed out", () => 
   assert.match(chat, /chatRequiresSignIn/);
   assert.match(chat, /ChatSignedOutHome/);
   assert.match(session, /syncSurfacesAfterAuthChange/);
+  assert.match(session, /rebindThreadStoreForIdentity/);
+  assert.match(session, /resolveThreadScopeKey/);
 });
