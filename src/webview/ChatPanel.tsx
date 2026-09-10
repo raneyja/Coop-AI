@@ -664,9 +664,11 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     ]
   );
 
-  // Real model CoT only — never invent “Distilling sources…” while waiting.
+  // Real model CoT in the body — Thinking pulse stays on for the whole wait.
   const visibleModelThinking = thinkingBuffer.trim();
-  const modelThinkingStreaming = Boolean(isStreaming && !streamMessage && thinkingBuffer.trim());
+  const turnInFlight =
+    isStreaming && !streamMessage && !hasVisibleAssistantResponse(messages, streamMessage);
+  const modelThinkingStreaming = turnInFlight;
 
   const activityFromFeedback = useMemo<AgentActivityState>(() => {
     // Do not invent tool rows from status todos — that produced fake "N explored" counts.
@@ -681,7 +683,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
 
   const showAgentActivity =
     !hasVisibleAssistantResponse(messages, streamMessage) &&
-    (agentActivity.todos.length > 0 ||
+    (turnInFlight ||
+      agentActivity.todos.length > 0 ||
       Boolean(visibleModelThinking) ||
       Boolean(visibleThinkingMessage) ||
       agentActivity.tools.length > 0);
@@ -1308,7 +1311,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
             break;
           }
-          setIntentFeedback(undefined);
           setIsStreaming(true);
           setThinkingBuffer((prev) => prev + message.payload.chunk);
           break;

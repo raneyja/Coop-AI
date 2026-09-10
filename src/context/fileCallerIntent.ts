@@ -28,6 +28,9 @@ export function isFileCallerQuery(queryText: string | undefined): boolean {
     /\bcallers?\s+(?:of|for|to)\b/.test(q) ||
     /\bwhat\s+(?:imports?|calls?)\s+(?:this|it)\b/.test(q) ||
     /\bwhat\s+depends\s+on\s+(?:this|it)\b/.test(q) ||
+    /\bwhat\s+other\s+files\s+rely\s+on\b/.test(q) ||
+    /\bfiles?\s+(?:that\s+)?rely\s+on\s+(?:this|it)\b/.test(q) ||
+    /\brely\s+on\s+(?:this|it)(?:\s+file)?\b/.test(q) ||
     /\bdependents?\s+(?:of|on)\b/.test(q) ||
     /\b(?:files?\s+that\s+)?(?:import|call)\s+(?:this|it)(?:\s+file)?\b/.test(q) ||
     /\breferences?\s+to\s+this\s+(?:file|module|symbol)\b/.test(q) ||

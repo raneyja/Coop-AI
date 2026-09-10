@@ -68,7 +68,12 @@ export function buildActivityTodosFromFeedback(
     concrete.length > MAX_ACTIVITY_TODOS ? concrete.slice(concrete.length - MAX_ACTIVITY_TODOS) : concrete;
 
   // Beat after send — nothing yet so steps don't auto-dump on submit.
-  if (elapsedMs < ACTIVITY_START_DELAY_MS && !hasTerminalPreparingSignal(intentFeedback, jobProgress)) {
+  // Streaming turns skip this: Thinking pulse is already on, and todos should appear.
+  if (
+    elapsedMs < ACTIVITY_START_DELAY_MS &&
+    !hasTerminalPreparingSignal(intentFeedback, jobProgress) &&
+    !options.awaitingResponse
+  ) {
     return [];
   }
 
@@ -96,10 +101,12 @@ export function buildActivityTodosFromFeedback(
     return [];
   }
 
-  const activeIndex = resolvePacedActivityIndex({
-    concreteCount: prep.length,
-    elapsedMs
-  });
+  const activeIndex = options.awaitingResponse
+    ? 0
+    : resolvePacedActivityIndex({
+        concreteCount: prep.length,
+        elapsedMs
+      });
   // Live tool lines (Slack/Jira/…) appear as soon as the backend posts them.
   const revealed = revealActivityMessages(prep, activeIndex);
   if (!revealed.length) {
@@ -133,7 +140,7 @@ function buildSynthesisActivityTodos(
   prep: string[],
   _intentFeedback: IntentFeedbackState | undefined,
   _jobProgress: JobProgressState | undefined,
-  _options: ThinkingRotationOptions,
+  options: ThinkingRotationOptions,
   synthesisElapsedMs: number,
   _waitingLabelStep: number,
   gatherElapsedMs: number
@@ -147,14 +154,22 @@ function buildSynthesisActivityTodos(
   const completedPrep: AgentTodoItem[] = revealedPrep.map((label, index) => ({
     id: `prep:${index}:${label}`,
     content: label,
-    status: "completed"
+    status: "completed" as const
   }));
 
-  // If prep was already on screen, hold it one beat before the first synthesis todo.
-  // If there was no prep, don't add a second start delay — gather already waited.
-  const synthPace =
-    completedPrep.length > 0 ? activityPaceElapsedMs(synthesisElapsedMs) : Math.max(0, synthesisElapsedMs);
-  if (completedPrep.length > 0 && synthPace <= 0) {
+  if (completedPrep.length === 0) {
+    return [];
+  }
+
+  // Cursor-style: last real row stays in progress for the whole model wait.
+  if (options.awaitingResponse) {
+    const last = completedPrep[completedPrep.length - 1];
+    return [...completedPrep.slice(0, -1), { ...last, status: "in_progress" }];
+  }
+
+  // If prep was already on screen, hold it one beat before marking done.
+  const synthPace = activityPaceElapsedMs(synthesisElapsedMs);
+  if (synthPace <= 0) {
     const last = completedPrep[completedPrep.length - 1];
     return [...completedPrep.slice(0, -1), { ...last, status: "in_progress" }];
   }
@@ -258,7 +273,7 @@ export function nextLiveThinkingOpenState(input: {
   if (input.isComplete || input.userTouched) {
     return null;
   }
-  return input.streaming || input.hasText;
+  return input.hasText;
 }
 
 export function agentStepsToActivity(

@@ -33,9 +33,10 @@ export function hasTerminalPreparingSignal(
 ): boolean {
   const fromIntent = (intentFeedback?.activityMessages ?? []).some(isTerminalPreparingMessage);
   const fromJob = isTerminalPreparingMessage(jobProgress?.message || jobProgress?.title || "");
+  const fromKeepAlive = (intentFeedback?.title ?? "").trim().toLowerCase() === "thinking";
   const highProgress =
     typeof jobProgress?.progress === "number" && jobProgress.progress >= 75;
-  return fromIntent || fromJob || highProgress;
+  return fromIntent || fromJob || fromKeepAlive || highProgress;
 }
 
 export type ThinkingRotationOptions = {

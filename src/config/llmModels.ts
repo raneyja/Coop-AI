@@ -368,3 +368,11 @@ export function formatWaitingOnModelMessage(model: string): string {
   const label = getCatalogModelById(model)?.label ?? model.trim() ?? "the model";
   return `Waiting on ${label}…`;
 }
+
+/** First-token wait line for the composer pick. Auto stays silent so we don't leak the assigned model. */
+export function waitingOnPickedModelMessage(pickerSelection?: string | null): string | undefined {
+  if (isAutoModelSelection(pickerSelection)) {
+    return undefined;
+  }
+  return formatWaitingOnModelMessage(pickerSelection ?? "");
+}

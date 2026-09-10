@@ -98,6 +98,10 @@ const CASES: Case[] = [
   { q: "Explain this function", expect: "none" },
   { q: "What does this function do?", expect: "none" },
   { q: "What does this file do?", expect: "none" },
+  {
+    q: "Give me a tl;dr of this file? What does it do, what other files rely on it, and who created it / when?",
+    expect: "understand"
+  },
   { q: "Summarize this code", expect: "none" },
   { q: "Explain what you just did", expect: "none" },
   { q: "Summarize your last answer", expect: "none" },

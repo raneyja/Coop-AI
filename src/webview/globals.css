@@ -1540,9 +1540,9 @@
   }
 
   .coop-agent-toolbar {
-    @apply flex items-center justify-between gap-2 rounded-md px-2 py-1.5;
-    background: color-mix(in srgb, var(--coop-composer-surface) 92%, var(--coop-panel-muted) 8%);
-    border: 1px solid color-mix(in srgb, var(--coop-composer-border) 70%, transparent);
+    @apply flex items-center justify-between gap-2 px-0 py-0.5;
+    background: transparent;
+    border: 0;
   }
 
   .coop-agent-toolbar-left {

@@ -1,4 +1,6 @@
 import type { ChatIntentPlan } from "./intentPlanner/types";
+import { isFileCallerQuery } from "../context/fileCallerIntent";
+import { isFileHistoryQuery } from "../context/fileHistoryIntent";
 import { classifyRepoCodeIntent, isNonCodeHowWhyAsk, needsRepoCode, type RepoCodeAction } from "./repoCodeIntent";
 import { isFeatureAddAsk } from "../context/existingCapabilityGrounding";
 import { extractNamedSourceFiles } from "../api/agent/searchQuery";
@@ -75,8 +77,10 @@ export function plannerAllowsAgentRepoLoop(
   // planner locks the turn as local explain / plain chat.
   if (
     plan.mode === "plain" &&
-    extractNamedSourceFiles(query).length > 0 &&
-    isRepoInvestigationQuery(query)
+    isRepoInvestigationQuery(query) &&
+    (extractNamedSourceFiles(query).length > 0 ||
+      isFileCallerQuery(query) ||
+      isFileHistoryQuery(query))
   ) {
     return true;
   }

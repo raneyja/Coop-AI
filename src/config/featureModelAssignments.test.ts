@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { formatWaitingOnModelMessage } from "./llmModels";
+import { formatWaitingOnModelMessage, waitingOnPickedModelMessage } from "./llmModels";
 import {
   assignedModelsHubSubtitle,
   COOP_FEATURE_MODEL_ASSIGNMENTS,
@@ -196,6 +196,10 @@ assert.equal(honoredCodestral.selection, "auto");
 
 assert.equal(formatWaitingOnModelMessage("claude-opus-4-8"), "Waiting on Claude Opus 4.8…");
 assert.equal(formatWaitingOnModelMessage("auto"), "Waiting on Auto…");
+assert.equal(waitingOnPickedModelMessage("auto"), undefined);
+assert.equal(waitingOnPickedModelMessage(""), undefined);
+assert.equal(waitingOnPickedModelMessage("gpt-5-mini"), "Waiting on GPT-5 mini…");
+assert.equal(waitingOnPickedModelMessage("claude-opus-4-8"), "Waiting on Claude Opus 4.8…");
 assert.equal(getFeatureModelAssignment("edit").model, "gpt-5.1");
 
 assert.equal(

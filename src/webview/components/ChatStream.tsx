@@ -662,7 +662,11 @@ export function ChatStream({
     endRef
   ]);
 
-  const showWorkingStack = Boolean(showAgentActivity) || Boolean(thinkingMessage) || Boolean(modelThinkingText);
+  const showWorkingStack =
+    Boolean(showAgentActivity) ||
+    Boolean(thinkingMessage) ||
+    Boolean(modelThinkingText) ||
+    Boolean(onStopStreaming && !streamingMessage);
 
   return (
     <div ref={scrollContainerRef} className="chat-thread no-scrollbar" role="log" aria-live="polite">
@@ -706,19 +710,19 @@ export function ChatStream({
                 tools={agentActivity.tools}
                 files={agentActivity.files}
                 thinkingText={modelThinkingText}
-                thinkingStreaming={modelThinkingStreaming}
+                thinkingStreaming={modelThinkingStreaming || Boolean(onStopStreaming && !streamingMessage)}
                 fallbackStatus={!agentActivity.todos.length ? thinkingMessage : undefined}
                 onStop={onStopStreaming}
               />
             ) : thinkingMessage ? (
               <ChatThinkingIndicator message={thinkingMessage} />
-            ) : modelThinkingText ? (
+            ) : modelThinkingText || (onStopStreaming && !streamingMessage) ? (
               <AgentActivityPanel
-                todos={[]}
-                tools={[]}
-                files={[]}
+                todos={agentActivity?.todos ?? []}
+                tools={agentActivity?.tools ?? []}
+                files={agentActivity?.files ?? []}
                 thinkingText={modelThinkingText}
-                thinkingStreaming={modelThinkingStreaming}
+                thinkingStreaming={modelThinkingStreaming || Boolean(onStopStreaming && !streamingMessage)}
                 onStop={onStopStreaming}
               />
             ) : null}

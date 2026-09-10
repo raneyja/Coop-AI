@@ -94,6 +94,7 @@ import { ThreadRunManager, SESSION_RUN_THREAD_ID, type ChatTurn } from "./chatTu
 import {
   appendTurnThinkingChunk,
   attachChatTurnActivity,
+  isTerminalPreparingMessage,
   recordTurnActivityLine,
   recordTurnAgentSteps,
   repoFactActivityLabel
@@ -181,6 +182,7 @@ import {
   searchDependentsFallback
 } from "../engines/blastRadiusDependentsFallback";
 import { isFileCallerQuery } from "../context/fileCallerIntent";
+import { isFileHistoryQuery } from "../context/fileHistoryIntent";
 import { isOpenFileReviewAsk } from "./plainChatExplain";
 import {
   coordinatesFromRepoId,
@@ -240,7 +242,7 @@ import {
   type QuickActionMentionRef
 } from "../prompts/quickActionPrompts";
 import { canUserSelectModels, getFeatureModelAssignment, resolveRuntimeModelForUseCase } from "../config/featureModelAssignments";
-import { formatWaitingOnModelMessage, isAutoModelSelection } from "../config/llmModels";
+import { isAutoModelSelection } from "../config/llmModels";
 import {
   filterMentionsByInScopeKeys,
   allMentionsOutOfScopeForActiveRepo,
@@ -3055,6 +3057,14 @@ export class CoopChatSession {
       result = await this.enrichPlainChatWithDurableDependents(request, result);
     }
 
+    if (
+      request.type === "blame" &&
+      !request.params.quickAction &&
+      isFileHistoryQuery(request.intent.context?.queryText)
+    ) {
+      result = await this.enrichPlainChatWithFileHistory(request, result);
+    }
+
     return result;
   }
 
@@ -3095,6 +3105,12 @@ export class CoopChatSession {
     }
     const symbols = [...new Set([...exportSymbols, ...askSymbols])];
 
+    this.appendLiveToolActivityLine(
+      `Find files that rely on \`${file}\``,
+      request.params.quickAction,
+      String(request.intent.intent)
+    );
+
     let resolved: Awaited<ReturnType<typeof resolveTrustedRemoteDependents>>;
     try {
       // Durable-first: skip Zoekt enrich when import-parse already returned callers.
@@ -3124,6 +3140,101 @@ export class CoopChatSession {
         resolved
       )
     };
+  }
+
+  /**
+   * Plain chat "who created / when" — remote file history (Zero-Clone).
+   * Oldest commit is created; newest is last modified.
+   */
+  private async enrichPlainChatWithFileHistory(
+    request: ContextFetchRequest,
+    result: ContextFetchResult
+  ): Promise<ContextFetchResult> {
+    const file = request.params.file?.trim();
+    if (!file) {
+      return result;
+    }
+    const remainingMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
+    if (remainingMs <= 0) {
+      return result;
+    }
+    const target = this.repoTargetForRequest(request);
+    const owner = target.owner?.trim();
+    const repo = target.repo?.trim();
+    if (!owner || !repo) {
+      return result;
+    }
+    const provider =
+      target.provider === "gitlab" || target.provider === "bitbucket" || target.provider === "github"
+        ? target.provider
+        : this.preferences.defaultCodeHost ?? "github";
+    const coords: RepoCoordinates = {
+      provider,
+      owner,
+      repo,
+      branch: target.branch
+    };
+
+    this.appendLiveToolActivityLine(
+      `Look up who created \`${file}\``,
+      request.params.quickAction,
+      String(request.intent.intent)
+    );
+
+    try {
+      const history = await Promise.race([
+        this.options.codeHostRouter.getFileHistory(file, 20, coords),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("file history timed out")), Math.min(remainingMs, 8_000));
+        })
+      ]);
+      if (!Array.isArray(history) || history.length === 0) {
+        return result;
+      }
+      const sorted = [...history].sort(
+        (left, right) => new Date(left.date).getTime() - new Date(right.date).getTime()
+      );
+      const created = sorted[0];
+      const latest = sorted[sorted.length - 1];
+      const baseData =
+        typeof result.data === "object" && result.data !== null
+          ? (result.data as Record<string, unknown>)
+          : {};
+      return {
+        ...result,
+        data: {
+          ...baseData,
+          file,
+          fileHistory: {
+            file,
+            created: created
+              ? {
+                  sha: created.sha,
+                  author: created.authorLogin ?? created.author,
+                  date: created.date,
+                  message: created.message
+                }
+              : undefined,
+            latest: latest
+              ? {
+                  sha: latest.sha,
+                  author: latest.authorLogin ?? latest.author,
+                  date: latest.date,
+                  message: latest.message
+                }
+              : undefined,
+            commits: sorted.slice(0, 8).map((commit) => ({
+              sha: commit.sha,
+              author: commit.authorLogin ?? commit.author,
+              date: commit.date,
+              message: commit.message
+            }))
+          }
+        }
+      };
+    } catch {
+      return result;
+    }
   }
 
   /**
@@ -4179,7 +4290,6 @@ export class CoopChatSession {
           return;
         }
         const id = threadId ?? this.activeThreadId();
-        this.clearIntentFeedback(id);
         this.postThinkingDelta(id, thinkingChunk);
       }
     );
@@ -4251,15 +4361,11 @@ export class CoopChatSession {
 
     const synthesisMessages = this.synthesisActivityMessages(
       `agent-${turn.streamGeneration}-${Date.now()}`,
-      turn.context,
-      runtimeModel.model
+      turn.context
     );
-    this.postIntentFeedbackForThread(turn.threadId, {
-      status: "loading",
+    this.postKeepAliveActivity(turn.threadId, {
       intent: UserIntent.MANUAL_CHAT_SUBMIT,
-      title: "Preparing answer",
-      message: synthesisMessages[0],
-      activityMessages: synthesisMessages
+      extra: synthesisMessages
     });
 
     let full = "";
@@ -5148,9 +5254,8 @@ export class CoopChatSession {
     return [focus, ...messages.filter((message) => message !== focus)];
   }
 
-  private synthesisActivityMessages(_seed: string, context: RepoContext | undefined, model: string): string[] {
-    const lines = isAutoModelSelection(model) ? [] : [formatWaitingOnModelMessage(model)];
-    return this.withSelectionFocusActivity(lines, context);
+  private synthesisActivityMessages(_seed: string, context: RepoContext | undefined): string[] {
+    return this.withSelectionFocusActivity([], context);
   }
 
   private loadingFeedbackFor(
@@ -7321,29 +7426,21 @@ export class CoopChatSession {
     if (!quickAction) {
       const synthesisMessages = this.synthesisActivityMessages(
         `synthesis-${turn.streamGeneration}-${Date.now()}`,
-        turnContext,
-        runtimeModel.model
+        turnContext
       );
-      this.postIntentFeedbackForThread(turn.threadId, {
-        status: "loading",
+      this.postKeepAliveActivity(turn.threadId, {
         intent: UserIntent.MANUAL_CHAT_SUBMIT,
-        title: "Preparing answer",
-        message: synthesisMessages[0],
-        activityMessages: synthesisMessages
+        extra: synthesisMessages
       });
     } else {
       const synthesisMessages = this.synthesisActivityMessages(
         `synthesis-${quickAction}-${turn.streamGeneration}-${Date.now()}`,
-        turnContext,
-        runtimeModel.model
+        turnContext
       );
-      this.postIntentFeedbackForThread(turn.threadId, {
-        status: "loading",
+      this.postKeepAliveActivity(turn.threadId, {
         intent: UserIntent.QUICK_ACTION_CLICKED,
         actionId: quickAction,
-        title: "Preparing answer",
-        message: synthesisMessages[0],
-        activityMessages: synthesisMessages
+        extra: synthesisMessages
       });
     }
 
@@ -7969,12 +8066,7 @@ export class CoopChatSession {
         signal,
         (thinkingChunk) => {
           // Thinking is not folded into answer text or model replay — persisted on the trail only.
-          if (!clearedIntentForOutput) {
-            clearedIntentForOutput = true;
-            clearResponseDeadlineForSynthesis(turn.clearResponseDeadline);
-            turn.clearResponseDeadline = () => undefined;
-            this.clearIntentFeedback(turn.threadId);
-          }
+          // Keep gather/todos visible until the first answer token.
           this.postThinkingDelta(turn.threadId, thinkingChunk);
         }
       );
@@ -10740,6 +10832,24 @@ export class CoopChatSession {
       this.lastActivityMessagesByThread.set(threadId, payload.activityMessages);
     }
     this.postForThread(threadId, { type: "intent:feedback", payload });
+  }
+
+  /** Keep gather/todos on screen through model wait — never replace with an empty list. */
+  private postKeepAliveActivity(
+    threadId: string,
+    options: { intent?: string; actionId?: string; extra?: string[] }
+  ): void {
+    const prior = this.lastActivityMessagesByThread.get(threadId) ?? [];
+    const kept = prior.filter((line) => !isTerminalPreparingMessage(line));
+    const activityMessages = mergeActivityMessageLists(kept, options.extra ?? []);
+    this.postIntentFeedbackForThread(threadId, {
+      status: "loading",
+      intent: options.intent,
+      actionId: options.actionId,
+      title: "Thinking",
+      message: activityMessages[activityMessages.length - 1] ?? "Thinking…",
+      activityMessages
+    });
   }
 
   private async healthForQuickAction(action: QuickActionFeatureId): Promise<IntegrationHealth[]> {

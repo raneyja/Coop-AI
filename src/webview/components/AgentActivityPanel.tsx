@@ -314,13 +314,15 @@ export function AgentActivityPanel({
   }, [todos, exploration]);
 
   const fileCount = files.length;
-  const showFilesToolbar = !exploration && fileCount > 0;
+  const showLiveThinking = !isComplete && thinkingStreaming;
+  const showThinkingHeader = Boolean(trimmedThinking) || showLiveThinking;
   const hasAnything =
     Boolean(exploration?.explored || exploration?.exploring) ||
     statusTodos.length > 0 ||
-    trimmedThinking ||
+    showThinkingHeader ||
     Boolean(fallbackStatus) ||
-    showFilesToolbar;
+    fileCount > 0 ||
+    Boolean(onStop && !isComplete);
 
   if (!hasAnything) {
     return null;
@@ -362,7 +364,7 @@ export function AgentActivityPanel({
         <p className="coop-agent-fallback-status">{fallbackStatus}</p>
       ) : null}
 
-      {trimmedThinking ? (
+      {showThinkingHeader ? (
         <div className="coop-agent-thinking">
           <button
             type="button"
@@ -374,19 +376,21 @@ export function AgentActivityPanel({
             }}
           >
             <span className="coop-agent-thinking-title">
-              {thinkingStreaming ? "Thinking" : formatThoughtLabel(isComplete ? thinkingMs : undefined)}
+              {thinkingStreaming || !isComplete
+                ? "Thinking"
+                : formatThoughtLabel(thinkingMs)}
               {thinkingStreaming ? <span className="coop-agent-thinking-pulse" aria-hidden="true" /> : null}
             </span>
             <Chevron open={thinkingOpen} />
           </button>
-          {thinkingOpen ? <ThinkingBody text={trimmedThinking} /> : null}
+          {thinkingOpen && trimmedThinking ? <ThinkingBody text={trimmedThinking} /> : null}
         </div>
       ) : null}
 
-      {showFilesToolbar || (onStop && !isComplete) ? (
+      {(fileCount > 0 || (onStop && !isComplete)) ? (
         <div className="coop-agent-toolbar">
           <div className="coop-agent-toolbar-left">
-            {showFilesToolbar ? (
+            {fileCount > 0 ? (
               <button
                 type="button"
                 className="coop-agent-files-toggle"
@@ -408,7 +412,7 @@ export function AgentActivityPanel({
         </div>
       ) : null}
 
-      {filesOpen && showFilesToolbar ? (
+      {filesOpen && fileCount > 0 ? (
         <ul className="coop-agent-file-list">
           {files.map((file) => (
             <li key={`${file.action}:${file.path}`} className="coop-agent-file-row">

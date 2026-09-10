@@ -1,3 +1,4 @@
+import { fileAskActivityMessages } from "../chat/fileAskActivity";
 import { shouldFetchCodeHostContext } from "./codeHostContext";
 import { shouldFetchConfluenceContext } from "./confluenceContext";
 import { shouldFetchGoogleDocsContext } from "./googleDocsContext";
@@ -217,6 +218,15 @@ function hasRepoTarget(event: IntentEvent): boolean {
 function manualChatMessages(event: IntentEvent, options: ContextGatheringMessageOptions): string[] {
   const resolved = resolvedOptions(options);
   const requests = buildContextRequests(event, requestTypesForIntent(event));
+  const file = event.context.file?.trim();
+  const fileAsk = fileAskActivityMessages(event.context.queryText, file);
+  if (fileAsk.length > 0) {
+    return finalizeActivityMessages(event, [
+      ...fileAsk,
+      ...integrationMessagesForRequests(requests, resolved)
+    ]);
+  }
+
   const messages: string[] = [];
 
   if (resolved.codeHostConnected && hasRepoTarget(event)) {
@@ -232,7 +242,6 @@ function manualChatMessages(event: IntentEvent, options: ContextGatheringMessage
     messages.push("Searching indexed codebase…");
   }
   messages.push(...integrationMessagesForRequests(requests, resolved));
-  messages.push("Preparing your answer…");
 
   return finalizeActivityMessages(event, messages);
 }
