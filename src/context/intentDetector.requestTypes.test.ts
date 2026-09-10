@@ -48,6 +48,19 @@ test("plain chat PR review requests dependencies and ownership", () => {
   assert.deepEqual(requestTypesForIntent(event), ["chat_context", "dependencies", "ownership"]);
 });
 
+test("plain chat file history ask requests blame with dependents", () => {
+  const event = detector.fromManualChatSubmit(
+    {
+      owner: "raneyja",
+      repo: "Coop-AI",
+      file: "src/server/authMiddleware.ts",
+      provider: "github"
+    },
+    "Give me a tl;dr of this file? What does it do, what other files rely on it, and who created it / when?"
+  );
+  assert.deepEqual(requestTypesForIntent(event), ["chat_context", "dependencies", "blame"]);
+});
+
 test("plain chat explain-only stays chat_context", () => {
   const event = detector.fromManualChatSubmit(
     {

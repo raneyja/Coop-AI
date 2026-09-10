@@ -188,6 +188,18 @@ test("isSynthesisActivityPhase does not start immediately for a single prep step
   );
 });
 
+test("isSynthesisActivityPhase starts when keep-alive title is Thinking", () => {
+  assert.equal(
+    isSynthesisActivityPhase({
+      intentFeedback: { status: "loading", title: "Thinking", activityMessages: ["Read `a.ts`"] },
+      awaitingResponse: true,
+      prepCount: 1,
+      elapsedMs: 0
+    }),
+    true
+  );
+});
+
 test("buildConcreteActivityMessages drops terminal preparing lines", () => {
   const concrete = buildConcreteActivityMessages(
     {

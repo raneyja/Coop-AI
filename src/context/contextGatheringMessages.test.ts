@@ -100,7 +100,7 @@ test("plain chat includes code host and workspace lines", () => {
   );
   assert.equal(messages[0], "Searching GitHub estate index…");
   assert.ok(messages.includes("Gathering workspace context…"));
-  assert.ok(messages.includes("Preparing your answer…"));
+  assert.ok(!messages.includes("Preparing your answer…"));
 });
 
 test("plain chat omits code host line without a repo target", () => {
@@ -113,6 +113,27 @@ test("plain chat omits code host line without a repo target", () => {
   );
   assert.ok(!messages.some((message) => message.includes("estate index")));
   assert.ok(messages.includes("Gathering workspace context…"));
+});
+
+test("plain chat file ask seeds Read / rely-on / created todos", () => {
+  const messages = contextGatheringMessagesFor(
+    event({
+      intent: UserIntent.MANUAL_CHAT_SUBMIT,
+      context: {
+        owner: "acme",
+        repo: "coop-ai",
+        file: "src/server/authMiddleware.ts",
+        queryText:
+          "Give me a tl;dr of this file? What does it do, what other files rely on it, and who created it / when?"
+      }
+    }),
+    { codeHostProvider: "github", codeHostConnected: true }
+  );
+  assert.ok(messages.includes("Read `src/server/authMiddleware.ts`"));
+  assert.ok(messages.includes("Find files that rely on `src/server/authMiddleware.ts`"));
+  assert.ok(messages.includes("Look up who created `src/server/authMiddleware.ts`"));
+  assert.ok(!messages.includes("Preparing your answer…"));
+  assert.ok(!messages.some((message) => message.includes("estate index")));
 });
 
 const total = passed + failed;

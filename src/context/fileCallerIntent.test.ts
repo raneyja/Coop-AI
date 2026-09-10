@@ -28,6 +28,13 @@ test("caller / import phrasings", () => {
   assert.equal(isFileCallerQuery("What depends on this file?"), true);
   assert.equal(isFileCallerQuery("Which files import this?"), true);
   assert.equal(isFileCallerQuery("references to this file"), true);
+  assert.equal(isFileCallerQuery("what other files rely on it"), true);
+  assert.equal(
+    isFileCallerQuery(
+      "Give me a tl;dr of this file? What does it do, what other files rely on it, and who created it / when?"
+    ),
+    true
+  );
 });
 
 test("rejects ownership and unrelated asks", () => {

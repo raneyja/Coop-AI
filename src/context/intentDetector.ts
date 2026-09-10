@@ -10,6 +10,7 @@ import { toRepositoryRelativePath } from "./repoFilePath";
 import type { RepoContext, UserPreferences } from "../chat/types";
 import { isOpenFileReviewAsk } from "../chat/plainChatExplain";
 import { isFileCallerQuery } from "./fileCallerIntent";
+import { isFileHistoryQuery } from "./fileHistoryIntent";
 
 export enum UserIntent {
   QUICK_ACTION_CLICKED = "quick_action_clicked",
@@ -311,15 +312,17 @@ function requestTypesForPlainChat(event: IntentEvent): ContextRequestType[] {
   if (!file) {
     return ["chat_context"];
   }
+  const types: ContextRequestType[] = ["chat_context"];
   // Open-file PR review needs the same caller graph Blast uses, plus ownership.
   if (isOpenFileReviewAsk(query)) {
-    return ["chat_context", "dependencies", "ownership"];
+    types.push("dependencies", "ownership");
+  } else if (isFileCallerQuery(query)) {
+    types.push("dependencies");
   }
-  // Caller/importer asks need durable dependents — not chat_context alone.
-  if (isFileCallerQuery(query)) {
-    return ["chat_context", "dependencies"];
+  if (isFileHistoryQuery(query)) {
+    types.push("blame");
   }
-  return ["chat_context"];
+  return types;
 }
 
 export function isBlockedIntent(intent: UserIntent): boolean {

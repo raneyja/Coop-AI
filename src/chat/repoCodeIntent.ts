@@ -1,3 +1,5 @@
+import { isFileCallerQuery } from "../context/fileCallerIntent";
+import { isFileHistoryQuery } from "../context/fileHistoryIntent";
 import { isRepoStructureQuery } from "../workspace/repoFactIntent";
 
 /**
@@ -204,10 +206,12 @@ export function classifyRepoCodeIntent(message: string): RepoCodeIntent {
   const hasRepoScope = REPO_SCOPE.test(trimmed);
   const hasCodeNoun = CODE_NOUN.test(trimmed);
 
-  // "explain this function" is about the open buffer unless it also names
-  // something concrete elsewhere in the repository.
+  // "explain this function" is about the open buffer unless it also asks
+  // for callers, git history, or names something elsewhere in the repository.
   if (LOCAL_SCOPE.test(trimmed) && !hasEntity && !hasRepoScope) {
-    return NONE;
+    if (!isFileCallerQuery(trimmed) && !isFileHistoryQuery(trimmed)) {
+      return NONE;
+    }
   }
 
   const hasSubject = hasEntity || hasRole || hasRepoScope || hasCodeNoun;

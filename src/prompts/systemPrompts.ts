@@ -948,6 +948,7 @@ export function buildUserMessageWithContext(
   const googleDocs = extractGoogleDocsSearch(context?.contextBundle);
   const knowledgeGapScan = extractKnowledgeGapJobScan(context?.contextBundle);
   const fileDependents = extractFileDependentsEvidence(context?.contextBundle);
+  const fileHistory = extractFileHistoryEvidence(context?.contextBundle);
   if (
     !context?.file &&
     context?.contextBundle === undefined &&
@@ -969,7 +970,8 @@ export function buildUserMessageWithContext(
     !notionPages &&
     !googleDocs &&
     !knowledgeGapScan &&
-    !fileDependents
+    !fileDependents &&
+    !fileHistory
   ) {
     return message;
   }
@@ -1128,6 +1130,9 @@ export function buildUserMessageWithContext(
   }
   if (fileDependents) {
     lines.push(...formatFileDependentsForLlm(fileDependents));
+  }
+  if (fileHistory) {
+    lines.push(...formatFileHistoryForLlm(fileHistory));
   }
   if (context?.contextBundle !== undefined) {
     const qualityNote = buildIndexQualityNote(context.contextBundle);
@@ -2001,6 +2006,86 @@ export function formatFileDependentsForLlm(evidence: FileDependentsEvidence): st
     lines.push(`(+${evidence.paths.length - paths.length} more)`);
   }
   lines.push("</file_dependents>");
+  return lines;
+}
+
+type FileHistoryCommit = {
+  sha: string;
+  author: string;
+  date: string;
+  message: string;
+};
+
+type FileHistoryEvidence = {
+  file?: string;
+  created?: FileHistoryCommit;
+  latest?: FileHistoryCommit;
+};
+
+export function extractFileHistoryEvidence(bundle: unknown): FileHistoryEvidence | undefined {
+  if (!Array.isArray(bundle)) {
+    return undefined;
+  }
+  for (const entry of bundle) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const data = (entry as { data?: Record<string, unknown> }).data;
+    const history = data?.fileHistory;
+    if (!history || typeof history !== "object") {
+      continue;
+    }
+    const record = history as Record<string, unknown>;
+    const created = asHistoryCommit(record.created);
+    const latest = asHistoryCommit(record.latest);
+    if (!created && !latest) {
+      continue;
+    }
+    return {
+      file: typeof record.file === "string" ? record.file : typeof data?.file === "string" ? data.file : undefined,
+      created,
+      latest
+    };
+  }
+  return undefined;
+}
+
+function asHistoryCommit(value: unknown): FileHistoryCommit | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const sha = typeof record.sha === "string" ? record.sha : "";
+  const author = typeof record.author === "string" ? record.author : "";
+  const date = typeof record.date === "string" ? record.date : "";
+  if (!sha && !author && !date) {
+    return undefined;
+  }
+  return {
+    sha,
+    author,
+    date,
+    message: typeof record.message === "string" ? record.message : ""
+  };
+}
+
+export function formatFileHistoryForLlm(evidence: FileHistoryEvidence): string[] {
+  const fileAttr = evidence.file ? ` file="${evidence.file}"` : "";
+  const lines = [
+    `<file_history${fileAttr}>`,
+    "Remote code-host file history (Zero-Clone). When the user asks who created this file or when, use created (oldest commit) and latest. Do not say author or date are unavailable while this block is present."
+  ];
+  if (evidence.created) {
+    lines.push(
+      `created: ${evidence.created.author || "unknown"} ${evidence.created.date} ${evidence.created.sha.slice(0, 8)} ${evidence.created.message}`.trim()
+    );
+  }
+  if (evidence.latest && evidence.latest.sha !== evidence.created?.sha) {
+    lines.push(
+      `latest: ${evidence.latest.author || "unknown"} ${evidence.latest.date} ${evidence.latest.sha.slice(0, 8)} ${evidence.latest.message}`.trim()
+    );
+  }
+  lines.push("</file_history>");
   return lines;
 }
 

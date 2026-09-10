@@ -210,6 +210,36 @@ test("plannerAllowsAgentRepoLoop allows named-file follow-ups even when the plan
   );
 });
 
+test("plannerAllowsAgentRepoLoop allows rely-on / who-created file asks even when the plan is plain", () => {
+  const query =
+    "Give me a tl;dr of this file? What does it do, what other files rely on it, and who created it / when?";
+  assert.equal(
+    plannerAllowsAgentRepoLoop(
+      {
+        ...emptyChatIntentPlan(query),
+        mode: "plain",
+        execution: "none",
+        confidence: "high"
+      },
+      query
+    ),
+    true
+  );
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query,
+      hasQuickAction: false,
+      intentPlan: {
+        ...emptyChatIntentPlan(query),
+        mode: "plain",
+        execution: "none",
+        confidence: "high"
+      }
+    }),
+    true
+  );
+});
+
 test("plannerAllowsAgentRepoLoop blocks workflows", () => {
   assert.equal(
     plannerAllowsAgentRepoLoop(

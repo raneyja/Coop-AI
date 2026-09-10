@@ -85,6 +85,15 @@ test("live thinking auto-opens until the user collapses it", () => {
   assert.equal(
     nextLiveThinkingOpenState({
       isComplete: false,
+      userTouched: false,
+      streaming: true,
+      hasText: false
+    }),
+    false
+  );
+  assert.equal(
+    nextLiveThinkingOpenState({
+      isComplete: false,
       userTouched: true,
       streaming: true,
       hasText: true
@@ -127,7 +136,24 @@ test("real gather lines stay visible after synthesis starts", () => {
     0,
     5_000
   );
-  assert.ok(todos.every((todo) => todo.status === "completed"));
   assert.ok(todos.some((todo) => todo.content === "Searching GitHub estate index…"));
   assert.ok(!todos.some((todo) => /distilling|aggregating|weighing gathered/i.test(todo.content)));
+  const last = todos[todos.length - 1];
+  assert.equal(last?.status, "in_progress");
+  assert.ok(todos.slice(0, -1).every((todo) => todo.status === "completed"));
+});
+
+test("awaitingResponse shows gather todos immediately (no blank start delay)", () => {
+  const todos = buildActivityTodosFromFeedback(
+    {
+      status: "loading",
+      title: "Fetching context",
+      activityMessages: ["Read `src/server/authMiddleware.ts`"]
+    },
+    undefined,
+    { awaitingResponse: true },
+    0
+  );
+  assert.equal(todos.length, 1);
+  assert.equal(todos[0]?.status, "in_progress");
 });

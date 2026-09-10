@@ -67,6 +67,42 @@ test("buildUserMessageWithContext emits file_dependents for caller asks", () => 
   assert.ok(message.includes("Do not say callers are unknown"));
 });
 
+test("buildUserMessageWithContext emits file_history for who-created asks", () => {
+  const message = buildUserMessageWithContext("Who created this file and when?", {
+    owner: "raneyja",
+    repo: "Coop-AI",
+    file: "src/server/authMiddleware.ts",
+    contextBundle: [
+      {
+        requestId: "t:blame:0",
+        type: "blame",
+        data: {
+          file: "src/server/authMiddleware.ts",
+          fileHistory: {
+            file: "src/server/authMiddleware.ts",
+            created: {
+              sha: "abc123456",
+              author: "jon",
+              date: "2024-01-15T00:00:00.000Z",
+              message: "add auth middleware"
+            },
+            latest: {
+              sha: "def987654",
+              author: "jon",
+              date: "2026-09-01T00:00:00.000Z",
+              message: "plan gates"
+            }
+          }
+        },
+        fetchedAt: new Date()
+      }
+    ]
+  });
+  assert.ok(message.includes("<file_history"));
+  assert.ok(message.includes("created: jon"));
+  assert.ok(message.includes("latest: jon"));
+});
+
 test("enrichPlainChatCallerResponse injects callers when model claims unknown", () => {
   assert.equal(
     plainChatClaimsCallersUnknown(
