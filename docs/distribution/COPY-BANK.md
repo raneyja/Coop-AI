@@ -32,12 +32,12 @@ https://coop-ai.dev
 
 ### About description
 ```text
-VS Code extension that understands and edits production code with your full stack as context — repo graph plus company Slack/Jira. Find owners, check blast radius, write changes you review, without cloning the monorepo.
+AI coding assistant for VS Code. Zero-clone indexing for any repo on any code host, then understand and edit with Slack, Jira, Confluence, and the rest of your stack.
 ```
 
 ### Org bio
 ```text
-Code intelligence for VS Code. Understand and edit production code with your full stack as context — repo graph + company Slack/Jira — without cloning the monorepo.
+AI coding assistant for VS Code. Zero-clone indexing for any repo on any code host, plus Slack, Jira, Confluence, and the rest of your stack.
 ```
 
 ### Discussions announcement
