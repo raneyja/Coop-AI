@@ -19,7 +19,7 @@ Brand-only external presence. No personal LinkedIn. No “I built this while at�
 ## Order of operations
 
 1. [00 — Stealth rules](./00-stealth-rules.md) — read once; don’t skip
-2. [01 — GitHub](./01-github.md) — **do first** (highest trust / lowest risk)
+2. [01 — GitHub](./01-github.md) — **do first** (repo home → About → gear — not Settings)
 3. [02 — VS Code Marketplace](./02-vscode-marketplace.md) — **do second**
 4. [03 — Product Hunt](./03-product-hunt.md) — when ready for a public launch day
 5. [04 — Hacker News](./04-hacker-news.md) — only as real answers / Show HN
