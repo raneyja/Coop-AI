@@ -47,7 +47,7 @@ export function PromptLibraryTop5Editor({
         Choose up to 5 prompts for quick access in chat. Pin order is personal to you.
       </p>
       {!hasWorkspace ? (
-        <p className="coop-settings-row-desc">Open a folder to load workspace prompts.</p>
+        <p className="coop-settings-row-desc">Sign in to load your prompts.</p>
       ) : topPrompts.length === 0 ? (
         <p className="coop-settings-row-desc">None pinned yet.</p>
       ) : (

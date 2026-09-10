@@ -292,21 +292,17 @@ import {
   resolvePromptLibraryRun
 } from "../prompts/promptLibraryRun";
 import {
-  deleteWorkspacePrompt,
-  hasWorkspaceFolder,
-  loadWorkspacePrompts,
-  replaceWorkspacePrompts,
-  saveWorkspacePrompt,
-  updateWorkspacePrompt,
-  watchWorkspacePrompts,
-  type WorkspacePromptEntry
-} from "../prompts/workspacePromptLibrary";
-import {
-  loadPinnedPromptIds,
-  prunePinnedPromptIds,
-  savePinnedPromptIds,
-  updatePinnedPromptIds
-} from "../prompts/pinnedPrompts";
+  deleteUserPrompt,
+  loadUserPinnedPromptIds,
+  loadUserPrompts,
+  saveUserPinnedPromptIds,
+  saveUserPrompt,
+  SIGNED_OUT_PROMPT_LIBRARY_ERROR,
+  updateUserPrompt,
+  writeUserPrompts
+} from "../prompts/userPromptLibrary";
+import { prunePinnedPromptIds } from "../prompts/pinnedPrompts";
+import type { WorkspacePromptEntry } from "../prompts/workspacePromptLibrary";
 import { ChatThreadStore, isDraftChatThread } from "./chatThreadStore";
 import { readChatSessionIdleMs } from "../config/chatSessionConfig";
 import { summarizeThreadTitle } from "./threadTitle";
@@ -917,6 +913,7 @@ export class CoopChatSession {
     await this.pushSettingsState();
     if (previousIdentity !== nextIdentity) {
       this.syncSurfacesAfterAuthChange(previousIdentity, nextIdentity);
+      void this.pushWorkspacePrompts();
     }
   }
 
@@ -1951,7 +1948,7 @@ export class CoopChatSession {
           this.pushPatchState();
           void this.pushWorkspacePrompts();
           this.workspacePromptWatcher?.dispose();
-          this.workspacePromptWatcher = watchWorkspacePrompts(() => void this.pushWorkspacePrompts());
+          this.workspacePromptWatcher = undefined;
         } else {
           try {
             await this.pushSettingsState();
@@ -2048,7 +2045,10 @@ export class CoopChatSession {
         await this.pushWorkspacePrompts();
         return;
       case "prompts:run": {
-        const prompts = await loadWorkspacePrompts();
+        const prompts = await loadUserPrompts(
+          this.options.extensionContext.globalState,
+          this.promptLibraryIdentity()
+        );
         const entry = prompts.find((item) => item.id === message.payload.id);
         if (!entry) {
           return;
@@ -2062,17 +2062,23 @@ export class CoopChatSession {
         return;
       }
       case "prompts:save":
-        await saveWorkspacePrompt({
-          id: `prompt-${Date.now()}`,
-          title: message.payload.title,
-          template: message.payload.template,
-          actionId: message.payload.actionId
-        });
+        try {
+          await saveUserPrompt(this.options.extensionContext.globalState, this.promptLibraryIdentity(), {
+            id: `prompt-${Date.now()}`,
+            title: message.payload.title,
+            template: message.payload.template,
+            actionId: message.payload.actionId
+          });
+        } catch (error) {
+          const text = error instanceof Error ? error.message : SIGNED_OUT_PROMPT_LIBRARY_ERROR;
+          void vscode.window.showErrorMessage(text);
+          return;
+        }
         await this.broadcastPromptLibrary();
         void vscode.window.showInformationMessage("Saved prompt to your prompt library.");
         return;
       case "prompts:update":
-        await updateWorkspacePrompt({
+        await updateUserPrompt(this.options.extensionContext.globalState, this.promptLibraryIdentity(), {
           id: message.payload.id,
           title: message.payload.title,
           template: message.payload.template,
@@ -2081,39 +2087,40 @@ export class CoopChatSession {
         await this.broadcastPromptLibrary();
         return;
       case "prompts:delete": {
-        await deleteWorkspacePrompt(message.payload.id);
-        const prompts = await loadWorkspacePrompts();
+        const identity = this.promptLibraryIdentity();
+        const prompts = await deleteUserPrompt(
+          this.options.extensionContext.globalState,
+          identity,
+          message.payload.id
+        );
         const validIds = new Set(prompts.map((entry) => entry.id));
-        const pinned = await loadPinnedPromptIds(this.options.extensionContext);
-        await updatePinnedPromptIds(this.options.extensionContext, pinned, validIds);
+        const pinned = await loadUserPinnedPromptIds(this.options.extensionContext.globalState, identity);
+        const pruned = prunePinnedPromptIds(pinned, validIds);
+        await saveUserPinnedPromptIds(this.options.extensionContext.globalState, identity, pruned);
         await this.broadcastPromptLibrary();
         return;
       }
       case "prompts:update-pinned": {
-        const prompts = await loadWorkspacePrompts();
+        const identity = this.promptLibraryIdentity();
+        const prompts = await loadUserPrompts(this.options.extensionContext.globalState, identity);
         const validIds = new Set(prompts.map((entry) => entry.id));
-        await updatePinnedPromptIds(
-          this.options.extensionContext,
-          message.payload.pinnedIds,
-          validIds
-        );
+        const pruned = prunePinnedPromptIds(message.payload.pinnedIds, validIds);
+        await saveUserPinnedPromptIds(this.options.extensionContext.globalState, identity, pruned);
         await this.broadcastPromptLibrary();
         return;
       }
       case "prompts:commit": {
+        const identity = this.promptLibraryIdentity();
         const entries = message.payload.prompts.map((entry) => ({
           id: entry.id,
           title: entry.title,
           template: entry.template,
           actionId: entry.actionId
         }));
-        await replaceWorkspacePrompts(entries);
+        await writeUserPrompts(this.options.extensionContext.globalState, identity, entries);
         const validIds = new Set(entries.map((entry) => entry.id));
-        await updatePinnedPromptIds(
-          this.options.extensionContext,
-          message.payload.pinnedIds,
-          validIds
-        );
+        const pruned = prunePinnedPromptIds(message.payload.pinnedIds, validIds);
+        await saveUserPinnedPromptIds(this.options.extensionContext.globalState, identity, pruned);
         await this.broadcastPromptLibrary();
         void vscode.window.showInformationMessage("Prompt library saved.");
         return;
@@ -11273,12 +11280,17 @@ export class CoopChatSession {
   }
 
   public async pushWorkspacePrompts(): Promise<void> {
-    const prompts = await loadWorkspacePrompts();
+    const identity = this.promptLibraryIdentity();
+    const prompts = await loadUserPrompts(this.options.extensionContext.globalState, identity);
     const validIds = new Set(prompts.map((entry) => entry.id));
-    let pinnedIds = await loadPinnedPromptIds(this.options.extensionContext);
+    let pinnedIds = await loadUserPinnedPromptIds(this.options.extensionContext.globalState, identity);
     const pruned = prunePinnedPromptIds(pinnedIds, validIds);
     if (pruned.length !== pinnedIds.length) {
-      pinnedIds = await savePinnedPromptIds(this.options.extensionContext, pruned);
+      pinnedIds = await saveUserPinnedPromptIds(
+        this.options.extensionContext.globalState,
+        identity,
+        pruned
+      );
     } else {
       pinnedIds = pruned;
     }
@@ -11290,11 +11302,15 @@ export class CoopChatSession {
         actionId: entry.actionId
       })),
       pinnedIds,
-      hasWorkspace: hasWorkspaceFolder()
+      hasWorkspace: Boolean(identity)
     };
     const message: WebviewOutbound = { type: "prompts:list", payload };
     this.postToChat(message);
     this.postToSettings(message);
+  }
+
+  public promptLibraryIdentity(): string {
+    return authIdentityKey(this.preferences);
   }
 
   public async broadcastPromptLibrary(): Promise<void> {
@@ -11967,3 +11983,4 @@ function providerFromDegradationMessage(message?: string): IntegrationProvider |
 function delayMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+

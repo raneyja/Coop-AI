@@ -14,6 +14,10 @@ export type WorkspacePromptFile = {
   prompts: WorkspacePromptEntry[];
 };
 
+/**
+ * Legacy on-disk team file. Personal Save to library is per signed-in user
+ * (`userPromptLibrary.ts`) — never this path. Do not load this file into the pill.
+ */
 const PROMPT_RELATIVE_PATH = ".coop/prompts.json";
 
 /** Phase D: prompt library stays user-picked. AGENTS.md is the always-on injection. */

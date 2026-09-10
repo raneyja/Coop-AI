@@ -44,7 +44,7 @@ export function PromptLibraryPill({
   const isDisabled = disabled || !hasWorkspace;
   const title = hasWorkspace
     ? "Browse saved prompts"
-    : "Open a folder to use workspace prompts";
+    : "Sign in to use your saved prompts";
 
   useEffect(() => {
     if (!open) {
