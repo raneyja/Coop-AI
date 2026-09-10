@@ -644,7 +644,7 @@ async function run(): Promise<void> {
       }
     );
     assert.equal(streamed, 0, "must not call the answer model on an empty hunt");
-    assert.match(result.answer ?? "", /usable match/i);
+    assert.match(result.answer ?? "", /couldn't find that in this repo/i);
     assert.doesNotMatch(result.answer ?? "", /Your question/);
   });
 
@@ -1482,7 +1482,7 @@ async function run(): Promise<void> {
       }
     );
     assert.equal(streamed, 0);
-    assert.match(result.answer ?? "", /usable match/i);
+    assert.match(result.answer ?? "", /couldn't find that in this repo/i);
   });
 
   await test("T2 hunt attaches parent ValidationError, not converters", async () => {

@@ -33,6 +33,10 @@ const CASES: Case[] = [
     expect: "locate"
   },
   { q: "What in this repo still owns requireAuth?", expect: "locate" },
+  {
+    q: "I need to fix SQL injection in the customer pages. What files should I read first? Don't invent helpers.",
+    expect: "locate"
+  },
 
   // Understand — the user wants an explanation grounded in repo code.
   { q: "What happens when a user signs in?", expect: "understand" },

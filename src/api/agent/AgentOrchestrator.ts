@@ -56,10 +56,10 @@ const MAX_API_REJECT_SEARCH_ATTEMPTS = 12;
 /** Read budget when the index returned a hit with no line number. */
 const UNPOSITIONED_READ_LINES = 120;
 const INDEX_HUNT_MISS =
-  "The index didn’t return a usable match for that name (tried casing aliases). Try a more specific name, or open the file and use /edit.";
+  "I couldn't find that in this repo. Try a more specific name, or open the file.";
 /** On-call API reject — never reuse the named-function miss copy. */
 const API_REJECT_HUNT_MISS =
-  "I couldn’t find where the API rejects that field in the index. I won’t guess a path. Try a more specific error string, or open the write path and use /edit.";
+  "I couldn't find where the API rejects that field. I won't guess a path. Try a more specific error string, or open the write path.";
 /** Cap mid-loop integration calls so the model cannot spray. */
 const MAX_INTEGRATION_TOOL_CALLS = 3;
 

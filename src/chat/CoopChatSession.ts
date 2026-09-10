@@ -16,9 +16,12 @@ import { collectEditorPrFiles, snapshotWorkingCopyIfAbsent } from "../edit/edito
 import { indexPatchFileContent, lookupPatchFileContent } from "../edit/patchFileContents";
 import {
   extractAgentProposedPatchText,
-  mergeAnswerWithAgentPatch,
-  stripEmittedPatchBlocks
+  mergeAnswerWithAgentPatch
 } from "./agentProposedPatch";
+import {
+  CUSTOMER_EMPTY_HUNT_ANSWER,
+  customerFacingAgentAnswer
+} from "./customerFacingAnswer";
 import {
   applyPendingPatch,
   applyPendingPatchHunk,
@@ -4481,22 +4484,13 @@ export class CoopChatSession {
         agentPatch
       );
       if (action === "change" && !agentPatch) {
-        const files = (agentResult.context?.read_file as { files?: unknown[] } | undefined)?.files;
-        const hasAgentFiles = Array.isArray(files) && files.length > 0;
-        if (!hasAgentFiles) {
-          contentForPatchCard =
-            "The index didn’t return a usable definition for that symbol (tried casing aliases). Try a more specific name, or open the target file and use /edit.";
-        } else {
-          const prose = stripEmittedPatchBlocks(contentForPatchCard).trim();
-          contentForPatchCard =
-            prose.length > 0
-              ? `${prose}\n\nI found related code but could not produce an apply-able patch anchored to those lines. Open the target file and use /edit, or try a more specific path.`
-              : "I found related code but could not produce an apply-able patch. Open the target file and use /edit, or try a more specific path.";
-        }
+        contentForPatchCard = customerFacingAgentAnswer({
+          content: contentForPatchCard,
+          hasApplyPatch: false
+        });
       }
       if (!contentForPatchCard.trim()) {
-        contentForPatchCard =
-          "I could not finish that hunt from the index. Try a more specific symbol or path.";
+        contentForPatchCard = CUSTOMER_EMPTY_HUNT_ANSWER;
       }
 
       const finalMessage: ChatMessage = {
@@ -8118,21 +8112,12 @@ export class CoopChatSession {
       const agentPatch = extractAgentProposedPatchText(contextBundle);
       let contentForPatchCard = mergeAnswerWithAgentPatch(enrichedContent, agentPatch);
       if (this.turnAgentAction === "change" && !agentPatch) {
-        const hasAgentFiles = contextBundle.some((entry) => {
-          const files = (entry as { data?: { agentTools?: { read_file?: { files?: unknown[] } } } })
-            ?.data?.agentTools?.read_file?.files;
-          return Array.isArray(files) && files.length > 0;
+        contentForPatchCard = customerFacingAgentAnswer({
+          content: contentForPatchCard,
+          hasApplyPatch: false
         });
-        if (!hasAgentFiles) {
-          // Do not keep a model story about AuthRoot when the hunt never read a match.
-          contentForPatchCard =
-            "The index didn’t return a usable definition for that symbol (tried casing aliases). Try a more specific name, or open the target file and use /edit.";
-        } else {
-          const prose = stripEmittedPatchBlocks(contentForPatchCard).trim();
-          contentForPatchCard =
-            prose.length > 0
-              ? `${prose}\n\nI found related code but could not produce an apply-able patch anchored to those lines. Open the target file and use /edit, or try a more specific path.`
-              : "I found related code but could not produce an apply-able patch. Open the target file and use /edit, or try a more specific path.";
+        if (!contentForPatchCard.trim()) {
+          contentForPatchCard = CUSTOMER_EMPTY_HUNT_ANSWER;
         }
       }
       const finalMessage: ChatMessage = {

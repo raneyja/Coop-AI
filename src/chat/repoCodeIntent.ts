@@ -73,7 +73,7 @@ const CHANGE_VERB =
  * `calls?` — that matched "who is on call this week".
  */
 const LOCATE =
-  /\b(where|which\s+file|what\s+file|find|defined|declared|located|lives?|live\s+in|show\s+me|point\s+me|list\s+all|callers?|called\s+by|(?:who|what|which)\s+calls?|(?:who|what|which)\s+(?:in\s+(?:this\s+)?repo\s+)?(?:still\s+)?owns?|references?|usages?|used\s+by|implemented|exists?|picking\s+up)\b/i;
+  /\b(where|which\s+files?|what\s+files?|find|defined|declared|located|lives?|live\s+in|show\s+me|point\s+me|list\s+all|callers?|called\s+by|(?:who|what|which)\s+calls?|(?:who|what|which)\s+(?:in\s+(?:this\s+)?repo\s+)?(?:still\s+)?owns?|references?|usages?|used\s+by|implemented|exists?|picking\s+up)\b/i;
 
 /** "Does the project …?" — an existence question, answerable only from code. */
 const EXISTENCE_START = /^(?:does|do|is|are|has|have)\b/i;
@@ -163,9 +163,23 @@ export function isGeneralLanguageQuestion(message: string): boolean {
   return !REPO_SCOPE.test(scoped) && !LOCAL_SCOPE.test(scoped) && !NAMED_SOURCE_FILE.test(scoped);
 }
 
+/**
+ * "I need to fix X. What files should I read first?" is a locate question.
+ * A preamble goal must not steal a reading-list ask into the Apply-patch path.
+ * Do not use a bare `where` here — "Fix the bug where tokens expire" is a change.
+ */
+const READ_FIRST_QUESTION =
+  /\b(?:what|which)\s+files?\s+should\s+i\b|\bwhere\s+should\s+i\s+(?:start|look|read|begin)\b|\bwhat\s+should\s+i\s+read\b|\bread first\b/i;
+
+const ASKED_FOR_APPLY =
+  /\b(?:show the exact change|exact change to apply|apply (?:this|the|these|it)|search\s*\/\s*replace)\b/i;
+
 /** Imperative change request: starts with the verb, or is politely prefixed. */
 function looksLikeChangeRequest(message: string): boolean {
   const trimmed = message.trim();
+  if (READ_FIRST_QUESTION.test(trimmed) && !ASKED_FOR_APPLY.test(trimmed)) {
+    return false;
+  }
   if (/^(?:can|could|would)\s+you\s+(?:please\s+)?\w+/i.test(trimmed) || /^please\s+\w+/i.test(trimmed)) {
     return CHANGE_VERB.test(trimmed);
   }
@@ -235,6 +249,9 @@ export function classifyRepoCodeIntent(message: string): RepoCodeIntent {
   // real question, so "are you sure?" never starts a hunt.
   const weakFormAllowed = hasSubject || words >= 5;
 
+  if (READ_FIRST_QUESTION.test(trimmed) && !ASKED_FOR_APPLY.test(trimmed)) {
+    return { action: "locate", confidence: "high", reason: "asks which files to read first" };
+  }
   if (looksLikeChangeRequest(trimmed)) {
     return { action: "change", confidence, reason: `change request that ${subject}` };
   }

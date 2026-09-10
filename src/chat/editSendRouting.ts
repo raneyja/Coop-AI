@@ -35,7 +35,7 @@ const REPO_WIDE_CHANGE_RE =
 
 /** Shown when explicit /edit has no open file / @mention to anchor a patch. */
 export const EDIT_NO_TARGET_FILE_ERROR =
-  "Open a file in the editor (or @mention one), then use /edit so Coop can emit an apply-able patch for that path.";
+  "Open a file (or @mention one), then use /edit so I can propose a change to Apply.";
 
 /**
  * Shown when a concrete change ask has no file anchor and routing will not hunt.
