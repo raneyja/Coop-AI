@@ -826,6 +826,143 @@ void (async () => {
   assert.equal(activateCancelled.statusCode, 409);
   assert.match(activateCancelled.body ?? "", /cancelled_not_restored/);
 
+  const viewerUsage = mockResponse();
+  const usageTracker = {
+    canRead: () => true,
+    sumUsdCentsForOrg: async (_orgId: string, _range: unknown, _types: string[], bucket: string) =>
+      bucket === "auto" ? 400 : 100,
+    eventsByType: async () => [{ eventType: "chat.message", count: 4 }],
+    eventsByTypeForPrincipals: async () => [{ eventType: "chat.message", count: 4 }],
+    lastActiveAtByPrincipal: async () => [],
+    sumUsdCentsByUserIds: async () => new Map()
+  };
+  const usageOrgStore = {
+    getOrganization: async () => ({
+      id: "org-1",
+      name: "Acme",
+      plan: "pro",
+      repoAccessMode: "all_indexed",
+      createdAt: new Date("2026-06-01T00:00:00.000Z"),
+      usageTier: "pro"
+    }),
+    getOrganizationBilling: async () => ({
+      seatCount: 1,
+      billingStatus: "active",
+      usageTier: "pro",
+      seatInventory: { pro: 1, pro_plus: 0, max: 0 }
+    })
+  } as unknown as OrgStore;
+  const usageUserStore = {
+    listOrgUsers: async () => [
+      {
+        id: "user-1",
+        orgId: "org-1",
+        email: "a@example.com",
+        role: "admin",
+        createdAt: new Date("2026-06-01T00:00:00.000Z"),
+        usageTier: "pro"
+      }
+    ],
+    getUser: async (id: string) =>
+      id === "user-1"
+        ? {
+            id: "user-1",
+            orgId: "org-1",
+            email: "a@example.com",
+            role: "admin",
+            createdAt: new Date("2026-06-01T00:00:00.000Z"),
+            usageTier: "pro"
+          }
+        : undefined
+  };
+  const usageHandled = await handleOperatorApiRequest(
+    {
+      method: "GET",
+      pathname: "/v1/operator/organizations/org-1/usage",
+      headers: { authorization: "Bearer ops-token" },
+      body: {}
+    },
+    viewerUsage,
+    baseDeps({
+      orgStore: usageOrgStore,
+      userStore: usageUserStore as never,
+      usageTracker: usageTracker as never,
+      operatorStore: {
+        resolveSession: async () => viewer
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(usageHandled, true);
+  assert.equal(viewerUsage.statusCode, 200);
+  const usageBody = JSON.parse(viewerUsage.body ?? "{}") as {
+    usage?: { usedCents?: number; includedCents?: number; alerts?: string[] };
+  };
+  assert.equal(usageBody.usage?.usedCents, 500);
+  assert.equal(usageBody.usage?.includedCents, 1500);
+
+  const missingOrgUsage = mockResponse();
+  await handleOperatorApiRequest(
+    {
+      method: "GET",
+      pathname: "/v1/operator/organizations/missing/usage",
+      headers: { authorization: "Bearer ops-token" },
+      body: {}
+    },
+    missingOrgUsage,
+    baseDeps({
+      orgStore: {
+        getOrganization: async () => undefined
+      } as unknown as OrgStore,
+      operatorStore: {
+        resolveSession: async () => viewer
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(missingOrgUsage.statusCode, 404);
+
+  const noTracker = mockResponse();
+  await handleOperatorApiRequest(
+    {
+      method: "GET",
+      pathname: "/v1/operator/organizations/org-1/usage",
+      headers: { authorization: "Bearer ops-token" },
+      body: {}
+    },
+    noTracker,
+    baseDeps({
+      orgStore: usageOrgStore,
+      operatorStore: {
+        resolveSession: async () => viewer
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(noTracker.statusCode, 503);
+
+  const userDetail = mockResponse();
+  await handleOperatorApiRequest(
+    {
+      method: "GET",
+      pathname: "/v1/operator/organizations/org-1/users/user-1",
+      headers: { authorization: "Bearer ops-token" },
+      body: {}
+    },
+    userDetail,
+    baseDeps({
+      orgStore: usageOrgStore,
+      userStore: usageUserStore as never,
+      usageTracker: {
+        ...usageTracker,
+        getUsageMetersForUsers: undefined
+      } as never,
+      operatorStore: {
+        resolveSession: async () => viewer
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(userDetail.statusCode, 200);
+  const userBody = JSON.parse(userDetail.body ?? "{}") as { user?: { email?: string; usedCents?: number } };
+  assert.equal(userBody.user?.email, "a@example.com");
+
   // Suspended org returns org_suspended via auth middleware.
   const suspendedStore = {
     resolveAuth: async () => ({

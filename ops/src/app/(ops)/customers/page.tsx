@@ -10,6 +10,8 @@ import {
   cancelOrganization,
   fetchOrganizations,
   formatDate,
+  formatUsdFromCents,
+  formatUsagePercent,
   planBadgeClass,
   planLabel,
   suspendOrganization,
@@ -19,6 +21,7 @@ import {
 import { ConfirmOrgNameModal } from "@/components/ConfirmOrgNameModal";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 import { OperatorOrgStatusBadge } from "@/components/StatusBadge";
+import { UsageMeterBar } from "@/components/UsageMeterBar";
 
 type ConfirmAction = "suspend" | "cancel";
 
@@ -39,6 +42,9 @@ export default function CustomersPage() {
   const [onboardingIncomplete, setOnboardingIncomplete] = useState(
     searchParams.get("onboardingIncomplete") === "true"
   );
+  const [sort, setSort] = useState<"name" | "usage">(
+    searchParams.get("sort") === "usage" ? "usage" : "name"
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,8 +54,8 @@ export default function CustomersPage() {
       plan: plan || undefined,
       billingStatus: billingStatus || undefined,
       onboardingIncomplete: onboardingIncomplete || undefined,
-      sort: "name",
-      order: "asc",
+      sort,
+      order: sort === "usage" ? "desc" : "asc",
       limit: 100
     });
     setLoading(false);
@@ -64,7 +70,7 @@ export default function CustomersPage() {
       return;
     }
     setOrganizations(result.data?.organizations ?? []);
-  }, [q, plan, billingStatus, onboardingIncomplete]);
+  }, [q, plan, billingStatus, onboardingIncomplete, sort]);
 
   useEffect(() => {
     void load();
@@ -77,6 +83,7 @@ export default function CustomersPage() {
     if (plan) params.set("plan", plan);
     if (billingStatus) params.set("billingStatus", billingStatus);
     if (onboardingIncomplete) params.set("onboardingIncomplete", "true");
+    if (sort === "usage") params.set("sort", "usage");
     const query = params.toString();
     router.replace(query ? `/customers?${query}` : "/customers");
     void load();
@@ -191,6 +198,20 @@ export default function CustomersPage() {
           />
           Onboarding incomplete
         </label>
+        <div>
+          <label htmlFor="sort" className="admin-label">
+            Sort
+          </label>
+          <select
+            id="sort"
+            className="admin-input"
+            value={sort}
+            onChange={(e) => setSort(e.target.value === "usage" ? "usage" : "name")}
+          >
+            <option value="name">Name</option>
+            <option value="usage">Highest usage</option>
+          </select>
+        </div>
         <button type="submit" className="admin-btn-secondary">
           Apply filters
         </button>
@@ -208,6 +229,9 @@ export default function CustomersPage() {
               <th>Plan</th>
               <th>Billing</th>
               <th>Seats</th>
+              <th>Usage</th>
+              <th>Cost</th>
+              <th>Margin</th>
               <th>Status</th>
               <th>Created</th>
               {showActions && <th>Actions</th>}
@@ -216,13 +240,13 @@ export default function CustomersPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={showActions ? 7 : 6} className="py-8 text-center text-coop-muted">
+                <td colSpan={showActions ? 10 : 9} className="py-8 text-center text-coop-muted">
                   Loading…
                 </td>
               </tr>
             ) : organizations.length === 0 ? (
               <tr>
-                <td colSpan={showActions ? 7 : 6} className="py-8 text-center text-coop-muted">
+                <td colSpan={showActions ? 10 : 9} className="py-8 text-center text-coop-muted">
                   {unavailable ? "Customer list unavailable until operator API is deployed." : "No customers match your filters."}
                 </td>
               </tr>
@@ -245,6 +269,20 @@ export default function CustomersPage() {
                     {org.seatsUsed != null && org.seats != null
                       ? `${org.seatsUsed} / ${org.seats}`
                       : org.seats ?? "—"}
+                  </td>
+                  <td>
+                    <UsageMeterBar
+                      ratio={org.usage?.usedRatio}
+                      label={formatUsagePercent(org.usage?.usedRatio)}
+                    />
+                  </td>
+                  <td className="text-xs">{formatUsdFromCents(org.usage?.usedCents)}</td>
+                  <td
+                    className={`text-xs ${
+                      org.usage?.marginCents != null && org.usage.marginCents < 0 ? "text-coop-warn" : "text-coop-muted"
+                    }`}
+                  >
+                    {formatUsdFromCents(org.usage?.marginCents)}
                   </td>
                   <td>
                     <OperatorOrgStatusBadge

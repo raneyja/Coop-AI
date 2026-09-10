@@ -682,7 +682,8 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           operatorAuthConfig,
           emailService,
           auditLogger,
-          jobQueue: jobs.queue
+          jobQueue: jobs.queue,
+          usageTracker
         })
       ) {
         return;

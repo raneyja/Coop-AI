@@ -17,9 +17,12 @@ import {
   fetchOrganization,
   fetchOrganizationApiKeys,
   fetchOrganizationAudit,
+  fetchOrganizationUsage,
   fetchOrganizationUsers,
   formatDate,
   formatDateTime,
+  formatUsdFromCents,
+  formatUsagePercent,
   inviteOrganizationUser,
   manualProUpgrade,
   planBadgeClass,
@@ -34,17 +37,20 @@ import {
   suspendOrganization,
   updateOrganization,
   updateOrganizationRepoAccess,
+  usageTierLabel,
   type CustomerApiKey,
   type CustomerDetail,
   type CustomerUser,
   type OrgAuditEntry,
   type OrgPlan,
+  type OrgUsageSnapshot,
   type RepoAccessMode
 } from "@/lib/coopApi";
 import { ApiKeyRevealModal } from "@/components/ApiKeyRevealModal";
 import { ConfirmOrgNameModal } from "@/components/ConfirmOrgNameModal";
 import { OperatorOrgStatusBadge } from "@/components/StatusBadge";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
+import { UsageMeterBar } from "@/components/UsageMeterBar";
 
 export default function CustomerDetailPage() {
   const params = useParams();
@@ -54,6 +60,7 @@ export default function CustomerDetailPage() {
   const focus = searchParams.get("focus");
 
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
+  const [usage, setUsage] = useState<OrgUsageSnapshot | null>(null);
   const [users, setUsers] = useState<CustomerUser[]>([]);
   const [keys, setKeys] = useState<CustomerApiKey[]>([]);
   const [audit, setAudit] = useState<OrgAuditEntry[]>([]);
@@ -84,11 +91,12 @@ export default function CustomerDetailPage() {
     setLoading(true);
     setError(null);
 
-    const [detailRes, usersRes, keysRes, auditRes] = await Promise.all([
+    const [detailRes, usersRes, keysRes, auditRes, usageRes] = await Promise.all([
       fetchOrganization(orgId),
       fetchOrganizationUsers(orgId),
       fetchOrganizationApiKeys(orgId),
-      fetchOrganizationAudit(orgId, { limit: 20 })
+      fetchOrganizationAudit(orgId, { limit: 20 }),
+      fetchOrganizationUsage(orgId)
     ]);
 
     setLoading(false);
@@ -114,6 +122,8 @@ export default function CustomerDetailPage() {
     if (usersRes.ok) setUsers(usersRes.data?.users ?? []);
     if (keysRes.ok) setKeys(keysRes.data?.keys ?? []);
     if (auditRes.ok) setAudit(auditRes.data?.entries ?? []);
+    if (usageRes.ok) setUsage(usageRes.data ?? null);
+    else setUsage(null);
   }, [orgId]);
 
   useEffect(() => {
@@ -122,7 +132,14 @@ export default function CustomerDetailPage() {
 
   useEffect(() => {
     if (!focus || loading) return;
-    const id = focus === "users" ? "ops-users" : focus === "billing" ? "ops-billing" : null;
+    const id =
+      focus === "users"
+        ? "ops-users"
+        : focus === "billing"
+          ? "ops-billing"
+          : focus === "usage"
+            ? "ops-usage"
+            : null;
     if (!id) return;
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [focus, loading]);
@@ -422,6 +439,91 @@ export default function CustomerDetailPage() {
       {actionError && <p className="text-sm text-red-400">{actionError}</p>}
       {actionNotice && <p className="text-sm text-coop-index">{actionNotice}</p>}
 
+      <nav className="flex flex-wrap gap-3 text-sm">
+        <a href="#ops-usage" className="admin-link">
+          Usage
+        </a>
+        <a href="#ops-users" className="admin-link">
+          Users
+        </a>
+        <a href="#ops-billing" className="admin-link">
+          Billing
+        </a>
+      </nav>
+
+      <section id="ops-usage" className="admin-card">
+        <h2 className="admin-section-label">Usage & cost</h2>
+        {usage ? (
+          <>
+            <div className="admin-stat-row mt-3">
+              <div className="admin-stat">
+                <p className="text-xs text-coop-muted">LLM cost</p>
+                <p className="mt-1 text-lg font-medium">{formatUsdFromCents(usage.usedCents)}</p>
+              </div>
+              <div className="admin-stat">
+                <p className="text-xs text-coop-muted">
+                  {usage.capKind === "free_credits" ? "Free credits" : "Included AI $"}
+                </p>
+                <p className="mt-1 text-lg font-medium">
+                  {usage.capKind === "free_credits" && usage.free
+                    ? `${Math.round(usage.free.usedTokens / 1000)}K / ${Math.round(usage.free.limitTokens / 1000)}K`
+                    : formatUsdFromCents(usage.includedCents)}
+                </p>
+              </div>
+              <div className="admin-stat">
+                <p className="text-xs text-coop-muted">Of plan</p>
+                <div className="mt-2">
+                  <UsageMeterBar ratio={usage.usedRatio} label={formatUsagePercent(usage.usedRatio)} />
+                </div>
+              </div>
+              <div className="admin-stat">
+                <p className="text-xs text-coop-muted">Seat revenue</p>
+                <p className="mt-1 text-lg font-medium">{formatUsdFromCents(usage.seatRevenueCents)}</p>
+              </div>
+              <div className="admin-stat">
+                <p className="text-xs text-coop-muted">Margin</p>
+                <p
+                  className={`mt-1 text-lg font-medium ${
+                    usage.marginCents != null && usage.marginCents < 0 ? "text-coop-warn" : ""
+                  }`}
+                >
+                  {formatUsdFromCents(usage.marginCents)}
+                </p>
+              </div>
+            </div>
+            <div className="admin-stat-row mt-4">
+              <div className="admin-stat">
+                <p className="text-xs text-coop-muted">Chat</p>
+                <p className="mt-1 text-lg font-medium">{usage.productMix.chat}</p>
+              </div>
+              <div className="admin-stat">
+                <p className="text-xs text-coop-muted">Completions</p>
+                <p className="mt-1 text-lg font-medium">{usage.productMix.completions}</p>
+              </div>
+              <div className="admin-stat">
+                <p className="text-xs text-coop-muted">Quick actions</p>
+                <p className="mt-1 text-lg font-medium">{usage.productMix.quickActions}</p>
+              </div>
+              <div className="admin-stat">
+                <p className="text-xs text-coop-muted">Lightning</p>
+                <p className="mt-1 text-lg font-medium">{usage.productMix.lightning}</p>
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-coop-muted">
+              LLM cost uses stored model rates this period. Seat revenue is list price × purchased seats, not
+              Stripe invoices.
+              {usage.capKind === "unlimited"
+                ? " Enterprise has no included-$ cap."
+                : usage.capKind === "free_credits"
+                  ? " Free credits are a rolling window, not a monthly $ cap."
+                  : ""}
+            </p>
+          </>
+        ) : (
+          <p className="mt-3 text-sm text-coop-muted">Usage is unavailable for this customer right now.</p>
+        )}
+      </section>
+
       <section className="admin-card">
         <h2 className="admin-section-label">Health</h2>
         <div className="admin-stat-row mt-3">
@@ -656,6 +758,10 @@ export default function CustomerDetailPage() {
               <tr>
                 <th>Email</th>
                 <th>Role</th>
+                <th>Seat</th>
+                <th>Usage</th>
+                <th>Cost</th>
+                <th>Last active</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -663,15 +769,25 @@ export default function CustomerDetailPage() {
             <tbody>
               {users.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-6 text-center text-coop-muted">
+                  <td colSpan={8} className="py-6 text-center text-coop-muted">
                     No users yet.
                   </td>
                 </tr>
               ) : (
                 users.map((user) => (
                   <tr key={user.id}>
-                    <td>{user.email}</td>
+                    <td>
+                      <Link href={`/customers/${orgId}/users/${user.id}`} className="admin-link">
+                        {user.email}
+                      </Link>
+                    </td>
                     <td className="text-xs">{user.role}</td>
+                    <td className="text-xs">{usageTierLabel(user.usageTier)}</td>
+                    <td>
+                      <UsageMeterBar ratio={user.usedRatio} label={formatUsagePercent(user.usedRatio)} />
+                    </td>
+                    <td className="text-xs">{formatUsdFromCents(user.usedCents)}</td>
+                    <td className="text-xs text-coop-muted">{formatDateTime(user.lastActiveAt)}</td>
                     <td className="text-xs">{user.status}</td>
                     <td>
                       {user.status !== "deactivated" && me && canMutateSupport(me) ? (

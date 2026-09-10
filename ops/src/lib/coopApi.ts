@@ -31,6 +31,54 @@ export type EnterpriseLead = {
   createdAt: string;
 };
 
+export type UsageCapKind = "paid_included" | "free_credits" | "unlimited";
+export type UsageAlertCode = "near_cap" | "at_cap" | "unprofitable";
+
+export type OperatorProductMix = {
+  chat: number;
+  completions: number;
+  lightning: number;
+  quickActions: number;
+};
+
+export type OrgUsageSummary = {
+  capKind: UsageCapKind;
+  periodStart: string;
+  periodEnd: string;
+  usedCents: number;
+  includedCents: number | null;
+  usedRatio: number | null;
+  seatRevenueCents: number | null;
+  marginCents: number | null;
+  alerts: UsageAlertCode[];
+};
+
+export type OrgUsageSnapshot = OrgUsageSummary & {
+  autoCents: number;
+  frontierCents: number;
+  productMix: OperatorProductMix;
+  free?: {
+    usedTokens: number;
+    limitTokens: number;
+    remainingTokens: number;
+    usedRatio: number;
+    resetsAt: string;
+  };
+};
+
+export type UsageQueueItem = {
+  orgId: string;
+  orgName: string;
+  plan: OrgPlan;
+  usedCents: number;
+  includedCents: number | null;
+  usedRatio: number | null;
+  seatRevenueCents: number | null;
+  marginCents: number | null;
+  trigger: "org" | "user";
+  userEmail?: string;
+};
+
 export type CustomerSummary = {
   id: string;
   name: string;
@@ -46,6 +94,7 @@ export type CustomerSummary = {
   onboardingIncomplete?: boolean;
   createdAt?: string;
   attentionFlags?: string[];
+  usage?: OrgUsageSummary;
 };
 
 export type AttentionQueue = {
@@ -70,6 +119,9 @@ export type AttentionQueue = {
     seats: number;
     seatsUsed: number;
   }>;
+  usageNearCap: UsageQueueItem[];
+  usageAtCap: UsageQueueItem[];
+  unprofitable: UsageQueueItem[];
 };
 
 export type StripeSnapshot = {
@@ -115,6 +167,21 @@ export type CustomerUser = {
   status: "active" | "invited" | "deactivated";
   createdAt?: string;
   lastLoginAt?: string;
+  usageTier?: string | null;
+  lastActiveAt?: string;
+  usedCents?: number;
+  includedCents?: number | null;
+  usedRatio?: number | null;
+  alerts?: UsageAlertCode[];
+};
+
+export type CustomerUserDetail = CustomerUser & {
+  capKind?: UsageCapKind;
+  periodStart?: string;
+  periodEnd?: string;
+  autoCents?: number;
+  frontierCents?: number;
+  productMix?: OperatorProductMix;
 };
 
 export type CustomerApiKey = {
@@ -132,6 +199,12 @@ type BackendCustomerUser = {
   status?: CustomerUser["status"];
   createdAt?: string;
   lastLoginAt?: string | null;
+  usageTier?: string | null;
+  lastActiveAt?: string | null;
+  usedCents?: number;
+  includedCents?: number | null;
+  usedRatio?: number | null;
+  alerts?: UsageAlertCode[];
 };
 
 function normalizeUser(user: BackendCustomerUser): CustomerUser {
@@ -144,7 +217,13 @@ function normalizeUser(user: BackendCustomerUser): CustomerUser {
     role: user.role === "owner" ? "admin" : user.role,
     status,
     createdAt: user.createdAt,
-    lastLoginAt: user.lastLoginAt ?? undefined
+    lastLoginAt: user.lastLoginAt ?? undefined,
+    usageTier: user.usageTier ?? null,
+    lastActiveAt: user.lastActiveAt ?? undefined,
+    usedCents: user.usedCents,
+    includedCents: user.includedCents ?? null,
+    usedRatio: user.usedRatio ?? null,
+    alerts: user.alerts ?? []
   };
 }
 
@@ -212,6 +291,78 @@ function asRecord(value: unknown): RawRecord {
   return value && typeof value === "object" ? (value as RawRecord) : {};
 }
 
+function normalizeUsageSummary(raw: unknown): OrgUsageSummary | undefined {
+  const record = asRecord(raw);
+  if (!record.capKind && record.usedCents == null) {
+    return undefined;
+  }
+  const capKind = String(record.capKind ?? "unlimited") as UsageCapKind;
+  const alerts = Array.isArray(record.alerts)
+    ? record.alerts.map((code) => String(code) as UsageAlertCode)
+    : [];
+  return {
+    capKind: capKind === "paid_included" || capKind === "free_credits" ? capKind : "unlimited",
+    periodStart: String(record.periodStart ?? ""),
+    periodEnd: String(record.periodEnd ?? ""),
+    usedCents: Number(record.usedCents ?? 0),
+    includedCents: record.includedCents == null ? null : Number(record.includedCents),
+    usedRatio: record.usedRatio == null ? null : Number(record.usedRatio),
+    seatRevenueCents: record.seatRevenueCents == null ? null : Number(record.seatRevenueCents),
+    marginCents: record.marginCents == null ? null : Number(record.marginCents),
+    alerts
+  };
+}
+
+function normalizeProductMix(raw: unknown): OperatorProductMix {
+  const record = asRecord(raw);
+  return {
+    chat: Number(record.chat ?? 0),
+    completions: Number(record.completions ?? 0),
+    lightning: Number(record.lightning ?? 0),
+    quickActions: Number(record.quickActions ?? 0)
+  };
+}
+
+function normalizeOrgUsageSnapshot(raw: unknown): OrgUsageSnapshot | undefined {
+  const summary = normalizeUsageSummary(raw);
+  if (!summary) {
+    return undefined;
+  }
+  const record = asRecord(raw);
+  const free = asRecord(record.free);
+  return {
+    ...summary,
+    autoCents: Number(record.autoCents ?? 0),
+    frontierCents: Number(record.frontierCents ?? 0),
+    productMix: normalizeProductMix(record.productMix),
+    free:
+      free.usedTokens != null
+        ? {
+            usedTokens: Number(free.usedTokens),
+            limitTokens: Number(free.limitTokens ?? 0),
+            remainingTokens: Number(free.remainingTokens ?? 0),
+            usedRatio: Number(free.usedRatio ?? 0),
+            resetsAt: String(free.resetsAt ?? "")
+          }
+        : undefined
+  };
+}
+
+function normalizeUsageQueueItem(raw: RawRecord): UsageQueueItem {
+  return {
+    orgId: String(raw.orgId ?? ""),
+    orgName: String(raw.orgName ?? ""),
+    plan: String(raw.plan ?? "free") as OrgPlan,
+    usedCents: Number(raw.usedCents ?? 0),
+    includedCents: raw.includedCents == null ? null : Number(raw.includedCents),
+    usedRatio: raw.usedRatio == null ? null : Number(raw.usedRatio),
+    seatRevenueCents: raw.seatRevenueCents == null ? null : Number(raw.seatRevenueCents),
+    marginCents: raw.marginCents == null ? null : Number(raw.marginCents),
+    trigger: raw.trigger === "user" ? "user" : "org",
+    userEmail: raw.userEmail ? String(raw.userEmail) : undefined
+  };
+}
+
 function normalizeCustomerSummary(raw: RawRecord): CustomerSummary {
   const billing = asRecord(raw.billing);
   return {
@@ -233,7 +384,8 @@ function normalizeCustomerSummary(raw: RawRecord): CustomerSummary {
     onboardingIncomplete:
       raw.onboardingIncomplete === true ||
       (billing.onboardingCompleted === false && raw.onboardingCompleted !== true),
-    createdAt: raw.createdAt ? String(raw.createdAt) : undefined
+    createdAt: raw.createdAt ? String(raw.createdAt) : undefined,
+    usage: normalizeUsageSummary(raw.usage)
   };
 }
 
@@ -348,7 +500,10 @@ function normalizeAttentionQueue(raw: RawRecord): AttentionQueue {
       orgName: String(item.orgName ?? item.name ?? ""),
       seats: Number(item.seats ?? item.seatCount ?? 0),
       seatsUsed: Number(item.seatsUsed ?? 0)
-    }))
+    })),
+    usageNearCap: ((raw.usageNearCap ?? []) as RawRecord[]).map(normalizeUsageQueueItem),
+    usageAtCap: ((raw.usageAtCap ?? []) as RawRecord[]).map(normalizeUsageQueueItem),
+    unprofitable: ((raw.unprofitable ?? []) as RawRecord[]).map(normalizeUsageQueueItem)
   };
 }
 
@@ -491,7 +646,7 @@ export type OrganizationListParams = {
   plan?: OrgPlan | "";
   billingStatus?: string;
   onboardingIncomplete?: boolean;
-  sort?: "name" | "createdAt" | "billingStatus";
+  sort?: "name" | "createdAt" | "billingStatus" | "usage";
   order?: "asc" | "desc";
   limit?: number;
   cursor?: string;
@@ -500,13 +655,16 @@ export type OrganizationListParams = {
 function mapOrganizationSort(
   sort: OrganizationListParams["sort"],
   order: OrganizationListParams["order"]
-): "name_asc" | "name_desc" | "created_asc" | "created_desc" | undefined {
+): "name_asc" | "name_desc" | "created_asc" | "created_desc" | "usage_desc" | undefined {
   const normalizedOrder = order === "desc" ? "desc" : "asc";
   if (sort === "name") {
     return normalizedOrder === "desc" ? "name_desc" : "name_asc";
   }
   if (sort === "createdAt") {
     return normalizedOrder === "desc" ? "created_desc" : "created_asc";
+  }
+  if (sort === "usage") {
+    return "usage_desc";
   }
   return undefined;
 }
@@ -546,6 +704,71 @@ export async function fetchOrganization(orgId: string): Promise<ApiResult<Custom
     return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
   }
   return { ok: true, status: result.status, data: normalizeCustomerDetail(result.data) };
+}
+
+export async function fetchOrganizationUsage(
+  orgId: string
+): Promise<ApiResult<OrgUsageSnapshot>> {
+  const result = await coopFetch<{ usage?: RawRecord }>(
+    `/v1/operator/organizations/${encodeURIComponent(orgId)}/usage`
+  );
+  if (!result.ok || !result.data) {
+    return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
+  }
+  const usage = normalizeOrgUsageSnapshot(result.data.usage ?? result.data);
+  if (!usage) {
+    return { ok: false, status: 502, error: "Usage payload was incomplete." };
+  }
+  return { ok: true, status: result.status, data: usage };
+}
+
+export async function fetchOrganizationUser(
+  orgId: string,
+  userId: string
+): Promise<ApiResult<{ organization: { id: string; name: string; plan: OrgPlan }; user: CustomerUserDetail }>> {
+  const result = await coopFetch<{
+    organization?: { id?: string; name?: string; plan?: string };
+    user?: BackendCustomerUser & {
+      capKind?: UsageCapKind;
+      periodStart?: string;
+      periodEnd?: string;
+      autoCents?: number;
+      frontierCents?: number;
+      productMix?: OperatorProductMix;
+      userId?: string;
+    };
+  }>(
+    `/v1/operator/organizations/${encodeURIComponent(orgId)}/users/${encodeURIComponent(userId)}`
+  );
+  if (!result.ok || !result.data?.user) {
+    return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
+  }
+  const rawUser = result.data.user;
+  const base = normalizeUser({
+    ...rawUser,
+    id: rawUser.id ?? rawUser.userId ?? userId,
+    email: rawUser.email
+  });
+  return {
+    ok: true,
+    status: result.status,
+    data: {
+      organization: {
+        id: String(result.data.organization?.id ?? orgId),
+        name: String(result.data.organization?.name ?? ""),
+        plan: String(result.data.organization?.plan ?? "free") as OrgPlan
+      },
+      user: {
+        ...base,
+        capKind: rawUser.capKind,
+        periodStart: rawUser.periodStart,
+        periodEnd: rawUser.periodEnd,
+        autoCents: rawUser.autoCents,
+        frontierCents: rawUser.frontierCents,
+        productMix: rawUser.productMix ? normalizeProductMix(rawUser.productMix) : undefined
+      }
+    }
+  };
 }
 
 export async function provisionOrganization(
@@ -1017,4 +1240,31 @@ export function formatDate(iso?: string): string {
 export function formatDateTime(iso?: string): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleString();
+}
+
+export function formatUsdFromCents(cents: number | null | undefined): string {
+  if (cents == null || !Number.isFinite(cents)) {
+    return "—";
+  }
+  return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(cents / 100);
+}
+
+export function formatUsagePercent(ratio: number | null | undefined): string {
+  if (ratio == null || !Number.isFinite(ratio)) {
+    return "—";
+  }
+  return `${Math.round(ratio * 100)}%`;
+}
+
+export function usageTierLabel(tier?: string | null): string {
+  if (tier === "pro_plus") {
+    return "Pro+";
+  }
+  if (tier === "max") {
+    return "Max";
+  }
+  if (tier === "pro") {
+    return "Pro";
+  }
+  return "—";
 }

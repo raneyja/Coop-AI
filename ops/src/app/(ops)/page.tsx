@@ -5,9 +5,34 @@ import Link from "next/link";
 import {
   fetchAttentionQueue,
   formatDate,
-  type AttentionQueue
+  formatUsdFromCents,
+  formatUsagePercent,
+  type AttentionQueue,
+  type UsageQueueItem
 } from "@/lib/coopApi";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
+
+function UsageAlertRow({ item, hrefFocus }: { item: UsageQueueItem; hrefFocus: "usage" | "users" }) {
+  const ratioLabel = formatUsagePercent(item.usedRatio);
+  const who = item.trigger === "user" && item.userEmail ? item.userEmail : "Company";
+  return (
+    <div className="admin-list-row flex-wrap justify-between gap-3">
+      <div className="min-w-0">
+        <p className="truncate font-medium text-white">{item.orgName}</p>
+        <p className="text-xs text-coop-muted">
+          {who} · {ratioLabel} of plan · cost {formatUsdFromCents(item.usedCents)}
+          {item.marginCents != null ? ` · margin ${formatUsdFromCents(item.marginCents)}` : ""}
+        </p>
+      </div>
+      <Link
+        href={`/customers/${item.orgId}?focus=${hrefFocus}`}
+        className="admin-btn-secondary shrink-0"
+      >
+        Open usage
+      </Link>
+    </div>
+  );
+}
 
 function AttentionCount({ count }: { count: number }) {
   if (count === 0) {
@@ -49,7 +74,10 @@ export default function AttentionQueuePage() {
     (queue?.pastDue.length ?? 0) +
     (queue?.invitePending.length ?? 0) +
     (queue?.indexingErrors.length ?? 0) +
-    (queue?.seatOverage.length ?? 0);
+    (queue?.seatOverage.length ?? 0) +
+    (queue?.usageNearCap.length ?? 0) +
+    (queue?.usageAtCap.length ?? 0) +
+    (queue?.unprofitable.length ?? 0);
 
   return (
     <div className="space-y-8">
@@ -93,6 +121,18 @@ export default function AttentionQueuePage() {
               <p className="admin-section-label">Stale invites</p>
               <p className="mt-1">
                 <AttentionCount count={queue?.invitePending.length ?? 0} />
+              </p>
+            </div>
+            <div className="admin-stat">
+              <p className="admin-section-label">Usage alerts</p>
+              <p className="mt-1">
+                <AttentionCount
+                  count={
+                    (queue?.usageNearCap.length ?? 0) +
+                    (queue?.usageAtCap.length ?? 0) +
+                    (queue?.unprofitable.length ?? 0)
+                  }
+                />
               </p>
             </div>
           </div>
@@ -232,6 +272,53 @@ export default function AttentionQueuePage() {
               </div>
             ) : (
               <p className="text-sm text-coop-muted">No seat overages.</p>
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="admin-section-label">At 100% of included usage</h2>
+            {queue?.usageAtCap.length ? (
+              <div className="admin-list">
+                {queue.usageAtCap.map((item, index) => (
+                  <UsageAlertRow
+                    key={`${item.orgId}-${item.userEmail ?? "org"}-cap-${index}`}
+                    item={item}
+                    hrefFocus={item.trigger === "user" ? "users" : "usage"}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-coop-muted">No customers or seats at cap.</p>
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="admin-section-label">Near cap (80%+)</h2>
+            {queue?.usageNearCap.length ? (
+              <div className="admin-list">
+                {queue.usageNearCap.map((item, index) => (
+                  <UsageAlertRow
+                    key={`${item.orgId}-${item.userEmail ?? "org"}-near-${index}`}
+                    item={item}
+                    hrefFocus={item.trigger === "user" ? "users" : "usage"}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-coop-muted">No customers near their included usage.</p>
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="admin-section-label">LLM cost above seat revenue</h2>
+            {queue?.unprofitable.length ? (
+              <div className="admin-list">
+                {queue.unprofitable.map((item) => (
+                  <UsageAlertRow key={`${item.orgId}-margin`} item={item} hrefFocus="usage" />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-coop-muted">No paid customers where LLM cost exceeds list-price seats.</p>
             )}
           </section>
         </>

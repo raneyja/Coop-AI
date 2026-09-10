@@ -30,6 +30,16 @@ import {
 import { OperatorGoogleAuthService } from "./operators/operatorGoogleAuth";
 import type { OperatorStore, OperatorContext } from "./operators/operatorStore";
 import type { OrgRepoAccessMode } from "./repoAccessTypes";
+import type { UsageTracker } from "./usageTracker";
+import {
+  loadOrgUsageSnapshot,
+  loadOrgUsageSummary,
+  loadUserUsageSnapshot,
+  loadUserUsageSummaries,
+  operatorUserStatus,
+  splitUsageQueueItems,
+  type OperatorUsageQueueItem
+} from "./operatorUsage";
 
 export type OperatorApiDeps = {
   orgStore?: OrgStore;
@@ -45,6 +55,7 @@ export type OperatorApiDeps = {
   emailService?: EmailService;
   auditLogger?: AuditLogger;
   jobQueue?: JobQueue;
+  usageTracker?: UsageTracker;
 };
 
 type ParsedRequest = {
@@ -229,13 +240,17 @@ async function handleAttentionQueue(
   const seatOverage = await deps.operatorStore!.listSeatOverageOrgs(20);
   const indexingErrors = await deps.operatorStore!.listIndexingErrors(30);
   const staleInvites = await deps.operatorStore!.listStaleInvites(30);
+  const usageAlerts = await collectUsageAlerts(deps);
 
   writeJson(response, 200, {
     enterpriseUpgradeRequests: upgradeRequests,
     pastDue: pastDue.organizations,
     seatOverage,
     indexingErrors,
-    staleInvites
+    staleInvites,
+    usageNearCap: usageAlerts.usageNearCap,
+    usageAtCap: usageAlerts.usageAtCap,
+    unprofitable: usageAlerts.unprofitable
   });
   return true;
 }
@@ -255,13 +270,24 @@ async function handleListOrganizations(
   const sort = query?.get("sort")?.trim();
   const search = query?.get("search")?.trim();
 
+  const parsedSort = parseSort(sort);
   const result = await deps.orgStore!.listOrganizationsForOperator({
     search,
     plan: plan as OrgPlan | undefined,
     billingStatus,
-    sort: parseSort(sort)
+    sort: parsedSort === "usage_desc" ? "name_asc" : parsedSort
   });
-  writeJson(response, 200, result);
+  const organizations = await attachOrgUsageSummaries(result.organizations, deps);
+  if (parsedSort === "usage_desc") {
+    organizations.sort((a, b) => {
+      const ratioDelta = (b.usage?.usedRatio ?? -1) - (a.usage?.usedRatio ?? -1);
+      if (ratioDelta !== 0) {
+        return ratioDelta;
+      }
+      return (b.usage?.usedCents ?? -1) - (a.usage?.usedCents ?? -1);
+    });
+  }
+  writeJson(response, 200, { organizations, total: result.total });
   return true;
 }
 
@@ -389,6 +415,10 @@ async function handleOrgScopedRequest(
   if (suffix === "/users" && parsed.method === "GET") {
     return handleListUsers(orgId, response, deps, operator);
   }
+  const userGetMatch = suffix.match(/^\/users\/([^/]+)$/);
+  if (userGetMatch && parsed.method === "GET") {
+    return handleGetUser(orgId, decodeURIComponent(userGetMatch[1]), response, deps, operator);
+  }
   if (suffix === "/users/invite" && parsed.method === "POST") {
     return handleInviteUser(orgId, parsed, response, deps, operator);
   }
@@ -423,6 +453,9 @@ async function handleOrgScopedRequest(
   }
   if (suffix === "/audit" && parsed.method === "GET") {
     return handleOrgAudit(orgId, parsed, response, deps, operator);
+  }
+  if (suffix === "/usage" && parsed.method === "GET") {
+    return handleOrgUsage(orgId, response, deps, operator);
   }
 
   writeJson(response, 404, { error: "not_found" });
@@ -842,16 +875,123 @@ async function handleListUsers(
   }
 
   const users = await deps.userStore.listOrgUsers(orgId);
+  const org = await deps.orgStore!.getOrganization(orgId);
+  const billing = org ? await deps.orgStore!.getOrganizationBilling(orgId) : undefined;
+  const usageByUser =
+    org && deps.usageTracker?.canRead()
+      ? await loadUserUsageSummaries({
+          org,
+          billing,
+          users,
+          usageTracker: deps.usageTracker
+        }).catch(() => undefined)
+      : undefined;
+
   writeJson(response, 200, {
-    users: users.map((user) => ({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      active: !user.deactivatedAt,
-      lastLoginAt: user.lastLoginAt ?? null,
-      createdAt: user.createdAt
-    }))
+    users: users.map((user) => {
+      const usage = usageByUser?.get(user.id);
+      return {
+        id: user.id,
+        email: user.email,
+        role: user.role === "owner" ? "admin" : user.role,
+        active: !user.deactivatedAt,
+        status: operatorUserStatus(user),
+        lastLoginAt: user.lastLoginAt ?? null,
+        createdAt: user.createdAt,
+        usageTier: user.usageTier ?? null,
+        lastActiveAt: usage?.lastActiveAt ?? null,
+        usedCents: usage?.usedCents,
+        includedCents: usage?.includedCents ?? null,
+        usedRatio: usage?.usedRatio ?? null,
+        alerts: usage?.alerts ?? []
+      };
+    })
   });
+  return true;
+}
+
+async function handleGetUser(
+  orgId: string,
+  userId: string,
+  response: ServerResponse,
+  deps: OperatorApiDeps,
+  operator: OperatorContext
+): Promise<boolean> {
+  if (!requireOperatorRole(operator, "viewer", response)) {
+    return true;
+  }
+  if (!deps.userStore) {
+    writeJson(response, 503, { error: "user store not configured" });
+    return true;
+  }
+  const org = await deps.orgStore!.getOrganization(orgId);
+  if (!org) {
+    writeJson(response, 404, { error: "organization not found" });
+    return true;
+  }
+  const user = await deps.userStore.getUser(userId);
+  if (!user || user.orgId !== orgId) {
+    writeJson(response, 404, { error: "user not found" });
+    return true;
+  }
+  const billing = await deps.orgStore!.getOrganizationBilling(orgId);
+  if (!deps.usageTracker?.canRead()) {
+    writeJson(response, 200, {
+      organization: { id: org.id, name: org.name, plan: org.plan },
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role === "owner" ? "admin" : user.role,
+        status: operatorUserStatus(user),
+        usageTier: user.usageTier ?? null,
+        lastLoginAt: user.lastLoginAt ?? null,
+        createdAt: user.createdAt
+      }
+    });
+    return true;
+  }
+  const usage = await loadUserUsageSnapshot({
+    org,
+    billing,
+    user,
+    usageTracker: deps.usageTracker
+  });
+  writeJson(response, 200, {
+    organization: { id: org.id, name: org.name, plan: org.plan },
+    user: usage
+  });
+  return true;
+}
+
+async function handleOrgUsage(
+  orgId: string,
+  response: ServerResponse,
+  deps: OperatorApiDeps,
+  operator: OperatorContext
+): Promise<boolean> {
+  if (!requireOperatorRole(operator, "viewer", response)) {
+    return true;
+  }
+  const org = await deps.orgStore!.getOrganization(orgId);
+  if (!org) {
+    writeJson(response, 404, { error: "organization not found" });
+    return true;
+  }
+  if (!deps.usageTracker?.canRead()) {
+    writeJson(response, 503, { error: "usage tracking not configured" });
+    return true;
+  }
+  const [billing, users] = await Promise.all([
+    deps.orgStore!.getOrganizationBilling(orgId),
+    deps.userStore ? deps.userStore.listOrgUsers(orgId) : Promise.resolve([])
+  ]);
+  const usage = await loadOrgUsageSnapshot({
+    org,
+    billing,
+    users,
+    usageTracker: deps.usageTracker
+  });
+  writeJson(response, 200, { organization: { id: org.id, name: org.name, plan: org.plan }, usage });
   return true;
 }
 
@@ -1460,16 +1600,133 @@ async function operatorAudit(
 
 function parseSort(
   value: string | undefined
-): "created_desc" | "created_asc" | "name_asc" | "name_desc" | undefined {
+): "created_desc" | "created_asc" | "name_asc" | "name_desc" | "usage_desc" | undefined {
   if (
     value === "created_desc" ||
     value === "created_asc" ||
     value === "name_asc" ||
-    value === "name_desc"
+    value === "name_desc" ||
+    value === "usage_desc"
   ) {
     return value;
   }
   return undefined;
+}
+
+async function attachOrgUsageSummaries(
+  organizations: Array<{
+    id: string;
+    name: string;
+    plan: OrgPlan;
+    createdAt: Date;
+    billingStatus?: string;
+    billingEmail?: string;
+    adminEmail?: string;
+    seatCount?: number;
+    stripeCustomerId?: string;
+    operatorStatus?: string;
+    provenance?: string;
+  }>,
+  deps: OperatorApiDeps
+): Promise<
+  Array<(typeof organizations)[number] & { usage?: Awaited<ReturnType<typeof loadOrgUsageSummary>> }>
+> {
+  if (!deps.usageTracker?.canRead() || !deps.orgStore) {
+    return organizations;
+  }
+  const usageTracker = deps.usageTracker;
+  const orgStore = deps.orgStore;
+  return Promise.all(
+    organizations.map(async (item) => {
+      try {
+        const org = await orgStore.getOrganization(item.id);
+        if (!org) {
+          return item;
+        }
+        const [billing, users] = await Promise.all([
+          orgStore.getOrganizationBilling(item.id),
+          deps.userStore ? deps.userStore.listOrgUsers(item.id) : Promise.resolve([])
+        ]);
+        const usage = await loadOrgUsageSummary({ org, billing, users, usageTracker });
+        return { ...item, usage };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[operator] usage summary failed for ${item.id}: ${message}`);
+        return item;
+      }
+    })
+  );
+}
+
+async function collectUsageAlerts(deps: OperatorApiDeps): Promise<{
+  usageNearCap: OperatorUsageQueueItem[];
+  usageAtCap: OperatorUsageQueueItem[];
+  unprofitable: OperatorUsageQueueItem[];
+}> {
+  const empty = { usageNearCap: [] as OperatorUsageQueueItem[], usageAtCap: [] as OperatorUsageQueueItem[], unprofitable: [] as OperatorUsageQueueItem[] };
+  if (!deps.usageTracker?.canRead() || !deps.orgStore) {
+    return empty;
+  }
+  const usageTracker = deps.usageTracker;
+  const orgStore = deps.orgStore;
+  try {
+    const [pro, free] = await Promise.all([
+      orgStore.listOrganizationsForOperator({ plan: "pro", limit: 200 }),
+      orgStore.listOrganizationsForOperator({ plan: "free", limit: 200 })
+    ]);
+    const usageNearCap: OperatorUsageQueueItem[] = [];
+    const usageAtCap: OperatorUsageQueueItem[] = [];
+    const unprofitable: OperatorUsageQueueItem[] = [];
+    for (const item of [...pro.organizations, ...free.organizations]) {
+      try {
+        const org = await orgStore.getOrganization(item.id);
+        if (!org) {
+          continue;
+        }
+        const [billing, users] = await Promise.all([
+          orgStore.getOrganizationBilling(item.id),
+          deps.userStore ? deps.userStore.listOrgUsers(item.id) : Promise.resolve([])
+        ]);
+        const summary = await loadOrgUsageSummary({
+          org,
+          billing,
+          users,
+          usageTracker
+        });
+        const userSummaries =
+          org.plan === "pro"
+            ? await loadUserUsageSummaries({
+                org,
+                billing,
+                users,
+                usageTracker
+              })
+            : undefined;
+        const split = splitUsageQueueItems({
+          orgId: org.id,
+          orgName: org.name,
+          plan: org.plan,
+          summary,
+          users: users.map((user) => ({
+            email: user.email,
+            alerts: userSummaries?.get(user.id)?.alerts ?? [],
+            usedRatio: userSummaries?.get(user.id)?.usedRatio ?? null
+          }))
+        });
+        usageNearCap.push(...split.usageNearCap);
+        usageAtCap.push(...split.usageAtCap);
+        unprofitable.push(...split.unprofitable);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[operator] usage alert failed for ${item.id}: ${message}`);
+      }
+    }
+    return { usageNearCap, usageAtCap, unprofitable };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[operator] usage alerts unavailable: ${message}`);
+    return empty;
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
