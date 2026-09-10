@@ -73,6 +73,7 @@ export default function ActivityPage() {
       {unavailable && <UnavailableBanner />}
       {error && <p className="text-sm text-red-400">{error}</p>}
 
+      <div className="admin-card admin-card--flush">
       <div className="admin-card--table">
         <table className="admin-table">
           <thead>
@@ -118,6 +119,7 @@ export default function ActivityPage() {
             )}
           </tbody>
         </table>
+      </div>
       </div>
 
       {nextCursor && (

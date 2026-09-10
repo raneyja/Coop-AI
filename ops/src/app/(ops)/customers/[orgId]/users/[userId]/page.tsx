@@ -15,36 +15,10 @@ import {
   resendOrganizationInvite,
   usageTierLabel,
   type CustomerUserDetail,
-  type OperatorProductMix,
   type OrgPlan
 } from "@/lib/coopApi";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 import { UsageMeterBar } from "@/components/UsageMeterBar";
-
-function Mix({ mix }: { mix?: OperatorProductMix }) {
-  if (!mix) {
-    return <p className="text-sm text-coop-muted">No activity in this period.</p>;
-  }
-  const rows = [
-    ["Chat", mix.chat],
-    ["Completions", mix.completions],
-    ["Quick actions", mix.quickActions],
-    ["Lightning", mix.lightning]
-  ] as const;
-  if (rows.every(([, value]) => value === 0)) {
-    return <p className="text-sm text-coop-muted">No activity in this period.</p>;
-  }
-  return (
-    <div className="admin-stat-row mt-3">
-      {rows.map(([name, value]) => (
-        <div key={name} className="admin-stat">
-          <p className="text-xs text-coop-muted">{name}</p>
-          <p className="mt-1 text-lg font-medium">{value}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export default function CustomerUserPage() {
   const params = useParams();
@@ -135,7 +109,7 @@ export default function CustomerUserPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <div>
         <Link href={`/customers/${orgId}?focus=users`} className="admin-link text-sm">
           ← {org.name}
@@ -158,54 +132,57 @@ export default function CustomerUserPage() {
 
       <section className="admin-card">
         <h2 className="admin-section-label">Usage vs plan</h2>
-        <div className="admin-stat-row mt-3">
-          <div className="admin-stat">
-            <p className="text-xs text-coop-muted">Seat</p>
-            <p className="mt-1 text-lg font-medium">{usageTierLabel(user.usageTier)}</p>
-          </div>
-          <div className="admin-stat">
-            <p className="text-xs text-coop-muted">LLM cost</p>
-            <p className="mt-1 text-lg font-medium">{formatUsdFromCents(user.usedCents)}</p>
-          </div>
-          <div className="admin-stat">
-            <p className="text-xs text-coop-muted">Included</p>
-            <p className="mt-1 text-lg font-medium">{formatUsdFromCents(user.includedCents)}</p>
-          </div>
-          <div className="admin-stat">
-            <p className="text-xs text-coop-muted">Of plan</p>
-            <div className="mt-2">
-              <UsageMeterBar ratio={user.usedRatio} label={formatUsagePercent(user.usedRatio)} />
+        <div>
+          <p className="admin-stat-label">
+            {usageTierLabel(user.usageTier)} seat · LLM cost this period
+          </p>
+          <p className="mt-1 text-2xl font-semibold text-white">
+            {formatUsdFromCents(user.usedCents)}
+            {user.includedCents != null ? (
+              <span className="ml-2 text-base font-normal text-coop-muted">
+                of {formatUsdFromCents(user.includedCents)}
+              </span>
+            ) : null}
+          </p>
+          {user.usedRatio != null ? (
+            <div className="mt-3">
+              <UsageMeterBar
+                size="lg"
+                ratio={user.usedRatio}
+                label={`${formatUsagePercent(user.usedRatio)} of included`}
+              />
             </div>
-          </div>
+          ) : null}
         </div>
-        {user.capKind === "unlimited" ? (
-          <p className="mt-3 text-xs text-coop-muted">Enterprise seats have no included-$ cap. Cost is Coop’s LLM spend.</p>
-        ) : null}
-        {user.capKind === "free_credits" ? (
-          <p className="mt-3 text-xs text-coop-muted">Free credits are org-wide. This cost is this person’s LLM spend only.</p>
-        ) : null}
         {(user.autoCents != null || user.frontierCents != null) && (
-          <p className="mt-2 text-xs text-coop-muted">
+          <p className="text-sm text-coop-muted">
             Auto {formatUsdFromCents(user.autoCents ?? 0)} · Frontier {formatUsdFromCents(user.frontierCents ?? 0)}
           </p>
         )}
-      </section>
-
-      <section className="admin-card">
-        <h2 className="admin-section-label">Activity this period</h2>
-        <Mix mix={user.productMix} />
+        {user.capKind === "unlimited" ? (
+          <p className="text-sm text-coop-muted">Enterprise seats have no included-$ cap. Cost is Coop’s LLM spend.</p>
+        ) : null}
+        {user.capKind === "free_credits" ? (
+          <p className="text-sm text-coop-muted">Free credits are org-wide. This cost is this person’s LLM spend only.</p>
+        ) : null}
+        <div className="admin-mix">
+          <span>Chat {user.productMix?.chat ?? 0}</span>
+          <span>Completions {user.productMix?.completions ?? 0}</span>
+          <span>Quick actions {user.productMix?.quickActions ?? 0}</span>
+          <span>Lightning {user.productMix?.lightning ?? 0}</span>
+        </div>
       </section>
 
       <section className="admin-card">
         <h2 className="admin-section-label">Account</h2>
-        <div className="admin-stat-row mt-3">
+        <div className="admin-stat-row">
           <div className="admin-stat">
-            <p className="text-xs text-coop-muted">Last active</p>
-            <p className="mt-1 text-sm">{formatDateTime(user.lastActiveAt)}</p>
+            <p className="admin-stat-label">Last active</p>
+            <p className="admin-stat-value--quiet">{formatDateTime(user.lastActiveAt)}</p>
           </div>
           <div className="admin-stat">
-            <p className="text-xs text-coop-muted">Last login</p>
-            <p className="mt-1 text-sm">{formatDateTime(user.lastLoginAt)}</p>
+            <p className="admin-stat-label">Last login</p>
+            <p className="admin-stat-value--quiet">{formatDateTime(user.lastLoginAt)}</p>
           </div>
         </div>
         {me && canMutateSupport(me) && user.status !== "deactivated" ? (

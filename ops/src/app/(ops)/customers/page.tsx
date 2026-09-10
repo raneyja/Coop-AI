@@ -221,7 +221,8 @@ export default function CustomersPage() {
       {error && <p className="text-sm text-red-400">{error}</p>}
       {actionError && <p className="text-sm text-red-400">{actionError}</p>}
 
-      <div className="admin-card--table">
+      <div className="admin-card admin-card--flush">
+        <div className="admin-card--table">
         <table className="admin-table">
           <thead>
             <tr>
@@ -333,6 +334,7 @@ export default function CustomersPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       <ConfirmOrgNameModal
