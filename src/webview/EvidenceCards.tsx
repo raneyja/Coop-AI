@@ -53,7 +53,7 @@ import {
   repoSummarySourceLabelTeams
 } from "../prompts/repoSummarySourceLabels";
 import { ownershipTierLabel } from "../prompts/ownershipSourceLabels";
-import { evidenceSectionDomId, EvidenceCardShell, type EvidenceCardSource } from "./EvidenceCardShell";
+import { evidenceSectionDomId, EvidenceCardShell, evidenceCardCodeHostSource, type EvidenceCardSource } from "./EvidenceCardShell";
 import {
   EvidenceConnectionGroup,
   EvidenceConnectionStack,
@@ -136,7 +136,7 @@ export function RepoSummaryEvidenceCard({
 
   const sources = useMemo(() => {
     const list: EvidenceCardSource[] = [
-      { provider: host, detail: `${entryCount} anchor file${entryCount === 1 ? "" : "s"}` }
+      evidenceCardCodeHostSource(host, `${entryCount} anchor file${entryCount === 1 ? "" : "s"}`)
     ];
     if (isIntegrationConnectedForSources(evidence.confluence)) list.push({ provider: "confluence", detail: `${confluenceCount} page(s)` });
     if (isIntegrationConnectedForSources(evidence.jira)) list.push({ provider: "jira", detail: `${jiraCount} issue(s)` });
@@ -165,7 +165,7 @@ export function RepoSummaryEvidenceCard({
     >
       <EvidenceConnectionStack>
         <EvidenceConnectionGroup
-          connection={host}
+          connection={host ?? "code-host"}
           briefSummary={
             entryCount > 0
               ? {
@@ -641,13 +641,13 @@ export function BlastRadiusEvidenceCard({
   const sources = useMemo(() => {
     const list: EvidenceCardSource[] = [];
     if (directCount || transitiveCount) {
-      list.push({ provider: host, detail: `${directCount + transitiveCount} code dependent(s)` });
+      list.push(evidenceCardCodeHostSource(host, `${directCount + transitiveCount} code dependent(s)`));
     }
     if (docsCount) {
-      list.push({ provider: host, detail: `${docsCount} docs reference(s)` });
+      list.push(evidenceCardCodeHostSource(host, `${docsCount} docs reference(s)`));
     }
-    if (prCount) list.push({ provider: host, detail: `${prCount} open PR(s)` });
-    if (evidence.ownersByFile?.length) list.push({ provider: host, detail: "CODEOWNERS" });
+    if (prCount) list.push(evidenceCardCodeHostSource(host, `${prCount} open PR(s)`));
+    if (evidence.ownersByFile?.length) list.push(evidenceCardCodeHostSource(host, "CODEOWNERS"));
     if (isIntegrationConnectedForSources(evidence.slackSearch)) {
       list.push({ provider: "slack", detail: `${slackCount} message(s)` });
     }
@@ -666,7 +666,7 @@ export function BlastRadiusEvidenceCard({
     if (isIntegrationConnectedForSources(evidence.teamsSearch)) {
       list.push({ provider: "teams", detail: `${teamsCount} message(s)` });
     }
-    if (list.length === 0) list.push({ provider: host, detail: "Limited graph" });
+    if (list.length === 0) list.push(evidenceCardCodeHostSource(host, "Limited graph"));
     return list;
   }, [
     host,
@@ -701,7 +701,7 @@ export function BlastRadiusEvidenceCard({
     >
       <EvidenceConnectionStack>
         <EvidenceConnectionGroup
-          connection={host}
+          connection={host ?? "code-host"}
           briefSummary={{
             title: dependentsTitle,
             sourceLabel: blastRadiusSourceLabelDependencies()
@@ -1150,20 +1150,22 @@ export function KnowledgeGapsEvidenceCard({
   );
 
   const sources = useMemo(() => {
-    const list: EvidenceCardSource[] = [{ provider: host, detail: "Repo scan" }];
-    if (evidence.jobScan) list.push({ provider: host, detail: "Gap scan" });
+    const list: EvidenceCardSource[] = [evidenceCardCodeHostSource(host, "Repo scan")];
+    if (evidence.jobScan) list.push(evidenceCardCodeHostSource(host, "Gap scan"));
     if (isIntegrationConnectedForSources(confluence)) list.push({ provider: "confluence", detail: `${pageCount} page(s)` });
     if (isIntegrationConnectedForSources(jira)) list.push({ provider: "jira", detail: `${jiraCount} issue(s)` });
     if (isIntegrationConnectedForSources(slack)) list.push({ provider: "slack", detail: `${slackCount} message(s)` });
     if (isIntegrationConnectedForSources(notion)) list.push({ provider: "notion", detail: `${notionCount} page(s)` });
     if (isIntegrationConnectedForSources(googleDocs)) list.push({ provider: "google-docs", detail: `${googleDocsCount} doc(s)` });
     if (isIntegrationConnectedForSources(teams)) list.push({ provider: "teams", detail: `${teamsCount} message(s)` });
-    if (evidence.ownershipReport) list.push({ provider: host, detail: `${ownerCount} owner score(s)` });
+    if (evidence.ownershipReport) list.push(evidenceCardCodeHostSource(host, `${ownerCount} owner score(s)`));
     if (evidence.dependencyGraph) {
-      list.push({
-        provider: host,
-        detail: `${depCount || evidence.dependencyGraph?.edgeCount || 0} dependent(s)`
-      });
+      list.push(
+        evidenceCardCodeHostSource(
+          host,
+          `${depCount || evidence.dependencyGraph?.edgeCount || 0} dependent(s)`
+        )
+      );
     }
     return list;
   }, [
@@ -1199,7 +1201,7 @@ export function KnowledgeGapsEvidenceCard({
     >
       <EvidenceConnectionStack>
         <EvidenceConnectionGroup
-          connection={host}
+          connection={host ?? "code-host"}
           briefSummary={
             evidence.jobScan
               ? {

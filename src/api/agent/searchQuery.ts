@@ -53,12 +53,43 @@ const MAX_SEARCH_CHARS = 48;
 const MAX_FALLBACK_QUERIES = 9;
 /** API-reject hunts need field-access queries, not only “is not valid” slogans. */
 const MAX_API_REJECT_FALLBACK_QUERIES = 12;
-const SOURCE_FILE_EXT =
-  "ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|rb|md|json|yml|yaml|css|html|vue|svelte|c|h|cpp|cc|kt|swift";
+/**
+ * Path-shaped file refs (`foo.ts`, `src/db/seed.sql`). Extension must start
+ * with a letter so `v2.0` / `COOP-401` are not files. Language allowlists
+ * miss the next repo (`.jsp`, `.sql`, `.gradle`).
+ */
 const NAMED_SOURCE_FILE = new RegExp(
-  `(?:^|[\\s\`'"(\\[]|/)((?:[\\w.-]+/)*[\\w.-]+\\.(?:${SOURCE_FILE_EXT}))(?=$|[\\s\`'")\\],:;!?])`,
+  `(?:^|[\\s\`'"(\\[]|/)((?:[\\w.-]+/)*[\\w.-]+\\.[A-Za-z][A-Za-z0-9]{0,9})(?=$|[\\s\`'")\\],:;!?]|\\.(?:\\s|$))`,
   "gi"
 );
+/** Host suffixes and prose — never real source exts (`ts`, `js`, `go`, `cc`, `md`). */
+const BLOCKED_FILE_EXTS = new Set([
+  "com",
+  "org",
+  "net",
+  "edu",
+  "gov",
+  "mil",
+  "int",
+  "io",
+  "dev",
+  "ai",
+  "co",
+  "uk",
+  "us",
+  "info",
+  "biz",
+  "app",
+  "xyz",
+  "me",
+  "tv",
+  "cloud",
+  "name",
+  "pro"
+]);
+/** Bare product names people type in prose. Count only with a path prefix. */
+const PRODUCT_FILE_BASENAMES = new Set(["node.js", "next.js", "nuxt.js"]);
+const PROSE_FILE_BASENAMES = new Set(["e.g", "i.e"]);
 
 export {
   isBarrelPath,
@@ -253,6 +284,10 @@ export function indexQueryForRetrieval(userQuery: string): string {
   const trimmed = userQuery.trim();
   if (!trimmed) {
     return trimmed;
+  }
+  const namedQueries = namedFileIndexQueries(trimmed);
+  if (namedQueries.length > 0) {
+    return namedQueries.join(" OR ");
   }
   if (!shouldFocusIndexQuery(trimmed)) {
     return trimmed;
@@ -615,13 +650,80 @@ export function extractNamedSourceFiles(userMessage: string): string[] {
   while ((match = NAMED_SOURCE_FILE.exec(userMessage)) !== null) {
     const value = (match[1] ?? "").replace(/^\/+/, "").trim();
     const key = value.toLowerCase();
-    if (!value || seen.has(key)) {
+    if (
+      !value ||
+      seen.has(key) ||
+      namedFileMatchIsUrl(userMessage, match.index) ||
+      shouldIgnoreNamedFileRef(value)
+    ) {
       continue;
     }
     seen.add(key);
     named.push(value);
   }
   return named;
+}
+
+function namedFileMatchIsUrl(message: string, matchIndex: number): boolean {
+  const token = (message.slice(0, matchIndex).split(/\s/).pop() ?? "").toLowerCase();
+  if (token.includes("://")) {
+    return true;
+  }
+  const host = token.replace(/^[(`'"<\[]+/, "").replace(/\/+$/, "");
+  const ext = fileRefExtension(host);
+  return Boolean(ext && BLOCKED_FILE_EXTS.has(ext));
+}
+
+function fileRefExtension(name: string): string {
+  const base = name.split("/").pop() ?? name;
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0 || dot === base.length - 1) {
+    return "";
+  }
+  return base.slice(dot + 1).toLowerCase();
+}
+
+/** TLDs, version-shaped tokens, URL hosts, and `e.g.` / `node.js` prose. */
+function shouldIgnoreNamedFileRef(value: string): boolean {
+  const normalized = value.replace(/^\/+/, "").toLowerCase();
+  if (!normalized || normalized.includes("://")) {
+    return true;
+  }
+  const parts = normalized.split("/").filter(Boolean);
+  const base = parts[parts.length - 1] ?? normalized;
+  if (PROSE_FILE_BASENAMES.has(base)) {
+    return true;
+  }
+  if (PRODUCT_FILE_BASENAMES.has(base) && parts.length < 2) {
+    return true;
+  }
+  for (const segment of parts.slice(0, -1)) {
+    const hostExt = fileRefExtension(segment);
+    if (hostExt && BLOCKED_FILE_EXTS.has(hostExt)) {
+      return true;
+    }
+  }
+  const ext = fileRefExtension(base);
+  return !ext || BLOCKED_FILE_EXTS.has(ext);
+}
+
+/** Basenames to search when the user typed files (`customers.jsp`, `src/foo.ts`). */
+export function namedFileIndexQueries(userQuery: string, limit = 2): string[] {
+  const queries: string[] = [];
+  const seen = new Set<string>();
+  for (const file of extractNamedSourceFiles(userQuery)) {
+    const basename = file.split("/").pop() ?? file;
+    const key = basename.toLowerCase();
+    if (!basename || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    queries.push(basename);
+    if (queries.length >= limit) {
+      break;
+    }
+  }
+  return queries;
 }
 
 /** True when `fileName` is a file the user typed (basename or full path). */
@@ -1246,6 +1348,9 @@ function rankHit(hit: RankedSearchHit, terms: string[], userMessage?: string): n
   }
   // Exact path token for the symbol (require_auth.py) beats a weak "auth"
   // substring match — and must not fire on require_authentication filenames.
+  if (userMessage && queryNamesSourceFile(hit.fileName, userMessage)) {
+    rank += 22;
+  }
   if (userMessage) {
     for (const form of namedSymbolForms(userMessage)) {
       if (pathHasIdentifierToken(hit.fileName, form)) {

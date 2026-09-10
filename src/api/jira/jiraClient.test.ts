@@ -25,6 +25,19 @@ async function run(): Promise<void> {
       `Expected /search/jql endpoint, got ${capturedUrl}`
     );
     console.log("  ✓ searchIssues uses /rest/api/3/search/jql");
+
+    assert.deepEqual(JiraClient.extractIssueKeys("covering COOP-401 (Jira COOP-242)"), [
+      "COOP-401",
+      "COOP-242"
+    ]);
+    assert.deepEqual(JiraClient.extractIssueKeys("see coop-242 in the summary"), ["COOP-242"]);
+    console.log("  ✓ extractIssueKeys finds mixed-case keys");
+
+    assert.deepEqual(JiraClient.extractIssueKeys("charset UTF-8 and ISO-8859"), []);
+    assert.deepEqual(JiraClient.extractIssueKeys("see RFC-9110 and SHA-256"), []);
+    assert.deepEqual(JiraClient.extractIssueKeys("CVE-2024-1234"), []);
+    assert.deepEqual(JiraClient.extractIssueKeys("COOP-1 and UTF-8"), ["COOP-1"]);
+    console.log("  ✓ extractIssueKeys ignores spec/encoding tokens");
   } finally {
     globalThis.fetch = originalFetch;
   }

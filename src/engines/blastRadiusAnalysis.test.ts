@@ -16,7 +16,8 @@ import type { IndexBackend } from "../indexing/indexBackend";
 import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 
-assert.equal(normalizeGraphRepoId("coop-demo-lab/fastify"), "github:coop-demo-lab/fastify");
+assert.equal(normalizeGraphRepoId("coop-demo-lab/fastify"), "coop-demo-lab/fastify");
+assert.equal(normalizeGraphRepoId("coop-demo-lab/fastify", "gitlab"), "gitlab:coop-demo-lab/fastify");
 assert.equal(normalizeGraphRepoId("github:coop-demo-lab/fastify"), "github:coop-demo-lab/fastify");
 
 const patterns = buildImportSearchPatterns("fastify.js");

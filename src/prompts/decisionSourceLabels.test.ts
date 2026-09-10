@@ -13,6 +13,7 @@ import {
 const timeline: DecisionTimeline = {
   file: "src/retry.ts",
   completeness: "partial",
+  provider: "github",
   originalCommit: {
     sha: "abc123def456",
     author: "dev@acme.com",
@@ -59,9 +60,10 @@ const timeline: DecisionTimeline = {
   warnings: ["No Slack thread found in linked PR metadata"]
 };
 
-assert.equal(decisionSourceLabelCommit("abc123def456"), "[Sources: GitHub commit abc123d]");
+assert.equal(decisionSourceLabelCommit("abc123def456"), "[Sources: Code host commit abc123d]");
 assert.equal(decisionSourceLabelCommit("abc123def456", "bitbucket"), "[Sources: Bitbucket commit abc123d]");
-assert.equal(decisionSourceLabelPr(1506), "[Sources: PR #1506]");
+assert.equal(decisionSourceLabelPr(1506), "[Sources: PR/MR #1506]");
+assert.equal(decisionSourceLabelPr(1506, "github"), "[Sources: PR #1506]");
 assert.equal(decisionSourceLabelPr(1506, "gitlab"), "[Sources: MR #1506]");
 assert.equal(decisionSourceLabelSlack("engineering"), "[Sources: Slack #engineering]");
 assert.equal(decisionSourceLabelTeams(), "[Sources: Teams thread]");

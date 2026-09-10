@@ -1,0 +1,27 @@
+---
+description: Code hosts and sister integrations share one search/mention rule — never GitHub-only prefixes
+alwaysApply: true
+---
+
+# Code host and integration parity
+
+Coop ships **three code hosts**: GitHub, GitLab, Bitbucket (`CODE_HOST_PROVIDERS` in `src/api/codeHosts/types.ts`). Indexing, search, repo IDs, and “mention this repo in Slack/Jira/docs” must work the same on all three.
+
+## Rule
+
+If you add or fix a behavior for one vendor, apply it through the **shared list or shared function**, not a one-off prefix.
+
+| Layer | Shared source | Do not |
+|---|---|---|
+| Code hosts | `CODE_HOST_PROVIDERS` / `codeHostPrefixedRepoIds` | Hardcode `github:` (or only `gitlab:`) in search terms |
+| Chat / Jira / Slack / Teams / Confluence / Notion / Google Docs repo mentions | `buildRepoSearchTerms` / `buildIntegrationSearchTermList` / `buildDiscussionSearchQueries` | A GitHub-only slug in one tool |
+| Slack vs Teams | `buildDiscussionSearchQueries` | A Slack-only query builder that Teams does not get |
+| Confluence vs Notion vs Google Docs | `buildIntegrationSearchTermList` / `buildConfluenceCql` | A docs search that only knows `github:owner/repo` |
+
+## Self-check
+
+Before shipping a “search GitHub / mention the repo” change: would the same ask work if Use-repo were GitLab or Bitbucket? If the answer depends on a hardcoded `github:` string, fail.
+
+Do not prefix every hyphen/underscore repo-name mutation for every host — that blows Jira JQL and the 16-term cap. Prefixed ids are `host:owner/canonical` and `host:owner/lowercase` only. Put the active Use-repo host first when it is known.
+
+Adding a fourth host later means appending `CODE_HOST_PROVIDERS` — search terms and repo-id parsing must follow that array, not a new `if (gitlab)` branch.

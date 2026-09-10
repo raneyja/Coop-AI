@@ -2,6 +2,7 @@ import { TeamsClient } from "../api/teams/teamsClient";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
 import { buildDiscussionSearchQueries } from "./integrationSearchTerms";
+import { shouldFetchIncidentIntegrations } from "./incidentIntent";
 import { shouldFetchDiscussionIntegrations } from "./integrationFetchPolicy";
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
 
@@ -40,7 +41,11 @@ export function shouldFetchTeamsContext(request: ContextFetchRequest): boolean {
     if (request.type !== "chat_context") {
       return false;
     }
-    return wantsTeamsContext(request.intent.context.queryText ?? "");
+    const queryText = request.intent.context.queryText ?? "";
+    if (shouldFetchIncidentIntegrations(queryText)) {
+      return true;
+    }
+    return wantsTeamsContext(queryText);
   });
 }
 
@@ -52,6 +57,7 @@ export function buildTeamsSearchQueries(options: {
   contextText?: string[];
   crossToolText?: string[];
   jiraIssueKeys?: string[];
+  preferHost?: import("../api/codeHosts/types").CodeHostProvider;
 }): string[] {
   return buildDiscussionSearchQueries(options);
 }
@@ -65,6 +71,7 @@ export async function fetchTeamsSearchContext(options: {
   contextText?: string[];
   crossToolText?: string[];
   jiraIssueKeys?: string[];
+  preferHost?: import("../api/codeHosts/types").CodeHostProvider;
   limit?: number;
 }): Promise<TeamsSearchContext> {
   const creds = await options.secrets.getCredentials();

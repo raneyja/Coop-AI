@@ -27,6 +27,13 @@ export type EvidenceCardSource =
   | { provider: IntegrationSourceId; detail?: string }
   | { label: string };
 
+export function evidenceCardCodeHostSource(
+  host: IntegrationSourceId | undefined,
+  detail: string
+): EvidenceCardSource {
+  return host ? { provider: host, detail } : { label: `Code host · ${detail}` };
+}
+
 export type EvidenceCardShellProps = {
   artifactId: string;
   title: string;

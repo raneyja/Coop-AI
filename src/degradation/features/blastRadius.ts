@@ -1,10 +1,10 @@
 import { toRepositoryRelativePath } from "../../context/repoFilePath";
 import { looksLikeAbsoluteDiskPath } from "../../context/outsideWorkspaceFile";
 import { degradationCacheKey } from "../../cache/degradationCache";
-import type { CodeHostProvider } from "../../api/codeHosts/types";
-import { coordinatesFromRepoId } from "../../api/codeHosts/types";
+import { resolveCodeHostProvider, resolveRepoCoordinates } from "../../api/codeHosts/types";
 import { remainingContextGatherBudgetMs } from "../../config/responseDeadline";
 import { getBlastRadiusAnalysisEngine } from "../../engines/blastRadiusAnalysisRegistry";
+import { evidenceCodeHostDisplayName } from "../../api/codeHosts/codeHostLabels";
 import { contextResult, unavailableResult, type FeatureExecutionContext } from "./types";
 
 /** Soft gather is silent — partial evidence only; never a user-facing banner message. */
@@ -37,18 +37,18 @@ export async function blastRadius(context: FeatureExecutionContext) {
           cacheAge: cached.cacheAge,
           fallbackLevel: "cached"
         },
-        `${codeHostLabel(provider)} offline; showing cached impact analysis.`,
+        `${evidenceCodeHostDisplayName(provider)} offline; showing cached impact analysis.`,
         true
       );
     }
     // Zero-Clone: never fall back to local workspace disk.
     return unavailableResult(
       context,
-      `${codeHostLabel(provider)} is offline and no cached blast radius data is available.`
+      `${evidenceCodeHostDisplayName(provider)} is offline and no cached blast radius data is available.`
     );
   }
 
-  const codeHost = resolveCodeHostContext(params);
+  const codeHost = resolveRepoCoordinates(params);
   const file = params.file ? toRepositoryRelativePath(params.file) : undefined;
   const fileSource = params.fileSource as string | undefined;
   const directOnly = context.status.level === "partial";
@@ -153,7 +153,7 @@ export async function blastRadius(context: FeatureExecutionContext) {
   return contextResult(
     context,
     data,
-    directOnly ? `${codeHostLabel(provider)} is slow. Showing direct impact only.` : context.status.message,
+    directOnly ? `${evidenceCodeHostDisplayName(provider)} is slow. Showing direct impact only.` : context.status.message,
     directOnly
   );
 }
@@ -189,41 +189,5 @@ function placeholderBlastRadiusData(
     completeness: "minimal",
     fallbackLevel: directOnly ? "partial" : "minimal"
   };
-}
-
-function resolveCodeHostContext(params: { repoId?: string; provider?: string }):
-  | { provider: CodeHostProvider; owner: string; repo: string }
-  | undefined {
-  if (params.repoId) {
-    const coords = coordinatesFromRepoId(
-      params.repoId.includes(":") ? params.repoId : `github:${params.repoId}`
-    );
-    if (coords) {
-      return coords;
-    }
-  }
-  const slash = params.repoId?.split("/");
-  if (slash && slash.length === 2) {
-    return {
-      provider: (params.provider as CodeHostProvider) ?? "github",
-      owner: slash[0],
-      repo: slash[1]
-    };
-  }
-  return undefined;
-}
-
-function resolveCodeHostProvider(params: { repoId?: string; provider?: string }): CodeHostProvider {
-  return resolveCodeHostContext(params)?.provider ?? "github";
-}
-
-function codeHostLabel(provider: CodeHostProvider): string {
-  if (provider === "gitlab") {
-    return "GitLab";
-  }
-  if (provider === "bitbucket") {
-    return "Bitbucket";
-  }
-  return "GitHub";
 }
 

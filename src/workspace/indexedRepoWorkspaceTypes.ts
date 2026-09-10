@@ -45,7 +45,7 @@ export type RepoFileEvidence = {
 
 export type RepoIdentity = {
   repoId: string;
-  provider: CodeHostProvider;
+  provider?: CodeHostProvider;
   owner?: string;
   repo?: string;
   branch?: string;

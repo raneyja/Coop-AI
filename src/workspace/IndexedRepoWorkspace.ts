@@ -7,6 +7,7 @@ import type {
   RepoTreeEvidence
 } from "./indexedRepoWorkspaceTypes";
 import type { RepoFactNeeds } from "./repoFactIntent";
+import { parseCodeHostProvider } from "../api/codeHosts/types";
 import {
   fetchIndexStatsInventory,
   fetchManifestInventory,
@@ -35,7 +36,7 @@ export class IndexedRepoWorkspace {
     const resolved = resolveInventoryRepoIds(repoId, target);
     return {
       repoId: resolved.preferred,
-      provider: resolved.coords?.provider ?? "github",
+      provider: resolved.coords?.provider ?? parseCodeHostProvider(target.provider),
       owner: resolved.coords?.owner ?? target.owner,
       repo: resolved.coords?.repo ?? target.repo,
       branch: resolved.coords?.branch ?? target.branch
@@ -183,11 +184,11 @@ export class IndexedRepoWorkspace {
 
     // Same reader as Remote explorer — cloud proxy or direct token via CodeHostRouter.
     if (identity?.owner && identity?.repo) {
+      const provider = parseCodeHostProvider(identity.provider);
+      if (!provider) {
+        return undefined;
+      }
       try {
-        const provider =
-          identity.provider === "gitlab" || identity.provider === "bitbucket"
-            ? identity.provider
-            : "github";
         const remote = await this.deps.codeHostRouter.getFileContent(cleanPath, {
           provider,
           owner: identity.owner,
@@ -226,8 +227,10 @@ export async function localDiskMatchesTargetRepo(
   }
   try {
     const { isRepoOpenInEditorWorkspace } = await import("./repoEditorOpener");
-    const provider =
-      identity.provider === "gitlab" || identity.provider === "bitbucket" ? identity.provider : "github";
+    const provider = parseCodeHostProvider(identity.provider);
+    if (!provider) {
+      return false;
+    }
     return isRepoOpenInEditorWorkspace(identity.owner, identity.repo, provider);
   } catch {
     return false;

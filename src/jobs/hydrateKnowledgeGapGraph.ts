@@ -1,4 +1,5 @@
 import type { DependencyEdge, FileNode, OwnershipEntry, RepositoryGraph } from "../cache/graphCache";
+import { codeHostPrefixedRepoIds } from "../api/codeHosts/types";
 
 export type KnowledgeGapGraphSlice = Pick<RepositoryGraph, "fileTree" | "dependencies" | "owners">;
 
@@ -38,7 +39,7 @@ export function knowledgeGapRepoIdCandidates(
   const owner = typeof params?.owner === "string" ? params.owner.trim() : "";
   const repo = typeof params?.repo === "string" ? params.repo.trim() : "";
   if (owner && repo) {
-    ids.push(`${owner}/${repo}`, `github:${owner}/${repo}`);
+    ids.push(`${owner}/${repo}`, ...codeHostPrefixedRepoIds(owner, repo));
   }
   return [...new Set(ids)];
 }

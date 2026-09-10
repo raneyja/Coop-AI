@@ -460,9 +460,7 @@ export function activate(context: vscode.ExtensionContext): void {
     indexBackend,
     resolveAbsolutePath: resolveLocalAbsolutePath,
     listDirectory: async ({ path: dirPath, repoId }) => {
-      const coords = repoId
-        ? coordinatesFromRepoId(repoId.includes(":") ? repoId : `github:${repoId}`)
-        : undefined;
+      const coords = repoId ? coordinatesFromRepoId(repoId) : undefined;
       const tree = await codeHostRouter.getRepositoryTree(dirPath ?? "", coords ?? undefined);
       return {
         path: tree.path,
@@ -475,9 +473,7 @@ export function activate(context: vscode.ExtensionContext): void {
       };
     },
     getBlame: async ({ path: filePath, repoId }) => {
-      const coords = repoId
-        ? coordinatesFromRepoId(repoId.includes(":") ? repoId : `github:${repoId}`)
-        : undefined;
+      const coords = repoId ? coordinatesFromRepoId(repoId) : undefined;
       const blame = await codeHostRouter.getBlameData(filePath, coords ?? undefined);
       return { ...blame, path: filePath };
     },
@@ -488,14 +484,11 @@ export function activate(context: vscode.ExtensionContext): void {
         codeHostRouter
       }).readFile({ repoId }, filePath),
     findFiles: async ({ query: fileQuery, repoId }) => {
-      const coords = repoId
-        ? coordinatesFromRepoId(repoId.includes(":") ? repoId : `github:${repoId}`)
-        : undefined;
-      const hits = await codeHostRouter.searchRepositoryFiles(
-        fileQuery,
-        coords ?? undefined,
-        20
-      );
+      const coords = repoId ? coordinatesFromRepoId(repoId) : undefined;
+      if (!coords) {
+        return [];
+      }
+      const hits = await codeHostRouter.searchRepositoryFiles(fileQuery, coords, 20);
       return hits.map((hit) => hit.path);
     }
   });

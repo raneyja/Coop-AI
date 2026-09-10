@@ -7,6 +7,7 @@ import { branchForEditorContext } from "./branchForEditorContext";
 import { enrichRepoContextWithEditorState } from "./editorManifestContext";
 import { looksLikeAbsoluteDiskPath } from "./outsideWorkspaceFile";
 import { toRepositoryRelativePath } from "./repoFilePath";
+import { parseCodeHostProvider } from "../api/codeHosts/types";
 import type { RepoContext, UserPreferences } from "../chat/types";
 import { isOpenFileReviewAsk } from "../chat/plainChatExplain";
 import { isFileCallerQuery } from "./fileCallerIntent";
@@ -210,7 +211,7 @@ export function repoContextFromEditor(
 export function repoContextToIntentContext(context: RepoContext): IntentEventContext {
   const owner = context.owner;
   const repo = context.repo;
-  const provider = context.provider ?? "github";
+  const provider = parseCodeHostProvider(context.provider);
   return normalizeContext({
     file: context.file,
     fileSource: context.fileSource,
@@ -225,7 +226,7 @@ export function repoContextToIntentContext(context: RepoContext): IntentEventCon
     repo,
     branch: context.branch,
     provider: context.provider,
-    repoId: owner && repo ? `${provider}:${owner}/${repo}` : undefined,
+    repoId: owner && repo ? (provider ? `${provider}:${owner}/${repo}` : `${owner}/${repo}`) : undefined,
     languageId: context.languageId,
     openEditors: context.openEditors,
     selectedSymbol: context.selectedSymbol
@@ -351,14 +352,15 @@ export function normalizeContext(context: IntentEventContext): IntentEventContex
     : undefined;
   const owner = emptyToUndefined(context.owner);
   const repo = emptyToUndefined(context.repo);
-  const provider =
-    context.provider === "gitlab" || context.provider === "bitbucket" ? context.provider : "github";
+  const provider = parseCodeHostProvider(context.provider);
   const repoId =
-    context.repoId?.includes(":")
+    context.repoId && context.repoId.includes(":")
       ? context.repoId
-      : owner && repo
+      : owner && repo && provider
         ? `${provider}:${owner}/${repo}`
-        : emptyToUndefined(context.repoId);
+        : owner && repo
+          ? `${owner}/${repo}`
+          : emptyToUndefined(context.repoId);
   // Keep absolute disk paths intact so the composer chip can show the real file name.
   const normalizedFile =
     !file

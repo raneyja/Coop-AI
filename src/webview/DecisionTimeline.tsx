@@ -19,8 +19,7 @@ import { EvidenceFileSourcePreview } from "./components/EvidenceFileSourcePrevie
 import { ChatActionLink } from "./components/ChatActionLink";
 import { useChatLinks } from "./components/ChatLinkContext";
 import { buildDeterministicEvidencePreview } from "../context/evidenceBodyPreview";
-import { type IntegrationSourceId } from "./components/IntegrationSourceBrand";
-import { evidenceSectionDomId, EvidenceCardShell } from "./EvidenceCardShell";
+import { evidenceSectionDomId, EvidenceCardShell, evidenceCardCodeHostSource, type EvidenceCardSource } from "./EvidenceCardShell";
 import {
   EvidenceConnectionGroup,
   EvidenceConnectionStack,
@@ -64,16 +63,18 @@ type SectionId =
 function evidenceSources(
   timeline: DecisionTimelineData,
   codeHost?: string
-): Array<{ provider: IntegrationSourceId; detail?: string }> {
+): EvidenceCardSource[] {
   const host = evidenceCodeHostConnection(codeHost ?? timeline.provider);
-  const sources: Array<{ provider: IntegrationSourceId; detail?: string }> = [];
+  const sources: EvidenceCardSource[] = [];
   if (timeline.originalCommit || timeline.fallbackMessage || timeline.linkedPR) {
-    sources.push({
-      provider: host,
-      detail: timeline.linkedPR
-        ? `${host === "gitlab" ? "MR" : "PR"} #${timeline.linkedPR.number}`
-        : timeline.originalCommit?.sha.slice(0, 7)
-    });
+    sources.push(
+      evidenceCardCodeHostSource(
+        host,
+        timeline.linkedPR
+          ? `${host === "gitlab" ? "MR" : host ? "PR" : "PR/MR"} #${timeline.linkedPR.number}`
+          : timeline.originalCommit?.sha.slice(0, 7) ?? "commit"
+      )
+    );
   }
   if (timeline.slackThread) {
     sources.push({
@@ -204,7 +205,7 @@ export function DecisionTimeline({
         ) : null}
 
         <EvidenceConnectionGroup
-          connection={host}
+          connection={host ?? "code-host"}
           briefSummary={
             timeline.focusCommit &&
             timeline.originalCommit &&

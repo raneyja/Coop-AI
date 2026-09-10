@@ -28,6 +28,18 @@ test("wantsTeamsContext matches explicit teams questions", () => {
   );
 });
 
+test("shouldFetchTeamsContext includes incident-shaped chat without teams keyword", () => {
+  const request = {
+    type: "chat_context",
+    params: {},
+    intent: {
+      context: { queryText: "board sync webhook failures — any retries last week?" }
+    }
+  } as ContextFetchRequest;
+  assert.equal(shouldFetchTeamsContext(request), true);
+  assert.equal(wantsTeamsContext("board sync webhook failures — any retries last week?"), false);
+});
+
 test("shouldFetchTeamsContext includes knowledge-gaps quick action", () => {
   const request = {
     type: "knowledge_gaps",

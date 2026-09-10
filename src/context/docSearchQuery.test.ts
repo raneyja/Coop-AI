@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { buildConfluenceCql, buildConfluenceRepoOnlyCql, buildRepoOrQuery } from "./docSearchQuery";
+import {
+  buildConfluenceCql,
+  buildConfluenceRepoOnlyCql,
+  buildRepoOrQuery,
+  buildRepoSearchTerms
+} from "./docSearchQuery";
+import { CODE_HOST_PROVIDERS } from "../api/codeHosts/types";
 
 let passed = 0;
 let failed = 0;
@@ -36,6 +42,32 @@ test("buildConfluenceRepoOnlyCql ignores extras", () => {
   assert.ok(cql);
   assert.match(cql!, /payments/i);
   assert.ok(!/webhook/i.test(cql!));
+});
+
+test("buildRepoSearchTerms prefixes every shipped code host", () => {
+  const terms = buildRepoSearchTerms("coopai-group", "training-java-monolith-refactor");
+  for (const host of CODE_HOST_PROVIDERS) {
+    assert.ok(
+      terms.includes(`${host}:coopai-group/training-java-monolith-refactor`),
+      `missing ${host}: prefix`
+    );
+  }
+});
+
+test("buildRepoSearchTerms does not prefix every hyphen/underscore mutation", () => {
+  const terms = buildRepoSearchTerms("acme", "training-java-monolith-refactor");
+  const prefixed = terms.filter((term) => term.includes(":"));
+  assert.equal(prefixed.length, CODE_HOST_PROVIDERS.length);
+  assert.ok(terms.includes("training_java_monolith_refactor"));
+  assert.ok(!terms.includes("github:acme/training_java_monolith_refactor"));
+});
+
+test("buildRepoSearchTerms puts the Use-repo host first among prefixes", () => {
+  const terms = buildRepoSearchTerms("acme", "app", { preferHost: "gitlab" });
+  const prefixed = terms.filter((term) => term.includes(":"));
+  assert.equal(prefixed[0], "gitlab:acme/app");
+  assert.ok(prefixed.includes("github:acme/app"));
+  assert.ok(prefixed.includes("bitbucket:acme/app"));
 });
 
 test("buildRepoOrQuery still joins extras with OR for non-CQL tools", () => {

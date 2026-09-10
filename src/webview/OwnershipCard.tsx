@@ -5,7 +5,7 @@ import type {
   OwnershipScore
 } from "../types/ownership";
 import { ChatActionLink } from "./components/ChatActionLink";
-import { evidenceSectionDomId, EvidenceCardShell, type EvidenceCardSource } from "./EvidenceCardShell";
+import { evidenceSectionDomId, EvidenceCardShell, evidenceCardCodeHostSource, type EvidenceCardSource } from "./EvidenceCardShell";
 import { EvidenceEvolutionLine } from "./EvidenceRichDetail";
 import {
   buildSlackPresenceViewModel,
@@ -87,13 +87,13 @@ export function OwnershipCard({
   );
   const sources = useMemo((): EvidenceCardSource[] => {
     const list: EvidenceCardSource[] = [
-      { provider: host, detail: `${report.scores.length} owner signal${report.scores.length === 1 ? "" : "s"}` }
+      evidenceCardCodeHostSource(host, `${report.scores.length} owner signal${report.scores.length === 1 ? "" : "s"}`)
     ];
     if (report.scores.some((score) => score.presence)) {
       list.push({ provider: "slack", detail: "Presence" });
     }
     if (report.orgContext?.source === "codeowners" || report.orgContext?.source === "github_teams") {
-      list.push({ provider: host, detail: "CODEOWNERS" });
+      list.push(evidenceCardCodeHostSource(host, "CODEOWNERS"));
     }
     if (report.signals?.issues?.length) {
       list.push({
@@ -159,7 +159,7 @@ export function OwnershipCard({
         </EvidenceDerivedGroup>
 
         <EvidenceConnectionGroup
-          connection={host}
+          connection={host ?? "code-host"}
           briefSummary={{
             title: "Commits & reviews",
             sourceLabel: codeHostLabel

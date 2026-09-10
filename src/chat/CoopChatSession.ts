@@ -4146,7 +4146,8 @@ export class CoopChatSession {
   private async searchIntegrationForAgent(
     provider: IntegrationChatProvider,
     query: string,
-    file?: string
+    file?: string,
+    userMessage?: string
   ): Promise<Record<string, unknown>> {
     const owner = this.currentContext.owner ?? this.preferences.owner;
     const repo = this.currentContext.repo ?? this.preferences.repo;
@@ -4199,6 +4200,8 @@ export class CoopChatSession {
       case "jira":
         return fetchJiraSearchContext({
           ...base,
+          contextText: userMessage ? [userMessage] : undefined,
+          preferHost: this.currentContext.provider,
           codeHostRouter: this.options.codeHostRouter,
           codeHostConnected: gathering.codeHostConnected ?? this.isCodeHostConnected(),
           integrationScope: atlassianScope
@@ -4416,7 +4419,7 @@ export class CoopChatSession {
           startedAt: turn.startedAt,
           allowedIntegrations,
           searchIntegration: (input) =>
-            this.searchIntegrationForAgent(input.provider, input.query, turn.context.file),
+            this.searchIntegrationForAgent(input.provider, input.query, turn.context.file, query),
           planTurn: (input) => {
             const editAssignment = getFeatureModelAssignment("edit");
             return this.planAgentToolTurn(input, {

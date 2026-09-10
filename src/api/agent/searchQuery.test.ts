@@ -708,6 +708,33 @@ test("filename asks are file hunts, not required in-body symbols", () => {
   assert.equal(queryHasNamedSymbol(readAsk), false);
   assert.equal(queryHasNamedSymbol("Where is requireAuth defined?"), true);
   assert.equal(queryNamesSourceFile("src/server/authMiddleware.ts", findAsk), true);
+  const n3Ask =
+    "I'm covering COOP-401 this week (Jira COOP-242) — SQL injection in customers.jsp. What in this repo still owns that SQL, and what's the safest first change so we don't rewrite hours.jsp in the same PR?";
+  assert.deepEqual(extractNamedSourceFiles(n3Ask), ["customers.jsp", "hours.jsp"]);
+  assert.equal(indexQueryForRetrieval(n3Ask), "customers.jsp OR hours.jsp");
+  assert.equal(
+    queryNamesSourceFile("src/main/webapp/customers.jsp", n3Ask),
+    true
+  );
+  const n3Picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "src/main/webapp/WEB-INF/web.xml",
+        lineNumber: 1,
+        content: "<web-app><welcome-file>index.jsp</welcome-file></web-app>",
+        score: 0.95
+      },
+      {
+        fileName: "src/main/webapp/customers.jsp",
+        lineNumber: 12,
+        content: "Statement.execute(\"SELECT * FROM customers WHERE id=\" + id)",
+        score: 0.4
+      }
+    ],
+    2,
+    n3Ask
+  );
+  assert.equal(n3Picked[0]?.fileName, "src/main/webapp/customers.jsp");
   const picked = pickSearchHitsToRead(
     [
       {
@@ -727,6 +754,33 @@ test("filename asks are file hunts, not required in-body symbols", () => {
     findAsk
   );
   assert.equal(picked[0]?.fileName, "src/server/authMiddleware.ts");
+});
+
+test("named files are path-shaped, not a language allowlist", () => {
+  assert.deepEqual(extractNamedSourceFiles(""), []);
+  assert.deepEqual(
+    extractNamedSourceFiles("Where is PaymentRepository.sql used?"),
+    ["PaymentRepository.sql"]
+  );
+  assert.deepEqual(
+    extractNamedSourceFiles("Read src/db/seed.sql and explain the inserts."),
+    ["src/db/seed.sql"]
+  );
+  assert.equal(indexQueryForRetrieval("Where is PaymentRepository.sql used?"), "PaymentRepository.sql");
+  assert.deepEqual(extractNamedSourceFiles("See README.md for setup."), ["README.md"]);
+  assert.deepEqual(extractNamedSourceFiles("This is v2.0 of the API."), []);
+  assert.deepEqual(extractNamedSourceFiles("Compare 3.14 vs the constant."), []);
+  assert.deepEqual(extractNamedSourceFiles("The docs live at example.com today."), []);
+  assert.deepEqual(extractNamedSourceFiles("Open coop-ai.dev and check pricing."), []);
+  assert.deepEqual(extractNamedSourceFiles("I'm covering COOP-401 this week."), []);
+  assert.deepEqual(extractNamedSourceFiles("We still run node.js in prod."), []);
+  assert.deepEqual(extractNamedSourceFiles("Read src/vendor/node.js next."), ["src/vendor/node.js"]);
+  assert.deepEqual(extractNamedSourceFiles("Use auth, e.g. the middleware."), []);
+  assert.deepEqual(extractNamedSourceFiles("That is i.e. a fallback."), []);
+  assert.deepEqual(
+    extractNamedSourceFiles("See https://example.com/foo.ts for the gist."),
+    []
+  );
 });
 
 test("API-reject hunt is a class: C2, parent, and assignee fields all match", () => {

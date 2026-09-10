@@ -225,7 +225,7 @@ export function summarizeDecisionTimeline(timeline: DecisionTimeline, codeHost?:
   if (commit) {
     const commitLabel = decisionSourceLabelCommit(commit.sha, host);
     sourceContributions.push({
-      provider: host,
+      provider: host ?? "code-host",
       label: commitLabel,
       contribution: [
         `Commit ${commit.sha.slice(0, 7)} by ${commit.author} introduced the traced code with message "${truncate(cleanLine(commit.message), 120)}".`,
@@ -245,7 +245,7 @@ export function summarizeDecisionTimeline(timeline: DecisionTimeline, codeHost?:
   if (linkedPr) {
     const prLabel = decisionSourceLabelPr(linkedPr.number, host);
     sourceContributions.push({
-      provider: host,
+      provider: host ?? "code-host",
       label: prLabel,
       contribution: `PR #${linkedPr.number} documents "${cleanLine(linkedPr.title)}" with ${linkedPr.reviews.length} review comment(s) and ${linkedPr.approvers.length} approver(s).`,
       relevance: relevanceFromRationaleRanking(
@@ -376,7 +376,7 @@ export function summarizeOwnershipReport(
 
   const sourceContributions: EvidenceSourceContribution[] = [
     {
-      provider: host,
+      provider: host ?? "code-host",
       label: ownershipSourceLabelCodeHost(host),
       contribution: report.scores.length
         ? `Git history and reviews produced ${report.scores.length} ownership score(s), led by @${(primary ?? fallback)?.owner ?? "unknown"}.`
@@ -395,7 +395,7 @@ export function summarizeOwnershipReport(
   }
   if (report.orgContext?.source === "codeowners") {
     sourceContributions.push({
-      provider: host,
+      provider: host ?? "code-host",
       label: ownershipSourceLabelCodeowners(),
       contribution: `CODEOWNERS maps this area to ${report.orgContext.teamName}, which supports escalation routing.`,
       relevance: "supporting",
@@ -526,7 +526,7 @@ export function summarizeBlastRadius(
   const sourceContributions: EvidenceSourceContribution[] = [];
   if (dependentCount > 0 || evidence.graphMeta) {
     sourceContributions.push({
-      provider: host,
+      provider: host ?? "code-host",
       label: blastRadiusSourceLabelDependencies(),
       contribution:
         dependentCount > 0
@@ -537,7 +537,7 @@ export function summarizeBlastRadius(
   }
   if (docsCount > 0) {
     sourceContributions.push({
-      provider: host,
+      provider: host ?? "code-host",
       label: blastRadiusSourceLabelDocsReferences(),
       contribution: `${docsCount} docs, README, or type-definition file(s) reference this target (not runtime importers).`,
       relevance: "background"
@@ -545,7 +545,7 @@ export function summarizeBlastRadius(
   }
   if (testCount > 0) {
     sourceContributions.push({
-      provider: host,
+      provider: host ?? "code-host",
       label: blastRadiusSourceLabelTests(),
       contribution: `${testCount} test/spec file(s) reference this target.`,
       relevance: "supporting"
@@ -553,7 +553,7 @@ export function summarizeBlastRadius(
   }
   if (exportCount > 0) {
     sourceContributions.push({
-      provider: host,
+      provider: host ?? "code-host",
       label: blastRadiusSourceLabelPublicApi(),
       contribution: `${exportCount} exported symbol(s) may be consumed downstream.`,
       relevance: "direct"
@@ -561,7 +561,7 @@ export function summarizeBlastRadius(
   }
   if (recentCount > 0) {
     sourceContributions.push({
-      provider: host,
+      provider: host ?? "code-host",
       label: blastRadiusSourceLabelRecentChanges(),
       contribution: `${recentCount} recent PR(s) touch this file or direct dependents.`,
       relevance: "supporting"
@@ -569,7 +569,7 @@ export function summarizeBlastRadius(
   }
   if (prCount > 0) {
     sourceContributions.push({
-      provider: host,
+      provider: host ?? "code-host",
       label: blastRadiusSourceLabelOpenPrs(),
       contribution: `${prCount} open pull request(s) suggest active change surfaces near this file.`,
       relevance: "supporting",
@@ -578,7 +578,7 @@ export function summarizeBlastRadius(
   }
   if (ownerCount > 0) {
     sourceContributions.push({
-      provider: host,
+      provider: host ?? "code-host",
       label: blastRadiusSourceLabelCodeowners(),
       contribution: `CODEOWNERS mapped ${ownerCount} impacted file(s) to owners for escalation.`,
       relevance: "supporting"
@@ -799,7 +799,7 @@ export function summarizeKnowledgeGaps(
   }
   if (evidence.ownershipReport) {
     sourceContributions.push({
-      provider: host,
+      provider: host ?? "code-host",
       label: knowledgeGapsSourceLabelOwnership(),
       contribution: ownershipCount
         ? `Ownership scoring identified ${ownershipCount} contributor signal(s) for handoff and escalation.`
@@ -809,7 +809,7 @@ export function summarizeKnowledgeGaps(
   }
   if (evidence.dependencyGraph) {
     sourceContributions.push({
-      provider: host,
+      provider: host ?? "code-host",
       label: knowledgeGapsSourceLabelDependencies(),
       contribution: dependentCount
         ? `Dependency graph found ${dependentCount} direct dependent file(s) for impact-aware gap analysis.`
@@ -936,7 +936,7 @@ export function summarizeRepoSummary(
   const sourceContributions: EvidenceSourceContribution[] = [];
   if (hasManifestSignal) {
     sourceContributions.push({
-      provider: host,
+      provider: host ?? "code-host",
       label: repoSummarySourceLabelManifest(),
       contribution:
         manifest?.fileCount !== undefined
@@ -947,7 +947,7 @@ export function summarizeRepoSummary(
   }
   if (entryCount > 0) {
     sourceContributions.push({
-      provider: host,
+      provider: host ?? "code-host",
       label: repoSummarySourceLabelEntryFiles(),
       contribution: `${entryCount} anchor file(s) were loaded to ground architecture inference in concrete code.`,
       relevance: "direct"
@@ -1020,7 +1020,7 @@ export function summarizeRepoSummary(
   }
   if (hasOwnershipScores) {
     sourceContributions.push({
-      provider: host,
+      provider: host ?? "code-host",
       label: repoSummarySourceLabelOwnership(),
       contribution: `Ownership scoring includes ${ownershipCount} contributor signal(s).`,
       relevance: "supporting"
@@ -1028,7 +1028,7 @@ export function summarizeRepoSummary(
   }
   if (dependencyCount > 0) {
     sourceContributions.push({
-      provider: host,
+      provider: host ?? "code-host",
       label: repoSummarySourceLabelDependencies(),
       contribution: `Dependency graph found ${dependencyCount} direct dependent(s) from the scoped entry file.`,
       relevance: "background"

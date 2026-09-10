@@ -63,29 +63,33 @@ function finalizeActivityMessages(_event: IntentEvent, messages: string[]): stri
   return uniqueMessages(messages);
 }
 
-function codeHostEstateMessage(provider: CodeHostProviderPreference): string {
+function codeHostEstateMessage(provider?: CodeHostProviderPreference): string {
   switch (provider) {
     case "gitlab":
       return "Searching GitLab estate index…";
     case "bitbucket":
       return "Searching Bitbucket estate index…";
-    default:
+    case "github":
       return "Searching GitHub estate index…";
+    default:
+      return "Searching code host estate index…";
   }
 }
 
-function codeHostPullRequestMessage(provider: CodeHostProviderPreference): string {
+function codeHostPullRequestMessage(provider?: CodeHostProviderPreference): string {
   switch (provider) {
     case "gitlab":
       return "Searching GitLab merge request history…";
     case "bitbucket":
       return "Searching Bitbucket pull request history…";
-    default:
+    case "github":
       return "Searching GitHub pull request history…";
+    default:
+      return "Searching pull request history…";
   }
 }
 
-function traceDecisionMessages(provider: CodeHostProviderPreference, codeHostConnected: boolean): string[] {
+function traceDecisionMessages(provider: CodeHostProviderPreference | undefined, codeHostConnected: boolean): string[] {
   const messages: string[] = [];
   if (codeHostConnected) {
     messages.push(codeHostPullRequestMessage(provider));
@@ -94,7 +98,7 @@ function traceDecisionMessages(provider: CodeHostProviderPreference, codeHostCon
   return messages;
 }
 
-function blastRadiusMessages(provider: CodeHostProviderPreference, codeHostConnected: boolean): string[] {
+function blastRadiusMessages(provider: CodeHostProviderPreference | undefined, codeHostConnected: boolean): string[] {
   const messages = [
     "Analyzing dependencies…",
     "Mapping change impact…",
@@ -110,8 +114,7 @@ function blastRadiusMessages(provider: CodeHostProviderPreference, codeHostConne
 
 function integrationMessagesForRequests(
   requests: ContextFetchRequest[],
-  options: Required<Pick<ContextGatheringMessageOptions, "codeHostProvider" | "codeHostConnected">> &
-    Pick<ContextGatheringMessageOptions, "integrations">
+  options: Pick<ContextGatheringMessageOptions, "codeHostProvider" | "codeHostConnected" | "integrations">
 ): string[] {
   const messages: string[] = [];
   const { codeHostProvider, codeHostConnected, integrations = {} } = options;
@@ -160,10 +163,13 @@ function fallbackMessages(event: IntentEvent): string[] {
 
 function resolvedOptions(
   options: ContextGatheringMessageOptions = {}
-): Required<Pick<ContextGatheringMessageOptions, "codeHostProvider" | "codeHostConnected">> &
-  Pick<ContextGatheringMessageOptions, "integrations"> {
+): {
+  codeHostProvider?: CodeHostProviderPreference;
+  codeHostConnected: boolean;
+  integrations?: ContextGatheringMessageOptions["integrations"];
+} {
   return {
-    codeHostProvider: options.codeHostProvider ?? "github",
+    codeHostProvider: options.codeHostProvider,
     codeHostConnected: options.codeHostConnected ?? true,
     integrations: options.integrations
   };

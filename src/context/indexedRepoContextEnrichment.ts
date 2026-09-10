@@ -14,6 +14,7 @@ import { IndexedRepoWorkspace, mergeRepoInventoryContext } from "../workspace/In
 import { resolveInventoryRepoIds } from "../workspace/repoInventorySources";
 import type { RepoTarget } from "../workspace/indexedRepoWorkspaceTypes";
 import type { IndexedRepoFileReadRequest } from "./indexedRepoFileRegistry";
+import { parseCodeHostProvider } from "../api/codeHosts/types";
 import { resolveActiveRepoTarget } from "../workspace/repoTargetResolver";
 import { repoFactNeeds } from "../workspace/repoFactIntent";
 import { COOP_EXTENSION_BUILD_ID } from "../config/coopBuildId";
@@ -32,8 +33,7 @@ export async function readRepoFileForContext(
   request: IndexedRepoFileReadRequest
 ): Promise<string | undefined> {
   const workspace = new IndexedRepoWorkspace(deps);
-  const provider =
-    request.provider === "gitlab" || request.provider === "bitbucket" ? request.provider : "github";
+  const provider = parseCodeHostProvider(request.provider);
   const target: RepoTarget = {
     repoId: request.repoId,
     owner: request.owner,

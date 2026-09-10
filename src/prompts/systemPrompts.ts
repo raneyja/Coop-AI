@@ -481,7 +481,7 @@ When \`<repo_compare>\` is attached, the user asked to compare exactly two index
 When \`<repo_inventory>\` is attached, it is the only valid source for repository totals (files, lines of code, size) — and only when the user asked for those totals or a repository overview. Do not lead with a census because inventory is present. When you do report totals, use the attached numbers exactly; when a total is absent or source="unavailable", say that total is unavailable and never estimate, extrapolate, or reuse a number from an earlier turn. Never mention XML-like tag names (\`repo_inventory\`, \`repo_semantic_files\`, etc.) in the user-visible answer — say "indexed inventory" or "repository totals" in plain language.
 When \`<repo_tree_overview>\` or \`<repo_entry_files>\` are attached for structure / package-boundary / monorepo-layout questions: cite only those Use-repo paths (e.g. apps/web, apps/api, package.json). Never cite paths from another repository or the local Extension Host workspace (especially Coop-AI \`src/chat/*\`). If tree and package manifests are missing or a package-boundary note says unavailable, say the layout is unavailable — do not invent apps/ or packages/ from training alone presented as fact.
 When \`<repo_package_structure>\` is attached, list the concrete package/app paths from that block (e.g. apps/remix, packages/signing). Do not answer with only workspace globs like \`apps/*\` / \`packages/*\` when concrete names are present. Workspace globs in that block are informational — expand from the listed paths.
-When \`<jira_tickets>\` is attached, respect the match attribute: match="none" means no repo-linked tickets were found — say so clearly and do not describe other tickets as related; match="git" means keys came from commit/PR history; match="text" means Jira text mentions the repo; match="key" means the user named a specific key.
+When \`<jira_tickets>\` is attached, respect the match attribute: match="none" means no repo-linked tickets were found — say so clearly and do not describe other tickets as related; match="git" means keys came from commit/PR history; match="text" means Jira text mentions the repo; match="key" means the user named a specific key. Listed \`<ticket>\` entries are valid even when a keyword-search note or \`<missing_key>\` is present — use those tickets. Do not invent contents for a \`<missing_key>\`.
 
 ${GENERAL_CHAT_EVIDENCE_RULES}
 
@@ -1458,6 +1458,7 @@ type JiraSearchSnippet = {
   repoKeyHits?: string[];
   matchStrategy?: "text" | "git" | "key" | "none";
   searchNote?: string;
+  keyErrors?: Array<{ key: string; error: string }>;
   error?: string;
 };
 
@@ -1484,8 +1485,15 @@ function formatJiraTicketsForLlm(jira: JiraSearchSnippet): string[] {
   lines.push(
     "Search sample only — not a complete Jira inventory. Do not treat shown ticket count as the total for the project or org."
   );
-  if (jira.error) {
+  if (jira.error && issues.length === 0) {
     lines.push(`<error>${escapeXml(jira.error)}</error>`);
+  } else if (jira.error && issues.length > 0) {
+    lines.push(
+      `<note>Keyword search failed (${escapeXml(jira.error)}). Use the tickets below.</note>`
+    );
+  }
+  for (const miss of jira.keyErrors ?? []) {
+    lines.push(`<missing_key key="${escapeXml(miss.key)}">${escapeXml(miss.error)}</missing_key>`);
   }
   if (jira.searchNote) {
     lines.push(`<note>${escapeXml(jira.searchNote)}</note>`);

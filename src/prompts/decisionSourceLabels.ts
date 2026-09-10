@@ -18,6 +18,9 @@ export function decisionSourceLabelPr(number: number, codeHost?: string | null):
   if (host === "gitlab") {
     return `[Sources: MR #${number}]`;
   }
+  if (!host) {
+    return `[Sources: PR/MR #${number}]`;
+  }
   return `[Sources: PR #${number}]`;
 }
 

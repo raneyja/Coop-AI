@@ -32,10 +32,19 @@ test("wantsSlackContext matches discussion + repo phrasing", () => {
   assert.equal(wantsSlackContext("any discussions related to this repository?"), true);
 });
 
-test("buildRepoSearchQuery includes owner/repo and github prefix", () => {
+test("buildRepoSearchQuery puts GitLab prefix first when preferred", () => {
+  const query = buildRepoSearchQuery("acme", "coop-ai-core", "gitlab") ?? "";
+  const gitlabAt = query.indexOf("gitlab:acme/coop-ai-core");
+  const githubAt = query.indexOf("github:acme/coop-ai-core");
+  assert.ok(gitlabAt >= 0 && githubAt > gitlabAt, query);
+});
+
+test("buildRepoSearchQuery includes owner/repo and every code-host prefix", () => {
   const query = buildRepoSearchQuery("acme", "coop-ai-core");
   assert.ok(query?.includes("acme/coop-ai-core"));
   assert.ok(query?.includes("github:acme/coop-ai-core"));
+  assert.ok(query?.includes("gitlab:acme/coop-ai-core"));
+  assert.ok(query?.includes("bitbucket:acme/coop-ai-core"));
   assert.ok(query?.includes("coop-ai-core"));
 });
 

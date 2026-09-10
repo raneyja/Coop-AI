@@ -22,6 +22,8 @@ function test(name: string, fn: () => void): void {
 test("integrationActivityLabel names Slack and code hosts", () => {
   assert.equal(integrationActivityLabel("slack"), "Pulling in Slack messages…");
   assert.equal(integrationActivityLabel("code-host", "gitlab"), "Searching GitLab estate index…");
+  assert.equal(integrationActivityLabel("code-host"), "Searching code host estate index…");
+  assert.equal(integrationActivityLabel("code-host", "github"), "Searching GitHub estate index…");
 });
 
 test("isIntegrationActivityLabel detects tool lines only", () => {
@@ -63,6 +65,10 @@ test("preferredIntegrationActivityQuery prefers repo slug over owner/repo", () =
     "plane"
   );
   assert.equal(preferredIntegrationActivityQuery(["auth middleware", "plane"]), "auth middleware");
+  assert.equal(
+    preferredIntegrationActivityQuery(["gitlab:acme/app", "app"]),
+    "app"
+  );
 });
 
 test("isActivityLabelForTool matches generic, running, and completed", () => {

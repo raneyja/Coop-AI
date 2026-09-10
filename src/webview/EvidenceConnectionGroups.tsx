@@ -16,13 +16,16 @@ import {
 } from "./evidenceConnectionBriefs";
 
 /** Connection keys for Source details grouping — one subheading per integration. */
-export type EvidenceConnectionKey = IntegrationSourceId | "workspace";
+export type EvidenceConnectionKey = IntegrationSourceId | "workspace" | "code-host";
 
 const WORKSPACE_LABEL = "Workspace";
 
 function connectionLabel(connection: EvidenceConnectionKey): string {
   if (connection === "workspace") {
     return WORKSPACE_LABEL;
+  }
+  if (connection === "code-host") {
+    return "Code host";
   }
   return integrationSourceLabel(connection);
 }

@@ -8,6 +8,7 @@ import {
   isSlackScopeBlocked,
   slackScopeBlockMessage
 } from "../integrationScope/slackQuery";
+import type { CodeHostProvider } from "../api/codeHosts/types";
 import { buildRepoSearchTerms } from "./docSearchQuery";
 import { collectJiraKeysFromText } from "./jiraContext";
 import { buildDiscussionSearchQueries } from "./integrationSearchTerms";
@@ -65,8 +66,12 @@ export function shouldFetchSlackContext(request: ContextFetchRequest): boolean {
   });
 }
 
-export function buildRepoSearchQuery(owner: string | undefined, repo: string | undefined): string | undefined {
-  const terms = buildRepoSearchTerms(owner, repo);
+export function buildRepoSearchQuery(
+  owner: string | undefined,
+  repo: string | undefined,
+  preferHost?: CodeHostProvider
+): string | undefined {
+  const terms = buildRepoSearchTerms(owner, repo, { preferHost });
   return terms.length > 0 ? terms.join(" OR ") : undefined;
 }
 
@@ -77,10 +82,13 @@ export function buildSlackSearchQuery(options: {
   activeFile?: string;
   contextText?: string[];
   crossToolText?: string[];
+  preferHost?: CodeHostProvider;
 }): string | undefined {
   const terms = new Set<string>();
 
-  for (const term of buildRepoSearchTerms(options.owner, options.repo)) {
+  for (const term of buildRepoSearchTerms(options.owner, options.repo, {
+    preferHost: options.preferHost
+  })) {
     terms.add(term);
   }
 
@@ -126,6 +134,7 @@ export function buildSlackSearchQueries(options: {
   contextText?: string[];
   crossToolText?: string[];
   jiraIssueKeys?: string[];
+  preferHost?: CodeHostProvider;
 }): string[] {
   return buildDiscussionSearchQueries({ ...options, threadModifier: "is:thread" });
 }
@@ -139,6 +148,7 @@ export async function fetchSlackSearchContext(options: {
   contextText?: string[];
   crossToolText?: string[];
   jiraIssueKeys?: string[];
+  preferHost?: CodeHostProvider;
   limit?: number;
   integrationScope?: ResolvedIntegrationScope;
 }): Promise<SlackSearchContext> {

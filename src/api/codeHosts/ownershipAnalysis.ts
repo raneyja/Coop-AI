@@ -1,6 +1,7 @@
 import { codeHostRequestJson } from "./codeHostHttp";
 import type { CodeHostRouter } from "./codeHostRouter";
-import type { CommitInfo, PullRequestReview, RepoCoordinates } from "./types";
+import type { CommitInfo, PullRequestReview, RepoCoordinates, CodeHostProvider } from "./types";
+import { evidenceCodeHostDisplayName } from "./codeHostLabels";
 import type {
   ActivityWindow,
   CommitPatternStats,
@@ -338,9 +339,12 @@ export type TeamDomainEscalationInput = {
   orgContext?: OrgTeamContext;
   /** Recent PR reviewers (logins), excluding anyone not grounded in review evidence. */
   recentReviewers?: string[];
+  provider?: CodeHostProvider;
 };
 
-const ESCALATION_SOURCE_COMMITS_REVIEWS = "[Sources: GitHub commits & reviews]";
+function commitsReviewsSource(provider?: CodeHostProvider): string {
+  return `[Sources: ${evidenceCodeHostDisplayName(provider)} commits & reviews]`;
+}
 const ESCALATION_SOURCE_CODEOWNERS = "[Sources: CODEOWNERS]";
 const ESCALATION_ADMIN_GAP =
   "No CODEOWNERS team or path owners matched; no strong secondary from commits/reviews. Escalate via repository admins/maintainers";
@@ -389,6 +393,7 @@ function buildEscalationPath(args: {
   escalationInput: TeamDomainEscalationInput;
 }): string {
   const { primary, secondaryLead, scoreBackup, escalationInput } = args;
+  const commitReviewSource = commitsReviewsSource(escalationInput.provider);
   const primaryLogin = primary?.owner;
   const scoreBackupLogin =
     scoreBackup && (!primaryLogin || !sameOwnerLogin(scoreBackup.owner, primaryLogin))
@@ -398,7 +403,7 @@ function buildEscalationPath(args: {
   if (primaryLogin && scoreBackupLogin) {
     return (
       `If @${primaryLogin} is unavailable, reach out to @${scoreBackupLogin} next ` +
-      `${ESCALATION_SOURCE_COMMITS_REVIEWS}.`
+      `${commitReviewSource}.`
     );
   }
 
@@ -406,26 +411,26 @@ function buildEscalationPath(args: {
   if (primaryLogin) {
     if (avenues.length > 0) {
       return (
-        `@${primaryLogin} is the primary contact ${ESCALATION_SOURCE_COMMITS_REVIEWS}. ` +
+        `@${primaryLogin} is the primary contact ${commitReviewSource}. ` +
         `Escalation: ${avenues.join("; ")}.`
       );
     }
     return (
-      `@${primaryLogin} is the primary contact ${ESCALATION_SOURCE_COMMITS_REVIEWS}. ` +
-      `${ESCALATION_ADMIN_GAP} ${ESCALATION_SOURCE_COMMITS_REVIEWS}.`
+      `@${primaryLogin} is the primary contact ${commitReviewSource}. ` +
+      `${ESCALATION_ADMIN_GAP} ${commitReviewSource}.`
     );
   }
 
   if (secondaryLead) {
     if (avenues.length > 0) {
       return (
-        `No primary owner; @${secondaryLead.owner} has the most context ${ESCALATION_SOURCE_COMMITS_REVIEWS}. ` +
+        `No primary owner; @${secondaryLead.owner} has the most context ${commitReviewSource}. ` +
         `Escalation: ${avenues.join("; ")}.`
       );
     }
     return (
-      `No primary owner; @${secondaryLead.owner} has the most context ${ESCALATION_SOURCE_COMMITS_REVIEWS}. ` +
-      `${ESCALATION_ADMIN_GAP} ${ESCALATION_SOURCE_COMMITS_REVIEWS}.`
+      `No primary owner; @${secondaryLead.owner} has the most context ${commitReviewSource}. ` +
+      `${ESCALATION_ADMIN_GAP} ${commitReviewSource}.`
     );
   }
 
@@ -433,7 +438,7 @@ function buildEscalationPath(args: {
     return `No scored primary from commits/reviews. Escalation: ${avenues.join("; ")}.`;
   }
 
-  return `${ESCALATION_ADMIN_GAP} ${ESCALATION_SOURCE_COMMITS_REVIEWS}.`;
+  return `${ESCALATION_ADMIN_GAP} ${commitReviewSource}.`;
 }
 
 /**
@@ -446,6 +451,7 @@ export function collectEscalationAvenues(
 ): string[] {
   const avenues: string[] = [];
   const named = new Set<string>();
+  const commitReviewSource = commitsReviewsSource(escalationInput.provider);
   if (primaryLogin) {
     named.add(normalizeOwnerLogin(primaryLogin));
   }
@@ -509,7 +515,7 @@ export function collectEscalationAvenues(
     .slice(0, 3);
   if (reviewers.length > 0) {
     avenues.push(
-      `recent reviewers ${reviewers.map((r) => `@${r}`).join(", ")} ${ESCALATION_SOURCE_COMMITS_REVIEWS}`
+      `recent reviewers ${reviewers.map((r) => `@${r}`).join(", ")} ${commitReviewSource}`
     );
   }
 

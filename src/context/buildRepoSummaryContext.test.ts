@@ -27,7 +27,7 @@ async function run(): Promise<void> {
     assert.equal(coords?.owner, "raneyja");
     assert.equal(coords?.repo, "Coop-AI");
     assert.equal(coords?.branch, "main");
-    assert.equal(coords?.repoId, "github:raneyja/Coop-AI");
+    assert.equal(coords?.repoId, "raneyja/Coop-AI");
   });
 
   test("hasRepoSummaryEvidence detects entry files and manifest", () => {

@@ -1,4 +1,5 @@
 import type { CodeHostProviderPreference } from "../chat/types";
+import { CODE_HOST_PROVIDERS } from "../api/codeHosts/types";
 
 /** Tools that can appear in the thinking/activity checklist while they run. */
 export type IntegrationActivityTool =
@@ -23,9 +24,22 @@ export type IntegrationToolActivityEvent = {
 const MAX_HIT_LINES = 5;
 const HIT_LINE_CHARS = 96;
 
+function codeHostToolTitle(codeHostProvider?: CodeHostProviderPreference): string {
+  if (codeHostProvider === "gitlab") {
+    return "GitLab";
+  }
+  if (codeHostProvider === "bitbucket") {
+    return "Bitbucket";
+  }
+  if (codeHostProvider === "github") {
+    return "GitHub";
+  }
+  return "code host";
+}
+
 export function integrationToolTitle(
   tool: IntegrationActivityTool,
-  codeHostProvider: CodeHostProviderPreference = "github"
+  codeHostProvider?: CodeHostProviderPreference
 ): string {
   switch (tool) {
     case "confluence":
@@ -41,14 +55,7 @@ export function integrationToolTitle(
     case "google-docs":
       return "Google Docs";
     case "code-host":
-      switch (codeHostProvider) {
-        case "gitlab":
-          return "GitLab";
-        case "bitbucket":
-          return "Bitbucket";
-        default:
-          return "GitHub";
-      }
+      return codeHostToolTitle(codeHostProvider);
     default:
       return "integrations";
   }
@@ -56,7 +63,7 @@ export function integrationToolTitle(
 
 export function integrationActivityLabel(
   tool: IntegrationActivityTool,
-  codeHostProvider: CodeHostProviderPreference = "github"
+  codeHostProvider?: CodeHostProviderPreference
 ): string {
   switch (tool) {
     case "confluence":
@@ -72,14 +79,7 @@ export function integrationActivityLabel(
     case "google-docs":
       return "Searching Google Docs…";
     case "code-host":
-      switch (codeHostProvider) {
-        case "gitlab":
-          return "Searching GitLab estate index…";
-        case "bitbucket":
-          return "Searching Bitbucket estate index…";
-        default:
-          return "Searching GitHub estate index…";
-      }
+      return `Searching ${codeHostToolTitle(codeHostProvider)} estate index…`;
     default:
       return "Gathering integration context…";
   }
@@ -89,7 +89,7 @@ export function integrationActivityLabel(
 export function integrationRunningActivityLabel(
   tool: IntegrationActivityTool,
   query?: string,
-  codeHostProvider: CodeHostProviderPreference = "github"
+  codeHostProvider?: CodeHostProviderPreference
 ): string {
   const trimmed = query?.trim();
   if (!trimmed) {
@@ -102,7 +102,7 @@ export function integrationRunningActivityLabel(
 export function integrationCompletedActivityLabel(
   tool: IntegrationActivityTool,
   query?: string,
-  codeHostProvider: CodeHostProviderPreference = "github"
+  codeHostProvider?: CodeHostProviderPreference
 ): string {
   const title = integrationToolTitle(tool, codeHostProvider);
   const trimmed = query?.trim();
@@ -114,8 +114,9 @@ export function integrationCompletedActivityLabel(
  * (Gaps focus phrases, named tickets).
  */
 export function preferredIntegrationActivityQuery(terms: string[]): string | undefined {
+  const hostPrefix = new RegExp(`^(${CODE_HOST_PROVIDERS.join("|")}):`, "i");
   const cleaned = terms
-    .map((term) => term.trim().replace(/^github:/i, ""))
+    .map((term) => term.trim().replace(hostPrefix, ""))
     .filter(Boolean);
   if (!cleaned.length) {
     return undefined;

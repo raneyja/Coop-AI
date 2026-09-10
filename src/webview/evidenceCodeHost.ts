@@ -3,14 +3,11 @@ import {
   evidenceCodeHostDisplayName,
   resolveEvidenceCodeHost
 } from "../api/codeHosts/codeHostLabels";
-import type { IntegrationSourceId } from "./components/IntegrationSourceBrand";
 
 export type { EvidenceCodeHost };
 export { evidenceCodeHostDisplayName, resolveEvidenceCodeHost };
 
-/** Brand id for Source Details connection groups / chips. */
-export function evidenceCodeHostConnection(
-  provider?: string | null
-): Extract<IntegrationSourceId, EvidenceCodeHost> {
+/** Brand id for Source Details connection groups / chips. Undefined when the host is unknown. */
+export function evidenceCodeHostConnection(provider?: string | null): EvidenceCodeHost | undefined {
   return resolveEvidenceCodeHost(provider);
 }

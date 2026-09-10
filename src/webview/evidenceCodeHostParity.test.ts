@@ -44,13 +44,15 @@ function test(name: string, fn: () => void): void {
 
 const HOSTS = ["github", "gitlab", "bitbucket"] as const;
 
-test("resolveEvidenceCodeHost maps all three hosts and rejects unknowns to github only as last resort", () => {
+test("resolveEvidenceCodeHost maps all three hosts and does not invent GitHub", () => {
   assert.equal(resolveEvidenceCodeHost("github"), "github");
   assert.equal(resolveEvidenceCodeHost("gitlab"), "gitlab");
   assert.equal(resolveEvidenceCodeHost("bitbucket"), "bitbucket");
-  assert.equal(resolveEvidenceCodeHost(undefined), "github");
+  assert.equal(resolveEvidenceCodeHost(undefined), undefined);
+  assert.equal(evidenceCodeHostDisplayName(undefined), "Code host");
   assert.equal(evidenceCodeHostDisplayName("bitbucket"), "Bitbucket");
   assert.equal(evidenceCodeHostConnection("gitlab"), "gitlab");
+  assert.equal(evidenceCodeHostConnection(undefined), undefined);
 });
 
 test("parseRepoId keeps nested GitLab paths in parity with coordinatesFromRepoId", () => {

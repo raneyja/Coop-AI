@@ -1,5 +1,5 @@
 import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
-import { coordinatesFromRepoId, repoIdFromCoordinates, type RepoCoordinates } from "../api/codeHosts/types";
+import { coordinatesFromRepoId, parseCodeHostProvider, repoIdFromCoordinates, type RepoCoordinates } from "../api/codeHosts/types";
 import type { CommitInfo, RemoteTreeEntry } from "../api/codeHosts/types";
 import type { SecureApiClient } from "../chat/SecureApiClient";
 import type { CodeHostProviderPreference } from "../chat/types";
@@ -63,9 +63,18 @@ export type RepoSummaryEntryFile = {
 export async function buildLiveRepoSummary(
   options: BuildRepoSummaryOptions
 ): Promise<Record<string, unknown>> {
+  const provider = parseCodeHostProvider(options.provider);
+  if (!provider) {
+    return {
+      repoId: options.repoId ?? `${options.owner}/${options.repo}`,
+      branch: options.branch,
+      activeFile: options.activeFile,
+      userFocus: focusQueryForRetrieval(options.userFocus),
+      source: "unavailable"
+    };
+  }
   const coords: RepoCoordinates = {
-    provider:
-      options.provider === "gitlab" || options.provider === "bitbucket" ? options.provider : "github",
+    provider,
     owner: options.owner,
     repo: options.repo,
     branch: options.branch
@@ -384,9 +393,7 @@ export function resolveRepoSummaryCoords(params: {
   provider?: string;
 }): { owner: string; repo: string; branch?: string; repoId: string } | undefined {
   if (params.repoId) {
-    const fromId = coordinatesFromRepoId(
-      params.repoId.includes(":") ? params.repoId : `github:${params.repoId}`
-    );
+    const fromId = coordinatesFromRepoId(params.repoId);
     if (fromId) {
       return {
         owner: fromId.owner,
@@ -396,20 +403,28 @@ export function resolveRepoSummaryCoords(params: {
       };
     }
     const slash = params.repoId.split("/");
+    const provider = parseCodeHostProvider(params.provider);
     if (slash.length === 2) {
-      const provider =
-        params.provider === "gitlab" || params.provider === "bitbucket" ? params.provider : "github";
       return {
         owner: slash[0],
         repo: slash[1],
         branch: params.branch,
-        repoId: `${provider}:${slash[0]}/${slash[1]}`
+        repoId: provider ? `${provider}:${slash[0]}/${slash[1]}` : params.repoId
       };
     }
   }
   if (params.owner && params.repo) {
+    const provider = parseCodeHostProvider(params.provider);
+    if (!provider) {
+      return {
+        owner: params.owner,
+        repo: params.repo,
+        branch: params.branch,
+        repoId: params.repoId ?? `${params.owner}/${params.repo}`
+      };
+    }
     const coords: RepoCoordinates = {
-      provider: params.provider === "gitlab" || params.provider === "bitbucket" ? params.provider : "github",
+      provider,
       owner: params.owner,
       repo: params.repo,
       branch: params.branch
@@ -528,8 +543,7 @@ export async function buildIndexedRepoSummary(
     apiBaseUrl: options.apiBaseUrl,
     codeHostRouter: options.codeHostRouter
   });
-  const provider =
-    options.provider === "gitlab" || options.provider === "bitbucket" ? options.provider : "github";
+  const provider = parseCodeHostProvider(options.provider);
   const resolvedTarget: RepoTarget = { ...target, provider };
   const resolved = resolveInventoryRepoIds(options.repoId, resolvedTarget);
 
@@ -662,8 +676,7 @@ export async function buildRepoSummaryEvidence(
     owner: options.owner,
     repo: options.repo,
     branch,
-    provider:
-      options.provider === "gitlab" || options.provider === "bitbucket" ? options.provider : "github"
+    provider: parseCodeHostProvider(options.provider)
   }).candidates;
 
   const indexed = await buildIndexedRepoSummary({

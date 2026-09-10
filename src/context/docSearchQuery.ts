@@ -1,3 +1,10 @@
+import {
+  CODE_HOST_PROVIDERS,
+  codeHostPrefixedRepoIds,
+  isCodeHostProvider,
+  type CodeHostProvider
+} from "../api/codeHosts/types";
+
 /** Case and separator variants for a repository slug (e.g. Coop-AI → coop-ai). */
 export function repoNameVariants(repoName: string): string[] {
   const trimmed = repoName.trim();
@@ -14,8 +21,27 @@ export function repoNameVariants(repoName: string): string[] {
   return [...variants];
 }
 
-/** Shared repo-scoped search terms for documentation integrations. */
-export function buildRepoSearchTerms(owner: string | undefined, repo: string | undefined): string[] {
+function canonicalRepoSlugs(repoName: string): string[] {
+  return [...new Set([repoName.trim(), repoName.trim().toLowerCase()].filter(Boolean))];
+}
+
+function hostsForSearch(preferHost?: CodeHostProvider): readonly CodeHostProvider[] {
+  if (!preferHost) {
+    return CODE_HOST_PROVIDERS;
+  }
+  return [preferHost, ...CODE_HOST_PROVIDERS.filter((host) => host !== preferHost)];
+}
+
+/**
+ * Shared repo-scoped search terms for Slack, Teams, Jira, Confluence, Notion, Google Docs.
+ * Prefixed ids (`github:` / `gitlab:` / `bitbucket:`) cover every shipped host.
+ * Underscore/hyphen mutations stay unprefixed so JQL/CQL does not explode.
+ */
+export function buildRepoSearchTerms(
+  owner: string | undefined,
+  repo: string | undefined,
+  options?: { preferHost?: CodeHostProvider }
+): string[] {
   const repoName = repo?.trim();
   if (!repoName) {
     return [];
@@ -23,11 +49,23 @@ export function buildRepoSearchTerms(owner: string | undefined, repo: string | u
   const terms = new Set<string>();
   const ownerName = owner?.trim();
   for (const variant of repoNameVariants(repoName)) {
+    terms.add(variant);
     if (ownerName) {
       terms.add(`${ownerName}/${variant}`);
-      terms.add(`github:${ownerName}/${variant}`);
     }
-    terms.add(variant);
+  }
+  if (ownerName) {
+    const preferHost = isCodeHostProvider(options?.preferHost) ? options.preferHost : undefined;
+    const prefixed = canonicalRepoSlugs(repoName).flatMap((slug) =>
+      codeHostPrefixedRepoIds(ownerName, slug)
+    );
+    for (const host of hostsForSearch(preferHost)) {
+      for (const id of prefixed) {
+        if (id.startsWith(`${host}:`)) {
+          terms.add(id);
+        }
+      }
+    }
   }
   return [...terms];
 }
@@ -37,7 +75,8 @@ export function buildRepoOrQuery(
   repo: string | undefined,
   extraTerms: string[] = []
 ): string | undefined {
-  const terms = [...buildRepoSearchTerms(owner, repo), ...extraTerms.map((term) => term.trim()).filter(Boolean)];
+  const extras = extraTerms.map((term) => term.trim()).filter(Boolean);
+  const terms = [...extras, ...buildRepoSearchTerms(owner, repo)];
   const uniqueTerms = [...new Set(terms)].slice(0, 16);
   return uniqueTerms.length > 0 ? uniqueTerms.join(" OR ") : undefined;
 }

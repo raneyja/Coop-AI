@@ -169,7 +169,7 @@ test("plain chat still requires keyword intent", () => {
   }
 });
 
-test("incident-shaped chat fetches Jira and Slack without saying jira/slack", () => {
+test("incident-shaped chat fetches Jira, Slack, and Teams without naming those tools", () => {
   const incidentRequest = {
     type: "chat_context",
     params: {},
@@ -181,6 +181,7 @@ test("incident-shaped chat fetches Jira and Slack without saying jira/slack", ()
   } as ContextFetchRequest;
   assert.equal(shouldFetchJiraContext(incidentRequest), true);
   assert.equal(shouldFetchSlackContext(incidentRequest), true);
+  assert.equal(shouldFetchTeamsContext(incidentRequest), true);
   assert.equal(shouldFetchNotionContext(incidentRequest), false);
 });
 
@@ -196,6 +197,7 @@ test("status-transition chat does not auto-fetch Jira/Slack as incident", () => 
   } as ContextFetchRequest;
   assert.equal(shouldFetchJiraContext(statusRequest), false);
   assert.equal(shouldFetchSlackContext(statusRequest), false);
+  assert.equal(shouldFetchTeamsContext(statusRequest), false);
 });
 
 const total = passed + failed;

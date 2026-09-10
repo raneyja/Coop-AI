@@ -1,7 +1,7 @@
 import type { SecureApiClient } from "../chat/SecureApiClient";
 import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
-import type { CodeHostProvider, RepoCoordinates } from "../api/codeHosts/types";
-import { coordinatesFromRepoId, repoIdFromCoordinates } from "../api/codeHosts/types";
+import type { RepoCoordinates } from "../api/codeHosts/types";
+import { coordinatesFromRepoId, parseCodeHostProvider, repoIdFromCoordinates } from "../api/codeHosts/types";
 import { normalizeGraphRepoId } from "../engines/blastRadiusDependentsFallback";
 import type { RepoInventoryEvidence, RepoTarget, RepoTreeEvidence } from "./indexedRepoWorkspaceTypes";
 
@@ -24,10 +24,7 @@ export function resolveInventoryRepoIds(
   repoId: string,
   target: Pick<RepoTarget, "provider" | "owner" | "repo" | "branch">
 ): { preferred: string; candidates: string[]; coords?: RepoCoordinates } {
-  const provider: CodeHostProvider =
-    target.provider === "gitlab" || target.provider === "bitbucket" || target.provider === "github"
-      ? target.provider
-      : "github";
+  const provider = parseCodeHostProvider(target.provider);
   const preferred = normalizeGraphRepoId(repoId, provider);
   const candidates = [preferred];
   if (repoId.trim() !== preferred) {
@@ -36,7 +33,7 @@ export function resolveInventoryRepoIds(
 
   const coords =
     coordinatesFromRepoId(preferred, target.branch) ??
-    (target.owner && target.repo
+    (provider && target.owner && target.repo
       ? {
           provider,
           owner: target.owner,

@@ -9,6 +9,7 @@ import {
   shouldFetchJiraContext,
   shouldMergeRepoWideJiraHits,
   shouldRunJiraFocusTextSearch,
+  shouldRunJiraTextSearch,
   wantsJiraContext,
   wantsOpenTickets,
   wantsRepoLinkedJiraDiscovery
@@ -43,18 +44,33 @@ test("wantsJiraContext matches issue keys in the query", () => {
   assert.equal(wantsJiraContext("summarize COOP-118"), true);
 });
 
-test("buildRepoJql searches owner/repo and github prefix", () => {
+test("buildRepoJql searches owner/repo and every code-host prefix", () => {
   const jql = buildRepoJql("acme", "coop-ai-core");
-  assert.ok(jql?.includes('text ~ "acme/coop-ai-core"'));
-  assert.ok(jql?.includes('text ~ "github:acme/coop-ai-core"'));
-  assert.ok(jql?.includes('summary ~ "coop-ai-core"'));
+  assert.ok(jql?.includes("acme/coop-ai-core"));
+  assert.ok(jql?.includes("github:acme/coop-ai-core"));
+  assert.ok(jql?.includes("gitlab:acme/coop-ai-core"));
+  assert.ok(jql?.includes("bitbucket:acme/coop-ai-core"));
+  assert.ok(jql?.includes("coop-ai-core"));
+  assert.match(jql!, /text ~ "\\"github:acme\/coop-ai-core\\""/);
   assert.ok(jql?.includes("ORDER BY updated DESC"));
+});
+
+test("buildRepoJql phrase-quotes prefixed ids and puts GitLab first when preferred", () => {
+  const jql = buildRepoJql("acme", "coop-ai-core", { preferHost: "gitlab" }) ?? "";
+  const gitlabClause = 'text ~ "\\"gitlab:acme/coop-ai-core\\""';
+  const githubClause = 'text ~ "\\"github:acme/coop-ai-core\\""';
+  const bitbucketClause = 'text ~ "\\"bitbucket:acme/coop-ai-core\\""';
+  assert.ok(jql.includes(gitlabClause), jql);
+  assert.ok(jql.includes(githubClause), jql);
+  assert.ok(jql.includes(bitbucketClause), jql);
+  assert.ok(jql.indexOf(gitlabClause) < jql.indexOf(githubClause));
+  assert.ok(jql.indexOf(gitlabClause) < jql.indexOf(bitbucketClause));
 });
 
 test("buildRepoJql includes repo slug case variants", () => {
   const jql = buildRepoJql("raneyja", "Coop-AI");
-  assert.ok(jql?.includes('text ~ "raneyja/Coop-AI"'));
-  assert.ok(jql?.includes('text ~ "raneyja/coop-ai"'));
+  assert.ok(jql?.includes("raneyja/Coop-AI"));
+  assert.ok(jql?.includes("raneyja/coop-ai"));
   assert.ok(jql?.includes('summary ~ "coop-ai"'));
 });
 
@@ -201,6 +217,18 @@ test("focused Jira asks do not fail-open to a repo-wide dump", () => {
 test("named issue keys skip the 20-ticket focus text search", () => {
   assert.equal(shouldRunJiraFocusTextSearch(["COOP-101"]), false);
   assert.equal(shouldRunJiraFocusTextSearch([]), true);
+});
+
+test("named keys skip fuzzy JQL unless the user asked for repo-wide tickets", () => {
+  assert.equal(
+    shouldRunJiraTextSearch({ namedIssueKeys: ["COOP-242"], wantsRepoDiscovery: false }),
+    false
+  );
+  assert.equal(
+    shouldRunJiraTextSearch({ namedIssueKeys: ["COOP-242"], wantsRepoDiscovery: true }),
+    true
+  );
+  assert.equal(shouldRunJiraTextSearch({ namedIssueKeys: [], wantsRepoDiscovery: false }), true);
 });
 
 const total = passed + failed;

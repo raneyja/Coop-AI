@@ -171,6 +171,15 @@ void (async () => {
     assert.equal(identity?.branch, "main");
   });
 
+  await test("getIdentity does not invent GitHub when the host is unknown", () => {
+    const { deps } = stubDeps({});
+    const identity = new IndexedRepoWorkspace(deps).getIdentity({
+      repoId: "acme/app"
+    });
+    assert.equal(identity?.repoId, "acme/app");
+    assert.equal(identity?.provider, undefined);
+  });
+
   await test("mergeRepoInventoryContext attaches inventory and tree overview", () => {
     const base: ContextFetchResult = {
       requestId: "req",

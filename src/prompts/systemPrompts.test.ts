@@ -255,6 +255,45 @@ test("buildUserMessageWithContext renders jira_tickets from context bundle", () 
   assert.equal(graphContext.includes('\n  "'), false, "graph_context should be compact JSON");
 });
 
+test("buildUserMessageWithContext keeps named Jira tickets when a key is missing", () => {
+  const message = buildUserMessageWithContext("Cover COOP-401 (Jira COOP-242).", {
+    owner: "coopai-group",
+    repo: "training-java-monolith-refactor",
+    contextBundle: [
+      {
+        type: "chat_context",
+        data: {
+          jiraSearch: {
+            jql: "",
+            matchStrategy: "key",
+            issues: [
+              {
+                key: "COOP-242",
+                summary: "SQL injection in customers.jsp",
+                status: "To Do",
+                issueType: "Story",
+                updated: "2026-09-10T00:00:00.000Z",
+                htmlUrl: "https://coop-ai.atlassian.net/browse/COOP-242"
+              }
+            ],
+            keyErrors: [
+              {
+                key: "COOP-401",
+                error: "An issue with key 'COOP-401' does not exist for field 'key'."
+              }
+            ]
+          }
+        }
+      }
+    ]
+  });
+
+  assert.ok(message.includes('<jira_tickets match="key" shown="1">'));
+  assert.ok(message.includes('key="COOP-242"'));
+  assert.ok(message.includes("<missing_key key=\"COOP-401\">"));
+  assert.equal(message.includes("<error>"), false);
+});
+
 test("buildUserMessageWithContext renders slack_messages from context bundle", () => {
   const message = buildUserMessageWithContext("Any Slack threads?", {
     owner: "acme",

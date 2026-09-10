@@ -1,5 +1,5 @@
 import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
-import type { CodeHostProvider } from "../api/codeHosts/types";
+import { parseCodeHostProvider } from "../api/codeHosts/types";
 import type { SecureApiClient } from "../chat/SecureApiClient";
 import { resolveInventoryRepoIds } from "../workspace/repoInventorySources";
 import type { RepoTarget } from "../workspace/indexedRepoWorkspaceTypes";
@@ -50,8 +50,7 @@ export async function resolveRepoBranchForTarget(
     return target.branch?.trim() || undefined;
   }
 
-  const provider: CodeHostProvider =
-    target.provider === "gitlab" || target.provider === "bitbucket" ? target.provider : "github";
+  const provider = parseCodeHostProvider(target.provider);
 
   let branch: string | undefined;
 
@@ -70,18 +69,20 @@ export async function resolveRepoBranchForTarget(
   // Probe validates the branch is readable. Never replace an indexed/workspace
   // branch with whatever the tree response echoes (often the request branch or host default).
   const lockedBranch = Boolean(branch);
-  try {
-    const tree = await options.codeHostRouter.getRepositoryTree("", {
-      provider,
-      owner,
-      repo,
-      branch
-    });
-    if (!lockedBranch) {
-      branch = tree.branch?.trim() || branch;
+  if (provider) {
+    try {
+      const tree = await options.codeHostRouter.getRepositoryTree("", {
+        provider,
+        owner,
+        repo,
+        branch
+      });
+      if (!lockedBranch) {
+        branch = tree.branch?.trim() || branch;
+      }
+    } catch {
+      /* keep best-known branch */
     }
-  } catch {
-    /* keep best-known branch */
   }
 
   return branch;

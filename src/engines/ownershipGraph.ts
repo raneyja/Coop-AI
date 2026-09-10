@@ -149,7 +149,11 @@ export class OwnershipGraphEngine {
       .filter((r) => r.reviews > 0 || r.approvals > 0)
       .map((r) => r.author)
       .filter(Boolean);
-    const teamGraph = buildTeamDomainGraph(scores, activity, { orgContext, recentReviewers });
+    const teamGraph = buildTeamDomainGraph(scores, activity, {
+      orgContext,
+      recentReviewers,
+      provider: resolved.provider
+    });
     if (orgContext && !scores.some((s) => orgContext.members.includes(s.owner))) {
       teamGraph.crossTeamNote = `This path is owned by ${orgContext.teamName}; your team may need to reach out cross-team.`;
     }

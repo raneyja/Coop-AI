@@ -1,4 +1,4 @@
-import type { CodeHostProvider } from "./types";
+import { parseCodeHostProvider, type CodeHostProvider } from "./types";
 
 export type EvidenceCodeHost = CodeHostProvider;
 
@@ -12,13 +12,11 @@ const CODE_HOST_NAMES: Record<EvidenceCodeHost, string> = {
  * Resolve the active Use-repo code host for evidence UI and source citations.
  * Prefer the open repo's provider — never assume GitHub.
  */
-export function resolveEvidenceCodeHost(provider?: string | null): EvidenceCodeHost {
-  if (provider === "gitlab" || provider === "bitbucket" || provider === "github") {
-    return provider;
-  }
-  return "github";
+export function resolveEvidenceCodeHost(provider?: string | null): EvidenceCodeHost | undefined {
+  return parseCodeHostProvider(provider);
 }
 
 export function evidenceCodeHostDisplayName(provider?: string | null): string {
-  return CODE_HOST_NAMES[resolveEvidenceCodeHost(provider)];
+  const host = resolveEvidenceCodeHost(provider);
+  return host ? CODE_HOST_NAMES[host] : "Code host";
 }

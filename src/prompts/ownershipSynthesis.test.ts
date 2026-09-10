@@ -6,6 +6,7 @@ const report: OwnershipReport = {
   owner: "acme",
   repo: "widgets",
   path: "src/handler.ts",
+  provider: "github",
   completeness: "full",
   scores: [{ owner: "alice", score: 85, tier: "primary", commitCount: 12 }],
   risk: { singlePointOfFailure: false, expertUnavailable: false, orphaned: false, highTurnover: false, teamDispersion: false },

@@ -1,4 +1,5 @@
 import type { Dirent } from "node:fs";
+import { CODE_HOST_PROVIDERS, isCodeHostProvider } from "../api/codeHosts/types";
 import type { IndexBackend } from "../indexing/indexBackend";
 import type { LocalSearchResult } from "../indexing/types";
 
@@ -63,13 +64,18 @@ export type BlastRadiusDependentDetail = {
   strength?: BlastCallStrength;
 };
 
-/** Normalize owner/repo or github:owner/repo to github:owner/repo for graph API calls. */
-export function normalizeGraphRepoId(repoId: string, provider = "github"): string {
+const PREFIXED_REPO_ID_RE = new RegExp(`^(${CODE_HOST_PROVIDERS.join("|")}):`);
+
+/** Keep a prefixed repo id; prefix unprefixed ids only when the host is known. */
+export function normalizeGraphRepoId(repoId: string, provider?: string): string {
   const trimmed = repoId.trim();
-  if (/^(github|gitlab|bitbucket):/.test(trimmed)) {
+  if (PREFIXED_REPO_ID_RE.test(trimmed)) {
     return trimmed;
   }
-  return `${provider}:${trimmed}`;
+  if (isCodeHostProvider(provider)) {
+    return `${provider}:${trimmed}`;
+  }
+  return trimmed;
 }
 
 /** Build Zoekt/import search patterns that find files referencing the target. */

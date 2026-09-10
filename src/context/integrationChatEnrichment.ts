@@ -139,9 +139,10 @@ async function enrichIntegrationStages(
   const integrationTerms = buildIntegrationSearchTermList({
     ...base,
     // Focus / caller terms first so they survive the term cap ahead of file basenames.
+    preferHost: options.codeHostProvider,
     extraTerms: [...(options.extraSearchTerms ?? []), ...(traceSeeds?.searchTerms ?? [])]
   });
-  const codeHostProvider = options.codeHostProvider ?? "github";
+  const codeHostProvider = options.codeHostProvider;
   const activityQuery = preferredIntegrationActivityQuery(integrationTerms);
   const notify = (
     tool: IntegrationActivityTool,
@@ -243,6 +244,7 @@ async function enrichIntegrationStages(
         ...base,
         crossToolText: crossToolKeys,
         extraTerms: integrationTerms,
+        preferHost: options.codeHostProvider,
         codeHostRouter: options.codeHostRouter,
         codeHostConnected: options.codeHostConnected,
         integrationScope: options.integrationScopes?.atlassian
@@ -279,6 +281,7 @@ async function enrichIntegrationStages(
         secrets: options.secrets,
         ...base,
         crossToolText: crossToolKeys,
+        preferHost: options.codeHostProvider,
         jiraIssueKeys,
         integrationScope: options.integrationScopes?.slack
       })
@@ -288,6 +291,7 @@ async function enrichIntegrationStages(
         secrets: options.secrets,
         ...base,
         crossToolText: crossToolKeys,
+        preferHost: options.codeHostProvider,
         jiraIssueKeys
       })
     )

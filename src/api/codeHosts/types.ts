@@ -1,4 +1,44 @@
-export type CodeHostProvider = "github" | "gitlab" | "bitbucket";
+export const CODE_HOST_PROVIDERS = ["github", "gitlab", "bitbucket"] as const;
+
+export type CodeHostProvider = (typeof CODE_HOST_PROVIDERS)[number];
+
+export function isCodeHostProvider(value: string | undefined | null): value is CodeHostProvider {
+  return typeof value === "string" && (CODE_HOST_PROVIDERS as readonly string[]).includes(value);
+}
+
+/**
+ * Host id (`gitlab`) or prefixed repo id (`gitlab:acme/app`).
+ * Never invents GitHub when the host is unknown.
+ */
+export function parseCodeHostProvider(value: string | undefined | null): CodeHostProvider | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  const lower = trimmed.toLowerCase();
+  if (isCodeHostProvider(lower)) {
+    return lower;
+  }
+  return coordinatesFromRepoId(trimmed)?.provider;
+}
+
+/** Prefer an explicit provider, then a prefixed repo id. Never defaults to GitHub. */
+export function resolveCodeHostProvider(params: {
+  provider?: string | null;
+  repoId?: string | null;
+}): CodeHostProvider | undefined {
+  return parseCodeHostProvider(params.provider) ?? parseCodeHostProvider(params.repoId ?? undefined);
+}
+
+/** `github:acme/app` — one id per host in CODE_HOST_PROVIDERS. */
+export function codeHostPrefixedRepoIds(owner: string, repo: string): string[] {
+  const ownerName = owner.trim();
+  const repoName = repo.trim();
+  if (!ownerName || !repoName) {
+    return [];
+  }
+  return CODE_HOST_PROVIDERS.map((host) => `${host}:${ownerName}/${repoName}`);
+}
 
 export type CodeHostErrorCode =
   | "auth"
@@ -274,11 +314,15 @@ export function repoIdFromCoordinates(coords: RepoCoordinates): string {
   return `${coords.provider}:${coords.owner}/${coords.repo}`;
 }
 
+const CODE_HOST_REPO_ID_RE = new RegExp(
+  `^(${CODE_HOST_PROVIDERS.join("|")}):([^/]+)/(.+)$`
+);
+
 export function coordinatesFromRepoId(
   repoId: string,
   branch?: string
 ): RepoCoordinates | undefined {
-  const match = /^(github|gitlab|bitbucket):([^/]+)\/(.+)$/.exec(repoId.trim());
+  const match = CODE_HOST_REPO_ID_RE.exec(repoId.trim());
   if (!match) {
     return undefined;
   }
@@ -288,6 +332,44 @@ export function coordinatesFromRepoId(
     repo: match[3],
     branch
   };
+}
+
+/**
+ * Build coordinates when the host is known. Unprefixed `owner/repo` is not
+ * assumed to be GitHub — pass `provider` from Use-repo instead.
+ */
+export function resolveRepoCoordinates(params: {
+  repoId?: string | null;
+  provider?: string | null;
+  owner?: string | null;
+  repo?: string | null;
+  branch?: string | null;
+}): RepoCoordinates | undefined {
+  const branch = params.branch?.trim() || undefined;
+  if (params.repoId?.trim()) {
+    const fromId = coordinatesFromRepoId(params.repoId, branch);
+    if (fromId) {
+      return fromId;
+    }
+  }
+  const provider = resolveCodeHostProvider(params);
+  const owner = params.owner?.trim();
+  const repo = params.repo?.trim();
+  if (provider && owner && repo) {
+    return { provider, owner, repo, branch };
+  }
+  if (provider && params.repoId?.trim() && !params.repoId.includes(":")) {
+    const parts = params.repoId.trim().split("/").filter(Boolean);
+    if (parts.length >= 2) {
+      return {
+        provider,
+        owner: parts[0]!,
+        repo: parts.slice(1).join("/"),
+        branch
+      };
+    }
+  }
+  return undefined;
 }
 
 export function humanizeRelativeDate(iso: string, now = Date.now()): string {

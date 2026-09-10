@@ -6,7 +6,11 @@ import type { LocalSearchResult } from "../indexing/types";
 import type { ContextFetchRequest, ContextFetchResult } from "./requestBatcher";
 import { isRepoStructureQuery } from "../workspace/repoFactIntent";
 import { filterCodeEvidenceToActiveRepo } from "../workspace/repoEvidenceIsolation";
-import { indexQueryForRetrieval, selectChatEvidencePaths } from "../api/agent/searchQuery";
+import {
+  indexQueryForRetrieval,
+  namedFileIndexQueries,
+  selectChatEvidencePaths
+} from "../api/agent/searchQuery";
 import { FOCUS_MAX_INJECTED_PATHS, focusQueryForRetrieval } from "./userFocusQuery";
 import {
   isWeakIndexQuery,
@@ -446,13 +450,20 @@ type LoadSemanticSearchOptions = {
 async function loadSemanticSearchContext(
   options: LoadSemanticSearchOptions
 ): Promise<RepoSemanticSearchContext | undefined> {
-  const searchResult = await runRepoSearch(options, options.repoId, options.query);
+  const rankQuery = options.rankQuery ?? options.query;
+  const namedQueries = namedFileIndexQueries(rankQuery).filter(
+    (query) => query.toLowerCase() !== options.query.trim().toLowerCase()
+  );
+  const [primaryResult, ...namedResults] = await Promise.all([
+    runRepoSearch(options, options.repoId, options.query),
+    ...namedQueries.map((query) => runRepoSearch(options, options.repoId, query))
+  ]);
+  const searchResult = mergeNamedFileSearchResults(primaryResult, namedResults);
   const pathBudget =
     options.rankMode === "onboarding"
       ? Math.max(24, options.maxFiles * 8)
       : Math.max(options.maxFiles, 1) * 4;
   const rankedPaths = rankSearchPaths(searchResult, pathBudget);
-  const rankQuery = options.rankQuery ?? options.query;
   const exclude = options.excludePath?.replace(/\\/g, "/").replace(/^\/+/, "").toLowerCase();
   const candidatePaths = rankedPaths.map((entry) => entry.path);
   const selected = (
@@ -523,6 +534,21 @@ async function loadSemanticSearchContext(
     pathHits: onboardingHits.length ? onboardingHits : undefined,
     matchedPathCount: rankedPaths.length,
     attachmentCap: options.maxFiles
+  };
+}
+
+function mergeNamedFileSearchResults(
+  primary: LocalSearchResult,
+  extras: LocalSearchResult[]
+): LocalSearchResult {
+  if (extras.length === 0) {
+    return primary;
+  }
+  return {
+    source: extras.find((result) => result.hits.length > 0 || result.symbols.length > 0)?.source ?? primary.source,
+    hits: [...extras.flatMap((result) => result.hits), ...primary.hits],
+    symbols: [...extras.flatMap((result) => result.symbols), ...primary.symbols],
+    stale: primary.stale || extras.some((result) => result.stale)
   };
 }
 

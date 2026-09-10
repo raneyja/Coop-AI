@@ -102,7 +102,7 @@ test("sparse-commit primary + recent reviewers yields reviewer escalation when C
 
   assert.match(graph.escalationPath, /@dguyen is the primary contact/);
   assert.match(graph.escalationPath, /recent reviewers @catalinpit, @mythie/);
-  assert.match(graph.escalationPath, /\[Sources: GitHub commits & reviews\]/);
+  assert.match(graph.escalationPath, /\[Sources: Code host commits & reviews\]/);
   assert.doesNotMatch(graph.escalationPath, /@dguyen.*recent reviewers.*@dguyen/);
   assert.doesNotMatch(graph.escalationPath, /no strong backup identified/);
 });
@@ -114,7 +114,7 @@ test("sparse-commit primary with no CODEOWNERS/reviewers yields explicit admin g
   assert.match(graph.escalationPath, /@dguyen is the primary contact/);
   assert.match(graph.escalationPath, /No CODEOWNERS team or path owners matched/);
   assert.match(graph.escalationPath, /Escalate via repository admins\/maintainers/);
-  assert.match(graph.escalationPath, /\[Sources: GitHub commits & reviews\]/);
+  assert.match(graph.escalationPath, /\[Sources: Code host commits & reviews\]/);
   assert.doesNotMatch(graph.escalationPath, /no strong backup identified/);
 });
 
@@ -133,7 +133,7 @@ test("score-tier secondary still preferred over CODEOWNERS for backup contact", 
   });
 
   assert.match(graph.escalationPath, /If @dguyen is unavailable, reach out to @mythie next/);
-  assert.match(graph.escalationPath, /\[Sources: GitHub commits & reviews\]/);
+  assert.match(graph.escalationPath, /\[Sources: Code host commits & reviews\]/);
 });
 
 test("collectEscalationAvenues never invents handles outside evidence", () => {

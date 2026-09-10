@@ -73,7 +73,7 @@ test("medium trace when commit links to thin PR context", () => {
     completeness: "partial"
   };
 
-  const summary = summarizeDecisionTimeline(timeline);
+  const summary = summarizeDecisionTimeline(timeline, "github");
   assert.equal(summary.quality, "medium");
   assert.match(summary.primaryFinding ?? "", /PR #322/);
   assert.ok(summary.sourceContributions.some((entry) => entry.label.includes("PR #322")));
@@ -120,7 +120,7 @@ test("decision summary uses evolution and rationale ranking", () => {
     completeness: "partial"
   };
 
-  const summary = summarizeDecisionTimeline(timeline);
+  const summary = summarizeDecisionTimeline(timeline, "github");
   assert.equal(summary.target, "src/service/handler.ts:20-40");
   assert.match(summary.primaryFinding ?? "", /5 commit\(s\) touched this file since introduction/i);
   const commitSource = summary.sourceContributions.find((entry) => /commit/i.test(entry.label));
@@ -228,7 +228,7 @@ test("ownership summary highlights primary owner", () => {
   };
 
   const slackSearch: SlackSearchEvidence = { messages: [] };
-  const summary = summarizeOwnershipReport(report, slackSearch);
+  const summary = summarizeOwnershipReport(report, slackSearch, "github");
   assert.match(summary.primaryFinding ?? "", /@alice is the primary owner/i);
   assert.ok(summary.sourceContributions.some((entry) => entry.provider === "github"));
   assert.ok(summary.recommendedActions.some((action) => action.kind === "open-file"));
@@ -287,7 +287,7 @@ test("blast radius summary is strong for verified import-parse callers", () => {
     warnings: []
   };
 
-  const summary = summarizeBlastRadius(evidence, "src/config/responseDeadline.ts");
+  const summary = summarizeBlastRadius(evidence, "src/config/responseDeadline.ts", "github");
   assert.equal(summary.quality, "strong");
   assert.match(summary.qualityReason, /import-parse/i);
   assert.match(summary.primaryFinding ?? "", /3 code dependent/i);

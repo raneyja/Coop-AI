@@ -2,7 +2,7 @@ import { toRepositoryRelativePath } from "../context/repoFilePath";
 import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
 import type { ResolvedIntegrationScope } from "../integrationScope/types";
 import type { CodeHostProvider, RepoCoordinates } from "../api/codeHosts/types";
-import { repoIdFromCoordinates } from "../api/codeHosts/types";
+import { parseCodeHostProvider, repoIdFromCoordinates } from "../api/codeHosts/types";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import { remainingContextGatherBudgetMs } from "../config/responseDeadline";
 import { buildRepoSearchQuery, fetchSlackSearchContext } from "../context/slackContext";
@@ -138,21 +138,30 @@ export class BlastRadiusAnalysisEngine {
     // Soft gather is silent to users — do not push latency jargon into warnings
     // (those surface in evidence cards / synthesis). completeness already reflects partial.
 
-    const coords: RepoCoordinates = {
-      provider: params.provider ?? "github",
-      owner: params.owner,
-      repo: params.repo,
-      branch: params.branch
-    };
+    const provider = parseCodeHostProvider(params.provider);
+    const coords: RepoCoordinates | undefined = provider
+      ? {
+          provider,
+          owner: params.owner,
+          repo: params.repo,
+          branch: params.branch
+        }
+      : undefined;
 
     let resolved = coords;
-    try {
-      resolved = await this.options.codeHostRouter.resolveCoordinates(coords);
-    } catch (error) {
-      warnings.push(`Could not resolve repository: ${errorMessage(error)}`);
+    if (coords) {
+      try {
+        resolved = await this.options.codeHostRouter.resolveCoordinates(coords);
+      } catch (error) {
+        warnings.push(`Could not resolve repository: ${errorMessage(error)}`);
+      }
+    } else {
+      warnings.push("Unknown code host — not guessing GitHub.");
     }
 
-    const repoId = normalizeGraphRepoId(repoIdFromCoordinates(resolved));
+    const repoId = resolved
+      ? normalizeGraphRepoId(repoIdFromCoordinates(resolved))
+      : normalizeGraphRepoId(`${params.owner}/${params.repo}`);
     const includeTransitive = params.includeTransitive !== false;
     const askSymbols = resolveNamedBlastSymbols(params.askText, {
       file,
@@ -191,22 +200,24 @@ export class BlastRadiusAnalysisEngine {
           const durableTrusted =
             directDependents.length > 0 && isTrustedBlastGraphSource(result.source);
           let exportSymbols: string[] = [];
-          try {
-            const fileContent = await this.options.codeHostRouter.getFileContent(file, {
-              provider: resolved.provider,
-              owner: resolved.owner,
-              repo: resolved.repo,
-              branch: resolved.branch
-            });
-            const text =
-              fileContent.content?.trim() ||
-              fileContent.lines?.map((line) => line.text).join("\n") ||
-              "";
-            if (text.trim()) {
-              exportSymbols = extractExportNamesFromSource(text);
+          if (resolved) {
+            try {
+              const fileContent = await this.options.codeHostRouter.getFileContent(file, {
+                provider: resolved.provider,
+                owner: resolved.owner,
+                repo: resolved.repo,
+                branch: resolved.branch
+              });
+              const text =
+                fileContent.content?.trim() ||
+                fileContent.lines?.map((line) => line.text).join("\n") ||
+                "";
+              if (text.trim()) {
+                exportSymbols = extractExportNamesFromSource(text);
+              }
+            } catch {
+              // Soft gather — path-suffix patterns still run.
             }
-          } catch {
-            // Soft gather — path-suffix patterns still run.
           }
           const symbols = [
             ...exportSymbols,
@@ -231,7 +242,7 @@ export class BlastRadiusAnalysisEngine {
               fallback.source === "workspace" ? [] : fallback.dependents,
               askSymbols
             );
-            if (askSymbols.length > 0 && ranked.length === 0 && !softBudgetExhausted()) {
+            if (askSymbols.length > 0 && ranked.length === 0 && resolved && !softBudgetExhausted()) {
               ranked = await this.verifyDurableImportersMentionSymbol(
                 durableList,
                 file,
@@ -305,9 +316,11 @@ export class BlastRadiusAnalysisEngine {
 
     // Secondary enrichment — skip when soft gather budget is gone so synthesis can start.
     if (!softBudgetExhausted()) {
-      ownersByFile = await this.resolveOwners(resolved, impactedFiles, warnings, gatherStartedAt);
+      ownersByFile = resolved
+        ? await this.resolveOwners(resolved, impactedFiles, warnings, gatherStartedAt)
+        : [];
 
-      if (!softBudgetExhausted()) {
+      if (!softBudgetExhausted() && resolved) {
         try {
           const impactedTerms = [file, ...directDependents.slice(0, 5)].join(" ");
           const search = await fetchCodeHostSearchContext({
@@ -345,7 +358,7 @@ export class BlastRadiusAnalysisEngine {
       if (!softBudgetExhausted()) {
         try {
           const fileStem = file.split("/").pop()?.replace(/\.[^.]+$/, "") ?? file;
-          const repoQuery = buildRepoSearchQuery(resolved.owner, resolved.repo);
+          const repoQuery = buildRepoSearchQuery(params.owner, params.repo, resolved?.provider);
           const query = [
             repoQuery,
             fileStem,
@@ -356,9 +369,10 @@ export class BlastRadiusAnalysisEngine {
           const slackScope = await this.options.resolveSlackScope?.();
           const slack = await fetchSlackSearchContext({
             secrets: this.options.integrationSecrets,
-            owner: resolved.owner,
-            repo: resolved.repo,
+            owner: params.owner,
+            repo: params.repo,
             queryText: query,
+            preferHost: resolved?.provider,
             integrationScope: slackScope
           });
           slackSearch = {

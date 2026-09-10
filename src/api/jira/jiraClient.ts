@@ -2,6 +2,23 @@ import { fetchWithTimeout } from "../networkResilience";
 
 const ISSUE_CACHE_TTL_MS = 30 * 60 * 1000;
 
+/** Spec/encoding tokens that match KEY-123 but are not Jira issues. */
+const NON_JIRA_ISSUE_KEY_PREFIXES = new Set([
+  "UTF",
+  "ISO",
+  "RFC",
+  "CVE",
+  "SHA",
+  "AES",
+  "TLS",
+  "SSL",
+  "HTTP",
+  "HTTPS",
+  "HTML",
+  "ASCII",
+  "ANSI"
+]);
+
 export type JiraClientOptions = {
   baseUrl: string;
   email?: string;
@@ -237,8 +254,14 @@ export class JiraClient {
   }
 
   public static extractIssueKeys(text: string): string[] {
-    const matches = text.match(/\b[A-Z][A-Z0-9]+-\d+\b/g) ?? [];
-    return [...new Set(matches.map((key) => key.toUpperCase()))];
+    const matches = text.match(/\b[A-Za-z][A-Za-z0-9]+-\d+\b/g) ?? [];
+    return [
+      ...new Set(
+        matches
+          .map((key) => key.toUpperCase())
+          .filter((key) => !NON_JIRA_ISSUE_KEY_PREFIXES.has(key.split("-")[0] ?? ""))
+      )
+    ];
   }
 
   private async request<T>(path: string, options?: { method?: string; body?: unknown }): Promise<T> {

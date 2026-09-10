@@ -11,6 +11,7 @@ import {
   jiraScopeBlockMessage
 } from "../integrationScope/atlassianQuery";
 import { buildRepoSearchTerms } from "./docSearchQuery";
+import { CODE_HOST_PROVIDERS, type CodeHostProvider } from "../api/codeHosts/types";
 import { shouldFetchIncidentIntegrations } from "./incidentIntent";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
@@ -38,7 +39,15 @@ export type JiraSearchContext = {
   matchStrategy?: "text" | "git" | "key" | "cross-tool" | "none";
   /** Human-readable note when fallback search strategies were used. */
   searchNote?: string;
+  /** Named keys that GET /issue/{key} could not open (404, permission, etc.). */
+  keyErrors?: Array<{ key: string; error: string }>;
   error?: string;
+};
+
+/** Injectable Jira client for tests — production uses credentials. */
+export type JiraSearchClient = {
+  getIssue(issueKey: string): Promise<JiraIssue>;
+  searchIssues(jql: string, limit?: number): Promise<JiraIssue[]>;
 };
 
 /** True when a free-form chat message likely needs live Jira evidence. */
@@ -90,8 +99,12 @@ export function shouldFetchJiraContext(request: ContextFetchRequest): boolean {
   });
 }
 
-export function buildRepoJql(owner: string | undefined, repo: string | undefined): string | undefined {
-  const repoClause = buildRepoClause(owner, repo);
+export function buildRepoJql(
+  owner: string | undefined,
+  repo: string | undefined,
+  options?: { preferHost?: CodeHostProvider }
+): string | undefined {
+  const repoClause = buildRepoClause(owner, repo, options?.preferHost);
   if (!repoClause) {
     return undefined;
   }
@@ -106,6 +119,21 @@ export function shouldMergeRepoWideJiraHits(options: { hasFocusJql: boolean }): 
 /** Named keys (COOP-101) skip the 20-ticket focus dump. */
 export function shouldRunJiraFocusTextSearch(namedIssueKeys: string[]): boolean {
   return namedIssueKeys.length === 0;
+}
+
+/**
+ * Fuzzy JQL is discovery-only. When the user (or editor context) already named
+ * ticket keys, open those issues by ID — do not run keyword search unless they
+ * also asked for repo-wide tickets.
+ */
+export function shouldRunJiraTextSearch(options: {
+  namedIssueKeys: string[];
+  wantsRepoDiscovery: boolean;
+}): boolean {
+  if (options.namedIssueKeys.length > 0 && !options.wantsRepoDiscovery) {
+    return false;
+  }
+  return true;
 }
 
 /** Focus terms for Jira text search (path stem, basename, caller extras). */
@@ -211,16 +239,19 @@ export function buildFocusAwareJiraJql(options: {
   activeFile?: string;
   extraTerms?: string[];
   queryText?: string;
+  preferHost?: CodeHostProvider;
 }): string | undefined {
-  const repoClause = buildRepoClause(options.owner, options.repo);
+  const repoClause = buildRepoClause(options.owner, options.repo, options.preferHost);
   const focusTerms = buildJiraFocusTerms(options);
   if (!repoClause || focusTerms.length === 0) {
     return undefined;
   }
   const focusClauses = new Set<string>();
   for (const term of focusTerms) {
-    focusClauses.add(`text ~ "${escapeJqlString(term)}"`);
-    focusClauses.add(`summary ~ "${escapeJqlString(term)}"`);
+    focusClauses.add(jqlContainsClause("text", term));
+    if (!term.includes(":")) {
+      focusClauses.add(jqlContainsClause("summary", term));
+    }
   }
   return `(${repoClause}) AND (${[...focusClauses].join(" OR ")}) ORDER BY updated DESC`;
 }
@@ -346,9 +377,12 @@ export async function fetchJiraSearchContext(options: {
   /** File/focus extras (path stems, Gaps phrases) — same list Slack/Confluence already use. */
   extraTerms?: string[];
   limit?: number;
+  preferHost?: CodeHostProvider;
   codeHostRouter?: CodeHostRouter;
   codeHostConnected?: boolean;
   integrationScope?: ResolvedIntegrationScope;
+  /** Test seam — production leaves this unset and builds a client from secrets. */
+  client?: JiraSearchClient;
 }): Promise<JiraSearchContext> {
   if (isJiraScopeBlocked(options.integrationScope)) {
     return {
@@ -359,8 +393,7 @@ export async function fetchJiraSearchContext(options: {
     };
   }
 
-  const creds = await options.secrets.getCredentials();
-  const client = createJiraClientFromCredentials(creds);
+  const client = options.client ?? createJiraClientFromCredentials(await options.secrets.getCredentials());
   if (!client) {
     return {
       source: "jira-search",
@@ -374,28 +407,38 @@ export async function fetchJiraSearchContext(options: {
   const contextKeys = collectJiraKeysFromText(...(options.contextText ?? []), options.activeFile);
   const crossToolKeys = collectJiraKeysFromText(...(options.crossToolText ?? []));
   const queryKeys = JiraClient.extractIssueKeys(queryText);
-  const discoveredKeys = new Set([...queryKeys, ...contextKeys, ...crossToolKeys]);
+  const userNamedKeys = [...new Set([...queryKeys, ...contextKeys])];
+  const discoveredKeys = new Set([...userNamedKeys, ...crossToolKeys]);
   const issuesByKey = new Map<string, JiraIssue>();
+  const keyErrors: Array<{ key: string; error: string }> = [];
   const limit = options.limit ?? 20;
   const focusJqlOptions = {
     owner: options.owner,
     repo: options.repo,
     activeFile: options.activeFile,
     extraTerms: options.extraTerms,
-    queryText
+    queryText,
+    preferHost: options.preferHost
   };
 
   for (const key of discoveredKeys) {
-    await addIssueByKey(client, issuesByKey, key);
+    const miss = await addIssueByKey(client, issuesByKey, key);
+    if (miss) {
+      keyErrors.push({ key, error: miss });
+    }
   }
 
+  const runTextSearch = shouldRunJiraTextSearch({
+    namedIssueKeys: userNamedKeys,
+    wantsRepoDiscovery: wantsRepoLinkedJiraDiscovery(queryText)
+  });
   const focusJql = scopeJql(buildFocusAwareJiraJql(focusJqlOptions), options.integrationScope);
-  const repoJql = scopeJql(buildRepoJql(options.owner, options.repo), options.integrationScope);
+  const repoJql = scopeJql(buildRepoJql(options.owner, options.repo, { preferHost: options.preferHost }), options.integrationScope);
   let searchError: string | undefined;
   let textSearchCount = 0;
-  let usedJql = focusJql ?? repoJql ?? "";
+  let usedJql = runTextSearch ? (focusJql ?? repoJql ?? "") : "";
 
-  if (focusJql && shouldRunJiraFocusTextSearch(queryKeys)) {
+  if (runTextSearch && focusJql) {
     try {
       const focusHits = await client.searchIssues(focusJql, limit);
       textSearchCount = focusHits.length;
@@ -409,7 +452,11 @@ export async function fetchJiraSearchContext(options: {
 
   // Repo-wide dump only when the user named no file/symbol/focus.
   // Compound "requireAuth + Jira" must not fail-open into 20 unrelated tickets.
-  if (shouldMergeRepoWideJiraHits({ hasFocusJql: Boolean(focusJql) }) && repoJql) {
+  if (
+    runTextSearch &&
+    shouldMergeRepoWideJiraHits({ hasFocusJql: Boolean(focusJql) }) &&
+    repoJql
+  ) {
     try {
       const repoHits = await client.searchIssues(repoJql, limit);
       textSearchCount = repoHits.length;
@@ -430,6 +477,7 @@ export async function fetchJiraSearchContext(options: {
   const repo = options.repo?.trim();
   let repoKeyHits: string[] | undefined;
   const shouldScanGit =
+    runTextSearch &&
     textSearchCount === 0 &&
     Boolean(owner && repo && options.codeHostRouter && options.codeHostConnected);
 
@@ -441,30 +489,21 @@ export async function fetchJiraSearchContext(options: {
     });
     for (const key of repoKeyHits) {
       discoveredKeys.add(key);
-      await addIssueByKey(client, issuesByKey, key);
+      const miss = await addIssueByKey(client, issuesByKey, key);
+      if (miss) {
+        keyErrors.push({ key, error: miss });
+      }
     }
   }
 
   const issueKeys = [...discoveredKeys];
-  const keysJql = scopeJql(buildIssueKeysJql(issueKeys), options.integrationScope);
-  if (keysJql && textSearchCount === 0 && issuesByKey.size < limit) {
-    try {
-      const keyHits = await client.searchIssues(keysJql, limit);
-      for (const issue of keyHits) {
-        issuesByKey.set(issue.key, issue);
-      }
-    } catch (error) {
-      if (!searchError) {
-        searchError = error instanceof Error ? error.message : "Jira search failed.";
-      }
-    }
-  }
-
   const repoQuery = owner && repo ? `${owner}/${repo}` : options.repo?.trim();
   let searchNote: string | undefined;
   let matchStrategy: JiraSearchContext["matchStrategy"] = "none";
 
-  if (textSearchCount > 0 || (focusJql && issuesByKey.size > 0)) {
+  if (queryKeys.length > 0 && issuesByKey.size > 0) {
+    matchStrategy = "key";
+  } else if (textSearchCount > 0) {
     matchStrategy = "text";
   } else if (repoKeyHits?.length && issuesByKey.size > 0) {
     matchStrategy = "git";
@@ -484,8 +523,13 @@ export async function fetchJiraSearchContext(options: {
     searchNote =
       `No Jira tickets mention ${repoQuery ?? "this repository"} in summary or description, ` +
       "and no issue keys were found in recent git history or open files. " +
-      "Link work by adding the repo slug to ticket text (e.g. github:owner/repo) or reference keys in commits (e.g. COOP-101). " +
+      `Link work by adding the repo slug to ticket text (e.g. ${CODE_HOST_PROVIDERS.map((host) => `${host}:owner/repo`).join(", ")}) or reference keys in commits (e.g. COOP-101). ` +
       "Ask about a specific key with `/jira COOP-101`.";
+  }
+
+  if (keyErrors.length > 0 && issuesByKey.size > 0) {
+    const missKeys = keyErrors.map((entry) => entry.key).join(", ");
+    searchNote = [searchNote, `Could not open ${missKeys}.`].filter(Boolean).join(" ");
   }
 
   if (issuesByKey.size === 0 && !jql && issueKeys.length === 0) {
@@ -493,7 +537,10 @@ export async function fetchJiraSearchContext(options: {
       source: "jira-search",
       jql: "",
       issues: [],
-      error: "Set repository owner and repo in Settings to search Jira by repo."
+      keyErrors: keyErrors.length > 0 ? keyErrors : undefined,
+      error: keyErrors.length > 0
+        ? formatKeyErrors(keyErrors)
+        : "Set repository owner and repo in Settings to search Jira by repo."
     };
   }
 
@@ -504,31 +551,56 @@ export async function fetchJiraSearchContext(options: {
     owner: options.owner,
     repo: options.repo
   }).slice(0, limit);
+  const issues = filterScopedIssues(ranked, options.integrationScope);
+
+  const emptyError =
+    issues.length === 0
+      ? (searchError
+          ?? (keyErrors.length > 0 ? formatKeyErrors(keyErrors) : undefined)
+          ?? (ranked.length > 0
+            ? "Jira project scope excluded the matching tickets."
+            : undefined))
+      : undefined;
 
   return {
     source: "jira-search",
     jql: jql ?? "",
     repoQuery,
-    issues: filterScopedIssues(ranked, options.integrationScope),
+    issues,
     issueKeyHits: issueKeys.length > 0 ? issueKeys : undefined,
     repoKeyHits: repoKeyHits?.length ? repoKeyHits : undefined,
     matchStrategy,
     searchNote,
-    error: searchError
+    keyErrors: keyErrors.length > 0 ? keyErrors : undefined,
+    error: emptyError
   };
 }
 
-function buildRepoClause(owner: string | undefined, repo: string | undefined): string | undefined {
-  const terms = buildRepoSearchTerms(owner, repo);
+function buildRepoClause(
+  owner: string | undefined,
+  repo: string | undefined,
+  preferHost?: CodeHostProvider
+): string | undefined {
+  const terms = buildRepoSearchTerms(owner, repo, { preferHost });
   if (terms.length === 0) {
     return undefined;
   }
   const clauses = new Set<string>();
   for (const term of terms) {
-    clauses.add(`text ~ "${escapeJqlString(term)}"`);
-    clauses.add(`summary ~ "${escapeJqlString(term)}"`);
+    clauses.add(jqlContainsClause("text", term));
+    if (!term.includes(":")) {
+      clauses.add(jqlContainsClause("summary", term));
+    }
   }
   return `(${[...clauses].join(" OR ")})`;
+}
+
+function jqlContainsClause(field: "text" | "summary", term: string): string {
+  const escaped = escapeJqlString(term);
+  if (/[:/]/.test(term)) {
+    return `${field} ~ "\\"${escaped}\\""`;
+  }
+  return `${field} ~ "${escaped}"`;
 }
 
 function scopeJql(
@@ -562,19 +634,24 @@ function filterScopedIssues(
   );
 }
 
+function formatKeyErrors(errors: Array<{ key: string; error: string }>): string {
+  return errors.map((entry) => `${entry.key}: ${entry.error}`).join("; ");
+}
+
 async function addIssueByKey(
-  client: JiraClient,
+  client: JiraSearchClient,
   issuesByKey: Map<string, JiraIssue>,
   key: string
-): Promise<void> {
+): Promise<string | undefined> {
   if (issuesByKey.has(key)) {
-    return;
+    return undefined;
   }
   try {
     const issue = await client.getIssue(key);
     issuesByKey.set(issue.key, issue);
-  } catch {
-    /* skip missing keys */
+    return undefined;
+  } catch (error) {
+    return error instanceof Error ? error.message : "Issue not found.";
   }
 }
 

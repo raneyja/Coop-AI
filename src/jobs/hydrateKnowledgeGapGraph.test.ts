@@ -63,10 +63,12 @@ test("memory tree wins over manifest", () => {
   );
 });
 
-test("repo id candidates include github prefix", () => {
+test("repo id candidates include every code-host prefix", () => {
   assert.deepEqual(knowledgeGapRepoIdCandidates("raneyja/Coop-AI", { owner: "raneyja", repo: "Coop-AI" }), [
     "raneyja/Coop-AI",
-    "github:raneyja/Coop-AI"
+    "github:raneyja/Coop-AI",
+    "gitlab:raneyja/Coop-AI",
+    "bitbucket:raneyja/Coop-AI"
   ]);
 });
 

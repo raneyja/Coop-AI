@@ -3,14 +3,14 @@ import { looksLikeAbsoluteDiskPath } from "../../context/outsideWorkspaceFile";
 import { degradationCacheKey } from "../../cache/degradationCache";
 import type { DecisionTimeline } from "../../types/decisionTimeline";
 import { getDecisionArchaeologyEngine } from "../../engines/decisionArchaeologyRegistry";
-import type { CodeHostProvider } from "../../api/codeHosts/types";
-import { coordinatesFromRepoId } from "../../api/codeHosts/types";
+import { resolveRepoCoordinates } from "../../api/codeHosts/types";
+import { evidenceCodeHostDisplayName } from "../../api/codeHosts/codeHostLabels";
 import { focusQueryForRetrieval } from "../../context/userFocusQuery";
 import { contextResult, unavailableResult, type FeatureExecutionContext } from "./types";
 
 export async function traceDecision(context: FeatureExecutionContext) {
   const params = context.request.params;
-  const codeHost = resolveCodeHostContext(params);
+  const codeHost = resolveRepoCoordinates(params);
   const key = degradationCacheKey("decision", [
     params.repoId,
     params.file,
@@ -29,14 +29,14 @@ export async function traceDecision(context: FeatureExecutionContext) {
           cached: true,
           cacheAge: cached.cacheAge
         },
-        `${codeHostLabel(codeHost?.provider)} offline. Showing cached decision history.`,
+        `${evidenceCodeHostDisplayName(codeHost?.provider)} offline. Showing cached decision history.`,
         true
       );
     }
     if (context.status.level === "unavailable") {
       return unavailableResult(
         context,
-        `${codeHostLabel(codeHost?.provider)} is offline and no cached decision history is available.`
+        `${evidenceCodeHostDisplayName(codeHost?.provider)} is offline and no cached decision history is available.`
       );
     }
   }
@@ -130,7 +130,7 @@ export async function traceDecision(context: FeatureExecutionContext) {
   data.slackContext = slackOffline ? null : { status: "slack-thread-search-requested" };
   data.jiraContext = jiraOffline ? null : { status: "ticket-lookup-requested" };
 
-  await context.cache.set(key, data, { provider: codeHost?.provider ?? "github", feature: "trace_why" });
+  await context.cache.set(key, data, { provider: codeHost?.provider, feature: "trace_why" });
   const skipped = [
     !engine ? "Decision engine not initialized" : undefined,
     !codeHost ? "Repository not configured" : undefined,
@@ -144,58 +144,16 @@ export async function traceDecision(context: FeatureExecutionContext) {
   return contextResult(context, data, skipped || context.status.message, false);
 }
 
-function resolveCodeHostContext(params: {
-  owner?: string;
-  repo?: string;
-  repoId?: string;
-  provider?: string;
-}): { owner: string; repo: string; provider: CodeHostProvider } | undefined {
-  if (params.repoId) {
-    const fromId = coordinatesFromRepoId(
-      params.repoId.includes(":") ? params.repoId : `github:${params.repoId}`
-    );
-    if (fromId) {
-      return { owner: fromId.owner, repo: fromId.repo, provider: fromId.provider };
-    }
-    const slash = params.repoId.split("/");
-    if (slash.length === 2) {
-      return { owner: slash[0], repo: slash[1], provider: "github" };
-    }
-  }
-  if (params.owner && params.repo) {
-    const provider = normalizeCodeHostProvider(params.provider);
-    return { owner: params.owner, repo: params.repo, provider };
-  }
-  return undefined;
-}
-
-function normalizeCodeHostProvider(value?: string): CodeHostProvider {
-  if (value === "gitlab" || value === "bitbucket" || value === "github") {
-    return value;
-  }
-  return "github";
-}
-
-function codeHostLabel(provider?: CodeHostProvider): string {
-  if (provider === "gitlab") {
-    return "GitLab";
-  }
-  if (provider === "bitbucket") {
-    return "Bitbucket";
-  }
-  return "GitHub";
-}
-
 function placeholderDecisionData(
   params: { file?: string; lines?: { start: number; end: number } },
-  provider: CodeHostProvider | undefined,
+  provider: string | undefined,
   level: string,
   error?: string
 ): Record<string, unknown> {
   return {
     file: params.file,
     lines: params.lines,
-    commitHistory: { status: "decision-history-requested", provider: provider ?? "github" },
+    commitHistory: { status: "decision-history-requested", provider },
     error,
     fallbackLevel: level
   };

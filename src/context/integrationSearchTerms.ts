@@ -19,6 +19,7 @@ export function buildIntegrationSearchTermList(options: {
   crossToolText?: string[];
   extraTerms?: string[];
   jiraIssueKeys?: string[];
+  preferHost?: import("../api/codeHosts/types").CodeHostProvider;
 }): string[] {
   const terms = new Set<string>();
   // Caller extras (e.g. Gaps focus phrases) first so they survive the term cap.
@@ -27,12 +28,6 @@ export function buildIntegrationSearchTermList(options: {
     if (trimmed) {
       terms.add(trimmed);
     }
-  }
-  for (const term of buildRepoSearchTerms(options.owner, options.repo)) {
-    terms.add(term);
-  }
-  for (const term of filePathSearchTerms(options.activeFile)) {
-    terms.add(term);
   }
   for (const key of [
     ...collectJiraKeysFromText(
@@ -43,6 +38,14 @@ export function buildIntegrationSearchTermList(options: {
     ...(options.jiraIssueKeys ?? [])
   ]) {
     terms.add(key);
+  }
+  for (const term of filePathSearchTerms(options.activeFile)) {
+    terms.add(term);
+  }
+  for (const term of buildRepoSearchTerms(options.owner, options.repo, {
+    preferHost: options.preferHost
+  })) {
+    terms.add(term);
   }
   return [...terms].slice(0, MAX_INTEGRATION_SEARCH_TERMS);
 }
@@ -72,6 +75,7 @@ export function buildDiscussionSearchQueries(options: {
   contextText?: string[];
   crossToolText?: string[];
   jiraIssueKeys?: string[];
+  preferHost?: import("../api/codeHosts/types").CodeHostProvider;
   /** When set (e.g. Slack `is:thread`), appended as a separate query variant per term. */
   threadModifier?: string;
 }): string[] {
@@ -109,7 +113,9 @@ export function buildDiscussionSearchQueries(options: {
     }
   }
 
-  for (const term of buildRepoSearchTerms(options.owner, options.repo)) {
+  for (const term of buildRepoSearchTerms(options.owner, options.repo, {
+    preferHost: options.preferHost
+  })) {
     push(term);
     if (options.threadModifier) {
       push(`${term} ${options.threadModifier}`);
