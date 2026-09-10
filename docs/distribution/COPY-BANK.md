@@ -37,7 +37,7 @@ VS Code extension that answers who owns this, what else breaks, and why it shipp
 
 ### Org bio
 ```text
-Code intelligence for VS Code. Understand production code with your repo graph + company Slack/Jira — without cloning the monorepo.
+Code intelligence for VS Code. Answer ownership, blast radius, and decision history with your repo graph + company Slack/Jira — without cloning the monorepo.
 ```
 
 ### Discussions announcement
