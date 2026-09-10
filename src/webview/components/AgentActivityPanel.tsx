@@ -234,7 +234,7 @@ function CollapsibleTerm({
   );
 }
 
-/** Cursor-like activity panel: todos, thinking, tool/file summary. */
+/** Cursor-like activity panel: explored work, files, then Thinking last. */
 export function AgentActivityPanel({
   todos,
   tools,
@@ -364,47 +364,22 @@ export function AgentActivityPanel({
         <p className="coop-agent-fallback-status">{fallbackStatus}</p>
       ) : null}
 
-      {showThinkingHeader ? (
-        <div className="coop-agent-thinking">
-          <button
-            type="button"
-            className="coop-agent-thinking-toggle"
-            aria-expanded={thinkingOpen}
-            onClick={() => {
-              thinkingTouchedRef.current = true;
-              setThinkingOpen((value) => !value);
-            }}
-          >
-            <span className="coop-agent-thinking-title">
-              {thinkingStreaming || !isComplete
-                ? "Thinking"
-                : formatThoughtLabel(thinkingMs)}
-              {thinkingStreaming ? <span className="coop-agent-thinking-pulse" aria-hidden="true" /> : null}
-            </span>
-            <Chevron open={thinkingOpen} />
-          </button>
-          {thinkingOpen && trimmedThinking ? <ThinkingBody text={trimmedThinking} /> : null}
-        </div>
-      ) : null}
-
-      {(fileCount > 0 || (onStop && !isComplete)) ? (
+      {fileCount > 0 ? (
         <div className="coop-agent-toolbar">
           <div className="coop-agent-toolbar-left">
-            {fileCount > 0 ? (
-              <button
-                type="button"
-                className="coop-agent-files-toggle"
-                aria-expanded={filesOpen}
-                onClick={() => setFilesOpen((value) => !value)}
-              >
-                <Chevron open={filesOpen} />
-                <span>
-                  {fileCount} {fileCount === 1 ? "File" : "Files"}
-                </span>
-              </button>
-            ) : null}
+            <button
+              type="button"
+              className="coop-agent-files-toggle"
+              aria-expanded={filesOpen}
+              onClick={() => setFilesOpen((value) => !value)}
+            >
+              <Chevron open={filesOpen} />
+              <span>
+                {fileCount} {fileCount === 1 ? "File" : "Files"}
+              </span>
+            </button>
           </div>
-          {onStop && !isComplete ? (
+          {onStop && !isComplete && !showThinkingHeader ? (
             <button type="button" className="coop-agent-stop-btn" onClick={onStop}>
               Stop
             </button>
@@ -431,6 +406,43 @@ export function AgentActivityPanel({
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {showThinkingHeader ? (
+        <div className="coop-agent-thinking">
+          <div className="coop-agent-thinking-row">
+            <button
+              type="button"
+              className="coop-agent-thinking-toggle"
+              aria-expanded={thinkingOpen}
+              onClick={() => {
+                thinkingTouchedRef.current = true;
+                setThinkingOpen((value) => !value);
+              }}
+            >
+              <span className="coop-agent-thinking-title">
+                {thinkingStreaming || !isComplete
+                  ? "Thinking"
+                  : formatThoughtLabel(thinkingMs)}
+                {thinkingStreaming ? <span className="coop-agent-thinking-pulse" aria-hidden="true" /> : null}
+              </span>
+              <Chevron open={thinkingOpen} />
+            </button>
+            {onStop && !isComplete ? (
+              <button type="button" className="coop-agent-stop-btn" onClick={onStop}>
+                Stop
+              </button>
+            ) : null}
+          </div>
+          {thinkingOpen && trimmedThinking ? <ThinkingBody text={trimmedThinking} /> : null}
+        </div>
+      ) : onStop && !isComplete && fileCount === 0 ? (
+        <div className="coop-agent-toolbar">
+          <div className="coop-agent-toolbar-left" />
+          <button type="button" className="coop-agent-stop-btn" onClick={onStop}>
+            Stop
+          </button>
+        </div>
       ) : null}
     </>
   );

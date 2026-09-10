@@ -1474,6 +1474,10 @@
     border-color: color-mix(in srgb, var(--coop-panel-muted) 40%, transparent);
   }
 
+  .coop-agent-thinking-row {
+    @apply flex items-center justify-between gap-2;
+  }
+
   .coop-agent-thinking-toggle {
     @apply flex items-center gap-1.5 border-0 bg-transparent p-0 text-left text-[12.5px] font-medium;
     color: color-mix(in srgb, var(--coop-panel-muted) 55%, var(--coop-panel-foreground) 45%);
