@@ -10,6 +10,7 @@ import {
   cancelOrganization,
   fetchOrganizations,
   formatDate,
+  formatBilledAmount,
   formatUsdFromCents,
   formatUsagePercent,
   planBadgeClass,
@@ -231,6 +232,7 @@ export default function CustomersPage() {
               <th>Billing</th>
               <th>Seats</th>
               <th>Usage</th>
+              <th>Billed</th>
               <th>Cost</th>
               <th>Margin</th>
               <th>Status</th>
@@ -241,13 +243,13 @@ export default function CustomersPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={showActions ? 10 : 9} className="py-8 text-center text-coop-muted">
+                <td colSpan={showActions ? 11 : 10} className="py-8 text-center text-coop-muted">
                   Loading…
                 </td>
               </tr>
             ) : organizations.length === 0 ? (
               <tr>
-                <td colSpan={showActions ? 10 : 9} className="py-8 text-center text-coop-muted">
+                <td colSpan={showActions ? 11 : 10} className="py-8 text-center text-coop-muted">
                   {unavailable ? "Customer list unavailable until operator API is deployed." : "No customers match your filters."}
                 </td>
               </tr>
@@ -276,6 +278,9 @@ export default function CustomersPage() {
                       ratio={org.usage?.usedRatio}
                       label={formatUsagePercent(org.usage?.usedRatio)}
                     />
+                  </td>
+                  <td className="whitespace-nowrap text-xs">
+                    {formatBilledAmount(org.usage?.seatRevenueCents)}
                   </td>
                   <td className="text-xs">{formatUsdFromCents(org.usage?.usedCents)}</td>
                   <td

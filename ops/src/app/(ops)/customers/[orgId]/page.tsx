@@ -19,6 +19,7 @@ import {
   fetchOrganizationAudit,
   fetchOrganizationUsage,
   fetchOrganizationUsers,
+  formatBilledAmount,
   formatDate,
   formatDateTime,
   formatUsdFromCents,
@@ -476,8 +477,8 @@ export default function CustomerDetailPage() {
             </div>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               <div>
-                <p className="admin-stat-label">Seat revenue</p>
-                <p className="admin-stat-value--quiet">{formatUsdFromCents(usage.seatRevenueCents)}</p>
+                <p className="admin-stat-label">Billed</p>
+                <p className="admin-stat-value--quiet">{formatBilledAmount(usage.seatRevenueCents)}</p>
               </div>
               <div>
                 <p className="admin-stat-label">Margin</p>
