@@ -4,28 +4,35 @@
 
 ## Do this now — Browser / GitHub
 
-### 1. Repo homepage URL
+There is **no Website tab under Settings → General**. The website + description live in the repo **About** panel.
 
-1. Open the Coop-AI repo → **Settings** → **General** → **Website**
-2. Set website to exactly:
+### 1–2. Website URL + description (same dialog)
+
+1. Open the **repo home** (Code tab) — e.g. `https://github.com/raneyja/Coop-AI`
+2. On the **right sidebar**, find **About**
+3. Click the **gear** icon next to About
+4. In **Website**, paste:
 
 ```text
 https://coop-ai.dev
 ```
 
-3. Save
-
-**Success:** Repo header shows `coop-ai.dev` (not a Vercel preview URL).
-
-### 2. Repo description (About)
-
-Paste:
+5. In **Description**, paste:
 
 ```text
-VS Code code intelligence — Deep-Index repos without cloning, company Slack/Jira in the editor, reviewable edits. Not an autonomous coding agent.
+VS Code extension that answers who owns this, what else breaks, and why it shipped — using your repo graph plus company Slack/Jira, without cloning the monorepo. You review every edit.
 ```
 
-Topics (add if missing): `vscode`, `code-intelligence`, `ai`, `developer-tools`, `slack`, `jira`
+6. Add topics if missing: `vscode`, `code-intelligence`, `ai`, `developer-tools`, `slack`, `jira`
+7. Click **Save changes**
+
+**Success:** Right sidebar shows a clickable `coop-ai.dev` link (not a Vercel preview URL).
+
+**Only if blocked:** empty repos hide About — make sure the default branch has files. Or from a machine logged into `gh`:
+
+```bash
+gh repo edit --homepage "https://coop-ai.dev" --description "VS Code extension that answers who owns this, what else breaks, and why it shipped — using your repo graph plus company Slack/Jira, without cloning the monorepo. You review every edit."
+```
 
 ### 3. Org profile (if you have a GitHub org)
 
@@ -34,7 +41,7 @@ Topics (add if missing): `vscode`, `code-intelligence`, `ai`, `developer-tools`,
 - Bio:
 
 ```text
-Code intelligence for VS Code. Understand production code with your repo graph + company Slack/Jira — without cloning the monorepo.
+Code intelligence for VS Code. Answer ownership, blast radius, and decision history with your repo graph + company Slack/Jira — without cloning the monorepo.
 ```
 
 ## Do this now — already in repo (after merge)

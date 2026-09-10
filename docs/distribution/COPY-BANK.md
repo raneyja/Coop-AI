@@ -32,7 +32,7 @@ https://coop-ai.dev
 
 ### About description
 ```text
-VS Code code intelligence — Deep-Index repos without cloning, company Slack/Jira in the editor, reviewable edits. Not an autonomous coding agent.
+VS Code extension that answers who owns this, what else breaks, and why it shipped — using your repo graph plus company Slack/Jira, without cloning the monorepo. You review every edit.
 ```
 
 ### Org bio
