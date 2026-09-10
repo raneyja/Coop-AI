@@ -45,11 +45,15 @@ If your org gave you a `.vsix` file:
 
 ## Docs and support
 
+- [What is CoopAI?](https://coop-ai.dev/docs/what-is-coopai) — canonical definition (and what we are not)
+- [How it works](https://coop-ai.dev/how-it-works)
+- [Compare CoopAI](https://coop-ai.dev/docs/compare)
 - [Documentation](https://coop-ai.dev/docs)
 - [Owner’s manual](https://coop-ai.dev/manual)
 - [Security](https://coop-ai.dev/security)
 - [Privacy](https://coop-ai.dev/privacy)
 - [Terms](https://coop-ai.dev/terms)
+- Machine-readable brief: [llms.txt](https://coop-ai.dev/llms.txt)
 - Support: [support@coop-ai.dev](mailto:support@coop-ai.dev)
 
 ## License
