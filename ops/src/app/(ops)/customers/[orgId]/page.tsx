@@ -19,6 +19,7 @@ import {
   fetchOrganizationAudit,
   fetchOrganizationUsage,
   fetchOrganizationUsers,
+  formatBilledAmount,
   formatDate,
   formatDateTime,
   formatUsdFromCents,
@@ -410,7 +411,7 @@ export default function CustomerDetailPage() {
     detail.stripe.seats !== detail.coopBilling.seats;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <div>
         <Link href="/customers" className="admin-link text-sm">
           ← Customers
@@ -439,14 +440,14 @@ export default function CustomerDetailPage() {
       {actionError && <p className="text-sm text-red-400">{actionError}</p>}
       {actionNotice && <p className="text-sm text-coop-index">{actionNotice}</p>}
 
-      <nav className="flex flex-wrap gap-3 text-sm">
-        <a href="#ops-usage" className="admin-link">
+      <nav className="admin-page-nav">
+        <a href="#ops-usage" className="admin-page-nav-link">
           Usage
         </a>
-        <a href="#ops-users" className="admin-link">
+        <a href="#ops-users" className="admin-page-nav-link">
           Users
         </a>
-        <a href="#ops-billing" className="admin-link">
+        <a href="#ops-billing" className="admin-page-nav-link">
           Billing
         </a>
       </nav>
@@ -455,35 +456,34 @@ export default function CustomerDetailPage() {
         <h2 className="admin-section-label">Usage & cost</h2>
         {usage ? (
           <>
-            <div className="admin-stat-row mt-3">
-              <div className="admin-stat">
-                <p className="text-xs text-coop-muted">LLM cost</p>
-                <p className="mt-1 text-lg font-medium">{formatUsdFromCents(usage.usedCents)}</p>
-              </div>
-              <div className="admin-stat">
-                <p className="text-xs text-coop-muted">
-                  {usage.capKind === "free_credits" ? "Free credits" : "Included AI $"}
-                </p>
-                <p className="mt-1 text-lg font-medium">
+            <div>
+              <p className="admin-stat-label">LLM cost this period</p>
+              <p className="mt-1 text-2xl font-semibold text-white">
+                {formatUsdFromCents(usage.usedCents)}
+                <span className="ml-2 text-base font-normal text-coop-muted">
+                  of{" "}
                   {usage.capKind === "free_credits" && usage.free
-                    ? `${Math.round(usage.free.usedTokens / 1000)}K / ${Math.round(usage.free.limitTokens / 1000)}K`
+                    ? `${Math.round(usage.free.limitTokens / 1000)}K credits`
                     : formatUsdFromCents(usage.includedCents)}
-                </p>
+                </span>
+              </p>
+              <div className="mt-3">
+                <UsageMeterBar
+                  size="lg"
+                  ratio={usage.usedRatio}
+                  label={`${formatUsagePercent(usage.usedRatio)} of included`}
+                />
               </div>
-              <div className="admin-stat">
-                <p className="text-xs text-coop-muted">Of plan</p>
-                <div className="mt-2">
-                  <UsageMeterBar ratio={usage.usedRatio} label={formatUsagePercent(usage.usedRatio)} />
-                </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              <div>
+                <p className="admin-stat-label">Billed</p>
+                <p className="admin-stat-value--quiet">{formatBilledAmount(usage.seatRevenueCents)}</p>
               </div>
-              <div className="admin-stat">
-                <p className="text-xs text-coop-muted">Seat revenue</p>
-                <p className="mt-1 text-lg font-medium">{formatUsdFromCents(usage.seatRevenueCents)}</p>
-              </div>
-              <div className="admin-stat">
-                <p className="text-xs text-coop-muted">Margin</p>
+              <div>
+                <p className="admin-stat-label">Margin</p>
                 <p
-                  className={`mt-1 text-lg font-medium ${
+                  className={`admin-stat-value--quiet ${
                     usage.marginCents != null && usage.marginCents < 0 ? "text-coop-warn" : ""
                   }`}
                 >
@@ -491,72 +491,51 @@ export default function CustomerDetailPage() {
                 </p>
               </div>
             </div>
-            <div className="admin-stat-row mt-4">
-              <div className="admin-stat">
-                <p className="text-xs text-coop-muted">Chat</p>
-                <p className="mt-1 text-lg font-medium">{usage.productMix.chat}</p>
-              </div>
-              <div className="admin-stat">
-                <p className="text-xs text-coop-muted">Completions</p>
-                <p className="mt-1 text-lg font-medium">{usage.productMix.completions}</p>
-              </div>
-              <div className="admin-stat">
-                <p className="text-xs text-coop-muted">Quick actions</p>
-                <p className="mt-1 text-lg font-medium">{usage.productMix.quickActions}</p>
-              </div>
-              <div className="admin-stat">
-                <p className="text-xs text-coop-muted">Lightning</p>
-                <p className="mt-1 text-lg font-medium">{usage.productMix.lightning}</p>
-              </div>
+            <div className="admin-mix">
+              <span>Chat {usage.productMix.chat}</span>
+              <span>Completions {usage.productMix.completions}</span>
+              <span>Quick actions {usage.productMix.quickActions}</span>
+              <span>Lightning {usage.productMix.lightning}</span>
             </div>
-            <p className="mt-3 text-xs text-coop-muted">
-              LLM cost uses stored model rates this period. Seat revenue is list price × purchased seats, not
-              Stripe invoices.
-              {usage.capKind === "unlimited"
-                ? " Enterprise has no included-$ cap."
-                : usage.capKind === "free_credits"
-                  ? " Free credits are a rolling window, not a monthly $ cap."
-                  : ""}
-            </p>
           </>
         ) : (
-          <p className="mt-3 text-sm text-coop-muted">Usage is unavailable for this customer right now.</p>
+          <p className="text-sm text-coop-muted">Usage is unavailable for this customer right now.</p>
         )}
       </section>
 
       <section className="admin-card">
         <h2 className="admin-section-label">Health</h2>
-        <div className="admin-stat-row mt-3">
+        <div className="admin-stat-row">
           <div className="admin-stat">
-            <p className="text-xs text-coop-muted">Integrations</p>
-            <p className="mt-1 text-lg font-medium">{detail.health?.integrationsCount ?? "—"}</p>
+            <p className="admin-stat-label">Integrations</p>
+            <p className="admin-stat-value--quiet">{detail.health?.integrationsCount ?? "—"}</p>
           </div>
           <div className="admin-stat">
-            <p className="text-xs text-coop-muted">Indexed repos</p>
-            <p className="mt-1 text-lg font-medium">{detail.health?.indexedRepos ?? "—"}</p>
+            <p className="admin-stat-label">Indexed repos</p>
+            <p className="admin-stat-value--quiet">{detail.health?.indexedRepos ?? "—"}</p>
           </div>
           <div className="admin-stat">
-            <p className="text-xs text-coop-muted">Indexing errors</p>
-            <p className={`mt-1 text-lg font-medium ${(detail.health?.indexingErrors ?? 0) > 0 ? "text-coop-warn" : ""}`}>
+            <p className="admin-stat-label">Indexing errors</p>
+            <p className={`admin-stat-value--quiet ${(detail.health?.indexingErrors ?? 0) > 0 ? "text-coop-warn" : ""}`}>
               {detail.health?.indexingErrors ?? 0}
             </p>
           </div>
           <div className="admin-stat">
-            <p className="text-xs text-coop-muted">Last admin login</p>
-            <p className="mt-1 text-sm">{formatDateTime(detail.health?.lastAdminLogin)}</p>
+            <p className="admin-stat-label">Last admin login</p>
+            <p className="admin-stat-value--quiet">{formatDateTime(detail.health?.lastAdminLogin)}</p>
           </div>
           <div className="admin-stat">
-            <p className="text-xs text-coop-muted">Repo access</p>
-            <p className="mt-1 text-sm font-mono">{detail.repoAccessMode ?? "all_indexed"}</p>
+            <p className="admin-stat-label">Repo access</p>
+            <p className="admin-stat-value--quiet font-mono">{detail.repoAccessMode ?? "all_indexed"}</p>
           </div>
         </div>
       </section>
 
       <section id="ops-billing" className="admin-card">
         <h2 className="admin-section-label">Billing & Stripe</h2>
-        <div className="mt-3 grid gap-4 sm:grid-cols-2">
-          <div className="rounded-md border border-coop-border/60 p-4">
-            <p className="text-xs font-medium uppercase text-coop-muted">Coop</p>
+        <div className="grid gap-6 sm:grid-cols-2">
+          <div>
+            <p className="admin-stat-label">Coop</p>
             <p className="mt-2">
               {planLabel(detail.coopBilling?.plan ?? detail.plan)} · {detail.coopBilling?.seats ?? detail.seats ?? "—"} seats
             </p>
@@ -568,8 +547,8 @@ export default function CustomerDetailPage() {
               <p className="text-sm text-coop-muted">{detail.coopBilling.billingEmail}</p>
             )}
           </div>
-          <div className="rounded-md border border-coop-border/60 p-4">
-            <p className="text-xs font-medium uppercase text-coop-muted">Stripe</p>
+          <div>
+            <p className="admin-stat-label">Stripe</p>
             {stripeId ? (
               <>
                 <p className="mt-2">
@@ -600,7 +579,7 @@ export default function CustomerDetailPage() {
           </p>
         )}
         {stripeManaged && me && canMutateBilling(me) && (
-          <div className="mt-4 space-y-3 rounded-md border border-coop-border/60 p-4">
+          <div className="space-y-3 border-t border-coop-border/40 pt-4">
             <p className="text-sm text-coop-muted">
               This org bills through Stripe. Enter how many seats to add — Coop does not change seats
               until the customer confirms the Stripe payment link. Do not edit Coop seats directly.

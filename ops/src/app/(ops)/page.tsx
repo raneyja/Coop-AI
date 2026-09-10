@@ -102,29 +102,29 @@ export default function AttentionQueuePage() {
         <>
           <div className="admin-stat-row">
             <div className="admin-stat">
-              <p className="admin-section-label">Total signals</p>
+              <p className="admin-stat-label">Total signals</p>
               <p className="mt-1 text-2xl font-semibold text-white">{totalSignals}</p>
             </div>
             <div className="admin-stat">
-              <p className="admin-section-label">Enterprise leads</p>
+              <p className="admin-stat-label">Enterprise leads</p>
               <p className="mt-1">
                 <AttentionCount count={queue?.enterpriseLeads.length ?? 0} />
               </p>
             </div>
             <div className="admin-stat">
-              <p className="admin-section-label">Past due</p>
+              <p className="admin-stat-label">Past due</p>
               <p className="mt-1">
                 <AttentionCount count={queue?.pastDue.length ?? 0} />
               </p>
             </div>
             <div className="admin-stat">
-              <p className="admin-section-label">Stale invites</p>
+              <p className="admin-stat-label">Stale invites</p>
               <p className="mt-1">
                 <AttentionCount count={queue?.invitePending.length ?? 0} />
               </p>
             </div>
             <div className="admin-stat">
-              <p className="admin-section-label">Usage alerts</p>
+              <p className="admin-stat-label">Usage alerts</p>
               <p className="mt-1">
                 <AttentionCount
                   count={
@@ -137,7 +137,7 @@ export default function AttentionQueuePage() {
             </div>
           </div>
 
-          <section className="space-y-3">
+          <section className="admin-card">
             <h2 className="admin-section-label">Enterprise upgrade requests</h2>
             {queue?.enterpriseLeads.length ? (
               <div className="admin-list">
@@ -163,7 +163,7 @@ export default function AttentionQueuePage() {
             )}
           </section>
 
-          <section className="space-y-3">
+          <section className="admin-card">
             <h2 className="admin-section-label">Past due billing</h2>
             {queue?.pastDue.length ? (
               <div className="admin-list">
@@ -184,7 +184,7 @@ export default function AttentionQueuePage() {
             )}
           </section>
 
-          <section className="space-y-3">
+          <section className="admin-card">
             <h2 className="admin-section-label">Invites pending &gt; 7 days</h2>
             {queue?.invitePending.length ? (
               <div className="admin-list">
@@ -215,7 +215,7 @@ export default function AttentionQueuePage() {
             )}
           </section>
 
-          <section className="space-y-3">
+          <section className="admin-card">
             <h2 className="admin-section-label">Indexing errors</h2>
             {queue?.indexingErrors.length ? (
               <div className="admin-list">
@@ -244,7 +244,7 @@ export default function AttentionQueuePage() {
             )}
           </section>
 
-          <section className="space-y-3">
+          <section className="admin-card">
             <h2 className="admin-section-label">Seat overage</h2>
             {queue?.seatOverage.length ? (
               <div className="admin-list">
@@ -275,7 +275,7 @@ export default function AttentionQueuePage() {
             )}
           </section>
 
-          <section className="space-y-3">
+          <section className="admin-card">
             <h2 className="admin-section-label">At 100% of included usage</h2>
             {queue?.usageAtCap.length ? (
               <div className="admin-list">
@@ -292,7 +292,7 @@ export default function AttentionQueuePage() {
             )}
           </section>
 
-          <section className="space-y-3">
+          <section className="admin-card">
             <h2 className="admin-section-label">Near cap (80%+)</h2>
             {queue?.usageNearCap.length ? (
               <div className="admin-list">
@@ -309,7 +309,7 @@ export default function AttentionQueuePage() {
             )}
           </section>
 
-          <section className="space-y-3">
+          <section className="admin-card">
             <h2 className="admin-section-label">LLM cost above seat revenue</h2>
             {queue?.unprofitable.length ? (
               <div className="admin-list">

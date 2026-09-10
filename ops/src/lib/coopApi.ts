@@ -1249,6 +1249,14 @@ export function formatUsdFromCents(cents: number | null | undefined): string {
   return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
+/** Seat list price × purchased seats. Paid plans are monthly; Free and Enterprise have no list price. */
+export function formatBilledAmount(cents: number | null | undefined): string {
+  if (cents == null || !Number.isFinite(cents)) {
+    return "—";
+  }
+  return `${formatUsdFromCents(cents)} / mo`;
+}
+
 export function formatUsagePercent(ratio: number | null | undefined): string {
   if (ratio == null || !Number.isFinite(ratio)) {
     return "—";

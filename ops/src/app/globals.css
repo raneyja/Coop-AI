@@ -26,11 +26,23 @@
   }
 
   .admin-card {
-    @apply space-y-4 border-b border-coop-border/50 pb-6;
+    @apply space-y-4 rounded-md border border-coop-border/80 bg-coop-surface/40 p-5;
   }
 
   .admin-card--table {
-    @apply overflow-x-auto border-b border-coop-border/50 pb-0;
+    @apply overflow-x-auto;
+  }
+
+  .admin-card--flush {
+    @apply overflow-hidden p-0;
+  }
+
+  .admin-page-nav {
+    @apply flex flex-wrap gap-1 rounded-md border border-coop-border/60 bg-coop-surface/40 p-1;
+  }
+
+  .admin-page-nav-link {
+    @apply rounded px-3 py-1.5 text-sm text-coop-muted no-underline transition-colors hover:bg-white/[0.04] hover:text-white;
   }
 
   .admin-panel-inset {
@@ -114,7 +126,23 @@
   }
 
   .admin-section-label {
-    @apply text-xs font-medium uppercase tracking-wide text-coop-muted;
+    @apply text-sm font-medium text-white;
+  }
+
+  .admin-stat-label {
+    @apply text-xs text-coop-muted;
+  }
+
+  .admin-stat-value {
+    @apply mt-1 text-lg font-medium text-white;
+  }
+
+  .admin-stat-value--quiet {
+    @apply mt-1 text-sm font-medium text-white/90;
+  }
+
+  .admin-mix {
+    @apply flex flex-wrap gap-x-5 gap-y-1 border-t border-coop-border/40 pt-3 text-sm text-coop-muted;
   }
 
   .admin-btn {
