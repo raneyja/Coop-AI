@@ -32,12 +32,12 @@ https://coop-ai.dev
 
 ### About description
 ```text
-VS Code code intelligence — Deep-Index repos without cloning, company Slack/Jira in the editor, reviewable edits. Not an autonomous coding agent.
+AI coding assistant for VS Code. Zero-clone indexing for any repo on any code host, then understand and edit with Slack, Jira, Confluence, and the rest of your stack.
 ```
 
 ### Org bio
 ```text
-Code intelligence for VS Code. Understand production code with your repo graph + company Slack/Jira — without cloning the monorepo.
+AI coding assistant for VS Code. Zero-clone indexing for any repo on any code host, plus Slack, Jira, Confluence, and the rest of your stack.
 ```
 
 ### Discussions announcement
