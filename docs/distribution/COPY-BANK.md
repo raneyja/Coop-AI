@@ -201,14 +201,16 @@ Cloning everything onto a laptop is often the wrong first step. CoopAI’s appro
 
 ## Directories
 
+**Wait until Marketplace is public.** Full prioritized list + waves: [06-directories.md](./06-directories.md).
+
 ### One-liner
 ```text
-VS Code code intelligence: understand production repos without cloning, with company Slack & Jira context.
+AI coding assistant for VS Code. Zero-clone indexing for any repo on any code host, with Slack, Jira, Confluence, and the rest of your stack.
 ```
 
 ### Short description
 ```text
-CoopAI is a VS Code extension for production engineering teams. It Deep-Indexes repositories into a remote graph (zero-clone), queries company Slack, Jira, and docs live from an admin-connected workspace, and helps you ask, complete, and edit with reviewable diffs. It is not an autonomous coding agent.
+CoopAI is an AI coding assistant for VS Code. Zero-clone indexing works with any repo on any code host. Answers and edits use your code graph plus company Slack, Jira, Confluence, and more — so work matches how your team ships. You review every change.
 ```
 
 ---

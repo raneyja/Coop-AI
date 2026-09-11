@@ -66,3 +66,5 @@ Keywords already in `package.json` are fine; prefer adding `code-intelligence`, 
 ## Publish note
 
 Marketplace updates often require a new extension version publish. If you only change Marketplace portal metadata, save there; if README-driven, bump version when you next ship.
+
+**When the listing is public (not draft):** start directory Wave A in [06-directories.md](./06-directories.md). Do not submit directories while this listing is still draft-only.
