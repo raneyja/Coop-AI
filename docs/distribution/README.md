@@ -24,7 +24,8 @@ Brand-only external presence. No personal LinkedIn. No “I built this while at�
 4. [03 — Product Hunt](./03-product-hunt.md) — when ready for a public launch day
 5. [04 — Hacker News](./04-hacker-news.md) — only as real answers / Show HN
 6. [05 — Reddit](./05-reddit.md) — only as real answers
-7. [06 — Directories](./06-directories.md) — **wait until Marketplace is public**, then Waves A→C
+7. [06 — Directories](./06-directories.md) — **wait until Marketplace is public**, then Waves A→C  
+   - Per-site steps: [06b — Directory submission steps](./06b-directory-steps.md)
 8. [07 — Guest post outline](./07-guest-post-outline.md) — optional amplification
 9. [08 — Monthly measurement](./08-monthly-measurement.md) — 15 minutes / month
 
