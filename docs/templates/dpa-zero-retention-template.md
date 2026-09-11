@@ -2,6 +2,28 @@
 
 This template is a starting point for legal review. It is not legal advice.
 
+## When to use this document
+
+| Document | Parties | Use case |
+|----------|---------|----------|
+| **This template** | Customer ↔ LLM Provider | BYOK or when Customer needs direct zero-retention contractual terms with Anthropic, OpenAI, Google, etc. |
+| [Customer DPA](../gtm/dpa-customer-addendum.md) | Customer ↔ Coop AI | Coop as processor of personal data in the CoopAI platform |
+| [Enterprise MSA + Order Form](../gtm/enterprise-msa-order-form.md) | Customer ↔ Coop AI | Commercial terms per [Terms §8](https://coop-ai.dev/terms) |
+
+Coop facilitates inference routing but is typically **not a party** to this addendum unless explicitly stated. For Coop-hosted keys, Customer may still request Provider execute this addendum alongside Customer's enterprise provider agreement.
+
+## Customer-specific redlines (legal review checklist)
+
+Before sending to Customer or Provider counsel, complete:
+
+- [ ] Replace `[CUSTOMER LEGAL NAME]` and `[LLM PROVIDER LEGAL NAME]`
+- [ ] Set `[PROVIDER]` (e.g., OpenAI, Anthropic, Google)
+- [ ] Set `[RETENTION DAYS]` — recommend **0–30** for zero-retention posture; align with provider's ZDR program
+- [ ] Confirm provider is enabled in Customer's Order Form (DeepSeek requires separate legal approval)
+- [ ] Attach provider's current SOC 2 / ISO report and policy URL from `src/api/zeroRetentionConfig.ts`
+- [ ] Cross-reference Customer's executed [Customer DPA](../gtm/dpa-customer-addendum.md) Exhibit A
+- [ ] If BYOK: confirm Customer's provider account has zero data retention or equivalent enabled
+
 ## Parties
 
 - Customer: `[CUSTOMER LEGAL NAME]`
