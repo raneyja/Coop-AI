@@ -38,6 +38,21 @@ Run: `npx tsx src/chat/intentPlanner/phase1.gates.test.ts`
 
 Run: `npx tsx src/chat/intentPlanner/phase3.gates.test.ts`
 
+## Phase 4 — job list (locate ≠ decision)
+
+| Gate | Pass | Fail |
+| --- | --- | --- |
+| P4-G1 | N5-class compound ask plans locate + decision jobs with distinct terms. | One favorite keyword to every tool, or a single job. |
+| P4-G2 | Named Slack + Confluence both stay on the allowlist. | Either named tool is dropped. |
+| P4-G3 | Topical "SQL-injection PR" does not fetch GitHub/GitLab/Bitbucket MRs. | Code-host PR/MR search runs unasked. |
+| P4-G4 | Implied decision adds Slack+Jira and connected Teams/Confluence. | Slack-only fork, or siblings ignored. |
+| P4-G5 | Empty Slack/Jira stay empty; writer must not invent a decision. | Fabricated "no decision existed." |
+| P4-G6 | No jobs → fail open into today's search; locate-only still hunts. | Planner stall blocks the answer. |
+
+Run: `npx tsx src/chat/intentPlanner/phase4.gates.test.ts`
+
+Leading labels (`Pager:`, `On-call:`) are metadata, not search terms. Writer does not search tools — prefetch runs each job on today's index / Slack / Teams / Jira / docs / code-host fetchers, then one model writes. Soft 15s gather still applies; do not abort the turn.
+
 ## How to run all gates
 
 ```bash
@@ -46,6 +61,7 @@ npm run test:chat-intent
 npm run test:chat-intent:phase1
 npm run test:chat-intent:phase2
 npm run test:chat-intent:phase3
+npm run test:chat-intent:phase4
 ```
 
 **Ship gate:** every phase script exits 0. A single FAIL in any phase blocks merge of that phase's behavior.
@@ -58,7 +74,8 @@ Plain `handleChatSend` runs the planner after slash parse:
 | --- | --- |
 | `silent-workflow` | Re-enters with the quick action + `fetchIntegrations` (Phase 2) |
 | `confirm-workflow` | Existing suggest chips (Phase 2) |
-| `tools-only` | Sets `fetchIntegrations` (+ single `integrationProvider` when exactly one tool) (Phase 1) |
+| `tools-only` | Sets `fetchIntegrations` (+ single `integrationProvider` when exactly one tool and no locate job) (Phase 1) |
+| `jobs[]` | Per-job terms on existing gather; skip agent wander when decision/docs/code-host jobs exist (Phase 4) |
 | Activity / preamble | Status line + tool checklist + `<coop_intent_plan>` (Phase 3) |
 
 Slash commands and explicit `/jira`-style routes still win.

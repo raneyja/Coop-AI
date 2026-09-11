@@ -6,14 +6,14 @@ export type GateVerdict = "PASS" | "FAIL";
 
 export type GateResult = {
   id: string;
-  phase: 1 | 2 | 3;
+  phase: 1 | 2 | 3 | 4;
   title: string;
   verdict: GateVerdict;
   detail?: string;
 };
 
 export function gatePass(
-  phase: 1 | 2 | 3,
+  phase: 1 | 2 | 3 | 4,
   id: string,
   title: string,
   detail?: string
@@ -22,7 +22,7 @@ export function gatePass(
 }
 
 export function gateFail(
-  phase: 1 | 2 | 3,
+  phase: 1 | 2 | 3 | 4,
   id: string,
   title: string,
   detail: string
@@ -109,5 +109,32 @@ export const PHASE3_GATE_CRITERIA = [
   {
     id: "P3-G4",
     title: "mode none → no status / no activity (silence)"
+  }
+] as const;
+
+export const PHASE4_GATE_CRITERIA = [
+  {
+    id: "P4-G1",
+    title: "N5 compound ask → locate + decision jobs with distinct terms"
+  },
+  {
+    id: "P4-G2",
+    title: "Named Slack + Confluence both run (tools floor)"
+  },
+  {
+    id: "P4-G3",
+    title: "Topical PR mention does not plan a code-host / MR job"
+  },
+  {
+    id: "P4-G4",
+    title: "Implied decision adds Slack+Jira and connected Teams/Confluence siblings"
+  },
+  {
+    id: "P4-G5",
+    title: "Empty Slack/Jira hits stay empty — writer must not invent a decision"
+  },
+  {
+    id: "P4-G6",
+    title: "Planner stall (no jobs) fail-open; agent loop still allowed for locate-only"
   }
 ] as const;

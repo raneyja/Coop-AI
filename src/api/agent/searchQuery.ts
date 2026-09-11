@@ -12,6 +12,7 @@ import {
   isTestPath,
   normalizePath
 } from "../../indexing/evidencePathNoise";
+import { stripLeadingAskLabels } from "../../chat/intentPlanner/planChatJobs";
 
 const STOP = new Set(
   [
@@ -43,7 +44,9 @@ const STOP = new Set(
     "defined",
     "define",
     "please",
-    "find"
+    "find",
+    "pager",
+    "oncall"
   ].map((w) => w.toLowerCase())
 );
 
@@ -206,7 +209,7 @@ export type RankedSearchHit = {
  * it is the symbol the user actually named.
  */
 export function extractAgentSearchQuery(userMessage: string): string {
-  const trimmed = userMessage.trim();
+  const trimmed = stripLeadingAskLabels(userMessage.trim()) || userMessage.trim();
   if (!trimmed) {
     return trimmed;
   }

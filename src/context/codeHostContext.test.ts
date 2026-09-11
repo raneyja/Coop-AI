@@ -29,6 +29,12 @@ test("wantsCodeHostContext matches PR numbers", () => {
   assert.equal(wantsCodeHostContext("what happened in PR #42?"), true);
 });
 
+test("wantsCodeHostContext does not treat a topical PR mention as MR search", () => {
+  assert.equal(wantsCodeHostContext("did we mix this into the SQL-injection PR?"), false);
+  assert.equal(wantsCodeHostContext("search gitlab merge requests"), true);
+  assert.equal(wantsCodeHostContext("list bitbucket pull requests for this repo"), true);
+});
+
 const total = passed + failed;
 console.log(`\ncodeHostContext: ${passed}/${total} tests passed`);
 if (failed > 0) {

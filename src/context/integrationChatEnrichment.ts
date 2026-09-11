@@ -13,6 +13,8 @@ import { fetchTeamsSearchContext, shouldFetchTeamsContext } from "./teamsContext
 import { shouldFetchTraceDecisionIntegrations } from "./integrationFetchPolicy";
 import { requestAllowsIntegrationFetch } from "./fetchIntegrationsAllowlist";
 import type { IntegrationChatProvider } from "../chat/types";
+import type { ChatIntentJob } from "../chat/intentPlanner/types";
+import { extraTermsForIntegration, hasCodeHostJob } from "../chat/intentPlanner/planChatJobs";
 import {
   buildIntegrationSearchTermList,
   collectCrossToolSearchText
@@ -53,6 +55,8 @@ type IntegrationEnrichmentOptions = {
   integrations?: IntegrationConnectedFlags;
   integrationScopes?: Partial<Record<ScopedIntegrationProvider, ResolvedIntegrationScope>>;
   extraSearchTerms?: string[];
+  /** Chat Intent jobs — per-tool terms, skip code-host unless a code-host job exists. */
+  jobs?: ChatIntentJob[];
   /** Fired when a real integration fetch starts/finishes — drives thinking UI. */
   onToolActivity?: (event: IntegrationToolActivityEvent) => void;
   deps?: Partial<IntegrationChatEnrichmentDeps>;
@@ -128,19 +132,26 @@ async function enrichIntegrationStages(
   deps: IntegrationChatEnrichmentDeps
 ): Promise<void> {
   const traceSeeds = await resolveTraceDecisionSearchSeeds(options);
+  const jobs = options.jobs;
+  const jobScoped = Boolean(jobs && jobs.length > 0);
   const base = {
     owner: options.owner,
     repo: options.repo,
-    queryText: traceSeeds?.queryText ?? options.request.intent.context.queryText,
+    queryText: jobScoped ? undefined : (traceSeeds?.queryText ?? options.request.intent.context.queryText),
     // Prefer caller-supplied activeFile (may be cleared when Gaps focus demotes an unrelated chip).
-    activeFile: options.activeFile !== undefined ? options.activeFile : options.request.params.file,
+    activeFile: jobScoped
+      ? undefined
+      : options.activeFile !== undefined
+        ? options.activeFile
+        : options.request.params.file,
     contextText: options.contextText
   };
+  const sharedJobOrFocusTerms = [...(options.extraSearchTerms ?? []), ...(traceSeeds?.searchTerms ?? [])];
   const integrationTerms = buildIntegrationSearchTermList({
     ...base,
     // Focus / caller terms first so they survive the term cap ahead of file basenames.
     preferHost: options.codeHostProvider,
-    extraTerms: [...(options.extraSearchTerms ?? []), ...(traceSeeds?.searchTerms ?? [])]
+    extraTerms: sharedJobOrFocusTerms
   });
   const codeHostProvider = options.codeHostProvider;
   const activityQuery = preferredIntegrationActivityQuery(integrationTerms);
@@ -201,13 +212,21 @@ async function enrichIntegrationStages(
     }
   };
 
+  const termsFor = (provider: IntegrationChatProvider): string[] => {
+    const jobTerms = extraTermsForIntegration(jobs, provider);
+    if (jobTerms?.length) {
+      return jobTerms;
+    }
+    return integrationTerms;
+  };
+
   const [confluenceSearch, notionSearch] = await Promise.all([
     runTool("confluence", shouldFetchConfluence, () =>
       deps.fetchConfluenceSearchContext({
         secrets: options.secrets,
         owner: options.owner,
         repo: options.repo,
-        extraTerms: integrationTerms,
+        extraTerms: termsFor("confluence"),
         integrationScope: options.integrationScopes?.atlassian
       })
     ),
@@ -216,7 +235,7 @@ async function enrichIntegrationStages(
         secrets: options.secrets,
         owner: options.owner,
         repo: options.repo,
-        extraTerms: integrationTerms,
+        extraTerms: termsFor("notion"),
         integrationScope: options.integrationScopes?.notion
       })
     )
@@ -229,8 +248,8 @@ async function enrichIntegrationStages(
   }
 
   const crossToolText = collectCrossToolSearchText(confluenceSearch, notionSearch);
-  const crossToolKeys = crossToolText.length > 0 ? crossToolText : undefined;
-  const docExtraTerms = [...integrationTerms, ...crossToolText];
+  const crossToolKeys = jobScoped ? undefined : (crossToolText.length > 0 ? crossToolText : undefined);
+  const docExtraTerms = [...termsFor("google-docs"), ...(jobScoped ? [] : crossToolText)];
 
   const shouldFetchJira =
     deps.shouldFetchJiraContext(options.request) && allowOrForced("jira", connected?.jira);
@@ -243,7 +262,7 @@ async function enrichIntegrationStages(
         secrets: options.secrets,
         ...base,
         crossToolText: crossToolKeys,
-        extraTerms: integrationTerms,
+        extraTerms: termsFor("jira"),
         preferHost: options.codeHostProvider,
         codeHostRouter: options.codeHostRouter,
         codeHostConnected: options.codeHostConnected,
@@ -280,9 +299,11 @@ async function enrichIntegrationStages(
       deps.fetchSlackSearchContext({
         secrets: options.secrets,
         ...base,
+        extraTerms: termsFor("slack"),
+        jobScoped,
         crossToolText: crossToolKeys,
         preferHost: options.codeHostProvider,
-        jiraIssueKeys,
+        jiraIssueKeys: jobScoped ? undefined : jiraIssueKeys,
         integrationScope: options.integrationScopes?.slack
       })
     ),
@@ -290,9 +311,11 @@ async function enrichIntegrationStages(
       deps.fetchTeamsSearchContext({
         secrets: options.secrets,
         ...base,
+        extraTerms: termsFor("teams"),
+        jobScoped,
         crossToolText: crossToolKeys,
         preferHost: options.codeHostProvider,
-        jiraIssueKeys
+        jiraIssueKeys: jobScoped ? undefined : jiraIssueKeys
       })
     )
   ]);
@@ -303,7 +326,8 @@ async function enrichIntegrationStages(
     data.teamsSearch = teamsSearch;
   }
   const shouldFetchCodeHost =
-    deps.shouldFetchCodeHostContext(options.request) && Boolean(options.codeHostConnected);
+    Boolean(options.codeHostConnected) &&
+    (jobScoped ? hasCodeHostJob(jobs) : deps.shouldFetchCodeHostContext(options.request));
   if (shouldFetchCodeHost) {
     data.codeHostSearch = await runTool("code-host", true, () =>
       deps.fetchCodeHostSearchContext({

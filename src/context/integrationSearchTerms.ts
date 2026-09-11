@@ -74,11 +74,34 @@ export function buildDiscussionSearchQueries(options: {
   activeFile?: string;
   contextText?: string[];
   crossToolText?: string[];
+  extraTerms?: string[];
   jiraIssueKeys?: string[];
   preferHost?: import("../api/codeHosts/types").CodeHostProvider;
   /** When set (e.g. Slack `is:thread`), appended as a separate query variant per term. */
   threadModifier?: string;
+  /**
+   * Job dispatch: extraTerms are the search. Do not dump queryText / file / repo
+   * slugs as if they were the user's terms.
+   */
+  jobScoped?: boolean;
 }): string[] {
+  if (options.jobScoped) {
+    const ordered: string[] = [];
+    const push = (query: string): void => {
+      const trimmed = query.trim();
+      if (trimmed && !ordered.includes(trimmed)) {
+        ordered.push(trimmed);
+      }
+    };
+    for (const term of options.extraTerms ?? []) {
+      push(term);
+      if (options.threadModifier) {
+        push(`${term} ${options.threadModifier}`);
+      }
+    }
+    return ordered.slice(0, MAX_INTEGRATION_SEARCH_TERMS * 2);
+  }
+
   const terms = buildIntegrationSearchTermList(options);
   const jiraKeys = new Set(
     [

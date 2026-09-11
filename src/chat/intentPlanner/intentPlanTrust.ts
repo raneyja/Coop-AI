@@ -116,6 +116,12 @@ export function buildIntentPlanTrustPreamble(plan: ChatIntentPlan): string | und
     plan.tools.length > 0
       ? `Connected tools in scope: ${plan.tools.map((t) => TOOL_LABEL[t]).join(", ")}.`
       : undefined,
+    plan.jobs?.length
+      ? `Jobs: ${plan.jobs.map((job) => `${job.capability} [${job.terms.join(", ")}]`).join("; ")}.`
+      : undefined,
+    plan.jobs?.some((job) => job.capability === "decision")
+      ? "Empty Slack/Jira/docs hits mean the search found nothing — do not invent that a decision never existed."
+      : undefined,
     `</coop_intent_plan>`
   ]
     .filter(Boolean)

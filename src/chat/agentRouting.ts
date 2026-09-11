@@ -1,4 +1,5 @@
 import type { ChatIntentPlan } from "./intentPlanner/types";
+import { jobsSkipAgentLoop } from "./intentPlanner/planChatJobs";
 import { isFileCallerQuery } from "../context/fileCallerIntent";
 import { isFileHistoryQuery } from "../context/fileHistoryIntent";
 import { classifyRepoCodeIntent, isNonCodeHowWhyAsk, needsRepoCode, type RepoCodeAction } from "./repoCodeIntent";
@@ -85,6 +86,10 @@ export function plannerAllowsAgentRepoLoop(
     return true;
   }
   if (plan.mode === "plain" || plan.mode === "run-workflow" || plan.mode === "suggest-chips") {
+    return false;
+  }
+  if (jobsSkipAgentLoop(plan.jobs)) {
+    // Compound locate+decision/docs: prefetch jobs, then one writer — not a second wander loop.
     return false;
   }
   if (plan.mode === "tools-only") {
