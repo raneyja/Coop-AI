@@ -56,8 +56,10 @@ export function buildTeamsSearchQueries(options: {
   activeFile?: string;
   contextText?: string[];
   crossToolText?: string[];
+  extraTerms?: string[];
   jiraIssueKeys?: string[];
   preferHost?: import("../api/codeHosts/types").CodeHostProvider;
+  jobScoped?: boolean;
 }): string[] {
   return buildDiscussionSearchQueries(options);
 }
@@ -69,10 +71,12 @@ export async function fetchTeamsSearchContext(options: {
   queryText?: string;
   activeFile?: string;
   contextText?: string[];
+  extraTerms?: string[];
   crossToolText?: string[];
   jiraIssueKeys?: string[];
   preferHost?: import("../api/codeHosts/types").CodeHostProvider;
   limit?: number;
+  jobScoped?: boolean;
 }): Promise<TeamsSearchContext> {
   const creds = await options.secrets.getCredentials();
   if (!creds.teamsToken) {

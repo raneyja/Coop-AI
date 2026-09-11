@@ -178,10 +178,17 @@ async function main(): Promise<void> {
       hasQuickAction: false,
       intentPlan: plan
     });
-    if (loops && plan.tools.includes("slack") && plan.mode === "tools-only") {
-      pass("S-G8", "Scope", "hunt + Slack: loop + Slack allowlist");
+    const jobs = (plan.jobs ?? []).map((job) => job.capability);
+    if (
+      !loops &&
+      plan.tools.includes("slack") &&
+      plan.mode === "tools-only" &&
+      jobs.includes("locate") &&
+      jobs.includes("decision")
+    ) {
+      pass("S-G8", "Scope", "hunt + Slack: jobs locate+decision, Slack allowlist, prefetch not wander");
     } else {
-      fail("S-G8", "Scope", `loops=${loops} tools=${plan.tools.join(",")} mode=${plan.mode}`);
+      fail("S-G8", "Scope", `loops=${loops} tools=${plan.tools.join(",")} mode=${plan.mode} jobs=${jobs.join(",")}`);
     }
   }
 

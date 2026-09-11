@@ -58,6 +58,18 @@ test("buildDiscussionSearchQueries never uses channel-scoped queries", () => {
   assert.ok(!queries.some((query) => query.startsWith("in:")));
 });
 
+test("job-scoped discussion queries prefer extraTerms and skip repo dump", () => {
+  const queries = buildDiscussionSearchQueries({
+    owner: "acme",
+    repo: "my-app",
+    extraTerms: ["don't mix", "sql-injection"],
+    jobScoped: true,
+    preferHost: "gitlab"
+  });
+  assert.deepEqual(queries.slice(0, 2), ["don't mix", "sql-injection"]);
+  assert.ok(!queries.some((query) => query.includes("gitlab:acme")));
+});
+
 const total = passed + failed;
 console.log(`\nintegrationSearchTerms: ${passed}/${total} tests passed`);
 if (failed > 0) {

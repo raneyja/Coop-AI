@@ -51,7 +51,7 @@ test("shouldRunAgentToolLoop is false for local explain even on a hunt-shaped le
   );
 });
 
-test("shouldRunAgentToolLoop is true for hunt + Slack compound ask (S-G8)", () => {
+test("shouldRunAgentToolLoop is true for hunt + Slack compound ask without jobs (fail-open)", () => {
   const query = "Where is requireAuth defined, and what did Slack say about the auth change?";
   const plan: ChatIntentPlan = {
     mode: "tools-only",
@@ -68,6 +68,30 @@ test("shouldRunAgentToolLoop is true for hunt + Slack compound ask (S-G8)", () =
       intentPlan: plan
     }),
     true
+  );
+});
+
+test("shouldRunAgentToolLoop is false when locate+decision jobs are planned (prefetch + write)", () => {
+  const query = "Where is requireAuth defined, and what did Slack say about the auth change?";
+  const plan: ChatIntentPlan = {
+    mode: "tools-only",
+    tools: ["slack"],
+    jobs: [
+      { capability: "locate", terms: ["requireAuth"] },
+      { capability: "decision", terms: ["auth change"] }
+    ],
+    confidence: "high",
+    focus: query,
+    execution: "none",
+    codeIntent: { action: "locate", confidence: "high", reason: "asks where something is and names code" }
+  };
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query,
+      hasQuickAction: false,
+      intentPlan: plan
+    }),
+    false
   );
 });
 

@@ -16,7 +16,13 @@ import {
   type ChatIntentPlan,
   type ChatIntentPlannerInput
 } from "./types";
-import { filterPlanToConnected } from "./planChatIntent";
+import { filterPlanToConnected, detectNamedTools } from "./planChatIntent";
+import {
+  decisionPhrasePresent,
+  mergeChatIntentTools,
+  planChatJobs,
+  toolsImpliedByJobs
+} from "./planChatJobs";
 
 const TOOLS = new Set<string>([
   "jira",
@@ -48,6 +54,10 @@ export function buildChatIntentPlanUserMessage(
     '- "understand-repo" = whole-repo architecture overview.',
     '- "knowledge-gaps" = missing docs / undocumented areas.',
     "- Compound asks MAY set both workflow and tools (e.g. blast-radius + jira).",
+    "- Also emit jobs when the ask has more than one capability: {\"jobs\":[{\"capability\":\"locate\"|\"decision\"|\"docs\"|\"code-host\",\"terms\":[\"...\"]}]}",
+    "- locate terms are code/file phrases; decision terms are discussion/ticket phrases. Never copy one token to every job.",
+    "- Leading labels like Pager: or On-call: are metadata, not terms.",
+    "- Do not add code-host unless the user asked to search PRs/MRs/issues.",
     "- Only include tools the user named or clearly needs from: " + connected,
     "- Never invent tools that are not in the connected list."
   ];
@@ -187,7 +197,26 @@ export async function classifyChatIntentPlan(
     if (plan.mode === "none") {
       return undefined;
     }
-    return plan;
+    const jobs = planChatJobs({
+      message,
+      activeFile: input.activeFile,
+      connectedTools: input.connectedTools
+    });
+    if (jobs.length === 0) {
+      return plan;
+    }
+    const named = detectNamedTools(message);
+    const implied = toolsImpliedByJobs({
+      jobs,
+      namedTools: named,
+      connectedTools: input.connectedTools,
+      decisionImplied: decisionPhrasePresent(message)
+    });
+    return {
+      ...plan,
+      jobs,
+      tools: mergeChatIntentTools(plan.tools, implied)
+    };
   } catch {
     return undefined;
   } finally {

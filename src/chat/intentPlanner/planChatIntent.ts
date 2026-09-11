@@ -20,6 +20,13 @@ import { isIncidentShapedQuery } from "../../context/incidentIntent";
 import { isOpenFileReviewAsk } from "../plainChatExplain";
 import { classifyRepoCodeIntent } from "../repoCodeIntent";
 import { queryHasNamedSymbol } from "../../api/agent/searchQuery";
+import {
+  decisionPhrasePresent,
+  mergeChatIntentTools,
+  planChatJobs,
+  stripLeadingAskLabels,
+  toolsImpliedByJobs
+} from "./planChatJobs";
 
 const WORKFLOW_PATTERNS: Array<{
   workflow: ChatIntentWorkflow;
@@ -171,27 +178,49 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
     return emptyChatIntentPlan(message);
   }
 
-  const focus = message;
-  const tools = detectNamedTools(message);
+  const named = detectNamedTools(message);
+  const jobs = planChatJobs({
+    message,
+    activeFile: input.activeFile,
+    connectedTools: input.connectedTools,
+    namedTools: named
+  });
+  const decisionImplied = decisionPhrasePresent(message);
+  const impliedTools = toolsImpliedByJobs({
+    jobs,
+    namedTools: named,
+    connectedTools: input.connectedTools ?? [],
+    decisionImplied
+  });
+  const tools = mergeChatIntentTools(named, impliedTools);
+  const focus = stripLeadingAskLabels(message) || message;
   const incident = isIncidentShapedQuery(message);
   const { workflow, confidence: workflowConfidence } = detectWorkflow(message);
 
-  // Keep incident reconstruction as the multi-tool owner unless a clear workflow wins.
-  if (incident && !workflow) {
-    return {
+  const withJobs = (plan: ChatIntentPlan): ChatIntentPlan => ({
+    ...plan,
+    jobs,
+    tools: plan.mode === "plain" ? [] : mergeChatIntentTools(plan.tools, impliedTools),
+    focus: plan.focus || focus
+  });
+
+  // Keep incident reconstruction as the multi-tool owner unless jobs or a workflow win.
+  if (incident && !workflow && jobs.length === 0) {
+    return withJobs({
       mode: tools.length > 0 ? "tools-only" : "none",
       tools,
       confidence: tools.length > 0 ? "high" : "low",
       focus,
       execution: "none",
       reason: "incident-shaped — defer to incident synthesis; tools if named"
-    };
+    });
   }
 
-  if (EXPLAIN_ONLY.test(message) && tools.length === 0 && !workflow) {
+  if (EXPLAIN_ONLY.test(message) && named.length === 0 && !workflow && jobs.length === 0) {
     return {
       mode: "plain",
       tools: [],
+      jobs: [],
       confidence: "high",
       focus,
       execution: "none",
@@ -199,10 +228,11 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
     };
   }
 
-  if (isOpenFileReviewAsk(message) && tools.length === 0 && !workflow) {
+  if (isOpenFileReviewAsk(message) && named.length === 0 && !workflow && !decisionImplied) {
     return {
       mode: "plain",
       tools: [],
+      jobs: [],
       confidence: "high",
       focus,
       execution: "none",
@@ -224,7 +254,7 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
     const execution =
       confidence === "high" ? "silent" : confidence === "medium" ? "confirm" : "none";
 
-    return {
+    return withJobs({
       mode: execution === "confirm" ? "suggest-chips" : "run-workflow",
       workflow,
       tools,
@@ -232,7 +262,7 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
       focus,
       execution,
       reason: `workflow:${workflow}`
-    };
+    });
   }
 
   if (tools.length > 0) {
@@ -241,20 +271,20 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
       classified.action === "none" && queryHasNamedSymbol(message)
         ? { action: "locate" as const, confidence: "high" as const, reason: "named symbol plus tools" }
         : classified;
-    return {
+    return withJobs({
       mode: "tools-only",
       tools,
       confidence: "high",
       focus,
       execution: "none",
-      reason: "named tools",
+      reason: named.length > 0 ? "named tools" : "implied jobs",
       // A compound ask ("where is X, and what did Slack say?") still needs code.
       codeIntent
-    };
+    });
   }
 
   if (workflow && workflowConfidence === "medium") {
-    return {
+    return withJobs({
       mode: "suggest-chips",
       workflow,
       tools: [],
@@ -262,12 +292,12 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
       focus,
       execution: "confirm",
       reason: `workflow-medium:${workflow}`
-    };
+    });
   }
 
   // Nothing else claimed the turn. If it is a question about the repository's
   // code, say so on the plan so the agent loop can take it.
-  return { ...emptyChatIntentPlan(focus), codeIntent: classifyRepoCodeIntent(message) };
+  return withJobs({ ...emptyChatIntentPlan(focus), codeIntent: classifyRepoCodeIntent(message) });
 }
 
 /**

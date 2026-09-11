@@ -168,6 +168,7 @@ export function buildMultiToolPlainChatUserPrompt(input: MultiToolPlainChatInput
     "Do not pretend a tool was searched when the snapshot says it was skipped or disconnected.",
     "Prefer concrete citations (ticket keys, thread links, page titles) when present.",
     "For Jira: cite only tickets that mention the active file/symbol or are clearly about this change. Do not invent a link from same-repo alone.",
+    "When Slack or Jira (or sibling tools) searched and returned no hits, say the search was empty. Do not invent that a decision never existed, and do not invent tickets or messages.",
     "",
     status ? `Intent: ${status}.` : undefined,
     `Repository: ${repo}`,

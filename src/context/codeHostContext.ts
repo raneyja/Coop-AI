@@ -36,7 +36,15 @@ export function wantsCodeHostContext(query: string): boolean {
   if (!q) {
     return false;
   }
-  if (/\b(pull requests?|PRs?|merge requests?|MRs?)\b/i.test(q)) {
+  // Explicit PR/MR/issue search — not a topical "the SQL-injection PR".
+  if (
+    /\b(?:search|list|show|find|open|recent)\s+(?:the\s+|our\s+|any\s+)?(?:PRs?|pull requests?|MRs?|merge requests?|issues?)\b/i.test(
+      q
+    )
+  ) {
+    return true;
+  }
+  if (/\b(PRs?|pull requests?|MRs?|merge requests?)\s+(?:for|in|on)\s+(?:this\s+)?(?:repo|repository)\b/i.test(q)) {
     return true;
   }
   if (/\b(github|gitlab|bitbucket)\b/i.test(q) && /\b(issues?|PRs?|pull|merge|open|recent|repo)\b/i.test(q)) {

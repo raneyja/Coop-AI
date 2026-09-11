@@ -133,8 +133,10 @@ export function buildSlackSearchQueries(options: {
   activeFile?: string;
   contextText?: string[];
   crossToolText?: string[];
+  extraTerms?: string[];
   jiraIssueKeys?: string[];
   preferHost?: CodeHostProvider;
+  jobScoped?: boolean;
 }): string[] {
   return buildDiscussionSearchQueries({ ...options, threadModifier: "is:thread" });
 }
@@ -147,10 +149,12 @@ export async function fetchSlackSearchContext(options: {
   activeFile?: string;
   contextText?: string[];
   crossToolText?: string[];
+  extraTerms?: string[];
   jiraIssueKeys?: string[];
   preferHost?: CodeHostProvider;
   limit?: number;
   integrationScope?: ResolvedIntegrationScope;
+  jobScoped?: boolean;
 }): Promise<SlackSearchContext> {
   if (isSlackScopeBlocked(options.integrationScope)) {
     return {

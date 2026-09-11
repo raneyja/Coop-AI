@@ -23,6 +23,17 @@ export type ChatIntentPlanMode =
   | "suggest-chips";
 
 /**
+ * One gather job. `capability` selects today's search machine;
+ * `terms` are that job's query (never one ranked token for every tool).
+ */
+export type ChatIntentJobCapability = "locate" | "decision" | "docs" | "code-host";
+
+export type ChatIntentJob = {
+  capability: ChatIntentJobCapability;
+  terms: string[];
+};
+
+/**
  * Deterministic plan produced before gather / synthesis.
  * Always fail-open to `mode: "none"` when unsure.
  * `mode: "plain"` locks local explain — model must not promote a workflow.
@@ -49,6 +60,11 @@ export type ChatIntentPlan = {
    * on ordinary code questions instead of only on hunt-shaped wording.
    */
   codeIntent?: RepoCodeIntent;
+  /**
+   * Interpreter job list. Empty/omitted = fail open into today's search.
+   * Named tools stay on `tools`; implied jobs still run.
+   */
+  jobs?: ChatIntentJob[];
 };
 
 export type ChatIntentPlannerInput = {
@@ -73,6 +89,7 @@ export function emptyChatIntentPlan(focus = ""): ChatIntentPlan {
   return {
     mode: "none",
     tools: [],
+    jobs: [],
     confidence: "low",
     focus,
     execution: "none"

@@ -219,6 +219,7 @@ import {
   buildIntentPlanStatusLine,
   buildIntentPlanTrustPreamble,
   emptyChatIntentPlan,
+  locateJobTerms,
   type ChatIntentPlan
 } from "./intentPlanner";
 import { buildMultiToolPlainChatUserPrompt } from "../prompts/multiToolPlainChatSynthesis";
@@ -3912,6 +3913,24 @@ export class CoopChatSession {
   ): Promise<ContextFetchResult> {
     try {
       const searchScope = resolveSearchScope(this.preferences);
+      const locateTerms = locateJobTerms(this.turnIntentPlan?.jobs);
+      const repoId = request.params.repoId?.trim();
+      if (locateTerms.length > 0 && repoId) {
+        const semantic = await searchRepoForFocusQuery({
+          repoId,
+          query: locateTerms.join(" "),
+          indexQueries: locateTerms,
+          indexBackend: this.options.indexBackend,
+          api: this.options.api,
+          apiBaseUrl: this.preferences.apiBaseUrl,
+          branch: request.params.branch ?? this.currentContext.branch ?? this.preferences.branch,
+          owner: request.params.owner,
+          repo: request.params.repo,
+          provider: request.params.provider as import("./types").CodeHostProviderPreference | undefined,
+          maxFiles: 5
+        });
+        return mergeRepoSemanticContext(result, semantic);
+      }
       const semantic = await searchRepoForChat({
         request,
         indexBackend: this.options.indexBackend,
@@ -4622,6 +4641,7 @@ export class CoopChatSession {
       integrationScopes,
       // Focus phrases first so Gaps subsystem asks reach doc/discussion search.
       extraSearchTerms: focusTerms.length ? focusTerms : undefined,
+      jobs: this.turnIntentPlan?.jobs,
       // Live tool lines when a fetch actually starts; durable Searched rows on done.
       onToolActivity: (toolEvent) => {
         this.applyIntegrationToolActivity(
@@ -4637,7 +4657,8 @@ export class CoopChatSession {
           ? UNDERSTAND_REPO_INTEGRATION_BUDGET_MS
           : request.params.quickAction === "knowledge-gaps" ||
               (request.type === "chat_context" &&
-                shouldFetchIncidentIntegrations(request.intent.context.queryText))
+                (shouldFetchIncidentIntegrations(request.intent.context.queryText) ||
+                  (this.turnIntentPlan?.jobs?.length ?? 0) > 0))
             ? Math.max(1, remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now()))
             : undefined
     });
@@ -5720,7 +5741,10 @@ export class CoopChatSession {
           intentPlan: decision.plan,
           // Single named tool keeps primary-source synthesis; multi-tool uses allowlist only.
           integrationProvider:
-            decision.tools.length === 1 ? decision.tools[0] : options?.integrationProvider,
+            decision.tools.length === 1 &&
+            !(decision.plan.jobs ?? []).some((job) => job.capability === "locate")
+              ? decision.tools[0]
+              : options?.integrationProvider,
           skipChatIntentPlanner: true
         };
       } else if (
