@@ -4,8 +4,7 @@ import { CoopNotice } from "../CoopNotice";
 import {
   accountHubSubtitle,
   planUsageHubSubtitle,
-  toolsHubSubtitle,
-  workspaceHubSubtitle
+  toolsHubSubtitle
 } from "./subtitles";
 import {
   isOnboardingBannerDismissedTemporarily,
@@ -52,7 +51,10 @@ export function AdminOnboardingBanner({
         <li>Account: {accountHubSubtitle(prefs)}</li>
         <li>Plan &amp; Usage: {planUsageHubSubtitle(prefs)}</li>
         <li>Tools: {toolsHubSubtitle(prefs)}</li>
-        <li>Workspace: {workspaceHubSubtitle(prefs)}</li>
+        <li>
+          Indexing:{" "}
+          {prefs.owner && prefs.repo ? `${prefs.owner}/${prefs.repo}` : "No repos selected"}
+        </li>
         {scopeHint ? (
           <li>
             Slack scope: configure channel access in the{" "}

@@ -13,8 +13,9 @@ export type SettingsScreen =
   | "integration-confluence"
   | "integration-notion"
   | "integration-google-docs"
-  | "workspace"
   | "preferences"
+  | "agents-md"
+  | "context"
   | "model"
   | "prompts";
 
@@ -24,7 +25,8 @@ export type LegacySettingsScreen =
   | "code-hosts"
   | "integrations"
   | "connections"
-  | "identity-links";
+  | "identity-links"
+  | "workspace";
 
 export type SettingsDetailScreen = Exclude<SettingsScreen, "hub">;
 
@@ -42,8 +44,9 @@ export const SETTINGS_SCREEN_TITLES: Record<SettingsDetailScreen, string> = {
   "integration-confluence": "Confluence",
   "integration-notion": "Notion",
   "integration-google-docs": "Google Docs",
-  workspace: "Workspace",
   preferences: "Preferences",
+  "agents-md": "AGENTS.md",
+  context: "Context",
   model: "Model & chat",
   prompts: "Prompt library"
 };
@@ -53,7 +56,8 @@ const LEGACY_SCREEN_MAP: Record<string, SettingsScreen> = {
   "code-hosts": "tools",
   integrations: "tools",
   connections: "tools",
-  "identity-links": "preferences"
+  "identity-links": "preferences",
+  workspace: "indexing"
 };
 
 const PROVIDER_SETTINGS_SCREEN: Record<string, SettingsScreen> = {
@@ -91,7 +95,7 @@ export function settingsScreenParent(screen: SettingsScreen): SettingsScreen {
   ) {
     return "tools";
   }
-  if (screen === "model" || screen === "prompts") {
+  if (screen === "model" || screen === "prompts" || screen === "agents-md" || screen === "context") {
     return "preferences";
   }
   return "hub";

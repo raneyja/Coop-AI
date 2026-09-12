@@ -428,14 +428,42 @@ export function fallbackAgentSearchQueries(userMessage: string): string[] {
 
 /**
  * Bounded locate-job queries for one-shot context gather.
- * Reuses the agent hunt's generic aliases without inventing repo-specific terms.
+ * Named files and identifiers win the cap; generic prose is last.
  */
 export function locateJobIndexQueries(terms: string[], max = 3): string[] {
-  const focus = terms.map((term) => term.trim()).filter(Boolean).join(" ");
-  if (!focus) {
+  const cleaned = terms.map((term) => term.trim()).filter(Boolean);
+  if (cleaned.length === 0) {
     return [];
   }
-  return fallbackAgentSearchQueries(focus).slice(0, Math.max(1, max));
+  const unique: string[] = [];
+  const push = (candidate: string | undefined): void => {
+    const clipped = clip(candidate ?? "");
+    if (!clipped) {
+      return;
+    }
+    if (unique.some((seen) => seen.toLowerCase() === clipped.toLowerCase())) {
+      return;
+    }
+    unique.push(clipped);
+  };
+
+  for (const term of cleaned) {
+    for (const file of namedFileIndexQueries(term)) {
+      push(file);
+    }
+  }
+  for (const term of cleaned) {
+    if (allIdentifiers(term).some((id) => id.toLowerCase() === term.toLowerCase())) {
+      push(term);
+    }
+  }
+  for (const term of cleaned) {
+    push(term);
+  }
+  for (const term of fallbackAgentSearchQueries(cleaned.join(" "))) {
+    push(term);
+  }
+  return unique.slice(0, Math.max(1, max));
 }
 
 /**

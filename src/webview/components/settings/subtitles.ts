@@ -116,18 +116,6 @@ export function integrationsHubSubtitle(prefs: Preferences): string {
   return integrationNames(prefs);
 }
 
-export function workspaceHubSubtitle(prefs: Preferences): string {
-  const repo =
-    prefs.owner && prefs.repo ? `${prefs.owner}/${prefs.repo}` : "No repo set";
-  const branch = prefs.branch || "main";
-  const agentsHint = prefs.projectInstructions?.hasAgentsMd
-    ? " · AGENTS.md ✓"
-    : prefs.projectInstructions?.status !== "disabled"
-      ? " · Add AGENTS.md"
-      : "";
-  return `${repo} · ${branch}${agentsHint}`;
-}
-
 export function promptsHubSubtitle(pinnedCount: number): string {
   if (pinnedCount === 0) {
     return "No quick prompts pinned";

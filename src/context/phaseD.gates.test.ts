@@ -69,7 +69,7 @@ test("D-G2 token cap truncates in the prompt, not a banner", () => {
   assert.equal(MAX_INSTRUCTION_FILE_CHARS, 12_000);
 });
 
-test("D-G3 memory facts are sourced, not chat chrome, and Settings requires a source", () => {
+test("D-G3 memory facts are sourced and never chat chrome", () => {
   const sourced = createVisibleMemoryFact({
     text: "Payments live in apps/api",
     source: "AGENTS.md",
@@ -84,10 +84,9 @@ test("D-G3 memory facts are sourced, not chat chrome, and Settings requires a so
     path.join(__dirname, "../webview/components/settings/SettingsDetailViews.tsx"),
     "utf8"
   );
-  // Saved facts live in Settings, but only with a required source — never as chat chrome.
-  assert.match(settingsUi, /Facts without a source are not sent/);
-  assert.match(settingsUi, /never appear as a chat banner/);
-  assert.match(settingsUi, /canAdd = Boolean\(onAdd && text\.trim\(\) && source\.trim\(\)\)/);
+  const chatPanel = fs.readFileSync(path.join(__dirname, "../webview/ChatPanel.tsx"), "utf8");
+  assert.equal(/Saved facts/i.test(settingsUi), false);
+  assert.equal(/visibleMemory|Saved facts|memory chip/i.test(chatPanel), false);
 });
 
 test("D-G4 cache or remaining gather budget — no extra 15s fetch", async () => {

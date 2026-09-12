@@ -3,7 +3,8 @@ import {
   buildConfluenceCql,
   buildConfluenceRepoOnlyCql,
   buildRepoOrQuery,
-  buildRepoSearchTerms
+  buildRepoSearchTerms,
+  sanitizeAtlassianContainsTerm
 } from "./docSearchQuery";
 import { CODE_HOST_PROVIDERS } from "../api/codeHosts/types";
 
@@ -68,6 +69,22 @@ test("buildRepoSearchTerms puts the Use-repo host first among prefixes", () => {
   assert.equal(prefixed[0], "gitlab:acme/app");
   assert.ok(prefixed.includes("github:acme/app"));
   assert.ok(prefixed.includes("bitbucket:acme/app"));
+});
+
+test("sanitizeAtlassianContainsTerm strips hyphens and reserved words", () => {
+  assert.equal(sanitizeAtlassianContainsTerm("SQL-injection"), "SQL injection");
+  assert.equal(sanitizeAtlassianContainsTerm("not to mix"), "to mix");
+  assert.equal(sanitizeAtlassianContainsTerm("coop-ai"), "coop ai");
+  assert.equal(sanitizeAtlassianContainsTerm("training-java-monolith-refactor"), "training java monolith refactor");
+  assert.equal(sanitizeAtlassianContainsTerm("github:acme/app"), "github:acme/app");
+});
+
+test("buildConfluenceCql sanitizes hyphenated extras", () => {
+  const cql = buildConfluenceCql("acme", "payments", ["SQL-injection", "not to mix"]);
+  assert.ok(cql);
+  assert.match(cql!, /SQL injection/);
+  assert.match(cql!, /to mix/);
+  assert.doesNotMatch(cql!, /SQL-injection|not to mix/);
 });
 
 test("buildRepoOrQuery still joins extras with OR for non-CQL tools", () => {

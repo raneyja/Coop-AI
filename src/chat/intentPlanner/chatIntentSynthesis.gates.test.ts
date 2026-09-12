@@ -76,6 +76,18 @@ Run git grep locally or use Find in Path for the implementation.`,
   assert.match(enriched, /SEC-9/);
   assert.doesNotMatch(enriched, /Slack search|git grep|Find in Path/i);
   assert.doesNotMatch(enriched, /\*\*Symptoms\*\*|\*\*Integrations\*\*/);
+
+  const heading = enrichIntentJobResponse(`**Summary**\nDate math is in DateTimeUtils.`, {
+    tools: route.tools,
+    integrations,
+    jobs: [
+      { capability: "locate", terms: ["date math"] },
+      { capability: "decision", terms: ["SQL-injection"] }
+    ],
+    codePaths: ["src/main/java/com/sourcegraph/demo/bigbadmonolith/util/DateTimeUtils.java"]
+  });
+  assert.match(heading, /\*\*Answer\*\*/);
+  assert.doesNotMatch(heading, /\*\*Summary\*\*/);
 });
 
 test("N5 with no source body and timed-out integrations gets a deterministic safe answer", () => {

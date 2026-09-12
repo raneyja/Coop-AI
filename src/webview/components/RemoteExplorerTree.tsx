@@ -704,9 +704,9 @@ export function RemoteExplorerTreePanel({
                       <button
                         type="button"
                         className="coop-explorer-inline-link"
-                        onClick={() => onOpenSettings("workspace")}
+                        onClick={() => onOpenSettings("indexing")}
                       >
-                        Settings → Workspace
+                        Settings → Indexing
                       </button>{" "}
                       to browse files here.
                     </span>

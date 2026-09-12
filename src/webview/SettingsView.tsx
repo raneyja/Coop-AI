@@ -7,11 +7,9 @@ import type { SettingsTestKey } from "./components/TestButton";
 import { PromptLibraryModal } from "./components/PromptLibraryModal";
 import type { PromptLibraryItem } from "./components/promptLibraryTypes";
 import { applyThemeMode } from "./theme";
-import type { CodeHostProviderPreference, IntegrationChatProvider } from "../chat/types";
-import type { OrgCollectionSummary, SettingsStatePayload, GithubRepoOption, RepoContext } from "../chat/types";
+import type { CodeHostProviderPreference, IntegrationChatProvider, SettingsStatePayload, GithubRepoOption } from "../chat/types";
 import type { LightningModeState } from "../indexing/lightningTypes";
 import type { SettingsLightningSummary } from "./components/settings/SettingsHub";
-import type { ExplorerSearchState, ExplorerTreeState } from "./components/RemoteExplorerTree";
 import { EMPTY_IDENTITY_DIRECTORY } from "../identity/types";
 
 type PersistedSettingsState = {
@@ -39,7 +37,6 @@ type InboundMessage =
         hasWorkspace: boolean;
       };
     }
-  | { type: "collections:list"; payload: { collections: OrgCollectionSummary[]; error?: string } }
   | {
       type: "github:repos:list-result";
       payload: {
@@ -171,8 +168,6 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
     hasWorkspace: boolean;
   }>({ prompts: [], pinnedIds: [], hasWorkspace: false });
   const [promptModalOpen, setPromptModalOpen] = useState(false);
-  const [collections, setCollections] = useState<OrgCollectionSummary[]>([]);
-  const [collectionsError, setCollectionsError] = useState<string | undefined>();
   const [workspacePickerState, setWorkspacePickerState] = useState<{
     repos: GithubRepoOption[];
     selectedRepoIds: string[];
@@ -204,9 +199,6 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
   const atlassianInstalledRef = useRef(false);
 
   const post = useCallback((payload: unknown) => vscode.postMessage(payload), [vscode]);
-  const requestCollections = useCallback(() => {
-    post({ type: "collections:list-request" });
-  }, [post]);
 
   const pollInstallations = useCallback(() => {
     post({ type: "settings:refresh-github-installation" });
@@ -442,10 +434,6 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           break;
         case "prompts:list":
           setPromptLibrary(message.payload);
-          break;
-        case "collections:list":
-          setCollections(message.payload.collections);
-          setCollectionsError(message.payload.error);
           break;
         case "workspace:repos:state":
           setWorkspacePickerState({
@@ -846,9 +834,6 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         }}
         onTestIntegration={testIntegration}
         onClearChat={() => post({ type: "chat:clear" })}
-        collections={collections}
-        collectionsError={collectionsError}
-        onRequestCollections={requestCollections}
         onLoadWorkspaceRepos={() => post({ type: "workspace:repos:load" })}
         onSaveWorkspaceRepos={(repoIds) => post({ type: "workspace:repos:save", payload: { repoIds } })}
         workspacePickerState={workspacePickerState}
@@ -857,8 +842,6 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         onOpenAgentsMd={() => post({ type: "agents:open" })}
         onStartFromAgentsMdTemplate={() => post({ type: "agents:start-from-template" })}
         onDetachAgentsMd={() => post({ type: "agents:detach" })}
-        onAddVisibleMemory={(fact) => post({ type: "memory:add", payload: fact })}
-        onClearVisibleMemory={(id) => post({ type: "memory:clear", payload: id ? { id } : {} })}
         onCompleteOnboarding={() => {
           setPrefs((current) => ({ ...current, onboardingCompleted: true }));
           post({ type: "settings:complete-onboarding" });

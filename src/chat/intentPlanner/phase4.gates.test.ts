@@ -237,6 +237,11 @@ test("Phase 4 Chat Intent job gates", () => {
     assert.ok(remainingContextGatherBudgetMs(Date.now()) <= MAX_USER_FACING_RESPONSE_MS);
     assert.equal(stripLeadingAskLabels("On-call: where is date math implemented?"), "where is date math implemented?");
     assert.deepEqual(locateJobIndexQueries(["date math"]), ["date math", "date", "math"]);
+    assert.deepEqual(locateJobIndexQueries(["date math", "DateTimeUtils", "reports.jsp"]), [
+      "reports.jsp",
+      "DateTimeUtils",
+      "date math"
+    ]);
   });
 
   assert.equal(results.length, PHASE4_GATE_CRITERIA.length);

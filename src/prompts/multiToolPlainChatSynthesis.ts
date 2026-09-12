@@ -256,6 +256,7 @@ export function enrichIntentJobResponse(
   const withoutLocalActionSections = stripLocalActionSections(content);
 
   return withoutLocalActionSections
+    .replace(/^\s*\*\*Summary\*\*\s*$/im, "**Answer**")
     .split("\n")
     .filter((line) => ![...unavailable].some((label) => line.includes(label)))
     .filter(

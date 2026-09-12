@@ -162,9 +162,6 @@ export type SettingsDetailProps = {
   onRefreshGoogleDocsInstallation: () => void;
   onInstallTeamsApp: () => void;
   onRefreshTeamsInstallation: () => void;
-  collections: import("./types").SettingsCollectionSummary[];
-  collectionsError?: string;
-  onRequestCollections: () => void;
   onLoadWorkspaceRepos: () => void;
   onSaveWorkspaceRepos: (repoIds: string[]) => void;
   workspacePickerState: {
@@ -180,8 +177,6 @@ export type SettingsDetailProps = {
   onAttachAgentsMd: () => void;
   onOpenAgentsMd: () => void;
   onStartFromAgentsMdTemplate: () => void;
-  onAddVisibleMemory?: (fact: { text: string; source: string; repoId?: string }) => void;
-  onClearVisibleMemory?: (id?: string) => void;
   onRequestSeatUpgrade?: (usageTier: "pro_plus" | "max") => void;
   onConvertOwnSeat?: (usageTier: "pro_plus" | "max") => void;
 };
@@ -219,10 +214,12 @@ export function SettingsDetailView({
       return <NotionDetail {...props} />;
     case "integration-google-docs":
       return <GoogleDocsDetail {...props} />;
-    case "workspace":
-      return <WorkspaceDetail {...props} />;
     case "preferences":
       return <PreferencesListDetail {...props} />;
+    case "agents-md":
+      return <AgentsMdSettings {...props} />;
+    case "context":
+      return <ContextSettings prefs={props.prefs} onUpdate={props.onUpdate} />;
     case "prompts":
       return <PromptsDetail {...props} />;
     default:
@@ -687,57 +684,58 @@ function PlanUsageDetail({
   );
 }
 
-function IndexingDetail({ prefs, lightningState }: SettingsDetailProps): React.ReactElement {
+function IndexingDetail(props: SettingsDetailProps): React.ReactElement {
+  const { prefs, lightningState } = props;
   const adminBase = (prefs.adminPortalUrl ?? "https://admin.coop-ai.dev").replace(/\/$/, "");
-
-  if (!preferencesSignedIn(prefs)) {
-    return (
-      <SettingsSection>
-        <p className="coop-settings-card-desc">Sign in under Account to view indexing status.</p>
-      </SettingsSection>
-    );
-  }
-
+  const signedIn = preferencesSignedIn(prefs);
   const readyRepos = lightningState?.readyRepos ?? 0;
   const indexingRepos = lightningState?.indexingRepos ?? 0;
   const indexedCount = lightningState?.indexedRepoCount;
   const indexedLimit = lightningState?.indexedRepoLimit;
 
   return (
-    <SettingsSection>
-      <p className="coop-prompt-modal-section-title">Deep-Index status</p>
-      {!lightningState ? (
-        <p className="coop-settings-card-desc">Loading indexing status…</p>
-      ) : (
-        <>
-          <p>
-            {readyRepos} ready
-            {indexingRepos > 0 ? (
-              <span className="text-[var(--coop-panel-muted)]"> · {indexingRepos} building</span>
-            ) : null}
-          </p>
-          {indexedLimit != null && indexedCount != null ? (
-            <p className="mt-1 text-[11px] text-[var(--coop-panel-muted)]">
-              {indexedCount} of {indexedLimit} Deep-Indexed repos on your plan
+    <>
+      <SettingsSection>
+        <p className="coop-prompt-modal-section-title">Deep-Index status</p>
+        {!signedIn ? (
+          <p className="coop-settings-card-desc">Sign in under Account to view indexing status.</p>
+        ) : !lightningState ? (
+          <p className="coop-settings-card-desc">Loading indexing status…</p>
+        ) : (
+          <>
+            <p>
+              {readyRepos} ready
+              {indexingRepos > 0 ? (
+                <span className="text-[var(--coop-panel-muted)]"> · {indexingRepos} building</span>
+              ) : null}
             </p>
-          ) : null}
-        </>
-      )}
-      <p className="coop-settings-card-desc mt-2">
-        Org-wide indexing and repo catalog are managed in the admin portal. Workspace repo selection stays under
-        Workspace.
-      </p>
-      <div className="coop-settings-actions mt-3">
-        <a
-          className="coop-settings-action-btn"
-          href={`${adminBase}/indexing`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Manage indexing in admin portal
-        </a>
-      </div>
-    </SettingsSection>
+            {indexedLimit != null && indexedCount != null ? (
+              <p className="mt-1 text-[11px] text-[var(--coop-panel-muted)]">
+                {indexedCount} of {indexedLimit} Deep-Indexed repos on your plan
+              </p>
+            ) : null}
+          </>
+        )}
+        {signedIn ? (
+          <>
+            <p className="coop-settings-card-desc mt-2">
+              Org-wide indexing and repo catalog are managed in the admin portal.
+            </p>
+            <div className="coop-settings-actions mt-3">
+              <a
+                className="coop-settings-action-btn"
+                href={`${adminBase}/indexing`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Manage indexing in admin portal
+              </a>
+            </div>
+          </>
+        ) : null}
+      </SettingsSection>
+      <WorkspaceReposSettings {...props} />
+    </>
   );
 }
 
@@ -942,7 +940,29 @@ function MemberToolsListDetail({ prefs }: { prefs: Preferences }): React.ReactEl
   );
 }
 
-function PreferencesListDetail({ prefs, promptLibrary, onNavigate, onUpdate }: SettingsDetailProps): React.ReactElement {
+function agentsMdNavSubtitle(prefs: Preferences): string {
+  if (prefs.projectInstructions?.status === "disabled") {
+    return "Disabled";
+  }
+  return agentsMdAttached(prefs.projectInstructions) ? "Loaded on every message" : "Create or upload";
+}
+
+function contextNavSubtitle(prefs: Preferences): string {
+  const parts: string[] = [];
+  if (prefs.includeActiveFile) {
+    parts.push("Active file");
+  }
+  if (prefs.includeSelection) {
+    parts.push("Selection");
+  }
+  if (prefs.useCachedResponses) {
+    parts.push("Reuse responses");
+  }
+  return parts.length > 0 ? parts.join(" · ") : "Off";
+}
+
+function PreferencesListDetail(props: SettingsDetailProps): React.ReactElement {
+  const { prefs, promptLibrary, onNavigate, onUpdate } = props;
   const pinned = promptLibrary.pinnedIds.length;
   const europeanTimezoneOptions = useMemo(() => listEuropeanTimezoneOptions(), []);
   const timezoneId = resolveTimezonePreference(prefs.timezone);
@@ -954,9 +974,19 @@ function PreferencesListDetail({ prefs, promptLibrary, onNavigate, onUpdate }: S
   return (
     <>
       <p className="coop-settings-card-desc px-0.5">
-        Model defaults, timezone, and your quick prompt library.
+        AGENTS.md, chat context, model defaults, timezone, and your quick prompt library.
       </p>
       <CoopNavList>
+        <CoopNavRow
+          title="AGENTS.md"
+          subtitle={agentsMdNavSubtitle(prefs)}
+          onClick={() => onNavigate("agents-md")}
+        />
+        <CoopNavRow
+          title="Context"
+          subtitle={contextNavSubtitle(prefs)}
+          onClick={() => onNavigate("context")}
+        />
         <CoopNavRow
           title="Model & chat"
           subtitle={assignedModelsHubSubtitle({
@@ -1379,20 +1409,12 @@ function GoogleDocsDetail({
   );
 }
 
-function WorkspaceDetail({
+function WorkspaceReposSettings({
   prefs,
   onUpdate,
-  collections,
-  collectionsError,
-  onRequestCollections,
   onLoadWorkspaceRepos,
   onSaveWorkspaceRepos,
-  workspacePickerState,
-  onAttachAgentsMd,
-  onOpenAgentsMd,
-  onStartFromAgentsMdTemplate,
-  onAddVisibleMemory,
-  onClearVisibleMemory
+  workspacePickerState
 }: SettingsDetailProps): React.ReactElement {
   const [draft, setDraft] = useState({ owner: prefs.owner, repo: prefs.repo, branch: prefs.branch });
   const [dirty, setDirty] = useState(false);
@@ -1415,10 +1437,6 @@ function WorkspaceDetail({
     },
     []
   );
-
-  useEffect(() => {
-    onRequestCollections();
-  }, [onRequestCollections]);
 
   useEffect(() => {
     if (!workspaceSavePendingRef.current || workspacePickerState.saving) {
@@ -1478,70 +1496,6 @@ function WorkspaceDetail({
 
   return (
     <>
-      <SettingsSection title="AGENTS.md">
-        <div className="coop-settings-card space-y-2">
-          {prefs.projectInstructions?.status === "disabled" ? (
-            <p className="coop-settings-card-desc">
-              Disabled in VS Code settings (<span className="font-medium">coopAI.projectInstructions.enabled</span>).
-            </p>
-          ) : (
-            <>
-              <div className="coop-agents-md-settings-row">
-                {agentsMdAttached(prefs.projectInstructions) ? (
-                  <button
-                    type="button"
-                    className="coop-agents-md-chip coop-agents-md-chip--attached coop-agents-md-chip--clickable"
-                    onClick={onOpenAgentsMd}
-                    aria-label="Open AGENTS.md"
-                  >
-                    <span className="coop-agents-md-chip-icon" aria-hidden="true">
-                      ✓
-                    </span>
-                    AGENTS.md
-                  </button>
-                ) : (
-                  <span className="coop-agents-md-chip coop-agents-md-chip--missing coop-agents-md-chip--static">
-                    <span className="coop-agents-md-chip-icon" aria-hidden="true">
-                      ✕
-                    </span>
-                    AGENTS.md
-                  </span>
-                )}
-                {agentsMdAttached(prefs.projectInstructions) ? (
-                  <button type="button" className="coop-settings-action-btn ml-auto" onClick={onAttachAgentsMd}>
-                    Upload AGENTS.md
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="coop-settings-action-btn ml-auto"
-                    onClick={onStartFromAgentsMdTemplate}
-                  >
-                    Create AGENTS.md
-                  </button>
-                )}
-              </div>
-              {!agentsMdAttached(prefs.projectInstructions) ? (
-                <button type="button" className="coop-agents-md-guide-link" onClick={onAttachAgentsMd}>
-                  Upload AGENTS.md
-                </button>
-              ) : null}
-              <p className="coop-settings-card-desc !mb-0">Loaded on every message.</p>
-              <AgentsMdTemplateGuide className="mt-1" />
-            </>
-          )}
-        </div>
-      </SettingsSection>
-      <VisibleMemorySettings
-        facts={prefs.visibleMemory ?? []}
-        repoId={
-          prefs.owner && prefs.repo
-            ? `${prefs.defaultCodeHost || "github"}:${prefs.owner}/${prefs.repo}`
-            : undefined
-        }
-        onAdd={onAddVisibleMemory}
-        onClear={onClearVisibleMemory}
-      />
       <SettingsSection title="Workspace repos">
         <p className="coop-settings-card-desc">
           {prefs.adminControlledRepos
@@ -1669,96 +1623,6 @@ function WorkspaceDetail({
           onSaveWorkspaceRepos(repoIds);
         }}
       />
-
-      <SettingsSection title="Search scope">
-        <p className="coop-settings-card-desc">
-          Controls Coop-Search and the chat @ file picker — active repo, your workspace repos
-          {isFreeDeveloperPlan(prefs) ? "" : ", or a collection"}.
-          @ mentions search Deep-Indexed repos and your local VS Code workspace folders.
-        </p>
-        <label className="coop-settings-field-row">
-          <span className="coop-settings-label">Scope</span>
-          <select
-            className="coop-settings-field"
-            value={prefs.searchScopeMode}
-            onChange={(event) => {
-              const value = event.target.value;
-              const mode =
-                value === "collection"
-                  ? "collection"
-                  : value === "indexed"
-                    ? "indexed"
-                    : value === "org"
-                      ? "org"
-                      : "repo";
-              onUpdate({ searchScopeMode: mode });
-            }}
-          >
-            <option value="repo">Active repo</option>
-            {prefs.plan === "enterprise" ? (
-              <option value="org">All Deep-Indexed Repos (org)</option>
-            ) : (
-              <option value="indexed">Workspace repos</option>
-            )}
-            {!isFreeDeveloperPlan(prefs) ? (
-              <option value="collection">Collection (advanced)</option>
-            ) : null}
-          </select>
-        </label>
-        {!isFreeDeveloperPlan(prefs) && prefs.searchScopeMode === "collection" ? (
-          <>
-            <label className="coop-settings-field-row">
-              <span className="coop-settings-label">Collection</span>
-              <select
-                className="coop-settings-field"
-                value={prefs.searchCollectionId}
-                onChange={(event) => onUpdate({ searchCollectionId: event.target.value })}
-              >
-                <option value="">Select a collection…</option>
-                {collections.map((collection) => (
-                  <option key={collection.id} value={collection.id}>
-                    {collection.name} ({collection.repoCount} repos)
-                  </option>
-                ))}
-              </select>
-            </label>
-            {!collectionsError && collections.length === 0 ? (
-              <p className="coop-settings-card-desc text-xs">
-                No collections for {prefs.orgName ? `"${prefs.orgName}"` : "this org"}. Create one in
-                the admin portal under Settings → Collections, then{" "}
-                <button type="button" className="coop-text-btn" onClick={() => onRequestCollections()}>
-                  refresh
-                </button>
-                . Sign in with your Coop account in Account settings to load collections.
-              </p>
-            ) : null}
-          </>
-        ) : null}
-        {collectionsError ? (
-          <p className="coop-settings-test-message--error text-xs">{collectionsError}</p>
-        ) : null}
-      </SettingsSection>
-
-      <SettingsSection title="Context">
-        <SettingsCheckboxRow
-          title="Include active file"
-          description="Send the currently open file with each message"
-          checked={prefs.includeActiveFile}
-          onChange={(checked) => onUpdate({ includeActiveFile: checked })}
-        />
-        <SettingsCheckboxRow
-          title="Include editor selection"
-          description="Send highlighted text with each message"
-          checked={prefs.includeSelection}
-          onChange={(checked) => onUpdate({ includeSelection: checked })}
-        />
-        <SettingsCheckboxRow
-          title="Reuse responses"
-          description="Cache identical prompts for 5 minutes"
-          checked={prefs.useCachedResponses}
-          onChange={(checked) => onUpdate({ useCachedResponses: checked })}
-        />
-      </SettingsSection>
     </>
   );
 }
@@ -1781,88 +1645,97 @@ function PromptsDetail({
   );
 }
 
-function VisibleMemorySettings({
-  facts,
-  repoId,
-  onAdd,
-  onClear
-}: {
-  facts: import("../../../chat/types").VisibleMemoryFact[];
-  repoId?: string;
-  onAdd?: (fact: { text: string; source: string; repoId?: string }) => void;
-  onClear?: (id?: string) => void;
-}): React.ReactElement {
-  const [text, setText] = useState("");
-  const [source, setSource] = useState("");
-  const canAdd = Boolean(onAdd && text.trim() && source.trim());
-
+function AgentsMdSettings({
+  prefs,
+  onAttachAgentsMd,
+  onOpenAgentsMd,
+  onStartFromAgentsMdTemplate
+}: SettingsDetailProps): React.ReactElement {
   return (
-    <SettingsSection title="Saved facts">
-      <div className="coop-settings-card space-y-2">
-        <p className="coop-settings-card-desc">
-          Facts with a source can be used in chat. Facts without a source are not sent. Clear them here — they
-          never appear as a chat banner.
-        </p>
-        {facts.length ? (
-          <ul className="space-y-2">
-            {facts.map((fact) => (
-              <li key={fact.id} className="coop-settings-card space-y-1">
-                <p className="text-[12px]">{fact.text}</p>
-                <p className="coop-settings-card-desc !mb-0">Source: {fact.source}</p>
-                {onClear ? (
-                  <button type="button" className="coop-text-btn" onClick={() => onClear(fact.id)}>
-                    Clear
-                  </button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+    <SettingsSection>
+      <div className="space-y-2">
+        {prefs.projectInstructions?.status === "disabled" ? (
+          <p className="coop-settings-card-desc">
+            Disabled in VS Code settings (<span className="font-medium">coopAI.projectInstructions.enabled</span>).
+          </p>
         ) : (
-          <p className="coop-settings-card-desc !mb-0">No saved facts.</p>
+          <>
+            <div className="coop-agents-md-settings-row">
+              {agentsMdAttached(prefs.projectInstructions) ? (
+                <button
+                  type="button"
+                  className="coop-agents-md-chip coop-agents-md-chip--attached coop-agents-md-chip--clickable"
+                  onClick={onOpenAgentsMd}
+                  aria-label="Open AGENTS.md"
+                >
+                  <span className="coop-agents-md-chip-icon" aria-hidden="true">
+                    ✓
+                  </span>
+                  AGENTS.md
+                </button>
+              ) : (
+                <span className="coop-agents-md-chip coop-agents-md-chip--missing coop-agents-md-chip--static">
+                  <span className="coop-agents-md-chip-icon" aria-hidden="true">
+                    ✕
+                  </span>
+                  AGENTS.md
+                </span>
+              )}
+              {agentsMdAttached(prefs.projectInstructions) ? (
+                <button type="button" className="coop-settings-action-btn ml-auto" onClick={onAttachAgentsMd}>
+                  Upload AGENTS.md
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="coop-settings-action-btn ml-auto"
+                  onClick={onStartFromAgentsMdTemplate}
+                >
+                  Create AGENTS.md
+                </button>
+              )}
+            </div>
+            {!agentsMdAttached(prefs.projectInstructions) ? (
+              <button type="button" className="coop-agents-md-guide-link" onClick={onAttachAgentsMd}>
+                Upload AGENTS.md
+              </button>
+            ) : null}
+            <p className="coop-settings-card-desc !mb-0">Loaded on every message.</p>
+            <AgentsMdTemplateGuide className="mt-1" />
+          </>
         )}
-        <label className="coop-settings-field-row">
-          <span className="coop-settings-label">Fact</span>
-          <input
-            type="text"
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            className="coop-settings-field"
-            placeholder="Auth lives in apps/api"
-          />
-        </label>
-        <label className="coop-settings-field-row">
-          <span className="coop-settings-label">Source</span>
-          <input
-            type="text"
-            value={source}
-            onChange={(event) => setSource(event.target.value)}
-            className="coop-settings-field"
-            placeholder="AGENTS.md or a Slack thread"
-          />
-        </label>
-        <div className="coop-settings-actions">
-          <button
-            type="button"
-            className="coop-settings-action-btn"
-            disabled={!canAdd}
-            onClick={() => {
-              if (!canAdd || !onAdd) {
-                return;
-              }
-              onAdd({ text: text.trim(), source: source.trim(), repoId });
-              setText("");
-              setSource("");
-            }}
-          >
-            Save fact
-          </button>
-          {facts.length && onClear ? (
-            <button type="button" className="coop-text-btn" onClick={() => onClear()}>
-              Clear all
-            </button>
-          ) : null}
-        </div>
       </div>
+    </SettingsSection>
+  );
+}
+
+function ContextSettings({
+  prefs,
+  onUpdate
+}: {
+  prefs: Preferences;
+  onUpdate: SettingsDetailProps["onUpdate"];
+}): React.ReactElement {
+  return (
+    <SettingsSection>
+      <SettingsCheckboxRow
+        title="Include active file"
+        description="Send the currently open file with each message"
+        checked={prefs.includeActiveFile}
+        onChange={(checked) => onUpdate({ includeActiveFile: checked })}
+      />
+      <SettingsCheckboxRow
+        title="Include editor selection"
+        description="Send highlighted text with each message"
+        checked={prefs.includeSelection}
+        onChange={(checked) => onUpdate({ includeSelection: checked })}
+      />
+      <SettingsCheckboxRow
+        title="Reuse responses"
+        description="Cache identical prompts for 5 minutes"
+        checked={prefs.useCachedResponses}
+        onChange={(checked) => onUpdate({ useCachedResponses: checked })}
+      />
     </SettingsSection>
   );
 }

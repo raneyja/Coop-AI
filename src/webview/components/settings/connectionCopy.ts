@@ -317,7 +317,7 @@ export function indexingHubSubtitle(
 }
 
 export function preferencesHubSubtitle(_prefs: Preferences, _pinnedCount: number): string {
-  return "Model & chat · Prompt Library";
+  return "AGENTS.md · Context · Model & chat";
 }
 
 export function integrationDisplayName(provider: IntegrationProvider): string {

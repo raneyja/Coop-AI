@@ -10,7 +10,7 @@ import {
   isJiraScopeBlocked,
   jiraScopeBlockMessage
 } from "../integrationScope/atlassianQuery";
-import { buildRepoSearchTerms } from "./docSearchQuery";
+import { buildRepoSearchTerms, sanitizeAtlassianContainsTerm } from "./docSearchQuery";
 import { CODE_HOST_PROVIDERS, type CodeHostProvider } from "../api/codeHosts/types";
 import { shouldFetchIncidentIntegrations } from "./incidentIntent";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
@@ -248,10 +248,19 @@ export function buildFocusAwareJiraJql(options: {
   }
   const focusClauses = new Set<string>();
   for (const term of focusTerms) {
-    focusClauses.add(jqlContainsClause("text", term));
-    if (!term.includes(":")) {
-      focusClauses.add(jqlContainsClause("summary", term));
+    const textClause = jqlContainsClause("text", term);
+    if (textClause) {
+      focusClauses.add(textClause);
     }
+    if (!term.includes(":")) {
+      const summaryClause = jqlContainsClause("summary", term);
+      if (summaryClause) {
+        focusClauses.add(summaryClause);
+      }
+    }
+  }
+  if (focusClauses.size === 0) {
+    return undefined;
   }
   return `(${repoClause}) AND (${[...focusClauses].join(" OR ")}) ORDER BY updated DESC`;
 }
@@ -587,17 +596,30 @@ function buildRepoClause(
   }
   const clauses = new Set<string>();
   for (const term of terms) {
-    clauses.add(jqlContainsClause("text", term));
-    if (!term.includes(":")) {
-      clauses.add(jqlContainsClause("summary", term));
+    const textClause = jqlContainsClause("text", term);
+    if (textClause) {
+      clauses.add(textClause);
     }
+    if (!term.includes(":")) {
+      const summaryClause = jqlContainsClause("summary", term);
+      if (summaryClause) {
+        clauses.add(summaryClause);
+      }
+    }
+  }
+  if (clauses.size === 0) {
+    return undefined;
   }
   return `(${[...clauses].join(" OR ")})`;
 }
 
-function jqlContainsClause(field: "text" | "summary", term: string): string {
-  const escaped = escapeJqlString(term);
-  if (/[:/]/.test(term)) {
+function jqlContainsClause(field: "text" | "summary", term: string): string | undefined {
+  const searchable = sanitizeAtlassianContainsTerm(term);
+  if (!searchable) {
+    return undefined;
+  }
+  const escaped = escapeJqlString(searchable);
+  if (/[:/]/.test(searchable)) {
     return `${field} ~ "\\"${escaped}\\""`;
   }
   return `${field} ~ "${escaped}"`;

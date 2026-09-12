@@ -10,8 +10,7 @@ import {
   planUsageHubSubtitle,
   toolsHubSubtitle,
   displayIdentitySubtitle,
-  preferencesHubSubtitle,
-  workspaceHubSubtitle
+  preferencesHubSubtitle
 } from "./subtitles";
 
 export type SettingsLightningSummary = {
@@ -47,7 +46,6 @@ const HUB_ROWS: Array<{
     title: "Tools",
     subtitle: (p) => toolsHubSubtitle(p)
   },
-  { screen: "workspace", title: "Workspace", subtitle: (p) => workspaceHubSubtitle(p) },
   {
     screen: "indexing",
     title: "Indexing",

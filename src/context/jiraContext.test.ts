@@ -71,7 +71,7 @@ test("buildRepoJql includes repo slug case variants", () => {
   const jql = buildRepoJql("raneyja", "Coop-AI");
   assert.ok(jql?.includes("raneyja/Coop-AI"));
   assert.ok(jql?.includes("raneyja/coop-ai"));
-  assert.ok(jql?.includes('summary ~ "coop-ai"'));
+  assert.ok(jql?.includes('summary ~ "coop ai"') || jql?.includes('summary ~ "Coop AI"'), jql);
 });
 
 test("buildIssueKeysJql searches by issue key", () => {
@@ -111,8 +111,24 @@ test("buildFocusAwareJiraJql ANDs repo with file focus", () => {
   assert.ok(jql);
   assert.ok(jql!.includes("AND"));
   assert.ok(jql!.includes('summary ~ "IndexedRepoWorkspace"'));
-  assert.ok(jql!.includes('text ~ "raneyja/Coop-AI"') || jql!.includes('text ~ "Coop-AI"'));
+  assert.ok(
+    jql!.includes('text ~ "raneyja/Coop-AI"') ||
+      jql!.includes('text ~ "Coop AI"') ||
+      jql!.includes('text ~ "Coop-AI"')
+  );
   assert.ok(jql!.includes("ORDER BY updated DESC"));
+});
+
+test("buildFocusAwareJiraJql sanitizes hyphenated extras", () => {
+  const jql = buildFocusAwareJiraJql({
+    owner: "acme",
+    repo: "payments",
+    extraTerms: ["SQL-injection", "not to mix"]
+  });
+  assert.ok(jql);
+  assert.match(jql!, /SQL injection/);
+  assert.match(jql!, /to mix/);
+  assert.doesNotMatch(jql!, /SQL-injection|not to mix/);
 });
 
 test("buildFocusAwareJiraJql undefined without focus", () => {

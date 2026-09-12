@@ -86,6 +86,29 @@ export function splitOrJoinedSearchTerms(query: string): string[] {
   return [...new Set(query.split(/\s+OR\s+/i).map((term) => term.trim()).filter(Boolean))];
 }
 
+const ATLASSIAN_RESERVED_WORD = /^(and|or|not|order|by|in|empty|null)$/i;
+
+/**
+ * Jira `~` / Confluence CQL treat `-` as NOT and reject reserved words.
+ * Prefixed host ids keep their punctuation; everything else becomes a safe phrase.
+ */
+export function sanitizeAtlassianContainsTerm(term: string): string | undefined {
+  const trimmed = term.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (/[:/]/.test(trimmed)) {
+    return trimmed;
+  }
+  const compact = trimmed
+    .replace(/[-–—]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length >= 2 && !ATLASSIAN_RESERVED_WORD.test(token))
+    .join(" ")
+    .trim();
+  return compact || undefined;
+}
+
 /**
  * Build Confluence CQL for Use-repo (+ optional focus/file extras).
  *
@@ -111,17 +134,25 @@ export function buildConfluenceCql(
     return undefined;
   }
 
-  const clause = (term: string): string => `text ~ "${escapeCql(term)}"`;
+  const clause = (term: string): string | undefined => {
+    const searchable = sanitizeAtlassianContainsTerm(term);
+    return searchable ? `text ~ "${escapeCql(searchable)}"` : undefined;
+  };
+  const clausesFor = (terms: string[]): string[] =>
+    [...new Set(terms.map(clause).filter((value): value is string => Boolean(value)))];
   const andExtras = options?.andExtrasWithRepo !== false;
+  const repoClauses = clausesFor(repoTerms);
+  const extraClauses = clausesFor(extras);
 
-  if (andExtras && repoTerms.length > 0 && extras.length > 0) {
-    const repoClause = repoTerms.map(clause).join(" OR ");
-    const extraClause = extras.map(clause).join(" OR ");
-    return `type=page AND (${repoClause}) AND (${extraClause}) ORDER BY lastModified DESC`;
+  if (andExtras && repoClauses.length > 0 && extraClauses.length > 0) {
+    return `type=page AND (${repoClauses.join(" OR ")}) AND (${extraClauses.join(" OR ")}) ORDER BY lastModified DESC`;
   }
 
-  const uniqueTerms = [...repoTerms, ...extras].slice(0, 16);
-  return `type=page AND (${uniqueTerms.map(clause).join(" OR ")}) ORDER BY lastModified DESC`;
+  const uniqueClauses = [...repoClauses, ...extraClauses].slice(0, 16);
+  if (uniqueClauses.length === 0) {
+    return undefined;
+  }
+  return `type=page AND (${uniqueClauses.join(" OR ")}) ORDER BY lastModified DESC`;
 }
 
 /** Repo-only Confluence CQL (fallback when repo∩focus returns no pages). */

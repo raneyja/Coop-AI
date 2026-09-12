@@ -105,13 +105,10 @@ type SettingsPanelProps = {
   };
   onUpdatePinnedPrompts: (pinnedIds: string[]) => void;
   onManagePromptLibrary: () => void;
-  collections: import("./settings/types").SettingsCollectionSummary[];
-  collectionsError?: string;
-  onRequestCollections: () => void;
   onLoadWorkspaceRepos: () => void;
   onSaveWorkspaceRepos: (repoIds: string[]) => void;
   workspacePickerState: {
-    repos: import("../../chat/types").GithubRepoOption[];
+    repos: GithubRepoOption[];
     selectedRepoIds: string[];
     selectedCount: number;
     limit: number | null;
@@ -124,8 +121,6 @@ type SettingsPanelProps = {
   onOpenAgentsMd: () => void;
   onStartFromAgentsMdTemplate: () => void;
   onDetachAgentsMd?: () => void;
-  onAddVisibleMemory?: (fact: { text: string; source: string; repoId?: string }) => void;
-  onClearVisibleMemory?: (id?: string) => void;
   onCompleteOnboarding?: () => void;
   onRequestSeatUpgrade?: (usageTier: "pro_plus" | "max") => void;
   onConvertOwnSeat?: (usageTier: "pro_plus" | "max") => void;
