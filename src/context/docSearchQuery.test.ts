@@ -4,7 +4,9 @@ import {
   buildConfluenceRepoOnlyCql,
   buildRepoOrQuery,
   buildRepoSearchTerms,
-  sanitizeAtlassianContainsTerm
+  sanitizeAtlassianContainsTerm,
+  decisionSearchPhrase,
+  buildDecisionConfluenceCql
 } from "./docSearchQuery";
 import { CODE_HOST_PROVIDERS } from "../api/codeHosts/types";
 
@@ -69,6 +71,14 @@ test("buildRepoSearchTerms puts the Use-repo host first among prefixes", () => {
   assert.equal(prefixed[0], "gitlab:acme/app");
   assert.ok(prefixed.includes("github:acme/app"));
   assert.ok(prefixed.includes("bitbucket:acme/app"));
+});
+
+test("decisionSearchPhrase picks the longest sanitized decision term", () => {
+  assert.equal(decisionSearchPhrase(["SQL-injection", "not to mix"]), "SQL injection");
+  assert.equal(
+    buildDecisionConfluenceCql(["SQL-injection", "not to mix"]),
+    'type=page AND text ~ "SQL injection" ORDER BY lastModified DESC'
+  );
 });
 
 test("sanitizeAtlassianContainsTerm strips hyphens and reserved words", () => {

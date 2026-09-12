@@ -111,6 +111,25 @@ export function sanitizeAtlassianContainsTerm(term: string): string | undefined 
   return compact || undefined;
 }
 
+/** One safe Atlassian phrase from decision-job terms. Longest sanitized term wins. */
+export function decisionSearchPhrase(terms: string[]): string | undefined {
+  const phrases = terms
+    .map((term) => sanitizeAtlassianContainsTerm(term))
+    .filter((term): term is string => Boolean(term));
+  if (phrases.length === 0) {
+    return undefined;
+  }
+  return [...phrases].sort((left, right) => right.length - left.length)[0];
+}
+
+export function buildDecisionConfluenceCql(terms: string[]): string | undefined {
+  const phrase = decisionSearchPhrase(terms);
+  if (!phrase) {
+    return undefined;
+  }
+  return `type=page AND text ~ "${escapeCql(phrase)}" ORDER BY lastModified DESC`;
+}
+
 /**
  * Build Confluence CQL for Use-repo (+ optional focus/file extras).
  *

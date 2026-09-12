@@ -333,96 +333,114 @@ export async function searchRepoForFocusQuery(
     provider: options.provider
   };
 
-  if (topicQueries.length === 0) {
-    return loadSemanticSearchContext({
-      ...shared,
-      query: indexQueryForRetrieval(rankQuery),
-      maxFiles
-    });
-  }
-
-  const perQueryCap = Math.max(2, Math.ceil(maxFiles / topicQueries.length) + 1);
-  const results = await Promise.all(
-    topicQueries.map((query) =>
-      loadSemanticSearchContext({
-        ...shared,
-        query,
-        rankQuery: [rankQuery, ...topicQueries].filter(Boolean).join(" "),
-        rankMode: options.rankMode ?? "onboarding",
-        maxFiles: perQueryCap
-      })
-    )
-  );
-  const merged = mergeFocusSearchResults(results, {
-    query: topicQueries.join(" | "),
-    rankQuery: [rankQuery, ...topicQueries].filter(Boolean).join(" "),
-    maxFiles,
-    rankMode: options.rankMode
-  });
-  return attachNamedLocateFiles(merged, {
-    ...shared,
+  const namedNames = namedFileIndexQueries([rankQuery, ...topicQueries].join(" "), 4);
+  const huntRankQuery = [rankQuery, ...topicQueries].filter(Boolean).join(" ");
+  const [namedFiles, hunt] = await Promise.all([
+    fetchNamedLocateFiles(shared, namedNames),
+    topicQueries.length === 0
+      ? loadSemanticSearchContext({
+          ...shared,
+          query: indexQueryForRetrieval(rankQuery),
+          maxFiles
+        })
+      : mergeFocusSearchResults(
+          await Promise.all(
+            topicQueries.map((query) =>
+              loadSemanticSearchContext({
+                ...shared,
+                query,
+                rankQuery: huntRankQuery,
+                rankMode: options.rankMode ?? "onboarding",
+                maxFiles: Math.max(2, Math.ceil(maxFiles / topicQueries.length) + 1)
+              })
+            )
+          ),
+          {
+            query: topicQueries.join(" | "),
+            rankQuery: huntRankQuery,
+            maxFiles,
+            rankMode: options.rankMode
+          }
+        )
+  ]);
+  return mergeNamedLocateIntoHunt(namedFiles, hunt, {
     query: options.query,
-    rankQuery: [rankQuery, ...topicQueries].filter(Boolean).join(" "),
+    rankQuery: huntRankQuery,
     maxFiles
   });
 }
 
-async function attachNamedLocateFiles(
-  merged: RepoSemanticSearchContext | undefined,
+async function fetchNamedLocateFiles(
   options: Pick<
     LoadSemanticSearchOptions,
     "repoId" | "indexBackend" | "api" | "apiBaseUrl" | "branch" | "owner" | "repo" | "provider"
-  > & {
-    query: string;
-    rankQuery: string;
-    maxFiles: number;
-  }
-): Promise<RepoSemanticSearchContext | undefined> {
-  const named = namedFileIndexQueries(options.rankQuery, 4);
-  if (named.length === 0) {
-    return merged;
-  }
-  const attached = new Set(
-    (merged?.files ?? []).map((file) => (file.path.split("/").pop() ?? file.path).toLowerCase())
-  );
-  const missing = named.filter((basename) => !attached.has(basename.toLowerCase()));
-  if (missing.length === 0) {
-    return merged;
-  }
-
-  const extraFiles: RepoSemanticSnippet[] = [];
-  for (const basename of missing) {
+  >,
+  names: string[]
+): Promise<RepoSemanticSnippet[]> {
+  const files: RepoSemanticSnippet[] = [];
+  for (const basename of names) {
     const search = await runRepoSearch(options, options.repoId, basename);
-    const paths = [
-      ...search.hits.map((hit) => hit.fileName),
-      ...search.symbols.map((symbol) => symbol.file)
-    ].filter((path) => {
-        const normalized = path.replace(/\\/g, "/").toLowerCase();
-        const key = basename.toLowerCase();
-        return normalized === key || normalized.endsWith(`/${key}`);
-      });
-    for (const path of paths.slice(0, 2)) {
+    const paths = pathsMatchingBasename(
+      [...search.hits.map((hit) => hit.fileName), ...search.symbols.map((symbol) => symbol.file)],
+      basename
+    );
+    for (const path of paths.slice(0, 3)) {
       const content = await resolveSemanticFileContent(path, options.repoId, options);
       if (!content?.trim()) {
         continue;
       }
-      extraFiles.push({ path, repoId: options.repoId, content });
+      files.push({ path, repoId: options.repoId, content });
       break;
     }
   }
-  if (extraFiles.length === 0) {
-    return merged;
+  return files;
+}
+
+export function pathsMatchingBasename(paths: string[], basename: string): string[] {
+  const key = basename.replace(/\\/g, "/").toLowerCase();
+  const seen = new Set<string>();
+  const matched: string[] = [];
+  for (const path of paths) {
+    const normalized = path.replace(/\\/g, "/").replace(/^\.?\//, "").toLowerCase();
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    if (normalized === key || normalized.endsWith(`/${key}`)) {
+      seen.add(normalized);
+      matched.push(path);
+    }
   }
-  const files = [...extraFiles, ...(merged?.files ?? [])];
+  return matched;
+}
+
+export function mergeNamedLocateIntoHunt(
+  named: RepoSemanticSnippet[],
+  hunt: RepoSemanticSearchContext | undefined,
+  options: { query: string; rankQuery: string; maxFiles: number }
+): RepoSemanticSearchContext | undefined {
+  if (named.length === 0) {
+    return hunt;
+  }
+  const seen = new Set(named.map((file) => file.path.replace(/\\/g, "/").toLowerCase()));
+  const extra = (hunt?.files ?? []).filter((file) => {
+    const key = file.path.replace(/\\/g, "/").toLowerCase();
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+  const files = [...named, ...extra];
+  const namedHits = named.map((file) => file.path);
   return {
-    source: merged?.source ?? "repo-semantic-search",
-    query: merged?.query ?? options.query,
+    source: hunt?.source ?? "repo-semantic-search",
+    query: hunt?.query ?? options.query,
     rankQuery: options.rankQuery,
-    searchSource: merged?.searchSource,
+    searchSource: hunt?.searchSource,
     files,
-    pathHits: [...extraFiles.map((file) => file.path), ...(merged?.pathHits ?? [])],
-    matchedPathCount: (merged?.matchedPathCount ?? 0) + extraFiles.length,
-    attachmentCap: Math.max(options.maxFiles, files.length)
+    pathHits: [...namedHits, ...(hunt?.pathHits ?? []).filter((path) => !seen.has(path.replace(/\\/g, "/").toLowerCase()))],
+    matchedPathCount: Math.max(hunt?.matchedPathCount ?? 0, files.length),
+    attachmentCap: Math.max(options.maxFiles, named.length)
   };
 }
 

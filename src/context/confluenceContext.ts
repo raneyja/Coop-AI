@@ -16,6 +16,7 @@ import {
 import {
   buildConfluenceCql,
   buildConfluenceRepoOnlyCql,
+  buildDecisionConfluenceCql,
   buildRepoOrQuery
 } from "./docSearchQuery";
 import { filterDocPagesForUseRepo, sanitizeIntegrationSnippet } from "./integrationDocRelevance";
@@ -94,10 +95,11 @@ export async function fetchConfluenceSearchContext(options: {
     };
   }
 
+  const extrasOnly = Boolean(options.jobScoped && (options.extraTerms?.length ?? 0) > 0);
   const primaryCql = scopeConfluenceCql(
-    buildConfluenceCql(options.owner, options.repo, options.extraTerms, {
-      extrasOnly: Boolean(options.jobScoped && (options.extraTerms?.length ?? 0) > 0)
-    }),
+    extrasOnly
+      ? buildDecisionConfluenceCql(options.extraTerms ?? [])
+      : buildConfluenceCql(options.owner, options.repo, options.extraTerms),
     options.integrationScope
   );
   if (!primaryCql) {

@@ -7,6 +7,8 @@ import {
   isPlainChatIntentEvent,
   mergeRepoSemanticContext,
   mergeFocusSearchResults,
+  mergeNamedLocateIntoHunt,
+  pathsMatchingBasename,
   rankSearchPaths,
   selectFocusSearchPaths,
   semanticRetrievalQueryText,
@@ -409,6 +411,49 @@ test("mergeFocusSearchResults round-robins unique paths from topic searches", ()
   assert.equal(merged!.files.length, 2);
   assert.ok(merged!.files.some((file) => file.path.includes("api_authentication")));
   assert.ok(merged!.files.some((file) => file.path.includes("state.py")));
+});
+
+test("named locate files stay attached even when hunt cap is 1", () => {
+  const named = [
+    {
+      path: "web/reports.jsp",
+      repoId: "coopai-group/training-java-monolith-refactor",
+      content: "<% DateTimeUtils.formatDateLegacy(today); %>"
+    }
+  ];
+  const hunt = mergeFocusSearchResults(
+    [
+      {
+        source: "repo-semantic-search",
+        query: "DateTimeUtils",
+        files: [
+          {
+            path: "src/main/java/com/sourcegraph/demo/bigbadmonolith/util/DateTimeUtils.java",
+            repoId: "coopai-group/training-java-monolith-refactor",
+            content: "public final class DateTimeUtils {}"
+          }
+        ]
+      }
+    ],
+    {
+      query: "DateTimeUtils",
+      rankQuery: "date math DateTimeUtils reports.jsp",
+      maxFiles: 1,
+      rankMode: "hunt"
+    }
+  );
+  const merged = mergeNamedLocateIntoHunt(named, hunt, {
+    query: "date math",
+    rankQuery: "date math DateTimeUtils reports.jsp",
+    maxFiles: 1
+  });
+  assert.ok(merged);
+  assert.ok(merged!.files.some((file) => file.path.endsWith("reports.jsp")));
+  assert.ok(merged!.files.some((file) => file.path.endsWith("DateTimeUtils.java")));
+  assert.deepEqual(pathsMatchingBasename(["AGENT.md", "web/reports.jsp", "src/reports.jsp"], "reports.jsp"), [
+    "web/reports.jsp",
+    "src/reports.jsp"
+  ]);
 });
 
 test("mergeFocusSearchResults pins named files ahead of the attach cap", () => {

@@ -10,7 +10,11 @@ import {
   isJiraScopeBlocked,
   jiraScopeBlockMessage
 } from "../integrationScope/atlassianQuery";
-import { buildRepoSearchTerms, sanitizeAtlassianContainsTerm } from "./docSearchQuery";
+import {
+  buildRepoSearchTerms,
+  decisionSearchPhrase,
+  sanitizeAtlassianContainsTerm
+} from "./docSearchQuery";
 import { CODE_HOST_PROVIDERS, type CodeHostProvider } from "../api/codeHosts/types";
 import { shouldFetchIncidentIntegrations } from "./incidentIntent";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
@@ -274,6 +278,15 @@ export function buildFocusAwareJiraJql(options: {
   return `(${repoClause}) AND ${focus} ORDER BY updated DESC`;
 }
 
+/** Decision jobs: one sanitized text clause. Never AND a repo slug. */
+export function buildDecisionJiraJql(extraTerms: string[]): string | undefined {
+  const phrase = decisionSearchPhrase(extraTerms);
+  if (!phrase) {
+    return undefined;
+  }
+  return `text ~ "${escapeJqlString(phrase)}" ORDER BY updated DESC`;
+}
+
 export function wantsOpenTickets(query: string | undefined): boolean {
   const q = query?.trim().toLowerCase() ?? "";
   if (!q) {
@@ -453,8 +466,15 @@ export async function fetchJiraSearchContext(options: {
     namedIssueKeys: userNamedKeys,
     wantsRepoDiscovery: wantsRepoLinkedJiraDiscovery(queryText)
   });
-  const focusJql = scopeJql(buildFocusAwareJiraJql(focusJqlOptions), options.integrationScope);
-  const repoJql = scopeJql(buildRepoJql(options.owner, options.repo, { preferHost: options.preferHost }), options.integrationScope);
+  const focusJql = scopeJql(
+    options.jobScoped && (options.extraTerms?.length ?? 0) > 0
+      ? buildDecisionJiraJql(options.extraTerms ?? [])
+      : buildFocusAwareJiraJql(focusJqlOptions),
+    options.integrationScope
+  );
+  const repoJql = options.jobScoped
+    ? undefined
+    : scopeJql(buildRepoJql(options.owner, options.repo, { preferHost: options.preferHost }), options.integrationScope);
   let searchError: string | undefined;
   let textSearchCount = 0;
   let usedJql = runTextSearch ? (focusJql ?? repoJql ?? "") : "";

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  buildDecisionJiraJql,
   buildFocusAwareJiraJql,
   buildIssueKeysJql,
   buildJiraFocusTerms,
@@ -128,6 +129,14 @@ test("buildFocusAwareJiraJql sanitizes hyphenated extras", () => {
   assert.match(jql!, /SQL injection/);
   assert.match(jql!, /to mix/);
   assert.doesNotMatch(jql!, /SQL-injection|not to mix/);
+});
+
+test("buildDecisionJiraJql is one sanitized text clause", () => {
+  assert.equal(
+    buildDecisionJiraJql(["SQL-injection", "not to mix"]),
+    'text ~ "SQL injection" ORDER BY updated DESC'
+  );
+  assert.doesNotMatch(buildDecisionJiraJql(["SQL-injection"]) ?? "", /training-java|AND/);
 });
 
 test("buildFocusAwareJiraJql extrasOnly skips hyphenated repo AND", () => {
