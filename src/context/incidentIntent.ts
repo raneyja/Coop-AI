@@ -7,7 +7,16 @@
  */
 
 function normalize(queryText: string | undefined): string {
-  return queryText?.trim().toLowerCase() ?? "";
+  return (
+    queryText
+      ?.trim()
+      .toLowerCase()
+      .replace(
+        /^(?:(?:pager|on[-\s]?call|oncall|sev(?:erity)?(?:\s*[0-3])?|incident)\s*:\s*)+/i,
+        ""
+      )
+      .trim() ?? ""
+  );
 }
 
 /** Strong operational / support signals — enough alone to treat as incident. */

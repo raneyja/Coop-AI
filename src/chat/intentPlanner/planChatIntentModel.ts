@@ -1,6 +1,6 @@
 /**
  * Optional cheap-model layer for Chat Intent Planner.
- * Extends the chip classifier schema with tools[] + compound workflow support.
+ * Classifies workflow + integration tools only. Jobs remain deterministic.
  * Fail-open: any error → undefined (caller keeps rules-only plan).
  */
 import type { IntegrationChatProvider } from "../types";
@@ -54,10 +54,6 @@ export function buildChatIntentPlanUserMessage(
     '- "understand-repo" = whole-repo architecture overview.',
     '- "knowledge-gaps" = missing docs / undocumented areas.',
     "- Compound asks MAY set both workflow and tools (e.g. blast-radius + jira).",
-    "- Also emit jobs when the ask has more than one capability: {\"jobs\":[{\"capability\":\"locate\"|\"decision\"|\"docs\"|\"code-host\",\"terms\":[\"...\"]}]}",
-    "- locate terms are code/file phrases; decision terms are discussion/ticket phrases. Never copy one token to every job.",
-    "- Leading labels like Pager: or On-call: are metadata, not terms.",
-    "- Do not add code-host unless the user asked to search PRs/MRs/issues.",
     "- Only include tools the user named or clearly needs from: " + connected,
     "- Never invent tools that are not in the connected list."
   ];
@@ -159,6 +155,18 @@ function extractJsonObject(text: string): string | undefined {
     return undefined;
   }
   return candidate.slice(start, end + 1);
+}
+
+/**
+ * The optional model only gets genuinely unclassified turns. Deterministic jobs
+ * and repo-code intent are executable contracts and must never be overwritten.
+ */
+export function shouldCallChatIntentModel(plan: ChatIntentPlan): boolean {
+  return (
+    plan.mode === "none" &&
+    (plan.jobs?.length ?? 0) === 0 &&
+    (plan.codeIntent?.action ?? "none") === "none"
+  );
 }
 
 /**

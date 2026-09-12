@@ -1,6 +1,7 @@
 import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
 import type { CodeHostProvider } from "../api/codeHosts/types";
 import type { ContextFetchRequest } from "./requestBatcher";
+import { wantsExplicitCodeHostSearch } from "../chat/intentPlanner/planChatJobs";
 
 export type CodeHostPullRequestSnippet = {
   number: number;
@@ -32,28 +33,7 @@ export type CodeHostSearchContext = {
 };
 
 export function wantsCodeHostContext(query: string): boolean {
-  const q = query.trim();
-  if (!q) {
-    return false;
-  }
-  // Explicit PR/MR/issue search — not a topical "the SQL-injection PR".
-  if (
-    /\b(?:search|list|show|find|open|recent)\s+(?:the\s+|our\s+|any\s+)?(?:PRs?|pull requests?|MRs?|merge requests?|issues?)\b/i.test(
-      q
-    )
-  ) {
-    return true;
-  }
-  if (/\b(PRs?|pull requests?|MRs?|merge requests?)\s+(?:for|in|on)\s+(?:this\s+)?(?:repo|repository)\b/i.test(q)) {
-    return true;
-  }
-  if (/\b(github|gitlab|bitbucket)\b/i.test(q) && /\b(issues?|PRs?|pull|merge|open|recent|repo)\b/i.test(q)) {
-    return true;
-  }
-  if (/\bissues?\b/i.test(q) && /\b(repo|repository|github|gitlab|bitbucket|this|open)\b/i.test(q)) {
-    return true;
-  }
-  return extractPrNumbers(q).length > 0;
+  return wantsExplicitCodeHostSearch(query);
 }
 
 export function shouldFetchCodeHostContext(request: ContextFetchRequest): boolean {

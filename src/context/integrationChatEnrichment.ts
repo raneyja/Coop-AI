@@ -130,7 +130,9 @@ async function enrichIntegrationStages(
   const base = {
     owner: options.owner,
     repo: options.repo,
-    queryText: jobScoped ? undefined : (traceSeeds?.queryText ?? options.request.intent.context.queryText),
+    queryText: jobScoped
+      ? undefined
+      : (traceSeeds?.queryText ?? options.request.intent.context.queryText),
     // Prefer caller-supplied activeFile (may be cleared when Gaps focus demotes an unrelated chip).
     activeFile: jobScoped
       ? undefined
@@ -401,8 +403,8 @@ async function enrichIntegrationStages(
   }
 
   const crossToolText = collectCrossToolSearchText(confluenceSearch, notionSearch);
-  const crossToolKeys = jobScoped ? undefined : (crossToolText.length > 0 ? crossToolText : undefined);
-  const docExtraTerms = [...termsFor("google-docs"), ...(jobScoped ? [] : crossToolText)];
+  const crossToolKeys = crossToolText.length > 0 ? crossToolText : undefined;
+  const docExtraTerms = [...termsFor("google-docs"), ...crossToolText];
 
   const [jiraSearch, googleDocsSearch] = await Promise.all([
     runTool("jira", shouldFetchJira, () =>
@@ -444,10 +446,10 @@ async function enrichIntegrationStages(
         secrets: options.secrets,
         ...base,
         extraTerms: termsFor("slack"),
-        jobScoped,
+        jobScoped: false,
         crossToolText: crossToolKeys,
         preferHost: options.codeHostProvider,
-        jiraIssueKeys: jobScoped ? undefined : jiraIssueKeys,
+        jiraIssueKeys,
         integrationScope: options.integrationScopes?.slack
       })
     ),
@@ -456,10 +458,10 @@ async function enrichIntegrationStages(
         secrets: options.secrets,
         ...base,
         extraTerms: termsFor("teams"),
-        jobScoped,
+        jobScoped: false,
         crossToolText: crossToolKeys,
         preferHost: options.codeHostProvider,
-        jiraIssueKeys: jobScoped ? undefined : jiraIssueKeys
+        jiraIssueKeys
       })
     )
   ]);

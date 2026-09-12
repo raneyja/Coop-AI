@@ -21,7 +21,9 @@ test("wantsCodeHostContext matches PR numbers", () => {
 
 test("wantsCodeHostContext does not treat a topical PR mention as MR search", () => {
   assert.equal(wantsCodeHostContext("did we mix this into the SQL-injection PR?"), false);
+  assert.equal(wantsCodeHostContext("Find the issue in the authentication middleware"), false);
   assert.equal(wantsCodeHostContext("search gitlab merge requests"), true);
+  assert.equal(wantsCodeHostContext("list GitLab issues for authentication"), true);
   assert.equal(wantsCodeHostContext("list bitbucket pull requests for this repo"), true);
 });
 

@@ -45,6 +45,17 @@ test("outage / on-call / incident keywords match", () => {
   assert.equal(isIncidentShapedQuery("summarize the SEV2 incident"), true);
 });
 
+test("leading operational labels are metadata; body signals decide incident routing", () => {
+  for (const label of ["Pager:", "On-call:", "Sev:", "Incident:"]) {
+    assert.equal(isIncidentShapedQuery(`${label} where is requireAuth defined?`), false, label);
+    assert.equal(
+      isIncidentShapedQuery(`${label} webhook failures caused an outage last week`),
+      true,
+      label
+    );
+  }
+});
+
 test("plain architecture questions are not incident-shaped", () => {
   assert.equal(isIncidentShapedQuery("What is the auth flow?"), false);
   assert.equal(isIncidentShapedQuery("how does webhook_task work?"), false);

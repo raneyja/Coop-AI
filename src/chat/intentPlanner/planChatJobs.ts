@@ -18,7 +18,8 @@ const TOOL_NAME_PATTERNS: Array<{ provider: IntegrationChatProvider; pattern: Re
   { provider: "google-docs", pattern: /\b(google\s*docs?|gdocs?)\b/i }
 ];
 
-function namedToolsIn(message: string): IntegrationChatProvider[] {
+/** Literal integration names, shared by rules and job planning. */
+export function detectExplicitlyNamedTools(message: string): IntegrationChatProvider[] {
   const named: IntegrationChatProvider[] = [];
   for (const { provider, pattern } of TOOL_NAME_PATTERNS) {
     if (pattern.test(message)) {
@@ -46,14 +47,14 @@ const LEADING_ASK_LABEL =
   /^(?:(?:pager|on[-\s]?call|oncall|sev(?:erity)?\s*[0-3]|incident|outage|war[-\s]?room)\s*:\s*)+/i;
 
 const DECISION_PHRASE =
-  /\b(?:decid(?:e|ed|ing|es)|decision|already\s+(?:decide[d]?|agreed|said)|don(?:'t|’t)\s+mix|not\s+to\s+mix|do\s+not\s+mix|what\s+did\s+\w+\s+say)\b/i;
+  /\b(?:decid(?:e|ed|ing|es)|decision|already\s+(?:decide[d]?|agreed|said)|don(?:'t|’t)\s+mix|not\s+to\s+mix|do\s+not\s+mix|what\s+(?:did|does)\s+.+?\s+say|where\s+did\s+.+?\s+(?:decide|agree))\b/i;
 
 /**
  * Explicit request to search PRs/MRs/issues on a code host.
  * Topical "the SQL-injection PR" is NOT this.
  */
 const EXPLICIT_CODE_HOST =
-  /\b(?:search|list|show|find|open|recent)\s+(?:the\s+|our\s+|any\s+)?(?:PRs?|pull requests?|MRs?|merge requests?|issues?)\b/i;
+  /\b(?:search|list|show|find|open|recent)\s+(?:the\s+|our\s+|any\s+)?(?:(?:github|gitlab|bitbucket)\s+)?(?:PRs?|pull requests?|MRs?|merge requests?|issues)\b/i;
 
 const EXPLICIT_CODE_HOST_REPO =
   /\b(?:PRs?|pull requests?|MRs?|merge requests?)\s+(?:for|in|on)\s+(?:this\s+)?(?:repo|repository)\b/i;
@@ -62,6 +63,7 @@ const EXPLICIT_CODE_HOST_VENDOR =
   /\b(?:github|gitlab|bitbucket)\b.{0,48}\b(?:PRs?|pull requests?|MRs?|merge requests?|issues?)\b/i;
 
 const EXPLICIT_PR_NUMBER = /\b(?:PR|pull request|merge request|MR)\s*#\s*\d+\b/i;
+const EXPLICIT_ISSUE_NUMBER = /\bissue\s*#\s*\d+\b/i;
 
 const NAMED_SOURCE_FILE =
   /(?:^|[\s`'"(\[]|\/)((?:[\w.-]+\/)*[\w.-]+\.[A-Za-z][A-Za-z0-9]{0,9})(?=$|[\s`'")\],:;!?])/g;
@@ -76,7 +78,8 @@ const WHERE_IS_PHRASE =
 
 const MIX_PHRASES = [/\bdon(?:'t|’t)\s+mix\b/i, /\bnot\s+to\s+mix\b/i, /\bdo\s+not\s+mix\b/i];
 
-const CLAUSE_SPLIT = /\s*(?:,\s+and\s+|;\s+|\s+and\s+did\s+we\b)\s*/i;
+const CLAUSE_SPLIT =
+  /\s*(?:,\s+and\s+|;\s+(?:and\s+)?|[—–]\s+(?:and\s+)?(?=(?:did|what|where)\b)|\s+and\s+(?=(?:did\b|what\s+(?:did|does)\b|where\s+did\b)))\s*/i;
 
 const TERM_STOP = new Set(
   [
@@ -174,7 +177,8 @@ export function wantsExplicitCodeHostSearch(message: string): boolean {
     EXPLICIT_CODE_HOST.test(q) ||
     EXPLICIT_CODE_HOST_REPO.test(q) ||
     EXPLICIT_CODE_HOST_VENDOR.test(q) ||
-    EXPLICIT_PR_NUMBER.test(q)
+    EXPLICIT_PR_NUMBER.test(q) ||
+    EXPLICIT_ISSUE_NUMBER.test(q)
   );
 }
 
@@ -240,6 +244,14 @@ export function hasCodeHostJob(jobs: ChatIntentJob[] | undefined): boolean {
   return (jobs ?? []).some((job) => job.capability === "code-host");
 }
 
+/** Exact query contract handed to code-host execution. */
+export function codeHostJobQuery(jobs: ChatIntentJob[] | undefined): string | undefined {
+  const terms = uniqueTerms(
+    (jobs ?? []).filter((job) => job.capability === "code-host").flatMap((job) => job.terms)
+  );
+  return terms.length > 0 ? terms.join(" ") : undefined;
+}
+
 /**
  * Tools implied by jobs. Named tools are a floor (always kept).
  * Implied decision (phrasing, not merely naming Slack) adds Slack + Jira,
@@ -288,7 +300,7 @@ export function planChatJobs(input: PlanChatJobsInput): ChatIntentJob[] {
     return [];
   }
   const stripped = stripLeadingAskLabels(raw) || raw;
-  const named = input.namedTools ?? namedToolsIn(raw);
+  const named = input.namedTools ?? detectExplicitlyNamedTools(raw);
   const clauses = splitAskClauses(stripped);
   const jobs: ChatIntentJob[] = [];
 
@@ -301,7 +313,7 @@ export function planChatJobs(input: PlanChatJobsInput): ChatIntentJob[] {
       continue;
     }
     const terms = extractJobTerms(clause, capability, input.activeFile);
-    if (terms.length === 0 && capability !== "code-host") {
+    if (terms.length === 0) {
       continue;
     }
     pushJob(jobs, capability, terms);
@@ -342,7 +354,7 @@ export function planChatJobs(input: PlanChatJobsInput): ChatIntentJob[] {
     pushJob(jobs, "code-host", extractJobTerms(stripped, "code-host", undefined));
   }
 
-  return jobs.filter((job) => job.capability === "code-host" || job.terms.length > 0);
+  return jobs.filter((job) => job.terms.length > 0);
 }
 
 function classifyClause(
@@ -441,6 +453,20 @@ function extractJobTerms(
       const hit = cleaned.match(pattern);
       if (hit) {
         terms.push(hit[0].replace(/’/g, "'").toLowerCase());
+      }
+    }
+  }
+
+  if (capability === "code-host") {
+    for (const match of cleaned.matchAll(
+      /\b(?:(?:PR|pull request|merge request|MR|issue)\s*#\s*\d+|(?:github|gitlab|bitbucket)\s+(?:PRs?|pull requests?|MRs?|merge requests?|issues?))\b/gi
+    )) {
+      terms.push(match[0]);
+    }
+    if (terms.length === 0) {
+      const phrase = compactPhrase(cleaned);
+      if (phrase) {
+        terms.push(phrase);
       }
     }
   }

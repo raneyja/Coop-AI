@@ -214,6 +214,7 @@ import { isIntentSuggestModelEnabled } from "../config/intentSuggestConfig";
 import {
   planChatIntentFromRules,
   classifyChatIntentPlan,
+  shouldCallChatIntentModel,
   resolveChatIntentExecution,
   buildIntentPlanActivityMessages,
   buildIntentPlanStatusLine,
@@ -6790,8 +6791,8 @@ export class CoopChatSession {
       connectedTools
     };
     const rulesPlan = planChatIntentFromRules(input);
-    // Locked plain explain / any non-empty rules plan — do not let the model promote Blast.
-    if (rulesPlan.mode === "plain" || rulesPlan.mode !== "none") {
+    // Deterministic jobs and repo-code intent are executable contracts.
+    if (!shouldCallChatIntentModel(rulesPlan)) {
       return rulesPlan;
     }
     if (!isIntentSuggestModelEnabled()) {

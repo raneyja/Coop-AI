@@ -7,6 +7,7 @@ import test from "node:test";
 import { planChatIntentFromRules } from "./planChatIntent";
 import {
   codeHostJobTerms,
+  codeHostJobQuery,
   extraTermsForIntegration,
   hasCodeHostJob,
   jobsSkipAgentLoop,
@@ -15,6 +16,7 @@ import {
   stripLeadingAskLabels,
   wantsExplicitCodeHostSearch
 } from "./planChatJobs";
+import { shouldCallChatIntentModel } from "./planChatIntentModel";
 import { shouldRunAgentToolLoop } from "../agentRouting";
 import { wantsCodeHostContext } from "../../context/codeHostContext";
 import { buildDiscussionSearchQueries } from "../../context/integrationSearchTerms";
@@ -265,4 +267,68 @@ test("planChatJobs does not copy one token to every capability", () => {
   const decision = jobs.find((job) => job.capability === "decision")?.terms ?? [];
   assert.notDeepEqual(locate, decision);
   assert.ok(locate.length > 0 && decision.length > 0);
+});
+
+test("compound locate and decision sibling wording stays job-scoped", () => {
+  const asks = [
+    "Where is date math implemented and what did we decide about the SQL-injection PR?",
+    "Where is date math implemented; what does the SQL-injection PR say about rounding?",
+    "Where is date math implemented — where did we decide how the SQL-injection PR should handle it?",
+    "Where is DateTimeUtils in reports.jsp, and what did we decide about the SQL-injection PR?"
+  ];
+
+  for (const ask of asks) {
+    const jobs = planChatJobs({ message: ask, activeFile: "web/reports.jsp" });
+    const locate = locateJobTerms(jobs).map((term) => term.toLowerCase());
+    const decision = extraTermsForIntegration(jobs, "slack")?.map((term) =>
+      term.toLowerCase()
+    ) ?? [];
+    assert.ok(jobs.some((job) => job.capability === "locate"), ask);
+    assert.ok(jobs.some((job) => job.capability === "decision"), ask);
+    assert.equal(hasCodeHostJob(jobs), false, ask);
+    assert.ok(locate.some((term) => /date|datetimeutils|reports\.jsp/.test(term)), ask);
+    assert.ok(decision.some((term) => /sql-injection|rounding/.test(term)), ask);
+    assert.equal(decision.some((term) => term.includes("date math")), false, ask);
+  }
+});
+
+test("code-host jobs require explicit listing intent and carry execution terms", () => {
+  const rows = [
+    {
+      ask: "Find the issue in the authentication middleware",
+      expected: false
+    },
+    {
+      ask: "list GitLab issues for authentication",
+      expected: true
+    },
+    {
+      ask: "what happened in PR #53?",
+      expected: true
+    }
+  ];
+
+  for (const row of rows) {
+    const jobs = planChatJobs({ message: row.ask });
+    assert.equal(hasCodeHostJob(jobs), row.expected, row.ask);
+    assert.equal(Boolean(codeHostJobQuery(jobs)), row.expected, row.ask);
+  }
+});
+
+test("deterministic rules plans cannot be overwritten by the model classifier", () => {
+  const asks = [
+    N5_EXACT_ASK,
+    "Where is date math implemented and what did we decide about the SQL-injection PR?",
+    "Find the issue in the authentication middleware"
+  ];
+
+  for (const message of asks) {
+    const plan = planChatIntentFromRules({
+      message,
+      activeFile: "src/server/authMiddleware.ts",
+      connectedTools: ["slack", "jira"]
+    });
+    assert.equal(shouldCallChatIntentModel(plan), false, message);
+    assert.ok((plan.jobs?.length ?? 0) > 0 || plan.codeIntent?.action !== "none", message);
+  }
 });

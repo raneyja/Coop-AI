@@ -22,6 +22,7 @@ import { classifyRepoCodeIntent } from "../repoCodeIntent";
 import { queryHasNamedSymbol } from "../../api/agent/searchQuery";
 import {
   decisionPhrasePresent,
+  detectExplicitlyNamedTools,
   mergeChatIntentTools,
   planChatJobs,
   stripLeadingAskLabels,
@@ -84,15 +85,6 @@ const WORKFLOW_PATTERNS: Array<{
   }
 ];
 
-const TOOL_NAME_PATTERNS: Array<{ provider: IntegrationChatProvider; pattern: RegExp }> = [
-  { provider: "jira", pattern: /\bjira\b/i },
-  { provider: "slack", pattern: /\bslack\b/i },
-  { provider: "teams", pattern: /\b(ms\s*)?teams\b/i },
-  { provider: "confluence", pattern: /\bconfluence\b/i },
-  { provider: "notion", pattern: /\bnotion\b/i },
-  { provider: "google-docs", pattern: /\b(google\s*docs?|gdocs?)\b/i }
-];
-
 /** Local explain / summarize — stay plain (no tools, no silent workflow). */
 const EXPLAIN_ONLY =
   /^(?:(?:can\s+you|could\s+you|please)\s+)?(?:what\s+does\s+this\s+(?:function|method|class|file)\s+do\b|explain\s+this\s+(?:function|method|class|file|code)\b|summarize\s+this\s+(?:function|method|class|file|code)\b|walk\s+me\s+through\s+this\s+(?:function|method|class|file|code)\b)/i;
@@ -106,12 +98,7 @@ const EXPLAIN_ONLY =
  * must not add Teams alongside Slack).
  */
 export function detectNamedTools(message: string): IntegrationChatProvider[] {
-  const namedByKeyword: IntegrationChatProvider[] = [];
-  for (const { provider, pattern } of TOOL_NAME_PATTERNS) {
-    if (pattern.test(message)) {
-      namedByKeyword.push(provider);
-    }
-  }
+  const namedByKeyword = detectExplicitlyNamedTools(message);
   if (namedByKeyword.length > 0) {
     return CHAT_INTENT_TOOL_PROVIDERS.filter((p) => namedByKeyword.includes(p));
   }
