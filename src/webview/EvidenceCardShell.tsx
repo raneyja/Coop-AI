@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback, useContext, useMemo, useState } from "react";
 import type { ConflictSummary } from "../webview/types";
 import { sourceCitationAnchor } from "../prompts/sourceCitationRegistry";
 import {
@@ -22,6 +22,10 @@ import {
   type EvidenceQuality
 } from "./evidenceCardSummary";
 import type { EvidenceActionContext } from "./evidenceCardActionHandler";
+import {
+  EvidenceCardExpandContext,
+  type EvidenceCardExpandApi
+} from "./evidenceConnectionExpandContext";
 
 export type EvidenceCardSource =
   | { provider: IntegrationSourceId; detail?: string }
@@ -47,6 +51,26 @@ export type EvidenceCardShellProps = {
   children: React.ReactNode;
 };
 
+function useSourcesCardExpand(): EvidenceCardExpandApi {
+  const parent = useContext(EvidenceCardExpandContext);
+  const [localExpanded, setLocalExpanded] = useState(false);
+  const expandLocal = useCallback(() => {
+    setLocalExpanded(true);
+  }, []);
+  const toggleLocal = useCallback(() => {
+    setLocalExpanded((value) => !value);
+  }, []);
+  return useMemo(
+    () =>
+      parent ?? {
+        expanded: localExpanded,
+        expand: expandLocal,
+        toggle: toggleLocal
+      },
+    [parent, localExpanded, expandLocal, toggleLocal]
+  );
+}
+
 export function EvidenceCardShell({
   title,
   meta,
@@ -60,8 +84,9 @@ export function EvidenceCardShell({
   // Summary quality always wins over caller-supplied statusTone/statusLabel (e.g. completeness).
   const resolved = resolveEvidenceCardHeaderStatus({ summary, statusTone, statusLabel, sources });
   const headerMetaLabel = resolveEvidenceTargetMetaLabel(meta, summary?.target);
+  const expandApi = useSourcesCardExpand();
 
-  return (
+  const card = (
     <IntegrationResultStack>
       <IntegrationResultCard
         title={title}
@@ -69,6 +94,8 @@ export function EvidenceCardShell({
         status={resolved.status}
         statusTone={resolved.statusTone}
         ariaLabel={`${title} sources`}
+        expanded={expandApi.expanded}
+        onToggleExpand={expandApi.toggle}
       >
         {!summary && sources.length > 0 ? (
           <IntegrationResultSection label="Connected sources" className="!border-b coop-result-sources-bar">
@@ -100,6 +127,10 @@ export function EvidenceCardShell({
         </IntegrationResultSection>
       </IntegrationResultCard>
     </IntegrationResultStack>
+  );
+
+  return (
+    <EvidenceCardExpandContext.Provider value={expandApi}>{card}</EvidenceCardExpandContext.Provider>
   );
 }
 

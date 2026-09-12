@@ -1,5 +1,9 @@
 import React, { useEffect, useRef } from "react";
 import { evidenceArtifactAnchor } from "../../prompts/sourceCitationRegistry";
+import {
+  EvidenceCardExpandProvider,
+  useEvidenceCardExpand
+} from "../evidenceConnectionExpandContext";
 import { useCitationNavigation } from "./CitationNavigationContext";
 
 /** Registers the evidence Sources card shell for scroll-to-card navigation. */
@@ -10,13 +14,28 @@ export function EvidenceArtifactAnchor({
   artifactId: string;
   children: React.ReactNode;
 }): React.ReactElement {
+  return (
+    <EvidenceCardExpandProvider>
+      <EvidenceArtifactAnchorInner artifactId={artifactId}>{children}</EvidenceArtifactAnchorInner>
+    </EvidenceCardExpandProvider>
+  );
+}
+
+function EvidenceArtifactAnchorInner({
+  artifactId,
+  children
+}: {
+  artifactId: string;
+  children: React.ReactNode;
+}): React.ReactElement {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const { registerEvidenceAnchor } = useCitationNavigation();
+  const expand = useEvidenceCardExpand()?.expand;
 
   useEffect(() => {
-    registerEvidenceAnchor(evidenceArtifactAnchor(artifactId), rootRef.current);
+    registerEvidenceAnchor(evidenceArtifactAnchor(artifactId), rootRef.current, expand);
     return () => registerEvidenceAnchor(evidenceArtifactAnchor(artifactId), null);
-  }, [artifactId, registerEvidenceAnchor]);
+  }, [artifactId, expand, registerEvidenceAnchor]);
 
   return <div ref={rootRef}>{children}</div>;
 }

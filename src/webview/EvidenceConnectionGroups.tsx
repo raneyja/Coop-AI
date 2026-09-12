@@ -7,7 +7,10 @@ import {
   type IntegrationSourceId
 } from "./components/IntegrationSourceBrand";
 import { useCitationNavigation } from "./components/CitationNavigationContext";
-import { EvidenceConnectionExpandContext } from "./evidenceConnectionExpandContext";
+import {
+  EvidenceConnectionExpandContext,
+  useEvidenceCardExpand
+} from "./evidenceConnectionExpandContext";
 import {
   extractSourceInventoryBriefs,
   renderConnectionBody,
@@ -79,6 +82,7 @@ function EvidenceConnectionGroupInner({
   const { scrollToEvidence } = useCitationNavigation();
 
   const heading = label ?? connectionLabel(connection);
+  const expandCard = useEvidenceCardExpand()?.expand;
   const brief = useMemo(
     () => resolveConnectionBrief(briefSummary, children),
     [briefSummary, children]
@@ -89,6 +93,7 @@ function EvidenceConnectionGroupInner({
   const showLegacyBrief = !open && inventory.length === 0 && Boolean(brief);
 
   const ensureOpen = () => {
+    expandCard?.();
     setOpen(true);
   };
 
@@ -105,6 +110,7 @@ function EvidenceConnectionGroupInner({
   }, [open, pendingFocusId, scrollToEvidence]);
 
   const openAndFocus = (sectionDomId?: string) => {
+    expandCard?.();
     if (sectionDomId) {
       setPendingFocusId(sectionDomId);
     }

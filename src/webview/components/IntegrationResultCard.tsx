@@ -6,7 +6,10 @@ import { useChatLinks } from "./ChatLinkContext";
 import { useCitationNavigation } from "./CitationNavigationContext";
 import type { IntegrationSourceId } from "./IntegrationSourceBrand";
 import { IntegrationSourceHeading } from "./IntegrationSourceBrand";
-import { useEvidenceConnectionExpand } from "../evidenceConnectionExpandContext";
+import {
+  useEvidenceCardExpand,
+  useEvidenceConnectionExpand
+} from "../evidenceConnectionExpandContext";
 
 type IntegrationResultCardProps = {
   title: string;
@@ -18,6 +21,9 @@ type IntegrationResultCardProps = {
   children: React.ReactNode;
   scrollable?: boolean;
   className?: string;
+  /** Sources cards: collapsed to the title until the user clicks. */
+  expanded?: boolean;
+  onToggleExpand?: () => void;
 };
 
 export function IntegrationResultStack({ children }: { children: React.ReactNode }): React.ReactElement {
@@ -33,27 +39,68 @@ export function IntegrationResultCard({
   ariaLabel,
   children,
   scrollable = false,
-  className
+  className,
+  expanded = true,
+  onToggleExpand
 }: IntegrationResultCardProps): React.ReactElement {
+  const collapsible = Boolean(onToggleExpand);
+  const collapsed = collapsible && !expanded;
+  const cardClassName = [
+    "coop-result-card",
+    collapsed ? "coop-result-card--collapsed" : "",
+    className ?? ""
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const titleRow = (
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
+      {collapsible ? (
+        <span className="coop-result-collapsible-chevron" aria-hidden="true">
+          {expanded ? "▾" : "▸"}
+        </span>
+      ) : null}
+      <span className="coop-result-title">{title}</span>
+      {status && !collapsed ? (
+        <span className={`coop-result-status coop-result-status--${statusTone}`}>{status}</span>
+      ) : null}
+    </div>
+  );
+
   return (
-    <section className={`coop-result-card${className ? ` ${className}` : ""}`} aria-label={ariaLabel}>
-      <header className="coop-result-header">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="coop-result-title">{title}</p>
-            {status ? (
-              <span className={`coop-result-status coop-result-status--${statusTone}`}>{status}</span>
-            ) : null}
+    <section className={cardClassName} aria-label={ariaLabel}>
+      <header className={`coop-result-header${collapsible ? " coop-result-header--collapsible" : ""}`}>
+        {collapsible ? (
+          <button
+            type="button"
+            className="coop-result-header-toggle"
+            onClick={onToggleExpand}
+            aria-expanded={expanded}
+          >
+            <span className="flex min-w-0 flex-1 flex-col">
+              {titleRow}
+              {meta && expanded ? <span className="coop-result-meta">{meta}</span> : null}
+            </span>
+          </button>
+        ) : (
+          <div className="min-w-0 flex-1">
+            {titleRow}
+            {meta ? <p className="coop-result-meta">{meta}</p> : null}
           </div>
-          {meta ? <p className="coop-result-meta">{meta}</p> : null}
-        </div>
+        )}
         {onDismiss ? (
           <button type="button" className="coop-text-btn shrink-0" onClick={onDismiss}>
             Dismiss
           </button>
         ) : null}
       </header>
-      <div className={scrollable ? "coop-result-body" : "coop-result-content"}>{children}</div>
+      <div
+        className={scrollable ? "coop-result-body" : "coop-result-content"}
+        hidden={collapsed}
+        aria-hidden={collapsed}
+      >
+        {children}
+      </div>
     </section>
   );
 }
@@ -167,6 +214,7 @@ export function IntegrationResultCollapsible({
   const { onOpenLink } = useChatLinks();
   const { registerEvidenceAnchor, scrollToCitation } = useCitationNavigation();
   const ensureConnectionExpanded = useEvidenceConnectionExpand();
+  const expandCard = useEvidenceCardExpand()?.expand;
   const rootRef = useRef<HTMLDivElement | null>(null);
   const useBrandedHeader = Boolean(provider && destination);
 
@@ -175,13 +223,22 @@ export function IntegrationResultCollapsible({
       return;
     }
     registerEvidenceAnchor(sectionDomId, rootRef.current, () => {
+      expandCard?.();
       ensureConnectionExpanded?.();
       if (!hideHeader && !open) {
         onToggle();
       }
     });
     return () => registerEvidenceAnchor(sectionDomId, null);
-  }, [sectionDomId, open, onToggle, registerEvidenceAnchor, ensureConnectionExpanded, hideHeader]);
+  }, [
+    sectionDomId,
+    open,
+    onToggle,
+    registerEvidenceAnchor,
+    ensureConnectionExpanded,
+    expandCard,
+    hideHeader
+  ]);
 
   const showBody = hideHeader || open;
 

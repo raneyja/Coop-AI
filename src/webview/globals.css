@@ -1037,6 +1037,10 @@
     border-left: 2px solid color-mix(in srgb, var(--vscode-textLink-foreground, #3794ff) 45%, var(--coop-border));
   }
 
+  .chat-message--evidence .chat-message-meta {
+    @apply mb-1;
+  }
+
   .chat-message-label--evidence {
     letter-spacing: 0.02em;
     text-transform: uppercase;
@@ -3022,13 +3026,31 @@
     border-bottom: 1px solid var(--coop-settings-divider);
   }
 
+  .coop-result-header--collapsible {
+    padding: 0;
+  }
+
+  .coop-result-card--collapsed .coop-result-header {
+    border-bottom: none;
+  }
+
+  .coop-result-header-toggle {
+    @apply flex min-w-0 flex-1 items-start gap-2 px-3.5 py-2.5 text-left;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40;
+    color: inherit;
+  }
+
+  .coop-result-header-toggle:hover {
+    background: color-mix(in srgb, var(--coop-panel-canvas) 88%, var(--coop-panel-foreground) 12%);
+  }
+
   .coop-result-title {
     @apply text-[13px] font-medium;
     color: var(--coop-panel-foreground);
   }
 
   .coop-result-meta {
-    @apply mt-0.5 truncate text-[11px];
+    @apply mt-0.5 block truncate text-[11px];
     color: var(--coop-panel-muted);
   }
 

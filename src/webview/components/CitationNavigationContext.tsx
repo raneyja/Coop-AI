@@ -54,9 +54,18 @@ export function CitationNavigationProvider({
       if (!entry) {
         return;
       }
+      const reveal = () => {
+        entry.element.scrollIntoView({ behavior: "smooth", block: "center" });
+        highlight(entry.element);
+      };
       entry.expand?.();
-      entry.element.scrollIntoView({ behavior: "smooth", block: "center" });
-      highlight(entry.element);
+      if (entry.expand) {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(reveal);
+        });
+        return;
+      }
+      reveal();
     },
     [highlight]
   );
