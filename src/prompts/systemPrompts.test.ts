@@ -114,7 +114,7 @@ test("paperclip attachment rule is gated on hasPaperclipAttachments (B6)", () =>
 test("chat use case includes enterprise evidence rules", () => {
   const prompt = systemPromptForUseCase("chat");
   assert.ok(prompt.includes("strong / medium / weak / limited"));
-  assert.ok(prompt.includes("integration blocks show <empty>"));
+  assert.ok(prompt.includes("A searched source with zero hits proves only"));
   assert.ok(prompt.includes("Never invent ticket IDs, PR numbers"));
   assert.ok(prompt.includes("Weight sources by reliability for decisions"));
   assert.ok(prompt.includes("search samples / capped result sets"));

@@ -8,7 +8,12 @@ import { REPO_SUMMARY_EVIDENCE_SYSTEM } from "./repoSummarySynthesis";
 import { BLAST_RADIUS_EVIDENCE_SYSTEM } from "./blastRadiusSynthesis";
 import { KNOWLEDGE_GAPS_EVIDENCE_SYSTEM } from "./knowledgeGapsSynthesis";
 import { INTEGRATION_EVIDENCE_SYSTEM } from "./integrationSynthesis";
-import { GENERAL_CHAT_EVIDENCE_RULES, SOURCES_FOOTER_OUTPUT_RULE, AGENT_REPO_HUNT_RULES } from "./evidenceSynthesis";
+import {
+  EMPTY_EVIDENCE_HONESTY_RULE,
+  GENERAL_CHAT_EVIDENCE_RULES,
+  SOURCES_FOOTER_OUTPUT_RULE,
+  AGENT_REPO_HUNT_RULES
+} from "./evidenceSynthesis";
 import { USER_PAPERCLIP_ATTACHMENTS_SYSTEM_RULE } from "../chat/paperclipAttachments";
 import {
   extractDualRepoCompareEvidence,
@@ -72,6 +77,7 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
 The reader is the engineer in the IDE. Never write Coop pipeline jargon in the answer, Sources footer, or subsection copy.
 FAIL (do not emit): \`scan_incomplete\`, \`gaps_found\`, \`no_structured_gaps\`, \`jobScan\`, \`scanCoverage\`, soft gather, gather budget, indexed-manifest, primary target, \`missing_docs\`, \`missing_owner\`, \`impact_unknown\`, high-value code, high-fan-in, depcruise, Dependency Submission, best-effort context.
 Use ordinary English: "this file", "this folder", "the scan could not finish", "no listed owner", "no nearby docs".
+- For a remote Use-repo, never tell the user to clone the repository, run \`git grep\` locally, use Find in Path, or open a local copy. Suggest another indexed search term or state what remote evidence is missing.
 `;
 
 export const PATCH_OUTPUT_CONTRACT = `
@@ -431,7 +437,26 @@ What the integration search did not cover or returned empty.
 Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
 
 **Sources**
-${SOURCES_FOOTER_OUTPUT_RULE}`
+${SOURCES_FOOTER_OUTPUT_RULE}`,
+
+  intent_job: `
+## Required response structure
+Use these sections in order (**Title** on its own line; blank line before each; omit empty sections):
+
+**Answer**
+Directly answer each requested capability in 2-4 sentences. Keep locate and decision findings separate.
+
+**Code location**
+Include for locate jobs. Make implementation claims only from attached remote file bodies. Cite concrete paths and symbols with the Cursor citation contract. If no body supports the claim, say the indexed search did not return a usable implementation file.
+
+**Decision evidence**
+Include for decision jobs. Make decision claims only from attached integration or code-host evidence. Name concrete ticket keys, thread/channel names, page titles, or PRs only when attached. Missing or empty evidence is not a decision.
+
+**Gaps**
+State unavailable, failed, or empty sources briefly. Do not turn gaps into local-search instructions.
+
+**Sources**
+Include at most 3 bullets. Cite only non-empty attached sources that contributed facts. Never cite a disconnected, missing, failed, or empty integration.`
 };
 
 function withOutputContract(
@@ -470,11 +495,35 @@ export const KNOWLEDGE_GAPS_SYSTEM = withOutputContract(KNOWLEDGE_GAPS_EVIDENCE_
 
 export const INTEGRATION_SYSTEM = withOutputContract(INTEGRATION_EVIDENCE_SYSTEM, "integration");
 
+const INTENT_JOB_BODY = `You are CoopAI's synthesis writer for a compound intent-job turn.
+Answer the requested locate, decision, docs, or code-host capabilities without blending their evidence.
+- Locate claims require attached remote code bodies. A path-only search hit is a lead, not proof of implementation.
+- Decision claims require attached integration or code-host evidence. Code proximity alone is not a recorded decision.
+- Keep one answer. Do not switch into incident, PR-review, patch, or open-file-review templates.
+${EMPTY_EVIDENCE_HONESTY_RULE}`;
+
+const INTENT_JOB_OUTPUT_CONTRACT = `
+## Cursor response contract
+- Use bold section titles, short prose, and bullets. Do not use # headings, tables, blockquotes, HTML, or README layout.
+- Existing repo code uses citation fences only: a plain fence whose first body line uses real integers, e.g. \`42:68:src/auth.ts\`, and whose remaining body is copied verbatim from attached code.
+- Never use language-tagged fences for existing repo code, placeholder line ranges, or invented file bodies.
+- Paths and symbols may be named only from attached evidence. Links require an attached URL.
+- For a remote Use-repo, never recommend cloning, \`git grep\`, Find in Path, or opening a local copy.
+${USE_CASE_STRUCTURE.intent_job}`;
+
+function buildIntentJobSystem(hasPaperclipAttachments = false): string {
+  const paperclip = hasPaperclipAttachments
+    ? `\n\n${USER_PAPERCLIP_ATTACHMENTS_SYSTEM_RULE}`
+    : "";
+  return `${INTENT_JOB_BODY}${paperclip}\n\n${INTENT_JOB_OUTPUT_CONTRACT}`;
+}
+
+export const INTENT_JOB_SYSTEM = buildIntentJobSystem();
+
 const GENERAL_CHAT_BODY = `You are CoopAI, an enterprise code intelligence assistant.
 Answer clearly using supplied repository and organizational context. Cite concrete paths when evidence is attached; do not fabricate external links, ticket keys, or PR numbers.
 When the user message has no discernible question or task, ask a brief clarifying question. Do not summarize attached files or repository context unless the user asked for that. Greetings and pings are not overview requests.
 When drawing conclusions from attached evidence, state strength (strong / medium / weak / limited) and distinguish provenance from inference.
-When integration blocks show <empty>, say clearly that the search found nothing — do not invent tickets, messages, or pages. Empty Slack or Jira hits are not proof that a decision never existed; do not invent that conclusion.
 When \`<local_files>\` / \`<file_content>\` blocks are attached, treat them as the authoritative source code. Quote exact conditions and identifiers from that code only — never invent functions, variables, or branches that are not present in the attachment.
 When \`<repo_semantic_paths>\` is attached, those are related-path hits only — name them in backticks. Do not invent file bodies or paste guessed implementations.
 When \`<repo_compare>\` is attached, the user asked to compare exactly two indexed repositories. Cite evidence from both \`<repo>\` sides and contrast them. If a side has a \`<note>\` about missing evidence, say so for that side. Never use a third repository, sticky Use-repo outside those two, or the local Extension Host workspace as primary evidence.
@@ -566,6 +615,7 @@ const USE_CASE_PROMPTS: Record<UseCase, string> = {
   blast_radius: BLAST_RADIUS_SYSTEM,
   knowledge_gaps: KNOWLEDGE_GAPS_SYSTEM,
   integration: INTEGRATION_SYSTEM,
+  intent_job: INTENT_JOB_SYSTEM,
   chat: GENERAL_CHAT_SYSTEM,
   code_edit: CODE_EDIT_SYSTEM,
   inline_completion: INLINE_COMPLETION_PROMPT,
@@ -593,6 +643,8 @@ function buildUseCaseSystemPrompt(useCase: UseCase, options?: SystemPromptOption
       return withOutputContract(KNOWLEDGE_GAPS_EVIDENCE_SYSTEM, "knowledge_gaps", undefined, hasPaperclip);
     case "integration":
       return withOutputContract(INTEGRATION_EVIDENCE_SYSTEM, "integration", undefined, hasPaperclip);
+    case "intent_job":
+      return buildIntentJobSystem(hasPaperclip);
     case "chat":
       return withOutputContract(GENERAL_CHAT_BODY, "chat", undefined, hasPaperclip);
     case "code_edit":

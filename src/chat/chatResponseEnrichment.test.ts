@@ -30,11 +30,18 @@ Retry helpers exist in webhook_task.py.
       {
         data: {
           jiraSearch: { issues: [] },
-          slackSearch: { messages: [] }
+          slackSearch: { messages: [] },
+          localFiles: {
+            files: [{ path: "apps/api/plane/bgtasks/webhook_task.py", content: "def retry(): pass" }]
+          }
         }
       }
     ],
-    incidentReconstruction: { jiraConnected: true, slackConnected: true }
+    incidentReconstruction: {
+      jiraConnected: true,
+      slackConnected: true,
+      codePaths: ["apps/api/plane/bgtasks/webhook_task.py"]
+    }
   });
   assert.ok(enriched.includes("**Code paths**"));
   assert.ok(enriched.includes("**Integrations**"));

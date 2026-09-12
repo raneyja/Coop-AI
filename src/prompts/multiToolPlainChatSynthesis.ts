@@ -4,6 +4,7 @@
  * and we must NOT steal the turn into Jira-only / Slack-only synthesis.
  */
 import type { IntegrationChatProvider } from "../chat/types";
+import type { ChatIntentJob } from "../chat/intentPlanner";
 import type { IntegrationSearchEvidenceLike } from "../context/integrationEvidenceVisibility";
 import {
   appendCitationKeysSection,
@@ -11,6 +12,7 @@ import {
   appendSourcesChecklistSection
 } from "./evidenceSynthesis";
 import {
+  integrationSourceLabel,
   listIntegrationSourceLabels,
   listIntegrationSourcesChecklist
 } from "./integrationSourceLabels";
@@ -25,10 +27,9 @@ export type MultiToolPlainChatInput = {
   repo?: string;
   file?: string;
   tools: IntegrationChatProvider[];
+  jobs?: ChatIntentJob[];
   integrations: MultiToolIntegrationSnapshot;
   connected?: Partial<Record<IntegrationChatProvider, boolean>>;
-  /** Optional trust status line from the intent planner. */
-  statusLine?: string;
 };
 
 const TOOL_TITLE: Record<IntegrationChatProvider, string> = {
@@ -149,8 +150,6 @@ export function buildMultiToolPlainChatUserPrompt(input: MultiToolPlainChatInput
   const repo =
     input.owner && input.repo ? `${input.owner}/${input.repo}` : "the active repository";
   const file = input.file?.trim();
-  const status = input.statusLine?.trim();
-
   const summaryLines = input.tools.map((tool) =>
     hitSummary(tool, input.integrations[tool], input.connected?.[tool])
   );
@@ -163,16 +162,17 @@ export function buildMultiToolPlainChatUserPrompt(input: MultiToolPlainChatInput
     .join("\n\n");
 
   const lines = [
-    "You are answering a plain-chat question that needs multiple connected tools.",
-    "Use the integration evidence below together with repository context.",
+    "Answer this compound intent-job turn with one synthesis.",
+    "Keep each capability tied to its own evidence.",
+    "Locate claims require attached remote code bodies; path-only hits are leads, not implementation proof.",
+    "Decision claims require the integration evidence below; code alone does not prove a prior decision.",
     "Do not pretend a tool was searched when the snapshot says it was skipped or disconnected.",
-    "Prefer concrete citations (ticket keys, thread links, page titles) when present.",
-    "For Jira: cite only tickets that mention the active file/symbol or are clearly about this change. Do not invent a link from same-repo alone.",
-    "When Slack or Jira (or sibling tools) searched and returned no hits, say the search was empty. Do not invent that a decision never existed, and do not invent tickets or messages.",
     "",
-    status ? `Intent: ${status}.` : undefined,
     `Repository: ${repo}`,
     file ? `Active file: ${file}` : undefined,
+    input.jobs?.length
+      ? `Jobs: ${input.jobs.map((job) => job.capability).join(", ")}`
+      : undefined,
     "",
     "## User question",
     input.userQuestion.trim(),
@@ -186,13 +186,14 @@ export function buildMultiToolPlainChatUserPrompt(input: MultiToolPlainChatInput
     .filter((line): line is string => Boolean(line));
 
   lines.push("");
-  appendCitationKeysSection(
-    lines,
-    input.tools.flatMap((tool) => listIntegrationSourceLabels(tool))
-  );
+  const evidencedTools = input.tools.filter((tool) => {
+    const evidence = input.integrations[tool];
+    return !evidence?.error && resultCount(evidence) > 0;
+  });
+  appendCitationKeysSection(lines, evidencedTools.flatMap((tool) => listIntegrationSourceLabels(tool)));
   appendSourcesChecklistSection(
     lines,
-    input.tools.flatMap((tool) => {
+    evidencedTools.flatMap((tool) => {
       const evidence = input.integrations[tool];
       return listIntegrationSourcesChecklist(tool, {
         error: evidence?.error,
@@ -202,4 +203,31 @@ export function buildMultiToolPlainChatUserPrompt(input: MultiToolPlainChatInput
   );
   appendEvidenceQualityInstructions(lines);
   return lines.join("\n");
+}
+
+/** Remove citations and local-workspace advice that contradict attached job evidence. */
+export function enrichIntentJobResponse(
+  content: string,
+  input: Pick<MultiToolPlainChatInput, "tools" | "integrations">
+): string {
+  const unavailableLabels = input.tools
+    .filter((tool) => {
+      const evidence = input.integrations[tool];
+      return Boolean(evidence?.error) || resultCount(evidence) === 0;
+    })
+    .map(integrationSourceLabel);
+  const unavailable = new Set(unavailableLabels);
+
+  return content
+    .split("\n")
+    .filter((line) => ![...unavailable].some((label) => line.includes(label)))
+    .filter(
+      (line) =>
+        !/\b(?:clone (?:the|this) repo(?:sitory)?|git grep|find in path|open (?:a|the) local copy)\b/i.test(
+          line
+        )
+    )
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }

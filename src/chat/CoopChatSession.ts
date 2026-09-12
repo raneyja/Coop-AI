@@ -223,7 +223,14 @@ import {
   locateJobTerms,
   type ChatIntentPlan
 } from "./intentPlanner";
-import { buildMultiToolPlainChatUserPrompt } from "../prompts/multiToolPlainChatSynthesis";
+import {
+  buildMultiToolPlainChatUserPrompt,
+  enrichIntentJobResponse
+} from "../prompts/multiToolPlainChatSynthesis";
+import {
+  resolvePlainChatSynthesisRoute,
+  useCaseForSynthesisRoute
+} from "./synthesisRouting";
 import { CHAT_INTENT_TOOL_PROVIDERS } from "./intentPlanner/types";
 import { enrichDecisionTimelineSourcePreviews } from "../context/enrichDecisionTimelineSourcePreviews";
 import {
@@ -435,7 +442,7 @@ import {
 } from "./mentionSearchMerge";
 import { isFreePlan, resolveSearchScopeForPlan } from "../license/licenseChecker";
 import { resolvePlainChatIntegrationProvider } from "./integrationProviderRouting";
-import { isIncidentShapedQuery, shouldFetchIncidentIntegrations } from "../context/incidentIntent";
+import { shouldFetchIncidentIntegrations } from "../context/incidentIntent";
 import {
   isStatusTransitionAsk,
   buildStatusTransitionSynthesisUserPrompt,
@@ -463,6 +470,7 @@ import {
 } from "../context/existingCapabilityGrounding";
 import {
   buildIncidentReconstructionUserPrompt,
+  incidentCodePathsFromBundle,
   incidentIntegrationsFromBundle
 } from "../prompts/incidentReconstruction";
 import { enrichChatContextWithIntegrations as mergeIntegrationChatContext, contextBundleHasIntegrationSearch } from "../context/integrationChatEnrichment";
@@ -7374,11 +7382,22 @@ export class CoopChatSession {
     const minResponseVisibleMs = 0;
     const sourceHint = options?.sourceHint;
     const integrationProvider = options?.integrationProvider;
+    const synthesisRoute = !effectiveQuickAction
+      ? resolvePlainChatSynthesisRoute({
+          userQuestion: options?.taskContent ?? content,
+          integrationProvider,
+          fetchIntegrations: options?.fetchIntegrations,
+          intentPlan: options?.intentPlan
+        })
+      : undefined;
     let chatUseCase = resolveChatUseCase(
       effectiveQuickAction,
       integrationProvider,
       options?.composerMode
     );
+    if (synthesisRoute && options?.composerMode !== "edit") {
+      chatUseCase = useCaseForSynthesisRoute(synthesisRoute, chatUseCase);
+    }
     let runtimeModel = resolveRuntimeModelForUseCase(chatUseCase, {
       devMode: this.preferences.devMode,
       llmProvider: this.preferences.llmProvider,
@@ -7568,6 +7587,14 @@ export class CoopChatSession {
       const integrationEvidence = integrationProvider
         ? integrationSearchFromBundle(contextBundle, integrationProvider)
         : undefined;
+      const intentJobIntegrations = {
+        jira: jiraEvidence,
+        slack: slackEvidence,
+        teams: teamsEvidence,
+        confluence: confluenceEvidence,
+        notion: notionEvidence,
+        "google-docs": googleDocsEvidence
+      };
 
       if (integrationProvider && options?.sourceHint) {
         const hits = countIntegrationResults(integrationProvider, integrationEvidence ?? {});
@@ -7834,9 +7861,9 @@ export class CoopChatSession {
                       mentionedFiles: mentionRefs,
                       activeRepoId
                     })
-                  : integrationProvider && integrationEvidence
+                  : synthesisRoute?.kind === "integration" && integrationEvidence
                     ? buildIntegrationSynthesisUserPrompt({
-                        provider: integrationProvider,
+                        provider: synthesisRoute.provider,
                         evidence: integrationEvidence,
                         owner: turnContext.owner,
                         repo: turnContext.repo,
@@ -7846,23 +7873,15 @@ export class CoopChatSession {
                         mentionedFiles: mentionRefs,
                         activeRepoId
                       })
-                    : !effectiveQuickAction &&
-                        !integrationProvider &&
-                        (options?.fetchIntegrations?.length ?? 0) >= 1
+                    : synthesisRoute?.kind === "intent-job"
                       ? buildMultiToolPlainChatUserPrompt({
                           userQuestion: taskContent,
                           owner: turnContext.owner ?? this.preferences.owner,
                           repo: turnContext.repo ?? this.preferences.repo,
                           file: turnContext.file,
-                          tools: options!.fetchIntegrations!,
-                          integrations: {
-                            jira: jiraEvidence,
-                            slack: slackEvidence,
-                            teams: teamsEvidence,
-                            confluence: confluenceEvidence,
-                            notion: notionEvidence,
-                            "google-docs": googleDocsEvidence
-                          },
+                          tools: synthesisRoute.tools,
+                          jobs: options?.intentPlan?.jobs,
+                          integrations: intentJobIntegrations,
                           connected: {
                             jira: this.isIntegrationConnected("jira"),
                             slack: this.isIntegrationConnected("slack"),
@@ -7870,14 +7889,9 @@ export class CoopChatSession {
                             confluence: this.isIntegrationConnected("confluence"),
                             notion: this.isIntegrationConnected("notion"),
                             "google-docs": this.isIntegrationConnected("google-docs")
-                          },
-                          statusLine: options?.intentPlan
-                            ? buildIntentPlanStatusLine(options.intentPlan)
-                            : undefined
+                          }
                         })
-                    : !effectiveQuickAction &&
-                        !integrationProvider &&
-                        isIncidentShapedQuery(taskContent)
+                    : synthesisRoute?.kind === "incident"
                       ? buildIncidentReconstructionUserPrompt({
                           userQuestion: taskContent,
                           owner: turnContext.owner ?? this.preferences.owner,
@@ -8122,10 +8136,17 @@ export class CoopChatSession {
         return;
       }
 
+      const routeEnrichedContent =
+        synthesisRoute?.kind === "intent-job"
+          ? enrichIntentJobResponse(full, {
+              tools: synthesisRoute.tools,
+              integrations: intentJobIntegrations
+            })
+          : full;
       const enrichedContent = enrichChatResponseForAction({
         quickAction: effectiveQuickAction,
         integrationProvider,
-        content: full,
+        content: routeEnrichedContent,
         contextBundle,
         activeFile: turnContext.file,
         mentions: mentionRefs,
@@ -8139,10 +8160,11 @@ export class CoopChatSession {
         ),
         isTraceFollowUp: !quickAction && effectiveQuickAction === "trace-decision",
         incidentReconstruction:
-          !effectiveQuickAction && !integrationProvider && isIncidentShapedQuery(taskContent)
+          synthesisRoute?.kind === "incident"
             ? {
                 jiraConnected: this.isIntegrationConnected("jira"),
-                slackConnected: this.isIntegrationConnected("slack")
+                slackConnected: this.isIntegrationConnected("slack"),
+                codePaths: incidentCodePathsFromBundle(contextBundle)
               }
             : undefined,
         existingCapability: existingCapabilityEvidence,

@@ -195,7 +195,7 @@ test("Phase 4 Chat Intent job gates", () => {
       connected: { jira: true, slack: true }
     });
     assert.match(prompt, /no hits|empty/i);
-    assert.match(prompt, /do not invent that a decision never existed/i);
+    assert.match(prompt, /Decision claims require the integration evidence/i);
     assert.doesNotMatch(prompt, /the team decided not to/i);
 
     const authTimeout = buildMultiToolPlainChatUserPrompt({
@@ -211,7 +211,7 @@ test("Phase 4 Chat Intent job gates", () => {
     assert.match(authTimeout, /401 Unauthorized/);
     assert.match(authTimeout, /timed out/);
     assert.match(authTimeout, /404 not found/);
-    assert.match(authTimeout, /do not invent that a decision never existed/i);
+    assert.match(authTimeout, /Do not pretend a tool was searched/i);
   });
 
   collectGate(results, phase4Criterion("P4-G6"), () => {

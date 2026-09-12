@@ -19,6 +19,10 @@ function normalize(queryText: string | undefined): string {
   );
 }
 
+/** Operational prefixes label the request; they are not incident evidence by themselves. */
+const LEADING_OPERATIONAL_LABEL_RE =
+  /^(?:(?:pager|on[-\s]?call|oncall|sev(?:erity)?\s*[0-3]|incident|outage|war[-\s]?room)\s*:\s*)+/i;
+
 /** Strong operational / support signals — enough alone to treat as incident. */
 const STRONG_INCIDENT_RE =
   /\b(incident|outage|on-?call|oncall|sev[0-3]|pager|pages?\b|postmortem|post-mortem|war\s*room)\b/;
@@ -73,7 +77,8 @@ function hasFailureSignal(q: string): boolean {
  * Prefers clear outage/failure heuristics over status-machine questions.
  */
 export function isIncidentShapedQuery(queryText: string | undefined): boolean {
-  const q = normalize(queryText);
+  const normalized = normalize(queryText);
+  const q = normalized.replace(LEADING_OPERATIONAL_LABEL_RE, "").trim();
   if (!q) {
     return false;
   }

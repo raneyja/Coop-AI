@@ -54,6 +54,9 @@ test("leading operational labels are metadata; body signals decide incident rout
       label
     );
   }
+  assert.equal(isIncidentShapedQuery("Pager: where is date math implemented?"), false);
+  assert.equal(isIncidentShapedQuery("On-call: explain DateTimeUtils"), false);
+  assert.equal(isIncidentShapedQuery("Incident: webhook failures and retries"), true);
 });
 
 test("plain architecture questions are not incident-shaped", () => {

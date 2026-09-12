@@ -13,6 +13,7 @@ export type UseCase =
   | "blast_radius"
   | "knowledge_gaps"
   | "integration"
+  | "intent_job"
   | "chat"
   | "code_edit"
   | "inline_completion"

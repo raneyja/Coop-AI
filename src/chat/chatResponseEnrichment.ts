@@ -68,6 +68,7 @@ export function enrichChatResponseForAction(options: {
   incidentReconstruction?: {
     jiraConnected?: boolean;
     slackConnected?: boolean;
+    codePaths?: string[];
   };
   /** A10: ticket-style add-feature with open-file capability evidence. */
   existingCapability?: ExistingCapabilityEvidence;
@@ -116,10 +117,13 @@ export function enrichChatResponseForAction(options: {
     enriched = enrichStatusTransitionResponse(enriched, options.statusTransition);
   }
 
-  if (options.incidentReconstruction && !quickAction && !integrationProvider) {
+  if (options.incidentReconstruction && !quickAction) {
     enriched = enrichIncidentReconstructionResponse(
       enriched,
-      incidentIntegrationsFromBundle(contextBundle, options.incidentReconstruction)
+      {
+        ...incidentIntegrationsFromBundle(contextBundle, options.incidentReconstruction),
+        codePaths: options.incidentReconstruction.codePaths
+      }
     );
   }
 

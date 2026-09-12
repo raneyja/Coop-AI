@@ -211,11 +211,17 @@ export function appendEvidenceEnrichmentInstructions(lines: string[], hasEnrichm
   lines.push("");
 }
 
+/** One canonical rule for empty, missing, and failed evidence. */
+export const EMPTY_EVIDENCE_HONESTY_RULE = `Empty-evidence honesty:
+- A searched source with zero hits proves only that this attached search sample was empty. It does not prove the event, decision, code, ticket, or discussion never existed.
+- A missing, disconnected, skipped, timed-out, or failed source is unavailable evidence. State that plainly; never cite it or infer facts from it.
+- Never invent tickets, messages, pages, paths, URLs, people, or decisions to fill an evidence gap.`;
+
 /** Slim evidence rules for general chat (static system prompt). */
 export const GENERAL_CHAT_EVIDENCE_RULES = `Evidence rules (when a context bundle or integration blocks are attached):
 - Cite concrete file paths and source identifiers from the attachment — do not invent paths, URLs, ticket keys, or PR numbers.
 - State evidence strength using one of: strong, medium, weak, or limited when drawing conclusions from attached evidence.
-- When integration blocks show <empty>, say clearly that the search found nothing — do not speculate about tickets, messages, or pages that are not attached.
+${EMPTY_EVIDENCE_HONESTY_RULE}
 - Integration and code-host blocks (Jira, Slack, Teams, Confluence, Notion, Google Docs, PRs/issues, semantic files) are **search samples / capped result sets**, not complete inventories. Never answer "how many" / "list all" / totals from those samples alone — say the attached set is partial and what would be needed for a full count.
 - When \`<repo_inventory>\` is attached, it is the only valid source for repository totals (file count, lines of code, size). Use its numbers verbatim only if the user asked for totals or an overview; if a total is missing there, say it is unavailable rather than estimating one. Do not volunteer a file/line census for greetings, pings, or unrelated questions.
 - Weight sources by reliability for decisions: pull requests and commit history > Jira tickets > Confluence/docs > Slack/Teams discussions. Prefer the higher-trust source when they conflict.

@@ -35,6 +35,11 @@ export type IncidentIntegrationSnapshot = {
   slackConnected?: boolean;
 };
 
+export type IncidentResponseEvidence = IncidentIntegrationSnapshot & {
+  /** Paths whose concrete file bodies were attached to this turn. */
+  codePaths?: string[];
+};
+
 export type IncidentReconstructionInput = {
   userQuestion: string;
   owner?: string;
@@ -324,18 +329,19 @@ function insertSectionBeforeSources(content: string, heading: string, body: stri
  */
 export function enrichIncidentReconstructionResponse(
   content: string,
-  integrations: IncidentIntegrationSnapshot
+  integrations: IncidentResponseEvidence
 ): string {
   let result = content.trim();
   if (!result) {
     result = "**Answer**\nIncident reconstruction from attached evidence.";
   }
 
-  if (!hasSection(result, INCIDENT_SECTION_CODE_PATHS)) {
+  const codePaths = [...new Set((integrations.codePaths ?? []).map((path) => path.trim()).filter(Boolean))];
+  if (!hasSection(result, INCIDENT_SECTION_CODE_PATHS) && codePaths.length > 0) {
     result = insertSectionBeforeSources(
       result,
       INCIDENT_SECTION_CODE_PATHS,
-      "- See attached file and code evidence for the failure / retry path."
+      codePaths.slice(0, 5).map((path) => `- \`${path}\` — concrete code body attached.`).join("\n")
     );
   }
 
@@ -360,6 +366,40 @@ export function enrichIncidentReconstructionResponse(
   }
 
   return result.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/** Collect only paths accompanied by concrete code bodies in the context bundle. */
+export function incidentCodePathsFromBundle(bundle: unknown): string[] {
+  const paths: string[] = [];
+  for (const entry of Array.isArray(bundle) ? bundle : []) {
+    const data = (entry as { data?: Record<string, unknown> })?.data;
+    if (!data) {
+      continue;
+    }
+    collectBodyPaths(data.localFiles, paths);
+    for (const key of ["agentFiles", "focusFiles", "entryFiles", "repoSemanticFiles"]) {
+      collectBodyPaths(data[key], paths);
+    }
+  }
+  return [...new Set(paths)];
+}
+
+function collectBodyPaths(value: unknown, paths: string[]): void {
+  const items = Array.isArray(value)
+    ? value
+    : value && typeof value === "object" && Array.isArray((value as { files?: unknown[] }).files)
+      ? (value as { files: unknown[] }).files
+      : [];
+  for (const item of items) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    const path = (item as { path?: unknown }).path;
+    const content = (item as { content?: unknown }).content;
+    if (typeof path === "string" && path.trim() && typeof content === "string" && content.trim()) {
+      paths.push(path.trim());
+    }
+  }
 }
 
 function incidentIntegrationsSectionHasToolLines(content: string): boolean {

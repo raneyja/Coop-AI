@@ -66,7 +66,8 @@ test("empty integrations still require explicit tickets + gaps sections", () => 
     jira: { issues: [] },
     slack: { messages: [] },
     jiraConnected: true,
-    slackConnected: true
+    slackConnected: true,
+    codePaths: ["apps/api/plane/bgtasks/webhook_task.py"]
   };
   const codeOnly = `**Answer**
 Found retry helpers in webhook_task.py.
@@ -86,6 +87,15 @@ Found retry helpers in webhook_task.py.
   const gaps = buildIncidentGapsBullets(integrations);
   assert.ok(gaps.some((line) => /empty/i.test(line)));
   assert.ok(gaps.some((line) => /do not stop at/i.test(line)));
+});
+
+test("missing code evidence does not append generic Code paths filler", () => {
+  const enriched = enrichIncidentReconstructionResponse("**Answer**\nOutage reported.", {
+    jiraConnected: false,
+    slackConnected: false
+  });
+  assert.equal(enriched.includes(`**${INCIDENT_SECTION_CODE_PATHS}**`), false);
+  assert.doesNotMatch(enriched, /See attached file and code evidence/i);
 });
 
 test("Tickets/threads alone still forces Integrations section", () => {
