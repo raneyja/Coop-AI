@@ -115,7 +115,7 @@ test("plain chat omits code host line without a repo target", () => {
   assert.ok(messages.includes("Gathering workspace context…"));
 });
 
-test("plain chat file ask seeds Read / rely-on / created todos", () => {
+test("plain chat file ask seeds rely-on / created todos, not a fake Read", () => {
   const messages = contextGatheringMessagesFor(
     event({
       intent: UserIntent.MANUAL_CHAT_SUBMIT,
@@ -129,7 +129,7 @@ test("plain chat file ask seeds Read / rely-on / created todos", () => {
     }),
     { codeHostProvider: "github", codeHostConnected: true }
   );
-  assert.ok(messages.includes("Read `src/server/authMiddleware.ts`"));
+  assert.equal(messages.includes("Read `src/server/authMiddleware.ts`"), false);
   assert.ok(messages.includes("Find files that rely on `src/server/authMiddleware.ts`"));
   assert.ok(messages.includes("Look up who created `src/server/authMiddleware.ts`"));
   assert.ok(!messages.includes("Preparing your answer…"));

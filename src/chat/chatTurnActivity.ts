@@ -1,6 +1,5 @@
 import { isGenericIntegrationStatusLabel } from "../context/integrationActivityLabels";
 import { isThinkingProcessingTermMessage } from "../context/thinkingProcessingTerms";
-import { extractNamedSourceFiles } from "../api/agent/searchQuery";
 import { hasRepoFactNeed, repoFactNeeds } from "../workspace/repoFactIntent";
 import type {
   ChatMessage,
@@ -37,7 +36,7 @@ export type ChatTurnActivityAccumulator = {
   activityLines?: string[];
   /** Expandable payload keyed by durable activity label. */
   activityDetails?: Record<string, string>;
-  /** User ask for this turn — named files still get a Read chip on gather-only answers. */
+  /** User ask for this turn — inventory labels only. Named files must be real reads. */
   modelMessage?: string;
 };
 
@@ -256,22 +255,9 @@ export function buildChatTurnActivity(
     fromSteps.tools.length,
     turn.activityDetails
   );
-  const fromNamed = activityFromNamedFiles(turn.modelMessage);
-  const fromFacts = activityFromRepoFacts(turn.modelMessage);
-
-  const tools = markToolsDone([
-    ...fromSteps.tools,
-    ...fromLines.tools,
-    ...fromNamed.tools,
-    ...fromFacts.tools
-  ]);
-  const steps = markTodosCompleted([
-    ...fromSteps.todos,
-    ...fromLines.todos,
-    ...fromNamed.todos,
-    ...fromFacts.todos
-  ]);
-  const files = mergeFiles(fromSteps.files, fromLines.files, fromNamed.files, fromFacts.files);
+  const tools = markToolsDone([...fromSteps.tools, ...fromLines.tools]);
+  const steps = markTodosCompleted([...fromSteps.todos, ...fromLines.todos]);
+  const files = mergeFiles(fromSteps.files, fromLines.files);
 
   if (!thinkingText && tools.length === 0 && files.length === 0 && steps.length === 0) {
     return undefined;
@@ -331,46 +317,6 @@ function activityFromConcreteLines(
     status: "done"
   }));
   return { todos, tools, files: extractFileChipsFromLabels(concrete) };
-}
-
-function activityFromRepoFacts(query: string | undefined): {
-  todos: ChatTurnActivityTodo[];
-  tools: ChatTurnActivityTool[];
-  files: ChatTurnActivityFile[];
-} {
-  const label = repoFactActivityLabel(query);
-  if (!label) {
-    return { todos: [], tools: [], files: [] };
-  }
-  return {
-    todos: [{ id: `repo-fact:${label}`, content: label, status: "completed" }],
-    tools: [{ id: "repo-fact-tool", kind: "search", label, status: "done" }],
-    files: []
-  };
-}
-
-function activityFromNamedFiles(query: string | undefined): {
-  todos: ChatTurnActivityTodo[];
-  tools: ChatTurnActivityTool[];
-  files: ChatTurnActivityFile[];
-} {
-  const named = query ? extractNamedSourceFiles(query) : [];
-  if (!named.length) {
-    return { todos: [], tools: [], files: [] };
-  }
-  const todos: ChatTurnActivityTodo[] = named.map((path, index) => ({
-    id: `named-file:${index}:${path}`,
-    content: `Read \`${path}\``,
-    status: "completed"
-  }));
-  const tools: ChatTurnActivityTool[] = named.map((path, index) => ({
-    id: `named-file-tool:${index}`,
-    kind: "read",
-    label: `Read \`${path}\``,
-    status: "done"
-  }));
-  const files: ChatTurnActivityFile[] = named.map((path) => ({ path, action: "read" as const }));
-  return { todos, tools, files };
 }
 
 function markToolsDone(tools: ChatTurnActivityTool[]): ChatTurnActivityTool[] {

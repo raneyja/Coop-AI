@@ -78,9 +78,18 @@ test("isConcreteActivityLine rejects filler and keeps real tool lines", () => {
   assert.equal(isConcreteActivityLine("Looked up indexed inventory"), true);
 });
 
-test("follow-up that names a file still persists a Read trail", () => {
+test("naming a file in the ask does not invent a Read trail", () => {
+  const invented = buildChatTurnActivity(
+    accumulator({
+      modelMessage: "Read src/server/authMiddleware.ts and show me the export."
+    }),
+    4_000
+  );
+  assert.equal(invented, undefined);
+
   const turn = accumulator({
-    modelMessage: "Read src/server/authMiddleware.ts and show me the export."
+    modelMessage: "Read src/server/authMiddleware.ts and show me the export.",
+    activityLines: ["Read `src/server/authMiddleware.ts`"]
   });
   const activity = buildChatTurnActivity(turn, 4_000);
   assert.ok(activity);
@@ -91,7 +100,10 @@ test("follow-up that names a file still persists a Read trail", () => {
 
 test("inventory asks persist a Looked up indexed inventory trail", () => {
   const first = buildChatTurnActivity(
-    accumulator({ modelMessage: "How many files are in this repo?" }),
+    accumulator({
+      modelMessage: "How many files are in this repo?",
+      activityLines: ["Looked up indexed inventory"]
+    }),
     3_200
   );
   assert.ok(first);
@@ -99,11 +111,21 @@ test("inventory asks persist a Looked up indexed inventory trail", () => {
   assert.equal(summarizeAgentExploration(first.tools)?.explored, "Explored 1 search");
 
   const followUp = buildChatTurnActivity(
-    accumulator({ modelMessage: "how many lines of code?" }),
+    accumulator({
+      modelMessage: "how many lines of code?",
+      activityLines: ["Looked up indexed inventory"]
+    }),
     2_500
   );
   assert.ok(followUp);
   assert.ok(followUp.tools.some((tool) => tool.label === "Looked up indexed inventory"));
+});
+
+test("inventory ask text alone does not invent a Looked up trail", () => {
+  assert.equal(
+    buildChatTurnActivity(accumulator({ modelMessage: "How many files are in this repo?" }), 3_200),
+    undefined
+  );
 });
 
 test("generic integration theater does not count as Explored searches", () => {

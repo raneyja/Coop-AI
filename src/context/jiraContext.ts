@@ -240,10 +240,11 @@ export function buildFocusAwareJiraJql(options: {
   extraTerms?: string[];
   queryText?: string;
   preferHost?: CodeHostProvider;
+  /** Decision jobs: search extras only — do not AND a hyphenated repo slug. */
+  extrasOnly?: boolean;
 }): string | undefined {
-  const repoClause = buildRepoClause(options.owner, options.repo, options.preferHost);
   const focusTerms = buildJiraFocusTerms(options);
-  if (!repoClause || focusTerms.length === 0) {
+  if (focusTerms.length === 0) {
     return undefined;
   }
   const focusClauses = new Set<string>();
@@ -262,7 +263,15 @@ export function buildFocusAwareJiraJql(options: {
   if (focusClauses.size === 0) {
     return undefined;
   }
-  return `(${repoClause}) AND (${[...focusClauses].join(" OR ")}) ORDER BY updated DESC`;
+  const focus = `(${[...focusClauses].join(" OR ")})`;
+  if (options.extrasOnly) {
+    return `${focus} ORDER BY updated DESC`;
+  }
+  const repoClause = buildRepoClause(options.owner, options.repo, options.preferHost);
+  if (!repoClause) {
+    return undefined;
+  }
+  return `(${repoClause}) AND ${focus} ORDER BY updated DESC`;
 }
 
 export function wantsOpenTickets(query: string | undefined): boolean {
@@ -385,6 +394,8 @@ export async function fetchJiraSearchContext(options: {
   crossToolText?: string[];
   /** File/focus extras (path stems, Gaps phrases) — same list Slack/Confluence already use. */
   extraTerms?: string[];
+  /** Chat Intent decision jobs — extras are the query; skip repo AND. */
+  jobScoped?: boolean;
   limit?: number;
   preferHost?: CodeHostProvider;
   codeHostRouter?: CodeHostRouter;
@@ -427,7 +438,8 @@ export async function fetchJiraSearchContext(options: {
     activeFile: options.activeFile,
     extraTerms: options.extraTerms,
     queryText,
-    preferHost: options.preferHost
+    preferHost: options.preferHost,
+    extrasOnly: options.jobScoped && (options.extraTerms?.length ?? 0) > 0
   };
 
   for (const key of discoveredKeys) {

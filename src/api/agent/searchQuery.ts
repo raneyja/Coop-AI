@@ -769,6 +769,38 @@ export function namedFileIndexQueries(userQuery: string, limit = 2): string[] {
   return queries;
 }
 
+/** Named files or identifier basenames the user typed — keep them ahead of the attach cap. */
+export function queryNamesEvidencePath(fileName: string, userMessage: string): boolean {
+  if (queryNamesSourceFile(fileName, userMessage)) {
+    return true;
+  }
+  const base = (fileName.split("/").pop() ?? fileName).replace(/\.[^.]+$/, "");
+  if (base.length < 4) {
+    return false;
+  }
+  return allIdentifiers(userMessage).some((id) => id.toLowerCase() === base.toLowerCase());
+}
+
+/** Named files the user typed stay first so a locate cap cannot drop them. */
+export function preferNamedSourcePaths(paths: string[], userMessage: string): string[] {
+  const named: string[] = [];
+  const rest: string[] = [];
+  const seen = new Set<string>();
+  for (const path of paths) {
+    const key = path.replace(/\\/g, "/").replace(/^\.?\//, "").toLowerCase();
+    if (!path.trim() || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    if (queryNamesEvidencePath(path, userMessage)) {
+      named.push(path);
+    } else {
+      rest.push(path);
+    }
+  }
+  return [...named, ...rest];
+}
+
 /** True when `fileName` is a file the user typed (basename or full path). */
 export function queryNamesSourceFile(fileName: string, userMessage: string): boolean {
   const named = extractNamedSourceFiles(userMessage);

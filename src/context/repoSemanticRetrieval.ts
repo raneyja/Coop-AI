@@ -9,6 +9,8 @@ import { filterCodeEvidenceToActiveRepo } from "../workspace/repoEvidenceIsolati
 import {
   indexQueryForRetrieval,
   namedFileIndexQueries,
+  preferNamedSourcePaths,
+  queryNamesEvidencePath,
   selectChatEvidencePaths
 } from "../api/agent/searchQuery";
 import { FOCUS_MAX_INJECTED_PATHS, focusQueryForRetrieval } from "./userFocusQuery";
@@ -405,15 +407,26 @@ export function mergeFocusSearchResults(
       }
     }
   }
+  const namedPinned = preferNamedSourcePaths(
+    files.map((file) => file.path),
+    options.rankQuery
+  ).filter((path) => queryNamesEvidencePath(path, options.rankQuery));
   const rankedFiles =
     options.rankMode === "hunt"
-      ? selectChatEvidencePaths(
-          files.map((file) => file.path),
-          options.rankQuery,
-          options.maxFiles
+      ? preferNamedSourcePaths(
+          [
+            ...namedPinned,
+            ...selectChatEvidencePaths(
+              files.map((file) => file.path),
+              options.rankQuery,
+              options.maxFiles
+            )
+          ],
+          options.rankQuery
         )
           .map((path) => files.find((file) => file.path === path))
           .filter((file): file is RepoSemanticSnippet => Boolean(file))
+          .slice(0, Math.max(options.maxFiles, namedPinned.length))
       : rankOnboardingEntryFiles(files, options.rankQuery).slice(0, options.maxFiles);
   for (const result of present) {
     matchedPathCount += result.matchedPathCount ?? result.files.length;
@@ -496,11 +509,15 @@ async function loadSemanticSearchContext(
   const rankedPaths = rankSearchPaths(searchResult, pathBudget);
   const exclude = options.excludePath?.replace(/\\/g, "/").replace(/^\/+/, "").toLowerCase();
   const candidatePaths = rankedPaths.map((entry) => entry.path);
-  const selected = selectFocusSearchPaths(
+  const namedPinned = candidatePaths.filter((path) => queryNamesEvidencePath(path, rankQuery));
+  const selected = preferNamedSourcePaths(
+    [...namedPinned, ...selectFocusSearchPaths(
     candidatePaths,
     rankQuery,
     Math.max(options.maxFiles, 6),
     options.rankMode ?? "hunt"
+  )],
+    rankQuery
   ).filter((path) => {
     if (!exclude) {
       return true;
@@ -529,9 +546,10 @@ async function loadSemanticSearchContext(
     };
   }
 
+  const attachCap = Math.max(options.maxFiles, namedPinned.length);
   const resolved: Array<{ path: string; repoId: string; content: string }> = [];
   for (const candidate of filteredPaths) {
-    if (resolved.length >= options.maxFiles) {
+    if (resolved.length >= attachCap) {
       break;
     }
     const content = await resolveSemanticFileContent(candidate.path, options.repoId, options);
@@ -541,11 +559,13 @@ async function loadSemanticSearchContext(
     resolved.push({ path: candidate.path, repoId: options.repoId, content });
   }
 
-  const files = applySemanticByteBudget(resolved, MAX_SEMANTIC_BYTES, options.maxFiles);
+  const files = applySemanticByteBudget(resolved, MAX_SEMANTIC_BYTES, attachCap);
+  const huntHits =
+    options.rankMode === "hunt" ? preferNamedSourcePaths(candidatePaths, rankQuery).slice(0, 12) : [];
   const onboardingHits =
     options.rankMode === "onboarding"
       ? selectOnboardingEvidencePaths(candidatePaths, rankQuery, 12)
-      : [];
+      : huntHits;
   if (files.length === 0 && onboardingHits.length === 0) {
     return undefined;
   }

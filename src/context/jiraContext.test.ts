@@ -46,20 +46,20 @@ test("wantsJiraContext matches issue keys in the query", () => {
 
 test("buildRepoJql searches owner/repo and every code-host prefix", () => {
   const jql = buildRepoJql("acme", "coop-ai-core");
-  assert.ok(jql?.includes("acme/coop-ai-core"));
-  assert.ok(jql?.includes("github:acme/coop-ai-core"));
-  assert.ok(jql?.includes("gitlab:acme/coop-ai-core"));
-  assert.ok(jql?.includes("bitbucket:acme/coop-ai-core"));
-  assert.ok(jql?.includes("coop-ai-core"));
-  assert.match(jql!, /text ~ "\\"github:acme\/coop-ai-core\\""/);
+  assert.ok(jql?.includes("acme/coop ai core"));
+  assert.ok(jql?.includes("github:acme/coop ai core"));
+  assert.ok(jql?.includes("gitlab:acme/coop ai core"));
+  assert.ok(jql?.includes("bitbucket:acme/coop ai core"));
+  assert.ok(jql?.includes("coop ai core"));
+  assert.match(jql!, /text ~ "\\"github:acme\/coop ai core\\""/);
   assert.ok(jql?.includes("ORDER BY updated DESC"));
 });
 
 test("buildRepoJql phrase-quotes prefixed ids and puts GitLab first when preferred", () => {
   const jql = buildRepoJql("acme", "coop-ai-core", { preferHost: "gitlab" }) ?? "";
-  const gitlabClause = 'text ~ "\\"gitlab:acme/coop-ai-core\\""';
-  const githubClause = 'text ~ "\\"github:acme/coop-ai-core\\""';
-  const bitbucketClause = 'text ~ "\\"bitbucket:acme/coop-ai-core\\""';
+  const gitlabClause = 'text ~ "\\"gitlab:acme/coop ai core\\""';
+  const githubClause = 'text ~ "\\"github:acme/coop ai core\\""';
+  const bitbucketClause = 'text ~ "\\"bitbucket:acme/coop ai core\\""';
   assert.ok(jql.includes(gitlabClause), jql);
   assert.ok(jql.includes(githubClause), jql);
   assert.ok(jql.includes(bitbucketClause), jql);
@@ -69,8 +69,8 @@ test("buildRepoJql phrase-quotes prefixed ids and puts GitLab first when preferr
 
 test("buildRepoJql includes repo slug case variants", () => {
   const jql = buildRepoJql("raneyja", "Coop-AI");
-  assert.ok(jql?.includes("raneyja/Coop-AI"));
-  assert.ok(jql?.includes("raneyja/coop-ai"));
+  assert.ok(jql?.includes("raneyja/Coop AI"));
+  assert.ok(jql?.includes("raneyja/coop ai"));
   assert.ok(jql?.includes('summary ~ "coop ai"') || jql?.includes('summary ~ "Coop AI"'), jql);
 });
 
@@ -112,9 +112,8 @@ test("buildFocusAwareJiraJql ANDs repo with file focus", () => {
   assert.ok(jql!.includes("AND"));
   assert.ok(jql!.includes('summary ~ "IndexedRepoWorkspace"'));
   assert.ok(
-    jql!.includes('text ~ "raneyja/Coop-AI"') ||
-      jql!.includes('text ~ "Coop AI"') ||
-      jql!.includes('text ~ "Coop-AI"')
+    jql!.includes('text ~ "raneyja/Coop AI"') ||
+      jql!.includes('text ~ "Coop AI"')
   );
   assert.ok(jql!.includes("ORDER BY updated DESC"));
 });
@@ -129,6 +128,18 @@ test("buildFocusAwareJiraJql sanitizes hyphenated extras", () => {
   assert.match(jql!, /SQL injection/);
   assert.match(jql!, /to mix/);
   assert.doesNotMatch(jql!, /SQL-injection|not to mix/);
+});
+
+test("buildFocusAwareJiraJql extrasOnly skips hyphenated repo AND", () => {
+  const jql = buildFocusAwareJiraJql({
+    owner: "coopai-group",
+    repo: "training-java-monolith-refactor",
+    extraTerms: ["SQL-injection"],
+    extrasOnly: true
+  });
+  assert.ok(jql);
+  assert.match(jql!, /SQL injection/);
+  assert.doesNotMatch(jql!, /training-java|SQL-injection|AND/);
 });
 
 test("buildFocusAwareJiraJql undefined without focus", () => {

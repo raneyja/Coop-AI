@@ -29,6 +29,7 @@ import {
   pickSearchHitsToRead,
   pickSymbolHitsToRead,
   pickTopSearchHit,
+  preferNamedSourcePaths,
   proseLocateSearchAliases,
   queryHasNamedSymbol,
   queryNamesSourceFile,
@@ -780,6 +781,21 @@ test("named files are path-shaped, not a language allowlist", () => {
   assert.deepEqual(
     extractNamedSourceFiles("See https://example.com/foo.ts for the gist."),
     []
+  );
+  assert.deepEqual(
+    preferNamedSourcePaths(
+      [
+        "AGENT.md",
+        "src/main/java/com/sourcegraph/demo/bigbadmonolith/util/DateTimeUtils.java",
+        "web/reports.jsp"
+      ],
+      "date math DateTimeUtils reports.jsp"
+    ),
+    [
+      "src/main/java/com/sourcegraph/demo/bigbadmonolith/util/DateTimeUtils.java",
+      "web/reports.jsp",
+      "AGENT.md"
+    ]
   );
 });
 

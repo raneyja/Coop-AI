@@ -3937,7 +3937,7 @@ export class CoopChatSession {
           maxFiles: 5,
           rankMode: "hunt"
         });
-        return mergeRepoSemanticContext(result, semantic);
+        return this.recordAttachedSemanticReads(mergeRepoSemanticContext(result, semantic));
       }
       const semantic = await searchRepoForChat({
         request,
@@ -3951,7 +3951,7 @@ export class CoopChatSession {
         codeEditIntent: this.pendingCodeEditIntent,
         selectionText: this.pendingCodeEditIntent ? this.selectedCodeSnippet(2000) : undefined
       });
-      return mergeRepoSemanticContext(result, semantic);
+      return this.recordAttachedSemanticReads(mergeRepoSemanticContext(result, semantic));
     } catch {
       return result;
     } finally {
@@ -4709,6 +4709,20 @@ export class CoopChatSession {
       message: event.label,
       activityMessages: next
     });
+  }
+
+  /** Record Read chips only for file bodies actually attached to the turn. */
+  private recordAttachedSemanticReads(result: ContextFetchResult): ContextFetchResult {
+    const semantic = (result.data as { repoSemanticSearch?: { files?: Array<{ path?: string; content?: string }> } } | undefined)
+      ?.repoSemanticSearch;
+    for (const file of semantic?.files ?? []) {
+      const path = file.path?.trim();
+      if (!path || !file.content?.trim()) {
+        continue;
+      }
+      this.appendLiveToolActivityLine(`Read \`${path}\``, undefined);
+    }
+    return result;
   }
 
   /** Append a real tool line to the activity checklist (Slack, Jira, …). */

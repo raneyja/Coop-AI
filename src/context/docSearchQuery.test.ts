@@ -77,6 +77,11 @@ test("sanitizeAtlassianContainsTerm strips hyphens and reserved words", () => {
   assert.equal(sanitizeAtlassianContainsTerm("coop-ai"), "coop ai");
   assert.equal(sanitizeAtlassianContainsTerm("training-java-monolith-refactor"), "training java monolith refactor");
   assert.equal(sanitizeAtlassianContainsTerm("github:acme/app"), "github:acme/app");
+  assert.equal(sanitizeAtlassianContainsTerm("github:acme/coop-ai-core"), "github:acme/coop ai core");
+  assert.equal(
+    sanitizeAtlassianContainsTerm("coopai-group/training-java-monolith-refactor"),
+    "coopai group/training java monolith refactor"
+  );
 });
 
 test("buildConfluenceCql sanitizes hyphenated extras", () => {
@@ -85,6 +90,18 @@ test("buildConfluenceCql sanitizes hyphenated extras", () => {
   assert.match(cql!, /SQL injection/);
   assert.match(cql!, /to mix/);
   assert.doesNotMatch(cql!, /SQL-injection|not to mix/);
+});
+
+test("buildConfluenceCql extrasOnly skips hyphenated repo slugs", () => {
+  const cql = buildConfluenceCql(
+    "coopai-group",
+    "training-java-monolith-refactor",
+    ["SQL-injection"],
+    { extrasOnly: true }
+  );
+  assert.ok(cql);
+  assert.match(cql!, /SQL injection/);
+  assert.doesNotMatch(cql!, /training-java|SQL-injection/);
 });
 
 test("buildRepoOrQuery still joins extras with OR for non-CQL tools", () => {

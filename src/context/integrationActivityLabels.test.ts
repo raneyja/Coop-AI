@@ -78,6 +78,16 @@ test("isActivityLabelForTool matches generic, running, and completed", () => {
   assert.equal(isActivityLabelForTool("Searched Slack for `on-call`", "confluence"), false);
 });
 
+test("formatIntegrationHitDetail prefers errors over empty-hit copy", () => {
+  assert.equal(formatIntegrationHitDetail([], "JQL parse failure"), "JQL parse failure");
+  assert.equal(
+    formatIntegrationHitDetail([], "Chat.Read not granted"),
+    "Chat.Read not granted"
+  );
+  assert.equal(formatIntegrationHitDetail([]), "No matching results");
+  assert.equal(formatIntegrationHitDetail(["SEC-9 records the scope"]), "SEC-9 records the scope");
+});
+
 test("query-form Google Docs is not generic theater", () => {
   assert.equal(isGenericIntegrationStatusLabel("Searching Google Docs…"), true);
   assert.equal(isGenericIntegrationStatusLabel("Searching Google Docs for `plane`"), false);

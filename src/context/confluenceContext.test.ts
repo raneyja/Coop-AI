@@ -25,7 +25,7 @@ test("wantsConfluenceContext matches explicit confluence questions", () => {
 
 test("buildConfluenceCql searches repo terms", () => {
   const cql = buildConfluenceCql("acme", "coop-ai-core");
-  assert.ok(cql?.includes('text ~ "acme/coop-ai-core"'));
+  assert.ok(cql?.includes('text ~ "acme/coop ai core"'));
   assert.ok(cql?.includes("type=page"));
 });
 

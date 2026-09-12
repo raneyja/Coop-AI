@@ -70,6 +70,8 @@ export async function fetchConfluenceSearchContext(options: {
   repo?: string;
   limit?: number;
   extraTerms?: string[];
+  /** Chat Intent decision jobs — extras are the query; skip repo AND. */
+  jobScoped?: boolean;
   integrationScope?: ResolvedIntegrationScope;
 }): Promise<ConfluenceSearchContext> {
   if (isConfluenceScopeBlocked(options.integrationScope)) {
@@ -93,7 +95,9 @@ export async function fetchConfluenceSearchContext(options: {
   }
 
   const primaryCql = scopeConfluenceCql(
-    buildConfluenceCql(options.owner, options.repo, options.extraTerms),
+    buildConfluenceCql(options.owner, options.repo, options.extraTerms, {
+      extrasOnly: Boolean(options.jobScoped && (options.extraTerms?.length ?? 0) > 0)
+    }),
     options.integrationScope
   );
   if (!primaryCql) {

@@ -256,7 +256,11 @@ async function enrichIntegrationStages(
       });
       throw outcome.caught;
     }
-    notify(tool, "done", { query, hits: hitsFromSearchResult(tool, outcome.result) });
+    notify(tool, "done", {
+      query,
+      hits: hitsFromSearchResult(tool, outcome.result),
+      error: errorFromSearchResult(outcome.result)
+    });
     return outcome.result;
   };
 
@@ -303,6 +307,7 @@ async function enrichIntegrationStages(
             owner: options.owner,
             repo: options.repo,
             extraTerms: termsFor("confluence"),
+            jobScoped: true,
             integrationScope: options.integrationScopes?.atlassian
           }),
         preferredIntegrationActivityQuery(termsFor("confluence"))
@@ -328,6 +333,7 @@ async function enrichIntegrationStages(
             secrets: options.secrets,
             ...base,
             extraTerms: termsFor("jira"),
+            jobScoped: true,
             preferHost: options.codeHostProvider,
             codeHostRouter: options.codeHostRouter,
             codeHostConnected: options.codeHostConnected,
@@ -539,6 +545,20 @@ async function resolveTraceDecisionSearchSeeds(options: {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? { ...(value as Record<string, unknown>) } : {};
+}
+
+function errorFromSearchResult(result: unknown): string | undefined {
+  if (!result || typeof result !== "object") {
+    return undefined;
+  }
+  const data = result as { error?: unknown; searchNote?: unknown };
+  if (typeof data.error === "string" && data.error.trim()) {
+    return data.error.trim();
+  }
+  if (typeof data.searchNote === "string" && data.searchNote.trim()) {
+    return data.searchNote.trim();
+  }
+  return undefined;
 }
 
 function hitsFromSearchResult(tool: IntegrationActivityTool, result: unknown): string[] {

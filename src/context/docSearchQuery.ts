@@ -90,20 +90,22 @@ const ATLASSIAN_RESERVED_WORD = /^(and|or|not|order|by|in|empty|null)$/i;
 
 /**
  * Jira `~` / Confluence CQL treat `-` as NOT and reject reserved words.
- * Prefixed host ids keep their punctuation; everything else becomes a safe phrase.
+ * Hyphens are stripped even in `host:owner/repo` slugs — leaving them is a parse error.
  */
 export function sanitizeAtlassianContainsTerm(term: string): string | undefined {
   const trimmed = term.trim();
   if (!trimmed) {
     return undefined;
   }
-  if (/[:/]/.test(trimmed)) {
-    return trimmed;
-  }
   const compact = trimmed
     .replace(/[-–—]/g, " ")
     .split(/\s+/)
-    .filter((token) => token.length >= 2 && !ATLASSIAN_RESERVED_WORD.test(token))
+    .filter((token) => {
+      if (/[:/]/.test(token)) {
+        return token.replace(/[:/]/g, "").length >= 2;
+      }
+      return token.length >= 2 && !ATLASSIAN_RESERVED_WORD.test(token);
+    })
     .join(" ")
     .trim();
   return compact || undefined;
@@ -120,7 +122,7 @@ export function buildConfluenceCql(
   owner: string | undefined,
   repo: string | undefined,
   extraTerms: string[] = [],
-  options?: { andExtrasWithRepo?: boolean }
+  options?: { andExtrasWithRepo?: boolean; extrasOnly?: boolean }
 ): string | undefined {
   const repoTerms = buildRepoSearchTerms(owner, repo);
   const repoKeys = new Set(repoTerms.map((term) => term.toLowerCase()));
@@ -140,9 +142,16 @@ export function buildConfluenceCql(
   };
   const clausesFor = (terms: string[]): string[] =>
     [...new Set(terms.map(clause).filter((value): value is string => Boolean(value)))];
+  const extraClauses = clausesFor(extras);
+  if (options?.extrasOnly) {
+    if (extraClauses.length === 0) {
+      return undefined;
+    }
+    return `type=page AND (${extraClauses.join(" OR ")}) ORDER BY lastModified DESC`;
+  }
+
   const andExtras = options?.andExtrasWithRepo !== false;
   const repoClauses = clausesFor(repoTerms);
-  const extraClauses = clausesFor(extras);
 
   if (andExtras && repoClauses.length > 0 && extraClauses.length > 0) {
     return `type=page AND (${repoClauses.join(" OR ")}) AND (${extraClauses.join(" OR ")}) ORDER BY lastModified DESC`;

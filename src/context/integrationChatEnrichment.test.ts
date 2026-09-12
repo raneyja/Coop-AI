@@ -348,6 +348,47 @@ test("onToolActivity emits query labels and hit detail, not generic theater", as
   }
 });
 
+test("onToolActivity surfaces Jira errors instead of No matching results", async () => {
+  const { enrichChatContextWithIntegrations } = require("./integrationChatEnrichment") as typeof import("./integrationChatEnrichment");
+  const events: Array<{ phase: string; label: string; detail?: string }> = [];
+  await enrichChatContextWithIntegrations({
+    result: {
+      requestId: "jira-err",
+      type: "chat_context",
+      data: {},
+      fetchedAt: new Date()
+    } as ContextFetchResult,
+    request: {
+      id: "jira-err",
+      type: "chat_context",
+      params: { fetchIntegrations: ["jira"] },
+      intent: { context: { queryText: "compound ask" } }
+    } as ContextFetchRequest,
+    secrets: { getCredentials: async () => ({}) } as never,
+    codeHostRouter: {} as never,
+    integrations: { jira: true },
+    jobs: [{ capability: "decision", terms: ["SQL-injection"] }],
+    onToolActivity: (event) => {
+      events.push({ phase: event.phase, label: event.label, detail: event.detail });
+    },
+    deps: {
+      shouldFetchConfluenceContext: () => false,
+      shouldFetchNotionContext: () => false,
+      shouldFetchJiraContext: () => true,
+      fetchJiraSearchContext: async () =>
+        ({ issues: [], error: "JQL parse failure: '-' is reserved" }) as never,
+      shouldFetchSlackContext: () => false,
+      shouldFetchTeamsContext: () => false,
+      shouldFetchGoogleDocsContext: () => false,
+      shouldFetchCodeHostContext: () => false
+    }
+  });
+  const done = events.find((event) => event.phase === "done");
+  assert.equal(done?.label, "Searched Jira for `SQL-injection`");
+  assert.match(done?.detail ?? "", /JQL parse failure/);
+  assert.doesNotMatch(done?.detail ?? "", /No matching results/);
+});
+
 test("job-scoped providers start in parallel with capability-specific terms", async () => {
   const { enrichChatContextWithIntegrations } = require("./integrationChatEnrichment") as typeof import("./integrationChatEnrichment");
   const gates = new Map<string, Deferred<unknown>>();

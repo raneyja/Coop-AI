@@ -411,6 +411,42 @@ test("mergeFocusSearchResults round-robins unique paths from topic searches", ()
   assert.ok(merged!.files.some((file) => file.path.includes("state.py")));
 });
 
+test("mergeFocusSearchResults pins named files ahead of the attach cap", () => {
+  const snippet = (path: string, content: string) => ({
+    path,
+    repoId: "coopai-group/training-java-monolith-refactor",
+    content
+  });
+  const merged = mergeFocusSearchResults(
+    [
+      {
+        source: "repo-semantic-search",
+        query: "DateTimeUtils",
+        files: [
+          snippet(
+            "src/main/java/com/sourcegraph/demo/bigbadmonolith/util/DateTimeUtils.java",
+            "public final class DateTimeUtils {}"
+          )
+        ]
+      },
+      {
+        source: "repo-semantic-search",
+        query: "reports.jsp",
+        files: [snippet("web/reports.jsp", "<% DateTimeUtils.formatDateLegacy(today); %>")]
+      }
+    ],
+    {
+      query: "reports.jsp | DateTimeUtils",
+      rankQuery: "date math DateTimeUtils reports.jsp",
+      maxFiles: 1,
+      rankMode: "hunt"
+    }
+  );
+  assert.ok(merged);
+  assert.ok(merged!.files.some((file) => file.path.endsWith("DateTimeUtils.java")));
+  assert.ok(merged!.files.some((file) => file.path.endsWith("reports.jsp")));
+});
+
 test("mergeFocusSearchResults honors hunt ranking over onboarding docs", () => {
   const snippet = (path: string, content: string) => ({
     path,
