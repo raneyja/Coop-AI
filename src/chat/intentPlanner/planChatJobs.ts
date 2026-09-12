@@ -28,9 +28,18 @@ function namedToolsIn(message: string): IntegrationChatProvider[] {
   return CHAT_INTENT_TOOL_PROVIDERS.filter((provider) => named.includes(provider));
 }
 
-const DECISION_PROVIDERS: IntegrationChatProvider[] = ["slack", "teams", "jira", "confluence"];
-const DOCS_PROVIDERS: IntegrationChatProvider[] = ["confluence", "notion", "google-docs"];
-const DISCUSSION_PROVIDERS: IntegrationChatProvider[] = ["slack", "teams"];
+export const DECISION_JOB_PROVIDERS: readonly IntegrationChatProvider[] = [
+  "slack",
+  "teams",
+  "jira",
+  "confluence"
+];
+export const DOCS_JOB_PROVIDERS: readonly IntegrationChatProvider[] = [
+  "confluence",
+  "notion",
+  "google-docs"
+];
+const DISCUSSION_PROVIDERS: readonly IntegrationChatProvider[] = ["slack", "teams"];
 
 /** Leading operational labels — never search terms. */
 const LEADING_ASK_LABEL =
@@ -82,6 +91,7 @@ const TERM_STOP = new Set(
     "this",
     "that",
     "into",
+    "in",
     "the",
     "and",
     "for",
@@ -93,6 +103,11 @@ const TERM_STOP = new Set(
     "show",
     "check",
     "search",
+    "list",
+    "open",
+    "recent",
+    "repo",
+    "repository",
     "pager",
     "oncall",
     "incident",
@@ -132,7 +147,10 @@ const TERM_STOP = new Set(
     "notion",
     "google",
     "docs",
-    "gdocs"
+    "gdocs",
+    "github",
+    "gitlab",
+    "bitbucket"
   ].map((w) => w.toLowerCase())
 );
 
@@ -190,15 +208,32 @@ export function extraTermsForIntegration(
   }
   const terms: string[] = [];
   for (const job of jobs) {
-    if (job.capability === "decision" && DECISION_PROVIDERS.includes(provider)) {
+    if (job.capability === "decision" && DECISION_JOB_PROVIDERS.includes(provider)) {
       terms.push(...job.terms);
     }
-    if (job.capability === "docs" && DOCS_PROVIDERS.includes(provider)) {
+    if (job.capability === "docs" && DOCS_JOB_PROVIDERS.includes(provider)) {
       terms.push(...job.terms);
     }
   }
   const unique = uniqueTerms(terms);
   return unique.length > 0 ? unique : undefined;
+}
+
+export function hasIntegrationJob(
+  jobs: ChatIntentJob[] | undefined,
+  provider: IntegrationChatProvider
+): boolean {
+  return (jobs ?? []).some(
+    (job) =>
+      (job.capability === "decision" && DECISION_JOB_PROVIDERS.includes(provider)) ||
+      (job.capability === "docs" && DOCS_JOB_PROVIDERS.includes(provider))
+  );
+}
+
+export function codeHostJobTerms(jobs: ChatIntentJob[] | undefined): string[] {
+  return uniqueTerms(
+    (jobs ?? []).filter((job) => job.capability === "code-host").flatMap((job) => job.terms)
+  );
 }
 
 export function hasCodeHostJob(jobs: ChatIntentJob[] | undefined): boolean {
@@ -230,7 +265,7 @@ export function toolsImpliedByJobs(options: {
   }
   const hasDocsJob = options.jobs.some((job) => job.capability === "docs");
   if (hasDocsJob && options.namedTools.length === 0) {
-    for (const provider of DOCS_PROVIDERS) {
+    for (const provider of DOCS_JOB_PROVIDERS) {
       if (options.connectedTools.includes(provider)) {
         tools.add(provider);
       }
@@ -296,7 +331,7 @@ export function planChatJobs(input: PlanChatJobsInput): ChatIntentJob[] {
       pushJob(jobs, "decision", terms.length ? terms : extractJobTerms(stripped, "decision", undefined));
     }
   }
-  if (named.some((tool) => DOCS_PROVIDERS.includes(tool))) {
+  if (named.some((tool) => DOCS_JOB_PROVIDERS.includes(tool))) {
     if (!jobs.some((job) => job.capability === "docs")) {
       const terms = extractJobTerms(stripToolNames(stripped), "docs", undefined);
       pushJob(jobs, "docs", terms.length ? terms : extractJobTerms(stripped, "docs", undefined));
@@ -320,7 +355,7 @@ function classifyClause(
   if (DECISION_PHRASE.test(clause)) {
     return "decision";
   }
-  if (named.some((tool) => DOCS_PROVIDERS.includes(tool)) && namedDocsInClause(clause)) {
+  if (named.some((tool) => DOCS_JOB_PROVIDERS.includes(tool)) && namedDocsInClause(clause)) {
     return "docs";
   }
   if (classifyRepoCodeIntent(clause).action === "locate") {
@@ -348,6 +383,16 @@ function extractJobTerms(
 ): string[] {
   const terms: string[] = [];
   const cleaned = stripToolNames(stripLeadingAskLabels(clause));
+
+  if (capability === "code-host") {
+    for (const match of cleaned.matchAll(/\b(?:PR|pull request|merge request|MR)\s*#?\s*(\d+)\b/gi)) {
+      terms.push(`PR #${match[1]}`);
+    }
+    const topic = compactPhrase(cleaned);
+    if (topic) {
+      terms.push(topic);
+    }
+  }
 
   for (const match of cleaned.matchAll(/"([^"]+)"|'([^']+)'|`([^`]+)`/g)) {
     const quoted = (match[1] ?? match[2] ?? match[3] ?? "").trim();

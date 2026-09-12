@@ -31,6 +31,10 @@ export type ContextRequestParams = {
   fileSource?: string;
   integrationProvider?: import("../chat/types").IntegrationChatProvider;
   fetchIntegrations?: import("../chat/types").IntegrationChatProvider[];
+  /** Immutable planner output captured by the ChatTurn that owns this request. */
+  intentPlan?: import("../chat/intentPlanner/types").ChatIntentPlan;
+  /** Per-turn soft gather clock. */
+  gatherStartedAt?: number;
   [key: string]: unknown;
 };
 

@@ -88,6 +88,7 @@ export async function fetchCodeHostSearchContext(options: {
   }
 
   const prNumbers = extractPrNumbers(options.queryText ?? "");
+  const searchTerms = extractCodeHostFilterTerms(options.queryText ?? "");
   const limit = options.limit ?? 20;
   const coords = { provider, owner, repo };
 
@@ -98,6 +99,14 @@ export async function fetchCodeHostSearchContext(options: {
     if (prNumbers.length > 0) {
       const wanted = new Set(prNumbers);
       pullRequests = pullRequests.filter((pr) => wanted.has(pr.number));
+    }
+    if (searchTerms.length > 0) {
+      const matchesTerms = (title: string): boolean => {
+        const normalized = title.toLowerCase();
+        return searchTerms.some((term) => normalized.includes(term));
+      };
+      pullRequests = pullRequests.filter((pr) => matchesTerms(pr.title));
+      issues = issues.filter((issue) => matchesTerms(issue.title));
     }
 
     return {
@@ -135,6 +144,42 @@ function extractPrNumbers(query: string): number[] {
     }
   }
   return [...new Set(hits)];
+}
+
+export function extractCodeHostFilterTerms(query: string): string[] {
+  const generic = new Set([
+    "search",
+    "list",
+    "show",
+    "find",
+    "open",
+    "recent",
+    "pull",
+    "request",
+    "requests",
+    "merge",
+    "issue",
+    "issues",
+    "github",
+    "gitlab",
+    "bitbucket",
+    "repo",
+    "repository",
+    "this",
+    "the",
+    "for",
+    "our",
+    "any"
+  ]);
+  const withoutRefs = query.replace(/\b(?:PR|pull request|merge request|MR)\s*#?\s*\d+\b/gi, " ");
+  const seen = new Set<string>();
+  return (withoutRefs.toLowerCase().match(/[a-z][a-z0-9_-]{2,}/g) ?? []).filter((term) => {
+    if (generic.has(term) || seen.has(term)) {
+      return false;
+    }
+    seen.add(term);
+    return true;
+  });
 }
 
 function mapPullRequest(pr: {

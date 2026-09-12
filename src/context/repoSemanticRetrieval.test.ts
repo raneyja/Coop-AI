@@ -8,6 +8,7 @@ import {
   mergeRepoSemanticContext,
   mergeFocusSearchResults,
   rankSearchPaths,
+  selectFocusSearchPaths,
   semanticRetrievalQueryText,
   shouldRunRepoSemanticRetrieval,
   MAX_SEMANTIC_BYTES,
@@ -59,6 +60,18 @@ test("shouldRunRepoSemanticRetrieval allows plain chat with long query", () => {
     }),
     true
   );
+});
+
+test("locate focus search ranks implementation ahead of onboarding docs", () => {
+  const selected = selectFocusSearchPaths(
+    ["README.md", "AGENTS.md", "src/auth/requireAuth.ts"],
+    "where is requireAuth implemented",
+    3,
+    "hunt"
+  );
+  assert.equal(selected[0], "src/auth/requireAuth.ts");
+  assert.equal(selected.includes("README.md"), false);
+  assert.equal(selected.includes("AGENTS.md"), false);
 });
 
 test("shouldRunRepoSemanticRetrieval allows open-file PR review so callers can attach", () => {

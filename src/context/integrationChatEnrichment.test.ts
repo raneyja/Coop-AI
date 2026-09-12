@@ -347,3 +347,219 @@ test("onToolActivity emits query labels and hit detail, not generic theater", as
     }
   }
 });
+
+test("job-scoped providers start in parallel with capability-specific terms", async () => {
+  const { enrichChatContextWithIntegrations } = require("./integrationChatEnrichment") as typeof import("./integrationChatEnrichment");
+  const gates = new Map<string, Deferred<unknown>>();
+  const args = new Map<string, Record<string, unknown>>();
+  const started: string[] = [];
+  const gateFor = (provider: string): Deferred<unknown> => {
+    const gate = deferred<unknown>();
+    gates.set(provider, gate);
+    return gate;
+  };
+  const fetchFor =
+    (provider: string) =>
+    async (options: Record<string, unknown>): Promise<unknown> => {
+      started.push(provider);
+      args.set(provider, options);
+      return gateFor(provider).promise;
+    };
+
+  const promise = enrichChatContextWithIntegrations({
+    result: {
+      requestId: "jobs",
+      type: "chat_context",
+      data: {},
+      fetchedAt: new Date()
+    } as ContextFetchResult,
+    request: {
+      id: "jobs",
+      type: "chat_context",
+      params: { fetchIntegrations: ["jira", "slack", "teams", "confluence", "notion", "google-docs"] },
+      intent: { context: { queryText: "compound ask" } }
+    } as ContextFetchRequest,
+    secrets: { getCredentials: async () => ({}) } as never,
+    codeHostRouter: {} as never,
+    owner: "acme",
+    repo: "app",
+    codeHostProvider: "gitlab",
+    codeHostConnected: true,
+    integrations: {
+      jira: true,
+      slack: true,
+      teams: true,
+      confluence: true,
+      notion: true,
+      googleDocs: true
+    },
+    jobs: [
+      { capability: "decision", terms: ["sql-injection"] },
+      { capability: "docs", terms: ["rollback runbook"] },
+      { capability: "code-host", terms: ["PR #53"] }
+    ],
+    deps: {
+      shouldFetchConfluenceContext: () => true,
+      fetchConfluenceSearchContext: fetchFor("confluence") as never,
+      shouldFetchNotionContext: () => true,
+      fetchNotionSearchContext: fetchFor("notion") as never,
+      shouldFetchJiraContext: () => true,
+      fetchJiraSearchContext: fetchFor("jira") as never,
+      shouldFetchSlackContext: () => true,
+      fetchSlackSearchContext: fetchFor("slack") as never,
+      shouldFetchTeamsContext: () => true,
+      fetchTeamsSearchContext: fetchFor("teams") as never,
+      shouldFetchGoogleDocsContext: () => true,
+      fetchGoogleDocsSearchContext: fetchFor("google-docs") as never,
+      shouldFetchCodeHostContext: () => false,
+      fetchCodeHostSearchContext: fetchFor("code-host") as never
+    }
+  });
+
+  await flushUntil(() => started.length === 7);
+  assert.deepEqual(new Set(started), new Set([
+    "confluence",
+    "notion",
+    "jira",
+    "google-docs",
+    "slack",
+    "teams",
+    "code-host"
+  ]));
+  assert.deepEqual(args.get("jira")?.extraTerms, ["sql-injection"]);
+  assert.deepEqual(args.get("slack")?.extraTerms, ["sql-injection"]);
+  assert.deepEqual(args.get("teams")?.extraTerms, ["sql-injection"]);
+  assert.deepEqual(args.get("notion")?.extraTerms, ["rollback runbook"]);
+  assert.deepEqual(args.get("google-docs")?.extraTerms, ["rollback runbook"]);
+  assert.deepEqual(args.get("confluence")?.extraTerms, ["sql-injection", "rollback runbook"]);
+  assert.equal(args.get("code-host")?.queryText, "PR #53");
+  assert.equal(args.get("code-host")?.provider, "gitlab");
+  for (const gate of gates.values()) gate.resolve({});
+  await promise;
+});
+
+test("job-scoped timeout never reports late completion", async () => {
+  const { enrichChatContextWithIntegrations } = require("./integrationChatEnrichment") as typeof import("./integrationChatEnrichment");
+  const jiraGate = deferred<{ issues: [] }>();
+  const events: Array<{ phase: string; label: string; detail?: string }> = [];
+  const enriched = await enrichChatContextWithIntegrations({
+    result: {
+      requestId: "timeout",
+      type: "chat_context",
+      data: {},
+      fetchedAt: new Date()
+    } as ContextFetchResult,
+    request: {
+      id: "timeout",
+      type: "chat_context",
+      params: { fetchIntegrations: ["jira"] },
+      intent: { context: { queryText: "compound ask" } }
+    } as ContextFetchRequest,
+    secrets: { getCredentials: async () => ({}) } as never,
+    codeHostRouter: {} as never,
+    integrations: { jira: true },
+    jobs: [{ capability: "decision", terms: ["auth rollback"] }],
+    budgetMs: 15,
+    onToolActivity: (event) => events.push(event),
+    deps: {
+      shouldFetchConfluenceContext: () => false,
+      shouldFetchNotionContext: () => false,
+      shouldFetchJiraContext: () => true,
+      fetchJiraSearchContext: () => jiraGate.promise as never,
+      shouldFetchSlackContext: () => false,
+      shouldFetchTeamsContext: () => false,
+      shouldFetchGoogleDocsContext: () => false,
+      shouldFetchCodeHostContext: () => false
+    }
+  });
+
+  assert.deepEqual(events.map((event) => event.phase), ["start", "timed-out"]);
+  assert.match(events[1]?.label ?? "", /^Timed out searching Jira/);
+  assert.match(events[1]?.detail ?? "", /did not finish/);
+  assert.equal((enriched.data as Record<string, unknown>).jiraSearch, undefined);
+
+  jiraGate.resolve({ issues: [] });
+  await flushMicrotasks();
+  assert.deepEqual(events.map((event) => event.phase), ["start", "timed-out"]);
+  assert.equal(events.some((event) => /^Searched Jira/.test(event.label)), false);
+});
+
+test("job-scoped provider without a matching job does not fall back to repo terms", async () => {
+  const { enrichChatContextWithIntegrations } = require("./integrationChatEnrichment") as typeof import("./integrationChatEnrichment");
+  let jiraCalls = 0;
+  await enrichChatContextWithIntegrations({
+    result: {
+      requestId: "no-fallback",
+      type: "chat_context",
+      data: {},
+      fetchedAt: new Date()
+    } as ContextFetchResult,
+    request: {
+      id: "no-fallback",
+      type: "chat_context",
+      params: { fetchIntegrations: ["jira"] },
+      intent: { context: { queryText: "where is requireAuth implemented?" } }
+    } as ContextFetchRequest,
+    secrets: { getCredentials: async () => ({}) } as never,
+    codeHostRouter: {} as never,
+    owner: "acme",
+    repo: "app",
+    integrations: { jira: true },
+    jobs: [{ capability: "locate", terms: ["requireAuth"] }],
+    deps: {
+      shouldFetchConfluenceContext: () => false,
+      shouldFetchNotionContext: () => false,
+      shouldFetchJiraContext: () => true,
+      fetchJiraSearchContext: async () => {
+        jiraCalls += 1;
+        return { issues: [] } as never;
+      },
+      shouldFetchSlackContext: () => false,
+      shouldFetchTeamsContext: () => false,
+      shouldFetchGoogleDocsContext: () => false,
+      shouldFetchCodeHostContext: () => false
+    }
+  });
+  assert.equal(jiraCalls, 0);
+});
+
+test("expired job budget skips fetch instead of claiming searched-empty", async () => {
+  const { enrichChatContextWithIntegrations } = require("./integrationChatEnrichment") as typeof import("./integrationChatEnrichment");
+  let jiraCalls = 0;
+  const phases: string[] = [];
+  await enrichChatContextWithIntegrations({
+    result: {
+      requestId: "expired",
+      type: "chat_context",
+      data: {},
+      fetchedAt: new Date()
+    } as ContextFetchResult,
+    request: {
+      id: "expired",
+      type: "chat_context",
+      params: { fetchIntegrations: ["jira"] },
+      intent: { context: { queryText: "decision" } }
+    } as ContextFetchRequest,
+    secrets: { getCredentials: async () => ({}) } as never,
+    codeHostRouter: {} as never,
+    integrations: { jira: true },
+    jobs: [{ capability: "decision", terms: ["auth rollback"] }],
+    budgetMs: 0,
+    onToolActivity: (event) => phases.push(event.phase),
+    deps: {
+      shouldFetchConfluenceContext: () => false,
+      shouldFetchNotionContext: () => false,
+      shouldFetchJiraContext: () => true,
+      fetchJiraSearchContext: async () => {
+        jiraCalls += 1;
+        return { issues: [] } as never;
+      },
+      shouldFetchSlackContext: () => false,
+      shouldFetchTeamsContext: () => false,
+      shouldFetchGoogleDocsContext: () => false,
+      shouldFetchCodeHostContext: () => false
+    }
+  });
+  assert.equal(jiraCalls, 0);
+  assert.deepEqual(phases, ["skipped"]);
+});

@@ -285,6 +285,8 @@ export type SearchRepoForFocusOptions = {
   provider?: CodeHostProviderPreference;
   /** Cap on attached focus file bodies (default FOCUS_MAX_INJECTED_PATHS). */
   maxFiles?: number;
+  /** Locate jobs rank implementation evidence; onboarding remains the default for repo overviews. */
+  rankMode?: "onboarding" | "hunt";
   /**
    * Topic queries for Understand Repo / Gaps. When set, these are searched in
    * parallel and hunt shortening (`indexQueryForRetrieval`) is skipped.
@@ -344,7 +346,7 @@ export async function searchRepoForFocusQuery(
         ...shared,
         query,
         rankQuery: [rankQuery, ...topicQueries].filter(Boolean).join(" "),
-        rankMode: "onboarding",
+        rankMode: options.rankMode ?? "onboarding",
         maxFiles: perQueryCap
       })
     )
@@ -426,6 +428,17 @@ export function mergeFocusSearchResults(
   };
 }
 
+export function selectFocusSearchPaths(
+  paths: string[],
+  query: string,
+  max: number,
+  rankMode: "onboarding" | "hunt"
+): string[] {
+  return rankMode === "onboarding"
+    ? selectOnboardingEvidencePaths(paths, query, max)
+    : selectChatEvidencePaths(paths, query, max);
+}
+
 type LoadSemanticSearchOptions = {
   repoId: string;
   query: string;
@@ -466,10 +479,11 @@ async function loadSemanticSearchContext(
   const rankedPaths = rankSearchPaths(searchResult, pathBudget);
   const exclude = options.excludePath?.replace(/\\/g, "/").replace(/^\/+/, "").toLowerCase();
   const candidatePaths = rankedPaths.map((entry) => entry.path);
-  const selected = (
-    options.rankMode === "onboarding"
-      ? selectOnboardingEvidencePaths(candidatePaths, rankQuery, Math.max(options.maxFiles, 6))
-      : selectChatEvidencePaths(candidatePaths, rankQuery, Math.max(options.maxFiles, 6))
+  const selected = selectFocusSearchPaths(
+    candidatePaths,
+    rankQuery,
+    Math.max(options.maxFiles, 6),
+    options.rankMode ?? "hunt"
   ).filter((path) => {
     if (!exclude) {
       return true;

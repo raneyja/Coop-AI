@@ -2,6 +2,7 @@ import type { ChatMessage, ChatPersistedArtifact, RepoContext } from "./types";
 import type { ContextFetchResult } from "../context/requestBatcher";
 import type { DecisionTimeline } from "../types/decisionTimeline";
 import { scheduleResponseDeadline } from "../config/responseDeadline";
+import type { ChatIntentPlan } from "./intentPlanner/types";
 
 /** Synthetic id for editor panels that do not use ChatThreadStore. */
 export const SESSION_RUN_THREAD_ID = "session";
@@ -25,6 +26,8 @@ export type ChatTurn = {
   sessionCostUsd: number;
   modelMessage: string;
   quickAction?: string;
+  /** Intent plan captured at send time; never shared across turns or threads. */
+  intentPlan: ChatIntentPlan;
   contextBundle: ContextFetchResult[];
   jobResult?: unknown;
   jobId?: string;
@@ -71,12 +74,28 @@ export type BeginChatTurnInput = {
   sessionCostUsd: number;
   modelMessage: string;
   quickAction?: string;
+  intentPlan: ChatIntentPlan;
   pendingMentions?: import("./types").ChatFileMention[];
   codeEditIntent?: boolean;
 };
 
 function createTurnId(): string {
   return `turn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function captureIntentPlan(plan: ChatIntentPlan): ChatIntentPlan {
+  return Object.freeze({
+    ...plan,
+    tools: Object.freeze([...plan.tools]) as unknown as ChatIntentPlan["tools"],
+    jobs: Object.freeze(
+      (plan.jobs ?? []).map((job) =>
+        Object.freeze({
+          ...job,
+          terms: Object.freeze([...job.terms]) as unknown as string[]
+        })
+      )
+    ) as unknown as ChatIntentPlan["jobs"]
+  });
 }
 
 /**
@@ -104,6 +123,7 @@ export class ThreadRunManager {
       sessionCostUsd: input.sessionCostUsd,
       modelMessage: input.modelMessage,
       quickAction: input.quickAction,
+      intentPlan: captureIntentPlan(input.intentPlan),
       contextBundle: [],
       jobGeneration: ++this.jobGenerationSeq,
       streamAbort,

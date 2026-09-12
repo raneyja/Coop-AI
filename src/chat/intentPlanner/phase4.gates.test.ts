@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { planChatIntentFromRules } from "./planChatIntent";
 import {
+  codeHostJobTerms,
   extraTermsForIntegration,
   hasCodeHostJob,
   jobsSkipAgentLoop,
@@ -160,6 +161,8 @@ test("Phase 4 Chat Intent job gates", () => {
     assert.equal(wantsCodeHostContext("list bitbucket pull requests for this repo"), true);
     assert.equal(wantsCodeHostContext("any open pull requests for this repo?"), true);
     assert.deepEqual([...CODE_HOST_PROVIDERS], ["github", "gitlab", "bitbucket"]);
+    const hostJobs = planChatJobs({ message: "search gitlab merge requests for auth in PR #53" });
+    assert.deepEqual(codeHostJobTerms(hostJobs), ["PR #53", "auth 53"]);
   });
 
   collectGate(results, phase4Criterion("P4-G4"), () => {

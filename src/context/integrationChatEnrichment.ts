@@ -14,7 +14,12 @@ import { shouldFetchTraceDecisionIntegrations } from "./integrationFetchPolicy";
 import { requestAllowsIntegrationFetch } from "./fetchIntegrationsAllowlist";
 import type { IntegrationChatProvider } from "../chat/types";
 import type { ChatIntentJob } from "../chat/intentPlanner/types";
-import { extraTermsForIntegration, hasCodeHostJob } from "../chat/intentPlanner/planChatJobs";
+import {
+  codeHostJobTerms,
+  extraTermsForIntegration,
+  hasCodeHostJob,
+  hasIntegrationJob
+} from "../chat/intentPlanner/planChatJobs";
 import {
   buildIntegrationSearchTermList,
   collectCrossToolSearchText
@@ -24,6 +29,7 @@ import type { DecisionTimeline } from "../types/decisionTimeline";
 import {
   formatIntegrationHitDetail,
   integrationCompletedActivityLabel,
+  integrationIncompleteActivityLabel,
   integrationRunningActivityLabel,
   preferredIntegrationActivityQuery,
   type IntegrationActivityTool,
@@ -106,30 +112,17 @@ export async function enrichChatContextWithIntegrations(
     ...options.deps
   };
 
-  const runStages = (): Promise<void> => enrichIntegrationStages(options, data, deps);
-
-  if (options.budgetMs !== undefined && options.budgetMs > 0) {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const budget = new Promise<void>((resolve) => {
-      timer = setTimeout(resolve, options.budgetMs);
-    });
-    // Swallow late rejections so an abandoned fetch cannot raise unhandled errors.
-    await Promise.race([runStages().catch(() => undefined), budget]);
-    if (timer) {
-      clearTimeout(timer);
-    }
-    // Snapshot so writes from still-in-flight fetches don't mutate the returned bundle.
-    return { ...options.result, data: { ...data } };
-  }
-
-  await runStages();
+  const deadlineAt =
+    options.budgetMs === undefined ? undefined : Date.now() + Math.max(0, options.budgetMs);
+  await enrichIntegrationStages(options, data, deps, deadlineAt);
   return { ...options.result, data };
 }
 
 async function enrichIntegrationStages(
   options: IntegrationEnrichmentOptions,
   data: Record<string, unknown>,
-  deps: IntegrationChatEnrichmentDeps
+  deps: IntegrationChatEnrichmentDeps,
+  deadlineAt?: number
 ): Promise<void> {
   const traceSeeds = await resolveTraceDecisionSearchSeeds(options);
   const jobs = options.jobs;
@@ -157,20 +150,28 @@ async function enrichIntegrationStages(
   const activityQuery = preferredIntegrationActivityQuery(integrationTerms);
   const notify = (
     tool: IntegrationActivityTool,
-    phase: "start" | "done",
+    phase: IntegrationToolActivityEvent["phase"],
     extra?: { query?: string; hits?: string[]; error?: string }
   ) => {
     const query = extra?.query ?? activityQuery;
     const label =
       phase === "done"
         ? integrationCompletedActivityLabel(tool, query, codeHostProvider)
-        : integrationRunningActivityLabel(tool, query, codeHostProvider);
+        : phase === "start"
+          ? integrationRunningActivityLabel(tool, query, codeHostProvider)
+          : integrationIncompleteActivityLabel(tool, phase, query, codeHostProvider);
     const event: IntegrationToolActivityEvent = {
       tool,
       phase,
       label,
       ...(query ? { query } : {}),
-      ...(phase === "done" ? { detail: formatIntegrationHitDetail(extra?.hits ?? [], extra?.error) } : {})
+      ...(phase === "done"
+        ? { detail: formatIntegrationHitDetail(extra?.hits ?? [], extra?.error) }
+        : phase === "timed-out"
+          ? { detail: "Search did not finish before context gathering ended" }
+          : phase === "skipped"
+            ? { detail: "Search did not start because context gathering had ended" }
+            : {})
     };
     options.onToolActivity?.(event);
   };
@@ -190,26 +191,48 @@ async function enrichIntegrationStages(
   const runTool = async <T>(
     tool: IntegrationActivityTool,
     enabled: boolean,
-    fetch: () => Promise<T>
+    fetch: () => Promise<T>,
+    query?: string
   ): Promise<T | undefined> => {
     if (!enabled) {
       return undefined;
     }
-    notify(tool, "start");
-    let result: T | undefined;
-    let error: string | undefined;
-    try {
-      result = await fetch();
-      return result;
-    } catch (caught) {
-      error = caught instanceof Error ? caught.message : "Search failed";
-      throw caught;
-    } finally {
-      notify(tool, "done", {
-        hits: hitsFromSearchResult(tool, result),
-        error
-      });
+    const remainingMs = deadlineAt === undefined ? undefined : Math.max(0, deadlineAt - Date.now());
+    if (remainingMs !== undefined && remainingMs <= 0) {
+      notify(tool, "skipped", { query });
+      return undefined;
     }
+    notify(tool, "start", { query });
+    const fetchOutcome = fetch().then(
+      (result) => ({ kind: "result" as const, result }),
+      (caught) => ({ kind: "error" as const, caught })
+    );
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const outcome =
+      remainingMs === undefined
+        ? await fetchOutcome
+        : await Promise.race([
+            fetchOutcome,
+            new Promise<{ kind: "timeout" }>((resolve) => {
+              timer = setTimeout(() => resolve({ kind: "timeout" }), remainingMs);
+            })
+          ]);
+    if (timer) {
+      clearTimeout(timer);
+    }
+    if (outcome.kind === "timeout") {
+      notify(tool, "timed-out", { query });
+      return undefined;
+    }
+    if (outcome.kind === "error") {
+      notify(tool, "done", {
+        query,
+        error: outcome.caught instanceof Error ? outcome.caught.message : "Search failed"
+      });
+      throw outcome.caught;
+    }
+    notify(tool, "done", { query, hits: hitsFromSearchResult(tool, outcome.result) });
+    return outcome.result;
   };
 
   const termsFor = (provider: IntegrationChatProvider): string[] => {
@@ -217,8 +240,138 @@ async function enrichIntegrationStages(
     if (jobTerms?.length) {
       return jobTerms;
     }
-    return integrationTerms;
+    return jobScoped ? [] : integrationTerms;
   };
+
+  const shouldFetchJira =
+    deps.shouldFetchJiraContext(options.request) && allowOrForced("jira", connected?.jira);
+  const shouldFetchGoogleDocs =
+    deps.shouldFetchGoogleDocsContext(options.request) &&
+    allowOrForced("google-docs", connected?.googleDocs);
+  const shouldFetchSlack =
+    deps.shouldFetchSlackContext(options.request) && allowOrForced("slack", connected?.slack);
+  const shouldFetchTeams =
+    deps.shouldFetchTeamsContext(options.request) && allowOrForced("teams", connected?.teams);
+  const shouldFetchCodeHost =
+    Boolean(options.codeHostConnected) &&
+    (jobScoped ? hasCodeHostJob(jobs) : deps.shouldFetchCodeHostContext(options.request));
+
+  if (jobScoped) {
+    const enabledForJob = (provider: IntegrationChatProvider, enabled: boolean): boolean =>
+      enabled && hasIntegrationJob(jobs, provider);
+    const codeHostTerms = codeHostJobTerms(jobs);
+    const [
+      confluenceSearch,
+      notionSearch,
+      jiraSearch,
+      googleDocsSearch,
+      slackSearch,
+      teamsSearch,
+      codeHostSearch
+    ] = await Promise.all([
+      runTool(
+        "confluence",
+        enabledForJob("confluence", shouldFetchConfluence),
+        () =>
+          deps.fetchConfluenceSearchContext({
+            secrets: options.secrets,
+            owner: options.owner,
+            repo: options.repo,
+            extraTerms: termsFor("confluence"),
+            integrationScope: options.integrationScopes?.atlassian
+          }),
+        preferredIntegrationActivityQuery(termsFor("confluence"))
+      ),
+      runTool(
+        "notion",
+        enabledForJob("notion", shouldFetchNotion),
+        () =>
+          deps.fetchNotionSearchContext({
+            secrets: options.secrets,
+            owner: options.owner,
+            repo: options.repo,
+            extraTerms: termsFor("notion"),
+            integrationScope: options.integrationScopes?.notion
+          }),
+        preferredIntegrationActivityQuery(termsFor("notion"))
+      ),
+      runTool(
+        "jira",
+        enabledForJob("jira", shouldFetchJira),
+        () =>
+          deps.fetchJiraSearchContext({
+            secrets: options.secrets,
+            ...base,
+            extraTerms: termsFor("jira"),
+            preferHost: options.codeHostProvider,
+            codeHostRouter: options.codeHostRouter,
+            codeHostConnected: options.codeHostConnected,
+            integrationScope: options.integrationScopes?.atlassian
+          }),
+        preferredIntegrationActivityQuery(termsFor("jira"))
+      ),
+      runTool(
+        "google-docs",
+        enabledForJob("google-docs", shouldFetchGoogleDocs),
+        () =>
+          deps.fetchGoogleDocsSearchContext({
+            secrets: options.secrets,
+            ...base,
+            extraTerms: termsFor("google-docs"),
+            integrationScope: options.integrationScopes?.["google-docs"]
+          }),
+        preferredIntegrationActivityQuery(termsFor("google-docs"))
+      ),
+      runTool(
+        "slack",
+        enabledForJob("slack", shouldFetchSlack),
+        () =>
+          deps.fetchSlackSearchContext({
+            secrets: options.secrets,
+            ...base,
+            extraTerms: termsFor("slack"),
+            jobScoped: true,
+            preferHost: options.codeHostProvider,
+            integrationScope: options.integrationScopes?.slack
+          }),
+        preferredIntegrationActivityQuery(termsFor("slack"))
+      ),
+      runTool(
+        "teams",
+        enabledForJob("teams", shouldFetchTeams),
+        () =>
+          deps.fetchTeamsSearchContext({
+            secrets: options.secrets,
+            ...base,
+            extraTerms: termsFor("teams"),
+            jobScoped: true,
+            preferHost: options.codeHostProvider
+          }),
+        preferredIntegrationActivityQuery(termsFor("teams"))
+      ),
+      runTool(
+        "code-host",
+        shouldFetchCodeHost,
+        () =>
+          deps.fetchCodeHostSearchContext({
+            router: options.codeHostRouter,
+            provider: options.codeHostProvider,
+            owner: options.owner,
+            repo: options.repo,
+            queryText: codeHostTerms.join(" ")
+          }),
+        preferredIntegrationActivityQuery(codeHostTerms)
+      )
+    ]);
+    if (enabledForJob("confluence", shouldFetchConfluence)) data.confluenceSearch = confluenceSearch;
+    if (enabledForJob("notion", shouldFetchNotion)) data.notionSearch = notionSearch;
+    if (enabledForJob("jira", shouldFetchJira)) data.jiraSearch = jiraSearch;
+    if (enabledForJob("google-docs", shouldFetchGoogleDocs)) data.googleDocsSearch = googleDocsSearch;
+    if (enabledForJob("slack", shouldFetchSlack)) data.slackSearch = slackSearch;
+    if (enabledForJob("teams", shouldFetchTeams)) data.teamsSearch = teamsSearch;
+    if (shouldFetchCodeHost) data.codeHostSearch = codeHostSearch;
+    return;
+  }
 
   const [confluenceSearch, notionSearch] = await Promise.all([
     runTool("confluence", shouldFetchConfluence, () =>
@@ -251,11 +404,6 @@ async function enrichIntegrationStages(
   const crossToolKeys = jobScoped ? undefined : (crossToolText.length > 0 ? crossToolText : undefined);
   const docExtraTerms = [...termsFor("google-docs"), ...(jobScoped ? [] : crossToolText)];
 
-  const shouldFetchJira =
-    deps.shouldFetchJiraContext(options.request) && allowOrForced("jira", connected?.jira);
-  const shouldFetchGoogleDocs =
-    deps.shouldFetchGoogleDocsContext(options.request) &&
-    allowOrForced("google-docs", connected?.googleDocs);
   const [jiraSearch, googleDocsSearch] = await Promise.all([
     runTool("jira", shouldFetchJira, () =>
       deps.fetchJiraSearchContext({
@@ -290,10 +438,6 @@ async function enrichIntegrationStages(
   )?.issues
     ?.map((issue) => issue.key?.trim())
     .filter((key): key is string => Boolean(key));
-  const shouldFetchSlack =
-    deps.shouldFetchSlackContext(options.request) && allowOrForced("slack", connected?.slack);
-  const shouldFetchTeams =
-    deps.shouldFetchTeamsContext(options.request) && allowOrForced("teams", connected?.teams);
   const [slackSearch, teamsSearch] = await Promise.all([
     runTool("slack", shouldFetchSlack, () =>
       deps.fetchSlackSearchContext({
@@ -325,9 +469,6 @@ async function enrichIntegrationStages(
   if (shouldFetchTeams) {
     data.teamsSearch = teamsSearch;
   }
-  const shouldFetchCodeHost =
-    Boolean(options.codeHostConnected) &&
-    (jobScoped ? hasCodeHostJob(jobs) : deps.shouldFetchCodeHostContext(options.request));
   if (shouldFetchCodeHost) {
     data.codeHostSearch = await runTool("code-host", true, () =>
       deps.fetchCodeHostSearchContext({

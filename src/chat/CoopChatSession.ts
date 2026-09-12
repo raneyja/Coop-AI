@@ -612,11 +612,6 @@ export class CoopChatSession {
   };
   /** Abort in-flight hybrid intent-suggest model call (user Stop). */
   private intentSuggestAbort?: AbortController;
-  /**
-   * Intent plan for the in-flight send. Every turn re-plans (UX-G7).
-   * Agent is not a sticky thread — only this turn's hunt/explain/change.
-   */
-  private turnIntentPlan?: ChatIntentPlan;
   private turnStreamAbort?: AbortSignal;
   private sessionCostUsd = 0;
   private readonly threadRuns = new ThreadRunManager();
@@ -2921,14 +2916,14 @@ export class CoopChatSession {
     }
 
     const requests = buildContextRequests(event, requestTypes).map((request) => {
-      // Soft gather clock for blast-radius (responseDeadline) — shared across job + sync gather.
-      if (request.params.quickAction !== "blast-radius") {
-        return request;
-      }
-      const gatherStartedAt = this.chatTurnStartedAt || turn?.startedAt || Date.now();
+      const gatherStartedAt = (turn?.startedAt ?? this.chatTurnStartedAt) || Date.now();
       return {
         ...request,
-        params: { ...request.params, gatherStartedAt }
+        params: {
+          ...request.params,
+          ...(request.params.quickAction === "blast-radius" ? { gatherStartedAt } : {}),
+          ...(turn ? { intentPlan: turn.intentPlan, gatherStartedAt } : {})
+        }
       };
     });
     try {
@@ -3913,7 +3908,7 @@ export class CoopChatSession {
   ): Promise<ContextFetchResult> {
     try {
       const searchScope = resolveSearchScope(this.preferences);
-      const locateTerms = locateJobTerms(this.turnIntentPlan?.jobs);
+      const locateTerms = locateJobTerms(request.params.intentPlan?.jobs);
       const repoId = request.params.repoId?.trim();
       if (locateTerms.length > 0 && repoId) {
         const semantic = await searchRepoForFocusQuery({
@@ -3927,7 +3922,8 @@ export class CoopChatSession {
           owner: request.params.owner,
           repo: request.params.repo,
           provider: request.params.provider as import("./types").CodeHostProviderPreference | undefined,
-          maxFiles: 5
+          maxFiles: 5,
+          rankMode: "hunt"
         });
         return mergeRepoSemanticContext(result, semantic);
       }
@@ -4445,7 +4441,7 @@ export class CoopChatSession {
       clearResponseDeadlineForSynthesis(turn.clearResponseDeadline);
       turn.clearResponseDeadline = () => undefined;
 
-      const allowedIntegrations = (this.turnIntentPlan?.tools ?? []).filter(
+      const allowedIntegrations = turn.intentPlan.tools.filter(
         (tool): tool is IntegrationChatProvider => Boolean(tool)
       );
       const agentResult = await this.options.agentOrchestrator.run(
@@ -4641,7 +4637,7 @@ export class CoopChatSession {
       integrationScopes,
       // Focus phrases first so Gaps subsystem asks reach doc/discussion search.
       extraSearchTerms: focusTerms.length ? focusTerms : undefined,
-      jobs: this.turnIntentPlan?.jobs,
+      jobs: request.params.intentPlan?.jobs,
       // Live tool lines when a fetch actually starts; durable Searched rows on done.
       onToolActivity: (toolEvent) => {
         this.applyIntegrationToolActivity(
@@ -4658,8 +4654,10 @@ export class CoopChatSession {
           : request.params.quickAction === "knowledge-gaps" ||
               (request.type === "chat_context" &&
                 (shouldFetchIncidentIntegrations(request.intent.context.queryText) ||
-                  (this.turnIntentPlan?.jobs?.length ?? 0) > 0))
-            ? Math.max(1, remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now()))
+                  (request.params.intentPlan?.jobs?.length ?? 0) > 0))
+            ? remainingContextGatherBudgetMs(
+                (request.params.gatherStartedAt ?? this.chatTurnStartedAt) || Date.now()
+              )
             : undefined
     });
     // Mid-loop agent searches land in agentTools; re-promote after prefetch so
@@ -4678,7 +4676,7 @@ export class CoopChatSession {
     if (turn && turn.status !== "running") {
       return;
     }
-    if (turn && event.phase === "done") {
+    if (turn && event.phase !== "start") {
       turn.activityLines = (turn.activityLines ?? []).filter(
         (line) => !isActivityLabelForTool(line, event.tool)
       );
@@ -5610,10 +5608,6 @@ export class CoopChatSession {
     if (!options?.skipQuickActionSuggest && !options?.skipUserHistoryPush) {
       this.dismissPendingQuickActionSuggest();
     }
-    if (options?.intentPlan) {
-      this.turnIntentPlan = options.intentPlan;
-    }
-
     // Slash-command routing applies only to manually typed messages — never to
     // button-driven quick actions or already-routed integration prompts.
     if (!quickAction && !options?.sourceHint) {
@@ -5693,7 +5687,7 @@ export class CoopChatSession {
       !options?.skipQuickActionSuggest
     ) {
       const plan = await this.resolveChatIntentPlan(message);
-      this.turnIntentPlan = plan;
+      options = { ...options, intentPlan: plan };
       const decision = resolveChatIntentExecution(plan);
       if (decision.kind === "silent-workflow") {
         void this.emitUsageEvent("chat_intent.silent_workflow", {
@@ -5718,7 +5712,7 @@ export class CoopChatSession {
           }) ||
           shouldSkipQuickActionSuggest(message)
         ) {
-          this.turnIntentPlan = emptyChatIntentPlan(message);
+          options = { ...options, intentPlan: emptyChatIntentPlan(message) };
         } else {
           void this.emitUsageEvent("chat_intent.confirm_workflow", {
             workflow: decision.plan.workflow,
@@ -5762,7 +5756,7 @@ export class CoopChatSession {
               query: message
             })
           ) {
-            this.turnIntentPlan = emptyChatIntentPlan(message);
+            options = { ...options, intentPlan: emptyChatIntentPlan(message) };
           } else {
             await this.completeQuickActionSuggestClarification(
               message,
@@ -5786,6 +5780,7 @@ export class CoopChatSession {
       isConcreteFileEditAsk(message);
     const explicitEdit = options?.composerMode === "edit";
     const mayNeedEditSnap = explicitEdit || concreteEditAsk;
+    const turnIntentPlan = options?.intentPlan ?? emptyChatIntentPlan(message);
 
     this.snapEditorContextBeforeSend({
       allowLocalFileForEdit: mayNeedEditSnap,
@@ -5800,7 +5795,7 @@ export class CoopChatSession {
       const agentCanOwnChange = shouldRunAgentToolLoop({
         query: message,
         hasQuickAction: false,
-        intentPlan: this.turnIntentPlan,
+        intentPlan: turnIntentPlan,
         isEditTurn: false
       });
       const changeRouting = resolveChangeSendRouting({
@@ -6031,6 +6026,7 @@ export class CoopChatSession {
       sessionCostUsd: this.sessionCostUsd,
       modelMessage,
       quickAction,
+      intentPlan: turnIntentPlan,
       pendingMentions: options?.mentions,
       codeEditIntent: options?.composerMode === "edit"
     });
@@ -6172,7 +6168,7 @@ export class CoopChatSession {
     this.turnAgentAction = agentTurnAction({
       query: message,
       hasQuickAction: Boolean(quickAction),
-      intentPlan: this.turnIntentPlan,
+      intentPlan: turn.intentPlan,
       isEditTurn: options?.composerMode === "edit",
       integrationSlash: Boolean(options?.integrationProvider && options?.sourceHint)
     });
@@ -7355,6 +7351,7 @@ export class CoopChatSession {
         sessionCostUsd: this.sessionCostUsd,
         modelMessage: content,
         quickAction,
+        intentPlan: options?.intentPlan ?? emptyChatIntentPlan(content),
         pendingMentions: options?.mentions,
         codeEditIntent: options?.composerMode === "edit"
       });

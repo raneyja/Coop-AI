@@ -1,14 +1,21 @@
 import assert from "node:assert/strict";
 import { ThreadRunManager, SESSION_RUN_THREAD_ID } from "./chatTurn";
+import { emptyChatIntentPlan, type ChatIntentPlan } from "./intentPlanner/types";
 
-function beginTurn(manager: ThreadRunManager, threadId: string, modelMessage = "hi") {
+function beginTurn(
+  manager: ThreadRunManager,
+  threadId: string,
+  modelMessage = "hi",
+  intentPlan: ChatIntentPlan = emptyChatIntentPlan(modelMessage)
+) {
   return manager.begin({
     threadId,
     context: { owner: "acme", repo: "app" },
     history: [{ role: "user", content: modelMessage, timestamp: Date.now() }],
     artifacts: [],
     sessionCostUsd: 0,
-    modelMessage
+    modelMessage,
+    intentPlan
   });
 }
 
@@ -60,6 +67,28 @@ function testAppendIgnoredAfterAbort(): void {
   assert.equal(turn.partialAssistant, "");
 }
 
+function testSequentialTurnsKeepIntentPlansIsolated(): void {
+  const manager = new ThreadRunManager();
+  const sourcePlan: ChatIntentPlan = {
+    mode: "tools-only",
+    tools: ["jira", "slack"],
+    jobs: [{ capability: "decision", terms: ["auth rollback"] }],
+    confidence: "high",
+    focus: "auth rollback",
+    execution: "none"
+  };
+  const compound = beginTurn(manager, "thread-a", "compound", sourcePlan);
+  const slash = beginTurn(manager, "thread-a", "/jira COOP-53");
+  const otherThread = beginTurn(manager, "thread-b", "where is auth implemented?");
+
+  sourcePlan.jobs?.[0]?.terms.push("late mutation");
+
+  assert.deepEqual(compound.intentPlan.jobs?.[0]?.terms, ["auth rollback"]);
+  assert.deepEqual(slash.intentPlan.jobs, []);
+  assert.deepEqual(otherThread.intentPlan.jobs, []);
+  assert.notEqual(slash.intentPlan, compound.intentPlan);
+}
+
 async function testBeginDoesNotHardAbortOnLatencyGuideline(): Promise<void> {
   const manager = new ThreadRunManager();
   const turn = beginTurn(manager, "thread-deadline");
@@ -79,6 +108,7 @@ testResendAbortsPriorTurnOnSameThread();
 testPartialBufferSurvivesForResume();
 testCompleteRemovesRun();
 testAppendIgnoredAfterAbort();
+testSequentialTurnsKeepIntentPlansIsolated();
 void testBeginDoesNotHardAbortOnLatencyGuideline()
   .then(() => {
     console.log("chatTurn.test.ts: ok");

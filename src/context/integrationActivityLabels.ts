@@ -13,7 +13,7 @@ export type IntegrationActivityTool =
 
 export type IntegrationToolActivityEvent = {
   tool: IntegrationActivityTool;
-  phase: "start" | "done";
+  phase: "start" | "done" | "timed-out" | "skipped";
   label: string;
   /** Short query shown in the label (`Searched Confluence for \`plane\``). */
   query?: string;
@@ -109,6 +109,19 @@ export function integrationCompletedActivityLabel(
   return trimmed ? `Searched ${title} for \`${trimmed}\`` : `Searched ${title}`;
 }
 
+export function integrationIncompleteActivityLabel(
+  tool: IntegrationActivityTool,
+  phase: "timed-out" | "skipped",
+  query?: string,
+  codeHostProvider?: CodeHostProviderPreference
+): string {
+  const title = integrationToolTitle(tool, codeHostProvider);
+  const suffix = query?.trim() ? ` for \`${query.trim()}\`` : "";
+  return phase === "timed-out"
+    ? `Timed out searching ${title}${suffix}`
+    : `Skipped ${title}${suffix} — gather time expired`;
+}
+
 /**
  * Prefer a short repo slug over `owner/repo`, but keep caller extra terms first
  * (Gaps focus phrases, named tickets).
@@ -187,10 +200,16 @@ export function isActivityLabelForTool(
     return true;
   }
   if (tool === "code-host") {
-    return /^(Searching|Searched) (GitHub|GitLab|Bitbucket)\b/i.test(trimmed);
+    return /^(?:(?:Searching|Searched|Skipped) (?:GitHub|GitLab|Bitbucket)|Timed out searching (?:GitHub|GitLab|Bitbucket))\b/i.test(
+      trimmed
+    );
   }
   const title = integrationToolTitle(tool, codeHostProvider).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  if (new RegExp(`^(Searching|Searched) ${title}\\b`, "i").test(trimmed)) {
+  if (
+    new RegExp(`^(?:(?:Searching|Searched|Skipped) ${title}|Timed out searching ${title})\\b`, "i").test(
+      trimmed
+    )
+  ) {
     return true;
   }
   if (tool === "jira") {
