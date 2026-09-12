@@ -137,7 +137,8 @@ export function buildConfluenceCql(
   }
 
   const clause = (term: string): string | undefined => {
-    const searchable = sanitizeAtlassianContainsTerm(term);
+    const withoutHost = term.replace(new RegExp(`^(${CODE_HOST_PROVIDERS.join("|")}):`, "i"), "");
+    const searchable = sanitizeAtlassianContainsTerm(withoutHost);
     return searchable ? `text ~ "${escapeCql(searchable)}"` : undefined;
   };
   const clausesFor = (terms: string[]): string[] =>

@@ -92,6 +92,13 @@ test("buildConfluenceCql sanitizes hyphenated extras", () => {
   assert.doesNotMatch(cql!, /SQL-injection|not to mix/);
 });
 
+test("buildConfluenceCql strips host prefixes that break CQL", () => {
+  const cql = buildConfluenceCql("coopai-group", "training-java-monolith-refactor");
+  assert.ok(cql);
+  assert.doesNotMatch(cql!, /github:|gitlab:|bitbucket:/);
+  assert.match(cql!, /training java monolith refactor/);
+});
+
 test("buildConfluenceCql extrasOnly skips hyphenated repo slugs", () => {
   const cql = buildConfluenceCql(
     "coopai-group",

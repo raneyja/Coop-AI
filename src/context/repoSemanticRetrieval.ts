@@ -353,12 +353,77 @@ export async function searchRepoForFocusQuery(
       })
     )
   );
-  return mergeFocusSearchResults(results, {
+  const merged = mergeFocusSearchResults(results, {
     query: topicQueries.join(" | "),
     rankQuery: [rankQuery, ...topicQueries].filter(Boolean).join(" "),
     maxFiles,
     rankMode: options.rankMode
   });
+  return attachNamedLocateFiles(merged, {
+    ...shared,
+    query: options.query,
+    rankQuery: [rankQuery, ...topicQueries].filter(Boolean).join(" "),
+    maxFiles
+  });
+}
+
+async function attachNamedLocateFiles(
+  merged: RepoSemanticSearchContext | undefined,
+  options: Pick<
+    LoadSemanticSearchOptions,
+    "repoId" | "indexBackend" | "api" | "apiBaseUrl" | "branch" | "owner" | "repo" | "provider"
+  > & {
+    query: string;
+    rankQuery: string;
+    maxFiles: number;
+  }
+): Promise<RepoSemanticSearchContext | undefined> {
+  const named = namedFileIndexQueries(options.rankQuery, 4);
+  if (named.length === 0) {
+    return merged;
+  }
+  const attached = new Set(
+    (merged?.files ?? []).map((file) => (file.path.split("/").pop() ?? file.path).toLowerCase())
+  );
+  const missing = named.filter((basename) => !attached.has(basename.toLowerCase()));
+  if (missing.length === 0) {
+    return merged;
+  }
+
+  const extraFiles: RepoSemanticSnippet[] = [];
+  for (const basename of missing) {
+    const search = await runRepoSearch(options, options.repoId, basename);
+    const paths = [
+      ...search.hits.map((hit) => hit.fileName),
+      ...search.symbols.map((symbol) => symbol.file)
+    ].filter((path) => {
+        const normalized = path.replace(/\\/g, "/").toLowerCase();
+        const key = basename.toLowerCase();
+        return normalized === key || normalized.endsWith(`/${key}`);
+      });
+    for (const path of paths.slice(0, 2)) {
+      const content = await resolveSemanticFileContent(path, options.repoId, options);
+      if (!content?.trim()) {
+        continue;
+      }
+      extraFiles.push({ path, repoId: options.repoId, content });
+      break;
+    }
+  }
+  if (extraFiles.length === 0) {
+    return merged;
+  }
+  const files = [...extraFiles, ...(merged?.files ?? [])];
+  return {
+    source: merged?.source ?? "repo-semantic-search",
+    query: merged?.query ?? options.query,
+    rankQuery: options.rankQuery,
+    searchSource: merged?.searchSource,
+    files,
+    pathHits: [...extraFiles.map((file) => file.path), ...(merged?.pathHits ?? [])],
+    matchedPathCount: (merged?.matchedPathCount ?? 0) + extraFiles.length,
+    attachmentCap: Math.max(options.maxFiles, files.length)
+  };
 }
 
 /** Round-robin merge of parallel topic searches — unique paths, domain files first. */

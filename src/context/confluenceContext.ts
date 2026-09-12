@@ -146,16 +146,21 @@ export async function fetchConfluenceSearchContext(options: {
     const limit = options.limit ?? 20;
     let pages = await client.searchPages(primaryCql, limit);
     let cql = primaryCql;
-    // When (repo ∩ focus) is empty, fall back to Use-repo-only — never focus-only OR,
-    // which is what pulled Coop-AI ADR/templates into documenso Gaps.
-    if (pages.length === 0) {
+    // Job-scoped extras are the query. A repo-only fallback with hyphenated
+    // slugs parse-errors and overwrites an honest empty extras search.
+    const extrasOnly = Boolean(options.jobScoped && (options.extraTerms?.length ?? 0) > 0);
+    if (pages.length === 0 && !extrasOnly) {
       const repoOnly = scopeConfluenceCql(
         buildConfluenceRepoOnlyCql(options.owner, options.repo),
         options.integrationScope
       );
       if (repoOnly && repoOnly !== primaryCql) {
-        pages = await client.searchPages(repoOnly, limit);
-        cql = repoOnly;
+        try {
+          pages = await client.searchPages(repoOnly, limit);
+          cql = repoOnly;
+        } catch {
+          /* keep the extras/primary result instead of a fallback parse error */
+        }
       }
     }
 

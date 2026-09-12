@@ -475,6 +475,7 @@ export async function fetchJiraSearchContext(options: {
   // Compound "requireAuth + Jira" must not fail-open into 20 unrelated tickets.
   if (
     runTextSearch &&
+    !options.jobScoped &&
     shouldMergeRepoWideJiraHits({ hasFocusJql: Boolean(focusJql) }) &&
     repoJql
   ) {
