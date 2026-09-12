@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  evidenceCardHeaderProviders,
   qualityStatusLabel,
   resolveEvidenceCardHeaderStatus
 } from "./EvidenceCardShell";
@@ -52,6 +53,18 @@ test("without summary, falls back to statusTone/statusLabel", () => {
   });
   assert.equal(resolved.status, "Medium evidence");
   assert.equal(resolved.statusTone, "partial");
+});
+
+test("header providers keep unique branded sources in order", () => {
+  assert.deepEqual(
+    evidenceCardHeaderProviders([
+      { provider: "jira" },
+      { label: "Search results" },
+      { provider: "slack" },
+      { provider: "jira", detail: "2 issue(s)" }
+    ]),
+    ["jira", "slack"]
+  );
 });
 
 console.log(`\nEvidenceCardShell: ${passed}/${passed + failed} tests passed`);

@@ -688,13 +688,7 @@ export function ChatStream({
               return (
                 <article key={entry.id} className="chat-message chat-message--evidence group" data-role="evidence">
                   <EvidenceArtifactAnchor artifactId={entry.artifact.id}>
-                    <div className="chat-message-inner">
-                      <div className="chat-message-meta">
-                        <span className="chat-message-label chat-message-label--evidence">Sources</span>
-                        <time className="chat-message-time">{formatTime(entry.artifact.timestamp)}</time>
-                      </div>
-                      {body}
-                    </div>
+                    <div className="chat-message-inner">{body}</div>
                   </EvidenceArtifactAnchor>
                 </article>
               );

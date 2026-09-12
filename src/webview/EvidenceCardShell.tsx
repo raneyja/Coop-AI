@@ -31,6 +31,19 @@ export type EvidenceCardSource =
   | { provider: IntegrationSourceId; detail?: string }
   | { label: string };
 
+export function evidenceCardHeaderProviders(sources: EvidenceCardSource[]): IntegrationSourceId[] {
+  const seen = new Set<IntegrationSourceId>();
+  const providers: IntegrationSourceId[] = [];
+  for (const source of sources) {
+    if (!("provider" in source) || seen.has(source.provider)) {
+      continue;
+    }
+    seen.add(source.provider);
+    providers.push(source.provider);
+  }
+  return providers;
+}
+
 export function evidenceCardCodeHostSource(
   host: IntegrationSourceId | undefined,
   detail: string
@@ -94,6 +107,7 @@ export function EvidenceCardShell({
         status={resolved.status}
         statusTone={resolved.statusTone}
         ariaLabel={`${title} sources`}
+        titleProviders={evidenceCardHeaderProviders(sources)}
         expanded={expandApi.expanded}
         onToggleExpand={expandApi.toggle}
       >

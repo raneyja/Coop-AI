@@ -1033,12 +1033,17 @@
   }
 
   .chat-message--evidence .chat-message-inner {
-    padding: 4px 2px 4px 12px;
+    padding: 0 2px 0 12px;
     border-left: 2px solid color-mix(in srgb, var(--vscode-textLink-foreground, #3794ff) 45%, var(--coop-border));
   }
 
-  .chat-message--evidence .chat-message-meta {
-    @apply mb-1;
+  .chat-message--evidence .coop-result-stack {
+    @apply mb-0;
+  }
+
+  /* Consecutive Sources cards sit tight; other messages keep gap-5. */
+  .chat-thread-messages > .chat-message--evidence + .chat-message--evidence {
+    margin-top: calc(-1.25rem + 6px);
   }
 
   .chat-message-label--evidence {
@@ -3522,6 +3527,27 @@
 
   .coop-source-icon {
     @apply shrink-0;
+  }
+
+  .coop-source-icon--slack {
+    color: #e01e5a;
+  }
+
+  .coop-source-icon--jira,
+  .coop-source-icon--confluence {
+    color: #2684ff;
+  }
+
+  .coop-source-icon--teams {
+    color: #6264a7;
+  }
+
+  .coop-source-icon--gitlab {
+    color: #fc6d26;
+  }
+
+  .coop-source-icon--bitbucket {
+    color: #2684ff;
   }
 
   [data-theme="high-contrast"] .coop-result-card,

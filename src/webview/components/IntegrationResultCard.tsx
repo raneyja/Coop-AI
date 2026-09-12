@@ -4,8 +4,7 @@ import { ChatActionLink } from "./ChatActionLink";
 import { ChatProse } from "./ChatProse";
 import { useChatLinks } from "./ChatLinkContext";
 import { useCitationNavigation } from "./CitationNavigationContext";
-import type { IntegrationSourceId } from "./IntegrationSourceBrand";
-import { IntegrationSourceHeading } from "./IntegrationSourceBrand";
+import { IntegrationSourceHeading, IntegrationSourceIcon, type IntegrationSourceId } from "./IntegrationSourceBrand";
 import {
   useEvidenceCardExpand,
   useEvidenceConnectionExpand
@@ -24,6 +23,7 @@ type IntegrationResultCardProps = {
   /** Sources cards: collapsed to the title until the user clicks. */
   expanded?: boolean;
   onToggleExpand?: () => void;
+  titleProviders?: IntegrationSourceId[];
 };
 
 export function IntegrationResultStack({ children }: { children: React.ReactNode }): React.ReactElement {
@@ -41,7 +41,8 @@ export function IntegrationResultCard({
   scrollable = false,
   className,
   expanded = true,
-  onToggleExpand
+  onToggleExpand,
+  titleProviders
 }: IntegrationResultCardProps): React.ReactElement {
   const collapsible = Boolean(onToggleExpand);
   const collapsed = collapsible && !expanded;
@@ -60,6 +61,9 @@ export function IntegrationResultCard({
           {expanded ? "▾" : "▸"}
         </span>
       ) : null}
+      {titleProviders?.map((provider) => (
+        <IntegrationSourceIcon key={provider} provider={provider} size={16} />
+      ))}
       <span className="coop-result-title">{title}</span>
       {status && !collapsed ? (
         <span className={`coop-result-status coop-result-status--${statusTone}`}>{status}</span>
