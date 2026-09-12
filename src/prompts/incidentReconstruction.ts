@@ -376,7 +376,6 @@ export function incidentCodePathsFromBundle(bundle: unknown): string[] {
     if (!data) {
       continue;
     }
-    collectBodyPaths(data.localFiles, paths);
     for (const key of ["agentFiles", "focusFiles", "entryFiles", "repoSemanticFiles"]) {
       collectBodyPaths(data[key], paths);
     }

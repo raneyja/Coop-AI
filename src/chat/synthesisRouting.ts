@@ -27,7 +27,7 @@ export function resolvePlainChatSynthesisRoute(input: {
   }
 
   const jobs = input.intentPlan?.jobs ?? [];
-  if (jobs.length > 0 && (input.fetchIntegrations?.length ?? input.intentPlan?.tools.length ?? 0) > 0) {
+  if (jobs.length > 0) {
     return {
       kind: "intent-job",
       useCase: "intent_job",

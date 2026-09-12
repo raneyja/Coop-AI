@@ -246,9 +246,7 @@ export function hasCodeHostJob(jobs: ChatIntentJob[] | undefined): boolean {
 
 /** Exact query contract handed to code-host execution. */
 export function codeHostJobQuery(jobs: ChatIntentJob[] | undefined): string | undefined {
-  const terms = uniqueTerms(
-    (jobs ?? []).filter((job) => job.capability === "code-host").flatMap((job) => job.terms)
-  );
+  const terms = codeHostJobTerms(jobs);
   return terms.length > 0 ? terms.join(" ") : undefined;
 }
 
@@ -397,8 +395,10 @@ function extractJobTerms(
   const cleaned = stripToolNames(stripLeadingAskLabels(clause));
 
   if (capability === "code-host") {
-    for (const match of cleaned.matchAll(/\b(?:PR|pull request|merge request|MR)\s*#?\s*(\d+)\b/gi)) {
-      terms.push(`PR #${match[1]}`);
+    for (const match of cleaned.matchAll(
+      /\b(PR|pull request|merge request|MR|issue)\s*#?\s*(\d+)\b/gi
+    )) {
+      terms.push(`${/^issue$/i.test(match[1]) ? "Issue" : "PR"} #${match[2]}`);
     }
     const topic = compactPhrase(cleaned);
     if (topic) {
@@ -453,20 +453,6 @@ function extractJobTerms(
       const hit = cleaned.match(pattern);
       if (hit) {
         terms.push(hit[0].replace(/’/g, "'").toLowerCase());
-      }
-    }
-  }
-
-  if (capability === "code-host") {
-    for (const match of cleaned.matchAll(
-      /\b(?:(?:PR|pull request|merge request|MR|issue)\s*#\s*\d+|(?:github|gitlab|bitbucket)\s+(?:PRs?|pull requests?|MRs?|merge requests?|issues?))\b/gi
-    )) {
-      terms.push(match[0]);
-    }
-    if (terms.length === 0) {
-      const phrase = compactPhrase(cleaned);
-      if (phrase) {
-        terms.push(phrase);
       }
     }
   }

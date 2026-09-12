@@ -78,6 +78,28 @@ Run git grep locally or use Find in Path for the implementation.`,
   assert.doesNotMatch(enriched, /\*\*Symptoms\*\*|\*\*Integrations\*\*/);
 });
 
+test("locate-only and code-host jobs still use the evidence-safe writer", () => {
+  for (const plan of [
+    planChatIntentFromRules({
+      message: "Where is requireAuth implemented?",
+      connectedTools: []
+    }),
+    planChatIntentFromRules({
+      message: "List GitLab merge requests about authentication",
+      connectedTools: []
+    })
+  ]) {
+    assert.ok((plan.jobs?.length ?? 0) > 0);
+    assert.equal(
+      resolvePlainChatSynthesisRoute({
+        userQuestion: plan.focus,
+        intentPlan: plan
+      }).kind,
+      "intent-job"
+    );
+  }
+});
+
 test("A9 plans through one incident route and enriches only attached evidence", () => {
   const plan = planChatIntentFromRules({
     message: A9_ASK,
