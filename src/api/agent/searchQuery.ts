@@ -427,6 +427,18 @@ export function fallbackAgentSearchQueries(userMessage: string): string[] {
 }
 
 /**
+ * Bounded locate-job queries for one-shot context gather.
+ * Reuses the agent hunt's generic aliases without inventing repo-specific terms.
+ */
+export function locateJobIndexQueries(terms: string[], max = 3): string[] {
+  const focus = terms.map((term) => term.trim()).filter(Boolean).join(" ");
+  if (!focus) {
+    return [];
+  }
+  return fallbackAgentSearchQueries(focus).slice(0, Math.max(1, max));
+}
+
+/**
  * camelCase ↔ snake_case forms of the same identifier.
  * Repo-agnostic: only transforms characters the user already typed.
  */

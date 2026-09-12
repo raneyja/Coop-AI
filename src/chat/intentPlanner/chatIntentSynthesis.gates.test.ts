@@ -78,6 +78,33 @@ Run git grep locally or use Find in Path for the implementation.`,
   assert.doesNotMatch(enriched, /\*\*Symptoms\*\*|\*\*Integrations\*\*/);
 });
 
+test("N5 with no source body and timed-out integrations gets a deterministic safe answer", () => {
+  const integrations = {
+    jira: { error: "Search timed out before context gathering ended." },
+    slack: { error: "Search timed out before context gathering ended." }
+  };
+  const enriched = enrichIntentJobResponse(
+    `**Summary**
+Look in src/main/java/example/util and run rg "DateTime" locally.
+
+**Sources**
+- [Sources: Jira search]`,
+    {
+      tools: ["jira", "slack"],
+      jobs: [
+        { capability: "locate", terms: ["date math"] },
+        { capability: "decision", terms: ["SQL-injection"] }
+      ],
+      integrations,
+      codePaths: []
+    }
+  );
+  assert.match(enriched, /\*\*Code location\*\*/);
+  assert.match(enriched, /remote code search did not return a usable implementation file/i);
+  assert.match(enriched, /Jira: error — Search timed out/i);
+  assert.doesNotMatch(enriched, /src\/main|run rg|Sources: Jira/i);
+});
+
 test("locate-only and code-host jobs still use the evidence-safe writer", () => {
   for (const plan of [
     planChatIntentFromRules({

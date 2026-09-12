@@ -411,6 +411,41 @@ test("mergeFocusSearchResults round-robins unique paths from topic searches", ()
   assert.ok(merged!.files.some((file) => file.path.includes("state.py")));
 });
 
+test("mergeFocusSearchResults honors hunt ranking over onboarding docs", () => {
+  const snippet = (path: string, content: string) => ({
+    path,
+    repoId: "coopai-group/training-java-monolith-refactor",
+    content
+  });
+  const merged = mergeFocusSearchResults(
+    [
+      {
+        source: "repo-semantic-search",
+        query: "date math",
+        files: [
+          snippet("AGENT.md", "The app intentionally uses legacy date math."),
+          snippet("README.md", "Modernize the legacy date handling."),
+          snippet(
+            "src/main/java/com/sourcegraph/demo/bigbadmonolith/util/DateTimeUtils.java",
+            "public final class DateTimeUtils {}"
+          )
+        ]
+      }
+    ],
+    {
+      query: "date math",
+      rankQuery: "date math",
+      maxFiles: 1,
+      rankMode: "hunt"
+    }
+  );
+  assert.ok(merged);
+  assert.equal(
+    merged!.files[0]?.path,
+    "src/main/java/com/sourcegraph/demo/bigbadmonolith/util/DateTimeUtils.java"
+  );
+});
+
 test("mergeFocusSearchResults drops OpenAPI/seed/i18n when domain files exist", () => {
   const snippet = (path: string, content: string) => ({
     path,

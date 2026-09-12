@@ -354,14 +354,20 @@ export async function searchRepoForFocusQuery(
   return mergeFocusSearchResults(results, {
     query: topicQueries.join(" | "),
     rankQuery: [rankQuery, ...topicQueries].filter(Boolean).join(" "),
-    maxFiles
+    maxFiles,
+    rankMode: options.rankMode
   });
 }
 
 /** Round-robin merge of parallel topic searches — unique paths, domain files first. */
 export function mergeFocusSearchResults(
   results: Array<RepoSemanticSearchContext | undefined>,
-  options: { query: string; rankQuery: string; maxFiles: number }
+  options: {
+    query: string;
+    rankQuery: string;
+    maxFiles: number;
+    rankMode?: "onboarding" | "hunt";
+  }
 ): RepoSemanticSearchContext | undefined {
   const present = results.filter((result): result is RepoSemanticSearchContext =>
     Boolean(result && (result.files.length || result.pathHits?.length))
@@ -375,7 +381,10 @@ export function mergeFocusSearchResults(
   let matchedPathCount = 0;
   let searchSource = present[0]?.searchSource;
   const queues = present.map((result) => [...result.files]);
-  const poolCap = Math.max(options.maxFiles * 2, options.maxFiles);
+  const poolCap =
+    options.rankMode === "hunt"
+      ? Math.max(options.maxFiles * 8, 12)
+      : Math.max(options.maxFiles * 2, options.maxFiles);
   let added = true;
   while (added && files.length < poolCap) {
     added = false;
@@ -396,10 +405,16 @@ export function mergeFocusSearchResults(
       }
     }
   }
-  const rankedFiles = rankOnboardingEntryFiles(files, options.rankQuery).slice(
-    0,
-    options.maxFiles
-  );
+  const rankedFiles =
+    options.rankMode === "hunt"
+      ? selectChatEvidencePaths(
+          files.map((file) => file.path),
+          options.rankQuery,
+          options.maxFiles
+        )
+          .map((path) => files.find((file) => file.path === path))
+          .filter((file): file is RepoSemanticSnippet => Boolean(file))
+      : rankOnboardingEntryFiles(files, options.rankQuery).slice(0, options.maxFiles);
   for (const result of present) {
     matchedPathCount += result.matchedPathCount ?? result.files.length;
     for (const path of result.pathHits ?? result.files.map((file) => file.path)) {
@@ -421,7 +436,9 @@ export function mergeFocusSearchResults(
     searchSource,
     files: rankedFiles,
     pathHits: pathHits.length
-      ? selectOnboardingEvidencePaths(pathHits, options.rankQuery, 12)
+      ? options.rankMode === "hunt"
+        ? selectChatEvidencePaths(pathHits, options.rankQuery, 12)
+        : selectOnboardingEvidencePaths(pathHits, options.rankQuery, 12)
       : undefined,
     matchedPathCount,
     attachmentCap: options.maxFiles

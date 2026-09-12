@@ -225,7 +225,8 @@ import {
 } from "./intentPlanner";
 import {
   buildMultiToolPlainChatUserPrompt,
-  enrichIntentJobResponse
+  enrichIntentJobResponse,
+  intentJobCodePathsFromBundle
 } from "../prompts/multiToolPlainChatSynthesis";
 import {
   resolvePlainChatSynthesisRoute,
@@ -360,6 +361,7 @@ import {
   searchRepoForChat,
   searchRepoForFocusQuery
 } from "../context/repoSemanticRetrieval";
+import { locateJobIndexQueries } from "../api/agent/searchQuery";
 import {
   FOCUS_MAX_INJECTED_PATHS,
   focusQueryForRetrieval,
@@ -3920,10 +3922,11 @@ export class CoopChatSession {
       const locateTerms = locateJobTerms(request.params.intentPlan?.jobs);
       const repoId = request.params.repoId?.trim();
       if (locateTerms.length > 0 && repoId) {
+        const locateQueries = locateJobIndexQueries(locateTerms);
         const semantic = await searchRepoForFocusQuery({
           repoId,
           query: locateTerms.join(" "),
-          indexQueries: locateTerms,
+          indexQueries: locateQueries.length > 0 ? locateQueries : locateTerms,
           indexBackend: this.options.indexBackend,
           api: this.options.api,
           apiBaseUrl: this.preferences.apiBaseUrl,
@@ -7368,12 +7371,14 @@ export class CoopChatSession {
       this.attachEditAnchor(turn);
     }
     const turnContext = turn.context;
+    const intentPlan = options?.intentPlan ?? turn.intentPlan;
     // Sticky [blast-radius] in history must not override tools-only / integration turns.
     const suppressInheritedQuickAction =
       Boolean(options?.fetchIntegrations?.length) ||
       Boolean(options?.integrationProvider) ||
-      options?.intentPlan?.mode === "plain" ||
-      options?.intentPlan?.mode === "tools-only";
+      intentPlan.mode === "plain" ||
+      intentPlan.mode === "tools-only" ||
+      (intentPlan.jobs?.length ?? 0) > 0;
     const effectiveQuickAction = suppressInheritedQuickAction
       ? (quickAction as import("../webview/types").QuickActionId | undefined)
       : resolveEffectiveQuickAction(quickAction, turn.history);
@@ -7387,7 +7392,7 @@ export class CoopChatSession {
           userQuestion: options?.taskContent ?? content,
           integrationProvider,
           fetchIntegrations: options?.fetchIntegrations,
-          intentPlan: options?.intentPlan
+          intentPlan
         })
       : undefined;
     let chatUseCase = resolveChatUseCase(
@@ -7880,7 +7885,7 @@ export class CoopChatSession {
                           repo: turnContext.repo ?? this.preferences.repo,
                           file: turnContext.file,
                           tools: synthesisRoute.tools,
-                          jobs: options?.intentPlan?.jobs,
+                          jobs: intentPlan.jobs,
                           integrations: intentJobIntegrations,
                           connected: {
                             jira: this.isIntegrationConnected("jira"),
@@ -7907,8 +7912,8 @@ export class CoopChatSession {
                       : content;
 
       const trustPreamble =
-        options?.intentPlan && !effectiveQuickAction
-          ? buildIntentPlanTrustPreamble(options.intentPlan)
+        intentPlan && !effectiveQuickAction
+          ? buildIntentPlanTrustPreamble(intentPlan)
           : undefined;
       if (trustPreamble) {
         // Prepend plan disclosure for the model (Sources / activity already show status).
@@ -8140,7 +8145,9 @@ export class CoopChatSession {
         synthesisRoute?.kind === "intent-job"
           ? enrichIntentJobResponse(full, {
               tools: synthesisRoute.tools,
-              integrations: intentJobIntegrations
+              jobs: intentPlan.jobs,
+              integrations: intentJobIntegrations,
+              codePaths: intentJobCodePathsFromBundle(contextBundle)
             })
           : full;
       const enrichedContent = enrichChatResponseForAction({

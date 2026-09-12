@@ -16,6 +16,7 @@ import {
   listIntegrationSourceLabels,
   listIntegrationSourcesChecklist
 } from "./integrationSourceLabels";
+import { isDocOrSpecPath, isGeneratedOrVendorPath } from "../indexing/evidencePathNoise";
 
 export type MultiToolIntegrationSnapshot = Partial<
   Record<IntegrationChatProvider, IntegrationSearchEvidenceLike | null | undefined>
@@ -208,8 +209,40 @@ export function buildMultiToolPlainChatUserPrompt(input: MultiToolPlainChatInput
 /** Remove citations and local-workspace advice that contradict attached job evidence. */
 export function enrichIntentJobResponse(
   content: string,
-  input: Pick<MultiToolPlainChatInput, "tools" | "integrations">
+  input: Pick<MultiToolPlainChatInput, "tools" | "integrations" | "jobs"> & {
+    codePaths?: string[];
+  }
 ): string {
+  const hasLocateJob = input.jobs?.some((job) => job.capability === "locate") ?? false;
+  const hasDecisionJob = input.jobs?.some((job) => job.capability === "decision") ?? false;
+  const hasCodeEvidence = (input.codePaths?.length ?? 0) > 0;
+  const hasIntegrationEvidence = input.tools.some(
+    (tool) => resultCount(input.integrations[tool]) > 0
+  );
+
+  if (hasLocateJob && !hasCodeEvidence && !hasIntegrationEvidence) {
+    const lines = [
+      "**Answer**",
+      "I could not verify either part of this request from the evidence attached to this turn.",
+      "",
+      "**Code location**",
+      "The remote code search did not return a usable implementation file. The attached documentation and path-only hits are not enough to infer where the implementation lives."
+    ];
+    if (hasDecisionJob) {
+      lines.push(
+        "",
+        "**Decision evidence**",
+        ...input.tools.map((tool) => `- ${hitSummary(tool, input.integrations[tool])}`)
+      );
+    }
+    lines.push(
+      "",
+      "**Gaps**",
+      "A follow-up remote search needs a more specific symbol or code term. No local clone or on-disk search is required."
+    );
+    return lines.join("\n");
+  }
+
   const unavailableLabels = input.tools
     .filter((tool) => {
       const evidence = input.integrations[tool];
@@ -217,8 +250,12 @@ export function enrichIntentJobResponse(
     })
     .map(integrationSourceLabel);
   const unavailable = new Set(unavailableLabels);
+  const allowedPaths = new Set(
+    (input.codePaths ?? []).map((path) => path.replace(/\\/g, "/").replace(/^\.?\//, "").toLowerCase())
+  );
+  const withoutLocalActionSections = stripLocalActionSections(content);
 
-  return content
+  return withoutLocalActionSections
     .split("\n")
     .filter((line) => ![...unavailable].some((label) => line.includes(label)))
     .filter(
@@ -227,7 +264,78 @@ export function enrichIntentJobResponse(
           line
         )
     )
+    .filter((line) => !/^\s*(?:[-*]\s*)?(?:rg|grep)\s+/i.test(line))
+    .filter((line) => !lineHasUnsupportedRepoPath(line, allowedPaths))
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+/** Concrete remote source bodies available to an intent-job writer. */
+export function intentJobCodePathsFromBundle(bundle: unknown): string[] {
+  const paths: string[] = [];
+  for (const entry of Array.isArray(bundle) ? bundle : []) {
+    const semantic = (entry as {
+      data?: { repoSemanticSearch?: { files?: unknown[] } };
+    })?.data?.repoSemanticSearch;
+    for (const item of semantic?.files ?? []) {
+      if (!item || typeof item !== "object") {
+        continue;
+      }
+      const path = (item as { path?: unknown }).path;
+      const body = (item as { content?: unknown }).content;
+      if (
+        typeof path === "string" &&
+        path.trim() &&
+        typeof body === "string" &&
+        body.trim() &&
+        isLikelySourcePath(path) &&
+        !isDocOrSpecPath(path) &&
+        !isGeneratedOrVendorPath(path)
+      ) {
+        paths.push(path.trim());
+      }
+    }
+  }
+  return [...new Set(paths)];
+}
+
+function isLikelySourcePath(path: string): boolean {
+  return /\.(?:[cm]?[jt]sx?|java|kt|kts|scala|go|rs|py|rb|php|cs|fs|fsx|swift|m|mm|cc|cpp|cxx|h|hpp|sql|jsp|vue|svelte)$/i.test(
+    path
+  );
+}
+
+function stripLocalActionSections(content: string): string {
+  const lines = content.split("\n");
+  const output: string[] = [];
+  let skipping = false;
+  for (const line of lines) {
+    const heading = line
+      .replace(/^\s*#{1,6}\s*/, "")
+      .replace(/^\s*\*\*|\*\*\s*$/g, "")
+      .trim();
+    if (/^(?:next actions?|if you want i can)\b/i.test(heading)) {
+      skipping = true;
+      continue;
+    }
+    if (skipping && /^(?:\s*#{1,6}\s+|\s*\*\*[^*]+\*\*\s*$)/.test(line)) {
+      skipping = false;
+    }
+    if (!skipping) {
+      output.push(line);
+    }
+  }
+  return output.join("\n");
+}
+
+function lineHasUnsupportedRepoPath(line: string, allowedPaths: Set<string>): boolean {
+  const candidates =
+    line.match(/(?:[\w.-]+\/){2,}[\w.*-]*(?:\.[A-Za-z][A-Za-z0-9]{0,9})?\/?/g) ?? [];
+  return candidates.some((candidate) => {
+    const normalized = candidate.replace(/\\/g, "/").replace(/^\.?\//, "").replace(/\/$/, "").toLowerCase();
+    return ![...allowedPaths].some(
+      (allowed) => allowed === normalized || allowed.startsWith(`${normalized}/`)
+    );
+  });
 }

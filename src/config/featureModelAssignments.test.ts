@@ -23,6 +23,7 @@ assert.equal(canUserSelectModels({ plan: "enterprise" }), true);
 assert.equal(resolveFeatureFromUseCase("chat"), "chat");
 assert.equal(resolveFeatureFromUseCase("code_edit"), "edit");
 assert.equal(resolveFeatureFromUseCase("ownership"), "quickActions");
+assert.equal(resolveFeatureFromUseCase("intent_job"), "quickActions");
 assert.equal(resolveFeatureFromUseCase("inline_completion"), "autocomplete");
 
 const chatModel = resolveAssignedModelForUseCase("chat");

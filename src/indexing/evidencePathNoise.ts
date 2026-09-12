@@ -115,7 +115,7 @@ export function isDocOrSpecPath(fileName: string): boolean {
     /(^|\/)(docs?|documentation)\//.test(n) ||
     /(^|\/)openapi\.(py|yml|yaml|json|ts)$/.test(n) ||
     /(^|\/)swagger\.(py|yml|yaml|json|ts)$/.test(n) ||
-    /(^|\/)(readme|changelog)(\.|$)/.test(n)
+    /(^|\/)(readme|changelog|agents?|setup|contributing)(\.|$)/.test(n)
   );
 }
 

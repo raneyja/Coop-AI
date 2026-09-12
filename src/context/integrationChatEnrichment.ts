@@ -150,6 +150,10 @@ async function enrichIntegrationStages(
   });
   const codeHostProvider = options.codeHostProvider;
   const activityQuery = preferredIntegrationActivityQuery(integrationTerms);
+  const incompletePhases = new Map<
+    IntegrationActivityTool,
+    Extract<IntegrationToolActivityEvent["phase"], "timed-out" | "skipped">
+  >();
   const notify = (
     tool: IntegrationActivityTool,
     phase: IntegrationToolActivityEvent["phase"],
@@ -175,7 +179,26 @@ async function enrichIntegrationStages(
             ? { detail: "Search did not start because context gathering had ended" }
             : {})
     };
+    if (phase === "timed-out" || phase === "skipped") {
+      incompletePhases.set(tool, phase);
+    } else if (phase === "done") {
+      incompletePhases.delete(tool);
+    }
     options.onToolActivity?.(event);
+  };
+  const withIncompleteEvidence = <T>(
+    tool: IntegrationActivityTool,
+    result: T | undefined
+  ): T | { error: string } | undefined => {
+    if (result !== undefined) {
+      return result;
+    }
+    const phase = incompletePhases.get(tool);
+    return phase === "timed-out"
+      ? { error: "Search timed out before context gathering ended." }
+      : phase === "skipped"
+        ? { error: "Search was skipped because context gathering had ended." }
+        : undefined;
   };
   const connected = options.integrations;
   const allow = (flag: boolean | undefined): boolean => flag !== false;
@@ -365,13 +388,27 @@ async function enrichIntegrationStages(
         preferredIntegrationActivityQuery(codeHostTerms)
       )
     ]);
-    if (enabledForJob("confluence", shouldFetchConfluence)) data.confluenceSearch = confluenceSearch;
-    if (enabledForJob("notion", shouldFetchNotion)) data.notionSearch = notionSearch;
-    if (enabledForJob("jira", shouldFetchJira)) data.jiraSearch = jiraSearch;
-    if (enabledForJob("google-docs", shouldFetchGoogleDocs)) data.googleDocsSearch = googleDocsSearch;
-    if (enabledForJob("slack", shouldFetchSlack)) data.slackSearch = slackSearch;
-    if (enabledForJob("teams", shouldFetchTeams)) data.teamsSearch = teamsSearch;
-    if (shouldFetchCodeHost) data.codeHostSearch = codeHostSearch;
+    if (enabledForJob("confluence", shouldFetchConfluence)) {
+      data.confluenceSearch = withIncompleteEvidence("confluence", confluenceSearch);
+    }
+    if (enabledForJob("notion", shouldFetchNotion)) {
+      data.notionSearch = withIncompleteEvidence("notion", notionSearch);
+    }
+    if (enabledForJob("jira", shouldFetchJira)) {
+      data.jiraSearch = withIncompleteEvidence("jira", jiraSearch);
+    }
+    if (enabledForJob("google-docs", shouldFetchGoogleDocs)) {
+      data.googleDocsSearch = withIncompleteEvidence("google-docs", googleDocsSearch);
+    }
+    if (enabledForJob("slack", shouldFetchSlack)) {
+      data.slackSearch = withIncompleteEvidence("slack", slackSearch);
+    }
+    if (enabledForJob("teams", shouldFetchTeams)) {
+      data.teamsSearch = withIncompleteEvidence("teams", teamsSearch);
+    }
+    if (shouldFetchCodeHost) {
+      data.codeHostSearch = withIncompleteEvidence("code-host", codeHostSearch);
+    }
     return;
   }
 

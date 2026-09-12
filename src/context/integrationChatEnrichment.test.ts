@@ -476,7 +476,9 @@ test("job-scoped timeout never reports late completion", async () => {
   assert.deepEqual(events.map((event) => event.phase), ["start", "timed-out"]);
   assert.match(events[1]?.label ?? "", /^Timed out searching Jira/);
   assert.match(events[1]?.detail ?? "", /did not finish/);
-  assert.equal((enriched.data as Record<string, unknown>).jiraSearch, undefined);
+  assert.deepEqual((enriched.data as Record<string, unknown>).jiraSearch, {
+    error: "Search timed out before context gathering ended."
+  });
 
   jiraGate.resolve({ issues: [] });
   await flushMicrotasks();
@@ -527,7 +529,7 @@ test("expired job budget skips fetch instead of claiming searched-empty", async 
   const { enrichChatContextWithIntegrations } = require("./integrationChatEnrichment") as typeof import("./integrationChatEnrichment");
   let jiraCalls = 0;
   const phases: string[] = [];
-  await enrichChatContextWithIntegrations({
+  const enriched = await enrichChatContextWithIntegrations({
     result: {
       requestId: "expired",
       type: "chat_context",
@@ -562,4 +564,7 @@ test("expired job budget skips fetch instead of claiming searched-empty", async 
   });
   assert.equal(jiraCalls, 0);
   assert.deepEqual(phases, ["skipped"]);
+  assert.deepEqual((enriched.data as Record<string, unknown>).jiraSearch, {
+    error: "Search was skipped because context gathering had ended."
+  });
 });

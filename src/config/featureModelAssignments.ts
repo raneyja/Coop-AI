@@ -87,7 +87,8 @@ const QUICK_ACTION_USE_CASES = new Set<UseCase>([
   "ownership",
   "blast_radius",
   "knowledge_gaps",
-  "integration"
+  "integration",
+  "intent_job"
 ]);
 
 export type RuntimeModelPrefs = {

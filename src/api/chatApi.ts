@@ -440,7 +440,7 @@ function readProvider(value: unknown, fallback: LlmProvider): LlmProvider {
   return fallback;
 }
 
-function readUseCase(value: unknown): UseCase {
+export function readUseCase(value: unknown): UseCase {
   const allowed: UseCase[] = [
     "comprehension",
     "decision_archaeology",
@@ -448,6 +448,7 @@ function readUseCase(value: unknown): UseCase {
     "blast_radius",
     "knowledge_gaps",
     "integration",
+    "intent_job",
     "chat",
     "code_edit",
     "inline_completion",
