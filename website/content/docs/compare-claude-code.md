@@ -13,7 +13,7 @@ That distinction matters for production teams that want **trust and blast radius
 ## Where CoopAI stands apart
 
 - **Product law: no silent tree rewrites** — Coop completes and proposes patches; you apply.
-- **Company stack in the editor** — shared Slack, Jira, Confluence, Notion, Docs, and Teams next to the symbol graph.
+- **Company stack in the editor** — shared Slack, Jira, Confluence, Notion, and Docs next to the symbol graph.
 - **Named engineering workflows** — Find Owner, Blast Radius, Trace Decision, Understand Repo, Knowledge Gaps.
 - **Zero-clone** — understand a codebase without cloning every service locally.
 

@@ -10,11 +10,8 @@ import {
   isJiraScopeBlocked,
   jiraScopeBlockMessage
 } from "../integrationScope/atlassianQuery";
-import {
-  buildRepoSearchTerms,
-  decisionSearchPhrase,
-  sanitizeAtlassianContainsTerm
-} from "./docSearchQuery";
+import { buildRepoSearchTerms, sanitizeAtlassianContainsTerm } from "./docSearchQuery";
+import { exactIssueKeys, planJobSearchAttempts, type JobSearchAttempt } from "./jobSearchPlan";
 import { CODE_HOST_PROVIDERS, type CodeHostProvider } from "../api/codeHosts/types";
 import { shouldFetchIncidentIntegrations } from "./incidentIntent";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
@@ -138,6 +135,28 @@ export function shouldRunJiraTextSearch(options: {
     return false;
   }
   return true;
+}
+
+/**
+ * Recover keys from recent commits/PRs only when a non-job text search missed
+ * and a code host is connected. Job searches stay empty on a miss — walking
+ * git would attach last week's unrelated tickets.
+ */
+export function shouldScanGitForJiraKeys(options: {
+  jobScoped?: boolean;
+  textSearchCount: number;
+  runTextSearch: boolean;
+  codeHostConnected?: boolean;
+  hasRepo: boolean;
+  hasCodeHostRouter: boolean;
+}): boolean {
+  if (options.jobScoped) {
+    return false;
+  }
+  if (!options.runTextSearch || options.textSearchCount > 0) {
+    return false;
+  }
+  return Boolean(options.hasRepo && options.hasCodeHostRouter && options.codeHostConnected);
 }
 
 /** Focus terms for Jira text search (path stem, basename, caller extras). */
@@ -278,9 +297,62 @@ export function buildFocusAwareJiraJql(options: {
   return `(${repoClause}) AND ${focus} ORDER BY updated DESC`;
 }
 
-/** Decision jobs: one sanitized text clause. Never AND a repo slug. */
+const DECISION_JQL_STOP = new Set(["sql", "the", "this", "that", "into", "from", "with", "for"]);
+
+/**
+ * Decision jobs: OR the sanitized phrase and distinctive words.
+ * Never put a hyphen in `~` — Jira treats it as NOT and parse-errors.
+ * Never AND a repo slug.
+ */
 export function buildDecisionJiraJql(extraTerms: string[]): string | undefined {
-  const phrase = decisionSearchPhrase(extraTerms);
+  const clauses = new Set<string>();
+  for (const raw of extraTerms) {
+    const phrase = sanitizeAtlassianContainsTerm(raw);
+    if (phrase) {
+      clauses.add(`text ~ "${escapeJqlString(phrase)}"`);
+    }
+    for (const token of phrase?.split(/\s+/) ?? []) {
+      if (token.length >= 3 && !DECISION_JQL_STOP.has(token.toLowerCase())) {
+        clauses.add(`text ~ "${escapeJqlString(token)}"`);
+      }
+    }
+  }
+  if (clauses.size === 0) {
+    return undefined;
+  }
+  const body = clauses.size === 1 ? [...clauses][0] : `(${[...clauses].join(" OR ")})`;
+  return `${body} ORDER BY updated DESC`;
+}
+
+export function isJiraJqlParseError(message: string): boolean {
+  return /jql/i.test(message) && /parse|reserved|not allowed|unexpected|illegal/i.test(message);
+}
+
+/** One sanitized phrase only — used when the first JQL is rejected. */
+function jqlForJobAttempt(attempt: JobSearchAttempt): string | undefined {
+  if (attempt.kind === "exact") {
+    return undefined;
+  }
+  if (attempt.kind === "phrase") {
+    return `text ~ "${escapeJqlString(attempt.text)}" ORDER BY updated DESC`;
+  }
+  const clauses = attempt.tokens
+    .map((token) => sanitizeAtlassianContainsTerm(token))
+    .filter((token): token is string => Boolean(token))
+    .map((token) => `text ~ "${escapeJqlString(token)}"`);
+  if (clauses.length === 0) {
+    return undefined;
+  }
+  const body = clauses.length === 1 ? clauses[0] : `(${clauses.join(" OR ")})`;
+  return `${body} ORDER BY updated DESC`;
+}
+
+export function fallbackDecisionJiraJql(extraTerms: string[]): string | undefined {
+  const phrases = extraTerms
+    .map((term) => sanitizeAtlassianContainsTerm(term))
+    .filter((term): term is string => Boolean(term))
+    .sort((left, right) => right.length - left.length);
+  const phrase = phrases[0];
   if (!phrase) {
     return undefined;
   }
@@ -321,10 +393,15 @@ export function rankJiraIssuesForFocus<T extends { key: string; summary: string;
   const preferOpen = wantsOpenTickets(options.queryText);
 
   const scored = issues.map((issue, index) => {
-    const haystack = `${issue.key} ${issue.summary}`.toLowerCase();
+    const description =
+      "description" in issue && typeof issue.description === "string" ? issue.description : "";
+    const haystack = `${issue.key} ${issue.summary} ${description}`
+      .toLowerCase()
+      .replace(/[-–—]/g, " ");
     let score = 0;
     for (const term of focusTerms) {
-      if (haystack.includes(term.toLowerCase())) {
+      const normalized = term.toLowerCase().replace(/[-–—]/g, " ");
+      if (haystack.includes(normalized)) {
         score += term.includes("/") || term.includes(".") ? 40 : 25;
       }
     }
@@ -441,7 +518,11 @@ export async function fetchJiraSearchContext(options: {
   const crossToolKeys = collectJiraKeysFromText(...(options.crossToolText ?? []));
   const queryKeys = JiraClient.extractIssueKeys(queryText);
   const userNamedKeys = [...new Set([...queryKeys, ...contextKeys])];
-  const discoveredKeys = new Set([...userNamedKeys, ...crossToolKeys]);
+  const discoveredKeys = new Set([
+    ...userNamedKeys,
+    ...crossToolKeys,
+    ...exactIssueKeys(options.extraTerms ?? [])
+  ]);
   const issuesByKey = new Map<string, JiraIssue>();
   const keyErrors: Array<{ key: string; error: string }> = [];
   const limit = options.limit ?? 20;
@@ -466,10 +547,16 @@ export async function fetchJiraSearchContext(options: {
     namedIssueKeys: userNamedKeys,
     wantsRepoDiscovery: wantsRepoLinkedJiraDiscovery(queryText)
   });
-  const focusJql = scopeJql(
+  const jobAttempts =
     options.jobScoped && (options.extraTerms?.length ?? 0) > 0
-      ? buildDecisionJiraJql(options.extraTerms ?? [])
-      : buildFocusAwareJiraJql(focusJqlOptions),
+      ? planJobSearchAttempts(options.extraTerms ?? []).filter((attempt) => attempt.kind !== "exact")
+      : [];
+  const focusJql = scopeJql(
+    jobAttempts[0]
+      ? jqlForJobAttempt(jobAttempts[0])
+      : options.jobScoped
+        ? undefined
+        : buildFocusAwareJiraJql(focusJqlOptions),
     options.integrationScope
   );
   const repoJql = options.jobScoped
@@ -488,6 +575,28 @@ export async function fetchJiraSearchContext(options: {
       }
     } catch (error) {
       searchError = error instanceof Error ? error.message : "Jira search failed.";
+    }
+    const retryAttempt = jobAttempts[1];
+    const shouldRetry =
+      options.jobScoped &&
+      textSearchCount === 0 &&
+      retryAttempt &&
+      (!searchError || isJiraJqlParseError(searchError));
+    const fallbackJql = shouldRetry
+      ? scopeJql(jqlForJobAttempt(retryAttempt), options.integrationScope)
+      : undefined;
+    if (fallbackJql && fallbackJql !== focusJql) {
+      try {
+        const retryHits = await client.searchIssues(fallbackJql, limit);
+        textSearchCount = retryHits.length;
+        usedJql = fallbackJql;
+        searchError = undefined;
+        for (const issue of retryHits) {
+          issuesByKey.set(issue.key, issue);
+        }
+      } catch (retryError) {
+        searchError = retryError instanceof Error ? retryError.message : searchError;
+      }
     }
   }
 
@@ -518,10 +627,14 @@ export async function fetchJiraSearchContext(options: {
   const owner = options.owner?.trim();
   const repo = options.repo?.trim();
   let repoKeyHits: string[] | undefined;
-  const shouldScanGit =
-    runTextSearch &&
-    textSearchCount === 0 &&
-    Boolean(owner && repo && options.codeHostRouter && options.codeHostConnected);
+  const shouldScanGit = shouldScanGitForJiraKeys({
+    jobScoped: options.jobScoped,
+    textSearchCount,
+    runTextSearch,
+    codeHostConnected: options.codeHostConnected,
+    hasRepo: Boolean(owner && repo),
+    hasCodeHostRouter: Boolean(options.codeHostRouter)
+  });
 
   if (shouldScanGit && owner && repo && options.codeHostRouter) {
     repoKeyHits = await collectJiraKeysFromRepoActivity({
@@ -562,11 +675,12 @@ export async function fetchJiraSearchContext(options: {
   } else if (issueKeys.length > 0 && issuesByKey.size > 0) {
     matchStrategy = "key";
   } else if (textSearchCount === 0 && issuesByKey.size === 0 && jql && !searchError) {
-    searchNote =
-      `No Jira tickets mention ${repoQuery ?? "this repository"} in summary or description, ` +
-      "and no issue keys were found in recent git history or open files. " +
-      `Link work by adding the repo slug to ticket text (e.g. ${CODE_HOST_PROVIDERS.map((host) => `${host}:owner/repo`).join(", ")}) or reference keys in commits (e.g. COOP-101). ` +
-      "Ask about a specific key with `/jira COOP-101`.";
+    searchNote = options.jobScoped
+      ? "No Jira tickets matched this search."
+      : `No Jira tickets mention ${repoQuery ?? "this repository"} in summary or description, ` +
+        "and no issue keys were found in recent git history or open files. " +
+        `Link work by adding the repo slug to ticket text (e.g. ${CODE_HOST_PROVIDERS.map((host) => `${host}:owner/repo`).join(", ")}) or reference keys in commits (e.g. COOP-101). ` +
+        "Ask about a specific key with `/jira COOP-101`.";
   }
 
   if (keyErrors.length > 0 && issuesByKey.size > 0) {

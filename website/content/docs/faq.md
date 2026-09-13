@@ -30,7 +30,7 @@ No. Your code and prompts are never used to train foundation models. See [Securi
 
 ### What's included in the free Developer plan?
 
-Full tool connectivity (GitHub, GitLab, Bitbucket, Slack, Jira, Notion, Google Docs, Teams) via the admin portal, Deep-Index / Lightning Mode on up to 3 repos org-wide, workspace repos, chat, quick actions, and inline autocomplete. Free accounts include a rolling 5-hour usage window. Solo account only — no team invites.
+Full tool connectivity (GitHub, GitLab, Bitbucket, Slack, Jira, Notion, Google Docs) via the admin portal, Deep-Index / Lightning Mode on up to 3 repos org-wide, workspace repos, chat, quick actions, and inline autocomplete. Free accounts include a rolling 5-hour usage window. Solo account only — no team invites.
 
 ### How do I upgrade to Pro?
 

@@ -36,7 +36,7 @@ const nextStepsBySlug: Record<string, { href: string; label: string }[]> = {
   "connect-integrations": [
     { href: "/docs/github", label: "GitHub setup" },
     { href: "/docs/slack", label: "Slack setup" },
-    { href: "/docs/teams", label: "Microsoft Teams setup" }
+    { href: "/docs/teams", label: "Microsoft Teams (coming soon)" }
   ],
   "integration-scope": [
     { href: "/docs/admin-portal", label: "Admin portal overview" },

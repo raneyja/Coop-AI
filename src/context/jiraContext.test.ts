@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import {
   buildDecisionJiraJql,
+  fallbackDecisionJiraJql,
+  isJiraJqlParseError,
   buildFocusAwareJiraJql,
   buildIssueKeysJql,
   buildJiraFocusTerms,
@@ -11,6 +13,7 @@ import {
   shouldMergeRepoWideJiraHits,
   shouldRunJiraFocusTextSearch,
   shouldRunJiraTextSearch,
+  shouldScanGitForJiraKeys,
   wantsJiraContext,
   wantsOpenTickets,
   wantsRepoLinkedJiraDiscovery
@@ -131,12 +134,22 @@ test("buildFocusAwareJiraJql sanitizes hyphenated extras", () => {
   assert.doesNotMatch(jql!, /SQL-injection|not to mix/);
 });
 
-test("buildDecisionJiraJql is one sanitized text clause", () => {
+test("fallbackDecisionJiraJql is one sanitized phrase", () => {
   assert.equal(
-    buildDecisionJiraJql(["SQL-injection", "not to mix"]),
+    fallbackDecisionJiraJql(["SQL-injection", "not to mix"]),
     'text ~ "SQL injection" ORDER BY updated DESC'
   );
-  assert.doesNotMatch(buildDecisionJiraJql(["SQL-injection"]) ?? "", /training-java|AND/);
+  assert.equal(isJiraJqlParseError("Error in the JQL Query: '-' is reserved"), true);
+  assert.equal(isJiraJqlParseError("401 Unauthorized"), false);
+});
+
+test("buildDecisionJiraJql searches words, never a hyphen", () => {
+  const jql = buildDecisionJiraJql(["SQL-injection", "not to mix"]) ?? "";
+  assert.match(jql, /text ~ "SQL injection"/);
+  assert.match(jql, /text ~ "injection"/);
+  assert.match(jql, /text ~ "mix"/);
+  assert.match(jql, /ORDER BY updated DESC$/);
+  assert.doesNotMatch(jql, /SQL\\-injection|SQL-injection|training-java|\bAND\b|text ~ "not"/);
 });
 
 test("buildFocusAwareJiraJql extrasOnly skips hyphenated repo AND", () => {
@@ -265,6 +278,52 @@ test("named keys skip fuzzy JQL unless the user asked for repo-wide tickets", ()
     true
   );
   assert.equal(shouldRunJiraTextSearch({ namedIssueKeys: [], wantsRepoDiscovery: false }), true);
+});
+
+const connectedEmptyTextSearch = {
+  textSearchCount: 0,
+  runTextSearch: true,
+  codeHostConnected: true,
+  hasRepo: true,
+  hasCodeHostRouter: true
+};
+
+test("job searches do not scan git when phrase and word JQL miss", () => {
+  assert.equal(
+    shouldScanGitForJiraKeys({ ...connectedEmptyTextSearch, jobScoped: true }),
+    false
+  );
+});
+
+test("non-job empty text search still scans git when the code host is connected", () => {
+  assert.equal(
+    shouldScanGitForJiraKeys({ ...connectedEmptyTextSearch, jobScoped: false }),
+    true
+  );
+  assert.equal(shouldScanGitForJiraKeys(connectedEmptyTextSearch), true);
+});
+
+test("git key scan stays off when text search already hit or the host cannot walk", () => {
+  assert.equal(
+    shouldScanGitForJiraKeys({ ...connectedEmptyTextSearch, textSearchCount: 2 }),
+    false
+  );
+  assert.equal(
+    shouldScanGitForJiraKeys({ ...connectedEmptyTextSearch, runTextSearch: false }),
+    false
+  );
+  assert.equal(
+    shouldScanGitForJiraKeys({ ...connectedEmptyTextSearch, codeHostConnected: false }),
+    false
+  );
+  assert.equal(
+    shouldScanGitForJiraKeys({ ...connectedEmptyTextSearch, hasRepo: false }),
+    false
+  );
+  assert.equal(
+    shouldScanGitForJiraKeys({ ...connectedEmptyTextSearch, hasCodeHostRouter: false }),
+    false
+  );
 });
 
 const total = passed + failed;

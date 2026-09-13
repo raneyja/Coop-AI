@@ -61,10 +61,11 @@ test("responseHasSpeculativeTradeoffs detects generic inference filler", () => {
 
 test("buildThinAlternativesTradeOffsResponse stays compact and honest", () => {
   const text = buildThinAlternativesTradeOffsResponse(thinTimeline, "fastify.js");
-  assert.ok(text.includes("**Summary**"));
+  assert.ok(text.includes("Evidence is **limited**"));
+  assert.equal(text.includes("**Summary**"), false);
   assert.ok(text.includes("Unknown — not recorded"));
   assert.ok(text.includes("Not documented"));
-  assert.ok(text.includes("[Sources: GitHub commit dd2bb73]"));
+  assert.match(text, /\[Sources: (?:GitHub|Code host) commit dd2bb73\]/);
   assert.ok(!text.includes("Performance vs"));
   assert.ok(text.split("\n").length < 20);
 });
@@ -133,7 +134,7 @@ test("enrichTraceDecisionResponse replaces speculative thin-evidence answer", ()
 
   assert.ok(enriched.includes("**Alternatives considered**"));
   assert.ok(!enriched.includes("we can infer"));
-  assert.ok(enriched.includes("[Sources: GitHub commit dd2bb73]"));
+  assert.match(enriched, /\[Sources: (?:GitHub|Code host) commit dd2bb73\]/);
 });
 
 test("enrichTraceDecisionResponse uses fallback timeline when bundle lost decision_history", () => {
@@ -261,7 +262,7 @@ test("enrichTraceDecisionResponse injects commit/PR when model did a code walkth
   });
 
   assert.ok(enriched.includes("dd2bb73"), "must cite introducing commit SHA");
-  assert.ok(enriched.includes("**Summary**"));
+  assert.ok(enriched.includes("Decision history for") || enriched.includes("**Summary**"));
   assert.ok(enriched.includes("**Sources**") || enriched.includes("[Sources: GitHub commit"));
 });
 

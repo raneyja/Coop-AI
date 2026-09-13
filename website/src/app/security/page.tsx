@@ -84,7 +84,7 @@ export default function SecurityPage() {
         </ul>
         <p>
           <strong>Queried live at chat time (not background-indexed):</strong> company Slack threads,
-          Jira issues, Confluence pages, Notion docs, Google Docs, and Microsoft Teams messages —
+          Jira issues, Confluence pages, Notion docs, and Google Docs —
           from the admin-connected org workspace (shared across developers, not personal accounts).
           CoopAI fetches integration content on demand when a workflow or chat command needs it, so
           ticket and conversation data is not copied into a standing index.
@@ -247,7 +247,7 @@ export default function SecurityPage() {
         <h2>Integrations</h2>
         <p>
           CoopAI connects to GitHub, GitLab, and Bitbucket for repository webhooks and catalog
-          sync; Slack, Jira, Confluence, Notion, Google Docs, and Microsoft Teams for
+          sync; Slack, Jira, Confluence, Notion, and Google Docs for
           organizational context. Each integration uses OAuth or host-specific authentication
           configured on the server: credentials are never stored in VS Code settings in production
           mode.

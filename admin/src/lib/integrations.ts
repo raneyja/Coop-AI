@@ -80,7 +80,9 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     id: "teams",
     name: "Microsoft Teams",
     description: "Channel messages and enterprise chat (work/school M365)",
-    category: "collaboration"
+    category: "collaboration",
+    // Keep in sync with TEAMS_COMING_SOON in src/integrations/teamsAvailability.ts
+    comingSoon: true
   }
 ];
 

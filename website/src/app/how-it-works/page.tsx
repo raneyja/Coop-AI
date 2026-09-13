@@ -192,7 +192,7 @@ function LiveToolsDetail() {
         <span className="mt-0.5 shrink-0 font-mono text-xs text-coop-index">02</span>
         <span>
           <span className="font-medium text-gray-900">Company collaboration tools</span> (Slack, Jira,
-          Confluence, Notion, Google Docs, Teams) are admin-connected once for the org, then fetched
+          Confluence, Notion, Google Docs) are admin-connected once for the org, then fetched
           live for Trace Decision, Knowledge Gaps, and slash commands — shared team context, not
           personal accounts.
         </span>

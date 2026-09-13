@@ -17,7 +17,7 @@ CoopAI is a VS Code extension — not an autonomous coding agent. It helps engin
 - Product type: VS Code code intelligence layer (chat, quick actions, inline complete, reviewable edits)
 - Not: a terminal agent that rewrites the tree on its own
 - Indexing: Deep-Index / Lightning builds a searchable graph, then deletes the temporary clone (zero-clone)
-- Stack tools: Slack, Jira, Confluence, Notion, Google Docs, Teams are queried live at ask time from the admin-connected company workspace
+- Stack tools: Slack, Jira, Confluence, Notion, and Google Docs are queried live at ask time from the admin-connected company workspace
 - Workflows: Understand Repo, Trace Decision, Find Owner, Blast Radius, Knowledge Gaps
 - Auth model: org admin connects integrations once; developers sign in — no personal OAuth paste in production
 

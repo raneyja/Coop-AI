@@ -161,7 +161,7 @@ In **production mode** (`coopAI.devMode: false`), org admins connect code hosts 
 
 ### Optional: connect integrations
 
-Integrations (Slack, Jira, Confluence, Notion, Google Docs, Teams) power **Trace Decision** and **Knowledge Gaps** with cross-tool context.
+Integrations (Slack, Jira, Confluence, Notion, Google Docs) power **Trace Decision** and **Knowledge Gaps** with cross-tool context.
 
 <!-- figures -->
 ![Admin portal Integrations page — org admin connects tools once for the whole team](/screenshots/docs/admin-integrations-dark.png)
@@ -326,7 +326,7 @@ Type `/` in the composer to see available commands. **Workflows** in the chat he
 | `/gaps` | Knowledge Gaps |
 | `/edit` | Edit code — GPT-5.1 (aliases: `/patch`, `/fix`). After **Apply**, click **Create pull request** on the card, or type **Create a PR** in chat (also works after you type in the file) |
 
-Integration commands: `/slack`, `/jira`, `/teams`, `/confluence`, `/notion`, `/docs`.
+Integration commands: `/slack`, `/jira`, `/confluence`, `/notion`, `/docs`. `/teams` is not available yet.
 
 ### Settings overview
 
@@ -608,7 +608,7 @@ On Auto, integration commands query connected tools with the same **Anthropic Cl
 | --- | --- |
 | `/slack` | Answer using Slack discussions as primary evidence |
 | `/jira` | Answer using Jira tickets as primary evidence |
-| `/teams` | Answer using Microsoft Teams threads |
+| `/teams` | Not available yet |
 | `/confluence` or `/wiki` | Answer using Confluence pages |
 | `/notion` | Answer using Notion pages |
 | `/docs`, `/googledocs` | Search Google Docs only — not the repository |

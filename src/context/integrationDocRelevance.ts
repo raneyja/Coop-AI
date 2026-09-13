@@ -114,18 +114,19 @@ export function scoreDocPageForUseRepo(
     score += 50;
   }
 
+  for (const term of options.focusTerms ?? []) {
+    const normalized = term.trim().toLowerCase().replace(/[-–—]/g, " ");
+    if (normalized.length >= 4 && haystack.includes(normalized)) {
+      score += 25;
+    }
+  }
+
   if (pageLooksLikeForeignProduct(haystack, options.repo)) {
     score -= 40;
   }
-  if (pageLooksLikeForeignTicket(haystack, options.repo)) {
+  const askedByPhrase = (options.focusTerms ?? []).some((term) => term.trim().length >= 4);
+  if (!askedByPhrase && pageLooksLikeForeignTicket(haystack, options.repo)) {
     score -= 40;
-  }
-
-  for (const term of options.focusTerms ?? []) {
-    const normalized = term.trim().toLowerCase();
-    if (normalized.length >= 4 && haystack.includes(normalized)) {
-      score += 10;
-    }
   }
 
   return score;

@@ -17,7 +17,10 @@ import {
 import {
   enrichTraceDecisionResponse
 } from "../prompts/decisionResponseEnrichment";
-import { stripDisallowedNarrativeSourceCitations } from "../prompts/evidenceSynthesis";
+import {
+  stripDisallowedNarrativeSourceCitations,
+  stripTemplateSectionHeadings
+} from "../prompts/evidenceSynthesis";
 import { rewriteGoogleDocsSlashIfRepoLeak } from "../prompts/integrationSynthesis";
 import { enrichCompactIntegrationDocs } from "../prompts/integrationDocsCompactEnrichment";
 import {
@@ -204,7 +207,7 @@ export function enrichChatResponseForAction(options: {
     enriched = enrichSourcesFooter(enriched);
   }
 
-  return enriched;
+  return stripTemplateSectionHeadings(enriched);
 }
 
 function packageStructureFromBundle(

@@ -16,7 +16,7 @@ How it works: https://coop-ai.dev/how-it-works
 ## How it works (three steps)
 
 1. **Index the code** — An org admin Deep-Indexes selected repos. Coop clones briefly, builds a searchable symbol graph (callers, ownership, full-text search), then deletes the clone (zero-clone). File bodies fetch from GitHub, GitLab, or Bitbucket on demand.
-2. **Query the company stack live** — Slack, Jira, Confluence, Notion, Google Docs, and Microsoft Teams are admin-connected once for the company. They are fetched at ask time from the shared org workspace (not each developer’s personal accounts) and are not background-copied into a second wiki.
+2. **Query the company stack live** — Slack, Jira, Confluence, Notion, and Google Docs are admin-connected once for the company. They are fetched at ask time from the shared org workspace (not each developer’s personal accounts) and are not background-copied into a second wiki.
 3. **Ask, complete, and edit in VS Code** — Chat and quick actions use the graph plus live tools. Ghost-text complete. Highlight → describe → reviewable patch. Optional PR from applied edits.
 
 ## Signature workflows

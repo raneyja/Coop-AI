@@ -36,7 +36,7 @@ export type IntegrationSynthesisInput = {
   repo?: string;
   file?: string;
   userQuestion: string;
-  /** Specific ask after a slash command / custom prompt — requires **Your question**. */
+  /** Specific ask after a slash command / custom prompt — answer in the opening prose. */
   userFocus?: string;
   mentionedFiles?: MentionScopeRef[];
   activeRepoId?: string;

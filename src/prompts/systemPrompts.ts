@@ -36,15 +36,16 @@ export const OPERATING_CONTEXT = `
 - Finish the answer. Never stop mid-sentence or mid-list. If you must cut, drop repetition and extra citations first — not the concluding point.
 - Do not open with filler ("Great question", "Certainly", or restating the request).
 - Omit sections with no evidence — never pad with generic advice.
-- When the user states a specific question or focus (text after a slash command, a custom prompt, or a direct ask in chat), answer that ask explicitly. If the message includes ## User focus (required), include **Your question** immediately after **Summary**/**Answer** and treat the focus as the primary deliverable — never bury it under a generic template overview. Exception: a PR review of an attached file uses **Reviewer checks** only — omit **Summary**, **Answer**, and **Your question**.
-- **Your question** must answer the ask with concrete evidence. Never restate, paraphrase, or truncate the user's question text as the section body.
+- When the user states a specific question or focus (text after a slash command, a custom prompt, or a direct ask in chat), answer that ask in the opening sentences. If the message includes ## User focus (required), treat the focus as the primary deliverable — never bury it under a generic template overview. Exception: a PR review of an attached file uses **Reviewer checks** only — do not add **Answer**, **Summary**, or **Your question**.
+- Never restate, paraphrase, or truncate the user's question text as a heading or section body.
 `;
 
 export const CURSOR_STYLE_OUTPUT_CONTRACT = `
 ## Typography (not markdown)
 CoopAI renders chat like Cursor: bold headings, body text, and italics — not markdown documents.
 - Do NOT use: # headings, tables, blockquotes, horizontal rules, images, HTML, or README-style markdown layout.
-- Main section titles (H1): **Title text** alone on its own line (blank line before). Examples: **Summary**, **Answer**, **Documentation gaps**, **Architecture**.
+- Main section titles (H1): **Title text** alone on its own line (blank line before). Name the topic, not the template. Examples: **How it works**, **Suggested reviewers**, **Documentation gaps**, **Architecture**.
+- Do not use template labels as titles: **Answer**, **Summary**, **Your question**.
 - Subsection titles (H2): same **Title** pattern nested under a main section — one short topic phrase per line, never a bullet.
 - Inline emphasis: **bold** for key terms and field labels; *italics* for uncertainty, caveats, inferred vs confirmed claims, and brief asides.
 - Lists: \`-\` bullets or \`1.\` numbered lists only — not nested markdown outlines.
@@ -65,13 +66,15 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
 - Links: [label](url) only when a real URL is in evidence; otherwise name the source in plain text.
 
 ## Response structure (all chat — quick actions included)
-- Lead with **Summary** or **Answer** — a direct 1-2 sentence answer, always first; put a blank line before every main and subsection title.
-- When ## User focus (required) is present (or the user asked something specific in chat), place **Your question** immediately after **Summary**/**Answer**. That section must **answer** the ask with concrete paths, symbols, or evidence — never restate or truncate the user's question text, and never leave it for the end of the response.
-- Then the main sections from the use-case structure below, in order — each **Title** on its own line, an optional one-line lead, then \`-\` bullets or \`1.\` numbered items.
+- Open with 1–3 sentences that answer the ask. No heading above that lead.
+- Add at most 2–3 topic headings after the lead, and only when there are two or more distinct topics. Name headings for the content. Put a blank line before every title.
+- When ## User focus (required) is present (or the user asked something specific in chat), the opening sentences must answer that ask with concrete paths, symbols, or evidence — never restate or truncate the user's question text, and never leave the ask for a later section.
+- Then only the use-case sections the ask needs — each **Title** on its own line, an optional one-line lead, then \`-\` bullets or \`1.\` numbered items. Omit the rest.
 - Multi-item audits (gaps, risks, alternatives, owners): one **subsection title** per item followed by 2-4 bullets — never a flat peer list. Field labels (**Open question:**, **What to check:**, **Risk:**, **Owner:**) are bullets inside a subsection, never section titles and never top-level bullets without a subsection title directly above them.
 - One theme per subsection; category labels (e.g. **Dependency configuration**) are subsection titles, not bullets.
-- Complete sentences. When the required structure below lists named sections, follow that list. Otherwise prefer 2–4 short sections — not 15+ peer-level bullets. No fabricated URLs or paths.
-- Spend output on new evidence, not restating **Answer** / **Your question** in later sections. Extra citations of the same snippet do not make the answer better.
+- Complete sentences. Prefer short paragraphs, then bullets for peer facts — not essay paragraphs that restate the bullets. No fabricated URLs or paths.
+- Do not emit a **Sources** section. The Sources evidence card already lists files. Cite paths, ticket keys, and PRs inline in plain language. At most 1–2 inline \`[Sources: …]\` labels in the opening if they help.
+- Spend output on new evidence, not restating the opening in later sections. Extra citations of the same snippet do not make the answer better.
 
 ## User-facing language (all answers — chat and commands)
 The reader is the engineer in the IDE. Never write Coop pipeline jargon in the answer, Sources footer, or subsection copy.
@@ -84,7 +87,7 @@ export const PATCH_OUTPUT_CONTRACT = `
 ## Patch output format (required)
 Edit mode: output concrete code changes as search-replace blocks — not chat summaries or audit sections.
 
-- Do **not** use **Summary**, **Answer**, or other narrative section titles from the ask-mode template.
+- Do **not** use **Summary**, **Answer**, **Your question**, or other narrative section titles from the ask-mode template.
 - Do **not** use # headings, tables, blockquotes, or README-style markdown layout.
 - At most one short lead sentence when the edit target is ambiguous; then patches only.
 
@@ -146,18 +149,11 @@ function comprehensionResponseStructure(activeFile?: string, locateOnly = false)
   if (locateOnly) {
     return `
 ## Required response structure
-Use these sections in order (**Title** on its own line; blank line before each; omit empty sections):
+Open with 1–3 sentences naming where the asked-about code lives, from attached files only. No **Answer**, **Summary**, or **Your question** heading.
 
-**Summary**
-1-3 sentences naming where the asked-about code lives, from attached files only.
+Then optional short bullets for the implementation path chain (UI click → apply logic, middleware file, etc.). Cite real paths/symbols from attached entry or focus-search files. Do not pad a reading list. Do not name Confluence or Notion pages.
 
-**Your question**
-Required. Name the attached implementation path chain that answers the locate ask (UI click → apply logic, middleware file, etc.). Cite real paths/symbols from attached entry or focus-search files. Do not pad a reading list. Do not name Confluence or Notion pages.
-
-**Sources**
-Include **at most 3 bullets**. Each bullet must start with a plain \`[Sources: …]\` label, then an em dash, then **one concrete fact** from GitHub/index evidence. Do not cite Confluence or Notion.
-
-Omit **Architecture**, **Key subsystems**, **Entry points**, **Risks & unknowns**, and **Suggested next steps** — this is a locate answer, not a repo syllabus.`;
+Omit **Architecture**, **Key subsystems**, **Entry points**, **Risks & unknowns**, **Suggested next steps**, and **Sources** — this is a locate answer, not a repo syllabus.`;
   }
   const activeFileSection = trimmed
     ? `${COMPREHENSION_ACTIVE_FILE_SECTION}
@@ -169,15 +165,13 @@ Include **only** when the user message ## Scope lists an active editor file. Omi
 
   return `
 ## Required response structure
-Use these sections in order (**Title** on its own line; blank line before each; omit empty sections):
+Open with 1–2 sentences. When evidence is GitHub/code-host only, end the lead with one short confidence line (e.g. "Based on inventory + anchors; no Confluence/Jira."). When ## User focus is present, those opening sentences are the answer to that ask. No **Answer**, **Summary**, or **Your question** heading.
 
-**Summary**
-1-2 sentence overview of the repo or relevant subsystem. When evidence is GitHub/code-host only, end with one short confidence line (e.g. "Based on inventory + anchors; no Confluence/Jira."). When ## User focus is present, open with a direct reply to that ask.
-
-**Your question**
-Include **only** when the user message has ## User focus (required). Place immediately after **Summary**.
+When ## User focus (required) is present:
 PASS: ≥1 concrete path/symbol from attached entry or focus-search files; answers the ask with that evidence. When the ask requests files to read first, list the attached domain paths that support the answer — however many that is. Do not pad to N. Not README / docker-compose / package.json unless that is the only evidence. If the ask has multiple topics, cover **each topic that has attached evidence**. Never name a path that is not in attached entry/focus-search files.
-FAIL: restating or truncating the user's question; generic form→API→DB story; invented endpoints or invented paths (e.g. collapsing a models package into models.py); padding or repeating files to hit a count; compose service names (web / api / postgres / redis) as a reading list; tests/migrations unless that is the only attached evidence; one topic filling the list when other topics have attached files; section omitted, folded into Architecture, or left until the end.
+FAIL: restating or truncating the user's question; generic form→API→DB story; invented endpoints or invented paths (e.g. collapsing a models package into models.py); padding or repeating files to hit a count; compose service names (web / api / postgres / redis) as a reading list; tests/migrations unless that is the only attached evidence; one topic filling the list when other topics have attached files; burying the ask under Architecture.
+
+Then at most 3 topic headings from this list (omit empty; pick what the ask needs). ${trimmed ? "Also include **How the open file fits**." : ""}
 
 **Architecture**
 How major pieces connect; boundaries and data flow. When ## User focus is present, weight toward the focus — PASS names real paths from evidence; FAIL is a generic monorepo lecture or docker-compose service names (web / api / postgres / redis) with no domain path.
@@ -198,8 +192,7 @@ Include only when the user message ## @ attachments section lists out-of-repo pa
 **Suggested next steps**
 Numbered list of 2-4 actions that name concrete paths from attached evidence (apps/, packages/, deployments/, compose files, workflows). When ## User focus asked for files to read first, those steps must be the same attached domain files — not generic "read the README" unless that is the only onboarding path in evidence.
 
-**Sources**
-Include **at most 3 bullets**. Each bullet must start with a plain \`[Sources: …]\` label, then an em dash, then **one concrete fact** from that source (file counts, top-level dirs, named anchors) — never filler like "contributed insights into the structure." Full detail is in the Sources evidence card.`;
+Do not emit **Sources**. The Sources evidence card already lists files.`;
 }
 
 const USE_CASE_STRUCTURE: Partial<Record<Exclude<UseCase, "inline_completion">, string>> = {
@@ -207,17 +200,11 @@ const USE_CASE_STRUCTURE: Partial<Record<Exclude<UseCase, "inline_completion">, 
 
   decision_archaeology: `
 ## Required response structure
-Use these sections in order (**Title** on its own line; blank line before each):
+Open with 1–2 sentences that state the decision and evidence strength (strong / medium / weak / limited) when thin. No **Answer**, **Summary**, or **Your question** heading.
 
-**Summary**
-Direct answer in 1-2 sentences. State evidence strength (strong / medium / weak / limited) when thin. When ## User focus is present, open with a direct reply to that ask.
+When ## User focus (required) is present: PASS answers the ask with timeline evidence (commit/PR/discussion). FAIL: restating or truncating the user's question; generic restatement with no evidence.
 
-**Your question**
-Include **only** when the user message has ## User focus (required). Place immediately after **Summary**.
-PASS: answers the ask with timeline evidence (commit/PR/discussion). FAIL: restating or truncating the user's question; generic restatement with no evidence; omits the section or leaves it until the end.
-
-**Business context**
-Why this code exists. One short paragraph or omit on follow-ups that did not ask for context.
+Then at most 3 topic headings from this list (omit empty):
 
 **Technical decision**
 What was chosen and why. Omit on follow-ups that did not ask for this when already covered.
@@ -228,97 +215,66 @@ One line or short bullets from evidence only. If unknown, write "Unknown — not
 **Trade-offs**
 One line from evidence only. If undocumented, write "Not documented in attached sources." Never invent generic trade-offs.
 
-**Known limitations**
-Future work or caveats from evidence. Omit if none.
+**Business context**
+Why this code exists. One short paragraph or omit unless the user asked.
 
-**Domain experts**
-Who to ask; cite sources. Omit if none named in evidence.
+**Known limitations** / **Domain experts**
+Only when evidence names them.
 
 **Out-of-scope @ attachments**
 Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
 
-**Sources**
-${SOURCES_FOOTER_OUTPUT_RULE} Omit integrations that failed or returned no results.
+Do not emit **Sources**. ${SOURCES_FOOTER_OUTPUT_RULE}
 
-Follow-up turns: keep this structure but stay compact — often 4-8 sentences total when evidence is limited. Omit empty sections except **Summary** and **Sources**.`,
+Follow-up turns: stay compact — often 4-8 sentences total when evidence is limited.`,
 
   ownership: `
 ## Required response structure
-Use these sections in order (**Title** on its own line; blank line before each):
+Open with who to contact first and why, in 1–2 sentences. No **Answer**, **Summary**, or **Your question** heading.
 
-**Summary**
-Who to contact first and why, in 1-2 sentences. When ## User focus is present, open with a direct reply to that ask.
+When ## User focus (required) is present: PASS names owners/paths from the ownership bundle. FAIL: generic “ask the team”.
 
-**Your question**
-Include **only** when the user message has ## User focus (required). Place immediately after **Summary**.
-PASS: names owners/paths from the ownership bundle for the ask. FAIL: generic “ask the team”; omits the section.
+Then at most 2 topic headings:
 
-**True experts**
+**Suggested reviewers**
 Bullets per person: tier (primary / secondary / backup), evidence (commits, reviews). Do not cite numeric ownership scores or points.
 
-**Availability**
-Current reachability or response expectations from evidence.
-
-**Risks**
-Single points of failure, stale ownership, bus factor.
-
-**Escalation path**
-Who to ask if primary experts are unavailable.
-
-**Knowledge transfer**
-Who should learn this area next.
+**Risk signals**
+Single points of failure, stale ownership, bus factor. Include a one-line escalation only when evidence names a backup.
 
 **Out-of-scope @ attachments**
-Include only when the user message ## @ attachments section lists out-of-repo paths. Name each skipped path and suggest fixes. **Never** include this section when all @ files are in scope or to confirm in-scope files.
+Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
 
-**Recommended next step**
-One concrete outreach or review action.
-
-**Sources**
-${SOURCES_FOOTER_OUTPUT_RULE}`,
+Do not emit **Sources**. ${SOURCES_FOOTER_OUTPUT_RULE}`,
 
   blast_radius: `
 ## Required response structure
-Use these sections in order (**Title** on its own line; blank line before each). Keep the whole answer concise — the Sources card already lists files.
+Open with 2–3 sentences. **Lead with the ranked Top risk surfaces from the evidence bundle** (up to 5, in order). Then state total **code** dependent count (exclude docs) and graph source (scip/zoekt/heuristic) when known. When dependency evidence is empty, say impact is **not found in the index** — never claim zero impact. No **Answer**, **Summary**, or **Your question** heading.
 
-**Summary**
-2-3 sentences max. **Open with the ranked Top risk surfaces from the evidence bundle** (up to 5, in order). Then state total **code** dependent count (exclude docs) and graph source (scip/zoekt/heuristic) when known. When dependency evidence is empty, say impact is **not found in the index** — never claim zero impact. When ## User focus is present, also answer that ask in the opening lines.
+When ## User focus (required) is present: PASS ties the ask to Top risk surfaces / dependents. FAIL: speculative impact with no paths.
 
-**Your question**
-Include **only** when the user message has ## User focus (required). Place immediately after **Summary**.
-PASS: ties the ask to Top risk surfaces / dependents from the bundle. FAIL: speculative impact with no paths; omits the section.
+Then at most 2 topic headings (omit empty):
 
 **Direct impact**
 Exactly the **Top risk surfaces** list (up to 5, same order) — one short line each. **Never** add paths outside that ranked set; no "Additional impacted files" section.
 
-**Transitive dependents**
-One short paragraph, or **None identified**. No file dump.
-
-**APIs & integrations**
-Only when public API or integration evidence exists. One short paragraph. Omit if no evidence.
-
-**Operational risk**
-Only CI, deploy, or runtime evidence from the bundle. Omit if no evidence. Do not speculate about PR oversight.
-
 **Testing surfaces**
 Name test files or suites to run (from evidence). Bullet list, max 6 items.
+
+Include **Transitive dependents**, **APIs & integrations**, or **Operational risk** only when the user asked or the bundle has a concrete finding — one short paragraph each, no file dump.
 
 **Out-of-scope @ attachments**
 Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
 
-**Sources**
-${SOURCES_FOOTER_OUTPUT_RULE} Never repeat file paths already shown in the Sources card.`,
+Do not emit **Sources**. ${SOURCES_FOOTER_OUTPUT_RULE} Never repeat file paths already shown in the Sources card.`,
 
   knowledge_gaps: `
 ## Required response structure
 Group each gap as a subsection with nested bullets — never a flat peer list of titles and field lines.
 
-**Summary**
-1-2 sentences on documentation and ownership health for the active file or area. Never use **Answer** for this use case. When ## User focus is present, open with a direct reply to that ask.
+Open with 1–2 sentences on documentation and ownership health for the active file or area. No **Answer**, **Summary**, or **Your question** heading. When ## User focus is present, those sentences answer the ask.
 
-**Your question**
-Include **only** when the user message has ## User focus (required). Place immediately after **Summary**.
-PASS: answers the ask from scan/docs/focus-file evidence (or states scan unavailable). When focus file excerpts are attached, say the subsystems exist and name docs/ownership/default-on risks visible in those excerpts. FAIL: invents gaps; claims indexed code is missing when excerpts are attached; omits the section.
+When ## User focus (required) is present: PASS answers from scan/docs/focus-file evidence (or states scan unavailable). When focus file excerpts are attached, say the subsystems exist and name docs/ownership/default-on risks visible in those excerpts. FAIL: invents gaps; claims indexed code is missing when excerpts are attached.
 
 **Documentation gaps**
 When \`<knowledge_gap_scan>\` is missing or contains \`<empty>\`: write one sentence that structured scan evidence is unavailable — **do not** invent gap subsections from code inspection unless focus file excerpts are attached in the user message.
@@ -348,7 +304,7 @@ Include only when \`<knowledge_gap_scan>\` contains a \`<gap type="missing_owner
 **Integration & operations**
 Include only when \`<knowledge_gap_scan>\` contains an integration/operations gap type (\`integration_unknown\`, \`ops_unknown\`, \`missing_runbook\`, \`missing_ops\`). **Omit the entire section** otherwise. Never invent plugin, deploy, or third-party configuration questions.
 
-Forbidden section names (never use these): **Documentation coverage**, **Operational unknowns**, **Answer**.
+Forbidden section names (never use these): **Documentation coverage**, **Operational unknowns**, **Answer**, **Summary**, **Your question**.
 
 **Recommended next steps**
 Numbered list of 2-4 concrete actions.
@@ -356,22 +312,14 @@ Numbered list of 2-4 concrete actions.
 **Out-of-scope @ attachments**
 Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
 
-**Sources**
-${SOURCES_FOOTER_OUTPUT_RULE} Include Confluence and knowledge-gap scan items when present.`,
+Do not emit **Sources**. ${SOURCES_FOOTER_OUTPUT_RULE} Name Confluence and knowledge-gap scan items inline when they contribute.`,
 
   chat: `
 ## Required response structure
-Use these sections in order (**Title** on its own line; blank line before each; omit empty sections):
+Open with 2–4 sentences that fully answer the ask (values, when it allows through, reviewer flags — whatever they asked). A teammate should not have to scroll. No **Answer**, **Summary**, or **Your question** heading.
 
-**Answer**
-2–4 sentences that fully answer the ask (values, when it allows through, reviewer flags — whatever they asked). A teammate should not have to scroll.
-Omit **Answer** when they asked to review as a PR — start at **Reviewer checks**.
-
-**Your question**
-Include when the user asked something specific beyond a yes/no **and** **Answer** did not already cover it. Place immediately after **Answer**.
 PASS: answers the ask with concrete paths, symbols, or evidence from attachments (enough that a teammate could act).
-FAIL: restating, paraphrasing, or truncating the user's question; repeating **Answer** with no added evidence; burying the ask under later sections.
-Omit when **Answer** already fully covers the ask (typical for open-file explain). Omit for PR review of an attached file.
+FAIL: restating, paraphrasing, or truncating the user's question; burying the ask under later sections.
 
 **How it works** (open-file explain only)
 At most **one** citation fence — the named function or type in the open file. Then 3 bullets max.
@@ -400,7 +348,7 @@ Depth: fit an open-file explain on **one screen** (~20 lines of prose, ≤2 cita
 ## Concrete file edits (when recommending code to apply)
 When you recommend changes the user should put into an open or attached file:
 - Do **not** paste whole rewritten functions as ordinary \`\`\`lang fences meant for copy-paste.
-- After **Your question** (or after **Answer** when **Your question** is omitted), emit applyable patches — one contiguous edit per block:
+- After the opening sentences, emit applyable patches — one contiguous edit per block:
 
 File: \`path/to/file.ts\`
 
@@ -418,33 +366,28 @@ File: \`path/to/file.ts\`
 
   integration: `
 ## Required response structure
-Use these sections in order (**Title** on its own line; blank line before each):
+Open with a direct 1–2 sentence answer from the attached integration search results. No **Answer**, **Summary**, or **Your question** heading.
 
-**Answer**
-Direct 1-2 sentence answer from the attached integration search results. When ## User focus is present, open with a direct reply to that ask.
+When ## User focus (required) is present: PASS cites specific search hits. FAIL: vague summary with no titles/keys.
 
-**Your question**
-Include **only** when the user message has ## User focus (required). Place immediately after **Answer**.
-PASS: cites specific search hits for the ask. FAIL: vague summary with no titles/keys; omits the section.
+Then at most 2 topic headings:
 
 **Key findings**
 Bullets citing specific messages, tickets, or pages by title/key.
 
 **Gaps**
-What the integration search did not cover or returned empty.
+What the integration search did not cover or returned empty. Omit if the hits fully cover the ask.
 
 **Out-of-scope @ attachments**
 Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
 
-**Sources**
-${SOURCES_FOOTER_OUTPUT_RULE}`,
+Do not emit **Sources**. ${SOURCES_FOOTER_OUTPUT_RULE}`,
 
   intent_job: `
 ## Required response structure
-Use these sections in order (**Title** on its own line; blank line before each; omit empty sections):
+Open with 2–4 sentences that answer each requested capability. Keep locate and decision findings separate. No **Answer**, **Summary**, or **Your question** heading.
 
-**Answer**
-Directly answer each requested capability in 2-4 sentences. Keep locate and decision findings separate.
+Then at most 2 topic headings (omit empty):
 
 **Code location**
 Include for locate jobs. Make implementation claims only from attached remote file bodies. Cite concrete paths and symbols with the Cursor citation contract. If no body supports the claim, say the indexed search did not return a usable implementation file.
@@ -455,8 +398,7 @@ Include for decision jobs. Make decision claims only from attached integration o
 **Gaps**
 State unavailable, failed, or empty sources briefly. Do not turn gaps into local-search instructions.
 
-**Sources**
-Include at most 3 bullets. Cite only non-empty attached sources that contributed facts. Never cite a disconnected, missing, failed, or empty integration.`
+Do not emit **Sources**. Cite only non-empty attached sources inline. Never cite a disconnected, missing, failed, or empty integration.`
 };
 
 function withOutputContract(
@@ -504,7 +446,8 @@ ${EMPTY_EVIDENCE_HONESTY_RULE}`;
 
 const INTENT_JOB_OUTPUT_CONTRACT = `
 ## Cursor response contract
-- Use bold section titles, short prose, and bullets. Do not use # headings, tables, blockquotes, HTML, or README layout.
+- Open with the answer in short prose. Use bold topic titles only when needed. Do not use # headings, tables, blockquotes, HTML, or README layout.
+- Do not use **Answer**, **Summary**, or **Your question** titles.
 - Existing repo code uses citation fences only: a plain fence whose first body line uses real integers, e.g. \`42:68:src/auth.ts\`, and whose remaining body is copied verbatim from attached code.
 - Never use language-tagged fences for existing repo code, placeholder line ranges, or invented file bodies.
 - Paths and symbols may be named only from attached evidence. Links require an attached URL.
@@ -1501,6 +1444,7 @@ type JiraTicketSnippet = {
   updated: string;
   htmlUrl: string;
   labels?: string[];
+  description?: string;
 };
 
 type JiraSearchSnippet = {
@@ -1561,8 +1505,9 @@ function formatJiraTicketsForLlm(jira: JiraSearchSnippet): string[] {
   }
   for (const issue of issues) {
     const labels = issue.labels?.length ? ` labels="${escapeXml(issue.labels.join(", "))}"` : "";
+    const body = issue.description?.replace(/\s+/g, " ").trim().slice(0, 400);
     lines.push(
-      `<ticket key="${escapeXml(issue.key)}" status="${escapeXml(issue.status)}" type="${escapeXml(issue.issueType)}" updated="${escapeXml(issue.updated)}" url="${escapeXml(issue.htmlUrl)}"${labels}>${escapeXml(issue.summary)}</ticket>`
+      `<ticket key="${escapeXml(issue.key)}" status="${escapeXml(issue.status)}" type="${escapeXml(issue.issueType)}" updated="${escapeXml(issue.updated)}" url="${escapeXml(issue.htmlUrl)}"${labels}>${escapeXml(issue.summary)}${body ? ` — ${escapeXml(body)}` : ""}</ticket>`
     );
   }
   lines.push("</jira_tickets>");

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { shouldFetchGoogleDocsContext, wantsGoogleDocsContext } from "./googleDocsContext";
+import { driveSearchTokens, shouldFetchGoogleDocsContext, wantsGoogleDocsContext } from "./googleDocsContext";
 import { buildIntegrationSearchTermList } from "./integrationSearchTerms";
 import type { ContextFetchRequest } from "./requestBatcher";
 
@@ -17,6 +17,10 @@ function test(name: string, fn: () => void): void {
     failed++;
   }
 }
+
+test("driveSearchTokens splits hyphenated phrases into words Drive can match", () => {
+  assert.deepEqual(driveSearchTokens(["SQL-injection", "not to mix"]), ["SQL", "injection", "mix"]);
+});
 
 test("wantsGoogleDocsContext matches explicit google docs questions", () => {
   assert.equal(wantsGoogleDocsContext("any google docs for this repo?"), true);

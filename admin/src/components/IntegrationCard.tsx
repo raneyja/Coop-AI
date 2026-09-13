@@ -297,7 +297,7 @@ export function IntegrationCard({
               {connecting ? "Opening…" : connectLabel}
             </button>
           ) : null}
-          {!readOnly && isScopable && connected ? (
+          {!readOnly && !comingSoon && isScopable && connected ? (
             <button type="button" className="admin-btn-secondary" onClick={() => setScopeOpen(true)}>
               Manage access
             </button>

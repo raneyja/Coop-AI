@@ -74,7 +74,7 @@ export type KnowledgeGapsSynthesisInput = {
   owner?: string;
   repo?: string;
   userQuestion?: string;
-  /** Specific ask after a slash command / custom prompt — requires **Your question**. */
+  /** Specific ask after a slash command / custom prompt — answer in the opening prose. */
   userFocus?: string;
   mentionedFiles?: MentionScopeRef[];
   activeRepoId?: string;
@@ -277,17 +277,17 @@ function appendKnowledgeGapsResponseContract(
   lines.push("## Response contract (required)");
   if (focusPrimary) {
     lines.push(
-      "**Summary** must lead with the ## Primary topic focus subsystems (docs/ownership gaps or explicit no-evidence). Do not make ownership of an unrelated open editor the Summary headline."
+      "The opening must lead with the ## Primary topic focus subsystems (docs/ownership gaps or explicit no-evidence). Do not make ownership of an unrelated open editor the headline."
     );
   }
   if (hasFocusExcerpts) {
     lines.push(
-      "**Your question** — PASS: the subsystems exist if focus paths/excerpts are attached; then name docs/ownership/default-on risks visible in those excerpts. FAIL: claiming no indexed code; empty “looks good”; a 40-bullet dump."
+      "Opening — PASS: the subsystems exist if focus paths/excerpts are attached; then name docs/ownership/default-on risks visible in those excerpts. FAIL: claiming no indexed code; empty “looks good”; a 40-bullet dump."
     );
   }
   if (isHuntLocateGapsAsk(`${input.userFocus ?? ""} ${input.userQuestion ?? ""} ${input.evidence.userFocus ?? ""}`)) {
     lines.push(
-      "**Your question** — PASS: name hunt evidence-class risks from attached hunt code (wrong-file ranking, canned miss, UI-as-API, default-on). FAIL: echo the ask; “docs/runbook may be thin” as the only answer. Do not invent plane paths."
+      "Opening — PASS: name hunt evidence-class risks from attached hunt code (wrong-file ranking, canned miss, UI-as-API, default-on). FAIL: echo the ask; “docs/runbook may be thin” as the only answer. Do not invent plane paths."
     );
   }
   lines.push("**Documentation gaps** must include, in order (after the attached page titles above):");
@@ -333,19 +333,19 @@ function appendKnowledgeGapsResponseContract(
     Boolean(input.googleDocs?.documents?.length);
   if (coverage === "scan_incomplete") {
     lines.push(
-      `- **Summary** must open: "${knowledgeGapScanIncompleteCopy()}" Name attached documentation or ownership gaps on real repo paths. FAIL: treating a missing Coop dependency graph as the documentation audit; recommending GitHub Dependency Submission API, depcruise, or inventing blast-radius. Do not quote raw API errors or internal coverage tokens.`
+      `- The opening must start: "${knowledgeGapScanIncompleteCopy()}" Name attached documentation or ownership gaps on real repo paths. FAIL: treating a missing Coop dependency graph as the documentation audit; recommending GitHub Dependency Submission API, depcruise, or inventing blast-radius. Do not quote raw API errors or internal coverage tokens.`
     );
   } else if (scanGapCount === 0 && hasDocHits) {
     lines.push(
-      '- **Summary** must open: "Automated scan found no structured gaps in this pass; attached doc review suggests…" — summarize doc-review follow-ups; do not contradict the zero-gap scan or claim the scan reported documentation gaps.'
+      '- The opening must start: "Automated scan found no structured gaps in this pass; attached doc review suggests…" — summarize doc-review follow-ups; do not contradict the zero-gap scan or claim the scan reported documentation gaps.'
     );
   } else if (scanGapCount === 0) {
     lines.push(
-      "- **Summary** should note the scan found no structured gaps in this pass when no doc pages are attached."
+      "- The opening should note the scan found no structured gaps in this pass when no doc pages are attached."
     );
   } else {
     lines.push(
-      "- Summary must acknowledge Notion/Confluence/Google Docs hits when present and cite scan gaps verbatim — never claim zero documentation when Notion pages are attached."
+      "- The opening must acknowledge Notion/Confluence/Google Docs hits when present and cite scan gaps verbatim — never claim zero documentation when Notion pages are attached."
     );
   }
   lines.push("");

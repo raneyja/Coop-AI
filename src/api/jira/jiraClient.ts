@@ -191,7 +191,7 @@ export class JiraClient {
       body: {
         jql,
         maxResults: Math.min(limit, 50),
-        fields: ["summary", "status", "issuetype", "labels", "updated"]
+        fields: ["summary", "description", "status", "issuetype", "labels", "updated"]
       }
     });
 

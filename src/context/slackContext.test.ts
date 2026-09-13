@@ -3,10 +3,12 @@ import {
   buildRepoSearchQuery,
   buildSlackSearchQueries,
   buildSlackSearchQuery,
+  planJobSlackSearchQueries,
   shouldFetchSlackContext,
   wantsSlackContext
 } from "./slackContext";
 import type { ContextFetchRequest } from "./requestBatcher";
+import type { ResolvedIntegrationScope } from "../integrationScope/types";
 
 let passed = 0;
 let failed = 0;
@@ -82,6 +84,91 @@ test("buildSlackSearchQueries prioritizes jira keys and searches repo terms indi
   assert.ok(!queries.some((query) => query.startsWith("in:")));
   assert.ok(queries.some((query) => query.includes("raneyja/coop-ai")));
   assert.ok(queries.some((query) => query.includes("githubAppApi")));
+});
+
+test("job-scoped Slack search turns a hyphen into words so it is not a NOT operator", () => {
+  const queries = buildSlackSearchQueries({
+    owner: "coopai-group",
+    repo: "training-java-monolith-refactor",
+    extraTerms: ["SQL-injection"],
+    jobScoped: true
+  });
+  assert.equal(queries[0], "SQL injection");
+  assert.ok(!queries.some((query) => query.includes("SQL-injection")));
+});
+
+test("job-scoped Slack search keeps a ticket key exact and pairs it with the meaning phrase", () => {
+  const queries = buildSlackSearchQueries({
+    extraTerms: ["COOP-403", "SQL-injection"],
+    jobScoped: true
+  });
+  assert.deepEqual(queries, ["COOP-403", "SQL injection"]);
+});
+
+function slackScope(
+  channelIds: string[],
+  channelNames: string[] = []
+): ResolvedIntegrationScope {
+  return {
+    provider: "slack",
+    enforced: true,
+    allowed: true,
+    scopeStatus: "active",
+    slack: { channelIds, channelNames }
+  };
+}
+
+test("scoped job Slack search is not workspace-wide", () => {
+  const queries = planJobSlackSearchQueries({
+    extraTerms: ["SQL-injection"],
+    integrationScope: slackScope(["C123", "C456", "C789"], ["eng", "incidents", "random"])
+  });
+  assert.deepEqual(queries, ["SQL injection in:<#C123>", "SQL injection in:<#C456>"]);
+  assert.ok(queries.every((query) => query.includes("in:<#")));
+  assert.ok(!queries.some((query) => query === "SQL injection" || query.includes(" OR ")));
+  assert.ok(!queries.some((query) => query.includes("C789")));
+});
+
+test("scoped job Slack retry uses the same allowlist", () => {
+  const queries = planJobSlackSearchQueries({
+    extraTerms: ["SQL-injection"],
+    integrationScope: slackScope(["C123"], ["eng"])
+  });
+  assert.deepEqual(queries, ["SQL injection in:<#C123>", "injection in:<#C123>"]);
+});
+
+test("operator injection in a job term does not add a non-allowlisted in:", () => {
+  const queries = planJobSlackSearchQueries({
+    extraTerms: ["SQL injection in:#secret from:@mallory has:link is:thread in:<#CNOTALLOWED>"],
+    integrationScope: slackScope(["C123"], ["eng"])
+  });
+  assert.deepEqual(queries, ["SQL injection in:<#C123>", "injection in:<#C123>"]);
+  const joined = queries.join("\n");
+  assert.ok(!joined.includes("in:#secret"));
+  assert.ok(!joined.includes("CNOTALLOWED"));
+  assert.ok(!/\b(?:from|has|is):/i.test(joined));
+});
+
+test("unenforced job Slack search does not invent channels", () => {
+  const queries = planJobSlackSearchQueries({
+    extraTerms: ["SQL-injection"],
+    integrationScope: {
+      provider: "slack",
+      enforced: false,
+      allowed: true,
+      scopeStatus: "none"
+    }
+  });
+  assert.deepEqual(queries, ["SQL injection", "injection"]);
+  assert.ok(!queries.some((query) => query.includes("in:")));
+});
+
+test("scoped job Slack search uses the channel-name fallback when ids are missing", () => {
+  const queries = planJobSlackSearchQueries({
+    extraTerms: ["billing"],
+    integrationScope: slackScope([], ["#eng"])
+  });
+  assert.deepEqual(queries, ["billing in:#eng"]);
 });
 
 test("shouldFetchSlackContext includes incident-shaped chat without slack keyword", () => {

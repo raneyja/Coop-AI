@@ -29,7 +29,7 @@ GitHub detail: [github-connect.md](./github-connect.md). Org install test flow: 
 
 **Extension UI** — Coop AI → **Settings → Tools** — admins can also connect here; admin portal is recommended for GitHub App org install and scope.
 
-**Teams:** Requires work/school Microsoft 365 (not personal Teams). Operator: Azure Entra app registration — see [teams-connect.md](./teams-connect.md).
+**Teams:** Coming soon — not available in the product yet. Do not connect. Operator notes for when we turn it back on: [teams-connect.md](./teams-connect.md).
 
 ---
 

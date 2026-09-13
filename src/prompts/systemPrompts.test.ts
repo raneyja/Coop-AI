@@ -58,10 +58,12 @@ test("comprehension keeps its full required section list (not thinned by chat de
   assert.ok(prompt.includes("Be dense, not thin"));
 });
 
-test("chat use case requires answer-style Your question and applyable edit patches", () => {
+test("chat use case requires opening-prose answers and applyable edit patches", () => {
   const prompt = systemPromptForUseCase("chat");
   assert.ok(prompt.includes("Never restate, paraphrase, or truncate the user's question text"));
   assert.ok(prompt.includes("FAIL: restating, paraphrasing, or truncating the user's question"));
+  assert.ok(prompt.includes("Open with 2–4 sentences"));
+  assert.ok(prompt.includes("No **Answer**, **Summary**, or **Your question** heading"));
   assert.ok(prompt.includes("## Concrete file edits (when recommending code to apply)"));
   assert.ok(prompt.includes("<<<<<<< SEARCH"));
   assert.ok(prompt.includes("Multiple edits → multiple patch blocks"));
@@ -77,7 +79,10 @@ test("chat PR-review contract stays in the file and forbids A8 headings", () => 
   assert.ok(prompt.includes("Never **Next-status WRITE path**"));
   assert.ok(prompt.includes("**Hard errors that abort this attempt**"));
   assert.ok(prompt.includes("No OWASP dump"));
-  assert.ok(prompt.includes("omit **Summary**, **Answer**, and **Your question**"));
+  assert.ok(
+    prompt.includes("do not add **Answer**, **Summary**, or **Your question**") ||
+      prompt.includes("omit **Summary**, **Answer**, and **Your question**")
+  );
   assert.ok(prompt.includes("Do not use **Summary**"));
   assert.ok(prompt.includes("Do not invent a follow-up about tests"));
   assert.ok(prompt.includes("named function"));
@@ -126,7 +131,9 @@ test("comprehension use case includes audience block via withOutputContract", ()
   assert.ok(prompt.includes(OUTPUT_CONTRACT_MARKER));
   assert.ok(prompt.includes("## Required response structure"));
   assert.ok(prompt.includes("**Architecture**"));
-  assert.ok(prompt.includes("**Your question**"));
+  assert.ok(prompt.includes("Open with 1–2 sentences"));
+  assert.ok(prompt.includes("No **Answer**, **Summary**, or **Your question** heading"));
+  assert.ok(!prompt.includes("Place immediately after **Summary**"));
   assert.ok(prompt.includes("## User focus (required)"));
   assert.ok(prompt.includes("PASS:"));
   assert.ok(prompt.includes("FAIL:"));
@@ -144,8 +151,8 @@ test("comprehension use case includes audience block via withOutputContract", ()
   assert.ok(prompt.includes("Based on inventory + anchors; no Confluence/Jira"));
   assert.ok(prompt.includes("Do not treat disconnected or empty Coop integrations"));
   assert.ok(prompt.includes('generic "read the README"'));
-  assert.ok(prompt.includes("one concrete fact"));
-  assert.ok(prompt.includes("answer that ask explicitly"));
+  assert.ok(prompt.includes("Do not emit **Sources**"));
+  assert.ok(prompt.includes("answer that ask in the opening sentences"));
 });
 
 test("comprehension locate-only omits architecture syllabus", () => {

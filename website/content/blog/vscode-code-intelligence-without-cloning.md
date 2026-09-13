@@ -25,7 +25,7 @@ That is the difference between “AI that sees the open file” and “AI that c
 
 ## Is Slack / Jira context personal or company-wide?
 
-**Company-wide.** An org admin connects Slack, Jira, Confluence, Notion, Google Docs, and Teams once. Developers sign in and get that **shared org workspace** context — not each person’s personal accounts.
+**Company-wide.** An org admin connects Slack, Jira, Confluence, Notion, and Google Docs once. Developers sign in and get that **shared org workspace** context — not each person’s personal accounts.
 
 Tools are queried **live when you ask**, not copied into a second standing wiki.
 

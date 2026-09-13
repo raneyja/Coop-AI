@@ -45,7 +45,7 @@ test("decision synthesis includes primary trace target and citation checklist", 
   });
   assert.ok(prompt.includes("## Primary trace target"));
   assert.ok(prompt.includes("fastify.js"));
-  assert.ok(prompt.includes("[Sources: GitHub commit dd2bb73]"));
+  assert.match(prompt, /\[Sources: (?:GitHub|Code host) commit dd2bb73\]/);
   assert.ok(prompt.includes("Grounding rule"));
   assert.ok(prompt.includes("secondary only"));
 });
@@ -108,7 +108,7 @@ test("decision synthesis includes alternatives guidance on initial trace", () =>
   assert.ok(prompt.includes("## Alternatives / trade-offs guidance"));
   assert.ok(prompt.includes("not documented"));
   assert.ok(prompt.includes("Do not infer generic trade-offs"));
-  assert.ok(prompt.includes("full trace narrative"));
+  assert.ok(prompt.includes("short trace for the primary file"));
 });
 
 test("decision synthesis follow-up steers compact alternatives answer when evidence is thin", () => {
@@ -126,7 +126,7 @@ test("decision synthesis follow-up steers compact alternatives answer when evide
   assert.ok(prompt.includes("not documented"));
   assert.ok(prompt.includes("Do not infer generic trade-offs"));
   assert.ok(prompt.includes("What trade-offs were rejected?"));
-  assert.ok(prompt.includes("**Your question**"));
+  assert.ok(prompt.includes("Do not add a **Your question**, **Answer**, or **Summary** heading"));
 });
 
 test("decision synthesis requires quote before alternatives when PR is attached", () => {
@@ -219,7 +219,7 @@ test("decision synthesis includes trace completeness and decision status guidanc
   assert.ok(prompt.includes("Completeness: minimal"));
   assert.ok(prompt.includes("**Decision status**"));
   assert.ok(prompt.includes("**Who to engage**"));
-  assert.ok(prompt.includes("introducing commit and message — provenance"));
+  assert.ok(prompt.includes("### [Sources:") && prompt.includes("dd2bb739fe3b"));
 });
 
 test("formatTimelineForPrompt surfaces technical debt on jira tickets", () => {

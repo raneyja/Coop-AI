@@ -455,21 +455,20 @@ export function buildEmailTemplateSynthesisUserPrompt(options: {
   lines.push("");
   lines.push("## Email-template ticket answer contract (required)");
   lines.push(
-    "This is a ticket-style ask about jobs + email templates. Structure the answer as:"
+    "This is a ticket-style ask about jobs + email templates. Open with where jobs and templates live and how to hook in. Then:"
   );
-  lines.push("1. **Summary** — name the open job / handler and concrete email template path(s) from evidence.");
-  lines.push("2. **Your question** — answer where jobs and templates live; how to hook in.");
+  lines.push("1. Opening — name the open job / handler and concrete email template path(s) from evidence. No **Answer**, **Summary**, or **Your question** heading.");
   lines.push(
-    "3. **Jobs** — cite the open job definition and any followed handler / triggered job from `<email_template_evidence>`."
-  );
-  lines.push(
-    "4. **Email templates** — name concrete Use-repo path(s) from the evidence block (e.g. `packages/email/templates/document-reminder.tsx`). NEVER say “search the repo for email templates” when paths are listed."
+    "2. **Jobs** — cite the open job definition and any followed handler / triggered job from `<email_template_evidence>`."
   );
   lines.push(
-    "5. If the evidence block says NOT FOUND — say templates were not found after following handlers and searching email paths. Still do not invent Coop-AI local paths."
+    "3. **Email templates** — name concrete Use-repo path(s) from the evidence block (e.g. `packages/email/templates/document-reminder.tsx`). NEVER say “search the repo for email templates” when paths are listed."
   );
   lines.push(
-    "6. Cite only active Use-repo paths from evidence — never Coop-AI extension paths (`src/chat/*`, etc.)."
+    "4. If the evidence block says NOT FOUND — say templates were not found after following handlers and searching email paths. Still do not invent Coop-AI local paths."
+  );
+  lines.push(
+    "5. Cite only active Use-repo paths from evidence — never Coop-AI extension paths (`src/chat/*`, etc.)."
   );
   lines.push("");
   lines.push("PASS: name at least one concrete template path when evidence lists it.");

@@ -4,14 +4,19 @@ import type { ContextFetchRequest } from "./requestBatcher";
 import type { ResolvedIntegrationScope } from "../integrationScope/types";
 import {
   applySlackChannelScope,
+  slackSearchTerm,
   filterSlackHitsByChannel,
   isSlackScopeBlocked,
-  slackScopeBlockMessage
+  MAX_JOB_SCOPED_SLACK_QUERIES,
+  scopeJobSlackSearchQueries,
+  slackScopeBlockMessage,
+  stripSlackSearchOperators
 } from "../integrationScope/slackQuery";
 import type { CodeHostProvider } from "../api/codeHosts/types";
 import { buildRepoSearchTerms } from "./docSearchQuery";
 import { collectJiraKeysFromText } from "./jiraContext";
 import { buildDiscussionSearchQueries } from "./integrationSearchTerms";
+import { exactIssueKeys, planJobSearchAttempts } from "./jobSearchPlan";
 import { filePathSearchTerms } from "./traceDecisionSearch";
 import { shouldFetchIncidentIntegrations } from "./incidentIntent";
 import { shouldFetchDiscussionIntegrations } from "./integrationFetchPolicy";
@@ -138,7 +143,38 @@ export function buildSlackSearchQueries(options: {
   preferHost?: CodeHostProvider;
   jobScoped?: boolean;
 }): string[] {
-  return buildDiscussionSearchQueries({ ...options, threadModifier: "is:thread" });
+  if (options.jobScoped) {
+    const terms = (options.extraTerms ?? []).map((term) => stripSlackSearchOperators(term));
+    const keys = exactIssueKeys(terms);
+    const attempts = planJobSearchAttempts(terms)
+      .map((attempt) => slackSearchTerm(attempt.text))
+      .filter(Boolean);
+    return [...keys, ...attempts].slice(0, MAX_JOB_SCOPED_SLACK_QUERIES);
+  }
+  return buildDiscussionSearchQueries({
+    ...options,
+    extraTerms: options.extraTerms?.map(slackSearchTerm).filter(Boolean),
+    threadModifier: "is:thread"
+  });
+}
+
+/**
+ * Job Slack searches Coop will actually send. Enforced allowlists are attached
+ * here so the fetch path cannot skip them and search the workspace.
+ */
+export function planJobSlackSearchQueries(options: {
+  extraTerms?: string[];
+  integrationScope?: ResolvedIntegrationScope;
+}): string[] {
+  return scopeJobSlackSearchQueries(
+    buildSlackSearchQueries({
+      extraTerms: options.extraTerms,
+      jobScoped: true
+    }),
+    options.integrationScope?.slack?.channelIds ?? [],
+    options.integrationScope?.slack?.channelNames ?? [],
+    { enforced: Boolean(options.integrationScope?.enforced) }
+  );
 }
 
 export async function fetchSlackSearchContext(options: {
@@ -175,15 +211,22 @@ export async function fetchSlackSearchContext(options: {
     };
   }
 
-  const queries = buildSlackSearchQueries(options);
+  const queries = options.jobScoped
+    ? planJobSlackSearchQueries({
+        extraTerms: options.extraTerms,
+        integrationScope: options.integrationScope
+      })
+    : buildSlackSearchQueries(options);
   const scopedQueries =
-    options.integrationScope?.enforced && options.integrationScope.slack
-      ? applySlackChannelScope(
-          queries,
-          options.integrationScope.slack.channelIds,
-          options.integrationScope.slack.channelNames
-        )
-      : queries;
+    options.jobScoped
+      ? queries
+      : options.integrationScope?.enforced && options.integrationScope.slack
+        ? applySlackChannelScope(
+            queries,
+            options.integrationScope.slack.channelIds,
+            options.integrationScope.slack.channelNames
+          )
+        : queries;
   const query = scopedQueries[0] ?? "";
   if (!query) {
     return {
@@ -196,18 +239,26 @@ export async function fetchSlackSearchContext(options: {
 
   const client = new SlackClient({ token: creds.slackToken });
   const limit = options.limit ?? 20;
-  const perQueryLimit = Math.max(5, Math.ceil(limit / Math.min(queries.length, 4)));
+  const runQueries = scopedQueries.slice(
+    0,
+    options.jobScoped ? MAX_JOB_SCOPED_SLACK_QUERIES : 16
+  );
+  const perQueryLimit = Math.max(5, Math.ceil(limit / Math.min(runQueries.length, 4)));
   const seen = new Map<string, SlackSearchMessage>();
   const errors: string[] = [];
 
   const allowedChannels = new Set(options.integrationScope?.slack?.channelIds ?? []);
 
-  for (const searchQuery of scopedQueries.slice(0, 16)) {
+  for (const searchQuery of runQueries) {
     if (seen.size >= limit) {
       break;
     }
     try {
       await mergeSlackHits(client, searchQuery, seen, limit, perQueryLimit, allowedChannels);
+      // A hit spends the cap. Do not keep calling Slack after allowlisted messages exist.
+      if (options.jobScoped && seen.size > 0) {
+        break;
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Slack search failed.";
       if (!errors.includes(message)) {

@@ -155,11 +155,9 @@ For Enterprise orgs that sign in with SAML instead of password/Google:
 
 ### Microsoft Teams
 
-- **Entra app registration** (Microsoft Graph OAuth) — not a Teams Store manifest. Full steps: [teams-connect.md](./teams-connect.md).
-- Delegated Graph permissions: `User.Read`, `Team.ReadBasic.All`, `Channel.ReadBasic.All`, `ChannelMessage.Read.All`, `Chat.Read`, `offline_access`.
-- Redirect URI = `/v1/teams/app/callback`.
-- Requires work/school Microsoft 365 with Teams channels (personal Teams/Community is not sufficient).
-- **Customer admin:** **Connect Microsoft Teams** → approve (admin consent if required) → **Manage access** (pick channels) → **Test Teams**.
+**Coming soon — not available in the product yet.** Do not Connect Teams. Chat and Trace Decision do not search Teams. Operator Azure notes stay in [teams-connect.md](./teams-connect.md) under “When we turn it back on.”
+
+- Do not ask the customer admin to Connect, reconnect, or Manage access until the flag is turned off.
 
 ---
 
@@ -199,7 +197,7 @@ For each row:
 | **Jira** | Site comes from Atlassian OAuth — no manual site URL in the extension |
 | **Confluence** | Same Atlassian OAuth as Jira |
 | **Notion / Google Docs** | — |
-| **Teams** | Work/school M365 required; admin consent may be needed — see [teams-connect.md](./teams-connect.md) |
+| **Teams** | Coming soon — do not connect. See [teams-connect.md](./teams-connect.md). |
 
 Admins can also connect from **Extension UI → Settings → Tools** when signed in as owner/admin — admin portal is recommended for GitHub org install and scope management.
 

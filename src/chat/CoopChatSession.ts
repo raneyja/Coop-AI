@@ -503,13 +503,17 @@ import { fetchIndexedBranch } from "../context/resolveRepoBranch";
 import { resolveActiveRepoTarget } from "../workspace/repoTargetResolver";
 import type { RepoTarget } from "../workspace/indexedRepoWorkspaceTypes";
 import { hasRepoFactNeed, needsRepoTreeOverview, repoFactNeeds, shouldSkipQuickActionSuggest } from "../workspace/repoFactIntent";
-import { enrichIntentFetchResultsOnce } from "../context/intentIntegrationEnrichment";
+import {
+  attachPickedIntegrationData,
+  enrichIntentFetchResultsOnce
+} from "../context/intentIntegrationEnrichment";
 import { shouldFetchConfluenceContext } from "../context/confluenceContext";
 import { shouldFetchGoogleDocsContext } from "../context/googleDocsContext";
 import { shouldFetchJiraContext, fetchJiraSearchContext } from "../context/jiraContext";
 import { shouldFetchNotionContext, fetchNotionSearchContext } from "../context/notionContext";
 import { shouldFetchSlackContext, fetchSlackSearchContext } from "../context/slackContext";
 import { shouldFetchTeamsContext, fetchTeamsSearchContext } from "../context/teamsContext";
+import { isTeamsComingSoon, TEAMS_UNAVAILABLE_MESSAGE } from "../integrations/teamsAvailability";
 import { fetchConfluenceSearchContext } from "../context/confluenceContext";
 import { fetchGoogleDocsSearchContext } from "../context/googleDocsContext";
 import type { ResolvedIntegrationScope, ScopedIntegrationProvider } from "../integrationScope/types";
@@ -2895,7 +2899,7 @@ export class CoopChatSession {
       return options.turn?.contextBundle ?? this.lastContextBundle;
     }
 
-    const loadingState = this.loadingFeedbackFor(event);
+    const loadingState = this.loadingFeedbackFor(event, options.turn?.intentPlan);
     const turn = options.turn;
     const feedbackThreadId = turn?.threadId;
     const previousActivityThread = this.activityFeedbackThreadId;
@@ -2938,16 +2942,39 @@ export class CoopChatSession {
       };
     });
     try {
-      const baseResults = await Promise.all(
+      const primaryRequest = requests[0];
+      const overlapIntegrations = Boolean(
+        primaryRequest && (primaryRequest.params.intentPlan?.jobs?.length ?? 0) > 0
+      );
+      const basePromise = Promise.all(
         requests.map((request) =>
           this.requestPrioritizer.enqueue(request, (prioritized) => this.requestBatcher.enqueue(prioritized))
         )
       );
-      const results = await enrichIntentFetchResultsOnce({
-        requests,
-        results: baseResults,
-        enrich: (result, request) => this.enrichChatContextWithIntegrations(result, request)
-      });
+      const results = overlapIntegrations && primaryRequest
+        ? await Promise.all([
+            basePromise,
+            this.enrichChatContextWithIntegrations(
+              {
+                requestId: primaryRequest.id,
+                type: primaryRequest.type,
+                data: {},
+                fetchedAt: new Date()
+              },
+              primaryRequest
+            )
+          ]).then(([baseResults, integrationResult]) =>
+            enrichIntentFetchResultsOnce({
+              requests,
+              results: baseResults,
+              enrich: async (result) => attachPickedIntegrationData(result, integrationResult)
+            })
+          )
+        : await enrichIntentFetchResultsOnce({
+            requests,
+            results: await basePromise,
+            enrich: (result, request) => this.enrichChatContextWithIntegrations(result, request)
+          });
       this.processConflicts(event, results);
 
       if (!options.quiet) {
@@ -3922,21 +3949,35 @@ export class CoopChatSession {
       const locateTerms = locateJobTerms(request.params.intentPlan?.jobs);
       const repoId = request.params.repoId?.trim();
       if (locateTerms.length > 0 && repoId) {
+        const preview = locateTerms
+          .slice(0, 3)
+          .map((term) => `\`${term}\``)
+          .join(", ");
+        this.appendLiveToolActivityLine(`Searching repo for ${preview}`, undefined);
+        const startedAt =
+          request.params.gatherStartedAt ?? this.chatTurnStartedAt ?? Date.now();
+        const budgetMs = remainingContextGatherBudgetMs(startedAt);
+        if (budgetMs <= 0) {
+          return result;
+        }
         const locateQueries = locateJobIndexQueries(locateTerms);
-        const semantic = await searchRepoForFocusQuery({
-          repoId,
-          query: locateTerms.join(" "),
-          indexQueries: locateQueries.length > 0 ? locateQueries : locateTerms,
-          indexBackend: this.options.indexBackend,
-          api: this.options.api,
-          apiBaseUrl: this.preferences.apiBaseUrl,
-          branch: request.params.branch ?? this.currentContext.branch ?? this.preferences.branch,
-          owner: request.params.owner,
-          repo: request.params.repo,
-          provider: request.params.provider as import("./types").CodeHostProviderPreference | undefined,
-          maxFiles: 5,
-          rankMode: "hunt"
-        });
+        const semantic = await Promise.race([
+          searchRepoForFocusQuery({
+            repoId,
+            query: locateTerms.join(" "),
+            indexQueries: locateQueries.length > 0 ? locateQueries : locateTerms,
+            indexBackend: this.options.indexBackend,
+            api: this.options.api,
+            apiBaseUrl: this.preferences.apiBaseUrl,
+            branch: request.params.branch ?? this.currentContext.branch ?? this.preferences.branch,
+            owner: request.params.owner,
+            repo: request.params.repo,
+            provider: request.params.provider as import("./types").CodeHostProviderPreference | undefined,
+            maxFiles: 5,
+            rankMode: "hunt"
+          }),
+          delayMs(budgetMs).then(() => undefined)
+        ]);
         return this.recordAttachedSemanticReads(mergeRepoSemanticContext(result, semantic));
       }
       const semantic = await searchRepoForChat({
@@ -4262,6 +4303,9 @@ export class CoopChatSession {
           integrationScope: atlassianScope
         });
       case "teams":
+        if (isTeamsComingSoon()) {
+          return { messages: [] };
+        }
         return fetchTeamsSearchContext({
           ...base,
           integrationScope: teamsScope
@@ -4795,7 +4839,7 @@ export class CoopChatSession {
     if (shouldFetchGoogleDocsContext(request)) {
       providers.push("google-docs");
     }
-    if (shouldFetchTeamsContext(request)) {
+    if (!isTeamsComingSoon() && shouldFetchTeamsContext(request)) {
       providers.push("teams");
     }
     if (providers.length === 0) {
@@ -6742,6 +6786,13 @@ export class CoopChatSession {
     const historyContent = slashCommandHistoryContent(def, focus);
 
     const provider = def.target.provider;
+    if (provider === "teams" && isTeamsComingSoon()) {
+      this.post({
+        type: "chat:error",
+        payload: { message: TEAMS_UNAVAILABLE_MESSAGE }
+      });
+      return;
+    }
     if (!this.isIntegrationConnected(provider)) {
       const label = integrationLabel(provider);
       const token = slashCommandDisplayToken(def);
@@ -6798,7 +6849,7 @@ export class CoopChatSession {
       case "jira":
         return this.preferences.hasJiraCredentials || this.preferences.hasAtlassianInstalled;
       case "teams":
-        return this.preferences.hasTeamsToken || this.preferences.hasTeamsInstalled;
+        return !isTeamsComingSoon() && (this.preferences.hasTeamsToken || this.preferences.hasTeamsInstalled);
       case "confluence":
         return this.preferences.hasConfluenceCredentials || this.preferences.hasAtlassianInstalled;
       case "notion":

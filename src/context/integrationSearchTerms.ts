@@ -5,6 +5,11 @@ import { filePathSearchTerms } from "./traceDecisionSearch";
 /** Cap terms per integration to avoid oversized API queries. */
 export const MAX_INTEGRATION_SEARCH_TERMS = 16;
 
+/** Hyphen is NOT in Slack and reserved in JQL/CQL. Search the words instead. */
+export function textSearchTerm(term: string): string {
+  return term.replace(/[-–—]/g, " ").replace(/\s+/g, " ").trim();
+}
+
 /**
  * Shared discovery terms for connected integrations (Slack, Teams, Jira, Confluence, Notion, Google Docs).
  * Derived only from Settings owner/repo, active file, editor context, cross-tool doc text, and trace seeds.

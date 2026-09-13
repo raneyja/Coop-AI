@@ -16,7 +16,7 @@ export const HOW_IT_WORKS_LOOP = [
     label: "query_live",
     title: "Query the stack live",
     summary: "Company Slack, Jira, and docs in VS Code — shared org context, fetched when you ask.",
-    body: "An org admin connects Slack, Jira, Confluence, Notion, Google Docs, and Teams once for the company. Those tools are not background-indexed, and they are not each developer’s personal accounts. When a question needs them, Coop fetches from the shared company workspace and places that context next to the code graph. Your conversations are not stored as a standing search index."
+    body: "An org admin connects Slack, Jira, Confluence, Notion, and Google Docs once for the company. Those tools are not background-indexed, and they are not each developer’s personal accounts. When a question needs them, Coop fetches from the shared company workspace and places that context next to the code graph. Your conversations are not stored as a standing search index."
   },
   {
     id: "in-vscode",
@@ -44,7 +44,7 @@ export const INDEXED_VS_LIVE = {
     label: "Fetched when you ask",
     title: "Your company tools",
     items: [
-      "Company Slack threads and Microsoft Teams messages",
+      "Company Slack threads",
       "Company Jira tickets",
       "Company Confluence, Notion, and Google Docs",
       "The current file body from the code host"
@@ -76,7 +76,7 @@ export const WHO_DOES_WHAT = {
     title: "Org admin (once)",
     items: [
       "Connect GitHub, GitLab, or Bitbucket in the admin portal",
-      "Connect company Slack, Jira, Confluence, Notion, Google Docs, and Teams",
+      "Connect company Slack, Jira, Confluence, Notion, and Google Docs",
       "Deep-Index the company repos the team should see",
       "Invite teammates (Pro and Enterprise)"
     ]
@@ -101,7 +101,7 @@ export const HOW_IT_WORKS_FAQS: FaqPair[] = [
   {
     question: "Does CoopAI index Slack, Jira, and docs?",
     answer:
-      "No. Only code repositories are Deep-Indexed. Company Slack, Jira, Confluence, Notion, Google Docs, and Teams are queried live at chat time from the admin-connected workspace — shared across the org, not each developer’s personal accounts — so Coop does not keep a standing copy of those tools."
+      "No. Only code repositories are Deep-Indexed. Company Slack, Jira, Confluence, Notion, and Google Docs are queried live at chat time from the admin-connected workspace — shared across the org, not each developer’s personal accounts — so Coop does not keep a standing copy of those tools."
   },
   {
     question: "Who connects GitHub and Slack?",

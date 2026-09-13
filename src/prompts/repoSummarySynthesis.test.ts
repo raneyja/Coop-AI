@@ -189,7 +189,7 @@ async function run(): Promise<void> {
     assert.ok(prompt.includes("[Sources: Dependency graph]"));
   });
 
-  test("buildRepoSummarySynthesisUserPrompt requires Your question section when userFocus is set", () => {
+  test("buildRepoSummarySynthesisUserPrompt requires opening-prose focus when userFocus is set", () => {
     const prompt = buildRepoSummarySynthesisUserPrompt({
       owner: "CoopAI-Corp",
       repo: "plane",
@@ -203,7 +203,7 @@ async function run(): Promise<void> {
     });
     assert.ok(prompt.includes("## User focus (required)"));
     assert.ok(prompt.includes("what are the main services and how does a work item flow from create → board?"));
-    assert.ok(prompt.includes("**Your question**"));
+    assert.ok(prompt.includes("Do not use **Answer**, **Summary**, or **Your question** headings"));
     assert.ok(prompt.includes("Answer the ## User focus ask first"));
     assert.ok(prompt.includes("however many that is"));
     assert.ok(prompt.includes("Do **not** pad to 5"));

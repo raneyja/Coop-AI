@@ -1,6 +1,7 @@
 import type { QuickActionId } from "../webview/types";
 import type { ComposerMode, IntegrationChatProvider } from "../chat/types";
 import { combineSlashFocus } from "./userFocusQuery";
+import { isTeamsComingSoon } from "../integrations/teamsAvailability";
 
 export type SlashCommandTarget =
   | { kind: "action"; actionId: QuickActionId }
@@ -314,10 +315,13 @@ export function slashMenuRange(
 /** Filters commands for the typeahead menu by token/alias prefix. */
 export function matchSlashCommands(query: string): SlashCommandDef[] {
   const normalized = query.toLowerCase();
+  const commands = isTeamsComingSoon()
+    ? SLASH_COMMANDS.filter((def) => def.name !== "teams")
+    : SLASH_COMMANDS;
   if (!normalized) {
-    return [...SLASH_COMMANDS];
+    return [...commands];
   }
-  return SLASH_COMMANDS.filter(
+  return commands.filter(
     (def) =>
       def.name.startsWith(normalized) || def.aliases.some((alias) => alias.startsWith(normalized))
   );

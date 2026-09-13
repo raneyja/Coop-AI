@@ -40,6 +40,27 @@ test("applyConfluenceSpaceScope appends space in filters", () => {
   assert.equal(queries[0], '(docs) AND (space in ("ENG"))');
 });
 
+test("scope keeps ORDER BY last so JQL and CQL stay legal", () => {
+  const jql = applyJiraProjectScope(
+    ['text ~ "SQL injection" ORDER BY updated DESC'],
+    [],
+    ["COOP"]
+  );
+  assert.equal(
+    jql[0],
+    '(text ~ "SQL injection") AND (project in ("COOP")) ORDER BY updated DESC'
+  );
+  const cql = applyConfluenceSpaceScope(
+    ['type=page AND text ~ "SQL injection" ORDER BY lastModified DESC'],
+    [],
+    ["COOP"]
+  );
+  assert.equal(
+    cql[0],
+    '(type=page AND text ~ "SQL injection") AND (space in ("COOP")) ORDER BY lastModified DESC'
+  );
+});
+
 test("filterJiraIssuesByProject keeps only allowlisted project keys", () => {
   const issues = [
     { key: "COOP-1" },

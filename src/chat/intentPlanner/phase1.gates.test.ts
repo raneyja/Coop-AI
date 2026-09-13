@@ -103,7 +103,7 @@ test("Phase 1 Chat Intent Planner gates", () => {
       assert.equal(requestAllowsIntegrationFetch(request, "jira"), true);
       assert.equal(shouldFetchJiraContext(request), true);
       assert.equal(shouldFetchSlackContext(request), true);
-      assert.equal(shouldFetchTeamsContext(request), true);
+      assert.equal(shouldFetchTeamsContext(request), false);
       assert.equal(shouldFetchConfluenceContext(request), true);
       assert.equal(shouldFetchNotionContext(request), true);
       assert.equal(shouldFetchGoogleDocsContext(request), true);

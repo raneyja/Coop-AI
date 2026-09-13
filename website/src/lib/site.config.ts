@@ -61,7 +61,7 @@ export const siteConfig = {
       integrations: {
         title: "Integrations | GitHub, Slack, Jira, and more",
         description:
-          "Connect CoopAI to GitHub, GitLab, Slack, Jira, Confluence, Notion, Google Docs, and Microsoft Teams once for the company so every developer gets shared stack context next to the code graph — not personal accounts."
+          "Connect CoopAI to GitHub, GitLab, Slack, Jira, Confluence, Notion, and Google Docs once for the company so every developer gets shared stack context next to the code graph — not personal accounts."
       },
       privacy: {
         title: "Privacy Policy",

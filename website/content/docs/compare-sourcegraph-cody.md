@@ -12,7 +12,7 @@ Both care about understanding code. CoopAI’s wedge is **stack context next to 
 
 ## Where CoopAI stands apart
 
-- **Company collaboration tools** — Slack/Jira/Confluence/Notion/Docs/Teams at ask time, shared across the org.
+- **Company collaboration tools** — Slack/Jira/Confluence/Notion/Docs at ask time, shared across the org.
 - **Decision and ownership workflows** — dedicated quick actions, not only “ask Cody.”
 - **Zero-clone product law** — remote index + on-demand file bodies; designed so Use-repo answers do not quietly fall back to a local disk clone of the wrong repo.
 - **Edit that stays reviewable** — complete and patch in the open file; nothing rewrites the tree alone.

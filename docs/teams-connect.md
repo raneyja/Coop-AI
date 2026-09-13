@@ -1,4 +1,16 @@
-# Connect Microsoft Teams (production mode)
+# Microsoft Teams — coming soon
+
+Microsoft Teams is **not available in the product yet**. Microsoft sign-in is unreliable, so Coop does not ask anyone to Connect Teams, and chat does not search Teams.
+
+**Status:** Coming soon. Do not connect, reconnect, or manage access. Existing Teams tokens stay stored and are ignored until we turn this back on. No user action is required.
+
+---
+
+## When we turn it back on
+
+The notes below are for operators. They are not a setup path today.
+
+## Connect Microsoft Teams (production mode)
 
 Coop searches **Teams channel messages** via **Microsoft Graph OAuth**. This is an **Entra (Azure AD) app registration** — not a Teams Store app or bot manifest.
 

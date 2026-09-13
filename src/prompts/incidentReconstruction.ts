@@ -16,6 +16,7 @@ import {
   appendCitationKeysSection,
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
+  stripTemplateSectionHeadings,
   truncationNote
 } from "./evidenceSynthesis";
 
@@ -180,10 +181,8 @@ export function appendIncidentReconstructionContract(
   integrations: IncidentIntegrationSnapshot
 ): void {
   lines.push("## Required response structure (incident / on-call)");
-  lines.push("Use these sections in order (**Title** on its own line; blank line before each):");
-  lines.push("");
-  lines.push(`**Answer**`);
-  lines.push("1-2 sentences: what failed / what the open path does, plus whether tickets/threads were found.");
+  lines.push("Open with 1–2 sentences: what failed / what the open path does, plus whether tickets/threads were found. No **Answer**, **Summary**, or **Your question** heading.");
+  lines.push("Then these topic headings (**Title** on its own line; blank line before each):");
   lines.push("");
   lines.push(`**${INCIDENT_SECTION_SYMPTOMS}**`);
   lines.push("Observable failure signals from the ask and code (retries, webhook errors, stuck sync).");
@@ -333,7 +332,7 @@ export function enrichIncidentReconstructionResponse(
 ): string {
   let result = content.trim();
   if (!result) {
-    result = "**Answer**\nIncident reconstruction from attached evidence.";
+    result = "Incident reconstruction from attached evidence.";
   }
 
   const codePaths = [...new Set((integrations.codePaths ?? []).map((path) => path.trim()).filter(Boolean))];
@@ -365,7 +364,7 @@ export function enrichIncidentReconstructionResponse(
     );
   }
 
-  return result.replace(/\n{3,}/g, "\n\n").trim();
+  return stripTemplateSectionHeadings(result);
 }
 
 /** Collect only paths accompanied by concrete code bodies in the context bundle. */

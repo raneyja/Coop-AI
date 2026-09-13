@@ -86,8 +86,8 @@ Run git grep locally or use Find in Path for the implementation.`,
     ],
     codePaths: ["src/main/java/com/sourcegraph/demo/bigbadmonolith/util/DateTimeUtils.java"]
   });
-  assert.match(heading, /\*\*Answer\*\*/);
-  assert.doesNotMatch(heading, /\*\*Summary\*\*/);
+  assert.match(heading, /Date math is in DateTimeUtils/);
+  assert.doesNotMatch(heading, /\*\*Answer\*\*|\*\*Summary\*\*/);
 });
 
 test("N5 with no source body and timed-out integrations gets a deterministic safe answer", () => {

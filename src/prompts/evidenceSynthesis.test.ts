@@ -13,6 +13,7 @@ import {
   AGENT_REPO_HUNT_RULES,
   NARRATIVE_CITATION_RULES,
   stripDisallowedNarrativeSourceCitations,
+  stripTemplateSectionHeadings,
   supplementaryKeysOmittedFromChecklist,
   truncationNote,
   USER_FOCUS_SECTION_TITLE
@@ -33,10 +34,10 @@ function test(name: string, fn: () => void): void {
   }
 }
 
-test("NARRATIVE_CITATION_RULES reserves source pills for Sources footer", () => {
-  assert.match(NARRATIVE_CITATION_RULES, /Sources.*footer/i);
+test("NARRATIVE_CITATION_RULES keeps source pills out of a Sources footer", () => {
+  assert.match(NARRATIVE_CITATION_RULES, /Do not emit a \*\*Sources\*\* section/i);
   assert.match(NARRATIVE_CITATION_RULES, /at most 1-2 inline/i);
-  assert.match(NARRATIVE_CITATION_RULES, /do \*\*not\*\* use/i);
+  assert.match(NARRATIVE_CITATION_RULES, /plain language/i);
 });
 
 test("EVIDENCE_CITATION_RULES includes narrative citation rules", () => {
@@ -55,20 +56,31 @@ test("appendEvidenceQualityInstructions adds Evidence quality section", () => {
   assert.ok(section.includes("provenance"));
 });
 
-test("appendUserFocusInstructions requires Your question section for specific asks", () => {
+test("appendUserFocusInstructions requires opening prose for specific asks", () => {
   const lines: string[] = [];
   appendUserFocusInstructions(lines, "how does a work item flow from create → board?");
   const section = lines.join("\n");
   assert.ok(section.includes("## User focus (required)"));
   assert.ok(section.includes("how does a work item flow from create → board?"));
-  assert.ok(section.includes(`**${USER_FOCUS_SECTION_TITLE}**`));
+  assert.ok(section.includes("Do not add a **Your question**, **Answer**, or **Summary** heading"));
   assert.ok(section.includes("primary deliverable"));
   assert.ok(section.includes("## Section quality gates (strict pass / fail)"));
   assert.ok(section.includes("PASS:"));
   assert.ok(section.includes("FAIL:"));
   assert.ok(section.includes("generic SaaS narrative"));
   assert.ok(section.includes("restates, paraphrases, or truncates the user's question"));
-  assert.ok(section.includes("immediately after **Summary**/**Answer**"));
+  assert.ok(section.includes("Opening prose"));
+  assert.equal(section.includes(`include a dedicated **${USER_FOCUS_SECTION_TITLE}**`), false);
+});
+
+test("stripTemplateSectionHeadings drops Answer/Summary/Your question titles", () => {
+  const stripped = stripTemplateSectionHeadings(
+    "**Answer**\n\nAuth lives in `src/auth.ts`.\n\n**Your question**\n\nWhere is auth?\n\n**How it works**\n- middleware"
+  );
+  assert.equal(stripped.includes("**Answer**"), false);
+  assert.equal(stripped.includes("**Your question**"), false);
+  assert.ok(stripped.includes("Auth lives in `src/auth.ts`."));
+  assert.ok(stripped.includes("**How it works**"));
 });
 
 test("appendUserFocusInstructions is a no-op when focus is empty", () => {
@@ -137,12 +149,12 @@ test("appendSupplementarySourceCitationGuardrails omits narrative citations for 
   assert.ok(section.includes("absent"));
 });
 
-test("appendNarrativeCitationInstructions forbids pills outside Sources", () => {
+test("appendNarrativeCitationInstructions forbids a Sources footer", () => {
   const lines: string[] = [];
   appendNarrativeCitationInstructions(lines);
   const section = lines.join("\n");
   assert.ok(section.includes("## Narrative citation rules"));
-  assert.ok(section.includes("Do **not** use"));
+  assert.ok(section.includes("Do **not** emit a **Sources** footer"));
 });
 
 test("supplementaryKeysOmittedFromChecklist returns keys missing from checklist", () => {
@@ -181,7 +193,7 @@ test("extractCitationKeysFromSourcesSection reads allowed keys", () => {
 
 test("GENERAL_CHAT_EVIDENCE_RULES covers citations, strength, empty integrations, and source weighting", () => {
   assert.match(GENERAL_CHAT_EVIDENCE_RULES, /strong, medium, weak, or limited/i);
-  assert.match(GENERAL_CHAT_EVIDENCE_RULES, /<empty>/);
+  assert.match(GENERAL_CHAT_EVIDENCE_RULES, /search sample was empty/i);
   assert.match(GENERAL_CHAT_EVIDENCE_RULES, /pull requests and commit history/i);
   assert.match(GENERAL_CHAT_EVIDENCE_RULES, /Slack\/Teams/i);
   assert.match(GENERAL_CHAT_EVIDENCE_RULES, /Never invent ticket IDs, PR numbers/i);
@@ -194,7 +206,7 @@ test("AGENT_REPO_HUNT_RULES forbids inventing absences and restating the ask", (
   assert.match(AGENT_REPO_HUNT_RULES, /index miss/i);
   assert.match(AGENT_REPO_HUNT_RULES, /absent from the repository/i);
   assert.match(AGENT_REPO_HUNT_RULES, /restating|paraphrasing/i);
-  assert.match(AGENT_REPO_HUNT_RULES, /Your question/);
+  assert.match(AGENT_REPO_HUNT_RULES, /Do not use a \*\*Your question\*\* heading/);
   assert.match(AGENT_REPO_HUNT_RULES, /clone/i);
   assert.match(AGENT_REPO_HUNT_RULES, /ValidationError/);
   assert.match(AGENT_REPO_HUNT_RULES, /OpenAPI/i);

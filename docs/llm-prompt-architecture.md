@@ -190,16 +190,18 @@ Appended to every chat use-case system prompt **except** `inline_completion`. Te
 
 ```
 ## Typography (not markdown)
-- Main section titles: **Title** alone on its own line (blank line before).
+- Main section titles: **Title** alone on its own line (blank line before). Name the topic, not the template.
+- Do not use **Answer**, **Summary**, or **Your question**.
 - Subsection titles: same pattern nested under a main section.
 - No # headings, tables, blockquotes, or README-style layout.
 - Field labels (**Open question:**, **What to check:**) are bullets inside subsections — never top-level.
 
-## Uniform response template
-1. **Summary** or **Answer** — direct 1-2 sentence lead (always first).
-2. Main sections from the use-case structure — omit empty sections.
+## Cursor-style response
+1. Open with 1–3 sentences that answer the ask — no heading above that lead.
+2. At most 2–3 topic headings after the lead, only when there are two or more distinct topics.
 3. Multi-item audits: one **subsection title** per item, then 2-4 bullets beneath.
-4. Right-sized: enough evidence to act, no extra tour; finish the last thought (never stop mid-sentence).
+4. Do not emit a **Sources** section — the Sources card already lists files.
+5. Right-sized: enough evidence to act, no extra tour; finish the last thought (never stop mid-sentence).
 ```
 
 **UI contract:** The webview parser (`src/webview/lib/chatProseParser.ts`) runs `normalizeCoopChatProse()` then parses into section headings, clickable file links, citation cards, and code blocks.

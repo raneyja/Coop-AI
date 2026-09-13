@@ -31,7 +31,7 @@ In **production mode** (`coopAI.devMode: false`), integration tokens live on the
 | 4 | **Confluence** → Connect + set site URL → Test | Connected |
 | 5 | **Notion** → Connect → Test | Connected |
 | 6 | **Google Docs** → Connect → Test | Connected |
-| 7 | **Microsoft Teams** → Connect → Test | Connected |
+| 7 | **Microsoft Teams** | Coming soon — do not connect |
 | 8 | **Indexing** → Configure GitHub → Deep-Index company repos | Repos **ready** |
 | 9 | **Extension UI** → **Workspace** → owner / repo / branch | Saved |
 
@@ -51,7 +51,7 @@ Admins with owner/admin role can also connect from **Extension UI → Settings �
 | **Slack** | Trace Decision, Knowledge Gaps with thread context |
 | **Jira** | Ticket-linked decision archaeology |
 | **Confluence / Notion / Google Docs** | Documentation cross-reference in answers |
-| **Teams** | Thread context (work/school Microsoft 365) |
+| **Teams** | Coming soon — not searched in chat or Trace Decision |
 
 ## Per-integration guides
 

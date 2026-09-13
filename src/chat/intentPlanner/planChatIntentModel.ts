@@ -21,6 +21,8 @@ import {
   decisionPhrasePresent,
   mergeChatIntentTools,
   planChatJobs,
+  planChatTasks,
+  planChatTodos,
   toolsImpliedByJobs
 } from "./planChatJobs";
 
@@ -220,10 +222,14 @@ export async function classifyChatIntentPlan(
       connectedTools: input.connectedTools,
       decisionImplied: decisionPhrasePresent(message)
     });
+    const tools = mergeChatIntentTools(plan.tools, implied);
+    const tasks = planChatTasks({ jobs, tools });
     return {
       ...plan,
       jobs,
-      tools: mergeChatIntentTools(plan.tools, implied)
+      tasks,
+      todos: planChatTodos(tasks),
+      tools
     };
   } catch {
     return undefined;

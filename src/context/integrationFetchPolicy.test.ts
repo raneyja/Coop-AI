@@ -45,10 +45,7 @@ const DOC_INTEGRATIONS = [
   ["google-docs", shouldFetchGoogleDocsContext]
 ] as const;
 
-const DISCUSSION_INTEGRATIONS = [
-  ["slack", shouldFetchSlackContext],
-  ["teams", shouldFetchTeamsContext]
-] as const;
+const DISCUSSION_INTEGRATIONS = [["slack", shouldFetchSlackContext]] as const;
 
 test("repo-wide quick actions are enumerated consistently", () => {
   assert.deepEqual([...REPO_WIDE_INTEGRATION_QUICK_ACTIONS], [
@@ -120,6 +117,7 @@ test("integrations auto-fetch on trace-decision", () => {
   for (const [, shouldFetch] of [...DOC_INTEGRATIONS, ...DISCUSSION_INTEGRATIONS]) {
     assert.equal(shouldFetch(traceRequest), true);
   }
+  assert.equal(shouldFetchTeamsContext(traceRequest), false);
 });
 
 test("outside-workspace file skips Notion and other integration auto-fetch", () => {
@@ -169,7 +167,7 @@ test("plain chat still requires keyword intent", () => {
   }
 });
 
-test("incident-shaped chat fetches Jira, Slack, and Teams without naming those tools", () => {
+test("incident-shaped chat fetches Jira and Slack, not Teams while coming soon", () => {
   const incidentRequest = {
     type: "chat_context",
     params: {},
@@ -181,7 +179,7 @@ test("incident-shaped chat fetches Jira, Slack, and Teams without naming those t
   } as ContextFetchRequest;
   assert.equal(shouldFetchJiraContext(incidentRequest), true);
   assert.equal(shouldFetchSlackContext(incidentRequest), true);
-  assert.equal(shouldFetchTeamsContext(incidentRequest), true);
+  assert.equal(shouldFetchTeamsContext(incidentRequest), false);
   assert.equal(shouldFetchNotionContext(incidentRequest), false);
 });
 

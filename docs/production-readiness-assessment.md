@@ -95,9 +95,9 @@ Migrations auto-apply only on **fresh** Postgres volumes via `docker-entrypoint-
 
 Server requests scopes without `search:read` (`slackAppService.ts`). Docs and `SlackClient.searchMessages` require it. Production Connect likely fails for message search. Also: no Slack token refresh branch in `integrationApi.ts`; bot token discarded after OAuth.
 
-### 5. Microsoft Teams Connect (shipped)
+### 5. Microsoft Teams Connect (coming soon)
 
-Admin portal and extension Settings expose **Connect** for Microsoft Teams on all subscription levels. Backend OAuth (`teamsAppApi.ts`) and chat handlers (`CoopChatSession.ts`) are wired. Requires work/school M365; `ChannelMessage.Read.All` may need tenant admin consent — see [teams-connect.md](./teams-connect.md).
+Teams is not offered in the product yet. Admin and extension hide Connect. Chat does not search Teams. OAuth and scope code stay so the flag can be flipped back — see [teams-connect.md](./teams-connect.md).
 
 ### 6. CI/CD baseline improving
 

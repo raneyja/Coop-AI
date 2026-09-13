@@ -62,6 +62,23 @@ test("filterDocPagesForUseRepo keeps Coop pages when Use-repo is Coop-AI", () =>
   assert.equal(filtered.length, 1);
 });
 
+test("decision focus keeps a COOP ticket page when the phrase matches", () => {
+  const filtered = filterDocPagesForUseRepo(
+    [
+      {
+        title: "ADR: extract SQL from customers.jsp (COOP-401)",
+        excerpt: "Do not start Joda-Time work until SQL injection is extracted."
+      }
+    ],
+    {
+      owner: "coopai-group",
+      repo: "training-java-monolith-refactor",
+      focusTerms: ["SQL-injection"]
+    }
+  );
+  assert.equal(filtered.length, 1);
+});
+
 test("scoreDocPageForUseRepo boosts focus term matches", () => {
   const base = scoreDocPageForUseRepo(
     { title: "Documenso overview", excerpt: "general" },

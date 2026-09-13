@@ -61,7 +61,7 @@ export type BlastRadiusSynthesisInput = {
   owner?: string;
   repo?: string;
   userQuestion?: string;
-  /** Specific ask after a slash command / custom prompt — requires **Your question**. */
+  /** Specific ask after a slash command / custom prompt — answer in the opening prose. */
   userFocus?: string;
   mentionedFiles?: MentionScopeRef[];
   activeRepoId?: string;
@@ -143,9 +143,9 @@ function appendBlastRadiusSummaryGuidance(lines: string[], evidence: BlastRadius
     return;
   }
   if (hasVerifiedRemoteBlastDependents(evidence)) {
-    lines.push("## Summary guidance");
+    lines.push("## Opening guidance");
     lines.push(
-      "- Callers come from a verified remote dependency graph. Lead **Summary** with impact (top risk surfaces) — do **not** open with partial-index or incomplete-coverage hedging."
+      "- Callers come from a verified remote dependency graph. Open with impact (top risk surfaces) — do **not** open with partial-index or incomplete-coverage hedging."
     );
     lines.push(
       "- Treat listed import-parse / scip / zoekt callers as real. Mention missing PR/Slack only as optional context, not as weak dependency evidence."
@@ -156,9 +156,9 @@ function appendBlastRadiusSummaryGuidance(lines: string[], evidence: BlastRadius
   if (!hasPartialIndexCoverage(evidence)) {
     return;
   }
-  lines.push("## Summary guidance");
+  lines.push("## Opening guidance");
   lines.push(
-    "- Open **Summary** with the partial index coverage caveat from `[Sources: Dependency graph]` before impact conclusions or **Top risk surfaces**."
+    "- Open with the partial index coverage caveat from `[Sources: Dependency graph]` before impact conclusions or **Top risk surfaces**."
   );
   lines.push(
     "- Lower evidence strength when the dependency graph notes partial index coverage; do not treat listed dependents as exhaustive."

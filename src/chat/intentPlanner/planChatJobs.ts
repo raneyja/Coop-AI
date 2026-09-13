@@ -6,8 +6,15 @@
  * Per-job terms stay distinct. Leading labels (Pager:, On-call:) are metadata.
  */
 import type { IntegrationChatProvider } from "../types";
-import { CHAT_INTENT_TOOL_PROVIDERS, type ChatIntentJob, type ChatIntentJobCapability } from "./types";
+import {
+  CHAT_INTENT_TOOL_PROVIDERS,
+  type ChatIntentJob,
+  type ChatIntentJobCapability,
+  type ChatIntentTask,
+  type ChatIntentTodo
+} from "./types";
 import { classifyRepoCodeIntent } from "../repoCodeIntent";
+import { isTeamsComingSoon, omitTeamsWhileComingSoon } from "../../integrations/teamsAvailability";
 
 const TOOL_NAME_PATTERNS: Array<{ provider: IntegrationChatProvider; pattern: RegExp }> = [
   { provider: "jira", pattern: /\bjira\b/i },
@@ -26,14 +33,18 @@ export function detectExplicitlyNamedTools(message: string): IntegrationChatProv
       named.push(provider);
     }
   }
-  return CHAT_INTENT_TOOL_PROVIDERS.filter((provider) => named.includes(provider));
+  return omitTeamsWhileComingSoon(
+    CHAT_INTENT_TOOL_PROVIDERS.filter((provider) => named.includes(provider))
+  );
 }
 
 export const DECISION_JOB_PROVIDERS: readonly IntegrationChatProvider[] = [
   "slack",
   "teams",
   "jira",
-  "confluence"
+  "confluence",
+  "notion",
+  "google-docs"
 ];
 export const DOCS_JOB_PROVIDERS: readonly IntegrationChatProvider[] = [
   "confluence",
@@ -266,11 +277,17 @@ export function toolsImpliedByJobs(options: {
   if (options.decisionImplied) {
     tools.add("slack");
     tools.add("jira");
-    if (options.connectedTools.includes("teams")) {
+    if (!isTeamsComingSoon() && options.connectedTools.includes("teams")) {
       tools.add("teams");
     }
     if (options.connectedTools.includes("confluence")) {
       tools.add("confluence");
+    }
+    if (options.connectedTools.includes("notion")) {
+      tools.add("notion");
+    }
+    if (options.connectedTools.includes("google-docs")) {
+      tools.add("google-docs");
     }
   }
   const hasDocsJob = options.jobs.some((job) => job.capability === "docs");
@@ -281,7 +298,92 @@ export function toolsImpliedByJobs(options: {
       }
     }
   }
-  return CHAT_INTENT_TOOL_PROVIDERS.filter((provider) => tools.has(provider));
+  return omitTeamsWhileComingSoon(
+    CHAT_INTENT_TOOL_PROVIDERS.filter((provider) => tools.has(provider))
+  );
+}
+
+const TASK_TOOL_LABEL: Record<IntegrationChatProvider, string> = {
+  jira: "Jira",
+  slack: "Slack",
+  teams: "Teams",
+  confluence: "Confluence",
+  notion: "Notion",
+  "google-docs": "Google Docs"
+};
+
+/**
+ * Expand jobs into the steps the turn will run. One locate step, then one
+ * search step per tool that job owns. These become the planned todos.
+ */
+export function planChatTasks(options: {
+  jobs: ChatIntentJob[];
+  tools: IntegrationChatProvider[];
+}): ChatIntentTask[] {
+  const tasks: ChatIntentTask[] = [];
+  for (const job of options.jobs) {
+    const query = job.terms.join(" ").trim();
+    const preview = job.terms.slice(0, 3).join(", ");
+    if (job.capability === "locate") {
+      tasks.push({
+        id: "locate-repo",
+        job: "locate",
+        kind: "search-repo",
+        title: preview ? `Find ${preview} in the repo` : "Find named code in the repo",
+        query,
+        tool: "repo"
+      });
+      continue;
+    }
+    if (job.capability === "code-host") {
+      tasks.push({
+        id: "code-host",
+        job: "code-host",
+        kind: "search-code-host",
+        title: preview ? `Search pull requests for ${preview}` : "Search pull requests",
+        query,
+        tool: "code-host"
+      });
+      continue;
+    }
+    const providers =
+      job.capability === "docs"
+        ? options.tools.filter((tool) => DOCS_JOB_PROVIDERS.includes(tool))
+        : options.tools.filter((tool) => DECISION_JOB_PROVIDERS.includes(tool));
+    const fallback =
+      job.capability === "docs" ? [...DOCS_JOB_PROVIDERS] : (["slack", "jira"] as const);
+    const tools = providers.length > 0 ? providers : [...fallback];
+    for (const tool of tools) {
+      tasks.push({
+        id: `${job.capability}-${tool}`,
+        job: job.capability,
+        kind: "search-integration",
+        title: preview
+          ? `Search ${TASK_TOOL_LABEL[tool]} for ${preview}`
+          : `Search ${TASK_TOOL_LABEL[tool]}`,
+        query,
+        tool
+      });
+    }
+  }
+  return tasks;
+}
+
+export function planChatTodos(tasks: ChatIntentTask[]): ChatIntentTodo[] {
+  return tasks.map((task) => ({ id: task.id, content: task.title }));
+}
+
+/** Trace Decision must not steal a locate + “did we decide” compound ask. */
+export function interpreterJobsClaimTurn(
+  jobs: ChatIntentJob[] | undefined,
+  workflow: string | undefined,
+  decisionImplied: boolean
+): boolean {
+  if (workflow !== "trace-decision" || !decisionImplied) {
+    return false;
+  }
+  const capabilities = new Set((jobs ?? []).map((job) => job.capability));
+  return capabilities.has("locate") && capabilities.has("decision");
 }
 
 export function mergeChatIntentTools(

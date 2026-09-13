@@ -15,18 +15,59 @@ import { activityFromAgentSteps, extractFileChipsFromLabels } from "../chat/chat
 
 export { extractFileChipsFromLabels };
 
-/** Keep the checklist short so timed reveal stays feelable during long jobs. */
-const MAX_ACTIVITY_TODOS = 5;
+/** Research rows can grow; the plan checklist is never sliced. */
+const MAX_RESEARCH_TODOS = 12;
 
 export type AgentTodoStatus = "pending" | "in_progress" | "completed";
+
+export type AgentTodoKind = "plan" | "research";
 
 export type AgentTodoItem = {
   id: string;
   content: string;
   status: AgentTodoStatus;
+  kind?: AgentTodoKind;
   /** Expandable hit list / error under a real search row. */
   detail?: string;
 };
+
+const RESEARCH_LINE =
+  /^(Searched|Read|Explored|Looked up|Reviewed|Traced|Searching repo)\b/i;
+const ACTIVITY_TOOL =
+  /\b(Slack|Jira|Teams|Confluence|Notion|Google Docs|repo|GitHub|GitLab|Bitbucket)\b/i;
+
+/** Planned work vs a finished search/read. Cursor keeps these in two stacks. */
+export function classifyActivityTodoKind(content: string): AgentTodoKind {
+  return RESEARCH_LINE.test(content.trim()) ? "research" : "plan";
+}
+
+export function activityToolKey(content: string): string | undefined {
+  const match = content.trim().match(ACTIVITY_TOOL);
+  return match?.[1]?.toLowerCase();
+}
+
+export function partitionActivityTodos(todos: AgentTodoItem[]): {
+  plan: AgentTodoItem[];
+  research: AgentTodoItem[];
+} {
+  const tagged = todos.map((todo) => ({
+    ...todo,
+    kind: todo.kind ?? classifyActivityTodoKind(todo.content)
+  }));
+  const research = tagged.filter((todo) => todo.kind === "research");
+  const researchedTools = new Set(
+    research.map((todo) => activityToolKey(todo.content)).filter((key): key is string => Boolean(key))
+  );
+  const plan = tagged.filter((todo) => {
+    if (todo.kind !== "plan") {
+      return false;
+    }
+    const tool = activityToolKey(todo.content);
+    // Drop the live "Searching Slack…" line once "Searched Slack…" exists.
+    return !(tool && /^Searching\b/i.test(todo.content.trim()) && researchedTools.has(tool));
+  });
+  return { plan, research };
+}
 
 export type AgentToolRow = {
   id: string;
@@ -64,8 +105,13 @@ export function buildActivityTodosFromFeedback(
   synthesisElapsedMs = 0
 ): AgentTodoItem[] {
   const concrete = buildConcreteActivityMessages(intentFeedback, jobProgress);
-  const prep =
-    concrete.length > MAX_ACTIVITY_TODOS ? concrete.slice(concrete.length - MAX_ACTIVITY_TODOS) : concrete;
+  const planLines = concrete.filter((line) => classifyActivityTodoKind(line) === "plan");
+  const researchLines = concrete.filter((line) => classifyActivityTodoKind(line) === "research");
+  const cappedResearch =
+    researchLines.length > MAX_RESEARCH_TODOS
+      ? researchLines.slice(researchLines.length - MAX_RESEARCH_TODOS)
+      : researchLines;
+  const prep = [...planLines, ...cappedResearch];
 
   // Beat after send — nothing yet so steps don't auto-dump on submit.
   // Streaming turns skip this: Thinking pulse is already on, and todos should appear.
@@ -116,7 +162,8 @@ export function buildActivityTodosFromFeedback(
   return buildNarrativeTimeline(revealed, timelineIndex).map((entry) => ({
     id: entry.id,
     content: entry.label,
-    status: narrativeStatusToTodo(entry.status)
+    status: narrativeStatusToTodo(entry.status),
+    kind: classifyActivityTodoKind(entry.label)
   }));
 }
 
@@ -154,7 +201,8 @@ function buildSynthesisActivityTodos(
   const completedPrep: AgentTodoItem[] = revealedPrep.map((label, index) => ({
     id: `prep:${index}:${label}`,
     content: label,
-    status: "completed" as const
+    status: "completed" as const,
+    kind: classifyActivityTodoKind(label)
   }));
 
   if (completedPrep.length === 0) {

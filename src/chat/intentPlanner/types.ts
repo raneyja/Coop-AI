@@ -33,6 +33,24 @@ export type ChatIntentJob = {
   terms: string[];
 };
 
+/** One executable step derived from a job (repo hunt, Jira search, …). */
+export type ChatIntentTaskKind = "search-repo" | "search-integration" | "search-code-host";
+
+export type ChatIntentTask = {
+  id: string;
+  job: ChatIntentJobCapability;
+  kind: ChatIntentTaskKind;
+  title: string;
+  query: string;
+  tool?: IntegrationChatProvider | "repo" | "code-host";
+};
+
+/** Planned checklist item. Status lives in the activity UI as work completes. */
+export type ChatIntentTodo = {
+  id: string;
+  content: string;
+};
+
 /**
  * Deterministic plan produced before gather / synthesis.
  * Always fail-open to `mode: "none"` when unsure.
@@ -65,6 +83,10 @@ export type ChatIntentPlan = {
    * Named tools stay on `tools`; implied jobs still run.
    */
   jobs?: ChatIntentJob[];
+  /** Concrete steps created from jobs + tools. */
+  tasks?: ChatIntentTask[];
+  /** Planned todos shown while those tasks run. */
+  todos?: ChatIntentTodo[];
 };
 
 export type ChatIntentPlannerInput = {

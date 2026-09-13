@@ -47,13 +47,7 @@ export function applyJiraProjectScope(
   }
   const keyList = keys.map((key) => `"${escapeJqlString(key)}"`).join(", ");
   const scopeClause = `project in (${keyList})`;
-  return queries.map((query) => {
-    const trimmed = query.trim();
-    if (!trimmed) {
-      return scopeClause;
-    }
-    return `(${trimmed}) AND (${scopeClause})`;
-  });
+  return queries.map((query) => appendAtlassianScope(query, scopeClause));
 }
 
 /** Append Confluence `space in (...)` filters so queries only hit allowlisted spaces. */
@@ -69,13 +63,19 @@ export function applyConfluenceSpaceScope(
   }
   const keyList = keys.map((key) => `"${escapeCqlString(key)}"`).join(", ");
   const scopeClause = `space in (${keyList})`;
-  return queries.map((query) => {
-    const trimmed = query.trim();
-    if (!trimmed) {
-      return scopeClause;
-    }
-    return `(${trimmed}) AND (${scopeClause})`;
-  });
+  return queries.map((query) => appendAtlassianScope(query, scopeClause));
+}
+
+/** ORDER BY must stay last. Wrapping the whole string makes JQL/CQL illegal. */
+function appendAtlassianScope(query: string, scopeClause: string): string {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return scopeClause;
+  }
+  const orderBy = trimmed.match(/\s+ORDER BY\s+.+$/i);
+  const body = orderBy ? trimmed.slice(0, orderBy.index).trim() : trimmed;
+  const scoped = body ? `(${body}) AND (${scopeClause})` : scopeClause;
+  return orderBy ? `${scoped}${orderBy[0]}` : scoped;
 }
 
 export function filterJiraIssuesByProject<T extends { key: string }>(

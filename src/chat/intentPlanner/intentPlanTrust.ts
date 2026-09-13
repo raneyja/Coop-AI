@@ -2,7 +2,7 @@
  * Phase 3 — trust UX copy derived from a ChatIntentPlan.
  * Activity checklist + short status line for Sources / answer preamble.
  */
-import type { ChatIntentPlan, ChatIntentWorkflow } from "./types";
+import type { ChatIntentPlan, ChatIntentTask, ChatIntentWorkflow } from "./types";
 import type { IntegrationChatProvider } from "../types";
 
 const WORKFLOW_LABEL: Record<ChatIntentWorkflow, string> = {
@@ -58,19 +58,26 @@ export function toolActivityMessage(tool: IntegrationChatProvider): string {
   }
 }
 
+function taskActivityMessage(task: ChatIntentTask): string {
+  return `${task.title.replace(/^Find /, "Finding ").replace(/^Search /, "Searching ")}…`;
+}
+
 /** Checklist lines shown while gathering for a planned plain-chat turn. */
 export function buildIntentPlanActivityMessages(plan: ChatIntentPlan): string[] {
   if (plan.mode === "none" || plan.mode === "plain") {
     return [];
   }
-  const messages: string[] = [];
   if (plan.workflow) {
-    messages.push(workflowActivityMessage(plan.workflow));
+    const messages: string[] = [workflowActivityMessage(plan.workflow)];
+    for (const tool of plan.tools) {
+      messages.push(toolActivityMessage(tool));
+    }
+    return messages;
   }
-  for (const tool of plan.tools) {
-    messages.push(toolActivityMessage(tool));
+  if (plan.tasks?.length) {
+    return plan.tasks.map(taskActivityMessage);
   }
-  return messages;
+  return plan.tools.map(toolActivityMessage);
 }
 
 /**
@@ -84,6 +91,11 @@ export function buildIntentPlanStatusLine(plan: ChatIntentPlan): string | undefi
   const parts: string[] = [];
   if (plan.workflow) {
     parts.push(WORKFLOW_LABEL[plan.workflow]);
+  } else if ((plan.jobs ?? []).some((job) => job.capability === "locate")) {
+    parts.push("named files");
+  }
+  if ((plan.jobs ?? []).some((job) => job.capability === "code-host")) {
+    parts.push("pull requests");
   }
   for (const tool of plan.tools) {
     parts.push(TOOL_LABEL[tool]);
@@ -118,6 +130,9 @@ export function buildIntentPlanTrustPreamble(plan: ChatIntentPlan): string | und
       : undefined,
     plan.jobs?.length
       ? `Jobs: ${plan.jobs.map((job) => `${job.capability} [${job.terms.join(", ")}]`).join("; ")}.`
+      : undefined,
+    plan.tasks?.length
+      ? `Tasks: ${plan.tasks.map((task) => task.title).join("; ")}.`
       : undefined,
     `</coop_intent_plan>`
   ]

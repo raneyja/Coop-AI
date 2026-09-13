@@ -214,7 +214,6 @@ export function buildThinAlternativesTradeOffsResponse(
     : undefined;
 
   const lines = [
-    "**Summary**",
     `Evidence is **limited** — only the introducing commit for \`${file}\` is attached.`,
     "",
     "**Alternatives considered**",
@@ -355,7 +354,7 @@ export function injectHistoryGrounding(content: string, timeline: DecisionTimeli
     const nextSummary = `${lead}\n\n${summaryBody}`.trim();
     result = replaceSectionBody(`\n${result}`, "Summary", nextSummary).replace(/^\n/, "");
   } else {
-    result = `**Summary**\n${lead}\n\n${result}`;
+    result = `${lead}\n\n${result}`;
   }
 
   const checklist = listDecisionSourcesChecklist(timeline);

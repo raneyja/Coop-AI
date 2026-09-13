@@ -14,8 +14,10 @@ type OnboardingScopeStepProps = {
 export function OnboardingScopeStep({ integrations, onRefresh }: OnboardingScopeStepProps) {
   const [openProvider, setOpenProvider] = useState<IntegrationProvider | null>(null);
 
-  const scopable = INTEGRATIONS.filter((def) =>
-    SCOPABLE_PROVIDERS.includes(def.id as (typeof SCOPABLE_PROVIDERS)[number])
+  const scopable = INTEGRATIONS.filter(
+    (def) =>
+      !def.comingSoon &&
+      SCOPABLE_PROVIDERS.includes(def.id as (typeof SCOPABLE_PROVIDERS)[number])
   );
   const connectedScopable = scopable.filter((def) => {
     const status = integrations.find((i) => i.provider === def.id);

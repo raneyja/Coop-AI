@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import type { ContextFetchRequest, ContextFetchResult } from "./requestBatcher";
-import { enrichIntentFetchResultsOnce, pickIntegrationData } from "./intentIntegrationEnrichment";
+import {
+  attachPickedIntegrationData,
+  enrichIntentFetchResultsOnce,
+  pickIntegrationData
+} from "./intentIntegrationEnrichment";
 
 let passed = 0;
 let failed = 0;
@@ -117,6 +121,15 @@ async function run(): Promise<void> {
 
     assert.equal((enriched[0].data as Record<string, unknown>).marker, "updated");
     assert.equal((enriched[1].data as Record<string, unknown>).marker, "b");
+  });
+
+  await test("attachPickedIntegrationData copies Slack onto a locate result", () => {
+    const locate = makeResult("a", { repoSemanticSearch: { files: [] } });
+    const integrations = makeResult("stub", { slackSearch: { messages: [{ text: "Do not mix" }] } });
+    const merged = attachPickedIntegrationData(locate, integrations);
+    const data = merged.data as Record<string, unknown>;
+    assert.ok(data.repoSemanticSearch);
+    assert.deepEqual(data.slackSearch, { messages: [{ text: "Do not mix" }] });
   });
 
   await test("pickIntegrationData extracts only integration fields", () => {

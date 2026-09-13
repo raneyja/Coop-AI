@@ -470,8 +470,10 @@ test("job-scoped providers start in parallel with capability-specific terms", as
   assert.deepEqual(args.get("jira")?.extraTerms, ["sql-injection"]);
   assert.deepEqual(args.get("slack")?.extraTerms, ["sql-injection"]);
   assert.deepEqual(args.get("teams")?.extraTerms, ["sql-injection"]);
-  assert.deepEqual(args.get("notion")?.extraTerms, ["rollback runbook"]);
-  assert.deepEqual(args.get("google-docs")?.extraTerms, ["rollback runbook"]);
+  assert.deepEqual(args.get("notion")?.extraTerms, ["sql-injection", "rollback runbook"]);
+  assert.equal(args.get("notion")?.jobScoped, true);
+  assert.deepEqual(args.get("google-docs")?.extraTerms, ["sql-injection", "rollback runbook"]);
+  assert.equal(args.get("google-docs")?.jobScoped, true);
   assert.deepEqual(args.get("confluence")?.extraTerms, ["sql-injection", "rollback runbook"]);
   assert.equal(args.get("code-host")?.queryText, "PR #53");
   assert.equal(args.get("code-host")?.provider, "gitlab");

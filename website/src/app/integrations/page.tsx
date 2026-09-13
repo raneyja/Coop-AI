@@ -36,8 +36,9 @@ const integrationCards = [
   },
   {
     name: "Microsoft Teams",
-    description: "Live company channel context for decision archaeology and knowledge gap detection.",
-    href: "/docs/teams"
+    description: "Coming soon. Channel search is not available in the product yet.",
+    href: "/docs/teams",
+    linkLabel: "Status"
   },
   {
     name: "Jira",
@@ -93,7 +94,9 @@ export default function IntegrationsPage() {
               >
                 <h3 className="text-lg font-semibold text-gray-900">{integration.name}</h3>
                 <p className="mt-3 text-sm leading-relaxed text-coop-muted">{integration.description}</p>
-                <p className="mt-4 text-sm font-medium text-gray-900">Setup guide →</p>
+                <p className="mt-4 text-sm font-medium text-gray-900">
+                  {"linkLabel" in integration ? integration.linkLabel : "Setup guide"} →
+                </p>
               </Link>
             ))}
           </div>

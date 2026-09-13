@@ -31,7 +31,7 @@ export const REPO_SUMMARY_LOCATE_ONLY_MARKER = "## Locate-only response";
 
 export const REPO_SUMMARY_EVIDENCE_SYSTEM = `You are an expert code architect helping engineers understand a repository.
 Summarize architecture, key systems, boundaries, and risks. Prefer evidence from the attached Sources card over speculation.
-Cite file paths in narrative sections; reserve \`[Sources: …]\` labels for the **Sources** footer (at most 1-2 inline in **Summary**).
+Cite file paths in narrative sections; at most 1–2 inline \`[Sources: …]\` labels in the opening. Do not emit a **Sources** footer.
 Never attribute @-attached files from other repositories or local workspaces to the target repository's architecture.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
@@ -46,7 +46,7 @@ export type RepoSummarySynthesisInput = {
   activeFile?: string;
   summary: RepoSummaryEvidence | Record<string, unknown>;
   userQuestion?: string;
-  /** Specific ask after a slash command / custom prompt — requires **Your question**. */
+  /** Specific ask after a slash command / custom prompt — answer in the opening prose. */
   userFocus?: string;
   mentionedFiles?: MentionScopeRef[];
   activeRepoId?: string;
@@ -76,17 +76,17 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
   if (locateOnly) {
     lines.push(REPO_SUMMARY_LOCATE_ONLY_MARKER);
     lines.push(
-      "This ask is where something lives. Answer **Summary** + **Your question** with the attached implementation path chain. Omit **Architecture**, **Key subsystems**, **Entry points**, **Risks & unknowns**, and **Suggested next steps**. Do not cite Confluence or Notion. Do not pad a repo syllabus."
+      "This ask is where something lives. Answer in the opening sentences with the attached implementation path chain. Omit **Architecture**, **Key subsystems**, **Entry points**, **Risks & unknowns**, and **Suggested next steps**. Do not cite Confluence or Notion. Do not pad a repo syllabus. Do not use **Answer**, **Summary**, or **Your question** headings."
     );
   } else if (input.userFocus?.trim()) {
     lines.push(
-      "Answer the ## User focus ask first (Summary + **Your question**). Then synthesize a **repository-wide** overview weighted toward that focus using `<repo_entry_files>`, `<graph_context>`, and manifest metadata in attached context."
+      "Answer the ## User focus ask first in the opening sentences. Then synthesize a **repository-wide** overview weighted toward that focus using `<repo_entry_files>`, `<graph_context>`, and manifest metadata in attached context. Do not use **Answer**, **Summary**, or **Your question** headings."
     );
     lines.push(
-      "When the focus asks where something lives or how a flow works: **Your question** must name the attached files/symbols that answer that ask, before Architecture. If they also asked for files to read first: list the attached **domain** paths that support the answer — however many that is (2 is fine; 6 is fine). Do **not** pad to 5, repeat a file, or invent paths to fill a count. There is no official reading list. README / docker-compose / package.json only if that is the only evidence. Tests/migrations only if that is the only attached evidence. Never name a path that is not attached (no invented `models.py`). If the ask has multiple topics, cover each topic that has attached evidence. Architecture / Key subsystems FAIL if they are only compose service names (web, api, postgres, redis) with no domain path."
+      "When the focus asks where something lives or how a flow works: the opening must name the attached files/symbols that answer that ask, before Architecture. If they also asked for files to read first: list the attached **domain** paths that support the answer — however many that is (2 is fine; 6 is fine). Do **not** pad to 5, repeat a file, or invent paths to fill a count. There is no official reading list. README / docker-compose / package.json only if that is the only evidence. Tests/migrations only if that is the only attached evidence. Never name a path that is not attached (no invented `models.py`). If the ask has multiple topics, cover each topic that has attached evidence. Architecture / Key subsystems FAIL if they are only compose service names (web, api, postgres, redis) with no domain path."
     );
     lines.push(
-      "If the focus asks where **the API** creates, writes, or rejects something: name attached serializer/view/handler/API paths in **Your question**. A frontend modal, store, or widget is not the API — do not call it that. If no API-layer files are attached, say the API path was not in attached evidence; never invent one."
+      "If the focus asks where **the API** creates, writes, or rejects something: name attached serializer/view/handler/API paths in the opening. A frontend modal, store, or widget is not the API — do not call it that. If no API-layer files are attached, say the API path was not in attached evidence; never invent one."
     );
     lines.push(
       "A `types.ts`, `interfaces/`, or `.d.ts` file defines shapes. It is not where a message is sent, handled, or dispatched. If the focus asks where something happens and the only attached files are type declarations, say the implementation path was not in attached evidence — do not name the types file as the send/handle path, and do not pad a reading list. If implementation files are attached, name those first."
@@ -139,7 +139,7 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
   }
   lines.push("Synthesize from evidence only. Follow the required response structure in your system instructions.");
   lines.push(
-    "Every **Sources** bullet MUST start with an exact citation key from the checklist and keep the concrete fact after the em dash (or an equally specific fact from that source). Never leave the label blank; never use filler like \"contributed insights\" or \"provided details\"."
+    "Do not emit a **Sources** footer. If you use an inline \`[Sources: …]\` label, it must be an exact citation key from the list. Never use filler like \"contributed insights\" or \"provided details\"."
   );
   if (!locateOnly) {
     lines.push(
@@ -151,10 +151,10 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
 
 function appendRepoSummaryCraftInstructions(lines: string[], summary: RepoSummaryEvidence): void {
   lines.push("## Evidence quality & response craft");
-  lines.push("- Lead **Summary** with what can be responsibly concluded from the attached bundle.");
+  lines.push("- Open with what can be responsibly concluded from the attached bundle.");
   if (isGithubOnlyRepoSummaryEvidence(summary)) {
     lines.push(
-      '- Evidence is GitHub/code-host only (no Confluence/Jira/Slack/Notion/Teams/Google Docs hits). End **Summary** with one short confidence line, e.g. "Based on inventory + anchors; no Confluence/Jira."'
+      '- Evidence is GitHub/code-host only (no Confluence/Jira/Slack/Notion/Teams/Google Docs hits). End the opening with one short confidence line, e.g. "Based on inventory + anchors; no Confluence/Jira."'
     );
   } else {
     lines.push(
@@ -167,10 +167,10 @@ function appendRepoSummaryCraftInstructions(lines: string[], summary: RepoSummar
     "- **Risks & unknowns**: only path-tied or evidence-tied risks (config, deploy, missing docs *in the repo*). Do **not** treat disconnected or empty Coop integrations (Slack, Jira, Confluence, etc.) as repository risks unless the user asked about those tools or code evidence shows they are required."
   );
   lines.push(
-    "- **Suggested next steps**: 2–4 numbered items that name concrete paths from ## Repository evidence (e.g. `apps/api`, `packages/…`, `deployments/…`, a compose file, a workflow). When ## User focus asked for files to read first, list those attached domain files — the same paths as **Your question**, covering each attached topic. Avoid generic \"read the README\" unless that is the only onboarding path in evidence."
+    "- **Suggested next steps**: 2–4 numbered items that name concrete paths from ## Repository evidence (e.g. `apps/api`, `packages/…`, `deployments/…`, a compose file, a workflow). When ## User focus asked for files to read first, list those attached domain files — the same paths as the opening, covering each attached topic. Avoid generic \"read the README\" unless that is the only onboarding path in evidence."
   );
   lines.push(
-    "- **Sources** bullets: after each `[Sources: …]` label, keep one concrete fact (counts, top-level dirs, named anchors). Forbidden filler: \"contributed insights\", \"provided details\", \"offered information\"."
+    "- Do not emit a **Sources** footer. Inline labels, if any, keep one concrete fact (counts, top-level dirs, named anchors). Forbidden filler: \"contributed insights\", \"provided details\", \"offered information\"."
   );
   lines.push("");
 }

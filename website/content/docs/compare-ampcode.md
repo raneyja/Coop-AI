@@ -14,7 +14,7 @@ If an agent is a junior who types fast, CoopAI is the senior who already read th
 
 - **Not an autonomous rewrite product** — reviewable patches.
 - **Find Owner / Blast Radius / Trace Decision** before large changes.
-- **Company Slack, Jira, Confluence, Notion, Docs, and Teams**.
+- **Company Slack, Jira, Confluence, Notion, and Docs**.
 - **Zero-clone** understanding for big monorepos and multi-service orgs.
 
 ## Comparison matrix

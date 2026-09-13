@@ -3,13 +3,43 @@ import test from "node:test";
 import {
   agentStepsToActivity,
   buildActivityTodosFromFeedback,
+  classifyActivityTodoKind,
   extractFileChipsFromLabels,
   nextLiveThinkingOpenState,
+  partitionActivityTodos,
   summarizeAgentExploration,
   toolRowsFromTodos,
   type AgentTodoItem
 } from "./agentActivity";
 import { ACTIVITY_PHASE_MS, ACTIVITY_START_DELAY_MS } from "./thinkingMessageRotation";
+
+test("classifyActivityTodoKind splits plan from finished research", () => {
+  assert.equal(classifyActivityTodoKind("Find DateTimeUtils in the repo"), "plan");
+  assert.equal(classifyActivityTodoKind("Search Jira for SQL-injection"), "plan");
+  assert.equal(classifyActivityTodoKind("Searching Slack for SQL-injection…"), "plan");
+  assert.equal(classifyActivityTodoKind("Searched Jira for `SQL-injection`"), "research");
+  assert.equal(classifyActivityTodoKind("Read `DateTimeUtils.java`"), "research");
+  assert.equal(classifyActivityTodoKind("Searching repo for `reports.jsp`"), "research");
+});
+
+test("partitionActivityTodos keeps the plan and drops Searching once Searched exists", () => {
+  const split = partitionActivityTodos([
+    { id: "1", content: "Find DateTimeUtils, reports.jsp in the repo", status: "completed" },
+    { id: "2", content: "Search Jira for SQL-injection", status: "completed" },
+    { id: "3", content: "Searching Slack for SQL-injection…", status: "in_progress" },
+    { id: "4", content: "Searched Jira for `SQL-injection`", status: "completed" },
+    { id: "5", content: "Read `DateTimeUtils.java`", status: "completed" }
+  ]);
+  assert.deepEqual(
+    split.plan.map((todo) => todo.content),
+    [
+      "Find DateTimeUtils, reports.jsp in the repo",
+      "Search Jira for SQL-injection",
+      "Searching Slack for SQL-injection…"
+    ]
+  );
+  assert.equal(split.research.length, 2);
+});
 
 test("agentStepsToActivity humanizes search/read tools", () => {
   const activity = agentStepsToActivity([

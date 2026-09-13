@@ -102,11 +102,11 @@ Set default **owner**, **repo**, and **branch** for Trace Decision and context f
 
 ---
 
-## 4. Integrations (Slack / Jira / Confluence / Notion / Google Docs / Teams)
+## 4. Integrations (Slack / Jira / Confluence / Notion / Google Docs)
 
-**Settings section:** Tools → Collaboration (Slack, Jira, Confluence, Notion, Google Docs, Teams)
+**Settings section:** Tools → Collaboration (Slack, Jira, Confluence, Notion, Google Docs). Microsoft Teams is coming soon — do not connect it.
 
-Used by **Trace Decision**, **Knowledge Gaps**, and chat (`/slack`, `/jira`, `/confluence`, `/notion`, `/docs`, `/teams`).
+Used by **Trace Decision**, **Knowledge Gaps**, and chat (`/slack`, `/jira`, `/confluence`, `/notion`, `/docs`). `/teams` is not available yet.
 
 ### Production (`coopAI.devMode: false`)
 

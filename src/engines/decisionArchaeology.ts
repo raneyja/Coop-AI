@@ -9,6 +9,7 @@ import { JiraClient } from "../api/jira/jiraClient";
 import { createJiraClientFromCredentials } from "../api/integrations/buildIntegrationClients";
 import { SlackClient, type SlackThread } from "../api/slack/slackClient";
 import { TeamsClient } from "../api/teams/teamsClient";
+import { isTeamsComingSoon } from "../integrations/teamsAvailability";
 import {
   buildSlackSearchQueries,
   extractGitHubIssueNumbers,
@@ -366,7 +367,7 @@ export class DecisionArchaeologyEngine {
     const uniqueIssues = [...new Set(issueKeys)];
 
     const slack = await this.resolveSlackClient();
-    const teams = await this.resolveTeamsClient();
+    const teams = isTeamsComingSoon() ? undefined : await this.resolveTeamsClient();
     const jira = await this.resolveJiraClient();
 
     if (slack) {

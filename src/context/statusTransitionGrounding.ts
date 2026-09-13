@@ -806,17 +806,16 @@ export function buildStatusTransitionSynthesisUserPrompt(options: {
   lines.push("");
   lines.push("## Status-transition answer contract (required)");
   lines.push(
-    "This is an on-call stuck-status / status-transition question. Structure the answer as:"
+    "This is an on-call stuck-status / status-transition question. Open with the write path and what keeps it pending. Then:"
   );
-  lines.push("1. **Summary** — name the next-status WRITE path first when evidence has one (job or direct write).");
-  lines.push("2. **Your question** — answer the ask with the write path + what keeps it pending.");
-  lines.push("3. **What keeps it in state** — waiting paths (still legitimately PENDING) vs hard aborts.");
-  lines.push("4. **Hard errors that abort this attempt** — throws that stop completion now.");
+  lines.push("1. Opening — name the next-status WRITE path first when evidence has one (job or direct write), plus what keeps it pending. No **Answer**, **Summary**, or **Your question** heading.");
+  lines.push("2. **What keeps it in state** — waiting paths (still legitimately PENDING) vs hard aborts.");
+  lines.push("3. **Hard errors that abort this attempt** — throws that stop completion now.");
   lines.push(
-    "5. **Next-status write path** — cite the job/symbol/file that advances status (e.g. `internal.seal-document`). Never invent a writer absent from `<status_transition_evidence>`."
+    "4. **Next-status write path** — cite the job/symbol/file that advances status (e.g. `internal.seal-document`). Never invent a writer absent from `<status_transition_evidence>`."
   );
-  lines.push("6. **Status type distinction** — when both appear, separate recipient SigningStatus from envelope DocumentStatus.");
-  lines.push("7. **Gaps** — say what evidence does not show.");
+  lines.push("5. **Status type distinction** — when both appear, separate recipient SigningStatus from envelope DocumentStatus.");
+  lines.push("6. **Gaps** — say what evidence does not show.");
   lines.push("");
   lines.push("PASS: name the seal/job/writer when the evidence block lists it.");
   lines.push("FAIL: only list throw conditions while omitting an evidenced job trigger that advances status.");

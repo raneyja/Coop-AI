@@ -6,7 +6,7 @@ export function appendCitationKeysSection(lines: string[], citationKeys: string[
   if (citationKeys.length === 0) {
     return;
   }
-  lines.push("## Citation keys (use exactly in **Sources**; at most 1-2 may appear inline in **Summary**)");
+  lines.push("## Citation keys (optional inline only — do not add a **Sources** footer; at most 1-2 labels in the opening)");
   for (const key of citationKeys) {
     lines.push(`- ${key}`);
   }
@@ -17,7 +17,7 @@ export function appendSourcesChecklistSection(lines: string[], checklist: string
   if (checklist.length === 0) {
     return;
   }
-  lines.push("## Required **Sources** bullets (prioritize up to 3 in your **Sources** section — full detail lives in the Sources card)");
+  lines.push("## Source labels (inline only — no **Sources** footer; full detail lives in the Sources card)");
   for (const item of checklist) {
     lines.push(`- ${item}`);
   }
@@ -46,14 +46,14 @@ export function buildSourcesChecklistFromKeys(
 }
 
 export const NARRATIVE_CITATION_RULES = `Narrative citation rules:
-- Reserve \`[Sources: …]\` labels for the **Sources** footer only.
-- In **Summary**, you may include at most 1-2 inline \`[Sources: …]\` citations for the strongest evidence — no more.
-- In all other narrative sections (**Architecture**, **Technical decision**, **Direct impact**, **Alternatives considered**, etc.), do **not** use \`[Sources: …]\` labels — describe evidence in plain language (file paths, PR numbers, ticket keys, channel names).
-- Never cite a \`[Sources: …]\` label in narrative when that source is absent from the required **Sources** checklist.`;
+- Do not emit a **Sources** section. The Sources evidence card already lists files.
+- You may include at most 1-2 inline \`[Sources: …]\` citations in the opening for the strongest evidence — no more.
+- In topic sections (**Architecture**, **Technical decision**, **Direct impact**, **Alternatives considered**, etc.), describe evidence in plain language (file paths, PR numbers, ticket keys, channel names).
+- Never cite a \`[Sources: …]\` label when that source is absent from the attached source-label list.`;
 
 export function appendEvidenceQualityInstructions(lines: string[]): void {
   lines.push("## Evidence quality");
-  lines.push("- Lead **Summary** with what can be responsibly concluded from the attached bundle.");
+  lines.push("- Open with what can be responsibly concluded from the attached bundle.");
   lines.push("- State evidence strength (strong / medium / weak / limited) and lower confidence when evidence is thin.");
   lines.push("- Call out missing PR, issue, discussion, or documentation when not present in the bundle.");
   lines.push("- Distinguish provenance (direct source facts) from rationale (your synthesis).");
@@ -63,9 +63,9 @@ export function appendEvidenceQualityInstructions(lines: string[]): void {
 
 export function appendNarrativeCitationInstructions(lines: string[]): void {
   lines.push("## Narrative citation rules");
-  lines.push("- Do **not** use \`[Sources: …]\` labels in narrative sections — reserve them for the **Sources** footer.");
-  lines.push("- **Summary** may include at most 1-2 inline \`[Sources: …]\` citations; all other sections use plain language.");
-  lines.push("- Never cite a source label in narrative when that label is absent from the required **Sources** checklist.");
+  lines.push("- Do **not** emit a **Sources** footer. At most 1–2 inline \`[Sources: …]\` labels in the opening.");
+  lines.push("- Topic sections use plain language (paths, PR numbers, ticket keys).");
+  lines.push("- Never cite a source label when that label is absent from the attached source-label list.");
   lines.push("");
 }
 
@@ -98,19 +98,25 @@ export function appendSupplementarySourceCitationGuardrails(
   }
   lines.push("## Citation guardrails");
   lines.push(
-    "- The labels below appear in the evidence card or citation keys but are **absent** from the required **Sources** checklist — do **not** cite them anywhere in your response (including **Summary**)."
+    "- The labels below appear in the evidence card or citation keys but are **absent** from the attached source-label list — do **not** cite them anywhere in your response."
   );
   lines.push(
     "- Describe any relevant facts from these sources in plain language without \`[Sources: …]\` pills, or omit them when they do not change your answer."
   );
   for (const key of omitted) {
-    lines.push(`- Omit \`${key}\` everywhere outside the **Sources** checklist (it is not a required checklist item).`);
+    lines.push(`- Omit \`${key}\` (it is not on the attached source-label list).`);
   }
   lines.push("");
 }
 
 const SOURCE_CITATION_TOKEN_RE = /\[Sources:[^\]]+\]/g;
 const SECTION_HEADER_RE = /^\*\*([^*]+)\*\*\s*$/;
+const TEMPLATE_SECTION_HEADING_RE = /^\s*\*\*(?:Answer|Summary|Your question)\*\*\s*$/gim;
+
+/** Drop leftover report-template titles so the lead reads as Cursor-style prose. */
+export function stripTemplateSectionHeadings(content: string): string {
+  return content.replace(TEMPLATE_SECTION_HEADING_RE, "").replace(/\n{3,}/g, "\n\n").trim();
+}
 
 export function extractCitationKeysFromSourcesSection(content: string): string[] {
   const match = content.match(/\*\*Sources\*\*/i);
@@ -194,16 +200,16 @@ export function appendEvidenceEnrichmentInstructions(lines: string[], hasEnrichm
     return;
   }
   lines.push("## Evidence enrichment");
-  lines.push("- When the bundle includes a precise `targetLabel`, cite that label in **Summary**.");
+  lines.push("- When the bundle includes a precise `targetLabel`, cite that label in the opening.");
   lines.push("- When `introducingDiffSummary` is present, use its summary to describe what the introducing commit changed.");
   lines.push(
-    "- When `evolution.commitCountSinceIntroduction` is present, mention file activity since introduction in **Summary**."
+    "- When `evolution.commitCountSinceIntroduction` is present, mention file activity since introduction in the opening."
   );
   lines.push(
-    "- When `evolution.recentCommits` or `focusCommit` is present for a full-file trace, lead **Summary** / **Technical decision** with that recent decision story; treat `originalCommit` as birth/background unless this is a line selection."
+    "- When `evolution.recentCommits` or `focusCommit` is present for a full-file trace, lead the opening / **Technical decision** with that recent decision story; treat `originalCommit` as birth/background unless this is a line selection."
   );
   lines.push(
-    "- When `rationaleRanking` is present, name the primary rationale source in **Summary** and weight sections by rationale vs provenance roles."
+    "- When `rationaleRanking` is present, name the primary rationale source in the opening and weight sections by rationale vs provenance roles."
   );
   lines.push(
     "- When `pathEvolution` is present, mention recent path activity and last modifier when assessing current ownership."
@@ -229,7 +235,7 @@ ${EMPTY_EVIDENCE_HONESTY_RULE}
 
 /**
  * Agent hunt honesty — empty index search ≠ symbol missing from the repo.
- * Without this, synthesis invents "**Your question**" restatements or false absences.
+ * Without this, synthesis invents restatements of the ask or false absences.
  */
 export const AGENT_REPO_HUNT_RULES = `When <agent_search> or <agent_files> are attached:
 - Prefer <agent_files> bodies. Cite real paths and line ranges from those blocks (citation fences with numeric startLine:endLine:path).
@@ -237,26 +243,25 @@ export const AGENT_REPO_HUNT_RULES = `When <agent_search> or <agent_files> are a
 - If <agent_search> has zero usable hits, or includes skipNote / exhaustedQueries: say the index returned no usable matches for the terms tried. Do not claim the symbol is absent from the repository (index miss ≠ missing code).
 - Never tell the user to clone the repo, open a local copy, or search on disk. Indexed remote is the workspace. If the write/reject path is not in attached bodies, say what you did read and that the index did not return the API check — do not send them to a clone.
 - If an attached body has validate() or ValidationError, cite it only when it rejects the field the user asked about. A validate() for a different field is a miss — keep hunting; do not narrate “must be elsewhere in this snippet.” Do not cite OpenAPI/swagger, a read_only serializer class, seed JSON, or a view that only checks permissions.
-- Never open **Your question** (or any section) by restating or paraphrasing the user's ask when agent evidence is empty — answer with the miss, then what to try next (different symbol spelling, confirm index freshness).
-- Do not dump the question text under a heading as if it were the answer.`;
+- Never open by restating or paraphrasing the user's ask when agent evidence is empty — answer with the miss, then what to try next (different symbol spelling, confirm index freshness).
+- Do not dump the question text under a heading as if it were the answer. Do not use a **Your question** heading.`;
 
 export const EVIDENCE_CITATION_RULES = `Citation rules:
 ${NARRATIVE_CITATION_RULES}
-- Format each **Sources** bullet as: \`[Sources: …] — one sentence on what that source contributed\` (plain text labels — not links).
-- The Sources evidence card lists every file, page, and integration hit — do not repeat full lists in **Sources** bullets.
-- Align quality and confidence statements with each source's contribution and the Sources card the user sees.
+- The Sources evidence card lists every file, page, and integration hit — do not repeat those lists in the answer.
+- Align quality and confidence statements with the Sources card the user sees.
 - Do not cite evidence that is not in the attached bundle.
 Never invent URLs, ticket IDs, PR numbers, people, or quotes not present in the evidence.`;
 
-/** Shared **Sources** footer contract for quick-action system prompts. */
-export const SOURCES_FOOTER_OUTPUT_RULE = `Include **at most 3 bullets** — one sentence each on what the highest-priority sources contributed (commits, PRs, Jira, Slack/Teams, then scans/dependencies; group multiple doc pages into one bullet). Use plain \`[Sources: …]\` text labels. Full detail is in the Sources evidence card.`;
+/** Shared rule: evidence lives on the Sources card, not a prose footer. */
+export const SOURCES_FOOTER_OUTPUT_RULE = `Do not emit a **Sources** section. The Sources evidence card already lists files, pages, and hits. Cite paths, ticket keys, and PR numbers inline in plain language. At most 1–2 inline \`[Sources: …]\` labels in the opening if they help.`;
 
-/** Section title when the user added a specific ask on top of a quick action / slash command. */
+/** Legacy template title — never emit. Parsers still accept leftover model output. */
 export const USER_FOCUS_SECTION_TITLE = "Your question";
 
 /**
  * When the user typed focus text before/after a slash command (or a custom prompt-library
- * template), require a dedicated response section for that ask. Shared by every
+ * template), require the opening prose to answer that ask. Shared by every
  * quick-action synthesis builder.
  */
 export function appendUserFocusInstructions(lines: string[], userFocus?: string): void {
@@ -271,21 +276,15 @@ export function appendUserFocusInstructions(lines: string[], userFocus?: string)
     "- The user added a specific ask on top of this action (text before and/or after the slash command). Treat it as the primary deliverable — not optional color on a generic overview."
   );
   lines.push(
-    `- After **Summary** (or **Answer**), include a dedicated **${USER_FOCUS_SECTION_TITLE}** section that answers that ask directly with concrete paths, flows, or evidence from the bundle.`
+    "- Answer that ask in the opening 1–3 sentences with concrete paths, flows, or evidence from the bundle. Do not add a **Your question**, **Answer**, or **Summary** heading."
   );
   lines.push(
-    "- Keep the action's standard sections, but weight them toward the focus. Do not ship a template overview that ignores the ask."
-  );
-  lines.push(
-    `- Lead **Summary**/**Answer** with a 1-2 sentence reply to the focus; expand detail under **${USER_FOCUS_SECTION_TITLE}**.`
+    "- Keep at most 2–3 topic headings after the lead, weighted toward the focus. Do not ship a template overview that ignores the ask."
   );
   lines.push("");
   lines.push("## Section quality gates (strict pass / fail)");
   lines.push(
-    `**${USER_FOCUS_SECTION_TITLE}** — PASS: cites ≥1 concrete repo path or symbol from attached \`<repo_entry_files>\` / focus-search hits and explains the ask using that evidence. FAIL: generic SaaS narrative (form→API→DB) with no path/symbol; invents endpoints, tables, or services not in evidence; omits the section; restates, paraphrases, or truncates the user's question instead of answering it; places the section at the end instead of immediately after **Summary**/**Answer**.`
-  );
-  lines.push(
-    "**Summary** — PASS: 1-2 sentences that directly answer the focus, then optional confidence line. FAIL: repo elevator pitch that never addresses the focus."
+    "Opening prose — PASS: cites ≥1 concrete repo path or symbol from attached `<repo_entry_files>` / focus-search hits and explains the ask using that evidence. FAIL: generic SaaS narrative (form→API→DB) with no path/symbol; invents endpoints, tables, or services not in evidence; restates, paraphrases, or truncates the user's question instead of answering it; buries the ask under later sections."
   );
   lines.push(
     "**Architecture** / **Key subsystems** (when present) — PASS: weight toward subsystems named in focus evidence; name real paths. FAIL: restating docker-compose service names as if they were the focus answer."
@@ -294,7 +293,7 @@ export function appendUserFocusInstructions(lines: string[], userFocus?: string)
     "**Risks & unknowns** — PASS: only evidence-tied gaps relevant to the focus (missing files, thin docs). FAIL: padding with generic testing/config advice unrelated to the ask."
   );
   lines.push(
-    "If focus-search evidence is thin or missing: say so in one line under **Your question** — do not invent the happy-path workflow."
+    "If focus-search evidence is thin or missing: say so in the opening sentences — do not invent the happy-path workflow."
   );
   lines.push("");
 }

@@ -19,6 +19,7 @@ import {
   buildDecisionConfluenceCql,
   buildRepoOrQuery
 } from "./docSearchQuery";
+import { planJobSearchAttempts } from "./jobSearchPlan";
 import { filterDocPagesForUseRepo, sanitizeIntegrationSnippet } from "./integrationDocRelevance";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
@@ -151,7 +152,18 @@ export async function fetchConfluenceSearchContext(options: {
     // Job-scoped extras are the query. A repo-only fallback with hyphenated
     // slugs parse-errors and overwrites an honest empty extras search.
     const extrasOnly = Boolean(options.jobScoped && (options.extraTerms?.length ?? 0) > 0);
-    if (pages.length === 0 && !extrasOnly) {
+    if (pages.length === 0 && extrasOnly) {
+      const words = planJobSearchAttempts(options.extraTerms ?? []).find(
+        (attempt) => attempt.kind === "words"
+      );
+      const wordCql = words
+        ? scopeConfluenceCql(buildDecisionConfluenceCql([words.text]), options.integrationScope)
+        : undefined;
+      if (wordCql && wordCql !== primaryCql) {
+        pages = await client.searchPages(wordCql, limit);
+        cql = wordCql;
+      }
+    } else if (pages.length === 0 && !extrasOnly) {
       const repoOnly = scopeConfluenceCql(
         buildConfluenceRepoOnlyCql(options.owner, options.repo),
         options.integrationScope

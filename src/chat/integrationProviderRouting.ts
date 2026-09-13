@@ -3,6 +3,7 @@ import { isIncidentShapedQuery } from "../context/incidentIntent";
 import { wantsJiraContext } from "../context/jiraContext";
 import { wantsSlackContext } from "../context/slackContext";
 import { wantsTeamsContext } from "../context/teamsContext";
+import { isTeamsComingSoon } from "../integrations/teamsAvailability";
 import { wantsConfluenceContext } from "../context/confluenceContext";
 import { wantsNotionContext } from "../context/notionContext";
 import { wantsGoogleDocsContext } from "../context/googleDocsContext";
@@ -36,7 +37,7 @@ export function resolvePlainChatIntegrationProvider(options: {
   };
   pushIf("jira", wantsJiraContext(message));
   pushIf("slack", wantsSlackContext(message));
-  pushIf("teams", wantsTeamsContext(message));
+  pushIf("teams", !isTeamsComingSoon() && wantsTeamsContext(message));
   pushIf("confluence", wantsConfluenceContext(message));
   pushIf("notion", wantsNotionContext(message));
   pushIf("google-docs", wantsGoogleDocsContext(message));

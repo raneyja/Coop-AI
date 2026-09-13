@@ -138,6 +138,10 @@ test("Phase 4 Chat Intent job gates", () => {
     const locate = locateJobTerms(namedNames.jobs);
     assert.ok(locate.some((term) => /DateTimeUtils/i.test(term)));
     assert.ok(locate.some((term) => /reports\.jsp/i.test(term)));
+    assert.ok(namedNames.tasks?.some((task) => task.job === "locate"));
+    assert.ok(namedNames.todos?.some((todo) => /DateTimeUtils|reports\.jsp/i.test(todo.content)));
+    assert.ok(namedNames.tasks?.some((task) => task.tool === "slack"));
+    assert.ok(namedNames.tasks?.some((task) => task.tool === "jira"));
   });
 
   collectGate(results, phase4Criterion("P4-G2"), () => {
@@ -175,7 +179,7 @@ test("Phase 4 Chat Intent job gates", () => {
     });
     assert.ok(withSiblings.tools.includes("slack"));
     assert.ok(withSiblings.tools.includes("jira"));
-    assert.ok(withSiblings.tools.includes("teams"));
+    assert.equal(withSiblings.tools.includes("teams"), false);
     assert.ok(withSiblings.tools.includes("confluence"));
 
     const namedOnly = planChatIntentFromRules({
@@ -320,6 +324,20 @@ test("code-host jobs require explicit listing intent and carry execution terms",
     assert.equal(hasCodeHostJob(jobs), row.expected, row.ask);
     assert.equal(Boolean(codeHostJobQuery(jobs)), row.expected, row.ask);
   }
+});
+
+test("who decided plus where is stays a job turn, not silent Trace Decision", () => {
+  const plan = planChatIntentFromRules({
+    message:
+      "Who decided not to mix date math into the SQL-injection PR, and where is DateTimeUtils?",
+    connectedTools: ["slack", "jira", "confluence"]
+  });
+  assert.equal(plan.mode, "tools-only");
+  assert.equal(plan.workflow, undefined);
+  assert.ok((plan.jobs ?? []).some((job) => job.capability === "locate"));
+  assert.ok((plan.jobs ?? []).some((job) => job.capability === "decision"));
+  assert.ok(plan.todos?.some((todo) => /DateTimeUtils/i.test(todo.content)));
+  assert.ok(plan.todos?.some((todo) => /Jira/i.test(todo.content)));
 });
 
 test("deterministic rules plans cannot be overwritten by the model classifier", () => {

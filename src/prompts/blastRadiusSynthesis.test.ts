@@ -125,7 +125,7 @@ test("blast-radius synthesis skips partial caveat when remote graph has verified
     owner: "raneyja",
     repo: "Coop-AI"
   });
-  assert.ok(prompt.includes("## Summary guidance"));
+  assert.ok(prompt.includes("## Opening guidance"));
   assert.ok(prompt.includes("verified remote dependency graph"));
   assert.ok(!prompt.includes("partial index coverage caveat"));
   assert.ok(!prompt.includes("Index coverage is partial"));
@@ -144,10 +144,10 @@ test("blast-radius synthesis leads Summary with partial index caveat when graph 
     owner: "raneyja",
     repo: "Coop-AI"
   });
-  assert.ok(prompt.includes("## Summary guidance"));
+  assert.ok(prompt.includes("## Opening guidance"));
   assert.ok(prompt.includes("partial index coverage caveat"));
   assert.ok(prompt.includes("Index coverage is partial"));
-  const checklistStart = prompt.indexOf("## Required **Sources** bullets");
+  const checklistStart = prompt.indexOf("## Source labels (inline only");
   const checklistEnd = prompt.indexOf("## Evidence quality", checklistStart);
   const checklistSection = prompt.slice(checklistStart, checklistEnd);
   assert.equal(

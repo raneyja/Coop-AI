@@ -64,7 +64,7 @@ export type DecisionSynthesisInput = {
   lineRange?: { start: number; end: number };
   codeSnippet?: string;
   userQuestion?: string;
-  /** Specific ask after a slash command / custom prompt — requires **Your question**. */
+  /** Specific ask after a slash command / custom prompt — answer in the opening prose. */
   userFocus?: string;
   mentionedFiles?: MentionScopeRef[];
   activeRepoId?: string;
@@ -95,7 +95,7 @@ export function buildDecisionSynthesisUserPrompt(input: DecisionSynthesisInput):
     lines.push(`- Repository: ${input.owner}/${input.repo}`);
   }
   lines.push(
-    `- Grounding rule: Summary / Technical decision / Your question must be about \`${file}\` (or commits/PRs that touch it). Other paths in multi-file PRs are secondary only.`
+    `- Grounding rule: the opening and **Technical decision** must be about \`${file}\` (or commits/PRs that touch it). Other paths in multi-file PRs are secondary only.`
   );
   appendMentionScopeSection(lines, input);
   lines.push("");
@@ -131,7 +131,7 @@ export function buildDecisionSynthesisUserPrompt(input: DecisionSynthesisInput):
   );
   if (!input.isFollowUp) {
     lines.push(
-      "Produce the full trace narrative (Summary, Business context, Technical decision, Domain experts, etc.) for the primary file — do not collapse the answer to only alternatives or trade-offs."
+      "Produce a short trace for the primary file (opening + at most 3 topic headings such as Technical decision) — do not collapse the answer to only alternatives or trade-offs."
     );
   }
   if (input.userFocus?.trim()) {
@@ -168,10 +168,10 @@ function appendFollowUpInstructions(lines: string[], userQuestion: string | unde
   if (userQuestion?.trim()) {
     lines.push(`- Focus on: ${userQuestion.trim()}`);
     lines.push(
-      "- After **Summary**, include a dedicated **Your question** section that answers that follow-up ask directly."
+      "- Answer the follow-up in the opening sentences. Do not add a **Your question**, **Answer**, or **Summary** heading."
     );
     lines.push(
-      "- **Your question** PASS: cites evidence from the attached timeline for the ask. FAIL: generic restatement with no PR/commit/discussion citation when evidence exists."
+      "- Opening PASS: cites evidence from the attached timeline for the ask. FAIL: generic restatement with no PR/commit/discussion citation when evidence exists."
     );
   }
   lines.push("");

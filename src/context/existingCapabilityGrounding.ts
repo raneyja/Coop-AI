@@ -456,24 +456,22 @@ export function buildExistingCapabilitySynthesisUserPrompt(options: {
 
   if (options.evidence.verdict === "already-exists") {
     lines.push(
-      `1. **Summary** — state that \`${options.evidence.capability}\` **already exists** in \`${options.evidence.filePath}\` (cite a hit line).`
+      `1. Opening — state that \`${options.evidence.capability}\` **already exists** in \`${options.evidence.filePath}\` (cite a hit line) and recommend **extend**, not greenfield add-new. No **Answer**, **Summary**, or **Your question** heading.`
     );
-    lines.push("2. **Your question** — recommend **extend**, not greenfield add-new.");
-    lines.push("3. **Extend points** — name validation / ViewSet / consumer surfaces from the evidence block.");
+    lines.push("2. **Extend points** — name validation / ViewSet / consumer surfaces from the evidence block.");
     lines.push(
-      `4. **Do not** propose adding a duplicate \`${options.evidence.capability}\` relation/type while evidence defines it.`
+      `3. **Do not** propose adding a duplicate \`${options.evidence.capability}\` relation/type while evidence defines it.`
     );
-    lines.push("5. **Gaps** — only claim APIs present in evidence.");
+    lines.push("4. **Gaps** — only claim APIs present in evidence.");
     lines.push("");
     lines.push("PASS: “already exists” + extend guidance with mapper/validation cite.");
     lines.push(`FAIL: greenfield “add new ${options.evidence.capability} type” while evidence shows it.`);
   } else {
     lines.push(
-      `1. **Summary** — \`${options.evidence.capability}\` was not found in the open file; **add-new** is allowed.`
+      `1. Opening — \`${options.evidence.capability}\` was not found in the open file; **add-new** is allowed. Propose an add path consistent with patterns in the open file. No **Answer**, **Summary**, or **Your question** heading.`
     );
-    lines.push("2. **Your question** — propose an add path consistent with patterns in the open file.");
-    lines.push("3. **Still search** — mirror existing sibling keys/types; do not invent parallel systems.");
-    lines.push("4. **Gaps** — say what the open file does not show.");
+    lines.push("2. **Still search** — mirror existing sibling keys/types; do not invent parallel systems.");
+    lines.push("3. **Gaps** — say what the open file does not show.");
     lines.push("");
     lines.push("PASS: add-new only when the symbol is absent from evidence.");
     lines.push("FAIL: claim it already exists without a hit.");

@@ -1,16 +1,24 @@
 ---
 title: Microsoft Teams
-description: Connect Microsoft Teams for Trace Decision and Knowledge Gaps with channel message context.
+description: Microsoft Teams is coming soon and is not available in the product yet.
 section: integrations
 order: 8
 lastUpdated: "2026-09-13"
 ---
 
+**Coming soon.** Microsoft Teams is not available in the product yet.
+
+Do not Connect Teams, reconnect, or Manage access. Chat, `/teams`, and Trace Decision do not search Teams. An existing Teams connection is left in place and ignored until we turn this back on.
+
+## When we turn it back on
+
+The notes below are kept so we can restore Teams. They are not a setup path today.
+
 Microsoft Teams connects through browser OAuth (Microsoft Graph). Coop searches **Teams channel messages** for Trace Decision and Knowledge Gaps.
 
 Requires **work or school Microsoft 365** with Teams channels. Personal Microsoft accounts and Teams Community are not supported for channel search.
 
-## Org admin — connect Teams
+### Org admin — connect Teams
 
 1. **Admin portal** → Integrations → **Connect** on **Microsoft Teams**
 2. **Browser** → Sign in with work/school account → approve permissions (admin consent if your IT requires it)
@@ -21,7 +29,7 @@ Requires **work or school Microsoft 365** with Teams channels. Personal Microsof
 
 Admins can also connect from **Extension UI → Settings → Tools → Microsoft Teams** (same OAuth flow). Scope still lives in the admin portal.
 
-## What Teams enables
+### What Teams enables
 
 | Feature | How Coop uses Teams |
 | --- | --- |
@@ -29,7 +37,7 @@ Admins can also connect from **Extension UI → Settings → Tools → Microsoft
 | **Knowledge Gaps** | Cross-tool context from Teams discussions |
 | **Chat** | `/teams` or natural questions about Teams threads |
 
-## Required Graph permissions
+### Required Graph permissions
 
 Your Coop operator registers an Entra (Azure AD) app with these **delegated** permissions:
 
@@ -44,7 +52,7 @@ Your Coop operator registers an Entra (Azure AD) app with these **delegated** pe
 
 `ChannelMessage.Read.All` often requires **admin consent** in enterprise tenants. If Connect fails with a consent error, ask your Microsoft 365 admin to approve the Coop app.
 
-## Using Teams in chat
+### Using Teams in chat
 
 Type `/teams` in the composer:
 
@@ -54,7 +62,7 @@ Type `/teams` in the composer:
 
 Or ask naturally — Coop pulls Teams context when connected and your question references discussions.
 
-## Troubleshooting
+### Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |

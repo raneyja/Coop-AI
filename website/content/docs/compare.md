@@ -47,7 +47,7 @@ These themes show up on every comparison page because they are the product:
 | Differentiator | What it means in practice |
 | --- | --- |
 | **Zero-clone Deep-Index** | Understand a codebase without cloning. Transient clone → graph → clone deleted. File bodies fetch from the code host on demand. |
-| **Company stack context** | Shared Slack, Jira, Confluence, Notion, Google Docs, and Teams — connected once by an admin, queried when you ask (not each developer’s personal accounts). |
+| **Company stack context** | Shared Slack, Jira, Confluence, Notion, and Google Docs — connected once by an admin, queried when you ask (not each developer’s personal accounts). |
 | **Decision workflows** | Understand Repo, Trace Decision, Find Owner, Blast Radius, Knowledge Gaps — not just freeform chat. |
 | **Stay in the file** | Complete and edit with reviewable diffs. Coop does not rewrite the tree on its own. |
 | **Org-wide connect** | Admins connect the company workspace once. Developers sign in and get that shared context — no personal OAuth paste. |
@@ -73,7 +73,7 @@ No. CoopAI stays in VS Code with reviewable patches. It does not rewrite the rep
 
 ### Does Coop use company Slack or personal Slack?
 
-Company Slack (and Jira, Teams, docs) — connected once by an org admin for the shared workspace. Developers sign in and get that org context, not each person’s personal accounts.
+Company Slack (and Jira, docs) — connected once by an org admin for the shared workspace. Developers sign in and get that org context, not each person’s personal accounts.
 
 ### Where should I start comparing tools?
 

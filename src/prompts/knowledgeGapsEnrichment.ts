@@ -289,23 +289,25 @@ function rebuildSummaryForZeroScanGaps(content: string, context?: KnowledgeGapsE
   }
 
   const lines = content.replace(/\r\n/g, "\n").split("\n");
-  const summaryIdx = lines.findIndex((line) => stripBoldHeading(line.trim()) === "summary");
-  if (summaryIdx < 0) {
+  const docLabel = attachedDocSourceLabel(context);
+  const summaryBody = `Automated scan found no structured gaps in this pass; attached ${docLabel} doc review (${pageCount} page(s)) suggests follow-up areas under **Documentation gaps** below.`;
+  if (/automated scan found no structured gaps/i.test(content)) {
     return content;
   }
 
-  let end = summaryIdx + 1;
-  while (end < lines.length && !isMainSectionLine(lines[end].trim())) {
-    end += 1;
+  const summaryIdx = lines.findIndex((line) => stripBoldHeading(line.trim()) === "summary");
+  if (summaryIdx >= 0) {
+    let end = summaryIdx + 1;
+    while (end < lines.length && !isMainSectionLine(lines[end].trim())) {
+      end += 1;
+    }
+    return [...lines.slice(0, summaryIdx + 1), "", summaryBody, "", ...lines.slice(end)]
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
   }
 
-  const docLabel = attachedDocSourceLabel(context);
-  const summaryBody = `Automated scan found no structured gaps in this pass; attached ${docLabel} doc review (${pageCount} page(s)) suggests follow-up areas under **Documentation gaps** below.`;
-
-  return [...lines.slice(0, summaryIdx + 1), "", summaryBody, "", ...lines.slice(end)]
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return `${summaryBody}\n\n${content}`.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function documentationBlocksFromContext(context?: KnowledgeGapsEnrichmentContext): string[] {

@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import {
   applySlackChannelScope,
   filterSlackHitsByChannel,
-  isSlackScopeBlocked
+  isSlackScopeBlocked,
+  scopeJobSlackSearchQueries,
+  stripSlackSearchOperators
 } from "./slackQuery";
 import type { ResolvedIntegrationScope } from "./types";
 
@@ -17,9 +19,36 @@ test("isSlackScopeBlocked is false when scope is not enforced", () => {
   assert.equal(isSlackScopeBlocked(scope), false);
 });
 
-test("applySlackChannelScope appends in:channel filters", () => {
-  const queries = applySlackChannelScope(["repo OR bug"], ["C123"], ["general"]);
-  assert.equal(queries[0], "(repo OR bug) (in:C123 OR in:general)");
+test("applySlackChannelScope fans out one in:<#id> query per channel", () => {
+  const queries = applySlackChannelScope(["SQL injection"], ["C123", "C456"], ["general"]);
+  assert.deepEqual(queries, ["SQL injection in:<#C123>", "SQL injection in:<#C456>"]);
+});
+
+test("stripSlackSearchOperators removes channel redirects but keeps the meaning", () => {
+  assert.equal(
+    stripSlackSearchOperators('SQL injection in:#secret from:<@U1> has:link is:thread in:"secret channel"'),
+    "SQL injection"
+  );
+  assert.equal(stripSlackSearchOperators("injection"), "injection");
+  assert.equal(stripSlackSearchOperators("COOP-403 in:#secret"), "COOP-403");
+});
+
+test("scopeJobSlackSearchQueries never sends an unscoped job query", () => {
+  const scoped = scopeJobSlackSearchQueries(
+    ["SQL injection", "injection"],
+    ["C1", "C2", "C3"],
+    ["a", "b", "c"],
+    { enforced: true }
+  );
+  assert.deepEqual(scoped, ["SQL injection in:<#C1>", "SQL injection in:<#C2>"]);
+  assert.deepEqual(
+    scopeJobSlackSearchQueries(["SQL injection"], [], [], { enforced: true }),
+    []
+  );
+  assert.deepEqual(
+    scopeJobSlackSearchQueries(["SQL injection"], ["C1"], ["eng"], { enforced: false }),
+    ["SQL injection"]
+  );
 });
 
 test("filterSlackHitsByChannel keeps only allowlisted channels", () => {

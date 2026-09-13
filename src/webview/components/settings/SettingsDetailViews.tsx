@@ -27,6 +27,7 @@ import { SaveFlashLabel, type SettingsSaveKey } from "../SaveFlashLabel";
 import { PromptLibraryTop5Editor } from "../PromptLibraryTop5Editor";
 import type { PromptLibraryItem } from "../promptLibraryTypes";
 import type { CodeHostProviderPreference, IntegrationChatProvider, LlmProviderPreference } from "../../../chat/types";
+import { isTeamsComingSoon } from "../../../integrations/teamsAvailability";
 import type { Preferences, SettingsDetailScreen } from "./types";
 import { ConnectionCard } from "./ConnectionCard";
 import { IntegrationConnectionShell } from "./IntegrationConnectionShell";
@@ -859,8 +860,8 @@ function ToolsListDetail({
         />
         <CoopNavRow
           title="Microsoft Teams"
-          subtitle={integrationListSubtitle(prefs, "teams")}
-          configured={integrationConfigured(prefs, "teams")}
+          subtitle={isTeamsComingSoon() ? "Coming soon" : integrationListSubtitle(prefs, "teams")}
+          configured={isTeamsComingSoon() ? false : integrationConfigured(prefs, "teams")}
           onClick={() => onNavigate("integration-teams")}
         />
         <CoopNavRow
@@ -923,15 +924,27 @@ function MemberToolsListDetail({ prefs }: { prefs: Preferences }): React.ReactEl
       <p className="coop-prompt-modal-section-title px-0.5 mt-4">Integrations</p>
       <SettingsSection>
         <div className="space-y-3">
-          {collaborationProviders.map((tool) => (
-            <IntegrationStatusCard
-              key={tool.provider}
-              name={tool.name}
-              meta={memberToolStatusMeta(prefs, tool.provider)}
-              status={resolveMemberToolStatus(prefs, tool.provider)}
-              description={tool.description}
-            />
-          ))}
+          {collaborationProviders.map((tool) =>
+            tool.provider === "teams" && isTeamsComingSoon() ? (
+              <div key="teams" className="coop-settings-card">
+                <div className="coop-health-integration">
+                  <div className="min-w-0">
+                    <div className="coop-health-integration-name">Microsoft Teams</div>
+                    <div className="coop-health-integration-meta">Not available yet</div>
+                  </div>
+                  <span className="coop-health-status shrink-0 coop-health-status--offline">Coming soon</span>
+                </div>
+              </div>
+            ) : (
+              <IntegrationStatusCard
+                key={tool.provider}
+                name={tool.name}
+                meta={memberToolStatusMeta(prefs, tool.provider)}
+                status={resolveMemberToolStatus(prefs, tool.provider)}
+                description={tool.description}
+              />
+            )
+          )}
         </div>
       </SettingsSection>
 
@@ -1253,41 +1266,16 @@ function JiraDetail({
   );
 }
 
-function TeamsDetail({
-  prefs,
-  onTestIntegration,
-  onInstallTeamsApp,
-  onRefreshTeamsInstallation,
-  pendingTest,
-  testResult,
-  pendingRefresh,
-  refreshResult
-}: SettingsDetailProps): React.ReactElement {
-  if (memberToolsReadOnly(prefs)) {
-    return (
-      <MemberToolDetail
-        prefs={prefs}
-        provider="teams"
-        name="Microsoft Teams"
-        description="Search Teams channel messages for Trace Decision."
-      />
-    );
-  }
+function TeamsDetail(_props: SettingsDetailProps): React.ReactElement {
   return (
     <SettingsSection>
-      <IntegrationConnectionShell
-        provider="teams"
-        prefs={prefs}
-        description="Search Teams channel messages for Trace Decision. Requires a work or school Microsoft 365 tenant with Teams channels (not personal Teams)."
-        onConnect={onInstallTeamsApp}
-        onRefresh={onRefreshTeamsInstallation}
-        onTest={() => onTestIntegration("teams")}
-        testKey="teams"
-        pendingTest={pendingTest}
-        testResult={testResult}
-        pendingRefresh={pendingRefresh}
-        refreshResult={refreshResult}
-      />
+      <div className="coop-health-integration">
+        <div>
+          <div className="coop-health-integration-name">Microsoft Teams</div>
+          <div className="coop-health-integration-meta">Not available yet</div>
+        </div>
+        <span className="coop-health-status coop-health-status--offline">Coming soon</span>
+      </div>
     </SettingsSection>
   );
 }

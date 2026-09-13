@@ -42,6 +42,14 @@ export async function enrichIntentFetchResultsOnce(options: {
   });
 }
 
+/** Copy Slack/Jira/… fields from a parallel integration fetch onto a locate result. */
+export function attachPickedIntegrationData(
+  result: ContextFetchResult,
+  source: ContextFetchResult
+): ContextFetchResult {
+  return mergeIntegrationData(result, pickIntegrationData(source.data));
+}
+
 export function pickIntegrationData(data: unknown): IntegrationData {
   const record = asRecord(data);
   if (!record) {

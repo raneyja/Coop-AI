@@ -8,6 +8,7 @@ import {
   googleDocsScopeBlockMessage
 } from "../integrationScope/googleDocsQuery";
 import { buildIntegrationSearchTermList } from "./integrationSearchTerms";
+import { planJobSearchAttempts } from "./jobSearchPlan";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
 import { filterDocPagesForUseRepo } from "./integrationDocRelevance";
@@ -63,6 +64,7 @@ export async function fetchGoogleDocsSearchContext(options: {
   crossToolText?: string[];
   limit?: number;
   extraTerms?: string[];
+  jobScoped?: boolean;
   integrationScope?: ResolvedIntegrationScope;
 }): Promise<GoogleDocsSearchContext> {
   if (isGoogleDocsScopeBlocked(options.integrationScope)) {
@@ -84,14 +86,19 @@ export async function fetchGoogleDocsSearchContext(options: {
     };
   }
 
-  const terms = buildIntegrationSearchTermList({
-    owner: options.owner,
-    repo: options.repo,
-    queryText: options.queryText,
-    activeFile: options.activeFile,
-    contextText: [...(options.contextText ?? []), ...(options.crossToolText ?? [])],
-    extraTerms: options.extraTerms
-  });
+  const jobAttempts = options.jobScoped
+    ? planJobSearchAttempts(options.extraTerms ?? [])
+    : [];
+  const terms = options.jobScoped
+    ? driveSearchTokens(jobAttempts[0]?.text ? [jobAttempts[0].text] : [])
+    : buildIntegrationSearchTermList({
+        owner: options.owner,
+        repo: options.repo,
+        queryText: options.queryText,
+        activeFile: options.activeFile,
+        contextText: [...(options.contextText ?? []), ...(options.crossToolText ?? [])],
+        extraTerms: options.extraTerms
+      });
   if (terms.length === 0) {
     return {
       source: "google-docs-search",
@@ -109,7 +116,12 @@ export async function fetchGoogleDocsSearchContext(options: {
       : undefined;
   const allowedFolderIds = new Set(options.integrationScope?.googleDocs?.expandedFolderIds ?? []);
   try {
-    const rawDocuments = await client.searchDocumentsForTerms(terms, options.limit ?? 20, driveScope);
+    const searchLimit = options.limit ?? 20;
+    let rawDocuments = await client.searchDocumentsForTerms(terms, searchLimit, driveScope);
+    const retryTokens = driveSearchTokens(jobAttempts[1]?.text ? [jobAttempts[1].text] : []);
+    if (options.jobScoped && rawDocuments.length === 0 && retryTokens.length > 0) {
+      rawDocuments = await client.searchDocumentsForTerms(retryTokens, searchLimit, driveScope);
+    }
     const scoped =
       options.integrationScope?.enforced && allowedFolderIds.size > 0
         ? filterGoogleDocsHitsByFolder(rawDocuments, allowedFolderIds).map(stripGoogleDocParents)
@@ -139,6 +151,22 @@ export async function fetchGoogleDocsSearchContext(options: {
       error: error instanceof Error ? error.message : "Google Docs search failed."
     };
   }
+}
+
+const DRIVE_SEARCH_STOP = new Set(["not", "the", "and", "for", "this", "that", "into", "from", "with", "to"]);
+
+/** Drive `contains` matches one token. A hyphen or a phrase is not a token. */
+export function driveSearchTokens(terms: string[]): string[] {
+  const tokens: string[] = [];
+  for (const term of terms) {
+    for (const raw of term.split(/[\s\-–—]+/)) {
+      const token = raw.replace(/[^\w]/g, "");
+      if (token.length >= 3 && !DRIVE_SEARCH_STOP.has(token.toLowerCase()) && !tokens.includes(token)) {
+        tokens.push(token);
+      }
+    }
+  }
+  return tokens;
 }
 
 function stripGoogleDocParents(doc: {

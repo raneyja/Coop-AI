@@ -34,7 +34,7 @@ function test(name: string, fn: () => void): void {
 test("ownership synthesis includes citation keys and sources checklist", () => {
   const prompt = buildOwnershipSynthesisUserPrompt({ report, file: report.path });
   assert.ok(prompt.includes("[Sources: GitHub commits & reviews]"));
-  assert.ok(prompt.includes("Required **Sources** bullets"));
+  assert.ok(prompt.includes("Source labels (inline only"));
 });
 
 test("ownership synthesis splits out-of-repo @ attachments", () => {
@@ -167,7 +167,7 @@ test("ownership synthesis cites Slack presence when discussions are empty", () =
   assert.ok(prompt.includes("## Slack citation guidance"));
   assert.ok(prompt.includes("[Sources: Slack presence]"));
   assert.ok(prompt.includes("do not cite `[Sources: Slack discussions]`"));
-  const checklistStart = prompt.indexOf("## Required **Sources** bullets");
+  const checklistStart = prompt.indexOf("## Source labels (inline only");
   const checklistEnd = prompt.indexOf("## Evidence quality", checklistStart);
   const checklistSection = prompt.slice(checklistStart, checklistEnd);
   assert.equal(

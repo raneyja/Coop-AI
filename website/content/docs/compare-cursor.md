@@ -15,7 +15,7 @@ Teams comparing them are usually choosing between **“change a lot of files fas
 - **Stay on VS Code** — No IDE migration. Coop installs beside your existing setup.
 - **Understand before agentize** — Cursor shines when you already know the change. CoopAI shines when you need Find Owner, Blast Radius, Trace Decision, and live Slack/Jira context first.
 - **Zero-clone remote graph** — Deep-Index is designed so developers do not need a full local clone of every service to ask serious questions.
-- **Org integrations** — Admins connect GitHub, Slack, Jira, Confluence, Notion, Docs, and Teams once for the whole company.
+- **Org integrations** — Admins connect GitHub, Slack, Jira, Confluence, Notion, and Docs once for the whole company.
 
 ## Comparison matrix
 

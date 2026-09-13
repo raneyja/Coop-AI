@@ -10,7 +10,7 @@ export const PRODUCT_FACTS = {
   zeroClone:
     "Deep-Index builds a searchable remote graph, then deletes the temporary clone. File bodies fetch from the code host when needed.",
   companyStack:
-    "Slack, Jira, Confluence, Notion, Google Docs, and Teams are admin-connected once for the company. Developers get shared org workspace context — not personal accounts. Tools are queried live at ask time.",
+    "Slack, Jira, Confluence, Notion, and Google Docs are admin-connected once for the company. Developers get shared org workspace context — not personal accounts. Tools are queried live at ask time.",
   workflows: [
     "Understand Repo",
     "Trace Decision",

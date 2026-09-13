@@ -321,6 +321,7 @@ async function enrichIntegrationStages(
             owner: options.owner,
             repo: options.repo,
             extraTerms: termsFor("notion"),
+            jobScoped: true,
             integrationScope: options.integrationScopes?.notion
           }),
         preferredIntegrationActivityQuery(termsFor("notion"))
@@ -349,6 +350,7 @@ async function enrichIntegrationStages(
             secrets: options.secrets,
             ...base,
             extraTerms: termsFor("google-docs"),
+            jobScoped: true,
             integrationScope: options.integrationScopes?.["google-docs"]
           }),
         preferredIntegrationActivityQuery(termsFor("google-docs"))

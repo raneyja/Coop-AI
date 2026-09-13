@@ -95,22 +95,7 @@ export class TeamsClient {
    */
   public async searchMessages(query: string, options?: { limit?: number }): Promise<TeamsSearchHit[]> {
     const limit = options?.limit ?? 25;
-    const encoded = encodeURIComponent(query);
-    const result = await this.request<{
-      value?: Array<{
-        id: string;
-        summary?: string;
-        resource?: {
-          id?: string;
-          "@odata.type"?: string;
-          channelIdentity?: { teamId?: string; channelId?: string };
-          from?: { user?: { displayName?: string; id?: string } };
-          body?: { content?: string };
-          createdDateTime?: string;
-          webUrl?: string;
-        };
-      }>;
-    }>(`/search/query`, {
+    const result = await this.request<TeamsSearchQueryResponse>(`/search/query`, {
       method: "POST",
       body: {
         requests: [
@@ -123,24 +108,7 @@ export class TeamsClient {
         ]
       }
     });
-
-    const hits: TeamsSearchHit[] = [];
-    for (const container of result.value ?? []) {
-      const resource = container.resource;
-      if (!resource?.channelIdentity) {
-        continue;
-      }
-      hits.push({
-        teamId: resource.channelIdentity.teamId ?? "",
-        channelId: resource.channelIdentity.channelId ?? "",
-        messageId: resource.id ?? container.id,
-        body: stripHtml(resource.body?.content ?? container.summary ?? ""),
-        fromUserName: resource.from?.user?.displayName,
-        createdAt: resource.createdDateTime ?? new Date(0).toISOString(),
-        webUrl: resource.webUrl
-      });
-    }
-    return hits.slice(0, limit);
+    return teamsSearchHitsFromGraph(result, limit);
   }
 
   public async getThread(teamId: string, channelId: string, messageId: string): Promise<TeamsThread> {
@@ -290,6 +258,71 @@ type TeamsGraphMessage = {
   };
   body?: { content?: string };
 };
+
+type TeamsGraphChatResource = {
+  id?: string;
+  channelIdentity?: { teamId?: string; channelId?: string };
+  from?: { user?: { displayName?: string; id?: string } };
+  body?: { content?: string };
+  createdDateTime?: string;
+  webUrl?: string;
+};
+
+type TeamsSearchQueryResponse = {
+  value?: Array<{
+    id?: string;
+    summary?: string;
+    resource?: TeamsGraphChatResource;
+    hitsContainers?: Array<{
+      hits?: Array<{
+        hitId?: string;
+        summary?: string;
+        resource?: TeamsGraphChatResource;
+      }>;
+    }>;
+  }>;
+};
+
+/** Graph puts chat hits at hitsContainers[].hits[], not on the request row. */
+export function teamsSearchHitsFromGraph(
+  result: TeamsSearchQueryResponse,
+  limit: number
+): TeamsSearchHit[] {
+  const hits: TeamsSearchHit[] = [];
+  for (const row of result.value ?? []) {
+    const nested = (row.hitsContainers ?? []).flatMap((container) => container.hits ?? []);
+    const candidates =
+      nested.length > 0
+        ? nested.map((hit) => ({
+            resource: hit.resource,
+            fallbackId: hit.hitId ?? row.id,
+            summary: hit.summary ?? row.summary
+          }))
+        : [
+            {
+              resource: row.resource,
+              fallbackId: row.id,
+              summary: row.summary
+            }
+          ];
+    for (const candidate of candidates) {
+      const resource = candidate.resource;
+      if (!resource?.channelIdentity) {
+        continue;
+      }
+      hits.push({
+        teamId: resource.channelIdentity.teamId ?? "",
+        channelId: resource.channelIdentity.channelId ?? "",
+        messageId: resource.id ?? candidate.fallbackId ?? "",
+        body: stripHtml(resource.body?.content ?? candidate.summary ?? ""),
+        fromUserName: resource.from?.user?.displayName,
+        createdAt: resource.createdDateTime ?? new Date(0).toISOString(),
+        webUrl: resource.webUrl
+      });
+    }
+  }
+  return hits.slice(0, limit);
+}
 
 function stripHtml(html: string): string {
   return html

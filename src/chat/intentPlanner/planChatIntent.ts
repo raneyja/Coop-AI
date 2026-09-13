@@ -13,6 +13,7 @@ import {
 import { wantsJiraContext } from "../../context/jiraContext";
 import { wantsSlackContext } from "../../context/slackContext";
 import { wantsTeamsContext } from "../../context/teamsContext";
+import { omitTeamsWhileComingSoon } from "../../integrations/teamsAvailability";
 import { wantsConfluenceContext } from "../../context/confluenceContext";
 import { wantsNotionContext } from "../../context/notionContext";
 import { wantsGoogleDocsContext } from "../../context/googleDocsContext";
@@ -23,8 +24,11 @@ import { queryHasNamedSymbol } from "../../api/agent/searchQuery";
 import {
   decisionPhrasePresent,
   detectExplicitlyNamedTools,
+  interpreterJobsClaimTurn,
   mergeChatIntentTools,
   planChatJobs,
+  planChatTasks,
+  planChatTodos,
   stripLeadingAskLabels,
   toolsImpliedByJobs
 } from "./planChatJobs";
@@ -109,7 +113,7 @@ export function detectNamedTools(message: string): IntegrationChatProvider[] {
       found.push(provider);
     }
   }
-  return found;
+  return omitTeamsWhileComingSoon(found);
 }
 
 /**
@@ -184,12 +188,18 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
   const incident = isIncidentShapedQuery(message);
   const { workflow, confidence: workflowConfidence } = detectWorkflow(message);
 
-  const withJobs = (plan: ChatIntentPlan): ChatIntentPlan => ({
-    ...plan,
-    jobs,
-    tools: plan.mode === "plain" ? [] : mergeChatIntentTools(plan.tools, impliedTools),
-    focus: plan.focus || focus
-  });
+  const withJobs = (plan: ChatIntentPlan): ChatIntentPlan => {
+    const tools = plan.mode === "plain" ? [] : mergeChatIntentTools(plan.tools, impliedTools);
+    const tasks = planChatTasks({ jobs, tools });
+    return {
+      ...plan,
+      jobs,
+      tasks,
+      todos: planChatTodos(tasks),
+      tools,
+      focus: plan.focus || focus
+    };
+  };
 
   // Keep incident reconstruction as the multi-tool owner unless jobs or a workflow win.
   if (incident && !workflow && jobs.length === 0) {
@@ -227,7 +237,11 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
     };
   }
 
-  if (workflow && (workflowConfidence === "high" || tools.length > 0)) {
+  if (
+    workflow &&
+    (workflowConfidence === "high" || tools.length > 0) &&
+    !interpreterJobsClaimTurn(jobs, workflow, decisionImplied)
+  ) {
     const confidence =
       workflowConfidence === "high" && (tools.length > 0 || Boolean(input.activeFile))
         ? "high"

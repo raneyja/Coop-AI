@@ -9,6 +9,7 @@ import {
 } from "../integrationScope/notionQuery";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 import { buildIntegrationSearchTermList } from "./integrationSearchTerms";
+import { planJobSearchAttempts } from "./jobSearchPlan";
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
 import { filterDocPagesForUseRepo } from "./integrationDocRelevance";
 
@@ -59,6 +60,7 @@ export async function fetchNotionSearchContext(options: {
   repo?: string;
   limit?: number;
   extraTerms?: string[];
+  jobScoped?: boolean;
   integrationScope?: ResolvedIntegrationScope;
 }): Promise<NotionSearchContext> {
   if (isNotionScopeBlocked(options.integrationScope)) {
@@ -80,11 +82,16 @@ export async function fetchNotionSearchContext(options: {
     };
   }
 
-  const terms = buildIntegrationSearchTermList({
-    owner: options.owner,
-    repo: options.repo,
-    extraTerms: options.extraTerms
-  });
+  const jobAttempts = options.jobScoped
+    ? planJobSearchAttempts(options.extraTerms ?? [])
+    : [];
+  const terms = options.jobScoped
+    ? jobAttempts.map((attempt) => attempt.text)
+    : buildIntegrationSearchTermList({
+        owner: options.owner,
+        repo: options.repo,
+        extraTerms: options.extraTerms
+      });
   if (terms.length === 0) {
     return {
       source: "notion-search",
@@ -97,7 +104,15 @@ export async function fetchNotionSearchContext(options: {
   const query = terms.join(" OR ");
   const client = new NotionClient({ token: creds.notionToken });
   try {
-    const rawPages = await searchNotionPagesForTerms(client, terms, options.limit ?? 20);
+    const limit = options.limit ?? 20;
+    let rawPages = await searchNotionPagesForTerms(
+      client,
+      options.jobScoped ? terms.slice(0, 1) : terms,
+      limit
+    );
+    if (options.jobScoped && rawPages.length === 0 && terms[1]) {
+      rawPages = await searchNotionPagesForTerms(client, [terms[1]], limit);
+    }
     const pages = filterDocPagesForUseRepo(
       filterScopedNotionPages(rawPages, options.integrationScope),
       {

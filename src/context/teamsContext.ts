@@ -11,6 +11,7 @@ import { buildDiscussionSearchQueries } from "./integrationSearchTerms";
 import { shouldFetchIncidentIntegrations } from "./incidentIntent";
 import { shouldFetchDiscussionIntegrations } from "./integrationFetchPolicy";
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
+import { isTeamsComingSoon } from "../integrations/teamsAvailability";
 
 export type TeamsSearchMessage = {
   fromUserName?: string;
@@ -40,6 +41,9 @@ export function wantsTeamsContext(query: string): boolean {
 }
 
 export function shouldFetchTeamsContext(request: ContextFetchRequest): boolean {
+  if (isTeamsComingSoon()) {
+    return false;
+  }
   return shouldFetchIntegrationWithAllowlist(request, "teams", () => {
     if (shouldFetchDiscussionIntegrations(request)) {
       return true;
@@ -67,7 +71,16 @@ export function buildTeamsSearchQueries(options: {
   preferHost?: import("../api/codeHosts/types").CodeHostProvider;
   jobScoped?: boolean;
 }): string[] {
-  return buildDiscussionSearchQueries(options);
+  return buildDiscussionSearchQueries({
+    ...options,
+    extraTerms: options.extraTerms?.map(quoteTeamsQueryTerm).filter(Boolean)
+  });
+}
+
+/** Graph treats a bare hyphen as NOT and `not` as an operator. Quotes make both literal. */
+export function quoteTeamsQueryTerm(term: string): string {
+  const trimmed = term.trim().replace(/"/g, "");
+  return trimmed ? `"${trimmed}"` : "";
 }
 
 export async function fetchTeamsSearchContext(options: {
@@ -85,6 +98,13 @@ export async function fetchTeamsSearchContext(options: {
   jobScoped?: boolean;
   integrationScope?: ResolvedIntegrationScope;
 }): Promise<TeamsSearchContext> {
+  if (isTeamsComingSoon()) {
+    return {
+      source: "teams-search",
+      query: "",
+      messages: []
+    };
+  }
   if (isTeamsScopeBlocked(options.integrationScope)) {
     return {
       source: "teams-search",
@@ -142,7 +162,9 @@ export async function fetchTeamsSearchContext(options: {
         });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Teams search failed.";
+      const message = explainTeamsSearchError(
+        error instanceof Error ? error.message : "Teams search failed."
+      );
       if (!errors.includes(message)) {
         errors.push(message);
       }
@@ -162,6 +184,13 @@ export async function fetchTeamsSearchContext(options: {
     messages: [...seen.values()].slice(0, limit),
     error: seen.size === 0 && errors.length > 0 ? errors[0] : undefined
   };
+}
+
+export function explainTeamsSearchError(message: string): string {
+  if (/Chat\.Read/i.test(message)) {
+    return "Teams is connected, but search needs Chat.Read. Disconnect and Connect Teams again in Settings after that permission is live.";
+  }
+  return message;
 }
 
 function truncate(value: string, max: number): string {

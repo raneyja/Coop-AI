@@ -9,7 +9,8 @@ import type { IntegrationSearchEvidenceLike } from "../context/integrationEviden
 import {
   appendCitationKeysSection,
   appendEvidenceQualityInstructions,
-  appendSourcesChecklistSection
+  appendSourcesChecklistSection,
+  stripTemplateSectionHeadings
 } from "./evidenceSynthesis";
 import {
   integrationSourceLabel,
@@ -222,7 +223,6 @@ export function enrichIntentJobResponse(
 
   if (hasLocateJob && !hasCodeEvidence && !hasIntegrationEvidence) {
     const lines = [
-      "**Answer**",
       "I could not verify either part of this request from the evidence attached to this turn.",
       "",
       "**Code location**",
@@ -255,21 +255,20 @@ export function enrichIntentJobResponse(
   );
   const withoutLocalActionSections = stripLocalActionSections(content);
 
-  return withoutLocalActionSections
-    .replace(/^\s*(?:\*\*)?Summary(?:\*\*)?\s*:?\s*$/im, "**Answer**")
-    .split("\n")
-    .filter((line) => ![...unavailable].some((label) => line.includes(label)))
-    .filter(
-      (line) =>
-        !/\b(?:clone (?:the|this) repo(?:sitory)?|git grep|find in path|open (?:a|the) local copy)\b/i.test(
-          line
-        )
-    )
-    .filter((line) => !/^\s*(?:[-*]\s*)?(?:rg|grep)\s+/i.test(line))
-    .filter((line) => !lineHasUnsupportedRepoPath(line, allowedPaths))
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return stripTemplateSectionHeadings(
+    withoutLocalActionSections
+      .split("\n")
+      .filter((line) => ![...unavailable].some((label) => line.includes(label)))
+      .filter(
+        (line) =>
+          !/\b(?:clone (?:the|this) repo(?:sitory)?|git grep|find in path|open (?:a|the) local copy)\b/i.test(
+            line
+          )
+      )
+      .filter((line) => !/^\s*(?:[-*]\s*)?(?:rg|grep)\s+/i.test(line))
+      .filter((line) => !lineHasUnsupportedRepoPath(line, allowedPaths))
+      .join("\n")
+  );
 }
 
 /** Concrete remote source bodies available to an intent-job writer. */
