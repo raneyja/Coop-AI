@@ -138,6 +138,46 @@ export class GoogleDocsClient {
     return this.searchDocuments(terms.join(" OR "), limit, scope);
   }
 
+  public async listRecentDocuments(
+    limit = 20,
+    scope?: GoogleDocsSearchScope
+  ): Promise<GoogleDoc[]> {
+    const folderIds = scope?.expandedFolderIds ?? [];
+    if (folderIds.length === 0) {
+      return [];
+    }
+    const baseQ = [
+      "mimeType='application/vnd.google-apps.document'",
+      "trashed=false"
+    ].join(" and ");
+    const [q] = applyGoogleDocsFolderScope([baseQ], folderIds);
+    const query: Record<string, string> = {
+      q: q!,
+      pageSize: String(Math.min(limit, 50)),
+      fields: "files(id,name,modifiedTime,webViewLink,parents)",
+      orderBy: "modifiedTime desc",
+      supportsAllDrives: "true",
+      includeItemsFromAllDrives: "true",
+      corpora: "allDrives"
+    };
+    const result = await this.request<{
+      files?: Array<{
+        id: string;
+        name?: string;
+        modifiedTime?: string;
+        webViewLink?: string;
+        parents?: string[];
+      }>;
+    }>("/files", { query });
+    return (result.files ?? []).map((file) => ({
+      id: file.id,
+      title: file.name ?? "Untitled",
+      updated: file.modifiedTime ?? new Date(0).toISOString(),
+      htmlUrl: file.webViewLink ?? "",
+      parents: file.parents
+    }));
+  }
+
   public async searchDocuments(
     query: string,
     limit = 20,

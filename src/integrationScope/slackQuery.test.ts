@@ -49,6 +49,10 @@ test("scopeJobSlackSearchQueries never sends an unscoped job query", () => {
     scopeJobSlackSearchQueries(["SQL injection"], ["C1"], ["eng"], { enforced: false }),
     ["SQL injection"]
   );
+  assert.deepEqual(
+    scopeJobSlackSearchQueries([""], ["C9"], [], { enforced: true, allowEmpty: true }),
+    ["in:<#C9>"]
+  );
 });
 
 test("filterSlackHitsByChannel keeps only allowlisted channels", () => {

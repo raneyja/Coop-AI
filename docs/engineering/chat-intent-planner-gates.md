@@ -62,20 +62,36 @@ npm run test:chat-intent:phase1
 npm run test:chat-intent:phase2
 npm run test:chat-intent:phase3
 npm run test:chat-intent:phase4
+# front door (slash is a constraint, not a bypass):
+npx tsx src/chat/intentPlanner/frontDoor.gates.test.ts
 ```
 
 **Ship gate:** every phase script exits 0. A single FAIL in any phase blocks merge of that phase's behavior.
 
 ## Session wiring (all phases)
 
-Plain `handleChatSend` runs the planner after slash parse:
+`handleChatSend` interprets **before** it distributes. A slash command or Workflows
+button is a **constraint** (Slack only, blast only) — not a bypass.
 
 | Decision | Behavior |
 | --- | --- |
-| `silent-workflow` | Re-enters with the quick action + `fetchIntegrations` (Phase 2) |
-| `confirm-workflow` | Existing suggest chips (Phase 2) |
-| `tools-only` | Sets `fetchIntegrations` (+ single `integrationProvider` when exactly one tool and no locate job) (Phase 1) |
-| `jobs[]` | Per-job terms on existing gather; skip agent wander when decision/docs/code-host jobs exist (Phase 4) |
-| Activity / preamble | Status line + tool checklist + `<coop_intent_plan>` (Phase 3) |
+| Slash `/slack` (with a topic) | Interpret focus → Slack-only decision job → existing Slack fetch with those terms |
+| Slash `/blast` (optional focus) | Interpret focus for terms → existing blast engine |
+| `silent-workflow` | Re-enters with the quick action + `fetchIntegrations` + the plan (no second interpret) |
+| `confirm-workflow` | Existing suggest chips; accept carries the same plan |
+| `tools-only` | Sets `fetchIntegrations` (+ single `integrationProvider` when exactly one tool and no locate job) |
+| `jobs[]` | Per-job terms on existing gather; skip agent wander when decision/docs/code-host jobs exist |
+| Activity / preamble | Status line + tool checklist + `<coop_intent_plan>`; chip shows the query actually sent |
 
-Slash commands and explicit `/jira`-style routes still win.
+Re-entry sets `skipChatIntentPlanner` and passes `intentPlan`. Interpret once per turn.
+
+## Phase 5 — job verb (search | latest)
+
+The interpreter assigns **work**, not leftover words. `ChatIntentJob.verb` is `search` or `latest` on the shared job (every tool). Recency-only language with no real topic → `latest` and empty terms. A real topic (SQL-injection, a ticket key) → `search` with that topic. Bare `/slack` / `/jira` / `/docs` with no topic and not recency still uses repo fallback (`jobs: []`).
+
+`latest` fetches newest-first **inside the org allowlist**. Empty enforced allowlist blocks. Unenforced/workspace-wide latest is refused (honest scope error), not a Settings lie.
+
+Run: `npx tsx src/chat/intentPlanner/frontDoor.gates.test.ts`
+
+
+Run front-door gates: `npx tsx src/chat/intentPlanner/frontDoor.gates.test.ts`

@@ -12,6 +12,13 @@ import { planJobSearchAttempts } from "./jobSearchPlan";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
 import { filterDocPagesForUseRepo } from "./integrationDocRelevance";
+import type { ChatIntentJobVerb } from "../chat/intentPlanner/types";
+import { isSearchMeaningStop } from "../chat/intentPlanner/searchMeaningStop";
+import {
+  emptySearchTopicError,
+  latestNeedsScopeError,
+  missingRepoSearchError
+} from "./integrationJobErrors";
 
 export type GoogleDocsSearchPage = {
   id: string;
@@ -65,6 +72,7 @@ export async function fetchGoogleDocsSearchContext(options: {
   limit?: number;
   extraTerms?: string[];
   jobScoped?: boolean;
+  jobVerb?: ChatIntentJobVerb;
   integrationScope?: ResolvedIntegrationScope;
 }): Promise<GoogleDocsSearchContext> {
   if (isGoogleDocsScopeBlocked(options.integrationScope)) {
@@ -86,29 +94,42 @@ export async function fetchGoogleDocsSearchContext(options: {
     };
   }
 
-  const jobAttempts = options.jobScoped
-    ? planJobSearchAttempts(options.extraTerms ?? [])
-    : [];
-  const terms = options.jobScoped
-    ? driveSearchTokens(jobAttempts[0]?.text ? [jobAttempts[0].text] : [])
-    : buildIntegrationSearchTermList({
-        owner: options.owner,
-        repo: options.repo,
-        queryText: options.queryText,
-        activeFile: options.activeFile,
-        contextText: [...(options.contextText ?? []), ...(options.crossToolText ?? [])],
-        extraTerms: options.extraTerms
-      });
-  if (terms.length === 0) {
+  const latest = Boolean(options.jobScoped && options.jobVerb === "latest");
+  if (latest && !googleDocsLatestAllowlisted(options.integrationScope)) {
     return {
       source: "google-docs-search",
       query: "",
       documents: [],
-      error: "Set repository owner and repo in Settings to search Google Docs by repo."
+      error: latestNeedsScopeError("Google Docs")
+    };
+  }
+  const jobAttempts = options.jobScoped && !latest
+    ? planJobSearchAttempts(options.extraTerms ?? [])
+    : [];
+  const terms = latest
+    ? []
+    : options.jobScoped
+      ? driveSearchTokens(jobAttempts[0]?.text ? [jobAttempts[0].text] : [])
+      : buildIntegrationSearchTermList({
+          owner: options.owner,
+          repo: options.repo,
+          queryText: options.queryText,
+          activeFile: options.activeFile,
+          contextText: [...(options.contextText ?? []), ...(options.crossToolText ?? [])],
+          extraTerms: options.extraTerms
+        });
+  if (!latest && terms.length === 0) {
+    return {
+      source: "google-docs-search",
+      query: "",
+      documents: [],
+      error: options.jobScoped
+        ? emptySearchTopicError("Google Docs")
+        : missingRepoSearchError("Google Docs")
     };
   }
 
-  const query = terms.join(" OR ");
+  const query = latest ? "latest" : terms.join(" OR ");
   const client = new GoogleDocsClient({ accessToken: creds.googleDocsToken });
   const driveScope =
     options.integrationScope?.enforced && options.integrationScope.googleDocs
@@ -117,21 +138,25 @@ export async function fetchGoogleDocsSearchContext(options: {
   const allowedFolderIds = new Set(options.integrationScope?.googleDocs?.expandedFolderIds ?? []);
   try {
     const searchLimit = options.limit ?? 20;
-    let rawDocuments = await client.searchDocumentsForTerms(terms, searchLimit, driveScope);
+    let rawDocuments = latest
+      ? await client.listRecentDocuments(searchLimit, driveScope)
+      : await client.searchDocumentsForTerms(terms, searchLimit, driveScope);
     const retryTokens = driveSearchTokens(jobAttempts[1]?.text ? [jobAttempts[1].text] : []);
-    if (options.jobScoped && rawDocuments.length === 0 && retryTokens.length > 0) {
+    if (!latest && options.jobScoped && rawDocuments.length === 0 && retryTokens.length > 0) {
       rawDocuments = await client.searchDocumentsForTerms(retryTokens, searchLimit, driveScope);
     }
     const scoped =
       options.integrationScope?.enforced && allowedFolderIds.size > 0
         ? filterGoogleDocsHitsByFolder(rawDocuments, allowedFolderIds).map(stripGoogleDocParents)
         : rawDocuments.map(stripGoogleDocParents);
-    const documents = filterDocPagesForUseRepo(scoped, {
-      owner: options.owner,
-      repo: options.repo,
-      focusTerms: options.extraTerms,
-      limit: options.limit ?? 20
-    });
+    const documents = latest
+      ? scoped.slice(0, options.limit ?? 20)
+      : filterDocPagesForUseRepo(scoped, {
+          owner: options.owner,
+          repo: options.repo,
+          focusTerms: options.extraTerms,
+          limit: options.limit ?? 20
+        });
     const repoQuery =
       options.owner?.trim() && options.repo?.trim()
         ? `${options.owner.trim()}/${options.repo.trim()}`
@@ -161,12 +186,25 @@ export function driveSearchTokens(terms: string[]): string[] {
   for (const term of terms) {
     for (const raw of term.split(/[\s\-–—]+/)) {
       const token = raw.replace(/[^\w]/g, "");
-      if (token.length >= 3 && !DRIVE_SEARCH_STOP.has(token.toLowerCase()) && !tokens.includes(token)) {
+      if (
+        token.length >= 3 &&
+        !DRIVE_SEARCH_STOP.has(token.toLowerCase()) &&
+        !isSearchMeaningStop(token) &&
+        !tokens.includes(token)
+      ) {
         tokens.push(token);
       }
     }
   }
   return tokens;
+}
+
+function googleDocsLatestAllowlisted(scope: ResolvedIntegrationScope | undefined): boolean {
+  return Boolean(
+    scope?.enforced &&
+      scope.allowed &&
+      (scope.googleDocs?.expandedFolderIds.length ?? 0) > 0
+  );
 }
 
 function stripGoogleDocParents(doc: {

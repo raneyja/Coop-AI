@@ -208,19 +208,24 @@ import {
 } from "./quickActionSuggestIntent";
 import {
   classifyQuickActionIntent,
+  INTENT_SUGGEST_TIMEOUT_MS,
   type IntentSuggestCompleteFn
 } from "./quickActionIntentModel";
 import { isIntentSuggestModelEnabled } from "../config/intentSuggestConfig";
 import {
-  planChatIntentFromRules,
-  classifyChatIntentPlan,
-  shouldCallChatIntentModel,
+  FRONT_DOOR_INTERPRETER_USE_CASE,
+  frontDoorInterpretText,
+  planChatFrontDoor,
+  planChatFrontDoorFromRules,
+  resolveChatCommandConstraint,
+  shouldInterpretChatAsk,
   resolveChatIntentExecution,
   buildIntentPlanActivityMessages,
   buildIntentPlanStatusLine,
   buildIntentPlanTrustPreamble,
   emptyChatIntentPlan,
   locateJobTerms,
+  type ChatCommandConstraint,
   type ChatIntentPlan
 } from "./intentPlanner";
 import {
@@ -624,6 +629,7 @@ export class CoopChatSession {
     mentions?: ChatFileMention[];
     attachments?: ChatImageAttachment[];
     assistantTimestamp: number;
+    intentPlan?: ChatIntentPlan;
   };
   /** Abort in-flight hybrid intent-suggest model call (user Stop). */
   private intentSuggestAbort?: AbortController;
@@ -1867,7 +1873,12 @@ export class CoopChatSession {
 
     switch (plan.kind) {
       case "slash":
-        await this.routeSlashCommand(plan.parsed, attachments, mentions);
+        await this.handleChatSend(
+          slashCommandHistoryContent(plan.parsed.def, plan.parsed.focus),
+          undefined,
+          attachments,
+          { mentions }
+        );
         return;
       case "quick-action":
         await this.handleChatSend("", plan.actionId, attachments, {
@@ -5680,7 +5691,7 @@ export class CoopChatSession {
       skipQuickActionSuggest?: boolean;
       /** Continue after suggest without duplicating the user bubble already in history. */
       skipUserHistoryPush?: boolean;
-      /** Skip Chat Intent Planner (already planned / slash / re-entry). */
+      /** Skip Chat Intent Planner (already planned re-entry). */
       skipChatIntentPlanner?: boolean;
     }
   ): Promise<void> {
@@ -5690,22 +5701,20 @@ export class CoopChatSession {
     }
     // Slash-command routing applies only to manually typed messages — never to
     // button-driven quick actions or already-routed integration prompts.
+    // Parse here as a constraint; interpretation still runs before distribute.
+    let parsedSlash: ParsedSlashCommand | null = null;
     if (!quickAction && !options?.sourceHint) {
-      const parsed = parseSlashCommand(message);
+      parsedSlash = parseSlashCommand(message);
       // /edit (or /fix) create a PR … is a ship command, not another patch.
       if (
-        parsed?.def.target.kind === "composer-mode" &&
-        isCreatePullRequestAsk(parsed.args || parsed.focus || message)
+        parsedSlash?.def.target.kind === "composer-mode" &&
+        isCreatePullRequestAsk(parsedSlash.args || parsedSlash.focus || message)
       ) {
         await this.handleCreatePrChatAsk(
-          parsed.args || parsed.focus || message,
+          parsedSlash.args || parsedSlash.focus || message,
           attachments,
           options?.mentions
         );
-        return;
-      }
-      if (parsed) {
-        await this.routeSlashCommand(parsed, attachments, options?.mentions);
         return;
       }
     }
@@ -5756,97 +5765,113 @@ export class CoopChatSession {
       return;
     }
 
-    // Chat Intent Planner (plain chat): pick workflow + connected tools before chips/edit.
-    // Slash and explicit integrationProvider remain the override.
-    if (
-      !quickAction &&
-      !options?.sourceHint &&
-      !options?.integrationProvider &&
-      !options?.composerMode &&
-      !options?.skipChatIntentPlanner &&
-      !options?.skipQuickActionSuggest
-    ) {
-      const plan = await this.resolveChatIntentPlan(message);
+    // One front door: interpret before distribute. A slash/Workflows token is a
+    // constraint, not a bypass. Re-entry carries skipChatIntentPlanner + the plan.
+    if (shouldInterpretChatAsk(options)) {
+      const constraint = resolveChatCommandConstraint({
+        parsed: parsedSlash,
+        quickAction,
+        composerMode: options?.composerMode,
+        integrationProvider: options?.integrationProvider
+      });
+      const interpretMessage = frontDoorInterpretText({
+        rawAsk: message,
+        parsed: parsedSlash,
+        slashUserArgs: options?.slashUserArgs
+      });
+      const plan = await this.resolveChatIntentPlan(interpretMessage, { constraint });
       options = { ...options, intentPlan: plan };
-      const decision = resolveChatIntentExecution(plan);
-      if (decision.kind === "silent-workflow") {
-        void this.emitUsageEvent("chat_intent.silent_workflow", {
-          workflow: decision.workflow,
-          tools: decision.tools
-        });
-        await this.handleChatSend("", decision.workflow, attachments, {
-          slashUserArgs: decision.focus,
-          historyContent: message,
-          mentions: options?.mentions,
-          fetchIntegrations: decision.tools.length ? decision.tools : undefined,
-          intentPlan: decision.plan,
-          skipQuickActionSuggest: true,
-          skipChatIntentPlanner: true
-        });
+
+      if (parsedSlash) {
+        await this.routeSlashCommand(parsedSlash, attachments, options?.mentions, plan);
         return;
       }
-      if (decision.kind === "confirm-workflow") {
-        if (
-          shouldSuppressSuggestChipsForAgentHunt({
-            query: message
-          }) ||
-          shouldSkipQuickActionSuggest(message)
-        ) {
-          options = { ...options, intentPlan: emptyChatIntentPlan(message) };
-        } else {
-          void this.emitUsageEvent("chat_intent.confirm_workflow", {
-            workflow: decision.plan.workflow,
+
+      if (!quickAction && !options?.composerMode && !options?.integrationProvider && !options?.sourceHint) {
+        const decision = resolveChatIntentExecution(plan);
+        if (decision.kind === "silent-workflow") {
+          void this.emitUsageEvent("chat_intent.silent_workflow", {
+            workflow: decision.workflow,
             tools: decision.tools
           });
-          await this.completeQuickActionSuggestClarification(
-            message,
-            decision.offer,
-            options?.mentions,
-            attachments
-          );
+          await this.handleChatSend("", decision.workflow, attachments, {
+            slashUserArgs: decision.focus,
+            historyContent: message,
+            mentions: options?.mentions,
+            fetchIntegrations: decision.tools.length ? decision.tools : undefined,
+            intentPlan: decision.plan,
+            skipQuickActionSuggest: true,
+            skipChatIntentPlanner: true
+          });
           return;
         }
-      }
-      if (decision.kind === "tools-only") {
-        void this.emitUsageEvent("chat_intent.tools_only", { tools: decision.tools });
-        options = {
-          ...options,
-          fetchIntegrations: decision.tools,
-          intentPlan: decision.plan,
-          // Single named tool keeps primary-source synthesis; multi-tool uses allowlist only.
-          integrationProvider:
-            decision.tools.length === 1 &&
-            !(decision.plan.jobs ?? []).some((job) => job.capability === "locate")
-              ? decision.tools[0]
-              : options?.integrationProvider,
-          skipChatIntentPlanner: true
-        };
-      } else if (
-        !options?.integrationProvider &&
-        !this.detectChatIntegrationProvider(message)
-      ) {
-        // Legacy chip path when planner has nothing (medium phrase-only still handled above).
-        let offer = shouldOfferQuickActionSuggest(message, this.currentContext);
-        if (!offer && isIntentSuggestModelEnabled() && !shouldSkipQuickActionSuggest(message)) {
-          offer = await this.resolveHybridIntentSuggestOffer(message);
-        }
-        if (offer) {
+        if (decision.kind === "confirm-workflow") {
           if (
             shouldSuppressSuggestChipsForAgentHunt({
               query: message
-            })
+            }) ||
+            shouldSkipQuickActionSuggest(message)
           ) {
             options = { ...options, intentPlan: emptyChatIntentPlan(message) };
           } else {
+            void this.emitUsageEvent("chat_intent.confirm_workflow", {
+              workflow: decision.plan.workflow,
+              tools: decision.tools
+            });
             await this.completeQuickActionSuggestClarification(
               message,
-              offer,
+              decision.offer,
               options?.mentions,
-              attachments
+              attachments,
+              decision.plan
             );
             return;
           }
         }
+        if (decision.kind === "tools-only") {
+          void this.emitUsageEvent("chat_intent.tools_only", { tools: decision.tools });
+          options = {
+            ...options,
+            fetchIntegrations: decision.tools,
+            intentPlan: decision.plan,
+            // Single named tool keeps primary-source synthesis; multi-tool uses allowlist only.
+            integrationProvider:
+              decision.tools.length === 1 &&
+              !(decision.plan.jobs ?? []).some((job) => job.capability === "locate")
+                ? decision.tools[0]
+                : options?.integrationProvider,
+            skipChatIntentPlanner: true
+          };
+        } else if (
+          !options?.integrationProvider &&
+          !this.detectChatIntegrationProvider(message)
+        ) {
+          // Legacy chip path when planner has nothing (medium phrase-only still handled above).
+          let offer = shouldOfferQuickActionSuggest(message, this.currentContext);
+          if (!offer && isIntentSuggestModelEnabled() && !shouldSkipQuickActionSuggest(message)) {
+            offer = await this.resolveHybridIntentSuggestOffer(message);
+          }
+          if (offer) {
+            if (
+              shouldSuppressSuggestChipsForAgentHunt({
+                query: message
+              })
+            ) {
+              options = { ...options, intentPlan: emptyChatIntentPlan(message) };
+            } else {
+              await this.completeQuickActionSuggestClarification(
+                message,
+                offer,
+                options?.mentions,
+                attachments,
+                plan
+              );
+              return;
+            }
+          }
+        }
+      } else if (plan.tools.length > 0 && !options?.fetchIntegrations) {
+        options = { ...options, fetchIntegrations: plan.tools };
       }
     }
 
@@ -6557,7 +6582,8 @@ export class CoopChatSession {
     message: string,
     offer: NonNullable<ReturnType<typeof shouldOfferQuickActionSuggest>>,
     mentions?: ChatFileMention[],
-    attachments?: ChatImageAttachment[]
+    attachments?: ChatImageAttachment[],
+    intentPlan?: ChatIntentPlan
   ): Promise<void> {
     const mentionRefs = this.quickActionMentionRefs(mentions);
     const historyContent = plainChatHistoryContent(message, mentionRefs, {
@@ -6609,7 +6635,8 @@ export class CoopChatSession {
       focus: message.trim(),
       mentions,
       attachments,
-      assistantTimestamp
+      assistantTimestamp,
+      intentPlan
     };
     void this.emitUsageEvent("suggest_chip.shown");
     this.post({ type: "chat:complete", payload: { message: finalMessage } });
@@ -6664,7 +6691,11 @@ export class CoopChatSession {
     await this.handleChatSend("", actionId, pending.attachments, {
       historyContent,
       mentions: pending.mentions,
-      slashUserArgs: pending.focus
+      slashUserArgs: pending.focus,
+      intentPlan: pending.intentPlan,
+      fetchIntegrations: pending.intentPlan?.tools.length ? pending.intentPlan.tools : undefined,
+      skipChatIntentPlanner: true,
+      skipQuickActionSuggest: true
     });
   }
 
@@ -6688,7 +6719,8 @@ export class CoopChatSession {
   private async routeCompareSlashCommand(
     focus: string,
     attachments?: ChatImageAttachment[],
-    mentions?: ChatFileMention[]
+    mentions?: ChatFileMention[],
+    intentPlan?: ChatIntentPlan
   ): Promise<void> {
     let catalogRepoIds: string[] = [];
     try {
@@ -6718,7 +6750,10 @@ export class CoopChatSession {
       await this.handleChatSend(userText, undefined, attachments, {
         historyContent,
         mentions,
-        slashUserArgs: parsed.plan.topic
+        slashUserArgs: parsed.plan.topic,
+        intentPlan,
+        skipChatIntentPlanner: true,
+        skipQuickActionSuggest: true
       });
     } finally {
       // Enrich clears on success; clear here if the turn exited before context gather.
@@ -6731,15 +6766,21 @@ export class CoopChatSession {
   private async routeSlashCommand(
     parsed: ParsedSlashCommand,
     attachments?: ChatImageAttachment[],
-    mentions?: ChatFileMention[]
+    mentions?: ChatFileMention[],
+    intentPlan?: ChatIntentPlan
   ): Promise<void> {
     const { def, focus } = parsed;
     const mentionRefs = this.quickActionMentionRefs(mentions);
     // Focus = text before + after the slash token (not args-after only).
     const slashUserArgs = focus.trim() || undefined;
+    const planned = {
+      intentPlan,
+      skipChatIntentPlanner: true,
+      skipQuickActionSuggest: true
+    } as const;
 
     if (def.target.kind === "compare") {
-      await this.routeCompareSlashCommand(focus, attachments, mentions);
+      await this.routeCompareSlashCommand(focus, attachments, mentions, intentPlan);
       return;
     }
 
@@ -6761,7 +6802,9 @@ export class CoopChatSession {
       await this.handleChatSend("", actionId, attachments, {
         historyContent,
         mentions,
-        slashUserArgs
+        slashUserArgs,
+        fetchIntegrations: intentPlan?.tools.length ? intentPlan.tools : undefined,
+        ...planned
       });
       return;
     }
@@ -6774,7 +6817,8 @@ export class CoopChatSession {
         historyContent,
         mentions,
         slashUserArgs: slashUserArgs,
-        composerMode: def.target.mode
+        composerMode: def.target.mode,
+        ...planned
       });
       return;
     }
@@ -6838,7 +6882,11 @@ export class CoopChatSession {
       integrationProvider: provider,
       historyContent,
       mentions,
-      slashUserArgs
+      slashUserArgs,
+      fetchIntegrations: intentPlan?.tools.length ? intentPlan.tools : [provider],
+      intentPlan,
+      skipChatIntentPlanner: true,
+      skipQuickActionSuggest: true
     });
   }
 
@@ -6866,23 +6914,29 @@ export class CoopChatSession {
   }
 
   /**
-   * Phrase-first Chat Intent Planner, with optional cheap model when rules return none.
-   * Fail-open → empty plan (plain chat).
+   * Front door: interpret the ask (command constraint + topic) then hand the plan
+   * to existing tools. Fail-open into the rules plan. Interpreter timeout is the
+   * remaining soft gather budget, capped at the cheap intent-suggest timeout.
    */
-  private async resolveChatIntentPlan(message: string): Promise<ChatIntentPlan> {
+  private async resolveChatIntentPlan(
+    message: string,
+    options?: { constraint?: ChatCommandConstraint }
+  ): Promise<ChatIntentPlan> {
     const connectedTools = this.listConnectedIntegrationTools();
+    const owner = this.currentContext.owner?.trim() || this.preferences.owner?.trim();
+    const repo = this.currentContext.repo?.trim() || this.preferences.repo?.trim();
     const input = {
       message,
       activeFile: this.currentContext.file,
-      connectedTools
+      connectedTools,
+      constraint: options?.constraint,
+      useRepo: owner && repo ? `${owner}/${repo}` : undefined
     };
-    const rulesPlan = planChatIntentFromRules(input);
-    // Deterministic jobs and repo-code intent are executable contracts.
-    if (!shouldCallChatIntentModel(rulesPlan)) {
-      return rulesPlan;
-    }
-    if (!isIntentSuggestModelEnabled()) {
-      return rulesPlan;
+    // Interpreter runs before the turn clock is stamped. Do not reuse a prior
+    // turn's startedAt or the cheap model is skipped for the rest of the session.
+    const remainingMs = remainingContextGatherBudgetMs(Date.now());
+    if (!isIntentSuggestModelEnabled() || remainingMs <= 0) {
+      return planChatFrontDoorFromRules(input);
     }
 
     this.intentSuggestAbort?.abort();
@@ -6897,7 +6951,7 @@ export class CoopChatSession {
           history: [],
           model: params.model,
           provider: params.provider,
-          useCase: "intent_suggest",
+          useCase: FRONT_DOOR_INTERPRETER_USE_CASE,
           temperature: params.temperature,
           maxTokens: params.maxTokens,
           enableThinking: false
@@ -6912,12 +6966,13 @@ export class CoopChatSession {
     };
 
     try {
-      const modelPlan = await classifyChatIntentPlan(input, complete, {
-        signal: controller.signal
+      return await planChatFrontDoor(input, {
+        complete,
+        signal: controller.signal,
+        timeoutMs: Math.min(INTENT_SUGGEST_TIMEOUT_MS, remainingMs)
       });
-      return modelPlan ?? rulesPlan;
     } catch {
-      return rulesPlan;
+      return planChatFrontDoorFromRules(input);
     } finally {
       if (this.intentSuggestAbort === controller) {
         this.intentSuggestAbort = undefined;

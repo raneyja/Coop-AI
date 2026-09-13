@@ -1,10 +1,14 @@
 /**
- * Chat Intent Planner — shared plan shape for plain-chat tool + workflow routing.
+ * Chat Intent Planner — shared plan shape for the chat front door.
+ *
+ * Every user ask (plain chat, slash, Workflows) is interpreted once, then
+ * handed to an existing tool. A slash command is a constraint, not a bypass.
  *
  * Phases:
  * 1) tools[] allowlist → fetch connected integrations without slash
  * 2) workflow + execution → silent/confirm quick-action promotion
  * 3) trust UX → activity + status copy from the plan
+ * 4) jobs[] + terms → existing fetchers (Slack/Jira/docs/index)
  */
 import type { IntegrationChatProvider } from "../types";
 import type { QuickActionId } from "../../webview/types";
@@ -24,12 +28,17 @@ export type ChatIntentPlanMode =
 
 /**
  * One gather job. `capability` selects today's search machine;
- * `terms` are that job's query (never one ranked token for every tool).
+ * `verb` is the work to run (search a topic, or list newest items);
+ * `terms` are that job's query (empty is valid for `latest`).
  */
 export type ChatIntentJobCapability = "locate" | "decision" | "docs" | "code-host";
 
+/** Shared assignment — not a per-vendor field and not a magic terms[] sentinel. */
+export type ChatIntentJobVerb = "search" | "latest";
+
 export type ChatIntentJob = {
   capability: ChatIntentJobCapability;
+  verb?: ChatIntentJobVerb;
   terms: string[];
 };
 
@@ -42,6 +51,7 @@ export type ChatIntentTask = {
   kind: ChatIntentTaskKind;
   title: string;
   query: string;
+  verb?: ChatIntentJobVerb;
   tool?: IntegrationChatProvider | "repo" | "code-host";
 };
 
@@ -89,12 +99,24 @@ export type ChatIntentPlan = {
   todos?: ChatIntentTodo[];
 };
 
+/** Slash / Workflows / palette pin. Narrows tools; does not skip interpretation. */
+export type ChatCommandConstraint =
+  | { kind: "none" }
+  | { kind: "integration"; provider: IntegrationChatProvider }
+  | { kind: "workflow"; workflow: ChatIntentWorkflow }
+  | { kind: "edit" }
+  | { kind: "compare" };
+
 export type ChatIntentPlannerInput = {
   message: string;
   activeFile?: string;
   /** Only tools the org/user has connected. */
   connectedTools: IntegrationChatProvider[];
-  /** When true, skip planner (slash / already-routed). */
+  /** Command constraint from slash / Workflows / palette. */
+  constraint?: ChatCommandConstraint;
+  /** Active Use-repo `owner/repo` — never a search term when the ask has a topic. */
+  useRepo?: string;
+  /** When true, skip planner (already planned re-entry). */
   disabled?: boolean;
 };
 

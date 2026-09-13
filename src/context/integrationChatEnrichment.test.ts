@@ -384,7 +384,7 @@ test("onToolActivity surfaces Jira errors instead of No matching results", async
     }
   });
   const done = events.find((event) => event.phase === "done");
-  assert.equal(done?.label, "Searched Jira for `SQL-injection`");
+  assert.equal(done?.label, "Searched Jira for `SQL injection`");
   assert.match(done?.detail ?? "", /JQL parse failure/);
   assert.doesNotMatch(done?.detail ?? "", /No matching results/);
 });
@@ -477,6 +477,8 @@ test("job-scoped providers start in parallel with capability-specific terms", as
   assert.deepEqual(args.get("confluence")?.extraTerms, ["sql-injection", "rollback runbook"]);
   assert.equal(args.get("code-host")?.queryText, "PR #53");
   assert.equal(args.get("code-host")?.provider, "gitlab");
+  assert.equal(args.get("slack")?.jobVerb, "search");
+  assert.equal(args.get("jira")?.jobVerb, "search");
   for (const gate of gates.values()) gate.resolve({});
   await promise;
 });

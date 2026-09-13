@@ -10,11 +10,14 @@ import {
   CHAT_INTENT_TOOL_PROVIDERS,
   type ChatIntentJob,
   type ChatIntentJobCapability,
+  type ChatIntentJobVerb,
   type ChatIntentTask,
   type ChatIntentTodo
 } from "./types";
 import { classifyRepoCodeIntent } from "../repoCodeIntent";
 import { isTeamsComingSoon, omitTeamsWhileComingSoon } from "../../integrations/teamsAvailability";
+import { isRepoSlugTerm } from "./repoSlugTerm";
+import { SEARCH_MEANING_STOP, uniqueMeaningTerms } from "./searchMeaningStop";
 
 const TOOL_NAME_PATTERNS: Array<{ provider: IntegrationChatProvider; pattern: RegExp }> = [
   { provider: "jira", pattern: /\bjira\b/i },
@@ -92,81 +95,41 @@ const MIX_PHRASES = [/\bdon(?:'t|’t)\s+mix\b/i, /\bnot\s+to\s+mix\b/i, /\bdo\s
 const CLAUSE_SPLIT =
   /\s*(?:,\s+and\s+|;\s+(?:and\s+)?|[—–]\s+(?:and\s+)?(?=(?:did|what|where)\b)|\s+and\s+(?=(?:did\b|what\s+(?:did|does)\b|where\s+did\b)))\s*/i;
 
-const TERM_STOP = new Set(
-  [
-    "where",
-    "what",
-    "which",
-    "who",
-    "how",
-    "does",
-    "did",
-    "already",
-    "this",
-    "that",
-    "into",
-    "in",
-    "the",
-    "and",
-    "for",
-    "from",
-    "with",
-    "about",
-    "please",
-    "find",
-    "show",
-    "check",
-    "search",
-    "list",
-    "open",
-    "recent",
-    "repo",
-    "repository",
-    "pager",
-    "oncall",
-    "incident",
-    "outage",
-    "implemented",
-    "defined",
-    "located",
-    "decide",
-    "decided",
-    "decision",
-    "already",
-    "we",
-    "our",
-    "was",
-    "were",
-    "have",
-    "has",
-    "been",
-    "not",
-    "dont",
-    "don't",
-    "mix",
-    "prs",
-    "pr",
-    "mrs",
-    "mr",
-    "pull",
-    "request",
-    "requests",
-    "merge",
-    "issue",
-    "issues",
-    "slack",
-    "jira",
-    "teams",
-    "confluence",
-    "notion",
-    "google",
-    "docs",
-    "gdocs",
-    "github",
-    "gitlab",
-    "bitbucket"
-  ].map((w) => w.toLowerCase())
-);
+const TERM_STOP = SEARCH_MEANING_STOP;
+
+/**
+ * Recency-only language. A real topic (SQL-injection, COOP-101) still wins —
+ * those words are sort, not the query.
+ */
+const RECENCY_PHRASE =
+  /\b(?:most\s+recent(?:ly)?|latest|newest|last\s+(?:post|posts|message|messages|ticket|tickets|page|pages|doc|docs|document|documents|item|items))\b/i;
+
+export type ChatAskAssignmentKind = "none" | "latest" | "search";
+
+export function hasRecencyLanguage(message: string): boolean {
+  return RECENCY_PHRASE.test(stripLeadingAskLabels(message));
+}
+
+/**
+ * Shared assignment: leftover filler is not a topic; recency-only is `latest`.
+ */
+export function classifyChatAskAssignment(
+  message: string,
+  useRepo?: string
+): { kind: ChatAskAssignmentKind } {
+  const text = stripLeadingAskLabels(message ?? "").trim();
+  if (text.length < 3 || isRepoSlugTerm(text, useRepo)) {
+    return { kind: "none" };
+  }
+  const topic = extractJobTerms(stripToolNames(text), "decision", undefined);
+  if (topic.length > 0) {
+    return { kind: "search" };
+  }
+  if (hasRecencyLanguage(text)) {
+    return { kind: "latest" };
+  }
+  return { kind: "search" };
+}
 
 export type PlanChatJobsInput = {
   message: string;
@@ -214,6 +177,28 @@ export function locateJobTerms(jobs: ChatIntentJob[] | undefined): string[] {
   );
 }
 
+function matchingIntegrationJobs(
+  jobs: ChatIntentJob[] | undefined,
+  provider: IntegrationChatProvider
+): ChatIntentJob[] {
+  return (jobs ?? []).filter(
+    (job) =>
+      (job.capability === "decision" && DECISION_JOB_PROVIDERS.includes(provider)) ||
+      (job.capability === "docs" && DOCS_JOB_PROVIDERS.includes(provider))
+  );
+}
+
+export function jobVerbForIntegration(
+  jobs: ChatIntentJob[] | undefined,
+  provider: IntegrationChatProvider
+): ChatIntentJobVerb {
+  const matching = matchingIntegrationJobs(jobs, provider);
+  if (matching.some((job) => job.verb === "latest")) {
+    return "latest";
+  }
+  return "search";
+}
+
 export function extraTermsForIntegration(
   jobs: ChatIntentJob[] | undefined,
   provider: IntegrationChatProvider
@@ -221,16 +206,14 @@ export function extraTermsForIntegration(
   if (!jobs?.length) {
     return undefined;
   }
-  const terms: string[] = [];
-  for (const job of jobs) {
-    if (job.capability === "decision" && DECISION_JOB_PROVIDERS.includes(provider)) {
-      terms.push(...job.terms);
-    }
-    if (job.capability === "docs" && DOCS_JOB_PROVIDERS.includes(provider)) {
-      terms.push(...job.terms);
-    }
+  const matching = matchingIntegrationJobs(jobs, provider);
+  if (matching.length === 0) {
+    return undefined;
   }
-  const unique = uniqueTerms(terms);
+  const unique = uniqueTerms(matching.flatMap((job) => job.terms));
+  if (matching.some((job) => job.verb === "latest")) {
+    return unique;
+  }
   return unique.length > 0 ? unique : undefined;
 }
 
@@ -259,6 +242,13 @@ export function hasCodeHostJob(jobs: ChatIntentJob[] | undefined): boolean {
 export function codeHostJobQuery(jobs: ChatIntentJob[] | undefined): string | undefined {
   const terms = codeHostJobTerms(jobs);
   return terms.length > 0 ? terms.join(" ") : undefined;
+}
+
+export function codeHostJobVerb(jobs: ChatIntentJob[] | undefined): ChatIntentJobVerb {
+  if ((jobs ?? []).some((job) => job.capability === "code-host" && job.verb === "latest")) {
+    return "latest";
+  }
+  return "search";
 }
 
 /**
@@ -324,6 +314,7 @@ export function planChatTasks(options: {
   for (const job of options.jobs) {
     const query = job.terms.join(" ").trim();
     const preview = job.terms.slice(0, 3).join(", ");
+    const verb = job.verb === "latest" ? "latest" : "search";
     if (job.capability === "locate") {
       tasks.push({
         id: "locate-repo",
@@ -331,6 +322,7 @@ export function planChatTasks(options: {
         kind: "search-repo",
         title: preview ? `Find ${preview} in the repo` : "Find named code in the repo",
         query,
+        verb: "search",
         tool: "repo"
       });
       continue;
@@ -340,8 +332,14 @@ export function planChatTasks(options: {
         id: "code-host",
         job: "code-host",
         kind: "search-code-host",
-        title: preview ? `Search pull requests for ${preview}` : "Search pull requests",
+        title:
+          verb === "latest"
+            ? "Latest pull requests and issues"
+            : preview
+              ? `Search pull requests for ${preview}`
+              : "Search pull requests",
         query,
+        verb,
         tool: "code-host"
       });
       continue;
@@ -358,10 +356,14 @@ export function planChatTasks(options: {
         id: `${job.capability}-${tool}`,
         job: job.capability,
         kind: "search-integration",
-        title: preview
-          ? `Search ${TASK_TOOL_LABEL[tool]} for ${preview}`
-          : `Search ${TASK_TOOL_LABEL[tool]}`,
-        query,
+        title:
+          verb === "latest"
+            ? `Latest ${TASK_TOOL_LABEL[tool]}`
+            : preview
+              ? `Search ${TASK_TOOL_LABEL[tool]} for ${preview}`
+              : `Search ${TASK_TOOL_LABEL[tool]}`,
+        query: verb === "latest" ? "latest" : query,
+        verb,
         tool
       });
     }
@@ -406,6 +408,7 @@ export function planChatJobs(input: PlanChatJobsInput): ChatIntentJob[] {
 
   const decisionImplied = decisionPhrasePresent(stripped);
   const locateGlobal = classifyRepoCodeIntent(stripped).action === "locate";
+  const assignment = classifyChatAskAssignment(stripped);
 
   for (const clause of clauses) {
     const capability = classifyClause(clause, named);
@@ -413,10 +416,15 @@ export function planChatJobs(input: PlanChatJobsInput): ChatIntentJob[] {
       continue;
     }
     const terms = extractJobTerms(clause, capability, input.activeFile);
-    if (terms.length === 0) {
+    if (terms.length === 0 && !(assignment.kind === "latest" && capability !== "locate")) {
       continue;
     }
-    pushJob(jobs, capability, terms);
+    pushJob(
+      jobs,
+      capability,
+      terms,
+      assignment.kind === "latest" && terms.length === 0 ? "latest" : "search"
+    );
   }
 
   if (locateGlobal && !jobs.some((job) => job.capability === "locate")) {
@@ -439,22 +447,40 @@ export function planChatJobs(input: PlanChatJobsInput): ChatIntentJob[] {
   // Named tools are a floor: ensure a job covers them even without decide/docs verbs.
   if (named.some((tool) => DISCUSSION_PROVIDERS.includes(tool) || tool === "jira")) {
     if (!jobs.some((job) => job.capability === "decision")) {
-      const terms = extractJobTerms(stripToolNames(stripped), "decision", undefined);
-      pushJob(jobs, "decision", terms.length ? terms : extractJobTerms(stripped, "decision", undefined));
+      if (assignment.kind === "latest") {
+        pushJob(jobs, "decision", [], "latest");
+      } else {
+        const terms = extractJobTerms(stripToolNames(stripped), "decision", undefined);
+        pushJob(
+          jobs,
+          "decision",
+          terms.length ? terms : extractJobTerms(stripped, "decision", undefined)
+        );
+      }
     }
   }
   if (named.some((tool) => DOCS_JOB_PROVIDERS.includes(tool))) {
     if (!jobs.some((job) => job.capability === "docs")) {
-      const terms = extractJobTerms(stripToolNames(stripped), "docs", undefined);
-      pushJob(jobs, "docs", terms.length ? terms : extractJobTerms(stripped, "docs", undefined));
+      if (assignment.kind === "latest") {
+        pushJob(jobs, "docs", [], "latest");
+      } else {
+        const terms = extractJobTerms(stripToolNames(stripped), "docs", undefined);
+        pushJob(jobs, "docs", terms.length ? terms : extractJobTerms(stripped, "docs", undefined));
+      }
     }
   }
 
   if (wantsExplicitCodeHostSearch(stripped) && !jobs.some((job) => job.capability === "code-host")) {
-    pushJob(jobs, "code-host", extractJobTerms(stripped, "code-host", undefined));
+    const terms = extractJobTerms(stripped, "code-host", undefined);
+    pushJob(
+      jobs,
+      "code-host",
+      terms,
+      assignment.kind === "latest" && terms.length === 0 ? "latest" : "search"
+    );
   }
 
-  return jobs.filter((job) => job.terms.length > 0);
+  return jobs.filter((job) => job.verb === "latest" || job.terms.length > 0);
 }
 
 function classifyClause(
@@ -593,32 +619,23 @@ function isBlockedFileExt(file: string): boolean {
   return ["com", "org", "net", "edu", "gov", "io", "dev", "ai"].includes(ext);
 }
 
-function pushJob(jobs: ChatIntentJob[], capability: ChatIntentJobCapability, terms: string[]): void {
+function pushJob(
+  jobs: ChatIntentJob[],
+  capability: ChatIntentJobCapability,
+  terms: string[],
+  verb: ChatIntentJobVerb = "search"
+): void {
+  const unique = uniqueTerms(terms).slice(0, 8);
+  const resolvedVerb = unique.length > 0 ? "search" : verb;
   const existing = jobs.find((job) => job.capability === capability);
   if (existing) {
-    existing.terms = uniqueTerms([...existing.terms, ...terms]).slice(0, 8);
+    existing.terms = uniqueTerms([...existing.terms, ...unique]).slice(0, 8);
+    existing.verb = existing.terms.length > 0 ? "search" : resolvedVerb;
     return;
   }
-  jobs.push({ capability, terms: uniqueTerms(terms).slice(0, 8) });
+  jobs.push({ capability, verb: resolvedVerb, terms: unique });
 }
 
-function uniqueTerms(terms: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const raw of terms) {
-    const term = raw.replace(/\s+/g, " ").trim();
-    if (!term || term.length < 2) {
-      continue;
-    }
-    const key = term.toLowerCase();
-    if (TERM_STOP.has(key) || seen.has(key)) {
-      continue;
-    }
-    if (LEADING_ASK_LABEL.test(`${term}:`)) {
-      continue;
-    }
-    seen.add(key);
-    out.push(term);
-  }
-  return out;
+export function uniqueTerms(terms: string[]): string[] {
+  return uniqueMeaningTerms(terms).filter((term) => !LEADING_ASK_LABEL.test(`${term}:`));
 }

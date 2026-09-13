@@ -21,6 +21,12 @@ import { filePathSearchTerms } from "./traceDecisionSearch";
 import { shouldFetchIncidentIntegrations } from "./incidentIntent";
 import { shouldFetchDiscussionIntegrations } from "./integrationFetchPolicy";
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
+import type { ChatIntentJobVerb } from "../chat/intentPlanner/types";
+import {
+  emptySearchTopicError,
+  latestNeedsScopeError,
+  missingRepoSearchError
+} from "./integrationJobErrors";
 
 export type SlackSearchMessage = {
   channelName?: string;
@@ -142,6 +148,7 @@ export function buildSlackSearchQueries(options: {
   jiraIssueKeys?: string[];
   preferHost?: CodeHostProvider;
   jobScoped?: boolean;
+  jobVerb?: ChatIntentJobVerb;
 }): string[] {
   if (options.jobScoped) {
     const terms = (options.extraTerms ?? []).map((term) => stripSlackSearchOperators(term));
@@ -165,15 +172,19 @@ export function buildSlackSearchQueries(options: {
 export function planJobSlackSearchQueries(options: {
   extraTerms?: string[];
   integrationScope?: ResolvedIntegrationScope;
+  jobVerb?: ChatIntentJobVerb;
 }): string[] {
+  const latest = options.jobVerb === "latest";
   return scopeJobSlackSearchQueries(
-    buildSlackSearchQueries({
-      extraTerms: options.extraTerms,
-      jobScoped: true
-    }),
+    latest
+      ? [""]
+      : buildSlackSearchQueries({
+          extraTerms: options.extraTerms,
+          jobScoped: true
+        }),
     options.integrationScope?.slack?.channelIds ?? [],
     options.integrationScope?.slack?.channelNames ?? [],
-    { enforced: Boolean(options.integrationScope?.enforced) }
+    { enforced: Boolean(options.integrationScope?.enforced), allowEmpty: latest }
   );
 }
 
@@ -191,6 +202,7 @@ export async function fetchSlackSearchContext(options: {
   limit?: number;
   integrationScope?: ResolvedIntegrationScope;
   jobScoped?: boolean;
+  jobVerb?: ChatIntentJobVerb;
 }): Promise<SlackSearchContext> {
   if (isSlackScopeBlocked(options.integrationScope)) {
     return {
@@ -214,7 +226,8 @@ export async function fetchSlackSearchContext(options: {
   const queries = options.jobScoped
     ? planJobSlackSearchQueries({
         extraTerms: options.extraTerms,
-        integrationScope: options.integrationScope
+        integrationScope: options.integrationScope,
+        jobVerb: options.jobVerb
       })
     : buildSlackSearchQueries(options);
   const scopedQueries =
@@ -233,7 +246,7 @@ export async function fetchSlackSearchContext(options: {
       source: "slack-search",
       query: "",
       messages: [],
-      error: "Set repository owner and repo in Settings to search Slack by repo."
+      error: jobScopedEmptyQueryError(options)
     };
   }
 
@@ -280,6 +293,19 @@ export async function fetchSlackSearchContext(options: {
     messages: [...seen.values()].slice(0, limit),
     error: seen.size === 0 && errors.length > 0 ? errors[0] : undefined
   };
+}
+
+function jobScopedEmptyQueryError(options: {
+  jobScoped?: boolean;
+  jobVerb?: ChatIntentJobVerb;
+}): string {
+  if (options.jobScoped && options.jobVerb === "latest") {
+    return latestNeedsScopeError("Slack messages");
+  }
+  if (options.jobScoped) {
+    return emptySearchTopicError("Slack");
+  }
+  return missingRepoSearchError("Slack");
 }
 
 function truncate(value: string, max: number): string {

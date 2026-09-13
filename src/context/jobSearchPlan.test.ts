@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { exactIssueKeys, planJobSearchAttempts } from "./jobSearchPlan";
+import { exactIssueKeys, jobSearchActivityQuery, planJobSearchAttempts } from "./jobSearchPlan";
 
 test("meaning-match treats a hyphen as the same idea and retries with the distinctive word", () => {
   const attempts = planJobSearchAttempts(["SQL-injection", "not to mix"]);
@@ -22,4 +22,8 @@ test("ticket keys and file names are not rewritten into fuzzy text", () => {
 
 test("ticket keys stay exact even when mixed into a hyphenated phrase", () => {
   assert.deepEqual(exactIssueKeys(["SQL-injection COOP-403"]), ["COOP-403"]);
+});
+
+test("activity query matches the first job search attempt", () => {
+  assert.equal(jobSearchActivityQuery(["SQL-injection"]), "SQL injection");
 });

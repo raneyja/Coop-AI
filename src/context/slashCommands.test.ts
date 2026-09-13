@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { isTeamsComingSoon } from "../integrations/teamsAvailability";
 import {
   insertWorkflowSlashIntoComposer,
   matchSlashCommands,
@@ -270,8 +271,10 @@ test("slashMenuQuery returns null once a space is typed or not slash-prefixed", 
 
 // ── matchSlashCommands ───────────────────────────────────────────────────────
 test("matchSlashCommands returns all commands for an empty query", () => {
-  assert.equal(matchSlashCommands("").length, SLASH_COMMANDS.length);
-  assert.ok(SLASH_COMMANDS.length >= 13);
+  const listed = matchSlashCommands("");
+  assert.equal(listed.some((def) => def.name === "teams"), !isTeamsComingSoon());
+  assert.equal(listed.length, isTeamsComingSoon() ? SLASH_COMMANDS.length - 1 : SLASH_COMMANDS.length);
+  assert.ok(listed.length >= 13);
 });
 
 test("matchSlashCommands includes integration commands like slack", () => {

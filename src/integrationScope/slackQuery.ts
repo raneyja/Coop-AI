@@ -70,7 +70,7 @@ export function scopeJobSlackSearchQueries(
   queries: string[],
   channelIds: string[],
   channelNames: string[],
-  options?: { enforced?: boolean; maxCalls?: number }
+  options?: { enforced?: boolean; maxCalls?: number; allowEmpty?: boolean }
 ): string[] {
   const maxCalls = options?.maxCalls ?? MAX_JOB_SCOPED_SLACK_QUERIES;
   const base = [
@@ -85,9 +85,15 @@ export function scopeJobSlackSearchQueries(
     return base;
   }
   const modifiers = slackChannelModifiers(channelIds, channelNames);
+  if (modifiers.length === 0) {
+    return [];
+  }
   const primary = base[0];
   const retry = base[1];
-  if (modifiers.length === 0 || !primary) {
+  if (!primary && options.allowEmpty) {
+    return modifiers.slice(0, maxCalls);
+  }
+  if (!primary) {
     return [];
   }
   const picked: string[] = [];

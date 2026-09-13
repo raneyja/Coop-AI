@@ -130,6 +130,11 @@ export function buildDecisionConfluenceCql(terms: string[]): string | undefined 
   return `type=page AND text ~ "${escapeCql(phrase)}" ORDER BY lastModified DESC`;
 }
 
+/** Newest pages — caller must AND space allowlist. Empty topic is valid. */
+export function buildLatestConfluenceCql(): string {
+  return "type=page ORDER BY lastModified DESC";
+}
+
 /**
  * Build Confluence CQL for Use-repo (+ optional focus/file extras).
  *

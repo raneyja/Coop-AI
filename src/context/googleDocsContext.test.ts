@@ -19,7 +19,7 @@ function test(name: string, fn: () => void): void {
 }
 
 test("driveSearchTokens splits hyphenated phrases into words Drive can match", () => {
-  assert.deepEqual(driveSearchTokens(["SQL-injection", "not to mix"]), ["SQL", "injection", "mix"]);
+  assert.deepEqual(driveSearchTokens(["SQL-injection", "not to mix"]), ["SQL", "injection"]);
 });
 
 test("wantsGoogleDocsContext matches explicit google docs questions", () => {

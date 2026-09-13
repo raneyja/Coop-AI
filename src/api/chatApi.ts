@@ -241,42 +241,50 @@ export async function handleChatApiRequest(
   const abortController = new AbortController();
   bindAbort(rawRequest, abortController);
 
-  let usageTokens: { inputTokens: number; outputTokens: number } | undefined;
+    let usageTokens: { inputTokens: number; outputTokens: number } | undefined;
+    let recordedUsage = false;
 
-  try {
-    for await (const chunk of router.stream(
-      {
-        requestId,
-        orgId: org.orgId,
-        plan: org.plan,
-        message: body.message,
-        history,
-        context: body.context,
-        attachments: attachments.length ? attachments : undefined,
-        useCase,
-        allowUnapprovedProvider: config.allowUnapprovedProvider,
-        enableThinking: body.enableThinking === true,
-        modelConfig: {
-          provider,
-          model,
-          temperature: typeof body.temperature === "number" ? body.temperature : 0.5,
-          maxTokens
+    try {
+      for await (const chunk of router.stream(
+        {
+          requestId,
+          orgId: org.orgId,
+          plan: org.plan,
+          message: body.message,
+          history,
+          context: body.context,
+          attachments: attachments.length ? attachments : undefined,
+          useCase,
+          allowUnapprovedProvider: config.allowUnapprovedProvider,
+          enableThinking: body.enableThinking === true,
+          modelConfig: {
+            provider,
+            model,
+            temperature: typeof body.temperature === "number" ? body.temperature : 0.5,
+            maxTokens
+          }
+        },
+        abortController.signal
+      )) {
+        if (chunk.type === "done" && !recordedUsage) {
+          usageTokens = {
+            inputTokens: chunk.usage.inputTokens,
+            outputTokens: chunk.usage.outputTokens
+          };
+          await recordV1ChatUsageTokens(planQuota, org, { provider, model, selection }, {
+            inputTokens: usageTokens.inputTokens,
+            outputTokens: usageTokens.outputTokens,
+            requestId,
+            visionWeighted
+          });
+          recordedUsage = true;
         }
-      },
-      abortController.signal
-    )) {
-      writeSse(response, chunk);
-      if (chunk.type === "done") {
-        usageTokens = {
-          inputTokens: chunk.usage.inputTokens,
-          outputTokens: chunk.usage.outputTokens
-        };
+        writeSse(response, chunk);
+        if (chunk.type === "error") {
+          break;
+        }
       }
-      if (chunk.type === "error") {
-        break;
-      }
-    }
-  } catch (error) {
+    } catch (error) {
     captureException(error, {
       service: "api",
       orgId: org.orgId,
@@ -297,19 +305,12 @@ export async function handleChatApiRequest(
     action: "chat.completion",
     metadata: { provider, model, requestId }
   });
-  if (usageTokens) {
-    await planQuota.recordTokens(org.orgId, org.plan, {
-      eventType: "chat.message",
+  if (usageTokens && !recordedUsage) {
+    await recordV1ChatUsageTokens(planQuota, org, { provider, model, selection }, {
       inputTokens: usageTokens.inputTokens,
       outputTokens: usageTokens.outputTokens,
-      provider,
-      model,
-      userId: org.userId,
-      principal: org.principal,
-      metadata: { requestId },
-      visionWeighted,
-      selection,
-      usageTier: org.usageTier
+      requestId,
+      visionWeighted
     });
   }
 
@@ -322,6 +323,39 @@ export function llmHealthPayload(router: ModelRouter): Record<string, unknown> {
     mockMode: router.isMockMode(),
     configuredProviders: router.getConfiguredProviders()
   };
+}
+
+/**
+ * Record a finished `/v1/chat` stream on the usage bar.
+ * `eventType` is always `chat.message` so quota pools see it. Do not invent tokens
+ * when the stream never returned usage. Do not set `forceAutoBucket` here —
+ * `intent_suggest` bills Auto because `resolveHonoredChatModel` returns
+ * `selection: "auto"` (picker does not apply).
+ */
+export async function recordV1ChatUsageTokens(
+  planQuota: PlanQuotaService,
+  org: Pick<ChatOrgContext, "orgId" | "plan" | "userId" | "principal" | "usageTier">,
+  honored: { provider: LlmProvider; model: string; selection: string },
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    requestId?: string;
+    visionWeighted?: boolean;
+  }
+): Promise<void> {
+  await planQuota.recordTokens(org.orgId, org.plan, {
+    eventType: "chat.message",
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    provider: honored.provider,
+    model: honored.model,
+    userId: org.userId,
+    principal: org.principal,
+    metadata: { requestId: usage.requestId },
+    visionWeighted: usage.visionWeighted,
+    selection: honored.selection,
+    usageTier: org.usageTier
+  });
 }
 
 async function resolveChatOrg(

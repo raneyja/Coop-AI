@@ -17,6 +17,12 @@ import { shouldFetchIncidentIntegrations } from "./incidentIntent";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
 import { filePathSearchTerms } from "./traceDecisionSearch";
+import type { ChatIntentJobVerb } from "../chat/intentPlanner/types";
+import {
+  emptySearchTopicError,
+  latestNeedsScopeError,
+  missingRepoSearchError
+} from "./integrationJobErrors";
 
 export type JiraSearchTicket = {
   key: string;
@@ -491,6 +497,7 @@ export async function fetchJiraSearchContext(options: {
   codeHostRouter?: CodeHostRouter;
   codeHostConnected?: boolean;
   integrationScope?: ResolvedIntegrationScope;
+  jobVerb?: ChatIntentJobVerb;
   /** Test seam — production leaves this unset and builds a client from secrets. */
   client?: JiraSearchClient;
 }): Promise<JiraSearchContext> {
@@ -500,6 +507,14 @@ export async function fetchJiraSearchContext(options: {
       jql: "",
       issues: [],
       error: jiraScopeBlockMessage(options.integrationScope)
+    };
+  }
+  if (options.jobScoped && options.jobVerb === "latest" && !jiraLatestAllowlisted(options.integrationScope)) {
+    return {
+      source: "jira-search",
+      jql: "",
+      issues: [],
+      error: latestNeedsScopeError("Jira tickets")
     };
   }
 
@@ -548,15 +563,21 @@ export async function fetchJiraSearchContext(options: {
     wantsRepoDiscovery: wantsRepoLinkedJiraDiscovery(queryText)
   });
   const jobAttempts =
-    options.jobScoped && (options.extraTerms?.length ?? 0) > 0
+    options.jobScoped && options.jobVerb !== "latest" && (options.extraTerms?.length ?? 0) > 0
       ? planJobSearchAttempts(options.extraTerms ?? []).filter((attempt) => attempt.kind !== "exact")
       : [];
+  const latestJql =
+    options.jobScoped && options.jobVerb === "latest"
+      ? scopeJql("ORDER BY updated DESC", options.integrationScope)
+      : undefined;
   const focusJql = scopeJql(
-    jobAttempts[0]
-      ? jqlForJobAttempt(jobAttempts[0])
-      : options.jobScoped
-        ? undefined
-        : buildFocusAwareJiraJql(focusJqlOptions),
+    latestJql
+      ? undefined
+      : jobAttempts[0]
+        ? jqlForJobAttempt(jobAttempts[0])
+        : options.jobScoped
+          ? undefined
+          : buildFocusAwareJiraJql(focusJqlOptions),
     options.integrationScope
   );
   const repoJql = options.jobScoped
@@ -564,9 +585,20 @@ export async function fetchJiraSearchContext(options: {
     : scopeJql(buildRepoJql(options.owner, options.repo, { preferHost: options.preferHost }), options.integrationScope);
   let searchError: string | undefined;
   let textSearchCount = 0;
-  let usedJql = runTextSearch ? (focusJql ?? repoJql ?? "") : "";
+  let usedJql = latestJql ?? (runTextSearch ? (focusJql ?? repoJql ?? "") : "");
 
-  if (runTextSearch && focusJql) {
+  if (latestJql) {
+    try {
+      const latestHits = await client.searchIssues(latestJql, limit);
+      textSearchCount = latestHits.length;
+      usedJql = latestJql;
+      for (const issue of latestHits) {
+        issuesByKey.set(issue.key, issue);
+      }
+    } catch (error) {
+      searchError = error instanceof Error ? error.message : "Jira search failed.";
+    }
+  } else if (runTextSearch && focusJql) {
     try {
       const focusHits = await client.searchIssues(focusJql, limit);
       textSearchCount = focusHits.length;
@@ -696,7 +728,11 @@ export async function fetchJiraSearchContext(options: {
       keyErrors: keyErrors.length > 0 ? keyErrors : undefined,
       error: keyErrors.length > 0
         ? formatKeyErrors(keyErrors)
-        : "Set repository owner and repo in Settings to search Jira by repo."
+        : options.jobScoped
+          ? options.jobVerb === "latest"
+            ? latestNeedsScopeError("Jira tickets")
+            : emptySearchTopicError("Jira")
+          : missingRepoSearchError("Jira")
     };
   }
 
@@ -805,6 +841,14 @@ function filterScopedIssues(
 
 function formatKeyErrors(errors: Array<{ key: string; error: string }>): string {
   return errors.map((entry) => `${entry.key}: ${entry.error}`).join("; ");
+}
+
+function jiraLatestAllowlisted(scope: ResolvedIntegrationScope | undefined): boolean {
+  return Boolean(
+    scope?.enforced &&
+      scope.allowed &&
+      (scope.atlassian?.jiraProjectKeys.length ?? 0) > 0
+  );
 }
 
 async function addIssueByKey(

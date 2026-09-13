@@ -1,4 +1,5 @@
 import { sanitizeAtlassianContainsTerm } from "./docSearchQuery";
+import { SEARCH_WORD_RETRY_STOP } from "../chat/intentPlanner/searchMeaningStop";
 
 export type JobSearchAttemptKind = "exact" | "phrase" | "words";
 
@@ -12,39 +13,7 @@ export type JobSearchAttempt = {
 const ISSUE_KEY = /\b[A-Z][A-Z0-9]+-\d+\b/gi;
 const FILE_NAME = /^[\w.-]+\.[A-Za-z0-9]{1,8}$/;
 
-/** Too common to be a retry by themselves. Not a spell-checker. */
-const MEANING_STOP = new Set([
-  "the",
-  "this",
-  "that",
-  "into",
-  "from",
-  "with",
-  "for",
-  "and",
-  "not",
-  "did",
-  "already",
-  "any",
-  "our",
-  "we",
-  "to",
-  "of",
-  "a",
-  "an",
-  "in",
-  "on",
-  "or",
-  "was",
-  "were",
-  "sql"
-]);
-
-/**
- * Job-scoped integration search: at most two tries.
- * 1) Meaning phrase (hyphen = same idea, junk punctuation dropped).
- * 2) Distinctive words, only worth sending if the phrase misses.
- * Ticket keys and file names are never rewritten. File names stay with the
+/** Ticket keys and file names are never rewritten. File names stay with the
  * locate job — they must not spend an integration try when a phrase exists.
  */
 export function planJobSearchAttempts(terms: string[]): JobSearchAttempt[] {
@@ -87,6 +56,11 @@ export function planJobSearchAttempts(terms: string[]): JobSearchAttempt[] {
   return attempts.slice(0, 2);
 }
 
+/** Query shown on the activity chip — same first try the fetcher sends. */
+export function jobSearchActivityQuery(terms: string[]): string | undefined {
+  return planJobSearchAttempts(terms)[0]?.text;
+}
+
 export function exactIssueKeys(terms: string[]): string[] {
   const keys = new Set<string>();
   for (const term of terms) {
@@ -110,7 +84,7 @@ function distinctiveWordQuery(phrase: string): string | undefined {
   const tokens = phrase
     .split(/\s+/)
     .map((token) => token.trim())
-    .filter((token) => token.length >= 3 && !MEANING_STOP.has(token.toLowerCase()));
+    .filter((token) => token.length >= 3 && !SEARCH_WORD_RETRY_STOP.has(token.toLowerCase()));
   if (tokens.length === 0) {
     return undefined;
   }

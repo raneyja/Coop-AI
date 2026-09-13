@@ -2,6 +2,8 @@ import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
 import type { CodeHostProvider } from "../api/codeHosts/types";
 import type { ContextFetchRequest } from "./requestBatcher";
 import { wantsExplicitCodeHostSearch } from "../chat/intentPlanner/planChatJobs";
+import type { ChatIntentJobVerb } from "../chat/intentPlanner/types";
+import { missingRepoSearchError } from "./integrationJobErrors";
 
 export type CodeHostPullRequestSnippet = {
   number: number;
@@ -53,6 +55,7 @@ export async function fetchCodeHostSearchContext(options: {
   repo?: string;
   queryText?: string;
   limit?: number;
+  jobVerb?: ChatIntentJobVerb;
 }): Promise<CodeHostSearchContext> {
   const provider = options.provider ?? "github";
   const owner = options.owner?.trim();
@@ -63,12 +66,13 @@ export async function fetchCodeHostSearchContext(options: {
       provider,
       pullRequests: [],
       issues: [],
-      error: "Set repository owner and repo in Settings to search pull requests and issues."
+      error: missingRepoSearchError("pull requests and issues")
     };
   }
 
-  const prNumbers = extractPrNumbers(options.queryText ?? "");
-  const searchTerms = extractCodeHostFilterTerms(options.queryText ?? "");
+  const prNumbers = options.jobVerb === "latest" ? [] : extractPrNumbers(options.queryText ?? "");
+  const searchTerms =
+    options.jobVerb === "latest" ? [] : extractCodeHostFilterTerms(options.queryText ?? "");
   const limit = options.limit ?? 20;
   const coords = { provider, owner, repo };
 
@@ -134,6 +138,8 @@ export function extractCodeHostFilterTerms(query: string): string[] {
     "find",
     "open",
     "recent",
+    "latest",
+    "newest",
     "pull",
     "request",
     "requests",

@@ -12,6 +12,12 @@ import { shouldFetchIncidentIntegrations } from "./incidentIntent";
 import { shouldFetchDiscussionIntegrations } from "./integrationFetchPolicy";
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
 import { isTeamsComingSoon } from "../integrations/teamsAvailability";
+import type { ChatIntentJobVerb } from "../chat/intentPlanner/types";
+import {
+  emptySearchTopicError,
+  latestUnsupportedError,
+  missingRepoSearchError
+} from "./integrationJobErrors";
 
 export type TeamsSearchMessage = {
   fromUserName?: string;
@@ -70,6 +76,7 @@ export function buildTeamsSearchQueries(options: {
   jiraIssueKeys?: string[];
   preferHost?: import("../api/codeHosts/types").CodeHostProvider;
   jobScoped?: boolean;
+  jobVerb?: ChatIntentJobVerb;
 }): string[] {
   return buildDiscussionSearchQueries({
     ...options,
@@ -96,13 +103,23 @@ export async function fetchTeamsSearchContext(options: {
   preferHost?: import("../api/codeHosts/types").CodeHostProvider;
   limit?: number;
   jobScoped?: boolean;
+  jobVerb?: ChatIntentJobVerb;
   integrationScope?: ResolvedIntegrationScope;
 }): Promise<TeamsSearchContext> {
   if (isTeamsComingSoon()) {
     return {
       source: "teams-search",
       query: "",
-      messages: []
+      messages: [],
+      error: options.jobVerb === "latest" ? latestUnsupportedError("Microsoft Teams") : undefined
+    };
+  }
+  if (options.jobVerb === "latest") {
+    return {
+      source: "teams-search",
+      query: "",
+      messages: [],
+      error: latestUnsupportedError("Microsoft Teams")
     };
   }
   if (isTeamsScopeBlocked(options.integrationScope)) {
@@ -131,7 +148,7 @@ export async function fetchTeamsSearchContext(options: {
       source: "teams-search",
       query: "",
       messages: [],
-      error: "Set repository owner and repo in Settings to search Teams by repo."
+      error: options.jobScoped ? emptySearchTopicError("Microsoft Teams") : missingRepoSearchError("Microsoft Teams")
     };
   }
 

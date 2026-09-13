@@ -12,6 +12,12 @@ import { buildIntegrationSearchTermList } from "./integrationSearchTerms";
 import { planJobSearchAttempts } from "./jobSearchPlan";
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
 import { filterDocPagesForUseRepo } from "./integrationDocRelevance";
+import type { ChatIntentJobVerb } from "../chat/intentPlanner/types";
+import {
+  emptySearchTopicError,
+  latestNeedsScopeError,
+  missingRepoSearchError
+} from "./integrationJobErrors";
 
 export type NotionSearchPage = {
   id: string;
@@ -61,6 +67,7 @@ export async function fetchNotionSearchContext(options: {
   limit?: number;
   extraTerms?: string[];
   jobScoped?: boolean;
+  jobVerb?: ChatIntentJobVerb;
   integrationScope?: ResolvedIntegrationScope;
 }): Promise<NotionSearchContext> {
   if (isNotionScopeBlocked(options.integrationScope)) {
@@ -82,22 +89,33 @@ export async function fetchNotionSearchContext(options: {
     };
   }
 
-  const jobAttempts = options.jobScoped
-    ? planJobSearchAttempts(options.extraTerms ?? [])
-    : [];
-  const terms = options.jobScoped
-    ? jobAttempts.map((attempt) => attempt.text)
-    : buildIntegrationSearchTermList({
-        owner: options.owner,
-        repo: options.repo,
-        extraTerms: options.extraTerms
-      });
-  if (terms.length === 0) {
+  const latest = Boolean(options.jobScoped && options.jobVerb === "latest");
+  if (latest && !notionLatestAllowlisted(options.integrationScope)) {
     return {
       source: "notion-search",
       query: "",
       pages: [],
-      error: "Set repository owner and repo in Settings to search Notion by repo."
+      error: latestNeedsScopeError("Notion pages")
+    };
+  }
+  const jobAttempts = options.jobScoped && !latest
+    ? planJobSearchAttempts(options.extraTerms ?? [])
+    : [];
+  const terms = latest
+    ? [""]
+    : options.jobScoped
+      ? jobAttempts.map((attempt) => attempt.text)
+      : buildIntegrationSearchTermList({
+          owner: options.owner,
+          repo: options.repo,
+          extraTerms: options.extraTerms
+        });
+  if (!latest && terms.length === 0) {
+    return {
+      source: "notion-search",
+      query: "",
+      pages: [],
+      error: options.jobScoped ? emptySearchTopicError("Notion") : missingRepoSearchError("Notion")
     };
   }
 
@@ -113,14 +131,17 @@ export async function fetchNotionSearchContext(options: {
     if (options.jobScoped && rawPages.length === 0 && terms[1]) {
       rawPages = await searchNotionPagesForTerms(client, [terms[1]], limit);
     }
-    const pages = filterDocPagesForUseRepo(
-      filterScopedNotionPages(rawPages, options.integrationScope),
-      {
-        owner: options.owner,
-        repo: options.repo,
-        focusTerms: options.extraTerms,
-        limit: options.limit ?? 20
-      }
+    const pages = (latest
+      ? filterScopedNotionPages(rawPages, options.integrationScope)
+      : filterDocPagesForUseRepo(
+          filterScopedNotionPages(rawPages, options.integrationScope),
+          {
+            owner: options.owner,
+            repo: options.repo,
+            focusTerms: options.extraTerms,
+            limit: options.limit ?? 20
+          }
+        )
     );
     const repoQuery =
       options.owner?.trim() && options.repo?.trim()
@@ -177,4 +198,10 @@ function filterScopedNotionPages(
       ? filterNotionPagesByScope(pages, new Set(resourceIds))
       : pages;
   return scoped.map(({ id, title, updated, htmlUrl }) => ({ id, title, updated, htmlUrl }));
+}
+
+function notionLatestAllowlisted(scope: ResolvedIntegrationScope | undefined): boolean {
+  return Boolean(
+    scope?.enforced && scope.allowed && (scope.notion?.resourceIds.length ?? 0) > 0
+  );
 }

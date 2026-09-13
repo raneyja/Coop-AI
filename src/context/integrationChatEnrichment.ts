@@ -15,11 +15,15 @@ import { requestAllowsIntegrationFetch } from "./fetchIntegrationsAllowlist";
 import type { IntegrationChatProvider } from "../chat/types";
 import type { ChatIntentJob } from "../chat/intentPlanner/types";
 import {
+  codeHostJobQuery,
   codeHostJobTerms,
   extraTermsForIntegration,
   hasCodeHostJob,
-  hasIntegrationJob
+  hasIntegrationJob,
+  jobVerbForIntegration,
+  codeHostJobVerb
 } from "../chat/intentPlanner/planChatJobs";
+import { jobSearchActivityQuery } from "./jobSearchPlan";
 import {
   buildIntegrationSearchTermList,
   collectCrossToolSearchText
@@ -271,6 +275,17 @@ async function enrichIntegrationStages(
     }
     return jobScoped ? [] : integrationTerms;
   };
+  const verbFor = (provider: IntegrationChatProvider) =>
+    jobScoped ? jobVerbForIntegration(jobs, provider) : "search";
+  const activityQueryForTerms = (
+    terms: string[],
+    provider?: IntegrationChatProvider
+  ): string | undefined => {
+    if (provider && verbFor(provider) === "latest") {
+      return "latest";
+    }
+    return jobSearchActivityQuery(terms) ?? preferredIntegrationActivityQuery(terms);
+  };
 
   const shouldFetchJira =
     deps.shouldFetchJiraContext(options.request) && allowOrForced("jira", connected?.jira);
@@ -289,6 +304,7 @@ async function enrichIntegrationStages(
     const enabledForJob = (provider: IntegrationChatProvider, enabled: boolean): boolean =>
       enabled && hasIntegrationJob(jobs, provider);
     const codeHostTerms = codeHostJobTerms(jobs);
+    const codeHostVerb = codeHostJobVerb(jobs);
     const [
       confluenceSearch,
       notionSearch,
@@ -308,9 +324,10 @@ async function enrichIntegrationStages(
             repo: options.repo,
             extraTerms: termsFor("confluence"),
             jobScoped: true,
+            jobVerb: verbFor("confluence"),
             integrationScope: options.integrationScopes?.atlassian
           }),
-        preferredIntegrationActivityQuery(termsFor("confluence"))
+        activityQueryForTerms(termsFor("confluence"), "confluence")
       ),
       runTool(
         "notion",
@@ -322,9 +339,10 @@ async function enrichIntegrationStages(
             repo: options.repo,
             extraTerms: termsFor("notion"),
             jobScoped: true,
+            jobVerb: verbFor("notion"),
             integrationScope: options.integrationScopes?.notion
           }),
-        preferredIntegrationActivityQuery(termsFor("notion"))
+        activityQueryForTerms(termsFor("notion"), "notion")
       ),
       runTool(
         "jira",
@@ -335,12 +353,13 @@ async function enrichIntegrationStages(
             ...base,
             extraTerms: termsFor("jira"),
             jobScoped: true,
+            jobVerb: verbFor("jira"),
             preferHost: options.codeHostProvider,
             codeHostRouter: options.codeHostRouter,
             codeHostConnected: options.codeHostConnected,
             integrationScope: options.integrationScopes?.atlassian
           }),
-        preferredIntegrationActivityQuery(termsFor("jira"))
+        activityQueryForTerms(termsFor("jira"), "jira")
       ),
       runTool(
         "google-docs",
@@ -351,9 +370,10 @@ async function enrichIntegrationStages(
             ...base,
             extraTerms: termsFor("google-docs"),
             jobScoped: true,
+            jobVerb: verbFor("google-docs"),
             integrationScope: options.integrationScopes?.["google-docs"]
           }),
-        preferredIntegrationActivityQuery(termsFor("google-docs"))
+        activityQueryForTerms(termsFor("google-docs"), "google-docs")
       ),
       runTool(
         "slack",
@@ -364,10 +384,11 @@ async function enrichIntegrationStages(
             ...base,
             extraTerms: termsFor("slack"),
             jobScoped: true,
+            jobVerb: verbFor("slack"),
             preferHost: options.codeHostProvider,
             integrationScope: options.integrationScopes?.slack
           }),
-        preferredIntegrationActivityQuery(termsFor("slack"))
+        activityQueryForTerms(termsFor("slack"), "slack")
       ),
       runTool(
         "teams",
@@ -378,10 +399,11 @@ async function enrichIntegrationStages(
             ...base,
             extraTerms: termsFor("teams"),
             jobScoped: true,
+            jobVerb: verbFor("teams"),
             preferHost: options.codeHostProvider,
             integrationScope: options.integrationScopes?.teams
           }),
-        preferredIntegrationActivityQuery(termsFor("teams"))
+        activityQueryForTerms(termsFor("teams"), "teams")
       ),
       runTool(
         "code-host",
@@ -392,9 +414,10 @@ async function enrichIntegrationStages(
             provider: options.codeHostProvider,
             owner: options.owner,
             repo: options.repo,
-            queryText: codeHostTerms.join(" ")
+            queryText: codeHostJobQuery(jobs),
+            jobVerb: codeHostVerb
           }),
-        preferredIntegrationActivityQuery(codeHostTerms)
+        codeHostVerb === "latest" ? "latest" : activityQueryForTerms(codeHostTerms)
       )
     ]);
     if (enabledForJob("confluence", shouldFetchConfluence)) {

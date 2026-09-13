@@ -17,12 +17,19 @@ import {
   buildConfluenceCql,
   buildConfluenceRepoOnlyCql,
   buildDecisionConfluenceCql,
+  buildLatestConfluenceCql,
   buildRepoOrQuery
 } from "./docSearchQuery";
 import { planJobSearchAttempts } from "./jobSearchPlan";
 import { filterDocPagesForUseRepo, sanitizeIntegrationSnippet } from "./integrationDocRelevance";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
+import type { ChatIntentJobVerb } from "../chat/intentPlanner/types";
+import {
+  emptySearchTopicError,
+  latestNeedsScopeError,
+  missingRepoSearchError
+} from "./integrationJobErrors";
 
 export type ConfluenceSearchPage = {
   id: string;
@@ -74,6 +81,7 @@ export async function fetchConfluenceSearchContext(options: {
   extraTerms?: string[];
   /** Chat Intent decision jobs — extras are the query; skip repo AND. */
   jobScoped?: boolean;
+  jobVerb?: ChatIntentJobVerb;
   integrationScope?: ResolvedIntegrationScope;
 }): Promise<ConfluenceSearchContext> {
   if (isConfluenceScopeBlocked(options.integrationScope)) {
@@ -96,11 +104,22 @@ export async function fetchConfluenceSearchContext(options: {
     };
   }
 
-  const extrasOnly = Boolean(options.jobScoped && (options.extraTerms?.length ?? 0) > 0);
+  const latest = Boolean(options.jobScoped && options.jobVerb === "latest");
+  if (latest && !confluenceLatestAllowlisted(options.integrationScope)) {
+    return {
+      source: "confluence-search",
+      cql: "",
+      pages: [],
+      error: latestNeedsScopeError("Confluence pages")
+    };
+  }
+  const extrasOnly = Boolean(options.jobScoped && !latest && (options.extraTerms?.length ?? 0) > 0);
   const primaryCql = scopeConfluenceCql(
-    extrasOnly
-      ? buildDecisionConfluenceCql(options.extraTerms ?? [])
-      : buildConfluenceCql(options.owner, options.repo, options.extraTerms),
+    latest
+      ? buildLatestConfluenceCql()
+      : extrasOnly
+        ? buildDecisionConfluenceCql(options.extraTerms ?? [])
+        : buildConfluenceCql(options.owner, options.repo, options.extraTerms),
     options.integrationScope
   );
   if (!primaryCql) {
@@ -108,7 +127,9 @@ export async function fetchConfluenceSearchContext(options: {
       source: "confluence-search",
       cql: "",
       pages: [],
-      error: "Set repository owner and repo in Settings to search Confluence by repo."
+      error: options.jobScoped
+        ? emptySearchTopicError("Confluence")
+        : missingRepoSearchError("Confluence")
     };
   }
 
@@ -151,7 +172,7 @@ export async function fetchConfluenceSearchContext(options: {
     let cql = primaryCql;
     // Job-scoped extras are the query. A repo-only fallback with hyphenated
     // slugs parse-errors and overwrites an honest empty extras search.
-    const extrasOnly = Boolean(options.jobScoped && (options.extraTerms?.length ?? 0) > 0);
+    const extrasOnly = Boolean(options.jobScoped && options.jobVerb !== "latest" && (options.extraTerms?.length ?? 0) > 0);
     if (pages.length === 0 && extrasOnly) {
       const words = planJobSearchAttempts(options.extraTerms ?? []).find(
         (attempt) => attempt.kind === "words"
@@ -163,7 +184,7 @@ export async function fetchConfluenceSearchContext(options: {
         pages = await client.searchPages(wordCql, limit);
         cql = wordCql;
       }
-    } else if (pages.length === 0 && !extrasOnly) {
+    } else if (pages.length === 0 && !extrasOnly && !latest) {
       const repoOnly = scopeConfluenceCql(
         buildConfluenceRepoOnlyCql(options.owner, options.repo),
         options.integrationScope
@@ -200,12 +221,14 @@ export async function fetchConfluenceSearchContext(options: {
       source: "confluence-search",
       cql,
       repoQuery,
-      pages: filterDocPagesForUseRepo(mapped, {
-        owner: options.owner,
-        repo: options.repo,
-        focusTerms: options.extraTerms,
-        limit
-      })
+      pages: latest
+        ? mapped.slice(0, limit)
+        : filterDocPagesForUseRepo(mapped, {
+            owner: options.owner,
+            repo: options.repo,
+            focusTerms: options.extraTerms,
+            limit
+          })
     };
   } catch (error) {
     return {
@@ -243,4 +266,12 @@ function scopeConfluenceCql(
     integrationScope.atlassian.confluenceSpaceIds,
     integrationScope.atlassian.confluenceSpaceKeys
   )[0];
+}
+
+function confluenceLatestAllowlisted(scope: ResolvedIntegrationScope | undefined): boolean {
+  return Boolean(
+    scope?.enforced &&
+      scope.allowed &&
+      (scope.atlassian?.confluenceSpaceKeys.length ?? 0) > 0
+  );
 }

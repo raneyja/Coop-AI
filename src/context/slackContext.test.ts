@@ -163,6 +163,15 @@ test("unenforced job Slack search does not invent channels", () => {
   assert.ok(!queries.some((query) => query.includes("in:")));
 });
 
+test("allowlisted latest Slack search is channel-only, not a meaning query", () => {
+  const queries = planJobSlackSearchQueries({
+    extraTerms: [],
+    jobVerb: "latest",
+    integrationScope: slackScope(["C123"], ["eng"])
+  });
+  assert.deepEqual(queries, ["in:<#C123>"]);
+});
+
 test("scoped job Slack search uses the channel-name fallback when ids are missing", () => {
   const queries = planJobSlackSearchQueries({
     extraTerms: ["billing"],
