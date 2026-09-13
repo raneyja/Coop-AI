@@ -376,7 +376,8 @@ async function enrichIntegrationStages(
             ...base,
             extraTerms: termsFor("teams"),
             jobScoped: true,
-            preferHost: options.codeHostProvider
+            preferHost: options.codeHostProvider,
+            integrationScope: options.integrationScopes?.teams
           }),
         preferredIntegrationActivityQuery(termsFor("teams"))
       ),
@@ -504,7 +505,8 @@ async function enrichIntegrationStages(
         jobScoped: false,
         crossToolText: crossToolKeys,
         preferHost: options.codeHostProvider,
-        jiraIssueKeys
+        jiraIssueKeys,
+        integrationScope: options.integrationScopes?.teams
       })
     )
   ]);

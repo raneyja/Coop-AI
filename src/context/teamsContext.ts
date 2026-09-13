@@ -1,5 +1,11 @@
 import { TeamsClient } from "../api/teams/teamsClient";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
+import type { ResolvedIntegrationScope } from "../integrationScope/types";
+import {
+  filterTeamsHitsByChannel,
+  isTeamsScopeBlocked,
+  teamsScopeBlockMessage
+} from "../integrationScope/teamsQuery";
 import type { ContextFetchRequest } from "./requestBatcher";
 import { buildDiscussionSearchQueries } from "./integrationSearchTerms";
 import { shouldFetchIncidentIntegrations } from "./incidentIntent";
@@ -77,7 +83,17 @@ export async function fetchTeamsSearchContext(options: {
   preferHost?: import("../api/codeHosts/types").CodeHostProvider;
   limit?: number;
   jobScoped?: boolean;
+  integrationScope?: ResolvedIntegrationScope;
 }): Promise<TeamsSearchContext> {
+  if (isTeamsScopeBlocked(options.integrationScope)) {
+    return {
+      source: "teams-search",
+      query: "",
+      messages: [],
+      error: teamsScopeBlockMessage(options.integrationScope)
+    };
+  }
+
   const creds = await options.secrets.getCredentials();
   if (!creds.teamsToken) {
     return {
@@ -103,6 +119,7 @@ export async function fetchTeamsSearchContext(options: {
   const limit = options.limit ?? 20;
   const seen = new Map<string, TeamsSearchMessage>();
   const errors: string[] = [];
+  const allowedChannels = new Set(options.integrationScope?.teams?.channelIds ?? []);
 
   for (const searchQuery of queries.slice(0, 16)) {
     if (seen.size >= limit) {
@@ -110,7 +127,9 @@ export async function fetchTeamsSearchContext(options: {
     }
     try {
       const hits = await client.searchMessages(searchQuery, { limit: limit - seen.size });
-      for (const hit of hits) {
+      const scopedHits =
+        allowedChannels.size > 0 ? filterTeamsHitsByChannel(hits, allowedChannels) : hits;
+      for (const hit of scopedHits) {
         const key = `${hit.teamId}:${hit.channelId}:${hit.messageId}`;
         if (seen.has(key)) {
           continue;

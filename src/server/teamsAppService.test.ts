@@ -12,6 +12,8 @@ assert.equal(url.searchParams.get("client_id"), "client-id");
 assert.equal(url.searchParams.get("response_type"), "code");
 assert.equal(url.searchParams.get("redirect_uri"), "http://localhost:8787/v1/teams/app/callback");
 assert.ok(url.searchParams.get("scope")?.includes("ChannelMessage.Read.All"));
+assert.ok(url.searchParams.get("scope")?.includes("Channel.ReadBasic.All"));
+assert.ok(url.searchParams.get("scope")?.includes("Chat.Read"));
 assert.equal(url.searchParams.get("prompt"), "consent");
 assert.ok(url.searchParams.get("state"));
 

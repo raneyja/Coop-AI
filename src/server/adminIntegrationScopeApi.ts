@@ -4,6 +4,7 @@ import { GoogleDocsClient } from "../api/googleDocs/googleDocsClient";
 import { JiraClient } from "../api/jira/jiraClient";
 import { NotionClient } from "../api/notion/notionClient";
 import { SlackClient } from "../api/slack/slackClient";
+import { TeamsClient } from "../api/teams/teamsClient";
 import {
   applyConfluenceSpaceScope,
   applyJiraProjectScope
@@ -11,6 +12,7 @@ import {
 import { filterNotionPagesByScope } from "../integrationScope/notionQuery";
 import { applySlackChannelScope } from "../integrationScope/slackQuery";
 import { filterGoogleDocsHitsByFolder } from "../integrationScope/googleDocsQuery";
+import { filterTeamsHitsByChannel } from "../integrationScope/teamsQuery";
 import {
   atlassianPolicyIsActive,
   googleDocsPolicyIsActive,
@@ -19,11 +21,14 @@ import {
   parseGoogleDocsIntegrationPolicy,
   parseNotionIntegrationPolicy,
   parseSlackIntegrationPolicy,
+  parseTeamsIntegrationPolicy,
   slackPolicyIsActive,
+  teamsPolicyIsActive,
   type AtlassianIntegrationPolicy,
   type GoogleDocsIntegrationPolicy,
   type NotionIntegrationPolicy,
-  type SlackIntegrationPolicy
+  type SlackIntegrationPolicy,
+  type TeamsIntegrationPolicy
 } from "../integrationScope/types";
 import { auditActor } from "./audit/auditLogger";
 import { writeJson, type AdminApiDeps } from "./adminApiShared";
@@ -39,7 +44,13 @@ type ParsedRequest = {
   body: unknown;
 };
 
-const SCOPED_PROVIDERS: IntegrationProvider[] = ["slack", "atlassian", "notion", "google-docs"];
+const SCOPED_PROVIDERS: IntegrationProvider[] = [
+  "slack",
+  "atlassian",
+  "notion",
+  "google-docs",
+  "teams"
+];
 
 export async function handleAdminIntegrationScopeRequest(
   parsed: ParsedRequest,
@@ -79,6 +90,9 @@ export async function handleAdminIntegrationScopeRequest(
     if (provider === "google-docs") {
       return handleGetGoogleDocsResources(parsed, response, deps, auth);
     }
+    if (provider === "teams") {
+      return handleGetTeamsResources(parsed, response, deps, auth);
+    }
     writeJson(response, 200, { provider, resources: [], comingSoon: true });
     return true;
   }
@@ -97,6 +111,9 @@ export async function handleAdminIntegrationScopeRequest(
     }
     if (provider === "google-docs") {
       return handleTestGoogleDocs(response, deps, auth);
+    }
+    if (provider === "teams") {
+      return handleTestTeams(response, deps, auth);
     }
     writeJson(response, 501, { error: "test not implemented for provider" });
     return true;
@@ -150,7 +167,13 @@ async function handlePutScope(
     writeJson(response, 503, { error: "scope policy store not configured" });
     return true;
   }
-  if (provider !== "slack" && provider !== "atlassian" && provider !== "notion" && provider !== "google-docs") {
+  if (
+    provider !== "slack" &&
+    provider !== "atlassian" &&
+    provider !== "notion" &&
+    provider !== "google-docs" &&
+    provider !== "teams"
+  ) {
     writeJson(response, 501, { error: "scope configuration coming soon for this provider" });
     return true;
   }
@@ -169,6 +192,7 @@ async function handlePutScope(
     | AtlassianIntegrationPolicy
     | NotionIntegrationPolicy
     | GoogleDocsIntegrationPolicy
+    | TeamsIntegrationPolicy
     | undefined;
   if (provider === "slack") {
     policy = parseSlackIntegrationPolicy(body?.policy);
@@ -186,6 +210,12 @@ async function handlePutScope(
     policy = parseNotionIntegrationPolicy(body?.policy);
     if (!policy) {
       writeJson(response, 400, { error: "invalid notion scope policy" });
+      return true;
+    }
+  } else if (provider === "teams") {
+    policy = parseTeamsIntegrationPolicy(body?.policy);
+    if (!policy) {
+      writeJson(response, 400, { error: "invalid teams scope policy" });
       return true;
     }
   } else {
@@ -276,6 +306,55 @@ async function handleGetSlackResources(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not list Slack channels.";
+    writeJson(response, 400, { error: message });
+  }
+  return true;
+}
+
+async function handleGetTeamsResources(
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: AdminApiDeps,
+  auth: AuthContext
+): Promise<boolean> {
+  if (!deps.integrationStore) {
+    writeJson(response, 503, { error: "integration store not configured" });
+    return true;
+  }
+
+  const accessToken = await resolveOrgIntegrationAccessToken(auth.orgId, "teams", deps);
+  if (!accessToken) {
+    writeJson(response, 400, {
+      error: "Teams access token unavailable. Disconnect and reconnect Teams to refresh channel access."
+    });
+    return true;
+  }
+
+  const query = parsed.query?.get("q")?.trim().toLowerCase() ?? "";
+
+  try {
+    const client = new TeamsClient({ accessToken });
+    const channels = await client.listChannelsForScopePicker({ limit: 200 });
+    const filtered = query
+      ? channels.filter(
+          (channel) =>
+            channel.name.toLowerCase().includes(query) ||
+            channel.id.toLowerCase().includes(query) ||
+            channel.teamName.toLowerCase().includes(query)
+        )
+      : channels;
+
+    writeJson(response, 200, {
+      provider: "teams",
+      resources: filtered.map((channel) => ({
+        id: channel.id,
+        name: channel.name,
+        teamId: channel.teamId,
+        teamName: channel.teamName
+      }))
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not list Teams channels.";
     writeJson(response, 400, { error: message });
   }
   return true;
@@ -562,6 +641,69 @@ async function handleTestSlack(
   return true;
 }
 
+async function handleTestTeams(
+  response: ServerResponse,
+  deps: AdminApiDeps,
+  auth: AuthContext
+): Promise<boolean> {
+  if (!deps.integrationStore) {
+    writeJson(response, 503, { error: "integration store not configured" });
+    return true;
+  }
+
+  const org = await deps.orgStore!.getOrganization(auth.orgId);
+  const connection = await deps.integrationStore.get(auth.orgId, "teams");
+  if (!connection) {
+    writeJson(response, 200, { ok: false, message: "Microsoft Teams is not connected." });
+    return true;
+  }
+
+  const resolved = await resolveIntegrationScope({
+    orgId: auth.orgId,
+    provider: "teams",
+    orgPlan: org?.plan ?? "free",
+    connected: true,
+    scopePolicyStore: deps.scopePolicyStore
+  });
+
+  if (resolved.enforced && !resolved.allowed) {
+    writeJson(response, 200, {
+      ok: false,
+      message: resolved.reason ?? "Configure allowed Teams channels before testing."
+    });
+    return true;
+  }
+
+  const accessToken = await resolveOrgIntegrationAccessToken(auth.orgId, "teams", deps);
+  if (!accessToken) {
+    writeJson(response, 400, { ok: false, message: "Teams access token unavailable." });
+    return true;
+  }
+
+  const client = new TeamsClient({ accessToken });
+  const channelIds = resolved.teams?.channelIds ?? [];
+  const channelNames = resolved.teams?.channelNames ?? [];
+  const testQuery = channelNames[0] ? `"${channelNames[0]}"` : "*";
+
+  try {
+    const hits = await client.searchMessages(testQuery, { limit: 8 });
+    const allowed = new Set(channelIds);
+    const scopedHits = allowed.size > 0 ? filterTeamsHitsByChannel(hits, allowed) : hits;
+    const channelLabel = channelNames[0] ?? "tenant";
+    writeJson(response, 200, {
+      ok: true,
+      message:
+        resolved.enforced && channelIds.length > 0
+          ? `Scoped Teams search succeeded (${scopedHits.length} recent hit(s) in allowlisted channels; tested ${channelLabel}).`
+          : `Teams search succeeded (${scopedHits.length} recent hit(s) in ${channelLabel}).`
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Teams scoped test failed.";
+    writeJson(response, 200, { ok: false, message });
+  }
+  return true;
+}
+
 async function handleTestAtlassian(
   response: ServerResponse,
   deps: AdminApiDeps,
@@ -822,6 +964,7 @@ function scopeAuditMetadata(
     | AtlassianIntegrationPolicy
     | NotionIntegrationPolicy
     | GoogleDocsIntegrationPolicy
+    | TeamsIntegrationPolicy
 ): Record<string, unknown> {
   if (provider === "slack") {
     const slackPolicy = policy as SlackIntegrationPolicy;
@@ -838,6 +981,10 @@ function scopeAuditMetadata(
   if (provider === "notion") {
     const notionPolicy = policy as NotionIntegrationPolicy;
     return { provider, resourceCount: notionPolicy.resources.length };
+  }
+  if (provider === "teams") {
+    const teamsPolicy = policy as TeamsIntegrationPolicy;
+    return { provider, channelCount: teamsPolicy.channels.length };
   }
   const googleDocsPolicy = policy as GoogleDocsIntegrationPolicy;
   return {
@@ -907,6 +1054,15 @@ function scopeSummary(provider: IntegrationProvider, policy: unknown): string | 
       parts.push(driveCount === 1 ? "1 shared drive" : `${driveCount} shared drives`);
     }
     return parts.length > 0 ? parts.join(", ") : undefined;
+  }
+
+  if (provider === "teams") {
+    const teamsPolicy = parseTeamsIntegrationPolicy(policy);
+    if (!teamsPolicyIsActive(teamsPolicy)) {
+      return undefined;
+    }
+    const count = teamsPolicy!.channels.length;
+    return count === 1 ? "1 channel selected" : `${count} channels selected`;
   }
 
   return undefined;

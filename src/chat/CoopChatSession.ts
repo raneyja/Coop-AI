@@ -509,7 +509,7 @@ import { shouldFetchGoogleDocsContext } from "../context/googleDocsContext";
 import { shouldFetchJiraContext, fetchJiraSearchContext } from "../context/jiraContext";
 import { shouldFetchNotionContext, fetchNotionSearchContext } from "../context/notionContext";
 import { shouldFetchSlackContext, fetchSlackSearchContext } from "../context/slackContext";
-import { fetchTeamsSearchContext } from "../context/teamsContext";
+import { shouldFetchTeamsContext, fetchTeamsSearchContext } from "../context/teamsContext";
 import { fetchConfluenceSearchContext } from "../context/confluenceContext";
 import { fetchGoogleDocsSearchContext } from "../context/googleDocsContext";
 import type { ResolvedIntegrationScope, ScopedIntegrationProvider } from "../integrationScope/types";
@@ -4208,6 +4208,7 @@ export class CoopChatSession {
     let atlassianScope: ResolvedIntegrationScope | undefined;
     let notionScope: ResolvedIntegrationScope | undefined;
     let googleDocsScope: ResolvedIntegrationScope | undefined;
+    let teamsScope: ResolvedIntegrationScope | undefined;
     if (!isCoopDevMode()) {
       const scoped: ScopedIntegrationProvider | undefined =
         provider === "slack"
@@ -4218,7 +4219,9 @@ export class CoopChatSession {
               ? "notion"
               : provider === "google-docs"
                 ? "google-docs"
-                : undefined;
+                : provider === "teams"
+                  ? "teams"
+                  : undefined;
       if (scoped) {
         try {
           const resolved = await this.options.api.getIntegrationScope(
@@ -4229,6 +4232,7 @@ export class CoopChatSession {
           if (scoped === "atlassian") atlassianScope = resolved;
           if (scoped === "notion") notionScope = resolved;
           if (scoped === "google-docs") googleDocsScope = resolved;
+          if (scoped === "teams") teamsScope = resolved;
         } catch {
           /* scope optional when API unavailable */
         }
@@ -4258,7 +4262,10 @@ export class CoopChatSession {
           integrationScope: atlassianScope
         });
       case "teams":
-        return fetchTeamsSearchContext(base);
+        return fetchTeamsSearchContext({
+          ...base,
+          integrationScope: teamsScope
+        });
       case "notion":
         return fetchNotionSearchContext({
           secrets,
@@ -4787,6 +4794,9 @@ export class CoopChatSession {
     }
     if (shouldFetchGoogleDocsContext(request)) {
       providers.push("google-docs");
+    }
+    if (shouldFetchTeamsContext(request)) {
+      providers.push("teams");
     }
     if (providers.length === 0) {
       return undefined;

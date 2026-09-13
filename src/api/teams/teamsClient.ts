@@ -43,6 +43,13 @@ export type TeamsUserInfo = {
   jobTitle?: string;
 };
 
+export type TeamsChannelForScope = {
+  id: string;
+  name: string;
+  teamId: string;
+  teamName: string;
+};
+
 export class TeamsApiError extends Error {
   public constructor(
     message: string,
@@ -196,6 +203,46 @@ export class TeamsClient {
       email: user.mail ?? user.userPrincipalName,
       jobTitle: user.jobTitle
     };
+  }
+
+  public async listChannelsForScopePicker(options?: {
+    limit?: number;
+  }): Promise<TeamsChannelForScope[]> {
+    const limit = options?.limit ?? 200;
+    const teams = await this.request<{ value?: Array<{ id?: string; displayName?: string }> }>(
+      "/me/joinedTeams?$select=id,displayName&$top=50"
+    );
+    const out: TeamsChannelForScope[] = [];
+    for (const team of teams.value ?? []) {
+      const teamId = team.id?.trim();
+      if (!teamId || out.length >= limit) {
+        break;
+      }
+      try {
+        const channels = await this.request<{
+          value?: Array<{ id?: string; displayName?: string }>;
+        }>(`/teams/${encodeURIComponent(teamId)}/channels?$select=id,displayName`);
+        for (const channel of channels.value ?? []) {
+          const id = channel.id?.trim();
+          const name = channel.displayName?.trim();
+          if (!id || !name) {
+            continue;
+          }
+          out.push({
+            id,
+            name,
+            teamId,
+            teamName: team.displayName?.trim() || "Team"
+          });
+          if (out.length >= limit) {
+            break;
+          }
+        }
+      } catch {
+        /* skip teams this token cannot list */
+      }
+    }
+    return out;
   }
 
   public extractDecisionSignals(thread: TeamsThread): Array<{ text: string; user: string; date: string }> {

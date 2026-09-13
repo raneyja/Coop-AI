@@ -9,7 +9,8 @@ import type {
   NotionScopePolicy,
   ScopableProvider,
   SlackScopeChannel,
-  SlackScopePolicy
+  SlackScopePolicy,
+  TeamsScopePolicy
 } from "@/lib/integrations";
 import {
   fetchIntegrationResources,
@@ -34,6 +35,8 @@ type ScopeItem = {
   key?: string;
   type?: string;
   kind?: string;
+  teamId?: string;
+  teamName?: string;
 };
 
 const SCOPE_UI: Record<
@@ -78,6 +81,14 @@ const SCOPE_UI: Record<
     emptyHint: "No folders or shared drives found.",
     itemPrefix: () => "",
     itemSuffix: (item) => (item.kind === "shared_drive" ? " · Shared drive" : "")
+  },
+  teams: {
+    title: "Manage Teams access",
+    description: "Choose which Teams channels Coop can search — not your entire tenant.",
+    searchPlaceholder: "Search channels…",
+    emptyHint: "No channels found. Disconnect and reconnect Teams if this stays empty.",
+    itemPrefix: () => "",
+    itemSuffix: (item) => (item.teamName ? ` · ${item.teamName}` : "")
   }
 };
 
@@ -102,6 +113,7 @@ export function IntegrationScopeModal({
   const [selectedConfluence, setSelectedConfluence] = useState<ScopeItem[]>([]);
   const [selectedNotion, setSelectedNotion] = useState<ScopeItem[]>([]);
   const [selectedGoogle, setSelectedGoogle] = useState<ScopeItem[]>([]);
+  const [selectedTeams, setSelectedTeams] = useState<ScopeItem[]>([]);
   const [resources, setResources] = useState<ScopeItem[]>([]);
   const [summary, setSummary] = useState<string | undefined>();
 
@@ -118,10 +130,20 @@ export function IntegrationScopeModal({
         return selectedNotion.length;
       case "google-docs":
         return selectedGoogle.length;
+      case "teams":
+        return selectedTeams.length;
       default:
         return 0;
     }
-  }, [scopableProvider, selectedSlack, selectedJira, selectedConfluence, selectedNotion, selectedGoogle]);
+  }, [
+    scopableProvider,
+    selectedSlack,
+    selectedJira,
+    selectedConfluence,
+    selectedNotion,
+    selectedGoogle,
+    selectedTeams
+  ]);
 
   const selectedIds = useMemo(() => {
     if (scopableProvider === "slack") {
@@ -134,6 +156,9 @@ export function IntegrationScopeModal({
     if (scopableProvider === "notion") {
       return new Set(selectedNotion.map((item) => item.id));
     }
+    if (scopableProvider === "teams") {
+      return new Set(selectedTeams.map((item) => item.id));
+    }
     return new Set(selectedGoogle.map((item) => item.id));
   }, [
     scopableProvider,
@@ -142,7 +167,8 @@ export function IntegrationScopeModal({
     selectedJira,
     selectedConfluence,
     selectedNotion,
-    selectedGoogle
+    selectedGoogle,
+    selectedTeams
   ]);
 
   const loadScope = useCallback(async () => {
@@ -211,6 +237,18 @@ export function IntegrationScopeModal({
           kind: folder.kind
         }))
       );
+      return;
+    }
+
+    if (scopableProvider === "teams" && Array.isArray((policy as TeamsScopePolicy).channels)) {
+      setSelectedTeams(
+        (policy as TeamsScopePolicy).channels.map((channel) => ({
+          id: channel.id,
+          name: channel.name,
+          teamId: channel.teamId,
+          teamName: channel.teamName
+        }))
+      );
     }
   }, [connected, provider, scopableProvider]);
 
@@ -231,7 +269,9 @@ export function IntegrationScopeModal({
         name: resource.name,
         key: resource.key,
         type: resource.type,
-        kind: resource.kind
+        kind: resource.kind,
+        teamId: resource.teamId,
+        teamName: resource.teamName
       }))
     );
   }, [open, connected, provider, scopableProvider, atlassianTab, search]);
@@ -298,6 +338,10 @@ export function IntegrationScopeModal({
       setSelectedNotion((current) => toggleInList(current, item));
       return;
     }
+    if (scopableProvider === "teams") {
+      setSelectedTeams((current) => toggleInList(current, item));
+      return;
+    }
     setSelectedGoogle((current) => toggleInList(current, item));
   }
 
@@ -310,7 +354,8 @@ export function IntegrationScopeModal({
       | SlackScopePolicy
       | AtlassianScopePolicy
       | NotionScopePolicy
-      | GoogleDocsScopePolicy;
+      | GoogleDocsScopePolicy
+      | TeamsScopePolicy;
 
     if (scopableProvider === "slack") {
       policy = { version: 1, mode: "allowlist", channels: selectedSlack };
@@ -337,6 +382,17 @@ export function IntegrationScopeModal({
           id: item.id,
           title: item.name,
           type: item.type === "database" ? "database" : "page"
+        }))
+      };
+    } else if (scopableProvider === "teams") {
+      policy = {
+        version: 1,
+        mode: "allowlist",
+        channels: selectedTeams.map((item) => ({
+          id: item.id,
+          name: item.name,
+          ...(item.teamId ? { teamId: item.teamId } : {}),
+          ...(item.teamName ? { teamName: item.teamName } : {})
         }))
       };
     } else {

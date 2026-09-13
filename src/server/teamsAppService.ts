@@ -7,7 +7,10 @@ const GRAPH_ME = "https://graph.microsoft.com/v1.0/me";
 const TEAMS_SCOPES = [
   "User.Read",
   "Team.ReadBasic.All",
+  "Channel.ReadBasic.All",
   "ChannelMessage.Read.All",
+  // Graph chatMessage search 403s without this, even for channel-only lookups.
+  "Chat.Read",
   "offline_access"
 ].join(" ");
 

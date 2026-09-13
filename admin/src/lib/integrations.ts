@@ -14,16 +14,15 @@ export const CODE_HOST_PROVIDERS: CodeHostProvider[] = ["github", "gitlab", "bit
 
 export type ScopableProvider = Extract<
   IntegrationProvider,
-  "slack" | "atlassian" | "notion" | "google-docs"
+  "slack" | "atlassian" | "notion" | "google-docs" | "teams"
 >;
 
-/** Teams is connectable but not scopable yet — backend lacks TeamsScopePolicy
- *  (see src/integrationScope/types.ts SCOPE_GOVERNED_PROVIDERS). */
 export const SCOPABLE_PROVIDERS: ScopableProvider[] = [
   "slack",
   "atlassian",
   "notion",
-  "google-docs"
+  "google-docs",
+  "teams"
 ];
 
 export type IntegrationDefinition = {
@@ -146,13 +145,31 @@ export type GoogleDocsScopePolicy = {
   expandedFolderIds?: string[];
 };
 
+export type TeamsScopeChannel = {
+  id: string;
+  name: string;
+  teamId?: string;
+  teamName?: string;
+};
+
+export type TeamsScopePolicy = {
+  version: 1;
+  mode: "allowlist";
+  channels: TeamsScopeChannel[];
+};
+
 export type IntegrationScopeResponse = {
   provider: IntegrationProvider;
   installed: boolean;
   scopeStatus: "none" | "required" | "active";
   enforced: boolean;
   allowed: boolean;
-  policy: SlackScopePolicy | AtlassianScopePolicy | NotionScopePolicy | GoogleDocsScopePolicy;
+  policy:
+    | SlackScopePolicy
+    | AtlassianScopePolicy
+    | NotionScopePolicy
+    | GoogleDocsScopePolicy
+    | TeamsScopePolicy;
   summary?: string;
   updatedAt?: string;
 };
@@ -165,4 +182,6 @@ export type IntegrationResource = {
   kind?: string;
   isPrivate?: boolean;
   topic?: string;
+  teamId?: string;
+  teamName?: string;
 };

@@ -59,11 +59,25 @@ export type GoogleDocsIntegrationPolicy = {
   expandedFolderIds: string[];
 };
 
+export type TeamsChannelRef = {
+  id: string;
+  name: string;
+  teamId?: string;
+  teamName?: string;
+};
+
+export type TeamsIntegrationPolicy = {
+  version: 1;
+  mode: "allowlist";
+  channels: TeamsChannelRef[];
+};
+
 export type IntegrationScopePolicy =
   | SlackIntegrationPolicy
   | AtlassianIntegrationPolicy
   | NotionIntegrationPolicy
-  | GoogleDocsIntegrationPolicy;
+  | GoogleDocsIntegrationPolicy
+  | TeamsIntegrationPolicy;
 
 export type ScopeStatus = "none" | "required" | "active";
 
@@ -95,6 +109,11 @@ export type ResolvedIntegrationScope = {
     folderKinds: GoogleDocsFolderKind[];
     expandedFolderIds: string[];
   };
+  teams?: {
+    channelIds: string[];
+    channelNames: string[];
+    teamIds: string[];
+  };
   reason?: string;
 };
 
@@ -102,7 +121,8 @@ export const SCOPE_GOVERNED_PROVIDERS: IntegrationProvider[] = [
   "slack",
   "atlassian",
   "notion",
-  "google-docs"
+  "google-docs",
+  "teams"
 ];
 
 /** Providers with admin allowlist scope enforced in chat context fetchers. */
@@ -285,4 +305,46 @@ export function parseGoogleDocsIntegrationPolicy(
 
 export function googleDocsPolicyIsActive(policy: GoogleDocsIntegrationPolicy | undefined): boolean {
   return Boolean(policy && policy.folders.length > 0);
+}
+
+export function parseTeamsIntegrationPolicy(raw: unknown): TeamsIntegrationPolicy | undefined {
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.mode !== "allowlist") {
+    return undefined;
+  }
+  const channelsRaw = record.channels;
+  if (!Array.isArray(channelsRaw)) {
+    return undefined;
+  }
+  const channels: TeamsChannelRef[] = [];
+  for (const entry of channelsRaw) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const channel = entry as Record<string, unknown>;
+    const id = typeof channel.id === "string" ? channel.id.trim() : "";
+    const name = typeof channel.name === "string" ? channel.name.trim() : "";
+    const teamId = typeof channel.teamId === "string" ? channel.teamId.trim() : "";
+    const teamName = typeof channel.teamName === "string" ? channel.teamName.trim() : "";
+    if (id && name) {
+      channels.push({
+        id,
+        name,
+        ...(teamId ? { teamId } : {}),
+        ...(teamName ? { teamName } : {})
+      });
+    }
+  }
+  return {
+    version: 1,
+    mode: "allowlist",
+    channels
+  };
+}
+
+export function teamsPolicyIsActive(policy: TeamsIntegrationPolicy | undefined): boolean {
+  return Boolean(policy && policy.channels.length > 0);
 }

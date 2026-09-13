@@ -6,7 +6,8 @@ import type {
   AtlassianScopePolicy,
   GoogleDocsScopePolicy,
   NotionScopePolicy,
-  SlackScopePolicy
+  SlackScopePolicy,
+  TeamsScopePolicy
 } from "./integrations";
 import type { StoredMe } from "./auth";
 import { ensureAccessToken, restoreSessionFromCookie } from "./auth";
@@ -993,7 +994,12 @@ export async function fetchIntegrationScope(
 
 export async function saveIntegrationScope(
   provider: IntegrationProvider,
-  policy: SlackScopePolicy | AtlassianScopePolicy | NotionScopePolicy | GoogleDocsScopePolicy
+  policy:
+    | SlackScopePolicy
+    | AtlassianScopePolicy
+    | NotionScopePolicy
+    | GoogleDocsScopePolicy
+    | TeamsScopePolicy
 ): Promise<ApiResult<IntegrationScopeResponse>> {
   return coopFetch<IntegrationScopeResponse>(
     `/v1/admin/integrations/${encodeURIComponent(provider)}/scope`,

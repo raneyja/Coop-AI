@@ -56,7 +56,9 @@ Add exactly these (must match `teamsAppService.ts`):
 |------------|---------|
 | `User.Read` | Sign-in profile |
 | `Team.ReadBasic.All` | List teams the user can access |
+| `Channel.ReadBasic.All` | List channels for Manage access |
 | `ChannelMessage.Read.All` | Read channel messages for search |
+| `Chat.Read` | Graph message search. Without this, search returns permission denied. |
 | `offline_access` | Refresh tokens |
 
 Click **Add permissions**.
@@ -99,7 +101,10 @@ docker compose up -d --build api
 
 1. **Microsoft Teams** → **Connect**
 2. Sign in with work/school account → approve permissions (admin consent if prompted)
-3. Return to Integrations → **Refresh** → **Test Teams**
+3. Return to Integrations → **Refresh** → **Manage access** → pick the Teams channels Coop may search → **Save access**
+4. **Test Teams**
+
+**Success:** Card shows a channel count (for example “2 channels selected”). Chat only uses those channels.
 
 **Extension UI** (optional): **Settings → Tools → Microsoft Teams** → **Connect** (same OAuth flow).
 
@@ -116,7 +121,7 @@ docker compose up -d --build api
 | `redirect_uri` mismatch | Azure → Authentication → Web redirect URI must match exactly (`https://api.coop-ai.dev/v1/teams/app/callback`) |
 | `AADSTS50011` redirect URI error | Same as above — check trailing slash and `http` vs `https` |
 | Admin consent required | Entra admin must grant consent for Graph permissions, or use [admin consent URL](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/grant-admin-consent) for your app |
-| Connected but search empty | User must have access to Teams channels; personal Teams has no channel search |
+| Connected but search empty | Pick channels in **Manage access**; user must belong to those channels |
 | Token exchange failed | Client secret expired or wrong; create new secret in Azure |
 | `invalid_client` | Client ID/secret mismatch — re-copy from Azure Overview + Certificates & secrets |
 

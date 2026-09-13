@@ -59,7 +59,13 @@ const INTEGRATION_PROVIDERS: IntegrationProvider[] = [
   "teams"
 ];
 
-const SCOPABLE_PROVIDERS: IntegrationProvider[] = ["slack", "atlassian", "notion", "google-docs"];
+const SCOPABLE_PROVIDERS: IntegrationProvider[] = [
+  "slack",
+  "atlassian",
+  "notion",
+  "google-docs",
+  "teams"
+];
 
 /**
  * Bulk integration status for the customer admin portal.

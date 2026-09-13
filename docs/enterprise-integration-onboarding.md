@@ -156,10 +156,10 @@ For Enterprise orgs that sign in with SAML instead of password/Google:
 ### Microsoft Teams
 
 - **Entra app registration** (Microsoft Graph OAuth) — not a Teams Store manifest. Full steps: [teams-connect.md](./teams-connect.md).
-- Delegated Graph permissions: `User.Read`, `Team.ReadBasic.All`, `ChannelMessage.Read.All`, `offline_access`.
+- Delegated Graph permissions: `User.Read`, `Team.ReadBasic.All`, `Channel.ReadBasic.All`, `ChannelMessage.Read.All`, `Chat.Read`, `offline_access`.
 - Redirect URI = `/v1/teams/app/callback`.
 - Requires work/school Microsoft 365 with Teams channels (personal Teams/Community is not sufficient).
-- **Customer admin:** **Connect Microsoft Teams** → approve (admin consent if required) → **Test Teams**.
+- **Customer admin:** **Connect Microsoft Teams** → approve (admin consent if required) → **Manage access** (pick channels) → **Test Teams**.
 
 ---
 
@@ -272,7 +272,7 @@ What exists today vs what enterprise self-serve still needs:
 
 **Phase D — Polish**
 - Operator script: `coop-cli integrations verify` hitting all install-url endpoints.
-- Per-integration scope allowlists beyond Slack (Jira, Notion, Google Docs, Teams).
+- Per-org BYO OAuth client polish (enterprise IT).
 
 ---
 

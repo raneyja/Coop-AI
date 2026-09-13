@@ -52,6 +52,9 @@ export function formatIntegrationError(
   if (/bot token unavailable/i.test(message)) {
     return "Slack bot token missing. Disconnect and reconnect Slack, then open Manage access again.";
   }
+  if (/Teams access token unavailable/i.test(message) || /Could not list Teams channels/i.test(message)) {
+    return "Teams channel list unavailable. Disconnect and reconnect Teams after Channel.ReadBasic.All is approved, then open Manage access again.";
+  }
   if (/insufficient.*scope/i.test(message) || /insufficientPermissions/i.test(message)) {
     return "Google Drive access is incomplete. Revoke Coop at myaccount.google.com/permissions, then connect again.";
   }

@@ -9,7 +9,9 @@ import {
   parseGoogleDocsIntegrationPolicy,
   parseNotionIntegrationPolicy,
   parseSlackIntegrationPolicy,
+  parseTeamsIntegrationPolicy,
   slackPolicyIsActive,
+  teamsPolicyIsActive,
   type ResolvedIntegrationScope,
   type ScopeStatus
 } from "../integrationScope/types";
@@ -37,6 +39,10 @@ export async function resolveIntegrationScope(options: {
 
   if (provider === "google-docs") {
     return resolveGoogleDocsScope(orgId, orgPlan, connected, scopePolicyStore);
+  }
+
+  if (provider === "teams") {
+    return resolveTeamsScope(orgId, orgPlan, connected, scopePolicyStore);
   }
 
   return unrestricted(provider, "none");
@@ -261,6 +267,64 @@ async function resolveGoogleDocsScope(
     allowed: true,
     scopeStatus: "active",
     googleDocs: { folderIds, folderNames, folderKinds, expandedFolderIds }
+  };
+}
+
+async function resolveTeamsScope(
+  orgId: string,
+  orgPlan: string,
+  connected: boolean,
+  scopePolicyStore?: IntegrationScopePolicyStore
+): Promise<ResolvedIntegrationScope> {
+  const provider: IntegrationProvider = "teams";
+  const scopeGated = requiresIntegrationScope(orgPlan);
+
+  if (!connected) {
+    if (!scopeGated) {
+      return unrestricted(provider, "none");
+    }
+    return {
+      provider,
+      enforced: true,
+      allowed: false,
+      scopeStatus: "required",
+      reason: "Microsoft Teams is not connected for this organization."
+    };
+  }
+
+  const record = scopePolicyStore ? await scopePolicyStore.get(orgId, provider) : undefined;
+  const teamsPolicy = parseTeamsIntegrationPolicy(record?.policy);
+
+  if (!teamsPolicyIsActive(teamsPolicy)) {
+    if (!scopeGated) {
+      return unrestricted(provider, "none");
+    }
+    return {
+      provider,
+      enforced: true,
+      allowed: false,
+      scopeStatus: "required",
+      reason:
+        "Microsoft Teams is connected but no channels are allowlisted. An org admin must configure scope in the admin portal."
+    };
+  }
+
+  return {
+    provider,
+    enforced: scopeGated,
+    allowed: true,
+    scopeStatus: "active",
+    teams: {
+      channelIds: teamsPolicy!.channels.map((channel) => channel.id),
+      channelNames: teamsPolicy!.channels.map((channel) => channel.name),
+      teamIds: [
+        ...new Set(
+          teamsPolicy!.channels
+            .map((channel) => channel.teamId)
+            .filter((id): id is string => Boolean(id))
+        )
+      ]
+    }
   };
 }
 
