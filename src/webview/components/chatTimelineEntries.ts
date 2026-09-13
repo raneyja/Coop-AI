@@ -81,3 +81,37 @@ export function buildTimelineEntries<M extends TimelineMessage, A extends Timeli
 
   return entries;
 }
+
+export type TimelineRenderGroup<
+  M extends TimelineMessage = TimelineMessage,
+  A extends TimelineArtifact = TimelineArtifact
+> =
+  | { type: "message"; entry: Extract<TimelineEntry<M, A>, { type: "message" }> }
+  | { type: "sources"; entries: Array<Extract<TimelineEntry<M, A>, { type: "artifact" }>> };
+
+/** Consecutive Sources cards share one Thinking-style fold. */
+export function groupTimelineSourceCards<M extends TimelineMessage, A extends TimelineArtifact>(
+  entries: TimelineEntry<M, A>[]
+): TimelineRenderGroup<M, A>[] {
+  const groups: TimelineRenderGroup<M, A>[] = [];
+  let pending: Array<Extract<TimelineEntry<M, A>, { type: "artifact" }>> = [];
+
+  const flush = () => {
+    if (pending.length === 0) {
+      return;
+    }
+    groups.push({ type: "sources", entries: pending });
+    pending = [];
+  };
+
+  for (const entry of entries) {
+    if (entry.type === "artifact") {
+      pending.push(entry);
+      continue;
+    }
+    flush();
+    groups.push({ type: "message", entry });
+  }
+  flush();
+  return groups;
+}

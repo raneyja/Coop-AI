@@ -1,8 +1,9 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { evidenceArtifactAnchor } from "../../prompts/sourceCitationRegistry";
 import {
   EvidenceCardExpandProvider,
-  useEvidenceCardExpand
+  useEvidenceCardExpand,
+  useSourcesFoldExpand
 } from "../evidenceConnectionExpandContext";
 import { useCitationNavigation } from "./CitationNavigationContext";
 
@@ -30,7 +31,12 @@ function EvidenceArtifactAnchorInner({
 }): React.ReactElement {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const { registerEvidenceAnchor } = useCitationNavigation();
-  const expand = useEvidenceCardExpand()?.expand;
+  const expandCard = useEvidenceCardExpand()?.expand;
+  const expandFold = useSourcesFoldExpand();
+  const expand = useCallback(() => {
+    expandFold?.();
+    expandCard?.();
+  }, [expandFold, expandCard]);
 
   useEffect(() => {
     registerEvidenceAnchor(evidenceArtifactAnchor(artifactId), rootRef.current, expand);

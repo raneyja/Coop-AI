@@ -31,13 +31,14 @@ import { AgentActivityPanel } from "./AgentActivityPanel";
 import type { AgentActivityState } from "../agentActivity";
 import type { NarrativeStep } from "../agentNarrative";
 import { EvidenceArtifactAnchor } from "./EvidenceArtifactAnchor";
+import { SourcesFold } from "./SourcesFold";
 import { MentionAttachmentChip } from "./MentionAttachmentChip";
 import {
   parseContextLineAttachments,
   splitPlainChatHistoryBody,
   type HistoryAttachment
 } from "../lib/parseHistoryAttachments";
-import { buildTimelineEntries } from "./chatTimelineEntries";
+import { buildTimelineEntries, groupTimelineSourceCards } from "./chatTimelineEntries";
 
 export type ChatMessage = {
   role: "user" | "assistant" | "system";
@@ -671,30 +672,35 @@ export function ChatStream({
   return (
     <div ref={scrollContainerRef} className="chat-thread no-scrollbar" role="log" aria-live="polite">
       <div className="chat-thread-messages">
-        {timelineEntries.map((entry) =>
-          entry.type === "message" ? (
-            <MessageBlock
-              key={entry.id}
-              message={entry.message}
-              renderBody={renderBody}
-              onSuggestResolve={onSuggestResolve}
-            />
-          ) : (
-            (() => {
-              const body = renderArtifact(entry.artifact, actionContext, conflicts);
-              if (!body) {
-                return null;
-              }
-              return (
-                <article key={entry.id} className="chat-message chat-message--evidence group" data-role="evidence">
-                  <EvidenceArtifactAnchor artifactId={entry.artifact.id}>
-                    <div className="chat-message-inner">{body}</div>
-                  </EvidenceArtifactAnchor>
-                </article>
-              );
-            })()
-          )
-        )}
+        {groupTimelineSourceCards(timelineEntries).map((group) => {
+          if (group.type === "message") {
+            return (
+              <MessageBlock
+                key={group.entry.id}
+                message={group.entry.message}
+                renderBody={renderBody}
+                onSuggestResolve={onSuggestResolve}
+              />
+            );
+          }
+          const cards = group.entries.flatMap((entry) => {
+            const body = renderArtifact(entry.artifact, actionContext, conflicts);
+            if (!body) {
+              return [];
+            }
+            return [
+              <article key={entry.id} className="chat-message chat-message--evidence group" data-role="evidence">
+                <EvidenceArtifactAnchor artifactId={entry.artifact.id}>
+                  <div className="chat-message-inner">{body}</div>
+                </EvidenceArtifactAnchor>
+              </article>
+            ];
+          });
+          if (cards.length === 0) {
+            return null;
+          }
+          return <SourcesFold key={group.entries[0]?.id ?? "sources"}>{cards}</SourcesFold>;
+        })}
 
         {showWorkingStack ? (
           <div className="chat-working-stack">

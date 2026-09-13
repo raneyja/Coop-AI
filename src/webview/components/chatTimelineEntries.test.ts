@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildTimelineEntries, type TimelineArtifact, type TimelineMessage } from "./chatTimelineEntries";
+import {
+  buildTimelineEntries,
+  groupTimelineSourceCards,
+  type TimelineArtifact,
+  type TimelineMessage
+} from "./chatTimelineEntries";
 
 function msg(
   role: TimelineMessage["role"],
@@ -37,5 +42,20 @@ test("orphaned Sources card still attaches to the turn when relatedArtifactId is
   assert.deepEqual(
     entries.map((e) => (e.type === "message" ? `msg:${e.message.role}` : `art:${e.artifact.id}`)),
     ["msg:user", "art:evidence-slack", "msg:assistant"]
+  );
+});
+
+test("consecutive Sources cards group into one fold", () => {
+  const messages = [
+    msg("user", 100, "search"),
+    msg("assistant", 400, "answer", "evidence-notion")
+  ];
+  const artifacts = [art("evidence-slack", 200), art("evidence-notion", 300)];
+  const groups = groupTimelineSourceCards(buildTimelineEntries(messages, artifacts));
+  assert.deepEqual(
+    groups.map((group) =>
+      group.type === "message" ? `msg:${group.entry.message.role}` : `sources:${group.entries.length}`
+    ),
+    ["msg:user", "sources:2", "msg:assistant"]
   );
 });

@@ -1033,17 +1033,28 @@
   }
 
   .chat-message--evidence .chat-message-inner {
-    padding: 0 2px 0 12px;
-    border-left: 2px solid color-mix(in srgb, var(--vscode-textLink-foreground, #3794ff) 45%, var(--coop-border));
+    padding: 0;
+    border-left: none;
   }
 
   .chat-message--evidence .coop-result-stack {
-    @apply mb-0;
+    @apply mx-0 mb-0;
   }
 
-  /* Consecutive Sources cards sit tight; other messages keep gap-5. */
-  .chat-thread-messages > .chat-message--evidence + .chat-message--evidence {
-    margin-top: calc(-1.25rem + 6px);
+  .chat-message--sources-fold {
+    @apply w-full min-w-0;
+  }
+
+  .chat-message-inner--sources-fold {
+    @apply min-w-0 py-0.5 pl-0.5;
+  }
+
+  .coop-sources-fold-body {
+    @apply flex flex-col gap-1.5 pt-1;
+  }
+
+  .coop-sources-fold-body[hidden] {
+    display: none;
   }
 
   .chat-message-label--evidence {

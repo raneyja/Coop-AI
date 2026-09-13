@@ -37,3 +37,9 @@ export function EvidenceCardExpandProvider({
 export function useEvidenceCardExpand(): EvidenceCardExpandApi | undefined {
   return useContext(EvidenceCardExpandContext);
 }
+
+export const SourcesFoldExpandContext = createContext<(() => void) | undefined>(undefined);
+
+export function useSourcesFoldExpand(): (() => void) | undefined {
+  return useContext(SourcesFoldExpandContext);
+}

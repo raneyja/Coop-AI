@@ -7,7 +7,8 @@ import { useCitationNavigation } from "./CitationNavigationContext";
 import { IntegrationSourceHeading, IntegrationSourceIcon, type IntegrationSourceId } from "./IntegrationSourceBrand";
 import {
   useEvidenceCardExpand,
-  useEvidenceConnectionExpand
+  useEvidenceConnectionExpand,
+  useSourcesFoldExpand
 } from "../evidenceConnectionExpandContext";
 
 type IntegrationResultCardProps = {
@@ -219,6 +220,7 @@ export function IntegrationResultCollapsible({
   const { registerEvidenceAnchor, scrollToCitation } = useCitationNavigation();
   const ensureConnectionExpanded = useEvidenceConnectionExpand();
   const expandCard = useEvidenceCardExpand()?.expand;
+  const expandFold = useSourcesFoldExpand();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const useBrandedHeader = Boolean(provider && destination);
 
@@ -227,6 +229,7 @@ export function IntegrationResultCollapsible({
       return;
     }
     registerEvidenceAnchor(sectionDomId, rootRef.current, () => {
+      expandFold?.();
       expandCard?.();
       ensureConnectionExpanded?.();
       if (!hideHeader && !open) {
@@ -241,6 +244,7 @@ export function IntegrationResultCollapsible({
     registerEvidenceAnchor,
     ensureConnectionExpanded,
     expandCard,
+    expandFold,
     hideHeader
   ]);
 
