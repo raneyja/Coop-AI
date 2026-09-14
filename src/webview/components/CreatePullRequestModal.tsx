@@ -30,6 +30,7 @@ export type CreatePullRequestModalProps = {
   error?: string;
   notesLoading?: boolean;
   generatedNotes?: string;
+  generatedTitle?: string;
   created?: CreatePullRequestCreated;
   onClose: () => void;
   onConfirm: (draft: CreatePullRequestDraft) => void;
@@ -46,6 +47,7 @@ export function CreatePullRequestModal({
   error,
   notesLoading = false,
   generatedNotes,
+  generatedTitle,
   created,
   onClose,
   onConfirm,
@@ -55,6 +57,7 @@ export function CreatePullRequestModal({
   const [title, setTitle] = useState(initialTitle);
   const [notes, setNotes] = useState("");
   const notesEdited = useRef(false);
+  const titleEdited = useRef(false);
 
   useEffect(() => {
     if (!open) {
@@ -63,6 +66,7 @@ export function CreatePullRequestModal({
     setBranch(initialBranch);
     setTitle(initialTitle);
     notesEdited.current = false;
+    titleEdited.current = false;
     setNotes(generatedNotes ?? "");
   }, [open, initialBranch, initialTitle]);
 
@@ -72,6 +76,13 @@ export function CreatePullRequestModal({
     }
     setNotes(generatedNotes);
   }, [open, generatedNotes]);
+
+  useEffect(() => {
+    if (!open || titleEdited.current || !generatedTitle?.trim()) {
+      return;
+    }
+    setTitle(generatedTitle);
+  }, [open, generatedTitle]);
 
   useEffect(() => {
     if (!open) {
@@ -180,7 +191,10 @@ export function CreatePullRequestModal({
                 <input
                   className="coop-prompt-modal-search"
                   value={title}
-                  onChange={(event) => setTitle(event.target.value)}
+                  onChange={(event) => {
+                    titleEdited.current = true;
+                    setTitle(event.target.value);
+                  }}
                   aria-label="Pull request title"
                   autoComplete="off"
                 />
@@ -190,7 +204,7 @@ export function CreatePullRequestModal({
                   Notes <span className="coop-prompt-modal-muted">{PR_NOTES_AI_GENERATED_LABEL}</span>
                 </span>
                 <textarea
-                  className="coop-prompt-modal-textarea"
+                  className="coop-prompt-modal-textarea coop-create-pr-notes"
                   value={notes}
                   onChange={(event) => {
                     notesEdited.current = true;
@@ -200,7 +214,7 @@ export function CreatePullRequestModal({
                   placeholder={
                     notesLoading ? "Generating summary…" : "Optional. Shown on the pull request."
                   }
-                  rows={4}
+                  rows={10}
                 />
               </label>
               <div className="coop-prompt-modal-section">

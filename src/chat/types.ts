@@ -746,6 +746,7 @@ export type WebviewInbound =
         messageTimestamp?: number;
         title: string;
         diff: string;
+        files?: string[];
       };
     }
   | { type: "ownership:copy-draft"; payload: { text: string } }
@@ -853,7 +854,7 @@ export type WebviewOutbound =
     }
   | {
       type: "patch:pr-notes";
-      payload: { messageTimestamp?: number; notes?: string };
+      payload: { messageTimestamp?: number; notes?: string; title?: string };
     }
   | {
       type: "patch:pr-created";

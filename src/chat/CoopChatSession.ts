@@ -5213,6 +5213,7 @@ export class CoopChatSession {
     messageTimestamp?: number;
     title: string;
     diff: string;
+    files?: string[];
   }): Promise<void> {
     const complete: PrNotesCompleteFn = async (params) => {
       let full = "";
@@ -5236,16 +5237,18 @@ export class CoopChatSession {
       );
       return full;
     };
-    const notes = await summarizePrNotes({
+    const result = await summarizePrNotes({
       title: payload.title,
       diff: payload.diff,
+      files: payload.files,
       complete
     });
     this.post({
       type: "patch:pr-notes",
       payload: {
         messageTimestamp: payload.messageTimestamp,
-        notes
+        notes: result?.notes,
+        title: result?.title
       }
     });
   }

@@ -942,6 +942,10 @@
     @apply min-h-[88px] resize-y;
   }
 
+  .coop-prompt-modal-textarea.coop-create-pr-notes {
+    min-height: 168px;
+  }
+
   .coop-prompt-modal-section {
     @apply space-y-1.5;
   }

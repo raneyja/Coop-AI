@@ -883,9 +883,11 @@ test("buildUserMessageWithContext renders live tree overview", () => {
   assert.ok(message.includes("files: package.json, README.md"));
 });
 
-test("pr_summary use case is short notes without the chat output contract", () => {
+test("pr_summary use case is JSON notes without the chat output contract", () => {
   const prompt = systemPromptForUseCase("pr_summary");
   assert.ok(prompt.includes("pull request notes"));
+  assert.ok(prompt.includes("JSON"));
+  assert.ok(prompt.includes("files[]"));
   assert.equal(prompt.includes(AUDIENCE_MARKER), false);
   assert.equal(prompt.includes(OUTPUT_CONTRACT_MARKER), false);
 });

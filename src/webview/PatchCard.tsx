@@ -44,6 +44,7 @@ type PatchCardProps = {
   onClearPrResult?: () => void;
   prNotesLoading?: boolean;
   generatedPrNotes?: string;
+  generatedPrTitle?: string;
   prCreated?: CreatePullRequestCreated;
   prCreateError?: string;
   /** Host asked to open the same confirm modal as the Create pull request button. */
@@ -128,6 +129,7 @@ export function PatchCard({
   onClearPrResult,
   prNotesLoading,
   generatedPrNotes,
+  generatedPrTitle,
   prCreated,
   prCreateError,
   openCreatePrRequested,
@@ -346,6 +348,7 @@ export function PatchCard({
         error={prError}
         notesLoading={prNotesLoading}
         generatedNotes={generatedPrNotes}
+        generatedTitle={generatedPrTitle}
         created={prCreated}
         onOpenLink={onOpenPrLink}
         onClose={() => {

@@ -9,6 +9,7 @@ import {
   createdPullRequestFromResult,
   createConfirmSubmitGuard,
   evaluateCreatePullRequest,
+  defaultPrTitle,
   filesWithContent,
   isPullRequestWriteSupported,
   openPullRequestOnHostLabel,
@@ -39,6 +40,23 @@ function test(name: string, fn: () => void | Promise<void>): Promise<void> {
 }
 
 void (async () => {
+await test("default title uses filenames a reviewer can scan", () => {
+  assert.equal(defaultPrTitle(["apps/api/plane/db/models/state.py"]), "Update state.py");
+  assert.equal(
+    defaultPrTitle(["apps/api/plane/db/models/state.py", "apps/api/plane/views.py"]),
+    "Update state.py and views.py"
+  );
+  assert.equal(
+    defaultPrTitle(["a.ts", "b.ts", "c.ts"]),
+    "Update a.ts, b.ts, and c.ts"
+  );
+  assert.equal(
+    defaultPrTitle(["a.ts", "b.ts", "c.ts", "d.ts"]),
+    "Update 4 files (a.ts, b.ts, ...)"
+  );
+  assert.equal(defaultPrTitle([]), "Coop patch");
+});
+
 await test("Notes field is labeled AI Generated", () => {
   assert.equal(PR_NOTES_AI_GENERATED_LABEL, "(AI Generated)");
 });

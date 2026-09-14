@@ -543,13 +543,14 @@ Rules:
 - Do not invent facts missing from the source text.
 - Reply with ONLY the overview text.`;
 
-export const PR_SUMMARY_SYSTEM = `You write pull request notes for a software engineer.
-Summarize the applied code change so a reviewer understands what changed and why.
+export const PR_SUMMARY_SYSTEM = `You write pull request notes a software engineer can scan in 10 seconds.
+Reply with JSON only (no markdown fence):
+{"title":"imperative ≤72 chars","summary":"1–2 sentences covering every file","files":[{"path":"exact path","notes":"what this file now does differently"}]}
 Rules:
-- 2–4 short sentences, or a short paragraph plus up to 4 bullets.
-- Name the files that changed. Describe the behavior change, not a line-by-line dump.
-- Do not invent tickets, reviewers, tests, or motivation that is not in the diff.
-- No markdown headings. Reply with ONLY the notes text.`;
+- title: what changed, not "Update N files" or a raw path. No trailing period.
+- One files[] entry per changed file. Do not merge two files into one entry.
+- File notes: concrete behavior a reviewer would verify. No "improved readability".
+- Do not invent tickets, reviewers, tests, or motivation missing from the diff.`;
 
 const USE_CASE_PROMPTS: Record<UseCase, string> = {
   comprehension: COMPREHENSION_SYSTEM,

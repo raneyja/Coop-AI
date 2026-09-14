@@ -102,12 +102,26 @@ export function defaultPrBranchName(): string {
   return "coop/patch";
 }
 
+export function prFileBasename(path: string): string {
+  const normalized = path.replace(/\\/g, "/").replace(/\/+$/, "");
+  const slash = normalized.lastIndexOf("/");
+  return (slash >= 0 ? normalized.slice(slash + 1) : normalized) || path;
+}
+
+/** Immediate title before AI notes land — filenames a reviewer can scan. */
 export function defaultPrTitle(filePaths: string[]): string {
-  if (filePaths.length === 1) {
-    return `Update ${filePaths[0]}`;
+  const names = filePaths.map(prFileBasename).filter(Boolean);
+  if (names.length === 1) {
+    return `Update ${names[0]}`;
   }
-  if (filePaths.length > 1) {
-    return `Update ${filePaths.length} files`;
+  if (names.length === 2) {
+    return `Update ${names[0]} and ${names[1]}`;
+  }
+  if (names.length === 3) {
+    return `Update ${names[0]}, ${names[1]}, and ${names[2]}`;
+  }
+  if (names.length > 3) {
+    return `Update ${names.length} files (${names[0]}, ${names[1]}, ...)`;
   }
   return "Coop patch";
 }

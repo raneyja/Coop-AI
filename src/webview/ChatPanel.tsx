@@ -184,7 +184,7 @@ type InboundMessage =
       type: "patch:open-create-pr";
       payload: { messageTimestamp: number; files?: Array<{ path: string; content: string }>; diff?: string };
     }
-  | { type: "patch:pr-notes"; payload: { messageTimestamp?: number; notes?: string } }
+  | { type: "patch:pr-notes"; payload: { messageTimestamp?: number; notes?: string; title?: string } }
   | {
       type: "patch:pr-created";
       payload: {
@@ -424,7 +424,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [conflictState, setConflictState] = useState<ConflictResolutionState | undefined>();
   const [patchCards, setPatchCards] = useState<PatchCardState[]>([]);
   const [prNotesByTimestamp, setPrNotesByTimestamp] = useState<
-    Record<number, { text?: string; loading?: boolean }>
+    Record<number, { text?: string; title?: string; loading?: boolean }>
   >({});
   const [openCreatePrTimestamp, setOpenCreatePrTimestamp] = useState<number | undefined>();
   const [createPrFilesByTimestamp, setCreatePrFilesByTimestamp] = useState<
@@ -929,7 +929,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
                 payload: {
                   messageTimestamp,
                   title: defaultPrTitle(titlePaths),
-                  diff
+                  diff,
+                  files: titlePaths
                 }
               });
             }}
@@ -954,6 +955,11 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             generatedPrNotes={
               typeof messageTimestamp === "number"
                 ? prNotesByTimestamp[messageTimestamp]?.text
+                : undefined
+            }
+            generatedPrTitle={
+              typeof messageTimestamp === "number"
+                ? prNotesByTimestamp[messageTimestamp]?.title
                 : undefined
             }
           />
@@ -1005,7 +1011,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         title: defaultPrTitle(files.map((file) => file.path)),
         diff:
           createPrDiffByTimestamp[timestamp] ||
-          files.map((file) => `${file.path}\n(editor changes)`).join("\n\n")
+          files.map((file) => `${file.path}\n(editor changes)`).join("\n\n"),
+        files: files.map((file) => file.path)
       }
     });
     setOpenCreatePrTimestamp(undefined);
@@ -1539,7 +1546,11 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           }
           setPrNotesByTimestamp((current) => ({
             ...current,
-            [timestamp]: { text: message.payload.notes, loading: false }
+            [timestamp]: {
+              text: message.payload.notes,
+              title: message.payload.title,
+              loading: false
+            }
           }));
           break;
         }
@@ -2577,6 +2588,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         }
         generatedNotes={
           standaloneCreatePr ? prNotesByTimestamp[standaloneCreatePr.timestamp]?.text : undefined
+        }
+        generatedTitle={
+          standaloneCreatePr ? prNotesByTimestamp[standaloneCreatePr.timestamp]?.title : undefined
         }
         created={
           standaloneCreatePr
