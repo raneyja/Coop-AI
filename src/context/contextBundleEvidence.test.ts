@@ -259,6 +259,28 @@ test("blastRadiusFromBundle does not promote job-scan importers for a named-func
   assert.ok((evidence!.warnings ?? []).some((w) => /named function blast/i.test(w)));
 });
 
+test("blastRadiusFromBundle keeps verified requireAuth callers from search", () => {
+  const evidence = blastRadiusFromBundle([
+    {
+      type: "dependencies",
+      data: {
+        file: "src/server/authMiddleware.ts",
+        namedAskSymbols: ["requireAuth"],
+        directDependents: ["src/jobs/jobsApi.ts", "src/server/sso/samlApi.ts"],
+        dependentDetails: [
+          { path: "src/jobs/jobsApi.ts", depth: 1, source: "zoekt", strength: "strong" },
+          { path: "src/server/sso/samlApi.ts", depth: 1, source: "zoekt", strength: "strong" }
+        ],
+        graphMeta: { source: "zoekt" }
+      }
+    }
+  ]);
+  assert.ok(evidence);
+  assert.ok(evidence!.directDependents?.includes("src/jobs/jobsApi.ts"));
+  assert.ok(evidence!.directDependents?.includes("src/server/sso/samlApi.ts"));
+  assert.deepEqual(evidence!.namedAskSymbols, ["requireAuth"]);
+});
+
 const total = passed + failed;
 console.log(`\ncontextBundleEvidence: ${passed}/${total} tests passed`);
 if (failed > 0) {

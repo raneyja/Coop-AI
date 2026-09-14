@@ -248,6 +248,58 @@ export function contentUsesNamedSymbol(content: string, symbol: string): boolean
   return new RegExp(`\\b${escaped}\\b`).test(withoutImportLines);
 }
 
+/** Graph search often fills `content` with the path when the snippet is missing. */
+export function isPathOnlySearchHit(hit: { fileName: string; content?: string }): boolean {
+  const content = (hit.content ?? "").trim();
+  if (!content) {
+    return true;
+  }
+  const normalized = normalizeHitPath(hit.fileName);
+  return content === hit.fileName || (Boolean(normalized) && content === normalized);
+}
+
+/** Remote (Zero-Clone) file body — IndexedRepoWorkspace / codehost, never workspace disk. */
+export type ReadRemoteFileBody = (path: string) => Promise<string | undefined>;
+
+/**
+ * Fetch importer bodies remotely and keep files that actually use the named
+ * function. Path-only Zoekt/SCIP rows are not callers until this confirms them.
+ */
+export async function verifyRemoteFilesMentionNamedSymbol(
+  candidates: BlastRadiusDependentDetail[],
+  namedAskSymbols: string[],
+  readRemoteFile: ReadRemoteFileBody,
+  options?: { maxFiles?: number; shouldAbort?: () => boolean }
+): Promise<BlastRadiusDependentDetail[]> {
+  if (namedAskSymbols.length === 0 || candidates.length === 0) {
+    return [];
+  }
+  const kept: BlastRadiusDependentDetail[] = [];
+  const seen = new Set<string>();
+  const list = sortDependentsProductionFirst(candidates).slice(0, options?.maxFiles ?? 16);
+  for (const entry of list) {
+    if (options?.shouldAbort?.()) {
+      break;
+    }
+    if (!entry.path || seen.has(entry.path)) {
+      continue;
+    }
+    seen.add(entry.path);
+    try {
+      const text = await readRemoteFile(entry.path);
+      if (!text?.trim()) {
+        continue;
+      }
+      if (namedAskSymbols.some((symbol) => contentUsesNamedSymbol(text, symbol))) {
+        kept.push({ ...entry, strength: "strong" });
+      }
+    } catch {
+      continue;
+    }
+  }
+  return kept;
+}
+
 function looksLikeNamedIdentifier(token: string): boolean {
   if (token.length < 3 || BLAST_ASK_STOP.has(token.toLowerCase())) {
     return false;
@@ -282,7 +334,7 @@ export function hitLooksLikeReferenceToTarget(
   namedAskSymbols: string[] = []
 ): boolean {
   const content = (hit.content ?? "").trim();
-  const pathOnly = !content || content === hit.fileName || content === normalizeHitPath(hit.fileName);
+  const pathOnly = isPathOnlySearchHit(hit);
   if (namedAskSymbols.length > 0) {
     if (pathOnly) {
       return false;
@@ -467,6 +519,14 @@ export type SearchDependentsFallbackOptions = {
    * importing the file for a different export is not a caller.
    */
   namedAskSymbols?: string[];
+  /**
+   * Zero-Clone body reader for path-only Zoekt/SCIP rows. Required to confirm
+   * named-function callers when the index omits snippets.
+   */
+  readRemoteFile?: ReadRemoteFileBody;
+  /** File-level importers from the durable graph — verify these first. */
+  knownImporterPaths?: string[];
+  shouldAbort?: () => boolean;
 };
 
 /** High-signal substrings for a single local filesystem walk. */
@@ -588,6 +648,8 @@ export async function resolveTrustedRemoteDependents(
     namedAskSymbols?: string[];
     /** When false, skip Zoekt/SCIP search if durable API already returned trusted hits. */
     enrichWithSearch?: boolean;
+    readRemoteFile?: ReadRemoteFileBody;
+    shouldAbort?: () => boolean;
   } = {}
 ): Promise<{ dependents: BlastRadiusDependentDetail[]; source: GraphEdgeSource; warnings: string[] }> {
   const warnings: string[] = [];
@@ -626,12 +688,16 @@ export async function resolveTrustedRemoteDependents(
     return fallback;
   }
 
+  const durableList = fallback.dependents;
   try {
     const search = await searchDependentsFallback(indexBackend, normalizedRepoId, file, {
       maxPatterns: options.maxPatterns,
       symbols: options.symbols,
       namedAskSymbols,
-      remoteOnly: true
+      remoteOnly: true,
+      readRemoteFile: options.readRemoteFile,
+      knownImporterPaths: durableList.map((entry) => entry.path),
+      shouldAbort: options.shouldAbort
     });
     warnings.push(...fallback.warnings, ...search.warnings);
     if (fallback.dependents.length === 0) {
@@ -646,6 +712,25 @@ export async function resolveTrustedRemoteDependents(
       search.source === "workspace" ? [] : search.dependents,
       namedAskSymbols
     );
+    if (namedAskSymbols.length > 0 && durableList.length > 0 && options.readRemoteFile) {
+      const confirmed = new Set(fallback.dependents.map((entry) => entry.path));
+      const remaining = durableList.filter((entry) => !confirmed.has(entry.path));
+      if (remaining.length > 0) {
+        const extra = await verifyRemoteFilesMentionNamedSymbol(
+          remaining,
+          namedAskSymbols,
+          options.readRemoteFile,
+          {
+            maxFiles: Math.max(1, 16 - fallback.dependents.length),
+            shouldAbort: options.shouldAbort
+          }
+        );
+        fallback.dependents = sortDependentsProductionFirst([
+          ...fallback.dependents,
+          ...extra
+        ]).slice(0, 30);
+      }
+    }
     return { ...fallback, warnings: [...new Set(warnings)] };
   } catch {
     return { ...fallback, warnings: [...new Set([...fallback.warnings, ...warnings])] };
@@ -730,6 +815,8 @@ export async function searchDependentsFallback(
   const maxPatterns = Math.max(1, Math.min(options.maxPatterns ?? 10, ordered.length));
   const seen = new Set<string>([file]);
   const dependents: BlastRadiusDependentDetail[] = [];
+  const pendingPathOnly: BlastRadiusDependentDetail[] = [];
+  const namedAskSymbols = options.namedAskSymbols ?? [];
   let bestSource: GraphEdgeSource = "remote";
   let skippedUnverified = 0;
 
@@ -759,15 +846,76 @@ export async function searchDependentsFallback(
           if (!depPath || seen.has(depPath) || depPath === file) {
             continue;
           }
-          if (!hitLooksLikeReferenceToTarget(hit, file, symbols, options.namedAskSymbols ?? [])) {
+          const hitGraphSource = mapSearchSourceToGraphSource(hit.source ?? resultSource);
+          if (namedAskSymbols.length > 0) {
+            if (isPathOnlySearchHit(hit)) {
+              pendingPathOnly.push({ path: depPath, depth: 1, source: hitGraphSource });
+              continue;
+            }
+            if (!namedAskSymbols.some((symbol) => contentUsesNamedSymbol(hit.content ?? "", symbol))) {
+              continue;
+            }
+            seen.add(depPath);
+            dependents.push({
+              path: depPath,
+              depth: 1,
+              source: hitGraphSource,
+              strength: "strong"
+            });
             continue;
           }
-          const hitGraphSource = mapSearchSourceToGraphSource(hit.source ?? resultSource);
+          if (!hitLooksLikeReferenceToTarget(hit, file, symbols, [])) {
+            continue;
+          }
           seen.add(depPath);
           dependents.push({ path: depPath, depth: 1, source: hitGraphSource });
         }
       } catch (error) {
         warnings.push(`Import-pattern search failed for "${pattern}": ${errorMessage(error)}`);
+      }
+    }
+  }
+
+  if (
+    namedAskSymbols.length > 0 &&
+    pendingPathOnly.length > 0 &&
+    options.readRemoteFile &&
+    !options.shouldAbort?.()
+  ) {
+    const known = new Set(
+      (options.knownImporterPaths ?? []).map((path) => path.replace(/\\/g, "/").replace(/^\/+/, ""))
+    );
+    const pathOnlySeen = new Set<string>();
+    const uniquePending: BlastRadiusDependentDetail[] = [];
+    for (const entry of pendingPathOnly) {
+      if (pathOnlySeen.has(entry.path) || seen.has(entry.path)) {
+        continue;
+      }
+      pathOnlySeen.add(entry.path);
+      uniquePending.push(entry);
+    }
+    // Prefer known file importers, then remaining symbol-search path-only rows.
+    const prioritized =
+      known.size > 0
+        ? [
+            ...uniquePending.filter((entry) => known.has(entry.path)),
+            ...uniquePending.filter((entry) => !known.has(entry.path))
+          ]
+        : uniquePending;
+    const verified = await verifyRemoteFilesMentionNamedSymbol(
+      prioritized,
+      namedAskSymbols,
+      options.readRemoteFile,
+      { maxFiles: 16, shouldAbort: options.shouldAbort }
+    );
+    for (const entry of verified) {
+      if (seen.has(entry.path)) {
+        continue;
+      }
+      seen.add(entry.path);
+      dependents.push(entry);
+      if (entry.source === "zoekt" || entry.source === "scip") {
+        bestSource = entry.source;
       }
     }
   }

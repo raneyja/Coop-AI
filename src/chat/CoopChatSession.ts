@@ -182,7 +182,9 @@ import {
   mergeSearchDependentsFallbackIntoDependenciesData,
   resolveNamedBlastSymbols,
   resolveTrustedRemoteDependents,
-  searchDependentsFallback
+  searchDependentsFallback,
+  sortDependentsProductionFirst,
+  verifyRemoteFilesMentionNamedSymbol
 } from "../engines/blastRadiusDependentsFallback";
 import { isFileCallerQuery } from "../context/fileCallerIntent";
 import { isFileHistoryQuery } from "../context/fileHistoryIntent";
@@ -3161,11 +3163,10 @@ export class CoopChatSession {
       file,
       selectedSymbol: request.intent.context?.selectedSymbol ?? this.currentContext.selectedSymbol
     });
+    const target = this.repoTargetForRequest(request);
     let exportSymbols: string[] = [];
     try {
-      const workspace = this.indexedRepoWorkspace();
-      const target = this.repoTargetForRequest(request);
-      const evidence = await workspace.readFile(target, file);
+      const evidence = await this.indexedRepoWorkspace().readFile(target, file);
       if (evidence?.content?.trim()) {
         exportSymbols = extractExportNamesFromSource(evidence.content);
       }
@@ -3188,7 +3189,9 @@ export class CoopChatSession {
         maxPatterns,
         symbols,
         namedAskSymbols: askSymbols,
-        enrichWithSearch: false
+        enrichWithSearch: false,
+        readRemoteFile: (path) => this.readIndexedRepoFileBody(target, path),
+        shouldAbort: () => remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now()) <= 0
       });
     } catch {
       return result;
@@ -3662,6 +3665,19 @@ export class CoopChatSession {
       });
     }
     return this.workspaceFacade;
+  }
+
+  /** Zero-Clone: IndexedRepoWorkspace / codehost only — never workspace disk. */
+  private async readIndexedRepoFileBody(
+    target: RepoTarget,
+    path: string
+  ): Promise<string | undefined> {
+    try {
+      const evidence = await this.indexedRepoWorkspace().readFile(target, path);
+      return evidence?.content?.trim() ? evidence.content : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private repoTargetForRequest(request: ContextFetchRequest): RepoTarget {
@@ -8857,17 +8873,16 @@ export class CoopChatSession {
       file: targetFile,
       selectedSymbol: ctx.selectedSymbol ?? this.currentContext.selectedSymbol
     });
+    const target: RepoTarget = {
+      repoId,
+      owner: ctx.owner ?? this.preferences.owner,
+      repo: ctx.repo ?? this.preferences.repo,
+      branch: ctx.branch ?? this.preferences.branch,
+      provider: ctx.provider ?? this.preferences.defaultCodeHost
+    };
     let exportSymbols: string[] = [];
     try {
-      const workspace = this.indexedRepoWorkspace();
-      const target: RepoTarget = {
-        repoId,
-        owner: ctx.owner ?? this.preferences.owner,
-        repo: ctx.repo ?? this.preferences.repo,
-        branch: ctx.branch ?? this.preferences.branch,
-        provider: ctx.provider ?? this.preferences.defaultCodeHost
-      };
-      const evidence = await workspace.readFile(target, targetFile);
+      const evidence = await this.indexedRepoWorkspace().readFile(target, targetFile);
       if (evidence?.content?.trim()) {
         exportSymbols = extractExportNamesFromSource(evidence.content);
       }
@@ -8875,6 +8890,9 @@ export class CoopChatSession {
       // Soft gather — continue with path-suffix patterns only.
     }
     const symbols = [...new Set([...exportSymbols, ...askSymbols])];
+    const shouldAbort = (): boolean =>
+      remainingContextGatherBudgetMs(turn?.startedAt ?? this.chatTurnStartedAt ?? Date.now()) <= 0;
+    const readRemoteFile = (path: string) => this.readIndexedRepoFileBody(target, path);
 
     // Zero-Clone: durable remote graph first, then Zoekt/SCIP search.
     // Never scan open folders — that fakes a local-repo Blast success.
@@ -8905,26 +8923,36 @@ export class CoopChatSession {
       // Soft gather — continue with remote search.
     }
 
+    const durableList = fallback.dependents;
+    const searchOptions = {
+      maxPatterns,
+      symbols,
+      namedAskSymbols: askSymbols,
+      remoteOnly: true as const,
+      readRemoteFile,
+      knownImporterPaths: durableList.map((entry) => entry.path),
+      shouldAbort
+    };
     if (fallback.dependents.length === 0) {
       try {
-        fallback = await searchDependentsFallback(this.options.indexBackend, repoId, targetFile, {
-          maxPatterns,
-          symbols,
-          namedAskSymbols: askSymbols,
-          remoteOnly: true
-        });
+        fallback = await searchDependentsFallback(
+          this.options.indexBackend,
+          repoId,
+          targetFile,
+          searchOptions
+        );
       } catch {
         return;
       }
     } else {
       // Enrich durable callers with remote search hits; keep durable provenance.
       try {
-        const search = await searchDependentsFallback(this.options.indexBackend, repoId, targetFile, {
-          maxPatterns,
-          symbols,
-          namedAskSymbols: askSymbols,
-          remoteOnly: true
-        });
+        const search = await searchDependentsFallback(
+          this.options.indexBackend,
+          repoId,
+          targetFile,
+          searchOptions
+        );
         fallback.warnings.push(...search.warnings);
         fallback.dependents = mergeDurableWithNamedSymbolSearch(
           fallback.dependents,
@@ -8933,6 +8961,22 @@ export class CoopChatSession {
         );
       } catch {
         // Soft gather — durable edges alone are enough.
+      }
+    }
+    if (askSymbols.length > 0 && durableList.length > 0) {
+      const confirmed = new Set(fallback.dependents.map((entry) => entry.path));
+      const remaining = durableList.filter((entry) => !confirmed.has(entry.path));
+      if (remaining.length > 0) {
+        const extra = await verifyRemoteFilesMentionNamedSymbol(
+          remaining,
+          askSymbols,
+          readRemoteFile,
+          { maxFiles: Math.max(1, 16 - fallback.dependents.length), shouldAbort }
+        );
+        fallback.dependents = sortDependentsProductionFirst([
+          ...fallback.dependents,
+          ...extra
+        ]).slice(0, 30);
       }
     }
 

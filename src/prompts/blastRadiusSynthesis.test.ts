@@ -236,6 +236,22 @@ test("enrichBlastRadiusResponse replaces guessed callers when named-function cal
   assert.doesNotMatch(out, /chatApi/);
 });
 
+test("enrichBlastRadiusResponse does not replace requireAuth callers from stub search", () => {
+  const out = enrichBlastRadiusResponse("Direct impact still ranking.", {
+    file: "src/server/authMiddleware.ts",
+    namedAskSymbols: ["requireAuth"],
+    directDependents: ["src/jobs/jobsApi.ts", "src/server/sso/samlApi.ts"],
+    dependentDetails: [
+      { path: "src/jobs/jobsApi.ts", depth: 1, source: "zoekt", strength: "strong" },
+      { path: "src/server/sso/samlApi.ts", depth: 1, source: "zoekt", strength: "strong" }
+    ],
+    graphMeta: { source: "zoekt" }
+  });
+  assert.doesNotMatch(out, /None confirmed in the index this turn/);
+  assert.match(out, /jobsApi\.ts/);
+  assert.match(out, /samlApi\.ts/);
+});
+
 console.log(`\nblastRadiusSynthesis: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);

@@ -24,8 +24,10 @@ import {
   searchDependentsInLocalRoots,
   sortDependentsProductionFirst,
   splitBlastRadiusDependents,
+  verifyRemoteFilesMentionNamedSymbol,
   type BlastRadiusDependentDetail
 } from "./blastRadiusDependentsFallback";
+import { enrichBlastRadiusResponse } from "../prompts/blastRadiusSynthesis";
 import type { IndexBackend } from "../indexing/indexBackend";
 import type { LocalDependentsResult, LocalSearchResult } from "../indexing/types";
 
@@ -603,6 +605,187 @@ asyncTests.push(
     }
   })()
 );
+
+function stubZoektBackend(
+  hits: Array<{ fileName: string; content?: string }>
+): IndexBackend {
+  return {
+    kind: "cloud",
+    isEnabledForRepo: async () => true,
+    search: async (): Promise<LocalSearchResult> => ({
+      source: "zoekt",
+      hits: hits.map((hit, index) => ({
+        fileName: hit.fileName,
+        lineNumber: index + 1,
+        content: hit.content ?? hit.fileName,
+        score: 1,
+        source: "zoekt"
+      })),
+      symbols: [],
+      stale: false
+    }),
+    dependents: async (): Promise<LocalDependentsResult> => ({
+      file: "src/server/authMiddleware.ts",
+      dependents: [],
+      source: "import-parse"
+    })
+  } as unknown as IndexBackend;
+}
+
+const REQUIRE_AUTH_ASK =
+  "/blast What breaks if we change requireAuth so unauthenticated production requests always 401?";
+
+testAsync(
+  "named requireAuth blast keeps jobsApi when Zoekt snippet contains requireAuth(",
+  async () => {
+    const symbols = extractBlastSearchSymbols(REQUIRE_AUTH_ASK, "src/server/authMiddleware.ts");
+    assert.ok(symbols.includes("requireAuth"));
+    const result = await searchDependentsFallback(
+      stubZoektBackend([
+        {
+          fileName: "src/jobs/jobsApi.ts",
+          content: "if (requireAuth(auth, deps.serverConfig?.requireApiAuth ?? false)) {"
+        },
+        {
+          fileName: "src/server/sso/samlApi.ts",
+          content: "if (!requireAuth(auth, deps.serverConfig.requireApiAuth)) {"
+        },
+        {
+          fileName: "src/server/adminOrgApi.ts",
+          content: 'import { requireInstallAdmin } from "./authMiddleware";'
+        }
+      ]),
+      "github:raneyja/Coop-AI",
+      "src/server/authMiddleware.ts",
+      { namedAskSymbols: ["requireAuth"], remoteOnly: true }
+    );
+    const paths = result.dependents.map((entry) => entry.path);
+    assert.ok(paths.includes("src/jobs/jobsApi.ts"), `expected jobsApi, got ${paths.join(", ")}`);
+    assert.ok(paths.includes("src/server/sso/samlApi.ts"));
+    assert.ok(!paths.includes("src/server/adminOrgApi.ts"));
+    assert.equal(result.dependents.find((entry) => entry.path === "src/jobs/jobsApi.ts")?.strength, "strong");
+
+    const evidence = {
+      file: "src/server/authMiddleware.ts",
+      namedAskSymbols: ["requireAuth"],
+      directDependents: paths,
+      dependentDetails: result.dependents,
+      graphMeta: { source: result.source }
+    };
+    const enriched = enrichBlastRadiusResponse("Direct impact is still being ranked.", evidence);
+    assert.doesNotMatch(enriched, /None confirmed in the index this turn/);
+    assert.match(enriched, /jobsApi\.ts/);
+  }
+);
+
+testAsync("path-only Zoekt requireAuth hits are confirmed via remote file bodies", async () => {
+  const bodies: Record<string, string> = {
+    "src/jobs/jobsApi.ts":
+      'import { requireAuth } from "../server/authMiddleware";\nif (requireAuth(auth, false)) { return; }',
+    "src/server/sso/samlApi.ts":
+      'import { requireAuth } from "../../server/authMiddleware";\nif (!requireAuth(auth, true)) { return; }',
+    "src/server/adminOrgApi.ts":
+      'import { requireInstallAdmin } from "./authMiddleware";\nexport function ready() { return requireInstallAdmin(); }'
+  };
+  const result = await searchDependentsFallback(
+    stubZoektBackend([
+      { fileName: "src/jobs/jobsApi.ts" },
+      { fileName: "src/server/sso/samlApi.ts" },
+      { fileName: "src/server/adminOrgApi.ts" }
+    ]),
+    "github:raneyja/Coop-AI",
+    "src/server/authMiddleware.ts",
+    {
+      namedAskSymbols: ["requireAuth"],
+      remoteOnly: true,
+      knownImporterPaths: Object.keys(bodies),
+      readRemoteFile: async (path) => bodies[path]
+    }
+  );
+  const paths = result.dependents.map((entry) => entry.path);
+  assert.ok(paths.includes("src/jobs/jobsApi.ts"));
+  assert.ok(paths.includes("src/server/sso/samlApi.ts"));
+  assert.ok(!paths.includes("src/server/adminOrgApi.ts"));
+});
+
+testAsync("path-only named-function hits are not callers without a remote body", async () => {
+  const result = await searchDependentsFallback(
+    stubZoektBackend([{ fileName: "src/jobs/jobsApi.ts" }]),
+    "github:raneyja/Coop-AI",
+    "src/server/authMiddleware.ts",
+    { namedAskSymbols: ["requireAuth"], remoteOnly: true }
+  );
+  assert.equal(result.dependents.length, 0);
+});
+
+testAsync(
+  "durable importers that call requireAuth survive when Zoekt snippets are path-only",
+  async () => {
+    const backend = {
+      kind: "cloud" as const,
+      isEnabledForRepo: async () => true,
+      dependents: async (): Promise<LocalDependentsResult> => ({
+        file: "src/server/authMiddleware.ts",
+        dependents: [
+          "src/jobs/jobsApi.ts",
+          "src/server/sso/samlApi.ts",
+          "src/server/adminOrgApi.ts"
+        ],
+        source: "import-parse"
+      }),
+      search: async (): Promise<LocalSearchResult> => ({
+        source: "zoekt",
+        hits: [
+          { fileName: "src/jobs/jobsApi.ts", lineNumber: 1, content: "src/jobs/jobsApi.ts", score: 1, source: "zoekt" },
+          { fileName: "src/server/adminOrgApi.ts", lineNumber: 1, content: "src/server/adminOrgApi.ts", score: 1, source: "zoekt" }
+        ],
+        symbols: [],
+        stale: false
+      })
+    } as unknown as IndexBackend;
+
+    const resolved = await resolveTrustedRemoteDependents(
+      backend,
+      "github:raneyja/Coop-AI",
+      "src/server/authMiddleware.ts",
+      {
+        namedAskSymbols: ["requireAuth"],
+        readRemoteFile: async (path) => {
+          if (path === "src/jobs/jobsApi.ts") {
+            return "if (requireAuth(auth, false)) { return 401; }";
+          }
+          if (path === "src/server/sso/samlApi.ts") {
+            return "if (!requireAuth(auth, true)) { return; }";
+          }
+          return 'import { requireInstallAdmin } from "./authMiddleware";';
+        }
+      }
+    );
+    const paths = resolved.dependents.map((entry) => entry.path);
+    assert.ok(paths.includes("src/jobs/jobsApi.ts"));
+    assert.ok(paths.includes("src/server/sso/samlApi.ts"));
+    assert.ok(!paths.includes("src/server/adminOrgApi.ts"));
+  }
+);
+
+testAsync("verifyRemoteFilesMentionNamedSymbol keeps requireAuth callers only", async () => {
+  const verified = await verifyRemoteFilesMentionNamedSymbol(
+    [
+      { path: "src/jobs/jobsApi.ts", depth: 1, source: "import-parse" },
+      { path: "src/server/adminOrgApi.ts", depth: 1, source: "import-parse" }
+    ],
+    ["requireAuth"],
+    async (path) =>
+      path === "src/jobs/jobsApi.ts"
+        ? "router.use(requireAuth);"
+        : 'import { requireInstallAdmin } from "./authMiddleware";'
+  );
+  assert.deepEqual(
+    verified.map((entry) => entry.path),
+    ["src/jobs/jobsApi.ts"]
+  );
+  assert.equal(verified[0]?.strength, "strong");
+});
 
 void Promise.all(asyncTests).then(() => {
   const total = passed + failed;

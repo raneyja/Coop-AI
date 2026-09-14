@@ -236,7 +236,10 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
     sections.push(
       `- Code dependent details:\n${evidence.dependentDetails
         .slice(0, 12)
-        .map((entry) => `  - ${entry.path} (depth ${entry.depth}, ${entry.source})`)
+        .map((entry) => {
+          const strength = entry.strength ? `, ${entry.strength}` : "";
+          return `  - ${entry.path} (depth ${entry.depth}, ${entry.source}${strength})`;
+        })
         .join("\n")}` + truncationNote(evidence.dependentDetails.length, 12)
     );
   } else if (!evidence.directDependents?.length && !evidence.transitiveDependents?.length) {

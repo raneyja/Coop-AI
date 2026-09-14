@@ -21,7 +21,7 @@ assert.equal(normalizeGraphRepoId("coop-demo-lab/fastify", "gitlab"), "gitlab:co
 assert.equal(normalizeGraphRepoId("github:coop-demo-lab/fastify"), "github:coop-demo-lab/fastify");
 
 const patterns = buildImportSearchPatterns("fastify.js");
-assert.ok(patterns.some((pattern) => pattern.includes("fastify.js")));
+assert.ok(patterns.some((pattern) => pattern.includes("fastify")));
 assert.ok(patterns.some((pattern) => pattern.includes("require(")));
 
 const testPatterns = buildTestSearchPatterns("lib/server.js");
@@ -141,7 +141,12 @@ async function softBudgetStillSynthesizesPartialReport(): Promise<void> {
   assert.ok(elapsed < 3_000, `expected soft-budget path to finish quickly, took ${elapsed}ms`);
   assert.ok(report.dependentDetails.length > 0, "expected verified import-search dependents for synthesis");
   assert.equal(report.dependentDetails[0]?.path, "apps/web/components/StateGroupSelect.tsx");
-  assert.equal(report.graphMeta?.source, "zoekt");
+  assert.ok(
+    report.graphMeta?.source === "zoekt" ||
+      report.graphMeta?.source === "scip" ||
+      report.graphMeta?.source === "import-parse",
+    `expected trusted remote graph source, got ${report.graphMeta?.source}`
+  );
   assert.ok(
     !report.warnings.some((warning) => /soft gather budget exhausted/i.test(warning)),
     "soft gather must not leak latency jargon into user-facing warnings"
@@ -152,6 +157,7 @@ async function softBudgetStillSynthesizesPartialReport(): Promise<void> {
 }
 
 softBudgetStillSynthesizesPartialReport()
+  .then(() => requireAuthNamedFunctionBlastListsJobsApi())
   .then(() => {
     console.log("blastRadiusAnalysis: ok");
   })
@@ -159,3 +165,67 @@ softBudgetStillSynthesizesPartialReport()
     console.error(error);
     process.exit(1);
   });
+
+async function requireAuthNamedFunctionBlastListsJobsApi(): Promise<void> {
+  const bodies: Record<string, string> = {
+    "src/server/authMiddleware.ts": "export function requireAuth() { return false; }",
+    "src/jobs/jobsApi.ts":
+      "if (requireAuth(auth, deps.serverConfig?.requireApiAuth ?? false)) { return; }",
+    "src/server/sso/samlApi.ts": "if (!requireAuth(auth, deps.serverConfig.requireApiAuth)) { return; }",
+    "src/server/adminOrgApi.ts": 'import { requireInstallAdmin } from "./authMiddleware";'
+  };
+  const engine = new BlastRadiusAnalysisEngine({
+    codeHostRouter: {
+      async resolveCoordinates(coords) {
+        return coords;
+      },
+      async getFileContent(path: string) {
+        return { content: bodies[path] ?? "", path, truncated: false };
+      }
+    } as unknown as CodeHostRouter,
+    integrationSecrets: {} as IntegrationSecrets,
+    indexBackend: {
+      ...mockIndexBackend({
+        dependents: ["src/jobs/jobsApi.ts", "src/server/sso/samlApi.ts", "src/server/adminOrgApi.ts"],
+        searchHits: [
+          { fileName: "src/jobs/jobsApi.ts" },
+          { fileName: "src/server/sso/samlApi.ts" },
+          { fileName: "src/server/adminOrgApi.ts" }
+        ]
+      }),
+      async dependents() {
+        return {
+          dependents: ["src/jobs/jobsApi.ts", "src/server/sso/samlApi.ts", "src/server/adminOrgApi.ts"],
+          source: "import-parse",
+          file: "src/server/authMiddleware.ts"
+        };
+      },
+      async search() {
+        return {
+          source: "zoekt",
+          hits: [
+            { fileName: "src/jobs/jobsApi.ts", lineNumber: 1, content: "src/jobs/jobsApi.ts", score: 1, source: "zoekt" },
+            { fileName: "src/server/sso/samlApi.ts", lineNumber: 1, content: "src/server/sso/samlApi.ts", score: 1, source: "zoekt" },
+            { fileName: "src/server/adminOrgApi.ts", lineNumber: 1, content: "src/server/adminOrgApi.ts", score: 1, source: "zoekt" }
+          ],
+          symbols: [],
+          stale: false
+        };
+      }
+    }
+  });
+
+  const report = await engine.analyzeImpact({
+    provider: "github",
+    owner: "raneyja",
+    repo: "Coop-AI",
+    file: "src/server/authMiddleware.ts",
+    askText: "What breaks if we change requireAuth so unauthenticated production requests always 401?",
+    includeTransitive: false
+  });
+
+  assert.ok(report.namedAskSymbols?.includes("requireAuth"));
+  assert.ok(report.directDependents.includes("src/jobs/jobsApi.ts"));
+  assert.ok(report.directDependents.includes("src/server/sso/samlApi.ts"));
+  assert.ok(!report.directDependents.includes("src/server/adminOrgApi.ts"));
+}

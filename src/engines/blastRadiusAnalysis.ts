@@ -15,10 +15,10 @@ import {
   codePathsFromDependentDetails,
   extractExportNamesFromSource,
   resolveNamedBlastSymbols,
-  hitLooksLikeReferenceToTarget,
   isTrustedBlastGraphSource,
   mergeDurableWithNamedSymbolSearch,
   normalizeGraphRepoId,
+  verifyRemoteFilesMentionNamedSymbol,
   searchCiWorkflowReferences,
   searchCrossRepoConsumers,
   searchDependentsFallback,
@@ -225,11 +225,17 @@ export class BlastRadiusAnalysisEngine {
             ...askSymbols
           ];
           const searchSymbols = askSymbols.length > 0 ? askSymbols : [...new Set(symbols)];
+          const readRemoteFile = resolved
+            ? (path: string) => this.readRemoteFileBody(path, resolved)
+            : undefined;
           const fallback = await searchDependentsFallback(this.options.indexBackend, repoId, file, {
             maxPatterns: softBudgetExhausted() ? 4 : askSymbols.length > 0 ? 8 : 12,
             symbols: searchSymbols,
             namedAskSymbols: askSymbols,
-            remoteOnly: true
+            remoteOnly: true,
+            readRemoteFile,
+            knownImporterPaths: directDependents,
+            shouldAbort: softBudgetExhausted
           });
           warnings.push(...fallback.warnings);
           if (durableTrusted) {
@@ -242,14 +248,18 @@ export class BlastRadiusAnalysisEngine {
               fallback.source === "workspace" ? [] : fallback.dependents,
               askSymbols
             );
-            if (askSymbols.length > 0 && ranked.length === 0 && resolved && !softBudgetExhausted()) {
-              ranked = await this.verifyDurableImportersMentionSymbol(
-                durableList,
-                file,
-                askSymbols,
-                resolved,
-                gatherStartedAt
-              );
+            if (askSymbols.length > 0 && readRemoteFile) {
+              const confirmed = new Set(ranked.map((entry) => entry.path));
+              const remaining = durableList.filter((entry) => !confirmed.has(entry.path));
+              if (remaining.length > 0) {
+                const extra = await verifyRemoteFilesMentionNamedSymbol(
+                  remaining,
+                  askSymbols,
+                  readRemoteFile,
+                  { maxFiles: Math.max(1, 16 - ranked.length), shouldAbort: softBudgetExhausted }
+                );
+                ranked = sortDependentsProductionFirst([...ranked, ...extra]).slice(0, 30);
+              }
             }
             directDependents = ranked.map((entry) => entry.path);
             dependentDetails = ranked;
@@ -476,50 +486,26 @@ export class BlastRadiusAnalysisEngine {
     return { paths: transitive, details };
   }
 
-  /**
-   * When Zoekt snippets are path-only, named-symbol search returns empty and
-   * we must not list every file importer. Read importer bodies (remote) and
-   * keep files that actually mention the asked function.
-   */
-  private async verifyDurableImportersMentionSymbol(
-    durable: BlastRadiusDependentDetail[],
-    targetFile: string,
-    namedAskSymbols: string[],
-    resolved: RepoCoordinates,
-    gatherStartedAt: number
-  ): Promise<BlastRadiusDependentDetail[]> {
-    const kept: BlastRadiusDependentDetail[] = [];
-    const candidates = sortDependentsProductionFirst(durable).slice(0, 16);
-    for (const entry of candidates) {
-      if (remainingContextGatherBudgetMs(gatherStartedAt) <= 0) {
-        break;
-      }
-      try {
-        const fileContent = await this.options.codeHostRouter.getFileContent(entry.path, {
-          provider: resolved.provider,
-          owner: resolved.owner,
-          repo: resolved.repo,
-          branch: resolved.branch
-        });
-        const text =
-          fileContent.content?.trim() ||
-          fileContent.lines?.map((line) => line.text).join("\n") ||
-          "";
-        if (
-          hitLooksLikeReferenceToTarget(
-            { fileName: entry.path, content: text },
-            targetFile,
-            namedAskSymbols,
-            namedAskSymbols
-          )
-        ) {
-          kept.push(entry);
-        }
-      } catch {
-        continue;
-      }
+  /** Zero-Clone: codehost file body only — never workspace disk. */
+  private async readRemoteFileBody(
+    path: string,
+    resolved: RepoCoordinates
+  ): Promise<string | undefined> {
+    try {
+      const fileContent = await this.options.codeHostRouter.getFileContent(path, {
+        provider: resolved.provider,
+        owner: resolved.owner,
+        repo: resolved.repo,
+        branch: resolved.branch
+      });
+      const text =
+        fileContent.content?.trim() ||
+        fileContent.lines?.map((line) => line.text).join("\n") ||
+        "";
+      return text.trim() ? text : undefined;
+    } catch {
+      return undefined;
     }
-    return kept;
   }
 
   private async resolveOwners(
