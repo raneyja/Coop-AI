@@ -12,12 +12,16 @@ import {
   enrichIncidentReconstructionResponse,
   incidentIntegrationsFromBundle
 } from "../../prompts/incidentReconstruction";
+import { extraTermsForIntegration } from "./planChatJobs";
+import { shouldRunAgentToolLoop } from "../agentRouting";
 import { systemPromptForUseCase } from "../../prompts/systemPrompts";
 
 const N5_COMPOUND_ASK =
   "Pager: Where is date math implemented — DateTimeUtils, reports.jsp — and did we already decide not to mix this into the SQL-injection PR?";
 const A9_ASK =
   "Last week’s webhook delivery failures — what Jira tickets and Slack threads are related, which code paths handle retries/monitoring, and what’s still open?";
+const I4_TICKET_PICKUP_ASK =
+  "I'm covering COOP-101 this week — peel auth into coop-backend. What in this repo still owns requireAuth, and what's the safest first extraction so we don't break every VS Code session?";
 
 test("N5 plans locate+decision, selects intent-job contract, and stays evidence-safe", () => {
   const plan = planChatIntentFromRules({
@@ -202,4 +206,73 @@ test("A9 plans through one incident route and enriches only attached evidence", 
 
   const noCode = enrichIncidentReconstructionResponse("**Answer**\nOutage reported.", integrations);
   assert.doesNotMatch(noCode, /See attached file and code evidence|concrete code body attached/);
+});
+
+test("I4 ticket pickup plans locate+decision, not incident reconstruction", () => {
+  const plan = planChatIntentFromRules({
+    message: I4_TICKET_PICKUP_ASK,
+    connectedTools: ["jira", "slack"]
+  });
+  const capabilities = (plan.jobs ?? []).map((job) => job.capability);
+  assert.ok(capabilities.includes("locate"));
+  assert.ok(capabilities.includes("decision"));
+  assert.equal(plan.codeIntent?.action, "locate");
+
+  const route = resolvePlainChatSynthesisRoute({
+    userQuestion: I4_TICKET_PICKUP_ASK,
+    fetchIntegrations: plan.tools,
+    intentPlan: plan
+  });
+  assert.equal(route.kind, "intent-job");
+  assert.notEqual(route.kind, "incident");
+
+  const jiraTerms = (extraTermsForIntegration(plan.jobs, "jira") ?? []).map((term) =>
+    term.toLowerCase()
+  );
+  assert.ok(
+    jiraTerms.some((term) => /coop-101/i.test(term)),
+    `jira terms: ${jiraTerms.join("|")}`
+  );
+  assert.ok(
+    jiraTerms.some((term) => /peel|auth|coop-backend/i.test(term)),
+    `jira terms: ${jiraTerms.join("|")}`
+  );
+  assert.equal(
+    jiraTerms.some(
+      (term) =>
+        term.includes("this week") ||
+        term.includes("covering") ||
+        term.split(/\s+/).length > 8
+    ),
+    false,
+    `jira terms leaked the user sentence: ${jiraTerms.join("|")}`
+  );
+
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query: I4_TICKET_PICKUP_ASK,
+      hasQuickAction: false,
+      intentPlan: plan
+    }),
+    true
+  );
+
+  const systemPrompt = systemPromptForUseCase(route.useCase);
+  assert.doesNotMatch(systemPrompt, /Required response structure \(incident/);
+  assert.match(systemPrompt, /No mention in Slack of peel-auth \/ COOP-101/);
+
+  const userPrompt = buildMultiToolPlainChatUserPrompt({
+    userQuestion: I4_TICKET_PICKUP_ASK,
+    tools: ["jira", "slack"],
+    jobs: plan.jobs,
+    integrations: {
+      jira: { issues: [{ key: "COOP-101", summary: "Peel auth into coop-backend" }] },
+      slack: { messages: [] }
+    },
+    connected: { jira: true, slack: true }
+  });
+  assert.doesNotMatch(userPrompt, /Symptoms|Code paths|incident \/ on-call/);
+  assert.match(userPrompt, /No mention in Slack of /);
+  assert.doesNotMatch(userPrompt, /Slack search returned zero hits/i);
+  assert.doesNotMatch(userPrompt, /index is stale|If you want I can run/);
 });

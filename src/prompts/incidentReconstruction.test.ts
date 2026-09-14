@@ -33,7 +33,7 @@ test("connected empty Jira/Slack says searched + empty (not 'no incident')", () 
   const slack = resolveIncidentIntegrationStatus("slack", { messages: [] }, true);
   assert.equal(jira.state, "empty");
   assert.equal(slack.state, "empty");
-  assert.ok(jira.detail.includes("Searched Jira"));
+  assert.ok(jira.detail.includes("No matching Jira"));
   assert.ok(jira.detail.includes("Empty search"));
   assert.ok(!/no incident existed/i.test(jira.detail) || /≠|not/.test(jira.detail));
 });
@@ -79,8 +79,8 @@ Found retry helpers in webhook_task.py.
   assert.ok(enriched.includes(`**${INCIDENT_SECTION_CODE_PATHS}**`));
   assert.ok(enriched.includes(`**${INCIDENT_SECTION_INTEGRATIONS}**`));
   assert.ok(enriched.includes(`**${INCIDENT_SECTION_GAPS}**`));
-  assert.ok(/Searched Jira/i.test(enriched));
-  assert.ok(/Searched Slack/i.test(enriched));
+  assert.ok(/No matching Jira/i.test(enriched));
+  assert.ok(/No matching Slack/i.test(enriched));
   assert.ok(/Empty search|no matching/i.test(enriched));
   assert.ok(!/no incident happened/i.test(enriched));
 
@@ -113,8 +113,8 @@ Retries in webhookRegistry.
 `;
   const enriched = enrichIncidentReconstructionResponse(withTicketsOnly, integrations);
   assert.ok(enriched.includes(`**${INCIDENT_SECTION_INTEGRATIONS}**`));
-  assert.ok(/Searched Jira/i.test(enriched));
-  assert.ok(/Searched Slack/i.test(enriched));
+  assert.ok(/No matching Jira/i.test(enriched));
+  assert.ok(/No matching Slack/i.test(enriched));
 });
 
 test("not connected still delivers gap section language", () => {

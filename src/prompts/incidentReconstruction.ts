@@ -125,13 +125,13 @@ export function resolveIncidentIntegrationStatus(
     return {
       state: "hits",
       count,
-      detail: `${label}: ${count} ${unit} in the attached search sample.`
+      detail: `${label}: ${count} ${unit}.`
     };
   }
 
   return {
     state: "empty",
-    detail: `Searched ${label}; no matching tickets/threads in the attached sample. Empty search ≠ proof that no incident existed — check other channels, time range, or keys.`
+    detail: `No matching ${label} tickets or threads for this incident. Empty search ≠ proof that no incident existed — check other channels, time range, or keys.`
   };
 }
 
@@ -211,6 +211,7 @@ export function appendIncidentReconstructionContract(
   lines.push("");
   lines.push("**Next steps**");
   lines.push("Actionable code + ops checks (logs, requeue, feature flags, owners) even when integrations are empty.");
+  lines.push("Never tell the user to reindex, run an indexed search, or operate Coop. Do not emit “If you want I can”, “evidence bundle”, or search-query dumps.");
   lines.push("");
 }
 

@@ -29,7 +29,26 @@ const STRONG_INCIDENT_RE =
 
 /** Failure / retry / webhook storm signals (often paired with time or ops context). */
 const FAILURE_SIGNAL_RE =
-  /\b(failing|failures?|failed|retries?|retry\s+storm|webhook\s+fail|board\s+sync|sync\s+fail|errors?\s+last|last\s+week|past\s+week|this\s+week|stuck\s+(?:after|on|in|during)|keeps?\s+retrying|retrying|timed?\s*out|timeouts?)\b/;
+  /\b(failing|failures?|failed|retries?|retry\s+storm|webhook\s+fail|board\s+sync|sync\s+fail|errors?\s+last|stuck\s+(?:after|on|in|during)|keeps?\s+retrying|retrying|timed?\s*out|timeouts?)\b/;
+
+/** Ticket key like COOP-101 — not UTF-8 / RFC-9110 style tokens. */
+const TICKET_KEY_RE = /\b[A-Za-z][A-Za-z0-9]{1,9}-\d+\b/;
+
+/** camelCase / PascalCase / snake_case identifier the user named (requireAuth). */
+const NAMED_SYMBOL_RE =
+  /\b(?:[a-z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]*|[A-Z][a-z0-9]+[A-Z][a-zA-Z0-9]*|[a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/;
+
+/**
+ * Ticket pickup: a Jira key plus a named symbol. That is locate + decision,
+ * never incident reconstruction — even if the ask also says "this week".
+ */
+export function isTicketPickupLocateQuery(queryText: string | undefined): boolean {
+  const raw = queryText?.trim() ?? "";
+  if (!raw) {
+    return false;
+  }
+  return TICKET_KEY_RE.test(raw) && NAMED_SYMBOL_RE.test(raw);
+}
 
 /**
  * Status-machine / transition questions — A8 territory.
@@ -77,6 +96,10 @@ function hasFailureSignal(q: string): boolean {
  * Prefers clear outage/failure heuristics over status-machine questions.
  */
 export function isIncidentShapedQuery(queryText: string | undefined): boolean {
+  if (isTicketPickupLocateQuery(queryText)) {
+    return false;
+  }
+
   const normalized = normalize(queryText);
   const q = normalized.replace(LEADING_OPERATIONAL_LABEL_RE, "").trim();
   if (!q) {

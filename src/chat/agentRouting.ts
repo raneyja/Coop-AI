@@ -1,5 +1,6 @@
 import type { ChatIntentPlan } from "./intentPlanner/types";
 import { jobsSkipAgentLoop } from "./intentPlanner/planChatJobs";
+import { isTicketPickupLocateQuery } from "../context/incidentIntent";
 import { isFileCallerQuery } from "../context/fileCallerIntent";
 import { isFileHistoryQuery } from "../context/fileHistoryIntent";
 import { classifyRepoCodeIntent, isNonCodeHowWhyAsk, needsRepoCode, type RepoCodeAction } from "./repoCodeIntent";
@@ -88,8 +89,9 @@ export function plannerAllowsAgentRepoLoop(
   if (plan.mode === "plain" || plan.mode === "run-workflow" || plan.mode === "suggest-chips") {
     return false;
   }
-  if (jobsSkipAgentLoop(plan.jobs)) {
+  if (jobsSkipAgentLoop(plan.jobs) && !isTicketPickupLocateQuery(query)) {
     // Compound locate+decision/docs: prefetch jobs, then one writer — not a second wander loop.
+    // Ticket pickup still hunts so a named symbol (requireAuth) is not skipped.
     return false;
   }
   if (plan.mode === "tools-only") {

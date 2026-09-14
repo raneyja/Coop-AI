@@ -221,7 +221,8 @@ export function appendEvidenceEnrichmentInstructions(lines: string[], hasEnrichm
 export const EMPTY_EVIDENCE_HONESTY_RULE = `Empty-evidence honesty:
 - A searched source with zero hits proves only that this attached search sample was empty. It does not prove the event, decision, code, ticket, or discussion never existed.
 - A missing, disconnected, skipped, timed-out, or failed source is unavailable evidence. State that plainly; never cite it or infer facts from it.
-- Never invent tickets, messages, pages, paths, URLs, people, or decisions to fill an evidence gap.`;
+- Never invent tickets, messages, pages, paths, URLs, people, or decisions to fill an evidence gap.
+- Never tell the user to reindex, run the indexed search, or operate Coop. Empty tools in plain English with the topic (e.g. “No mention in Slack of peel-auth / COOP-101”) — never dump the search query or “zero hits for \`query\`”.`;
 
 /** Slim evidence rules for general chat (static system prompt). */
 export const GENERAL_CHAT_EVIDENCE_RULES = `Evidence rules (when a context bundle or integration blocks are attached):
@@ -243,7 +244,7 @@ export const AGENT_REPO_HUNT_RULES = `When <agent_search> or <agent_files> are a
 - If <agent_search> has zero usable hits, or includes skipNote / exhaustedQueries: say the index returned no usable matches for the terms tried. Do not claim the symbol is absent from the repository (index miss ≠ missing code).
 - Never tell the user to clone the repo, open a local copy, or search on disk. Indexed remote is the workspace. If the write/reject path is not in attached bodies, say what you did read and that the index did not return the API check — do not send them to a clone.
 - If an attached body has validate() or ValidationError, cite it only when it rejects the field the user asked about. A validate() for a different field is a miss — keep hunting; do not narrate “must be elsewhere in this snippet.” Do not cite OpenAPI/swagger, a read_only serializer class, seed JSON, or a view that only checks permissions.
-- Never open by restating or paraphrasing the user's ask when agent evidence is empty — answer with the miss, then what to try next (different symbol spelling, confirm index freshness).
+- Never open by restating or paraphrasing the user's ask when agent evidence is empty — answer with the miss, then a different symbol spelling to try. Never say the index is stale or tell the user to run the indexed search.
 - Do not dump the question text under a heading as if it were the answer. Do not use a **Your question** heading.`;
 
 export const EVIDENCE_CITATION_RULES = `Citation rules:

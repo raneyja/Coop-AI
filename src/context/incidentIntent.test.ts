@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import {
   isIncidentShapedQuery,
   isStatusTransitionIntent,
+  isTicketPickupLocateQuery,
   shouldFetchIncidentIntegrations
 } from "./incidentIntent";
+
+const I4_TICKET_PICKUP_ASK =
+  "I'm covering COOP-101 this week — peel auth into coop-backend. What in this repo still owns requireAuth, and what's the safest first extraction so we don't break every VS Code session?";
 
 let passed = 0;
 let failed = 0;
@@ -89,6 +93,20 @@ test("status-transition + strong incident signal still counts as incident", () =
 test("stuck alone without ops co-signal is not incident", () => {
   assert.equal(isIncidentShapedQuery("why is this UI stuck?"), false);
   assert.equal(isIncidentShapedQuery("stuck after webhook retry storm"), true);
+});
+
+test("bare week phrases are not incident; failure words still are", () => {
+  assert.equal(isIncidentShapedQuery("I'm covering COOP-101 this week"), false);
+  assert.equal(isIncidentShapedQuery("what happened last week"), false);
+  assert.equal(isIncidentShapedQuery("standup notes from the past week"), false);
+  assert.equal(isIncidentShapedQuery("errors last week"), true);
+  assert.equal(isIncidentShapedQuery("webhook failures last week"), true);
+});
+
+test("I4 ticket pickup ask is not incident-shaped", () => {
+  assert.equal(isIncidentShapedQuery(I4_TICKET_PICKUP_ASK), false);
+  assert.equal(isTicketPickupLocateQuery(I4_TICKET_PICKUP_ASK), true);
+  assert.equal(shouldFetchIncidentIntegrations(I4_TICKET_PICKUP_ASK), false);
 });
 
 const total = passed + failed;

@@ -1,5 +1,5 @@
 import type { UseCase } from "../api/types";
-import { isIncidentShapedQuery } from "../context/incidentIntent";
+import { isIncidentShapedQuery, isTicketPickupLocateQuery } from "../context/incidentIntent";
 import type { IntegrationChatProvider } from "./types";
 import type { ChatIntentPlan } from "./intentPlanner";
 
@@ -22,7 +22,8 @@ export function resolvePlainChatSynthesisRoute(input: {
   fetchIntegrations?: IntegrationChatProvider[];
   intentPlan?: ChatIntentPlan;
 }): PlainChatSynthesisRoute {
-  if (isIncidentShapedQuery(input.userQuestion)) {
+  // Ticket pickup (Jira key + named symbol) is locate+decision, never incident.
+  if (isIncidentShapedQuery(input.userQuestion) && !isTicketPickupLocateQuery(input.userQuestion)) {
     return { kind: "incident", useCase: "chat" };
   }
 

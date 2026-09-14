@@ -534,9 +534,10 @@ function extractJobTerms(
     }
   }
 
-  for (const match of cleaned.matchAll(/"([^"]+)"|'([^']+)'|`([^`]+)`/g)) {
+  for (const match of cleaned.matchAll(/"([^"]{1,80})"|`([^`]{1,80})`|(?<![A-Za-z0-9])'([^'\n]{1,64})'(?![A-Za-z])/g)) {
     const quoted = (match[1] ?? match[2] ?? match[3] ?? "").trim();
-    if (quoted) {
+    // Contractions ("I'm", "what's") are not quoted search terms; neither is a whole sentence.
+    if (quoted && quoted.split(/\s+/).length <= 6 && !/[?.!]/.test(quoted)) {
       terms.push(quoted);
     }
   }

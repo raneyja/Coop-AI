@@ -32,6 +32,10 @@ const CASES: Case[] = [
     q: "I'm picking up COOP-101 — peel auth into coop-backend. What in this repo still owns requireAuth / request auth, and what's the safest first extraction boundary so we don't break every VS Code session?",
     expect: "locate"
   },
+  {
+    q: "I'm covering COOP-101 this week — peel auth into coop-backend. What in this repo still owns requireAuth, and what's the safest first extraction so we don't break every VS Code session?",
+    expect: "locate"
+  },
   { q: "What in this repo still owns requireAuth?", expect: "locate" },
   {
     q: "I need to fix SQL injection in the customer pages. What files should I read first? Don't invent helpers.",

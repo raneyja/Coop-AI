@@ -46,8 +46,8 @@ Retry helpers exist in webhook_task.py.
   assert.ok(enriched.includes("**Code paths**"));
   assert.ok(enriched.includes("**Integrations**"));
   assert.ok(enriched.includes("**Gaps**"));
-  assert.ok(/Searched Jira/i.test(enriched));
-  assert.ok(/Searched Slack/i.test(enriched));
+  assert.ok(/No matching Jira/i.test(enriched));
+  assert.ok(/No matching Slack/i.test(enriched));
 });
 
 test("incident reconstruction with disconnected tools still has gaps", () => {

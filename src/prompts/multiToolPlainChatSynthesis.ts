@@ -43,10 +43,20 @@ const TOOL_TITLE: Record<IntegrationChatProvider, string> = {
   "google-docs": "Google Docs"
 };
 
+function topicPhrase(jobs: ChatIntentJob[] | undefined): string {
+  const decision = (jobs ?? [])
+    .filter((job) => job.capability === "decision")
+    .flatMap((job) => job.terms);
+  const fallback = (jobs ?? []).flatMap((job) => job.terms);
+  const terms = [...new Set((decision.length > 0 ? decision : fallback).map((term) => term.trim()).filter(Boolean))];
+  return terms.slice(0, 4).join(" / ");
+}
+
 function hitSummary(
   provider: IntegrationChatProvider,
   evidence: IntegrationSearchEvidenceLike | null | undefined,
-  connected?: boolean
+  connected?: boolean,
+  jobs?: ChatIntentJob[]
 ): string {
   const label = TOOL_TITLE[provider];
   if (!evidence) {
@@ -79,6 +89,10 @@ function hitSummary(
     parts.push(`${docs} doc(s)`);
   }
   if (parts.length === 0) {
+    const topic = topicPhrase(jobs);
+    if (topic) {
+      return `No mention in ${label} of ${topic}`;
+    }
     return `${label}: searched — no hits.`;
   }
   return `${label}: ${parts.join(", ")}.`;
@@ -153,7 +167,7 @@ export function buildMultiToolPlainChatUserPrompt(input: MultiToolPlainChatInput
     input.owner && input.repo ? `${input.owner}/${input.repo}` : "the active repository";
   const file = input.file?.trim();
   const summaryLines = input.tools.map((tool) =>
-    hitSummary(tool, input.integrations[tool], input.connected?.[tool])
+    hitSummary(tool, input.integrations[tool], input.connected?.[tool], input.jobs)
   );
 
   const evidenceSections = input.tools
@@ -169,6 +183,7 @@ export function buildMultiToolPlainChatUserPrompt(input: MultiToolPlainChatInput
     "Locate claims require attached remote code bodies; path-only hits are leads, not implementation proof.",
     "Decision claims require the integration evidence below; code alone does not prove a prior decision.",
     "Do not pretend a tool was searched when the snapshot says it was skipped or disconnected.",
+    "Never tell the user to operate Coop (reindex, run the indexed search, “If you want I can”). Empty Slack/Jira: plain English with the topic terms — “No mention in Slack of peel-auth / COOP-101” — never dump the search query or “zero hits for `query`”.",
     "",
     `Repository: ${repo}`,
     file ? `Active file: ${file}` : undefined,
@@ -232,7 +247,7 @@ export function enrichIntentJobResponse(
       lines.push(
         "",
         "**Decision evidence**",
-        ...input.tools.map((tool) => `- ${hitSummary(tool, input.integrations[tool])}`)
+        ...input.tools.map((tool) => `- ${hitSummary(tool, input.integrations[tool], undefined, input.jobs)}`)
       );
     }
     lines.push(
@@ -255,19 +270,21 @@ export function enrichIntentJobResponse(
   );
   const withoutLocalActionSections = stripLocalActionSections(content);
 
-  return stripTemplateSectionHeadings(
-    withoutLocalActionSections
-      .split("\n")
-      .filter((line) => ![...unavailable].some((label) => line.includes(label)))
-      .filter(
-        (line) =>
-          !/\b(?:clone (?:the|this) repo(?:sitory)?|git grep|find in path|open (?:a|the) local copy)\b/i.test(
-            line
-          )
-      )
-      .filter((line) => !/^\s*(?:[-*]\s*)?(?:rg|grep)\s+/i.test(line))
-      .filter((line) => !lineHasUnsupportedRepoPath(line, allowedPaths))
-      .join("\n")
+  return stripPipelineJargon(
+    stripTemplateSectionHeadings(
+      withoutLocalActionSections
+        .split("\n")
+        .filter((line) => ![...unavailable].some((label) => line.includes(label)))
+        .filter(
+          (line) =>
+            !/\b(?:clone (?:the|this) repo(?:sitory)?|git grep|find in path|open (?:a|the) local copy)\b/i.test(
+              line
+            )
+        )
+        .filter((line) => !/^\s*(?:[-*]\s*)?(?:rg|grep)\s+/i.test(line))
+        .filter((line) => !lineHasUnsupportedRepoPath(line, allowedPaths))
+        .join("\n")
+    )
   );
 }
 
@@ -304,6 +321,20 @@ function isLikelySourcePath(path: string): boolean {
   return /\.(?:[cm]?[jt]sx?|java|kt|kts|scala|go|rs|py|rb|php|cs|fs|fsx|swift|m|mm|cc|cpp|cxx|h|hpp|sql|jsp|vue|svelte)$/i.test(
     path
   );
+}
+
+function stripPipelineJargon(content: string): string {
+  return content
+    .split("\n")
+    .filter(
+      (line) =>
+        !/\bevidence bundle\b/i.test(line) &&
+        !/\bindex is stale\b/i.test(line) &&
+        !/\brun the indexed search\b/i.test(line) &&
+        !/\bzero hits for\s*`/i.test(line) &&
+        !/\d+\s+issue\(s\) in the attached search sample\b/i.test(line)
+    )
+    .join("\n");
 }
 
 function stripLocalActionSections(content: string): string {

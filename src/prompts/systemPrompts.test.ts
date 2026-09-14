@@ -35,6 +35,11 @@ test("chat use case includes audience and output contract", () => {
   assert.ok(prompt.includes("FAIL: literal placeholders"));
   assert.ok(prompt.includes("one **subsection title** per item"));
   assert.ok(prompt.includes("## Required response structure"));
+  assert.ok(prompt.includes("evidence bundle"));
+  assert.ok(prompt.includes("index is stale"));
+  assert.ok(prompt.includes("If you want I can"));
+  assert.ok(prompt.includes("zero hits for"));
+  assert.ok(prompt.includes("No mention in Slack of peel-auth / COOP-101"));
 });
 
 test("chat use case asks for right-sized dense answers that still finish", () => {

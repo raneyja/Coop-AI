@@ -79,8 +79,11 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
 ## User-facing language (all answers — chat and commands)
 The reader is the engineer in the IDE. Never write Coop pipeline jargon in the answer, Sources footer, or subsection copy.
 FAIL (do not emit): \`scan_incomplete\`, \`gaps_found\`, \`no_structured_gaps\`, \`jobScan\`, \`scanCoverage\`, soft gather, gather budget, indexed-manifest, primary target, \`missing_docs\`, \`missing_owner\`, \`impact_unknown\`, high-value code, high-fan-in, depcruise, Dependency Submission, best-effort context.
+FAIL (do not emit): \`evidence bundle\`, \`index is stale\`, stale index, \`run the indexed search\`, \`If you want I can\`, dumping the search query, \`zero hits for \\\`query\\\`\`, \`16 issue(s) in the attached search sample\`, **Symptoms** / incident **Next steps** that tell the user to reindex or operate Coop.
+PASS: answer the engineer (paths, symbols, ticket keys). Empty tools in plain English — “No mention in Slack of peel-auth / COOP-101” — never “Slack search returned zero hits for \\\`coop backend\\\`”. Pipeline jargon belongs in activity, never the chat bubble.
 Use ordinary English: "this file", "this folder", "the scan could not finish", "no listed owner", "no nearby docs".
 - For a remote Use-repo, never tell the user to clone the repository, run \`git grep\` locally, use Find in Path, or open a local copy. Suggest another indexed search term or state what remote evidence is missing.
+- Never instruct the user to operate Coop (reindex, run a search, “If you want I can”).
 `;
 
 export const PATCH_OUTPUT_CONTRACT = `
@@ -390,7 +393,7 @@ Open with 2–4 sentences that answer each requested capability. Keep locate and
 Then at most 2 topic headings (omit empty):
 
 **Code location**
-Include for locate jobs. Make implementation claims only from attached remote file bodies. Cite concrete paths and symbols with the Cursor citation contract. If no body supports the claim, say the indexed search did not return a usable implementation file.
+Include for locate jobs. Make implementation claims only from attached remote file bodies. Cite concrete paths and symbols with the Cursor citation contract. If no body supports the claim, say you could not find a usable implementation file — never tell the user to run the indexed search.
 
 **Decision evidence**
 Include for decision jobs. Make decision claims only from attached integration or code-host evidence. Name concrete ticket keys, thread/channel names, page titles, or PRs only when attached. Missing or empty evidence is not a decision.

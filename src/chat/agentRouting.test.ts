@@ -356,10 +356,14 @@ test("open-file feature-add skips the agent hunt so A10 can read the chip file",
 
 test("ticket pickup with requireAuth and Jira still runs the hunt (3b)", () => {
   const query =
-    "I'm picking up COOP-101 — peel auth into coop-backend. What in this repo still owns requireAuth / request auth, and what's the safest first extraction boundary so we don't break every VS Code session?";
+    "I'm covering COOP-101 this week — peel auth into coop-backend. What in this repo still owns requireAuth, and what's the safest first extraction so we don't break every VS Code session?";
   const plan: ChatIntentPlan = {
     mode: "tools-only",
     tools: ["jira"],
+    jobs: [
+      { capability: "locate", terms: ["requireAuth"] },
+      { capability: "decision", terms: ["COOP-101", "peel-auth"] }
+    ],
     confidence: "high",
     focus: query,
     execution: "none",
