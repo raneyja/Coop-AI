@@ -41,13 +41,11 @@ export function detectExplicitlyNamedTools(message: string): IntegrationChatProv
   );
 }
 
+/** Decision phrasing searches discussion + tickets — not docs unless named or a docs job. */
 export const DECISION_JOB_PROVIDERS: readonly IntegrationChatProvider[] = [
   "slack",
   "teams",
-  "jira",
-  "confluence",
-  "notion",
-  "google-docs"
+  "jira"
 ];
 export const DOCS_JOB_PROVIDERS: readonly IntegrationChatProvider[] = [
   "confluence",
@@ -91,6 +89,12 @@ const WHERE_IS_PHRASE =
   /\bwhere\s+is\s+(.+?)(?:\s+implemented|\s+defined|\s+located|\s+enforced|$)/i;
 
 const MIX_PHRASES = [/\bdon(?:'t|’t)\s+mix\b/i, /\bnot\s+to\s+mix\b/i, /\bdo\s+not\s+mix\b/i];
+
+const PEEL_AUTH = /\bpeel(?:ing)?\s+auth(?:entication)?\b/i;
+
+const ISSUE_KEY = /\b[A-Z][A-Z0-9]+-\d+\b/g;
+
+const ABOUT_TOPIC = /\babout\s+(.+?)(?:\?|$)/i;
 
 const CLAUSE_SPLIT =
   /\s*(?:,\s+and\s+|;\s+(?:and\s+)?|[—–]\s+(?:and\s+)?(?=(?:did|what|where)\b)|\s+and\s+(?=(?:did\b|what\s+(?:did|does)\b|where\s+did\b)))\s*/i;
@@ -163,12 +167,26 @@ export function decisionPhrasePresent(message: string): boolean {
 /**
  * True when jobs should skip the LLM tool-wander loop: integrations/docs/code-host
  * run on prefetch, then one writer. Locate-only still uses today's agent hunt.
+ * Compound locate+decision still prefetches locate (see jobsGuaranteeLocatePrefetch).
  */
 export function jobsSkipAgentLoop(jobs: ChatIntentJob[] | undefined): boolean {
   return (jobs ?? []).some(
     (job) =>
       job.capability === "decision" || job.capability === "docs" || job.capability === "code-host"
   );
+}
+
+/**
+ * Start Slack/Jira prefetch in parallel with the base fetch only when there is
+ * no locate job. Locate must run first (or with a reserved budget), never after
+ * five sequential doc searches have exhausted the gather window.
+ */
+export function shouldOverlapIntegrationPrefetch(jobs: ChatIntentJob[] | undefined): boolean {
+  const list = jobs ?? [];
+  if (list.length === 0) {
+    return false;
+  }
+  return locateJobTerms(list).length === 0;
 }
 
 export function locateJobTerms(jobs: ChatIntentJob[] | undefined): string[] {
@@ -254,8 +272,10 @@ export function codeHostJobVerb(jobs: ChatIntentJob[] | undefined): ChatIntentJo
 /**
  * Tools implied by jobs. Named tools are a floor (always kept).
  * Implied decision (phrasing, not merely naming Slack) adds Slack + Jira,
- * plus Teams / Confluence when connected. Docs/discussion siblings stay on
- * shared lists — never a GitHub-only or Slack-only fork.
+ * plus Teams when connected and not coming-soon. Do not auto-attach
+ * Confluence / Notion / Google Docs unless the user named them or a docs job
+ * exists. Docs/discussion siblings stay on shared lists — never a GitHub-only
+ * or Slack-only fork.
  */
 export function toolsImpliedByJobs(options: {
   jobs: ChatIntentJob[];
@@ -269,15 +289,6 @@ export function toolsImpliedByJobs(options: {
     tools.add("jira");
     if (!isTeamsComingSoon() && options.connectedTools.includes("teams")) {
       tools.add("teams");
-    }
-    if (options.connectedTools.includes("confluence")) {
-      tools.add("confluence");
-    }
-    if (options.connectedTools.includes("notion")) {
-      tools.add("notion");
-    }
-    if (options.connectedTools.includes("google-docs")) {
-      tools.add("google-docs");
     }
   }
   const hasDocsJob = options.jobs.some((job) => job.capability === "docs");
@@ -480,6 +491,7 @@ export function planChatJobs(input: PlanChatJobsInput): ChatIntentJob[] {
     );
   }
 
+  dropLocateTermsFromDecision(jobs);
   return jobs.filter((job) => job.verb === "latest" || job.terms.length > 0);
 }
 
@@ -563,6 +575,11 @@ function extractJobTerms(
     terms.push(match[0]);
   }
 
+  ISSUE_KEY.lastIndex = 0;
+  for (const match of cleaned.matchAll(ISSUE_KEY)) {
+    terms.push(match[0].toUpperCase());
+  }
+
   if (capability === "locate") {
     const whereIs = cleaned.match(WHERE_IS_PHRASE);
     if (whereIs?.[1]) {
@@ -582,6 +599,23 @@ function extractJobTerms(
       const hit = cleaned.match(pattern);
       if (hit) {
         terms.push(hit[0].replace(/’/g, "'").toLowerCase());
+      }
+    }
+    const peel = cleaned.match(PEEL_AUTH);
+    if (peel?.[0]) {
+      terms.push(peel[0].toLowerCase().replace(/\s+/g, " "));
+    }
+    const hasDistinctiveTopic = terms.some(
+      (term) =>
+        PEEL_AUTH.test(term) ||
+        /^[A-Z][A-Z0-9]+-\d+$/.test(term) ||
+        /[a-z0-9]+-[a-z0-9-]+/i.test(term)
+    );
+    if (!hasDistinctiveTopic) {
+      const about = cleaned.match(ABOUT_TOPIC);
+      const phrase = compactPhrase(about?.[1] ?? cleaned);
+      if (phrase) {
+        terms.push(phrase);
       }
     }
   }
@@ -618,6 +652,24 @@ function stripToolNames(text: string): string {
 function isBlockedFileExt(file: string): boolean {
   const ext = file.split(".").pop()?.toLowerCase() ?? "";
   return ["com", "org", "net", "edu", "gov", "io", "dev", "ai"].includes(ext);
+}
+
+function dropLocateTermsFromDecision(jobs: ChatIntentJob[]): void {
+  const locateExact = new Set(
+    jobs
+      .filter((job) => job.capability === "locate")
+      .flatMap((job) => job.terms)
+      .map((term) => term.toLowerCase())
+  );
+  if (locateExact.size === 0) {
+    return;
+  }
+  for (const job of jobs) {
+    if (job.capability !== "decision") {
+      continue;
+    }
+    job.terms = job.terms.filter((term) => !locateExact.has(term.toLowerCase()));
+  }
 }
 
 function pushJob(

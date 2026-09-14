@@ -93,3 +93,27 @@ test("Ticket pickup + named symbol + Jira is locate, not tools-only codeIntent n
   assert.ok((plan.jobs ?? []).some((job) => job.capability === "locate"));
   assert.ok((plan.jobs ?? []).some((job) => job.capability === "decision"));
 });
+
+const I3_COMPOUND_ASK =
+  "Where is requireAuth defined, and what did we already decide about peeling auth into coop-backend?";
+
+test("I3 compound ask plans locate requireAuth + peel-auth decision with slack+jira only", () => {
+  const plan = planChatIntentFromRules({
+    message: I3_COMPOUND_ASK,
+    connectedTools: ["slack", "jira", "confluence", "notion", "google-docs"]
+  });
+  const capabilities = (plan.jobs ?? []).map((job) => job.capability);
+  assert.ok(capabilities.includes("locate"));
+  assert.ok(capabilities.includes("decision"));
+  const locate = (plan.jobs ?? []).find((job) => job.capability === "locate")?.terms ?? [];
+  const decision = (plan.jobs ?? []).find((job) => job.capability === "decision")?.terms ?? [];
+  const decisionBlob = decision.join(" ").toLowerCase();
+  assert.ok(locate.some((term) => /requireAuth/i.test(term)));
+  assert.match(decisionBlob, /peel/);
+  assert.match(decisionBlob, /coop-backend|coop backend/);
+  assert.deepEqual(
+    plan.tools.filter((tool) => tool === "confluence" || tool === "notion" || tool === "google-docs"),
+    []
+  );
+  assert.ok(plan.tools.includes("slack") && plan.tools.includes("jira"));
+});

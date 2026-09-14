@@ -127,7 +127,7 @@ export const PHASE4_GATE_CRITERIA = [
   },
   {
     id: "P4-G4",
-    title: "Implied decision adds Slack+Jira and connected Teams/Confluence siblings"
+    title: "Implied decision adds Slack+Jira only — not unnamed docs tools"
   },
   {
     id: "P4-G5",

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   isRepoInvestigationQuery,
+  jobsGuaranteeLocatePrefetch,
   plannerAllowsAgentRepoLoop,
   shouldRunAgentToolLoop,
   shouldSkipAgentHuntForOpenFileFeatureAdd,
@@ -90,6 +91,42 @@ test("shouldRunAgentToolLoop is false when locate+decision jobs are planned (pre
       query,
       hasQuickAction: false,
       intentPlan: plan
+    }),
+    false
+  );
+  assert.equal(jobsGuaranteeLocatePrefetch(plan.jobs), true);
+});
+
+test("I3 compound locate+decision still guarantees locate prefetch, not a docs wander", () => {
+  const query =
+    "Where is requireAuth defined, and what did we already decide about peeling auth into coop-backend?";
+  const plan: ChatIntentPlan = {
+    mode: "tools-only",
+    tools: ["slack", "jira"],
+    jobs: [
+      { capability: "locate", terms: ["requireAuth"] },
+      { capability: "decision", terms: ["peeling auth", "coop-backend"] }
+    ],
+    confidence: "high",
+    focus: query,
+    execution: "none",
+    codeIntent: { action: "locate", confidence: "high", reason: "asks where something is and names code" }
+  };
+  assert.equal(jobsGuaranteeLocatePrefetch(plan.jobs), true);
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query,
+      hasQuickAction: false,
+      intentPlan: plan
+    }),
+    false
+  );
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query,
+      hasQuickAction: false,
+      intentPlan: plan,
+      integrationSlash: true
     }),
     false
   );

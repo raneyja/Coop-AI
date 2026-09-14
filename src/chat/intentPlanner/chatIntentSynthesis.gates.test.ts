@@ -60,6 +60,7 @@ test("N5 plans locate+decision, selects intent-job contract, and stays evidence-
   const systemPrompt = systemPromptForUseCase(route.useCase);
   assert.match(systemPrompt, /Locate claims require attached remote code bodies/);
   assert.match(systemPrompt, /Decision claims require attached integration or code-host evidence/);
+  assert.match(systemPrompt, /no mention of the decision topic/i);
   assert.doesNotMatch(
     systemPrompt,
     /\*\*Reviewer checks\*\* \(if|## Concrete file edits|## Patch output format|\*\*How the open file fits\*\*/

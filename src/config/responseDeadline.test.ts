@@ -9,7 +9,9 @@ import {
   isSoftGatherLatencyMessage,
   remainingContextGatherBudgetMs,
   remainingResponseBudgetMs,
-  scheduleResponseDeadline
+  scheduleResponseDeadline,
+  LOCATE_PREFETCH_MIN_MS,
+  locateSearchBudgetMs
 } from "./responseDeadline";
 
 let passed = 0;
@@ -37,6 +39,13 @@ async function main(): Promise<void> {
     const started = Date.now();
     const gather = remainingContextGatherBudgetMs(started, started);
     assert.equal(gather, MAX_USER_FACING_RESPONSE_MS - RESERVED_SYNTHESIS_MS);
+  });
+
+  await test("locateSearchBudgetMs does not skip locate when gather leftover is zero", () => {
+    assert.equal(locateSearchBudgetMs(0), LOCATE_PREFETCH_MIN_MS);
+    assert.equal(locateSearchBudgetMs(-5), LOCATE_PREFETCH_MIN_MS);
+    assert.equal(locateSearchBudgetMs(1_000), LOCATE_PREFETCH_MIN_MS);
+    assert.equal(locateSearchBudgetMs(9_000), 9_000);
   });
 
   await test("scheduleResponseDeadline never aborts the turn signal", async () => {

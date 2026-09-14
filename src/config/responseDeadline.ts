@@ -30,6 +30,17 @@ export const RESPONSE_DEADLINE_REASON = "coop-response-deadline";
 /** Reserve this much of the soft budget for LLM synthesis after context/job work. */
 export const RESERVED_SYNTHESIS_MS = 6_000;
 
+/**
+ * Floor so a locate job still searches when integrations have already used the
+ * leftover gather budget. First-class locate, not leftover.
+ */
+export const LOCATE_PREFETCH_MIN_MS = 4_000;
+
+/** Locate prefetch budget: leftover gather time, never below the locate floor. */
+export function locateSearchBudgetMs(remainingGatherMs: number): number {
+  return Math.max(Math.max(0, remainingGatherMs), LOCATE_PREFETCH_MIN_MS);
+}
+
 /** Connect/TTFB ceiling for provider streams (not the soft gather guideline). */
 export const LLM_STREAM_CONNECT_TIMEOUT_MS = 120_000;
 

@@ -106,6 +106,7 @@ import {
   abortablePromise,
   clearResponseDeadlineForSynthesis,
   isSoftGatherLatencyMessage,
+  locateSearchBudgetMs,
   remainingContextGatherBudgetMs
 } from "../config/responseDeadline";
 import { renderWebviewHtml } from "./renderWebviewHtml";
@@ -227,6 +228,7 @@ import {
   buildIntentPlanTrustPreamble,
   emptyChatIntentPlan,
   locateJobTerms,
+  shouldOverlapIntegrationPrefetch,
   type ChatCommandConstraint,
   type ChatIntentPlan
 } from "./intentPlanner";
@@ -2957,7 +2959,8 @@ export class CoopChatSession {
     try {
       const primaryRequest = requests[0];
       const overlapIntegrations = Boolean(
-        primaryRequest && (primaryRequest.params.intentPlan?.jobs?.length ?? 0) > 0
+        primaryRequest &&
+          shouldOverlapIntegrationPrefetch(primaryRequest.params.intentPlan?.jobs)
       );
       const basePromise = Promise.all(
         requests.map((request) =>
@@ -3983,10 +3986,7 @@ export class CoopChatSession {
         this.appendLiveToolActivityLine(`Searching repo for ${preview}`, undefined);
         const startedAt =
           request.params.gatherStartedAt ?? this.chatTurnStartedAt ?? Date.now();
-        const budgetMs = remainingContextGatherBudgetMs(startedAt);
-        if (budgetMs <= 0) {
-          return result;
-        }
+        const budgetMs = locateSearchBudgetMs(remainingContextGatherBudgetMs(startedAt));
         const locateQueries = locateJobIndexQueries(locateTerms);
         const semantic = await Promise.race([
           searchRepoForFocusQuery({

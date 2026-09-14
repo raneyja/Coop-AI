@@ -1,5 +1,5 @@
-import type { ChatIntentPlan } from "./intentPlanner/types";
-import { jobsSkipAgentLoop } from "./intentPlanner/planChatJobs";
+import type { ChatIntentJob, ChatIntentPlan } from "./intentPlanner/types";
+import { jobsSkipAgentLoop, locateJobTerms } from "./intentPlanner/planChatJobs";
 import { isTicketPickupLocateQuery } from "../context/incidentIntent";
 import { isFileCallerQuery } from "../context/fileCallerIntent";
 import { isFileHistoryQuery } from "../context/fileHistoryIntent";
@@ -68,6 +68,14 @@ export function agentTurnAction(options: {
   return (options.intentPlan?.codeIntent ?? classifyRepoCodeIntent(options.query)).action;
 }
 
+/**
+ * Compound locate+decision still needs a repo search even though the wander
+ * loop is skipped. Prefetch must run locate with a reserved budget.
+ */
+export function jobsGuaranteeLocatePrefetch(jobs: ChatIntentJob[] | undefined): boolean {
+  return locateJobTerms(jobs).length > 0;
+}
+
 export function plannerAllowsAgentRepoLoop(
   plan: ChatIntentPlan | undefined,
   query: string
@@ -90,8 +98,11 @@ export function plannerAllowsAgentRepoLoop(
     return false;
   }
   if (jobsSkipAgentLoop(plan.jobs) && !isTicketPickupLocateQuery(query)) {
-    // Compound locate+decision/docs: prefetch jobs, then one writer — not a second wander loop.
+    // Compound locate+decision/docs: prefetch jobs, then one writer — not a
+    // second wander loop. Locate still attaches via guaranteed prefetch
+    // (jobsGuaranteeLocatePrefetch), never leftover after integration searches.
     // Ticket pickup still hunts so a named symbol (requireAuth) is not skipped.
+    // Slash /slack /jira constraint turns stay integrationSlash → none.
     return false;
   }
   if (plan.mode === "tools-only") {

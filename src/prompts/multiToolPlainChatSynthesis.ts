@@ -183,7 +183,7 @@ export function buildMultiToolPlainChatUserPrompt(input: MultiToolPlainChatInput
     "Locate claims require attached remote code bodies; path-only hits are leads, not implementation proof.",
     "Decision claims require the integration evidence below; code alone does not prove a prior decision.",
     "Do not pretend a tool was searched when the snapshot says it was skipped or disconnected.",
-    "Never tell the user to operate Coop (reindex, run the indexed search, “If you want I can”). Empty Slack/Jira: plain English with the topic terms — “No mention in Slack of peel-auth / COOP-101” — never dump the search query or “zero hits for `query`”.",
+    "Never tell the user to operate Coop (reindex, run the indexed search, “If you want I can”). When Slack or Teams searched and messages are empty: tell the user there was no mention of the decision topic (job terms such as peel auth, coop-backend, or a ticket key) in plain English — never dump the search query, say “zero hits for `query`”, mention an evidence bundle, or invent a decision.",
     "",
     `Repository: ${repo}`,
     file ? `Active file: ${file}` : undefined,

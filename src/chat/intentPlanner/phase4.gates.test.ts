@@ -13,11 +13,13 @@ import {
   jobsSkipAgentLoop,
   locateJobTerms,
   planChatJobs,
+  shouldOverlapIntegrationPrefetch,
   stripLeadingAskLabels,
   wantsExplicitCodeHostSearch
 } from "./planChatJobs";
+import { jobsGuaranteeLocatePrefetch, shouldRunAgentToolLoop } from "../agentRouting";
 import { shouldCallChatIntentModel } from "./planChatIntentModel";
-import { shouldRunAgentToolLoop } from "../agentRouting";
+import { shouldCallChatIntentModel } from "./planChatIntentModel";
 import { wantsCodeHostContext } from "../../context/codeHostContext";
 import { buildDiscussionSearchQueries } from "../../context/integrationSearchTerms";
 import { CODE_HOST_PROVIDERS } from "../../api/codeHosts/types";
@@ -66,6 +68,9 @@ export const N5_COMPOUND_ASK =
 
 const N5_EXACT_ASK =
   "Pager: Where is date math implemented, and did we already decide not to mix this into the SQL-injection PR?";
+
+const I3_COMPOUND_ASK =
+  "Where is requireAuth defined, and what did we already decide about peeling auth into coop-backend?";
 
 test("Phase 4 Chat Intent job gates", () => {
   const results: GateResult[] = [];
@@ -180,7 +185,7 @@ test("Phase 4 Chat Intent job gates", () => {
     assert.ok(withSiblings.tools.includes("slack"));
     assert.ok(withSiblings.tools.includes("jira"));
     assert.equal(withSiblings.tools.includes("teams"), false);
-    assert.ok(withSiblings.tools.includes("confluence"));
+    assert.equal(withSiblings.tools.includes("confluence"), false);
 
     const namedOnly = planChatIntentFromRules({
       message: "search slack for discussions about this file",
@@ -201,6 +206,7 @@ test("Phase 4 Chat Intent job gates", () => {
     });
     assert.match(prompt, /no hits|empty/i);
     assert.match(prompt, /Decision claims require the integration evidence/i);
+    assert.match(prompt, /no mention of the decision topic/i);
     assert.doesNotMatch(prompt, /the team decided not to/i);
 
     const authTimeout = buildMultiToolPlainChatUserPrompt({
@@ -356,4 +362,48 @@ test("deterministic rules plans cannot be overwritten by the model classifier", 
     assert.equal(shouldCallChatIntentModel(plan), false, message);
     assert.ok((plan.jobs?.length ?? 0) > 0 || plan.codeIntent?.action !== "none", message);
   }
+});
+
+test("I3 compound locate+decision splits requireAuth from peel-auth and skips unnamed docs", () => {
+  const plan = planChatIntentFromRules({
+    message: I3_COMPOUND_ASK,
+    connectedTools: ["slack", "jira", "confluence", "notion", "google-docs", "teams"]
+  });
+  const capabilities = (plan.jobs ?? []).map((job) => job.capability);
+  assert.ok(capabilities.includes("locate"));
+  assert.ok(capabilities.includes("decision"));
+
+  const locate = locateJobTerms(plan.jobs);
+  const decision = extraTermsForIntegration(plan.jobs, "slack") ?? [];
+  const decisionBlob = decision.join(" ").toLowerCase();
+  assert.ok(locate.some((term) => /requireAuth/i.test(term)), locate.join("|"));
+  assert.match(decisionBlob, /peel/);
+  assert.match(decisionBlob, /auth/);
+  assert.match(decisionBlob, /coop-backend|coop backend/);
+  assert.equal(decision.some((term) => /requireAuth/i.test(term)), false);
+  assert.ok(plan.tools.includes("slack") && plan.tools.includes("jira"));
+  assert.equal(plan.tools.includes("confluence"), false);
+  assert.equal(plan.tools.includes("notion"), false);
+  assert.equal(plan.tools.includes("google-docs"), false);
+
+  assert.equal(jobsSkipAgentLoop(plan.jobs), true);
+  assert.equal(jobsGuaranteeLocatePrefetch(plan.jobs), true);
+  assert.equal(shouldOverlapIntegrationPrefetch(plan.jobs), false);
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query: I3_COMPOUND_ASK,
+      hasQuickAction: false,
+      intentPlan: plan
+    }),
+    false
+  );
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query: I3_COMPOUND_ASK,
+      hasQuickAction: false,
+      intentPlan: plan,
+      integrationSlash: true
+    }),
+    false
+  );
 });

@@ -140,6 +140,31 @@ test("plain compound ask still splits locate vs decision with distinct terms", (
   );
 });
 
+test("I3 compound ask splits requireAuth locate from peel-auth decision, slack+jira only", () => {
+  const turn = planRawChatAskFromRules(
+    "Where is requireAuth defined, and what did we already decide about peeling auth into coop-backend?",
+    {
+      connectedTools: [...CONNECTED, "notion", "google-docs"],
+      useRepo: USE_REPO
+    }
+  );
+  assert.equal(turn.constraint.kind, "none");
+  const capabilities = (turn.plan.jobs ?? []).map((job) => job.capability);
+  assert.ok(capabilities.includes("locate"));
+  assert.ok(capabilities.includes("decision"));
+  const locate = (turn.plan.jobs ?? []).find((job) => job.capability === "locate")?.terms ?? [];
+  const decision = extraTermsForIntegration(turn.plan.jobs, "slack") ?? [];
+  const decisionBlob = decision.join(" ").toLowerCase();
+  assert.ok(locate.some((term) => /requireAuth/i.test(term)));
+  assert.match(decisionBlob, /peel/);
+  assert.match(decisionBlob, /coop-backend|coop backend/);
+  assert.equal(decision.some((term) => /requireAuth/i.test(term)), false);
+  assert.ok(turn.plan.tools.includes("slack") && turn.plan.tools.includes("jira"));
+  assert.equal(turn.plan.tools.includes("confluence"), false);
+  assert.equal(turn.plan.tools.includes("notion"), false);
+  assert.equal(turn.plan.tools.includes("google-docs"), false);
+});
+
 test("bare /slack may use the repo (no topic)", () => {
   const turn = planRawChatAskFromRules("/slack", {
     connectedTools: [...CONNECTED],

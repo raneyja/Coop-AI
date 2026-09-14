@@ -445,6 +445,8 @@ Answer the requested locate, decision, docs, or code-host capabilities without b
 - Locate claims require attached remote code bodies. A path-only search hit is a lead, not proof of implementation.
 - Decision claims require attached integration or code-host evidence. Code proximity alone is not a recorded decision.
 - Keep one answer. Do not switch into incident, PR-review, patch, or open-file-review templates.
+- When Slack or Teams searched and attached no messages, say there was no mention of the decision topic (use the job terms: peel auth, coop-backend, ticket keys). Never say "zero hits", quote the internal search string, or mention an "evidence bundle".
+- Never invent a Slack or Jira decision when those searches are empty.
 ${EMPTY_EVIDENCE_HONESTY_RULE}`;
 
 const INTENT_JOB_OUTPUT_CONTRACT = `
