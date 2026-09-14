@@ -167,6 +167,80 @@ void (async () => {
     assert.equal(empty, undefined);
   });
 
+  const hallucinatedNotes =
+    "This pull request updates the `apps/api/plane/db/models/state.py` file to improve the code structure and readability. The changes include refactoring certain functions and optimizing imports to enhance performance and maintainability.\n- Refactored functions for better clarity and reduced complexity.\n- Optimized import statements to streamline dependencies.\n- Improved inline documentation for better understanding of the code logic.";
+
+  const assertHonestCommentNotes = (notes: string | undefined): void => {
+    assert.match(notes ?? "", /test test/);
+    assert.match(notes ?? "", /state\.py/);
+    assert.doesNotMatch(notes ?? "", /refactor/i);
+    assert.doesNotMatch(notes ?? "", /readability/i);
+    assert.doesNotMatch(notes ?? "", /optimized import/i);
+  };
+
+  await test("comment-only # test test above DEFAULT_STATES skips the model", async () => {
+    let called = 0;
+    const result = await summarizePrNotes({
+      title: "Update state.py",
+      files: ["apps/api/plane/db/models/state.py"],
+      diff: "apps/api/plane/db/models/state.py\n+ # test test",
+      complete: async () => {
+        called += 1;
+        return hallucinatedNotes;
+      }
+    });
+    assert.equal(called, 0);
+    assertHonestCommentNotes(result?.notes);
+    assert.match(result?.title ?? "", /test test/);
+  });
+
+  await test("comment-only // test test above DEFAULT_STATES skips the model", async () => {
+    let called = 0;
+    const result = await summarizePrNotes({
+      title: "Update state.py",
+      files: ["apps/api/plane/db/models/state.py"],
+      diff: "apps/api/plane/db/models/state.py\n+ // test test",
+      complete: async () => {
+        called += 1;
+        return hallucinatedNotes;
+      }
+    });
+    assert.equal(called, 0);
+    assertHonestCommentNotes(result?.notes);
+  });
+
+  await test("post-filter replaces a fake refactor when the diff is only test test", async () => {
+    let called = 0;
+    const result = await summarizePrNotes({
+      title: "Update state.py",
+      files: ["apps/api/plane/db/models/state.py"],
+      diff: "apps/api/plane/db/models/state.py\n+ test test",
+      complete: async () => {
+        called += 1;
+        return hallucinatedNotes;
+      }
+    });
+    assert.equal(called, 1);
+    assertHonestCommentNotes(result?.notes);
+  });
+
+  await test("empty diff preview does not invent a refactor", async () => {
+    let called = 0;
+    const result = await summarizePrNotes({
+      title: "Update state.py",
+      files: ["apps/api/plane/db/models/state.py"],
+      diff: "apps/api/plane/db/models/state.py\n(no line preview)",
+      complete: async () => {
+        called += 1;
+        return hallucinatedNotes;
+      }
+    });
+    assert.equal(called, 0);
+    assert.match(result?.notes ?? "", /state\.py/);
+    assert.doesNotMatch(result?.notes ?? "", /refactor/i);
+    assert.doesNotMatch(result?.notes ?? "", /readability/i);
+  });
+
   console.log(`\nprNotesSummary: ${passed} passed, ${failed} failed`);
   if (failed > 0) {
     process.exitCode = 1;
