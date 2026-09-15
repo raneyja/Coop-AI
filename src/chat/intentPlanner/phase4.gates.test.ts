@@ -10,7 +10,6 @@ import {
   codeHostJobQuery,
   extraTermsForIntegration,
   hasCodeHostJob,
-  jobsSkipAgentLoop,
   locateJobTerms,
   planChatJobs,
   shouldOverlapIntegrationPrefetch,
@@ -124,14 +123,13 @@ test("Phase 4 Chat Intent job gates", () => {
         "locate terms must not be copied onto decision"
       );
       assert.ok(plan.tools.includes("slack") && plan.tools.includes("jira"));
-      assert.equal(jobsSkipAgentLoop(plan.jobs), true);
       assert.equal(
         shouldRunAgentToolLoop({
           query: row.ask,
           hasQuickAction: false,
           intentPlan: plan
         }),
-        false
+        true
       );
     }
 
@@ -235,7 +233,6 @@ test("Phase 4 Chat Intent job gates", () => {
       message: "Where is requireAuth defined in this repo?",
       connectedTools: []
     });
-    assert.equal(jobsSkipAgentLoop(hunt.jobs), false);
     assert.equal(
       shouldRunAgentToolLoop({
         query: "Where is requireAuth defined in this repo?",
@@ -386,7 +383,6 @@ test("I3 compound locate+decision splits requireAuth from peel-auth and skips un
   assert.equal(plan.tools.includes("notion"), false);
   assert.equal(plan.tools.includes("google-docs"), false);
 
-  assert.equal(jobsSkipAgentLoop(plan.jobs), true);
   assert.equal(jobsGuaranteeLocatePrefetch(plan.jobs), true);
   assert.equal(shouldOverlapIntegrationPrefetch(plan.jobs), false);
   assert.equal(
@@ -395,7 +391,7 @@ test("I3 compound locate+decision splits requireAuth from peel-auth and skips un
       hasQuickAction: false,
       intentPlan: plan
     }),
-    false
+    true
   );
   assert.equal(
     shouldRunAgentToolLoop({

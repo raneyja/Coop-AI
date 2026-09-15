@@ -150,8 +150,8 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
 }
 
 function appendRepoSummaryCraftInstructions(lines: string[], summary: RepoSummaryEvidence): void {
-  lines.push("## Evidence quality & response craft");
-  lines.push("- Open with what can be responsibly concluded from the attached bundle.");
+  lines.push("## Grounding");
+  lines.push("- Open with what can be responsibly concluded from attached sources.");
   if (isGithubOnlyRepoSummaryEvidence(summary)) {
     lines.push(
       '- Evidence is GitHub/code-host only (no Confluence/Jira/Slack/Notion/Teams/Google Docs hits). End the opening with one short confidence line, e.g. "Based on inventory + anchors; no Confluence/Jira."'

@@ -77,13 +77,12 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
 - Spend output on new evidence, not restating the opening in later sections. Extra citations of the same snippet do not make the answer better.
 
 ## User-facing language (all answers — chat and commands)
-The reader is the engineer in the IDE. Never write Coop pipeline jargon in the answer, Sources footer, or subsection copy.
-FAIL (do not emit): \`scan_incomplete\`, \`gaps_found\`, \`no_structured_gaps\`, \`jobScan\`, \`scanCoverage\`, soft gather, gather budget, indexed-manifest, primary target, \`missing_docs\`, \`missing_owner\`, \`impact_unknown\`, high-value code, high-fan-in, depcruise, Dependency Submission, best-effort context.
-FAIL (do not emit): \`evidence bundle\`, \`index is stale\`, stale index, \`run the indexed search\`, \`If you want I can\`, dumping the search query, \`zero hits for \\\`query\\\`\`, \`16 issue(s) in the attached search sample\`, **Symptoms** / incident **Next steps** that tell the user to reindex or operate Coop.
-PASS: answer the engineer (paths, symbols, ticket keys). Empty tools in plain English — “No mention in Slack of peel-auth / COOP-101” — never “Slack search returned zero hits for \\\`coop backend\\\`”. Pipeline jargon belongs in activity, never the chat bubble.
-Use ordinary English: "this file", "this folder", "the scan could not finish", "no listed owner", "no nearby docs".
-- For a remote Use-repo, never tell the user to clone the repository, run \`git grep\` locally, use Find in Path, or open a local copy. Suggest another indexed search term or state what remote evidence is missing.
-- Never instruct the user to operate Coop (reindex, run a search, “If you want I can”).
+The reader is the engineer in the IDE. Answer them like a teammate.
+- Answer the engineer: paths, symbols, ticket keys — not pipeline status.
+- Empty tools in teammate English: “No mention in Slack of peel-auth / COOP-101.” “No Jira ticket matching COOP-101 in what came back.” “I couldn’t find requireAuth in this repo.”
+- Pipeline belongs in Activity (Searched / Read), never the chat bubble.
+- Use ordinary English: "this file", "this folder", "the scan could not finish", "no listed owner", "no nearby docs".
+- For a remote Use-repo, never tell the user to clone the repository, run \`git grep\` locally, use Find in Path, or open a local copy. Name a more specific symbol or say what remote evidence is missing.
 `;
 
 export const PATCH_OUTPUT_CONTRACT = `
@@ -203,7 +202,7 @@ const USE_CASE_STRUCTURE: Partial<Record<Exclude<UseCase, "inline_completion">, 
 
   decision_archaeology: `
 ## Required response structure
-Open with 1–2 sentences that state the decision and evidence strength (strong / medium / weak / limited) when thin. No **Answer**, **Summary**, or **Your question** heading.
+Open with 1–2 sentences that state the decision. When evidence is thin, say so in ordinary English. No **Answer**, **Summary**, or **Your question** heading.
 
 When ## User focus (required) is present: PASS answers the ask with timeline evidence (commit/PR/discussion). FAIL: restating or truncating the user's question; generic restatement with no evidence.
 
@@ -252,7 +251,7 @@ Do not emit **Sources**. ${SOURCES_FOOTER_OUTPUT_RULE}`,
 
   blast_radius: `
 ## Required response structure
-Open with 2–3 sentences. **Lead with the ranked Top risk surfaces from the evidence bundle** (up to 5, in order). Then state total **code** dependent count (exclude docs) and graph source (scip/zoekt/heuristic) when known. When dependency evidence is empty, say impact is **not found in the index** — never claim zero impact. No **Answer**, **Summary**, or **Your question** heading.
+Open with 2–3 sentences. **Lead with the ranked Top risk surfaces** (up to 5, in order). Then state total **code** dependent count (exclude docs) and graph source (scip/zoekt/heuristic) when known. When callers were not confirmed, say you couldn’t find callers — never claim zero impact. No **Answer**, **Summary**, or **Your question** heading.
 
 When ## User focus (required) is present: PASS ties the ask to Top risk surfaces / dependents. FAIL: speculative impact with no paths.
 
@@ -393,7 +392,7 @@ Open with 2–4 sentences that answer each requested capability. Keep locate and
 Then at most 2 topic headings (omit empty):
 
 **Code location**
-Include for locate jobs. Make implementation claims only from attached remote file bodies. Cite concrete paths and symbols with the Cursor citation contract. If no body supports the claim, say you could not find a usable implementation file — never tell the user to run the indexed search.
+Include for locate jobs. Make implementation claims only from attached remote file bodies. Cite concrete paths and symbols with the Cursor citation contract. If no body supports the claim, say you could not find a usable implementation file.
 
 **Decision evidence**
 Include for decision jobs. Make decision claims only from attached integration or code-host evidence. Name concrete ticket keys, thread/channel names, page titles, or PRs only when attached. Missing or empty evidence is not a decision.
@@ -445,25 +444,12 @@ Answer the requested locate, decision, docs, or code-host capabilities without b
 - Locate claims require attached remote code bodies. A path-only search hit is a lead, not proof of implementation.
 - Decision claims require attached integration or code-host evidence. Code proximity alone is not a recorded decision.
 - Keep one answer. Do not switch into incident, PR-review, patch, or open-file-review templates.
-- When Slack or Teams searched and attached no messages, say there was no mention of the decision topic (use the job terms: peel auth, coop-backend, ticket keys). Never say "zero hits", quote the internal search string, or mention an "evidence bundle".
+- When Slack or Teams searched and attached no messages, say there was no mention of the decision topic (use the job terms: peel auth, coop-backend, ticket keys).
 - Never invent a Slack or Jira decision when those searches are empty.
 ${EMPTY_EVIDENCE_HONESTY_RULE}`;
 
-const INTENT_JOB_OUTPUT_CONTRACT = `
-## Cursor response contract
-- Open with the answer in short prose. Use bold topic titles only when needed. Do not use # headings, tables, blockquotes, HTML, or README layout.
-- Do not use **Answer**, **Summary**, or **Your question** titles.
-- Existing repo code uses citation fences only: a plain fence whose first body line uses real integers, e.g. \`42:68:src/auth.ts\`, and whose remaining body is copied verbatim from attached code.
-- Never use language-tagged fences for existing repo code, placeholder line ranges, or invented file bodies.
-- Paths and symbols may be named only from attached evidence. Links require an attached URL.
-- For a remote Use-repo, never recommend cloning, \`git grep\`, Find in Path, or opening a local copy.
-${USE_CASE_STRUCTURE.intent_job}`;
-
 function buildIntentJobSystem(hasPaperclipAttachments = false): string {
-  const paperclip = hasPaperclipAttachments
-    ? `\n\n${USER_PAPERCLIP_ATTACHMENTS_SYSTEM_RULE}`
-    : "";
-  return `${INTENT_JOB_BODY}${paperclip}\n\n${INTENT_JOB_OUTPUT_CONTRACT}`;
+  return withOutputContract(INTENT_JOB_BODY, "intent_job", undefined, hasPaperclipAttachments);
 }
 
 export const INTENT_JOB_SYSTEM = buildIntentJobSystem();
@@ -471,7 +457,7 @@ export const INTENT_JOB_SYSTEM = buildIntentJobSystem();
 const GENERAL_CHAT_BODY = `You are CoopAI, an enterprise code intelligence assistant.
 Answer clearly using supplied repository and organizational context. Cite concrete paths when evidence is attached; do not fabricate external links, ticket keys, or PR numbers.
 When the user message has no discernible question or task, ask a brief clarifying question. Do not summarize attached files or repository context unless the user asked for that. Greetings and pings are not overview requests.
-When drawing conclusions from attached evidence, state strength (strong / medium / weak / limited) and distinguish provenance from inference.
+When drawing conclusions from attached evidence, distinguish what the sources say from your inference.
 When \`<local_files>\` / \`<file_content>\` blocks are attached, treat them as the authoritative source code. Quote exact conditions and identifiers from that code only — never invent functions, variables, or branches that are not present in the attachment.
 When \`<repo_semantic_paths>\` is attached, those are related-path hits only — name them in backticks. Do not invent file bodies or paste guessed implementations.
 When \`<repo_compare>\` is attached, the user asked to compare exactly two indexed repositories. Cite evidence from both \`<repo>\` sides and contrast them. If a side has a \`<note>\` about missing evidence, say so for that side. Never use a third repository, sticky Use-repo outside those two, or the local Extension Host workspace as primary evidence.
@@ -1435,7 +1421,7 @@ function formatRepoInventoryForLlm(inventory: RepoInventorySnippet): string[] {
     lines.push(inventory.note);
   } else if (inventory.source === "unavailable") {
     lines.push(
-      "Inventory is unavailable. Say so clearly — do not estimate totals from semantic search samples or attached file snippets."
+      "Inventory is unavailable. Say so clearly — do not estimate totals from related-file hits or attached file snippets."
     );
   }
   lines.push("</repo_inventory>");

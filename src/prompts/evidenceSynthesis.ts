@@ -51,12 +51,14 @@ export const NARRATIVE_CITATION_RULES = `Narrative citation rules:
 - In topic sections (**Architecture**, **Technical decision**, **Direct impact**, **Alternatives considered**, etc.), describe evidence in plain language (file paths, PR numbers, ticket keys, channel names).
 - Never cite a \`[Sources: …]\` label when that source is absent from the attached source-label list.`;
 
+/** Writer-facing heading for attached facts. Never “Evidence bundle”. */
+export const ATTACHED_FACTS_HEADING = "## What we found";
+
 export function appendEvidenceQualityInstructions(lines: string[]): void {
-  lines.push("## Evidence quality");
-  lines.push("- Open with what can be responsibly concluded from the attached bundle.");
-  lines.push("- State evidence strength (strong / medium / weak / limited) and lower confidence when evidence is thin.");
-  lines.push("- Call out missing PR, issue, discussion, or documentation when not present in the bundle.");
-  lines.push("- Distinguish provenance (direct source facts) from rationale (your synthesis).");
+  lines.push("## Grounding");
+  lines.push("- Answer only from attached facts.");
+  lines.push("- Distinguish what the sources say from your inference.");
+  lines.push("- Call out missing PR, issue, discussion, or documentation when not present.");
   lines.push("- When evidence is thin, use one line per section — do not pad with generic software trade-offs.");
   lines.push("");
 }
@@ -219,17 +221,16 @@ export function appendEvidenceEnrichmentInstructions(lines: string[], hasEnrichm
 
 /** One canonical rule for empty, missing, and failed evidence. */
 export const EMPTY_EVIDENCE_HONESTY_RULE = `Empty-evidence honesty:
-- A searched source with zero hits proves only that this attached search sample was empty. It does not prove the event, decision, code, ticket, or discussion never existed.
-- A missing, disconnected, skipped, timed-out, or failed source is unavailable evidence. State that plainly; never cite it or infer facts from it.
-- Never invent tickets, messages, pages, paths, URLs, people, or decisions to fill an evidence gap.
-- Never tell the user to reindex, run the indexed search, or operate Coop. Empty tools in plain English with the topic (e.g. “No mention in Slack of peel-auth / COOP-101”) — never dump the search query or “zero hits for \`query\`”.`;
+- A search that came back empty proves only that nothing matched this turn. It does not prove the event, decision, code, ticket, or discussion never existed.
+- A missing, disconnected, skipped, timed-out, or failed source is unavailable. State that plainly; never cite it or infer facts from it.
+- Never invent tickets, messages, pages, paths, URLs, people, or decisions to fill a gap.
+- Empty tools in teammate English with the topic (e.g. “No mention in Slack of peel-auth / COOP-101”). “No Jira ticket matching COOP-101 in what came back.”`;
 
 /** Slim evidence rules for general chat (static system prompt). */
-export const GENERAL_CHAT_EVIDENCE_RULES = `Evidence rules (when a context bundle or integration blocks are attached):
+export const GENERAL_CHAT_EVIDENCE_RULES = `Evidence rules (when sources or integration blocks are attached):
 - Cite concrete file paths and source identifiers from the attachment — do not invent paths, URLs, ticket keys, or PR numbers.
-- State evidence strength using one of: strong, medium, weak, or limited when drawing conclusions from attached evidence.
 ${EMPTY_EVIDENCE_HONESTY_RULE}
-- Integration and code-host blocks (Jira, Slack, Teams, Confluence, Notion, Google Docs, PRs/issues, semantic files) are **search samples / capped result sets**, not complete inventories. Never answer "how many" / "list all" / totals from those samples alone — say the attached set is partial and what would be needed for a full count.
+- Integration and code-host blocks (Jira, Slack, Teams, Confluence, Notion, Google Docs, PRs/issues, related files) are partial results, not a full inventory. Never answer "how many" / "list all" / totals from those results alone — say this isn’t a full count and what would be needed for one.
 - When \`<repo_inventory>\` is attached, it is the only valid source for repository totals (file count, lines of code, size). Use its numbers verbatim only if the user asked for totals or an overview; if a total is missing there, say it is unavailable rather than estimating one. Do not volunteer a file/line census for greetings, pings, or unrelated questions.
 - Weight sources by reliability for decisions: pull requests and commit history > Jira tickets > Confluence/docs > Slack/Teams discussions. Prefer the higher-trust source when they conflict.
 - Never invent ticket IDs, PR numbers, people, or quotes not present in the evidence.`;
@@ -241,10 +242,10 @@ ${EMPTY_EVIDENCE_HONESTY_RULE}
 export const AGENT_REPO_HUNT_RULES = `When <agent_search> or <agent_files> are attached:
 - Prefer <agent_files> bodies. Cite real paths and line ranges from those blocks (citation fences with numeric startLine:endLine:path).
 - If the user named a symbol (requireAuth, parse_token), only discuss files whose attached bodies contain that symbol or its snake_case/camelCase alias. Never substitute a nearby auth UI form or AuthRoot component.
-- If <agent_search> has zero usable hits, or includes skipNote / exhaustedQueries: say the index returned no usable matches for the terms tried. Do not claim the symbol is absent from the repository (index miss ≠ missing code).
-- Never tell the user to clone the repo, open a local copy, or search on disk. Indexed remote is the workspace. If the write/reject path is not in attached bodies, say what you did read and that the index did not return the API check — do not send them to a clone.
+- If <agent_search> has zero usable hits, or includes skipNote / exhaustedQueries: say “I couldn’t find {symbol} in this repo.” Do not claim the symbol is absent from the repository (index miss ≠ missing code).
+- Never tell the user to clone the repo, open a local copy, or search on disk. Indexed remote is the workspace. If the write/reject path is not in attached bodies, say what you did read and that those files did not contain the API check — do not send them to a clone.
 - If an attached body has validate() or ValidationError, cite it only when it rejects the field the user asked about. A validate() for a different field is a miss — keep hunting; do not narrate “must be elsewhere in this snippet.” Do not cite OpenAPI/swagger, a read_only serializer class, seed JSON, or a view that only checks permissions.
-- Never open by restating or paraphrasing the user's ask when agent evidence is empty — answer with the miss, then a different symbol spelling to try. Never say the index is stale or tell the user to run the indexed search.
+- Never open by restating or paraphrasing the user's ask when agent evidence is empty — answer with the miss, then a different symbol spelling to try.
 - Do not dump the question text under a heading as if it were the answer. Do not use a **Your question** heading.`;
 
 export const EVIDENCE_CITATION_RULES = `Citation rules:

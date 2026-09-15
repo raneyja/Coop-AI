@@ -277,3 +277,15 @@ test("I4 ticket pickup plans locate+decision, not incident reconstruction", () =
   assert.doesNotMatch(userPrompt, /Slack search returned zero hits/i);
   assert.doesNotMatch(userPrompt, /index is stale|If you want I can run/);
 });
+
+test("I3/I4 intern-speak bubbles rewrite through the chat funnel", () => {
+  const intern =
+    "Slack search returned zero hits for `coop backend`. The index returned no usable matches for `requireAuth`.";
+  const enriched = enrichChatResponseForAction({ content: intern });
+  assert.match(enriched, /No mention in Slack of coop backend/i);
+  assert.match(enriched, /I couldn't find requireAuth in this repo/i);
+  assert.doesNotMatch(enriched, /zero hits for|index returned no usable/i);
+
+  const locked = "requireAuth lives in src/server/authMiddleware.ts.";
+  assert.equal(enrichChatResponseForAction({ content: locked }), locked);
+});

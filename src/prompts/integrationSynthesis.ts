@@ -18,6 +18,7 @@ import {
   appendUserFocusInstructions,
   supplementaryKeysOmittedFromChecklist,
   truncationNote,
+  ATTACHED_FACTS_HEADING,
   EVIDENCE_CITATION_RULES
 } from "./evidenceSynthesis";
 
@@ -70,7 +71,7 @@ export function buildIntegrationSynthesisUserPrompt(input: IntegrationSynthesisI
     appendMentionScopeSection(lines, input);
     lines.push("");
   }
-  lines.push("## Evidence bundle");
+  lines.push(ATTACHED_FACTS_HEADING);
   lines.push(formatIntegrationEvidenceForPrompt(input.provider, input.evidence));
   lines.push("");
 

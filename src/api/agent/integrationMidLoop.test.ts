@@ -125,16 +125,58 @@ async function main(): Promise<void> {
     assert.equal(data.jiraSearch?.issues?.[0]?.key, "AUTH-9");
   });
 
-  await test("prompt lists allowlisted integration tools", () => {
+  await test("prompt lists connected integration tools", () => {
     const prompt = buildAgentToolPlanPrompt({
       message: "find auth and check jira",
       repoId: "acme/demo",
       round: 0,
       priorSummaries: [],
-      allowedIntegrations: ["jira"]
+      allowedIntegrations: ["jira"],
+      suggestedJobs: [{ capability: "locate", terms: ["requireAuth"] }]
     });
-    assert.match(prompt, /search_jira/);
-    assert.doesNotMatch(prompt, /search_slack/);
+    assert.match(prompt, /Connected integration tools this turn: search_jira/);
+    assert.doesNotMatch(prompt, /Connected integration tools this turn:.*search_slack/);
+    assert.doesNotMatch(prompt, /Hunt the repo first/);
+    assert.doesNotMatch(prompt, /none are on the allowlist/);
+    assert.match(prompt, /Suggested queries, not a limit/);
+    assert.match(prompt, /after a matching code read/);
+  });
+
+  await test("connected vendor is callable even when planner tools would be empty", () => {
+    const parsed = parseAgentToolPlan(
+      JSON.stringify({ tool: "search_confluence", args: { query: "onboarding" } }),
+      { allowedIntegrations: ["confluence"] }
+    );
+    assert.equal(parsed.kind, "call");
+  });
+
+  await test("does not backfill every connected vendor when fill hints are empty", async () => {
+    const calls: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: {
+        async search() {
+          return { hits: [], symbols: [] };
+        }
+      } as unknown as IndexBackend,
+      resolveAbsolutePath: () => undefined
+    });
+    await orchestrator.run(
+      { message: "Where is requireAuth defined?", repoId: "acme/demo", maxSteps: 3 },
+      {
+        allowedIntegrations: ["jira", "slack", "confluence"],
+        searchIntegration: async ({ provider }) => {
+          calls.push(provider);
+          return {};
+        },
+        planTurn: async ({ round }) => {
+          if (round === 0) {
+            return JSON.stringify({ done: true });
+          }
+          return JSON.stringify({ done: true });
+        }
+      }
+    );
+    assert.deepEqual(calls, []);
   });
 
   await test("after a matching hunt, allowlisted Jira is fetched if the model skipped it", async () => {
@@ -165,6 +207,7 @@ async function main(): Promise<void> {
       { message: "Where is requireAuth, and check Jira for related tickets?", repoId: "acme/demo", maxSteps: 6 },
       {
         allowedIntegrations: ["jira"],
+        fillIntegrations: ["jira"],
         searchIntegration: async ({ query }) => {
           calls.push(query);
           return { source: "jira-search", issues: [{ key: "AUTH-1", summary: "Auth middleware" }] };

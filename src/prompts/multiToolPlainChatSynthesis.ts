@@ -18,6 +18,7 @@ import {
   listIntegrationSourcesChecklist
 } from "./integrationSourceLabels";
 import { isDocOrSpecPath, isGeneratedOrVendorPath } from "../indexing/evidencePathNoise";
+import { rewriteCustomerFacingProse } from "../chat/customerFacingAnswer";
 
 export type MultiToolIntegrationSnapshot = Partial<
   Record<IntegrationChatProvider, IntegrationSearchEvidenceLike | null | undefined>
@@ -183,7 +184,7 @@ export function buildMultiToolPlainChatUserPrompt(input: MultiToolPlainChatInput
     "Locate claims require attached remote code bodies; path-only hits are leads, not implementation proof.",
     "Decision claims require the integration evidence below; code alone does not prove a prior decision.",
     "Do not pretend a tool was searched when the snapshot says it was skipped or disconnected.",
-    "Never tell the user to operate Coop (reindex, run the indexed search, “If you want I can”). When Slack or Teams searched and messages are empty: tell the user there was no mention of the decision topic (job terms such as peel auth, coop-backend, or a ticket key) in plain English — never dump the search query, say “zero hits for `query`”, mention an evidence bundle, or invent a decision.",
+    "When Slack or Teams searched and messages are empty: tell the user there was no mention of the decision topic (job terms such as peel auth, coop-backend, or a ticket key). Do not invent a decision.",
     "",
     `Repository: ${repo}`,
     file ? `Active file: ${file}` : undefined,
@@ -270,7 +271,7 @@ export function enrichIntentJobResponse(
   );
   const withoutLocalActionSections = stripLocalActionSections(content);
 
-  return stripPipelineJargon(
+  return rewriteCustomerFacingProse(
     stripTemplateSectionHeadings(
       withoutLocalActionSections
         .split("\n")
@@ -321,20 +322,6 @@ function isLikelySourcePath(path: string): boolean {
   return /\.(?:[cm]?[jt]sx?|java|kt|kts|scala|go|rs|py|rb|php|cs|fs|fsx|swift|m|mm|cc|cpp|cxx|h|hpp|sql|jsp|vue|svelte)$/i.test(
     path
   );
-}
-
-function stripPipelineJargon(content: string): string {
-  return content
-    .split("\n")
-    .filter(
-      (line) =>
-        !/\bevidence bundle\b/i.test(line) &&
-        !/\bindex is stale\b/i.test(line) &&
-        !/\brun the indexed search\b/i.test(line) &&
-        !/\bzero hits for\s*`/i.test(line) &&
-        !/\d+\s+issue\(s\) in the attached search sample\b/i.test(line)
-    )
-    .join("\n");
 }
 
 function stripLocalActionSections(content: string): string {

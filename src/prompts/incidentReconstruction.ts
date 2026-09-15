@@ -90,7 +90,7 @@ export function resolveIncidentIntegrationStatus(
     if (connectedHint === true) {
       return {
         state: "not_searched",
-        detail: `${label} is connected but no search result was attached (budget elapsed or fetch skipped). Do not treat this as proof that no ${label.toLowerCase()} activity existed.`
+        detail: `${label} is connected, but no tickets/threads came back this turn. That does not prove none exist.`
       };
     }
     return {
@@ -152,12 +152,12 @@ export function buildIncidentGapsBullets(integrations: IncidentIntegrationSnapsh
 
   if (jira.state === "empty" || slack.state === "empty") {
     bullets.push(
-      "- Integration search returned empty for at least one connected tool — expand time range, try `/jira` / `/slack` with a key or channel, or check ops dashboards."
+      "- No matching tickets or threads came back for at least one connected tool. That does not prove the incident never existed — check other channels, time range, or keys."
     );
   }
   if (jira.state === "not_connected" || slack.state === "not_connected") {
     bullets.push(
-      "- Connect missing tools in Coop Settings (Jira / Slack) so the next incident ask can pull tickets and threads."
+      "- Jira or Slack wasn’t connected this turn, so tickets/threads weren’t available."
     );
   }
   if (jira.state === "error" || slack.state === "error" || jira.state === "not_searched" || slack.state === "not_searched") {
@@ -211,7 +211,7 @@ export function appendIncidentReconstructionContract(
   lines.push("");
   lines.push("**Next steps**");
   lines.push("Actionable code + ops checks (logs, requeue, feature flags, owners) even when integrations are empty.");
-  lines.push("Never tell the user to reindex, run an indexed search, or operate Coop. Do not emit “If you want I can”, “evidence bundle”, or search-query dumps.");
+  lines.push("Do not tell the user to operate Coop. Keep next steps on the incident (logs, owners, retries).");
   lines.push("");
 }
 
@@ -224,7 +224,7 @@ function formatJiraEvidence(evidence: IntegrationSearchEvidenceLike | null | und
   }
   const issues = evidence.issues ?? [];
   if (issues.length === 0) {
-    return "- <empty> — searched; no issues in sample";
+    return "- searched; no matching issues in what came back";
   }
   const lines = issues.slice(0, 8).map((issue) => {
     const row = issue as { key?: string; summary?: string; status?: string };
@@ -245,7 +245,7 @@ function formatSlackEvidence(evidence: IntegrationSearchEvidenceLike | null | un
   }
   const messages = evidence.messages ?? [];
   if (messages.length === 0) {
-    return "- <empty> — searched; no messages in sample";
+    return "- searched; no matching messages in what came back";
   }
   const lines = messages.slice(0, 8).map((message) => {
     const row = message as { channelName?: string; text?: string; userName?: string };

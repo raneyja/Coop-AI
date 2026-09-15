@@ -10,6 +10,7 @@ import {
   appendUserFocusInstructions,
   supplementaryKeysOmittedFromChecklist,
   truncationNote,
+  ATTACHED_FACTS_HEADING,
   EVIDENCE_CITATION_RULES
 } from "./evidenceSynthesis";
 import {
@@ -37,13 +38,13 @@ export const OWNERSHIP_INTELLIGENCE_SYSTEM = `You are an organizational intellig
 Synthesize a response that:
 1. Identifies the true expert(s) for the target path or repository
 2. Highlights any single-point-of-failure risks
-3. Always includes an on-call escalation path: CODEOWNERS team, CODEOWNERS path owners, and/or recent reviewers from the evidence bundle — or an explicit evidence-backed gap ("no CODEOWNERS/team; escalate via repository admins/maintainers") with source labels. Never end on "no backup" / "no strong secondary" with zero escalation guidance.
+3. Always includes an on-call escalation path: CODEOWNERS team, CODEOWNERS path owners, and/or recent reviewers from attached sources — or an explicit evidence-backed gap ("no CODEOWNERS/team; escalate via repository admins/maintainers") with source labels. Never end on "no backup" / "no strong secondary" with zero escalation guidance.
 4. Identifies expertise coverage gaps — recommend pairing, a secondary owner, or escalation before any staffing change
 5. Recommends knowledge transfer targets (who should learn this)
 
 Be pragmatic: if someone is listed as owner but inactive, say who to actually ask.
 Distinguish code authors from reviewers. Use plain language in narrative sections; reserve \`[Sources: …]\` labels for **Sources** (at most 1-2 inline in **Summary**).
-Never invent people or Slack handles — every named human or team must appear in the evidence bundle (commits, reviews, CODEOWNERS) with a source label.
+Never invent people or Slack handles — every named human or team must appear in the attached sources (commits, reviews, CODEOWNERS) with a source label.
 Never attribute ownership from the target repository to @-attached files from other repositories or workspaces.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
@@ -83,7 +84,7 @@ export function buildOwnershipSynthesisUserPrompt(input: OwnershipSynthesisInput
   lines.push(`- Analysis completeness: ${report.completeness}`);
   appendMentionScopeSection(lines, input);
   lines.push("");
-  lines.push("## Evidence bundle");
+  lines.push(ATTACHED_FACTS_HEADING);
   lines.push(formatOwnershipReportForPrompt(report, input.slackSearch));
   lines.push("");
   const citationKeys = listOwnershipSourceLabels(report, input.slackSearch);
@@ -100,7 +101,7 @@ export function buildOwnershipSynthesisUserPrompt(input: OwnershipSynthesisInput
   appendPathEvolutionGuidance(lines, report.pathEvolution);
   if (repoWide) {
     lines.push(
-      "Synthesize repository-wide ownership from the evidence bundle — top experts, CODEOWNERS coverage, team boundaries, and escalation paths."
+      "Synthesize repository-wide ownership from attached sources — top experts, CODEOWNERS coverage, team boundaries, and escalation paths."
     );
     lines.push(
       "When CODEOWNERS data is present, lead with the owning team, then escalation order (primary → secondary → manager or Slack channel)."

@@ -72,7 +72,7 @@ test("shouldRunAgentToolLoop is true for hunt + Slack compound ask without jobs 
   );
 });
 
-test("shouldRunAgentToolLoop is false when locate+decision jobs are planned (prefetch + write)", () => {
+test("shouldRunAgentToolLoop is true when locate+decision jobs are planned", () => {
   const query = "Where is requireAuth defined, and what did Slack say about the auth change?";
   const plan: ChatIntentPlan = {
     mode: "tools-only",
@@ -92,12 +92,12 @@ test("shouldRunAgentToolLoop is false when locate+decision jobs are planned (pre
       hasQuickAction: false,
       intentPlan: plan
     }),
-    false
+    true
   );
   assert.equal(jobsGuaranteeLocatePrefetch(plan.jobs), true);
 });
 
-test("I3 compound locate+decision still guarantees locate prefetch, not a docs wander", () => {
+test("I3 compound locate+decision enters the agent loop; slash still does not", () => {
   const query =
     "Where is requireAuth defined, and what did we already decide about peeling auth into coop-backend?";
   const plan: ChatIntentPlan = {
@@ -119,7 +119,7 @@ test("I3 compound locate+decision still guarantees locate prefetch, not a docs w
       hasQuickAction: false,
       intentPlan: plan
     }),
-    false
+    true
   );
   assert.equal(
     shouldRunAgentToolLoop({

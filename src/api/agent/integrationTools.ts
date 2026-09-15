@@ -1,7 +1,7 @@
 import type { IntegrationChatProvider } from "../../chat/types";
 import type { AgentToolName } from "./agentTypes";
 
-/** Agent tool ↔ planner allowlist provider. */
+/** Agent tool ↔ connected integration provider. */
 export const AGENT_INTEGRATION_TOOLS = {
   search_slack: "slack",
   search_jira: "jira",
@@ -67,6 +67,25 @@ export function integrationToolLabel(tool: AgentIntegrationToolName): string {
     default:
       return tool;
   }
+}
+
+/** Providers the agent actually called this turn — for evidence cards, not the full connected list. */
+export function integrationProvidersFromAgentSteps(
+  steps: Array<{ tool: string }>
+): IntegrationChatProvider[] {
+  const seen = new Set<IntegrationChatProvider>();
+  const out: IntegrationChatProvider[] = [];
+  for (const step of steps) {
+    if (!isAgentIntegrationTool(step.tool)) {
+      continue;
+    }
+    const provider = providerForAgentIntegrationTool(step.tool);
+    if (!seen.has(provider)) {
+      seen.add(provider);
+      out.push(provider);
+    }
+  }
+  return out;
 }
 
 export function allowedIntegrationToolSet(

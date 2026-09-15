@@ -41,6 +41,8 @@ Repository intelligence (graph fetches, manifest snippets, decision timelines) i
 
 The chat UI stores the user's message as typed (with optional `[quick-action]` prefix). Before the API call, CoopAI may **replace or wrap** that text with synthesis prompts, context blocks, and history — without changing what appears in the thread (except the displayed user bubble).
 
+Chat bubbles use **one teammate voice**. Pipeline (searched, read, skipped) belongs in Activity / Sources — never as intern-speak in the answer. Empty Slack/Jira/index misses stay honest facts in ordinary English.
+
 ### 5. Zero retention by construction
 
 Every provider request carries confidentiality language, retention metadata, `store: false` (where supported), and a sanitization pass over message bodies. Headers assert inference-only use. See [Zero retention & sanitization](#zero-retention--sanitization).
@@ -277,7 +279,7 @@ When context fetching produced a structured artifact, the user's text may be **r
 ## Code under investigation
 ```<snippet>```
 
-## Evidence bundle
+## What we found
 <formatted timeline: commits, PRs, Slack, Jira, etc.>
 
 Synthesize from evidence only. Follow the required response structure in your system instructions.
@@ -291,13 +293,13 @@ Synthesize from evidence only. Follow the required response structure in your sy
 ## Target path
 - Repository, path, completeness
 
-## Evidence bundle
+## What we found
 <scores, experts, Slack, escalation data>
 
 Synthesize from evidence only. Follow the required response structure in your system instructions.
 ```
 
-**Understand repo** (when `repoSummary` exists): same pattern — evidence bundle + defer to system structure (no duplicate `## Output format` block).
+**Understand repo** (when `repoSummary` exists): same pattern — attached facts + defer to system structure (no duplicate `## Output format` block).
 
 The UI still shows the quick-action user bubble; the model receives the full synthesis document.
 

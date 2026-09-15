@@ -15,7 +15,7 @@ import type {
   AgentToolName
 } from "./agentTypes";
 import type { AgentToolContext } from "./agentToolContext";
-import { parseAgentToolPlan } from "./parseAgentToolPlan";
+import { agentSearchSkipNote, parseAgentToolPlan } from "./parseAgentToolPlan";
 import {
   fallbackAgentSearchQueries,
   extractNamedSourceFiles,
@@ -154,9 +154,14 @@ export type AgentRunOptions = {
   signal?: AbortSignal;
   startedAt?: number;
   wallMs?: number;
-  /** Planner allowlist — mid-loop may only call these integration tools. */
+  /** Connected integrations — the model may call these mid-loop. */
   allowedIntegrations?: IntegrationChatProvider[];
-  /** Live integration search for allowlisted mid-loop tools. */
+  /**
+   * Planner-hinted tools to backfill if the model never called them.
+   * Not the connected list — filling every connected vendor would spray.
+   */
+  fillIntegrations?: IntegrationChatProvider[];
+  /** Live integration search for connected mid-loop tools. */
   searchIntegration?: (options: {
     provider: IntegrationChatProvider;
     query: string;
@@ -168,7 +173,7 @@ export type AgentRunOptions = {
  *
  * Live path: one model conversation (`planTurn`) chooses tools, sees results,
  * then `streamAnswer` writes the user-visible answer. There is no user toggle.
- * Allowlisted integrations may be called mid-loop when discovered.
+ * Connected integrations may be called mid-loop when discovered.
  * Deterministic search→read is only the no-planTurn fallback (tests / fail-open).
  */
 export class AgentOrchestrator {
@@ -581,8 +586,9 @@ export class AgentOrchestrator {
   }
 
   /**
-   * If the model hunted but never called allowlisted Slack/Jira, fetch them
-   * with a focused query so compound asks still get both halves.
+   * If the model hunted but never called planner-hinted integrations, fetch
+   * those with a focused query so compound asks still get both halves.
+   * Does not walk the full connected list.
    */
   private async fillAllowlistedIntegrations(
     query: string,
@@ -590,7 +596,10 @@ export class AgentOrchestrator {
     options: AgentRunOptions,
     conversation?: AgentConversationMessage[]
   ): Promise<AgentConversationMessage[] | undefined> {
-    if (!this.runSearchIntegration || this.runAllowedIntegrations.length === 0) {
+    const toFill = (options.fillIntegrations ?? []).filter((provider) =>
+      this.runAllowedIntegrations.includes(provider)
+    );
+    if (!this.runSearchIntegration || toFill.length === 0) {
       return conversation;
     }
     const context: AgentSessionContext = { ...(result.context ?? {}) };
@@ -599,7 +608,7 @@ export class AgentOrchestrator {
     const focused =
       namedSymbolKeys(query)[0] ?? sanitizeAgentSearchQuery(query, query);
     let calls = steps.filter((step) => isAgentIntegrationTool(step.tool)).length;
-    for (const provider of this.runAllowedIntegrations) {
+    for (const provider of toFill) {
       if (calls >= MAX_INTEGRATION_TOOL_CALLS) {
         break;
       }
@@ -1258,9 +1267,7 @@ export class AgentOrchestrator {
       context.search_code = {
         ...context.search_code,
         exhaustedQueries: tried,
-        skipNote: lastError
-          ? `search_code failed: ${lastError}. Do not claim the symbol is missing from the repo — say the index search failed.`
-          : `Tried ${tried.map((q) => JSON.stringify(q)).join(", ")} with no readable hits. Say the index returned no usable matches for those terms.`
+        skipNote: agentSearchSkipNote(tried, lastError)
       };
     }
     return undefined;

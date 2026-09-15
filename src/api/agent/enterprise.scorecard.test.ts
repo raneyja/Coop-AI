@@ -180,13 +180,13 @@ async function main(): Promise<void> {
     });
     const jobs = (plan.jobs ?? []).map((job) => job.capability);
     if (
-      !loops &&
+      loops &&
       plan.tools.includes("slack") &&
       plan.mode === "tools-only" &&
       jobs.includes("locate") &&
       jobs.includes("decision")
     ) {
-      pass("S-G8", "Scope", "hunt + Slack: jobs locate+decision, Slack allowlist, prefetch not wander");
+      pass("S-G8", "Scope", "hunt + Slack: jobs locate+decision, agent loop, connected tools unlocked");
     } else {
       fail("S-G8", "Scope", `loops=${loops} tools=${plan.tools.join(",")} mode=${plan.mode} jobs=${jobs.join(",")}`);
     }
@@ -412,14 +412,23 @@ async function main(): Promise<void> {
   }
 
   {
-    const session = readRepo("src/chat/CoopChatSession.ts");
-    const start = session.indexOf("private shouldRunAgentOwnedTurn");
-    const end = session.indexOf("private async runAgentOwnedTurn");
-    const fn = start >= 0 && end > start ? session.slice(start, end) : "";
-    if (fn && !/integrationProvider/.test(fn)) {
-      pass("H-G14", "Honesty", "hunt is not skipped when Slack/Jira is named");
+    const q = "Where is requireAuth defined, and what did Slack say about the auth change?";
+    const plan = planChatIntentFromRules({ message: q, connectedTools: ["slack", "jira"] });
+    const loops = shouldRunAgentToolLoop({
+      query: q,
+      hasQuickAction: false,
+      intentPlan: plan
+    });
+    const slashBlocked = shouldRunAgentToolLoop({
+      query: q,
+      hasQuickAction: false,
+      intentPlan: plan,
+      integrationSlash: true
+    });
+    if (loops && !slashBlocked) {
+      pass("H-G14", "Honesty", "hunt is not skipped when Slack/Jira is named; slash still constrains");
     } else {
-      fail("H-G14", "Honesty", "integrationProvider still steals the hunt");
+      fail("H-G14", "Honesty", `loops=${loops} slashBlocked=${slashBlocked}`);
     }
   }
 

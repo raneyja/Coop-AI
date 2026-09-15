@@ -35,10 +35,10 @@ test("chat use case includes audience and output contract", () => {
   assert.ok(prompt.includes("FAIL: literal placeholders"));
   assert.ok(prompt.includes("one **subsection title** per item"));
   assert.ok(prompt.includes("## Required response structure"));
-  assert.ok(prompt.includes("evidence bundle"));
-  assert.ok(prompt.includes("index is stale"));
-  assert.ok(prompt.includes("If you want I can"));
-  assert.ok(prompt.includes("zero hits for"));
+  assert.equal(prompt.includes("evidence bundle"), false);
+  assert.equal(prompt.includes("index is stale"), false);
+  assert.equal(prompt.includes("If you want I can"), false);
+  assert.equal(prompt.includes("zero hits for"), false);
   assert.ok(prompt.includes("No mention in Slack of peel-auth / COOP-101"));
 });
 
@@ -123,11 +123,26 @@ test("paperclip attachment rule is gated on hasPaperclipAttachments (B6)", () =>
 
 test("chat use case includes enterprise evidence rules", () => {
   const prompt = systemPromptForUseCase("chat");
-  assert.ok(prompt.includes("strong / medium / weak / limited"));
-  assert.ok(prompt.includes("A searched source with zero hits proves only"));
+  assert.equal(prompt.includes("strong / medium / weak / limited"), false);
+  assert.ok(prompt.includes("A search that came back empty proves only"));
   assert.ok(prompt.includes("Never invent ticket IDs, PR numbers"));
   assert.ok(prompt.includes("Weight sources by reliability for decisions"));
-  assert.ok(prompt.includes("search samples / capped result sets"));
+  assert.ok(prompt.includes("this isn’t a full count") || prompt.includes("this isn't a full count"));
+  assert.equal(prompt.includes("search samples / capped result sets"), false);
+});
+
+test("intent_job uses the same audience and user-facing contract as chat", () => {
+  const chat = systemPromptForUseCase("chat");
+  const intentJob = systemPromptForUseCase("intent_job");
+  assert.ok(intentJob.includes(AUDIENCE_MARKER));
+  assert.ok(intentJob.includes(TYPOGRAPHY_MARKER));
+  assert.ok(intentJob.includes(OUTPUT_CONTRACT_MARKER));
+  assert.ok(intentJob.includes("## User-facing language"));
+  assert.ok(intentJob.includes("No mention in Slack of peel-auth / COOP-101"));
+  assert.ok(intentJob.includes("Locate claims require attached remote code bodies"));
+  assert.equal(intentJob.includes("evidence bundle"), false);
+  assert.equal(intentJob.includes("index returned no usable"), false);
+  assert.ok(chat.includes("## User-facing language"));
 });
 
 test("comprehension use case includes audience block via withOutputContract", () => {
@@ -758,8 +773,8 @@ test("buildUserMessageWithContext forbids estimating a missing line count", () =
             source: "tree",
             fileCount: 1233,
             note:
-              "No line count is recorded for this repository — Deep-Index has not stored line stats for it yet. " +
-              "Say the line count is unavailable and offer to re-index. Do not estimate it from file counts or attached snippets."
+              "No line count is recorded for this repository yet. " +
+              "Say the line count is unavailable. Do not estimate it from file counts or attached snippets."
           }
         }
       }

@@ -41,6 +41,7 @@ import {
   appendUserFocusInstructions,
   supplementaryKeysOmittedFromChecklist,
   truncationNote,
+  ATTACHED_FACTS_HEADING,
   EVIDENCE_CITATION_RULES
 } from "./evidenceSynthesis";
 import { appendIntegrationDocsResponseContract } from "./integrationDocsResponseContract";
@@ -85,7 +86,7 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
   }
   appendMentionScopeSection(lines, input);
   lines.push("");
-  lines.push("## Evidence bundle");
+  lines.push(ATTACHED_FACTS_HEADING);
   lines.push(formatBlastRadiusForPrompt(evidence, file));
   lines.push("");
 

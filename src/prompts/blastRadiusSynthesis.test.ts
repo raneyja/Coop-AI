@@ -148,7 +148,7 @@ test("blast-radius synthesis leads Summary with partial index caveat when graph 
   assert.ok(prompt.includes("partial index coverage caveat"));
   assert.ok(prompt.includes("Index coverage is partial"));
   const checklistStart = prompt.indexOf("## Source labels (inline only");
-  const checklistEnd = prompt.indexOf("## Evidence quality", checklistStart);
+  const checklistEnd = prompt.indexOf("## Grounding", checklistStart);
   const checklistSection = prompt.slice(checklistStart, checklistEnd);
   assert.equal(
     (checklistSection.match(/\[Sources: Dependency graph\]/g) ?? []).length,

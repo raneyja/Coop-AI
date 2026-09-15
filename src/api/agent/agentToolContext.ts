@@ -33,12 +33,12 @@ export type AgentToolContext = {
   findFiles?: (options: { query: string; repoId?: string }) => Promise<string[]>;
   /**
    * Mid-loop integration search. Only providers on {@link allowedIntegrations}
-   * (or the per-run allowlist) may be called.
+   * (connected tools for this run) may be called.
    */
   searchIntegration?: (options: {
     provider: IntegrationChatProvider;
     query: string;
   }) => Promise<Record<string, unknown>>;
-  /** Planner allowlist for this session/run — empty means no integration tools. */
+  /** Connected integrations for this session/run — empty means none connected. */
   allowedIntegrations?: IntegrationChatProvider[];
 };

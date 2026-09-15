@@ -57,7 +57,7 @@ function isAllowedTool(
 
 /**
  * Parse one model-chosen tool call. Fail-open: garbage → invalid.
- * Integration tools are valid only when on this turn's planner allowlist.
+ * Integration tools are valid only when on this turn's connected allowlist.
  */
 export function parseAgentToolPlan(
   raw: string,
@@ -97,6 +97,8 @@ export function buildAgentToolPlanPrompt(input: {
   priorSummaries: string[];
   lastToolResult?: string;
   allowedIntegrations?: IntegrationChatProvider[];
+  /** Planner job terms — hints, not a limit on which tools may run. */
+  suggestedJobs?: Array<{ capability: string; terms: string[] }>;
 }): string {
   const prior =
     input.priorSummaries.length > 0
@@ -114,17 +116,25 @@ export function buildAgentToolPlanPrompt(input: {
     "propose_patch",
     ...integrationTools
   ].join(", ");
+  const jobHint =
+    input.suggestedJobs && input.suggestedJobs.length > 0
+      ? `Suggested queries, not a limit: ${input.suggestedJobs
+          .map((job) => `${job.capability} [${job.terms.join(", ")}]`)
+          .join("; ")}.`
+      : undefined;
   const integrationRules =
     integrationTools.length > 0
       ? [
-          `Integration tools on this turn only: ${integrationTools.join(", ")}.`,
-          "Hunt the repo first (search_code / read_file). After a matching read, call the listed integration tool with a short focused query (the symbol or a ticket key) — not the whole question.",
-          "Do not {\"done\":true} after Slack/Jira alone when the user also asked where code lives.",
+          `Connected integration tools this turn: ${integrationTools.join(", ")}.`,
+          "Call a discussion tool (search_slack, search_teams) only if the question needs chat or a decision.",
+          "Call a ticket tool (search_jira) only if the question needs issues or a ticket.",
+          "Call a docs tool (search_confluence, search_notion, search_google_docs) only if the question needs written docs.",
+          "Use a short focused query (symbol, ticket key, or topic) — not the whole question.",
+          "Do not {\"done\":true} after a discussion, ticket, or docs tool alone when the user also asked where code lives.",
+          "If the user asked two things, do not {\"done\":true} after a matching code read either — call the connected discussion, ticket, or docs tool the question still needs, then finish.",
           "Do not call integrations that are not listed."
         ]
-      : [
-          "Do not call Slack, Jira, or any integration tool this turn — none are on the allowlist."
-        ];
+      : ["No integration tools are connected this turn. Do not call them."];
   return [
     "You are Coop Agent on this Use-repo. This is one conversation: you pick tools, see results, then a later turn in this same conversation answers the user.",
     "Reply with JSON only this turn — not the user-facing answer.",
@@ -138,6 +148,7 @@ export function buildAgentToolPlanPrompt(input: {
       : undefined,
     'Or finish: {"done":true} — only after you have read a file whose body mentions the named symbol (or an alias), or the role the user named (middleware, handler).',
     ...integrationRules,
+    jobHint,
     "Search for identifiers; do not guess file paths.",
     "search_code query must be a short identifier or 2–4 word phrase. Never paste the whole question.",
     "Prefer an exact symbol name the user wrote (requireAuth, parse_token) over a prose phrase.",
@@ -170,11 +181,19 @@ export function buildAgentAnswerPrompt(input: {
     "Cite real paths with citation fences (numeric startLine:endLine:path).",
     "Citation line numbers must be the N| prefixes from read_file (the real file lines), not 1-based offsets in the snippet.",
     "If Slack/Jira/docs results include permalink or htmlUrl, include that URL as a markdown link so the user can open the native app.",
-    "If you never read a file that mentions a named symbol, say in 1–2 sentences that the index returned no usable match, then suggest a more specific name or opening the file. Answer only from files you read. Do not use a **Your question** heading. Do not restate the user's ask.",
+    "If you never read a file that mentions a named symbol, say in 1–2 sentences that you couldn’t find that symbol in this repo, then suggest a more specific name or opening the file. Answer only from files you read. Do not use a **Your question** heading. Do not restate the user's ask.",
     "Never tell the user to clone, inspect a local copy, or search on disk. If only a state catalog, default rows, or a client post of state_id were read, say the API write/reject path was not in those bodies.",
     "If a read_file body contains validate() or ValidationError for the field the user asked about, that is the write/reject. Cite that. Never cite OpenAPI/swagger, a read_only serializer class, seed JSON, or a view that only checks permissions and fetches a row.",
     "When Slack/Jira ran, summarize those hits after the code answer (or after the honest miss). Do not stretch an unrelated ticket into the definition.",
     "Do not emit tool JSON.",
     change
   ].join("\n");
+}
+
+/** Writer-facing skip note when search_code exhausted queries with no readable hits. */
+export function agentSearchSkipNote(tried: string[], lastError?: string): string {
+  if (lastError) {
+    return `search_code failed: ${lastError}. Do not claim the symbol is missing from the repo — say you couldn’t find it in this repo.`;
+  }
+  return `Tried ${tried.map((q) => JSON.stringify(q)).join(", ")} with no readable hits. Say you couldn’t find that symbol in this repo.`;
 }

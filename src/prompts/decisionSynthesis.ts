@@ -8,6 +8,7 @@ import {
   appendUserFocusInstructions,
   supplementaryKeysOmittedFromChecklist,
   truncationNote,
+  ATTACHED_FACTS_HEADING,
   EVIDENCE_CITATION_RULES
 } from "./evidenceSynthesis";
 import {
@@ -29,7 +30,7 @@ import {
   listDecisionSourcesChecklist
 } from "./decisionSourceLabels";
 
-export const DECISION_HISTORIAN_SYSTEM = `You are a code historian. You have been given a structured evidence bundle from the Sources card shown to the user.
+export const DECISION_HISTORIAN_SYSTEM = `You are a code historian. You have been given structured sources from the Sources card shown to the user.
 
 Each evidence section is labeled with an exact citation key like \`[Sources: PR #1506]\` or \`[Sources: Slack #engineering]\`.
 
@@ -42,7 +43,7 @@ Synthesize a clear narrative explaining:
 6. What is the current **Decision status** (active, superseded, or unclear from evidence)?
 7. **Who to engage** for questions or changes today — name people with evidence (authors, approvers, thread participants), not generic role titles.
 
-The primary trace target is the file in ## Task and the decision timeline in ## Evidence bundle — not @-attached paths unless listed as in-scope in ## @ attachments.
+The primary trace target is the file in ## Task and the decision timeline in ## What we found — not @-attached paths unless listed as in-scope in ## @ attachments.
 Never attribute timeline commits, PRs, or tickets to code from out-of-scope @ attachments.
 Never retarget the narrative to a different repo path (migration, sibling model, drive-by file in a multi-file PR). Unrelated paths may appear only as clearly labeled secondary context.
 If warnings say history for the target file is thin, truncated, or missing, say so honestly for that file — do not substitute another popular file's story.
@@ -108,7 +109,7 @@ export function buildDecisionSynthesisUserPrompt(input: DecisionSynthesisInput):
     lines.push("");
   }
 
-  lines.push("## Evidence bundle");
+  lines.push(ATTACHED_FACTS_HEADING);
   lines.push(formatTimelineForPrompt(timeline));
   lines.push("");
   const citationKeys = listDecisionSourceLabels(timeline);
@@ -140,10 +141,10 @@ export function buildDecisionSynthesisUserPrompt(input: DecisionSynthesisInput):
     );
   }
   lines.push(
-    "If the bundle warns that history for this file is thin/truncated/missing, say that plainly for this file — never substitute a different migration or model file as the main subject."
+    "If the attached sources warn that history for this file is thin/truncated/missing, say that plainly for this file — never substitute a different migration or model file as the main subject."
   );
   lines.push(
-    "Include **Decision status** (active / superseded / unclear) and **Who to engage** when evidence supports it — cite approvers, authors, or thread participants; say unknown when the bundle is thin."
+    "Include **Decision status** (active / superseded / unclear) and **Who to engage** when evidence supports it — cite approvers, authors, or thread participants; say unknown when attached sources are thin."
   );
   lines.push("Follow the required response structure in your system instructions.");
 
@@ -162,7 +163,7 @@ function hasDecisionEnrichment(timeline: DecisionTimeline): boolean {
 
 function appendFollowUpInstructions(lines: string[], userQuestion: string | undefined): void {
   lines.push("## Follow-up");
-  lines.push("- This is a follow-up in an active trace-decision thread — answer only from the attached evidence bundle.");
+  lines.push("- This is a follow-up in an active trace-decision thread — answer only from the attached sources.");
   lines.push("- Use the required section headings, but keep the reply compact (often 4-8 sentences when evidence is limited).");
   lines.push("- Omit sections the user did not ask about when they would be empty or speculative.");
   if (userQuestion?.trim()) {

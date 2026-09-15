@@ -165,18 +165,6 @@ export function decisionPhrasePresent(message: string): boolean {
 }
 
 /**
- * True when jobs should skip the LLM tool-wander loop: integrations/docs/code-host
- * run on prefetch, then one writer. Locate-only still uses today's agent hunt.
- * Compound locate+decision still prefetches locate (see jobsGuaranteeLocatePrefetch).
- */
-export function jobsSkipAgentLoop(jobs: ChatIntentJob[] | undefined): boolean {
-  return (jobs ?? []).some(
-    (job) =>
-      job.capability === "decision" || job.capability === "docs" || job.capability === "code-host"
-  );
-}
-
-/**
  * Start Slack/Jira prefetch in parallel with the base fetch only when there is
  * no locate job. Locate must run first (or with a reserved budget), never after
  * five sequential doc searches have exhausted the gather window.

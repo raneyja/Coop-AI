@@ -134,7 +134,7 @@ function mentionModelGuidance(
         budgetRule,
         `The blast-radius target is the primary open file (${file}) — analyze impact for that path first.`,
         `In-repo @ paths in ${repo} may add blast surfaces; local workspace or foreign-repo paths are NOT part of ${repo}'s dependency graph.`,
-        `Do NOT attribute dependents or risk from the evidence bundle to out-of-scope @ files.`
+        `Do NOT attribute dependents or risk from attached sources to out-of-scope @ files.`
       ]
         .filter(Boolean)
         .join(" ");
@@ -195,7 +195,7 @@ export function quickActionPromptParts(
           task,
           DIRECTIVE,
           `Context: repo ${repo}, branch ${branch}${host}.`,
-          "Use attached repo entry files, graph context, and manifest metadata from the evidence bundle.",
+          "Use attached repo entry files, graph context, and manifest metadata.",
           mentions.length
             ? mentionModelGuidance("understand-repo", mentions, ctx)
             : "Cover architecture repo-wide — do not deep-dive a single file unless it illustrates a cross-cutting pattern."
@@ -222,7 +222,7 @@ export function quickActionPromptParts(
           task,
           DIRECTIVE,
           `Context: file ${file}, lines ${lineHint}, repo ${repo}, branch ${branch}${host}${source}.`,
-          "Use attached decision timeline, blame, PR, Slack, Teams, and Jira evidence from the evidence bundle — cite sources explicitly.",
+          "Use attached decision timeline, blame, PR, Slack, Teams, and Jira evidence — cite sources explicitly.",
           ...(mentions.length ? [mentionModelGuidance("trace-decision", mentions, ctx)] : []),
           "State confidence when evidence is thin; do not invent ticket IDs, PR numbers, or URLs."
         ].join("\n"),
@@ -254,7 +254,7 @@ export function quickActionPromptParts(
           repoWide
             ? `Context: repo ${repo}, branch ${branch}${host}.`
             : `Context: file ${file}, repo ${repo}, branch ${branch}${host}${source}.`,
-          "Use ownership scores, commit/review history, Slack presence, and org identity links from the evidence bundle.",
+          "Use ownership scores, commit/review history, Slack presence, and org identity links from attached sources.",
           ...(mentions.length ? [mentionModelGuidance("find-owner", mentions, ctx)] : []),
           repoWide
             ? "Highlight single points of failure, cross-team boundaries, and who to ask first for unfamiliar areas — not a single-file deep dive."
@@ -283,7 +283,7 @@ export function quickActionPromptParts(
           task,
           DIRECTIVE,
           `Context: file ${file}, repo ${repo}, branch ${branch}${host}${ctx.languageId ? `, language ${ctx.languageId}` : ""}${source}.`,
-          "Use dependency graph data, evidence bundle context, and open-file content when present.",
+          "Use attached dependency graph data and open-file content when present.",
           ...(mentions.length ? [mentionModelGuidance("blast-radius", mentions, ctx)] : []),
           "Prioritize the top 5 ranked risk surfaces from dependency evidence — summarize APIs, integrations, operational risk, and testing surfaces; do not enumerate every dependent path."
         ].join("\n"),
@@ -316,7 +316,7 @@ export function quickActionPromptParts(
           repoWide
             ? `Context: repo ${repo}, branch ${branch}${host}.`
             : `Context: file ${file}, branch ${branch}, repo ${repo}${host}${source}.`,
-          "Use attached knowledge_gap_scan findings, Confluence/Notion/Google Docs search results, and code context from the evidence bundle.",
+          "Use attached knowledge_gap_scan findings, Confluence/Notion/Google Docs search results, and code context.",
           ...(mentions.length ? [mentionModelGuidance("knowledge-gaps", mentions, ctx)] : []),
           repoWide
             ? "Prioritize repo-wide blind spots — missing docs, unclear ownership, and orphaned areas — not a single-file deep dive unless evidence points there."

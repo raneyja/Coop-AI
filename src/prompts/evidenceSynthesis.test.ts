@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { agentSearchSkipNote, buildAgentAnswerPrompt } from "../api/agent/parseAgentToolPlan";
 import {
   appendCitationKeysSection,
   appendEvidenceEnrichmentInstructions,
@@ -6,6 +8,7 @@ import {
   appendNarrativeCitationInstructions,
   appendSupplementarySourceCitationGuardrails,
   appendUserFocusInstructions,
+  ATTACHED_FACTS_HEADING,
   buildSourcesChecklistFromKeys,
   EVIDENCE_CITATION_RULES,
   extractCitationKeysFromSourcesSection,
@@ -45,15 +48,16 @@ test("EVIDENCE_CITATION_RULES includes narrative citation rules", () => {
   assert.match(EVIDENCE_CITATION_RULES, /quality and confidence/i);
 });
 
-test("appendEvidenceQualityInstructions adds Evidence quality section", () => {
+test("appendEvidenceQualityInstructions adds grounding without intern-speak", () => {
   const lines: string[] = [];
   appendEvidenceQualityInstructions(lines);
   const section = lines.join("\n");
-  assert.ok(section.includes("## Evidence quality"));
-  assert.ok(section.includes("responsibly concluded"));
-  assert.ok(section.includes("strong / medium / weak / limited"));
+  assert.ok(section.includes("## Grounding"));
+  assert.ok(section.includes("Answer only from attached facts"));
   assert.ok(section.includes("missing PR, issue, discussion, or documentation"));
-  assert.ok(section.includes("provenance"));
+  assert.ok(section.includes("inference"));
+  assert.equal(section.includes("evidence bundle"), false);
+  assert.equal(section.includes("evidence strength (strong / medium / weak"), false);
 });
 
 test("appendUserFocusInstructions requires opening prose for specific asks", () => {
@@ -191,25 +195,54 @@ test("extractCitationKeysFromSourcesSection reads allowed keys", () => {
   assert.deepEqual(keys, ["[Sources: GitHub commit abc1234]", "[Sources: PR #99]"]);
 });
 
-test("GENERAL_CHAT_EVIDENCE_RULES covers citations, strength, empty integrations, and source weighting", () => {
-  assert.match(GENERAL_CHAT_EVIDENCE_RULES, /strong, medium, weak, or limited/i);
-  assert.match(GENERAL_CHAT_EVIDENCE_RULES, /search sample was empty/i);
+test("GENERAL_CHAT_EVIDENCE_RULES covers citations, empty integrations, and source weighting", () => {
+  assert.match(GENERAL_CHAT_EVIDENCE_RULES, /came back empty/i);
   assert.match(GENERAL_CHAT_EVIDENCE_RULES, /pull requests and commit history/i);
   assert.match(GENERAL_CHAT_EVIDENCE_RULES, /Slack\/Teams/i);
   assert.match(GENERAL_CHAT_EVIDENCE_RULES, /Never invent ticket IDs, PR numbers/i);
   assert.match(GENERAL_CHAT_EVIDENCE_RULES, /Cite concrete file paths/i);
-  assert.match(GENERAL_CHAT_EVIDENCE_RULES, /search samples \/ capped result sets/i);
+  assert.match(GENERAL_CHAT_EVIDENCE_RULES, /this isn.t a full count/i);
   assert.match(GENERAL_CHAT_EVIDENCE_RULES, /how many/i);
+  assert.doesNotMatch(GENERAL_CHAT_EVIDENCE_RULES, /search sample was empty/i);
+  assert.doesNotMatch(GENERAL_CHAT_EVIDENCE_RULES, /search samples \/ capped result sets/i);
+  assert.doesNotMatch(GENERAL_CHAT_EVIDENCE_RULES, /strong, medium, weak, or limited/i);
 });
 
 test("AGENT_REPO_HUNT_RULES forbids inventing absences and restating the ask", () => {
   assert.match(AGENT_REPO_HUNT_RULES, /index miss/i);
   assert.match(AGENT_REPO_HUNT_RULES, /absent from the repository/i);
+  assert.match(AGENT_REPO_HUNT_RULES, /I couldn.t find \{symbol\} in this repo/i);
   assert.match(AGENT_REPO_HUNT_RULES, /restating|paraphrasing/i);
   assert.match(AGENT_REPO_HUNT_RULES, /Do not use a \*\*Your question\*\* heading/);
   assert.match(AGENT_REPO_HUNT_RULES, /clone/i);
   assert.match(AGENT_REPO_HUNT_RULES, /ValidationError/);
   assert.match(AGENT_REPO_HUNT_RULES, /OpenAPI/i);
+  assert.doesNotMatch(AGENT_REPO_HUNT_RULES, /index returned no usable/i);
+});
+
+test("hunt answer prompt and skipNote use teammate miss copy", () => {
+  const prompt = buildAgentAnswerPrompt({ message: "Where is requireAuth?" });
+  assert.match(prompt, /couldn.t find that symbol in this repo/i);
+  assert.doesNotMatch(prompt, /index returned no usable/i);
+  const skip = agentSearchSkipNote(["requireAuth"]);
+  assert.match(skip, /couldn.t find that symbol in this repo/i);
+  assert.doesNotMatch(skip, /index returned no usable/i);
+});
+
+test("synthesis builders do not use a writer-facing Evidence bundle heading", () => {
+  assert.equal(ATTACHED_FACTS_HEADING, "## What we found");
+  const files = [
+    "src/prompts/decisionSynthesis.ts",
+    "src/prompts/ownershipSynthesis.ts",
+    "src/prompts/blastRadiusSynthesis.ts",
+    "src/prompts/knowledgeGapsSynthesis.ts",
+    "src/prompts/integrationSynthesis.ts"
+  ];
+  for (const file of files) {
+    const src = readFileSync(file, "utf8");
+    assert.equal(src.includes("## Evidence bundle"), false, file);
+    assert.ok(src.includes("ATTACHED_FACTS_HEADING"), file);
+  }
 });
 
 console.log(`\nevidenceSynthesis: ${passed}/${passed + failed} tests passed`);

@@ -168,7 +168,7 @@ test("ownership synthesis cites Slack presence when discussions are empty", () =
   assert.ok(prompt.includes("[Sources: Slack presence]"));
   assert.ok(prompt.includes("do not cite `[Sources: Slack discussions]`"));
   const checklistStart = prompt.indexOf("## Source labels (inline only");
-  const checklistEnd = prompt.indexOf("## Evidence quality", checklistStart);
+  const checklistEnd = prompt.indexOf("## Grounding", checklistStart);
   const checklistSection = prompt.slice(checklistStart, checklistEnd);
   assert.equal(
     (checklistSection.match(/\[Sources: Slack presence\]/g) ?? []).length,

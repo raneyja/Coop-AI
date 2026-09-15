@@ -49,6 +49,7 @@ import {
   type MentionScopeQuickAction,
   type MentionScopeRef
 } from "../prompts/mentionScope";
+import { rewriteCustomerFacingProse } from "./customerFacingAnswer";
 
 /**
  * Post-processes assistant responses for quick actions and their slash-command aliases.
@@ -207,7 +208,7 @@ export function enrichChatResponseForAction(options: {
     enriched = enrichSourcesFooter(enriched);
   }
 
-  return stripTemplateSectionHeadings(enriched);
+  return rewriteCustomerFacingProse(stripTemplateSectionHeadings(enriched));
 }
 
 function packageStructureFromBundle(

@@ -159,7 +159,7 @@ test("H-G10 docs do not tell the user to enable AgentMode", () => {
   assert.doesNotMatch(arch, /defaults to \*\*off\*\*/);
 
   const dogfood = readRepo("docs/agent-dogfood.md");
-  assert.match(dogfood, /no Coop Settings toggle|No Coop Settings toggle/i);
+  assert.doesNotMatch(dogfood, /enable AgentMode|turn Agent (?:on|off)/i);
   assert.match(dogfood, /search_jira|mid-loop|Jira/i);
 });
 
@@ -196,13 +196,30 @@ test("H-G12 hot path merges agent patch before Apply card (not orphan helpers)",
   assert.match(session, /handlePatchComplete/);
 });
 
-test("H-G14 hunt+Slack is not stolen by a named integrationProvider", () => {
+test("H-G14 hunt+named integration is not stolen; slash still constrains", () => {
   const session = readRepo("src/chat/CoopChatSession.ts");
   const start = session.indexOf("private shouldRunAgentOwnedTurn");
   const end = session.indexOf("private async runAgentOwnedTurn");
   assert.ok(start >= 0 && end > start, "shouldRunAgentOwnedTurn must exist");
   const fn = session.slice(start, end);
-  assert.doesNotMatch(fn, /integrationProvider/);
+  assert.match(fn, /integrationProvider && options\?\.sourceHint/);
+  assert.doesNotMatch(fn, /if \(options\?\.integrationProvider\) \{\s*return false/);
+
+  const q = "Where is requireAuth defined, and what did Slack say about the auth change?";
+  const plan = planChatIntentFromRules({ message: q, connectedTools: ["slack"] });
+  assert.equal(
+    shouldRunAgentToolLoop({ query: q, hasQuickAction: false, intentPlan: plan }),
+    true
+  );
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query: q,
+      hasQuickAction: false,
+      intentPlan: plan,
+      integrationSlash: true
+    }),
+    false
+  );
 });
 
 test("H-G13 agent-owned answer still bridges propose_patch to Apply", () => {

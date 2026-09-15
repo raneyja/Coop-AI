@@ -26,6 +26,7 @@ import {
   appendUserFocusInstructions,
   supplementaryKeysOmittedFromChecklist,
   truncationNote,
+  ATTACHED_FACTS_HEADING,
   EVIDENCE_CITATION_RULES
 } from "./evidenceSynthesis";
 import { appendIntegrationDocsResponseContract } from "./integrationDocsResponseContract";
@@ -152,7 +153,7 @@ export function buildKnowledgeGapsSynthesisUserPrompt(input: KnowledgeGapsSynthe
     lines.push("");
   }
 
-  lines.push("## Evidence bundle");
+  lines.push(ATTACHED_FACTS_HEADING);
   lines.push(
     formatKnowledgeGapsForPrompt(
       input.evidence,
@@ -229,7 +230,7 @@ export function buildKnowledgeGapsSynthesisUserPrompt(input: KnowledgeGapsSynthe
   } else {
     lines.push(
       repoWide
-        ? "Synthesize repository-wide blind spots from the evidence bundle — prioritize missing docs, unclear ownership, and orphaned areas across the repo."
+        ? "Synthesize repository-wide blind spots from attached sources — prioritize missing docs, unclear ownership, and orphaned areas across the repo."
         : "Audit the open file only. Out-of-scope @ paths must not replace that audit."
     );
   }

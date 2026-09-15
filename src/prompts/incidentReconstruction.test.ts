@@ -85,7 +85,7 @@ Found retry helpers in webhook_task.py.
   assert.ok(!/no incident happened/i.test(enriched));
 
   const gaps = buildIncidentGapsBullets(integrations);
-  assert.ok(gaps.some((line) => /empty/i.test(line)));
+  assert.ok(gaps.some((line) => /does not prove the incident never existed/i.test(line)));
   assert.ok(gaps.some((line) => /do not stop at/i.test(line)));
 });
 
@@ -125,7 +125,7 @@ test("not connected still delivers gap section language", () => {
   const bullets = buildIncidentTicketsThreadsBullets(integrations);
   assert.ok(bullets.every((line) => /not connected/i.test(line)));
   const gaps = buildIncidentGapsBullets(integrations);
-  assert.ok(gaps.some((line) => /Connect missing tools/i.test(line)));
+  assert.ok(gaps.some((line) => /wasn.t connected this turn/i.test(line)));
   const enriched = enrichIncidentReconstructionResponse("**Answer**\nRetries exist.", integrations);
   assert.ok(enriched.includes(`**${INCIDENT_SECTION_GAPS}**`));
   assert.ok(/not connected/i.test(enriched));

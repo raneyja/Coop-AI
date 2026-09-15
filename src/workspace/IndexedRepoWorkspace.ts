@@ -247,8 +247,8 @@ function withInventoryNote(
   return {
     ...inventory,
     note:
-      "No line count is recorded for this repository — Deep-Index has not stored line stats for it yet. " +
-      "Say the line count is unavailable and offer to re-index. Do not estimate it from file counts or attached snippets."
+      "No line count is recorded for this repository yet. " +
+      "Say the line count is unavailable. Do not estimate it from file counts or attached snippets."
   };
 }
 
@@ -260,7 +260,7 @@ function unavailableNote(needs: RepoFactNeeds): string {
       : "the file count is";
   return (
     `Coop has no indexed inventory for this repository yet, so ${subject} unavailable. ` +
-    "Say so clearly and suggest Deep-Indexing the repo. Do not estimate totals from search samples or attached files."
+    "Say so clearly. Do not estimate totals from related-file hits or attached files."
   );
 }
 

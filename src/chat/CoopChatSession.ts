@@ -20,7 +20,8 @@ import {
 } from "./agentProposedPatch";
 import {
   CUSTOMER_EMPTY_HUNT_ANSWER,
-  customerFacingAgentAnswer
+  customerFacingAgentAnswer,
+  rewriteCustomerFacingProse
 } from "./customerFacingAnswer";
 import {
   applyPendingPatch,
@@ -531,6 +532,7 @@ import { shouldRunAgentToolLoop, agentTurnAction, shouldSuppressSuggestChipsForA
 import { buildAgentAnswerPrompt, buildAgentToolPlanPrompt } from "../api/agent/parseAgentToolPlan";
 import type { AgentConversationMessage, AgentPlanTurnInput, AgentStreamAnswerInput } from "../api/agent/agentTypes";
 import { promoteAgentIntegrationSearches } from "../api/agent/promoteAgentIntegrations";
+import { integrationProvidersFromAgentSteps } from "../api/agent/integrationTools";
 import {
   EDIT_UNREADABLE_FILE_ERROR,
   hasEditTargetInScope,
@@ -3945,7 +3947,7 @@ export class CoopChatSession {
       } catch {
         return mergeRepoInventoryContext(result, {
           source: "unavailable",
-          note: "Failed to load repository inventory. Do not estimate repository totals from search samples."
+          note: "Failed to load repository inventory. Do not estimate repository totals from related-file hits."
         });
       }
     };
@@ -3955,7 +3957,7 @@ export class CoopChatSession {
     if (budgetMs <= 0) {
       return mergeRepoInventoryContext(result, {
         source: "unavailable",
-        note: "Timed out loading repository inventory within the response budget."
+        note: "Timed out loading repository inventory. Say totals are unavailable."
       });
     }
 
@@ -3964,7 +3966,7 @@ export class CoopChatSession {
       delayMs(budgetMs).then(() =>
         mergeRepoInventoryContext(result, {
           source: "unavailable",
-          note: "Timed out loading repository inventory within the response budget."
+          note: "Timed out loading repository inventory. Say totals are unavailable."
         })
       )
     ]);
@@ -4219,7 +4221,8 @@ export class CoopChatSession {
    */
   private async planAgentToolTurn(
     input: AgentPlanTurnInput,
-    runtime: { model: string; provider: import("./types").LlmProviderPreference }
+    runtime: { model: string; provider: import("./types").LlmProviderPreference },
+    suggestedJobs?: Array<{ capability: string; terms: string[] }>
   ): Promise<string> {
     if (this.turnStreamAbort?.aborted) {
       return JSON.stringify({ done: true });
@@ -4230,7 +4233,8 @@ export class CoopChatSession {
       round: input.round,
       priorSummaries: input.priorSteps.map((step) => step.summary),
       lastToolResult: input.lastToolResult,
-      allowedIntegrations: input.allowedIntegrations
+      allowedIntegrations: input.allowedIntegrations,
+      suggestedJobs
     });
     let full = "";
     try {
@@ -4531,9 +4535,7 @@ export class CoopChatSession {
       clearResponseDeadlineForSynthesis(turn.clearResponseDeadline);
       turn.clearResponseDeadline = () => undefined;
 
-      const allowedIntegrations = turn.intentPlan.tools.filter(
-        (tool): tool is IntegrationChatProvider => Boolean(tool)
-      );
+      const allowedIntegrations = this.listConnectedIntegrationTools();
       const agentResult = await this.options.agentOrchestrator.run(
         {
           message: query,
@@ -4547,14 +4549,21 @@ export class CoopChatSession {
           wallMs: AGENT_JOB_WALL_MS,
           startedAt: turn.startedAt,
           allowedIntegrations,
+          fillIntegrations: turn.intentPlan.tools.filter(
+            (tool): tool is IntegrationChatProvider => Boolean(tool)
+          ),
           searchIntegration: (input) =>
             this.searchIntegrationForAgent(input.provider, input.query, turn.context.file, query),
           planTurn: (input) => {
             const editAssignment = getFeatureModelAssignment("edit");
-            return this.planAgentToolTurn(input, {
-              provider: editAssignment.provider,
-              model: editAssignment.model
-            });
+            return this.planAgentToolTurn(
+              input,
+              {
+                provider: editAssignment.provider,
+                model: editAssignment.model
+              },
+              turn.intentPlan.jobs
+            );
           },
           streamAnswer: (input) =>
             this.streamAgentAnswer(input, runtimeModel, chatUseCase, (chunk) => {
@@ -4596,12 +4605,13 @@ export class CoopChatSession {
       if (this.isViewingThread(turn.threadId)) {
         this.lastContextBundle = contextBundle;
       }
-      if (allowedIntegrations.length > 0) {
+      const calledIntegrations = integrationProvidersFromAgentSteps(agentResult.steps);
+      if (calledIntegrations.length > 0) {
         await this.postEvidenceCardsFromBundle(
           undefined,
-          allowedIntegrations.length === 1 ? allowedIntegrations[0] : undefined,
+          calledIntegrations.length === 1 ? calledIntegrations[0] : undefined,
           turn,
-          allowedIntegrations
+          calledIntegrations
         );
       }
       const agentPatch = extractAgentProposedPatchText(contextBundle);
@@ -4614,6 +4624,8 @@ export class CoopChatSession {
           content: contentForPatchCard,
           hasApplyPatch: false
         });
+      } else {
+        contentForPatchCard = rewriteCustomerFacingProse(contentForPatchCard);
       }
       if (!contentForPatchCard.trim()) {
         contentForPatchCard = CUSTOMER_EMPTY_HUNT_ANSWER;

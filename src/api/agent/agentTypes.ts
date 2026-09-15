@@ -33,7 +33,7 @@ export type AgentPlanTurnInput = {
   priorSteps: AgentStep[];
   lastToolResult?: string;
   conversation: AgentConversationMessage[];
-  /** Planner allowlist for this turn — mid-loop may only call these. */
+  /** Connected integrations for this turn — mid-loop may only call these. */
   allowedIntegrations?: IntegrationChatProvider[];
 };
 
