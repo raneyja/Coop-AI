@@ -209,6 +209,76 @@ test("code-host latest without Use-repo is a missing-repo error, not a Settings-
   assert.equal(result.error?.includes(SETTINGS_REPO_LIE), false);
 });
 
+test("Jira search hits keep the opened ticket body", async () => {
+  const opened: string[] = [];
+  const result = await fetchJiraSearchContext({
+    secrets,
+    extraTerms: ["peel auth"],
+    jobScoped: true,
+    client: {
+      getIssue: async (key) => {
+        opened.push(key);
+        return {
+          key: "COOP-101",
+          summary: "Auth hardening",
+          description: "Chose GitHub App over PAT for requireAuth.",
+          status: "Done",
+          issueType: "Story",
+          acceptanceCriteria: [],
+          labels: [],
+          technicalDebt: false,
+          created: "2026-01-01T00:00:00.000Z",
+          updated: "2026-01-02T00:00:00.000Z",
+          htmlUrl: "https://example.atlassian.net/browse/COOP-101"
+        };
+      },
+      searchIssues: async () => [
+        {
+          key: "COOP-101",
+          summary: "Auth hardening",
+          status: "Done",
+          issueType: "Story",
+          acceptanceCriteria: [],
+          labels: [],
+          technicalDebt: false,
+          created: "2026-01-01T00:00:00.000Z",
+          updated: "2026-01-02T00:00:00.000Z",
+          htmlUrl: "https://example.atlassian.net/browse/COOP-101"
+        }
+      ]
+    }
+  });
+  assert.deepEqual(opened, ["COOP-101"]);
+  assert.equal(result.issues[0]?.key, "COOP-101");
+  assert.match(result.issues[0]?.description ?? "", /GitHub App/);
+});
+
+test("Confluence search opens ADR page body after a hit", async () => {
+  const opened: string[] = [];
+  const result = await fetchConfluenceSearchContext({
+    secrets,
+    extraTerms: ["peel auth"],
+    jobScoped: true,
+    client: {
+      searchPages: async () => [
+        {
+          id: "42",
+          title: "ADR: GitHub App API (COOP-101)",
+          excerpt: "short snippet",
+          updated: "2026-01-02T00:00:00.000Z",
+          htmlUrl: "https://wiki/42"
+        }
+      ],
+      getPageBody: async (id) => {
+        opened.push(id);
+        return "We chose a GitHub App so requireAuth can verify installation tokens.";
+      }
+    }
+  });
+  assert.deepEqual(opened, ["42"]);
+  assert.match(result.pages[0]?.excerpt ?? "", /GitHub App so requireAuth/);
+});
+
 async function fetchForProvider(
   provider: IntegrationChatProvider,
   options: { extraTerms: string[]; jobScoped: true; jobVerb: "latest" }

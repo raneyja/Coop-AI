@@ -38,10 +38,10 @@ function integrationResultCount(evidence: IntegrationSearchEvidenceLike): number
   );
 }
 
-/** True when an integration should appear in prose **Sources** checklists (connected, succeeded, has hits). */
+/** Sources cards/chips: connected, succeeded, and has hits. Empty searches stay in Activity. */
 export function shouldIncludeIntegrationInSourcesChecklist(
   evidence: IntegrationSearchEvidenceLike | undefined | null
-): boolean {
+): evidence is IntegrationSearchEvidenceLike {
   if (!evidence || !isIntegrationConnectedForSources(evidence) || evidence.error?.trim()) {
     return false;
   }

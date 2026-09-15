@@ -174,7 +174,7 @@ import {
   teamsSearchFromBundle,
   type RepoSummaryEvidence
 } from "../context/contextBundleEvidence";
-import { isIntegrationConnectedForSources } from "../context/integrationEvidenceVisibility";
+import { shouldIncludeIntegrationInSourcesChecklist } from "../context/integrationEvidenceVisibility";
 import {
   extractExportNamesFromSource,
   filterJobDependentsForFile,
@@ -4396,7 +4396,8 @@ export class CoopChatSession {
   ): Promise<string> {
     const prompt = buildAgentAnswerPrompt({
       message: input.message,
-      action: input.action
+      action: input.action,
+      openedEvidence: input.openedEvidence
     });
     const projectInstructionsBlock = await this.buildProjectInstructionsBlock();
     const message = projectInstructionsBlock ? `${projectInstructionsBlock}\n\n${prompt}` : prompt;
@@ -7314,8 +7315,8 @@ export class CoopChatSession {
     if (!evidence) {
       return;
     }
-    // Don't post empty Sources chrome for "not configured" stubs (card body returns null).
-    if (!isIntegrationConnectedForSources(evidence)) {
+    // Sources are hits only. Empty or disconnected searches stay in Activity.
+    if (!shouldIncludeIntegrationInSourcesChecklist(evidence)) {
       return;
     }
     const artifactId = this.beginEvidenceArtifact();

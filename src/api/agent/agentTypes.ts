@@ -48,6 +48,8 @@ export type AgentStreamAnswerInput = {
   repoId: string;
   conversation: AgentConversationMessage[];
   action?: "locate" | "understand" | "change" | "none";
+  /** Opened Jira/docs bodies — last user turn, not buried in tool JSON. */
+  openedEvidence?: string;
 };
 
 /** Same conversation, next turn: stream the user-visible answer. */

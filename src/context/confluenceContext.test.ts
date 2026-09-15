@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { buildConfluenceCql } from "./docSearchQuery";
-import { shouldFetchConfluenceContext, wantsConfluenceContext } from "./confluenceContext";
+import {
+  looksLikeDecisionDocTitle,
+  shouldFetchConfluenceContext,
+  wantsConfluenceContext
+} from "./confluenceContext";
 import type { ContextFetchRequest } from "./requestBatcher";
 
 let passed = 0;
@@ -35,6 +39,11 @@ test("shouldFetchConfluenceContext includes knowledge-gaps quick action", () => 
     params: { quickAction: "knowledge-gaps" }
   } as ContextFetchRequest;
   assert.equal(shouldFetchConfluenceContext(request), true);
+});
+
+test("looksLikeDecisionDocTitle matches ADR titles", () => {
+  assert.equal(looksLikeDecisionDocTitle("ADR: GitHub App API (COOP-101)"), true);
+  assert.equal(looksLikeDecisionDocTitle("Onboarding checklist"), false);
 });
 
 const total = passed + failed;

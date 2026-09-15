@@ -224,7 +224,8 @@ export const EMPTY_EVIDENCE_HONESTY_RULE = `Empty-evidence honesty:
 - A search that came back empty proves only that nothing matched this turn. It does not prove the event, decision, code, ticket, or discussion never existed.
 - A missing, disconnected, skipped, timed-out, or failed source is unavailable. State that plainly; never cite it or infer facts from it.
 - Never invent tickets, messages, pages, paths, URLs, people, or decisions to fill a gap.
-- Empty tools in teammate English with the topic (e.g. “No mention in Slack of peel-auth / COOP-101”). “No Jira ticket matching COOP-101 in what came back.”`;
+- Empty tools in teammate English with the topic (e.g. “No mention in Slack of peel-auth / COOP-101”). “No Jira ticket matching COOP-101 in what came back.”
+- An attached Jira ticket body or Confluence/docs page excerpt is documented decision evidence. Use it. Do not say there is no documented decision while those bodies are attached. Empty Slack is only “no mention in Slack.”`;
 
 /** Slim evidence rules for general chat (static system prompt). */
 export const GENERAL_CHAT_EVIDENCE_RULES = `Evidence rules (when sources or integration blocks are attached):

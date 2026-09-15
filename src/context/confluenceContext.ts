@@ -74,6 +74,18 @@ export function shouldFetchConfluenceContext(request: ContextFetchRequest): bool
   });
 }
 
+/** Injectable Confluence client for tests — production uses credentials. */
+export type ConfluenceSearchClient = {
+  searchPages(cql: string, limit?: number): Promise<Array<{
+    id: string;
+    title: string;
+    excerpt?: string;
+    updated: string;
+    htmlUrl: string;
+  }>>;
+  getPageBody?(pageId: string): Promise<string | undefined>;
+};
+
 export async function fetchConfluenceSearchContext(options: {
   secrets: IntegrationSecrets;
   owner?: string;
@@ -84,6 +96,8 @@ export async function fetchConfluenceSearchContext(options: {
   jobScoped?: boolean;
   jobVerb?: ChatIntentJobVerb;
   integrationScope?: ResolvedIntegrationScope;
+  /** Test seam — production leaves this unset and builds a client from secrets. */
+  client?: ConfluenceSearchClient;
 }): Promise<ConfluenceSearchContext> {
   if (isConfluenceScopeBlocked(options.integrationScope)) {
     return {
@@ -94,9 +108,10 @@ export async function fetchConfluenceSearchContext(options: {
     };
   }
 
-  const creds = await options.secrets.getCredentials();
-  const auth = resolveConfluenceAuth(creds);
-  if (!auth && !creds.atlassianCloudId) {
+  const injectedClient = options.client;
+  const creds = injectedClient ? undefined : await options.secrets.getCredentials();
+  const auth = creds ? resolveConfluenceAuth(creds) : undefined;
+  if (!injectedClient && !auth && !creds?.atlassianCloudId) {
     return {
       source: "confluence-search",
       cql: "",
@@ -134,30 +149,33 @@ export async function fetchConfluenceSearchContext(options: {
     };
   }
 
-  const { baseUrl } = resolveConfluenceBaseUrl({
-    confluenceBaseUrl: creds.confluenceBaseUrl,
-    jiraBaseUrl: creds.jiraBaseUrl
-  });
-  const siteError = confluenceSiteUrlError(baseUrl);
-  if (siteError && !creds.atlassianCloudId) {
-    return {
-      source: "confluence-search",
-      cql: primaryCql,
-      pages: [],
-      error: siteError
-    };
-  }
+  let client: ConfluenceSearchClient | undefined = injectedClient;
+  if (!client && creds) {
+    const { baseUrl } = resolveConfluenceBaseUrl({
+      confluenceBaseUrl: creds.confluenceBaseUrl,
+      jiraBaseUrl: creds.jiraBaseUrl
+    });
+    const siteError = confluenceSiteUrlError(baseUrl);
+    if (siteError && !creds.atlassianCloudId) {
+      return {
+        source: "confluence-search",
+        cql: primaryCql,
+        pages: [],
+        error: siteError
+      };
+    }
 
-  const oauthClient = createConfluenceClientFromCredentials(creds, baseUrl);
-  const client =
-    oauthClient ??
-    (auth
-      ? new ConfluenceClient({
-          baseUrl,
-          email: auth.email,
-          apiToken: auth.apiToken
-        })
-      : undefined);
+    const oauthClient = createConfluenceClientFromCredentials(creds, baseUrl);
+    client =
+      oauthClient ??
+      (auth
+        ? new ConfluenceClient({
+            baseUrl,
+            email: auth.email,
+            apiToken: auth.apiToken
+          })
+        : undefined);
+  }
   if (!client) {
     return {
       source: "confluence-search",
@@ -218,19 +236,24 @@ export async function fetchConfluenceSearchContext(options: {
       };
     });
 
+    const ranked = latest
+      ? mapped.slice(0, limit)
+      : filterDocPagesForUseRepo(mapped, {
+          owner: options.owner,
+          repo: options.repo,
+          focusTerms: options.extraTerms,
+          limit
+        });
+    const opened = await attachConfluencePageBodies(client, ranked, {
+      jobScoped: Boolean(options.jobScoped && options.jobVerb !== "latest")
+    });
+
     return {
       source: "confluence-search",
       cql,
       query: (options.extraTerms ?? []).join(" ").trim() || undefined,
       repoQuery,
-      pages: latest
-        ? mapped.slice(0, limit)
-        : filterDocPagesForUseRepo(mapped, {
-            owner: options.owner,
-            repo: options.repo,
-            focusTerms: options.extraTerms,
-            limit
-          })
+      pages: opened
     };
   } catch (error) {
     return {
@@ -244,6 +267,80 @@ export async function fetchConfluenceSearchContext(options: {
 
 export function confluenceFallbackQuery(owner?: string, repo?: string): string | undefined {
   return buildRepoOrQuery(owner, repo);
+}
+
+const OPENED_PAGE_BODY_CHARS = 1500;
+const MAX_OPENED_PAGES = 3;
+
+/** ADR / RFC / decision-record titles — open the page, don't stop at search. */
+export function looksLikeDecisionDocTitle(title: string): boolean {
+  return /\badr\b|architecture decision|decision record|\brfc\b|design doc|technical decision/i.test(
+    title
+  );
+}
+
+function pagesToOpen(
+  pages: ConfluenceSearchPage[],
+  jobScoped: boolean
+): ConfluenceSearchPage[] {
+  const picked: ConfluenceSearchPage[] = [];
+  const seen = new Set<string>();
+  for (const page of pages) {
+    if (!looksLikeDecisionDocTitle(page.title)) {
+      continue;
+    }
+    if (picked.length >= MAX_OPENED_PAGES) {
+      break;
+    }
+    seen.add(page.id);
+    picked.push(page);
+  }
+  if (jobScoped) {
+    for (const page of pages) {
+      if (picked.length >= MAX_OPENED_PAGES) {
+        break;
+      }
+      if (seen.has(page.id)) {
+        continue;
+      }
+      seen.add(page.id);
+      picked.push(page);
+    }
+  }
+  return picked;
+}
+
+async function attachConfluencePageBodies(
+  client: ConfluenceSearchClient,
+  pages: ConfluenceSearchPage[],
+  options: { jobScoped: boolean }
+): Promise<ConfluenceSearchPage[]> {
+  if (pages.length === 0 || !client.getPageBody) {
+    return pages;
+  }
+  const selected = pagesToOpen(pages, options.jobScoped);
+  if (selected.length === 0) {
+    return pages;
+  }
+  const bodies = await Promise.all(
+    selected.map(async (page) => {
+      try {
+        const body = await client.getPageBody?.(page.id);
+        return { id: page.id, body };
+      } catch {
+        return { id: page.id, body: undefined };
+      }
+    })
+  );
+  const byId = new Map(bodies.map((entry) => [entry.id, entry.body]));
+  return pages.map((page) => {
+    const raw = byId.get(page.id);
+    if (!raw?.trim()) {
+      return page;
+    }
+    const excerpt = sanitizeIntegrationSnippet(truncate(raw, OPENED_PAGE_BODY_CHARS));
+    return excerpt ? { ...page, excerpt } : page;
+  });
 }
 
 function truncate(value: string, max: number): string {

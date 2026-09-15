@@ -47,5 +47,8 @@ test("shouldIncludeIntegrationInSourcesChecklist requires connected successful h
     false
   );
   assert.equal(shouldIncludeIntegrationInSourcesChecklist({ issues: [] }), false);
+  assert.equal(shouldIncludeIntegrationInSourcesChecklist({ messages: [] }), false);
+  assert.equal(shouldIncludeIntegrationInSourcesChecklist({ pages: [] }), false);
+  assert.equal(shouldIncludeIntegrationInSourcesChecklist({ documents: [] }), false);
   assert.equal(shouldIncludeIntegrationInSourcesChecklist({ issues: [{ key: "WID-1" }] }), true);
 });

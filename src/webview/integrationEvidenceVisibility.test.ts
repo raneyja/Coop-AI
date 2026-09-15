@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   isIntegrationConnectedForSources,
-  isIntegrationNotConnectedError
+  isIntegrationNotConnectedError,
+  shouldIncludeIntegrationInSourcesChecklist
 } from "./integrationEvidenceVisibility";
 
 test("isIntegrationNotConnectedError matches credential stubs", () => {
@@ -28,4 +29,9 @@ test("isIntegrationConnectedForSources hides disconnected stubs", () => {
     }),
     true
   );
+});
+
+test("Sources cards hide empty searches", () => {
+  assert.equal(shouldIncludeIntegrationInSourcesChecklist({ messages: [] }), false);
+  assert.equal(shouldIncludeIntegrationInSourcesChecklist({ issues: [{ key: "COOP-101" }] }), true);
 });

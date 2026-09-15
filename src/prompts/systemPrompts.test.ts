@@ -140,6 +140,7 @@ test("intent_job uses the same audience and user-facing contract as chat", () =>
   assert.ok(intentJob.includes("## User-facing language"));
   assert.ok(intentJob.includes("No mention in Slack of peel-auth / COOP-101"));
   assert.ok(intentJob.includes("Locate claims require attached remote code bodies"));
+  assert.ok(intentJob.includes("documented decision evidence"));
   assert.equal(intentJob.includes("evidence bundle"), false);
   assert.equal(intentJob.includes("index returned no usable"), false);
   assert.ok(chat.includes("## User-facing language"));
@@ -261,7 +262,8 @@ test("buildUserMessageWithContext renders jira_tickets from context bundle", () 
                 status: "Done",
                 issueType: "Story",
                 updated: "2026-01-02T00:00:00.000Z",
-                htmlUrl: "https://acme.atlassian.net/browse/COOP-101"
+                htmlUrl: "https://acme.atlassian.net/browse/COOP-101",
+                description: "Chose GitHub App over PAT for requireAuth."
               }
             ]
           }
@@ -274,6 +276,7 @@ test("buildUserMessageWithContext renders jira_tickets from context bundle", () 
   assert.ok(message.includes("Search sample only"));
   assert.ok(message.includes('key="COOP-101"'));
   assert.ok(message.includes("Auth hardening"));
+  assert.ok(message.includes("Chose GitHub App over PAT"));
 
   // B7: integration records are XML-only — not double-sent inside <graph_context>.
   const graphContext = message.slice(message.indexOf("<graph_context>"), message.indexOf("</graph_context>"));

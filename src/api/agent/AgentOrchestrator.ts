@@ -37,6 +37,7 @@ import {
 } from "./searchQuery";
 import { createAgentToolRegistry } from "./tools/registry";
 import { handleIntegrationSearch } from "./tools/integrationSearch";
+import { formatOpenedIntegrationEvidence } from "./openedIntegrationEvidence";
 import {
   agentToolForIntegrationProvider,
   isAgentIntegrationTool
@@ -729,7 +730,8 @@ export class AgentOrchestrator {
         message: query,
         repoId,
         conversation: filledHistory ?? history,
-        action
+        action,
+        openedEvidence: formatOpenedIntegrationEvidence(result.context)
       });
       return {
         ...result,

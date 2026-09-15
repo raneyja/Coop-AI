@@ -32,6 +32,8 @@ export type JiraSearchTicket = {
   updated: string;
   htmlUrl: string;
   labels?: string[];
+  /** Opened ticket body from search/getIssue — not just the summary line. */
+  description?: string;
 };
 
 export type JiraSearchContext = {
@@ -721,6 +723,19 @@ export async function fetchJiraSearchContext(options: {
     searchNote = [searchNote, `Could not open ${missKeys}.`].filter(Boolean).join(" ");
   }
 
+  const focusRank = rankJiraIssuesForFocus(mapIssues([...issuesByKey.values()]), {
+    activeFile: options.activeFile,
+    queryText,
+    extraTerms: options.extraTerms,
+    owner: options.owner,
+    repo: options.repo
+  });
+  await openJiraSearchHitBodies(
+    client,
+    issuesByKey,
+    focusRank.slice(0, Math.min(limit, 3)).map((issue) => issue.key)
+  );
+
   if (issuesByKey.size === 0 && !jql && issueKeys.length === 0) {
     return {
       source: "jira-search",
@@ -853,6 +868,24 @@ function jiraLatestAllowlisted(scope: ResolvedIntegrationScope | undefined): boo
   );
 }
 
+/** After a search hit, GET the ticket — search snippets are not the body. */
+async function openJiraSearchHitBodies(
+  client: JiraSearchClient,
+  issuesByKey: Map<string, JiraIssue>,
+  keys: string[]
+): Promise<void> {
+  await Promise.all(
+    keys.map(async (key) => {
+      try {
+        const opened = await client.getIssue(key);
+        issuesByKey.set(opened.key, opened);
+      } catch {
+        /* keep the search row */
+      }
+    })
+  );
+}
+
 async function addIssueByKey(
   client: JiraSearchClient,
   issuesByKey: Map<string, JiraIssue>,
@@ -870,16 +903,26 @@ async function addIssueByKey(
   }
 }
 
+const JIRA_TICKET_BODY_CHARS = 2000;
+
 function mapIssues(issues: JiraIssue[]): JiraSearchTicket[] {
-  return issues.map((issue) => ({
-    key: issue.key,
-    summary: issue.summary,
-    status: issue.status,
-    issueType: issue.issueType,
-    updated: issue.updated,
-    htmlUrl: issue.htmlUrl,
-    labels: issue.labels.length > 0 ? issue.labels : undefined
-  }));
+  return issues.map((issue) => {
+    const description = issue.description?.replace(/\s+/g, " ").trim();
+    return {
+      key: issue.key,
+      summary: issue.summary,
+      status: issue.status,
+      issueType: issue.issueType,
+      updated: issue.updated,
+      htmlUrl: issue.htmlUrl,
+      labels: issue.labels.length > 0 ? issue.labels : undefined,
+      description: description
+        ? description.length > JIRA_TICKET_BODY_CHARS
+          ? `${description.slice(0, JIRA_TICKET_BODY_CHARS)}…`
+          : description
+        : undefined
+    };
+  });
 }
 
 function escapeJqlString(value: string): string {

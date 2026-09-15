@@ -171,11 +171,13 @@ export function buildAgentToolPlanPrompt(input: {
 export function buildAgentAnswerPrompt(input: {
   message: string;
   action?: "locate" | "understand" | "change" | "none";
+  openedEvidence?: string;
 }): string {
   const change =
     input.action === "change"
       ? "If propose_patch succeeded, briefly explain the change. The Apply card will show the patch — do not invent a different SEARCH/REPLACE. If no patch was accepted, say so and do not dump a guessed File: block."
       : "Do not emit SEARCH/REPLACE or propose a patch. Hunt/explain only.";
+  const opened = input.openedEvidence?.trim();
   return [
     "Write the user-facing answer now from the tool results in this conversation.",
     `Question: ${input.message}`,
@@ -185,7 +187,14 @@ export function buildAgentAnswerPrompt(input: {
     "If you never read a file that mentions a named symbol, say in 1–2 sentences that you couldn’t find that symbol in this repo, then suggest a more specific name or opening the file. Answer only from files you read. Do not use a **Your question** heading. Do not restate the user's ask.",
     "Never tell the user to clone, inspect a local copy, or search on disk. If only a state catalog, default rows, or a client post of state_id were read, say the API write/reject path was not in those bodies.",
     "If a read_file body contains validate() or ValidationError for the field the user asked about, that is the write/reject. Cite that. Never cite OpenAPI/swagger, a read_only serializer class, seed JSON, or a view that only checks permissions and fetches a row.",
-    "When Slack/Jira ran, summarize those hits after the code answer (or after the honest miss). Do not stretch an unrelated ticket into the definition.",
+    "When Slack/Jira/docs ran: empty Slack/Teams is only “no mention in Slack,” not “no decision.” A Jira issue `description` or a Confluence/docs `excerpt` is the documented decision — quote or paraphrase that body. Do not infer a decision from title and status alone. If issues have no description, say the ticket was found but its body was not attached.",
+    "When Slack/Jira ran, put those findings after the code answer (or after the honest miss). Do not stretch an unrelated ticket into the definition.",
+    ...(opened
+      ? [
+          "Opened integration artifacts for this answer (required — quote or paraphrase Body lines; never infer a decision from title/status when Body is present):",
+          opened
+        ]
+      : []),
     "Do not emit tool JSON.",
     change
   ].join("\n");

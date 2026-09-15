@@ -74,6 +74,24 @@ async function run(): Promise<void> {
       `Expected basic-auth listSpaces to call v1 /space, got: ${capturedUrls.join(", ")}`
     );
     console.log("  ✓ Basic-auth listSpaces still uses v1 /space");
+
+    capturedUrls = [];
+    globalThis.fetch = (async (url: string | URL) => {
+      capturedUrls.push(String(url));
+      return new Response(
+        JSON.stringify({
+          body: { view: { value: "<p>We chose a GitHub App.</p>" } }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }) as typeof fetch;
+    const body = await basicClient.getPageBody("42");
+    assert.equal(body, "We chose a GitHub App.");
+    assert.ok(
+      capturedUrls.some((url) => url.includes("/content/42") && url.includes("expand=")),
+      `Expected getPageBody to open the page, got: ${capturedUrls.join(", ")}`
+    );
+    console.log("  ✓ getPageBody opens the page and strips HTML");
   } finally {
     globalThis.fetch = originalFetch;
   }

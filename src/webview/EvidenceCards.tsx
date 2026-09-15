@@ -80,7 +80,10 @@ import {
   IntegrationSourceChip,
   type IntegrationSourceId
 } from "./components/IntegrationSourceBrand";
-import { isIntegrationConnectedForSources, type IntegrationSearchEvidenceLike } from "./integrationEvidenceVisibility";
+import {
+  shouldIncludeIntegrationInSourcesChecklist,
+  type IntegrationSearchEvidenceLike
+} from "./integrationEvidenceVisibility";
 import { evidenceCodeHostConnection } from "./evidenceCodeHost";
 
 export function RepoSummaryEvidenceCard({
@@ -138,12 +141,12 @@ export function RepoSummaryEvidenceCard({
     const list: EvidenceCardSource[] = [
       evidenceCardCodeHostSource(host, `${entryCount} anchor file${entryCount === 1 ? "" : "s"}`)
     ];
-    if (isIntegrationConnectedForSources(evidence.confluence)) list.push({ provider: "confluence", detail: `${confluenceCount} page(s)` });
-    if (isIntegrationConnectedForSources(evidence.jira)) list.push({ provider: "jira", detail: `${jiraCount} issue(s)` });
-    if (isIntegrationConnectedForSources(evidence.slack)) list.push({ provider: "slack", detail: `${slackCount} message(s)` });
-    if (isIntegrationConnectedForSources(evidence.teams)) list.push({ provider: "teams", detail: `${teamsCount} message(s)` });
-    if (isIntegrationConnectedForSources(evidence.notion)) list.push({ provider: "notion", detail: `${notionCount} page(s)` });
-    if (isIntegrationConnectedForSources(evidence.googleDocs)) list.push({ provider: "google-docs", detail: `${googleDocsCount} doc(s)` });
+    if (shouldIncludeIntegrationInSourcesChecklist(evidence.confluence)) list.push({ provider: "confluence", detail: `${confluenceCount} page(s)` });
+    if (shouldIncludeIntegrationInSourcesChecklist(evidence.jira)) list.push({ provider: "jira", detail: `${jiraCount} issue(s)` });
+    if (shouldIncludeIntegrationInSourcesChecklist(evidence.slack)) list.push({ provider: "slack", detail: `${slackCount} message(s)` });
+    if (shouldIncludeIntegrationInSourcesChecklist(evidence.teams)) list.push({ provider: "teams", detail: `${teamsCount} message(s)` });
+    if (shouldIncludeIntegrationInSourcesChecklist(evidence.notion)) list.push({ provider: "notion", detail: `${notionCount} page(s)` });
+    if (shouldIncludeIntegrationInSourcesChecklist(evidence.googleDocs)) list.push({ provider: "google-docs", detail: `${googleDocsCount} doc(s)` });
     return list;
   }, [host, entryCount, evidence.confluence, evidence.jira, evidence.slack, evidence.teams, evidence.notion, evidence.googleDocs, confluenceCount, jiraCount, slackCount, teamsCount, notionCount, googleDocsCount]);
 
@@ -278,7 +281,7 @@ export function RepoSummaryEvidenceCard({
           <TreeOverviewSection treeOverview={evidence.treeOverview} />
         </EvidenceConnectionGroup>
 
-        {isIntegrationConnectedForSources(evidence.confluence) ? (
+        {shouldIncludeIntegrationInSourcesChecklist(evidence.confluence) ? (
           <EvidenceConnectionGroup connection="confluence">
             <IntegrationResultCollapsible
               title={`Architecture pages (${confluenceCount})`}
@@ -305,7 +308,7 @@ export function RepoSummaryEvidenceCard({
           </EvidenceConnectionGroup>
         ) : null}
 
-        {isIntegrationConnectedForSources(evidence.jira) ? (
+        {shouldIncludeIntegrationInSourcesChecklist(evidence.jira) ? (
           <EvidenceConnectionGroup connection="jira">
             <IntegrationResultCollapsible
               title={`Epics (${jiraCount})`}
@@ -332,7 +335,7 @@ export function RepoSummaryEvidenceCard({
           </EvidenceConnectionGroup>
         ) : null}
 
-        {isIntegrationConnectedForSources(evidence.slack) ? (
+        {shouldIncludeIntegrationInSourcesChecklist(evidence.slack) ? (
           <EvidenceConnectionGroup connection="slack">
             <IntegrationResultCollapsible
               title={`Discussions (${slackCount})`}
@@ -359,7 +362,7 @@ export function RepoSummaryEvidenceCard({
           </EvidenceConnectionGroup>
         ) : null}
 
-        {isIntegrationConnectedForSources(evidence.teams) ? (
+        {shouldIncludeIntegrationInSourcesChecklist(evidence.teams) ? (
           <EvidenceConnectionGroup connection="teams">
             <IntegrationResultCollapsible
               title={`Discussions (${teamsCount})`}
@@ -386,7 +389,7 @@ export function RepoSummaryEvidenceCard({
           </EvidenceConnectionGroup>
         ) : null}
 
-        {isIntegrationConnectedForSources(evidence.notion) ? (
+        {shouldIncludeIntegrationInSourcesChecklist(evidence.notion) ? (
           <EvidenceConnectionGroup connection="notion">
             <IntegrationResultCollapsible
               title={`Pages (${notionCount})`}
@@ -413,7 +416,7 @@ export function RepoSummaryEvidenceCard({
           </EvidenceConnectionGroup>
         ) : null}
 
-        {isIntegrationConnectedForSources(evidence.googleDocs) ? (
+        {shouldIncludeIntegrationInSourcesChecklist(evidence.googleDocs) ? (
           <EvidenceConnectionGroup connection="google-docs">
             <IntegrationResultCollapsible
               title={`Documents (${googleDocsCount})`}
@@ -648,22 +651,22 @@ export function BlastRadiusEvidenceCard({
     }
     if (prCount) list.push(evidenceCardCodeHostSource(host, `${prCount} open PR(s)`));
     if (evidence.ownersByFile?.length) list.push(evidenceCardCodeHostSource(host, "CODEOWNERS"));
-    if (isIntegrationConnectedForSources(evidence.slackSearch)) {
+    if (shouldIncludeIntegrationInSourcesChecklist(evidence.slackSearch)) {
       list.push({ provider: "slack", detail: `${slackCount} message(s)` });
     }
-    if (isIntegrationConnectedForSources(evidence.jiraSearch)) {
+    if (shouldIncludeIntegrationInSourcesChecklist(evidence.jiraSearch)) {
       list.push({ provider: "jira", detail: `${jiraCount} issue(s)` });
     }
-    if (isIntegrationConnectedForSources(evidence.confluenceSearch)) {
+    if (shouldIncludeIntegrationInSourcesChecklist(evidence.confluenceSearch)) {
       list.push({ provider: "confluence", detail: `${confluenceCount} page(s)` });
     }
-    if (isIntegrationConnectedForSources(evidence.notionSearch)) {
+    if (shouldIncludeIntegrationInSourcesChecklist(evidence.notionSearch)) {
       list.push({ provider: "notion", detail: `${notionCount} page(s)` });
     }
-    if (isIntegrationConnectedForSources(evidence.googleDocsSearch)) {
+    if (shouldIncludeIntegrationInSourcesChecklist(evidence.googleDocsSearch)) {
       list.push({ provider: "google-docs", detail: `${googleDocsCount} doc(s)` });
     }
-    if (isIntegrationConnectedForSources(evidence.teamsSearch)) {
+    if (shouldIncludeIntegrationInSourcesChecklist(evidence.teamsSearch)) {
       list.push({ provider: "teams", detail: `${teamsCount} message(s)` });
     }
     if (list.length === 0) list.push(evidenceCardCodeHostSource(host, "Limited graph"));
@@ -889,7 +892,7 @@ export function BlastRadiusEvidenceCard({
           </EvidenceConnectionGroup>
         ) : null}
 
-        {isIntegrationConnectedForSources(evidence.slackSearch) ? (
+        {shouldIncludeIntegrationInSourcesChecklist(evidence.slackSearch) ? (
           <EvidenceConnectionGroup connection="slack">
             <IntegrationResultCollapsible
               title={`Discussions (${slackCount})`}
@@ -916,7 +919,7 @@ export function BlastRadiusEvidenceCard({
           </EvidenceConnectionGroup>
         ) : null}
 
-        {isIntegrationConnectedForSources(evidence.jiraSearch) ? (
+        {shouldIncludeIntegrationInSourcesChecklist(evidence.jiraSearch) ? (
           <EvidenceConnectionGroup connection="jira">
             <IntegrationResultCollapsible
               title={`Jira (${jiraCount})`}
@@ -943,7 +946,7 @@ export function BlastRadiusEvidenceCard({
           </EvidenceConnectionGroup>
         ) : null}
 
-        {isIntegrationConnectedForSources(evidence.confluenceSearch) ? (
+        {shouldIncludeIntegrationInSourcesChecklist(evidence.confluenceSearch) ? (
           <EvidenceConnectionGroup connection="confluence">
             <IntegrationResultCollapsible
               title={`Confluence (${confluenceCount})`}
@@ -971,7 +974,7 @@ export function BlastRadiusEvidenceCard({
           </EvidenceConnectionGroup>
         ) : null}
 
-        {isIntegrationConnectedForSources(evidence.notionSearch) ? (
+        {shouldIncludeIntegrationInSourcesChecklist(evidence.notionSearch) ? (
           <EvidenceConnectionGroup connection="notion">
             <IntegrationResultCollapsible
               title={`Notion (${notionCount})`}
@@ -998,7 +1001,7 @@ export function BlastRadiusEvidenceCard({
           </EvidenceConnectionGroup>
         ) : null}
 
-        {isIntegrationConnectedForSources(evidence.googleDocsSearch) ? (
+        {shouldIncludeIntegrationInSourcesChecklist(evidence.googleDocsSearch) ? (
           <EvidenceConnectionGroup connection="google-docs">
             <IntegrationResultCollapsible
               title={`Google Docs (${googleDocsCount})`}
@@ -1025,7 +1028,7 @@ export function BlastRadiusEvidenceCard({
           </EvidenceConnectionGroup>
         ) : null}
 
-        {isIntegrationConnectedForSources(evidence.teamsSearch) ? (
+        {shouldIncludeIntegrationInSourcesChecklist(evidence.teamsSearch) ? (
           <EvidenceConnectionGroup connection="teams">
             <IntegrationResultCollapsible
               title={`Teams (${teamsCount})`}
@@ -1152,12 +1155,12 @@ export function KnowledgeGapsEvidenceCard({
   const sources = useMemo(() => {
     const list: EvidenceCardSource[] = [evidenceCardCodeHostSource(host, "Repo scan")];
     if (evidence.jobScan) list.push(evidenceCardCodeHostSource(host, "Gap scan"));
-    if (isIntegrationConnectedForSources(confluence)) list.push({ provider: "confluence", detail: `${pageCount} page(s)` });
-    if (isIntegrationConnectedForSources(jira)) list.push({ provider: "jira", detail: `${jiraCount} issue(s)` });
-    if (isIntegrationConnectedForSources(slack)) list.push({ provider: "slack", detail: `${slackCount} message(s)` });
-    if (isIntegrationConnectedForSources(notion)) list.push({ provider: "notion", detail: `${notionCount} page(s)` });
-    if (isIntegrationConnectedForSources(googleDocs)) list.push({ provider: "google-docs", detail: `${googleDocsCount} doc(s)` });
-    if (isIntegrationConnectedForSources(teams)) list.push({ provider: "teams", detail: `${teamsCount} message(s)` });
+    if (shouldIncludeIntegrationInSourcesChecklist(confluence)) list.push({ provider: "confluence", detail: `${pageCount} page(s)` });
+    if (shouldIncludeIntegrationInSourcesChecklist(jira)) list.push({ provider: "jira", detail: `${jiraCount} issue(s)` });
+    if (shouldIncludeIntegrationInSourcesChecklist(slack)) list.push({ provider: "slack", detail: `${slackCount} message(s)` });
+    if (shouldIncludeIntegrationInSourcesChecklist(notion)) list.push({ provider: "notion", detail: `${notionCount} page(s)` });
+    if (shouldIncludeIntegrationInSourcesChecklist(googleDocs)) list.push({ provider: "google-docs", detail: `${googleDocsCount} doc(s)` });
+    if (shouldIncludeIntegrationInSourcesChecklist(teams)) list.push({ provider: "teams", detail: `${teamsCount} message(s)` });
     if (evidence.ownershipReport) list.push(evidenceCardCodeHostSource(host, `${ownerCount} owner score(s)`));
     if (evidence.dependencyGraph) {
       list.push(
@@ -1299,7 +1302,7 @@ export function KnowledgeGapsEvidenceCard({
           ) : null}
         </EvidenceConnectionGroup>
 
-        {isIntegrationConnectedForSources(confluence) ? (
+        {shouldIncludeIntegrationInSourcesChecklist(confluence) ? (
           <EvidenceConnectionGroup connection="confluence">
             <IntegrationResultCollapsible
               title={`Pages (${pageCount})`}
@@ -1327,7 +1330,7 @@ export function KnowledgeGapsEvidenceCard({
           </EvidenceConnectionGroup>
         ) : null}
 
-        {isIntegrationConnectedForSources(jira) ? (
+        {shouldIncludeIntegrationInSourcesChecklist(jira) ? (
           <EvidenceConnectionGroup connection="jira">
             <IntegrationResultCollapsible
               title={`Issues (${jiraCount})`}
@@ -1354,7 +1357,7 @@ export function KnowledgeGapsEvidenceCard({
           </EvidenceConnectionGroup>
         ) : null}
 
-        {isIntegrationConnectedForSources(slack) ? (
+        {shouldIncludeIntegrationInSourcesChecklist(slack) ? (
           <EvidenceConnectionGroup connection="slack">
             <IntegrationResultCollapsible
               title={`Discussions (${slackCount})`}
@@ -1381,7 +1384,7 @@ export function KnowledgeGapsEvidenceCard({
           </EvidenceConnectionGroup>
         ) : null}
 
-        {isIntegrationConnectedForSources(notion) ? (
+        {shouldIncludeIntegrationInSourcesChecklist(notion) ? (
           <EvidenceConnectionGroup connection="notion">
             <IntegrationResultCollapsible
               title={`Pages (${notionCount})`}
@@ -1408,7 +1411,7 @@ export function KnowledgeGapsEvidenceCard({
           </EvidenceConnectionGroup>
         ) : null}
 
-        {isIntegrationConnectedForSources(googleDocs) ? (
+        {shouldIncludeIntegrationInSourcesChecklist(googleDocs) ? (
           <EvidenceConnectionGroup connection="google-docs">
             <IntegrationResultCollapsible
               title={`Documents (${googleDocsCount})`}
@@ -1435,7 +1438,7 @@ export function KnowledgeGapsEvidenceCard({
           </EvidenceConnectionGroup>
         ) : null}
 
-        {isIntegrationConnectedForSources(teams) ? (
+        {shouldIncludeIntegrationInSourcesChecklist(teams) ? (
           <EvidenceConnectionGroup connection="teams">
             <IntegrationResultCollapsible
               title={`Discussions (${teamsCount})`}
@@ -1516,7 +1519,7 @@ export function IntegrationSearchEvidenceCard({
     [provider, evidence]
   );
 
-  if (!isIntegrationConnectedForSources(evidence as IntegrationSearchEvidenceLike)) {
+  if (!shouldIncludeIntegrationInSourcesChecklist(evidence as IntegrationSearchEvidenceLike)) {
     return null;
   }
 

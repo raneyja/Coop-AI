@@ -12,7 +12,7 @@ import {
   isSlackPresenceResolved
 } from "./slackPresenceDisplay";
 import { filterDetailWarnings, summarizeOwnershipReport } from "./evidenceCardSummary";
-import { isIntegrationConnectedForSources } from "./integrationEvidenceVisibility";
+import { shouldIncludeIntegrationInSourcesChecklist } from "./integrationEvidenceVisibility";
 import type { EvidenceActionContext } from "./evidenceCardActionHandler";
 import type { ConflictSummary } from "./types";
 import type { SlackSearchEvidence } from "../context/contextBundleEvidence";
@@ -101,7 +101,7 @@ export function OwnershipCard({
         detail: `${report.signals.issues.length} issue${report.signals.issues.length === 1 ? "" : "s"}`
       });
     }
-    if (isIntegrationConnectedForSources(slackSearch) && slackSearch?.messages?.length) {
+    if (shouldIncludeIntegrationInSourcesChecklist(slackSearch)) {
       list.push({ provider: "slack", detail: `${slackSearch.messages.length} discussion(s)` });
     }
     return list;
@@ -113,7 +113,7 @@ export function OwnershipCard({
   );
   const slackDiscussionCount = slackSearch?.messages?.length ?? 0;
   const hasSlackDiscussionEvidence = slackDiscussionCount > 0;
-  const showSlackDiscussions = isIntegrationConnectedForSources(slackSearch);
+  const showSlackDiscussions = hasSlackDiscussionEvidence;
   const resolvedArtifactId = artifactId ?? `ownership-${report.path}`;
 
   return (

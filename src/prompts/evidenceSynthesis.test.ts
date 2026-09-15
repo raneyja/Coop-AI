@@ -14,6 +14,7 @@ import {
   extractCitationKeysFromSourcesSection,
   GENERAL_CHAT_EVIDENCE_RULES,
   AGENT_REPO_HUNT_RULES,
+  EMPTY_EVIDENCE_HONESTY_RULE,
   NARRATIVE_CITATION_RULES,
   stripDisallowedNarrativeSourceCitations,
   stripTemplateSectionHeadings,
@@ -223,6 +224,14 @@ test("AGENT_REPO_HUNT_RULES forbids inventing absences and restating the ask", (
 test("hunt answer prompt and skipNote use teammate miss copy", () => {
   const prompt = buildAgentAnswerPrompt({ message: "Where is requireAuth?" });
   assert.match(prompt, /couldn.t find that symbol in this repo/i);
+  assert.match(prompt, /documented decision/i);
+  assert.match(prompt, /title and status alone/i);
+  const withBody = buildAgentAnswerPrompt({
+    message: "Where is requireAuth?",
+    openedEvidence: "COOP-101\nBody: Chose GitHub App over PAT."
+  });
+  assert.match(withBody, /Opened integration artifacts/);
+  assert.match(withBody, /Chose GitHub App over PAT/);
   assert.doesNotMatch(prompt, /index returned no usable/i);
   const skip = agentSearchSkipNote(["requireAuth"]);
   assert.match(skip, /couldn.t find that symbol in this repo/i);
@@ -243,6 +252,11 @@ test("synthesis builders do not use a writer-facing Evidence bundle heading", ()
     assert.equal(src.includes("## Evidence bundle"), false, file);
     assert.ok(src.includes("ATTACHED_FACTS_HEADING"), file);
   }
+});
+
+test("empty-evidence honesty treats attached ticket/page bodies as decisions", () => {
+  assert.match(EMPTY_EVIDENCE_HONESTY_RULE, /documented decision evidence/);
+  assert.match(EMPTY_EVIDENCE_HONESTY_RULE, /Empty Slack is only/);
 });
 
 console.log(`\nevidenceSynthesis: ${passed}/${passed + failed} tests passed`);

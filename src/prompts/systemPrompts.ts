@@ -446,6 +446,7 @@ Answer the requested locate, decision, docs, or code-host capabilities without b
 - Keep one answer. Do not switch into incident, PR-review, patch, or open-file-review templates.
 - When Slack or Teams searched and attached no messages, say there was no mention of the decision topic (use the job terms: peel auth, coop-backend, ticket keys).
 - Never invent a Slack or Jira decision when those searches are empty.
+- A listed Jira ticket with a body, or a Confluence/docs page with an excerpt, is documented decision evidence. Use it. Do not conclude there is no documented decision while those are attached. Empty Slack is only “no mention in Slack.”
 ${EMPTY_EVIDENCE_HONESTY_RULE}`;
 
 function buildIntentJobSystem(hasPaperclipAttachments = false): string {
@@ -1497,7 +1498,7 @@ function formatJiraTicketsForLlm(jira: JiraSearchSnippet): string[] {
   }
   for (const issue of issues) {
     const labels = issue.labels?.length ? ` labels="${escapeXml(issue.labels.join(", "))}"` : "";
-    const body = issue.description?.replace(/\s+/g, " ").trim().slice(0, 400);
+    const body = issue.description?.replace(/\s+/g, " ").trim().slice(0, 1200);
     lines.push(
       `<ticket key="${escapeXml(issue.key)}" status="${escapeXml(issue.status)}" type="${escapeXml(issue.issueType)}" updated="${escapeXml(issue.updated)}" url="${escapeXml(issue.htmlUrl)}"${labels}>${escapeXml(issue.summary)}${body ? ` — ${escapeXml(body)}` : ""}</ticket>`
     );

@@ -211,6 +211,22 @@ export class ConfluenceClient {
       .filter((page) => page.id);
   }
 
+  /** Open a search hit — page body as plain text, not the search snippet. */
+  public async getPageBody(pageId: string): Promise<string | undefined> {
+    const id = pageId.trim();
+    if (!id) {
+      return undefined;
+    }
+    const payload = await this.request<{
+      body?: { view?: { value?: string }; storage?: { value?: string } };
+    }>(`/content/${encodeURIComponent(id)}`, {
+      query: { expand: "body.view,body.storage" }
+    });
+    const html = payload.body?.view?.value ?? payload.body?.storage?.value ?? "";
+    const text = stripHtml(html);
+    return text || undefined;
+  }
+
   public async listSpaces(options?: { limit?: number }): Promise<ConfluenceSpace[]> {
     // OAuth Cloud: v1 GET /wiki/rest/api/space returns 410 Gone. Use v2 spaces.
     if (this.oauthMode && this.options.cloudId) {
@@ -406,4 +422,16 @@ export class ConfluenceClient {
 
     return { ok: true, data: (await response.json()) as T };
   }
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, " ")
+    .trim();
 }

@@ -246,6 +246,79 @@ async function main(): Promise<void> {
     );
   });
 
+  await test("I3 writer prompt receives opened Jira body, not title-only JSON", async () => {
+    let openedEvidence: string | undefined;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: {
+        async search() {
+          return {
+            hits: [
+              {
+                fileName: "src/auth/middleware.ts",
+                lineNumber: 12,
+                content: "export function requireAuth() {}",
+                score: 1
+              }
+            ],
+            symbols: []
+          };
+        }
+      } as unknown as IndexBackend,
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path }) => ({
+        path,
+        content: "export function requireAuth() {\n  return true;\n}\n"
+      })
+    });
+    await orchestrator.run(
+      {
+        message:
+          "Where is requireAuth defined, and what did we already decide about peeling auth into coop-backend?",
+        repoId: "acme/demo",
+        maxSteps: 6
+      },
+      {
+        allowedIntegrations: ["jira", "slack"],
+        fillIntegrations: ["jira", "slack"],
+        fillQueries: { jira: "peel auth coop-backend", slack: "peel auth coop-backend" },
+        searchIntegration: async ({ provider }) => {
+          if (provider === "slack") {
+            return { source: "slack-search", messages: [] };
+          }
+          return {
+            source: "jira-search",
+            issues: [
+              {
+                key: "COOP-101",
+                summary: "Extract auth and repo indexing into coop-backend",
+                status: "In Progress",
+                description: "Chose GitHub App over PAT for requireAuth."
+              }
+            ]
+          };
+        },
+        planTurn: async ({ round }) => {
+          if (round === 0) {
+            return JSON.stringify({ tool: "search_code", args: { query: "requireAuth" } });
+          }
+          if (round === 1) {
+            return JSON.stringify({
+              tool: "read_file",
+              args: { path: "src/auth/middleware.ts" }
+            });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async (input) => {
+          openedEvidence = input.openedEvidence;
+          return "ok";
+        }
+      }
+    );
+    assert.match(openedEvidence ?? "", /Body: Chose GitHub App/);
+    assert.match(openedEvidence ?? "", /Slack: no matching messages/);
+  });
+
   console.log(`\nintegrationMidLoop: ${passed}/${passed + failed} tests passed`);
   if (failed > 0) {
     process.exit(1);
