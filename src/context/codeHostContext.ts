@@ -3,6 +3,7 @@ import type { CodeHostProvider } from "../api/codeHosts/types";
 import type { ContextFetchRequest } from "./requestBatcher";
 import { wantsExplicitCodeHostSearch } from "../chat/intentPlanner/planChatJobs";
 import type { ChatIntentJobVerb } from "../chat/intentPlanner/types";
+import { sanitizeIntegrationSnippet } from "./integrationDocRelevance";
 import { missingRepoSearchError } from "./integrationJobErrors";
 
 export type CodeHostPullRequestSnippet = {
@@ -13,6 +14,10 @@ export type CodeHostPullRequestSnippet = {
   author?: string;
   updatedAt: string;
   htmlUrl?: string;
+  /** Opened PR description from getPullRequestDetail — not the list title. */
+  body?: string;
+  /** True when body came from getPullRequestDetail. */
+  bodyOpened?: boolean;
 };
 
 export type CodeHostIssueSnippet = {
@@ -56,6 +61,13 @@ export async function fetchCodeHostSearchContext(options: {
   queryText?: string;
   limit?: number;
   jobVerb?: ChatIntentJobVerb;
+  /** Chat Intent / agent job path — open PR bodies after a hit. */
+  jobScoped?: boolean;
+  /**
+   * Explicit opt-in to open PR descriptions. Chat enrichment sets this.
+   * Blast must omit it so bulk list stays title/state only.
+   */
+  openPullBodies?: boolean;
 }): Promise<CodeHostSearchContext> {
   const provider = options.provider ?? "github";
   const owner = options.owner?.trim();
@@ -83,8 +95,7 @@ export async function fetchCodeHostSearchContext(options: {
     if (prNumbers.length > 0) {
       const wanted = new Set(prNumbers);
       pullRequests = pullRequests.filter((pr) => wanted.has(pr.number));
-    }
-    if (searchTerms.length > 0) {
+    } else if (searchTerms.length > 0) {
       const matchesTerms = (title: string): boolean => {
         const normalized = title.toLowerCase();
         return searchTerms.some((term) => normalized.includes(term));
@@ -93,11 +104,22 @@ export async function fetchCodeHostSearchContext(options: {
       issues = issues.filter((issue) => matchesTerms(issue.title));
     }
 
+    const mapped = pullRequests.slice(0, limit).map(mapPullRequest);
+    const shouldOpen = shouldOpenPullBodies({
+      openPullBodies: options.openPullBodies,
+      jobScoped: options.jobScoped,
+      jobVerb: options.jobVerb,
+      prNumberHits: prNumbers
+    });
+    const opened = shouldOpen
+      ? await attachPullRequestBodies(options.router, coords, mapped)
+      : mapped;
+
     return {
       source: "code-host-search",
       provider,
       repoQuery: `${owner}/${repo}`,
-      pullRequests: pullRequests.slice(0, limit).map(mapPullRequest),
+      pullRequests: opened,
       issues: issues.slice(0, limit).map(mapIssue),
       prNumberHits: prNumbers.length > 0 ? prNumbers : undefined
     };
@@ -111,6 +133,67 @@ export async function fetchCodeHostSearchContext(options: {
       error: error instanceof Error ? error.message : "Code host search failed."
     };
   }
+}
+
+const OPENED_PR_BODY_CHARS = 1500;
+const MAX_OPENED_PRS = 3;
+
+function shouldOpenPullBodies(options: {
+  openPullBodies?: boolean;
+  jobScoped?: boolean;
+  jobVerb?: ChatIntentJobVerb;
+  prNumberHits: number[];
+}): boolean {
+  if (options.jobVerb === "latest") {
+    return false;
+  }
+  if (options.prNumberHits.length > 0) {
+    return true;
+  }
+  if (options.openPullBodies === true) {
+    return true;
+  }
+  if (options.jobScoped) {
+    return true;
+  }
+  return false;
+}
+
+async function attachPullRequestBodies(
+  router: CodeHostRouter,
+  coords: { provider: CodeHostProvider; owner: string; repo: string },
+  pullRequests: CodeHostPullRequestSnippet[]
+): Promise<CodeHostPullRequestSnippet[]> {
+  if (pullRequests.length === 0 || typeof router.getPullRequestDetail !== "function") {
+    return pullRequests;
+  }
+  const selected = pullRequests.slice(0, MAX_OPENED_PRS);
+  const bodies = await Promise.all(
+    selected.map(async (pr) => {
+      try {
+        const detail = await router.getPullRequestDetail(pr.number, coords);
+        return { number: pr.number, body: detail.body };
+      } catch {
+        return { number: pr.number, body: undefined };
+      }
+    })
+  );
+  const byNumber = new Map(bodies.map((entry) => [entry.number, entry.body]));
+  return pullRequests.map((pr) => {
+    const raw = byNumber.get(pr.number);
+    if (!raw?.trim()) {
+      return pr;
+    }
+    const body = sanitizeIntegrationSnippet(truncate(raw, OPENED_PR_BODY_CHARS));
+    return body ? { ...pr, body, bodyOpened: true } : pr;
+  });
+}
+
+function truncate(value: string, max: number): string {
+  if (value.length <= max) {
+    return value;
+  }
+  return `${value.slice(0, max)}…`;
 }
 
 function extractPrNumbers(query: string): number[] {

@@ -279,6 +279,436 @@ test("Confluence search opens ADR page body after a hit", async () => {
   assert.match(result.pages[0]?.excerpt ?? "", /GitHub App so requireAuth/);
 });
 
+test("Notion search opens ADR page body after a hit", async () => {
+  const opened: string[] = [];
+  const result = await fetchNotionSearchContext({
+    secrets,
+    extraTerms: ["peel auth"],
+    jobScoped: true,
+    client: {
+      searchPages: async () => [
+        {
+          id: "notion-adr-1",
+          title: "ADR: GitHub App API (COOP-101)",
+          updated: "2026-01-02T00:00:00.000Z",
+          htmlUrl: "https://notion.so/notion-adr-1"
+        }
+      ],
+      getPagePlainText: async (id) => {
+        opened.push(id);
+        return "We chose a GitHub App so requireAuth can verify installation tokens.";
+      }
+    }
+  });
+  assert.deepEqual(opened, ["notion-adr-1"]);
+  assert.match(result.pages[0]?.excerpt ?? "", /GitHub App so requireAuth/);
+});
+
+test("Google Docs search opens ADR document body after a hit", async () => {
+  const opened: string[] = [];
+  const result = await fetchGoogleDocsSearchContext({
+    secrets,
+    extraTerms: ["peel auth"],
+    jobScoped: true,
+    client: {
+      searchDocumentsForTerms: async () => [
+        {
+          id: "gdoc-adr-1",
+          title: "ADR: GitHub App API (COOP-101)",
+          updated: "2026-01-02T00:00:00.000Z",
+          htmlUrl: "https://docs.google.com/document/d/gdoc-adr-1"
+        }
+      ],
+      listRecentDocuments: async () => [],
+      getDocumentPlainText: async (id) => {
+        opened.push(id);
+        return "We chose a GitHub App so requireAuth can verify installation tokens.";
+      }
+    }
+  });
+  assert.deepEqual(opened, ["gdoc-adr-1"]);
+  assert.match(result.documents[0]?.excerpt ?? "", /GitHub App so requireAuth/);
+});
+
+test("Notion job-scoped search opens top hit when title is not ADR-shaped", async () => {
+  const opened: string[] = [];
+  const result = await fetchNotionSearchContext({
+    secrets,
+    extraTerms: ["peel auth"],
+    jobScoped: true,
+    client: {
+      searchPages: async () => [
+        {
+          id: "notion-plain-1",
+          title: "Auth notes for peel",
+          updated: "2026-01-02T00:00:00.000Z",
+          htmlUrl: "https://notion.so/notion-plain-1"
+        }
+      ],
+      getPagePlainText: async (id) => {
+        opened.push(id);
+        return "Decision: use installation tokens for requireAuth.";
+      }
+    }
+  });
+  assert.deepEqual(opened, ["notion-plain-1"]);
+  assert.match(result.pages[0]?.excerpt ?? "", /installation tokens/);
+});
+
+test("Slack search opens full thread body after a hit", async () => {
+  const opened: string[] = [];
+  const result = await fetchSlackSearchContext({
+    secrets,
+    extraTerms: ["peel auth"],
+    jobScoped: true,
+    client: {
+      searchMessages: async () => [
+        {
+          channelId: "C123",
+          channelName: "eng",
+          ts: "1000.1",
+          threadTs: "1000.1",
+          text: "short snippet about auth",
+          userId: "U1",
+          userName: "alice",
+          permalink: "https://slack.com/archives/C123/p1000000001000100"
+        }
+      ],
+      getThread: async (channelId, threadTs) => {
+        opened.push(`${channelId}:${threadTs}`);
+        return {
+          channelId,
+          threadTs,
+          messages: [
+            {
+              ts: "1000.1",
+              userId: "U1",
+              userName: "alice",
+              text: "Chose GitHub App over PAT for requireAuth."
+            },
+            {
+              ts: "1000.2",
+              userId: "U2",
+              userName: "bob",
+              text: "Agreed — ship the App install path."
+            }
+          ],
+          participants: ["alice", "bob"]
+        };
+      }
+    }
+  });
+  assert.deepEqual(opened, ["C123:1000.1"]);
+  assert.match(result.messages[0]?.text ?? "", /GitHub App over PAT/);
+  assert.equal(result.messages[0]?.threadOpened, true);
+  assert.ok((result.messages[0]?.text.length ?? 0) > "short snippet about auth".length);
+});
+
+test("Slack job-scoped search opens top hit when snippet is not decision-shaped", async () => {
+  const opened: string[] = [];
+  const result = await fetchSlackSearchContext({
+    secrets,
+    extraTerms: ["peel auth"],
+    jobScoped: true,
+    client: {
+      searchMessages: async () => [
+        {
+          channelId: "C99",
+          channelName: "eng",
+          ts: "2000.1",
+          text: "random chatter",
+          userId: "U9",
+          userName: "carol"
+        }
+      ],
+      getThread: async (channelId, threadTs) => {
+        opened.push(`${channelId}:${threadTs}`);
+        return {
+          channelId,
+          threadTs,
+          messages: [
+            {
+              ts: "2000.1",
+              userId: "U9",
+              userName: "carol",
+              text: "Decision: use installation tokens for requireAuth."
+            }
+          ],
+          participants: ["carol"]
+        };
+      }
+    }
+  });
+  assert.deepEqual(opened, ["C99:2000.1"]);
+  assert.match(result.messages[0]?.text ?? "", /installation tokens/);
+});
+
+test("Teams search opens full thread body after a hit", async () => {
+  const opened: string[] = [];
+  const result = await fetchTeamsSearchContext({
+    secrets: {
+      getCredentials: async () => ({
+        ...((await secrets.getCredentials()) as object),
+        teamsToken: "teams-test"
+      })
+    } as never,
+    extraTerms: ["peel auth"],
+    jobScoped: true,
+    client: {
+      searchMessages: async () => [
+        {
+          teamId: "T1",
+          channelId: "CH1",
+          messageId: "M1",
+          body: "short snippet about auth",
+          fromUserName: "dana",
+          createdAt: "2026-01-02T00:00:00.000Z",
+          webUrl: "https://teams.microsoft.com/l/message/M1"
+        }
+      ],
+      getThread: async (teamId, channelId, messageId) => {
+        opened.push(`${teamId}:${channelId}:${messageId}`);
+        return {
+          teamId,
+          channelId,
+          rootMessageId: messageId,
+          messages: [
+            {
+              id: "M1",
+              createdAt: "2026-01-02T00:00:00.000Z",
+              fromUserName: "dana",
+              body: "Chose GitHub App over PAT for requireAuth."
+            }
+          ],
+          participants: ["dana"]
+        };
+      }
+    }
+  });
+  assert.deepEqual(opened, ["T1:CH1:M1"]);
+  assert.match(result.messages[0]?.body ?? "", /GitHub App over PAT/);
+  assert.equal(result.messages[0]?.threadOpened, true);
+});
+
+test("code-host search opens PR description after a hit", async () => {
+  const opened: number[] = [];
+  const result = await fetchCodeHostSearchContext({
+    provider: "github",
+    owner: "acme",
+    repo: "app",
+    queryText: "PR #53 auth",
+    jobScoped: true,
+    jobVerb: "search",
+    openPullBodies: true,
+    router: {
+      listRepoPullRequests: async () => [
+        {
+          number: 53,
+          title: "Auth hardening",
+          state: "merged",
+          merged: true,
+          updatedAt: "2026-01-02T00:00:00.000Z"
+        }
+      ],
+      listRepoIssues: async () => [],
+      getPullRequestDetail: async (n: number) => {
+        opened.push(n);
+        return {
+          number: 53,
+          title: "Auth hardening",
+          body: "Chose GitHub App over PAT for requireAuth.",
+          state: "closed",
+          merged: true,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-02T00:00:00.000Z",
+          labels: []
+        };
+      }
+    } as never
+  });
+  assert.deepEqual(opened, [53]);
+  assert.match(result.pullRequests[0]?.body ?? "", /GitHub App/);
+  assert.equal(result.pullRequests[0]?.bodyOpened, true);
+});
+
+test("code-host latest never opens PR bodies", async () => {
+  const opened: number[] = [];
+  await fetchCodeHostSearchContext({
+    provider: "github",
+    owner: "acme",
+    repo: "app",
+    jobVerb: "latest",
+    jobScoped: true,
+    openPullBodies: true,
+    router: {
+      listRepoPullRequests: async () => [
+        {
+          number: 53,
+          title: "Auth hardening",
+          state: "merged",
+          merged: true,
+          updatedAt: "2026-01-02T00:00:00.000Z"
+        }
+      ],
+      listRepoIssues: async () => [],
+      getPullRequestDetail: async (n: number) => {
+        opened.push(n);
+        return {
+          number: n,
+          title: "Auth hardening",
+          body: "should not open",
+          state: "closed",
+          merged: true,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-02T00:00:00.000Z",
+          labels: []
+        };
+      }
+    } as never
+  });
+  assert.deepEqual(opened, []);
+});
+
+test("code-host unfiltered bulk list does not open PR bodies (Blast guard)", async () => {
+  const opened: number[] = [];
+  await fetchCodeHostSearchContext({
+    provider: "github",
+    owner: "acme",
+    repo: "app",
+    queryText: "open pull requests src/server/auth.ts",
+    router: {
+      listRepoPullRequests: async () => [
+        {
+          number: 53,
+          title: "Auth hardening",
+          state: "open",
+          merged: false,
+          updatedAt: "2026-01-02T00:00:00.000Z"
+        },
+        {
+          number: 54,
+          title: "Other work",
+          state: "open",
+          merged: false,
+          updatedAt: "2026-01-02T00:00:00.000Z"
+        }
+      ],
+      listRepoIssues: async () => [],
+      getPullRequestDetail: async (n: number) => {
+        opened.push(n);
+        return {
+          number: n,
+          title: "Auth",
+          body: "should not open",
+          state: "open",
+          merged: false,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-02T00:00:00.000Z",
+          labels: []
+        };
+      }
+    } as never
+  });
+  assert.deepEqual(opened, []);
+});
+
+test("code-host detail fetch failure keeps title row", async () => {
+  const result = await fetchCodeHostSearchContext({
+    provider: "github",
+    owner: "acme",
+    repo: "app",
+    queryText: "PR #53",
+    openPullBodies: true,
+    router: {
+      listRepoPullRequests: async () => [
+        {
+          number: 53,
+          title: "Auth hardening",
+          state: "merged",
+          merged: true,
+          updatedAt: "2026-01-02T00:00:00.000Z"
+        }
+      ],
+      listRepoIssues: async () => [],
+      getPullRequestDetail: async () => {
+        throw new Error("not found");
+      }
+    } as never
+  });
+  assert.equal(result.pullRequests[0]?.number, 53);
+  assert.equal(result.pullRequests[0]?.body, undefined);
+  assert.equal(result.pullRequests[0]?.bodyOpened, undefined);
+  assert.equal(result.error, undefined);
+});
+
+test("knowledge-gaps Notion openAfterHit opens top hit when title is not ADR-shaped", async () => {
+  const opened: string[] = [];
+  const result = await fetchNotionSearchContext({
+    secrets,
+    extraTerms: ["peel auth"],
+    openAfterHit: true,
+    client: {
+      searchPages: async () => [
+        {
+          id: "notion-gaps-1",
+          title: "Auth notes for peel",
+          updated: "2026-01-02T00:00:00.000Z",
+          htmlUrl: "https://notion.so/notion-gaps-1"
+        }
+      ],
+      getPagePlainText: async (id) => {
+        opened.push(id);
+        return "Decision: use installation tokens for requireAuth.";
+      }
+    }
+  });
+  assert.deepEqual(opened, ["notion-gaps-1"]);
+  assert.match(result.pages[0]?.excerpt ?? "", /installation tokens/);
+});
+
+test("knowledge-gaps Slack openAfterHit opens thread after a hit", async () => {
+  const opened: string[] = [];
+  const result = await fetchSlackSearchContext({
+    secrets,
+    owner: "acme",
+    repo: "app",
+    queryText: "auth decision",
+    openAfterHit: true,
+    client: {
+      searchMessages: async () => [
+        {
+          channelId: "C123",
+          channelName: "eng",
+          ts: "1000.1",
+          threadTs: "1000.1",
+          text: "short snippet",
+          userId: "U1",
+          userName: "alice"
+        }
+      ],
+      getThread: async (channelId, threadTs) => {
+        opened.push(`${channelId}:${threadTs}`);
+        return {
+          channelId,
+          threadTs,
+          messages: [
+            {
+              ts: "1000.1",
+              userId: "U1",
+              userName: "alice",
+              text: "Chose GitHub App over PAT for requireAuth."
+            }
+          ],
+          participants: ["alice"]
+        };
+      }
+    }
+  });
+  assert.deepEqual(opened, ["C123:1000.1"]);
+  assert.equal(result.messages[0]?.threadOpened, true);
+  assert.match(result.messages[0]?.text ?? "", /GitHub App/);
+});
+
 async function fetchForProvider(
   provider: IntegrationChatProvider,
   options: { extraTerms: string[]; jobScoped: true; jobVerb: "latest" }

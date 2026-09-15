@@ -96,6 +96,8 @@ export async function fetchConfluenceSearchContext(options: {
   jobScoped?: boolean;
   jobVerb?: ChatIntentJobVerb;
   integrationScope?: ResolvedIntegrationScope;
+  /** Repo-wide Gaps: open page bodies after a hit. */
+  openAfterHit?: boolean;
   /** Test seam — production leaves this unset and builds a client from secrets. */
   client?: ConfluenceSearchClient;
 }): Promise<ConfluenceSearchContext> {
@@ -245,7 +247,9 @@ export async function fetchConfluenceSearchContext(options: {
           limit
         });
     const opened = await attachConfluencePageBodies(client, ranked, {
-      jobScoped: Boolean(options.jobScoped && options.jobVerb !== "latest")
+      jobScoped: Boolean(
+        (options.jobScoped && options.jobVerb !== "latest") || options.openAfterHit
+      )
     });
 
     return {

@@ -111,14 +111,27 @@ export type KnowledgeGapsEvidence = {
 };
 
 export type JiraSearchEvidence = {
-  issues: Array<{ key: string; summary: string; status: string; htmlUrl?: string }>;
+  issues: Array<{
+    key: string;
+    summary: string;
+    status: string;
+    htmlUrl?: string;
+    description?: string;
+  }>;
   error?: string;
   matchStrategy?: string;
   query?: string;
 };
 
 export type SlackSearchEvidence = {
-  messages: Array<{ channelName?: string; userName?: string; text: string; permalink?: string }>;
+  messages: Array<{
+    channelName?: string;
+    userName?: string;
+    text: string;
+    permalink?: string;
+    ts?: string;
+    threadOpened?: boolean;
+  }>;
   error?: string;
   query?: string;
 };
@@ -130,17 +143,22 @@ export type ConfluenceSearchEvidence = {
 };
 
 export type TeamsSearchEvidence = {
-  messages: Array<{ text: string; fromUserName?: string }>;
+  messages: Array<{
+    text?: string;
+    body?: string;
+    fromUserName?: string;
+    threadOpened?: boolean;
+  }>;
   error?: string;
 };
 
 export type NotionSearchEvidence = {
-  pages: Array<{ id: string; title: string; url?: string }>;
+  pages: Array<{ id: string; title: string; excerpt?: string; url?: string; htmlUrl?: string }>;
   error?: string;
 };
 
 export type GoogleDocsSearchEvidence = {
-  documents: Array<{ id: string; title: string; url?: string }>;
+  documents: Array<{ id: string; title: string; excerpt?: string; url?: string; htmlUrl?: string }>;
   error?: string;
 };
 

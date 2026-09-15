@@ -116,6 +116,53 @@ export class NotionClient {
     }));
   }
 
+  /**
+   * Open a search hit — page body as plain text from block children.
+   * Shallow flatten only (no deep toggle recursion) to stay inside gather budget.
+   */
+  public async getPagePlainText(pageId: string): Promise<string | undefined> {
+    const id = pageId.trim();
+    if (!id) {
+      return undefined;
+    }
+    const parts: string[] = [];
+    let cursor: string | undefined;
+    let pages = 0;
+    const maxChars = 2000;
+    const maxBlockPages = 3;
+
+    while (pages < maxBlockPages && parts.join("\n").length < maxChars) {
+      pages += 1;
+      const query = new URLSearchParams({ page_size: "100" });
+      if (cursor) {
+        query.set("start_cursor", cursor);
+      }
+      const result = await this.request<{
+        results?: NotionBlock[];
+        has_more?: boolean;
+        next_cursor?: string | null;
+      }>(`/blocks/${encodeURIComponent(id)}/children?${query.toString()}`);
+
+      for (const block of result.results ?? []) {
+        const text = flattenNotionBlockPlainText(block);
+        if (text) {
+          parts.push(text);
+        }
+        if (parts.join("\n").length >= maxChars) {
+          break;
+        }
+      }
+
+      if (!result.has_more || !result.next_cursor) {
+        break;
+      }
+      cursor = result.next_cursor;
+    }
+
+    const joined = parts.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    return joined || undefined;
+  }
+
   public async searchResources(options?: {
     query?: string;
     limit?: number;
@@ -230,4 +277,39 @@ function extractNotionParentId(parent: NotionParent | undefined): string | undef
 
 function extractNotionParentType(parent: NotionParent | undefined): string | undefined {
   return parent?.type;
+}
+
+type NotionRichText = Array<{ plain_text?: string }>;
+
+type NotionBlock = {
+  type?: string;
+  has_children?: boolean;
+  paragraph?: { rich_text?: NotionRichText };
+  heading_1?: { rich_text?: NotionRichText };
+  heading_2?: { rich_text?: NotionRichText };
+  heading_3?: { rich_text?: NotionRichText };
+  bulleted_list_item?: { rich_text?: NotionRichText };
+  numbered_list_item?: { rich_text?: NotionRichText };
+  to_do?: { rich_text?: NotionRichText };
+  quote?: { rich_text?: NotionRichText };
+  callout?: { rich_text?: NotionRichText };
+  code?: { rich_text?: NotionRichText };
+  toggle?: { rich_text?: NotionRichText };
+};
+
+function richTextPlain(parts: NotionRichText | undefined): string {
+  return (parts ?? []).map((part) => part.plain_text ?? "").join("").trim();
+}
+
+/** Top-level block text only — enough for decision/ADR evidence. */
+function flattenNotionBlockPlainText(block: NotionBlock): string {
+  const type = block.type;
+  if (!type) {
+    return "";
+  }
+  const payload = (block as Record<string, { rich_text?: NotionRichText } | undefined>)[type];
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+  return richTextPlain(payload.rich_text);
 }

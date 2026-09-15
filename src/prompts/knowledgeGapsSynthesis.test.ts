@@ -96,10 +96,112 @@ test("knowledge-gaps synthesis requires Notion pages and scan gaps in response c
     repo: "fastify"
   });
   assert.ok(prompt.includes("**Notion pages reviewed** — exactly 2 titled bullet(s)"));
-  assert.ok(prompt.includes("In **Documentation gaps**, name every attached page or document title"));
+  assert.ok(prompt.includes("summarize what the attached Body says"));
+  assert.ok(prompt.includes("Do not list titles alone as documentation gaps"));
   assert.ok(prompt.includes("No Confluence pages matched repo scope"));
   assert.ok(prompt.includes("No Google Docs matched repo scope"));
   assert.ok(prompt.includes("Omit Ownership & maintenance entirely"));
+});
+
+test("knowledge-gaps synthesis includes Notion opened excerpt in Attached facts", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({
+    evidence: { jobScan: { gaps: [] } },
+    notion: {
+      pages: [
+        {
+          id: "n1",
+          title: "ADR: Auth",
+          excerpt: "Decision: use installation tokens for requireAuth."
+        }
+      ]
+    },
+    file: "fastify.js",
+    owner: "coop-demo-lab",
+    repo: "fastify"
+  });
+  assert.match(prompt, /Body: Decision: use installation tokens/);
+  assert.doesNotMatch(prompt, /- ADR: Auth\n(?! {2}Body:)/);
+});
+
+test("knowledge-gaps synthesis includes Google Docs opened excerpt in Attached facts", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({
+    evidence: { jobScan: { gaps: [] } },
+    googleDocs: {
+      documents: [
+        {
+          id: "g1",
+          title: "ADR: Auth",
+          excerpt: "Chose GitHub App over PAT for requireAuth."
+        }
+      ]
+    },
+    file: "fastify.js"
+  });
+  assert.match(prompt, /Body: Chose GitHub App/);
+});
+
+test("knowledge-gaps synthesis includes Jira opened description not just summary", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({
+    evidence: { jobScan: { gaps: [] } },
+    jira: {
+      issues: [
+        {
+          key: "COOP-101",
+          summary: "Auth hardening",
+          status: "Done",
+          description: "Chose GitHub App over PAT for requireAuth."
+        }
+      ]
+    },
+    file: "fastify.js"
+  });
+  assert.match(prompt, /Body: Chose GitHub App/);
+});
+
+test("knowledge-gaps synthesis includes Slack opened thread body when threadOpened", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({
+    evidence: { jobScan: { gaps: [] } },
+    slack: {
+      messages: [
+        {
+          channelName: "eng",
+          text: "alice: Chose GitHub App over PAT.\nbob: Agreed — ship the App install path.",
+          threadOpened: true
+        }
+      ]
+    },
+    file: "fastify.js"
+  });
+  assert.match(prompt, /Body: alice: Chose GitHub App/);
+  assert.match(prompt, /ship the App install path/);
+});
+
+test("knowledge-gaps synthesis labels unattached Notion bodies honestly", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({
+    evidence: { jobScan: { gaps: [] } },
+    notion: {
+      pages: [{ id: "n1", title: "ADR: Auth" }]
+    },
+    file: "fastify.js"
+  });
+  assert.match(prompt, /Body: not attached/);
+});
+
+test("knowledge-gaps synthesis includes Teams opened thread body when threadOpened", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({
+    evidence: { jobScan: { gaps: [] } },
+    teams: {
+      messages: [
+        {
+          fromUserName: "dana",
+          body: "Chose GitHub App over PAT for requireAuth.",
+          threadOpened: true
+        }
+      ]
+    },
+    file: "fastify.js"
+  });
+  assert.match(prompt, /Body: Chose GitHub App/);
 });
 
 test("knowledge-gaps synthesis flags limited evidence when scan missing", () => {

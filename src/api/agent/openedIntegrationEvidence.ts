@@ -18,8 +18,8 @@ export function formatOpenedIntegrationEvidence(
   appendDocPages(lines, "Confluence", context.search_confluence, "pages");
   appendDocPages(lines, "Notion", context.search_notion, "pages");
   appendDocPages(lines, "Google Docs", context.search_google_docs, "documents");
-  appendEmptySlack(lines, context.search_slack);
-  appendEmptySlack(lines, context.search_teams, "Teams");
+  appendDiscussionThreads(lines, "Slack", context.search_slack, "text");
+  appendDiscussionThreads(lines, "Teams", context.search_teams, "body");
   return lines.length > 0 ? lines.join("\n") : undefined;
 }
 
@@ -63,21 +63,38 @@ function appendDocPages(
   }
 }
 
-function appendEmptySlack(
+function appendDiscussionThreads(
   lines: string[],
+  label: string,
   payload: Record<string, unknown> | undefined,
-  label = "Slack"
+  bodyKey: "text" | "body"
 ): void {
   if (!payload) {
     return;
   }
-  const messages = payload.messages;
-  if (!Array.isArray(messages) || messages.length > 0) {
+  const messages = asRecords(payload.messages).slice(0, MAX_ITEMS);
+  if (messages.length === 0) {
+    lines.push(
+      `${label}: no matching messages. That is not a documented decision.`
+    );
     return;
   }
   lines.push(
-    `${label}: no matching messages. That is not a documented decision.`
+    `Opened ${label} threads (the Body line is the decision; the search snippet is not a decision):`
   );
+  for (const message of messages) {
+    const channel = asText(message.channelName);
+    const user = asText(message.userName) || asText(message.fromUserName);
+    const meta = [channel ? `#${channel}` : "", user ? `@${user}` : ""].filter(Boolean).join(" — ");
+    lines.push(meta || label);
+    const opened = message.threadOpened === true;
+    const body = clip(asText(message[bodyKey]));
+    if (opened && body) {
+      lines.push(`Body: ${body}`);
+    } else {
+      lines.push("Body: not attached.");
+    }
+  }
 }
 
 function asRecords(value: unknown): Array<Record<string, unknown>> {

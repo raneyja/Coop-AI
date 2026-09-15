@@ -11,7 +11,8 @@ import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolic
 import { buildIntegrationSearchTermList } from "./integrationSearchTerms";
 import { planJobSearchAttempts } from "./jobSearchPlan";
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
-import { filterDocPagesForUseRepo } from "./integrationDocRelevance";
+import { filterDocPagesForUseRepo, sanitizeIntegrationSnippet } from "./integrationDocRelevance";
+import { looksLikeDecisionDocTitle } from "./confluenceContext";
 import type { ChatIntentJobVerb } from "../chat/intentPlanner/types";
 import {
   emptySearchTopicError,
@@ -22,6 +23,7 @@ import {
 export type NotionSearchPage = {
   id: string;
   title: string;
+  excerpt?: string;
   updated: string;
   htmlUrl: string;
 };
@@ -32,6 +34,18 @@ export type NotionSearchContext = {
   repoQuery?: string;
   pages: NotionSearchPage[];
   error?: string;
+};
+
+/** Injectable Notion client for tests — production uses credentials. */
+export type NotionSearchClient = {
+  searchPages(query: string, limit?: number): Promise<Array<{
+    id: string;
+    title: string;
+    updated: string;
+    htmlUrl: string;
+    parentId?: string;
+  }>>;
+  getPagePlainText?(pageId: string): Promise<string | undefined>;
 };
 
 export function wantsNotionContext(query: string): boolean {
@@ -69,6 +83,13 @@ export async function fetchNotionSearchContext(options: {
   jobScoped?: boolean;
   jobVerb?: ChatIntentJobVerb;
   integrationScope?: ResolvedIntegrationScope;
+  /**
+   * Repo-wide Gaps (and similar): open page bodies after a hit without
+   * changing job-scoped search semantics.
+   */
+  openAfterHit?: boolean;
+  /** Test seam — production leaves this unset and builds a client from secrets. */
+  client?: NotionSearchClient;
 }): Promise<NotionSearchContext> {
   if (isNotionScopeBlocked(options.integrationScope)) {
     return {
@@ -80,7 +101,7 @@ export async function fetchNotionSearchContext(options: {
   }
 
   const creds = await options.secrets.getCredentials();
-  if (!creds.notionToken) {
+  if (!creds.notionToken && !options.client) {
     return {
       source: "notion-search",
       query: "",
@@ -120,7 +141,9 @@ export async function fetchNotionSearchContext(options: {
   }
 
   const query = terms.join(" OR ");
-  const client = new NotionClient({ token: creds.notionToken });
+  const client =
+    options.client ??
+    new NotionClient({ token: creds.notionToken! });
   try {
     const limit = options.limit ?? 20;
     let rawPages = await searchNotionPagesForTerms(
@@ -131,7 +154,7 @@ export async function fetchNotionSearchContext(options: {
     if (options.jobScoped && rawPages.length === 0 && terms[1]) {
       rawPages = await searchNotionPagesForTerms(client, [terms[1]], limit);
     }
-    const pages = (latest
+    const ranked = (latest
       ? filterScopedNotionPages(rawPages, options.integrationScope)
       : filterDocPagesForUseRepo(
           filterScopedNotionPages(rawPages, options.integrationScope),
@@ -143,6 +166,11 @@ export async function fetchNotionSearchContext(options: {
           }
         )
     );
+    const pages = await attachNotionPageBodies(client, ranked, {
+      jobScoped: Boolean(
+        (options.jobScoped && options.jobVerb !== "latest") || options.openAfterHit
+      )
+    });
     const repoQuery =
       options.owner?.trim() && options.repo?.trim()
         ? `${options.owner.trim()}/${options.repo.trim()}`
@@ -164,8 +192,82 @@ export async function fetchNotionSearchContext(options: {
   }
 }
 
+const OPENED_PAGE_BODY_CHARS = 1500;
+const MAX_OPENED_PAGES = 3;
+
+function pagesToOpen(
+  pages: NotionSearchPage[],
+  jobScoped: boolean
+): NotionSearchPage[] {
+  const picked: NotionSearchPage[] = [];
+  const seen = new Set<string>();
+  for (const page of pages) {
+    if (!looksLikeDecisionDocTitle(page.title)) {
+      continue;
+    }
+    if (picked.length >= MAX_OPENED_PAGES) {
+      break;
+    }
+    seen.add(page.id);
+    picked.push(page);
+  }
+  if (jobScoped) {
+    for (const page of pages) {
+      if (picked.length >= MAX_OPENED_PAGES) {
+        break;
+      }
+      if (seen.has(page.id)) {
+        continue;
+      }
+      seen.add(page.id);
+      picked.push(page);
+    }
+  }
+  return picked;
+}
+
+async function attachNotionPageBodies(
+  client: NotionSearchClient,
+  pages: NotionSearchPage[],
+  options: { jobScoped: boolean }
+): Promise<NotionSearchPage[]> {
+  if (pages.length === 0 || !client.getPagePlainText) {
+    return pages;
+  }
+  const selected = pagesToOpen(pages, options.jobScoped);
+  if (selected.length === 0) {
+    return pages;
+  }
+  const bodies = await Promise.all(
+    selected.map(async (page) => {
+      try {
+        const body = await client.getPagePlainText?.(page.id);
+        return { id: page.id, body };
+      } catch {
+        return { id: page.id, body: undefined };
+      }
+    })
+  );
+  const byId = new Map(bodies.map((entry) => [entry.id, entry.body]));
+  return pages.map((page) => {
+    const raw = byId.get(page.id);
+    if (!raw?.trim()) {
+      return page;
+    }
+    const excerpt = sanitizeIntegrationSnippet(truncate(raw, OPENED_PAGE_BODY_CHARS));
+    return excerpt ? { ...page, excerpt } : page;
+  });
+}
+
+function truncate(value: string, max: number): string {
+  if (value.length <= max) {
+    return value;
+  }
+  return `${value.slice(0, max)}…`;
+}
+
 async function searchNotionPagesForTerms(
-  client: NotionClient,
+  client: NotionSearchClient,
   terms: string[],
   limit: number
 ): Promise<Array<NotionSearchPage & { parentId?: string }>> {

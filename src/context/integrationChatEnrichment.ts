@@ -131,6 +131,7 @@ async function enrichIntegrationStages(
   const traceSeeds = await resolveTraceDecisionSearchSeeds(options);
   const jobs = options.jobs;
   const jobScoped = Boolean(jobs && jobs.length > 0);
+  const openAfterHit = options.request.params.quickAction === "knowledge-gaps";
   const base = {
     owner: options.owner,
     repo: options.repo,
@@ -415,7 +416,9 @@ async function enrichIntegrationStages(
             owner: options.owner,
             repo: options.repo,
             queryText: codeHostJobQuery(jobs),
-            jobVerb: codeHostVerb
+            jobVerb: codeHostVerb,
+            jobScoped: true,
+            openPullBodies: true
           }),
         codeHostVerb === "latest" ? "latest" : activityQueryForTerms(codeHostTerms)
       )
@@ -451,6 +454,7 @@ async function enrichIntegrationStages(
         owner: options.owner,
         repo: options.repo,
         extraTerms: termsFor("confluence"),
+        openAfterHit,
         integrationScope: options.integrationScopes?.atlassian
       })
     ),
@@ -460,6 +464,7 @@ async function enrichIntegrationStages(
         owner: options.owner,
         repo: options.repo,
         extraTerms: termsFor("notion"),
+        openAfterHit,
         integrationScope: options.integrationScopes?.notion
       })
     )
@@ -494,6 +499,7 @@ async function enrichIntegrationStages(
         ...base,
         crossToolText: crossToolKeys,
         extraTerms: docExtraTerms,
+        openAfterHit,
         integrationScope: options.integrationScopes?.["google-docs"]
       })
     )
@@ -516,6 +522,7 @@ async function enrichIntegrationStages(
         ...base,
         extraTerms: termsFor("slack"),
         jobScoped: false,
+        openAfterHit,
         crossToolText: crossToolKeys,
         preferHost: options.codeHostProvider,
         jiraIssueKeys,
@@ -528,6 +535,7 @@ async function enrichIntegrationStages(
         ...base,
         extraTerms: termsFor("teams"),
         jobScoped: false,
+        openAfterHit,
         crossToolText: crossToolKeys,
         preferHost: options.codeHostProvider,
         jiraIssueKeys,
@@ -546,6 +554,7 @@ async function enrichIntegrationStages(
       deps.fetchCodeHostSearchContext({
         router: options.codeHostRouter,
         provider: options.codeHostProvider,
+        openPullBodies: openAfterHit,
         ...base
       })
     );

@@ -178,6 +178,39 @@ export class GoogleDocsClient {
     }));
   }
 
+  /**
+   * Open a search hit — document body as plain text via Drive export.
+   * Uses drive.readonly (no Docs API / documents.readonly reconnect).
+   */
+  public async getDocumentPlainText(documentId: string): Promise<string | undefined> {
+    const id = documentId.trim();
+    if (!id) {
+      return undefined;
+    }
+    const url = new URL(`${DRIVE_API}/files/${encodeURIComponent(id)}/export`);
+    url.searchParams.set("mimeType", "text/plain");
+
+    const response = await fetchWithTimeout(url.toString(), {
+      method: "GET",
+      headers: this.headers
+    });
+
+    if (isFetchTimeout(response)) {
+      throw new GoogleDocsApiError(response.message);
+    }
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      throw new GoogleDocsApiError(
+        body || `Google Docs export failed (${response.status}).`,
+        response.status
+      );
+    }
+
+    const text = (await response.text()).replace(/\r\n/g, "\n").trim();
+    return text || undefined;
+  }
+
   public async searchDocuments(
     query: string,
     limit = 20,

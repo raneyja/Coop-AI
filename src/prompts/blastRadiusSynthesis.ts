@@ -404,7 +404,7 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
           : evidence.teamsSearch.messages?.length
             ? evidence.teamsSearch.messages
                 .slice(0, 8)
-                .map((message) => `- ${message.fromUserName ?? "Teams"}: ${message.text.slice(0, 160)}`)
+                .map((message) => `- ${message.fromUserName ?? "Teams"}: ${(message.text ?? message.body ?? "").slice(0, 160)}`)
                 .join("\n") + truncationNote(evidence.teamsSearch.messages.length, 8)
             : "- No matching Teams messages")
     );

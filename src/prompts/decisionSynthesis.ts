@@ -458,7 +458,7 @@ function appendIntegrationSearchSections(sections: string[], timeline: DecisionT
       `### ${decisionSourceLabelTeams()} (integration search)\n` +
         (search.teams?.messages ?? [])
           .slice(0, 10)
-          .map((message) => `- ${message.fromUserName ?? "unknown"}: ${truncate(message.text, 250)}`)
+          .map((message) => `- ${message.fromUserName ?? "unknown"}: ${truncate(message.text ?? message.body ?? "", 250)}`)
           .join("\n") +
         truncationNote(search.teams?.messages?.length ?? 0, 10)
     );

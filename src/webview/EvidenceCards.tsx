@@ -378,7 +378,7 @@ export function RepoSummaryEvidenceCard({
                 <ul className="space-y-1">
                   {evidence.teams.messages.slice(0, 8).map((message, index) => (
                     <li key={index} className="coop-result-text">
-                      {message.fromUserName ?? "Teams"}: {message.text.slice(0, 160)}
+                      {message.fromUserName ?? "Teams"}: {(message.text ?? message.body ?? "").slice(0, 160)}
                     </li>
                   ))}
                 </ul>
@@ -1044,7 +1044,7 @@ export function BlastRadiusEvidenceCard({
                 <ul className="space-y-1">
                   {evidence.teamsSearch.messages.slice(0, 8).map((message, index) => (
                     <li key={index} className="coop-result-text">
-                      {message.fromUserName ?? "Teams"}: {message.text.slice(0, 200)}
+                      {message.fromUserName ?? "Teams"}: {(message.text ?? message.body ?? "").slice(0, 200)}
                     </li>
                   ))}
                 </ul>
@@ -1454,7 +1454,7 @@ export function KnowledgeGapsEvidenceCard({
                 <ul className="space-y-2">
                   {teams.messages.slice(0, 8).map((message, index) => (
                     <li key={index} className="coop-result-text">
-                      {message.fromUserName ?? "Teams"}: {message.text.slice(0, 200)}
+                      {message.fromUserName ?? "Teams"}: {(message.text ?? message.body ?? "").slice(0, 200)}
                     </li>
                   ))}
                 </ul>
@@ -1623,7 +1623,7 @@ function IntegrationSearchResults({
         <ul className="space-y-2">
           {messages.slice(0, 10).map((message, index) => (
             <li key={index} className="coop-result-text">
-              {message.fromUserName ?? "Teams"}: {message.text.slice(0, 240)}
+              {message.fromUserName ?? "Teams"}: {(message.text ?? message.body ?? "").slice(0, 240)}
             </li>
           ))}
         </ul>

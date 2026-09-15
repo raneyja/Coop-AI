@@ -1524,7 +1524,17 @@ type TeamsSearchSnippet = {
 type CodeHostSearchSnippet = {
   provider: string;
   repoQuery?: string;
-  pullRequests: Array<{ number: number; title: string; state: string; merged: boolean; author?: string; updatedAt: string; htmlUrl?: string }>;
+  pullRequests: Array<{
+    number: number;
+    title: string;
+    state: string;
+    merged: boolean;
+    author?: string;
+    updatedAt: string;
+    htmlUrl?: string;
+    body?: string;
+    bodyOpened?: boolean;
+  }>;
   issues: Array<{ number: number; title: string; state: string; author?: string; updatedAt: string; htmlUrl?: string }>;
   error?: string;
 };
@@ -1559,14 +1569,14 @@ type ConfluenceSearchSnippet = {
 type NotionSearchSnippet = {
   query: string;
   repoQuery?: string;
-  pages: Array<{ id: string; title: string; updated: string; htmlUrl: string }>;
+  pages: Array<{ id: string; title: string; excerpt?: string; updated: string; htmlUrl: string }>;
   error?: string;
 };
 
 type GoogleDocsSearchSnippet = {
   query: string;
   repoQuery?: string;
-  documents: Array<{ id: string; title: string; updated: string; htmlUrl: string }>;
+  documents: Array<{ id: string; title: string; excerpt?: string; updated: string; htmlUrl: string }>;
   error?: string;
 };
 
@@ -1730,8 +1740,9 @@ function formatNotionPagesForLlm(notion: NotionSearchSnippet): string[] {
   }
   for (const page of pages) {
     const url = page.htmlUrl ? ` url="${escapeXml(page.htmlUrl)}"` : "";
+    const excerpt = page.excerpt ? ` excerpt="${escapeXml(page.excerpt)}"` : "";
     lines.push(
-      `<page id="${escapeXml(page.id)}" updated="${escapeXml(page.updated)}"${url}>${escapeXml(page.title)}</page>`
+      `<page id="${escapeXml(page.id)}" updated="${escapeXml(page.updated)}"${url}${excerpt}>${escapeXml(page.title)}</page>`
     );
   }
   lines.push("</notion_pages>");
@@ -1758,8 +1769,9 @@ function formatGoogleDocsForLlm(googleDocs: GoogleDocsSearchSnippet): string[] {
   }
   for (const doc of documents) {
     const url = doc.htmlUrl ? ` url="${escapeXml(doc.htmlUrl)}"` : "";
+    const excerpt = doc.excerpt ? ` excerpt="${escapeXml(doc.excerpt)}"` : "";
     lines.push(
-      `<document id="${escapeXml(doc.id)}" updated="${escapeXml(doc.updated)}"${url}>${escapeXml(doc.title)}</document>`
+      `<document id="${escapeXml(doc.id)}" updated="${escapeXml(doc.updated)}"${url}${excerpt}>${escapeXml(doc.title)}</document>`
     );
   }
   lines.push("</google_docs>");
@@ -1788,8 +1800,9 @@ function formatCodeHostActivityForLlm(codeHost: CodeHostSearchSnippet): string[]
   for (const pr of pullRequests) {
     const author = pr.author ? ` author="${escapeXml(pr.author)}"` : "";
     const url = pr.htmlUrl ? ` url="${escapeXml(pr.htmlUrl)}"` : "";
+    const body = pr.body ? ` body="${escapeXml(pr.body)}"` : "";
     lines.push(
-      `<pull_request number="${pr.number}" state="${escapeXml(pr.state)}" merged="${pr.merged}" updated="${escapeXml(pr.updatedAt)}"${author}${url}>${escapeXml(pr.title)}</pull_request>`
+      `<pull_request number="${pr.number}" state="${escapeXml(pr.state)}" merged="${pr.merged}" updated="${escapeXml(pr.updatedAt)}"${author}${url}${body}>${escapeXml(pr.title)}</pull_request>`
     );
   }
   for (const issue of issues) {

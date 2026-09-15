@@ -1,4 +1,4 @@
-import { TeamsClient } from "../api/teams/teamsClient";
+import { TeamsClient, type TeamsSearchHit, type TeamsThread } from "../api/teams/teamsClient";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ResolvedIntegrationScope } from "../integrationScope/types";
 import {
@@ -12,6 +12,7 @@ import { shouldFetchIncidentIntegrations } from "./incidentIntent";
 import { shouldFetchDiscussionIntegrations } from "./integrationFetchPolicy";
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
 import { isTeamsComingSoon } from "../integrations/teamsAvailability";
+import { sanitizeIntegrationSnippet } from "./integrationDocRelevance";
 import type { ChatIntentJobVerb } from "../chat/intentPlanner/types";
 import {
   emptySearchTopicError,
@@ -20,10 +21,15 @@ import {
 } from "./integrationJobErrors";
 
 export type TeamsSearchMessage = {
+  teamId?: string;
+  channelId?: string;
+  messageId?: string;
   fromUserName?: string;
   body: string;
   createdAt: string;
   webUrl?: string;
+  /** True when body was replaced with a full thread via getThread. */
+  threadOpened?: boolean;
 };
 
 export type TeamsSearchContext = {
@@ -34,6 +40,15 @@ export type TeamsSearchContext = {
   /** Queries merged when multiple search strategies were used. */
   queries?: string[];
   error?: string;
+};
+
+/** Injectable Teams client for tests — production uses credentials. */
+export type TeamsSearchClient = {
+  searchMessages(
+    query: string,
+    options?: { limit?: number }
+  ): Promise<TeamsSearchHit[]>;
+  getThread?(teamId: string, channelId: string, messageId: string): Promise<TeamsThread>;
 };
 
 export function wantsTeamsContext(query: string): boolean {
@@ -105,8 +120,13 @@ export async function fetchTeamsSearchContext(options: {
   jobScoped?: boolean;
   jobVerb?: ChatIntentJobVerb;
   integrationScope?: ResolvedIntegrationScope;
+  /** Test seam — production leaves this unset and builds a client from secrets. */
+  client?: TeamsSearchClient;
+  /** Repo-wide Gaps: open threads after a hit. */
+  openAfterHit?: boolean;
 }): Promise<TeamsSearchContext> {
-  if (isTeamsComingSoon()) {
+  // Injected clients (gates) exercise the open-thread path while product is coming-soon.
+  if (isTeamsComingSoon() && !options.client) {
     return {
       source: "teams-search",
       query: "",
@@ -132,7 +152,7 @@ export async function fetchTeamsSearchContext(options: {
   }
 
   const creds = await options.secrets.getCredentials();
-  if (!creds.teamsToken) {
+  if (!creds.teamsToken && !options.client) {
     return {
       source: "teams-search",
       query: "",
@@ -152,7 +172,9 @@ export async function fetchTeamsSearchContext(options: {
     };
   }
 
-  const client = new TeamsClient({ accessToken: creds.teamsToken });
+  const client =
+    options.client ??
+    new TeamsClient({ accessToken: creds.teamsToken! });
   const limit = options.limit ?? 20;
   const seen = new Map<string, TeamsSearchMessage>();
   const errors: string[] = [];
@@ -172,11 +194,17 @@ export async function fetchTeamsSearchContext(options: {
           continue;
         }
         seen.set(key, {
+          teamId: hit.teamId,
+          channelId: hit.channelId,
+          messageId: hit.messageId,
           fromUserName: hit.fromUserName,
           body: truncate(hit.body, 500),
           createdAt: hit.createdAt,
           webUrl: hit.webUrl
         });
+      }
+      if (options.jobScoped && seen.size > 0) {
+        break;
       }
     } catch (error) {
       const message = explainTeamsSearchError(
@@ -188,6 +216,12 @@ export async function fetchTeamsSearchContext(options: {
     }
   }
 
+  const messages = await attachTeamsThreadBodies(
+    client,
+    [...seen.values()].slice(0, limit),
+    { jobScoped: Boolean(options.jobScoped || options.openAfterHit) }
+  );
+
   const repoQuery =
     options.owner?.trim() && options.repo?.trim()
       ? `${options.owner.trim()}/${options.repo.trim()}`
@@ -198,8 +232,8 @@ export async function fetchTeamsSearchContext(options: {
     query,
     queries: queries.length > 1 ? queries : undefined,
     repoQuery,
-    messages: [...seen.values()].slice(0, limit),
-    error: seen.size === 0 && errors.length > 0 ? errors[0] : undefined
+    messages,
+    error: messages.length === 0 && errors.length > 0 ? errors[0] : undefined
   };
 }
 
@@ -215,4 +249,56 @@ function truncate(value: string, max: number): string {
     return value;
   }
   return `${value.slice(0, max)}…`;
+}
+
+const OPENED_THREAD_BODY_CHARS = 1500;
+const MAX_OPENED_THREADS = 3;
+
+async function attachTeamsThreadBodies(
+  client: TeamsSearchClient,
+  messages: TeamsSearchMessage[],
+  options: { jobScoped: boolean }
+): Promise<TeamsSearchMessage[]> {
+  if (messages.length === 0 || !options.jobScoped || !client.getThread) {
+    return messages;
+  }
+  const selected = messages.slice(0, MAX_OPENED_THREADS);
+  const opened = await Promise.all(
+    selected.map(async (message) => {
+      try {
+        const teamId = message.teamId?.trim();
+        const channelId = message.channelId?.trim();
+        const messageId = message.messageId?.trim();
+        if (!teamId || !channelId || !messageId) {
+          return { key: teamsMessageKey(message), body: undefined };
+        }
+        const thread = await client.getThread?.(teamId, channelId, messageId);
+        if (!thread?.messages?.length) {
+          return { key: teamsMessageKey(message), body: undefined };
+        }
+        const raw = thread.messages
+          .map((entry) => {
+            const who = entry.fromUserName ?? entry.fromUserId ?? "unknown";
+            return `${who}: ${entry.body}`;
+          })
+          .join("\n");
+        return { key: teamsMessageKey(message), body: raw };
+      } catch {
+        return { key: teamsMessageKey(message), body: undefined };
+      }
+    })
+  );
+  const byKey = new Map(opened.map((entry) => [entry.key, entry.body]));
+  return messages.map((message) => {
+    const raw = byKey.get(teamsMessageKey(message));
+    if (!raw?.trim()) {
+      return message;
+    }
+    const body = sanitizeIntegrationSnippet(truncate(raw, OPENED_THREAD_BODY_CHARS));
+    return body ? { ...message, body, threadOpened: true } : message;
+  });
+}
+
+function teamsMessageKey(message: TeamsSearchMessage): string {
+  return `${message.teamId ?? ""}:${message.channelId ?? ""}:${message.messageId ?? ""}`;
 }

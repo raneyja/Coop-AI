@@ -24,7 +24,9 @@ export function appendIntegrationDocsResponseContract(
 
   const targetSection = input.targetSection ?? "Architecture";
   lines.push("## Attached documentation (required in response)");
-  lines.push(`In **${targetSection}**, name every attached page or document title exactly as listed below:`);
+  lines.push(
+    `In **${targetSection}**, for every attached page or document below: name the title exactly, then summarize what the attached Body says (or state Body not attached). Do not list titles alone as documentation gaps.`
+  );
   if (notionCount > 0) {
     lines.push(
       `- **Notion pages reviewed** — exactly ${notionCount} titled bullet(s) in this order: ${input.notionPages!

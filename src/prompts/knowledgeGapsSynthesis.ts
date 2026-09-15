@@ -55,7 +55,8 @@ import { ORG_DOCS_EVIDENCE_LABEL, orgDocsSynthesisGuardrail } from "../workspace
 export const KNOWLEDGE_GAPS_EVIDENCE_SYSTEM = `You audit engineering health using only attached evidence from the Sources card and synthesis bundle.
 When ### Focus file excerpts are attached, you MAY name documentation, ownership, or default-on risks that are visible in those excerpts (allowlists, call caps, missing confirmation). Cite the path. Still fail: inventing files not attached, foreign-repo paths, or a 40-bullet dump.
 When focus excerpts are absent, list scan-backed gaps and integration hits only — never invent gap subsections from code inspection or generic framework knowledge.
-Documentation gap subsections must come from knowledge gap scan entries, Confluence/Notion/Google Docs page lists, explicit integration errors in the bundle, or attached focus file excerpts.
+Documentation gap subsections must come from knowledge gap scan entries, opened Confluence/Notion/Google Docs Body lines, Jira Body lines, opened Slack/Teams Body lines, explicit integration errors in the bundle, or attached focus file excerpts.
+Titles alone are not documentation gaps — summarize attached Body content (or state Body not attached).
 The primary audit target is stated in ## Task — do not center the audit on out-of-scope @ attachments.
 When ## User focus / ## Primary topic is present, audit those subsystems first — leftover open-editor ownership is secondary at most.
 Org Confluence/Notion hits are org-wide supplementary docs — never the active repository's architecture source of truth.
@@ -463,7 +464,7 @@ function formatKnowledgeGapsForPrompt(
           : confluence.pages?.length
             ? confluence.pages
                 .slice(0, 15)
-                .map((page) => `- ${page.title}${page.excerpt ? `: ${page.excerpt.slice(0, 120)}` : ""}`)
+                .map((page) => formatOpenedDocLine(page.title, page.excerpt))
                 .join("\n") + truncationNote(confluence.pages.length, 15)
             : "- No matching Confluence pages")
     );
@@ -476,7 +477,13 @@ function formatKnowledgeGapsForPrompt(
           : jira.issues?.length
             ? jira.issues
                 .slice(0, 15)
-                .map((issue) => `- ${issue.key} (${issue.status}): ${issue.summary}`)
+                .map(
+                  (issue) =>
+                    formatOpenedDocLine(
+                      `${issue.key} (${issue.status}): ${issue.summary}`,
+                      issue.description
+                    )
+                )
                 .join("\n") + truncationNote(jira.issues.length, 15)
             : "- No matching Jira issues")
     );
@@ -489,7 +496,13 @@ function formatKnowledgeGapsForPrompt(
           : slack.messages?.length
             ? slack.messages
                 .slice(0, 10)
-                .map((message) => `- ${message.channelName ? `#${message.channelName}` : "Slack"}: ${message.text.slice(0, 160)}`)
+                .map((message) =>
+                  formatOpenedDiscussionLine(
+                    message.channelName ? `#${message.channelName}` : "Slack",
+                    message.text,
+                    message.threadOpened === true
+                  )
+                )
                 .join("\n") + truncationNote(slack.messages.length, 10)
             : "- No matching Slack discussions")
     );
@@ -502,7 +515,7 @@ function formatKnowledgeGapsForPrompt(
           : notion.pages?.length
             ? notion.pages
                 .slice(0, 15)
-                .map((page) => `- ${page.title}`)
+                .map((page) => formatOpenedDocLine(page.title, page.excerpt))
                 .join("\n") + truncationNote(notion.pages.length, 15)
             : "- No matching Notion pages")
     );
@@ -515,7 +528,7 @@ function formatKnowledgeGapsForPrompt(
           : googleDocs.documents?.length
             ? googleDocs.documents
                 .slice(0, 15)
-                .map((doc) => `- ${doc.title}`)
+                .map((doc) => formatOpenedDocLine(doc.title, doc.excerpt))
                 .join("\n") + truncationNote(googleDocs.documents.length, 15)
             : "- No matching Google Docs")
     );
@@ -528,7 +541,13 @@ function formatKnowledgeGapsForPrompt(
           : teams.messages?.length
             ? teams.messages
                 .slice(0, 10)
-                .map((message) => `- ${message.fromUserName ?? "Teams"}: ${message.text.slice(0, 160)}`)
+                .map((message) =>
+                  formatOpenedDiscussionLine(
+                    message.fromUserName ?? "Teams",
+                    message.text ?? message.body ?? "",
+                    message.threadOpened === true
+                  )
+                )
                 .join("\n") + truncationNote(teams.messages.length, 10)
             : "- No matching Teams discussions")
     );
@@ -565,6 +584,33 @@ function formatKnowledgeGapsForPrompt(
 }
 
 const FOCUS_EXCERPT_CHARS = 4_000;
+const OPENED_ARTIFACT_BODY_CHARS = 1_200;
+
+/** Opened doc/ticket body for Gaps — title alone is not enough. */
+function formatOpenedDocLine(title: string, body: string | undefined): string {
+  const clipped = body?.trim()
+    ? body.trim().length > OPENED_ARTIFACT_BODY_CHARS
+      ? `${body.trim().slice(0, OPENED_ARTIFACT_BODY_CHARS)}…`
+      : body.trim()
+    : undefined;
+  return `- ${title}\n  Body: ${clipped ?? "not attached."}`;
+}
+
+/** Opened Slack/Teams thread — search snippet without threadOpened is not a decision. */
+function formatOpenedDiscussionLine(
+  label: string,
+  text: string,
+  threadOpened: boolean
+): string {
+  if (threadOpened && text.trim()) {
+    const clipped =
+      text.trim().length > OPENED_ARTIFACT_BODY_CHARS
+        ? `${text.trim().slice(0, OPENED_ARTIFACT_BODY_CHARS)}…`
+        : text.trim();
+    return `- ${label}\n  Body: ${clipped}`;
+  }
+  return `- ${label}\n  Body: not attached.`;
+}
 
 function formatFocusFileExcerpts(
   files: KnowledgeGapsEvidence["focusFiles"]

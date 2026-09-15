@@ -11,7 +11,8 @@ import { buildIntegrationSearchTermList } from "./integrationSearchTerms";
 import { planJobSearchAttempts } from "./jobSearchPlan";
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
-import { filterDocPagesForUseRepo } from "./integrationDocRelevance";
+import { filterDocPagesForUseRepo, sanitizeIntegrationSnippet } from "./integrationDocRelevance";
+import { looksLikeDecisionDocTitle } from "./confluenceContext";
 import type { ChatIntentJobVerb } from "../chat/intentPlanner/types";
 import { isSearchMeaningStop } from "../chat/intentPlanner/searchMeaningStop";
 import {
@@ -23,6 +24,7 @@ import {
 export type GoogleDocsSearchPage = {
   id: string;
   title: string;
+  excerpt?: string;
   updated: string;
   htmlUrl: string;
 };
@@ -33,6 +35,32 @@ export type GoogleDocsSearchContext = {
   repoQuery?: string;
   documents: GoogleDocsSearchPage[];
   error?: string;
+};
+
+/** Injectable Google Docs client for tests — production uses credentials. */
+export type GoogleDocsSearchClient = {
+  searchDocumentsForTerms(
+    terms: string[],
+    limit?: number,
+    scope?: { expandedFolderIds: string[] }
+  ): Promise<Array<{
+    id: string;
+    title: string;
+    updated: string;
+    htmlUrl: string;
+    parents?: string[];
+  }>>;
+  listRecentDocuments(
+    limit?: number,
+    scope?: { expandedFolderIds: string[] }
+  ): Promise<Array<{
+    id: string;
+    title: string;
+    updated: string;
+    htmlUrl: string;
+    parents?: string[];
+  }>>;
+  getDocumentPlainText?(documentId: string): Promise<string | undefined>;
 };
 
 export function wantsGoogleDocsContext(query: string): boolean {
@@ -74,6 +102,10 @@ export async function fetchGoogleDocsSearchContext(options: {
   jobScoped?: boolean;
   jobVerb?: ChatIntentJobVerb;
   integrationScope?: ResolvedIntegrationScope;
+  /** Repo-wide Gaps: open document bodies after a hit. */
+  openAfterHit?: boolean;
+  /** Test seam — production leaves this unset and builds a client from secrets. */
+  client?: GoogleDocsSearchClient;
 }): Promise<GoogleDocsSearchContext> {
   if (isGoogleDocsScopeBlocked(options.integrationScope)) {
     return {
@@ -85,7 +117,7 @@ export async function fetchGoogleDocsSearchContext(options: {
   }
 
   const creds = await options.secrets.getCredentials();
-  if (!creds.googleDocsToken) {
+  if (!creds.googleDocsToken && !options.client) {
     return {
       source: "google-docs-search",
       query: "",
@@ -130,7 +162,9 @@ export async function fetchGoogleDocsSearchContext(options: {
   }
 
   const query = latest ? "latest" : terms.join(" OR ");
-  const client = new GoogleDocsClient({ accessToken: creds.googleDocsToken });
+  const client =
+    options.client ??
+    new GoogleDocsClient({ accessToken: creds.googleDocsToken! });
   const driveScope =
     options.integrationScope?.enforced && options.integrationScope.googleDocs
       ? { expandedFolderIds: options.integrationScope.googleDocs.expandedFolderIds }
@@ -149,7 +183,7 @@ export async function fetchGoogleDocsSearchContext(options: {
       options.integrationScope?.enforced && allowedFolderIds.size > 0
         ? filterGoogleDocsHitsByFolder(rawDocuments, allowedFolderIds).map(stripGoogleDocParents)
         : rawDocuments.map(stripGoogleDocParents);
-    const documents = latest
+    const ranked = latest
       ? scoped.slice(0, options.limit ?? 20)
       : filterDocPagesForUseRepo(scoped, {
           owner: options.owner,
@@ -157,6 +191,11 @@ export async function fetchGoogleDocsSearchContext(options: {
           focusTerms: options.extraTerms,
           limit: options.limit ?? 20
         });
+    const documents = await attachGoogleDocBodies(client, ranked, {
+      jobScoped: Boolean(
+        (options.jobScoped && options.jobVerb !== "latest") || options.openAfterHit
+      )
+    });
     const repoQuery =
       options.owner?.trim() && options.repo?.trim()
         ? `${options.owner.trim()}/${options.repo.trim()}`
@@ -176,6 +215,80 @@ export async function fetchGoogleDocsSearchContext(options: {
       error: error instanceof Error ? error.message : "Google Docs search failed."
     };
   }
+}
+
+const OPENED_PAGE_BODY_CHARS = 1500;
+const MAX_OPENED_PAGES = 3;
+
+function pagesToOpen(
+  pages: GoogleDocsSearchPage[],
+  jobScoped: boolean
+): GoogleDocsSearchPage[] {
+  const picked: GoogleDocsSearchPage[] = [];
+  const seen = new Set<string>();
+  for (const page of pages) {
+    if (!looksLikeDecisionDocTitle(page.title)) {
+      continue;
+    }
+    if (picked.length >= MAX_OPENED_PAGES) {
+      break;
+    }
+    seen.add(page.id);
+    picked.push(page);
+  }
+  if (jobScoped) {
+    for (const page of pages) {
+      if (picked.length >= MAX_OPENED_PAGES) {
+        break;
+      }
+      if (seen.has(page.id)) {
+        continue;
+      }
+      seen.add(page.id);
+      picked.push(page);
+    }
+  }
+  return picked;
+}
+
+async function attachGoogleDocBodies(
+  client: GoogleDocsSearchClient,
+  pages: GoogleDocsSearchPage[],
+  options: { jobScoped: boolean }
+): Promise<GoogleDocsSearchPage[]> {
+  if (pages.length === 0 || !client.getDocumentPlainText) {
+    return pages;
+  }
+  const selected = pagesToOpen(pages, options.jobScoped);
+  if (selected.length === 0) {
+    return pages;
+  }
+  const bodies = await Promise.all(
+    selected.map(async (page) => {
+      try {
+        const body = await client.getDocumentPlainText?.(page.id);
+        return { id: page.id, body };
+      } catch {
+        return { id: page.id, body: undefined };
+      }
+    })
+  );
+  const byId = new Map(bodies.map((entry) => [entry.id, entry.body]));
+  return pages.map((page) => {
+    const raw = byId.get(page.id);
+    if (!raw?.trim()) {
+      return page;
+    }
+    const excerpt = sanitizeIntegrationSnippet(truncate(raw, OPENED_PAGE_BODY_CHARS));
+    return excerpt ? { ...page, excerpt } : page;
+  });
+}
+
+function truncate(value: string, max: number): string {
+  if (value.length <= max) {
+    return value;
+  }
+  return `${value.slice(0, max)}…`;
 }
 
 const DRIVE_SEARCH_STOP = new Set(["not", "the", "and", "for", "this", "that", "into", "from", "with", "to"]);

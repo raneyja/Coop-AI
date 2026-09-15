@@ -117,7 +117,12 @@ export type DecisionIntegrationSearch = {
     query?: string;
   };
   teams?: {
-    messages: Array<{ text: string; fromUserName?: string }>;
+    messages: Array<{
+      text?: string;
+      body?: string;
+      fromUserName?: string;
+      threadOpened?: boolean;
+    }>;
     error?: string;
   };
   seedJiraKeys?: string[];
