@@ -140,6 +140,9 @@ async function main(): Promise<void> {
     assert.doesNotMatch(prompt, /none are on the allowlist/);
     assert.match(prompt, /Suggested queries, not a limit/);
     assert.match(prompt, /after a matching code read/);
+    assert.match(prompt, /Never search those tools for the locate symbol/);
+    assert.match(prompt, /search_code: prefer an exact symbol/);
+    assert.doesNotMatch(prompt, /^Prefer an exact symbol name/m);
   });
 
   await test("connected vendor is callable even when planner tools would be empty", () => {
@@ -179,7 +182,7 @@ async function main(): Promise<void> {
     assert.deepEqual(calls, []);
   });
 
-  await test("after a matching hunt, allowlisted Jira is fetched if the model skipped it", async () => {
+    await test("after a matching hunt, Jira fill uses decision terms not the locate symbol", async () => {
     const calls: string[] = [];
     const orchestrator = createAgentOrchestrator({
       indexBackend: {
@@ -204,13 +207,18 @@ async function main(): Promise<void> {
       })
     });
     const result = await orchestrator.run(
-      { message: "Where is requireAuth, and check Jira for related tickets?", repoId: "acme/demo", maxSteps: 6 },
+      {
+        message: "Where is requireAuth defined, and what did we already decide about peeling auth into coop-backend?",
+        repoId: "acme/demo",
+        maxSteps: 6
+      },
       {
         allowedIntegrations: ["jira"],
         fillIntegrations: ["jira"],
+        fillQueries: { jira: "peel auth coop-backend" },
         searchIntegration: async ({ query }) => {
           calls.push(query);
-          return { source: "jira-search", issues: [{ key: "AUTH-1", summary: "Auth middleware" }] };
+          return { source: "jira-search", issues: [{ key: "COOP-101", summary: "Extract auth" }] };
         },
         planTurn: async ({ round }) => {
           if (round === 0) {
@@ -226,15 +234,15 @@ async function main(): Promise<void> {
         }
       }
     );
-    assert.ok(
-      calls.some((q) => q.toLowerCase().includes("requireauth")),
-      `expected auto Jira query, got ${calls.join(",")}`
+    assert.deepEqual(calls, ["peel auth coop-backend"]);
+    assert.equal(
+      calls.some((q) => /requireauth/i.test(q)),
+      false
     );
     assert.ok(result.steps.some((s) => s.tool === "search_jira"));
-    assert.equal(
-      (result.context?.search_jira as { issues?: Array<{ key: string }> } | undefined)?.issues?.[0]
-        ?.key,
-      "AUTH-1"
+    assert.match(
+      result.steps.find((s) => s.tool === "search_jira")?.summary ?? "",
+      /peel auth coop-backend/
     );
   });
 

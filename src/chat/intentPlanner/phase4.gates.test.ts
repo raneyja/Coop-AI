@@ -10,6 +10,7 @@ import {
   codeHostJobQuery,
   extraTermsForIntegration,
   hasCodeHostJob,
+  integrationJobQuery,
   locateJobTerms,
   planChatJobs,
   shouldOverlapIntegrationPrefetch,
@@ -378,6 +379,9 @@ test("I3 compound locate+decision splits requireAuth from peel-auth and skips un
   assert.match(decisionBlob, /auth/);
   assert.match(decisionBlob, /coop-backend|coop backend/);
   assert.equal(decision.some((term) => /requireAuth/i.test(term)), false);
+  const jiraQuery = integrationJobQuery(plan.jobs, "jira") ?? "";
+  assert.match(jiraQuery, /peel|coop-backend|coop backend/i);
+  assert.doesNotMatch(jiraQuery, /requireAuth/i);
   assert.ok(plan.tools.includes("slack") && plan.tools.includes("jira"));
   assert.equal(plan.tools.includes("confluence"), false);
   assert.equal(plan.tools.includes("notion"), false);

@@ -42,6 +42,7 @@ export type ConfluenceSearchPage = {
 export type ConfluenceSearchContext = {
   source: "confluence-search";
   cql: string;
+  query?: string;
   repoQuery?: string;
   pages: ConfluenceSearchPage[];
   error?: string;
@@ -220,6 +221,7 @@ export async function fetchConfluenceSearchContext(options: {
     return {
       source: "confluence-search",
       cql,
+      query: (options.extraTerms ?? []).join(" ").trim() || undefined,
       repoQuery,
       pages: latest
         ? mapped.slice(0, limit)

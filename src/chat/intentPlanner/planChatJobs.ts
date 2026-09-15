@@ -223,6 +223,32 @@ export function extraTermsForIntegration(
   return unique.length > 0 ? unique : undefined;
 }
 
+/** Decision/docs job terms as one search string — never the locate symbol. */
+export function integrationJobQuery(
+  jobs: ChatIntentJob[] | undefined,
+  provider: IntegrationChatProvider
+): string | undefined {
+  const terms = extraTermsForIntegration(jobs, provider);
+  if (!terms?.length) {
+    return undefined;
+  }
+  return terms.slice(0, 6).join(" ");
+}
+
+export function integrationFillQueries(
+  jobs: ChatIntentJob[] | undefined,
+  tools: IntegrationChatProvider[] | undefined
+): Partial<Record<IntegrationChatProvider, string>> {
+  const out: Partial<Record<IntegrationChatProvider, string>> = {};
+  for (const provider of tools ?? []) {
+    const query = integrationJobQuery(jobs, provider);
+    if (query) {
+      out[provider] = query;
+    }
+  }
+  return out;
+}
+
 export function hasIntegrationJob(
   jobs: ChatIntentJob[] | undefined,
   provider: IntegrationChatProvider

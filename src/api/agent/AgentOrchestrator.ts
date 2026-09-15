@@ -19,7 +19,6 @@ import { agentSearchSkipNote, parseAgentToolPlan } from "./parseAgentToolPlan";
 import {
   fallbackAgentSearchQueries,
   extractNamedSourceFiles,
-  namedSymbolKeys,
   pickSearchHitsToRead,
   pickSymbolHitsToRead,
   pickTopSearchHit,
@@ -161,6 +160,8 @@ export type AgentRunOptions = {
    * Not the connected list — filling every connected vendor would spray.
    */
   fillIntegrations?: IntegrationChatProvider[];
+  /** Per-vendor search string from decision/docs jobs — not the locate symbol. */
+  fillQueries?: Partial<Record<IntegrationChatProvider, string>>;
   /** Live integration search for connected mid-loop tools. */
   searchIntegration?: (options: {
     provider: IntegrationChatProvider;
@@ -605,12 +606,14 @@ export class AgentOrchestrator {
     const context: AgentSessionContext = { ...(result.context ?? {}) };
     const steps = [...result.steps];
     const messages = conversation ? [...conversation] : undefined;
-    const focused =
-      namedSymbolKeys(query)[0] ?? sanitizeAgentSearchQuery(query, query);
     let calls = steps.filter((step) => isAgentIntegrationTool(step.tool)).length;
     for (const provider of toFill) {
       if (calls >= MAX_INTEGRATION_TOOL_CALLS) {
         break;
+      }
+      const focused = options.fillQueries?.[provider]?.trim();
+      if (!focused) {
+        continue;
       }
       const tool = agentToolForIntegrationProvider(provider);
       if (!tool || context[tool]) {

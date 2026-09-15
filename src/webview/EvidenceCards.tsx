@@ -1543,7 +1543,20 @@ export function IntegrationSearchEvidenceCard({
             {error ? (
               <IntegrationResultText muted>{error}</IntegrationResultText>
             ) : (
-              <IntegrationSearchResults provider={provider} evidence={evidence} />
+              <div className="space-y-2">
+                {typeof evidence.query === "string" && evidence.query.trim() ? (
+                  <IntegrationResultText muted>
+                    Searched for {evidence.query.trim()}
+                  </IntegrationResultText>
+                ) : Array.isArray(evidence.queries) &&
+                  typeof evidence.queries[0] === "string" &&
+                  evidence.queries[0].trim() ? (
+                  <IntegrationResultText muted>
+                    Searched for {evidence.queries[0].trim()}
+                  </IntegrationResultText>
+                ) : null}
+                <IntegrationSearchResults provider={provider} evidence={evidence} />
+              </div>
             )}
           </IntegrationResultCollapsible>
         </EvidenceConnectionGroup>

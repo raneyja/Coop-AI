@@ -129,7 +129,8 @@ export function buildAgentToolPlanPrompt(input: {
           "Call a discussion tool (search_slack, search_teams) only if the question needs chat or a decision.",
           "Call a ticket tool (search_jira) only if the question needs issues or a ticket.",
           "Call a docs tool (search_confluence, search_notion, search_google_docs) only if the question needs written docs.",
-          "Use a short focused query (symbol, ticket key, or topic) — not the whole question.",
+          "Use a short focused query — not the whole question.",
+          "Discussion/ticket/docs query must be the suggested decision or docs terms (peel-auth, coop-backend, ticket key). Never search those tools for the locate symbol (requireAuth).",
           "Do not {\"done\":true} after a discussion, ticket, or docs tool alone when the user also asked where code lives.",
           "If the user asked two things, do not {\"done\":true} after a matching code read either — call the connected discussion, ticket, or docs tool the question still needs, then finish.",
           "Do not call integrations that are not listed."
@@ -151,7 +152,7 @@ export function buildAgentToolPlanPrompt(input: {
     jobHint,
     "Search for identifiers; do not guess file paths.",
     "search_code query must be a short identifier or 2–4 word phrase. Never paste the whole question.",
-    "Prefer an exact symbol name the user wrote (requireAuth, parse_token) over a prose phrase.",
+    "search_code: prefer an exact symbol name the user wrote (requireAuth, parse_token) over a prose phrase.",
     "If camelCase misses, retry snake_case (requireAuth → require_auth) or a nearby synonym — never stop after one empty search.",
     "Never reply {\"done\":true} after an empty search_code, a skipNote, or a read whose body does not mention the named symbol. Search or read a different path instead.",
     "Never read barrel index.ts, build output, or vendored code — they re-export, they do not define.",

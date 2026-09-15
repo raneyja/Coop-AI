@@ -339,6 +339,14 @@ test("integration summary marks empty result sets as weak", () => {
   assert.ok(summary.recommendedActions.some((action) => action.kind === "search"));
 });
 
+test("empty integration summary names the search query", () => {
+  const summary = summarizeIntegrationSearch("slack", {
+    messages: [],
+    query: "peel-auth coop-backend"
+  });
+  assert.match(summary.primaryFinding ?? "", /peel-auth coop-backend/);
+});
+
 test("integration summary includes open action for teams links", () => {
   const summary = summarizeIntegrationSearch("teams", {
     messages: [{ text: "Discussed rollout steps", fromUserName: "alex", webUrl: "https://teams.example.com/message/1" }]

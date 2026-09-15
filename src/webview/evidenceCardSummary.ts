@@ -1099,10 +1099,17 @@ export function summarizeIntegrationSearch(
     qualityReason = "Search completed but returned no matching results.";
   }
 
+  const query =
+    typeof evidence.query === "string" && evidence.query.trim()
+      ? evidence.query.trim()
+      : undefined;
+
   const primaryFinding = error
     ? `${provider} search failed: ${cleanLine(error)}`
     : count === 0
-      ? `No matching ${provider} results were found.`
+      ? query
+        ? `No matching ${provider} results for ${query}.`
+        : `No matching ${provider} results were found.`
       : describeTopIntegrationResult(provider, top, count);
 
   const limitations = dedupeLimitations([

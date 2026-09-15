@@ -37,6 +37,7 @@ export type JiraSearchTicket = {
 export type JiraSearchContext = {
   source: "jira-search";
   jql: string;
+  query?: string;
   repoQuery?: string;
   issues: JiraSearchTicket[];
   issueKeyHits?: string[];
@@ -757,6 +758,7 @@ export async function fetchJiraSearchContext(options: {
   return {
     source: "jira-search",
     jql: jql ?? "",
+    query: queryText.trim() || (options.extraTerms ?? []).join(" "),
     repoQuery,
     issues,
     issueKeyHits: issueKeys.length > 0 ? issueKeys : undefined,

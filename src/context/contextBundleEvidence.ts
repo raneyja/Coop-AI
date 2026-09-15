@@ -114,6 +114,7 @@ export type JiraSearchEvidence = {
   issues: Array<{ key: string; summary: string; status: string; htmlUrl?: string }>;
   error?: string;
   matchStrategy?: string;
+  query?: string;
 };
 
 export type SlackSearchEvidence = {
@@ -125,6 +126,7 @@ export type SlackSearchEvidence = {
 export type ConfluenceSearchEvidence = {
   pages: Array<{ id: string; title: string; excerpt?: string; htmlUrl: string }>;
   error?: string;
+  query?: string;
 };
 
 export type TeamsSearchEvidence = {
@@ -229,7 +231,8 @@ export function repoSummaryFromBundle(bundle: unknown[]): RepoSummaryEvidence | 
       merged.jira = {
         issues: (asRecord(data.jiraSearch).issues as JiraSearchEvidence["issues"]) ?? [],
         error: asRecord(data.jiraSearch).error as string | undefined,
-        matchStrategy: asRecord(data.jiraSearch).matchStrategy as string | undefined
+        matchStrategy: asRecord(data.jiraSearch).matchStrategy as string | undefined,
+        query: asRecord(data.jiraSearch).query as string | undefined
       };
     }
     if (data.slackSearch) {
@@ -672,7 +675,8 @@ export function jiraSearchFromBundle(bundle: unknown[]): JiraSearchEvidence | un
     return {
       issues: (search.issues as JiraSearchEvidence["issues"]) ?? [],
       error: search.error as string | undefined,
-      matchStrategy: search.matchStrategy as string | undefined
+      matchStrategy: search.matchStrategy as string | undefined,
+      query: search.query as string | undefined
     };
   });
 }
