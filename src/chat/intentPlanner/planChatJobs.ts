@@ -22,10 +22,10 @@ import { SEARCH_MEANING_STOP, uniqueMeaningTerms } from "./searchMeaningStop";
 const TOOL_NAME_PATTERNS: Array<{ provider: IntegrationChatProvider; pattern: RegExp }> = [
   { provider: "jira", pattern: /\bjira\b/i },
   { provider: "slack", pattern: /\bslack\b/i },
-  { provider: "teams", pattern: /\b(ms\s*)?teams\b/i },
+  { provider: "teams", pattern: /\b(?:microsoft\s+teams|ms\s+teams)\b/i },
   { provider: "confluence", pattern: /\bconfluence\b/i },
   { provider: "notion", pattern: /\bnotion\b/i },
-  { provider: "google-docs", pattern: /\b(google\s*docs?|gdocs?)\b/i }
+  { provider: "google-docs", pattern: /\b(?:google\s+docs?|gdocs?)\b/i }
 ];
 
 /** Literal integration names, shared by rules and job planning. */
@@ -39,6 +39,19 @@ export function detectExplicitlyNamedTools(message: string): IntegrationChatProv
   return omitTeamsWhileComingSoon(
     CHAT_INTENT_TOOL_PROVIDERS.filter((provider) => named.includes(provider))
   );
+}
+
+/** Product-word padlock — not “tickets/pages/docs in this repo”. */
+export function messageNamesProduct(
+  message: string,
+  provider: IntegrationChatProvider
+): boolean {
+  const entry = TOOL_NAME_PATTERNS.find((row) => row.provider === provider);
+  return Boolean(entry?.pattern.test(message));
+}
+
+export function messageNamesJiraTicket(message: string): boolean {
+  return /\b[A-Z][A-Z0-9]+-\d+\b/.test(message);
 }
 
 /** Decision phrasing searches discussion + tickets — not docs unless named or a docs job. */
@@ -95,6 +108,9 @@ const PEEL_AUTH = /\bpeel(?:ing)?\s+auth(?:entication)?\b/i;
 const ISSUE_KEY = /\b[A-Z][A-Z0-9]+-\d+\b/g;
 
 const ABOUT_TOPIC = /\babout\s+(.+?)(?:\?|$)/i;
+
+/** Named doc title in "what does the Architecture Overview say". */
+const WHAT_DOC_SAYS = /\bwhat does (?:the )?(.+?) say\b/i;
 
 const CLAUSE_SPLIT =
   /\s*(?:,\s+and\s+|;\s+(?:and\s+)?|[—–]\s+(?:and\s+)?(?=(?:did|what|where)\b)|\s+and\s+(?=(?:did\b|what\s+(?:did|does)\b|where\s+did\b)))\s*/i;
@@ -294,11 +310,16 @@ export function codeHostJobVerb(jobs: ChatIntentJob[] | undefined): ChatIntentJo
 export function toolsImpliedByJobs(options: {
   jobs: ChatIntentJob[];
   namedTools: IntegrationChatProvider[];
+  /** Product words (slack, notion, …) — padlock. Ticket keys add Jira to namedTools without padlocking Slack away. */
+  namedProducts?: IntegrationChatProvider[];
   connectedTools: IntegrationChatProvider[];
   decisionImplied: boolean;
 }): IntegrationChatProvider[] {
   const tools = new Set<IntegrationChatProvider>(options.namedTools);
-  if (options.decisionImplied) {
+  const padlock = (options.namedProducts ?? options.namedTools).length > 0;
+  // Named product is a padlock. "Look in Notion — what does the Overview say"
+  // matches decision phrasing; that must not add Slack/Jira.
+  if (options.decisionImplied && !padlock) {
     tools.add("slack");
     tools.add("jira");
     if (!isTeamsComingSoon() && options.connectedTools.includes("teams")) {
@@ -375,7 +396,9 @@ export function planChatTasks(options: {
         : options.tools.filter((tool) => DECISION_JOB_PROVIDERS.includes(tool));
     const fallback =
       job.capability === "docs" ? [...DOCS_JOB_PROVIDERS] : (["slack", "jira"] as const);
-    const tools = providers.length > 0 ? providers : [...fallback];
+    // Named Notion/Slack/etc. must not fall back to every sibling vendor.
+    const tools =
+      providers.length > 0 ? providers : options.tools.length > 0 ? [] : [...fallback];
     for (const tool of tools) {
       tasks.push({
         id: `${job.capability}-${tool}`,
@@ -461,7 +484,12 @@ export function planChatJobs(input: PlanChatJobsInput): ChatIntentJob[] {
     }
   }
 
-  if (decisionImplied && !jobs.some((job) => job.capability === "decision")) {
+  if (
+    decisionImplied &&
+    !jobs.some((job) => job.capability === "decision") &&
+    !(named.some((tool) => DOCS_JOB_PROVIDERS.includes(tool)) &&
+      !named.some((tool) => DISCUSSION_PROVIDERS.includes(tool) || tool === "jira"))
+  ) {
     const decisionClause = clauses.find((clause) => DECISION_PHRASE.test(clause)) ?? stripped;
     const terms = extractJobTerms(decisionClause, "decision", undefined);
     if (terms.length > 0) {
@@ -516,10 +544,14 @@ function classifyClause(
   if (wantsExplicitCodeHostSearch(clause)) {
     return "code-host";
   }
+  const namedDocs = named.some((tool) => DOCS_JOB_PROVIDERS.includes(tool));
+  if (namedDocs && (namedDocsInClause(clause) || WHAT_DOC_SAYS.test(clause))) {
+    return "docs";
+  }
   if (DECISION_PHRASE.test(clause)) {
     return "decision";
   }
-  if (named.some((tool) => DOCS_JOB_PROVIDERS.includes(tool)) && namedDocsInClause(clause)) {
+  if (namedDocs && namedDocsInClause(clause)) {
     return "docs";
   }
   if (classifyRepoCodeIntent(clause).action === "locate") {
@@ -605,6 +637,16 @@ function extractJobTerms(
     const fileName = activeFile?.trim().split(/[/\\]/).pop();
     if (fileName) {
       terms.push(fileName);
+    }
+  }
+
+  if (capability === "docs") {
+    const namedDoc = cleaned.match(WHAT_DOC_SAYS);
+    if (namedDoc?.[1]) {
+      const phrase = compactPhrase(namedDoc[1]);
+      if (phrase) {
+        terms.unshift(phrase);
+      }
     }
   }
 

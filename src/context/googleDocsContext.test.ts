@@ -24,6 +24,8 @@ test("driveSearchTokens splits hyphenated phrases into words Drive can match", (
 
 test("wantsGoogleDocsContext matches explicit google docs questions", () => {
   assert.equal(wantsGoogleDocsContext("any google docs for this repo?"), true);
+  assert.equal(wantsGoogleDocsContext("check gdocs for auth"), true);
+  assert.equal(wantsGoogleDocsContext("any docs for this repo?"), false);
   assert.equal(wantsGoogleDocsContext("What is the auth flow?"), false);
 });
 

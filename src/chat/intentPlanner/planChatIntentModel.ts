@@ -23,6 +23,7 @@ import {
 import { filterPlanToConnected, detectNamedTools } from "./planChatIntent";
 import {
   decisionPhrasePresent,
+  detectExplicitlyNamedTools,
   mergeChatIntentTools,
   planChatJobs,
   planChatTasks,
@@ -313,6 +314,7 @@ export async function classifyChatIntentPlan(
     const implied = toolsImpliedByJobs({
       jobs,
       namedTools: named,
+      namedProducts: detectExplicitlyNamedTools(message),
       connectedTools: input.connectedTools,
       decisionImplied: decisionPhrasePresent(message)
     });

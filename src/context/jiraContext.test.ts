@@ -41,7 +41,7 @@ test("wantsJiraContext matches explicit jira questions", () => {
 });
 
 test("wantsJiraContext matches ticket + repo phrasing", () => {
-  assert.equal(wantsJiraContext("any tickets related to this repository?"), true);
+  assert.equal(wantsJiraContext("any tickets related to this repository?"), false);
 });
 
 test("wantsJiraContext matches issue keys in the query", () => {

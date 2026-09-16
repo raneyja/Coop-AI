@@ -1,10 +1,12 @@
 import { fetchWithTimeout, isFetchTimeout } from "../networkResilience";
+import { INTEGRATION_HTTP_TIMEOUT_MS, integrationAuthFailureMessage } from "../integrations/integrationHttp";
 
 const NOTION_API = "https://api.notion.com/v1";
 const NOTION_VERSION = "2022-06-28";
 
 export type NotionClientOptions = {
   token: string;
+  signal?: AbortSignal;
 };
 
 export type NotionPage = {
@@ -128,7 +130,7 @@ export class NotionClient {
     const parts: string[] = [];
     let cursor: string | undefined;
     let pages = 0;
-    const maxChars = 2000;
+    const maxChars = 8000;
     const maxBlockPages = 3;
 
     while (pages < maxBlockPages && parts.join("\n").length < maxChars) {
@@ -206,17 +208,26 @@ export class NotionClient {
   }
 
   private async request<T>(path: string, options?: { method?: string; body?: unknown }): Promise<T> {
-    const response = await fetchWithTimeout(`${NOTION_API}${path}`, {
-      method: options?.method ?? "GET",
-      headers: this.headers,
-      body: options?.body ? JSON.stringify(options.body) : undefined
-    });
+    const response = await fetchWithTimeout(
+      `${NOTION_API}${path}`,
+      {
+        method: options?.method ?? "GET",
+        headers: this.headers,
+        body: options?.body ? JSON.stringify(options.body) : undefined,
+        signal: this.options.signal
+      },
+      INTEGRATION_HTTP_TIMEOUT_MS
+    );
 
     if (isFetchTimeout(response)) {
       throw new NotionApiError(response.message);
     }
 
     if (!response.ok) {
+      const auth = integrationAuthFailureMessage(response.status);
+      if (auth) {
+        throw new NotionApiError(auth, response.status);
+      }
       const body = await response.text().catch(() => "");
       throw new NotionApiError(body || `Notion request failed (${response.status}).`, response.status);
     }

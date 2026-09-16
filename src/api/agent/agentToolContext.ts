@@ -38,7 +38,13 @@ export type AgentToolContext = {
   searchIntegration?: (options: {
     provider: IntegrationChatProvider;
     query: string;
+    openIds?: string[];
+    priorHits?: Record<string, unknown>;
+    signal?: AbortSignal;
   }) => Promise<Record<string, unknown>>;
   /** Connected integrations for this session/run — empty means none connected. */
   allowedIntegrations?: IntegrationChatProvider[];
+  /** Prior Search payload for this tool — Open merges bodies onto these hits. */
+  priorIntegrationPayload?: Record<string, unknown>;
+  searchSignal?: AbortSignal;
 };

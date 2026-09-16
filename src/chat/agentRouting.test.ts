@@ -4,8 +4,10 @@ import {
   jobsGuaranteeLocatePrefetch,
   plannerAllowsAgentRepoLoop,
   shouldRunAgentToolLoop,
+  agentTurnAllowsRepoTools,
   shouldSkipAgentHuntForOpenFileFeatureAdd,
-  shouldSuppressSuggestChipsForAgentHunt
+  shouldSuppressSuggestChipsForAgentHunt,
+  integrationsForAgentLoop
 } from "./agentRouting";
 import { emptyChatIntentPlan, type ChatIntentPlan } from "./intentPlanner/types";
 import { DOGFOOD_HUNT_QUESTION } from "../api/agent/dogfoodContract";
@@ -97,7 +99,7 @@ test("shouldRunAgentToolLoop is true when locate+decision jobs are planned", () 
   assert.equal(jobsGuaranteeLocatePrefetch(plan.jobs), true);
 });
 
-test("I3 compound locate+decision enters the agent loop; slash still does not", () => {
+test("I3 compound locate+decision enters the agent loop; slash still loops without a hunt", () => {
   const query =
     "Where is requireAuth defined, and what did we already decide about peeling auth into coop-backend?";
   const plan: ChatIntentPlan = {
@@ -128,11 +130,11 @@ test("I3 compound locate+decision enters the agent loop; slash still does not", 
       intentPlan: plan,
       integrationSlash: true
     }),
-    false
+    true
   );
 });
 
-test("shouldRunAgentToolLoop is false for Slack-named ask without a repo hunt (A-P9)", () => {
+test("shouldRunAgentToolLoop is true for Slack-named ask without a repo hunt (A-P9)", () => {
   const plan: ChatIntentPlan = {
     mode: "tools-only",
     tools: ["slack"],
@@ -146,7 +148,37 @@ test("shouldRunAgentToolLoop is false for Slack-named ask without a repo hunt (A
       hasQuickAction: false,
       intentPlan: plan
     }),
-    false
+    true
+  );
+  assert.equal(agentTurnAllowsRepoTools({ intentPlan: plan }), false);
+});
+
+test("named Notion docs ask starts the vendor loop and does not unlock Jira", () => {
+  const query =
+    "Look in Notion — what does the Architecture Overview say about extracting auth into coop-backend?";
+  const plan: ChatIntentPlan = {
+    mode: "tools-only",
+    tools: ["notion"],
+    jobs: [{ capability: "docs", terms: ["Architecture Overview", "coop-backend"] }],
+    confidence: "high",
+    focus: query,
+    execution: "none"
+  };
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query,
+      hasQuickAction: false,
+      intentPlan: plan
+    }),
+    true
+  );
+  assert.equal(agentTurnAllowsRepoTools({ intentPlan: plan }), false);
+  assert.deepEqual(
+    integrationsForAgentLoop({
+      connected: ["notion", "jira", "slack", "confluence"],
+      plan
+    }),
+    ["notion"]
   );
 });
 
@@ -161,7 +193,7 @@ test("shouldRunAgentToolLoop is true for a repo hunt (always on)", () => {
   );
 });
 
-test("shouldRunAgentToolLoop is false for /docs slash even when the ask looks like a hunt", () => {
+test("shouldRunAgentToolLoop is true for /docs slash — vendor loop, not a hunt", () => {
   assert.equal(
     shouldRunAgentToolLoop({
       query: "summarize auth middleware behavior",
@@ -169,8 +201,9 @@ test("shouldRunAgentToolLoop is false for /docs slash even when the ask looks li
       intentPlan: emptyChatIntentPlan("summarize auth middleware behavior"),
       integrationSlash: true
     }),
-    false
+    true
   );
+  assert.equal(agentTurnAllowsRepoTools({ integrationSlash: true }), false);
 });
 
 test("shouldRunAgentToolLoop is false for a file-count inventory ask", () => {

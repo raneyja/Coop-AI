@@ -1,12 +1,7 @@
 import type { IntegrationChatProvider } from "./types";
 import { isIncidentShapedQuery } from "../context/incidentIntent";
-import { wantsJiraContext } from "../context/jiraContext";
-import { wantsSlackContext } from "../context/slackContext";
-import { wantsTeamsContext } from "../context/teamsContext";
 import { isTeamsComingSoon } from "../integrations/teamsAvailability";
-import { wantsConfluenceContext } from "../context/confluenceContext";
-import { wantsNotionContext } from "../context/notionContext";
-import { wantsGoogleDocsContext } from "../context/googleDocsContext";
+import { detectNamedTools } from "./intentPlanner/planChatIntent";
 
 /**
  * Plain-chat integration single-routing.
@@ -16,6 +11,7 @@ import { wantsGoogleDocsContext } from "../context/googleDocsContext";
  * Integrations still fetch via shouldFetchIncidentIntegrations on chat_context.
  *
  * When the user names 2+ tools, never single-route — multi-tool allowlist owns the turn.
+ * Named-product list only (plus ticket keys for Jira). Not “tickets/pages/docs in this repo”.
  */
 export function resolvePlainChatIntegrationProvider(options: {
   message: string;
@@ -29,27 +25,19 @@ export function resolvePlainChatIntegrationProvider(options: {
     return undefined;
   }
 
-  const named: IntegrationChatProvider[] = [];
-  const pushIf = (provider: IntegrationChatProvider, wants: boolean): void => {
-    if (wants) {
-      named.push(provider);
-    }
-  };
-  pushIf("jira", wantsJiraContext(message));
-  pushIf("slack", wantsSlackContext(message));
-  pushIf("teams", !isTeamsComingSoon() && wantsTeamsContext(message));
-  pushIf("confluence", wantsConfluenceContext(message));
-  pushIf("notion", wantsNotionContext(message));
-  pushIf("google-docs", wantsGoogleDocsContext(message));
+  const named = detectNamedTools(message);
   if (named.length >= 2) {
     return undefined;
   }
-
-  for (const provider of named) {
-    if (options.isConnected(provider) || named.length === 1) {
-      // Single named tool: route even when disconnected so Sources can show not-connected.
-      return provider;
-    }
+  const provider = named[0];
+  if (!provider) {
+    return undefined;
+  }
+  if (provider === "teams" && isTeamsComingSoon()) {
+    return undefined;
+  }
+  if (options.isConnected(provider) || named.length === 1) {
+    return provider;
   }
   return undefined;
 }

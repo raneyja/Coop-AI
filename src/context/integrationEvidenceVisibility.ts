@@ -29,21 +29,39 @@ export function isIntegrationNotConnectedError(error: string): boolean {
   );
 }
 
-function integrationResultCount(evidence: IntegrationSearchEvidenceLike): number {
-  return (
-    (evidence.pages?.length ?? 0) +
-    (evidence.issues?.length ?? 0) +
-    (evidence.messages?.length ?? 0) +
-    (evidence.documents?.length ?? 0)
-  );
+function openedHitText(item: unknown): string {
+  if (!item || typeof item !== "object") {
+    return "";
+  }
+  const rec = item as Record<string, unknown>;
+  for (const key of ["description", "excerpt", "text", "body"] as const) {
+    const value = rec[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return "";
 }
 
-/** Sources cards/chips: connected, succeeded, and has hits. Empty searches stay in Activity. */
+function integrationOpenedHitCount(evidence: IntegrationSearchEvidenceLike): number {
+  const buckets = [evidence.pages, evidence.issues, evidence.messages, evidence.documents];
+  let count = 0;
+  for (const bucket of buckets) {
+    for (const item of bucket ?? []) {
+      if (openedHitText(item)) {
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
+
+/** Sources cards: connected, succeeded, and has opened content. Title-only rows stay in Activity. */
 export function shouldIncludeIntegrationInSourcesChecklist(
   evidence: IntegrationSearchEvidenceLike | undefined | null
 ): evidence is IntegrationSearchEvidenceLike {
   if (!evidence || !isIntegrationConnectedForSources(evidence) || evidence.error?.trim()) {
     return false;
   }
-  return integrationResultCount(evidence) > 0;
+  return integrationOpenedHitCount(evidence) > 0;
 }

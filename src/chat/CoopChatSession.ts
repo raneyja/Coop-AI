@@ -529,11 +529,12 @@ import { fetchConfluenceSearchContext } from "../context/confluenceContext";
 import { fetchGoogleDocsSearchContext } from "../context/googleDocsContext";
 import type { ResolvedIntegrationScope, ScopedIntegrationProvider } from "../integrationScope/types";
 import { AGENT_JOB_WALL_MS, AGENT_MAX_TOOL_ROUNDS } from "../config/agentJobBudget";
-import { shouldRunAgentToolLoop, agentTurnAction, shouldSuppressSuggestChipsForAgentHunt, shouldSkipAgentHuntForOpenFileFeatureAdd } from "./agentRouting";
+import { shouldRunAgentToolLoop, agentTurnAction, agentTurnAllowsRepoTools, shouldSuppressSuggestChipsForAgentHunt, shouldSkipAgentHuntForOpenFileFeatureAdd, integrationsForAgentLoop } from "./agentRouting";
 import { buildAgentAnswerPrompt, buildAgentToolPlanPrompt } from "../api/agent/parseAgentToolPlan";
 import type { AgentConversationMessage, AgentPlanTurnInput, AgentStreamAnswerInput } from "../api/agent/agentTypes";
 import { promoteAgentIntegrationSearches } from "../api/agent/promoteAgentIntegrations";
 import { integrationProvidersFromAgentSteps } from "../api/agent/integrationTools";
+import { buildInterpretOpenedArtifactPrompt, type OpenedVendorArtifact } from "../api/agent/openedIntegrationEvidence";
 import {
   EDIT_UNREADABLE_FILE_ERROR,
   hasEditTargetInScope,
@@ -674,6 +675,7 @@ export class CoopChatSession {
   private pendingCodeEditIntent = false;
   /** Agent action for this turn (set during gather; drives model + patch path). */
   private turnAgentAction: RepoCodeAction = "none";
+  private turnAllowsRepoTools = true;
   private readonly threadStore?: ChatThreadStore;
 
   public constructor(
@@ -4223,7 +4225,8 @@ export class CoopChatSession {
   private async planAgentToolTurn(
     input: AgentPlanTurnInput,
     runtime: { model: string; provider: import("./types").LlmProviderPreference },
-    suggestedJobs?: Array<{ capability: string; terms: string[] }>
+    suggestedJobs?: Array<{ capability: string; terms: string[] }>,
+    allowedRepoTools = true
   ): Promise<string> {
     if (this.turnStreamAbort?.aborted) {
       return JSON.stringify({ done: true });
@@ -4235,7 +4238,8 @@ export class CoopChatSession {
       priorSummaries: input.priorSteps.map((step) => step.summary),
       lastToolResult: input.lastToolResult,
       allowedIntegrations: input.allowedIntegrations,
-      suggestedJobs
+      suggestedJobs,
+      allowedRepoTools
     });
     let full = "";
     try {
@@ -4270,7 +4274,8 @@ export class CoopChatSession {
   private async searchIntegrationForAgent(
     provider: IntegrationChatProvider,
     query: string,
-    file?: string
+    file?: string,
+    extra?: { openIds?: string[]; priorHits?: Record<string, unknown>; signal?: AbortSignal }
   ): Promise<Record<string, unknown>> {
     const owner = this.currentContext.owner ?? this.preferences.owner;
     const repo = this.currentContext.repo ?? this.preferences.repo;
@@ -4311,6 +4316,12 @@ export class CoopChatSession {
       }
     }
     const extraTerms = query.trim() ? [query.trim()] : undefined;
+    const searchOnly = !extra?.openIds?.length;
+    const openIds = extra?.openIds;
+    const existingHits = extra?.priorHits;
+    if (extra?.signal?.aborted) {
+      return { error: "Stopped." };
+    }
     const base = {
       secrets,
       owner,
@@ -4319,7 +4330,11 @@ export class CoopChatSession {
       activeFile: file,
       extraTerms,
       jobScoped: true as const,
-      limit: 5
+      limit: 8,
+      searchOnly,
+      openIds,
+      existingHits,
+      signal: extra?.signal
     };
     switch (provider) {
       case "slack":
@@ -4348,20 +4363,28 @@ export class CoopChatSession {
           secrets,
           owner,
           repo,
-          limit: 5,
+          limit: 8,
           extraTerms,
           jobScoped: true,
-          integrationScope: notionScope
+          integrationScope: notionScope,
+          searchOnly,
+          openIds,
+          existingHits,
+          signal: extra?.signal
         });
       case "confluence":
         return fetchConfluenceSearchContext({
           secrets,
           owner,
           repo,
-          limit: 5,
+          limit: 8,
           extraTerms,
           jobScoped: true,
-          integrationScope: atlassianScope
+          integrationScope: atlassianScope,
+          searchOnly,
+          openIds,
+          existingHits,
+          signal: extra?.signal
         });
       case "google-docs":
         return fetchGoogleDocsSearchContext({
@@ -4386,6 +4409,52 @@ export class CoopChatSession {
     });
   }
 
+  private async interpretOpenedVendorHits(
+    artifacts: OpenedVendorArtifact[],
+    ask: string,
+    signal?: AbortSignal
+  ): Promise<string | undefined> {
+    if (artifacts.length === 0 || signal?.aborted) {
+      return undefined;
+    }
+    const assignment = getFeatureModelAssignment("intentSuggest");
+    const notes = await Promise.all(
+      artifacts.map(async (artifact) => {
+        if (signal?.aborted) {
+          return "";
+        }
+        const prompt = buildInterpretOpenedArtifactPrompt({ ask, artifact });
+        let full = "";
+        try {
+          await this.options.api.streamChat(
+            {
+              message: prompt,
+              context: {},
+              history: [],
+              model: assignment.model,
+              provider: assignment.provider,
+              useCase: "chat",
+              temperature: 0,
+              maxTokens: 220,
+              enableThinking: false
+            },
+            (chunk) => {
+              full += chunk;
+            },
+            this.preferences.apiBaseUrl,
+            signal
+          );
+        } catch {
+          return `${artifact.title}: ${artifact.body.slice(0, 400)}`;
+        }
+        const text = rewriteCustomerFacingProse(full.trim());
+        return text ? `${artifact.title}: ${text}` : "";
+      })
+    );
+    const joined = notes.filter(Boolean).join("\n\n");
+    return joined || undefined;
+  }
+
   private async streamAgentAnswer(
     input: AgentStreamAnswerInput,
     runtime: { model: string; provider: import("./types").LlmProviderPreference },
@@ -4397,7 +4466,8 @@ export class CoopChatSession {
     const prompt = buildAgentAnswerPrompt({
       message: input.message,
       action: input.action,
-      openedEvidence: input.openedEvidence
+      openedEvidence: input.openedEvidence,
+      interpretNotes: input.interpretNotes
     });
     const projectInstructionsBlock = await this.buildProjectInstructionsBlock();
     const message = projectInstructionsBlock ? `${projectInstructionsBlock}\n\n${prompt}` : prompt;
@@ -4453,9 +4523,6 @@ export class CoopChatSession {
     // Hunt wins over a named Slack/Jira primary-source steal. Slack-only
     // (action none) still skips the loop.
     if (quickAction || options?.composerMode === "edit") {
-      return false;
-    }
-    if (options?.integrationProvider && options?.sourceHint) {
       return false;
     }
     if (this.turnAgentAction === "none") {
@@ -4541,7 +4608,11 @@ export class CoopChatSession {
       clearResponseDeadlineForSynthesis(turn.clearResponseDeadline);
       turn.clearResponseDeadline = () => undefined;
 
-      const allowedIntegrations = this.listConnectedIntegrationTools();
+      const allowedIntegrations = integrationsForAgentLoop({
+        connected: this.listConnectedIntegrationTools(),
+        plan: turn.intentPlan
+      });
+      const allowedRepoTools = this.turnAllowsRepoTools;
       const agentResult = await this.options.agentOrchestrator.run(
         {
           message: query,
@@ -4555,12 +4626,18 @@ export class CoopChatSession {
           wallMs: AGENT_JOB_WALL_MS,
           startedAt: turn.startedAt,
           allowedIntegrations,
+          allowedRepoTools,
           fillIntegrations: turn.intentPlan.tools.filter(
             (tool): tool is IntegrationChatProvider => Boolean(tool)
           ),
           fillQueries: integrationFillQueries(turn.intentPlan.jobs, turn.intentPlan.tools),
           searchIntegration: (input) =>
-            this.searchIntegrationForAgent(input.provider, input.query, turn.context.file),
+            this.searchIntegrationForAgent(input.provider, input.query, turn.context.file, {
+              openIds: input.openIds,
+              priorHits: input.priorHits,
+              signal: input.signal ?? signal
+            }),
+          interpretOpens: (artifacts) => this.interpretOpenedVendorHits(artifacts, query, signal),
           planTurn: (input) => {
             const editAssignment = getFeatureModelAssignment("edit");
             return this.planAgentToolTurn(
@@ -4569,7 +4646,8 @@ export class CoopChatSession {
                 provider: editAssignment.provider,
                 model: editAssignment.model
               },
-              turn.intentPlan.jobs
+              turn.intentPlan.jobs,
+              allowedRepoTools
             );
           },
           streamAnswer: (input) =>
@@ -4704,6 +4782,7 @@ export class CoopChatSession {
         this.pendingChatAttachFullFile = false;
         this.pendingCodeEditIntent = false;
         this.turnAgentAction = "none";
+        this.turnAllowsRepoTools = true;
       }
     }
   }
@@ -6313,6 +6392,10 @@ export class CoopChatSession {
       hasQuickAction: Boolean(quickAction),
       intentPlan: turn.intentPlan,
       isEditTurn: options?.composerMode === "edit",
+      integrationSlash: Boolean(options?.integrationProvider && options?.sourceHint)
+    });
+    this.turnAllowsRepoTools = agentTurnAllowsRepoTools({
+      intentPlan: turn.intentPlan,
       integrationSlash: Boolean(options?.integrationProvider && options?.sourceHint)
     });
     if (this.shouldRunAgentOwnedTurn(quickAction, options, message)) {
@@ -8451,6 +8534,7 @@ export class CoopChatSession {
         this.pendingChatAttachFullFile = false;
         this.pendingCodeEditIntent = false;
         this.turnAgentAction = "none";
+        this.turnAllowsRepoTools = true;
       }
     }
   }

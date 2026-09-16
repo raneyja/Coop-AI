@@ -30,8 +30,8 @@ test("wantsSlackContext matches explicit slack questions", () => {
   assert.equal(wantsSlackContext("What is the auth flow?"), false);
 });
 
-test("wantsSlackContext matches discussion + repo phrasing", () => {
-  assert.equal(wantsSlackContext("any discussions related to this repository?"), true);
+test("wantsSlackContext does not match discussions/messages without naming Slack", () => {
+  assert.equal(wantsSlackContext("any discussions related to this repository?"), false);
 });
 
 test("buildRepoSearchQuery puts GitLab prefix first when preferred", () => {

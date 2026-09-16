@@ -1,4 +1,5 @@
 import { fetchWithTimeout, isFetchTimeout } from "../networkResilience";
+import { INTEGRATION_HTTP_TIMEOUT_MS, integrationAuthFailureMessage } from "../integrations/integrationHttp";
 import { applyGoogleDocsFolderScope } from "../../integrationScope/googleDocsQuery";
 import type { GoogleDocsFolderKind } from "../../integrationScope/types";
 
@@ -6,6 +7,7 @@ const DRIVE_API = "https://www.googleapis.com/drive/v3";
 
 export type GoogleDocsClientOptions = {
   accessToken: string;
+  signal?: AbortSignal;
 };
 
 export type GoogleDoc = {
@@ -190,21 +192,27 @@ export class GoogleDocsClient {
     const url = new URL(`${DRIVE_API}/files/${encodeURIComponent(id)}/export`);
     url.searchParams.set("mimeType", "text/plain");
 
-    const response = await fetchWithTimeout(url.toString(), {
-      method: "GET",
-      headers: this.headers
-    });
+    const response = await fetchWithTimeout(
+      url.toString(),
+      {
+        method: "GET",
+        headers: this.headers,
+        signal: this.options.signal
+      },
+      INTEGRATION_HTTP_TIMEOUT_MS
+    );
 
     if (isFetchTimeout(response)) {
       throw new GoogleDocsApiError(response.message);
     }
 
     if (!response.ok) {
+      const auth = integrationAuthFailureMessage(response.status);
+      if (auth) {
+        throw new GoogleDocsApiError(auth, response.status);
+      }
       const body = await response.text().catch(() => "");
-      throw new GoogleDocsApiError(
-        body || `Google Docs export failed (${response.status}).`,
-        response.status
-      );
+      throw new GoogleDocsApiError(body || `Google Docs export failed (${response.status}).`, response.status);
     }
 
     const text = (await response.text()).replace(/\r\n/g, "\n").trim();
@@ -334,16 +342,25 @@ export class GoogleDocsClient {
       }
     }
 
-    const response = await fetchWithTimeout(url.toString(), {
-      method: "GET",
-      headers: this.headers
-    });
+    const response = await fetchWithTimeout(
+      url.toString(),
+      {
+        method: "GET",
+        headers: this.headers,
+        signal: this.options.signal
+      },
+      INTEGRATION_HTTP_TIMEOUT_MS
+    );
 
     if (isFetchTimeout(response)) {
       throw new GoogleDocsApiError(response.message);
     }
 
     if (!response.ok) {
+      const auth = integrationAuthFailureMessage(response.status);
+      if (auth) {
+        throw new GoogleDocsApiError(auth, response.status);
+      }
       const body = await response.text().catch(() => "");
       throw new GoogleDocsApiError(body || `Google Docs request failed (${response.status}).`, response.status);
     }

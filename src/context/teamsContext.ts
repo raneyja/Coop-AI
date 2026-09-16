@@ -19,6 +19,9 @@ import {
   latestUnsupportedError,
   missingRepoSearchError
 } from "./integrationJobErrors";
+import { clipOpenedBody, openHitsByIds } from "../api/integrations/openHitsByIds";
+import { OPENED_ARTIFACT_BODY_CHARS } from "../api/integrations/integrationHttp";
+import { messageNamesProduct } from "../chat/intentPlanner/planChatJobs";
 
 export type TeamsSearchMessage = {
   teamId?: string;
@@ -28,8 +31,9 @@ export type TeamsSearchMessage = {
   body: string;
   createdAt: string;
   webUrl?: string;
-  /** True when body was replaced with a full thread via getThread. */
+  /** True when body was replaced with a full thread via getThread, or the message was kept. */
   threadOpened?: boolean;
+  opened?: boolean;
 };
 
 export type TeamsSearchContext = {
@@ -52,13 +56,7 @@ export type TeamsSearchClient = {
 };
 
 export function wantsTeamsContext(query: string): boolean {
-  const q = query.trim();
-  if (!q) {
-    return false;
-  }
-  // Require an explicit Teams product mention. "discussions about this" is Slack-shaped
-  // and must not also plan Microsoft Teams when the user only named Slack.
-  return /\b(ms\s*)?teams\b/i.test(q) || /\bmicrosoft\s+teams\b/i.test(q);
+  return messageNamesProduct(query, "teams");
 }
 
 export function shouldFetchTeamsContext(request: ContextFetchRequest): boolean {
@@ -124,6 +122,10 @@ export async function fetchTeamsSearchContext(options: {
   client?: TeamsSearchClient;
   /** Repo-wide Gaps: open threads after a hit. */
   openAfterHit?: boolean;
+  searchOnly?: boolean;
+  openIds?: string[];
+  existingHits?: Record<string, unknown>;
+  signal?: AbortSignal;
 }): Promise<TeamsSearchContext> {
   // Injected clients (gates) exercise the open-thread path while product is coming-soon.
   if (isTeamsComingSoon() && !options.client) {
@@ -163,6 +165,17 @@ export async function fetchTeamsSearchContext(options: {
 
   const queries = buildTeamsSearchQueries(options);
   const query = queries[0] ?? "";
+  const existingMessages = teamsMessagesFromHits(options.existingHits);
+  const client =
+    options.client ??
+    new TeamsClient({ accessToken: creds.teamsToken!, signal: options.signal });
+  if (options.openIds?.length && existingMessages.length > 0) {
+    const messages = await attachTeamsThreadBodies(client, existingMessages, {
+      jobScoped: true,
+      openIds: options.openIds
+    });
+    return { source: "teams-search", query, messages };
+  }
   if (!query) {
     return {
       source: "teams-search",
@@ -171,10 +184,6 @@ export async function fetchTeamsSearchContext(options: {
       error: options.jobScoped ? emptySearchTopicError("Microsoft Teams") : missingRepoSearchError("Microsoft Teams")
     };
   }
-
-  const client =
-    options.client ??
-    new TeamsClient({ accessToken: creds.teamsToken! });
   const limit = options.limit ?? 20;
   const seen = new Map<string, TeamsSearchMessage>();
   const errors: string[] = [];
@@ -216,11 +225,13 @@ export async function fetchTeamsSearchContext(options: {
     }
   }
 
-  const messages = await attachTeamsThreadBodies(
-    client,
-    [...seen.values()].slice(0, limit),
-    { jobScoped: Boolean(options.jobScoped || options.openAfterHit) }
-  );
+  const messages = options.searchOnly
+    ? [...seen.values()].slice(0, limit)
+    : await attachTeamsThreadBodies(
+        client,
+        [...seen.values()].slice(0, limit),
+        { jobScoped: Boolean(options.jobScoped || options.openAfterHit), openIds: options.openIds }
+      );
 
   const repoQuery =
     options.owner?.trim() && options.repo?.trim()
@@ -251,52 +262,73 @@ function truncate(value: string, max: number): string {
   return `${value.slice(0, max)}…`;
 }
 
-const OPENED_THREAD_BODY_CHARS = 1500;
-const MAX_OPENED_THREADS = 3;
+const OPENED_THREAD_BODY_CHARS = OPENED_ARTIFACT_BODY_CHARS;
 
 async function attachTeamsThreadBodies(
   client: TeamsSearchClient,
   messages: TeamsSearchMessage[],
-  options: { jobScoped: boolean }
+  options: { jobScoped: boolean; openIds?: string[] }
 ): Promise<TeamsSearchMessage[]> {
-  if (messages.length === 0 || !options.jobScoped || !client.getThread) {
+  if (messages.length === 0) {
     return messages;
   }
-  const selected = messages.slice(0, MAX_OPENED_THREADS);
-  const opened = await Promise.all(
-    selected.map(async (message) => {
-      try {
-        const teamId = message.teamId?.trim();
-        const channelId = message.channelId?.trim();
-        const messageId = message.messageId?.trim();
-        if (!teamId || !channelId || !messageId) {
-          return { key: teamsMessageKey(message), body: undefined };
-        }
-        const thread = await client.getThread?.(teamId, channelId, messageId);
-        if (!thread?.messages?.length) {
-          return { key: teamsMessageKey(message), body: undefined };
-        }
+  if (options.openIds?.length) {
+    return openHitsByIds({
+      hits: messages,
+      ids: options.openIds,
+      idOf: (message) => message.messageId ?? teamsMessageKey(message),
+      openOne: (message) => openTeamsArtifact(client, message)
+    });
+  }
+  if (!options.jobScoped) {
+    return messages;
+  }
+  const selected = messages.slice(0, 3);
+  const opened = await Promise.all(selected.map((message) => openTeamsArtifact(client, message)));
+  const byKey = new Map(opened.map((message) => [teamsMessageKey(message), message]));
+  return messages.map((message) => byKey.get(teamsMessageKey(message)) ?? message);
+}
+
+async function openTeamsArtifact(
+  client: TeamsSearchClient,
+  message: TeamsSearchMessage
+): Promise<TeamsSearchMessage> {
+  const marked = { ...message, opened: true as const };
+  const teamId = message.teamId?.trim();
+  const channelId = message.channelId?.trim();
+  const messageId = message.messageId?.trim();
+  if (teamId && channelId && messageId && client.getThread) {
+    try {
+      const thread = await client.getThread(teamId, channelId, messageId);
+      if (thread?.messages?.length) {
         const raw = thread.messages
           .map((entry) => {
             const who = entry.fromUserName ?? entry.fromUserId ?? "unknown";
             return `${who}: ${entry.body}`;
           })
           .join("\n");
-        return { key: teamsMessageKey(message), body: raw };
-      } catch {
-        return { key: teamsMessageKey(message), body: undefined };
+        const body = sanitizeIntegrationSnippet(clipOpenedBody(raw, OPENED_THREAD_BODY_CHARS) ?? "");
+        if (body) {
+          return { ...marked, body, threadOpened: true };
+        }
       }
-    })
-  );
-  const byKey = new Map(opened.map((entry) => [entry.key, entry.body]));
-  return messages.map((message) => {
-    const raw = byKey.get(teamsMessageKey(message));
-    if (!raw?.trim()) {
-      return message;
+    } catch {
+      /* keep the search hit */
     }
-    const body = sanitizeIntegrationSnippet(truncate(raw, OPENED_THREAD_BODY_CHARS));
-    return body ? { ...message, body, threadOpened: true } : message;
-  });
+  }
+  const body = sanitizeIntegrationSnippet(message.body);
+  return body ? { ...marked, body, threadOpened: true } : marked;
+}
+
+function teamsMessagesFromHits(existing: Record<string, unknown> | undefined): TeamsSearchMessage[] {
+  const messages = existing?.messages;
+  if (!Array.isArray(messages)) {
+    return [];
+  }
+  return messages.filter(
+    (entry): entry is TeamsSearchMessage =>
+      Boolean(entry) && typeof entry === "object" && typeof (entry as TeamsSearchMessage).messageId === "string"
+  );
 }
 
 function teamsMessageKey(message: TeamsSearchMessage): string {

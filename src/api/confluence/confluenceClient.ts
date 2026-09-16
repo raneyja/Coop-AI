@@ -1,4 +1,5 @@
 import { fetchWithTimeout, isFetchTimeout } from "../networkResilience";
+import { INTEGRATION_HTTP_TIMEOUT_MS, integrationAuthFailureMessage } from "../integrations/integrationHttp";
 import { confluenceSiteUrlError, isPlaceholderAtlassianSite } from "./resolveConfluenceBaseUrl";
 
 export type ConfluenceClientOptions = {
@@ -7,6 +8,7 @@ export type ConfluenceClientOptions = {
   apiToken?: string;
   oauthAccessToken?: string;
   cloudId?: string;
+  signal?: AbortSignal;
 };
 
 export type ConfluencePage = {
@@ -217,12 +219,45 @@ export class ConfluenceClient {
     if (!id) {
       return undefined;
     }
+    // OAuth Cloud: v1 /content/{id} is gone the same way as v1 /space.
+    if (this.oauthMode && this.options.cloudId) {
+      return this.getPageBodyV2(id);
+    }
+    return this.getPageBodyV1(id);
+  }
+
+  private async getPageBodyV1(pageId: string): Promise<string | undefined> {
     const payload = await this.request<{
       body?: { view?: { value?: string }; storage?: { value?: string } };
-    }>(`/content/${encodeURIComponent(id)}`, {
+    }>(`/content/${encodeURIComponent(pageId)}`, {
       query: { expand: "body.view,body.storage" }
     });
     const html = payload.body?.view?.value ?? payload.body?.storage?.value ?? "";
+    const text = stripHtml(html);
+    return text || undefined;
+  }
+
+  private async getPageBodyV2(pageId: string): Promise<string | undefined> {
+    const v2Base = `https://api.atlassian.com/ex/confluence/${this.options.cloudId}/wiki/api/v2`;
+    const response = await this.requestOnce<{
+      body?: {
+        storage?: { value?: string };
+        view?: { value?: string };
+        atlas_doc_format?: { value?: string };
+      };
+    }>(v2Base, `/pages/${encodeURIComponent(pageId)}`, {
+      query: { "body-format": "storage" }
+    });
+    if (!response.ok) {
+      throw new ConfluenceApiError(
+        formatConfluenceError(response.status, response.body, this.oauthMode),
+        response.status
+      );
+    }
+    const html =
+      response.data.body?.storage?.value ??
+      response.data.body?.view?.value ??
+      "";
     const text = stripHtml(html);
     return text || undefined;
   }
@@ -335,10 +370,15 @@ export class ConfluenceClient {
     if (this.platformApiBase) {
       return this.platformApiBase;
     }
-    const response = await fetchWithTimeout(`${this.siteOrigin}/_edge/tenant_info`, {
-      method: "GET",
-      headers: { Accept: "application/json" }
-    });
+    const response = await fetchWithTimeout(
+      `${this.siteOrigin}/_edge/tenant_info`,
+      {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        signal: this.options.signal
+      },
+      INTEGRATION_HTTP_TIMEOUT_MS
+    );
     if (isFetchTimeout(response)) {
       throw new ConfluenceApiError(response.message);
     }
@@ -380,13 +420,15 @@ export class ConfluenceClient {
         return second.data;
       }
       throw new ConfluenceApiError(
-        formatConfluenceError(second.status, second.body, this.oauthMode),
+        integrationAuthFailureMessage(second.status) ??
+          formatConfluenceError(second.status, second.body, this.oauthMode),
         second.status
       );
     }
 
     throw new ConfluenceApiError(
-      formatConfluenceError(first.status, first.body, this.oauthMode),
+      integrationAuthFailureMessage(first.status) ??
+        formatConfluenceError(first.status, first.body, this.oauthMode),
       first.status
     );
   }
@@ -403,13 +445,18 @@ export class ConfluenceClient {
       }
     }
 
-    const response = await fetchWithTimeout(url.toString(), {
-      method: "GET",
-      headers: {
-        Authorization: this.authHeader,
-        Accept: "application/json"
-      }
-    });
+    const response = await fetchWithTimeout(
+      url.toString(),
+      {
+        method: "GET",
+        headers: {
+          Authorization: this.authHeader,
+          Accept: "application/json"
+        },
+        signal: this.options.signal
+      },
+      INTEGRATION_HTTP_TIMEOUT_MS
+    );
 
     if (isFetchTimeout(response)) {
       return { ok: false, status: 0, body: response.message };

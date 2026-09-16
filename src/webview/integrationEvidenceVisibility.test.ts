@@ -33,5 +33,11 @@ test("isIntegrationConnectedForSources hides disconnected stubs", () => {
 
 test("Sources cards hide empty searches", () => {
   assert.equal(shouldIncludeIntegrationInSourcesChecklist({ messages: [] }), false);
-  assert.equal(shouldIncludeIntegrationInSourcesChecklist({ issues: [{ key: "COOP-101" }] }), true);
+  assert.equal(shouldIncludeIntegrationInSourcesChecklist({ issues: [{ key: "COOP-101" }] }), false);
+  assert.equal(
+    shouldIncludeIntegrationInSourcesChecklist({
+      issues: [{ key: "COOP-101", description: "Extract auth into coop-backend." }]
+    }),
+    true
+  );
 });

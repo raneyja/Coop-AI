@@ -7,7 +7,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { emptyChatIntentPlan } from "../../chat/intentPlanner/types";
 import { planChatIntentFromRules } from "../../chat/intentPlanner/planChatIntent";
-import { shouldRunAgentToolLoop } from "../../chat/agentRouting";
+import { agentTurnAllowsRepoTools, shouldRunAgentToolLoop } from "../../chat/agentRouting";
 import { agentStepsToActivity } from "../../webview/agentActivity";
 import { HONESTY_GATE_IDS } from "./gates";
 import { DOGFOOD_HUNT_QUESTION, DOGFOOD_HUNT_SEARCH_QUERY } from "./dogfoodContract";
@@ -198,12 +198,11 @@ test("H-G12 hot path merges agent patch before Apply card (not orphan helpers)",
 
 test("H-G14 hunt+named integration is not stolen; slash still constrains", () => {
   const session = readRepo("src/chat/CoopChatSession.ts");
-  const start = session.indexOf("private shouldRunAgentOwnedTurn");
-  const end = session.indexOf("private async runAgentOwnedTurn");
-  assert.ok(start >= 0 && end > start, "shouldRunAgentOwnedTurn must exist");
-  const fn = session.slice(start, end);
-  assert.match(fn, /integrationProvider && options\?\.sourceHint/);
-  assert.doesNotMatch(fn, /if \(options\?\.integrationProvider\) \{\s*return false/);
+  assert.match(
+    session,
+    /integrationSlash: Boolean\(options\?\.integrationProvider && options\?\.sourceHint\)/
+  );
+  assert.doesNotMatch(session, /if \(options\?\.integrationProvider\) \{\s*return false/);
 
   const q = "Where is requireAuth defined, and what did Slack say about the auth change?";
   const plan = planChatIntentFromRules({ message: q, connectedTools: ["slack"] });
@@ -218,8 +217,9 @@ test("H-G14 hunt+named integration is not stolen; slash still constrains", () =>
       intentPlan: plan,
       integrationSlash: true
     }),
-    false
+    true
   );
+  assert.equal(agentTurnAllowsRepoTools({ intentPlan: plan, integrationSlash: true }), false);
 });
 
 test("H-G13 agent-owned answer still bridges propose_patch to Apply", () => {

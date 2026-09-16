@@ -1,4 +1,5 @@
 import { fetchWithTimeout } from "../networkResilience";
+import { INTEGRATION_HTTP_TIMEOUT_MS, integrationAuthFailureMessage } from "../integrations/integrationHttp";
 
 const GRAPH_API = "https://graph.microsoft.com/v1.0";
 const MESSAGE_CACHE_TTL_MS = 60 * 60 * 1000;
@@ -7,6 +8,7 @@ export type TeamsClientOptions = {
   accessToken: string;
   graphBaseUrl?: string;
   now?: () => number;
+  signal?: AbortSignal;
 };
 
 export type TeamsMessage = {
@@ -232,15 +234,20 @@ export class TeamsClient {
       {
         method: options?.method ?? "GET",
         headers: this.headers,
-        body: options?.body ? JSON.stringify(options.body) : undefined
+        body: options?.body ? JSON.stringify(options.body) : undefined,
+        signal: this.options.signal
       },
-      20_000
+      INTEGRATION_HTTP_TIMEOUT_MS
     );
 
     if ("timeout" in response) {
       throw new TeamsApiError(response.message);
     }
     if (!response.ok) {
+      const auth = integrationAuthFailureMessage(response.status);
+      if (auth) {
+        throw new TeamsApiError(auth, response.status);
+      }
       const text = await response.text().catch(() => "");
       throw new TeamsApiError(text || `Graph HTTP ${response.status}`, response.status);
     }

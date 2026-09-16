@@ -140,6 +140,11 @@ const UNIVERSAL_PATH_WORDS = new Set([
   "documentation",
   "readme",
   "changelog",
+  "agents",
+  "setup",
+  "contributing",
+  "md",
+  "rs",
   "filter",
   "filters",
   "queryset",
@@ -209,6 +214,7 @@ function regexLiterals(source: string): string[] {
 
 function words(value: string): string[] {
   return value
+    .replace(/\[[^\]]*\]/g, " ")
     .toLowerCase()
     .split(/[^a-z0-9_]+/)
     .filter((word) => word.length > 1);

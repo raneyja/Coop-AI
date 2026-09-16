@@ -98,7 +98,7 @@ test("A-P13 edit turn does not loop (UX-G8)", () => {
   );
 });
 
-test("A-P9 named Slack does not loop", () => {
+test("A-P9 named Slack loops without a repo hunt", () => {
   assert.equal(
     shouldRunAgentToolLoop({
       query: "What's in Slack about this?",
@@ -111,7 +111,7 @@ test("A-P9 named Slack does not loop", () => {
         execution: "none"
       }
     }),
-    false
+    true
   );
 });
 

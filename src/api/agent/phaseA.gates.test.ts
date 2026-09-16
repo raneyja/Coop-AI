@@ -38,20 +38,28 @@ test("A-G4 / A-G7 Trace/workflow does not enter the loop", () => {
   );
 });
 
-test("A-G7 Slack-named ask does not run search_code", () => {
+test("A-G7 Slack-named ask loops but does not run search_code", () => {
+  const plan = {
+    mode: "tools-only" as const,
+    tools: ["slack" as const],
+    confidence: "high" as const,
+    focus: "What's in Slack about this login bug?",
+    execution: "none" as const
+  };
   assert.equal(
     shouldRunAgentToolLoop({
       query: "What's in Slack about this login bug?",
       hasQuickAction: false,
-      intentPlan: {
-        mode: "tools-only",
-        tools: ["slack"],
-        confidence: "high",
-        focus: "What's in Slack about this login bug?",
-        execution: "none"
-      }
+      intentPlan: plan
     }),
-    false
+    true
+  );
+  assert.equal(
+    parseAgentToolPlan(JSON.stringify({ tool: "search_code", args: { query: "login" } }), {
+      allowedRepoTools: false,
+      allowedIntegrations: ["slack"]
+    }).kind,
+    "invalid"
   );
 });
 
@@ -96,7 +104,7 @@ test("parseAgentToolPlan rejects Slack as a repo tool (UX-G2)", () => {
   assert.equal(parsed.kind, "invalid");
 });
 
-test("A-G7 Slack-only stays out; hunt + Slack loops", () => {
+test("A-G7 Slack-only loops without hunt; hunt + Slack loops", () => {
   const huntSlack = "Where is requireAuth defined, and what did Slack say about the auth change?";
   assert.equal(
     shouldRunAgentToolLoop({
@@ -110,7 +118,7 @@ test("A-G7 Slack-only stays out; hunt + Slack loops", () => {
         execution: "none"
       }
     }),
-    false
+    true
   );
   assert.equal(
     shouldRunAgentToolLoop({

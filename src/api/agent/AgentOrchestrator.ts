@@ -37,13 +37,20 @@ import {
 } from "./searchQuery";
 import { createAgentToolRegistry } from "./tools/registry";
 import { handleIntegrationSearch } from "./tools/integrationSearch";
-import { formatOpenedIntegrationEvidence } from "./openedIntegrationEvidence";
+import { formatOpenedIntegrationEvidence, listOpenedIntegrationArtifacts, type OpenedVendorArtifact } from "./openedIntegrationEvidence";
 import {
   agentToolForIntegrationProvider,
   isAgentIntegrationTool
 } from "./integrationTools";
 import { isRepoStructureQuery } from "../../workspace/repoFactIntent";
 import { isFeatureAddAsk } from "../../context/existingCapabilityGrounding";
+import {
+  mergeIntegrationPayload,
+  parseOpenIds,
+  recordVendorToolCall,
+  vendorDoneBlockReason,
+  type VendorToolState
+} from "./vendorLoop";
 
 export { pickTopSearchHit };
 
@@ -60,8 +67,8 @@ const INDEX_HUNT_MISS =
 /** On-call API reject — never reuse the named-function miss copy. */
 const API_REJECT_HUNT_MISS =
   "I couldn't find where the API rejects that field. I won't guess a path. Try a more specific error string, or open the write path.";
-/** Cap mid-loop integration calls so the model cannot spray. */
-const MAX_INTEGRATION_TOOL_CALLS = 3;
+/** Cap mid-loop integration calls so the model cannot spray. Search + Open + retry needs headroom. */
+const MAX_INTEGRATION_TOOL_CALLS = 8;
 
 type SearchHit = {
   fileName: string;
@@ -167,7 +174,14 @@ export type AgentRunOptions = {
   searchIntegration?: (options: {
     provider: IntegrationChatProvider;
     query: string;
+    openIds?: string[];
+    priorHits?: Record<string, unknown>;
+    signal?: AbortSignal;
   }) => Promise<Record<string, unknown>>;
+  /** False on named-product / slash turns unless locate is also asked. */
+  allowedRepoTools?: boolean;
+  /** Cheap per-Open Interpret before the Talk track. */
+  interpretOpens?: (artifacts: OpenedVendorArtifact[]) => Promise<string | undefined>;
 };
 
 /**
@@ -182,6 +196,9 @@ export class AgentOrchestrator {
   private readonly registry;
   private runAllowedIntegrations: IntegrationChatProvider[] = [];
   private runSearchIntegration?: AgentRunOptions["searchIntegration"];
+  private runSignal?: AbortSignal;
+  private loopContext?: AgentSessionContext;
+  private allowedRepoTools = true;
 
   public constructor(private readonly ctx: AgentToolContext) {
     this.registry = createAgentToolRegistry(ctx);
@@ -193,7 +210,9 @@ export class AgentOrchestrator {
         {
           ...this.ctx,
           allowedIntegrations: this.runAllowedIntegrations,
-          searchIntegration: this.runSearchIntegration ?? this.ctx.searchIntegration
+          searchIntegration: this.runSearchIntegration ?? this.ctx.searchIntegration,
+          priorIntegrationPayload: this.loopContext?.[tool],
+          searchSignal: this.runSignal
         },
         tool,
         args
@@ -222,6 +241,8 @@ export class AgentOrchestrator {
 
     this.runAllowedIntegrations = options?.allowedIntegrations ?? [];
     this.runSearchIntegration = options?.searchIntegration;
+    this.runSignal = options?.signal;
+    this.allowedRepoTools = options?.allowedRepoTools !== false;
     try {
       const action = request.action ?? "none";
       const openFile = request.openFile?.trim();
@@ -232,6 +253,9 @@ export class AgentOrchestrator {
     } finally {
       this.runAllowedIntegrations = [];
       this.runSearchIntegration = undefined;
+      this.runSignal = undefined;
+      this.loopContext = undefined;
+      this.allowedRepoTools = true;
     }
   }
 
@@ -262,19 +286,24 @@ export class AgentOrchestrator {
     let lastToolResult: string | undefined;
     let matchingRead = false;
     const allowedIntegrations = options.allowedIntegrations ?? [];
-    const seeded = await this.seedOpenFileReadIfFeatureAdd(
-      repoId,
-      query,
-      openFile,
-      emit,
-      context,
-      conversation
-    );
+    this.loopContext = context;
+    const vendorState = new Map<AgentToolName, VendorToolState>();
+    const allowedRepoTools = options.allowedRepoTools !== false;
+    const seeded = allowedRepoTools
+      ? await this.seedOpenFileReadIfFeatureAdd(
+          repoId,
+          query,
+          openFile,
+          emit,
+          context,
+          conversation
+        )
+      : { ok: false as const };
     if (seeded.ok) {
       matchingRead = true;
       filesRead = 1;
       lastToolResult = seeded.raw;
-    } else {
+    } else if (allowedRepoTools) {
       const named = await this.seedNamedFileReads(
         repoId,
         query,
@@ -289,7 +318,23 @@ export class AgentOrchestrator {
       }
     }
 
+    const vendorBlock = (): string | undefined =>
+      vendorDoneBlockReason({
+        query,
+        steps,
+        context,
+        state: vendorState,
+        allowedRepoTools
+      });
+
     const canAnswerNow = (): boolean => {
+      const block = vendorBlock();
+      if (block) {
+        return false;
+      }
+      if (!allowedRepoTools) {
+        return steps.length > 0;
+      }
       if (isApiRejectAsk(query)) {
         return contextHasWriteReject(context, query);
       }
@@ -316,6 +361,8 @@ export class AgentOrchestrator {
       );
     }
 
+    const skipDeterministicFallback = !allowedRepoTools;
+
     for (let round = 0; round < maxSteps; round++) {
       if (options.signal?.aborted) {
         break;
@@ -336,7 +383,7 @@ export class AgentOrchestrator {
           allowedIntegrations
         });
       } catch {
-        if (steps.length === 0) {
+        if (steps.length === 0 && !skipDeterministicFallback) {
           const fallback = await this.runDeterministic(repoId, query, maxSteps, options, openFile);
           return this.finishWithAnswer(
             fallback,
@@ -353,9 +400,9 @@ export class AgentOrchestrator {
         break;
       }
 
-      const plan = parseAgentToolPlan(raw, { allowedIntegrations });
+      const plan = parseAgentToolPlan(raw, { allowedIntegrations, allowedRepoTools });
       if (plan.kind === "invalid") {
-        if (steps.length === 0) {
+        if (steps.length === 0 && !skipDeterministicFallback) {
           const fallback = await this.runDeterministic(repoId, query, maxSteps, options, openFile);
           return this.finishWithAnswer(
             fallback,
@@ -380,10 +427,15 @@ export class AgentOrchestrator {
             true
           );
         }
+        const block = vendorBlock();
         lastToolResult = JSON.stringify({
-          error: canAnswerNow()
-            ? 'Reply {"done":true} so the next turn can answer the user, or call another repo tool.'
-            : "Reply with a tool JSON call. You have not read a file that mentions the named symbol or role — do not answer yet."
+          error: block
+            ? block
+            : canAnswerNow()
+              ? 'Reply {"done":true} so the next turn can answer the user, or call another allowed tool.'
+              : allowedRepoTools
+                ? "Reply with a tool JSON call. You have not read a file that mentions the named symbol or role — do not answer yet."
+                : "Reply with a vendor Search or Open JSON call."
         });
         conversation.push({ role: "assistant", content: raw.slice(0, 2000) });
         conversation.push({ role: "user", content: lastToolResult });
@@ -391,10 +443,14 @@ export class AgentOrchestrator {
       }
 
       if (plan.kind === "done") {
-        if (!canAnswerNow()) {
+        const block = vendorBlock();
+        if (block || !canAnswerNow()) {
           lastToolResult = JSON.stringify({
             error:
-              "Do not finish yet. You have not read a file whose body mentions the named symbol or the role the user named (e.g. middleware). Call search_code or read_file on a different path — do not answer from a related UI, test, or form."
+              block ??
+              (allowedRepoTools
+                ? "Do not finish yet. You have not read a file whose body mentions the named symbol or the role the user named (e.g. middleware). Call search_code or read_file on a different path — do not answer from a related UI, test, or form."
+                : "Do not finish yet. Search, then Open chosen ids (or retry Search once if empty).")
           });
           conversation.push({ role: "assistant", content: '{"done":true}' });
           conversation.push({ role: "user", content: lastToolResult });
@@ -466,6 +522,9 @@ export class AgentOrchestrator {
         rawResult = await this.executeTool(plan.tool, args);
       } catch {
         break;
+      }
+      if (isAgentIntegrationTool(plan.tool)) {
+        recordVendorToolCall(vendorState, plan.tool, parseOpenIds(plan.args).length > 0);
       }
 
       if (plan.tool === "read_file") {
@@ -726,12 +785,18 @@ export class AgentOrchestrator {
       return { ...result, context: result.steps.length ? result.context : undefined };
     }
     try {
+      const artifacts = listOpenedIntegrationArtifacts(result.context);
+      let interpretNotes: string | undefined;
+      if (artifacts.length > 0 && options.interpretOpens && !options.signal?.aborted) {
+        interpretNotes = await options.interpretOpens(artifacts);
+      }
       const answer = await options.streamAnswer({
         message: query,
         repoId,
         conversation: filledHistory ?? history,
         action,
-        openedEvidence: formatOpenedIntegrationEvidence(result.context)
+        openedEvidence: formatOpenedIntegrationEvidence(result.context),
+        interpretNotes
       });
       return {
         ...result,
@@ -1391,7 +1456,8 @@ export class AgentOrchestrator {
       return;
     }
     if (isAgentIntegrationTool(tool)) {
-      context[tool] = parsed;
+      const prev = context[tool];
+      context[tool] = mergeIntegrationPayload(prev, parsed);
       return;
     }
     context.git_blame = parsed;
@@ -1415,6 +1481,10 @@ export class AgentOrchestrator {
       return files > 0 ? `propose_patch: ${files} file${files === 1 ? "" : "s"}` : "propose_patch";
     }
     if (isAgentIntegrationTool(tool)) {
+      const ids = parseOpenIds(args);
+      if (ids.length > 0) {
+        return `${tool}: Open ${ids.join(", ")}`;
+      }
       const q = typeof args.query === "string" ? args.query : query;
       return `${tool}: ${truncateSummary(q)}`;
     }

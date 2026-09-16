@@ -225,7 +225,7 @@ export const EMPTY_EVIDENCE_HONESTY_RULE = `Empty-evidence honesty:
 - A missing, disconnected, skipped, timed-out, or failed source is unavailable. State that plainly; never cite it or infer facts from it.
 - Never invent tickets, messages, pages, paths, URLs, people, or decisions to fill a gap.
 - Empty tools in teammate English with the topic (e.g. “No mention in Slack of peel-auth / COOP-101”). “No Jira ticket matching COOP-101 in what came back.”
-- An attached Jira ticket body or Confluence/docs page excerpt is documented decision evidence. Use it. Do not say there is no documented decision while those bodies are attached. Empty Slack is only “no mention in Slack.”`;
+- Quote Body when a page or ticket was opened. If Body is missing, name the title and say it could not be opened. Never mention gather budget, timeouts, or tool JSON.`;
 
 /** Slim evidence rules for general chat (static system prompt). */
 export const GENERAL_CHAT_EVIDENCE_RULES = `Evidence rules (when sources or integration blocks are attached):

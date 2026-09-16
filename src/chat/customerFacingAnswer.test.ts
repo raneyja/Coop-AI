@@ -69,6 +69,12 @@ test("does not invent a patch-failure footer when the hunt already answered", ()
   assert.equal(out.includes("index"), false);
 });
 
+test("rewrites timed-out vendor search into teammate English", () => {
+  const out = rewriteCustomerFacingProse("Timed out searching Notion for coop backend.");
+  assert.match(out, /No mention in Notion of coop backend/i);
+  assert.doesNotMatch(out, /timed out/i);
+});
+
 test("leaves Apply-patch answers unchanged", () => {
   const withPatch = "Here is the change.\n\n<<<<<<< SEARCH\na\n=======\nb\n>>>>>>> REPLACE";
   assert.equal(

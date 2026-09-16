@@ -15,6 +15,9 @@ import { filterDocPagesForUseRepo, sanitizeIntegrationSnippet } from "./integrat
 import { looksLikeDecisionDocTitle } from "./confluenceContext";
 import type { ChatIntentJobVerb } from "../chat/intentPlanner/types";
 import { isSearchMeaningStop } from "../chat/intentPlanner/searchMeaningStop";
+import { clipOpenedBody, openHitsByIds } from "../api/integrations/openHitsByIds";
+import { OPENED_ARTIFACT_BODY_CHARS } from "../api/integrations/integrationHttp";
+import { messageNamesProduct } from "../chat/intentPlanner/planChatJobs";
 import {
   emptySearchTopicError,
   latestNeedsScopeError,
@@ -27,6 +30,7 @@ export type GoogleDocsSearchPage = {
   excerpt?: string;
   updated: string;
   htmlUrl: string;
+  opened?: boolean;
 };
 
 export type GoogleDocsSearchContext = {
@@ -64,17 +68,7 @@ export type GoogleDocsSearchClient = {
 };
 
 export function wantsGoogleDocsContext(query: string): boolean {
-  const q = query.trim();
-  if (!q) {
-    return false;
-  }
-  if (/\bgoogle docs?\b/i.test(q)) {
-    return true;
-  }
-  if (/\b(docs?|documents?|documentation)\b/i.test(q) && /\b(google|repo|repository|this)\b/i.test(q)) {
-    return true;
-  }
-  return false;
+  return messageNamesProduct(query, "google-docs");
 }
 
 export function shouldFetchGoogleDocsContext(request: ContextFetchRequest): boolean {
@@ -104,6 +98,10 @@ export async function fetchGoogleDocsSearchContext(options: {
   integrationScope?: ResolvedIntegrationScope;
   /** Repo-wide Gaps: open document bodies after a hit. */
   openAfterHit?: boolean;
+  searchOnly?: boolean;
+  openIds?: string[];
+  existingHits?: Record<string, unknown>;
+  signal?: AbortSignal;
   /** Test seam — production leaves this unset and builds a client from secrets. */
   client?: GoogleDocsSearchClient;
 }): Promise<GoogleDocsSearchContext> {
@@ -150,7 +148,7 @@ export async function fetchGoogleDocsSearchContext(options: {
           contextText: [...(options.contextText ?? []), ...(options.crossToolText ?? [])],
           extraTerms: options.extraTerms
         });
-  if (!latest && terms.length === 0) {
+  if (!latest && terms.length === 0 && !(options.openIds?.length && Array.isArray(options.existingHits?.documents))) {
     return {
       source: "google-docs-search",
       query: "",
@@ -164,7 +162,15 @@ export async function fetchGoogleDocsSearchContext(options: {
   const query = latest ? "latest" : terms.join(" OR ");
   const client =
     options.client ??
-    new GoogleDocsClient({ accessToken: creds.googleDocsToken! });
+    new GoogleDocsClient({ accessToken: creds.googleDocsToken!, signal: options.signal });
+  const existingDocs = (options.existingHits?.documents ?? []) as GoogleDocsSearchPage[];
+  if (options.openIds?.length && existingDocs.length > 0) {
+    const documents = await attachGoogleDocBodies(client, existingDocs, {
+      jobScoped: false,
+      openIds: options.openIds
+    });
+    return { source: "google-docs-search", query: "", documents };
+  }
   const driveScope =
     options.integrationScope?.enforced && options.integrationScope.googleDocs
       ? { expandedFolderIds: options.integrationScope.googleDocs.expandedFolderIds }
@@ -191,11 +197,14 @@ export async function fetchGoogleDocsSearchContext(options: {
           focusTerms: options.extraTerms,
           limit: options.limit ?? 20
         });
-    const documents = await attachGoogleDocBodies(client, ranked, {
-      jobScoped: Boolean(
-        (options.jobScoped && options.jobVerb !== "latest") || options.openAfterHit
-      )
-    });
+    const documents = options.searchOnly
+      ? ranked
+      : await attachGoogleDocBodies(client, ranked, {
+          jobScoped: Boolean(
+            (options.jobScoped && options.jobVerb !== "latest") || options.openAfterHit
+          ),
+          openIds: options.openIds
+        });
     const repoQuery =
       options.owner?.trim() && options.repo?.trim()
         ? `${options.owner.trim()}/${options.repo.trim()}`
@@ -217,7 +226,7 @@ export async function fetchGoogleDocsSearchContext(options: {
   }
 }
 
-const OPENED_PAGE_BODY_CHARS = 1500;
+const OPENED_PAGE_BODY_CHARS = OPENED_ARTIFACT_BODY_CHARS;
 const MAX_OPENED_PAGES = 3;
 
 function pagesToOpen(
@@ -254,10 +263,28 @@ function pagesToOpen(
 async function attachGoogleDocBodies(
   client: GoogleDocsSearchClient,
   pages: GoogleDocsSearchPage[],
-  options: { jobScoped: boolean }
+  options: { jobScoped: boolean; openIds?: string[] }
 ): Promise<GoogleDocsSearchPage[]> {
   if (pages.length === 0 || !client.getDocumentPlainText) {
     return pages;
+  }
+  if (options.openIds?.length) {
+    return openHitsByIds({
+      hits: pages,
+      ids: options.openIds,
+      idOf: (page) => page.id,
+      openOne: async (page) => {
+        try {
+          const raw = await client.getDocumentPlainText?.(page.id);
+          const excerpt = sanitizeIntegrationSnippet(
+            clipOpenedBody(raw, OPENED_PAGE_BODY_CHARS) ?? ""
+          );
+          return excerpt ? { ...page, excerpt, opened: true } : { ...page, opened: true };
+        } catch {
+          return { ...page, opened: true };
+        }
+      }
+    });
   }
   const selected = pagesToOpen(pages, options.jobScoped);
   if (selected.length === 0) {

@@ -23,6 +23,9 @@ import { shouldFetchDiscussionIntegrations } from "./integrationFetchPolicy";
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
 import { sanitizeIntegrationSnippet } from "./integrationDocRelevance";
 import type { ChatIntentJobVerb } from "../chat/intentPlanner/types";
+import { clipOpenedBody, openHitsByIds } from "../api/integrations/openHitsByIds";
+import { OPENED_ARTIFACT_BODY_CHARS } from "../api/integrations/integrationHttp";
+import { messageNamesProduct } from "../chat/intentPlanner/planChatJobs";
 import {
   emptySearchTopicError,
   latestNeedsScopeError,
@@ -30,6 +33,7 @@ import {
 } from "./integrationJobErrors";
 
 export type SlackSearchMessage = {
+  id?: string;
   channelId?: string;
   channelName?: string;
   userName?: string;
@@ -37,8 +41,10 @@ export type SlackSearchMessage = {
   ts: string;
   threadTs?: string;
   permalink?: string;
-  /** True when text was replaced with a full thread body via getThread. */
+  /** True when text was replaced with a full thread body via getThread, or a standalone message was kept. */
   threadOpened?: boolean;
+  /** True after an Open attempt. */
+  opened?: boolean;
 };
 
 export type SlackSearchContext = {
@@ -62,17 +68,7 @@ export type SlackSearchClient = {
 };
 
 export function wantsSlackContext(query: string): boolean {
-  const q = query.trim();
-  if (!q) {
-    return false;
-  }
-  if (/\bslack\b/i.test(q)) {
-    return true;
-  }
-  if (/\b(threads?|discussions?|messages?|conversations?)\b/i.test(q) && /\b(slack|repo|repository|this|channel)\b/i.test(q)) {
-    return true;
-  }
-  return false;
+  return messageNamesProduct(query, "slack");
 }
 
 export function shouldFetchSlackContext(request: ContextFetchRequest): boolean {
@@ -222,6 +218,10 @@ export async function fetchSlackSearchContext(options: {
   client?: SlackSearchClient;
   /** Repo-wide Gaps: open threads after a hit. */
   openAfterHit?: boolean;
+  searchOnly?: boolean;
+  openIds?: string[];
+  existingHits?: Record<string, unknown>;
+  signal?: AbortSignal;
 }): Promise<SlackSearchContext> {
   if (isSlackScopeBlocked(options.integrationScope)) {
     return {
@@ -260,7 +260,7 @@ export async function fetchSlackSearchContext(options: {
           )
         : queries;
   const query = scopedQueries[0] ?? "";
-  if (!query) {
+  if (!query && !(options.openIds?.length && Array.isArray(options.existingHits?.messages))) {
     return {
       source: "slack-search",
       query: "",
@@ -271,7 +271,16 @@ export async function fetchSlackSearchContext(options: {
 
   const client =
     options.client ??
-    new SlackClient({ token: creds.slackToken! });
+    new SlackClient({ token: creds.slackToken!, signal: options.signal });
+  const existingMessages = slackMessagesFromHits(options.existingHits);
+  if (options.openIds?.length && existingMessages.length > 0) {
+    const messages = await attachSlackThreadBodies(client, existingMessages, {
+      jobScoped: true,
+      openIds: options.openIds
+    });
+    return { source: "slack-search", query, messages };
+  }
+
   const limit = options.limit ?? 20;
   const runQueries = scopedQueries.slice(
     0,
@@ -301,15 +310,15 @@ export async function fetchSlackSearchContext(options: {
     }
   }
 
-  const messages = await attachSlackThreadBodies(
-    client,
-    [...seen.values()].slice(0, limit),
-    {
-      jobScoped: Boolean(
-        (options.jobScoped && options.jobVerb !== "latest") || options.openAfterHit
-      )
-    }
-  );
+  const rawMessages = [...seen.values()].slice(0, limit).map(withSlackHitId);
+  const messages = options.searchOnly
+    ? rawMessages
+    : await attachSlackThreadBodies(client, rawMessages, {
+        jobScoped: Boolean(
+          (options.jobScoped && options.jobVerb !== "latest") || options.openAfterHit
+        ),
+        openIds: options.openIds
+      });
 
   const repoQuery =
     options.owner?.trim() && options.repo?.trim()
@@ -339,6 +348,27 @@ function jobScopedEmptyQueryError(options: {
   return missingRepoSearchError("Slack");
 }
 
+function withSlackHitId(message: SlackSearchMessage): SlackSearchMessage {
+  return { ...message, id: slackHitId(message) };
+}
+
+function slackHitId(message: SlackSearchMessage): string {
+  const channel = message.channelId?.trim() ?? "";
+  const ts = message.ts?.trim() ?? "";
+  return channel && ts ? `${channel}:${ts}` : ts || message.permalink || "";
+}
+
+function slackMessagesFromHits(existing: Record<string, unknown> | undefined): SlackSearchMessage[] {
+  const messages = existing?.messages;
+  if (!Array.isArray(messages)) {
+    return [];
+  }
+  return messages.filter(
+    (entry): entry is SlackSearchMessage =>
+      Boolean(entry) && typeof entry === "object" && typeof (entry as SlackSearchMessage).ts === "string"
+  );
+}
+
 function truncate(value: string, max: number): string {
   if (value.length <= max) {
     return value;
@@ -346,50 +376,65 @@ function truncate(value: string, max: number): string {
   return `${value.slice(0, max)}…`;
 }
 
-const OPENED_THREAD_BODY_CHARS = 1500;
+const OPENED_THREAD_BODY_CHARS = OPENED_ARTIFACT_BODY_CHARS;
 const MAX_OPENED_THREADS = 3;
 
 async function attachSlackThreadBodies(
   client: SlackSearchClient,
   messages: SlackSearchMessage[],
-  options: { jobScoped: boolean }
+  options: { jobScoped: boolean; openIds?: string[] }
 ): Promise<SlackSearchMessage[]> {
-  if (messages.length === 0 || !options.jobScoped || !client.getThread) {
+  if (messages.length === 0) {
     return messages;
   }
+  if (options.openIds?.length) {
+    return openHitsByIds({
+      hits: messages.map(withSlackHitId),
+      ids: options.openIds,
+      idOf: (message) => slackHitId(message),
+      openOne: (message) => openSlackArtifact(client, message)
+    });
+  }
+  if (!options.jobScoped) {
+    return messages.map(withSlackHitId);
+  }
   const selected = messages.slice(0, MAX_OPENED_THREADS);
-  const opened = await Promise.all(
-    selected.map(async (message) => {
-      try {
-        const coords = resolveSlackThreadCoords(client, message);
-        if (!coords) {
-          return { key: messageKey(message), body: undefined };
+  const opened = await Promise.all(selected.map((message) => openSlackArtifact(client, message)));
+  const byKey = new Map(opened.map((message) => [messageKey(message), message]));
+  return messages.map((message) => byKey.get(messageKey(message)) ?? withSlackHitId(message));
+}
+
+async function openSlackArtifact(
+  client: SlackSearchClient,
+  message: SlackSearchMessage
+): Promise<SlackSearchMessage> {
+  const marked = { ...withSlackHitId(message), opened: true as const };
+  if (client.getThread) {
+    try {
+      const coords = resolveSlackThreadCoords(client, message);
+      if (coords) {
+        const thread = await client.getThread(coords.channelId, coords.threadTs);
+        if (thread?.messages?.length) {
+          const raw = thread.messages
+            .map((entry) => {
+              const who = entry.userName ?? entry.userId ?? "unknown";
+              return `${who}: ${entry.text}`;
+            })
+            .join("\n");
+          const text = sanitizeIntegrationSnippet(
+            clipOpenedBody(raw, OPENED_THREAD_BODY_CHARS) ?? ""
+          );
+          if (text) {
+            return { ...marked, text, threadOpened: true };
+          }
         }
-        const thread = await client.getThread?.(coords.channelId, coords.threadTs);
-        if (!thread?.messages?.length) {
-          return { key: messageKey(message), body: undefined };
-        }
-        const raw = thread.messages
-          .map((entry) => {
-            const who = entry.userName ?? entry.userId ?? "unknown";
-            return `${who}: ${entry.text}`;
-          })
-          .join("\n");
-        return { key: messageKey(message), body: raw };
-      } catch {
-        return { key: messageKey(message), body: undefined };
       }
-    })
-  );
-  const byKey = new Map(opened.map((entry) => [entry.key, entry.body]));
-  return messages.map((message) => {
-    const raw = byKey.get(messageKey(message));
-    if (!raw?.trim()) {
-      return message;
+    } catch {
+      /* keep the search hit */
     }
-    const text = sanitizeIntegrationSnippet(truncate(raw, OPENED_THREAD_BODY_CHARS));
-    return text ? { ...message, text, threadOpened: true } : message;
-  });
+  }
+  const text = sanitizeIntegrationSnippet(message.text);
+  return text ? { ...marked, text, threadOpened: true } : marked;
 }
 
 function messageKey(message: SlackSearchMessage): string {
@@ -435,14 +480,14 @@ async function mergeSlackHits(
     if (seen.has(key)) {
       continue;
     }
-    seen.set(key, {
-      channelId: hit.channelId,
-      channelName: hit.channelName,
-      userName: hit.userName,
-      text: truncate(hit.text, 500),
-      ts: hit.ts,
-      threadTs: hit.threadTs ?? hit.ts,
-      permalink: hit.permalink
-    });
+        seen.set(key, {
+          channelId: hit.channelId,
+          channelName: hit.channelName,
+          userName: hit.userName,
+          text: truncate(hit.text, 500),
+          ts: hit.ts,
+          threadTs: hit.threadTs,
+          permalink: hit.permalink
+        });
   }
 }

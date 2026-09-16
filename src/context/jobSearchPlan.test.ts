@@ -27,3 +27,8 @@ test("ticket keys stay exact even when mixed into a hyphenated phrase", () => {
 test("activity query matches the first job search attempt", () => {
   assert.equal(jobSearchActivityQuery(["SQL-injection"]), "SQL injection");
 });
+
+test("named doc title is searched before a hyphen topic", () => {
+  const attempts = planJobSearchAttempts(["Architecture Overview", "coop-backend"]);
+  assert.equal(attempts[0]?.text, "Architecture Overview");
+});

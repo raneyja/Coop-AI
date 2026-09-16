@@ -25,6 +25,9 @@ import { filterDocPagesForUseRepo, sanitizeIntegrationSnippet } from "./integrat
 import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolicy";
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
 import type { ChatIntentJobVerb } from "../chat/intentPlanner/types";
+import { clipOpenedBody, openHitsByIds } from "../api/integrations/openHitsByIds";
+import { OPENED_ARTIFACT_BODY_CHARS } from "../api/integrations/integrationHttp";
+import { messageNamesProduct } from "../chat/intentPlanner/planChatJobs";
 import {
   emptySearchTopicError,
   latestNeedsScopeError,
@@ -37,6 +40,7 @@ export type ConfluenceSearchPage = {
   excerpt?: string;
   updated: string;
   htmlUrl: string;
+  opened?: boolean;
 };
 
 export type ConfluenceSearchContext = {
@@ -49,17 +53,7 @@ export type ConfluenceSearchContext = {
 };
 
 export function wantsConfluenceContext(query: string): boolean {
-  const q = query.trim();
-  if (!q) {
-    return false;
-  }
-  if (/\bconfluence\b/i.test(q)) {
-    return true;
-  }
-  if (/\b(pages?|docs?|documentation|wiki)\b/i.test(q) && /\b(confluence|repo|repository|this)\b/i.test(q)) {
-    return true;
-  }
-  return false;
+  return messageNamesProduct(query, "confluence");
 }
 
 export function shouldFetchConfluenceContext(request: ContextFetchRequest): boolean {
@@ -98,6 +92,10 @@ export async function fetchConfluenceSearchContext(options: {
   integrationScope?: ResolvedIntegrationScope;
   /** Repo-wide Gaps: open page bodies after a hit. */
   openAfterHit?: boolean;
+  searchOnly?: boolean;
+  openIds?: string[];
+  existingHits?: Record<string, unknown>;
+  signal?: AbortSignal;
   /** Test seam — production leaves this unset and builds a client from secrets. */
   client?: ConfluenceSearchClient;
 }): Promise<ConfluenceSearchContext> {
@@ -140,7 +138,7 @@ export async function fetchConfluenceSearchContext(options: {
         : buildConfluenceCql(options.owner, options.repo, options.extraTerms),
     options.integrationScope
   );
-  if (!primaryCql) {
+  if (!primaryCql && !(options.openIds?.length && Array.isArray(options.existingHits?.pages))) {
     return {
       source: "confluence-search",
       cql: "",
@@ -150,6 +148,7 @@ export async function fetchConfluenceSearchContext(options: {
         : missingRepoSearchError("Confluence")
     };
   }
+  const resolvedCql = primaryCql ?? "";
 
   let client: ConfluenceSearchClient | undefined = injectedClient;
   if (!client && creds) {
@@ -161,36 +160,48 @@ export async function fetchConfluenceSearchContext(options: {
     if (siteError && !creds.atlassianCloudId) {
       return {
         source: "confluence-search",
-        cql: primaryCql,
+        cql: resolvedCql,
         pages: [],
         error: siteError
       };
     }
 
-    const oauthClient = createConfluenceClientFromCredentials(creds, baseUrl);
+    const oauthClient = createConfluenceClientFromCredentials(creds, baseUrl, {
+      signal: options.signal
+    });
     client =
       oauthClient ??
       (auth
         ? new ConfluenceClient({
             baseUrl,
             email: auth.email,
-            apiToken: auth.apiToken
+            apiToken: auth.apiToken,
+            signal: options.signal
           })
         : undefined);
   }
   if (!client) {
     return {
       source: "confluence-search",
-      cql: primaryCql,
+      cql: resolvedCql,
       pages: [],
       error: "Confluence credentials not configured."
     };
   }
 
+  const existingPages = (options.existingHits?.pages ?? []) as ConfluenceSearchPage[];
+  if (options.openIds?.length && existingPages.length > 0) {
+    const pages = await attachConfluencePageBodies(client, existingPages, {
+      jobScoped: false,
+      openIds: options.openIds
+    });
+    return { source: "confluence-search", cql: resolvedCql, pages };
+  }
+
   try {
     const limit = options.limit ?? 20;
-    let pages = await client.searchPages(primaryCql, limit);
-    let cql = primaryCql;
+    let pages = await client.searchPages(resolvedCql, limit);
+    let cql = resolvedCql;
     // Job-scoped extras are the query. A repo-only fallback with hyphenated
     // slugs parse-errors and overwrites an honest empty extras search.
     const extrasOnly = Boolean(options.jobScoped && options.jobVerb !== "latest" && (options.extraTerms?.length ?? 0) > 0);
@@ -246,11 +257,14 @@ export async function fetchConfluenceSearchContext(options: {
           focusTerms: options.extraTerms,
           limit
         });
-    const opened = await attachConfluencePageBodies(client, ranked, {
-      jobScoped: Boolean(
-        (options.jobScoped && options.jobVerb !== "latest") || options.openAfterHit
-      )
-    });
+    const opened = options.searchOnly
+      ? ranked
+      : await attachConfluencePageBodies(client, ranked, {
+          jobScoped: Boolean(
+            (options.jobScoped && options.jobVerb !== "latest") || options.openAfterHit
+          ),
+          openIds: options.openIds
+        });
 
     return {
       source: "confluence-search",
@@ -262,7 +276,7 @@ export async function fetchConfluenceSearchContext(options: {
   } catch (error) {
     return {
       source: "confluence-search",
-      cql: primaryCql,
+      cql: resolvedCql,
       pages: [],
       error: error instanceof Error ? error.message : "Confluence search failed."
     };
@@ -273,7 +287,7 @@ export function confluenceFallbackQuery(owner?: string, repo?: string): string |
   return buildRepoOrQuery(owner, repo);
 }
 
-const OPENED_PAGE_BODY_CHARS = 1500;
+const OPENED_PAGE_BODY_CHARS = OPENED_ARTIFACT_BODY_CHARS;
 const MAX_OPENED_PAGES = 3;
 
 /** ADR / RFC / decision-record titles — open the page, don't stop at search. */
@@ -317,10 +331,28 @@ function pagesToOpen(
 async function attachConfluencePageBodies(
   client: ConfluenceSearchClient,
   pages: ConfluenceSearchPage[],
-  options: { jobScoped: boolean }
+  options: { jobScoped: boolean; openIds?: string[] }
 ): Promise<ConfluenceSearchPage[]> {
   if (pages.length === 0 || !client.getPageBody) {
     return pages;
+  }
+  if (options.openIds?.length) {
+    return openHitsByIds({
+      hits: pages,
+      ids: options.openIds,
+      idOf: (page) => page.id,
+      openOne: async (page) => {
+        try {
+          const raw = await client.getPageBody?.(page.id);
+          const excerpt = sanitizeIntegrationSnippet(
+            clipOpenedBody(raw, OPENED_PAGE_BODY_CHARS) ?? ""
+          );
+          return excerpt ? { ...page, excerpt, opened: true } : { ...page, opened: true };
+        } catch {
+          return { ...page, opened: true };
+        }
+      }
+    });
   }
   const selected = pagesToOpen(pages, options.jobScoped);
   if (selected.length === 0) {

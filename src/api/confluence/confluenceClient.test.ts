@@ -92,6 +92,30 @@ async function run(): Promise<void> {
       `Expected getPageBody to open the page, got: ${capturedUrls.join(", ")}`
     );
     console.log("  ✓ getPageBody opens the page and strips HTML");
+
+    capturedUrls = [];
+    globalThis.fetch = (async (url: string | URL) => {
+      capturedUrls.push(String(url));
+      return new Response(
+        JSON.stringify({
+          body: { storage: { value: "<p>We chose a GitHub App so requireAuth can verify tokens.</p>" } }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }) as typeof fetch;
+    const oauthBody = await oauthClient.getPageBody("1212417");
+    assert.match(oauthBody ?? "", /requireAuth can verify tokens/);
+    assert.ok(
+      capturedUrls.some((url) =>
+        url.includes("https://api.atlassian.com/ex/confluence/cloud-123/wiki/api/v2/pages/1212417")
+      ),
+      `Expected OAuth getPageBody to call v2 /pages/{id}, got: ${capturedUrls.join(", ")}`
+    );
+    assert.ok(
+      !capturedUrls.some((url) => url.includes("/content/1212417")),
+      "OAuth getPageBody must not call deprecated v1 /content/{id}"
+    );
+    console.log("  ✓ OAuth getPageBody opens the page via Confluence Cloud REST API v2");
   } finally {
     globalThis.fetch = originalFetch;
   }

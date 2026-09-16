@@ -82,7 +82,7 @@ export const ENTERPRISE_CRITERIA: GateCriterion[] = [
   {
     id: "S-G8",
     family: "Scope",
-    pass: "Compound hunt + Slack/Jira: agent loops; allowlisted mid-loop search_* tools; Slack-only stays out",
+    pass: "Compound hunt + Slack/Jira: agent loops; allowlisted mid-loop search_* tools; named Slack loops without search_code",
     fail: "Hunt+Slack drops the loop, or mid-loop can call tools off the allowlist",
     evidence: "automated"
   },

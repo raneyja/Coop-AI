@@ -86,9 +86,9 @@ const ROUTE_CASES: RouteCase[] = [
   },
   {
     q: "What's in Slack about this?",
-    expectAction: "none",
-    expectLoop: false,
-    note: "named integration only"
+    expectAction: "understand",
+    expectLoop: true,
+    note: "named integration vendor loop — no repo hunt"
   },
   {
     q: "Who owns the billing service?",

@@ -50,5 +50,11 @@ test("shouldIncludeIntegrationInSourcesChecklist requires connected successful h
   assert.equal(shouldIncludeIntegrationInSourcesChecklist({ messages: [] }), false);
   assert.equal(shouldIncludeIntegrationInSourcesChecklist({ pages: [] }), false);
   assert.equal(shouldIncludeIntegrationInSourcesChecklist({ documents: [] }), false);
-  assert.equal(shouldIncludeIntegrationInSourcesChecklist({ issues: [{ key: "WID-1" }] }), true);
+  assert.equal(shouldIncludeIntegrationInSourcesChecklist({ issues: [{ key: "WID-1" }] }), false);
+  assert.equal(
+    shouldIncludeIntegrationInSourcesChecklist({
+      issues: [{ key: "COOP-101", description: "Extract auth into coop-backend." }]
+    }),
+    true
+  );
 });

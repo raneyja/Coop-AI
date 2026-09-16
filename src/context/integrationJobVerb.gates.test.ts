@@ -330,6 +330,75 @@ test("Google Docs search opens ADR document body after a hit", async () => {
   assert.match(result.documents[0]?.excerpt ?? "", /GitHub App so requireAuth/);
 });
 
+test("Notion named-doc search queries Architecture Overview and opens that page only", async () => {
+  const searched: string[] = [];
+  const opened: string[] = [];
+  const result = await fetchNotionSearchContext({
+    secrets,
+    repo: "Coop-AI",
+    extraTerms: ["Architecture Overview", "coop-backend"],
+    jobScoped: true,
+    client: {
+      searchPages: async (query) => {
+        searched.push(query);
+        return [
+          {
+            id: "noise",
+            title: "Backend standup notes",
+            updated: "2026-01-02T00:00:00.000Z",
+            htmlUrl: "https://notion.so/noise"
+          },
+          {
+            id: "overview",
+            title: "Coop AI — Architecture Overview",
+            updated: "2026-01-02T00:00:00.000Z",
+            htmlUrl: "https://notion.so/overview"
+          },
+          {
+            id: "other",
+            title: "Auth extraction dump",
+            updated: "2026-01-02T00:00:00.000Z",
+            htmlUrl: "https://notion.so/other"
+          }
+        ];
+      },
+      getPagePlainText: async (id) => {
+        opened.push(id);
+        return "See COOP-101 for extracting auth into coop-backend.";
+      }
+    }
+  });
+  assert.equal(searched[0], "Architecture Overview");
+  assert.deepEqual(opened, ["overview"]);
+  assert.match(result.pages.find((page) => page.id === "overview")?.excerpt ?? "", /COOP-101/);
+});
+
+test("Notion search keeps title hits when body open misses the gather deadline", async () => {
+  const result = await fetchNotionSearchContext({
+    secrets,
+    extraTerms: ["Architecture Overview"],
+    jobScoped: true,
+    deadlineAt: Date.now() + 15,
+    client: {
+      searchPages: async () => [
+        {
+          id: "overview",
+          title: "Architecture Overview",
+          updated: "2026-01-02T00:00:00.000Z",
+          htmlUrl: "https://notion.so/overview"
+        }
+      ],
+      getPagePlainText: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        return "late body that missed the gather deadline";
+      }
+    }
+  });
+  assert.equal(result.error, undefined);
+  assert.equal(result.pages[0]?.title, "Architecture Overview");
+  assert.equal(result.pages[0]?.excerpt, undefined);
+});
+
 test("Notion job-scoped search opens top hit when title is not ADR-shaped", async () => {
   const opened: string[] = [];
   const result = await fetchNotionSearchContext({

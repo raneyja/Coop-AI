@@ -140,7 +140,7 @@ test("intent_job uses the same audience and user-facing contract as chat", () =>
   assert.ok(intentJob.includes("## User-facing language"));
   assert.ok(intentJob.includes("No mention in Slack of peel-auth / COOP-101"));
   assert.ok(intentJob.includes("Locate claims require attached remote code bodies"));
-  assert.ok(intentJob.includes("documented decision evidence"));
+  assert.ok(intentJob.includes("Quote Body when a ticket or page was opened"));
   assert.equal(intentJob.includes("evidence bundle"), false);
   assert.equal(intentJob.includes("index returned no usable"), false);
   assert.ok(chat.includes("## User-facing language"));

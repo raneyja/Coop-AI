@@ -341,7 +341,8 @@ async function enrichIntegrationStages(
             extraTerms: termsFor("notion"),
             jobScoped: true,
             jobVerb: verbFor("notion"),
-            integrationScope: options.integrationScopes?.notion
+            integrationScope: options.integrationScopes?.notion,
+            deadlineAt
           }),
         activityQueryForTerms(termsFor("notion"), "notion")
       ),
@@ -465,7 +466,8 @@ async function enrichIntegrationStages(
         repo: options.repo,
         extraTerms: termsFor("notion"),
         openAfterHit,
-        integrationScope: options.integrationScopes?.notion
+        integrationScope: options.integrationScopes?.notion,
+        deadlineAt
       })
     )
   ]);

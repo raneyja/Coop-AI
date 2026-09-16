@@ -50,15 +50,20 @@ export async function fetchWithTimeout(
   options: RequestInit = {},
   timeoutMs = 5_000
 ): Promise<Response | TimeoutResult> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const timeoutController = new AbortController();
+  const timeout = setTimeout(() => timeoutController.abort(), timeoutMs);
+  const userSignal = options.signal ?? undefined;
+  const signal = combineAbortSignals(timeoutController.signal, userSignal);
   try {
     return await fetch(url, {
       ...options,
-      signal: controller.signal
+      signal
     });
   } catch (error) {
     if (isAbortError(error)) {
+      if (userSignal?.aborted) {
+        return { timeout: true, message: "Stopped." };
+      }
       return {
         timeout: true,
         message: `Request timed out after ${Math.round(timeoutMs / 1000)} seconds`

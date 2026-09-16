@@ -1,4 +1,5 @@
 import { fetchWithTimeout } from "../networkResilience";
+import { INTEGRATION_HTTP_TIMEOUT_MS, integrationAuthFailureMessage } from "../integrations/integrationHttp";
 import {
   isSlackBotAccessToken,
   SLACK_BOT_TOKEN_SEARCH_MESSAGE
@@ -10,6 +11,7 @@ const THREAD_CACHE_TTL_MS = 60 * 60 * 1000;
 export type SlackClientOptions = {
   token: string;
   now?: () => number;
+  signal?: AbortSignal;
 };
 
 export type SlackMessage = {
@@ -478,12 +480,17 @@ export class SlackClient {
       init.headers = { ...this.headers, "Content-Type": "application/x-www-form-urlencoded" };
     }
 
-    const response = await fetchWithTimeout(url, init, 15_000);
+    const response = await fetchWithTimeout(
+      url,
+      { ...init, signal: this.options.signal },
+      INTEGRATION_HTTP_TIMEOUT_MS
+    );
     if ("timeout" in response) {
       throw new SlackApiError(response.message);
     }
     if (!response.ok) {
-      throw new SlackApiError(`Slack HTTP ${response.status}`, String(response.status));
+      const auth = integrationAuthFailureMessage(response.status);
+      throw new SlackApiError(auth ?? `Slack HTTP ${response.status}`, String(response.status));
     }
     return (await response.json()) as T;
   }

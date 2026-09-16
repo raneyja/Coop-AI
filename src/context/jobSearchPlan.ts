@@ -28,7 +28,7 @@ export function planJobSearchAttempts(terms: string[]): JobSearchAttempt[] {
   }
 
   const attempts: JobSearchAttempt[] = [];
-  const phrase = [...phrases].sort((left, right) => right.length - left.length)[0];
+  const phrase = pickPrimaryPhrase(phrases);
   if (phrase) {
     attempts.push({
       kind: "phrase",
@@ -70,6 +70,24 @@ export function exactIssueKeys(terms: string[]): string[] {
     }
   }
   return [...keys];
+}
+
+function pickPrimaryPhrase(phrases: string[]): string | undefined {
+  if (phrases.length === 0) {
+    return undefined;
+  }
+  const named = phrases.filter(looksLikeNamedDocTitle);
+  const pool = named.length > 0 ? named : phrases;
+  return [...pool].sort((left, right) => right.length - left.length)[0];
+}
+
+/** Prefer "Architecture Overview" over a hyphen topic like coop-backend. */
+function looksLikeNamedDocTitle(phrase: string): boolean {
+  const trimmed = phrase.trim();
+  if (/\b(overview|architecture|adr|rfc)\b/i.test(trimmed)) {
+    return true;
+  }
+  return /^(?:[A-Z][a-z]+)(?:\s+[A-Z][a-z]+)+$/.test(trimmed);
 }
 
 function meaningPhrase(term: string): string | undefined {

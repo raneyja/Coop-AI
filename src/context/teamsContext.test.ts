@@ -19,7 +19,7 @@ function test(name: string, fn: () => void): void {
 }
 
 test("wantsTeamsContext matches explicit teams questions", () => {
-  assert.equal(wantsTeamsContext("any teams threads for this repo?"), true);
+  assert.equal(wantsTeamsContext("any teams threads for this repo?"), false);
   assert.equal(wantsTeamsContext("microsoft teams discussion about auth"), true);
   assert.equal(wantsTeamsContext("What is the auth flow?"), false);
   assert.equal(

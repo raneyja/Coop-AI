@@ -24,6 +24,7 @@ function test(name: string, fn: () => void): void {
 
 test("wantsConfluenceContext matches explicit confluence questions", () => {
   assert.equal(wantsConfluenceContext("any confluence pages for this repo?"), true);
+  assert.equal(wantsConfluenceContext("any wiki pages for this repo?"), false);
   assert.equal(wantsConfluenceContext("What is the auth flow?"), false);
 });
 

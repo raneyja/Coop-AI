@@ -10,13 +10,7 @@ import {
   type ChatIntentPlannerInput,
   type ChatIntentWorkflow
 } from "./types";
-import { wantsJiraContext } from "../../context/jiraContext";
-import { wantsSlackContext } from "../../context/slackContext";
-import { wantsTeamsContext } from "../../context/teamsContext";
 import { omitTeamsWhileComingSoon } from "../../integrations/teamsAvailability";
-import { wantsConfluenceContext } from "../../context/confluenceContext";
-import { wantsNotionContext } from "../../context/notionContext";
-import { wantsGoogleDocsContext } from "../../context/googleDocsContext";
 import { isIncidentShapedQuery } from "../../context/incidentIntent";
 import { isOpenFileReviewAsk } from "../plainChatExplain";
 import { classifyRepoCodeIntent } from "../repoCodeIntent";
@@ -26,6 +20,7 @@ import {
   detectExplicitlyNamedTools,
   interpreterJobsClaimTurn,
   mergeChatIntentTools,
+  messageNamesJiraTicket,
   planChatJobs,
   planChatTasks,
   planChatTodos,
@@ -103,17 +98,13 @@ const EXPLAIN_ONLY =
  */
 export function detectNamedTools(message: string): IntegrationChatProvider[] {
   const namedByKeyword = detectExplicitlyNamedTools(message);
-  if (namedByKeyword.length > 0) {
-    return CHAT_INTENT_TOOL_PROVIDERS.filter((p) => namedByKeyword.includes(p));
+  const named = [...namedByKeyword];
+  if (messageNamesJiraTicket(message) && !named.includes("jira")) {
+    named.push("jira");
   }
-
-  const found: IntegrationChatProvider[] = [];
-  for (const provider of CHAT_INTENT_TOOL_PROVIDERS) {
-    if (legacyWants(provider, message)) {
-      found.push(provider);
-    }
-  }
-  return omitTeamsWhileComingSoon(found);
+  return omitTeamsWhileComingSoon(
+    CHAT_INTENT_TOOL_PROVIDERS.filter((provider) => named.includes(provider))
+  );
 }
 
 /**
@@ -125,25 +116,6 @@ export function detectRequestedTools(
   _connectedTools: IntegrationChatProvider[]
 ): IntegrationChatProvider[] {
   return detectNamedTools(message);
-}
-
-function legacyWants(provider: IntegrationChatProvider, message: string): boolean {
-  switch (provider) {
-    case "jira":
-      return wantsJiraContext(message);
-    case "slack":
-      return wantsSlackContext(message);
-    case "teams":
-      return wantsTeamsContext(message);
-    case "confluence":
-      return wantsConfluenceContext(message);
-    case "notion":
-      return wantsNotionContext(message);
-    case "google-docs":
-      return wantsGoogleDocsContext(message);
-    default:
-      return false;
-  }
 }
 
 export function detectWorkflow(message: string): {
@@ -170,6 +142,7 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
   }
 
   const named = detectNamedTools(message);
+  const namedProducts = detectExplicitlyNamedTools(message);
   const jobs = planChatJobs({
     message,
     activeFile: input.activeFile,
@@ -180,6 +153,7 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
   const impliedTools = toolsImpliedByJobs({
     jobs,
     namedTools: named,
+    namedProducts,
     connectedTools: input.connectedTools ?? [],
     decisionImplied
   });

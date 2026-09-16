@@ -19,12 +19,12 @@ function test(name: string, fn: () => void): void {
 test("Jira title-only hits are labeled body not attached", () => {
   const text = formatOpenedIntegrationEvidence({
     search_jira: {
-      issues: [{ key: "COOP-101", summary: "Extract auth", status: "In Progress" }]
+      issues: [{ key: "COOP-101", summary: "Extract auth", status: "In Progress", opened: true }]
     }
   });
   assert.match(text ?? "", /COOP-101/);
   assert.match(text ?? "", /Body: not attached/);
-  assert.match(text ?? "", /title and status are not a decision/);
+  assert.doesNotMatch(text ?? "", /title and status are not a decision/);
 });
 
 test("Jira description is the Body line the writer must use", () => {
@@ -44,6 +44,7 @@ test("Jira description is the Body line the writer must use", () => {
   assert.match(text ?? "", /Body: Chose GitHub App/);
   assert.match(text ?? "", /Slack: no matching messages/);
   assert.doesNotMatch(text ?? "", /Body: not attached/);
+  assert.doesNotMatch(text ?? "", /that is not a documented decision/i);
 });
 
 test("empty context yields nothing", () => {
@@ -88,7 +89,7 @@ test("Google Docs excerpt is the Body line the writer must use", () => {
 test("Notion title-only hits are labeled body not attached", () => {
   const text = formatOpenedIntegrationEvidence({
     search_notion: {
-      pages: [{ id: "n1", title: "ADR: Auth" }]
+      pages: [{ id: "n1", title: "ADR: Auth", opened: true }]
     }
   });
   assert.match(text ?? "", /Body: not attached/);
@@ -107,12 +108,12 @@ test("Slack thread body is the Body line the writer must use", () => {
       ]
     }
   });
-  assert.match(text ?? "", /search snippet is not a decision/);
+  assert.match(text ?? "", /Opened Slack threads/);
   assert.match(text ?? "", /Body: Chose GitHub App/);
   assert.doesNotMatch(text ?? "", /Body: not attached/);
 });
 
-test("Slack snippet-only hits are labeled body not attached", () => {
+test("Slack snippet-only hits are not treated as Opened", () => {
   const text = formatOpenedIntegrationEvidence({
     search_slack: {
       messages: [
@@ -124,7 +125,48 @@ test("Slack snippet-only hits are labeled body not attached", () => {
       ]
     }
   });
-  assert.match(text ?? "", /Body: not attached/);
+  assert.equal(text, undefined);
+});
+
+test("I3 Slack empty plus ADR title is still a documented decision", () => {
+  const text = formatOpenedIntegrationEvidence({
+    search_slack: { messages: [] },
+    search_confluence: {
+      pages: [
+        {
+          id: "1212417",
+          title: "ADR: Backend service extraction (COOP-101)",
+          excerpt: "Extract GitHub pagination and repo indexing into coop-backend."
+        }
+      ]
+    }
+  });
+  assert.match(text ?? "", /COOP-101/);
+  assert.match(text ?? "", /ADR: Backend service extraction/);
+  assert.match(text ?? "", /No mention in Slack/);
+  assert.doesNotMatch(text ?? "", /that is not a documented decision/i);
+  assert.doesNotMatch(text ?? "", /the title is not a decision/i);
+});
+
+test("unopened Search ranks are not dumped into the Talk track", () => {
+  const text = formatOpenedIntegrationEvidence({
+    search_notion: {
+      pages: [
+        { id: "p1", title: "Standup notes" },
+        { id: "p2", title: "Retro" },
+        { id: "p3", title: "Weekly" },
+        {
+          id: "p4",
+          title: "Architecture Overview",
+          excerpt: "Extract auth into coop-backend.",
+          opened: true
+        }
+      ]
+    }
+  });
+  assert.match(text ?? "", /Architecture Overview/);
+  assert.match(text ?? "", /Extract auth into coop-backend/);
+  assert.doesNotMatch(text ?? "", /Standup notes/);
 });
 
 test("Teams thread body is the Body line the writer must use", () => {

@@ -18,6 +18,9 @@ import { shouldFetchTraceDecisionDocIntegrations } from "./integrationFetchPolic
 import { shouldFetchIntegrationWithAllowlist } from "./fetchIntegrationsAllowlist";
 import { filePathSearchTerms } from "./traceDecisionSearch";
 import type { ChatIntentJobVerb } from "../chat/intentPlanner/types";
+import { OPENED_ARTIFACT_BODY_CHARS } from "../api/integrations/integrationHttp";
+import { openHitsByIds } from "../api/integrations/openHitsByIds";
+import { messageNamesProduct } from "../chat/intentPlanner/planChatJobs";
 import {
   emptySearchTopicError,
   latestNeedsScopeError,
@@ -26,6 +29,7 @@ import {
 
 export type JiraSearchTicket = {
   key: string;
+  id?: string;
   summary: string;
   status: string;
   issueType: string;
@@ -34,6 +38,7 @@ export type JiraSearchTicket = {
   labels?: string[];
   /** Opened ticket body from search/getIssue — not just the summary line. */
   description?: string;
+  opened?: boolean;
 };
 
 export type JiraSearchContext = {
@@ -60,19 +65,13 @@ export type JiraSearchClient = {
   searchIssues(jql: string, limit?: number): Promise<JiraIssue[]>;
 };
 
-/** True when a free-form chat message likely needs live Jira evidence. */
+/** True when a free-form chat message names Jira or a ticket key. */
 export function wantsJiraContext(query: string): boolean {
   const q = query.trim();
   if (!q) {
     return false;
   }
-  if (/\bjira\b/i.test(q)) {
-    return true;
-  }
-  if (/\btickets?\b/i.test(q) && /\b(repo|repository|project|refer|related|link|this)\b/i.test(q)) {
-    return true;
-  }
-  return JiraClient.extractIssueKeys(q).length > 0;
+  return messageNamesProduct(q, "jira") || JiraClient.extractIssueKeys(q).length > 0;
 }
 
 /** Repo-wide discovery — user expects tickets linked to the open repo, not a known key. */
@@ -501,6 +500,10 @@ export async function fetchJiraSearchContext(options: {
   codeHostConnected?: boolean;
   integrationScope?: ResolvedIntegrationScope;
   jobVerb?: ChatIntentJobVerb;
+  searchOnly?: boolean;
+  openIds?: string[];
+  existingHits?: Record<string, unknown>;
+  signal?: AbortSignal;
   /** Test seam — production leaves this unset and builds a client from secrets. */
   client?: JiraSearchClient;
 }): Promise<JiraSearchContext> {
@@ -521,13 +524,25 @@ export async function fetchJiraSearchContext(options: {
     };
   }
 
-  const client = options.client ?? createJiraClientFromCredentials(await options.secrets.getCredentials());
+  const client =
+    options.client ?? createJiraClientFromCredentials(await options.secrets.getCredentials(), {
+      signal: options.signal
+    });
   if (!client) {
     return {
       source: "jira-search",
       jql: "",
       issues: [],
       error: "Jira credentials not configured."
+    };
+  }
+
+  const existingIssues = (options.existingHits?.issues ?? []) as JiraSearchTicket[];
+  if (options.openIds?.length && existingIssues.length > 0) {
+    return {
+      source: "jira-search",
+      jql: "",
+      issues: await openJiraSearchHitBodies(client, existingIssues, options.openIds)
     };
   }
 
@@ -730,11 +745,21 @@ export async function fetchJiraSearchContext(options: {
     owner: options.owner,
     repo: options.repo
   });
-  await openJiraSearchHitBodies(
-    client,
-    issuesByKey,
-    focusRank.slice(0, Math.min(limit, 3)).map((issue) => issue.key)
-  );
+  if (!options.searchOnly) {
+    const opened = await openJiraSearchHitBodies(
+      client,
+      mapIssues([...issuesByKey.values()]),
+      options.openIds?.length
+        ? options.openIds
+        : focusRank.slice(0, Math.min(limit, 3)).map((issue) => issue.key)
+    );
+    for (const ticket of opened) {
+      const prior = issuesByKey.get(ticket.key);
+      if (prior && ticket.description) {
+        issuesByKey.set(ticket.key, { ...prior, description: ticket.description });
+      }
+    }
+  }
 
   if (issuesByKey.size === 0 && !jql && issueKeys.length === 0) {
     return {
@@ -759,7 +784,13 @@ export async function fetchJiraSearchContext(options: {
     owner: options.owner,
     repo: options.repo
   }).slice(0, limit);
-  const issues = filterScopedIssues(ranked, options.integrationScope);
+  const issues = (options.searchOnly
+    ? filterScopedIssues(ranked, options.integrationScope).map((issue) => ({
+        ...issue,
+        description: undefined
+      }))
+    : filterScopedIssues(ranked, options.integrationScope)
+  );
 
   const emptyError =
     issues.length === 0
@@ -871,19 +902,22 @@ function jiraLatestAllowlisted(scope: ResolvedIntegrationScope | undefined): boo
 /** After a search hit, GET the ticket — search snippets are not the body. */
 async function openJiraSearchHitBodies(
   client: JiraSearchClient,
-  issuesByKey: Map<string, JiraIssue>,
-  keys: string[]
-): Promise<void> {
-  await Promise.all(
-    keys.map(async (key) => {
+  hits: JiraSearchTicket[],
+  ids: string[]
+): Promise<JiraSearchTicket[]> {
+  return openHitsByIds({
+    hits,
+    ids,
+    idOf: (issue) => issue.key,
+    openOne: async (issue) => {
       try {
-        const opened = await client.getIssue(key);
-        issuesByKey.set(opened.key, opened);
+        const opened = await client.getIssue(issue.key);
+        return { ...mapIssues([opened])[0]!, opened: true };
       } catch {
-        /* keep the search row */
+        return { ...issue, opened: true };
       }
-    })
-  );
+    }
+  });
 }
 
 async function addIssueByKey(
@@ -903,13 +937,14 @@ async function addIssueByKey(
   }
 }
 
-const JIRA_TICKET_BODY_CHARS = 2000;
+const JIRA_TICKET_BODY_CHARS = OPENED_ARTIFACT_BODY_CHARS;
 
 function mapIssues(issues: JiraIssue[]): JiraSearchTicket[] {
   return issues.map((issue) => {
     const description = issue.description?.replace(/\s+/g, " ").trim();
     return {
       key: issue.key,
+      id: issue.key,
       summary: issue.summary,
       status: issue.status,
       issueType: issue.issueType,

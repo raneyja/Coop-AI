@@ -19,6 +19,7 @@ function test(name: string, fn: () => void): void {
 
 test("wantsNotionContext matches explicit notion questions", () => {
   assert.equal(wantsNotionContext("any notion docs for this repo?"), true);
+  assert.equal(wantsNotionContext("any pages for this repo?"), false);
   assert.equal(wantsNotionContext("What is the auth flow?"), false);
 });
 

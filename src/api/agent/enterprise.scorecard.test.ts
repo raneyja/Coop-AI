@@ -95,13 +95,12 @@ async function main(): Promise<void> {
     const mustStayOut = [
       "Explain this function",
       "Thanks",
-      "What's in Slack about this?",
       "Who owns the billing service?",
       "Who calls verifyToken?"
     ];
     const leaks = mustStayOut.filter((q) => route(q).loops);
     if (leaks.length === 0) {
-      pass("S-G2", "Scope", "buffer / Slack / Owner / Blast stay out");
+      pass("S-G2", "Scope", "buffer / Owner / Blast stay out");
     } else {
       fail("S-G2", "Scope", `leaked: ${leaks.join(" | ")}`);
     }
@@ -419,16 +418,16 @@ async function main(): Promise<void> {
       hasQuickAction: false,
       intentPlan: plan
     });
-    const slashBlocked = shouldRunAgentToolLoop({
+    const slashLoops = shouldRunAgentToolLoop({
       query: q,
       hasQuickAction: false,
       intentPlan: plan,
       integrationSlash: true
     });
-    if (loops && !slashBlocked) {
-      pass("H-G14", "Honesty", "hunt is not skipped when Slack/Jira is named; slash still constrains");
+    if (loops && slashLoops) {
+      pass("H-G14", "Honesty", "hunt is not skipped when Slack/Jira is named; slash still runs the vendor loop");
     } else {
-      fail("H-G14", "Honesty", `loops=${loops} slashBlocked=${slashBlocked}`);
+      fail("H-G14", "Honesty", `loops=${loops} slashLoops=${slashLoops}`);
     }
   }
 

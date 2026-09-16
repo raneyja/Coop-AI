@@ -1,3 +1,4 @@
+import type { IntegrationChatProvider } from "./types";
 import type { ChatIntentJob, ChatIntentPlan } from "./intentPlanner/types";
 import { locateJobTerms } from "./intentPlanner/planChatJobs";
 import { isFileCallerQuery } from "../context/fileCallerIntent";
@@ -39,13 +40,15 @@ export function shouldRunAgentToolLoop(options: {
  *
  * `change` is what makes `propose_patch` reachable — the agent hunts for the
  * real code first, so the patch it writes is anchored to lines it actually read.
+ * Named-product / slash turns return `understand` so Search → Open can run;
+ * {@link agentTurnAllowsRepoTools} keeps hunt tools off unless locate is also asked.
  */
 export function agentTurnAction(options: {
   query: string;
   hasQuickAction: boolean;
   intentPlan?: ChatIntentPlan;
   isEditTurn?: boolean;
-  /** Slash /docs /slack /jira etc. — answer from that tool, never a repo hunt. */
+  /** Slash /docs /slack /jira etc. — vendor loop, never a repo hunt. */
   integrationSlash?: boolean;
 }): RepoCodeAction {
   if (options.isEditTurn) {
@@ -55,7 +58,7 @@ export function agentTurnAction(options: {
     return "none";
   }
   if (options.integrationSlash) {
-    return "none";
+    return "understand";
   }
   // Inventory / layout facts use IndexedRepoWorkspace, not list_directory samples.
   // How-to / product How-Why must not hunt even if the planner stamped "understand".
@@ -65,7 +68,31 @@ export function agentTurnAction(options: {
   if (!plannerAllowsAgentRepoLoop(options.intentPlan, options.query)) {
     return "none";
   }
-  return (options.intentPlan?.codeIntent ?? classifyRepoCodeIntent(options.query)).action;
+  const classified = options.intentPlan?.codeIntent ?? classifyRepoCodeIntent(options.query);
+  if (classified.action === "none" && (options.intentPlan?.tools.length ?? 0) > 0) {
+    return "understand";
+  }
+  return classified.action;
+}
+
+/**
+ * Repo hunt tools (`search_code`, `read_file`, …). Named-product and slash
+ * turns are a padlock on extra vendors — not “skip the vendor loop.”
+ * Locate / change in the same ask still hunts.
+ */
+export function agentTurnAllowsRepoTools(options: {
+  intentPlan?: ChatIntentPlan;
+  integrationSlash?: boolean;
+}): boolean {
+  if (options.integrationSlash) {
+    return false;
+  }
+  const jobs = options.intentPlan?.jobs ?? [];
+  if (jobs.some((job) => job.capability === "locate")) {
+    return true;
+  }
+  const action = options.intentPlan?.codeIntent?.action;
+  return action === "locate" || action === "change";
 }
 
 /**
@@ -98,10 +125,37 @@ export function plannerAllowsAgentRepoLoop(
     return false;
   }
   if (plan.mode === "tools-only") {
-    // Named Slack/Jira/etc. only — no repo hunt unless the ask is also a hunt.
-    return isRepoInvestigationQuery(query);
+    // Named Slack/Jira/Notion: vendor loop (90s wall). Locate in the same ask
+    // still hunts. Prefetch gather is skipped because the loop owns the turn.
+    if (locateJobTerms(plan.jobs).length > 0) {
+      return isRepoInvestigationQuery(query);
+    }
+    if (plan.codeIntent?.action === "locate" || plan.codeIntent?.action === "change") {
+      return isRepoInvestigationQuery(query);
+    }
+    return plan.tools.length > 0;
   }
   return true;
+}
+
+/**
+ * Integrations the agent may call. Named-tool turns without a locate job stay
+ * on plan.tools — do not pass every connected vendor.
+ */
+export function integrationsForAgentLoop(options: {
+  connected: IntegrationChatProvider[];
+  plan?: ChatIntentPlan;
+}): IntegrationChatProvider[] {
+  if (options.plan?.mode === "tools-only") {
+    const hasLocate =
+      locateJobTerms(options.plan.jobs).length > 0 ||
+      options.plan.codeIntent?.action === "locate" ||
+      options.plan.codeIntent?.action === "change";
+    if (!hasLocate) {
+      return options.plan.tools;
+    }
+  }
+  return options.connected;
 }
 
 /**

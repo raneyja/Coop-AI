@@ -23,7 +23,23 @@ const INTERN_SPEAK_RE = [
   /\bsuggest Deep-Index/i,
   /\breindex\b/i,
   /\bsoft gather\b/i,
-  /\bgather budget\b/i
+  /\bgather budget\b/i,
+  /\btimed out searching\b/i,
+  /\btimed out after\b/i,
+  /\bRequest timed out after\b/i,
+  /\bfetchWithTimeout\b/i,
+  /\bcoop-response-deadline\b/i,
+  /\bsearch_notion\b/i,
+  /\bsearch_slack\b/i,
+  /\bsearch_jira\b/i,
+  /\bsearch_confluence\b/i,
+  /\bsearch_google_docs\b/i,
+  /\bsearch_teams\b/i,
+  /\bAbortError\b/i,
+  /\bHTTP\s*401\b/i,
+  /\bHTTP\s*403\b/i,
+  /\b401 unauthorized\b/i,
+  /\b403 forbidden\b/i
 ];
 
 const OPERATE_COOP_RE = [
@@ -74,7 +90,7 @@ function symbolFromHaystack(haystack: string): string | undefined {
 
 function rewriteZeroHits(text: string): string {
   let out = text.replace(
-    /\b((?:Slack|Teams|Jira))\s+search\s+returned\s+zero\s+hits(?:\s+for\s+(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\S+)))?/gi,
+    /\b((?:Slack|Teams|Jira|Notion|Confluence|Google Docs))\s+search\s+returned\s+zero\s+hits(?:\s+for\s+(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\S+)))?/gi,
     (_full, tool: string, tick?: string, dquote?: string, squote?: string, bare?: string) => {
       const topic = (tick || dquote || squote || bare)?.replace(/^[`'"]+|[`'"]+$/g, "").replace(/[.,;:]+$/, "");
       if (/jira/i.test(tool)) {
@@ -83,6 +99,13 @@ function rewriteZeroHits(text: string): string {
           : "No Jira ticket matching that in what came back";
       }
       return topic ? `No mention in ${tool} of ${topic}` : `No mention in ${tool} of that`;
+    }
+  );
+  out = out.replace(
+    /\bTimed out searching (Slack|Teams|Jira|Notion|Confluence|Google Docs)(?:\s+for\s+(.+))?/gi,
+    (_full, tool: string, topic?: string) => {
+      const cleaned = topic?.replace(/[.,;:]+$/, "").trim();
+      return cleaned ? `No mention in ${tool} of ${cleaned}` : `No mention in ${tool} of that`;
     }
   );
   out = out.replace(
@@ -97,6 +120,12 @@ function rewriteZeroHits(text: string): string {
       }
       if (/\bteams\b/i.test(text)) {
         return `No mention in Teams of ${topic}`;
+      }
+      if (/\bnotion\b/i.test(text)) {
+        return `No mention in Notion of ${topic}`;
+      }
+      if (/\bconfluence\b/i.test(text)) {
+        return `No mention in Confluence of ${topic}`;
       }
       if (/\bjira\b/i.test(text)) {
         return `No Jira ticket matching ${topic} in what came back`;
@@ -135,6 +164,10 @@ function rewriteJargonPhrases(text: string): string {
   out = rewriteZeroHits(out);
   out = rewriteIndexMiss(out);
   out = out.replace(/\bConnect (?:missing tools )?in Coop Settings[^.!\n]*/gi, "");
+  out = out.replace(/\bHTTP\s*401\b/gi, "");
+  out = out.replace(/\bHTTP\s*403\b/gi, "");
+  out = out.replace(/\b401 unauthorized\b/gi, "couldn't sign in");
+  out = out.replace(/\b403 forbidden\b/gi, "couldn't sign in");
   return tidyPhrase(out);
 }
 

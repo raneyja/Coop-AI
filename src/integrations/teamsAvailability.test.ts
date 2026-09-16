@@ -21,15 +21,26 @@ function test(name: string, fn: () => void): void {
 
 test("Teams is not implied or fetched while coming soon", () => {
   assert.equal(isTeamsComingSoon(), true);
-  const tools = toolsImpliedByJobs({
+  const unnamed = toolsImpliedByJobs({
     jobs: [{ capability: "decision", terms: ["session ttl"] }],
-    namedTools: ["teams"],
+    namedTools: [],
+    namedProducts: [],
     connectedTools: ["slack", "jira", "teams"],
     decisionImplied: true
   });
-  assert.equal(tools.includes("teams"), false);
-  assert.equal(tools.includes("slack"), true);
-  assert.equal(tools.includes("jira"), true);
+  assert.equal(unnamed.includes("teams"), false);
+  assert.equal(unnamed.includes("slack"), true);
+  assert.equal(unnamed.includes("jira"), true);
+
+  const namedTeams = toolsImpliedByJobs({
+    jobs: [{ capability: "decision", terms: ["session ttl"] }],
+    namedTools: ["teams"],
+    namedProducts: ["teams"],
+    connectedTools: ["slack", "jira", "teams"],
+    decisionImplied: true
+  });
+  assert.equal(namedTeams.includes("teams"), false);
+  assert.equal(namedTeams.includes("slack"), false);
 
   const request = {
     type: "chat_context",

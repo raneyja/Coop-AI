@@ -395,7 +395,7 @@ Then at most 2 topic headings (omit empty):
 Include for locate jobs. Make implementation claims only from attached remote file bodies. Cite concrete paths and symbols with the Cursor citation contract. If no body supports the claim, say you could not find a usable implementation file.
 
 **Decision evidence**
-Include for decision jobs. Make decision claims only from attached integration or code-host evidence. Name concrete ticket keys, thread/channel names, page titles, or PRs only when attached. Missing or empty evidence is not a decision.
+Include for decision jobs. Make claims only from attached integration or code-host evidence. Quote Body when present. Empty Slack is only “no mention in Slack.”
 
 **Gaps**
 State unavailable, failed, or empty sources briefly. Do not turn gaps into local-search instructions.
@@ -446,7 +446,7 @@ Answer the requested locate, decision, docs, or code-host capabilities without b
 - Keep one answer. Do not switch into incident, PR-review, patch, or open-file-review templates.
 - When Slack or Teams searched and attached no messages, say there was no mention of the decision topic (use the job terms: peel auth, coop-backend, ticket keys).
 - Never invent a Slack or Jira decision when those searches are empty.
-- A listed Jira ticket with a body, or a Confluence/docs page with an excerpt, is documented decision evidence. Use it. Do not conclude there is no documented decision while those are attached. Empty Slack is only “no mention in Slack.”
+- Quote Body when a ticket or page was opened. If Body is missing, name the title and say it could not be opened.
 ${EMPTY_EVIDENCE_HONESTY_RULE}`;
 
 function buildIntentJobSystem(hasPaperclipAttachments = false): string {

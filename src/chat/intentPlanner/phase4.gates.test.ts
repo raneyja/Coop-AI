@@ -19,7 +19,6 @@ import {
 } from "./planChatJobs";
 import { jobsGuaranteeLocatePrefetch, shouldRunAgentToolLoop } from "../agentRouting";
 import { shouldCallChatIntentModel } from "./planChatIntentModel";
-import { shouldCallChatIntentModel } from "./planChatIntentModel";
 import { wantsCodeHostContext } from "../../context/codeHostContext";
 import { buildDiscussionSearchQueries } from "../../context/integrationSearchTerms";
 import { CODE_HOST_PROVIDERS } from "../../api/codeHosts/types";
@@ -404,6 +403,30 @@ test("I3 compound locate+decision splits requireAuth from peel-auth and skips un
       intentPlan: plan,
       integrationSlash: true
     }),
-    false
+    true
+  );
+});
+
+test("named Notion ask stays Notion-only and starts the vendor loop", () => {
+  const query =
+    "Look in Notion — what does the Architecture Overview say about extracting auth into coop-backend?";
+  const plan = planChatIntentFromRules({
+    message: query,
+    connectedTools: ["notion", "jira", "slack", "confluence", "google-docs"]
+  });
+  assert.deepEqual(plan.tools, ["notion"]);
+  assert.equal(plan.mode, "tools-only");
+  const notionTerms = extraTermsForIntegration(plan.jobs, "notion") ?? [];
+  assert.ok(
+    notionTerms.some((term) => /architecture overview/i.test(term)),
+    `expected Architecture Overview in ${JSON.stringify(notionTerms)}`
+  );
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query,
+      hasQuickAction: false,
+      intentPlan: plan
+    }),
+    true
   );
 });
