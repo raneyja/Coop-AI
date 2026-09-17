@@ -427,7 +427,7 @@ export default function CustomerDetailPage() {
             <p className="mt-1 font-mono text-xs text-coop-muted">{detail.id}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className={planBadgeClass(detail.plan)}>{planLabel(detail.plan)}</span>
+            <span className={planBadgeClass(detail.plan)}>{planLabel(detail.plan, detail.seats ?? detail.coopBilling?.seats)}</span>
             <OperatorOrgStatusBadge
               status={detail.operatorStatus}
               onboardingIncomplete={detail.onboardingIncomplete}
@@ -537,7 +537,7 @@ export default function CustomerDetailPage() {
           <div>
             <p className="admin-stat-label">Coop</p>
             <p className="mt-2">
-              {planLabel(detail.coopBilling?.plan ?? detail.plan)} · {detail.coopBilling?.seats ?? detail.seats ?? "—"} seats
+              {planLabel(detail.coopBilling?.plan ?? detail.plan, detail.coopBilling?.seats ?? detail.seats)} · {detail.coopBilling?.seats ?? detail.seats ?? "—"} seats
             </p>
             {detail.coopBilling?.seatMix ? (
               <p className="text-sm text-coop-muted">{detail.coopBilling.seatMix}</p>

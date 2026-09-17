@@ -3,6 +3,8 @@ import {
   addSeatsCopy,
   billingAccountRow,
   billingPageSubtitle,
+  billingPlanLabel,
+  billingPlanDetailLine,
   convertSeatModalCopy,
   convertSeatPreview,
   upgradeRequestNoticeCopy,
@@ -26,6 +28,41 @@ assert.equal(normalizeSeatCount(8), 8);
 assert.equal(isSoloSeatCount(1), true);
 assert.equal(isSoloSeatCount(undefined), true);
 assert.equal(isSoloSeatCount(8), false);
+
+assert.equal(billingPlanLabel({ plan: "free" }), "Free");
+assert.equal(billingPlanLabel({ plan: "enterprise", seats: 40 }), "Enterprise");
+assert.equal(billingPlanLabel({ plan: "pro", usageTier: "pro", seats: 1 }), "Pro");
+assert.equal(billingPlanLabel({ plan: "pro", usageTier: "pro_plus", seats: 1 }), "Pro+");
+assert.equal(billingPlanLabel({ plan: "pro", usageTier: "max", seats: 1 }), "Max");
+assert.equal(billingPlanLabel({ plan: "pro", usageTier: "pro", seats: 2 }), "Team");
+assert.equal(billingPlanLabel({ plan: "pro", usageTier: "max", seats: 8 }), "Team");
+assert.equal(billingPlanLabel({ plan: "pro", usageTier: "pro_plus" }), "Pro+");
+assert.equal(billingPlanLabel({ plan: "pro", usageTier: "pro", seats: null }), "Pro");
+assert.equal(
+  billingPlanDetailLine({
+    solo: true,
+    seats: 1,
+    usageTierName: "Pro"
+  }),
+  null
+);
+assert.equal(
+  billingPlanDetailLine({
+    solo: false,
+    seats: 8,
+    mixLine: "Mixed (6 Pro · 1 Pro+ · 1 Max)",
+    usageTierName: "Pro"
+  }),
+  "Mixed (6 Pro · 1 Pro+ · 1 Max)"
+);
+assert.equal(
+  billingPlanDetailLine({
+    solo: false,
+    seats: 8,
+    usageTierName: "Pro"
+  }),
+  "8 Pro seats"
+);
 
 assert.equal(billingPageSubtitle(true), "Plan and subscription.");
 assert.equal(billingPageSubtitle(false), "Plan, seats, and subscription management.");

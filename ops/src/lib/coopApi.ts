@@ -1292,12 +1292,14 @@ export async function fetchOperatorActivity(
   return { ok: true, status: result.status, data: { entries, nextCursor: result.data?.nextCursor } };
 }
 
-export function planLabel(plan: string): string {
+export function planLabel(plan: string, seats?: number | null): string {
   switch (plan) {
     case "enterprise":
       return "Enterprise";
-    case "pro":
-      return "Pro";
+    case "pro": {
+      const count = Math.max(1, Math.floor(Number(seats ?? 1) || 1));
+      return count >= 2 ? "Team" : "Pro";
+    }
     default:
       return "Free";
   }

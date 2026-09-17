@@ -13,6 +13,7 @@ import type { StoredMe } from "./auth";
 import { ensureAccessToken, restoreSessionFromCookie } from "./auth";
 import { markOrgSuspended, clearOrgSuspended } from "./orgSuspendedState";
 import { normalizeQuotaSnapshot } from "./quotaSnapshot";
+import { billingPlanLabel } from "./billingCopy";
 
 export type ApiError = {
   error?: string;
@@ -890,6 +891,7 @@ export type OrgSummary = {
   name: string;
   plan: string;
   usageTier?: string | null;
+  seats?: number | null;
   repoAccessMode?: "all_indexed" | "per_user";
   onboardingCompleted?: boolean;
   memberCount?: number;
@@ -1358,23 +1360,8 @@ export async function fetchSamlMetadataXml(): Promise<ApiResult<string>> {
   }
 }
 
-export function planLabel(plan: string, usageTier?: string | null): string {
-  if (plan === "enterprise") {
-    return "Enterprise";
-  }
-  if (plan === "free" || !plan) {
-    return "Free";
-  }
-  if (usageTier === "pro_plus" || plan === "pro_plus") {
-    return "Pro+";
-  }
-  if (usageTier === "max" || plan === "max") {
-    return "Max";
-  }
-  if (plan === "pro") {
-    return "Pro";
-  }
-  return "Free";
+export function planLabel(plan: string, usageTier?: string | null, seats?: number | null): string {
+  return billingPlanLabel({ plan, usageTier, seats });
 }
 
 export function planBadgeClass(plan: string, usageTier?: string | null): string {

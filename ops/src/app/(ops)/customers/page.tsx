@@ -305,7 +305,7 @@ export default function CustomersPage() {
                     </p>
                   </td>
                   <td>
-                    <span className={planBadgeClass(org.plan)}>{planLabel(org.plan)}</span>
+                    <span className={planBadgeClass(org.plan)}>{planLabel(org.plan, org.seats)}</span>
                   </td>
                   <td className="text-xs text-coop-muted">{org.billingStatus ?? "—"}</td>
                   <td className="text-xs">

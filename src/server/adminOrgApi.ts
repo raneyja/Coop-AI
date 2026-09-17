@@ -49,6 +49,7 @@ export async function handleAdminOrgRequest(
       name: org.name,
       plan,
       usageTier: org.usageTier ?? (plan === "pro" ? "pro" : null),
+      seats: Math.max(1, Math.floor(Number(billing?.seatCount ?? 1) || 1)),
       repoAccessMode: org.repoAccessMode,
       createdAt: org.createdAt,
       memberCount: activeMemberCount,

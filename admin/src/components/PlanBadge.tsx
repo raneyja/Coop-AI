@@ -1,10 +1,16 @@
-import { planBadgeClass, planLabel } from "@/lib/coopApi";
+import { billingPlanLabel } from "@/lib/billingCopy";
+import { planBadgeClass } from "@/lib/coopApi";
 
 type PlanBadgeProps = {
   plan: string;
   usageTier?: string | null;
+  seats?: number | null;
 };
 
-export function PlanBadge({ plan, usageTier }: PlanBadgeProps) {
-  return <span className={planBadgeClass(plan, usageTier)}>{planLabel(plan, usageTier)}</span>;
+export function PlanBadge({ plan, usageTier, seats }: PlanBadgeProps) {
+  return (
+    <span className={planBadgeClass(plan, usageTier)}>
+      {billingPlanLabel({ plan, usageTier, seats })}
+    </span>
+  );
 }

@@ -8,6 +8,57 @@ export function isSoloSeatCount(seats: number | null | undefined): boolean {
   return normalizeSeatCount(seats) === 1;
 }
 
+/**
+ * Public name for the org's billing plan.
+ * Solo paid = Pro / Pro+ / Max. Two or more paid seats = Team.
+ * Unknown seat count stays solo so we never flash Team on a 1-seat org.
+ */
+export function billingPlanLabel(options: {
+  plan?: string | null;
+  usageTier?: string | null;
+  seats?: number | null;
+}): string {
+  const plan = options.plan ?? "free";
+  if (plan === "enterprise") {
+    return "Enterprise";
+  }
+  if (plan === "free" || !plan) {
+    return "Free";
+  }
+  if (plan === "pro" || plan === "pro_plus" || plan === "max") {
+    if (options.seats != null && !isSoloSeatCount(options.seats)) {
+      return "Team";
+    }
+    if (options.usageTier === "pro_plus" || plan === "pro_plus") {
+      return "Pro+";
+    }
+    if (options.usageTier === "max" || plan === "max") {
+      return "Max";
+    }
+    return "Pro";
+  }
+  return "Free";
+}
+
+/** Composition under the plan name. Solo has none; teams show mix or “N Pro seats”. */
+export function billingPlanDetailLine(options: {
+  solo: boolean;
+  seats: number;
+  mixLine?: string | null;
+  usageTierName: string;
+}): string | null {
+  if (options.solo) {
+    return null;
+  }
+  const mix = options.mixLine?.trim();
+  if (mix) {
+    return mix;
+  }
+  const seats = normalizeSeatCount(options.seats);
+  const tier = options.usageTierName.trim() || "Pro";
+  return `${seats} ${tier} seat${seats === 1 ? "" : "s"}`;
+}
+
 export function billingPageSubtitle(solo: boolean): string {
   return solo ? "Plan and subscription." : "Plan, seats, and subscription management.";
 }

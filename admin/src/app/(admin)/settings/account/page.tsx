@@ -6,6 +6,7 @@ import { clearSession, displayOrgName, getStoredMe, isAdminRole, signOutRemote }
 import { PlanBadge } from "@/components/PlanBadge";
 import { SettingsRow } from "@/components/SettingsRow";
 import { SettingsSubpage } from "@/components/SettingsSubpage";
+import { useOrgPlan } from "@/hooks/useOrgPlan";
 
 function signInMethodLabel(me: ReturnType<typeof getStoredMe>): string {
   switch (me?.authMethod) {
@@ -26,6 +27,7 @@ export default function SettingsAccountPage() {
   const router = useRouter();
   const me = getStoredMe();
   const isAdmin = me ? isAdminRole(me) : false;
+  const { plan, usageTier, seats } = useOrgPlan();
   const usesPassword = me?.authMethod === "password" || me?.sessionProvider === "password";
 
   async function handleSignOut() {
@@ -91,7 +93,7 @@ export default function SettingsAccountPage() {
             <code className="font-mono text-xs text-coop-muted">{me?.orgId ?? "—"}</code>
           </SettingsRow>
           <SettingsRow label="Plan">
-            <PlanBadge plan={me?.plan ?? "free"} />
+            <PlanBadge plan={plan} usageTier={usageTier} seats={seats} />
           </SettingsRow>
           {isAdmin ? (
             <SettingsRow label="Billing">

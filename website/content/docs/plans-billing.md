@@ -3,7 +3,7 @@ title: Plans & billing
 description: Free, Pro, Pro+, Max, and Enterprise — seats, included usage, and upgrade paths.
 section: plans
 order: 1
-lastUpdated: "2026-09-09"
+lastUpdated: "2026-09-17"
 ---
 
 ## Plan comparison
@@ -49,7 +49,7 @@ Free includes the same tool connectivity and cloud indexing as Pro. Limits are t
 4. You already have admin portal access. Connect GitHub and integrations (same flow as free)
 5. If you bought seats for a team, invite people from the admin portal
 
-These plans are **seat-based**. An individual buys one seat. A team buys several at checkout, or adds seats later from Billing. Each paid seat includes the extension, unlimited Deep-Indexed repos, Collections, and **that person's** monthly included usage. A teammate hitting their cap does not stop everyone else. Unused empty seats do not spill usage to anyone. Hit the cap and you must upgrade that seat — Coop does not sell extra usage on demand.
+These plans are **seat-based**. An individual buys one seat. A team buys several at checkout, or adds seats later from Billing. In the admin portal, **Current plan** stays Pro / Pro+ / Max for 1 paid seat, and becomes **Team** once there are 2 or more paid seats. The admin pays for the group on one Stripe bill. Each paid seat includes the extension, unlimited Deep-Indexed repos, Collections, and **that person's** monthly included usage. A teammate hitting their cap does not stop everyone else. Unused empty seats do not spill usage to anyone. Hit the cap and you must upgrade that seat — Coop does not sell extra usage on demand.
 
 Checkout is still **one plan × N**. After you start a team, an admin can convert a person's seat to Pro+ or Max (or confirm a member's request) without upgrading the whole team. Occupied seats stay with that person — deactivating someone does not free their seat for someone else.
 
@@ -87,7 +87,7 @@ See also [Enterprise deployment](/docs/enterprise-deployment) and [Security arch
 **Admin portal → Billing** (paid):
 
 - View invoices and payment method via Stripe customer portal
-- 1-seat plans: add a teammate (buys another seat, then invite from Users). Teams: add seats of a chosen plan
+- 1-seat plans show as Pro / Pro+ / Max: add a teammate (buys another seat, then invite from Users). Two or more seats show as a Team plan. The admin pays for every seat.
 - Mix Pro / Pro+ / Max after checkout: convert **that person's** seat from Users (or confirm their request)
 - Occupied seats are not transferable. Unused empty seats can be invited into later
 - Payment methods, invoices, and cancel stay in Stripe. After a mix exists, do not switch the whole subscription to one price in the portal

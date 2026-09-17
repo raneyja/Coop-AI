@@ -11,6 +11,7 @@ import {
 import { displayName } from "@/lib/timezones";
 import { INTEGRATIONS, integrationIsConnected } from "@/lib/integrations";
 import { useIntegrations } from "@/hooks/useIntegrations";
+import { useOrgPlan } from "@/hooks/useOrgPlan";
 import { dedupeWorkspaceRepos } from "@/lib/workspaceRepoStatus";
 import { AdminStat, AdminStatRow } from "@/components/AdminStatRow";
 import { PlanBadge } from "@/components/PlanBadge";
@@ -21,6 +22,7 @@ const EXTENSION_URL = "https://marketplace.visualstudio.com/search?term=coop%20a
 
 export function MemberDashboard() {
   const me = getStoredMe();
+  const { plan, usageTier, seats } = useOrgPlan();
   const [repos, setRepos] = useState<WorkspaceRepo[]>([]);
   const [adminControlled, setAdminControlled] = useState(false);
   const { integrations, initialLoading: integrationsLoading, error: integrationsError } =
@@ -64,7 +66,7 @@ export function MemberDashboard() {
           <p className="text-xs font-medium uppercase tracking-wide text-coop-muted">Organization</p>
           <p className="mt-1 text-lg font-semibold text-white">{displayOrgName(me)}</p>
           <div className="mt-2">
-            <PlanBadge plan={me?.plan ?? "free"} />
+            <PlanBadge plan={plan} usageTier={usageTier} seats={seats} />
           </div>
         </div>
         <AdminStat

@@ -230,6 +230,7 @@ export async function handleOrgApiRequest(
     const plan = (await resolveOrgPlanFromDb(deps.orgStore, auth!)) ?? auth!.plan;
     const planQuota = createPlanQuotaService(deps.usageTracker);
     const storedOrg = deps.orgStore ? await deps.orgStore.getOrganization(auth.orgId) : undefined;
+    const billing = deps.orgStore ? await deps.orgStore.getOrganizationBilling(auth.orgId) : undefined;
     const profileUser =
       deps.userStore && auth.userId ? await deps.userStore.getUser(auth.userId) : undefined;
     const usageTier = profileUser?.usageTier ?? storedOrg?.usageTier ?? (plan === "pro" ? "pro" : null);
@@ -334,6 +335,7 @@ export async function handleOrgApiRequest(
       quota,
       usageMeters,
       usageTier: usageTier ?? undefined,
+      seats: Math.max(1, Math.floor(Number(billing?.seatCount ?? 1) || 1)),
       pendingSeatUpgrade,
       incomingSeatUpgradeRequests
     });

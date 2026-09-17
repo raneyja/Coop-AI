@@ -20,6 +20,8 @@ export type StoredMe = {
   email?: string;
   authMethod?: "api_key" | "sso_session" | "password" | "google_oauth";
   sessionProvider?: "password" | "google" | "saml";
+  usageTier?: string | null;
+  seats?: number | null;
 };
 
 export function getToken(): string | null {
@@ -267,6 +269,8 @@ export function meFromAuthPayload(data: Record<string, unknown>): StoredMe {
     canInstallIntegrations: data.canInstallIntegrations === true,
     email: typeof data.email === "string" ? data.email : undefined,
     authMethod: data.authMethod as StoredMe["authMethod"],
-    sessionProvider: data.sessionProvider as StoredMe["sessionProvider"]
+    sessionProvider: data.sessionProvider as StoredMe["sessionProvider"],
+    usageTier: typeof data.usageTier === "string" ? data.usageTier : data.usageTier === null ? null : undefined,
+    seats: typeof data.seats === "number" && Number.isFinite(data.seats) ? data.seats : undefined
   };
 }

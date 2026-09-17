@@ -3,7 +3,7 @@ title: Admin portal
 description: Sign in, connect integrations, invite users, and manage automation API keys.
 section: admin
 order: 1
-lastUpdated: "2026-07-09"
+lastUpdated: "2026-09-17"
 ---
 
 The admin portal at [admin.coop-ai.dev](https://admin.coop-ai.dev) is where org admins configure CoopAI for the whole organization. Invited developers also sign in here for workspace repos, usage, and chat feed.
@@ -129,9 +129,9 @@ API keys are **not** the primary sign-in method. Developers and admins sign in w
 
 **Billing** page (Pro/Enterprise, admin only):
 
-- View current plan (1-seat plans show as just you; teams show seat count)
+- View current plan (1 paid seat shows as Pro / Pro+ / Max; 2+ paid seats show as Team)
 - Open Stripe customer portal for invoices and payment method
-- Upgrade, or add a teammate / seats
+- Upgrade, or add a teammate / seats. The admin pays for every seat on the account.
 
 ## Audit log
 

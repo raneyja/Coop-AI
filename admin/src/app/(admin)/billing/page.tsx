@@ -12,13 +12,14 @@ import {
   addSeatsCopy,
   billingAccountRow,
   billingPageSubtitle,
+  billingPlanDetailLine,
+  billingPlanLabel,
   isSoloSeatCount,
   newSeatTotalPreview,
   normalizeSeatCount,
   seatMixLine,
   upgradeSeatCountNote
 } from "@/lib/billingCopy";
-import { PlanBadge } from "@/components/PlanBadge";
 import { EnterpriseUpgradeRequestForm } from "@/components/EnterpriseUpgradeRequestForm";
 import { displayUsageTierName, resolvePlanNudge } from "@/lib/planNudge";
 
@@ -114,14 +115,21 @@ export default function BillingPage() {
   const seatsCopy = addSeatsCopy({ solo, currentSeats, addCount });
   const accountRow = billingAccountRow(currentSeats, solo);
   const totalPreview = newSeatTotalPreview(currentSeats, addCount);
-  const currentPlanName =
-    plan === "enterprise"
-      ? "Enterprise"
-      : plan === "pro"
-        ? mixed && mixLine
-          ? mixLine
-          : displayUsageTierName(usageTier === "pro_plus" || usageTier === "max" ? usageTier : "pro")
-        : "Free";
+  const currentPlanName = billingPlanLabel({
+    plan,
+    usageTier,
+    seats: billing ? currentSeats : null
+  });
+  const planDetail = billing
+    ? billingPlanDetailLine({
+        solo: solo || isFree,
+        seats: currentSeats,
+        mixLine,
+        usageTierName: displayUsageTierName(
+          usageTier === "pro_plus" || usageTier === "max" ? usageTier : "pro"
+        )
+      })
+    : null;
   const paidNextIsEnterprise = nudge?.nextName === "Enterprise";
 
   const addSeatsBlock = isPro ? (
@@ -198,9 +206,10 @@ export default function BillingPage() {
       <section className="admin-card max-w-lg">
         <div>
           <p className="admin-section-label">Current plan</p>
-          <div className="mt-3 flex items-center gap-3">
-            <PlanBadge plan={plan} usageTier={usageTier} />
-            <span className="text-sm text-coop-muted">{displayOrgName(me)}</span>
+          <div className="mt-3">
+            <p className="text-lg font-semibold tracking-tight text-white">{currentPlanName}</p>
+            <p className="mt-1 text-sm text-coop-muted">{displayOrgName(me)}</p>
+            {planDetail ? <p className="mt-1 text-sm text-coop-muted">{planDetail}</p> : null}
           </div>
         </div>
 
@@ -214,12 +223,6 @@ export default function BillingPage() {
               <dt className="text-coop-muted">{accountRow.label}</dt>
               <dd className="mt-1">{accountRow.value}</dd>
             </div>
-            {mixLine ? (
-              <div className="col-span-2">
-                <dt className="text-coop-muted">Seat mix</dt>
-                <dd className="mt-1">{mixLine}</dd>
-              </div>
-            ) : null}
             {billing.billingEmail && (
               <div className="col-span-2">
                 <dt className="text-coop-muted">Billing email</dt>

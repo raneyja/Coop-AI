@@ -144,10 +144,12 @@ void (async () => {
     indexedRepoCount?: number;
     indexedRepoLimit?: number;
     canEnableMoreRepos?: boolean;
+    seats?: number;
   };
   assert.equal(meBody.indexedRepoCount, 3);
   assert.equal(meBody.indexedRepoLimit, null);
   assert.equal(meBody.canEnableMoreRepos, true);
+  assert.equal(meBody.seats, 1);
 
   const fourth = await request(
     proDeps,

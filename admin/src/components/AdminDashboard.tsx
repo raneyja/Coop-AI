@@ -24,7 +24,7 @@ import { USAGE_METER_YOUR_SEAT_TITLE } from "@/lib/usageMeterCopy";
 
 export function AdminDashboard() {
   const me = getStoredMe();
-  const { plan, usageTier, capabilities, loading: planLoading } = useOrgPlan();
+  const { plan, usageTier, seats: orgSeats, capabilities, loading: planLoading } = useOrgPlan();
   const { integrations, initialLoading, error: integrationsError } = useIntegrations({ poll: true });
   const [userCount, setUserCount] = useState<number | null>(null);
   const [seatCount, setSeatCount] = useState<number | null>(null);
@@ -146,7 +146,7 @@ export function AdminDashboard() {
           <p className="text-xs font-medium uppercase tracking-wide text-coop-muted">Organization</p>
           <p className="mt-1 text-lg font-semibold text-white">{displayOrgName(me)}</p>
           <div className="mt-2">
-            <PlanBadge plan={plan} usageTier={effectiveUsageTier} />
+            <PlanBadge plan={plan} usageTier={effectiveUsageTier} seats={seatCount ?? orgSeats} />
           </div>
           {mixLine ? <p className="mt-1 text-xs text-coop-muted">{mixLine}</p> : null}
         </div>
