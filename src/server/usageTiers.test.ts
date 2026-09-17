@@ -8,6 +8,10 @@ import {
   nextUsageTier,
   ownSeatConvertCopy,
   parseUsageTier,
+  seatConvertErrorCopy,
+  seatConvertProcessingCopy,
+  seatConvertSuccessCopy,
+  SEAT_CONVERT_TIMEOUT_MESSAGE,
   seatPricesUsd,
   usageTierFromStripePriceId,
   anniversaryMonthRange,
@@ -73,7 +77,23 @@ assert.equal(missingAnchor.from.toISOString(), "2026-09-01T00:00:00.000Z");
 
 const ownCopy = ownSeatConvertCopy({ fromName: "Pro", toName: "Pro+", fromUsd: 25, toUsd: 60 });
 assert.equal(ownCopy.confirmLabel, "Confirm upgrade");
-assert.match(ownCopy.body, /prorated on the card on file/);
+assert.match(ownCopy.body, /charges the card on file now/);
+assert.match(ownCopy.body, /stay in Coop/);
 assert.match(ownCopy.body, /\+\$35\/mo/);
+
+const processing = seatConvertProcessingCopy({ fromName: "Pro", toName: "Pro+" });
+assert.equal(processing.title, "Confirming your upgrade");
+assert.match(processing.body, /Charging the card on file for Pro\+/);
+assert.match(processing.body, /stays Pro/);
+
+const success = seatConvertSuccessCopy("Max");
+assert.equal(success.title, "You're on Max");
+assert.match(success.body, /card on file was charged/);
+
+const failed = seatConvertErrorCopy("Pro", "The card on file was declined.");
+assert.equal(failed.title, "Upgrade didn't go through");
+assert.match(failed.reason, /declined/);
+assert.match(failed.stay, /still Pro/);
+assert.match(SEAT_CONVERT_TIMEOUT_MESSAGE, /taking too long/);
 
 console.log("usageTiers: 1/1 tests passed");

@@ -33,6 +33,8 @@ COOP_CHECKOUT_CANCEL_URL=https://coop-ai.dev/pricing
 STRIPE_SECRET_KEY=sk_live_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 STRIPE_PRICE_ID_PRO=price_...
+STRIPE_PRICE_ID_PRO_PLUS=price_...
+STRIPE_PRICE_ID_MAX=price_...
 STRIPE_BILLING_PORTAL_RETURN_URL=https://admin.coop-ai.dev/billing
 
 RESEND_API_KEY=re_...
@@ -45,6 +47,8 @@ COOP_EMAIL_MOCK=false
 | `STRIPE_SECRET_KEY` | Stripe Dashboard → Developers → API keys |
 | `STRIPE_WEBHOOK_SECRET` | Stripe Dashboard → Webhooks → endpoint → Signing secret |
 | `STRIPE_PRICE_ID_PRO` | Stripe Dashboard → Products → your Pro price ID |
+| `STRIPE_PRICE_ID_PRO_PLUS` | Stripe Dashboard → Products → your Pro+ price ID (required to convert seats to Pro+) |
+| `STRIPE_PRICE_ID_MAX` | Stripe Dashboard → Products → your Max price ID (required to convert seats to Max) |
 | `RESEND_API_KEY` | [resend.com](https://resend.com) → API Keys |
 
 **Success looks like:** `docker compose config` shows the vars (values redacted) and the API starts without `billing_unavailable` on checkout.
@@ -183,6 +187,7 @@ Defaults aligned in `billingConfig.ts`, `welcome/page.tsx`, and `admin/README.md
 | Symptom | Check |
 |---------|-------|
 | Checkout 503 | `STRIPE_SECRET_KEY` + `STRIPE_PRICE_ID_PRO` in `.env.backend`; API rebuilt |
+| Pro+ / Max convert 503 | `STRIPE_PRICE_ID_PRO_PLUS` / `STRIPE_PRICE_ID_MAX` in `.env.backend`; missing IDs fail closed |
 | No welcome email | `RESEND_API_KEY`, `COOP_EMAIL_MOCK=false`, API logs for `[email]` |
 | Admin CORS error | `COOP_CORS_ORIGINS` includes admin origin; restart API |
 | Duplicate org on webhook replay | Migration 015 applied (`stripe_webhook_events` table) |

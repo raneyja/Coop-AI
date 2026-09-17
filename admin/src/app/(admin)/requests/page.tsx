@@ -76,7 +76,7 @@ export default function RequestsPage() {
       setError(result.error ?? "Could not update that request.");
       return;
     }
-    setSuccessMessage(action === "confirm" ? "Seat upgraded. Stripe prorated the change." : "Request denied.");
+    setSuccessMessage(action === "confirm" ? "Seat upgraded. The card on file was charged." : "Request denied.");
     void load();
   }
 

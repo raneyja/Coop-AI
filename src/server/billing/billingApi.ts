@@ -9,7 +9,7 @@ import { clampSeatCountForPlan } from "../planGates";
 import type { ServerConfig } from "../serverConfig";
 import { loadBillingConfig, type BillingConfig } from "./billingConfig";
 import { adminPortalFreshLoginUrl } from "./adminPortalUrl";
-import { StripeService } from "./stripeService";
+import { StripeService, isTerminalStripeSubscriptionStatus, subscriptionAllowsPaidMutation } from "./stripeService";
 import { handleFreeSignupApiRequest } from "../freeSignupApi";
 import { provisionOrgFromCheckout } from "./provisionOrg";
 import {
@@ -29,6 +29,7 @@ import {
 import type { AuthIdentityStore } from "../auth/authIdentityStore";
 import type { AuthTokenStore } from "../auth/authTokenStore";
 import type { AuthConfig } from "../auth/authConfig";
+import { mapStripeConvertError, SeatConvertError, subscriptionInactiveMessage } from "./convertSeat";
 import { captureException } from "../observability/errorReporter";
 
 type ParsedRequest = {
@@ -488,6 +489,14 @@ async function handleSeatIncrease(
     return true;
   }
 
+  if (!subscriptionAllowsPaidMutation(subscription)) {
+    writeJson(response, 409, {
+      error: "subscription_inactive",
+      message: subscriptionInactiveMessage(subscription)
+    });
+    return true;
+  }
+
   const prices = stripeUsagePriceIds(billingConfig);
   const items =
     subscription.items?.length > 0
@@ -606,15 +615,14 @@ async function handleSeatIncrease(
   }
 
   try {
-    await stripe.updateSubscriptionItems(subscription.id, [
-      ...items.map((item) => ({ id: item.id, quantity: item.quantity })),
-      { priceId, quantity: addedSeats }
-    ]);
+    await stripe.updateSubscriptionItems(
+      subscription.id,
+      [...items.map((item) => ({ id: item.id, quantity: item.quantity })), { priceId, quantity: addedSeats }],
+      { collectPayment: true }
+    );
   } catch (error) {
-    writeJson(response, 502, {
-      error: "stripe_error",
-      message: error instanceof Error ? error.message : "Could not add seats of that plan."
-    });
+    const mapped = error instanceof SeatConvertError ? error : mapStripeConvertError(error);
+    writeJson(response, mapped.statusCode, { error: mapped.code, message: mapped.message });
     return true;
   }
 
@@ -786,14 +794,18 @@ async function handleSubscriptionChange(event: Record<string, unknown>, deps: Bi
       stripePriceId: priceId ?? null,
       seatInventory: inventory
     });
-  } else if (status === "canceled" || status === "unpaid") {
+  } else if (isTerminalStripeSubscriptionStatus(status)) {
+    // Keep stripeSubscriptionId so convert/ops can see the canceled sub and refuse.
+    // Drop plan + purchased inventory + per-user SKUs so Max/Pro+ cannot linger.
     await deps.orgStore!.setOrganizationPlan(org.id, "free");
     await deps.orgStore!.updateOrganizationBilling(org.id, {
-      billingStatus: status,
+      billingStatus: status === "incomplete_expired" ? "canceled" : status,
       usageTier: null,
       stripePriceId: null,
+      seatCount: 1,
       seatInventory: { pro: 0, pro_plus: 0, max: 0 }
     });
+    await deps.userStore?.clearOrgUsersUsageTiers(org.id);
   }
 }
 

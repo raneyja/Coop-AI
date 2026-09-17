@@ -19,7 +19,71 @@ export type StripeSubscription = {
   priceId?: string;
   items: StripeSubscriptionItem[];
   paused?: boolean;
+  latestInvoice?: StripeLatestInvoice;
 };
+
+export type StripeLatestInvoice = {
+  id?: string;
+  paid?: boolean;
+  status?: string;
+  amountDue?: number;
+};
+
+export type UpdateSubscriptionItemsOptions = {
+  /** Invoice now and collect the card on file. Stripe rejects the update if payment fails. */
+  collectPayment?: boolean;
+};
+
+export class StripeRequestError extends Error {
+  public constructor(
+    message: string,
+    public readonly statusCode: number,
+    public readonly stripeCode?: string
+  ) {
+    super(message);
+    this.name = "StripeRequestError";
+  }
+}
+
+export function isLatestInvoiceSettled(invoice: StripeLatestInvoice | string | null | undefined): boolean {
+  if (!invoice || typeof invoice === "string") {
+    return true;
+  }
+  if (invoice.paid === true || invoice.status === "paid" || invoice.status === "void") {
+    return true;
+  }
+  const amountDue = Math.max(0, Math.floor(Number(invoice.amountDue ?? 0) || 0));
+  return amountDue === 0;
+}
+
+/** Fail closed when Stripe did not return an expanded paid/zero-due invoice. */
+export function collectedInvoiceIsSettled(invoice: StripeLatestInvoice | string | null | undefined): boolean {
+  if (!invoice || typeof invoice === "string") {
+    return false;
+  }
+  return isLatestInvoiceSettled(invoice);
+}
+
+export function subscriptionAllowsPaidMutation(subscription: {
+  status?: string | null;
+  paused?: boolean;
+}): boolean {
+  if (subscription.paused) {
+    return false;
+  }
+  const status = String(subscription.status ?? "").toLowerCase();
+  return status === "active" || status === "trialing";
+}
+
+export function isTerminalStripeSubscriptionStatus(status: string | null | undefined): boolean {
+  const normalized = String(status ?? "").toLowerCase();
+  return (
+    normalized === "canceled" ||
+    normalized === "cancelled" ||
+    normalized === "unpaid" ||
+    normalized === "incomplete_expired"
+  );
+}
 
 export type StripeCheckoutSession = {
   id: string;
@@ -181,12 +245,16 @@ export class StripeService {
       }
     );
     const json = (await response.json().catch(() => ({}))) as StripeSubscription & {
-      error?: { message?: string };
+      error?: { message?: string; code?: string };
       pause_collection?: { behavior?: string } | null;
       items?: { data?: Array<{ id?: string; quantity?: number; price?: string | { id?: string } }> };
     };
     if (!response.ok) {
-      throw new Error(json.error?.message ?? `Stripe request failed (${response.status})`);
+      throw new StripeRequestError(
+        json.error?.message ?? `Stripe request failed (${response.status})`,
+        response.status,
+        json.error?.code
+      );
     }
     const items = (json.items?.data ?? [])
       .map((item) => {
@@ -208,7 +276,7 @@ export class StripeService {
       itemId: first?.id,
       priceId: first?.priceId,
       items,
-      paused: Boolean(json.pause_collection)
+      paused: Boolean(json.pause_collection) || String(json.status ?? "").toLowerCase() === "paused"
     };
   }
 
@@ -230,7 +298,8 @@ export class StripeService {
 
   public async updateSubscriptionItems(
     subscriptionId: string,
-    items: SubscriptionItemUpdate[]
+    items: SubscriptionItemUpdate[],
+    options?: UpdateSubscriptionItemsOptions
   ): Promise<StripeSubscription> {
     if (!this.config.stripeSecretKey) {
       throw new Error("STRIPE_SECRET_KEY is not configured");
@@ -239,7 +308,13 @@ export class StripeService {
       return this.retrieveSubscription(subscriptionId);
     }
     const params = new URLSearchParams();
-    params.set("proration_behavior", "create_prorations");
+    if (options?.collectPayment) {
+      params.set("proration_behavior", "always_invoice");
+      params.set("payment_behavior", "error_if_incomplete");
+      params.set("expand[0]", "latest_invoice");
+    } else {
+      params.set("proration_behavior", "create_prorations");
+    }
     items.forEach((item, index) => {
       if (item.id) {
         params.set(`items[${index}][id]`, item.id);
@@ -253,7 +328,17 @@ export class StripeService {
         params.set(`items[${index}][quantity]`, String(Math.max(0, Math.floor(item.quantity))));
       }
     });
-    await this.postForm(`/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, params);
+    const json = await this.postForm<StripeUpdateResponse>(
+      `/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
+      params
+    );
+    if (options?.collectPayment && !collectedInvoiceIsSettled(readLatestInvoice(json.latest_invoice))) {
+      throw new StripeRequestError(
+        "Stripe did not collect payment for this change.",
+        402,
+        "payment_incomplete"
+      );
+    }
     return this.retrieveSubscription(subscriptionId);
   }
 
@@ -309,10 +394,36 @@ export class StripeService {
       },
       body
     });
-    const json = (await response.json().catch(() => ({}))) as T & { error?: { message?: string } };
+    const json = (await response.json().catch(() => ({}))) as T & {
+      error?: { message?: string; code?: string };
+    };
     if (!response.ok) {
-      throw new Error(json.error?.message ?? `Stripe request failed (${response.status})`);
+      throw new StripeRequestError(
+        json.error?.message ?? `Stripe request failed (${response.status})`,
+        response.status,
+        json.error?.code
+      );
     }
     return json;
   }
+}
+
+type StripeUpdateResponse = {
+  latest_invoice?: unknown;
+};
+
+function readLatestInvoice(value: unknown): StripeLatestInvoice | string | undefined {
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
+  const row = value as Record<string, unknown>;
+  return {
+    id: typeof row.id === "string" ? row.id : undefined,
+    paid: typeof row.paid === "boolean" ? row.paid : undefined,
+    status: typeof row.status === "string" ? row.status : undefined,
+    amountDue: Number(row.amount_due ?? row.amountDue ?? 0) || 0
+  };
 }

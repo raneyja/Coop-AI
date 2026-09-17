@@ -201,7 +201,7 @@ Do these before any public traffic:
    - `COOP_CORS_ORIGINS` including `https://admin.coop-ai.dev`
    - `COOP_PUBLIC_BASE_URL=https://api.coop-ai.dev`
    - All OAuth app credentials in `.env.backend`
-   - Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_PRO`
+   - Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_PRO`, `STRIPE_PRICE_ID_PRO_PLUS`, `STRIPE_PRICE_ID_MAX`
    - Email: `RESEND_API_KEY`, `COOP_EMAIL_MOCK=false`
 
 3. **Database**

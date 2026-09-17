@@ -281,6 +281,15 @@ export class UserStore {
     return row ? rowToUser(row) : undefined;
   }
 
+  /** Drop paid seat SKUs after Stripe cancel/unpaid so members cannot keep Max/Pro+. */
+  public async clearOrgUsersUsageTiers(orgId: string): Promise<number> {
+    const result = await this.pool.query(
+      `UPDATE users SET usage_tier = NULL WHERE org_id = $1 AND usage_tier IS NOT NULL`,
+      [orgId]
+    );
+    return result.rowCount ?? 0;
+  }
+
   /**
    * Occupied named seats: pending invites hold a seat; after join the seat
    * stays even if deactivated; deactivate before accept frees it.

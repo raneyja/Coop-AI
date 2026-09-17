@@ -35,6 +35,7 @@ import {
   codeHostConnectionMeta,
   codeHostDisplayName,
   codeHostListSubtitle,
+  accountDetailIdentity,
   displayOrgName,
   displayPlanLabel,
   formatQuotaUsageSummary,
@@ -45,7 +46,15 @@ import {
   preferencesSignedIn,
   quotaUsedPercent
 } from "./connectionCopy";
-import { ownSeatConvertCopy } from "../../../server/usageTiers";
+import {
+  ownSeatConvertCopy,
+  SEAT_CONVERT_TIMEOUT_MESSAGE,
+  SEAT_CONVERT_TIMEOUT_MS,
+  seatConvertErrorCopy,
+  seatConvertProcessingCopy,
+  seatConvertSuccessCopy
+} from "../../../server/usageTiers";
+import { CoopNotice } from "../CoopNotice";
 import type { SettingsLightningSummary } from "./SettingsHub";
 import { SettingsCheckboxRow, SettingsSection } from "./SettingsShared";
 import { WorkspaceReposPickerModal } from "../WorkspaceReposPickerModal";
@@ -180,6 +189,7 @@ export type SettingsDetailProps = {
   onStartFromAgentsMdTemplate: () => void;
   onRequestSeatUpgrade?: (usageTier: "pro_plus" | "max") => void;
   onConvertOwnSeat?: (usageTier: "pro_plus" | "max") => void;
+  seatConvertResult?: { ok: boolean; message: string } | null;
 };
 
 export function SettingsDetailView({
@@ -491,7 +501,8 @@ function FreePlanUsageMeter({
 function PlanUsageDetail({
   prefs,
   onRequestSeatUpgrade,
-  onConvertOwnSeat
+  onConvertOwnSeat,
+  seatConvertResult
 }: SettingsDetailProps): React.ReactElement {
   const orgName = displayOrgName(prefs);
   const adminBase = (prefs.adminPortalUrl ?? "https://admin.coop-ai.dev").replace(/\/$/, "");
@@ -500,21 +511,71 @@ function PlanUsageDetail({
   const resetParts = formatPaidUsageResetParts(meters?.periodEnd);
   const upgradeCta = planSeatUpgradeCta(prefs);
   const incomingCopy = incomingSeatUpgradeCopy(prefs);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [converting, setConverting] = useState(false);
+  const [convertPhase, setConvertPhase] = useState<"idle" | "confirm" | "processing" | "success" | "error">(
+    "idle"
+  );
+  const [convertError, setConvertError] = useState<string | null>(null);
+  const [convertNames, setConvertNames] = useState<{ fromName: string; toName: string } | null>(null);
+  const appliedConvertResult = useRef(seatConvertResult);
+
+  const closeConvertFlow = () => {
+    if (convertPhase === "processing") {
+      return;
+    }
+    setConvertPhase("idle");
+    setConvertError(null);
+  };
+
+  const startConvertCharge = () => {
+    if (upgradeCta.kind !== "admin-convert") {
+      return;
+    }
+    setConvertError(null);
+    setConvertNames({ fromName: displayPlanLabel(prefs), toName: upgradeCta.nextLabel });
+    setConvertPhase("processing");
+    onConvertOwnSeat?.(upgradeCta.nextTier);
+  };
 
   useEffect(() => {
-    if (!confirmOpen) {
+    if (!seatConvertResult || seatConvertResult === appliedConvertResult.current) {
+      return;
+    }
+    appliedConvertResult.current = seatConvertResult;
+    if (seatConvertResult.ok) {
+      setConvertPhase("success");
+      setConvertError(null);
+      return;
+    }
+    setConvertPhase("error");
+    setConvertError(seatConvertResult.message);
+  }, [seatConvertResult]);
+
+  useEffect(() => {
+    if (convertPhase !== "processing") {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      if (convertPhase !== "processing") {
+        return;
+      }
+      setConvertError(SEAT_CONVERT_TIMEOUT_MESSAGE);
+      setConvertPhase("error");
+    }, SEAT_CONVERT_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [convertPhase]);
+
+  useEffect(() => {
+    if (convertPhase === "idle" || convertPhase === "processing") {
       return;
     }
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !converting) {
-        setConfirmOpen(false);
+      if (event.key === "Escape") {
+        closeConvertFlow();
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [confirmOpen, converting]);
+  }, [convertPhase]);
 
   if (!preferencesSignedIn(prefs)) {
     return (
@@ -533,6 +594,56 @@ function PlanUsageDetail({
           toUsd: meters?.nextTierPriceUsd
         })
       : null;
+
+  if (convertPhase === "processing" || convertPhase === "success" || convertPhase === "error") {
+    const fromName = convertNames?.fromName ?? displayPlanLabel(prefs);
+    const toName = convertNames?.toName ?? (upgradeCta.kind === "admin-convert" ? upgradeCta.nextLabel : "Pro+");
+    const processing = seatConvertProcessingCopy({ fromName, toName });
+    const success = seatConvertSuccessCopy(toName);
+    const failed = seatConvertErrorCopy(fromName, convertError ?? SEAT_CONVERT_TIMEOUT_MESSAGE);
+    const title =
+      convertPhase === "processing" ? processing.title : convertPhase === "success" ? success.title : failed.title;
+    const body = convertPhase === "processing" ? processing.body : convertPhase === "success" ? success.body : failed.reason;
+    return (
+      <SettingsSection>
+        <p className="coop-prompt-modal-section-title">Upgrade</p>
+        <div
+          className="coop-settings-card p-3"
+          role={convertPhase === "error" ? "alert" : "status"}
+        >
+          <p className="text-[15px] font-medium">{title}</p>
+          <p className="coop-settings-card-desc mt-2">{body}</p>
+          {convertPhase === "processing" ? (
+            <p className="coop-prompt-modal-muted mt-3">Working… stay on this screen.</p>
+          ) : null}
+          {convertPhase === "error" ? (
+            <CoopNotice tone="error" compact className="mt-3" message={failed.stay} />
+          ) : null}
+          {convertPhase === "success" ? (
+            <div className="coop-settings-actions mt-3">
+              <button type="button" className="coop-settings-action-btn" onClick={closeConvertFlow}>
+                {success.doneLabel}
+              </button>
+            </div>
+          ) : null}
+          {convertPhase === "error" ? (
+            <div className="coop-settings-actions mt-3">
+              <button
+                type="button"
+                className="coop-settings-action-btn coop-settings-action-btn--primary"
+                onClick={startConvertCharge}
+              >
+                {failed.retryLabel}
+              </button>
+              <button type="button" className="coop-settings-action-btn" onClick={closeConvertFlow}>
+                {failed.closeLabel}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </SettingsSection>
+    );
+  }
 
   return (
     <SettingsSection>
@@ -578,7 +689,7 @@ function PlanUsageDetail({
                 <p className="coop-settings-card-desc mt-1">
                   This is your seat.{" "}
                   {upgradeCta.kind === "admin-convert"
-                    ? "Confirm here to convert it. Stripe prorates the change on the card on file — the rest of the team stays on their seats."
+                    ? "Confirm here to convert it. We'll charge the card on file now — the rest of the team stays on their seats."
                     : "Ask an admin to convert it. They confirm, then the company is charged."}
                 </p>
                 <div className="coop-settings-actions mt-2">
@@ -586,7 +697,14 @@ function PlanUsageDetail({
                     <button
                       type="button"
                       className="coop-settings-action-btn"
-                      onClick={() => setConfirmOpen(true)}
+                      onClick={() => {
+                        setConvertError(null);
+                        setConvertNames({
+                          fromName: displayPlanLabel(prefs),
+                          toName: upgradeCta.nextLabel
+                        });
+                        setConvertPhase("confirm");
+                      }}
                     >
                       Upgrade this seat
                     </button>
@@ -626,7 +744,7 @@ function PlanUsageDetail({
               ? `${incomingCopy.newestEmail} asked for ${incomingCopy.toLabel}.`
               : `A teammate asked for ${incomingCopy.toLabel}.`}
             {incomingCopy.count > 1 ? ` ${incomingCopy.count} requests are waiting.` : ""} Confirm in
-            the admin portal — Stripe prorates on the card on file.
+            the admin portal. That charges the card on file.
           </p>
         </div>
       ) : null}
@@ -656,15 +774,11 @@ function PlanUsageDetail({
         ) : null}
       </div>
 
-      {confirmOpen && convertCopy && upgradeCta.kind === "admin-convert" ? (
+      {convertPhase === "confirm" && convertCopy && upgradeCta.kind === "admin-convert" ? (
         <div
           className="coop-prompt-modal-backdrop coop-prompt-modal-backdrop--dim"
           role="presentation"
-          onClick={() => {
-            if (!converting) {
-              setConfirmOpen(false);
-            }
-          }}
+          onClick={closeConvertFlow}
         >
           <div
             className="coop-prompt-modal coop-prompt-modal--confirm"
@@ -685,26 +799,15 @@ function PlanUsageDetail({
               </p>
             </div>
             <div className="coop-prompt-modal-footer coop-prompt-modal-footer--inset">
-              <button
-                type="button"
-                className="coop-settings-action-btn"
-                disabled={converting}
-                onClick={() => setConfirmOpen(false)}
-              >
+              <button type="button" className="coop-settings-action-btn" onClick={closeConvertFlow}>
                 {convertCopy.cancelLabel}
               </button>
               <button
                 type="button"
                 className="coop-settings-action-btn coop-settings-action-btn--primary"
-                disabled={converting}
-                onClick={() => {
-                  setConverting(true);
-                  onConvertOwnSeat?.(upgradeCta.nextTier);
-                  setConfirmOpen(false);
-                  setConverting(false);
-                }}
+                onClick={startConvertCharge}
               >
-                {converting ? "Updating…" : convertCopy.confirmLabel}
+                {convertCopy.confirmLabel}
               </button>
             </div>
           </div>
@@ -783,10 +886,7 @@ function AccountDetail({
     return (
       <SettingsSection>
         <p className="coop-prompt-modal-section-title">Signed in</p>
-        <p className="coop-settings-card-desc">
-          {displayOrgName(prefs) ? `${displayOrgName(prefs)} · ` : ""}
-          {displayPlanLabel(prefs)}
-        </p>
+        <p className="coop-settings-card-desc">{accountDetailIdentity(prefs)}</p>
         <div className="coop-settings-actions">
           <button type="button" className="coop-settings-action-btn" onClick={onSignOut}>
             Sign out

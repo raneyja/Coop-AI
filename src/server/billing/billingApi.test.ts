@@ -3,7 +3,7 @@ import type { ServerResponse } from "node:http";
 import { handleBillingApiRequest, usageTierForStripePrice, type BillingApiDeps } from "./billingApi";
 import type { AuthContext, OrgStore } from "../orgStore";
 import type { ServerConfig } from "../serverConfig";
-import type { StripeService, StripeSubscription } from "./stripeService";
+import { StripeRequestError, type StripeService, type StripeSubscription } from "./stripeService";
 import type { BillingConfig } from "./billingConfig";
 
 function mockSubscription(quantity: number, itemId = "si_123"): StripeSubscription {
@@ -75,7 +75,7 @@ function baseDeps(overrides: {
 
 async function seatIncrease(
   deps: BillingApiDeps,
-  body: { seats?: unknown; addSeats?: unknown }
+  body: { seats?: unknown; addSeats?: unknown; tier?: unknown }
 ) {
   const response = mockResponse();
   const handled = await handleBillingApiRequest(
@@ -592,6 +592,176 @@ void (async () => {
     else process.env.STRIPE_PRICE_ID_PRO_PLUS = prevPlus;
     if (prevMax === undefined) delete process.env.STRIPE_PRICE_ID_MAX;
     else process.env.STRIPE_PRICE_ID_MAX = prevMax;
+  }
+
+  {
+    const billingPatches: Array<Record<string, unknown>> = [];
+    let planSet: string | undefined;
+    let clearedTiers = false;
+    const stripe = {
+      isConfigured: () => true,
+      verifyWebhookSignature: () => ({
+        id: "evt_canceled",
+        type: "customer.subscription.deleted",
+        data: {
+          object: {
+            id: "sub_dead",
+            customer: "cus_1",
+            status: "canceled",
+            items: { data: [{ quantity: 8, price: { id: "price_max" } }] }
+          }
+        }
+      })
+    } as unknown as StripeService;
+    const prevPro = process.env.STRIPE_PRICE_ID_PRO;
+    const prevMax = process.env.STRIPE_PRICE_ID_MAX;
+    process.env.STRIPE_PRICE_ID_PRO = "price_pro";
+    process.env.STRIPE_PRICE_ID_MAX = "price_max";
+    const response = mockResponse();
+    await handleBillingApiRequest(
+      {
+        method: "POST",
+        pathname: "/webhooks/stripe",
+        headers: { "stripe-signature": "t=1,v1=test" },
+        body: {},
+        rawBody: Buffer.from("{}")
+      },
+      response,
+      {
+        serverConfig: { requireApiAuth: false } as ServerConfig,
+        stripeService: stripe,
+        userStore: {
+          clearOrgUsersUsageTiers: async () => {
+            clearedTiers = true;
+            return 3;
+          }
+        } as never,
+        emailService: {} as never,
+        orgStore: {
+          findOrganizationByStripeCustomerId: async () => ({
+            id: "org-1",
+            name: "Acme",
+            plan: "pro",
+            usageTier: "max"
+          }),
+          setOrganizationPlan: async (_id: string, plan: string) => {
+            planSet = plan;
+          },
+          updateOrganizationBilling: async (_id: string, patch: Record<string, unknown>) => {
+            billingPatches.push(patch);
+          }
+        } as unknown as OrgStore
+      }
+    );
+    assert.equal(response.statusCode, 200);
+    assert.equal(planSet, "free");
+    assert.equal(clearedTiers, true);
+    assert.equal(billingPatches[0]?.usageTier, null);
+    assert.equal(billingPatches[0]?.seatCount, 1);
+    assert.deepEqual(billingPatches[0]?.seatInventory, { pro: 0, pro_plus: 0, max: 0 });
+    assert.equal(billingPatches[0]?.stripeSubscriptionId, undefined);
+    if (prevPro === undefined) delete process.env.STRIPE_PRICE_ID_PRO;
+    else process.env.STRIPE_PRICE_ID_PRO = prevPro;
+    if (prevMax === undefined) delete process.env.STRIPE_PRICE_ID_MAX;
+    else process.env.STRIPE_PRICE_ID_MAX = prevMax;
+  }
+
+  {
+    let collectPayment: boolean | undefined;
+    let mutated = false;
+    const prevPro = process.env.STRIPE_PRICE_ID_PRO;
+    const prevPlus = process.env.STRIPE_PRICE_ID_PRO_PLUS;
+    const prevMax = process.env.STRIPE_PRICE_ID_MAX;
+    process.env.STRIPE_PRICE_ID_PRO = "price_pro";
+    process.env.STRIPE_PRICE_ID_PRO_PLUS = "price_plus";
+    process.env.STRIPE_PRICE_ID_MAX = "price_max";
+    const res = await seatIncrease(
+      baseDeps({
+        billing: activeBilling,
+        onMutate: () => {
+          mutated = true;
+        },
+        stripe: {
+          retrieveSubscription: async () => mockSubscription(2),
+          updateSubscriptionItems: async (
+            _id: string,
+            _items: unknown,
+            options?: { collectPayment?: boolean }
+          ) => {
+            collectPayment = options?.collectPayment;
+            return mockSubscription(3);
+          },
+          createBillingPortalSession: async () => ({ url: "https://billing.stripe.com/session/manage" })
+        }
+      }),
+      { addSeats: 1, tier: "max" }
+    );
+    assert.equal(res.statusCode, 200);
+    const payload = JSON.parse(res.body ?? "{}");
+    assert.equal(payload.applied, true);
+    assert.equal(collectPayment, true);
+    assert.equal(mutated, true);
+    if (prevPro === undefined) delete process.env.STRIPE_PRICE_ID_PRO;
+    else process.env.STRIPE_PRICE_ID_PRO = prevPro;
+    if (prevPlus === undefined) delete process.env.STRIPE_PRICE_ID_PRO_PLUS;
+    else process.env.STRIPE_PRICE_ID_PRO_PLUS = prevPlus;
+    if (prevMax === undefined) delete process.env.STRIPE_PRICE_ID_MAX;
+    else process.env.STRIPE_PRICE_ID_MAX = prevMax;
+  }
+
+  {
+    let mutated = false;
+    const prevPro = process.env.STRIPE_PRICE_ID_PRO;
+    const prevMax = process.env.STRIPE_PRICE_ID_MAX;
+    process.env.STRIPE_PRICE_ID_PRO = "price_pro";
+    process.env.STRIPE_PRICE_ID_MAX = "price_max";
+    const res = await seatIncrease(
+      baseDeps({
+        billing: activeBilling,
+        onMutate: () => {
+          mutated = true;
+        },
+        stripe: {
+          retrieveSubscription: async () => mockSubscription(2),
+          updateSubscriptionItems: async () => {
+            throw new StripeRequestError("Your card was declined.", 402, "card_declined");
+          }
+        }
+      }),
+      { addSeats: 1, tier: "max" }
+    );
+    assert.equal(res.statusCode, 402);
+    assert.match(res.body ?? "", /payment_failed/);
+    assert.equal(mutated, false);
+    if (prevPro === undefined) delete process.env.STRIPE_PRICE_ID_PRO;
+    else process.env.STRIPE_PRICE_ID_PRO = prevPro;
+    if (prevMax === undefined) delete process.env.STRIPE_PRICE_ID_MAX;
+    else process.env.STRIPE_PRICE_ID_MAX = prevMax;
+  }
+
+  {
+    let mutated = false;
+    const res = await seatIncrease(
+      baseDeps({
+        billing: activeBilling,
+        onMutate: () => {
+          mutated = true;
+        },
+        stripe: {
+          retrieveSubscription: async () => ({
+            id: "sub_123",
+            status: "canceled",
+            quantity: 2,
+            itemId: "si_123",
+            items: [{ id: "si_123", quantity: 2, priceId: "price_pro" }]
+          })
+        }
+      }),
+      { addSeats: 1 }
+    );
+    assert.equal(res.statusCode, 409);
+    assert.match(res.body ?? "", /subscription_inactive/);
+    assert.equal(mutated, false);
   }
 
   console.log("billingApi.test.ts: ok");

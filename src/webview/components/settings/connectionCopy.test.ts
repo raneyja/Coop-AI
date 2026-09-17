@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import {
+  accountDetailIdentity,
   accountHubSubtitle,
   displayIdentitySubtitle,
   displayOrgName,
   displayPlanLabel,
+  displayUserEmail,
   formatQuotaUsageSummary,
   incomingSeatUpgradeCopy,
   indexingHubSubtitle,
@@ -154,6 +156,34 @@ test("accountHubSubtitle falls back without email", () => {
   assert.equal(accountHubSubtitle(basePrefs), "Signed in");
   assert.equal(accountHubSubtitle({ ...basePrefs, userEmail: "  " }), "Signed in");
   assert.equal(accountHubSubtitle({ ...basePrefs, hasApiKey: false, isSignedIn: false }), "Not signed in");
+});
+
+test("displayUserEmail trims and ignores blanks", () => {
+  assert.equal(displayUserEmail({ userEmail: "jon@acme.com" }), "jon@acme.com");
+  assert.equal(displayUserEmail({ userEmail: "  jon@acme.com  " }), "jon@acme.com");
+  assert.equal(displayUserEmail({ userEmail: "  " }), undefined);
+  assert.equal(displayUserEmail({}), undefined);
+});
+
+test("accountDetailIdentity uses email instead of org name", () => {
+  assert.equal(
+    accountDetailIdentity({
+      ...basePrefs,
+      orgName: "jonathanaraney",
+      userEmail: "jonathanaraney@gmail.com",
+      plan: "pro",
+      usageTier: "pro_plus"
+    }),
+    "jonathanaraney@gmail.com · Pro+"
+  );
+  assert.equal(
+    accountDetailIdentity({ ...basePrefs, orgName: "Acme Corp", userEmail: "jon@acme.com" }),
+    "jon@acme.com"
+  );
+  assert.equal(
+    accountDetailIdentity({ ...basePrefs, orgName: "Acme Corp", plan: "pro" }),
+    "Pro"
+  );
 });
 
 test("planSeatUpgradeCta is convert for admins and request for members", () => {

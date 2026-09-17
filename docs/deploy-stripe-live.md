@@ -66,6 +66,8 @@ Real customers pay on [coop-ai.dev/pricing](https://coop-ai.dev/pricing), Stripe
 | `STRIPE_SECRET_KEY` | `sk_live_…` from Part 1.3 |
 | `STRIPE_WEBHOOK_SECRET` | `whsec_…` from Part 1.4 (**live** endpoint, not test) |
 | `STRIPE_PRICE_ID_PRO` | live `price_…` from Part 1.2 |
+| `STRIPE_PRICE_ID_PRO_PLUS` | live Pro+ `price_…` (required for Pro+ seat converts) |
+| `STRIPE_PRICE_ID_MAX` | live Max `price_…` (required for Max seat converts) |
 
 3. Confirm these are still set correctly:
 
@@ -132,7 +134,7 @@ Both `bpc_…` IDs come from the configuration URL / API response. Set both in t
 
 ## Part 4 — Rollback (if something breaks)
 
-1. Railway → restore **test** `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_PRO`
+1. Railway → restore **test** `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_PRO`, `STRIPE_PRICE_ID_PRO_PLUS`, `STRIPE_PRICE_ID_MAX`
 2. Redeploy
 3. Website checkout works in test mode again
 
@@ -143,6 +145,7 @@ Both `bpc_…` IDs come from the configuration URL / API response. Set both in t
 | Symptom | Fix |
 |---------|-----|
 | Checkout 503 | `STRIPE_SECRET_KEY` + `STRIPE_PRICE_ID_PRO` set; API redeployed |
+| Pro+ / Max convert 503 | `STRIPE_PRICE_ID_PRO_PLUS` / `STRIPE_PRICE_ID_MAX` set; missing IDs fail closed (seat unchanged) |
 | Webhook 400 signature | `STRIPE_WEBHOOK_SECRET` must match **live** endpoint secret |
 | No welcome email | `RESEND_API_KEY`, `COOP_EMAIL_MOCK=false`, domain verified in Resend |
 | Duplicate org on replay | Migration `015_stripe_webhook_events.sql` applied |

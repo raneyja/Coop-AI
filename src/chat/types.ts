@@ -874,6 +874,7 @@ export type WebviewOutbound =
   | { type: "settings:auth-failed" }
   | { type: "settings:navigate"; payload: { screen: string } }
   | { type: "settings:test-result"; payload: { ok: boolean; message: string } }
+  | { type: "settings:convert-own-seat-result"; payload: { ok: boolean; message: string } }
   | { type: "settings:refresh-result"; payload: { ok: boolean; message: string } }
   | { type: "settings:api-key-revealed"; payload: { apiKey: string } }
   | { type: "degradation:notification"; payload: DegradationNotificationPayload }

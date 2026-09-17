@@ -27,6 +27,7 @@ type InboundMessage =
   | { type: "settings:state"; payload: SettingsStatePayload }
   | { type: "settings:navigate"; payload: { screen: string } }
   | { type: "settings:test-result"; payload: { ok: boolean; message: string } }
+  | { type: "settings:convert-own-seat-result"; payload: { ok: boolean; message: string } }
   | { type: "settings:refresh-result"; payload: { ok: boolean; message: string } }
   | { type: "settings:api-key-revealed"; payload: { apiKey: string } }
   | {
@@ -185,6 +186,9 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
     saving: false
   });
   const [lightningState, setLightningState] = useState<SettingsLightningSummary | null>(null);
+  const [seatConvertResult, setSeatConvertResult] = useState<{ ok: boolean; message: string } | null>(
+    null
+  );
   const activeTestRef = useRef<SettingsTestKey | null>(null);
   const activeRefreshRef = useRef<SettingsTestKey | null>(null);
   const testResultTimerRef = useRef<number | null>(null);
@@ -424,6 +428,9 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         }
         case "settings:test-result":
           completeTest(message.payload);
+          break;
+        case "settings:convert-own-seat-result":
+          setSeatConvertResult(message.payload);
           break;
         case "settings:refresh-result":
           completeRefresh(message.payload);
@@ -849,9 +856,11 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         onRequestSeatUpgrade={(usageTier) =>
           post({ type: "settings:request-seat-upgrade", payload: { usageTier } })
         }
-        onConvertOwnSeat={(usageTier) =>
-          post({ type: "settings:convert-own-seat", payload: { usageTier } })
-        }
+        onConvertOwnSeat={(usageTier) => {
+          setSeatConvertResult(null);
+          post({ type: "settings:convert-own-seat", payload: { usageTier } });
+        }}
+        seatConvertResult={seatConvertResult}
       />
       </div>
       <PromptLibraryModal

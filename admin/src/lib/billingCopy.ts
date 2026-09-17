@@ -218,6 +218,41 @@ export function convertSeatModalCopy(options: {
   };
 }
 
+export const SEAT_CONVERT_TIMEOUT_MS = 30_000;
+export const SEAT_CONVERT_TIMEOUT_MESSAGE =
+  "This is taking too long. Check Billing, then try again. The seat was not changed.";
+
+export function seatConvertProcessingCopy(options: { fromName: string; toName: string }): {
+  title: string;
+  body: string;
+} {
+  return {
+    title: "Confirming this upgrade",
+    body: `Charging the card on file for ${options.toName}. This usually takes a few seconds. The seat stays ${options.fromName} until this finishes.`
+  };
+}
+
+export function seatConvertSuccessCopy(toName: string): { title: string; body: string; doneLabel: string } {
+  return {
+    title: `This seat is now ${toName}`,
+    body: "The card on file was charged. The rest of the team is unchanged.",
+    doneLabel: "Done"
+  };
+}
+
+export function seatConvertErrorCopy(
+  fromName: string,
+  message: string
+): { title: string; reason: string; stay: string; retryLabel: string; closeLabel: string } {
+  return {
+    title: "Upgrade didn't go through",
+    reason: message.trim() || "The card on file could not be charged.",
+    stay: `The seat is still ${fromName}. Nothing was charged.`,
+    retryLabel: "Try again",
+    closeLabel: "Close"
+  };
+}
+
 export function upgradeRequestNoticeCopy(options: {
   memberEmail?: string;
   toName: string;

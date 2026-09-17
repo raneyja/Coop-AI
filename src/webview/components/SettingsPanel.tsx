@@ -124,6 +124,7 @@ type SettingsPanelProps = {
   onCompleteOnboarding?: () => void;
   onRequestSeatUpgrade?: (usageTier: "pro_plus" | "max") => void;
   onConvertOwnSeat?: (usageTier: "pro_plus" | "max") => void;
+  seatConvertResult?: { ok: boolean; message: string } | null;
 };
 
 export function SettingsPanel({

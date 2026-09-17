@@ -225,6 +225,11 @@ export function incomingSeatUpgradeCopy(prefs: Preferences): {
   };
 }
 
+export function displayUserEmail(prefs: Pick<Preferences, "userEmail">): string | undefined {
+  const email = prefs.userEmail?.trim();
+  return email || undefined;
+}
+
 export function displayIdentitySubtitle(prefs: Preferences): string | undefined {
   if (!preferencesSignedIn(prefs)) {
     return undefined;
@@ -241,11 +246,21 @@ export function accountHubSubtitle(prefs: Preferences): string {
   if (!preferencesSignedIn(prefs)) {
     return "Not signed in";
   }
-  const email = prefs.userEmail?.trim();
+  const email = displayUserEmail(prefs);
   if (email) {
     return `Signed in · ${email}`;
   }
   return "Signed in";
+}
+
+/** Account page identity: the signed-in user email, never the org/team name. */
+export function accountDetailIdentity(prefs: Preferences): string {
+  const email = displayUserEmail(prefs);
+  const plan = displayPlanLabel(prefs);
+  if (email && plan) {
+    return `${email} · ${plan}`;
+  }
+  return email ?? plan;
 }
 
 export function formatQuotaUsageSummary(

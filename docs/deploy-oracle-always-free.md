@@ -189,6 +189,8 @@ COOP_EMAIL_MOCK=false
 # STRIPE_SECRET_KEY=
 # STRIPE_WEBHOOK_SECRET=
 # STRIPE_PRICE_ID_PRO=
+# STRIPE_PRICE_ID_PRO_PLUS=
+# STRIPE_PRICE_ID_MAX=
 ```
 
 `DATABASE_URL` is set by `docker-compose.yml` to the internal Postgres service — leave the compose override as-is.

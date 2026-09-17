@@ -16,7 +16,15 @@ import {
   type SeatInventory,
   type SeatUpgradeRequest
 } from "@/lib/coopApi";
-import { convertSeatModalCopy, upgradeRequestNoticeCopy } from "@/lib/billingCopy";
+import {
+  convertSeatModalCopy,
+  SEAT_CONVERT_TIMEOUT_MESSAGE,
+  SEAT_CONVERT_TIMEOUT_MS,
+  seatConvertErrorCopy,
+  seatConvertProcessingCopy,
+  seatConvertSuccessCopy,
+  upgradeRequestNoticeCopy
+} from "@/lib/billingCopy";
 import { displayUsageTierName } from "@/lib/planNudge";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 import { InviteUserModal } from "@/components/InviteUserModal";
@@ -63,6 +71,7 @@ export default function UsersPage() {
   const [pendingConvert, setPendingConvert] = useState<PendingConvert | null>(null);
   const [pendingUpgradeConfirm, setPendingUpgradeConfirm] = useState<SeatUpgradeRequest | null>(null);
   const [converting, setConverting] = useState(false);
+  const [convertPhase, setConvertPhase] = useState<"confirm" | "processing" | "success" | "error">("confirm");
   const [convertError, setConvertError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -166,6 +175,25 @@ export default function UsersPage() {
         })
       : null;
 
+  const convertFromName = pendingConvert
+    ? displayUsageTierName(pendingConvert.from)
+    : pendingUpgradeConfirm
+      ? displayUsageTierName(
+          pendingUpgradeConfirm.fromTier === "pro_plus" || pendingUpgradeConfirm.fromTier === "max"
+            ? pendingUpgradeConfirm.fromTier
+            : "pro"
+        )
+      : "Pro";
+  const convertToName = pendingConvert
+    ? displayUsageTierName(pendingConvert.to)
+    : pendingUpgradeConfirm
+      ? displayUsageTierName(
+          pendingUpgradeConfirm.toTier === "pro_plus" || pendingUpgradeConfirm.toTier === "max"
+            ? pendingUpgradeConfirm.toTier
+            : "pro"
+        )
+      : "Pro+";
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -177,6 +205,18 @@ export default function UsersPage() {
     const timer = window.setTimeout(() => setSuccessMessage(null), 5000);
     return () => window.clearTimeout(timer);
   }, [successMessage]);
+
+  useEffect(() => {
+    if (convertPhase !== "processing") {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setConvertError(SEAT_CONVERT_TIMEOUT_MESSAGE);
+      setConvertPhase("error");
+      setConverting(false);
+    }, SEAT_CONVERT_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [convertPhase]);
 
   async function handleInvite(payload: {
     email: string;
@@ -228,12 +268,14 @@ export default function UsersPage() {
   }
 
   function closeConvertModal() {
-    if (converting) {
+    if (convertPhase === "processing") {
       return;
     }
     setPendingConvert(null);
     setPendingUpgradeConfirm(null);
     setConvertError(null);
+    setConvertPhase("confirm");
+    setConverting(false);
   }
 
   function requestConvertTier(user: AdminUser, usageTier: string) {
@@ -244,6 +286,7 @@ export default function UsersPage() {
     }
     setError(null);
     setConvertError(null);
+    setConvertPhase("confirm");
     setPendingConvert({ userId: user.id, email: user.email, from, to });
   }
 
@@ -260,34 +303,24 @@ export default function UsersPage() {
   }
 
   async function confirmConvertTier() {
-    if (pendingUpgradeConfirm) {
-      setConverting(true);
-      setConvertError(null);
-      const result = await resolveSeatUpgradeRequest(pendingUpgradeConfirm.id, "confirm");
-      setConverting(false);
-      if (!result.ok) {
-        setConvertError(result.error ?? "Could not confirm this upgrade.");
-        return;
-      }
-      setPendingUpgradeConfirm(null);
-      setSuccessMessage("Seat upgraded. Stripe prorated the change.");
-      void load();
+    if (convertPhase === "processing") {
       return;
     }
-    if (!pendingConvert) {
-      return;
-    }
+    setConvertPhase("processing");
     setConverting(true);
     setConvertError(null);
-    const result = await convertUserUsageTier(pendingConvert.userId, pendingConvert.to);
+    const result = pendingUpgradeConfirm
+      ? await resolveSeatUpgradeRequest(pendingUpgradeConfirm.id, "confirm")
+      : pendingConvert
+        ? await convertUserUsageTier(pendingConvert.userId, pendingConvert.to)
+        : { ok: false, error: "Could not convert this seat." };
     setConverting(false);
     if (!result.ok) {
+      setConvertPhase("error");
       setConvertError(result.error ?? "Could not convert this seat.");
       return;
     }
-    const toName = displayUsageTierName(pendingConvert.to);
-    setPendingConvert(null);
-    setSuccessMessage(`Converted this person's seat to ${toName}.`);
+    setConvertPhase("success");
     void load();
   }
 
@@ -354,6 +387,7 @@ export default function UsersPage() {
                     disabled={actionId === request.id || converting}
                     onClick={() => {
                       setConvertError(null);
+                      setConvertPhase("confirm");
                       setPendingUpgradeConfirm(request);
                     }}
                   >
@@ -546,29 +580,65 @@ export default function UsersPage() {
       ) : null}
 
       {convertCopy && (pendingConvert || pendingUpgradeConfirm) ? (
-        <Modal open title={convertCopy.title} onClose={closeConvertModal}>
-          <div className="space-y-4">
-            <p className="text-sm text-coop-muted">{convertCopy.body}</p>
-            {convertError ? <p className="text-sm text-red-400">{convertError}</p> : null}
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                className="admin-btn-secondary"
-                onClick={closeConvertModal}
-                disabled={converting}
-              >
-                {convertCopy.cancelLabel}
-              </button>
-              <button
-                type="button"
-                className="admin-btn-primary"
-                onClick={() => void confirmConvertTier()}
-                disabled={converting}
-              >
-                {converting ? "Converting…" : convertCopy.confirmLabel}
-              </button>
+        <Modal
+          open
+          title={
+            convertPhase === "processing"
+              ? seatConvertProcessingCopy({ fromName: convertFromName, toName: convertToName }).title
+              : convertPhase === "success"
+                ? seatConvertSuccessCopy(convertToName).title
+                : convertPhase === "error"
+                  ? seatConvertErrorCopy(convertFromName, convertError ?? "").title
+                  : convertCopy.title
+          }
+          onClose={closeConvertModal}
+        >
+          {convertPhase === "processing" ? (
+            <div className="space-y-4" role="status">
+              <p className="text-sm text-coop-muted">
+                {seatConvertProcessingCopy({ fromName: convertFromName, toName: convertToName }).body}
+              </p>
+              <p className="text-sm text-white">Working… stay on this screen.</p>
             </div>
-          </div>
+          ) : convertPhase === "success" ? (
+            <div className="space-y-4" role="status">
+              <p className="text-sm text-coop-muted">{seatConvertSuccessCopy(convertToName).body}</p>
+              <div className="flex justify-end">
+                <button type="button" className="admin-btn-primary" onClick={closeConvertModal}>
+                  {seatConvertSuccessCopy(convertToName).doneLabel}
+                </button>
+              </div>
+            </div>
+          ) : convertPhase === "error" ? (
+            <div className="space-y-4" role="alert">
+              <p className="text-sm text-red-400">
+                {seatConvertErrorCopy(convertFromName, convertError ?? "").reason}
+              </p>
+              <p className="text-sm text-coop-muted">
+                {seatConvertErrorCopy(convertFromName, convertError ?? "").stay}
+              </p>
+              <div className="flex justify-end gap-2">
+                <button type="button" className="admin-btn-secondary" onClick={closeConvertModal}>
+                  {seatConvertErrorCopy(convertFromName, convertError ?? "").closeLabel}
+                </button>
+                <button type="button" className="admin-btn-primary" onClick={() => void confirmConvertTier()}>
+                  {seatConvertErrorCopy(convertFromName, convertError ?? "").retryLabel}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-coop-muted">{convertCopy.body}</p>
+              <div className="flex justify-end gap-2">
+                <button type="button" className="admin-btn-secondary" onClick={closeConvertModal}>
+                  {convertCopy.cancelLabel}
+                </button>
+                <button type="button" className="admin-btn-primary" onClick={() => void confirmConvertTier()}>
+                  {convertCopy.confirmLabel}
+                </button>
+              </div>
+            </div>
+          )}
         </Modal>
       ) : null}
     </div>

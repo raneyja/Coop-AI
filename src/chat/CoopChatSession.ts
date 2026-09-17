@@ -5593,12 +5593,12 @@ export class CoopChatSession {
     try {
       const result = await this.options.api.convertOwnSeat(this.preferences.apiBaseUrl, usageTier);
       await this.refreshAllSessionsPreferences();
-      void vscode.window.showInformationMessage(
-        `Your seat is now ${result.to === "max" ? "Max" : "Pro+"}. Stripe prorated the change on the card on file.`
-      );
+      const toName = result.to === "max" ? "Max" : "Pro+";
+      const message = `Your seat is now ${toName}. The card on file was charged.`;
+      this.postToSettings({ type: "settings:convert-own-seat-result", payload: { ok: true, message } });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not upgrade this seat.";
-      void vscode.window.showWarningMessage(message);
+      this.postToSettings({ type: "settings:convert-own-seat-result", payload: { ok: false, message } });
     }
   }
 

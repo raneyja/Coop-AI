@@ -116,7 +116,7 @@ Update redirect URIs in each vendor console after the API domain is live — [co
 
 Add when ready per [deploy-self-serve-pro.md](./deploy-self-serve-pro.md):
 
-`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_PRO`
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_PRO`, `STRIPE_PRICE_ID_PRO_PLUS`, `STRIPE_PRICE_ID_MAX`
 
 ---
 

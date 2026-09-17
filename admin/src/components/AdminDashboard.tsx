@@ -119,7 +119,7 @@ export function AdminDashboard() {
               ? "1 teammate asked to upgrade"
               : `${pendingUpgradeCount} teammates asked to upgrade`
           }
-          body="Confirm to convert their seat. Stripe prorates on the card on file. Quota does not change until you confirm."
+          body="Confirm to convert their seat. That charges the card on file now. Quota does not change until you confirm."
           ctaLabel="Review requests"
           href="/requests"
         />

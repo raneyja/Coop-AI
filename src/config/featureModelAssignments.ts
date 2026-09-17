@@ -110,6 +110,9 @@ export function canUserSelectModels(options: {
   if (options.plan === "enterprise" || options.plan === "pro") {
     return true;
   }
+  if (options.plan === "free") {
+    return false;
+  }
   return Boolean(options.usageTier);
 }
 

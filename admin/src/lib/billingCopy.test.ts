@@ -11,6 +11,9 @@ import {
   SEAT_PRICES_USD,
   convertSeatModalCopy,
   convertSeatPreview,
+  seatConvertErrorCopy,
+  seatConvertProcessingCopy,
+  seatConvertSuccessCopy,
   upgradeRequestNoticeCopy,
   isSoloSeatCount,
   newSeatTotalPreview,
@@ -195,6 +198,15 @@ assert.equal(
   modal.body,
   "Convert alice@example.com's seat from Pro to Pro+ (+$35/mo, charged to the card on file now)."
 );
+
+const processing = seatConvertProcessingCopy({ fromName: "Pro", toName: "Pro+" });
+assert.equal(processing.title, "Confirming this upgrade");
+assert.match(processing.body, /Charging the card on file for Pro\+/);
+const upgraded = seatConvertSuccessCopy("Max");
+assert.equal(upgraded.title, "This seat is now Max");
+const failed = seatConvertErrorCopy("Pro", "The card on file was declined.");
+assert.equal(failed.title, "Upgrade didn't go through");
+assert.match(failed.stay, /still Pro/);
 
 const notice = upgradeRequestNoticeCopy({
   memberEmail: "alex@acme.com",

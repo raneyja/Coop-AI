@@ -19,6 +19,7 @@ assert.equal(canUserSelectModels({ devMode: false }), false);
 assert.equal(canUserSelectModels({ devMode: true }), true);
 assert.equal(canUserSelectModels({ plan: "pro" }), true);
 assert.equal(canUserSelectModels({ plan: "enterprise" }), true);
+assert.equal(canUserSelectModels({ plan: "free", usageTier: "max" }), false);
 
 assert.equal(resolveFeatureFromUseCase("chat"), "chat");
 assert.equal(resolveFeatureFromUseCase("code_edit"), "edit");

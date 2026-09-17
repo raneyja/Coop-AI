@@ -91,6 +91,42 @@ export function displayUsageTierName(tier: UsageTier): string {
   return displayPlanName(tier);
 }
 
+export const OWN_SEAT_CONVERT_BUSY_LABEL = "Charging card…";
+export const SEAT_CONVERT_TIMEOUT_MS = 30_000;
+export const SEAT_CONVERT_TIMEOUT_MESSAGE =
+  "This is taking too long. Check Billing, then try again. Your seat was not changed.";
+
+export function seatConvertProcessingCopy(options: { fromName: string; toName: string }): {
+  title: string;
+  body: string;
+} {
+  return {
+    title: "Confirming your upgrade",
+    body: `Charging the card on file for ${options.toName}. This usually takes a few seconds. Your seat stays ${options.fromName} until this finishes.`
+  };
+}
+
+export function seatConvertSuccessCopy(toName: string): { title: string; body: string; doneLabel: string } {
+  return {
+    title: `You're on ${toName}`,
+    body: "The card on file was charged. The rest of the team is unchanged.",
+    doneLabel: "Done"
+  };
+}
+
+export function seatConvertErrorCopy(
+  fromName: string,
+  message: string
+): { title: string; reason: string; stay: string; retryLabel: string; closeLabel: string } {
+  return {
+    title: "Upgrade didn't go through",
+    reason: message.trim() || "The card on file could not be charged.",
+    stay: `Your seat is still ${fromName}. Nothing was charged.`,
+    retryLabel: "Try again",
+    closeLabel: "Close"
+  };
+}
+
 /** Extension confirm copy when an org admin upgrades their own seat in place. */
 export function ownSeatConvertCopy(options: {
   fromName: string;
@@ -102,11 +138,11 @@ export function ownSeatConvertCopy(options: {
   if (typeof options.fromUsd === "number" && typeof options.toUsd === "number") {
     const change = options.toUsd - options.fromUsd;
     const signed = change >= 0 ? `+$${change}` : `-$${Math.abs(change)}`;
-    delta = ` (${signed}/mo, prorated on the card on file)`;
+    delta = ` (${signed}/mo)`;
   }
   return {
     title: "Upgrade this seat",
-    body: `Convert your seat from ${options.fromName} to ${options.toName}${delta}. This does not upgrade the rest of the team.`,
+    body: `Convert your seat from ${options.fromName} to ${options.toName}${delta}. Confirm charges the card on file now — you stay in Coop. This does not upgrade the rest of the team.`,
     confirmLabel: "Confirm upgrade",
     cancelLabel: "Cancel"
   };

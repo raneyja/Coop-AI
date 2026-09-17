@@ -196,7 +196,7 @@ export class EmailService {
           Every admin on this org received this email.
         </p>
         ${primaryButton("Review request", params.reviewUrl)}
-        <p style="margin:0;font-size:14px;color:#57606a;">Confirm or deny. Quota does not change until you confirm. Stripe prorates on the card on file.</p>
+        <p style="margin:0;font-size:14px;color:#57606a;">Confirm or deny. Quota does not change until you confirm. Confirm charges the card on file — they stay in Coop.</p>
       `
     });
     const text = [
