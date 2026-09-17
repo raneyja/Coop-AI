@@ -73,6 +73,13 @@ export type OperatorUserUsageSnapshot = {
   frontierCents: number;
   productMix: ProductMix;
   alerts: OperatorUsageAlertCode[];
+  free?: {
+    usedTokens: number;
+    limitTokens: number;
+    remainingTokens: number;
+    usedRatio: number;
+    resetsAt: string;
+  };
 };
 
 export type OperatorUsageQueueItem = {
@@ -353,12 +360,22 @@ export async function loadUserUsageSnapshot(input: {
   const capKind = capKindForPlan(input.org.plan);
   const quota = input.quota ?? createPlanQuotaService(input.usageTracker);
   let { periodStart, periodEnd, range } = periodIso(input.org.createdAt, now);
+  let free: OperatorUserUsageSnapshot["free"] = undefined;
   if (capKind === "free_credits") {
     const snapshot = await quota.getSnapshot(input.org.id, "free", now);
     const windowMs = snapshot ? snapshot.windowHours * 3_600_000 : 5 * 60 * 60 * 1000;
     range = rollingWindowRange(now, windowMs);
     periodStart = range.from.toISOString();
     periodEnd = snapshot?.resetsAt ?? now.toISOString();
+    if (snapshot) {
+      free = {
+        usedTokens: snapshot.usedTokens,
+        limitTokens: snapshot.limitTokens,
+        remainingTokens: snapshot.remainingTokens,
+        usedRatio: unclampedRatio(snapshot.usedTokens, snapshot.limitTokens) ?? 0,
+        resetsAt: snapshot.resetsAt
+      };
+    }
   }
   const aliases = principalAliasesForUser(input.user);
   const eventTypes = [...LLM_USAGE_EVENT_TYPES];
@@ -408,7 +425,8 @@ export async function loadUserUsageSnapshot(input: {
     autoCents,
     frontierCents,
     productMix: productMixFromEventTypes(byType),
-    alerts: userAlertsFromMeters(meters)
+    alerts: userAlertsFromMeters(meters),
+    free
   };
 }
 

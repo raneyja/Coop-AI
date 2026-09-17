@@ -37,6 +37,17 @@ export type PrincipalLastActive = {
   lastActiveAt: Date;
 };
 
+/** Postgres regex for JSON text that is a signed integer. Credits may be negative. */
+export const JSONB_SIGNED_INT_REGEX = "^-?\\d+$";
+
+export function isSignedIntJson(value: string): boolean {
+  return /^-?\d+$/.test(value);
+}
+
+function jsonSignedIntSql(key: string): string {
+  return `WHEN (metadata->>'${key}') ~ '${JSONB_SIGNED_INT_REGEX}' THEN (metadata->>'${key}')::bigint`;
+}
+
 /** Aggregate product-surface counts from an events-by-type breakdown. */
 export function productMixFromEventTypes(
   byType: Array<{ eventType: string; count: number }>
@@ -97,8 +108,9 @@ export class UsageTracker {
     const result = await this.pool.query(
       `SELECT created_at,
               CASE
-                WHEN (metadata->>'totalTokens') ~ '^\\d+$' THEN (metadata->>'totalTokens')::bigint
-                WHEN (metadata->>'inputTokens') ~ '^\\d+$' AND (metadata->>'outputTokens') ~ '^\\d+$'
+                ${jsonSignedIntSql("totalTokens")}
+                WHEN (metadata->>'inputTokens') ~ '${JSONB_SIGNED_INT_REGEX}'
+                 AND (metadata->>'outputTokens') ~ '${JSONB_SIGNED_INT_REGEX}'
                   THEN (metadata->>'inputTokens')::bigint + (metadata->>'outputTokens')::bigint
                 ELSE 0
               END AS tokens
@@ -127,8 +139,9 @@ export class UsageTracker {
     const result = await this.pool.query(
       `SELECT COALESCE(SUM(
          CASE
-           WHEN (metadata->>'totalTokens') ~ '^\\d+$' THEN (metadata->>'totalTokens')::bigint
-           WHEN (metadata->>'inputTokens') ~ '^\\d+$' AND (metadata->>'outputTokens') ~ '^\\d+$'
+           ${jsonSignedIntSql("totalTokens")}
+           WHEN (metadata->>'inputTokens') ~ '${JSONB_SIGNED_INT_REGEX}'
+            AND (metadata->>'outputTokens') ~ '${JSONB_SIGNED_INT_REGEX}'
              THEN (metadata->>'inputTokens')::bigint + (metadata->>'outputTokens')::bigint
            ELSE 0
          END
@@ -179,7 +192,7 @@ export class UsageTracker {
     const result = await this.pool.query(
       `SELECT COALESCE(SUM(
          CASE
-           WHEN (metadata->>'usdCents') ~ '^\\d+$' THEN (metadata->>'usdCents')::bigint
+           ${jsonSignedIntSql("usdCents")}
            ELSE 0
          END
        ), 0)::int AS total
@@ -214,7 +227,7 @@ export class UsageTracker {
               metadata->>'bucket' AS bucket,
               COALESCE(SUM(
                 CASE
-                  WHEN (metadata->>'usdCents') ~ '^\\d+$' THEN (metadata->>'usdCents')::bigint
+                  ${jsonSignedIntSql("usdCents")}
                   ELSE 0
                 END
               ), 0)::int AS total

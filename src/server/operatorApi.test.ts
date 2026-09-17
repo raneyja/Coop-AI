@@ -963,6 +963,204 @@ void (async () => {
   const userBody = JSON.parse(userDetail.body ?? "{}") as { user?: { email?: string; usedCents?: number } };
   assert.equal(userBody.user?.email, "a@example.com");
 
+  const supportOp: OpCtx = {
+    operatorId: "op-support",
+    email: "support@coop-ai.dev",
+    role: "support"
+  };
+  const paidCents = { auto: 1485, frontier: 0 };
+  const creditEvents: Array<{ eventType?: string; metadata?: Record<string, unknown> }> = [];
+  let creditAudit = "";
+  const creditTracker = {
+    canRead: () => true,
+    record: async (entry: { eventType?: string; metadata?: Record<string, unknown> }) => {
+      creditEvents.push(entry);
+      const usd = Number(entry.metadata?.usdCents ?? 0);
+      if (entry.metadata?.bucket === "frontier") {
+        paidCents.frontier += usd;
+      } else {
+        paidCents.auto += usd;
+      }
+    },
+    eventsByTypeForPrincipals: async () => [],
+    lastActiveAtByPrincipal: async () => [],
+    sumUsdCentsByUserIds: async () =>
+      new Map([["user-1", { autoCents: paidCents.auto, frontierCents: paidCents.frontier }]])
+  };
+  const creditOk = mockResponse();
+  await handleOperatorApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/operator/organizations/org-1/users/user-1/usage",
+      headers: { authorization: "Bearer ops-token" },
+      body: { targetUsedRatio: 0.5, reason: "Dogfood unblock" }
+    },
+    creditOk,
+    baseDeps({
+      orgStore: usageOrgStore,
+      userStore: usageUserStore as never,
+      usageTracker: creditTracker as never,
+      operatorStore: {
+        resolveSession: async () => supportOp,
+        recordAudit: async (input: { action: string }) => {
+          creditAudit = input.action;
+          return {
+            id: "audit-credit",
+            operatorId: supportOp.operatorId,
+            action: input.action,
+            metadata: {},
+            createdAt: new Date()
+          };
+        }
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(creditOk.statusCode, 200);
+  const creditBody = JSON.parse(creditOk.body ?? "{}") as {
+    applied?: boolean;
+    afterUsedRatio?: number;
+    targetUsedRatio?: number;
+  };
+  assert.equal(creditBody.applied, true);
+  assert.equal(creditBody.targetUsedRatio, 0.5);
+  assert.equal(creditBody.afterUsedRatio, 0.5);
+  assert.equal(creditAudit, "operator.user.usage_credit");
+  assert.equal(creditEvents.length, 1);
+  assert.equal(creditEvents[0]?.eventType, "quota.credit");
+  assert.equal(creditEvents[0]?.metadata?.usdCents, -735);
+
+  const creditNoop = mockResponse();
+  await handleOperatorApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/operator/organizations/org-1/users/user-1/usage",
+      headers: { authorization: "Bearer ops-token" },
+      body: { targetUsedRatio: 0.5, reason: "Already there" }
+    },
+    creditNoop,
+    baseDeps({
+      orgStore: usageOrgStore,
+      userStore: usageUserStore as never,
+      usageTracker: creditTracker as never,
+      operatorStore: {
+        resolveSession: async () => supportOp,
+        recordAudit: async () => {
+          throw new Error("noop should not audit");
+        }
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(creditNoop.statusCode, 200);
+  assert.equal(JSON.parse(creditNoop.body ?? "{}").applied, false);
+
+  const viewerCredit = mockResponse();
+  await handleOperatorApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/operator/organizations/org-1/users/user-1/usage",
+      headers: { authorization: "Bearer ops-token" },
+      body: { targetUsedRatio: 0, reason: "reset" }
+    },
+    viewerCredit,
+    baseDeps({
+      orgStore: usageOrgStore,
+      userStore: usageUserStore as never,
+      usageTracker: creditTracker as never,
+      operatorStore: {
+        resolveSession: async () => viewer
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(viewerCredit.statusCode, 403);
+
+  const mismatchCredit = mockResponse();
+  await handleOperatorApiRequest(
+    {
+      method: "POST",
+      pathname: "/v1/operator/organizations/org-1/users/missing/usage",
+      headers: { authorization: "Bearer ops-token" },
+      body: { targetUsedRatio: 0, reason: "reset" }
+    },
+    mismatchCredit,
+    baseDeps({
+      orgStore: usageOrgStore,
+      userStore: usageUserStore as never,
+      usageTracker: creditTracker as never,
+      operatorStore: {
+        resolveSession: async () => supportOp
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(mismatchCredit.statusCode, 404);
+
+  const lookupOk = mockResponse();
+  await handleOperatorApiRequest(
+    {
+      method: "GET",
+      pathname: "/v1/operator/users/lookup",
+      query: new URLSearchParams({ email: "jonathanaraney@gmail.com" }),
+      headers: { authorization: "Bearer ops-token" },
+      body: {}
+    },
+    lookupOk,
+    baseDeps({
+      orgStore: {
+        getOrganization: async () => ({
+          id: "org-jon",
+          name: "Raney Apps",
+          plan: "pro",
+          repoAccessMode: "all_indexed",
+          createdAt: new Date()
+        })
+      } as unknown as OrgStore,
+      userStore: {
+        findActiveUserByEmail: async (email: string) =>
+          email.toLowerCase() === "jonathanaraney@gmail.com"
+            ? {
+                id: "user-jon",
+                orgId: "org-jon",
+                email: "jonathanaraney@gmail.com",
+                role: "admin",
+                createdAt: new Date()
+              }
+            : undefined
+      } as never,
+      operatorStore: {
+        resolveSession: async () => viewer
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(lookupOk.statusCode, 200);
+  const lookupBody = JSON.parse(lookupOk.body ?? "{}") as {
+    organization?: { id?: string };
+    user?: { id?: string; email?: string };
+  };
+  assert.equal(lookupBody.organization?.id, "org-jon");
+  assert.equal(lookupBody.user?.id, "user-jon");
+  assert.equal(lookupBody.user?.email, "jonathanaraney@gmail.com");
+
+  const lookupMissing = mockResponse();
+  await handleOperatorApiRequest(
+    {
+      method: "GET",
+      pathname: "/v1/operator/users/lookup",
+      query: new URLSearchParams({ email: "nobody@example.com" }),
+      headers: { authorization: "Bearer ops-token" },
+      body: {}
+    },
+    lookupMissing,
+    baseDeps({
+      orgStore: usageOrgStore,
+      userStore: {
+        findActiveUserByEmail: async () => undefined
+      } as never,
+      operatorStore: {
+        resolveSession: async () => viewer
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(lookupMissing.statusCode, 404);
+
   // Suspended org returns org_suspended via auth middleware.
   const suspendedStore = {
     resolveAuth: async () => ({
