@@ -565,6 +565,12 @@
     backdrop-filter: blur(0.5px);
   }
 
+  /* Confirm overlays sit on dense pages (Plan & Usage). Dim + blur so the dialog is the only readable surface. */
+  .coop-prompt-modal-backdrop--dim {
+    background: color-mix(in srgb, var(--vscode-editor-background) 52%, #000 48%);
+    backdrop-filter: blur(6px);
+  }
+
   .coop-prompt-modal-stack {
     @apply fixed inset-0 z-[60] flex items-center justify-center p-4;
     background: color-mix(in srgb, var(--vscode-editor-background) 50%, transparent);
@@ -856,6 +862,32 @@
   .coop-prompt-modal-footer--inset {
     @apply shrink-0 gap-2 border-t px-4 pb-4 pt-3;
     border-color: var(--coop-border);
+  }
+
+  .coop-prompt-modal.coop-prompt-modal--confirm {
+    max-width: 380px;
+    box-shadow:
+      0 0 0 1px var(--coop-border),
+      0 20px 56px color-mix(in srgb, #000 42%, transparent);
+  }
+
+  .coop-prompt-modal--confirm > .coop-prompt-modal-header {
+    padding: 20px 20px 0;
+  }
+
+  .coop-prompt-modal--confirm .coop-prompt-modal-body {
+    padding: 12px 20px 18px;
+  }
+
+  .coop-prompt-modal--confirm .coop-prompt-modal-muted {
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .coop-prompt-modal--confirm .coop-prompt-modal-footer--inset {
+    justify-content: flex-end;
+    padding: 14px 20px 16px;
+    gap: 8px;
   }
 
   .coop-panel-back-btn,

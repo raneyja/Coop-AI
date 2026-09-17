@@ -503,6 +503,19 @@ function PlanUsageDetail({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [converting, setConverting] = useState(false);
 
+  useEffect(() => {
+    if (!confirmOpen) {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !converting) {
+        setConfirmOpen(false);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [confirmOpen, converting]);
+
   if (!preferencesSignedIn(prefs)) {
     return (
       <SettingsSection>
@@ -644,18 +657,34 @@ function PlanUsageDetail({
       </div>
 
       {confirmOpen && convertCopy && upgradeCta.kind === "admin-convert" ? (
-        <div className="coop-prompt-modal-backdrop" role="presentation">
+        <div
+          className="coop-prompt-modal-backdrop coop-prompt-modal-backdrop--dim"
+          role="presentation"
+          onClick={() => {
+            if (!converting) {
+              setConfirmOpen(false);
+            }
+          }}
+        >
           <div
-            className="coop-prompt-modal"
+            className="coop-prompt-modal coop-prompt-modal--confirm"
             role="dialog"
             aria-modal="true"
             aria-labelledby="coop-seat-convert-title"
+            aria-describedby="coop-seat-convert-body"
+            onClick={(event) => event.stopPropagation()}
           >
-            <p id="coop-seat-convert-title" className="coop-prompt-modal-title">
-              {convertCopy.title}
-            </p>
-            <p className="coop-prompt-modal-muted mt-2">{convertCopy.body}</p>
-            <div className="coop-prompt-modal-footer">
+            <div className="coop-prompt-modal-header">
+              <p id="coop-seat-convert-title" className="coop-prompt-modal-title">
+                {convertCopy.title}
+              </p>
+            </div>
+            <div className="coop-prompt-modal-body">
+              <p id="coop-seat-convert-body" className="coop-prompt-modal-muted">
+                {convertCopy.body}
+              </p>
+            </div>
+            <div className="coop-prompt-modal-footer coop-prompt-modal-footer--inset">
               <button
                 type="button"
                 className="coop-settings-action-btn"
@@ -666,7 +695,7 @@ function PlanUsageDetail({
               </button>
               <button
                 type="button"
-                className="coop-settings-action-btn"
+                className="coop-settings-action-btn coop-settings-action-btn--primary"
                 disabled={converting}
                 onClick={() => {
                   setConverting(true);
