@@ -30,6 +30,10 @@ test("caller / import phrasings", () => {
   assert.equal(isFileCallerQuery("references to this file"), true);
   assert.equal(isFileCallerQuery("what other files rely on it"), true);
   assert.equal(
+    isFileCallerQuery("Where is auth middleware enforced and what calls it?"),
+    true
+  );
+  assert.equal(
     isFileCallerQuery(
       "Give me a tl;dr of this file? What does it do, what other files rely on it, and who created it / when?"
     ),

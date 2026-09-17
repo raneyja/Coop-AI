@@ -139,23 +139,15 @@ export function plannerAllowsAgentRepoLoop(
 }
 
 /**
- * Integrations the agent may call. Named-tool turns without a locate job stay
- * on plan.tools — do not pass every connected vendor.
+ * Integrations the agent may call. Never the full connected list.
+ * Named-product and implied-job turns stay on plan.tools (I3 jira+slack,
+ * I30 docs, Notion-only). Code-only locate has empty plan.tools — allow none.
  */
 export function integrationsForAgentLoop(options: {
   connected: IntegrationChatProvider[];
   plan?: ChatIntentPlan;
 }): IntegrationChatProvider[] {
-  if (options.plan?.mode === "tools-only") {
-    const hasLocate =
-      locateJobTerms(options.plan.jobs).length > 0 ||
-      options.plan.codeIntent?.action === "locate" ||
-      options.plan.codeIntent?.action === "change";
-    if (!hasLocate) {
-      return options.plan.tools;
-    }
-  }
-  return options.connected;
+  return options.plan?.tools ?? [];
 }
 
 /**

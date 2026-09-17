@@ -10,6 +10,7 @@ import {
   integrationsForAgentLoop
 } from "./agentRouting";
 import { emptyChatIntentPlan, type ChatIntentPlan } from "./intentPlanner/types";
+import { planChatIntentFromRules } from "./intentPlanner/planChatIntent";
 import { DOGFOOD_HUNT_QUESTION } from "../api/agent/dogfoodContract";
 
 let passed = 0;
@@ -52,6 +53,27 @@ test("shouldRunAgentToolLoop is false for local explain even on a hunt-shaped le
     }),
     false
   );
+});
+
+test("Explain requireAuth in this file + activeFile keeps the loop off", () => {
+  const query =
+    "Explain requireAuth in this file. When does it let an unauthenticated request through?";
+  const plan = planChatIntentFromRules({
+    message: query,
+    activeFile: "src/server/authMiddleware.ts",
+    connectedTools: ["jira", "slack", "confluence"]
+  });
+  assert.equal(plan.mode, "plain");
+  assert.deepEqual(plan.tools, []);
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query,
+      hasQuickAction: false,
+      intentPlan: plan
+    }),
+    false
+  );
+  assert.equal(plannerAllowsAgentRepoLoop(plan, query), false);
 });
 
 test("shouldRunAgentToolLoop is true for hunt + Slack compound ask without jobs (fail-open)", () => {
@@ -179,6 +201,94 @@ test("named Notion docs ask starts the vendor loop and does not unlock Jira", ()
       plan
     }),
     ["notion"]
+  );
+});
+
+test("code-only locate does not unlock connected vendors", () => {
+  const query = "Where is auth middleware enforced and what calls it?";
+  const connected: Array<"jira" | "slack" | "confluence" | "notion"> = [
+    "jira",
+    "slack",
+    "confluence",
+    "notion"
+  ];
+  assert.deepEqual(
+    integrationsForAgentLoop({
+      connected,
+      plan: emptyChatIntentPlan(query)
+    }),
+    []
+  );
+  const planned = planChatIntentFromRules({
+    message: query,
+    activeFile: "src/server/authMiddleware.ts",
+    connectedTools: connected
+  });
+  assert.notEqual(planned.mode, "plain");
+  assert.deepEqual(planned.tools, []);
+  assert.deepEqual(integrationsForAgentLoop({ connected, plan: planned }), []);
+});
+
+test("I3 locate+decision stays on planned jira+slack, not Confluence", () => {
+  const query =
+    "Where is requireAuth defined, and what did we already decide about peeling auth into coop-backend?";
+  const connected = ["jira", "slack", "confluence"] as const;
+  const plan: ChatIntentPlan = {
+    mode: "tools-only",
+    tools: ["jira", "slack"],
+    jobs: [
+      { capability: "locate", terms: ["requireAuth"] },
+      { capability: "decision", terms: ["peeling auth", "coop-backend"] }
+    ],
+    confidence: "high",
+    focus: query,
+    execution: "none",
+    codeIntent: { action: "locate", confidence: "high", reason: "asks where something is and names code" }
+  };
+  assert.deepEqual(
+    integrationsForAgentLoop({
+      connected: [...connected],
+      plan
+    }),
+    ["jira", "slack"]
+  );
+  const fromRules = planChatIntentFromRules({
+    message: query,
+    connectedTools: [...connected]
+  });
+  assert.equal(fromRules.mode, "tools-only");
+  assert.ok(fromRules.tools.includes("jira") && fromRules.tools.includes("slack"));
+  assert.equal(fromRules.tools.includes("confluence"), false);
+  assert.deepEqual(
+    integrationsForAgentLoop({ connected: [...connected], plan: fromRules }).sort(),
+    fromRules.tools.slice().sort()
+  );
+  assert.equal(
+    integrationsForAgentLoop({ connected: [...connected], plan: fromRules }).includes("confluence"),
+    false
+  );
+});
+
+test("I30 locate+docs stays on planned Confluence", () => {
+  const query = "Where is requireAuth defined, and what do the docs say about extracting auth?";
+  const plan: ChatIntentPlan = {
+    mode: "tools-only",
+    tools: ["confluence"],
+    jobs: [
+      { capability: "locate", terms: ["requireAuth"] },
+      { capability: "docs", terms: ["extracting auth"] }
+    ],
+    confidence: "high",
+    focus: query,
+    execution: "none",
+    codeIntent: { action: "locate", confidence: "high", reason: "asks where something is and names code" }
+  };
+  assert.deepEqual(
+    integrationsForAgentLoop({
+      connected: ["jira", "slack", "confluence", "notion"],
+      plan
+    }),
+    ["confluence"]
   );
 });
 

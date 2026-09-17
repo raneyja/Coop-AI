@@ -1485,6 +1485,738 @@ async function run(): Promise<void> {
     assert.match(result.answer ?? "", /couldn't find that in this repo/i);
   });
 
+  await test("unread open file does not instruct writer to claim an index miss", async () => {
+    const leftovers: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({ source: "zoekt", stale: false, hits: [], symbols: [] })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async () => undefined
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is requireAuth defined?",
+        repoId: "github:raneyja/Coop-AI",
+        action: "locate",
+        openFile: "src/config/responseDeadline.ts",
+        maxSteps: 4
+      },
+      {
+        allowedIntegrations: ["jira"],
+        searchIntegration: async () => ({
+          issues: [{ key: "COOP-55", summary: "Unrelated ticket" }]
+        }),
+        planTurn: async ({ round }) => {
+          if (round === 0) {
+            return JSON.stringify({ tool: "search_jira", args: { query: "requireAuth" } });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async ({ conversation }) => {
+          leftovers.push(JSON.stringify(conversation));
+          return "COOP-55 is unrelated.";
+        }
+      }
+    );
+    const blob = leftovers.join("\n");
+    assert.doesNotMatch(blob, /Summarize Slack\/Jira/i);
+    assert.doesNotMatch(blob, /index didn.t return a usable definition/i);
+    assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
+  });
+
+  await test("locate last-chance reads authMiddleware.ts instead of INDEX_HUNT_MISS", async () => {
+    const filePath = "src/server/authMiddleware.ts";
+    const leftover = "src/config/responseDeadline.ts";
+    const body = [
+      "export function requireAuth(req, res, next) {",
+      "  if (!req.user) {",
+      "    return res.status(401).end();",
+      "  }",
+      "  return next();",
+      "}"
+    ].join("\n");
+    const reads: string[] = [];
+    let streamed = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: filePath,
+              lineNumber: 1,
+              content: "export function requireAuth(req, res, next)",
+              score: 0.95
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        if (rel === filePath) {
+          return { path: rel, content: body };
+        }
+        if (rel === leftover) {
+          return { path: rel, content: "export const MAX_USER_FACING_RESPONSE_MS = 15_000;" };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is auth middleware enforced and what calls it?",
+        repoId: "github:raneyja/Coop-AI",
+        action: "locate",
+        openFile: leftover,
+        maxSteps: 4
+      },
+      {
+        planTurn: async ({ round }) => {
+          if (round === 0) {
+            return JSON.stringify({ tool: "search_code", args: { query: "auth" } });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async ({ conversation }) => {
+          streamed += 1;
+          assert.match(JSON.stringify(conversation), /authMiddleware\.ts/);
+          assert.doesNotMatch(JSON.stringify(conversation), /responseDeadline\.ts is the definition/i);
+          return "Auth middleware is enforced in src/server/authMiddleware.ts.";
+        }
+      }
+    );
+    assert.equal(streamed, 1);
+    assert.equal(reads.includes(leftover), false, `must not seed leftover chip, got ${reads.join(", ")}`);
+    assert.equal(reads.includes(filePath), true);
+    assert.match(result.answer ?? "", /authMiddleware\.ts/);
+    assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
+  });
+
+  await test("I32 matching chip seeds authMiddleware.ts and rejects vendor tools", async () => {
+    const filePath = "src/server/authMiddleware.ts";
+    const body = [
+      "export function requireAuth(req, res, next) {",
+      "  if (!req.user) {",
+      "    return res.status(401).end();",
+      "  }",
+      "  return next();",
+      "}"
+    ].join("\n");
+    assert.doesNotMatch(body, /middleware/i);
+    const reads: string[] = [];
+    const executed: string[] = [];
+    let streamed = 0;
+    let planCalls = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: filePath,
+              lineNumber: 1,
+              content: "export function requireAuth(req, res, next)",
+              score: 0.95
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        return rel === filePath ? { path: rel, content: body } : undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is auth middleware enforced and what calls it?",
+        repoId: "github:raneyja/Coop-AI",
+        action: "locate",
+        openFile: filePath,
+        maxSteps: 4
+      },
+      {
+        allowedIntegrations: [],
+        fillIntegrations: [],
+        searchIntegration: async () => {
+          executed.push("search_jira");
+          return { issues: [{ key: "COOP-55", summary: "Should not run" }] };
+        },
+        planTurn: async ({ round }) => {
+          planCalls += 1;
+          if (round === 0) {
+            return JSON.stringify({ tool: "search_jira", args: { query: "auth middleware" } });
+          }
+          if (round === 1) {
+            return JSON.stringify({ tool: "search_code", args: { query: "requireAuth" } });
+          }
+          return JSON.stringify({ done: true });
+        },
+        onStep: (step) => {
+          executed.push(step.tool);
+        },
+        streamAnswer: async ({ conversation }) => {
+          streamed += 1;
+          assert.match(JSON.stringify(conversation), /authMiddleware\.ts/);
+          return "Auth middleware is enforced in src/server/authMiddleware.ts (requireAuth).";
+        }
+      }
+    );
+    assert.equal(planCalls >= 1, true, "owned loop must continue after the chip seed");
+    assert.equal(streamed, 1);
+    assert.equal(reads.includes(filePath), true);
+    assert.equal(executed.includes("search_jira"), false);
+    assert.equal(executed.includes("search_confluence"), false);
+    assert.match(result.answer ?? "", /authMiddleware\.ts/);
+    assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
+  });
+
+  await test("I32 matching chip reads via codehost when the index is empty", async () => {
+    const filePath = "src/server/authMiddleware.ts";
+    const body = [
+      "export function requireAuth(req, res, next) {",
+      "  if (!req.user) {",
+      "    return res.status(401).end();",
+      "  }",
+      "  return next();",
+      "}"
+    ].join("\n");
+    const reads: string[] = [];
+    let streamed = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({ source: "zoekt", stale: false, hits: [], symbols: [] })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        return rel === filePath ? { path: rel, content: body } : undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is auth middleware enforced and what calls it?",
+        repoId: "github:raneyja/Coop-AI",
+        action: "locate",
+        openFile: filePath,
+        maxSteps: 4
+      },
+      {
+        allowedIntegrations: [],
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async ({ conversation }) => {
+          streamed += 1;
+          assert.match(JSON.stringify(conversation), /authMiddleware\.ts/);
+          assert.match(JSON.stringify(conversation), /requireAuth/);
+          return "requireAuth lives in src/server/authMiddleware.ts.";
+        }
+      }
+    );
+    assert.equal(streamed, 1);
+    assert.equal(reads.includes(filePath), true);
+    assert.match(result.answer ?? "", /authMiddleware\.ts/);
+    assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
+  });
+
+  await test("I32 leftover wrong chip plus empty index still posts INDEX_HUNT_MISS", async () => {
+    let streamed = 0;
+    const leftover = "src/config/responseDeadline.ts";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({ source: "zoekt", stale: false, hits: [], symbols: [] })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) =>
+        rel === leftover
+          ? { path: rel, content: "export const MAX_USER_FACING_RESPONSE_MS = 15_000;" }
+          : undefined
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is auth middleware enforced and what calls it?",
+        repoId: "github:raneyja/Coop-AI",
+        action: "locate",
+        openFile: leftover,
+        maxSteps: 4
+      },
+      {
+        planTurn: async () => JSON.stringify({ tool: "search_code", args: { query: "auth" } }),
+        streamAnswer: async () => {
+          streamed += 1;
+          return "should not stream";
+        }
+      }
+    );
+    assert.equal(streamed, 0);
+    assert.match(result.answer ?? "", /couldn't find that in this repo/i);
+  });
+
+  await test("I32 last-chance still reads authMiddleware when Jira is wrongly allowlisted", async () => {
+    const filePath = "src/server/authMiddleware.ts";
+    const body = [
+      "export function requireAuth(req, res, next) {",
+      "  if (!req.user) {",
+      "    return res.status(401).end();",
+      "  }",
+      "  return next();",
+      "}"
+    ].join("\n");
+    let streamed = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: filePath,
+              lineNumber: 1,
+              content: "export function requireAuth(req, res, next)",
+              score: 0.95
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) =>
+        rel === filePath ? { path: rel, content: body } : undefined
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is auth middleware enforced and what calls it?",
+        repoId: "github:raneyja/Coop-AI",
+        action: "locate",
+        openFile: filePath,
+        maxSteps: 4
+      },
+      {
+        allowedIntegrations: ["jira"],
+        fillIntegrations: [],
+        searchIntegration: async () => ({
+          issues: [{ key: "COOP-55", summary: "Unrelated ticket" }]
+        }),
+        planTurn: async ({ round }) => {
+          if (round === 0) {
+            return JSON.stringify({ tool: "search_jira", args: { query: "auth middleware" } });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async ({ conversation }) => {
+          streamed += 1;
+          const blob = JSON.stringify(conversation);
+          assert.match(blob, /authMiddleware\.ts/);
+          assert.match(blob, /requireAuth/);
+          return "Auth middleware is enforced in src/server/authMiddleware.ts.";
+        }
+      }
+    );
+    assert.equal(streamed, 1);
+    assert.match(result.answer ?? "", /authMiddleware\.ts/);
+    assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
+  });
+
+  await test("I32 leftover absolute chip still reads via basename findFiles", async () => {
+    const filePath = "src/server/authMiddleware.ts";
+    const body = [
+      "export function requireAuth(req, res, next) {",
+      "  if (!req.user) {",
+      "    return res.status(401).end();",
+      "  }",
+      "  return next();",
+      "}"
+    ].join("\n");
+    const reads: string[] = [];
+    let streamed = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({ source: "zoekt", stale: false, hits: [], symbols: [] })
+      }),
+      resolveAbsolutePath: () => undefined,
+      findFiles: async ({ query: fileQuery }) =>
+        fileQuery.toLowerCase() === "authmiddleware.ts" ? [filePath] : [],
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        return rel === filePath ? { path: rel, content: body } : undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is auth middleware enforced and what calls it?",
+        repoId: "github:raneyja/Coop-AI",
+        action: "locate",
+        openFile: "/Users/jonraney/tmp/authMiddleware.ts",
+        maxSteps: 4
+      },
+      {
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async ({ conversation }) => {
+          streamed += 1;
+          assert.match(JSON.stringify(conversation), /authMiddleware\.ts/);
+          return "Auth middleware is enforced in src/server/authMiddleware.ts.";
+        }
+      }
+    );
+    assert.equal(streamed, 1);
+    assert.equal(reads.includes(filePath), true, `reads=${reads.join(", ")}`);
+    assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
+  });
+
+  await test("I32 last-chance keeps searching after non-role preferredHits", async () => {
+    const filePath = "src/server/authMiddleware.ts";
+    const body = [
+      "export function requireAuth(req, res, next) {",
+      "  if (!req.user) {",
+      "    return res.status(401).end();",
+      "  }",
+      "  return next();",
+      "}"
+    ].join("\n");
+    const leftover = "src/config/responseDeadline.ts";
+    let streamed = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async (_repo, query) => {
+          if (/middleware/i.test(query) || /authMiddleware/i.test(query)) {
+            return {
+              source: "zoekt",
+              stale: false,
+              hits: [
+                {
+                  fileName: filePath,
+                  lineNumber: 132,
+                  content: "export function requireAuth(req, res, next)",
+                  score: 0.95
+                }
+              ],
+              symbols: []
+            };
+          }
+          return {
+            source: "zoekt",
+            stale: false,
+            hits: [
+              {
+                fileName: "src/server/auth.ts",
+                lineNumber: 1,
+                content: "export function extractBearerToken(header) { return header; }",
+                score: 0.99
+              }
+            ],
+            symbols: []
+          };
+        }
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        if (rel === filePath) {
+          return { path: rel, content: body };
+        }
+        if (rel === leftover) {
+          return { path: rel, content: "export const MAX_USER_FACING_RESPONSE_MS = 15_000;" };
+        }
+        if (rel === "src/server/auth.ts") {
+          return {
+            path: rel,
+            content: "export function extractBearerToken(header) { return header; }"
+          };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is auth middleware enforced and what calls it?",
+        repoId: "github:raneyja/Coop-AI",
+        action: "locate",
+        openFile: leftover,
+        maxSteps: 6
+      },
+      {
+        planTurn: async ({ round }) => {
+          if (round === 0) {
+            return JSON.stringify({ tool: "search_code", args: { query: "auth" } });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async ({ conversation }) => {
+          streamed += 1;
+          assert.match(JSON.stringify(conversation), /authMiddleware\.ts/);
+          return "Auth middleware is enforced in src/server/authMiddleware.ts.";
+        }
+      }
+    );
+    assert.equal(streamed, 1);
+    assert.match(result.answer ?? "", /authMiddleware\.ts/);
+    assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
+  });
+
+  await test("I32 matching chip plus auth.ts first search still grounds authMiddleware.ts", async () => {
+    const filePath = "src/server/authMiddleware.ts";
+    const body = [
+      "export function requireAuth(req, res, next) {",
+      "  if (!req.user) {",
+      "    return res.status(401).end();",
+      "  }",
+      "  return next();",
+      "}"
+    ].join("\n");
+    assert.doesNotMatch(body, /middleware/i);
+    const reads: string[] = [];
+    const searches: string[] = [];
+    let streamed = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async (_repo, query) => {
+          searches.push(query);
+          if (/middleware/i.test(query) || /authMiddleware/i.test(query)) {
+            return {
+              source: "zoekt",
+              stale: false,
+              hits: [
+                {
+                  fileName: filePath,
+                  lineNumber: 132,
+                  content: "export function requireAuth(req, res, next)",
+                  score: 0.95
+                }
+              ],
+              symbols: []
+            };
+          }
+          return {
+            source: "zoekt",
+            stale: false,
+            hits: [
+              {
+                fileName: "src/server/auth.ts",
+                lineNumber: 1,
+                content: "export function extractBearerToken(header) { return header; }",
+                score: 0.99
+              }
+            ],
+            symbols: []
+          };
+        }
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        if (rel === filePath) {
+          return { path: rel, content: body };
+        }
+        if (rel === "src/server/auth.ts") {
+          return {
+            path: rel,
+            content: "export function extractBearerToken(header) { return header; }"
+          };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is auth middleware enforced and what calls it?",
+        repoId: "github:raneyja/Coop-AI",
+        action: "locate",
+        openFile: filePath,
+        maxSteps: 4
+      },
+      {
+        allowedIntegrations: [],
+        planTurn: async ({ round }) => {
+          if (round === 0) {
+            return JSON.stringify({ tool: "search_code", args: { query: "auth" } });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async ({ conversation }) => {
+          streamed += 1;
+          assert.match(JSON.stringify(conversation), /authMiddleware\.ts/);
+          assert.match(JSON.stringify(conversation), /requireAuth/);
+          return "Auth middleware is enforced in src/server/authMiddleware.ts.";
+        }
+      }
+    );
+    assert.equal(streamed, 1);
+    assert.equal(reads.includes(filePath), true);
+    assert.equal(
+      searches.some((query) => /middleware/i.test(query) || /authMiddleware/i.test(query)),
+      true,
+      `last-chance must keep searching after auth.ts; searches=${searches.join(" | ")}`
+    );
+    assert.match(result.answer ?? "", /authMiddleware\.ts/);
+    assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
+  });
+
+  await test("I32 matching chip still hunts after an immediate done", async () => {
+    const filePath = "src/server/authMiddleware.ts";
+    const callerPath = "src/server/adminApi.ts";
+    const body = [
+      "export function requireAuth(req, res, next) {",
+      "  if (!req.user) {",
+      "    return res.status(401).end();",
+      "  }",
+      "  return next();",
+      "}"
+    ].join("\n");
+    const caller = [
+      'import { requireAuth } from "./authMiddleware";',
+      "export function handleAdmin(auth) {",
+      "  if (!requireAuth(auth, true)) { return; }",
+      "}"
+    ].join("\n");
+    assert.doesNotMatch(body, /middleware/i);
+    const reads: string[] = [];
+    let streamed = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: filePath,
+              lineNumber: 1,
+              content: "export function requireAuth(req, res, next)",
+              score: 0.95
+            },
+            {
+              fileName: callerPath,
+              lineNumber: 1,
+              content: 'import { requireAuth } from "./authMiddleware";',
+              score: 0.8
+            }
+          ],
+          symbols: []
+        }),
+        dependents: async (_repo, file) =>
+          file.includes("authMiddleware")
+            ? { file, dependents: [callerPath], source: "scip" }
+            : { file, dependents: [], source: "scip" }
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        if (rel === filePath) {
+          return { path: rel, content: body };
+        }
+        if (rel === callerPath) {
+          return { path: rel, content: caller };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is auth middleware enforced and what calls it?",
+        repoId: "github:raneyja/Coop-AI",
+        action: "locate",
+        openFile: filePath,
+        maxSteps: 4
+      },
+      {
+        allowedIntegrations: [],
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async ({ conversation }) => {
+          streamed += 1;
+          const blob = JSON.stringify(conversation);
+          assert.match(blob, /authMiddleware\.ts/);
+          assert.match(blob, /adminApi\.ts/);
+          return "requireAuth lives in src/server/authMiddleware.ts and is called from src/server/adminApi.ts.";
+        }
+      }
+    );
+    assert.equal(streamed, 1);
+    assert.equal(reads.includes(filePath), true, "chip stays — it is evidence");
+    assert.equal(reads.includes(callerPath), true, "keep looking: read a caller too");
+    assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
+  });
+
+  await test("I32 keeps the chip and still reads a search caller when the graph is empty", async () => {
+    const filePath = "src/server/authMiddleware.ts";
+    const callerPath = "src/api/chatApi.ts";
+    const body = [
+      "export function requireAuth(req, res, next) {",
+      "  if (!req.user) {",
+      "    return res.status(401).end();",
+      "  }",
+      "  return next();",
+      "}"
+    ].join("\n");
+    const caller = [
+      'import { requireAuth } from "../server/authMiddleware";',
+      "export function chatHandler(auth) {",
+      "  if (!requireAuth(auth, true)) { return; }",
+      "}"
+    ].join("\n");
+    assert.doesNotMatch(body, /middleware/i);
+    const reads: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: filePath,
+              lineNumber: 1,
+              content: "export function requireAuth(req, res, next)",
+              score: 0.99
+            },
+            {
+              fileName: callerPath,
+              lineNumber: 1,
+              content: 'import { requireAuth } from "../server/authMiddleware";',
+              score: 0.7
+            }
+          ],
+          symbols: []
+        }),
+        dependents: async () => ({ file: filePath, dependents: [], source: "scip" })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        if (rel === filePath) {
+          return { path: rel, content: body };
+        }
+        if (rel === callerPath) {
+          return { path: rel, content: caller };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is auth middleware enforced and what calls it?",
+        repoId: "github:raneyja/Coop-AI",
+        action: "locate",
+        openFile: filePath,
+        maxSteps: 4
+      },
+      {
+        allowedIntegrations: [],
+        planTurn: async () => JSON.stringify({ done: true }),
+        streamAnswer: async ({ conversation }) => {
+          const blob = JSON.stringify(conversation);
+          assert.match(blob, /authMiddleware\.ts/);
+          assert.match(blob, /chatApi\.ts/);
+          return "Enforced in authMiddleware.ts; chatApi.ts calls requireAuth.";
+        }
+      }
+    );
+    assert.equal(reads.includes(filePath), true);
+    assert.equal(reads.includes(callerPath), true);
+    assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
+  });
+
   await test("T2 hunt attaches parent ValidationError, not converters", async () => {
     const writerPath = "apps/api/plane/app/serializers/issue.py";
     const writer = [

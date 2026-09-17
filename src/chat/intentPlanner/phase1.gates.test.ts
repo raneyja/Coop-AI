@@ -72,16 +72,25 @@ test("Phase 1 Chat Intent Planner gates", () => {
         "Explain this function",
         "summarize this file",
         "walk me through this function",
-        "What does this file do?"
+        "What does this file do?",
+        "Explain requireAuth in this file. When does it let an unauthenticated request through?"
       ]) {
         const plan = planChatIntentFromRules({
           message,
-          activeFile: "src/example.ts",
+          activeFile: "src/server/authMiddleware.ts",
           connectedTools: ["jira", "slack", "confluence"]
         });
         assert.deepEqual(plan.tools, [], message);
         assert.equal(plan.mode, "plain", message);
       }
+      const compound = planChatIntentFromRules({
+        message:
+          "Where is requireAuth defined, and what did we already decide about peeling auth into coop-backend?",
+        activeFile: "src/server/authMiddleware.ts",
+        connectedTools: ["jira", "slack", "confluence"]
+      });
+      assert.notEqual(compound.mode, "plain");
+      assert.equal(compound.tools.length > 0, true);
     }),
     evaluateGate(PHASE1_GATE_CRITERIA[2], () => {
       const plan = planChatIntentFromRules({

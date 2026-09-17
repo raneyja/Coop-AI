@@ -27,7 +27,7 @@ test("Jira title-only hits are labeled body not attached", () => {
   assert.doesNotMatch(text ?? "", /title and status are not a decision/);
 });
 
-test("Jira description is the Body line the writer must use", () => {
+test("Jira Search snippet without Open is not Talk-track Body", () => {
   const text = formatOpenedIntegrationEvidence({
     search_jira: {
       issues: [
@@ -35,6 +35,25 @@ test("Jira description is the Body line the writer must use", () => {
           key: "COOP-101",
           summary: "Extract auth",
           status: "In Progress",
+          description: "Chose GitHub App over PAT for requireAuth."
+        }
+      ]
+    },
+    search_slack: { messages: [] }
+  });
+  assert.doesNotMatch(text ?? "", /Body: Chose GitHub App/);
+  assert.match(text ?? "", /Slack: no matching messages/);
+});
+
+test("Opened Jira description is the Body line the writer must use", () => {
+  const text = formatOpenedIntegrationEvidence({
+    search_jira: {
+      issues: [
+        {
+          key: "COOP-101",
+          summary: "Extract auth",
+          status: "In Progress",
+          opened: true,
           description: "Chose GitHub App over PAT for requireAuth."
         }
       ]
@@ -52,7 +71,7 @@ test("empty context yields nothing", () => {
   assert.equal(formatOpenedIntegrationEvidence({}), undefined);
 });
 
-test("Notion excerpt is the Body line the writer must use", () => {
+test("Notion Search snippet without Open is not Talk-track Body", () => {
   const text = formatOpenedIntegrationEvidence({
     search_notion: {
       pages: [
@@ -64,12 +83,28 @@ test("Notion excerpt is the Body line the writer must use", () => {
       ]
     }
   });
+  assert.equal(text, undefined);
+});
+
+test("Opened Notion excerpt is the Body line the writer must use", () => {
+  const text = formatOpenedIntegrationEvidence({
+    search_notion: {
+      pages: [
+        {
+          id: "n1",
+          title: "ADR: Auth",
+          excerpt: "Chose GitHub App over PAT for requireAuth.",
+          opened: true
+        }
+      ]
+    }
+  });
   assert.match(text ?? "", /Notion/);
   assert.match(text ?? "", /Body: Chose GitHub App/);
   assert.doesNotMatch(text ?? "", /Body: not attached/);
 });
 
-test("Google Docs excerpt is the Body line the writer must use", () => {
+test("Google Docs Search snippet without Open is not Talk-track Body", () => {
   const text = formatOpenedIntegrationEvidence({
     search_google_docs: {
       documents: [
@@ -77,6 +112,22 @@ test("Google Docs excerpt is the Body line the writer must use", () => {
           id: "g1",
           title: "ADR: Auth",
           excerpt: "Chose GitHub App over PAT for requireAuth."
+        }
+      ]
+    }
+  });
+  assert.equal(text, undefined);
+});
+
+test("Opened Google Docs excerpt is the Body line the writer must use", () => {
+  const text = formatOpenedIntegrationEvidence({
+    search_google_docs: {
+      documents: [
+        {
+          id: "g1",
+          title: "ADR: Auth",
+          excerpt: "Chose GitHub App over PAT for requireAuth.",
+          opened: true
         }
       ]
     }
@@ -128,7 +179,22 @@ test("Slack snippet-only hits are not treated as Opened", () => {
   assert.equal(text, undefined);
 });
 
-test("I3 Slack empty plus ADR title is still a documented decision", () => {
+test("Confluence Search snippet without Open is not Talk-track Body", () => {
+  const text = formatOpenedIntegrationEvidence({
+    search_confluence: {
+      pages: [
+        {
+          id: "1212417",
+          title: "ADR: Backend service extraction (COOP-101)",
+          excerpt: "Extract GitHub pagination and repo indexing into coop-backend."
+        }
+      ]
+    }
+  });
+  assert.doesNotMatch(text ?? "", /Body: Extract GitHub pagination/);
+});
+
+test("I3 Slack empty plus opened ADR is still a documented decision", () => {
   const text = formatOpenedIntegrationEvidence({
     search_slack: { messages: [] },
     search_confluence: {
@@ -136,7 +202,8 @@ test("I3 Slack empty plus ADR title is still a documented decision", () => {
         {
           id: "1212417",
           title: "ADR: Backend service extraction (COOP-101)",
-          excerpt: "Extract GitHub pagination and repo indexing into coop-backend."
+          excerpt: "Extract GitHub pagination and repo indexing into coop-backend.",
+          opened: true
         }
       ]
     }

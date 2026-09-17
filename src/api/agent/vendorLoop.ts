@@ -53,6 +53,17 @@ export type VendorToolState = {
   openAttempted: boolean;
 };
 
+const OPEN_QUERY_ID =
+  /^\s*open\s+([A-Z][A-Z0-9]+-\d+|\d{6,}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\s*[.!]?\s*$/i;
+
+function coerceOpenQueryId(query: unknown): string | undefined {
+  if (typeof query !== "string") {
+    return undefined;
+  }
+  const match = query.trim().match(OPEN_QUERY_ID);
+  return match?.[1];
+}
+
 export function parseOpenIds(args: Record<string, unknown>): string[] {
   const raw = args.ids ?? args.open ?? args.pageIds ?? args.issueKeys;
   const values: string[] = [];
@@ -68,6 +79,10 @@ export function parseOpenIds(args: Record<string, unknown>): string[] {
         values.push(part.trim());
       }
     }
+  }
+  const coerced = coerceOpenQueryId(args.query);
+  if (values.length === 0 && coerced) {
+    values.push(coerced);
   }
   const unique: string[] = [];
   const seen = new Set<string>();
@@ -119,6 +134,59 @@ export function integrationHitRecords(
   );
 }
 
+/** Open id for any vendor hit — key before id so Jira Opens COOP-101, not a numeric row id. */
+export function integrationHitId(hit: Record<string, unknown>): string {
+  for (const field of ["key", "id", "messageId", "ts"] as const) {
+    const raw = hit[field];
+    if (typeof raw === "string" && raw.trim()) {
+      return raw.trim();
+    }
+  }
+  return "";
+}
+
+function hitTitleBlob(hit: Record<string, unknown>): string {
+  return `${hit.title ?? ""} ${hit.summary ?? ""} ${hit.key ?? ""}`.toLowerCase();
+}
+
+function hitTitleMatchesAsk(hit: Record<string, unknown>, tokens: string[]): boolean {
+  if (tokens.length === 0) {
+    return true;
+  }
+  const title = hitTitleBlob(hit);
+  return tokens.some((token) => title.includes(token));
+}
+
+/**
+ * Choose Open ids by title vs the ask, not rank. Ceiling MAX_VENDOR_OPENS.
+ * Hit 4 may Open; ranks 1–3 may be skipped. Empty hits → no Open.
+ * Same picker for Slack, Teams, Jira, Confluence, Notion, and Google Docs.
+ */
+export function pickOpenIds(
+  payload: Record<string, unknown> | undefined,
+  query: string
+): string[] {
+  const tokens = askTopicTokens(query);
+  const chosen: string[] = [];
+  const seen = new Set<string>();
+  for (const hit of integrationHitRecords(payload)) {
+    if (!hitTitleMatchesAsk(hit, tokens)) {
+      continue;
+    }
+    const id = integrationHitId(hit);
+    if (!id) {
+      continue;
+    }
+    const key = id.toLowerCase();
+    if (seen.has(key) || chosen.length >= MAX_VENDOR_OPENS) {
+      continue;
+    }
+    seen.add(key);
+    chosen.push(id);
+  }
+  return chosen;
+}
+
 function hitBody(hit: Record<string, unknown>): string {
   for (const key of ["excerpt", "description", "text", "body"] as const) {
     const value = hit[key];
@@ -159,14 +227,12 @@ export function askTopicTokens(query: string): string[] {
 }
 
 export function titlesMatchAsk(payload: Record<string, unknown> | undefined, query: string): boolean {
-  const tokens = askTopicTokens(query);
-  if (tokens.length === 0) {
-    return integrationHitRecords(payload).length > 0;
+  const hits = integrationHitRecords(payload);
+  if (hits.length === 0) {
+    return false;
   }
-  return integrationHitRecords(payload).some((hit) => {
-    const title = `${hit.title ?? ""} ${hit.summary ?? ""} ${hit.key ?? ""}`.toLowerCase();
-    return tokens.some((token) => title.includes(token));
-  });
+  const tokens = askTopicTokens(query);
+  return hits.some((hit) => hitTitleMatchesAsk(hit, tokens));
 }
 
 export function vendorSearchNeedsRetry(options: {
@@ -208,7 +274,7 @@ export function vendorDoneBlockReason(options: {
       return `Search returned nothing useful. Retry ${tool} once with a nearby page title or topic — then stop if still empty. Do not Open off-topic hits.`;
     }
     const hits = integrationHitRecords(payload);
-    if (hits.length > 0 && !toolState.openAttempted && !integrationHitsHaveBodies(payload)) {
+    if (hits.length > 0 && !toolState.openAttempted) {
       return `Pick up to ${MAX_VENDOR_OPENS} ids from the full hit list and Open them: {"tool":"${tool}","args":{"ids":["…"]}}. Choose by title, not rank. Hit 4 may Open; ranks 1–3 may be skipped.`;
     }
   }
@@ -242,10 +308,7 @@ export function mergeIntegrationPayload(
     return { ...(previous ?? {}), ...next };
   }
   const byId = new Map<string, Record<string, unknown>>();
-  const idOf = (hit: Record<string, unknown>): string => {
-    const raw = hit.id ?? hit.key ?? hit.ts ?? hit.messageId;
-    return typeof raw === "string" ? raw.trim().toLowerCase() : "";
-  };
+  const idOf = (hit: Record<string, unknown>): string => integrationHitId(hit).toLowerCase();
   for (const hit of priorHits) {
     const id = idOf(hit);
     if (id) {

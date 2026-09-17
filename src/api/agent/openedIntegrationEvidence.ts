@@ -38,7 +38,7 @@ export function listOpenedIntegrationArtifacts(
   }
   const out: OpenedVendorArtifact[] = [];
   for (const issue of asRecords(context.search_jira?.issues)
-    .filter((issue) => issue.opened === true || Boolean(asText(issue.description)))
+    .filter((issue) => issue.opened === true)
     .slice(0, MAX_ITEMS)) {
     const body = clip(asText(issue.description));
     if (!body) {
@@ -81,9 +81,7 @@ function pushDocArtifacts(
   payload: Record<string, unknown> | undefined,
   listKey: "pages" | "documents"
 ): void {
-  const opened = asRecords(payload?.[listKey]).filter(
-    (page) => page.opened === true || Boolean(asText(page.excerpt))
-  );
+  const opened = asRecords(payload?.[listKey]).filter((page) => page.opened === true);
   for (const page of opened.slice(0, MAX_ITEMS)) {
     const body = clip(asText(page.excerpt));
     if (!body && page.opened !== true) {
@@ -125,7 +123,7 @@ function pushDiscussionArtifacts(
 
 function appendJira(lines: string[], payload: Record<string, unknown> | undefined): void {
   const issues = asRecords(payload?.issues)
-    .filter((issue) => issue.opened === true || Boolean(asText(issue.description)))
+    .filter((issue) => issue.opened === true)
     .slice(0, MAX_ITEMS);
   if (issues.length === 0) {
     return;
@@ -152,9 +150,7 @@ function appendDocPages(
   payload: Record<string, unknown> | undefined,
   listKey: "pages" | "documents"
 ): void {
-  const pages = asRecords(payload?.[listKey]).filter(
-    (page) => page.opened === true || Boolean(asText(page.excerpt))
-  );
+  const pages = asRecords(payload?.[listKey]).filter((page) => page.opened === true);
   if (pages.length === 0) {
     return;
   }

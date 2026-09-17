@@ -12,13 +12,14 @@ import {
 } from "./types";
 import { omitTeamsWhileComingSoon } from "../../integrations/teamsAvailability";
 import { isIncidentShapedQuery } from "../../context/incidentIntent";
-import { isOpenFileReviewAsk } from "../plainChatExplain";
+import { isOpenFileExplainAsk, isOpenFileReviewAsk } from "../plainChatExplain";
 import { classifyRepoCodeIntent } from "../repoCodeIntent";
 import { queryHasNamedSymbol } from "../../api/agent/searchQuery";
 import {
   decisionPhrasePresent,
   detectExplicitlyNamedTools,
   interpreterJobsClaimTurn,
+  locateJobTerms,
   mergeChatIntentTools,
   messageNamesJiraTicket,
   planChatJobs,
@@ -196,6 +197,25 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
       focus,
       execution: "none",
       reason: "local code explanation — no tools"
+    };
+  }
+
+  if (
+    isOpenFileExplainAsk(message) &&
+    Boolean(input.activeFile?.trim()) &&
+    named.length === 0 &&
+    !workflow &&
+    !decisionImplied &&
+    locateJobTerms(jobs).length === 0
+  ) {
+    return {
+      mode: "plain",
+      tools: [],
+      jobs: [],
+      confidence: "high",
+      focus,
+      execution: "none",
+      reason: "open-file explanation — no tools"
     };
   }
 

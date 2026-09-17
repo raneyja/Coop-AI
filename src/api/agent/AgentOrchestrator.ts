@@ -44,9 +44,12 @@ import {
 } from "./integrationTools";
 import { isRepoStructureQuery } from "../../workspace/repoFactIntent";
 import { isFeatureAddAsk } from "../../context/existingCapabilityGrounding";
+import { isOpenFileExplainAsk } from "../../chat/plainChatExplain";
+import { isFileCallerQuery } from "../../context/fileCallerIntent";
 import {
   mergeIntegrationPayload,
   parseOpenIds,
+  pickOpenIds,
   recordVendorToolCall,
   vendorDoneBlockReason,
   type VendorToolState
@@ -290,7 +293,7 @@ export class AgentOrchestrator {
     const vendorState = new Map<AgentToolName, VendorToolState>();
     const allowedRepoTools = options.allowedRepoTools !== false;
     const seeded = allowedRepoTools
-      ? await this.seedOpenFileReadIfFeatureAdd(
+      ? await this.seedOpenFileRead(
           repoId,
           query,
           openFile,
@@ -357,7 +360,8 @@ export class AgentOrchestrator {
         action,
         options,
         conversation,
-        matchingRead
+        matchingRead,
+        openFile
       );
     }
 
@@ -394,7 +398,8 @@ export class AgentOrchestrator {
             undefined,
             Boolean(
               (fallback.context?.read_file as { files?: unknown[] } | undefined)?.files?.length
-            )
+            ),
+            openFile
           );
         }
         break;
@@ -413,7 +418,8 @@ export class AgentOrchestrator {
             undefined,
             Boolean(
               (fallback.context?.read_file as { files?: unknown[] } | undefined)?.files?.length
-            )
+            ),
+            openFile
           );
         }
         if (canAnswerNow() && looksLikeProseAnswer(raw)) {
@@ -424,7 +430,8 @@ export class AgentOrchestrator {
             action,
             options,
             conversation,
-            true
+            true,
+            openFile
           );
         }
         const block = vendorBlock();
@@ -635,6 +642,108 @@ export class AgentOrchestrator {
       }
     }
 
+    if (allowedRepoTools && !options.signal?.aborted && action === "locate") {
+      if (!matchingRead && openFile?.trim() && openFileMatchesLocateAsk(openFile, query)) {
+        const chip = await this.seedOpenFileRead(
+          repoId,
+          query,
+          openFile,
+          emit,
+          context,
+          conversation
+        );
+        if (chip.ok) {
+          matchingRead = true;
+          filesRead += 1;
+          lastToolResult = chip.raw;
+        }
+      }
+      const extraQueries = locateLastChanceExtraQueries(openFile, query);
+      const preferredHits = (
+        context.search_code as { preferredHits?: SearchHit[] } | undefined
+      )?.preferredHits;
+      const preferredMentionsRole = preferredHitsMentionLocateRole(preferredHits, query);
+      if (!matchingRead) {
+        let opened =
+          preferredHits && preferredHits.length > 0 && preferredMentionsRole
+            ? await this.readFirstMatchingHit(
+                repoId,
+                query,
+                preferredHits,
+                emit,
+                context,
+                conversation
+              )
+            : { ok: false as const };
+        if (!opened.ok) {
+          const found = await this.searchUntilReadableHits(
+            repoId,
+            query,
+            emit,
+            context,
+            new Set(),
+            extraQueries
+          );
+          if (found?.toRead.length) {
+            opened = await this.readFirstMatchingHit(
+              repoId,
+              query,
+              found.toRead,
+              emit,
+              context,
+              conversation
+            );
+          }
+        }
+        if (opened.ok) {
+          matchingRead = true;
+        }
+      } else if (isFileCallerQuery(query) || !preferredMentionsRole) {
+        // Chip is already evidence. Keep hunting until another file is read.
+        const chipPath =
+          openFile?.trim() && openFileMatchesLocateAsk(openFile, query)
+            ? huntOpenFilePath(openFile)
+            : undefined;
+        const fromGraph =
+          isFileCallerQuery(query) && chipPath && filesRead < AGENT_MAX_FILES_READ
+            ? await this.readOpenFileCallers(
+                repoId,
+                query,
+                chipPath,
+                emit,
+                context,
+                conversation
+              )
+            : { ok: false as const };
+        if (fromGraph.ok) {
+          filesRead += 1;
+        } else {
+          const found = await this.searchUntilReadableHits(
+            repoId,
+            query,
+            emit,
+            context,
+            new Set(),
+            extraQueries,
+            true
+          );
+          if (found?.toRead.length && filesRead < AGENT_MAX_FILES_READ) {
+            const opened = await this.readFirstMatchingHit(
+              repoId,
+              query,
+              found.toRead,
+              emit,
+              context,
+              conversation
+            );
+            if (opened.ok) {
+              filesRead += 1;
+            }
+          }
+        }
+      }
+    }
+
     return this.finishWithAnswer(
       { steps, context },
       query,
@@ -642,7 +751,8 @@ export class AgentOrchestrator {
       action,
       options,
       conversation,
-      matchingRead
+      matchingRead,
+      openFile
     );
   }
 
@@ -664,9 +774,28 @@ export class AgentOrchestrator {
       return conversation;
     }
     const context: AgentSessionContext = { ...(result.context ?? {}) };
+    this.loopContext = context;
     const steps = [...result.steps];
     const messages = conversation ? [...conversation] : undefined;
     let calls = steps.filter((step) => isAgentIntegrationTool(step.tool)).length;
+    const recordFill = (tool: AgentToolName, args: Record<string, unknown>, raw: string) => {
+      this.mergeContext(context, tool, raw);
+      const step = {
+        index: steps.length,
+        tool,
+        summary: this.summarize(tool, args, query),
+        completed: true
+      };
+      steps.push(step);
+      options.onStep?.(step, [...steps]);
+      if (messages) {
+        messages.push({
+          role: "assistant",
+          content: JSON.stringify({ tool, args })
+        });
+        messages.push({ role: "user", content: raw });
+      }
+    };
     for (const provider of toFill) {
       if (calls >= MAX_INTEGRATION_TOOL_CALLS) {
         break;
@@ -679,29 +808,28 @@ export class AgentOrchestrator {
       if (!tool || context[tool]) {
         continue;
       }
+      const searchArgs = { query: focused };
       let rawResult: string;
       try {
-        rawResult = await this.executeTool(tool, { query: focused });
+        rawResult = await this.executeTool(tool, searchArgs);
       } catch {
         continue;
       }
       calls += 1;
-      this.mergeContext(context, tool, rawResult);
-      const step = {
-        index: steps.length,
-        tool,
-        summary: this.summarize(tool, { query: focused }, query),
-        completed: true
-      };
-      steps.push(step);
-      options.onStep?.(step, [...steps]);
-      if (messages) {
-        messages.push({
-          role: "assistant",
-          content: JSON.stringify({ tool, args: { query: focused } })
-        });
-        messages.push({ role: "user", content: rawResult });
+      recordFill(tool, searchArgs, rawResult);
+      const openIds = pickOpenIds(context[tool], `${focused} ${query}`);
+      if (openIds.length === 0 || calls >= MAX_INTEGRATION_TOOL_CALLS) {
+        continue;
       }
+      const openArgs = { ids: openIds };
+      let openRaw: string;
+      try {
+        openRaw = await this.executeTool(tool, openArgs);
+      } catch {
+        continue;
+      }
+      calls += 1;
+      recordFill(tool, openArgs, openRaw);
     }
     result.context = context;
     result.steps = steps;
@@ -715,7 +843,8 @@ export class AgentOrchestrator {
     action: NonNullable<AgentSessionRequest["action"]>,
     options: AgentRunOptions,
     conversation?: AgentConversationMessage[],
-    matchingRead = false
+    matchingRead = false,
+    openFile?: string
   ): Promise<AgentSessionResult> {
     if (isApiRejectAsk(query)) {
       pruneContextToWriteReject(result.context, query);
@@ -744,14 +873,18 @@ export class AgentOrchestrator {
     const needsGrounding =
       queryHasNamedSymbol(query) || queryRoleHints(query).length > 0;
     const hasIntegrationHits = this.contextHasIntegrationHits(result.context);
-    if (needsGrounding && !matchingRead && hasIntegrationHits && filledHistory) {
+    const matchingChip =
+      Boolean(openFile?.trim()) && openFileMatchesLocateAsk(openFile!, query);
+    const unreadOpenFile =
+      Boolean(openFile?.trim()) && !matchingRead && !readFileContextHasBody(result.context);
+    if (needsGrounding && !matchingRead && hasIntegrationHits && filledHistory && !unreadOpenFile) {
       filledHistory.push({
         role: "user",
         content:
           "You did not read a file that mentions the named symbol. Summarize Slack/Jira/docs results, and say the index didn’t return a usable definition."
       });
     }
-    if (needsGrounding && !matchingRead && !hasIntegrationHits) {
+    if (needsGrounding && !matchingRead && !hasIntegrationHits && !matchingChip) {
       const hadSuccessfulRead = readFileContextHasBody(result.context);
       if (!(isFeatureAddAsk(query) && hadSuccessfulRead)) {
         return {
@@ -767,6 +900,7 @@ export class AgentOrchestrator {
       action === "locate" &&
       !matchingRead &&
       !hasIntegrationHits &&
+      !matchingChip &&
       !readFileContextHasBody(result.context)
     ) {
       return {
@@ -860,7 +994,7 @@ export class AgentOrchestrator {
     return false;
   }
 
-  private async seedOpenFileReadIfFeatureAdd(
+  private async seedOpenFileRead(
     repoId: string,
     query: string,
     openFile: string | undefined,
@@ -869,30 +1003,69 @@ export class AgentOrchestrator {
     conversation?: AgentConversationMessage[]
   ): Promise<{ ok: boolean; raw?: string }> {
     const filePath = openFile?.trim();
-    if (!filePath || !isFeatureAddAsk(query)) {
+    if (
+      !filePath ||
+      !(
+        isFeatureAddAsk(query) ||
+        isOpenFileExplainAsk(query) ||
+        openFileMatchesLocateAsk(filePath, query)
+      )
+    ) {
       return { ok: false };
     }
-    try {
-      const rawResult = await this.executeTool("read_file", { path: filePath, repoId });
-      if (!readFilePayloadHasBody(rawResult)) {
-        return { ok: false };
+    const candidates = await this.openFileReadCandidates(repoId, filePath);
+    for (const path of candidates) {
+      try {
+        const rawResult = await this.executeTool("read_file", { path, repoId });
+        if (!readFilePayloadHasBody(rawResult)) {
+          continue;
+        }
+        this.mergeContext(context, "read_file", rawResult);
+        conversation?.push({
+          role: "assistant",
+          content: JSON.stringify({ tool: "read_file", args: { path } })
+        });
+        conversation?.push({ role: "user", content: rawResult });
+        emit({
+          index: 0,
+          tool: "read_file",
+          summary: `read_file: ${path}`,
+          completed: true
+        });
+        return { ok: true, raw: rawResult };
+      } catch {
+        // Try the next candidate path.
       }
-      this.mergeContext(context, "read_file", rawResult);
-      conversation?.push({
-        role: "assistant",
-        content: JSON.stringify({ tool: "read_file", args: { path: filePath } })
-      });
-      conversation?.push({ role: "user", content: rawResult });
-      emit({
-        index: 0,
-        tool: "read_file",
-        summary: `read_file: ${filePath}`,
-        completed: true
-      });
-      return { ok: true, raw: rawResult };
-    } catch {
-      return { ok: false };
     }
+    return { ok: false };
+  }
+
+  private async openFileReadCandidates(repoId: string, filePath: string): Promise<string[]> {
+    const huntPath = huntOpenFilePath(filePath);
+    const candidates: string[] = [];
+    const seen = new Set<string>();
+    const push = (path: string) => {
+      const trimmed = path.replace(/^\/+/, "").trim();
+      const key = trimmed.toLowerCase();
+      if (!trimmed || seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      candidates.push(trimmed);
+    };
+    push(huntPath);
+    push(filePath);
+    const base = (huntPath.split("/").pop() ?? "").trim();
+    if (base.includes(".") && this.ctx.findFiles) {
+      const found = (await this.ctx.findFiles({ query: base, repoId }).catch(() => [])) ?? [];
+      const want = base.toLowerCase();
+      for (const path of found) {
+        if ((path.split("/").pop() ?? "").toLowerCase() === want) {
+          push(path);
+        }
+      }
+    }
+    return candidates;
   }
 
   /**
@@ -1014,14 +1187,14 @@ export class AgentOrchestrator {
       options?.onStep?.(step, [...steps]);
     };
 
-    const seeded = await this.seedOpenFileReadIfFeatureAdd(
+    const seeded = await this.seedOpenFileRead(
       repoId,
       query,
       openFile,
       emit,
       context
     );
-    if (seeded.ok) {
+    if (seeded.ok && (isFeatureAddAsk(query) || isOpenFileExplainAsk(query))) {
       return { steps, context };
     }
     const named = await this.seedNamedFileReads(repoId, query, emit, context);
@@ -1296,15 +1469,50 @@ export class AgentOrchestrator {
     return false;
   }
 
+  private async readOpenFileCallers(
+    repoId: string,
+    query: string,
+    filePath: string,
+    emit: (step: AgentStep) => void,
+    context: AgentSessionContext,
+    conversation?: AgentConversationMessage[]
+  ): Promise<{ ok: boolean; raw?: string }> {
+    const path = huntOpenFilePath(filePath).trim();
+    if (!path) {
+      return { ok: false };
+    }
+    try {
+      const result = await this.ctx.indexBackend.dependents(repoId, path);
+      const callers = (result.dependents ?? []).filter(
+        (candidate) => candidate.trim() && !sameHuntPath(candidate, path)
+      );
+      if (!callers.length) {
+        return { ok: false };
+      }
+      const hits: SearchHit[] = callers.slice(0, 3).map((fileName) => ({
+        fileName,
+        lineNumber: 0
+      }));
+      return this.readFirstMatchingHit(repoId, query, hits, emit, context, conversation);
+    } catch {
+      return { ok: false };
+    }
+  }
+
   private async searchUntilReadableHits(
     repoId: string,
     query: string,
     emit: (step: AgentStep) => void,
     context: AgentSessionContext,
-    skipQueries: Set<string> = new Set()
+    skipQueries: Set<string> = new Set(),
+    extraQueries: string[] = [],
+    needUnreadFile = false
   ): Promise<{ toRead: SearchHit[] } | undefined> {
-    const queries = fallbackAgentSearchQueries(query)
-      .filter((candidate) => !skipQueries.has(candidate))
+    const queries = [...extraQueries, ...fallbackAgentSearchQueries(query)]
+      .filter((candidate) => Boolean(candidate.trim()) && !skipQueries.has(candidate))
+      .filter((candidate, index, all) =>
+        all.findIndex((seen) => seen.toLowerCase() === candidate.toLowerCase()) === index
+      )
       .slice(0, MAX_SEARCH_ATTEMPTS);
     let stepIndex = 0;
     const tried: string[] = [];
@@ -1328,9 +1536,18 @@ export class AgentOrchestrator {
       if (parsed.error) {
         lastError = parsed.error;
       }
-      const toRead = parsed.preferredHits ?? [];
+      const preferred = parsed.preferredHits ?? [];
+      const toRead = needUnreadFile ? unreadSearchHits(preferred, context) : preferred;
       if (toRead.length > 0) {
-        return { toRead };
+        const hints = queryRoleHints(query);
+        if (
+          hints.length === 0 ||
+          toRead.some((hit) =>
+            textMentionsQueryRoles(`${hit.fileName}\n${hit.content ?? ""}`, query)
+          )
+        ) {
+          return { toRead };
+        }
       }
     }
     if (context.search_code && typeof context.search_code === "object") {
@@ -1499,6 +1716,92 @@ function looksLikeProseAnswer(raw: string): boolean {
     return false;
   }
   return trimmed.length > 40 && /[.!?\n]/.test(trimmed);
+}
+
+/**
+ * Leftover chips are display-only unless this path is the locate target.
+ * Role match is on the PATH (authMiddleware.ts vs leftover responseDeadline.ts).
+ * Do not use the vacuously-true no-hint branch of textMentionsQueryRoles.
+ */
+function openFileMatchesLocate(filePath: string, query: string): boolean {
+  const path = filePath.trim();
+  if (!path) {
+    return false;
+  }
+  if (queryNamesSourceFile(path, query)) {
+    return true;
+  }
+  if (extractNamedSourceFiles(query).length > 0) {
+    return false;
+  }
+  return queryRoleHints(query).length > 0 && textMentionsQueryRoles(path, query);
+}
+
+function openFileMatchesLocateAsk(filePath: string, query: string): boolean {
+  return (
+    openFileMatchesLocate(filePath, query) ||
+    openFileMatchesLocate(huntOpenFilePath(filePath), query)
+  );
+}
+
+function locateLastChanceExtraQueries(openFile: string | undefined, query: string): string[] {
+  if (!openFile?.trim() || !openFileMatchesLocateAsk(openFile, query)) {
+    return [];
+  }
+  const base = huntOpenFilePath(openFile).split("/").pop();
+  return base ? [base] : [];
+}
+
+function unreadSearchHits(
+  hits: SearchHit[],
+  context: AgentSessionContext
+): SearchHit[] {
+  const read = alreadyReadHuntPaths(context);
+  if (read.size === 0) {
+    return hits;
+  }
+  return hits.filter((hit) => hit.fileName && !read.has(normalizeHuntPath(hit.fileName)));
+}
+
+function alreadyReadHuntPaths(context: AgentSessionContext): Set<string> {
+  const files = (context.read_file as ReadFilePayload | undefined)?.files ?? [];
+  return new Set(
+    files.map((file) => normalizeHuntPath(file.path ?? "")).filter((path) => Boolean(path))
+  );
+}
+
+function preferredHitsMentionLocateRole(
+  preferredHits: SearchHit[] | undefined,
+  query: string
+): boolean {
+  if (!preferredHits?.length) {
+    return false;
+  }
+  const hints = queryRoleHints(query);
+  if (hints.length === 0) {
+    return true;
+  }
+  return preferredHits.some((hit) =>
+    textMentionsQueryRoles(`${hit.fileName}\n${hit.content ?? ""}`, query)
+  );
+}
+
+/**
+ * Chip paths may be absolute leftover tabs. Hunt reads need a repo-relative path.
+ */
+function huntOpenFilePath(filePath: string): string {
+  const normalized = filePath.trim().replace(/\\/g, "/");
+  const noLead = normalized.replace(/^\/+/, "");
+  if (!/^(Users|home|tmp|var|private)\//i.test(noLead) && !/^[a-zA-Z]:/.test(normalized)) {
+    return noLead;
+  }
+  const rooted = noLead.match(
+    /(?:^|\/)((?:src|apps|packages|lib|server|web|backend|frontend)\/.+)$/i
+  );
+  if (rooted?.[1]) {
+    return rooted[1];
+  }
+  return noLead.split("/").pop() ?? noLead;
 }
 
 function readFilePayloadHasBody(raw: string): boolean {

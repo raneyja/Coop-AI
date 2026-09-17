@@ -4620,6 +4620,8 @@ export class CoopChatSession {
           maxSteps: AGENT_MAX_TOOL_ROUNDS,
           action,
           openFile: turn.context.file
+            ? toRepositoryRelativePath(turn.context.file)
+            : undefined
         },
         {
           signal,
