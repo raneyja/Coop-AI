@@ -60,7 +60,81 @@ export function billingPlanDetailLine(options: {
 }
 
 export function billingPageSubtitle(solo: boolean): string {
-  return solo ? "Plan and subscription." : "Plan, seats, and subscription management.";
+  return solo ? "Your plan and payment." : "Plan, seats, and payment.";
+}
+
+/** List prices — keep in sync with `USAGE_TIER_LIMITS` in the API. */
+export const SEAT_PRICES_USD = { pro: 25, pro_plus: 60, max: 100 } as const;
+
+export type SeatBreakdownRow = {
+  tier: "pro" | "pro_plus" | "max";
+  name: string;
+  count: number;
+  priceUsd: number;
+};
+
+export function seatPriceLabel(tier: "pro" | "pro_plus" | "max"): string {
+  return `$${SEAT_PRICES_USD[tier]}/seat/mo`;
+}
+
+export function billingSeatBreakdown(inventory?: {
+  pro?: number;
+  pro_plus?: number;
+  max?: number;
+} | null): SeatBreakdownRow[] {
+  if (!inventory) {
+    return [];
+  }
+  const names = { pro: "Pro", pro_plus: "Pro+", max: "Max" } as const;
+  const rows: SeatBreakdownRow[] = [];
+  for (const tier of ["pro", "pro_plus", "max"] as const) {
+    const count = Math.max(0, Math.floor(Number(inventory[tier]) || 0));
+    if (count > 0) {
+      rows.push({ tier, name: names[tier], count, priceUsd: SEAT_PRICES_USD[tier] });
+    }
+  }
+  return rows;
+}
+
+export type BillingStatusTone = "connected" | "available" | "reconnect";
+
+export type BillingStatusDisplay = {
+  label: string;
+  tone: BillingStatusTone;
+  hint?: string;
+};
+
+/** Human labels for Stripe/Coop billing status — never dump raw `incomplete`. */
+export function billingStatusDisplay(status: string | null | undefined): BillingStatusDisplay {
+  switch ((status ?? "").trim().toLowerCase()) {
+    case "active":
+      return { label: "Active", tone: "connected" };
+    case "trialing":
+      return { label: "Trial", tone: "connected" };
+    case "past_due":
+    case "unpaid":
+      return {
+        label: "Past due",
+        tone: "reconnect",
+        hint: "Update the card on file in Stripe to keep the subscription active."
+      };
+    case "incomplete":
+    case "incomplete_expired":
+      return {
+        label: "Payment incomplete",
+        tone: "reconnect",
+        hint: "Stripe has not confirmed payment for this subscription."
+      };
+    case "canceled":
+    case "cancelled":
+      return { label: "Canceled", tone: "available" };
+    case "paused":
+      return { label: "Paused", tone: "available" };
+    case "manual":
+      return { label: "Managed with Coop", tone: "available" };
+    default:
+      return { label: status?.trim() ? status : "Unknown", tone: "available" };
+  }
 }
 
 export type BillingAccountRow = {
@@ -89,7 +163,6 @@ export function addSeatsCopy(options: {
   currentSeats: number;
   addCount: number;
 }): AddSeatsCopy {
-  const currentSeats = normalizeSeatCount(options.currentSeats);
   const addCount = Math.max(0, Math.floor(Number(options.addCount) || 0));
   if (options.solo) {
     return {
@@ -102,7 +175,7 @@ export function addSeatsCopy(options: {
   }
   return {
     title: "Add seats",
-    body: `You currently have ${currentSeats} seat${currentSeats === 1 ? "" : "s"}. Pick a plan and how many to add — you'll confirm and pay the prorated amount in Stripe. Unused seats stay available to invite later.`,
+    body: "Pick a plan and how many to add. You'll confirm and pay the prorated amount in Stripe. Unused seats stay available to invite later.",
     inputLabel: "Seats to add",
     cta: "Add seats",
     showReduceNote: true
@@ -116,11 +189,11 @@ export function seatMixLine(mix?: string | null): string | null {
 
 function convertSeatDelta(fromUsd?: number, toUsd?: number): string {
   if (!Number.isFinite(fromUsd) || !Number.isFinite(toUsd)) {
-    return ", prorated in Stripe";
+    return ", charged to the card on file now";
   }
   const delta = (toUsd as number) - (fromUsd as number);
   const signed = delta >= 0 ? `+$${delta}` : `-$${Math.abs(delta)}`;
-  return ` (${signed}/mo, prorated in Stripe)`;
+  return ` (${signed}/mo, charged to the card on file now)`;
 }
 
 export function convertSeatPreview(fromName: string, toName: string, fromUsd?: number, toUsd?: number): string {

@@ -5,6 +5,10 @@ import {
   billingPageSubtitle,
   billingPlanLabel,
   billingPlanDetailLine,
+  billingSeatBreakdown,
+  billingStatusDisplay,
+  seatPriceLabel,
+  SEAT_PRICES_USD,
   convertSeatModalCopy,
   convertSeatPreview,
   upgradeRequestNoticeCopy,
@@ -64,8 +68,8 @@ assert.equal(
   "8 Pro seats"
 );
 
-assert.equal(billingPageSubtitle(true), "Plan and subscription.");
-assert.equal(billingPageSubtitle(false), "Plan, seats, and subscription management.");
+assert.equal(billingPageSubtitle(true), "Your plan and payment.");
+assert.equal(billingPageSubtitle(false), "Plan, seats, and payment.");
 
 assert.deepEqual(billingAccountRow(1, true), { label: "Account", value: "Just you" });
 assert.deepEqual(billingAccountRow(8, false), { label: "Seats", value: "8" });
@@ -83,8 +87,9 @@ const teamAdd = addSeatsCopy({ solo: false, currentSeats: 8, addCount: 1 });
 assert.equal(teamAdd.title, "Add seats");
 assert.equal(teamAdd.cta, "Add seats");
 assert.equal(teamAdd.showReduceNote, true);
-assert.match(teamAdd.body, /8 seats/);
+assert.match(teamAdd.body, /prorated/);
 assert.match(teamAdd.body, /Unused seats/);
+assert.doesNotMatch(teamAdd.body, /You currently have/);
 
 assert.equal(newSeatTotalPreview(1, 1), "New total after confirm: 2 seats.");
 assert.equal(newSeatTotalPreview(8, 0), null);
@@ -170,9 +175,9 @@ assert.equal(seatMixLine("Mixed (8 Pro · 2 Max)"), "Mixed (8 Pro · 2 Max)");
 assert.equal(seatMixLine("  "), null);
 assert.equal(
   convertSeatPreview("Pro", "Max", 25, 100),
-  "Convert this person's seat from Pro to Max (+$75/mo, prorated in Stripe)."
+  "Convert this person's seat from Pro to Max (+$75/mo, charged to the card on file now)."
 );
-assert.match(convertSeatPreview("Pro", "Pro+"), /prorated in Stripe/);
+assert.match(convertSeatPreview("Pro", "Pro+"), /charged to the card on file now/);
 assert.doesNotMatch(convertSeatPreview("Pro", "Pro+"), /\$/);
 assert.doesNotMatch(convertSeatPreview("Pro", "Max", 25, 100), /Does not move/);
 
@@ -188,7 +193,7 @@ assert.equal(modal.confirmLabel, "Convert");
 assert.equal(modal.cancelLabel, "Cancel");
 assert.equal(
   modal.body,
-  "Convert alice@example.com's seat from Pro to Pro+ (+$35/mo, prorated in Stripe)."
+  "Convert alice@example.com's seat from Pro to Pro+ (+$35/mo, charged to the card on file now)."
 );
 
 const notice = upgradeRequestNoticeCopy({
@@ -206,5 +211,23 @@ const noticeMany = upgradeRequestNoticeCopy({
 });
 assert.equal(noticeMany.heading, "Upgrade requests");
 assert.match(noticeMany.body, /2 more requests are still open/);
+
+assert.deepEqual(SEAT_PRICES_USD, { pro: 25, pro_plus: 60, max: 100 });
+assert.equal(seatPriceLabel("pro"), "$25/seat/mo");
+assert.equal(seatPriceLabel("pro_plus"), "$60/seat/mo");
+assert.equal(seatPriceLabel("max"), "$100/seat/mo");
+assert.deepEqual(billingSeatBreakdown(undefined), []);
+assert.deepEqual(billingSeatBreakdown({ pro: 6, pro_plus: 0, max: 2 }), [
+  { tier: "pro", name: "Pro", count: 6, priceUsd: 25 },
+  { tier: "max", name: "Max", count: 2, priceUsd: 100 }
+]);
+
+assert.deepEqual(billingStatusDisplay("active"), { label: "Active", tone: "connected" });
+assert.equal(billingStatusDisplay("incomplete").label, "Payment incomplete");
+assert.equal(billingStatusDisplay("incomplete").tone, "reconnect");
+assert.match(billingStatusDisplay("incomplete").hint ?? "", /not confirmed payment/);
+assert.equal(billingStatusDisplay("past_due").label, "Past due");
+assert.equal(billingStatusDisplay("manual").label, "Managed with Coop");
+assert.equal(billingStatusDisplay("trialing").label, "Trial");
 
 console.log("billingCopy: 1/1 tests passed");
