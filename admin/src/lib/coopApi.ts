@@ -1048,6 +1048,8 @@ export type BillingInfo = {
   stripeSeats?: number | null;
   status: string;
   billingEmail?: string;
+  /** Active members of this org who can be the billing contact. */
+  billingEmailOptions?: string[];
   hasStripeCustomer?: boolean;
   seatInventory?: SeatInventory;
   seatMix?: string;
@@ -1106,6 +1108,13 @@ export function quotaSnapshotFromMe(me: MeResponse): QuotaSnapshot {
 
 export async function fetchBilling(): Promise<ApiResult<BillingInfo>> {
   return coopFetch<BillingInfo>("/v1/admin/billing");
+}
+
+export async function updateBillingEmail(email: string): Promise<ApiResult<{ billingEmail: string; billingEmailOptions?: string[] }>> {
+  return coopFetch<{ billingEmail: string; billingEmailOptions?: string[] }>("/v1/admin/billing/email", {
+    method: "POST",
+    body: JSON.stringify({ email })
+  });
 }
 
 export async function openBillingPortal(): Promise<ApiResult<{ url: string }>> {

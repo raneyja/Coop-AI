@@ -7,7 +7,8 @@ import {
   createSeatIncreaseSession,
   createUpgradeCheckoutSession,
   fetchBilling,
-  openBillingPortal
+  openBillingPortal,
+  updateBillingEmail
 } from "@/lib/coopApi";
 import {
   addSeatsCopy,
@@ -42,6 +43,8 @@ export default function BillingPage() {
   const [seatInput, setSeatInput] = useState("1");
   const [addTier, setAddTier] = useState<"pro" | "pro_plus" | "max">("pro");
   const [addingSeats, setAddingSeats] = useState(false);
+  const [billingEmailDraft, setBillingEmailDraft] = useState("");
+  const [savingEmail, setSavingEmail] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,6 +53,7 @@ export default function BillingPage() {
     setLoading(false);
     if (result.ok) {
       setBilling(result.data);
+      setBillingEmailDraft(result.data?.billingEmail ?? "");
       return;
     }
     setError(result.error ?? "Could not load billing.");
@@ -109,6 +113,31 @@ export default function BillingPage() {
     window.location.href = result.data.url;
   }
 
+  async function handleBillingEmailSave() {
+    const email = billingEmailDraft.trim().toLowerCase();
+    if (!email || email === (billing?.billingEmail ?? "").trim().toLowerCase()) {
+      return;
+    }
+    setSavingEmail(true);
+    setError(null);
+    const result = await updateBillingEmail(email);
+    setSavingEmail(false);
+    if (!result.ok) {
+      setError(result.error ?? "Could not update billing email.");
+      return;
+    }
+    setBilling((current) =>
+      current
+        ? {
+            ...current,
+            billingEmail: result.data?.billingEmail ?? email,
+            billingEmailOptions: result.data?.billingEmailOptions ?? current.billingEmailOptions
+          }
+        : current
+    );
+    setBillingEmailDraft(result.data?.billingEmail ?? email);
+  }
+
   const plan = billing?.plan ?? me?.plan ?? "free";
   const usageTier = billing?.usageTier ?? (plan === "pro" ? "pro" : null);
   const currentSeats = normalizeSeatCount(billing?.seats);
@@ -148,6 +177,9 @@ export default function BillingPage() {
   const billingReady = Boolean(billing) && !loading;
   const showPlanNudge = billingReady && Boolean(nudge) && !mixed && !isEnterprise && !isFree;
   const orgName = displayOrgName(me);
+  const billingEmailOptions = billing?.billingEmailOptions ?? [];
+  const billingEmailDirty =
+    billingEmailDraft.trim().toLowerCase() !== (billing?.billingEmail ?? "").trim().toLowerCase();
 
   const addSeatsForm = isPro ? (
     <div className="space-y-3">
@@ -287,8 +319,35 @@ export default function BillingPage() {
               </div>
             </SettingsRow>
           ) : null}
-          {billing?.billingEmail ? (
-            <SettingsRow label="Billing email">{billing.billingEmail}</SettingsRow>
+          {!loading && billing ? (
+            <SettingsRow label="Billing email">
+              {billingEmailOptions.length > 1 ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    className="admin-input max-w-xs"
+                    value={billingEmailDraft}
+                    onChange={(event) => setBillingEmailDraft(event.target.value)}
+                    disabled={savingEmail}
+                  >
+                    {billingEmailOptions.map((email) => (
+                      <option key={email} value={email}>
+                        {email}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="admin-btn-secondary"
+                    onClick={() => void handleBillingEmailSave()}
+                    disabled={savingEmail || !billingEmailDirty}
+                  >
+                    {savingEmail ? "Saving…" : "Update"}
+                  </button>
+                </div>
+              ) : (
+                <span>{billing.billingEmail ?? (billingEmailDraft || "—")}</span>
+              )}
+            </SettingsRow>
           ) : null}
         </dl>
       </section>

@@ -8,6 +8,7 @@ import { resolveEffectiveSeatCount } from "./billing/resolveSeatCount";
 import { loadBillingConfig } from "./billing/billingConfig";
 import { StripeService } from "./billing/stripeService";
 import { displaySeatMix, isMixedSeatInventory } from "./billing/seatInventory";
+import { billingEmailBelongsToOrg, resolveBillingContact } from "./billing/billingEmail";
 
 type ParsedRequest = {
   method: string;
@@ -105,18 +106,46 @@ export async function handleAdminOrgRequest(
       }
     }
 
+    const users = deps.userStore ? await deps.userStore.listOrgUsers(auth.orgId) : [];
+    const contact = resolveBillingContact({ storedEmail: billing?.billingEmail, users });
+    if (contact.healed && contact.email) {
+      await deps.orgStore!.updateOrganizationBilling(auth.orgId, { billingEmail: contact.email });
+    }
+
     writeJson(response, 200, {
       plan,
       usageTier: billing?.usageTier ?? (plan === "pro" ? "pro" : null),
       seats,
       stripeSeats,
       status: billing?.billingStatus ?? "manual",
-      billingEmail: billing?.billingEmail,
+      billingEmail: contact.email,
+      billingEmailOptions: contact.options,
       hasStripeCustomer: Boolean(billing?.stripeCustomerId),
       seatInventory: billing?.seatInventory,
       seatMix: billing?.seatInventory ? displaySeatMix(billing.seatInventory) : undefined,
       mixedSeats: billing?.seatInventory ? isMixedSeatInventory(billing.seatInventory) : false
     });
+    return true;
+  }
+
+  if (parsed.method === "POST" && parsed.pathname === "/v1/admin/billing/email") {
+    if (!deps.userStore) {
+      writeJson(response, 503, { error: "user store not configured" });
+      return true;
+    }
+    const email = String(asRecord(parsed.body).email ?? "")
+      .trim()
+      .toLowerCase();
+    const users = await deps.userStore.listOrgUsers(auth.orgId);
+    if (!billingEmailBelongsToOrg(email, users)) {
+      writeJson(response, 400, {
+        error: "invalid_billing_email",
+        message: "Billing email must be an active member of this organization."
+      });
+      return true;
+    }
+    await deps.orgStore!.updateOrganizationBilling(auth.orgId, { billingEmail: email });
+    writeJson(response, 200, { billingEmail: email, billingEmailOptions: resolveBillingContact({ storedEmail: email, users }).options });
     return true;
   }
 

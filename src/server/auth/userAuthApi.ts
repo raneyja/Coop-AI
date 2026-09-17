@@ -154,6 +154,7 @@ async function handleRegister(
   const orgName = orgNameInput || deriveOrgName(email);
   const org = await deps.orgStore!.createOrganization(orgName, "free");
   const user = await deps.userStore!.createUser(org.id, email, "admin");
+  await deps.orgStore!.updateOrganizationBilling(org.id, { billingEmail: email });
   await deps.authIdentityStore!.createPasswordIdentity(user.id, hashPassword(password));
 
   const verifyToken = await deps.authTokenStore!.createToken(user.id, "email_verify", 24 * 60 * 60 * 1000);
@@ -995,6 +996,7 @@ export async function resolveGoogleUser(
     const orgName = state.orgName?.trim() || deriveOrgName(profile.email);
     const org = await deps.orgStore!.createOrganization(orgName, "free");
     user = await deps.userStore!.createUser(org.id, profile.email, "admin");
+    await deps.orgStore!.updateOrganizationBilling(org.id, { billingEmail: profile.email });
     await deps.authIdentityStore!.createGoogleIdentity(user.id, profile.sub, new Date());
     const loginUrl = adminPortalFreshLoginUrl(deps.authConfig.adminPortalUrl, {
       email: profile.email

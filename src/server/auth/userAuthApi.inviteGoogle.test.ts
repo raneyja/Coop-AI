@@ -86,7 +86,8 @@ function inviteDeps(options: {
       createOrganization: async () => {
         createOrgCalls.count += 1;
         return { id: "org-free", name: "Should not create", plan: "free", createdAt: new Date() };
-      }
+      },
+      updateOrganizationBilling: async () => undefined
     } as unknown as OrgStore,
     userStore: {
       getUser: async () => ({

@@ -54,6 +54,7 @@ function googleDeps(options: {
         createOrgCalls.count += 1;
         return { id: "org-free", name: "New Free Org", plan: "free", createdAt: new Date() };
       },
+      updateOrganizationBilling: async () => undefined,
       isOrgSuspended: async () => false
     } as unknown as OrgStore,
     userStore: {

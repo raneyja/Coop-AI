@@ -30,6 +30,7 @@ import type { AuthIdentityStore } from "../auth/authIdentityStore";
 import type { AuthTokenStore } from "../auth/authTokenStore";
 import type { AuthConfig } from "../auth/authConfig";
 import { mapStripeConvertError, SeatConvertError, subscriptionInactiveMessage } from "./convertSeat";
+import { billingEmailBelongsToOrg, resolveBillingContact } from "./billingEmail";
 import { captureException } from "../observability/errorReporter";
 
 type ParsedRequest = {
@@ -240,16 +241,13 @@ async function handleCreateUpgradeCheckout(
     .toLowerCase();
   const fallbackSessionEmail =
     auth.userId && deps.userStore ? (await deps.userStore.getUser(auth.userId))?.email?.trim().toLowerCase() : "";
-  let fallbackOwnerEmail = "";
-  if (!requestedEmail && !billing?.billingEmail?.trim() && !fallbackSessionEmail && deps.userStore) {
-    const orgUsers = await deps.userStore.listOrgUsers(auth.orgId);
-    const owner = orgUsers.find(
-      (user) => (user.role === "admin" || user.role === "owner") && !user.deactivatedAt
-    );
-    fallbackOwnerEmail = owner?.email?.trim().toLowerCase() ?? "";
-  }
+  const orgUsers = deps.userStore ? await deps.userStore.listOrgUsers(auth.orgId) : [];
+  const contact = resolveBillingContact({ storedEmail: billing?.billingEmail, users: orgUsers });
   const adminEmail =
-    requestedEmail || billing?.billingEmail?.trim().toLowerCase() || fallbackSessionEmail || fallbackOwnerEmail || "";
+    (requestedEmail && billingEmailBelongsToOrg(requestedEmail, orgUsers) ? requestedEmail : "") ||
+    fallbackSessionEmail ||
+    contact.email ||
+    "";
   const seats = clampSeatCountForPlan("pro", Number(body.seats ?? billing?.seatCount ?? 1) || 1);
 
   if (!isValidEmail(adminEmail)) {

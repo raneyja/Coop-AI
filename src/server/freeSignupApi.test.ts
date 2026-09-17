@@ -32,12 +32,15 @@ test("free signup creates org, owner, session, and sends welcome email", async (
   const previousAdminPortalUrl = process.env.COOP_ADMIN_PORTAL_URL;
   process.env.COOP_ADMIN_PORTAL_URL = "https://admin.coop-ai.dev";
 
-  const created: { orgName?: string; plan?: string; ownerEmail?: string } = {};
+  const created: { orgName?: string; plan?: string; ownerEmail?: string; billingEmail?: string } = {};
   const orgStore = {
     createOrganization: async (name: string, plan: "free" | "pro" | "enterprise") => {
       created.orgName = name;
       created.plan = plan;
       return { id: "org-1", name, plan: "free", createdAt: new Date() };
+    },
+    updateOrganizationBilling: async (_id: string, patch: { billingEmail?: string }) => {
+      created.billingEmail = patch.billingEmail;
     }
   };
   const userStore = {
@@ -102,6 +105,7 @@ test("free signup creates org, owner, session, and sends welcome email", async (
   assert.equal(created.plan, "free");
   assert.equal(created.orgName, "owner");
   assert.equal(created.ownerEmail, "owner@example.com");
+  assert.equal(created.billingEmail, "owner@example.com");
   assert.deepEqual(welcomeEmail, {
     to: "owner@example.com",
     orgName: "owner",
