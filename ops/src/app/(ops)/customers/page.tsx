@@ -13,6 +13,7 @@ import {
   formatBilledAmount,
   formatUsdFromCents,
   formatUsagePercent,
+  lookupUserByEmail,
   planBadgeClass,
   planLabel,
   suspendOrganization,
@@ -38,6 +39,9 @@ export default function CustomersPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ action: ConfirmAction; org: CustomerSummary } | null>(null);
   const [q, setQ] = useState(searchParams.get("q") ?? "");
+  const [userEmail, setUserEmail] = useState("");
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const [lookupBusy, setLookupBusy] = useState(false);
   const [plan, setPlan] = useState<OrgPlan | "">((searchParams.get("plan") as OrgPlan) ?? "");
   const [billingStatus, setBillingStatus] = useState(searchParams.get("billingStatus") ?? "");
   const [onboardingIncomplete, setOnboardingIncomplete] = useState(
@@ -90,6 +94,21 @@ export default function CustomersPage() {
     void load();
   }
 
+  async function handleUserLookup(e: React.FormEvent) {
+    e.preventDefault();
+    const email = userEmail.trim();
+    if (!email) return;
+    setLookupBusy(true);
+    setLookupError(null);
+    const result = await lookupUserByEmail(email);
+    setLookupBusy(false);
+    if (!result.ok || !result.data) {
+      setLookupError(result.error ?? "No active user with that email.");
+      return;
+    }
+    router.push(`/customers/${result.data.organization.id}/users/${result.data.user.id}`);
+  }
+
   async function handleActivate(org: CustomerSummary) {
     if (!me || !canSuperAdmin(me)) return;
     setBusy(`activate-${org.id}`);
@@ -135,13 +154,34 @@ export default function CustomersPage() {
         <div>
           <h1 className="admin-page-title">Customers</h1>
           <p className="mt-1 text-sm text-coop-muted">
-            Search by name, billing email, admin email, org ID, or Stripe customer ID.
+            Search orgs by name, billing email, admin email, org ID, or Stripe customer ID. Jump to
+            any member by email below.
           </p>
         </div>
         <Link href="/customers/new" className="admin-btn-primary">
           Provision new
         </Link>
       </div>
+
+      <form onSubmit={handleUserLookup} className="admin-card flex flex-wrap items-end gap-3">
+        <div className="min-w-[260px] flex-1">
+          <label htmlFor="user-email" className="admin-label">
+            Find user by email
+          </label>
+          <input
+            id="user-email"
+            type="email"
+            className="admin-input"
+            placeholder="jonathanaraney@gmail.com"
+            value={userEmail}
+            onChange={(e) => setUserEmail(e.target.value)}
+          />
+        </div>
+        <button type="submit" className="admin-btn-secondary" disabled={lookupBusy || !userEmail.trim()}>
+          {lookupBusy ? "Looking up…" : "Open user"}
+        </button>
+        {lookupError ? <p className="w-full text-sm text-red-400">{lookupError}</p> : null}
+      </form>
 
       <form onSubmit={applyFilters} className="admin-card flex flex-wrap items-end gap-3">
         <div className="min-w-[220px] flex-1">

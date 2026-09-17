@@ -40,6 +40,11 @@ import {
   splitUsageQueueItems,
   type OperatorUsageQueueItem
 } from "./operatorUsage";
+import {
+  applyOperatorUsageCredit,
+  parseUsageCreditReason,
+  parseUsageCreditTargetRatio
+} from "./operatorUsageCredit";
 
 export type OperatorApiDeps = {
   orgStore?: OrgStore;
@@ -149,6 +154,10 @@ export async function handleOperatorApiRequest(
 
   if (parsed.method === "GET" && parsed.pathname === "/v1/operator/activity") {
     return handlePlatformActivity(parsed, response, deps, operator);
+  }
+
+  if (parsed.method === "GET" && parsed.pathname === "/v1/operator/users/lookup") {
+    return handleLookupUser(parsed, response, deps, operator);
   }
 
   writeJson(response, 404, { error: "not_found" });
@@ -425,6 +434,10 @@ async function handleOrgScopedRequest(
   const resendMatch = suffix.match(/^\/users\/([^/]+)\/resend-invite$/);
   if (resendMatch && parsed.method === "POST") {
     return handleResendInvite(orgId, decodeURIComponent(resendMatch[1]), response, deps, operator);
+  }
+  const userUsageMatch = suffix.match(/^\/users\/([^/]+)\/usage$/);
+  if (userUsageMatch && parsed.method === "POST") {
+    return handleCreditUserUsage(orgId, decodeURIComponent(userUsageMatch[1]), parsed, response, deps, operator);
   }
   if (suffix === "/api-keys" && parsed.method === "GET") {
     return handleListApiKeys(orgId, response, deps, operator);
@@ -959,6 +972,141 @@ async function handleGetUser(
   writeJson(response, 200, {
     organization: { id: org.id, name: org.name, plan: org.plan },
     user: usage
+  });
+  return true;
+}
+
+async function handleLookupUser(
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: OperatorApiDeps,
+  operator: OperatorContext
+): Promise<boolean> {
+  if (!requireOperatorRole(operator, "viewer", response)) {
+    return true;
+  }
+  if (!deps.userStore) {
+    writeJson(response, 503, { error: "user store not configured" });
+    return true;
+  }
+  const email = parsed.query?.get("email")?.trim() ?? "";
+  if (!email) {
+    writeJson(response, 400, { error: "invalid_request", message: "email is required." });
+    return true;
+  }
+  const user = await deps.userStore.findActiveUserByEmail(email);
+  if (!user) {
+    writeJson(response, 404, { error: "user not found" });
+    return true;
+  }
+  const org = await deps.orgStore!.getOrganization(user.orgId);
+  if (!org) {
+    writeJson(response, 404, { error: "organization not found" });
+    return true;
+  }
+  writeJson(response, 200, {
+    organization: { id: org.id, name: org.name, plan: org.plan },
+    user: {
+      id: user.id,
+      email: user.email,
+      role: user.role === "owner" ? "admin" : user.role,
+      status: operatorUserStatus(user)
+    }
+  });
+  return true;
+}
+
+async function handleCreditUserUsage(
+  orgId: string,
+  userId: string,
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: OperatorApiDeps,
+  operator: OperatorContext
+): Promise<boolean> {
+  if (!requireOperatorRole(operator, "support", response)) {
+    return true;
+  }
+  if (!deps.userStore) {
+    writeJson(response, 503, { error: "user store not configured" });
+    return true;
+  }
+  if (!deps.usageTracker?.canRead()) {
+    writeJson(response, 503, { error: "usage tracking not configured" });
+    return true;
+  }
+  const org = await deps.orgStore!.getOrganization(orgId);
+  if (!org) {
+    writeJson(response, 404, { error: "organization not found" });
+    return true;
+  }
+  const user = await deps.userStore.getUser(userId);
+  if (!user || user.orgId !== orgId) {
+    writeJson(response, 404, { error: "user not found" });
+    return true;
+  }
+  const body = asRecord(parsed.body);
+  const targetUsedRatio = parseUsageCreditTargetRatio(body.targetUsedRatio);
+  if (targetUsedRatio == null) {
+    writeJson(response, 400, {
+      error: "invalid_request",
+      message: "targetUsedRatio must be 0, 0.25, or 0.5."
+    });
+    return true;
+  }
+  const reason = parseUsageCreditReason(body.reason);
+  if (!reason) {
+    writeJson(response, 400, {
+      error: "invalid_request",
+      message: "reason is required (1–500 characters)."
+    });
+    return true;
+  }
+  const billing = await deps.orgStore!.getOrganizationBilling(orgId);
+  const result = await applyOperatorUsageCredit({
+    org,
+    billing,
+    user,
+    usageTracker: deps.usageTracker,
+    targetUsedRatio,
+    reason,
+    operatorEmail: operator.email
+  });
+  if (!result.ok) {
+    if (result.error === "not_applicable") {
+      writeJson(response, 400, {
+        error: "usage_credit_not_applicable",
+        message: "Enterprise seats have no included usage cap."
+      });
+      return true;
+    }
+    writeJson(response, 503, { error: "usage tracking not configured" });
+    return true;
+  }
+  if (result.applied) {
+    await operatorAudit(deps, operator, "operator.user.usage_credit", orgId, {
+      userId: user.id,
+      email: user.email,
+      targetUsedRatio,
+      reason,
+      creditTokens: result.creditTokens,
+      creditAutoCents: result.creditAutoCents,
+      creditFrontierCents: result.creditFrontierCents,
+      beforeUsedRatio: result.beforeUsedRatio,
+      afterUsedRatio: result.afterUsedRatio
+    });
+  }
+  writeJson(response, 200, {
+    applied: result.applied,
+    targetUsedRatio,
+    capKind: result.capKind,
+    beforeUsedRatio: result.beforeUsedRatio,
+    afterUsedRatio: result.afterUsedRatio,
+    creditTokens: result.creditTokens,
+    creditAutoCents: result.creditAutoCents,
+    creditFrontierCents: result.creditFrontierCents,
+    organization: { id: org.id, name: org.name, plan: org.plan },
+    user: result.user
   });
   return true;
 }

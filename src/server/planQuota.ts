@@ -20,7 +20,8 @@ import {
   type UsageTier
 } from "./usageTiers";
 
-export const LLM_USAGE_EVENT_TYPES = ["chat.message", "completion.requested"] as const;
+export const QUOTA_CREDIT_EVENT_TYPE = "quota.credit" as const;
+export const LLM_USAGE_EVENT_TYPES = ["chat.message", "completion.requested", QUOTA_CREDIT_EVENT_TYPE] as const;
 
 export const DEFAULT_FREE_TOKEN_LIMIT = 80_000;
 /** @deprecated Use DEFAULT_FREE_TOKEN_LIMIT */
@@ -332,7 +333,7 @@ export class PlanQuotaService {
     }
     const limits = USAGE_TIER_LIMITS[tier];
     const pools = await this.getPaidPoolUsage(orgId, now, periodAnchor, userId);
-    const usedCents = pools.autoCents + pools.frontierCents;
+    const usedCents = Math.max(0, pools.autoCents + pools.frontierCents);
     if (usedCents < limits.costCents) {
       return;
     }
@@ -373,7 +374,10 @@ export class PlanQuotaService {
   }> {
     const range = rollingWindowRange(now, this.config.rollingWindowMs);
     const events = await this.listTokenEvents(orgId, range);
-    const usedTokens = events.reduce((sum, event) => sum + event.tokens, 0);
+    const usedTokens = Math.max(
+      0,
+      events.reduce((sum, event) => sum + event.tokens, 0)
+    );
     const resetsAt =
       computeQuotaResetsAt(events, usedTokens, this.config.freeTokenLimit, this.config.rollingWindowMs, now) ??
       new Date(now.getTime() + this.config.rollingWindowMs);
@@ -524,14 +528,15 @@ function buildSnapshot(
   resetsAt: Date,
   rollingWindowMs: number
 ): PlanQuotaSnapshot {
-  const remainingTokens = Math.max(0, limitTokens - usedTokens);
+  const clampedUsed = Math.max(0, usedTokens);
+  const remainingTokens = Math.max(0, limitTokens - clampedUsed);
   const retryAfterMs = Math.max(0, resetsAt.getTime() - Date.now());
   return {
     plan: "free",
-    usedTokens,
+    usedTokens: clampedUsed,
     limitTokens,
     remainingTokens,
-    usedCredits: tokensToCredits(usedTokens),
+    usedCredits: tokensToCredits(clampedUsed),
     limitCredits: tokensToCredits(limitTokens),
     remainingCredits: tokensToCredits(remainingTokens),
     windowHours: rollingWindowMs / 3_600_000,
@@ -579,12 +584,13 @@ function buildPaidUsageMeters(
 }
 
 function toPoolMeter(usedCents: number, limitCents: number): UsagePoolMeter {
-  const remainingCents = Math.max(0, limitCents - usedCents);
+  const clampedUsed = Math.max(0, usedCents);
+  const remainingCents = Math.max(0, limitCents - clampedUsed);
   return {
-    usedCents,
+    usedCents: clampedUsed,
     limitCents,
     remainingCents,
-    usedRatio: limitCents <= 0 ? 1 : Math.min(1, usedCents / limitCents)
+    usedRatio: limitCents <= 0 ? 1 : Math.min(1, clampedUsed / limitCents)
   };
 }
 

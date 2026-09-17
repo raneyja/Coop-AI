@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { getStoredMe } from "@/lib/auth";
 import { canMutateSupport } from "@/lib/operatorRbac";
 import {
+  creditOrganizationUserUsage,
   fetchOrganizationUser,
   formatDateTime,
   formatUsdFromCents,
@@ -13,12 +14,27 @@ import {
   planBadgeClass,
   planLabel,
   resendOrganizationInvite,
+  tokensToCredits,
   usageTierLabel,
   type CustomerUserDetail,
-  type OrgPlan
+  type OrgPlan,
+  type UsageCreditTargetRatio
 } from "@/lib/coopApi";
+import { ConfirmUsageCreditModal } from "@/components/ConfirmUsageCreditModal";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 import { UsageMeterBar } from "@/components/UsageMeterBar";
+
+const CREDIT_TARGETS: UsageCreditTargetRatio[] = [0.5, 0.25, 0];
+
+function currentUsedRatio(user: CustomerUserDetail): number | null {
+  if (user.capKind === "free_credits") {
+    return user.free?.usedRatio ?? null;
+  }
+  if (user.capKind === "paid_included") {
+    return user.usedRatio ?? null;
+  }
+  return null;
+}
 
 export default function CustomerUserPage() {
   const params = useParams();
@@ -34,6 +50,7 @@ export default function CustomerUserPage() {
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [creditTarget, setCreditTarget] = useState<UsageCreditTargetRatio | null>(null);
 
   const load = useCallback(async () => {
     if (!orgId || !userId) return;
@@ -82,6 +99,31 @@ export default function CustomerUserPage() {
     }
   }
 
+  async function handleCredit(reason: string) {
+    if (!me || !canMutateSupport(me) || !user || creditTarget == null) return;
+    setBusy(true);
+    setActionError(null);
+    setActionNotice(null);
+    const result = await creditOrganizationUserUsage(orgId, user.id, {
+      targetUsedRatio: creditTarget,
+      reason
+    });
+    setBusy(false);
+    if (!result.ok || !result.data) {
+      setActionError(result.error ?? "Failed to credit usage.");
+      return;
+    }
+    const target = creditTarget;
+    setUser(result.data.user);
+    setCreditTarget(null);
+    const label = `${Math.round(target * 100)}%`;
+    setActionNotice(
+      result.data.applied
+        ? `Usage set to ${formatUsagePercent(result.data.afterUsedRatio)}.`
+        : `Usage is already at or below ${label}.`
+    );
+  }
+
   if (loading) {
     return <p className="text-coop-muted">Loading user…</p>;
   }
@@ -108,6 +150,9 @@ export default function CustomerUserPage() {
     );
   }
 
+  const usedRatio = currentUsedRatio(user);
+  const canCredit = Boolean(me && canMutateSupport(me) && user.capKind !== "unlimited");
+
   return (
     <div className="space-y-5">
       <div>
@@ -132,38 +177,78 @@ export default function CustomerUserPage() {
 
       <section className="admin-card">
         <h2 className="admin-section-label">Usage vs plan</h2>
-        <div>
-          <p className="admin-stat-label">
-            {usageTierLabel(user.usageTier)} seat · LLM cost this period
-          </p>
-          <p className="mt-1 text-2xl font-semibold text-white">
-            {formatUsdFromCents(user.usedCents)}
-            {user.includedCents != null ? (
+        {user.capKind === "free_credits" && user.free ? (
+          <div className="mb-4">
+            <p className="admin-stat-label">Org free credits (5-hour window)</p>
+            <p className="mt-1 text-2xl font-semibold text-white">
+              {tokensToCredits(user.free.usedTokens)}K
               <span className="ml-2 text-base font-normal text-coop-muted">
-                of {formatUsdFromCents(user.includedCents)}
+                of {tokensToCredits(user.free.limitTokens)}K
               </span>
-            ) : null}
-          </p>
-          {user.usedRatio != null ? (
+            </p>
             <div className="mt-3">
               <UsageMeterBar
                 size="lg"
-                ratio={user.usedRatio}
-                label={`${formatUsagePercent(user.usedRatio)} of included`}
+                ratio={user.free.usedRatio}
+                label={`${formatUsagePercent(user.free.usedRatio)} of included`}
               />
             </div>
-          ) : null}
-        </div>
+            <p className="mt-2 text-sm text-coop-muted">
+              Free credits are org-wide. Crediting this person lowers the shared pool that blocks
+              chat.
+            </p>
+          </div>
+        ) : (
+          <div>
+            <p className="admin-stat-label">
+              {usageTierLabel(user.usageTier)} seat · LLM cost this period
+            </p>
+            <p className="mt-1 text-2xl font-semibold text-white">
+              {formatUsdFromCents(user.usedCents)}
+              {user.includedCents != null ? (
+                <span className="ml-2 text-base font-normal text-coop-muted">
+                  of {formatUsdFromCents(user.includedCents)}
+                </span>
+              ) : null}
+            </p>
+            {user.usedRatio != null ? (
+              <div className="mt-3">
+                <UsageMeterBar
+                  size="lg"
+                  ratio={user.usedRatio}
+                  label={`${formatUsagePercent(user.usedRatio)} of included`}
+                />
+              </div>
+            ) : null}
+          </div>
+        )}
         {(user.autoCents != null || user.frontierCents != null) && (
           <p className="text-sm text-coop-muted">
             Auto {formatUsdFromCents(user.autoCents ?? 0)} · Frontier {formatUsdFromCents(user.frontierCents ?? 0)}
+            {user.capKind === "free_credits" ? " · this person’s LLM spend" : ""}
           </p>
         )}
         {user.capKind === "unlimited" ? (
           <p className="text-sm text-coop-muted">Enterprise seats have no included-$ cap. Cost is Coop’s LLM spend.</p>
         ) : null}
-        {user.capKind === "free_credits" ? (
-          <p className="text-sm text-coop-muted">Free credits are org-wide. This cost is this person’s LLM spend only.</p>
+        {canCredit ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {CREDIT_TARGETS.map((target) => (
+              <button
+                key={target}
+                type="button"
+                className="admin-btn-secondary"
+                disabled={busy}
+                onClick={() => {
+                  setActionError(null);
+                  setActionNotice(null);
+                  setCreditTarget(target);
+                }}
+              >
+                Set to {Math.round(target * 100)}%
+              </button>
+            ))}
+          </div>
         ) : null}
         <div className="admin-mix">
           <span>Chat {user.productMix?.chat ?? 0}</span>
@@ -193,6 +278,18 @@ export default function CustomerUserPage() {
           </form>
         ) : null}
       </section>
+
+      <ConfirmUsageCreditModal
+        open={creditTarget != null}
+        email={user.email}
+        currentRatio={usedRatio}
+        targetRatio={creditTarget}
+        loading={busy}
+        onConfirm={handleCredit}
+        onClose={() => {
+          if (!busy) setCreditTarget(null);
+        }}
+      />
     </div>
   );
 }

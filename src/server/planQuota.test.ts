@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_FREE_TOKEN_LIMIT,
   DEFAULT_ROLLING_WINDOW_MS,
+  LLM_USAGE_EVENT_TYPES,
   PlanQuotaExceededError,
   PlanQuotaService,
   computeQuotaResetsAt,
@@ -87,7 +88,7 @@ void (async () => {
   const pool = {
     query: async (sql: string, params: unknown[]) => {
       if (sql.includes("ORDER BY created_at ASC")) {
-        assert.deepEqual(params[3], ["chat.message", "completion.requested"]);
+        assert.deepEqual(params[3], [...LLM_USAGE_EVENT_TYPES]);
         return {
           rows: [
             { created_at: "2026-06-12T11:00:00.000Z", tokens: 6_000 },
@@ -247,7 +248,8 @@ void (async () => {
       return { rows: [] };
     }
   };
-  const paidQuota = new PlanQuotaService(new UsageTracker(paidTrackerPool as never), config);
+  const paidTracker = new UsageTracker(paidTrackerPool as never);
+  const paidQuota = new PlanQuotaService(paidTracker, config);
 
   await paidQuota.check("org-pro", "pro", 0, paidNow, {
     usageTier: "pro",
@@ -341,6 +343,32 @@ void (async () => {
   assert.equal(meters?.frontier.limitCents, 1500);
   assert.equal(meters?.auto.usedCents, 1000);
   assert.equal(meters?.frontier.usedCents, 500);
+
+  await paidTracker.record({
+    orgId: "org-pro",
+    userId: "user-a",
+    principal: "user:user-a",
+    eventType: "quota.credit",
+    metadata: { usdCents: -750, bucket: "auto" }
+  });
+  await paidQuota.check("org-pro", "pro", 0, paidNow, {
+    usageTier: "pro",
+    userId: "user-a",
+    selection: "auto",
+    provider: "openai",
+    model: "gpt-5-mini",
+    periodAnchor: new Date("2026-09-04T17:00:00.000Z")
+  });
+  const creditedMeters = await paidQuota.getUsageMeters(
+    "org-pro",
+    "pro",
+    "pro",
+    paidNow,
+    new Date("2026-09-04T17:00:00.000Z"),
+    "user-a"
+  );
+  assert.equal(creditedMeters?.usedCents, 750);
+  assert.equal(creditedMeters?.usedRatio, 0.5);
 
   centsByKey.set("user-record", { auto: 100, frontier: 50 });
   let recordedMeta: Record<string, unknown> | undefined;

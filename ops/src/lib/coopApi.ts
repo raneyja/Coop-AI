@@ -182,7 +182,16 @@ export type CustomerUserDetail = CustomerUser & {
   autoCents?: number;
   frontierCents?: number;
   productMix?: OperatorProductMix;
+  free?: {
+    usedTokens: number;
+    limitTokens: number;
+    remainingTokens: number;
+    usedRatio: number;
+    resetsAt: string;
+  };
 };
+
+export type UsageCreditTargetRatio = 0 | 0.25 | 0.5;
 
 export type CustomerApiKey = {
   id: string;
@@ -722,6 +731,100 @@ export async function fetchOrganizationUsage(
   return { ok: true, status: result.status, data: usage };
 }
 
+export async function lookupUserByEmail(email: string): Promise<
+  ApiResult<{
+    organization: { id: string; name: string; plan: OrgPlan };
+    user: { id: string; email: string; role: string; status: CustomerUser["status"] };
+  }>
+> {
+  const result = await coopFetch<{
+    organization?: { id?: string; name?: string; plan?: string };
+    user?: { id?: string; email?: string; role?: string; status?: CustomerUser["status"] };
+  }>(`/v1/operator/users/lookup?email=${encodeURIComponent(email.trim())}`);
+  if (!result.ok || !result.data?.user?.id || !result.data.organization?.id) {
+    return {
+      ok: false,
+      status: result.status,
+      error: result.status === 404 ? "No active user with that email." : result.error,
+      unavailable: result.status === 503
+    };
+  }
+  return {
+    ok: true,
+    status: result.status,
+    data: {
+      organization: {
+        id: String(result.data.organization.id),
+        name: String(result.data.organization.name ?? ""),
+        plan: String(result.data.organization.plan ?? "free") as OrgPlan
+      },
+      user: {
+        id: String(result.data.user.id),
+        email: String(result.data.user.email ?? email.trim()),
+        role: String(result.data.user.role ?? "member"),
+        status: result.data.user.status ?? "active"
+      }
+    }
+  };
+}
+
+export async function creditOrganizationUserUsage(
+  orgId: string,
+  userId: string,
+  input: { targetUsedRatio: UsageCreditTargetRatio; reason: string }
+): Promise<ApiResult<{ applied: boolean; afterUsedRatio: number | null; user: CustomerUserDetail }>> {
+  const result = await coopFetch<{
+    applied?: boolean;
+    afterUsedRatio?: number | null;
+    user?: BackendCustomerUser & {
+      capKind?: UsageCapKind;
+      periodStart?: string;
+      periodEnd?: string;
+      autoCents?: number;
+      frontierCents?: number;
+      productMix?: OperatorProductMix;
+      userId?: string;
+      free?: CustomerUserDetail["free"];
+    };
+  }>(
+    `/v1/operator/organizations/${encodeURIComponent(orgId)}/users/${encodeURIComponent(userId)}/usage`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        targetUsedRatio: input.targetUsedRatio,
+        reason: input.reason
+      })
+    }
+  );
+  if (!result.ok || !result.data?.user) {
+    return { ok: false, status: result.status, error: result.error, unavailable: result.status === 503 };
+  }
+  const rawUser = result.data.user;
+  const base = normalizeUser({
+    ...rawUser,
+    id: rawUser.id ?? rawUser.userId ?? userId,
+    email: rawUser.email
+  });
+  return {
+    ok: true,
+    status: result.status,
+    data: {
+      applied: result.data.applied !== false,
+      afterUsedRatio: result.data.afterUsedRatio ?? null,
+      user: {
+        ...base,
+        capKind: rawUser.capKind,
+        periodStart: rawUser.periodStart,
+        periodEnd: rawUser.periodEnd,
+        autoCents: rawUser.autoCents,
+        frontierCents: rawUser.frontierCents,
+        productMix: rawUser.productMix ? normalizeProductMix(rawUser.productMix) : undefined,
+        free: rawUser.free
+      }
+    }
+  };
+}
+
 export async function fetchOrganizationUser(
   orgId: string,
   userId: string
@@ -736,6 +839,7 @@ export async function fetchOrganizationUser(
       frontierCents?: number;
       productMix?: OperatorProductMix;
       userId?: string;
+      free?: CustomerUserDetail["free"];
     };
   }>(
     `/v1/operator/organizations/${encodeURIComponent(orgId)}/users/${encodeURIComponent(userId)}`
@@ -765,7 +869,8 @@ export async function fetchOrganizationUser(
         periodEnd: rawUser.periodEnd,
         autoCents: rawUser.autoCents,
         frontierCents: rawUser.frontierCents,
-        productMix: rawUser.productMix ? normalizeProductMix(rawUser.productMix) : undefined
+        productMix: rawUser.productMix ? normalizeProductMix(rawUser.productMix) : undefined,
+        free: rawUser.free
       }
     }
   };
@@ -1261,7 +1366,11 @@ export function formatUsagePercent(ratio: number | null | undefined): string {
   if (ratio == null || !Number.isFinite(ratio)) {
     return "—";
   }
-  return `${Math.round(ratio * 100)}%`;
+  return `${Math.round(Math.max(0, ratio) * 100)}%`;
+}
+
+export function tokensToCredits(tokens: number): number {
+  return Math.ceil(Math.max(0, tokens) / 1000);
 }
 
 export function usageTierLabel(tier?: string | null): string {
