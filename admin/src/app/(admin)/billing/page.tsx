@@ -145,7 +145,8 @@ export default function BillingPage() {
     : null;
   const paidNextIsEnterprise = nudge?.nextName === "Enterprise";
   const hasStripe = Boolean(billing?.hasStripeCustomer);
-  const showPlanNudge = Boolean(nudge) && !mixed && !isEnterprise;
+  const billingReady = Boolean(billing) && !loading;
+  const showPlanNudge = billingReady && Boolean(nudge) && !mixed && !isEnterprise && !isFree;
   const orgName = displayOrgName(me);
 
   const addSeatsForm = isPro ? (
@@ -230,7 +231,7 @@ export default function BillingPage() {
         </div>
       ) : null}
 
-      {showPlanNudge && nudge && !isFree ? (
+      {showPlanNudge && nudge ? (
         <div className="space-y-2">
           <UpgradeCTA
             variant="banner"
