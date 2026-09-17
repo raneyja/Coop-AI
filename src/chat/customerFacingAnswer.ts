@@ -4,8 +4,9 @@ import { stripEmittedPatchBlocks } from "./agentProposedPatch";
 export const CUSTOMER_EMPTY_HUNT_ANSWER =
   "I couldn't find that in this repo. Try a more specific name, or open the file.";
 
-const PATCH_OR_FENCE_RE =
-  /```(?:patch|diff)[\s\S]*?```|<<<<<<< SEARCH[\s\S]*?>>>>>>> REPLACE/g;
+/** Patch/diff, SEARCH/REPLACE, and any ``` fence (cite cards included). */
+const PRESERVED_FENCE_RE =
+  /```[\s\S]*?```|<<<<<<< SEARCH[\s\S]*?>>>>>>> REPLACE/g;
 
 const INTERN_SPEAK_RE = [
   /\bevidence bundle\b/i,
@@ -22,8 +23,10 @@ const INTERN_SPEAK_RE = [
   /\boffer to re-index\b/i,
   /\bsuggest Deep-Index/i,
   /\breindex\b/i,
-  /\bsoft gather\b/i,
-  /\bgather budget\b/i,
+  /\bsoft gather budget exhausted\b/i,
+  /\bgather budget exhausted\b/i,
+  /\bpartial blast evidence\b/i,
+  /\bsynthesizing with partial\b/i,
   /\btimed out searching\b/i,
   /\btimed out after\b/i,
   /\bRequest timed out after\b/i,
@@ -51,12 +54,19 @@ const OPERATE_COOP_RE = [
   /\bsuggest Deep-Index/i,
   /\bConnect (?:missing tools )?in Coop Settings/i,
   /\breindex\b/i,
-  /\bsoft gather\b/i,
-  /\bgather budget\b/i
+  /\bsoft gather budget exhausted\b/i,
+  /\bgather budget exhausted\b/i,
+  /\bpartial blast evidence\b/i,
+  /\bsynthesizing with partial\b/i
 ];
 
+function proseOutsideFences(content: string): string {
+  PRESERVED_FENCE_RE.lastIndex = 0;
+  return content.replace(PRESERVED_FENCE_RE, "\n");
+}
+
 function hasInternSpeak(content: string): boolean {
-  return INTERN_SPEAK_RE.some((pattern) => pattern.test(content));
+  return INTERN_SPEAK_RE.some((pattern) => pattern.test(proseOutsideFences(content)));
 }
 
 function tidyPhrase(value: string): string {
@@ -214,31 +224,34 @@ function rewriteSegment(segment: string): string {
     .split("\n")
     .map(rewriteLine)
     .filter((line): line is string => line !== null)
-    .join("\n");
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n");
 }
 
-function rewritePreservingPatches(content: string): string {
+function rewritePreservingFences(content: string): string {
   const parts: string[] = [];
   let last = 0;
-  for (const match of content.matchAll(PATCH_OR_FENCE_RE)) {
+  PRESERVED_FENCE_RE.lastIndex = 0;
+  for (const match of content.matchAll(PRESERVED_FENCE_RE)) {
     const idx = match.index ?? 0;
     parts.push(rewriteSegment(content.slice(last, idx)));
     parts.push(match[0]);
     last = idx + match[0].length;
   }
   parts.push(rewriteSegment(content.slice(last)));
-  return parts.join("").replace(/\n{3,}/g, "\n\n");
+  return parts.join("");
 }
 
 /**
  * Last-gate bubble rewriter. Sentences with intern-speak become teammate English.
  * Answers with none of those phrases are returned unchanged (byte-identical).
+ * Citation / code fences are copied through unchanged (same as patch/diff).
  */
 export function rewriteCustomerFacingProse(content: string): string {
   if (!hasInternSpeak(content)) {
     return content;
   }
-  const rewritten = rewritePreservingPatches(content);
+  const rewritten = rewritePreservingFences(content);
   if (!rewritten.trim()) {
     return content;
   }

@@ -29,6 +29,27 @@ function linesMatch(fileSlice: string[], snippet: string[]): boolean {
   return fileSlice.every((line, index) => line.trimEnd() === snippet[index]!.trimEnd());
 }
 
+/** True when snippet is the file slice with some lines removed (still in order). */
+function snippetIsSubsequence(fileSlice: string[], snippet: string[]): boolean {
+  if (snippet.length === 0 || snippet.length > fileSlice.length) {
+    return false;
+  }
+  let i = 0;
+  for (const fileLine of fileSlice) {
+    if (i < snippet.length && fileLine.trimEnd() === snippet[i]!.trimEnd()) {
+      i += 1;
+    }
+  }
+  return i === snippet.length;
+}
+
+function shouldRestoreStrippedClaimedSlice(fileSlice: string[], snippet: string[]): boolean {
+  if (!snippetIsSubsequence(fileSlice, snippet)) {
+    return false;
+  }
+  return snippet.length * 5 >= fileSlice.length * 3;
+}
+
 function sliceLines(fileLines: string[], startLine: number, endLine: number): string[] {
   return fileLines.slice(Math.max(0, startLine - 1), Math.max(startLine, endLine));
 }
@@ -74,7 +95,7 @@ export function groundCodeCitation(
 
   if (claimedStart != null && claimedEnd != null && claimedEnd >= claimedStart) {
     const claimedSlice = sliceLines(fileLines, claimedStart, claimedEnd);
-    if (linesMatch(claimedSlice, snippetLines)) {
+    if (linesMatch(claimedSlice, snippetLines) || shouldRestoreStrippedClaimedSlice(claimedSlice, snippetLines)) {
       return {
         startLine: claimedStart,
         endLine: claimedEnd,

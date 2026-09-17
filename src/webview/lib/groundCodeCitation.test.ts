@@ -88,6 +88,68 @@ test("rewrites the citation fence locator to the real line range", () => {
   assert.equal(rewritten.includes("```7:15:src/server/authMiddleware.ts"), false);
 });
 
+const DEADLINE_FILE = `/**
+ * Soft latency guidance for chat / quick actions.
+ *
+ * 15s is a *start answering* guideline — stop gathering context and hand off to
+ * the model with whatever evidence we have. It must never abort the turn,
+ * kill the model, or replace an answer with a timeout message.
+ *
+ * Soft gather is silent to the user: synthesize with partial evidence, do not
+ * post degradation banners or engineer jargon about “budget exhausted.”
+ *
+ * Agent-owned locate / understand / change turns use \`AGENT_JOB_WALL_MS\` instead
+ * of this gather budget — see agentJobBudget.ts.
+ */
+export const MAX_USER_FACING_RESPONSE_MS = 15_000;
+`;
+
+test("restores cite-body comment lines dropped from the claimed range", () => {
+  const stripped = `/**
+ * Soft latency guidance for chat / quick actions.
+ *
+ * 15s is a *start answering* guideline — stop gathering context and hand off to
+ * the model with whatever evidence we have. It must never abort the turn,
+ * kill the model, or replace an answer with a timeout message.
+ *
+ * post degradation banners or engineer jargon about “budget exhausted.”
+ *
+ * Agent-owned locate / understand / change turns use \`AGENT_JOB_WALL_MS\` instead
+ */
+export const MAX_USER_FACING_RESPONSE_MS = 15_000;`;
+  const grounded = groundCodeCitation(DEADLINE_FILE, stripped, 1, 14);
+  assert.equal(grounded.grounded, true);
+  assert.equal(grounded.startLine, 1);
+  assert.equal(grounded.endLine, 14);
+  assert.match(grounded.code, /Soft gather is silent to the user/);
+  assert.match(grounded.code, /of this gather budget/);
+});
+
+test("applyGroundedCitations restores stripped comments inside a citation fence", () => {
+  const markdown = [
+    "```1:14:src/config/responseDeadline.ts",
+    "/**",
+    " * Soft latency guidance for chat / quick actions.",
+    " *",
+    " * 15s is a *start answering* guideline — stop gathering context and hand off to",
+    " * the model with whatever evidence we have. It must never abort the turn,",
+    " * kill the model, or replace an answer with a timeout message.",
+    " *",
+    " * post degradation banners or engineer jargon about “budget exhausted.”",
+    " *",
+    " * Agent-owned locate / understand / change turns use `AGENT_JOB_WALL_MS` instead",
+    " */",
+    "export const MAX_USER_FACING_RESPONSE_MS = 15_000;",
+    "```"
+  ].join("\n");
+  const rewritten = applyGroundedCitations(
+    markdown,
+    new Map([["src/config/responseDeadline.ts", DEADLINE_FILE]])
+  );
+  assert.match(rewritten, /Soft gather is silent to the user/);
+  assert.match(rewritten, /of this gather budget/);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);

@@ -83,6 +83,87 @@ test("leaves Apply-patch answers unchanged", () => {
   );
 });
 
+test("intern-speak only inside a citation fence leaves the bubble byte-identical", () => {
+  const locked = [
+    "The cap lives in `src/config/responseDeadline.ts`.",
+    "",
+    "```1:4:src/config/responseDeadline.ts",
+    " * Soft gather is silent to the user.",
+    " * If you want I can reindex later.",
+    "```"
+  ].join("\n");
+  assert.equal(rewriteCustomerFacingProse(locked), locked);
+});
+
+test("keeps locate prose and citation-fence comments about the soft gather budget", () => {
+  const firstFence = [
+    "```1:15:src/config/responseDeadline.ts",
+    "/**",
+    " * Soft gather is silent to the user: synthesize with partial evidence, do not",
+    " * post degradation banners or engineer jargon about “budget exhausted.”",
+    " */",
+    "export const MAX_USER_FACING_RESPONSE_MS = 15_000;",
+    "```"
+  ].join("\n");
+  const secondFence = [
+    "```56:63:src/config/responseDeadline.ts",
+    "export function remainingContextGatherBudgetMs(",
+    "  startedAt: number,",
+    "  now = Date.now(),",
+    "  maxMs = MAX_USER_FACING_RESPONSE_MS,",
+    "  reserveSynthesisMs = RESERVED_SYNTHESIS_MS",
+    "): number {",
+    "```"
+  ].join("\n");
+  const locate = [
+    "The soft gather budget is defined in `src/config/responseDeadline.ts`.",
+    "Callers use `remainingContextGatherBudgetMs` for context fetching.",
+    "",
+    firstFence,
+    "",
+    "That helper subtracts the synthesis reserve from the remaining 15s window.",
+    "",
+    secondFence
+  ].join("\n");
+  const out = rewriteCustomerFacingProse(locate);
+  assert.equal(out, locate);
+  assert.match(out, /The soft gather budget is defined/);
+  assert.match(out, /Callers use `remainingContextGatherBudgetMs`/);
+  assert.match(out, /Soft gather is silent to the user/);
+  assert.ok(out.includes(firstFence), "first citation fence must stay byte-identical");
+  assert.ok(out.includes(secondFence), "second citation fence must stay byte-identical");
+});
+
+test("citation fences stay byte-identical even when surrounding intern-speak is rewritten", () => {
+  const fence = [
+    "```8:12:src/config/responseDeadline.ts",
+    " * Soft gather is silent to the user: synthesize with partial evidence, do not",
+    "",
+    "",
+    " * post degradation banners or engineer jargon about “budget exhausted.”",
+    "```"
+  ].join("\n");
+  const mixed = [
+    "From the evidence bundle, the cap lives here.",
+    "",
+    fence,
+    "",
+    "If you want I can run the indexed search."
+  ].join("\n");
+  const out = rewriteCustomerFacingProse(mixed);
+  assert.ok(out.includes(fence), "cite body must not be rewritten");
+  assert.match(out, /the cap lives here/);
+  assert.doesNotMatch(out, /evidence bundle|If you want I can/i);
+});
+
+test("drops latency-banner intern copy without blanking a real answer", () => {
+  const out = rewriteCustomerFacingProse(
+    "Soft gather budget exhausted — synthesizing with partial blast evidence.\nrequireAuth lives in src/server/authMiddleware.ts."
+  );
+  assert.match(out, /requireAuth lives in src\/server\/authMiddleware\.ts/);
+  assert.doesNotMatch(out, /soft gather budget exhausted|partial blast evidence|synthesizing with partial/i);
+});
+
 console.log(`\ncustomerFacingAnswer: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);
