@@ -639,6 +639,8 @@ export class CoopChatSession {
     assistantTimestamp: number;
     intentPlan?: ChatIntentPlan;
   };
+  /** Timestamp of the in-flight user bubble painted before intent planning. */
+  private pendingUserEchoTimestamp?: number;
   /** Abort in-flight hybrid intent-suggest model call (user Stop). */
   private intentSuggestAbort?: AbortController;
   private turnStreamAbort?: AbortSignal;
@@ -5787,6 +5789,87 @@ export class CoopChatSession {
     void this.options.api.recordUsageEvents(eventType, metadata).catch(() => undefined);
   }
 
+  private upsertUserHistoryMessage(
+    userMessage: ChatMessage,
+    options?: { quickAction?: string; replacePending?: boolean; finalize?: boolean }
+  ): void {
+    const last = this.chatHistory[this.chatHistory.length - 1];
+    const canReplace =
+      last?.role === "user" &&
+      this.pendingUserEchoTimestamp !== undefined &&
+      last.timestamp === this.pendingUserEchoTimestamp;
+    if (canReplace && options?.replacePending) {
+      this.chatHistory[this.chatHistory.length - 1] = {
+        ...userMessage,
+        timestamp: last.timestamp
+      };
+    } else {
+      this.chatHistory.push(userMessage);
+      this.pendingUserEchoTimestamp = userMessage.timestamp;
+    }
+    if (this.chatHistory.length === 1) {
+      this.setThreadTitle(
+        summarizeThreadTitle({
+          content: userMessage.content || userMessage.attachments?.[0]?.name || "File attachment",
+          quickAction: options?.quickAction,
+          context: this.currentContext
+        })
+      );
+    }
+    if (options?.finalize) {
+      this.pendingUserEchoTimestamp = undefined;
+    }
+    this.postChatHistory();
+    this.persistActiveThread();
+  }
+
+  /** Show the user bubble before the intent planner / quota / branch pin wait. */
+  private echoUserTurnToChat(
+    message: string,
+    quickAction?: string,
+    attachments?: ChatImageAttachment[],
+    options?: {
+      skipChatIntentPlanner?: boolean;
+      historyContent?: string;
+      mentions?: ChatFileMention[];
+      slashUserArgs?: string;
+      targetFile?: string;
+    }
+  ): void {
+    const mentionRefs = this.quickActionMentionRefs(options?.mentions);
+    const actionContext = quickAction
+      ? this.contextForQuickAction(this.currentContext, options?.targetFile)
+      : this.currentContext;
+    const historyContent =
+      options?.historyContent ??
+      (quickAction && isQuickActionId(quickAction)
+        ? quickActionHistoryContent(
+            quickAction,
+            actionContext,
+            options?.slashUserArgs,
+            mentionRefs
+          )
+        : plainChatHistoryContent(message, mentionRefs, {
+            context: actionContext,
+            includeContextChips: true
+          }));
+    const historyWithScope = historyContentHasScopeChips(historyContent)
+      ? historyContent
+      : withContextChipLine(historyContent, actionContext, mentionRefs);
+    this.upsertUserHistoryMessage(
+      {
+        role: "user",
+        content: historyWithScope,
+        timestamp: Date.now(),
+        attachments: attachments?.length ? attachments : undefined
+      },
+      {
+        quickAction,
+        replacePending: Boolean(options?.skipChatIntentPlanner)
+      }
+    );
+  }
+
   private async handleChatSend(
     message: string,
     quickAction?: string,
@@ -5814,6 +5897,10 @@ export class CoopChatSession {
       skipChatIntentPlanner?: boolean;
     }
   ): Promise<void> {
+    // Paint the user bubble before intent planning so Send is not a 1–2s blank.
+    if (!options?.skipUserHistoryPush) {
+      this.echoUserTurnToChat(message, quickAction, attachments, options);
+    }
     // A new send abandons any unanswered suggest chips.
     if (!options?.skipQuickActionSuggest && !options?.skipUserHistoryPush) {
       this.dismissPendingQuickActionSuggest();
@@ -6227,18 +6314,11 @@ export class CoopChatSession {
       attachments: attachments?.length ? attachments : undefined
     };
     if (!options?.skipUserHistoryPush) {
-      this.chatHistory.push(userMessage);
-      if (this.chatHistory.length === 1) {
-        this.setThreadTitle(
-          summarizeThreadTitle({
-            content: historyWithScope || attachments?.[0]?.name || "File attachment",
-            quickAction,
-            context: this.currentContext
-          })
-        );
-      }
-      this.postChatHistory();
-      this.persistActiveThread();
+      this.upsertUserHistoryMessage(userMessage, {
+        quickAction,
+        replacePending: true,
+        finalize: true
+      });
     }
     this.chatTurnStartedAt = Date.now();
 
@@ -6474,17 +6554,7 @@ export class CoopChatSession {
       timestamp: Date.now(),
       attachments: attachments?.length ? attachments : undefined
     };
-    this.chatHistory.push(userMessage);
-    if (this.chatHistory.length === 1) {
-      this.setThreadTitle(
-        summarizeThreadTitle({
-          content: historyContent || attachments?.[0]?.name || "File attachment",
-          context: this.currentContext
-        })
-      );
-    }
-    this.postChatHistory();
-    this.persistActiveThread();
+    this.upsertUserHistoryMessage(userMessage, { replacePending: true, finalize: true });
     this.chatTurnStartedAt = Date.now();
     this.clearIntentFeedback();
 
@@ -6581,17 +6651,7 @@ export class CoopChatSession {
       timestamp: Date.now(),
       attachments: attachments?.length ? attachments : undefined
     };
-    this.chatHistory.push(userMessage);
-    if (this.chatHistory.length === 1) {
-      this.setThreadTitle(
-        summarizeThreadTitle({
-          content: historyContent || attachments?.[0]?.name || "File attachment",
-          context: this.currentContext
-        })
-      );
-    }
-    this.postChatHistory();
-    this.persistActiveThread();
+    this.upsertUserHistoryMessage(userMessage, { replacePending: true, finalize: true });
     this.chatTurnStartedAt = Date.now();
     this.clearIntentFeedback();
 
@@ -6719,17 +6779,7 @@ export class CoopChatSession {
       timestamp: Date.now(),
       attachments: attachments?.length ? attachments : undefined
     };
-    this.chatHistory.push(userMessage);
-    if (this.chatHistory.length === 1) {
-      this.setThreadTitle(
-        summarizeThreadTitle({
-          content: historyContent || attachments?.[0]?.name || "File attachment",
-          context: this.currentContext
-        })
-      );
-    }
-    this.postChatHistory();
-    this.persistActiveThread();
+    this.upsertUserHistoryMessage(userMessage, { replacePending: true, finalize: true });
     this.chatTurnStartedAt = Date.now();
     this.clearIntentFeedback();
 

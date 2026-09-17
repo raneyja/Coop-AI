@@ -98,6 +98,11 @@ import {
   shouldAutoFlushFollowUpQueue,
   type QueuedFollowUp
 } from "./lib/chatFollowUpQueue";
+import {
+  buildOptimisticUserMessage,
+  mergeChatHistoryWithOptimistic,
+  type OptimisticUserTurn
+} from "./lib/optimisticUserMessage";
 import type {
   ConflictActionId,
   ConflictResolutionState,
@@ -478,6 +483,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const liveStreamRef = useRef(false);
   /** Sync lock so Enter-repeat / double-click cannot post chat:send twice. */
   const inFlightSendRef = useRef(false);
+  /** Local user bubble until host history includes this turn. */
+  const optimisticUserRef = useRef<OptimisticUserTurn | null>(null);
   const [lightningState, setLightningState] = useState<LightningModeState | null>(null);
   const [chatHistorySynced, setChatHistorySynced] = useState(false);
   const [launchIntroConsumed, setLaunchIntroConsumed] = useState(false);
@@ -1052,6 +1059,28 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     });
   }, []);
 
+  const paintOptimisticUser = useCallback(
+    (input: {
+      message: string;
+      quickAction?: string;
+      historyContent?: string;
+      slashUserArgs?: string;
+      attachments?: ChatImageAttachment[];
+      mentions?: ChatFileMention[];
+    }) => {
+      setMessages((prev) => {
+        const turn = buildOptimisticUserMessage({
+          ...input,
+          context,
+          baselineCount: prev.length
+        });
+        optimisticUserRef.current = turn;
+        return [...prev, turn.message];
+      });
+    },
+    [context]
+  );
+
   const handleEvidenceComposerFollowup = useCallback(
     (text: string) => {
       const prompt = text.trim();
@@ -1065,6 +1094,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setAgentOverlay(undefined);
       userStoppedRef.current = false;
       liveStreamRef.current = true;
+      paintOptimisticUser({ message: prompt });
       post({
         type: "chat:send",
         payload: { message: prompt }
@@ -1075,7 +1105,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setMentionResults([]);
       setMentionError("");
     },
-    [post]
+    [paintOptimisticUser, post]
   );
 
   const handleEvidenceQuickAction = useCallback(
@@ -1097,6 +1127,11 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setStreamingBuffer("");
       setThinkingBuffer("");
       setAgentOverlay(undefined);
+      paintOptimisticUser({
+        message: "",
+        quickAction: actionId,
+        historyContent
+      });
       post({
         type: "chat:send",
         payload: {
@@ -1112,7 +1147,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setMentionResults([]);
       setMentionError("");
     },
-    [post]
+    [paintOptimisticUser, post]
   );
 
   const handleSuggestResolve = useCallback(
@@ -1236,7 +1271,11 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           const historyPatches = Array.isArray(payload)
             ? undefined
             : patchCardsFromHistoryPayload(payload);
-          setMessages(historyMessages);
+          const merged = mergeChatHistoryWithOptimistic(historyMessages, optimisticUserRef.current);
+          if (merged.settled) {
+            optimisticUserRef.current = null;
+          }
+          setMessages(merged.messages);
           setInlineArtifacts(historyArtifacts);
           if (historyPatches) {
             setPatchCards(historyPatches.cards);
@@ -1265,6 +1304,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setThreadsState(message.payload);
           break;
         case "chat:thread-changed":
+          optimisticUserRef.current = null;
           setThreadsState((prev) => {
             const next = prev
               ? {
@@ -1780,6 +1820,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setStreamingBuffer("");
       setThinkingBuffer("");
       setAgentOverlay(undefined);
+      paintOptimisticUser({
+        message,
+        quickAction,
+        slashUserArgs: options?.slashUserArgs,
+        attachments: pendingAttachments,
+        mentions: pendingMentions.slice(0, 3)
+      });
       post({
         type: "chat:send",
         payload: {
@@ -1797,7 +1844,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setMentionError("");
       setPendingPromptActionId(undefined);
     },
-    [attachments, mentions, post, signedIn]
+    [attachments, mentions, paintOptimisticUser, post, signedIn]
   );
 
   const submitQueuedFollowUp = useCallback(
@@ -2005,10 +2052,18 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       setStreamingBuffer("");
       setThinkingBuffer("");
       setAgentOverlay(undefined);
+      paintOptimisticUser({
+        message: pending.run.message,
+        quickAction: pending.run.quickAction,
+        historyContent: pending.run.historyContent,
+        slashUserArgs: pending.run.slashUserArgs,
+        attachments: pending.run.attachments,
+        mentions: pending.run.mentions
+      });
       post({ type: "chat:send", payload: pending.run });
       return undefined;
     });
-  }, [post]);
+  }, [paintOptimisticUser, post]);
 
   const handleStopStreaming = useCallback(() => {
     userStoppedRef.current = true;

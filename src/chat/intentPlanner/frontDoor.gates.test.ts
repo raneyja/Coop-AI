@@ -273,6 +273,13 @@ test("handleChatSend interprets before routeSlashCommand (slash bypass is imposs
   assert.match(src, /frontDoorInterpretText/);
   assert.match(src, /routeSlashCommand\(parsedSlash,[\s\S]{0,80}plan\)/);
   assert.match(src, /useCase:\s*FRONT_DOOR_INTERPRETER_USE_CASE/);
+  const sendStart = src.indexOf("private async handleChatSend");
+  const echoAt = src.indexOf("this.echoUserTurnToChat", sendStart);
+  const interpretAt = src.indexOf("shouldInterpretChatAsk(options)", sendStart);
+  assert.ok(
+    echoAt >= 0 && interpretAt > echoAt,
+    "user bubble must paint before the intent planner wait"
+  );
   assert.doesNotMatch(
     src,
     /if \(parsed\) \{\s*await this\.routeSlashCommand\(parsed, attachments, options\?\.mentions\);\s*return;/
