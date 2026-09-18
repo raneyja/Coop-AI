@@ -288,6 +288,7 @@ export class AgentOrchestrator {
     let lastToolResult: string | undefined;
     let matchingRead = false;
     let callerRead = false;
+    const triedSearchQueries = new Set<string>();
     const allowedIntegrations = options.allowedIntegrations ?? [];
     this.loopContext = context;
     const vendorState = new Map<AgentToolName, VendorToolState>();
@@ -611,14 +612,17 @@ export class AgentOrchestrator {
       if (plan.tool === "search_code") {
         const parsed = JSON.parse(lastToolResult) as SearchPayload & { preferredHits?: SearchHit[] };
         let hits = parsed.preferredHits ?? [];
+        const used = typeof args.query === "string" ? args.query : "";
+        if (used) {
+          triedSearchQueries.add(used);
+        }
         if (!hits.length) {
-          const used = typeof args.query === "string" ? args.query : "";
           const found = await this.searchUntilReadableHits(
             repoId,
             query,
             emit,
             context,
-            new Set([used])
+            triedSearchQueries
           );
           if (found) {
             hits = found.toRead;
@@ -690,7 +694,9 @@ export class AgentOrchestrator {
           query,
           emit,
           context,
-          conversation
+          conversation,
+          false,
+          triedSearchQueries
         );
         if (grounded.ok) {
           matchingRead = true;
@@ -719,7 +725,8 @@ export class AgentOrchestrator {
           emit,
           context,
           conversation,
-          true
+          true,
+          triedSearchQueries
         );
         if (caller.ok) {
           filesRead += 1;
@@ -1323,25 +1330,25 @@ export class AgentOrchestrator {
     emit: (step: AgentStep) => void,
     context: AgentSessionContext,
     conversation?: AgentConversationMessage[],
-    preferCallerHits = false
+    preferCallerHits = false,
+    skipQueries: Set<string> = new Set()
   ): Promise<{ ok: boolean; raw?: string; path?: string }> {
     const parsed = context.search_code as (SearchPayload & { preferredHits?: SearchHit[] }) | undefined;
     let hits = parsed?.preferredHits ?? [];
     const roleHints = queryRoleHints(query);
     if (!preferCallerHits && roleHints.length > 0) {
-      const roleHits = hits.filter((hit) =>
+      hits = hits.filter((hit) =>
         textMentionsQueryRoles(`${hit.fileName}\n${hit.content ?? ""}`, query)
       );
-      if (roleHits.length > 0) {
-        hits = roleHits;
-      } else if (hits.length > 0 && !queryHasNamedSymbol(query)) {
-        return { ok: false };
-      } else if (hits.length > 0) {
-        hits = [];
-      }
     }
     if (!hits.length) {
-      const found = await this.searchUntilReadableHits(repoId, query, emit, context);
+      const found = await this.searchUntilReadableHits(
+        repoId,
+        query,
+        emit,
+        context,
+        skipQueries
+      );
       if (found?.toRead.length) {
         hits = found.toRead;
       }
@@ -1506,6 +1513,7 @@ export class AgentOrchestrator {
     let lastError: string | undefined;
     for (const searchQuery of queries) {
       tried.push(searchQuery);
+      skipQueries.add(searchQuery);
       const searchRaw = await this.executeTool("search_code", { query: searchQuery, repoId });
       const decorated = this.decorateToolResult("search_code", searchRaw, query);
       this.mergeContext(context, "search_code", decorated);

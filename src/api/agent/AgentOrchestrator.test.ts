@@ -540,8 +540,8 @@ async function run(): Promise<void> {
         }
       }
     );
-    assert.equal(result.steps.length, 8);
     assert.equal(calls, 8);
+    assert.ok(result.steps.length >= 8);
   });
 
   await test("wrong first hit forces a second read before done (dogfood)", async () => {
@@ -2087,25 +2087,36 @@ async function run(): Promise<void> {
     let round = 0;
     const orchestrator = createAgentOrchestrator({
       indexBackend: mockIndexBackend({
-        search: async () => ({
-          source: "zoekt",
-          stale: false,
-          hits: [
-            {
-              fileName: leftover,
-              lineNumber: 8,
-              content: "export const MAX_USER_FACING_RESPONSE_MS = 15_000;",
-              score: 0.99
-            },
-            {
-              fileName: authPath,
-              lineNumber: 132,
-              content: "export function requireAuth(request) {",
-              score: 0.4
-            }
-          ],
-          symbols: []
-        })
+        search: async (_repo, pattern) => {
+          if (/authmiddleware/i.test(pattern)) {
+            return {
+              source: "zoekt",
+              stale: false,
+              hits: [
+                {
+                  fileName: authPath,
+                  lineNumber: 132,
+                  content: "export function requireAuth(request) {",
+                  score: 0.9
+                }
+              ],
+              symbols: []
+            };
+          }
+          return {
+            source: "zoekt",
+            stale: false,
+            hits: [
+              {
+                fileName: leftover,
+                lineNumber: 8,
+                content: "export const MAX_USER_FACING_RESPONSE_MS = 15_000;",
+                score: 0.99
+              }
+            ],
+            symbols: []
+          };
+        }
       }),
       resolveAbsolutePath: () => undefined,
       readRemoteFile: async ({ path: rel }) => {

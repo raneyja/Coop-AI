@@ -217,6 +217,22 @@ test("role-noun hunts keep middleware hits and drop collab auth", () => {
   assert.equal(picked[0]?.fileName, "server/http/middleware.py");
 });
 
+test("role-noun hunts drop leftover latency hits that never say middleware", () => {
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "src/config/responseDeadline.ts",
+        lineNumber: 8,
+        score: 0.99,
+        content: "export const MAX_USER_FACING_RESPONSE_MS = 15_000;"
+      }
+    ],
+    8,
+    "Where is auth middleware enforced and what calls it?"
+  );
+  assert.equal(picked.length, 0);
+});
+
 test("does not treat require_authentication filenames as requireAuth", () => {
   const ask = "add logging around requireAuth";
   assert.equal(

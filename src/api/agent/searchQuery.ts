@@ -537,12 +537,9 @@ export function pickSearchHitsToRead<T extends RankedSearchHit & { content?: str
         )
       : ranked;
   if (keys.length === 0 && userMessage && queryRoleHints(userMessage).length > 0) {
-    const roleHits = pool.filter((hit) =>
+    pool = pool.filter((hit) =>
       textMentionsQueryRoles(`${hit.fileName}\n${hit.content ?? ""}`, userMessage)
     );
-    if (roleHits.length > 0) {
-      pool = roleHits;
-    }
   } else if (
     keys.length > 0 &&
     pool.length === 0 &&
