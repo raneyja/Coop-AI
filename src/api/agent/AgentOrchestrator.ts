@@ -32,9 +32,11 @@ import {
   isApiRejectAsk,
   contentLooksLikeAskedFieldReject,
   lineNumberOfWriteReject,
-  textMentionsNamedSymbol,
-  textMentionsQueryRoles
+  textMentionsQueryRoles,
+  textSatisfiesLocateQuery,
+  readBodyHasCallerUse
 } from "./searchQuery";
+import { isFileCallerQuery } from "../../context/fileCallerIntent";
 import { createAgentToolRegistry } from "./tools/registry";
 import { handleIntegrationSearch } from "./tools/integrationSearch";
 import { formatOpenedIntegrationEvidence, listOpenedIntegrationArtifacts, type OpenedVendorArtifact } from "./openedIntegrationEvidence";
@@ -285,6 +287,7 @@ export class AgentOrchestrator {
     let integrationCalls = 0;
     let lastToolResult: string | undefined;
     let matchingRead = false;
+    let callerRead = false;
     const allowedIntegrations = options.allowedIntegrations ?? [];
     this.loopContext = context;
     const vendorState = new Map<AgentToolName, VendorToolState>();
@@ -339,7 +342,13 @@ export class AgentOrchestrator {
         return contextHasWriteReject(context, query);
       }
       if (queryHasNamedSymbol(query) || queryRoleHints(query).length > 0) {
+        if (isFileCallerQuery(query) && queryHasNamedSymbol(query)) {
+          return matchingRead && callerRead;
+        }
         return matchingRead;
+      }
+      if (isFileCallerQuery(query) && queryHasNamedSymbol(query)) {
+        return matchingRead && callerRead;
       }
       return steps.length > 0;
     };
@@ -557,6 +566,21 @@ export class AgentOrchestrator {
         if (judged.matchesSymbol) {
           matchingRead = true;
           this.mergeContext(context, plan.tool, rawResult);
+          if (isFileCallerQuery(query) && !callerRead) {
+            const expanded = await this.expandReadForCallers(
+              repoId,
+              query,
+              args,
+              rawResult,
+              emit,
+              context,
+              conversation
+            );
+            rawResult = expanded.raw;
+            if (expanded.callerRead) {
+              callerRead = true;
+            }
+          }
         } else {
           // Keep the miss in the conversation so the model searches again;
           // do not treat it as definition evidence.
@@ -602,25 +626,49 @@ export class AgentOrchestrator {
             conversation[conversation.length - 1] = { role: "user", content: lastToolResult };
           }
         }
+        const roleHints = queryRoleHints(query);
+        const autoReadHits =
+          roleHints.length > 0
+            ? hits.filter((hit) =>
+                textMentionsQueryRoles(`${hit.fileName}\n${hit.content ?? ""}`, query)
+              )
+            : hits;
         if (
-          !matchingRead &&
-          hits.length > 0 &&
+          autoReadHits.length > 0 &&
           filesRead < AGENT_MAX_FILES_READ &&
-          (!queryHasNamedSymbol(query) || isApiRejectAsk(query)) &&
-          (queryRoleHints(query).length === 0 || isApiRejectAsk(query))
+          (!matchingRead || (isFileCallerQuery(query) && queryHasNamedSymbol(query) && !callerRead))
         ) {
           const seeded = await this.readFirstMatchingHit(
             repoId,
             query,
-            hits,
+            autoReadHits,
             emit,
             context,
-            conversation
+            conversation,
+            undefined,
+            isFileCallerQuery(query) && matchingRead && !callerRead
           );
           if (seeded.ok) {
-            matchingRead = true;
             filesRead += 1;
             lastToolResult = seeded.raw;
+            if (!matchingRead) {
+              matchingRead = true;
+            }
+            if (isFileCallerQuery(query) && !callerRead) {
+              const expanded = await this.expandReadForCallers(
+                repoId,
+                query,
+                { path: seeded.path ?? "", repoId },
+                seeded.raw ?? "",
+                emit,
+                context,
+                conversation
+              );
+              lastToolResult = expanded.raw;
+              if (expanded.callerRead) {
+                callerRead = true;
+              }
+            }
             if (isApiRejectAsk(query) && contextHasWriteReject(context, query)) {
               break;
             }
@@ -631,6 +679,63 @@ export class AgentOrchestrator {
         const proposed = JSON.parse(rawResult) as { ok?: boolean };
         if (proposed.ok) {
           break;
+        }
+      }
+    }
+
+    if (allowedRepoTools && filesRead < AGENT_MAX_FILES_READ) {
+      if (!matchingRead) {
+        const grounded = await this.lastChanceReadMatchingHit(
+          repoId,
+          query,
+          emit,
+          context,
+          conversation
+        );
+        if (grounded.ok) {
+          matchingRead = true;
+          filesRead += 1;
+          lastToolResult = grounded.raw;
+          if (isFileCallerQuery(query) && !callerRead) {
+            const expanded = await this.expandReadForCallers(
+              repoId,
+              query,
+              { path: grounded.path ?? "", repoId },
+              grounded.raw ?? "",
+              emit,
+              context,
+              conversation
+            );
+            lastToolResult = expanded.raw;
+            if (expanded.callerRead) {
+              callerRead = true;
+            }
+          }
+        }
+      } else if (isFileCallerQuery(query) && queryHasNamedSymbol(query) && !callerRead) {
+        const caller = await this.lastChanceReadMatchingHit(
+          repoId,
+          query,
+          emit,
+          context,
+          conversation,
+          true
+        );
+        if (caller.ok) {
+          filesRead += 1;
+          const expanded = await this.expandReadForCallers(
+            repoId,
+            query,
+            { path: caller.path ?? "", repoId },
+            caller.raw ?? "",
+            emit,
+            context,
+            conversation
+          );
+          lastToolResult = expanded.raw;
+          if (expanded.callerRead) {
+            callerRead = true;
+          }
         }
       }
     }
@@ -965,7 +1070,7 @@ export class AgentOrchestrator {
     args: Record<string, unknown>
   ): { raw: string; matchesSymbol: boolean } {
     const needsNamed = queryHasNamedSymbol(query);
-    const needsRole = !needsNamed && queryRoleHints(query).length > 0;
+    const needsRole = queryRoleHints(query).length > 0;
     if (!needsNamed && !needsRole) {
       return { raw, matchesSymbol: true };
     }
@@ -980,16 +1085,13 @@ export class AgentOrchestrator {
       if (queryNamesSourceFile(path, query) && readFilePayloadHasBody(raw)) {
         return { raw, matchesSymbol: true };
       }
-      const matches = needsNamed
-        ? textMentionsNamedSymbol(blob, query)
-        : textMentionsQueryRoles(blob, query);
-      if (matches) {
+      if (textSatisfiesLocateQuery(blob, query)) {
         return { raw, matchesSymbol: true };
       }
       return {
         raw: JSON.stringify({
           ...parsed,
-          skipNote: needsNamed
+          skipNote: needsNamed && !needsRole
             ? "This file does not mention the named symbol. Search or read a different path before answering. Do not treat this as the definition."
             : "This file does not mention the role the user named (e.g. middleware). Search or read a different path — do not treat websocket/session auth as HTTP middleware."
         }),
@@ -1073,8 +1175,9 @@ export class AgentOrchestrator {
     emit: (step: AgentStep) => void,
     context: AgentSessionContext,
     conversation?: AgentConversationMessage[],
-    skippedPaths?: Set<string>
-  ): Promise<{ ok: boolean; raw?: string }> {
+    skippedPaths?: Set<string>,
+    preferCallerHits = false
+  ): Promise<{ ok: boolean; raw?: string; path?: string }> {
     for (const hit of hits) {
       if (!hit.fileName) {
         continue;
@@ -1108,17 +1211,22 @@ export class AgentOrchestrator {
         .map((file) => `${file.path}\n${file.content}`)
         .join("\n");
       const blob = `${hit.fileName}\n${hit.content ?? ""}\n${body}`;
-      const namedOk = !queryHasNamedSymbol(query) || textMentionsNamedSymbol(blob, query);
-      const roleOk =
-        queryHasNamedSymbol(query) ||
-        queryRoleHints(query).length === 0 ||
-        textMentionsQueryRoles(blob, query);
-      if (!namedOk || !roleOk) {
+      if (!textSatisfiesLocateQuery(blob, query)) {
         skippedPaths?.add(pathKey);
         emit({
           index: 0,
           tool: "read_file",
           summary: `read_file skipped (no symbol match): ${hit.fileName}`,
+          completed: true
+        });
+        continue;
+      }
+      if (preferCallerHits && !readBodyHasCallerUse(body, query)) {
+        skippedPaths?.add(pathKey);
+        emit({
+          index: 0,
+          tool: "read_file",
+          summary: `read_file skipped (definition only): ${hit.fileName}`,
           completed: true
         });
         continue;
@@ -1161,9 +1269,96 @@ export class AgentOrchestrator {
         summary: `read_file: ${hit.fileName}`,
         completed: true
       });
-      return { ok: true, raw: readRaw };
+      return { ok: true, raw: readRaw, path: hit.fileName };
     }
     return { ok: false };
+  }
+
+  /**
+   * A definition window (L10–17) is not proof there are no callers. Re-read the
+   * whole file; same-file `extractBearerToken(` at L77 counts.
+   */
+  private async expandReadForCallers(
+    repoId: string,
+    query: string,
+    args: Record<string, unknown>,
+    raw: string,
+    emit: (step: AgentStep) => void,
+    context: AgentSessionContext,
+    conversation?: AgentConversationMessage[]
+  ): Promise<{ raw: string; callerRead: boolean }> {
+    if (readBodyHasCallerUse(readFileBodies(raw), query)) {
+      return { raw, callerRead: true };
+    }
+    const expanded = await this.retryReadWithoutWindow(args, repoId, query);
+    if (!expanded?.matchesSymbol) {
+      return { raw, callerRead: false };
+    }
+    this.mergeContext(context, "read_file", expanded.raw);
+    const path = typeof args.path === "string" ? args.path : "";
+    conversation?.push({
+      role: "assistant",
+      content: JSON.stringify({ tool: "read_file", args: { path } })
+    });
+    conversation?.push({ role: "user", content: expanded.raw });
+    emit({
+      index: 0,
+      tool: "read_file",
+      summary: `read_file: ${path}`,
+      completed: true
+    });
+    return {
+      raw: expanded.raw,
+      callerRead: readBodyHasCallerUse(readFileBodies(expanded.raw), query)
+    };
+  }
+
+  /**
+   * Preferred hits existed but were never opened, or named-symbol searches missed
+   * an OR role phrase. Read a matching hit before INDEX_HUNT_MISS or vendor fill.
+   */
+  private async lastChanceReadMatchingHit(
+    repoId: string,
+    query: string,
+    emit: (step: AgentStep) => void,
+    context: AgentSessionContext,
+    conversation?: AgentConversationMessage[],
+    preferCallerHits = false
+  ): Promise<{ ok: boolean; raw?: string; path?: string }> {
+    const parsed = context.search_code as (SearchPayload & { preferredHits?: SearchHit[] }) | undefined;
+    let hits = parsed?.preferredHits ?? [];
+    const roleHints = queryRoleHints(query);
+    if (!preferCallerHits && roleHints.length > 0) {
+      const roleHits = hits.filter((hit) =>
+        textMentionsQueryRoles(`${hit.fileName}\n${hit.content ?? ""}`, query)
+      );
+      if (roleHits.length > 0) {
+        hits = roleHits;
+      } else if (hits.length > 0 && !queryHasNamedSymbol(query)) {
+        return { ok: false };
+      } else if (hits.length > 0) {
+        hits = [];
+      }
+    }
+    if (!hits.length) {
+      const found = await this.searchUntilReadableHits(repoId, query, emit, context);
+      if (found?.toRead.length) {
+        hits = found.toRead;
+      }
+    }
+    if (!hits.length) {
+      return { ok: false };
+    }
+    return this.readFirstMatchingHit(
+      repoId,
+      query,
+      hits,
+      emit,
+      context,
+      conversation,
+      undefined,
+      preferCallerHits
+    );
   }
 
   /**

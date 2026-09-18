@@ -139,23 +139,15 @@ export function plannerAllowsAgentRepoLoop(
 }
 
 /**
- * Integrations the agent may call. Named-tool turns without a locate job stay
- * on plan.tools — do not pass every connected vendor.
+ * Integrations the agent may call. Code-only locate/change (empty plan.tools)
+ * padlocks vendors. Named-tool turns — including compound locate+Jira — stay
+ * on plan.tools only. Never the full connected list.
  */
 export function integrationsForAgentLoop(options: {
   connected: IntegrationChatProvider[];
   plan?: ChatIntentPlan;
 }): IntegrationChatProvider[] {
-  if (options.plan?.mode === "tools-only") {
-    const hasLocate =
-      locateJobTerms(options.plan.jobs).length > 0 ||
-      options.plan.codeIntent?.action === "locate" ||
-      options.plan.codeIntent?.action === "change";
-    if (!hasLocate) {
-      return options.plan.tools;
-    }
-  }
-  return options.connected;
+  return options.plan?.tools ?? [];
 }
 
 /**

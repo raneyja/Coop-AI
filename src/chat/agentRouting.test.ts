@@ -449,6 +449,55 @@ test("ticket pickup with requireAuth and Jira still runs the hunt (3b)", () => {
   );
 });
 
+test("code-only locate does not unlock connected vendors (FAIL 2)", () => {
+  const query = "Where is auth middleware enforced and what calls it?";
+  const plan: ChatIntentPlan = {
+    ...emptyChatIntentPlan(query),
+    mode: "none",
+    tools: [],
+    codeIntent: {
+      action: "locate",
+      confidence: "high",
+      reason: "asks where something is and names code"
+    }
+  };
+  assert.deepEqual(
+    integrationsForAgentLoop({
+      connected: ["jira", "confluence", "slack"],
+      plan
+    }),
+    []
+  );
+});
+
+test("I3 compound locate+jira stays on jira, not the full connected list", () => {
+  const query =
+    "Where is requireAuth defined, and what did we already decide about peeling auth into coop-backend?";
+  const plan: ChatIntentPlan = {
+    mode: "tools-only",
+    tools: ["jira"],
+    jobs: [
+      { capability: "locate", terms: ["requireAuth"] },
+      { capability: "decision", terms: ["peeling auth", "coop-backend"] }
+    ],
+    confidence: "high",
+    focus: query,
+    execution: "none",
+    codeIntent: {
+      action: "locate",
+      confidence: "high",
+      reason: "asks where something is and names code"
+    }
+  };
+  assert.deepEqual(
+    integrationsForAgentLoop({
+      connected: ["jira", "confluence", "slack", "notion"],
+      plan
+    }),
+    ["jira"]
+  );
+});
+
 console.log(`\nagentRouting: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);

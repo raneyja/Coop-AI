@@ -414,6 +414,11 @@ export function fallbackAgentSearchQueries(userMessage: string): string[] {
     push(alias);
   }
   push(role);
+  if (role) {
+    for (const alias of rolePhraseFileAliases(role)) {
+      push(alias);
+    }
+  }
   for (const token of tokens) {
     if (isJunkSearchToken(token)) {
       continue;
@@ -533,6 +538,18 @@ export function pickSearchHitsToRead<T extends RankedSearchHit & { content?: str
       : ranked;
   if (keys.length === 0 && userMessage && queryRoleHints(userMessage).length > 0) {
     const roleHits = pool.filter((hit) =>
+      textMentionsQueryRoles(`${hit.fileName}\n${hit.content ?? ""}`, userMessage)
+    );
+    if (roleHits.length > 0) {
+      pool = roleHits;
+    }
+  } else if (
+    keys.length > 0 &&
+    pool.length === 0 &&
+    userMessage &&
+    queryRoleHints(userMessage).length > 0
+  ) {
+    const roleHits = ranked.filter((hit) =>
       textMentionsQueryRoles(`${hit.fileName}\n${hit.content ?? ""}`, userMessage)
     );
     if (roleHits.length > 0) {
@@ -894,6 +911,59 @@ export function textMentionsQueryRoles(text: string, userMessage: string): boole
   }
   const blob = text.toLowerCase();
   return hints.some((role) => blob.includes(role));
+}
+
+/**
+ * "requireAuth or authentication middleware" is an OR. Named-only asks still
+ * require the identifier; role-only asks still require the role.
+ */
+export function textSatisfiesLocateQuery(text: string, userMessage: string): boolean {
+  const hasNamed = queryHasNamedSymbol(userMessage);
+  const hasRole = queryRoleHints(userMessage).length > 0;
+  const namedOk = !hasNamed || textMentionsNamedSymbol(text, userMessage);
+  const roleOk = !hasRole || textMentionsQueryRoles(text, userMessage);
+  if (hasNamed && hasRole) {
+    return namedOk || roleOk;
+  }
+  return namedOk && roleOk;
+}
+
+/**
+ * A call / import of the named symbol on a line that is not its declaration.
+ * Same-file `extractBearerToken(headers)` at L77 counts; the export does not.
+ */
+export function readBodyHasCallerUse(text: string, userMessage: string): boolean {
+  const forms = namedSymbolForms(userMessage);
+  if (!forms.length || !text) {
+    return false;
+  }
+  for (const line of text.split(/\r?\n/)) {
+    if (!forms.some((form) => textHasIdentifierToken(line, form))) {
+      continue;
+    }
+    if (!contentLooksLikeDeclaration(line, userMessage)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** `auth middleware` → authMiddleware / authMiddleware.ts for last-chance index queries. */
+function rolePhraseFileAliases(rolePhrase: string): string[] {
+  const words = rolePhrase
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length < 2) {
+    return [];
+  }
+  const camel =
+    words[0] + words.slice(1).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join("");
+  if (camel.length < 4) {
+    return [];
+  }
+  return [camel, `${camel}.ts`];
 }
 
 function hitMentionsNamedSymbol(
