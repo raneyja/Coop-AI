@@ -35,6 +35,7 @@ import {
   queryNamesSourceFile,
   queryRoleHints,
   readBodyHasCallerUse,
+  lineNumberOfCallerUse,
   sanitizeAgentSearchQuery,
   selectChatEvidencePaths,
   shouldSkipEvidencePath,
@@ -1212,6 +1213,21 @@ test("readBodyHasCallerUse still counts same-file extractBearerToken( for a name
     "const token = extractBearerToken(headers);"
   ].join("\n");
   assert.equal(readBodyHasCallerUse(body, ask), true);
+  assert.equal(lineNumberOfCallerUse(body, ask), 4);
+});
+
+test("lineNumberOfCallerUse returns the use line, not the declaration", () => {
+  const ask = "Where is auth middleware enforced and what calls it?";
+  const handler = [
+    "// handler header",
+    'import { requireAuth } from "../authMiddleware";',
+    "export function handleLogin(req) {",
+    "  if (!requireAuth(req.auth, true)) return;",
+    "}"
+  ].join("\n");
+  const def = "export function requireAuth(request) {\n  return Boolean(request.auth);\n}\n";
+  assert.equal(lineNumberOfCallerUse(handler, ask, "requireAuth"), 2);
+  assert.equal(lineNumberOfCallerUse(def, ask, "requireAuth"), undefined);
 });
 
 console.log(`\nsearchQuery: ${passed}/${passed + failed} tests passed`);

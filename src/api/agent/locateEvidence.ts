@@ -328,6 +328,39 @@ function queryExportTokens(query: string): string[] {
   return [...terms];
 }
 
+function nativeDeclPatterns(path: string): RegExp[] {
+  switch (fileLangFamily(path)) {
+    case "ts":
+      return [
+        /\bexport\s+(?:default\s+)?(?:async\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)/g,
+        /\bexport\s+(?:default\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/g,
+        /\bexport\s+(?:const|let|var)\s+([A-Za-z_][A-Za-z0-9_]*)/g
+      ];
+    case "py":
+      return [
+        /^class\s+([A-Za-z_][A-Za-z0-9_]*)/gm,
+        /^(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)/gm
+      ];
+    case "go":
+      return [
+        /\bfunc\s+(?:\([^)]*\)\s+)?([A-Za-z_][A-Za-z0-9_]*)/g,
+        /\btype\s+([A-Za-z_][A-Za-z0-9_]*)/g
+      ];
+    case "java":
+      return [/\b(?:class|interface|enum)\s+([A-Za-z_][A-Za-z0-9_]*)/g];
+    case "rs":
+      return [/\b(?:fn|struct)\s+([A-Za-z_][A-Za-z0-9_]*)/g];
+    case "rb":
+      return [/\b(?:def|class|module)\s+([A-Za-z_][A-Za-z0-9_]*)/g];
+    default:
+      return [
+        /\b(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)/g,
+        /\b(?:export\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/g,
+        /^(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)/gm
+      ];
+  }
+}
+
 function collectDeclNames(source: string, patterns: RegExp[]): string[] {
   const names: string[] = [];
   const seen = new Set<string>();
@@ -352,38 +385,34 @@ export function nativeDeclarationsInBody(path: string, body: string): string[] {
   if (!code.trim()) {
     return [];
   }
-  switch (fileLangFamily(path)) {
-    case "ts":
-      return collectDeclNames(code, [
-        /\bexport\s+(?:default\s+)?(?:async\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)/g,
-        /\bexport\s+(?:default\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/g,
-        /\bexport\s+(?:const|let|var)\s+([A-Za-z_][A-Za-z0-9_]*)/g
-      ]);
-    case "py":
-      return collectDeclNames(code, [
-        /^class\s+([A-Za-z_][A-Za-z0-9_]*)/gm,
-        /^(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)/gm
-      ]);
-    case "go":
-      return collectDeclNames(code, [
-        /\bfunc\s+(?:\([^)]*\)\s+)?([A-Za-z_][A-Za-z0-9_]*)/g,
-        /\btype\s+([A-Za-z_][A-Za-z0-9_]*)/g
-      ]);
-    case "java":
-      return collectDeclNames(code, [
-        /\b(?:class|interface|enum)\s+([A-Za-z_][A-Za-z0-9_]*)/g
-      ]);
-    case "rs":
-      return collectDeclNames(code, [/\b(?:fn|struct)\s+([A-Za-z_][A-Za-z0-9_]*)/g]);
-    case "rb":
-      return collectDeclNames(code, [/\b(?:def|class|module)\s+([A-Za-z_][A-Za-z0-9_]*)/g]);
-    default:
-      return collectDeclNames(code, [
-        /\b(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)/g,
-        /\b(?:export\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/g,
-        /^(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)/gm
-      ]);
+  return collectDeclNames(code, nativeDeclPatterns(path));
+}
+
+/**
+ * File line of a name already chosen by pickGroundedExport / nativeDeclarationsInBody.
+ * Scans the body; does not rank files.
+ */
+export function lineNumberOfGroundedExport(
+  path: string,
+  body: string,
+  exportName: string
+): number | undefined {
+  const name = exportName.trim();
+  if (!name || !nativeDeclarationsInBody(path, body).includes(name)) {
+    return undefined;
   }
+  const rows = body.split(/\r?\n/).map((row) => row.replace(/^\d+\|/, ""));
+  const patterns = nativeDeclPatterns(path);
+  for (let i = 0; i < rows.length; i++) {
+    for (const pattern of patterns) {
+      pattern.lastIndex = 0;
+      const match = pattern.exec(rows[i] ?? "");
+      if (match?.[1] === name) {
+        return i + 1;
+      }
+    }
+  }
+  return undefined;
 }
 
 function scoreDeclarationForQuery(name: string, query: string): number {

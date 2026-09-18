@@ -70,6 +70,38 @@ function mockIndexBackend(overrides: Partial<IndexBackend> = {}): IndexBackend {
   };
 }
 
+function latestReadFileContent(
+  conversation: Array<{ role: string; content: string }> | undefined,
+  filePath: string
+): string {
+  let latest = "";
+  for (const msg of conversation ?? []) {
+    if (msg.role !== "user") {
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(msg.content) as {
+        files?: Array<{ path?: string; content?: string }>;
+      };
+      for (const file of parsed.files ?? []) {
+        if (file.path === filePath && file.content) {
+          latest = file.content;
+        }
+      }
+    } catch {
+      // Not a read_file payload.
+    }
+  }
+  return latest;
+}
+
+function latestContextFile(
+  files: Array<{ path: string; content: string }>,
+  filePath: string
+): { path: string; content: string } | undefined {
+  return files.filter((file) => file.path === filePath).at(-1);
+}
+
 async function run(): Promise<void> {
   await test("pickTopSearchHit prefers highest score", () => {
     const top = pickTopSearchHit([
@@ -2994,6 +3026,16 @@ async function run(): Promise<void> {
           const blob = JSON.stringify(conversation);
           assert.match(blob, /requireAuth|require_auth/);
           assert.doesNotMatch(blob, /callers were not found in the index/i);
+          const implAttach = latestReadFileContent(conversation, serverPath);
+          assert.match(implAttach, /requireAuth/);
+          assert.doesNotMatch(
+            implAttach,
+            /extractBearerToken/,
+            "writer implementation body must be the gate window, not page 1"
+          );
+          assert.doesNotMatch(implAttach, /^1\|/m);
+          const callerAttach = latestReadFileContent(conversation, callerPath);
+          assert.match(callerAttach, /require_auth\(request\)/);
           return "Auth middleware is requireAuth; handle_login in src/server/http/handlers.py calls it.";
         }
       }
@@ -3013,8 +3055,152 @@ async function run(): Promise<void> {
       true,
       "caller body must be attached"
     );
+    const latestImpl = latestContextFile(attached, serverPath);
+    assert.ok(latestImpl, "implementation body must be attached");
+    assert.match(latestImpl.content, /requireAuth/);
+    assert.doesNotMatch(latestImpl.content, /extractBearerToken/);
+    assert.doesNotMatch(latestImpl.content, /^1\|/m);
+    assert.equal(
+      attached.filter((file) => file.path === serverPath).length,
+      1,
+      "writer should see one implementation body, not the top window plus the full file"
+    );
+    assert.ok(
+      latestImpl.content.split("\n").length < 120,
+      "jumped implementation window must not be the full 160-line file"
+    );
+    const latestCaller = latestContextFile(attached, callerPath);
+    assert.match(latestCaller?.content ?? "", /require_auth\(request\)/);
     assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
     assert.doesNotMatch(result.answer ?? "", /callers were not found/i);
+  });
+
+  await test("role-only Card 1 attach jumps to the gate export, not page 1", async () => {
+    const serverPath = "src/server/authMiddleware.ts";
+    const callerPath = "src/server/http/handlers.py";
+    const defLines = Array.from({ length: 160 }, (_, i) => {
+      const line = i + 1;
+      if (line === 10) {
+        return "export function extractBearerToken(headers) {";
+      }
+      if (line === 17) {
+        return "}";
+      }
+      if (line === 46) {
+        return "export async function resolveAuthContextDetailed(headers) {";
+      }
+      if (line === 50) {
+        return "}";
+      }
+      if (line === 132) {
+        return "export function requireAuth(auth, requireInProduction) {";
+      }
+      if (line === 136) {
+        return "}";
+      }
+      return `// line ${line}`;
+    }).join("\n");
+    const callerBody = Array.from({ length: 90 }, (_, i) => {
+      const line = i + 1;
+      if (line === 1) {
+        return "# HTTP handlers";
+      }
+      if (line === 83) {
+        return "from server.http.middleware import require_auth";
+      }
+      if (line === 84) {
+        return "def handle_login(request):";
+      }
+      if (line === 85) {
+        return "    return require_auth(request)";
+      }
+      return `# line ${line}`;
+    }).join("\n");
+    const reads: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async (_repo, pattern) => {
+          if (/^requireAuth$|^require_auth$/i.test(pattern)) {
+            return {
+              source: "zoekt",
+              stale: false,
+              hits: [
+                {
+                  fileName: serverPath,
+                  lineNumber: 132,
+                  content: "export function requireAuth(auth, requireInProduction) {",
+                  score: 0.9
+                },
+                {
+                  fileName: callerPath,
+                  lineNumber: 1,
+                  content: "return require_auth(request)",
+                  score: 0.8
+                }
+              ],
+              symbols: []
+            };
+          }
+          return {
+            source: "zoekt",
+            stale: false,
+            hits: [
+              {
+                fileName: serverPath,
+                lineNumber: 10,
+                content: "export function extractBearerToken(headers) {",
+                score: 0.95
+              }
+            ],
+            symbols: []
+          };
+        }
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        if (rel === serverPath) {
+          return { path: rel, content: defLines };
+        }
+        if (rel === callerPath) {
+          return { path: rel, content: callerBody };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is auth middleware enforced and what calls it?",
+        repoId: "acme/demo",
+        action: "locate",
+        maxSteps: 8
+      },
+      {
+        allowedIntegrations: [],
+        planTurn: async () => JSON.stringify({ tool: "search_code", args: { query: "auth middleware" } }),
+        streamAnswer: async ({ conversation }) => {
+          const implAttach = latestReadFileContent(conversation, serverPath);
+          assert.match(implAttach, /requireAuth/);
+          assert.doesNotMatch(implAttach, /extractBearerToken/);
+          assert.doesNotMatch(implAttach, /^1\|/m);
+          const callerAttach = latestReadFileContent(conversation, callerPath);
+          assert.match(callerAttach, /require_auth\(request\)/);
+          assert.doesNotMatch(callerAttach, /^1\|# HTTP handlers/m);
+          return "Auth middleware is requireAuth; handle_login calls it.";
+        }
+      }
+    );
+    assert.equal(reads.includes(serverPath), true);
+    assert.equal(reads.includes(callerPath), true);
+    const attached =
+      (result.context?.read_file as { files?: Array<{ path: string; content: string }> } | undefined)
+        ?.files ?? [];
+    const latestImpl = latestContextFile(attached, serverPath);
+    assert.match(latestImpl?.content ?? "", /requireAuth/);
+    assert.doesNotMatch(latestImpl?.content ?? "", /extractBearerToken/);
+    const latestCaller = latestContextFile(attached, callerPath);
+    assert.match(latestCaller?.content ?? "", /require_auth\(request\)/);
+    assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
   });
 
   console.log(`\nAgentOrchestrator: ${passed}/${passed + failed} tests passed`);

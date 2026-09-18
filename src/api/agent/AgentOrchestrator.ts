@@ -35,12 +35,14 @@ import {
   contentLooksLikeAskedFieldReject,
   lineNumberOfWriteReject,
   textMentionsQueryRoles,
-  readBodyHasCallerUse
+  readBodyHasCallerUse,
+  lineNumberOfCallerUse
 } from "./searchQuery";
 import { isFileCallerQuery } from "../../context/fileCallerIntent";
 import {
   classifyLocateRead,
   locateReadCountsAsGrounding,
+  lineNumberOfGroundedExport,
   pickGroundedExport,
   preferredHitsForLocate
 } from "./locateEvidence";
@@ -131,6 +133,35 @@ function sameHuntPath(left: string, right: string): boolean {
   const a = normalizeHuntPath(left);
   const b = normalizeHuntPath(right);
   return a === b || a.endsWith(`/${b}`) || b.endsWith(`/${a}`);
+}
+
+function messageIsReadFileOfPath(content: string, path: string): boolean {
+  try {
+    const parsed = JSON.parse(content) as { tool?: string; args?: { path?: string } };
+    return (
+      parsed.tool === "read_file" &&
+      typeof parsed.args?.path === "string" &&
+      sameHuntPath(parsed.args.path, path)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function payloadIsReadFileOfPath(content: string, path: string): boolean {
+  try {
+    const parsed = JSON.parse(content) as ReadFilePayload & { hits?: unknown; tool?: unknown };
+    if (parsed.hits || parsed.tool) {
+      return false;
+    }
+    const files = parsed.files ?? [];
+    if (files.some((file) => file.path && sameHuntPath(file.path, path))) {
+      return true;
+    }
+    return Boolean(parsed.path && sameHuntPath(parsed.path, path) && files.length > 0);
+  } catch {
+    return false;
+  }
 }
 
 function preferredLineForPath(
@@ -1171,27 +1202,36 @@ export class AgentOrchestrator {
     const full = await this.retryReadWithoutWindow({ path, repoId }, repoId, query);
     if (full?.raw) {
       bodyRaw = full.raw;
-      this.mergeContext(context, "read_file", full.raw);
-      conversation?.push({
-        role: "assistant",
-        content: JSON.stringify({ tool: "read_file", args: { path } })
-      });
-      conversation?.push({ role: "user", content: full.raw });
-      emit({
-        index: 0,
-        tool: "read_file",
-        summary: `read_file: ${path}`,
-        completed: true
-      });
     }
-    return {
-      exportName: pickGroundedExport(
+    const exportName = pickGroundedExport(
+      path,
+      stripReadLinePrefixes(readFileBodies(bodyRaw)),
+      query
+    );
+    if (exportName && full?.raw) {
+      const line = lineNumberOfGroundedExport(
         path,
-        stripReadLinePrefixes(readFileBodies(bodyRaw)),
-        query
-      ),
-      raw: bodyRaw
-    };
+        stripReadLinePrefixes(readFileBodies(full.raw)),
+        exportName
+      );
+      if (line) {
+        const jumped = await this.readWindowAroundLine(repoId, path, line);
+        if (jumped) {
+          this.replaceReadFileAttach(context, conversation, path, jumped.raw, {
+            startLine: jumped.startLine,
+            endLine: jumped.endLine
+          });
+          emit({
+            index: 0,
+            tool: "read_file",
+            summary: `read_file: ${path}`,
+            completed: true
+          });
+          return { exportName, raw: jumped.raw };
+        }
+      }
+    }
+    return { exportName, raw };
   }
 
   private judgeReadResult(
@@ -1351,7 +1391,7 @@ export class AgentOrchestrator {
         });
         continue;
       }
-      const { startLine, endLine } = readLineWindow(hit.lineNumber);
+      let { startLine, endLine } = readLineWindow(hit.lineNumber);
       let readRaw = await this.executeTool("read_file", {
         path: hit.fileName,
         repoId,
@@ -1437,6 +1477,22 @@ export class AgentOrchestrator {
             completed: true
           });
           continue;
+        }
+      }
+      if (preferCallerHits) {
+        const callerAttach = await this.jumpCallerAttachIfNeeded(
+          repoId,
+          hit.fileName,
+          query,
+          groundedExport,
+          readRaw,
+          usedWindow
+        );
+        if (callerAttach) {
+          readRaw = callerAttach.raw;
+          usedWindow = true;
+          startLine = callerAttach.startLine;
+          endLine = callerAttach.endLine;
         }
       }
       this.mergeContext(context, "read_file", readRaw);
@@ -1590,23 +1646,77 @@ export class AgentOrchestrator {
     if (!line) {
       return undefined;
     }
-    const { startLine, endLine } = readLineWindow(line);
-    const windowRaw = await this.executeTool("read_file", {
-      path: filePath,
-      repoId,
-      startLine,
-      endLine
-    });
-    if (!readFilePayloadHasBody(windowRaw)) {
+    const jumped = await this.readWindowAroundLine(repoId, filePath, line);
+    if (!jumped) {
       return undefined;
     }
-    const windowBody = (JSON.parse(windowRaw) as ReadFilePayload).files
+    const windowBody = (JSON.parse(jumped.raw) as ReadFilePayload).files
       ?.map((file) => file.content)
       .join("\n");
     if (!windowBody || !contentLooksLikeAskedFieldReject(windowBody, query, filePath)) {
       return undefined;
     }
-    return { raw: windowRaw, startLine, endLine };
+    return jumped;
+  }
+
+  /**
+   * Window around a known line. Picking may use a full body locally; this is
+   * the snippet the writer sees.
+   */
+  private async readWindowAroundLine(
+    repoId: string,
+    filePath: string,
+    line: number
+  ): Promise<{ raw: string; startLine: number; endLine: number } | undefined> {
+    if (!Number.isInteger(line) || line < 1) {
+      return undefined;
+    }
+    const { startLine, endLine } = readLineWindow(line);
+    try {
+      const windowRaw = await this.executeTool("read_file", {
+        path: filePath,
+        repoId,
+        startLine,
+        endLine
+      });
+      if (!readFilePayloadHasBody(windowRaw)) {
+        return undefined;
+      }
+      return { raw: windowRaw, startLine, endLine };
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Caller hunt: if the attach is the whole file or misses the use, jump to
+   * the import/call. Keep skip-definition / mention filters at the caller.
+   */
+  private async jumpCallerAttachIfNeeded(
+    repoId: string,
+    filePath: string,
+    query: string,
+    groundedExport: string | undefined,
+    readRaw: string,
+    usedWindow: boolean
+  ): Promise<{ raw: string; startLine: number; endLine: number } | undefined> {
+    const useBody = stripReadLinePrefixes(readFileBodies(readRaw));
+    if (usedWindow && readBodyHasCallerUse(useBody, query, groundedExport)) {
+      return undefined;
+    }
+    const useLine = lineNumberOfCallerUse(useBody, query, groundedExport);
+    if (!useLine) {
+      return undefined;
+    }
+    const jumped = await this.readWindowAroundLine(repoId, filePath, useLine);
+    if (!jumped) {
+      return undefined;
+    }
+    const jumpedBody = stripReadLinePrefixes(readFileBodies(jumped.raw));
+    if (!readBodyHasCallerUse(jumpedBody, query, groundedExport)) {
+      return undefined;
+    }
+    return jumped;
   }
 
   private async readWriteRejectInSameFile(
@@ -1840,6 +1950,62 @@ export class AgentOrchestrator {
     } catch {
       return raw;
     }
+  }
+
+  /**
+   * After the export is picked, the writer should see one implementation body:
+   * the jumped declaration window, not page 1 plus the full file.
+   */
+  private replaceReadFileAttach(
+    context: AgentSessionContext,
+    conversation: AgentConversationMessage[] | undefined,
+    path: string,
+    raw: string,
+    window?: { startLine: number; endLine: number }
+  ): void {
+    let next: ReadFilePayload;
+    try {
+      next = JSON.parse(raw) as ReadFilePayload;
+    } catch {
+      next = { error: "invalid tool JSON" };
+    }
+    const prev = context.read_file as ReadFilePayload | undefined;
+    const keptFiles = (prev?.files ?? []).filter(
+      (file) => !sameHuntPath(file.path ?? "", path)
+    );
+    const incoming = (next.files ?? []).filter(
+      (file) => !file.path || sameHuntPath(file.path, path)
+    );
+    context.read_file = { ...next, files: [...keptFiles, ...incoming] };
+    if (!conversation) {
+      return;
+    }
+    const keptMessages: AgentConversationMessage[] = [];
+    for (let i = 0; i < conversation.length; i++) {
+      const msg = conversation[i];
+      if (msg.role === "assistant" && messageIsReadFileOfPath(msg.content, path)) {
+        if (conversation[i + 1]?.role === "user") {
+          i += 1;
+        }
+        continue;
+      }
+      if (msg.role === "user" && payloadIsReadFileOfPath(msg.content, path)) {
+        continue;
+      }
+      keptMessages.push(msg);
+    }
+    conversation.length = 0;
+    conversation.push(...keptMessages);
+    conversation.push({
+      role: "assistant",
+      content: JSON.stringify({
+        tool: "read_file",
+        args: window
+          ? { path, startLine: window.startLine, endLine: window.endLine }
+          : { path }
+      })
+    });
+    conversation.push({ role: "user", content: raw });
   }
 
   private mergeContext(context: AgentSessionContext, tool: AgentToolName, raw: string): void {

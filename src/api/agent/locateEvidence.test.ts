@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   classifyLocateRead,
   locateReadCountsAsGrounding,
+  lineNumberOfGroundedExport,
   pickGroundedExport,
   preferredHitsForLocate
 } from "./locateEvidence";
@@ -180,6 +181,39 @@ test("pickGroundedExport prefers APIKeyAuthentication for an authentication midd
 
 test("pickGroundedExport leaves named-symbol asks to the user-typed name", () => {
   assert.equal(pickGroundedExport(SERVER_TS_PATH, SERVER_TS_BODY, REQUIRE_AUTH_ASK), undefined);
+});
+
+test("lineNumberOfGroundedExport finds the chosen export below a top helper", () => {
+  const body = Array.from({ length: 160 }, (_, i) => {
+    const line = i + 1;
+    if (line === 10) {
+      return "export function extractBearerToken(headers) {";
+    }
+    if (line === 17) {
+      return "}";
+    }
+    if (line === 132) {
+      return "export function requireAuth(auth, requireInProduction) {";
+    }
+    if (line === 136) {
+      return "}";
+    }
+    return `// line ${line}`;
+  }).join("\n");
+  assert.equal(lineNumberOfGroundedExport(SERVER_TS_PATH, body, "requireAuth"), 132);
+  assert.equal(lineNumberOfGroundedExport(SERVER_TS_PATH, body, "extractBearerToken"), 10);
+  assert.equal(lineNumberOfGroundedExport(SERVER_TS_PATH, body, "missingExport"), undefined);
+});
+
+test("lineNumberOfGroundedExport finds APIKeyAuthentication without a Coop export", () => {
+  assert.equal(
+    lineNumberOfGroundedExport(PLANE_SHAPED_PATH, PLANE_SHAPED_BODY, "APIKeyAuthentication"),
+    1
+  );
+  assert.equal(
+    lineNumberOfGroundedExport(PLANE_SHAPED_PATH, PLANE_SHAPED_BODY, "requireAuth"),
+    undefined
+  );
 });
 
 console.log(`\nlocateEvidence: ${passed}/${passed + failed} tests passed`);

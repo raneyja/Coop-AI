@@ -932,6 +932,41 @@ export function textSatisfiesLocateQuery(text: string, userMessage: string): boo
 }
 
 /**
+ * File line of a call / import of the named symbol that is not its declaration.
+ * Same-file `extractBearerToken(headers)` at L77 counts; the export does not.
+ */
+export function lineNumberOfCallerUse(
+  text: string,
+  userMessage: string,
+  groundedExport?: string
+): number | undefined {
+  const forms = callerSymbolForms(userMessage, groundedExport);
+  if (!forms.length || !text) {
+    return undefined;
+  }
+  const rows = text.split(/\r?\n/);
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i] ?? "";
+    const line = row.replace(/^\d+\|/, "");
+    if (!forms.some((form) => textHasIdentifierToken(line, form))) {
+      continue;
+    }
+    if (lineLooksLikeSymbolDeclaration(line, forms)) {
+      continue;
+    }
+    const prefixed = /^(\d+)\|/.exec(row);
+    if (prefixed) {
+      const numbered = Number(prefixed[1]);
+      if (Number.isInteger(numbered) && numbered >= 1) {
+        return numbered;
+      }
+    }
+    return i + 1;
+  }
+  return undefined;
+}
+
+/**
  * A call / import of the named symbol on a line that is not its declaration.
  * Same-file `extractBearerToken(headers)` at L77 counts; the export does not.
  */
@@ -940,19 +975,7 @@ export function readBodyHasCallerUse(
   userMessage: string,
   groundedExport?: string
 ): boolean {
-  const forms = callerSymbolForms(userMessage, groundedExport);
-  if (!forms.length || !text) {
-    return false;
-  }
-  for (const line of text.split(/\r?\n/)) {
-    if (!forms.some((form) => textHasIdentifierToken(line, form))) {
-      continue;
-    }
-    if (!lineLooksLikeSymbolDeclaration(line, forms)) {
-      return true;
-    }
-  }
-  return false;
+  return lineNumberOfCallerUse(text, userMessage, groundedExport) !== undefined;
 }
 
 /** `auth middleware` → authMiddleware / authMiddleware.ts for last-chance index queries. */
