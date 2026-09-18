@@ -365,14 +365,16 @@ async function run(): Promise<void> {
   });
 
   await test("reads a bounded window when the index gave no position", async () => {
-    const body = Array.from({ length: 400 }, (_, i) => `line ${i + 1}`).join("\n");
+    const body = Array.from({ length: 400 }, (_, i) =>
+      i === 0 ? "def adapter():" : `line ${i + 1}`
+    ).join("\n");
     const orchestrator = createAgentOrchestrator({
       indexBackend: mockIndexBackend({
         search: async () => ({
           source: "zoekt",
           stale: false,
           hits: [
-            { fileName: "server/auth/adapter.py", lineNumber: 0, content: "auth adapter", score: 1 }
+            { fileName: "server/auth/adapter.py", lineNumber: 0, content: "def adapter():", score: 1 }
           ],
           symbols: []
         })
@@ -384,7 +386,7 @@ async function run(): Promise<void> {
     const result = await orchestrator.run({ message: "where is the auth adapter?", repoId: "acme/demo" });
     const readFile = result.context?.read_file as { files?: Array<{ content: string }> };
     const lines = (readFile.files?.[0]?.content ?? "").split("\n");
-    assert.equal(lines[0], "1|line 1");
+    assert.equal(lines[0], "1|def adapter():");
     assert.ok(lines.length > 26 && lines.length <= 120);
   });
 
@@ -2361,6 +2363,162 @@ async function run(): Promise<void> {
     assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
     assert.doesNotMatch(result.answer ?? "", /open the file/i);
     assert.match(result.answer ?? "", /APIKeyAuthentication|api_authentication/);
+  });
+
+  await test("first search story mention then authMiddleware query reads the server", async () => {
+    const storyPath = "web/stories/authMiddlewareDemo.ts";
+    const serverPath = "src/server/authMiddleware.ts";
+    const storyBody = [
+      "const AUTH_MIDDLEWARE_STORY = `",
+      "func AuthMiddleware(next http.Handler) http.Handler {",
+      "  return next",
+      "}",
+      "// see internal/auth/auth_middleware.go",
+      "`;"
+    ].join("\n");
+    const serverBody = "export function requireAuth(request) {\n  return Boolean(request.auth);\n}\n";
+    const reads: string[] = [];
+    let streamed = "";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async (_repo, pattern) => {
+          if (/authmiddleware/i.test(pattern)) {
+            return {
+              source: "zoekt",
+              stale: false,
+              hits: [
+                {
+                  fileName: serverPath,
+                  lineNumber: 132,
+                  content: "export function requireAuth(request) {",
+                  score: 0.9
+                }
+              ],
+              symbols: []
+            };
+          }
+          return {
+            source: "zoekt",
+            stale: false,
+            hits: [
+              {
+                fileName: storyPath,
+                lineNumber: 4,
+                content: "func AuthMiddleware(next http.Handler) http.Handler {",
+                score: 0.99
+              }
+            ],
+            symbols: []
+          };
+        }
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        if (rel === storyPath) {
+          return { path: rel, content: storyBody };
+        }
+        if (rel === serverPath) {
+          return { path: rel, content: serverBody };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is auth middleware enforced and what calls it?",
+        repoId: "acme/demo",
+        action: "locate",
+        maxSteps: 8
+      },
+      {
+        allowedIntegrations: [],
+        planTurn: async () => JSON.stringify({ tool: "search_code", args: { query: "auth middleware" } }),
+        streamAnswer: async ({ conversation }) => {
+          streamed = JSON.stringify(conversation);
+          assert.doesNotMatch(streamed, /internal\/auth\/auth_middleware\.go/);
+          return "Auth middleware is requireAuth in src/server/authMiddleware.ts.";
+        }
+      }
+    );
+    assert.equal(reads.includes(serverPath), true, `must read ${serverPath}, got ${reads.join(", ")}`);
+    const attached =
+      (result.context?.read_file as { files?: Array<{ path: string; content: string }> } | undefined)
+        ?.files ?? [];
+    assert.equal(
+      attached.some((file) => file.path === serverPath),
+      true,
+      "server body must be attached"
+    );
+    assert.equal(
+      attached.some((file) => /auth_middleware\.go/.test(file.content ?? "")),
+      false,
+      "must not attach the story body"
+    );
+    assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
+    assert.doesNotMatch(result.answer ?? "", /auth_middleware\.go|internal\/auth\//);
+  });
+
+  await test("story-only hunt posts INDEX_HUNT_MISS and does not answer from the mention", async () => {
+    const storyPath = "web/stories/authMiddlewareDemo.ts";
+    const storyBody = [
+      "const AUTH_MIDDLEWARE_STORY = `",
+      "func AuthMiddleware(next http.Handler) http.Handler {",
+      "  return next",
+      "}",
+      "// see internal/auth/auth_middleware.go",
+      "`;"
+    ].join("\n");
+    let streamed = false;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: storyPath,
+              lineNumber: 4,
+              content: "func AuthMiddleware(next http.Handler) http.Handler {",
+              score: 0.99
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        if (rel === storyPath) {
+          return { path: rel, content: storyBody };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is auth middleware enforced and what calls it?",
+        repoId: "acme/demo",
+        action: "locate",
+        maxSteps: 8
+      },
+      {
+        allowedIntegrations: [],
+        planTurn: async () => JSON.stringify({ tool: "search_code", args: { query: "auth middleware" } }),
+        streamAnswer: async () => {
+          streamed = true;
+          return "Auth middleware lives in internal/auth/auth_middleware.go.";
+        }
+      }
+    );
+    assert.equal(streamed, false, "must not stream a confident answer from the story");
+    assert.match(result.answer ?? "", /couldn't find that in this repo/i);
+    const attached =
+      (result.context?.read_file as { files?: Array<{ content: string }> } | undefined)?.files ?? [];
+    assert.equal(
+      attached.some((file) => /auth_middleware\.go/.test(file.content ?? "")),
+      false,
+      "must not attach the story body"
+    );
   });
 
   console.log(`\nAgentOrchestrator: ${passed}/${passed + failed} tests passed`);

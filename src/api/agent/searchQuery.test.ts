@@ -233,6 +233,53 @@ test("role-noun hunts drop leftover latency hits that never say middleware", () 
   assert.equal(picked.length, 0);
 });
 
+const CARD1_ASK = "Where is auth middleware enforced and what calls it?";
+
+test("pickSearchHitsToRead keeps the server and drops a language-mismatch story", () => {
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "web/stories/authMiddlewareDemo.ts",
+        lineNumber: 12,
+        score: 0.99,
+        content: "func AuthMiddleware(next http.Handler) http.Handler {"
+      },
+      {
+        fileName: "src/server/authMiddleware.ts",
+        lineNumber: 132,
+        score: 0.4,
+        content: "export function requireAuth(request) {"
+      }
+    ],
+    8,
+    CARD1_ASK
+  );
+  assert.equal(picked.length, 1);
+  assert.equal(picked[0]?.fileName, "src/server/authMiddleware.ts");
+});
+
+test("pickSearchHitsToRead returns empty when every hit is a mention", () => {
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "web/stories/authMiddlewareDemo.ts",
+        lineNumber: 12,
+        score: 0.99,
+        content: "func AuthMiddleware(next http.Handler) http.Handler {"
+      }
+    ],
+    8,
+    CARD1_ASK
+  );
+  assert.equal(picked.length, 0);
+});
+
+test("locate skips docs and fixtures but not a story path", () => {
+  assert.equal(shouldSkipEvidencePath("docs/architecture.md", CARD1_ASK), true);
+  assert.equal(shouldSkipEvidencePath("apps/api/seeds/issues.json", CARD1_ASK), true);
+  assert.equal(shouldSkipEvidencePath("web/stories/authMiddlewareDemo.ts", CARD1_ASK), false);
+});
+
 test("does not treat require_authentication filenames as requireAuth", () => {
   const ask = "add logging around requireAuth";
   assert.equal(

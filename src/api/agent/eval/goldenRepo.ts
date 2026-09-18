@@ -261,6 +261,16 @@ const SOURCES: Record<string, string> = {
     "",
     "Requests pass through require_auth before reaching a view.",
     "The LoginForm calls useSession, which calls ApiClient."
+  ].join("\n"),
+
+  // Mention-class story: not docs/tests/fixtures. Language-mismatch, not a folder ban.
+  "web/stories/authMiddlewareDemo.ts": [
+    "const AUTH_MIDDLEWARE_STORY = `",
+    "func AuthMiddleware(next http.Handler) http.Handler {",
+    "  return next",
+    "}",
+    "// see internal/auth/auth_middleware.go",
+    "`;"
   ].join("\n")
 };
 

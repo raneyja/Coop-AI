@@ -31,6 +31,7 @@ function test(name: string, fn: () => void): void {
 /** Every module that decides which files become evidence. */
 const RANKING_MODULES = [
   "src/api/agent/searchQuery.ts",
+  "src/api/agent/locateEvidence.ts",
   "src/api/agent/AgentOrchestrator.ts",
   "src/api/agent/parseAgentToolPlan.ts",
   "src/indexing/evidencePathNoise.ts",

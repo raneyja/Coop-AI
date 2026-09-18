@@ -13,6 +13,7 @@ import {
   normalizePath
 } from "../../indexing/evidencePathNoise";
 import { stripLeadingAskLabels } from "../../chat/intentPlanner/planChatJobs";
+import { preferredHitsForLocate } from "./locateEvidence";
 
 const STOP = new Set(
   [
@@ -343,13 +344,15 @@ export function shouldSkipEvidencePath(fileName: string, userMessage?: string): 
   ) {
     return true;
   }
-  // Named symbol + change/locate: skip tests unless the user asked about tests.
-  // Otherwise contract tests that say "require_authentication" steal requireAuth.
+  // Locate with a named symbol or role: skip docs/tests/fixtures. This does not
+  // catch mention-class stories; the locate verdict does.
   if (
     userMessage &&
-    namedSymbolKeys(userMessage).length > 0 &&
-    isTestPath(fileName) &&
-    !userAskedAboutTests(userMessage)
+    !isApiRejectAsk(userMessage) &&
+    (namedSymbolKeys(userMessage).length > 0 || queryRoleHints(userMessage).length > 0) &&
+    (isDocOrSpecPath(fileName) ||
+      isSeedOrFixturePath(fileName) ||
+      (isTestPath(fileName) && !userAskedAboutTests(userMessage)))
   ) {
     return true;
   }
@@ -586,6 +589,9 @@ export function pickSearchHitsToRead<T extends RankedSearchHit & { content?: str
     if (mutators.length > 0) {
       pool = [...mutators, ...pool.filter((hit) => !mutators.includes(hit))];
     }
+  }
+  if (userMessage) {
+    pool = preferredHitsForLocate(pool, userMessage);
   }
   const picked: T[] = [];
   for (const hit of pool) {
@@ -990,7 +996,7 @@ function textHasIdentifierToken(text: string, form: string): boolean {
   return new RegExp(`(^|[^A-Za-z0-9_])${escaped}([^A-Za-z0-9_]|$)`, "i").test(text);
 }
 
-function contentLooksLikeDeclaration(content: string, userMessage: string): boolean {
+export function contentLooksLikeDeclaration(content: string, userMessage: string): boolean {
   const forms = namedSymbolForms(userMessage);
   if (!forms.length || !content) {
     return false;

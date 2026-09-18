@@ -33,12 +33,17 @@ import {
   contentLooksLikeAskedFieldReject,
   lineNumberOfWriteReject,
   textMentionsQueryRoles,
-  textSatisfiesLocateQuery,
   readBodyHasCallerUse
 } from "./searchQuery";
 import { isFileCallerQuery } from "../../context/fileCallerIntent";
+import {
+  classifyLocateRead,
+  locateReadCountsAsGrounding,
+  preferredHitsForLocate
+} from "./locateEvidence";
 import { createAgentToolRegistry } from "./tools/registry";
 import { handleIntegrationSearch } from "./tools/integrationSearch";
+import { stripReadLinePrefixes } from "./tools/readFile";
 import { formatOpenedIntegrationEvidence, listOpenedIntegrationArtifacts, type OpenedVendorArtifact } from "./openedIntegrationEvidence";
 import {
   agentToolForIntegrationProvider,
@@ -97,6 +102,7 @@ type ReadFilePayload = {
   path?: string;
   files?: Array<{ path: string; content: string }>;
   error?: string;
+  skipNote?: string;
 };
 
 /**
@@ -444,7 +450,7 @@ export class AgentOrchestrator {
             : canAnswerNow()
               ? 'Reply {"done":true} so the next turn can answer the user, or call another allowed tool.'
               : allowedRepoTools
-                ? "Reply with a tool JSON call. You have not read a file that mentions the named symbol or role — do not answer yet."
+                ? "Reply with a tool JSON call. You have not read an implementation of the named symbol or role — do not answer yet."
                 : "Reply with a vendor Search or Open JSON call."
         });
         conversation.push({ role: "assistant", content: raw.slice(0, 2000) });
@@ -459,7 +465,7 @@ export class AgentOrchestrator {
             error:
               block ??
               (allowedRepoTools
-                ? "Do not finish yet. You have not read a file whose body mentions the named symbol or the role the user named (e.g. middleware). Call search_code or read_file on a different path — do not answer from a related UI, test, or form."
+                ? "Do not finish yet. You have not read an implementation of the named symbol or role. Call search_code or read_file on a different path — do not answer from a mention, UI, test, or form."
                 : "Do not finish yet. Search, then Open chosen ids (or retry Search once if empty).")
           });
           conversation.push({ role: "assistant", content: '{"done":true}' });
@@ -479,7 +485,7 @@ export class AgentOrchestrator {
         if ((queryHasNamedSymbol(query) || queryRoleHints(query).length > 0) && !matchingRead) {
           lastToolResult = JSON.stringify({
             error:
-              "Do not propose_patch until you have read a file that mentions the named symbol or role. Search/read again."
+              "Do not propose_patch until you have read an implementation of the named symbol or role. Search/read again."
           });
           conversation.push({
             role: "assistant",
@@ -1084,16 +1090,28 @@ export class AgentOrchestrator {
     try {
       const parsed = JSON.parse(raw) as ReadFilePayload;
       const path = typeof args.path === "string" ? args.path : parsed.path ?? "";
-      const body = (parsed.files ?? []).map((file) => `${file.path}\n${file.content}`).join("\n");
-      const blob = `${path}\n${body}`;
+      const body = (parsed.files ?? [])
+        .map((file) => `${file.path}\n${stripReadLinePrefixes(file.content ?? "")}`)
+        .join("\n");
       if (isFeatureAddAsk(query) && readFilePayloadHasBody(raw)) {
         return { raw, matchesSymbol: true };
       }
       if (queryNamesSourceFile(path, query) && readFilePayloadHasBody(raw)) {
         return { raw, matchesSymbol: true };
       }
-      if (textSatisfiesLocateQuery(blob, query)) {
+      if (locateReadCountsAsGrounding({ path, body, query })) {
         return { raw, matchesSymbol: true };
+      }
+      const verdict = classifyLocateRead({ path, body, query });
+      if (verdict === "mention") {
+        return {
+          raw: JSON.stringify({
+            path,
+            skipNote:
+              "This file talks about the role; it is not the implementation. Keep searching."
+          }),
+          matchesSymbol: false
+        };
       }
       return {
         raw: JSON.stringify({
@@ -1204,26 +1222,47 @@ export class AgentOrchestrator {
         continue;
       }
       const { startLine, endLine } = readLineWindow(hit.lineNumber);
-      const readRaw = await this.executeTool("read_file", {
+      let readRaw = await this.executeTool("read_file", {
         path: hit.fileName,
         repoId,
         startLine,
         endLine
       });
+      let usedWindow = true;
+      let body = "";
+      try {
+        body = readBodiesUnprefixed(JSON.parse(readRaw) as ReadFilePayload);
+      } catch {
+        body = "";
+      }
+      if (
+        !readFilePayloadHasBody(readRaw) ||
+        !locateReadCountsAsGrounding({ path: hit.fileName, body, query })
+      ) {
+        const fullRaw = await this.executeTool("read_file", { path: hit.fileName, repoId });
+        if (readFilePayloadHasBody(fullRaw)) {
+          readRaw = fullRaw;
+          usedWindow = false;
+          try {
+            body = readBodiesUnprefixed(JSON.parse(fullRaw) as ReadFilePayload);
+          } catch {
+            body = "";
+          }
+        }
+      }
       if (!readFilePayloadHasBody(readRaw)) {
         continue;
       }
-      const readParsed = JSON.parse(readRaw) as ReadFilePayload;
-      const body = (readParsed.files ?? [])
-        .map((file) => `${file.path}\n${file.content}`)
-        .join("\n");
-      const blob = `${hit.fileName}\n${hit.content ?? ""}\n${body}`;
-      if (!textSatisfiesLocateQuery(blob, query)) {
+      if (!locateReadCountsAsGrounding({ path: hit.fileName, body, query })) {
         skippedPaths?.add(pathKey);
+        const verdict = classifyLocateRead({ path: hit.fileName, body, query });
         emit({
           index: 0,
           tool: "read_file",
-          summary: `read_file skipped (no symbol match): ${hit.fileName}`,
+          summary:
+            verdict === "mention"
+              ? `read_file skipped (mention): ${hit.fileName}`
+              : `read_file skipped (no symbol match): ${hit.fileName}`,
           completed: true
         });
         continue;
@@ -1266,7 +1305,9 @@ export class AgentOrchestrator {
         role: "assistant",
         content: JSON.stringify({
           tool: "read_file",
-          args: { path: hit.fileName, startLine, endLine }
+          args: usedWindow
+            ? { path: hit.fileName, startLine, endLine }
+            : { path: hit.fileName }
         })
       });
       conversation?.push({ role: "user", content: readRaw });
@@ -1341,29 +1382,40 @@ export class AgentOrchestrator {
         textMentionsQueryRoles(`${hit.fileName}\n${hit.content ?? ""}`, query)
       );
     }
-    if (!hits.length) {
-      const found = await this.searchUntilReadableHits(
+    const skippedPaths = new Set<string>();
+    if (hits.length) {
+      const opened = await this.readFirstMatchingHit(
         repoId,
         query,
+        hits,
         emit,
         context,
-        skipQueries
+        conversation,
+        skippedPaths,
+        preferCallerHits
       );
-      if (found?.toRead.length) {
-        hits = found.toRead;
+      if (opened.ok) {
+        return opened;
       }
     }
-    if (!hits.length) {
+    const found = await this.searchUntilReadableHits(
+      repoId,
+      query,
+      emit,
+      context,
+      skipQueries
+    );
+    if (!found?.toRead.length) {
       return { ok: false };
     }
     return this.readFirstMatchingHit(
       repoId,
       query,
-      hits,
+      found.toRead,
       emit,
       context,
       conversation,
-      undefined,
+      skippedPaths,
       preferCallerHits
     );
   }
@@ -1531,7 +1583,7 @@ export class AgentOrchestrator {
       if (parsed.error) {
         lastError = parsed.error;
       }
-      const toRead = parsed.preferredHits ?? [];
+      const toRead = preferredHitsForLocate(parsed.preferredHits ?? [], query);
       if (toRead.length > 0) {
         return { toRead };
       }
@@ -1710,6 +1762,9 @@ function readFilePayloadHasBody(raw: string): boolean {
     if (parsed.error) {
       return false;
     }
+    if (parsed.skipNote && !(parsed.files ?? []).some((file) => Boolean(file.content?.trim()))) {
+      return false;
+    }
     return (parsed.files ?? []).some((file) => Boolean(file.content?.trim()));
   } catch {
     return false;
@@ -1725,9 +1780,22 @@ function readFileBodies(raw: string): string {
   }
 }
 
+function readBodiesUnprefixed(parsed: ReadFilePayload | undefined): string {
+  return (parsed?.files ?? [])
+    .map((file) => `${file.path}\n${stripReadLinePrefixes(file.content ?? "")}`)
+    .join("\n");
+}
+
 function readFileContextHasBody(context: AgentSessionContext | undefined): boolean {
-  const files = (context?.read_file as ReadFilePayload | undefined)?.files;
-  return Boolean(files?.some((file) => Boolean(file.content?.trim())));
+  const payload = context?.read_file as ReadFilePayload | undefined;
+  if (!payload) {
+    return false;
+  }
+  const files = payload.files ?? [];
+  if (payload.skipNote && !files.some((file) => Boolean(file.content?.trim()))) {
+    return false;
+  }
+  return files.some((file) => Boolean(file.content?.trim()));
 }
 
 function contextHasWriteReject(

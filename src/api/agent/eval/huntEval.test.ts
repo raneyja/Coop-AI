@@ -25,9 +25,17 @@ type HuntCase = {
   expectFile: string;
   /** Exact source line that answers the question. */
   expectLine: string;
+  /** Mention-class file that must not be treated as the found file. */
+  rejectFile?: string;
 };
 
 const CASES: HuntCase[] = [
+  {
+    question: "Where is auth middleware enforced and what calls it?",
+    expectFile: "server/auth/middleware.py",
+    expectLine: "class AuthenticationMiddleware:",
+    rejectFile: "web/stories/authMiddlewareDemo.ts"
+  },
   {
     question: "Where is requireAuth or authentication middleware defined in this repo?",
     expectFile: "server/auth/middleware.py",
@@ -116,6 +124,7 @@ type Outcome = {
   readPaths: string[];
   foundFile: boolean;
   foundLine: boolean;
+  rejectedAttached: boolean;
 };
 
 async function runHunt(hunt: HuntCase, fidelity: GoldenIndexFidelity): Promise<Outcome> {
@@ -139,7 +148,10 @@ async function runHunt(hunt: HuntCase, fidelity: GoldenIndexFidelity): Promise<O
     question: hunt.question,
     readPaths,
     foundFile: Boolean(match),
-    foundLine: Boolean(match?.content.includes(hunt.expectLine))
+    foundLine: Boolean(match?.content.includes(hunt.expectLine)),
+    rejectedAttached: Boolean(
+      hunt.rejectFile && files.some((file) => file.path === hunt.rejectFile)
+    )
   };
 }
 
@@ -152,6 +164,9 @@ async function main(): Promise<void> {
       body.includes(hunt.expectLine),
       `fixture ${hunt.expectFile} does not contain ${JSON.stringify(hunt.expectLine)}`
     );
+    if (hunt.rejectFile) {
+      assert.ok(GOLDEN_REPO_FILES[hunt.rejectFile], `fixture missing ${hunt.rejectFile}`);
+    }
   }
 
   const regimes: Array<{ fidelity: GoldenIndexFidelity; label: string }> = [
@@ -178,10 +193,13 @@ async function main(): Promise<void> {
     ];
 
     for (const outcome of outcomes) {
-      const mark = outcome.foundLine ? "✓" : outcome.foundFile ? "~" : "✗";
+      const mark = outcome.foundLine && !outcome.rejectedAttached ? "✓" : outcome.foundFile ? "~" : "✗";
       console.log(`  ${mark} ${outcome.question}`);
-      if (!outcome.foundLine) {
+      if (!outcome.foundLine || outcome.rejectedAttached) {
         console.log(`      read: ${outcome.readPaths.join(", ") || "(nothing)"}`);
+        if (outcome.rejectedAttached) {
+          console.log("      FAIL — mention-class story was attached as evidence");
+        }
       }
     }
 
@@ -192,8 +210,15 @@ async function main(): Promise<void> {
       console.log(`  R-G4 FAIL — read vendored/build/barrel files: ${noiseReads.join(", ")}`);
     }
 
+    const rejectedAttached = outcomes.filter((o) => o.rejectedAttached).length;
+
     // Enterprise bar: 100%. Soft partial credit is a FAIL.
-    if (noiseReads.length > 0 || rightFile < CASES.length || rightLine < CASES.length) {
+    if (
+      noiseReads.length > 0 ||
+      rightFile < CASES.length ||
+      rightLine < CASES.length ||
+      rejectedAttached > 0
+    ) {
       allPassed = false;
       console.error(
         `  FAIL R-G1..R-G4 (${regime.fidelity}): require ${CASES.length}/${CASES.length} file and definition; got ${rightFile}/${rightLine}`
