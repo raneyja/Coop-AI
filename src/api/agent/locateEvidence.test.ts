@@ -161,6 +161,16 @@ test("pickGroundedExport prefers requireAuth for a role-only auth middleware ask
   assert.equal(pickGroundedExport(SERVER_TS_PATH, body, CARD1_ASK), "requireAuth");
 });
 
+test("a top-of-file window without requireAuth picks a weaker auth export", () => {
+  const window = [
+    "export function extractBearerToken(headers) { return headers.authorization; }",
+    "export async function resolveAuthContextDetailed(headers) { return {}; }"
+  ].join("\n");
+  assert.equal(pickGroundedExport(SERVER_TS_PATH, window, CARD1_ASK), "resolveAuthContextDetailed");
+  const full = `${window}\nexport function requireAuth(auth, requireInProduction) { return Boolean(auth); }\n`;
+  assert.equal(pickGroundedExport(SERVER_TS_PATH, full, CARD1_ASK), "requireAuth");
+});
+
 test("pickGroundedExport prefers APIKeyAuthentication for an authentication middleware role ask", () => {
   assert.equal(
     pickGroundedExport(PLANE_SHAPED_PATH, PLANE_SHAPED_BODY, CARD1_ASK),

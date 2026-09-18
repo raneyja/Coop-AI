@@ -2881,6 +2881,142 @@ async function run(): Promise<void> {
     assert.match(result.answer ?? "", /requireAuth/);
   });
 
+  await test("role-only what-calls-it uses requireAuth from the full file, not the top window", async () => {
+    const serverPath = "src/server/authMiddleware.ts";
+    const callerPath = "src/server/http/handlers.py";
+    const defLines = Array.from({ length: 160 }, (_, i) => {
+      const line = i + 1;
+      if (line === 10) {
+        return "export function extractBearerToken(headers) {";
+      }
+      if (line === 17) {
+        return "}";
+      }
+      if (line === 46) {
+        return "export async function resolveAuthContextDetailed(headers) {";
+      }
+      if (line === 50) {
+        return "}";
+      }
+      if (line === 132) {
+        return "export function requireAuth(auth, requireInProduction) {";
+      }
+      if (line === 136) {
+        return "}";
+      }
+      return `// line ${line}`;
+    }).join("\n");
+    const callerBody = [
+      "from server.http.middleware import require_auth",
+      "def handle_login(request):",
+      "    return require_auth(request)"
+    ].join("\n");
+    const reads: string[] = [];
+    const searches: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async (_repo, pattern) => {
+          searches.push(pattern);
+          if (/^requireAuth$|^require_auth$/i.test(pattern)) {
+            return {
+              source: "zoekt",
+              stale: false,
+              hits: [
+                {
+                  fileName: serverPath,
+                  lineNumber: 132,
+                  content: "export function requireAuth(auth, requireInProduction) {",
+                  score: 0.9
+                },
+                {
+                  fileName: callerPath,
+                  lineNumber: 3,
+                  content: "return require_auth(request)",
+                  score: 0.8
+                }
+              ],
+              symbols: []
+            };
+          }
+          if (/resolveAuthContextDetailed|extractBearerToken|requireInstallAdmin/i.test(pattern)) {
+            return {
+              source: "zoekt",
+              stale: false,
+              hits: [
+                {
+                  fileName: serverPath,
+                  lineNumber: 10,
+                  content: "export function extractBearerToken(headers) {",
+                  score: 0.7
+                }
+              ],
+              symbols: []
+            };
+          }
+          return {
+            source: "zoekt",
+            stale: false,
+            hits: [
+              {
+                fileName: serverPath,
+                lineNumber: 10,
+                content: "export function extractBearerToken(headers) {",
+                score: 0.95
+              }
+            ],
+            symbols: []
+          };
+        }
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        if (rel === serverPath) {
+          return { path: rel, content: defLines };
+        }
+        if (rel === callerPath) {
+          return { path: rel, content: callerBody };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is auth middleware enforced and what calls it?",
+        repoId: "acme/demo",
+        action: "locate",
+        maxSteps: 8
+      },
+      {
+        allowedIntegrations: [],
+        planTurn: async () => JSON.stringify({ tool: "search_code", args: { query: "auth middleware" } }),
+        streamAnswer: async ({ conversation }) => {
+          const blob = JSON.stringify(conversation);
+          assert.match(blob, /requireAuth|require_auth/);
+          assert.doesNotMatch(blob, /callers were not found in the index/i);
+          return "Auth middleware is requireAuth; handle_login in src/server/http/handlers.py calls it.";
+        }
+      }
+    );
+    assert.equal(reads.includes(serverPath), true, `must read the implementation, got ${reads.join(", ")}`);
+    assert.equal(reads.includes(callerPath), true, `must read a caller of requireAuth, got ${reads.join(", ")}`);
+    assert.equal(
+      searches.some((query) => /^requireAuth$|^require_auth$/i.test(query)),
+      true,
+      `must search the requireAuth export, got ${searches.join(" | ")}`
+    );
+    const attached =
+      (result.context?.read_file as { files?: Array<{ path: string; content: string }> } | undefined)
+        ?.files ?? [];
+    assert.equal(
+      attached.some((file) => file.path === callerPath),
+      true,
+      "caller body must be attached"
+    );
+    assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
+    assert.doesNotMatch(result.answer ?? "", /callers were not found/i);
+  });
+
   console.log(`\nAgentOrchestrator: ${passed}/${passed + failed} tests passed`);
   if (failed > 0) {
     process.exit(1);

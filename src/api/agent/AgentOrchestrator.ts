@@ -585,7 +585,17 @@ export class AgentOrchestrator {
             implementationPath = path;
           }
           if (!groundedExport) {
-            groundedExport = this.groundedExportFromRead(path, rawResult, query);
+            const captured = await this.captureGroundedExport(
+              path,
+              rawResult,
+              query,
+              repoId,
+              emit,
+              context,
+              conversation
+            );
+            groundedExport = captured.exportName;
+            rawResult = captured.raw;
           }
           this.mergeContext(context, plan.tool, rawResult);
           if (isFileCallerQuery(query) && queryHasNamedSymbol(query) && !callerRead) {
@@ -696,11 +706,17 @@ export class AgentOrchestrator {
                 implementationPath = seeded.path;
               }
               if (!groundedExport) {
-                groundedExport = this.groundedExportFromRead(
+                const captured = await this.captureGroundedExport(
                   seeded.path ?? "",
                   seeded.raw ?? "",
-                  query
+                  query,
+                  repoId,
+                  emit,
+                  context,
+                  conversation
                 );
+                groundedExport = captured.exportName;
+                lastToolResult = captured.raw;
               }
             } else if (huntingCallers) {
               callerRead = true;
@@ -754,11 +770,17 @@ export class AgentOrchestrator {
             implementationPath = grounded.path;
           }
           if (!groundedExport) {
-            groundedExport = this.groundedExportFromRead(
+            const captured = await this.captureGroundedExport(
               grounded.path ?? "",
               grounded.raw ?? "",
-              query
+              query,
+              repoId,
+              emit,
+              context,
+              conversation
             );
+            groundedExport = captured.exportName;
+            lastToolResult = captured.raw;
           }
           if (queryHasNamedSymbol(query) && isFileCallerQuery(query) && !callerRead) {
             const expanded = await this.expandReadForCallers(
@@ -1130,14 +1152,46 @@ export class AgentOrchestrator {
     return { ok: false };
   }
 
-  private groundedExportFromRead(path: string, raw: string, query: string): string | undefined {
+  private async captureGroundedExport(
+    path: string,
+    raw: string,
+    query: string,
+    repoId: string,
+    emit: (step: AgentStep) => void,
+    context: AgentSessionContext,
+    conversation?: AgentConversationMessage[]
+  ): Promise<{ exportName?: string; raw: string }> {
     if (queryHasNamedSymbol(query)) {
-      return extractAgentSearchQuery(query);
+      return { exportName: extractAgentSearchQuery(query), raw };
     }
     if (!path.trim()) {
-      return undefined;
+      return { raw };
     }
-    return pickGroundedExport(path, stripReadLinePrefixes(readFileBodies(raw)), query);
+    let bodyRaw = raw;
+    const full = await this.retryReadWithoutWindow({ path, repoId }, repoId, query);
+    if (full?.raw) {
+      bodyRaw = full.raw;
+      this.mergeContext(context, "read_file", full.raw);
+      conversation?.push({
+        role: "assistant",
+        content: JSON.stringify({ tool: "read_file", args: { path } })
+      });
+      conversation?.push({ role: "user", content: full.raw });
+      emit({
+        index: 0,
+        tool: "read_file",
+        summary: `read_file: ${path}`,
+        completed: true
+      });
+    }
+    return {
+      exportName: pickGroundedExport(
+        path,
+        stripReadLinePrefixes(readFileBodies(bodyRaw)),
+        query
+      ),
+      raw: bodyRaw
+    };
   }
 
   private judgeReadResult(
