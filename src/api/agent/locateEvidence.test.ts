@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   classifyLocateRead,
   locateReadCountsAsGrounding,
+  pickGroundedExport,
   preferredHitsForLocate
 } from "./locateEvidence";
 
@@ -149,6 +150,26 @@ test("preferredHitsForLocate returns empty when the pool is only mentions", () =
     CARD1_ASK
   );
   assert.deepEqual(picked, []);
+});
+
+test("pickGroundedExport prefers requireAuth for a role-only auth middleware ask", () => {
+  const body = [
+    "export function extractBearerToken(headers) { return headers.authorization; }",
+    "export async function resolveAuthContext(headers) { return undefined; }",
+    "export function requireAuth(auth, requireInProduction) { return Boolean(auth); }"
+  ].join("\n");
+  assert.equal(pickGroundedExport(SERVER_TS_PATH, body, CARD1_ASK), "requireAuth");
+});
+
+test("pickGroundedExport prefers APIKeyAuthentication for an authentication middleware role ask", () => {
+  assert.equal(
+    pickGroundedExport(PLANE_SHAPED_PATH, PLANE_SHAPED_BODY, CARD1_ASK),
+    "APIKeyAuthentication"
+  );
+});
+
+test("pickGroundedExport leaves named-symbol asks to the user-typed name", () => {
+  assert.equal(pickGroundedExport(SERVER_TS_PATH, SERVER_TS_BODY, REQUIRE_AUTH_ASK), undefined);
 });
 
 console.log(`\nlocateEvidence: ${passed}/${passed + failed} tests passed`);

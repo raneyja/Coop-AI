@@ -935,8 +935,12 @@ export function textSatisfiesLocateQuery(text: string, userMessage: string): boo
  * A call / import of the named symbol on a line that is not its declaration.
  * Same-file `extractBearerToken(headers)` at L77 counts; the export does not.
  */
-export function readBodyHasCallerUse(text: string, userMessage: string): boolean {
-  const forms = namedSymbolForms(userMessage);
+export function readBodyHasCallerUse(
+  text: string,
+  userMessage: string,
+  groundedExport?: string
+): boolean {
+  const forms = callerSymbolForms(userMessage, groundedExport);
   if (!forms.length || !text) {
     return false;
   }
@@ -944,7 +948,7 @@ export function readBodyHasCallerUse(text: string, userMessage: string): boolean
     if (!forms.some((form) => textHasIdentifierToken(line, form))) {
       continue;
     }
-    if (!contentLooksLikeDeclaration(line, userMessage)) {
+    if (!lineLooksLikeSymbolDeclaration(line, forms)) {
       return true;
     }
   }
@@ -982,8 +986,16 @@ function namedSymbolForms(userMessage: string): string[] {
   if (!isSpecificCodeIdentifier(primary)) {
     return [];
   }
-  const forms = new Set<string>([primary]);
-  for (const alias of identifierSearchAliases(primary)) {
+  return identifierForms(primary);
+}
+
+function identifierForms(primary: string): string[] {
+  const trimmed = primary.trim();
+  if (!trimmed) {
+    return [];
+  }
+  const forms = new Set<string>([trimmed]);
+  for (const alias of identifierSearchAliases(trimmed)) {
     if (alias.length >= 4) {
       forms.add(alias);
     }
@@ -991,13 +1003,19 @@ function namedSymbolForms(userMessage: string): string[] {
   return [...forms];
 }
 
-function textHasIdentifierToken(text: string, form: string): boolean {
-  const escaped = form.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(^|[^A-Za-z0-9_])${escaped}([^A-Za-z0-9_]|$)`, "i").test(text);
+function callerSymbolForms(userMessage: string, groundedExport?: string): string[] {
+  const named = namedSymbolForms(userMessage);
+  if (named.length) {
+    return named;
+  }
+  const exportName = groundedExport?.trim();
+  if (!exportName) {
+    return [];
+  }
+  return identifierForms(exportName);
 }
 
-export function contentLooksLikeDeclaration(content: string, userMessage: string): boolean {
-  const forms = namedSymbolForms(userMessage);
+function lineLooksLikeSymbolDeclaration(content: string, forms: string[]): boolean {
   if (!forms.length || !content) {
     return false;
   }
@@ -1015,6 +1033,19 @@ export function contentLooksLikeDeclaration(content: string, userMessage: string
     }
   }
   return false;
+}
+
+function textHasIdentifierToken(text: string, form: string): boolean {
+  const escaped = form.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^A-Za-z0-9_])${escaped}([^A-Za-z0-9_]|$)`, "i").test(text);
+}
+
+export function contentLooksLikeDeclaration(
+  content: string,
+  userMessage: string,
+  groundedExport?: string
+): boolean {
+  return lineLooksLikeSymbolDeclaration(content, callerSymbolForms(userMessage, groundedExport));
 }
 
 function userAskedAboutTests(userMessage: string): boolean {

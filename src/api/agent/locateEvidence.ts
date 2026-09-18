@@ -285,6 +285,163 @@ export function locateReadCountsAsGrounding(input: LocateReadInput): boolean {
   return classifyLocateRead(input) === "implementation";
 }
 
+const EXPORT_QUERY_STOP = new Set(
+  [
+    "where",
+    "what",
+    "which",
+    "who",
+    "how",
+    "the",
+    "this",
+    "that",
+    "and",
+    "calls",
+    "call",
+    "it",
+    "in",
+    "repo",
+    "defined",
+    "enforced",
+    "enforce"
+  ].map((word) => word.toLowerCase())
+);
+
+const GATE_VERBS = new Set(["require", "ensure", "enforce", "guard"]);
+
+function identTokens(name: string): string[] {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((token) => token.length >= 2);
+}
+
+function queryExportTokens(query: string): string[] {
+  const terms = new Set<string>(queryRoleHints(query));
+  for (const word of query.toLowerCase().split(/[^a-z0-9]+/)) {
+    if (word.length >= 3 && !EXPORT_QUERY_STOP.has(word)) {
+      terms.add(word);
+    }
+  }
+  return [...terms];
+}
+
+function collectDeclNames(source: string, patterns: RegExp[]): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const pattern of patterns) {
+    pattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(source)) !== null) {
+      const name = match[1] ?? "";
+      if (!name || seen.has(name)) {
+        continue;
+      }
+      seen.add(name);
+      names.push(name);
+    }
+  }
+  return names;
+}
+
+/** Native declarations in an implementation body. Not a fourth evidence class. */
+export function nativeDeclarationsInBody(path: string, body: string): string[] {
+  const code = stripStringsAndComments(body);
+  if (!code.trim()) {
+    return [];
+  }
+  switch (fileLangFamily(path)) {
+    case "ts":
+      return collectDeclNames(code, [
+        /\bexport\s+(?:default\s+)?(?:async\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)/g,
+        /\bexport\s+(?:default\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/g,
+        /\bexport\s+(?:const|let|var)\s+([A-Za-z_][A-Za-z0-9_]*)/g
+      ]);
+    case "py":
+      return collectDeclNames(code, [
+        /^class\s+([A-Za-z_][A-Za-z0-9_]*)/gm,
+        /^(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)/gm
+      ]);
+    case "go":
+      return collectDeclNames(code, [
+        /\bfunc\s+(?:\([^)]*\)\s+)?([A-Za-z_][A-Za-z0-9_]*)/g,
+        /\btype\s+([A-Za-z_][A-Za-z0-9_]*)/g
+      ]);
+    case "java":
+      return collectDeclNames(code, [
+        /\b(?:class|interface|enum)\s+([A-Za-z_][A-Za-z0-9_]*)/g
+      ]);
+    case "rs":
+      return collectDeclNames(code, [/\b(?:fn|struct)\s+([A-Za-z_][A-Za-z0-9_]*)/g]);
+    case "rb":
+      return collectDeclNames(code, [/\b(?:def|class|module)\s+([A-Za-z_][A-Za-z0-9_]*)/g]);
+    default:
+      return collectDeclNames(code, [
+        /\b(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)/g,
+        /\b(?:export\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/g,
+        /^(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)/gm
+      ]);
+  }
+}
+
+function scoreDeclarationForQuery(name: string, query: string): number {
+  const tokens = identTokens(name);
+  if (tokens.length === 0) {
+    return 0;
+  }
+  const roles = queryRoleHints(query);
+  const terms = queryExportTokens(query);
+  let score = 0;
+  for (const role of roles) {
+    if (tokens.some((token) => token === role || token.includes(role))) {
+      score += 5;
+    }
+  }
+  for (const term of terms) {
+    if (tokens.includes(term)) {
+      score += 3;
+      continue;
+    }
+    if (tokens.some((token) => token.startsWith(term) && term.length >= 4)) {
+      score += 2;
+    }
+  }
+  const wantsGate =
+    roles.includes("middleware") || /\benforc|\brequired?\b|\bguard\b/i.test(query);
+  if (wantsGate && tokens.some((token) => GATE_VERBS.has(token))) {
+    score += 2;
+  }
+  return score;
+}
+
+/**
+ * Best export in an implementation body for a role-only ask.
+ * Named-symbol asks keep the name the user typed (orchestrator).
+ */
+export function pickGroundedExport(path: string, body: string, query: string): string | undefined {
+  if (queryHasNamedSymbol(query)) {
+    return undefined;
+  }
+  const decls = nativeDeclarationsInBody(path, body);
+  let best: { name: string; score: number } | undefined;
+  for (const name of decls) {
+    const score = scoreDeclarationForQuery(name, query);
+    if (score <= 0) {
+      continue;
+    }
+    if (
+      !best ||
+      score > best.score ||
+      (score === best.score && name.length < best.name.length)
+    ) {
+      best = { name, score };
+    }
+  }
+  return best?.name;
+}
+
 export function preferredHitsForLocate<T extends { fileName: string; content?: string }>(
   hits: T[],
   query: string

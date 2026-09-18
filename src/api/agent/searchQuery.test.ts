@@ -34,6 +34,7 @@ import {
   queryHasNamedSymbol,
   queryNamesSourceFile,
   queryRoleHints,
+  readBodyHasCallerUse,
   sanitizeAgentSearchQuery,
   selectChatEvidencePaths,
   shouldSkipEvidencePath,
@@ -1182,6 +1183,35 @@ test("API-reject hunt ignores invite callers that rethrow and pass email through
     true,
     `must search the reject slogan, got ${queries.join(", ")}`
   );
+});
+
+test("readBodyHasCallerUse uses the grounded export when the ask has no named symbol", () => {
+  const ask = "Where is auth middleware enforced and what calls it?";
+  const handler =
+    'import { requireAuth } from "../authMiddleware";\nexport function handleLogin(req) {\n  if (!requireAuth(req.auth, true)) return;\n}\n';
+  const def = "export function requireAuth(request) {\n  return Boolean(request.auth);\n}\n";
+  const story = [
+    "const AUTH_MIDDLEWARE_STORY = `",
+    "func AuthMiddleware(next http.Handler) http.Handler {",
+    "  return next",
+    "}",
+    "`;"
+  ].join("\n");
+  assert.equal(readBodyHasCallerUse(handler, ask), false);
+  assert.equal(readBodyHasCallerUse(handler, ask, "requireAuth"), true);
+  assert.equal(readBodyHasCallerUse(def, ask, "requireAuth"), false);
+  assert.equal(readBodyHasCallerUse(story, ask, "requireAuth"), false);
+});
+
+test("readBodyHasCallerUse still counts same-file extractBearerToken( for a named-symbol ask", () => {
+  const ask = "Where is extractBearerToken defined and what calls it?";
+  const body = [
+    "export function extractBearerToken(headers) {",
+    "  return headers.authorization;",
+    "}",
+    "const token = extractBearerToken(headers);"
+  ].join("\n");
+  assert.equal(readBodyHasCallerUse(body, ask), true);
 });
 
 console.log(`\nsearchQuery: ${passed}/${passed + failed} tests passed`);

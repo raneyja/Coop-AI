@@ -2521,6 +2521,366 @@ async function run(): Promise<void> {
     );
   });
 
+  await test("role-only what-calls-it reads the server then a handler that uses the export", async () => {
+    const storyPath = "web/stories/authMiddlewareDemo.ts";
+    const serverPath = "src/server/authMiddleware.ts";
+    const callerPath = "src/server/auth/userAuthApi.ts";
+    const storyBody = [
+      "const AUTH_MIDDLEWARE_STORY = `",
+      "func AuthMiddleware(next http.Handler) http.Handler {",
+      "  return next",
+      "}",
+      "// see internal/auth/auth_middleware.go",
+      "`;"
+    ].join("\n");
+    const serverBody = "export function requireAuth(request) {\n  return Boolean(request.auth);\n}\n";
+    const callerBody = [
+      'import { requireAuth } from "../authMiddleware";',
+      "export function handleLogin(req) {",
+      "  if (!requireAuth(req.auth, true)) return;",
+      "}"
+    ].join("\n");
+    const reads: string[] = [];
+    const searches: string[] = [];
+    let streamed = "";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async (_repo, pattern) => {
+          searches.push(pattern);
+          if (/requireAuth|require_auth/i.test(pattern)) {
+            return {
+              source: "zoekt",
+              stale: false,
+              hits: [
+                {
+                  fileName: serverPath,
+                  lineNumber: 1,
+                  content: "export function requireAuth(request) {",
+                  score: 0.9
+                },
+                {
+                  fileName: callerPath,
+                  lineNumber: 3,
+                  content: "if (!requireAuth(req.auth, true)) return;",
+                  score: 0.8
+                }
+              ],
+              symbols: []
+            };
+          }
+          if (/authmiddleware/i.test(pattern)) {
+            return {
+              source: "zoekt",
+              stale: false,
+              hits: [
+                {
+                  fileName: serverPath,
+                  lineNumber: 1,
+                  content: "export function requireAuth(request) {",
+                  score: 0.9
+                }
+              ],
+              symbols: []
+            };
+          }
+          return {
+            source: "zoekt",
+            stale: false,
+            hits: [
+              {
+                fileName: storyPath,
+                lineNumber: 4,
+                content: "func AuthMiddleware(next http.Handler) http.Handler {",
+                score: 0.99
+              }
+            ],
+            symbols: []
+          };
+        }
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        if (rel === storyPath) {
+          return { path: rel, content: storyBody };
+        }
+        if (rel === serverPath) {
+          return { path: rel, content: serverBody };
+        }
+        if (rel === callerPath) {
+          return { path: rel, content: callerBody };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is auth middleware enforced and what calls it?",
+        repoId: "acme/demo",
+        action: "locate",
+        maxSteps: 8
+      },
+      {
+        allowedIntegrations: [],
+        planTurn: async () => JSON.stringify({ tool: "search_code", args: { query: "auth middleware" } }),
+        streamAnswer: async ({ conversation }) => {
+          streamed = JSON.stringify(conversation);
+          assert.doesNotMatch(streamed, /internal\/auth\/auth_middleware\.go/);
+          return "Auth middleware is requireAuth in src/server/authMiddleware.ts and handleLogin in src/server/auth/userAuthApi.ts calls it.";
+        }
+      }
+    );
+    assert.equal(reads.includes(serverPath), true, `must read server, got ${reads.join(", ")}`);
+    assert.equal(reads.includes(callerPath), true, `must read a caller, got ${reads.join(", ")}`);
+    assert.equal(
+      searches.some((query) => /requireAuth|require_auth/i.test(query)),
+      true,
+      `caller hunt must search the export, got ${searches.join(" | ")}`
+    );
+    const attached =
+      (result.context?.read_file as { files?: Array<{ path: string; content: string }> } | undefined)
+        ?.files ?? [];
+    assert.equal(
+      attached.some((file) => file.path === serverPath),
+      true,
+      "server body must be attached"
+    );
+    assert.equal(
+      attached.some((file) => file.path === callerPath),
+      true,
+      "caller body must be attached"
+    );
+    assert.equal(
+      attached.some((file) => /auth_middleware\.go/.test(file.content ?? "")),
+      false,
+      "must not attach the story body"
+    );
+    assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
+    assert.doesNotMatch(result.answer ?? "", /auth_middleware\.go|internal\/auth\//);
+    assert.ok(
+      reads.indexOf(serverPath) < reads.indexOf(callerPath),
+      "matchingRead (server) must happen before callerRead (handler)"
+    );
+  });
+
+  await test("role-only what-calls-it without a caller still cites the implementation", async () => {
+    const serverPath = "src/server/authMiddleware.ts";
+    const serverBody = "export function requireAuth(request) {\n  return Boolean(request.auth);\n}\n";
+    const searches: string[] = [];
+    let streamed = "";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async (_repo, pattern) => {
+          searches.push(pattern);
+          if (/requireAuth|require_auth|authmiddleware/i.test(pattern)) {
+            return {
+              source: "zoekt",
+              stale: false,
+              hits: [
+                {
+                  fileName: serverPath,
+                  lineNumber: 1,
+                  content: "export function requireAuth(request) {",
+                  score: 0.9
+                }
+              ],
+              symbols: []
+            };
+          }
+          return { source: "zoekt", stale: false, hits: [], symbols: [] };
+        }
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        if (rel === serverPath) {
+          return { path: rel, content: serverBody };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is auth middleware enforced and what calls it?",
+        repoId: "acme/demo",
+        action: "locate",
+        maxSteps: 8
+      },
+      {
+        allowedIntegrations: [],
+        planTurn: async () => JSON.stringify({ tool: "search_code", args: { query: "auth middleware" } }),
+        streamAnswer: async ({ conversation }) => {
+          streamed = JSON.stringify(conversation);
+          assert.doesNotMatch(streamed, /userAuthApi|auth_middleware\.go|internal\/auth\//);
+          return "Auth middleware is requireAuth in src/server/authMiddleware.ts. Callers were not found in the index.";
+        }
+      }
+    );
+    assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
+    assert.doesNotMatch(result.answer ?? "", /userAuthApi|auth_middleware\.go|internal\/auth\//);
+    assert.match(result.answer ?? "", /requireAuth/);
+    assert.doesNotMatch(streamed, /userAuthApi/);
+    assert.equal(
+      searches.some((query) => /requireAuth|require_auth/i.test(query)),
+      true,
+      `must still search the export, got ${searches.join(" | ")}`
+    );
+  });
+
+  await test("story mention must not become callerRead", async () => {
+    const storyPath = "web/stories/authMiddlewareDemo.ts";
+    const serverPath = "src/server/authMiddleware.ts";
+    const storyBody = [
+      "const AUTH_MIDDLEWARE_STORY = `",
+      "func AuthMiddleware(next http.Handler) http.Handler {",
+      "  return next",
+      "}",
+      "// see internal/auth/auth_middleware.go",
+      "`;"
+    ].join("\n");
+    const serverBody = "export function requireAuth(request) {\n  return Boolean(request.auth);\n}\n";
+    const reads: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async (_repo, pattern) => {
+          if (/requireAuth|require_auth/i.test(pattern)) {
+            return {
+              source: "zoekt",
+              stale: false,
+              hits: [
+                {
+                  fileName: storyPath,
+                  lineNumber: 4,
+                  content: "func AuthMiddleware(next http.Handler) http.Handler {",
+                  score: 0.99
+                }
+              ],
+              symbols: []
+            };
+          }
+          return {
+            source: "zoekt",
+            stale: false,
+            hits: [
+              {
+                fileName: serverPath,
+                lineNumber: 1,
+                content: "export function requireAuth(request) {",
+                score: 0.9
+              }
+            ],
+            symbols: []
+          };
+        }
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        if (rel === storyPath) {
+          return { path: rel, content: storyBody };
+        }
+        if (rel === serverPath) {
+          return { path: rel, content: serverBody };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is auth middleware enforced and what calls it?",
+        repoId: "acme/demo",
+        action: "locate",
+        maxSteps: 8
+      },
+      {
+        allowedIntegrations: [],
+        planTurn: async () => JSON.stringify({ tool: "search_code", args: { query: "auth middleware" } }),
+        streamAnswer: async ({ conversation }) => {
+          assert.doesNotMatch(JSON.stringify(conversation), /auth_middleware\.go/);
+          return "Auth middleware is requireAuth in src/server/authMiddleware.ts. Callers were not found in the index.";
+        }
+      }
+    );
+    const attached =
+      (result.context?.read_file as { files?: Array<{ path: string; content: string }> } | undefined)
+        ?.files ?? [];
+    assert.equal(
+      attached.some((file) => file.path === serverPath),
+      true,
+      "server implementation must still be attached"
+    );
+    assert.equal(
+      attached.some((file) => file.path === storyPath || /auth_middleware\.go/.test(file.content ?? "")),
+      false,
+      "story must not attach as a caller"
+    );
+    assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
+    assert.doesNotMatch(result.answer ?? "", /auth_middleware\.go|internal\/auth\//);
+  });
+
+  await test("H1 requireAuth defined does not require a caller read", async () => {
+    const serverPath = "src/server/authMiddleware.ts";
+    const callerPath = "src/server/auth/userAuthApi.ts";
+    const reads: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: serverPath,
+              lineNumber: 1,
+              content: "export function requireAuth(request) {",
+              score: 0.9
+            },
+            {
+              fileName: callerPath,
+              lineNumber: 3,
+              content: "if (!requireAuth(req.auth, true)) return;",
+              score: 0.8
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        if (rel === serverPath) {
+          return {
+            path: rel,
+            content: "export function requireAuth(request) {\n  return Boolean(request.auth);\n}\n"
+          };
+        }
+        if (rel === callerPath) {
+          return {
+            path: rel,
+            content:
+              'import { requireAuth } from "../authMiddleware";\nexport function handleLogin(req) {\n  if (!requireAuth(req.auth, true)) return;\n}\n'
+          };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: "Where is requireAuth defined in this repo?",
+        repoId: "acme/demo",
+        action: "locate",
+        maxSteps: 6
+      },
+      {
+        allowedIntegrations: [],
+        planTurn: async () => JSON.stringify({ tool: "search_code", args: { query: "requireAuth" } }),
+        streamAnswer: async () => "requireAuth is exported from src/server/authMiddleware.ts."
+      }
+    );
+    assert.equal(reads.includes(serverPath), true, `must read the definition, got ${reads.join(", ")}`);
+    assert.equal(reads.includes(callerPath), false, "H1 must not require a caller read");
+    assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
+    assert.match(result.answer ?? "", /requireAuth/);
+  });
+
   console.log(`\nAgentOrchestrator: ${passed}/${passed + failed} tests passed`);
   if (failed > 0) {
     process.exit(1);
