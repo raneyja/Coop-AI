@@ -3,7 +3,7 @@ title: Admin portal
 description: Sign in, connect integrations, invite users, and manage automation API keys.
 section: admin
 order: 1
-lastUpdated: "2026-09-17"
+lastUpdated: "2026-09-18"
 ---
 
 The admin portal at [admin.coop-ai.dev](https://admin.coop-ai.dev) is where org admins configure CoopAI for the whole organization. Invited developers also sign in here for workspace repos, usage, and chat feed.
@@ -112,7 +112,7 @@ Developers invited to the org see:
 |------|---------|
 | **My Usage** | Personal chat, completions, and event analytics |
 | **My Activity** | Personal audit log |
-| **Chat Feed** | Browse org chat threads |
+| **Chat Feed** | Your own chats synced from the VS Code extension |
 | **Integrations** | Read-only connection status |
 
 ## API keys (automation only)

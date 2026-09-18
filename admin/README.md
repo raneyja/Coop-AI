@@ -69,7 +69,7 @@ Login requires `canInstallIntegrations: true` or role `owner` / `admin` for admi
 | `/analytics/my` | All signed-in users | Personal usage analytics (overview, chat, completions) |
 | `/my-usage` | — | Redirects to `/analytics/my` |
 | `/my-activity` | Member | Personal audit log |
-| `/feed` | All | Chat thread browser |
+| `/feed` | All | Your own synced chat threads |
 | `/api-keys` | Admin | Create and revoke org API keys — linked from **Settings** (not sidebar) |
 | `/billing` | Admin | Plan, seats, and Stripe billing portal |
 | `/audit` | Admin | Org admin audit log |

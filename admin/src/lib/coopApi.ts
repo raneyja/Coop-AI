@@ -1217,7 +1217,6 @@ export type ThreadDetailResponse = {
 export type FetchThreadsParams = {
   from?: string;
   to?: string;
-  userId?: string;
   repo?: string;
   q?: string;
   limit?: number;
@@ -1230,7 +1229,6 @@ export async function fetchThreads(
   const search = new URLSearchParams();
   if (params.from) search.set("from", params.from);
   if (params.to) search.set("to", params.to);
-  if (params.userId) search.set("userId", params.userId);
   if (params.repo) search.set("repo", params.repo);
   if (params.q) search.set("q", params.q);
   if (params.limit) search.set("limit", String(params.limit));

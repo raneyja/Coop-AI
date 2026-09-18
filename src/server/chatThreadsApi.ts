@@ -1,6 +1,6 @@
 import type { ServerResponse } from "node:http";
 import { auditActor } from "./audit/auditLogger";
-import { canOrgAdmin, requireAuth, resolveAuthContext } from "./authMiddleware";
+import { requireAuth, resolveAuthContext } from "./authMiddleware";
 import { getDbPool, requireDbPool } from "./db";
 import type { OrgStore } from "./orgStore";
 import type { ServerConfig } from "./serverConfig";
@@ -24,6 +24,8 @@ export type ChatThreadsApiDeps = {
   orgStore?: OrgStore;
   userStore?: UserStore;
   serverConfig: ServerConfig;
+  /** Test hook — production always uses the database-backed store. */
+  threadsStore?: ChatThreadsStore;
 };
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
@@ -156,16 +158,19 @@ export async function handleChatThreadsApiRequest(
     return true;
   }
 
-  const pool = await getDbPool();
-  if (!pool) {
-    writeJson(response, 503, { error: "database not configured" });
-    return true;
+  let store = deps.threadsStore;
+  if (!store) {
+    const pool = await getDbPool();
+    if (!pool) {
+      writeJson(response, 503, { error: "database not configured" });
+      return true;
+    }
+    store = new ChatThreadsStore(requireDbPool(pool));
   }
-
-  const store = new ChatThreadsStore(requireDbPool(pool));
   const actor = auditActor(auth);
-  const orgWideFeed = canOrgAdmin(auth);
-  const memberScope = orgWideFeed ? undefined : personalThreadScope(auth, actor);
+  // Role never widens Chat Feed. Admins, owners, members, and org API keys
+  // all see only threads they own.
+  const memberScope = personalThreadScope(auth, actor);
 
   if (parsed.method === "GET" && parsed.pathname === "/v1/threads") {
     const query = parsed.query;
@@ -174,6 +179,12 @@ export async function handleChatThreadsApiRequest(
     const fromRaw = query?.get("from")?.trim();
     const toRaw = query?.get("to")?.trim();
     const cursor = decodeThreadCursor(query?.get("cursor")?.trim() ?? "");
+    const requestedUserId = query?.get("userId")?.trim() || undefined;
+    // Ignore ?userId= unless it is the caller. Never use it to widen access.
+    const callerUserId =
+      requestedUserId && auth.userId && requestedUserId === auth.userId
+        ? requestedUserId
+        : undefined;
 
     try {
       const result = await store.listThreads({
@@ -186,7 +197,7 @@ export async function handleChatThreadsApiRequest(
         limit,
         cursor,
         memberScope,
-        userId: query?.get("userId")?.trim() || undefined
+        userId: callerUserId
       });
 
       writeJson(response, 200, {
@@ -210,7 +221,7 @@ export async function handleChatThreadsApiRequest(
     if (parsed.method === "GET") {
       try {
         const thread = await store.getThread(auth.orgId, threadId);
-        if (!thread || (!orgWideFeed && !threadOwnedByAuth(thread, auth))) {
+        if (!thread || !threadOwnedByAuth(thread, auth)) {
           writeJson(response, 404, { error: "thread_not_found" });
           return true;
         }
@@ -244,7 +255,12 @@ export async function handleChatThreadsApiRequest(
       }
 
       let threadUserId = auth.userId;
-      if (!threadUserId && deps.userStore) {
+      if (!threadUserId && existing?.userId) {
+        threadUserId = existing.userId;
+      }
+      // New threads only: API-key sync may attach the caller's org member email.
+      // Never re-attribute an existing thread via ownerEmail.
+      if (!threadUserId && !existing && deps.userStore) {
         const ownerEmail = String(body.ownerEmail ?? "").trim();
         if (ownerEmail) {
           const owner = await deps.userStore.findActiveUserByEmail(ownerEmail);
@@ -252,9 +268,6 @@ export async function handleChatThreadsApiRequest(
             threadUserId = owner.id;
           }
         }
-      }
-      if (!threadUserId && existing?.userId) {
-        threadUserId = existing.userId;
       }
 
       const messages = rawMessages.map((raw, index) => {

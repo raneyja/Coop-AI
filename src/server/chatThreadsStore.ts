@@ -259,6 +259,9 @@ export class ChatThreadsStore {
   }
 
   public async listThreads(filters: ListThreadsFilters): Promise<ListThreadsResult> {
+    if (!filters.memberScope) {
+      return { threads: [] };
+    }
     const { clauses, params } = buildThreadListWhere(filters);
     const limit = Math.min(Math.max(filters.limit, 1), 100);
     const query = `

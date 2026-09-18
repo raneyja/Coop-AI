@@ -123,7 +123,7 @@ export default function ChatFeedPage() {
       <div>
         <h1 className="admin-page-title">Chat Feed</h1>
         <p className="mt-1 text-sm text-coop-muted">
-          Past chats synced from the Coop VS Code extension — browse threads and read full message history.
+          Your chats synced from the Coop VS Code extension.
         </p>
       </div>
 
@@ -148,7 +148,7 @@ export default function ChatFeedPage() {
               <p className="px-4 py-6 text-sm text-coop-muted">Loading threads…</p>
             ) : threads.length === 0 ? (
               <p className="px-4 py-6 text-sm text-coop-muted">
-                No synced chats yet. Chats appear here after you sign in to the VS Code extension and start a conversation.
+                No synced chats yet. Conversations you start in the VS Code extension appear here after you sign in.
               </p>
             ) : (
               <ul>
