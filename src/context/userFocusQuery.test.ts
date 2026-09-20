@@ -75,6 +75,10 @@ test("looksLikeCannedQuickActionPrompt detects directive blobs but not real owne
     ),
     true
   );
+  assert.equal(
+    looksLikeCannedQuickActionPrompt("Analyze what breaks if this area is modified."),
+    true
+  );
 });
 
 test("mergeFocusEntryPaths keeps anchors then injects focus paths", () => {

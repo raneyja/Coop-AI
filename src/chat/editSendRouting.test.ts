@@ -102,7 +102,7 @@ test("named symbol without an edit verb is not an edit ask", () => {
   assert.equal(isConcreteFileEditAsk("Explain requireAuth in this file"), false);
 });
 
-test("J4: prose fix + open file lands on the anchored Patch card, not the hunt", () => {
+test("J4: prose fix + open file stays agent-change, not auto /edit", () => {
   const ask =
     "fix extractBearerToken throws if headers is missing. Guard it so undefined headers return undefined.";
   assert.deepEqual(
@@ -112,7 +112,7 @@ test("J4: prose fix + open file lands on the anchored Patch card, not the hunt",
       hasEditTarget: hasEditTargetInScope({ file: "src/server/authMiddleware.ts" }),
       agentCanOwnChange: true
     }),
-    { kind: "anchored-edit" }
+    { kind: "agent-change" }
   );
 });
 
@@ -192,24 +192,33 @@ test("resolveChangeSendRouting: no file + Agent can hunt → agent-change (not h
   );
 });
 
-test("resolveChangeSendRouting: no file + cannot hunt → reject with hunt hint", () => {
+test("resolveChangeSendRouting: no file + cannot hunt → still not /edit (plain/agent)", () => {
   const decision = resolveChangeSendRouting({
     explicitEdit: false,
     concreteEditAsk: true,
     hasEditTarget: false,
     agentCanOwnChange: false
   });
-  assert.equal(decision.kind, "reject-no-target");
-  if (decision.kind === "reject-no-target") {
-    assert.match(decision.message, /find the code and propose a patch/i);
-  }
+  assert.equal(decision.kind, "none");
 });
 
-test("resolveChangeSendRouting: file in scope → anchored-edit", () => {
+test("resolveChangeSendRouting: file in scope without /edit → agent-change", () => {
   assert.deepEqual(
     resolveChangeSendRouting({
       explicitEdit: false,
       concreteEditAsk: true,
+      hasEditTarget: true,
+      agentCanOwnChange: true
+    }),
+    { kind: "agent-change" }
+  );
+});
+
+test("resolveChangeSendRouting: explicit /edit with file → anchored-edit", () => {
+  assert.deepEqual(
+    resolveChangeSendRouting({
+      explicitEdit: true,
+      concreteEditAsk: false,
       hasEditTarget: true,
       agentCanOwnChange: true
     }),

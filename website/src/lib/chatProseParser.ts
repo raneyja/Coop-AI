@@ -229,6 +229,9 @@ function findUnclosedFenceResume(
     if (line.trim() === "") {
       continue;
     }
+    if (seenCode && isUnfencedCitationStartLine(line)) {
+      return i;
+    }
     if (looksLikeCodeLine(line) || locatorFromProseLine(line)) {
       seenCode = true;
       continue;

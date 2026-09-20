@@ -17,6 +17,7 @@ import {
   isBarrelPath,
   isGeneratedOrVendorPath,
   contentLooksLikeWriteReject,
+  contentLooksLikeUnauthorizedWrite,
   contentLooksLikeStateTransitionReject,
   apiRejectSearchQueries,
   contentLooksLikeAskedFieldReject,
@@ -358,6 +359,26 @@ test("skips test paths for named-symbol hunts unless the user asked about tests"
     ),
     false
   );
+});
+
+test("ship-check ask does not skip handler tests", () => {
+  const ask =
+    "If I change that missing-key response, what else in this repo should I check before I ship?";
+  assert.equal(shouldSkipEvidencePath("src/server/orgApi.test.ts", ask), false);
+  assert.equal(
+    shouldSkipEvidencePath(
+      "src/server/orgApi.test.ts",
+      "What's the blast radius of renaming validate_identifier?"
+    ),
+    false
+  );
+  assert.equal(
+    contentLooksLikeUnauthorizedWrite(
+      '    writeJson(response, 401, { error: "unauthorized" });'
+    ),
+    true
+  );
+  assert.equal(contentLooksLikeUnauthorizedWrite("export function requireAuth() { return false; }"), false);
 });
 
 test("keeps a barrel when the user named that exact file", () => {

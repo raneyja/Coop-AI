@@ -92,15 +92,10 @@ async function main(): Promise<void> {
   }
 
   {
-    const mustStayOut = [
-      "Explain this function",
-      "Thanks",
-      "Who owns the billing service?",
-      "Who calls verifyToken?"
-    ];
+    const mustStayOut = ["Explain this function", "Thanks"];
     const leaks = mustStayOut.filter((q) => route(q).loops);
     if (leaks.length === 0) {
-      pass("S-G2", "Scope", "buffer / Owner / Blast stay out");
+      pass("S-G2", "Scope", "buffer / thanks stay out; Owner/Blast English may loop as chat");
     } else {
       fail("S-G2", "Scope", `leaked: ${leaks.join(" | ")}`);
     }

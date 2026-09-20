@@ -215,6 +215,7 @@ test("AGENT_REPO_HUNT_RULES forbids inventing absences and restating the ask", (
   assert.match(AGENT_REPO_HUNT_RULES, /I couldn.t find \{symbol\} in this repo/i);
   assert.match(AGENT_REPO_HUNT_RULES, /restating|paraphrasing/i);
   assert.match(AGENT_REPO_HUNT_RULES, /Do not use a \*\*Your question\*\* heading/);
+  assert.match(AGENT_REPO_HUNT_RULES, /bodies were not attached/);
   assert.match(AGENT_REPO_HUNT_RULES, /clone/i);
   assert.match(AGENT_REPO_HUNT_RULES, /ValidationError/);
   assert.match(AGENT_REPO_HUNT_RULES, /OpenAPI/i);
@@ -225,6 +226,10 @@ test("hunt answer prompt and skipNote use teammate miss copy", () => {
   const prompt = buildAgentAnswerPrompt({ message: "Where is requireAuth?" });
   assert.match(prompt, /couldn.t find that symbol in this repo/i);
   assert.match(prompt, /one talk track/i);
+  assert.match(prompt, /Never leave a \*\*Heading\*\* with an empty body/);
+  assert.match(prompt, /bodies were not attached/);
+  assert.match(prompt, /Path-only search hits are not ripples/);
+  assert.match(prompt, /57:66:src\/server\/integrationApi\.ts/);
   assert.doesNotMatch(prompt, /never conclude the team never decided/i);
   assert.doesNotMatch(prompt, /title and status alone/i);
   assert.doesNotMatch(prompt, /body was not attached/i);

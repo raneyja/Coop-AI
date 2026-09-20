@@ -6,8 +6,8 @@
  *
  * Phases:
  * 1) tools[] allowlist → fetch connected integrations without slash
- * 2) workflow + execution → silent/confirm quick-action promotion
- * 3) trust UX → activity + status copy from the plan
+ * 2) workflow is set only by an explicit slash / Workflows / grid constraint
+ * 3) trust UX → activity + status copy from the plan (never "plain chat was routed")
  * 4) jobs[] + terms → existing fetchers (Slack/Jira/docs/index)
  */
 import type { IntegrationChatProvider } from "../types";
@@ -78,7 +78,10 @@ export type ChatIntentPlan = {
   confidence: SuggestConfidence;
   /** Short focus string for search / slashUserArgs. */
   focus: string;
-  /** How to execute: silent run, confirm chips, or plain. */
+  /**
+   * How to execute. `silent` / `confirm` are valid only after an explicit
+   * command constraint. Unconstrained English must stay `none`.
+   */
   execution: ChatIntentExecution;
   /** Human-readable reason (debug / activity). */
   reason?: string;

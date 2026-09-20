@@ -52,6 +52,14 @@ const CASES: Case[] = [
   { q: "Why is requireAuth called twice?", expect: "understand" },
   { q: "Does this project validate webhook signatures?", expect: "locate" },
   { q: "How many files import lodash?", expect: "locate" },
+  {
+    q: "If I change that missing-key response, what else in this repo should I check before I ship?",
+    expect: "locate"
+  },
+  { q: "If I modify this function, what else is affected?", expect: "locate" },
+  { q: "What breaks if I change this handler?", expect: "locate" },
+  { q: "What's the blast radius of renaming validate_identifier?", expect: "locate" },
+  { q: "Is it safe to change these enum values?", expect: "locate" },
 
   // Change — the user wants code modified.
   { q: "Add a null check to requireAuth in the auth middleware", expect: "change" },

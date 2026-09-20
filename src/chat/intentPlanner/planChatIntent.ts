@@ -18,7 +18,6 @@ import { queryHasNamedSymbol } from "../../api/agent/searchQuery";
 import {
   decisionPhrasePresent,
   detectExplicitlyNamedTools,
-  interpreterJobsClaimTurn,
   mergeChatIntentTools,
   messageNamesJiraTicket,
   planChatJobs,
@@ -118,6 +117,10 @@ export function detectRequestedTools(
   return detectNamedTools(message);
 }
 
+/**
+ * Phrase detector kept for tests / debugging. Do **not** wire this into send-path
+ * execution — English matching a Blast/Owner pattern is still plain chat.
+ */
 export function detectWorkflow(message: string): {
   workflow?: ChatIntentWorkflow;
   confidence: "high" | "medium" | "low";
@@ -134,6 +137,10 @@ export function detectWorkflow(message: string): {
  * Phrase-first planner. Does not call the LLM.
  * Incident-shaped asks leave workflow empty (incident path owns multi-tool synthesis)
  * but may still list tools when explicitly named.
+ *
+ * English never sets `workflow`. Slash / Workflows / grid pin it via
+ * `applyChatCommandConstraint`. Phrase matches here used to silently enter
+ * Blast/Owner/Trace — that hijack is the bug.
  */
 export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatIntentPlan {
   const message = input.message?.trim() ?? "";
@@ -160,7 +167,6 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
   const tools = mergeChatIntentTools(named, impliedTools);
   const focus = stripLeadingAskLabels(message) || message;
   const incident = isIncidentShapedQuery(message);
-  const { workflow, confidence: workflowConfidence } = detectWorkflow(message);
 
   const withJobs = (plan: ChatIntentPlan): ChatIntentPlan => {
     const tools = plan.mode === "plain" ? [] : mergeChatIntentTools(plan.tools, impliedTools);
@@ -175,8 +181,8 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
     };
   };
 
-  // Keep incident reconstruction as the multi-tool owner unless jobs or a workflow win.
-  if (incident && !workflow && jobs.length === 0) {
+  // Keep incident reconstruction as the multi-tool owner unless jobs win.
+  if (incident && jobs.length === 0) {
     return withJobs({
       mode: tools.length > 0 ? "tools-only" : "none",
       tools,
@@ -187,7 +193,7 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
     });
   }
 
-  if (EXPLAIN_ONLY.test(message) && named.length === 0 && !workflow && jobs.length === 0) {
+  if (EXPLAIN_ONLY.test(message) && named.length === 0 && jobs.length === 0) {
     return {
       mode: "plain",
       tools: [],
@@ -199,7 +205,7 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
     };
   }
 
-  if (isOpenFileReviewAsk(message) && named.length === 0 && !workflow && !decisionImplied) {
+  if (isOpenFileReviewAsk(message) && named.length === 0 && !decisionImplied) {
     return {
       mode: "plain",
       tools: [],
@@ -209,35 +215,6 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
       execution: "none",
       reason: "open-file PR review — gather callers/owners; do not swap to Blast synthesis"
     };
-  }
-
-  if (
-    workflow &&
-    (workflowConfidence === "high" || tools.length > 0) &&
-    !interpreterJobsClaimTurn(jobs, workflow, decisionImplied)
-  ) {
-    const confidence =
-      workflowConfidence === "high" && (tools.length > 0 || Boolean(input.activeFile))
-        ? "high"
-        : workflowConfidence === "high"
-          ? "high"
-          : tools.length > 0
-            ? "medium"
-            : workflowConfidence;
-
-    // Phase 2: high → silent; medium → confirm; low → none
-    const execution =
-      confidence === "high" ? "silent" : confidence === "medium" ? "confirm" : "none";
-
-    return withJobs({
-      mode: execution === "confirm" ? "suggest-chips" : "run-workflow",
-      workflow,
-      tools,
-      confidence,
-      focus,
-      execution,
-      reason: `workflow:${workflow}`
-    });
   }
 
   if (tools.length > 0) {
@@ -255,18 +232,6 @@ export function planChatIntentFromRules(input: ChatIntentPlannerInput): ChatInte
       reason: named.length > 0 ? "named tools" : "implied jobs",
       // A compound ask ("where is X, and what did Slack say?") still needs code.
       codeIntent
-    });
-  }
-
-  if (workflow && workflowConfidence === "medium") {
-    return withJobs({
-      mode: "suggest-chips",
-      workflow,
-      tools: [],
-      confidence: "medium",
-      focus,
-      execution: "confirm",
-      reason: `workflow-medium:${workflow}`
     });
   }
 

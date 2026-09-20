@@ -75,18 +75,17 @@ export function resolveChangeSendRouting(options: {
   if (!options.concreteEditAsk) {
     return { kind: "none" };
   }
-  if (options.hasEditTarget) {
-    return { kind: "anchored-edit" };
-  }
+  // Plain change asks stay in the agent loop. Never auto-set composerMode edit.
   if (options.agentCanOwnChange) {
     return { kind: "agent-change" };
   }
-  return { kind: "reject-no-target", message: EDIT_NO_TARGET_WITHOUT_AGENT_ERROR };
+  return { kind: "none" };
 }
 
 /**
  * True when plain chat is asking for a concrete code change (not advice / archaeology).
- * Used to auto-route onto the /edit Apply-patch path when a file is in scope.
+ * Used to snap editor context and prefer the agent hunt → propose_patch path.
+ * Must not auto-route onto `/edit` unless the user typed `/edit` or `/fix`.
  */
 export function isConcreteFileEditAsk(message: string): boolean {
   const text = message.trim();

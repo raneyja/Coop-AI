@@ -201,7 +201,9 @@ export function PatchCard({
       ? `${state.appliedFileCount ?? state.fileCount} file${(state.appliedFileCount ?? state.fileCount) === 1 ? "" : "s"} updated`
       : state.status === "rejected"
         ? "Not applied — Undo to review again"
-        : `${state.fileCount} file${state.fileCount === 1 ? "" : "s"} · ${state.hunkCount} edit${state.hunkCount === 1 ? "" : "s"}${
+        : state.status === "failed" && state.files.length === 0
+          ? "Not applied"
+          : `${state.fileCount} file${state.fileCount === 1 ? "" : "s"} · ${state.hunkCount} edit${state.hunkCount === 1 ? "" : "s"}${
             pending < state.hunkCount ? ` · ${pending} remaining` : ""
           }`;
 
@@ -225,7 +227,9 @@ export function PatchCard({
       : state.status === "rejected"
         ? "Not applied. Undo to review again."
         : state.status === "failed"
-          ? "Select match locations or regenerate with /edit, then try again."
+          ? state.files.length === 0
+            ? "Regenerate with /edit, then try again."
+            : "Select match locations or regenerate with /edit, then try again."
           : hasAmbiguous
             ? "This edit matches multiple places — select one or more options below, then Apply."
             : multiEdit
@@ -384,7 +388,12 @@ function CreatePullRequestButton({ onClick }: { onClick: () => void }): React.Re
 }
 
 export function shouldRenderPatchCard(state: PatchCardState | undefined): boolean {
-  if (!state || state.files.length === 0) {
+  if (!state) {
+    return false;
+  }
+  const hasFiles = state.files.length > 0;
+  const failedNotice = state.status === "failed" && Boolean(state.error);
+  if (!hasFiles && !failedNotice) {
     return false;
   }
   return (

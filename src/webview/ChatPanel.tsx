@@ -28,7 +28,7 @@ import {
   prCreateErrorFromResult
 } from "./createPullRequestConfirm";
 import { mergeAppliedPrPreviewFiles } from "../chat/createPrChatRouting";
-import { isEditHistoryContent, looksLikePatchStreamingContent } from "./lib/patchStreamDisplay";
+import { isAssistantReplyToEdit, isEditHistoryContent, looksLikePatchStreamingContent } from "./lib/patchStreamDisplay";
 import { DegradationNotification } from "./DegradationNotification";
 import { IntentFeedback } from "./IntentFeedback";
 import type {
@@ -794,7 +794,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       const hidePatchFences =
         showPatchCard ||
         (messageTimestamp !== undefined &&
-          shouldHidePatchMarkdownForMessage(patchCards, messageTimestamp, suppressedPatchTimestamps));
+          shouldHidePatchMarkdownForMessage(patchCards, messageTimestamp, suppressedPatchTimestamps)) ||
+        isAssistantReplyToEdit(messages, messageTimestamp);
 
       const elements: React.ReactElement[] = [];
       // Prose first — "replace the following" must sit above the Patch card, not below it.
@@ -976,6 +977,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       createPrDiffByTimestamp,
       createPrFilesByTimestamp,
       handleOpenLink,
+      messages,
       openCreatePrTimestamp,
       patchCards,
       post,

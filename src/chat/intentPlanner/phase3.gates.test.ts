@@ -74,9 +74,9 @@ test("Phase 3 Chat Intent Planner gates", () => {
     assert.ok(preamble);
     assert.match(preamble, /^<coop_intent_plan>/);
     assert.match(preamble, /Checking change impact \+ Jira\./);
-    assert.match(
+    assert.doesNotMatch(
       preamble,
-      /Plain chat was routed to the blast-radius workflow automatically\./
+      /Plain chat was routed to the blast-radius workflow automatically/
     );
     assert.match(preamble, /Connected tools in scope: Jira\./);
     assert.match(preamble, /<\/coop_intent_plan>$/);

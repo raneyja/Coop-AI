@@ -354,6 +354,57 @@ const emptyBearerHole: ExtractedCodeContext = {
   filePath: "/workspace/src/server/authMiddleware.ts"
 };
 
+test("type-body assignment drops statement ghosts and invented getBearerToken", () => {
+  const typeBody: ExtractedCodeContext = {
+    ...context,
+    currentLinePrefix: "  const token =",
+    currentLineSuffix: "",
+    suffixWindow: "\n  auth?: AuthContext;\n};",
+    previousLines: "export type AuthResolveResult = {",
+    parentSignature: "export type AuthResolveResult = {",
+    indent: "  ",
+    filePath: "/workspace/src/server/authMiddleware.ts"
+  };
+  const ghost = "getBearerToken(headers);\nif (!token) { return undefined; }";
+  assert.equal(sanitizeCompletionForContext(ghost, typeBody), "");
+  const ranked = filterAndRankCompletions(
+    [ghost, "extractBearerToken(headers);"],
+    typeBody,
+    settings,
+    "export function extractBearerToken(headers: Record<string, string | undefined>): string | undefined {\n}\nexport type AuthResolveResult = {\n"
+  );
+  assert.equal(ranked.length, 0);
+});
+
+test("function-body assignment can still complete and prefers extractBearerToken", () => {
+  const fnBody: ExtractedCodeContext = {
+    ...context,
+    currentLinePrefix: "  const token =",
+    currentLineSuffix: "",
+    suffixWindow: "\n  if (!token) {\n    return undefined;\n  }\n}",
+    previousLines:
+      "export function resolveAuthContext(headers: Record<string, string | undefined>): AuthResolveResult {\n  const raw = headers.authorization;",
+    parentSignature:
+      "export function resolveAuthContext(headers: Record<string, string | undefined>): AuthResolveResult {",
+    indent: "  ",
+    filePath: "/workspace/src/server/authMiddleware.ts"
+  };
+  const ranked = filterAndRankCompletions(
+    ["getBearerToken(headers);", "extractBearerToken(headers);"],
+    fnBody,
+    { ...settings, showMultipleSuggestions: true },
+    [
+      "export function extractBearerToken(headers: Record<string, string | undefined>): string | undefined {",
+      "  return headers.authorization;",
+      "}",
+      "export function resolveAuthContext(headers: Record<string, string | undefined>): AuthResolveResult {"
+    ].join("\n")
+  );
+  assert.ok(ranked.length >= 1);
+  assert.match(ranked[0]?.text ?? "", /extractBearerToken/);
+  assert.equal(ranked.some((item) => item.text.includes("getBearerToken")), false);
+});
+
 test("empty-block hole keeps a ~194 char Bearer body when maxSuggestionLength is 200", () => {
   assert.ok(EXTRACT_BEARER_BODY.length > 180);
   assert.ok(EXTRACT_BEARER_BODY.length < 480);

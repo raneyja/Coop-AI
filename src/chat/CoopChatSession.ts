@@ -94,6 +94,13 @@ import { CacheEntry, RateLimitAwareExecutor } from "../context/rateLimitAwareExe
 import { createChatOutputGate, delayUntilMinResponseVisible } from "./chatResponseTiming";
 import { createStreamDeltaBatcher } from "./streamDeltaBatcher";
 import { resolveChatOutputMaxTokens } from "../config/chatOutputBudget";
+import { summarizeAgentToolResultForHistory } from "./agentAnswerHistory";
+import {
+  LENGTH_CONTINUE_PROMPT,
+  hasTrailingEmptyHeadings,
+  shouldContinueForLengthStop,
+  withLengthCutoffNotice
+} from "./lengthContinue";
 import { ThreadRunManager, SESSION_RUN_THREAD_ID, type ChatTurn } from "./chatTurn";
 import {
   appendTurnThinkingChunk,
@@ -176,6 +183,7 @@ import {
 } from "../context/contextBundleEvidence";
 import { shouldIncludeIntegrationInSourcesChecklist } from "../context/integrationEvidenceVisibility";
 import {
+  extractDefinedNamesFromSource,
   extractExportNamesFromSource,
   filterJobDependentsForFile,
   isTrustedBlastGraphSource,
@@ -205,13 +213,10 @@ import {
   shouldClarifyFirstChatTurn
 } from "./chatMessageIntent";
 import {
-  filterSuggestableActions,
-  offerFromActionId,
   shouldOfferQuickActionSuggest,
   suggestRunChipLabel
 } from "./quickActionSuggestIntent";
 import {
-  classifyQuickActionIntent,
   INTENT_SUGGEST_TIMEOUT_MS,
   type IntentSuggestCompleteFn
 } from "./quickActionIntentModel";
@@ -454,7 +459,6 @@ import {
   rankMentionSearchResults
 } from "./mentionSearchMerge";
 import { isFreePlan, resolveSearchScopeForPlan } from "../license/licenseChecker";
-import { resolvePlainChatIntegrationProvider } from "./integrationProviderRouting";
 import { shouldFetchIncidentIntegrations } from "../context/incidentIntent";
 import {
   isStatusTransitionAsk,
@@ -513,7 +517,7 @@ import { coopBuildBanner, COOP_EXTENSION_BUILD_ID } from "../config/coopBuildId"
 import { fetchIndexedBranch } from "../context/resolveRepoBranch";
 import { resolveActiveRepoTarget } from "../workspace/repoTargetResolver";
 import type { RepoTarget } from "../workspace/indexedRepoWorkspaceTypes";
-import { hasRepoFactNeed, needsRepoTreeOverview, repoFactNeeds, shouldSkipQuickActionSuggest } from "../workspace/repoFactIntent";
+import { hasRepoFactNeed, needsRepoTreeOverview, repoFactNeeds } from "../workspace/repoFactIntent";
 import {
   attachPickedIntegrationData,
   enrichIntentFetchResultsOnce
@@ -529,7 +533,7 @@ import { fetchConfluenceSearchContext } from "../context/confluenceContext";
 import { fetchGoogleDocsSearchContext } from "../context/googleDocsContext";
 import type { ResolvedIntegrationScope, ScopedIntegrationProvider } from "../integrationScope/types";
 import { AGENT_JOB_WALL_MS, AGENT_MAX_TOOL_ROUNDS } from "../config/agentJobBudget";
-import { shouldRunAgentToolLoop, agentTurnAction, agentTurnAllowsRepoTools, shouldSuppressSuggestChipsForAgentHunt, shouldSkipAgentHuntForOpenFileFeatureAdd, integrationsForAgentLoop } from "./agentRouting";
+import { shouldRunAgentToolLoop, agentTurnAction, agentTurnAllowsRepoTools, shouldSkipAgentHuntForOpenFileFeatureAdd, integrationsForAgentLoop } from "./agentRouting";
 import { buildAgentAnswerPrompt, buildAgentToolPlanPrompt } from "../api/agent/parseAgentToolPlan";
 import type { AgentConversationMessage, AgentPlanTurnInput, AgentStreamAnswerInput } from "../api/agent/agentTypes";
 import { promoteAgentIntegrationSearches } from "../api/agent/promoteAgentIntegrations";
@@ -3167,20 +3171,23 @@ export class CoopChatSession {
     }
 
     const maxPatterns = remainingMs < 4_000 ? 4 : remainingMs < 8_000 ? 6 : 10;
-    const askSymbols = resolveNamedBlastSymbols(request.intent.context?.queryText, {
-      file,
-      selectedSymbol: request.intent.context?.selectedSymbol ?? this.currentContext.selectedSymbol
-    });
     const target = this.repoTargetForRequest(request);
     let exportSymbols: string[] = [];
+    let definedNames: string[] = [];
     try {
       const evidence = await this.indexedRepoWorkspace().readFile(target, file);
       if (evidence?.content?.trim()) {
         exportSymbols = extractExportNamesFromSource(evidence.content);
+        definedNames = extractDefinedNamesFromSource(evidence.content);
       }
     } catch {
       // Soft gather — path-suffix patterns still run.
     }
+    const askSymbols = resolveNamedBlastSymbols(request.intent.context?.queryText, {
+      file,
+      selectedSymbol: request.intent.context?.selectedSymbol ?? this.currentContext.selectedSymbol,
+      definedNames
+    });
     const symbols = [...new Set([...exportSymbols, ...askSymbols])];
 
     this.appendLiveToolActivityLine(
@@ -3554,7 +3561,9 @@ export class CoopChatSession {
           hitPaths,
           attachedPaths: entryFiles.map((file) => file.path)
         });
-        if (remainingMs > 0 && uncovered.length > 0) {
+        // First useful paint: architecture + 5 files. Skip a second search round
+        // when the list is already full so synthesis can start inside the budget.
+        if (remainingMs > 0 && uncovered.length > 0 && entryFiles.length < 5) {
           const retrySearch = await Promise.race([
             searchRepoForFocusQuery({
               repoId,
@@ -4209,12 +4218,16 @@ export class CoopChatSession {
   }
 
   private conversationToHistory(
-    conversation: AgentConversationMessage[]
+    conversation: AgentConversationMessage[],
+    options?: { summarizeTools?: boolean }
   ): Array<{ role: "user" | "assistant"; content: string; timestamp: number }> {
     const now = Date.now();
     return conversation.map((entry, index) => ({
       role: entry.role,
-      content: entry.content,
+      content:
+        options?.summarizeTools && entry.role === "user"
+          ? summarizeAgentToolResultForHistory(entry.content)
+          : entry.content,
       timestamp: now - (conversation.length - index) * 1000
     }));
   }
@@ -4480,7 +4493,7 @@ export class CoopChatSession {
           repo: this.currentContext.repo,
           branch: this.currentContext.branch
         },
-        history: this.conversationToHistory(input.conversation),
+        history: this.conversationToHistory(input.conversation, { summarizeTools: true }),
         model: runtime.model,
         provider: runtime.provider,
         useCase,
@@ -4505,7 +4518,53 @@ export class CoopChatSession {
         this.postThinkingDelta(id, thinkingChunk);
       }
     );
-    return result.message.content || full;
+    let content = result.message.content || full;
+    let finishReason = result.finishReason;
+    if (
+      !signal?.aborted &&
+      shouldContinueForLengthStop({ finishReason, content, alreadyContinued: false })
+    ) {
+      let extra = "";
+      const continued = await this.options.api.streamChat(
+        {
+          message: LENGTH_CONTINUE_PROMPT,
+          context: {
+            owner: this.currentContext.owner,
+            repo: this.currentContext.repo,
+            branch: this.currentContext.branch
+          },
+          history: [
+            ...this.conversationToHistory(input.conversation, { summarizeTools: true }),
+            { role: "assistant" as const, content, timestamp: Date.now() }
+          ],
+          model: runtime.model,
+          provider: runtime.provider,
+          useCase,
+          temperature: this.preferences.temperature,
+          maxTokens: resolveChatOutputMaxTokens(this.preferences.maxTokens),
+          enableThinking: false
+        },
+        (chunk) => {
+          if (signal?.aborted) {
+            return;
+          }
+          extra += chunk;
+          onChunk(chunk);
+        },
+        this.preferences.apiBaseUrl,
+        signal
+      );
+      content += extra || continued.message.content || "";
+      finishReason = continued.finishReason;
+    }
+    if (finishReason === "length" || hasTrailingEmptyHeadings(content)) {
+      const noticed = withLengthCutoffNotice(content);
+      if (noticed !== content) {
+        onChunk(noticed.slice(content.length));
+        content = noticed;
+      }
+    }
+    return content;
   }
 
   private shouldRunAgentOwnedTurn(
@@ -5906,94 +5965,22 @@ export class CoopChatSession {
 
       if (!quickAction && !options?.composerMode && !options?.integrationProvider && !options?.sourceHint) {
         const decision = resolveChatIntentExecution(plan);
-        if (decision.kind === "silent-workflow") {
-          void this.emitUsageEvent("chat_intent.silent_workflow", {
-            workflow: decision.workflow,
-            tools: decision.tools
-          });
-          await this.handleChatSend("", decision.workflow, attachments, {
-            slashUserArgs: decision.focus,
-            historyContent: message,
-            mentions: options?.mentions,
-            fetchIntegrations: decision.tools.length ? decision.tools : undefined,
-            intentPlan: decision.plan,
-            skipQuickActionSuggest: true,
-            skipChatIntentPlanner: true
-          });
-          return;
-        }
-        if (decision.kind === "confirm-workflow") {
-          if (
-            shouldSuppressSuggestChipsForAgentHunt({
-              query: message
-            }) ||
-            shouldSkipQuickActionSuggest(message)
-          ) {
-            options = { ...options, intentPlan: emptyChatIntentPlan(message) };
-          } else {
-            void this.emitUsageEvent("chat_intent.confirm_workflow", {
-              workflow: decision.plan.workflow,
-              tools: decision.tools
-            });
-            await this.completeQuickActionSuggestClarification(
-              message,
-              decision.offer,
-              options?.mentions,
-              attachments,
-              decision.plan
-            );
-            return;
-          }
-        }
         if (decision.kind === "tools-only") {
           void this.emitUsageEvent("chat_intent.tools_only", { tools: decision.tools });
           options = {
             ...options,
             fetchIntegrations: decision.tools,
             intentPlan: decision.plan,
-            // Single named tool keeps primary-source synthesis; multi-tool uses allowlist only.
-            integrationProvider:
-              decision.tools.length === 1 &&
-              !(decision.plan.jobs ?? []).some((job) => job.capability === "locate")
-                ? decision.tools[0]
-                : options?.integrationProvider,
             skipChatIntentPlanner: true
           };
-        } else if (
-          !options?.integrationProvider &&
-          !this.detectChatIntegrationProvider(message)
-        ) {
-          // Legacy chip path when planner has nothing (medium phrase-only still handled above).
-          let offer = shouldOfferQuickActionSuggest(message, this.currentContext);
-          if (!offer && isIntentSuggestModelEnabled() && !shouldSkipQuickActionSuggest(message)) {
-            offer = await this.resolveHybridIntentSuggestOffer(message);
-          }
-          if (offer) {
-            if (
-              shouldSuppressSuggestChipsForAgentHunt({
-                query: message
-              })
-            ) {
-              options = { ...options, intentPlan: emptyChatIntentPlan(message) };
-            } else {
-              await this.completeQuickActionSuggestClarification(
-                message,
-                offer,
-                options?.mentions,
-                attachments,
-                plan
-              );
-              return;
-            }
-          }
         }
       } else if (plan.tools.length > 0 && !options?.fetchIntegrations) {
         options = { ...options, fetchIntegrations: plan.tools };
       }
     }
 
-    // Change asks: anchored /edit when a file is in scope; otherwise Agent hunts
-    // → propose_patch. Do not hard-error when the agent can own the change.
+    // Change asks: /edit only when the user chose it. Otherwise Agent hunts
+    // → propose_patch. Do not auto-set composerMode from a change-shaped sentence.
     const concreteEditAsk =
       !quickAction &&
       !options?.composerMode &&
@@ -6081,10 +6068,7 @@ export class CoopChatSession {
       }
     }
 
-    const integrationProviderForGuard =
-      quickAction || options?.sourceHint
-        ? options?.integrationProvider
-        : options?.integrationProvider ?? this.detectChatIntegrationProvider(message);
+    const integrationProviderForGuard = options?.integrationProvider;
     if (
       shouldClarifyFirstChatTurn({
         message,
@@ -6161,14 +6145,7 @@ export class CoopChatSession {
       }
     }
 
-    const inheritedQuickAction = resolveEffectiveQuickAction(quickAction, this.chatHistory);
-    // Planner tools-only / plain turns must not inherit a prior [blast-radius] sticky QA.
-    const suppressInheritedQuickAction =
-      Boolean(options?.fetchIntegrations?.length) ||
-      Boolean(options?.integrationProvider) ||
-      options?.intentPlan?.mode === "plain" ||
-      options?.intentPlan?.mode === "tools-only";
-    const intentQuickAction = quickAction ?? (suppressInheritedQuickAction ? undefined : inheritedQuickAction);
+    const intentQuickAction = quickAction;
 
     const mentionRefs = this.quickActionMentionRefs(options?.mentions);
     const modelMessage = quickAction
@@ -6268,15 +6245,11 @@ export class CoopChatSession {
       ? this.intentDetector.fromQuickAction(
           intentQuickAction,
           actionContext,
-          userFocus ?? modelMessage,
+          userFocus ?? taskMessage,
           { fetchIntegrations }
         )
       : this.intentDetector.fromManualChatSubmit(this.currentContext, message, {
-          integrationProvider:
-            options?.integrationProvider ??
-            (fetchIntegrations && fetchIntegrations.length > 1
-              ? undefined
-              : this.detectChatIntegrationProvider(message)),
+          integrationProvider: options?.integrationProvider,
           fetchIntegrations
         });
     this.postIntentFeedbackForThread(
@@ -6307,6 +6280,50 @@ export class CoopChatSession {
       !(quickAction === "knowledge-gaps" && userFocus)
     ) {
       try {
+        if (quickAction === "blast-radius") {
+          // Durable file-level callers first (full gather budget), then leftover job poll.
+          // Job-first left analyzeImpact with remainingMs === 0 and delayed first paint.
+          const blastIntent = this.intentDetector.fromQuickAction(
+            quickAction,
+            turn.context,
+            userFocus ?? taskMessage,
+            { fetchIntegrations }
+          );
+          await abortablePromise(
+            this.runIntentFetch(blastIntent, { quiet: true, turn }),
+            turn.streamAbort.signal
+          );
+          if (!this.threadRuns.isStreamActive(turn)) {
+            return;
+          }
+          if (remainingContextGatherBudgetMs(turn.startedAt) > 0) {
+            await abortablePromise(
+              this.runAsyncQuickAction(quickAction, modelMessage, turn),
+              turn.streamAbort.signal
+            );
+          }
+          if (!this.threadRuns.isStreamActive(turn)) {
+            return;
+          }
+          await abortablePromise(
+            this.applyBlastRadiusJobResultToBundle(quickAction, turn),
+            turn.streamAbort.signal
+          );
+          await abortablePromise(
+            this.postEvidenceCardsFromBundle(quickAction, undefined, turn, fetchIntegrations),
+            turn.streamAbort.signal
+          );
+          await this.continueChatAfterContext(modelMessage, quickAction, attachments, {
+            mentions: options?.mentions,
+            composerMode: options?.composerMode,
+            taskContent: taskMessage,
+            userFocus,
+            turn,
+            intentPlan: options?.intentPlan,
+            fetchIntegrations
+          });
+          return;
+        }
         const ranAsync = await abortablePromise(
           this.runAsyncQuickAction(quickAction, modelMessage, turn),
           turn.streamAbort.signal
@@ -6316,11 +6333,11 @@ export class CoopChatSession {
         }
         if (ranAsync) {
           // Keep planner allowlist on async Blast/Gaps enrichment — otherwise
-          // "check Jira" silent Blast reverts to fetching every connected tool.
+          // `/blast` plus "check Jira" reverts to fetching every connected tool.
           const intentEvent = this.intentDetector.fromQuickAction(
             quickAction,
             turn.context,
-            userFocus ?? modelMessage,
+            userFocus ?? taskMessage,
             { fetchIntegrations }
           );
           await abortablePromise(
@@ -6367,18 +6384,12 @@ export class CoopChatSession {
       return;
     }
 
-    const integrationProvider =
-      options?.integrationProvider ??
-      (quickAction
-        ? undefined
-        : fetchIntegrations && fetchIntegrations.length > 1
-          ? undefined
-          : this.detectChatIntegrationProvider(message));
+    const integrationProvider = options?.integrationProvider;
     const intentEvent = intentQuickAction
       ? this.intentDetector.fromQuickAction(
           intentQuickAction,
           actionContext,
-          userFocus ?? modelMessage,
+          userFocus ?? taskMessage,
           { fetchIntegrations }
         )
       : this.intentDetector.fromManualChatSubmit(turn.context, message, {
@@ -6626,68 +6637,10 @@ export class CoopChatSession {
   }
 
   /**
-   * Hybrid path: call gpt-4o-mini only when the phrase classifier returned nothing.
-   * Fail-open on error/timeout/abort → undefined (plain chat continues).
+   * Hybrid phrase/model chips used to interrupt plain chat. Intentionally
+   * removed — English stays chat. Chip accept (`handleSuggestResolve`) remains
+   * for an explicit Run /blast click if a leftover card is still on screen.
    */
-  private async resolveHybridIntentSuggestOffer(
-    message: string
-  ): Promise<ReturnType<typeof shouldOfferQuickActionSuggest>> {
-    this.intentSuggestAbort?.abort();
-    const controller = new AbortController();
-    this.intentSuggestAbort = controller;
-
-    const complete: IntentSuggestCompleteFn = async (params) => {
-      let full = "";
-      await this.options.api.streamChat(
-        {
-          message: params.message,
-          context: {},
-          history: [],
-          model: params.model,
-          provider: params.provider,
-          useCase: "intent_suggest",
-          temperature: params.temperature,
-          maxTokens: params.maxTokens,
-          enableThinking: false
-        },
-        (chunk) => {
-          full += chunk;
-        },
-        this.preferences.apiBaseUrl,
-        params.signal
-      );
-      return full;
-    };
-
-    try {
-      void this.emitUsageEvent("suggest_intent.model_invoked");
-      const result = await classifyQuickActionIntent(message, complete, {
-        activeFile: this.currentContext.file,
-        signal: controller.signal
-      });
-      if (!result || result.suggestions.length === 0) {
-        void this.emitUsageEvent("suggest_intent.model_none");
-        return undefined;
-      }
-      const available = filterSuggestableActions(result.suggestions, this.currentContext);
-      if (available.length === 0) {
-        void this.emitUsageEvent("suggest_intent.model_none");
-        return undefined;
-      }
-      const top = available[0]!;
-      void this.emitUsageEvent("suggest_intent.model_hit", {
-        actionId: top.actionId
-      });
-      return offerFromActionId(top.actionId, result.confidence);
-    } catch {
-      void this.emitUsageEvent("suggest_intent.model_error");
-      return undefined;
-    } finally {
-      if (this.intentSuggestAbort === controller) {
-        this.intentSuggestAbort = undefined;
-      }
-    }
-  }
 
   private markSuggestResolved(assistantTimestamp: number): void {
     for (let i = this.chatHistory.length - 1; i >= 0; i--) {
@@ -7099,13 +7052,6 @@ export class CoopChatSession {
         this.intentSuggestAbort = undefined;
       }
     }
-  }
-
-  private detectChatIntegrationProvider(message: string): IntegrationChatProvider | undefined {
-    return resolvePlainChatIntegrationProvider({
-      message,
-      isConnected: (provider) => this.isIntegrationConnected(provider)
-    });
   }
 
   private isCodeHostConnected(): boolean {
@@ -7623,16 +7569,7 @@ export class CoopChatSession {
     }
     const turnContext = turn.context;
     const intentPlan = options?.intentPlan ?? turn.intentPlan;
-    // Sticky [blast-radius] in history must not override tools-only / integration turns.
-    const suppressInheritedQuickAction =
-      Boolean(options?.fetchIntegrations?.length) ||
-      Boolean(options?.integrationProvider) ||
-      intentPlan.mode === "plain" ||
-      intentPlan.mode === "tools-only" ||
-      (intentPlan.jobs?.length ?? 0) > 0;
-    const effectiveQuickAction = suppressInheritedQuickAction
-      ? (quickAction as import("../webview/types").QuickActionId | undefined)
-      : resolveEffectiveQuickAction(quickAction, turn.history);
+    const effectiveQuickAction = resolveEffectiveQuickAction(quickAction, turn.history);
     // No artificial minimum — first tokens stream as soon as the LLM produces them,
     // for plain chat, /edit, and quick actions alike.
     const minResponseVisibleMs = 0;
@@ -8381,6 +8318,47 @@ export class CoopChatSession {
         }
       );
 
+      if (
+        !isCancelled() &&
+        shouldContinueForLengthStop({
+          finishReason: result.finishReason,
+          content: full,
+          alreadyContinued: false
+        })
+      ) {
+        const continued = await this.options.api.streamChat(
+          {
+            message: LENGTH_CONTINUE_PROMPT,
+            context: {
+              owner: turnContext.owner,
+              repo: turnContext.repo,
+              branch: turnContext.branch,
+              file: effectiveQuickAction === "understand-repo" ? turnContext.file : undefined
+            },
+            history: [
+              ...priorHistory,
+              { role: "assistant", content: full, timestamp: Date.now() }
+            ],
+            model: runtimeModel.model,
+            provider: runtimeModel.provider,
+            useCase: chatUseCase,
+            temperature: this.preferences.temperature,
+            maxTokens: resolveChatOutputMaxTokens(this.preferences.maxTokens),
+            enableThinking: false
+          },
+          (chunk) => {
+            outputGate.push(chunk);
+          },
+          this.preferences.apiBaseUrl,
+          signal
+        );
+        if (continued.finishReason === "length" || hasTrailingEmptyHeadings(full)) {
+          outputGate.push(withLengthCutoffNotice(full).slice(full.length));
+        }
+      } else if (result.finishReason === "length" || hasTrailingEmptyHeadings(full)) {
+        outputGate.push(withLengthCutoffNotice(full).slice(full.length));
+      }
+
       await outputGate.waitUntilOpen();
 
       if (isCancelled()) {
@@ -8967,15 +8945,14 @@ export class CoopChatSession {
       return;
     }
 
-    const askText = (turn?.modelMessage ?? "").trim();
+    const lastUser = [...(turn?.history ?? this.chatHistory)]
+      .reverse()
+      .find((message) => message.role === "user");
+    const askText = lastUser?.content ?? "";
     const remainingMs = remainingContextGatherBudgetMs(
       turn?.startedAt ?? this.chatTurnStartedAt ?? Date.now()
     );
     const maxPatterns = remainingMs <= 0 ? 4 : remainingMs < 4_000 ? 6 : 12;
-    const askSymbols = resolveNamedBlastSymbols(askText, {
-      file: targetFile,
-      selectedSymbol: ctx.selectedSymbol ?? this.currentContext.selectedSymbol
-    });
     const target: RepoTarget = {
       repoId,
       owner: ctx.owner ?? this.preferences.owner,
@@ -8984,14 +8961,21 @@ export class CoopChatSession {
       provider: ctx.provider ?? this.preferences.defaultCodeHost
     };
     let exportSymbols: string[] = [];
+    let definedNames: string[] = [];
     try {
       const evidence = await this.indexedRepoWorkspace().readFile(target, targetFile);
       if (evidence?.content?.trim()) {
         exportSymbols = extractExportNamesFromSource(evidence.content);
+        definedNames = extractDefinedNamesFromSource(evidence.content);
       }
     } catch {
       // Soft gather — continue with path-suffix patterns only.
     }
+    const askSymbols = resolveNamedBlastSymbols(askText, {
+      file: targetFile,
+      selectedSymbol: ctx.selectedSymbol ?? this.currentContext.selectedSymbol,
+      definedNames
+    });
     const symbols = [...new Set([...exportSymbols, ...askSymbols])];
     const shouldAbort = (): boolean =>
       remainingContextGatherBudgetMs(turn?.startedAt ?? this.chatTurnStartedAt ?? Date.now()) <= 0;
@@ -9047,8 +9031,9 @@ export class CoopChatSession {
       } catch {
         return;
       }
-    } else {
+    } else if (!shouldAbort()) {
       // Enrich durable callers with remote search hits; keep durable provenance.
+      // When the soft gather budget is already gone, answer with durables now.
       try {
         const search = await searchDependentsFallback(
           this.options.indexBackend,

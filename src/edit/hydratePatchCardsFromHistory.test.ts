@@ -1,12 +1,14 @@
 import "../autocomplete/test/vscodeMockSetup";
 import assert from "node:assert/strict";
 import {
+  filePathFromEditHistoryContent,
   hydratePatchCardsFromHistory,
   patchCardsForMessages
 } from "./hydratePatchCardsFromHistory";
-import { getPatchRecord, listPatchCards, resetPatchSessionForTests, upsertPatchRecord } from "./patchSession";
+import { getPatchRecord, getSuppressedMessageTimestamps, listPatchCards, resetPatchSessionForTests, upsertPatchRecord } from "./patchSession";
 import { buildPatchCardState, withSuppressionRegistry } from "./patchDiffPreview";
 import { parsePatchResponse } from "./patchParser";
+import { COMMENT_ONLY_REWRITE_REJECTED_ERROR } from "./snapPatchToSelection";
 
 let passed = 0;
 let failed = 0;
@@ -99,6 +101,133 @@ test("patchCardsForMessages only returns cards for the open thread", () => {
   assert.equal(snapshot.cards.length, 1);
   assert.equal(snapshot.cards[0]?.messageTimestamp, 10);
   assert.deepEqual(snapshot.suppressedMessageTimestamps, [10]);
+});
+
+test("filePathFromEditHistoryContent reads the /edit file chip", () => {
+  assert.equal(
+    filePathFromEditHistoryContent(
+      "/edit add a one-line comment\nfile: src/server/authMiddleware.ts · selection: L24–32"
+    ),
+    "src/server/authMiddleware.ts"
+  );
+});
+
+test("hydrates a Patch card when the model omitted File: but the user chip has the path", () => {
+  const content = [
+    "```patch",
+    "<<<<<<< SEARCH",
+    "const x = 1;",
+    "=======",
+    "const x = 2;",
+    ">>>>>>> REPLACE",
+    "```"
+  ].join("\n");
+  const count = hydratePatchCardsFromHistory([
+    {
+      role: "user",
+      content: "/edit add a comment\nfile: src/foo.ts · selection: L1–1",
+      timestamp: 1
+    },
+    { role: "assistant", content, timestamp: 2 }
+  ]);
+  assert.equal(count, 1);
+  assert.equal(listPatchCards()[0]?.files[0]?.relativePath, "src/foo.ts");
+});
+
+test("unparseable patch markdown still stays suppressed after history echo", () => {
+  const count = hydratePatchCardsFromHistory([
+    { role: "user", content: "/edit rewrite this", timestamp: 1 },
+    { role: "assistant", content: "```patch\nnot a real hunk\n```", timestamp: 2 }
+  ]);
+  assert.equal(count, 0);
+  assert.ok(getSuppressedMessageTimestamps().includes(2));
+  const snapshot = patchCardsForMessages([{ timestamp: 1 }, { timestamp: 2 }]);
+  assert.ok(snapshot.suppressedMessageTimestamps?.includes(2));
+});
+
+test("hydrates from a composer edit chip without a /edit prefix", () => {
+  const content = [
+    "```patch",
+    "<<<<<<< SEARCH",
+    "const x = 1;",
+    "=======",
+    "const x = 2;",
+    ">>>>>>> REPLACE",
+    "```"
+  ].join("\n");
+  const count = hydratePatchCardsFromHistory([
+    {
+      role: "user",
+      content: "add a comment\nfile: src/foo.ts · selection: L1–1",
+      timestamp: 1
+    },
+    { role: "assistant", content, timestamp: 2 }
+  ]);
+  assert.equal(count, 1);
+  assert.equal(listPatchCards()[0]?.files[0]?.relativePath, "src/foo.ts");
+  assert.equal(listPatchCards()[0]?.status, "pending");
+});
+
+test("retries a failed empty record once File: can be inferred from the user chip", () => {
+  const content = [
+    "```patch",
+    "<<<<<<< SEARCH",
+    "const x = 1;",
+    "=======",
+    "const x = 2;",
+    ">>>>>>> REPLACE",
+    "```"
+  ].join("\n");
+  upsertPatchRecord(
+    2,
+    { files: [] },
+    {
+      status: "failed",
+      messageTimestamp: 2,
+      fileCount: 0,
+      hunkCount: 0,
+      files: [],
+      error: "Patch blocks found but no File: header",
+      suppressMarkdown: true
+    }
+  );
+  const count = hydratePatchCardsFromHistory([
+    {
+      role: "user",
+      content: "/edit add a comment\nfile: src/foo.ts · selection: L1–1",
+      timestamp: 1
+    },
+    { role: "assistant", content, timestamp: 2 }
+  ]);
+  assert.equal(count, 1);
+  assert.equal(getPatchRecord(2)?.card.status, "pending");
+  assert.equal(getPatchRecord(2)?.card.files[0]?.relativePath, "src/foo.ts");
+});
+
+test("does not revive a comment-only rewrite rejection as a pending Apply card", () => {
+  upsertPatchRecord(
+    2,
+    { files: [] },
+    {
+      status: "failed",
+      messageTimestamp: 2,
+      fileCount: 0,
+      hunkCount: 0,
+      files: [],
+      error: COMMENT_ONLY_REWRITE_REJECTED_ERROR,
+      suppressMarkdown: true
+    }
+  );
+  const count = hydratePatchCardsFromHistory([
+    {
+      role: "user",
+      content: "/edit add a comment above this. Do not change any code.",
+      timestamp: 1
+    },
+    { role: "assistant", content: SAMPLE_PATCH, timestamp: 2 }
+  ]);
+  assert.equal(count, 0);
+  assert.equal(getPatchRecord(2)?.card.status, "failed");
 });
 
 console.log(`\nhydratePatchCardsFromHistory: ${passed} passed, ${failed} failed`);

@@ -102,6 +102,7 @@ export function slashCommandHistoryContent(def: SlashCommandDef, focusOrArgs: st
  * buttons, including @-mentioned file attachments. Shared behavior (use-case prompts, context fetch,
  * response enrichment) lives in CoopChatSession via resolveEffectiveQuickAction() and
  * chatResponseEnrichment.ts — update those when adding or changing quick-action behavior.
+ * History inherit is off: a later plain follow-up is plain chat.
  */
 export const SLASH_COMMANDS: SlashCommandDef[] = [
   {

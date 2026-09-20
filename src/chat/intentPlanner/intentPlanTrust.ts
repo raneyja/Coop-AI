@@ -122,9 +122,6 @@ export function buildIntentPlanTrustPreamble(plan: ChatIntentPlan): string | und
   return [
     `<coop_intent_plan>`,
     status + ".",
-    plan.execution === "silent" && plan.workflow
-      ? `Plain chat was routed to the ${plan.workflow} workflow automatically.`
-      : undefined,
     plan.tools.length > 0
       ? `Connected tools in scope: ${plan.tools.map((t) => TOOL_LABEL[t]).join(", ")}.`
       : undefined,

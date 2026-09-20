@@ -16,15 +16,17 @@ criteria in `src/chat/intentPlanner/gates.ts` as the canonical checklist.
 
 Run: `npx tsx src/chat/intentPlanner/phase1.gates.test.ts`
 
-## Phase 2 — workflow promotion
+## Phase 2 — no silent workflow promotion
+
+Plain English is plain chat. A slash / Workflows / grid `quickAction` is the only way onto Blast, Owner, Trace, Gaps, or Understand.
 
 | Gate | Pass | Fail |
 | --- | --- | --- |
-| P2-G1 | A high-confidence Blast ask with an open file runs silently. | It stays plain chat or asks for confirmation. |
-| P2-G2 | A compound ask keeps both the workflow and named tools. | Either side of the compound plan is dropped. |
-| P2-G3 | A medium-confidence workflow with no tools offers confirmation chips. | It runs silently or disappears. |
-| P2-G4 | Model-plan parsing accepts workflow-plus-tools JSON. | Valid compound JSON is rejected or reduced. |
-| P2-G5 | Silent execution resolves to the workflow path. | It resolves to plain chat or confirmation. |
+| P2-G1 | Blast-shaped English with an open file stays plain chat (agent/tools allowed). | It silently runs Blast or asks “Want Blast Radius?” |
+| P2-G2 | A compound impact + Jira ask stays tools-only with Jira on the allowlist. | It silent-runs Blast, or drops Jira. |
+| P2-G3 | Repo-overview English does not open suggest-chips. | It confirms or silent-runs Understand Repo. |
+| P2-G4 | Model-plan JSON may name tools; `workflow` on unconstrained chat is ignored. | Unconstrained JSON silently becomes Blast. |
+| P2-G5 | `resolveChatIntentExecution` never returns silent-workflow or confirm-workflow. | Leftover silent plans re-enter a quick action. |
 | P2-G6 | Invalid model output fails open without forcing a workflow. | Invalid output triggers an action. |
 
 ## Phase 3 — trust UX
@@ -77,11 +79,10 @@ button is a **constraint** (Slack only, blast only) — not a bypass.
 | --- | --- |
 | Slash `/slack` (with a topic) | Interpret focus → Slack-only decision job → existing Slack fetch with those terms |
 | Slash `/blast` (optional focus) | Interpret focus for terms → existing blast engine |
-| `silent-workflow` | Re-enters with the quick action + `fetchIntegrations` + the plan (no second interpret) |
-| `confirm-workflow` | Existing suggest chips; accept carries the same plan |
-| `tools-only` | Sets `fetchIntegrations` (+ single `integrationProvider` when exactly one tool and no locate job) |
+| Unconstrained English | Never `silent-workflow` or `confirm-workflow`. Never set `quickAction` from a phrase or model. |
+| `tools-only` | Sets `fetchIntegrations` only. Does **not** set `integrationProvider` (that is the slash single-route). |
 | `jobs[]` | Per-job terms on existing gather; skip agent wander when decision/docs/code-host jobs exist |
-| Activity / preamble | Status line + tool checklist + `<coop_intent_plan>`; chip shows the query actually sent |
+| Activity / preamble | Status line + tool checklist + `<coop_intent_plan>`; may name tools being fetched. Must not say plain chat was routed to a workflow automatically. |
 
 Re-entry sets `skipChatIntentPlanner` and passes `intentPlan`. Interpret once per turn.
 

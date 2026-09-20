@@ -1,4 +1,4 @@
-import { isFileCallerQuery } from "../context/fileCallerIntent";
+import { isFileCallerQuery, isShipCheckQuery } from "../context/fileCallerIntent";
 import { isFileHistoryQuery } from "../context/fileHistoryIntent";
 import { isRepoStructureQuery } from "../workspace/repoFactIntent";
 
@@ -234,6 +234,16 @@ export function classifyRepoCodeIntent(message: string): RepoCodeIntent {
   // A bare fragment that names nothing ("find auth") is too vague to hunt on.
   if (!hasSubject && words < 4) {
     return NONE;
+  }
+
+  // Ship-check / blast-shaped English stays locate (search+read callers), never
+  // /blast and never a no-op "none" that skips the agent loop.
+  if (isShipCheckQuery(trimmed)) {
+    return {
+      action: "locate",
+      confidence: hasEntity ? "high" : "medium",
+      reason: "asks what else to check before changing code"
+    };
   }
 
   const subject = hasEntity

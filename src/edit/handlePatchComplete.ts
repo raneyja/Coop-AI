@@ -6,7 +6,9 @@ import { countHunks, countUniqueFiles, parsePatchResponse } from "./patchParser"
 import { emitPatchEvent } from "./patchEvents";
 import { rejectPendingPatchWithState, type PatchSnapshotPublisher } from "./patchActions";
 import {
+  getSuppressedMessageTimestamps,
   listPatchCards,
+  markMessageMarkdownSuppressed,
   setLastAssistantPatchContent,
   setLastPatchApplyError,
   setLastPatchMessageTimestamp,
@@ -113,38 +115,55 @@ function filesForSutGrounding(
   return files;
 }
 
+function publishFailedPatch(
+  content: string,
+  error: string,
+  options: HandlePatchCompleteOptions,
+  phase: "parse" | "comment_only",
+  applyError?: string
+): PatchCardState {
+  setLastAssistantPatchContent(content);
+  setLastPatchApplyError(applyError);
+  setLastPatchMessageTimestamp(options.messageTimestamp);
+  emitPatchEvent("edit.patch_failed", { phase, error });
+  markMessageMarkdownSuppressed(options.messageTimestamp);
+  const failed = withSuppressionRegistry({
+    status: "failed",
+    messageTimestamp: options.messageTimestamp,
+    fileCount: 0,
+    hunkCount: 0,
+    files: [],
+    error,
+    suppressMarkdown: true
+  });
+  if (options.messageTimestamp !== undefined) {
+    upsertPatchRecord(options.messageTimestamp, { files: [] }, failed, {
+      fileContents: options.fileContents ? { ...options.fileContents } : undefined
+    });
+  }
+  if (options.publish) {
+    const cards = listPatchCards().map((card) =>
+      withSuppressionRegistry({ ...card, suppressMarkdown: true })
+    );
+    options.publish({
+      cards,
+      activeMessageTimestamp: options.messageTimestamp,
+      suppressedMessageTimestamps: getSuppressedMessageTimestamps()
+    });
+  }
+  return failed;
+}
+
 export async function handlePatchComplete(
   content: string,
   options: HandlePatchCompleteOptions = {}
 ): Promise<PatchCardState | undefined> {
-  const parsed = parsePatchResponse(content);
+  const parsed = parsePatchResponse(content, { preferredFile: options.file });
   if (!parsed.ok) {
     if (options.ignoreParseFailure) {
       return undefined;
     }
-    setLastAssistantPatchContent(content);
-    setLastPatchApplyError(undefined);
-    setLastPatchMessageTimestamp(options.messageTimestamp);
-    emitPatchEvent("edit.patch_failed", { phase: "parse", error: parsed.error });
-    const failed: PatchCardState = {
-      status: "failed",
-      messageTimestamp: options.messageTimestamp,
-      fileCount: 0,
-      hunkCount: 0,
-      files: [],
-      error: parsed.error,
-      suppressMarkdown: true
-    };
-    if (options.messageTimestamp !== undefined) {
-      // Failed parse has no hunks — still record suppression timestamp via empty files skip.
-      // Prefer not upserting empty cards; publish snapshot if publisher provided.
-    }
-    options.publish?.({
-      cards: [],
-      activeMessageTimestamp: options.messageTimestamp,
-      suppressedMessageTimestamps: options.messageTimestamp ? [options.messageTimestamp] : []
-    });
-    return failed;
+    return publishFailedPatch(content, parsed.error, options, "parse");
   }
 
   setLastAssistantPatchContent(content);
@@ -172,25 +191,13 @@ export async function handlePatchComplete(
   grounded = rewritePatchSetToMatchConstants(grounded, parseExportedSutLiterals(sutBody));
 
   if (options.commentOnly && countHunks(grounded) === 0) {
-    setLastAssistantPatchContent(content);
-    setLastPatchApplyError(COMMENT_ONLY_REWRITE_REJECTED_ERROR);
-    setLastPatchMessageTimestamp(options.messageTimestamp);
-    emitPatchEvent("edit.patch_failed", { phase: "comment_only", error: COMMENT_ONLY_REWRITE_REJECTED_ERROR });
-    const failed: PatchCardState = {
-      status: "failed",
-      messageTimestamp: options.messageTimestamp,
-      fileCount: 0,
-      hunkCount: 0,
-      files: [],
-      error: COMMENT_ONLY_REWRITE_REJECTED_ERROR,
-      suppressMarkdown: true
-    };
-    options.publish?.({
-      cards: [],
-      activeMessageTimestamp: options.messageTimestamp,
-      suppressedMessageTimestamps: options.messageTimestamp ? [options.messageTimestamp] : []
-    });
-    return failed;
+    return publishFailedPatch(
+      content,
+      COMMENT_ONLY_REWRITE_REJECTED_ERROR,
+      options,
+      "comment_only",
+      COMMENT_ONLY_REWRITE_REJECTED_ERROR
+    );
   }
 
   const fileCount = countUniqueFiles(grounded);
@@ -215,7 +222,8 @@ export async function handlePatchComplete(
     const cards = listPatchCards().map((card) => withSuppressionRegistry({ ...card, suppressMarkdown: true }));
     options.publish({
       cards,
-      activeMessageTimestamp: options.messageTimestamp
+      activeMessageTimestamp: options.messageTimestamp,
+      suppressedMessageTimestamps: getSuppressedMessageTimestamps()
     });
   } else {
     showPatchReadyNotification(grounded);

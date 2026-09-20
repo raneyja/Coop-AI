@@ -97,9 +97,21 @@ test("a newer /edit patch keeps older card visible and markdown suppressed", () 
   assert.equal(shouldRenderPatchCardForMessage(cards, 20), true);
 });
 
-test("suppress registry hides markdown even when card list is empty for that message", () => {
-  assert.equal(shouldHidePatchMarkdownForMessage([], 10, [10]), true);
-  assert.equal(shouldRenderPatchCardForMessage([], 10), false);
+test("failed empty card still renders so /edit never falls back to an anonymous fence", () => {
+  const cards: PatchCardState[] = [
+    {
+      status: "failed",
+      messageTimestamp: 10,
+      fileCount: 0,
+      hunkCount: 0,
+      files: [],
+      error: "Patch blocks found but no File: header",
+      suppressMarkdown: true
+    }
+  ];
+  assert.equal(shouldRenderPatchCardForMessage(cards, 10), true);
+  assert.equal(shouldHidePatchMarkdownForMessage(cards, 10, [10]), true);
+  assert.equal(showCreatePullRequestButton(cards[0]!), false);
 });
 
 test("B-G7 / UX-G4 Create PR is hidden until Apply sets canCreatePr", () => {

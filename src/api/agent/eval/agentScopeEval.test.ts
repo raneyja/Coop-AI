@@ -92,15 +92,15 @@ const ROUTE_CASES: RouteCase[] = [
   },
   {
     q: "Who owns the billing service?",
-    expectAction: "none",
-    expectLoop: false,
-    note: "find-owner workflow wins"
+    expectAction: "locate",
+    expectLoop: true,
+    note: "plain chat — not Find Owner unless /owner"
   },
   {
     q: "Who calls verifyToken?",
-    expectAction: "none",
-    expectLoop: false,
-    note: "blast-radius workflow wins"
+    expectAction: "locate",
+    expectLoop: true,
+    note: "plain chat — not Blast unless /blast"
   }
 ];
 

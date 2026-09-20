@@ -33,6 +33,7 @@ test("chat use case includes audience and output contract", () => {
   assert.ok(prompt.includes("Do **not** abbreviate repo code"));
   assert.ok(prompt.includes("PASS example first line:"));
   assert.ok(prompt.includes("FAIL: literal placeholders"));
+  assert.ok(prompt.includes("Never leave a **Heading** with an empty body"));
   assert.ok(prompt.includes("one **subsection title** per item"));
   assert.ok(prompt.includes("## Required response structure"));
   assert.equal(prompt.includes("evidence bundle"), false);

@@ -282,6 +282,10 @@ function findUnclosedFenceResume(
     if (line.trim() === "") {
       continue;
     }
+    // A later unfenced locator is the next cite, not more body of this fence.
+    if (seenCode && isUnfencedCitationStartLine(line)) {
+      return i;
+    }
     if (looksLikeCodeLine(line) || locatorFromProseLine(line)) {
       seenCode = true;
       continue;

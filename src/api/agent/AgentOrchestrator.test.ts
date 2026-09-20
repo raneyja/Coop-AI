@@ -3203,6 +3203,177 @@ async function run(): Promise<void> {
     assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
   });
 
+  const SHIP_CHECK_ASK =
+    "If I change that missing-key response, what else in this repo should I check before I ship?";
+
+  await test("ship-check search hits do not answer until a sibling 401 body is read", async () => {
+    const serverPath = "src/server/authMiddleware.ts";
+    const siblingPath = "src/jobs/jobsApi.ts";
+    const serverBody = "export function requireAuth(request) {\n  return Boolean(request.auth);\n}\n";
+    const reads: string[] = [];
+    let rounds = 0;
+    let streamed = "";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: serverPath,
+              lineNumber: 1,
+              content: "export function requireAuth(request) {",
+              score: 0.9
+            },
+            {
+              fileName: siblingPath,
+              lineNumber: 40,
+              content: 'writeJson(response, 401, { error: "unauthorized" });',
+              score: 0.8
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        if (rel === serverPath) {
+          return { path: rel, content: serverBody };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: SHIP_CHECK_ASK,
+        repoId: "acme/demo",
+        action: "locate",
+        maxSteps: 8,
+        openFile: serverPath
+      },
+      {
+        allowedIntegrations: [],
+        planTurn: async () => {
+          rounds += 1;
+          if (rounds === 1) {
+            return JSON.stringify({ tool: "search_code", args: { query: "missing-key" } });
+          }
+          return JSON.stringify({ done: true });
+        },
+        streamAnswer: async ({ conversation }) => {
+          streamed = JSON.stringify(conversation);
+          return "I could not open other call sites.";
+        }
+      }
+    );
+    assert.ok(rounds > 2, `done after search-only would be ${rounds} rounds`);
+    assert.match(streamed, /could not open other call sites|callers were not found/i);
+    const attached =
+      (result.context?.read_file as { files?: Array<{ path: string; content: string }> } | undefined)
+        ?.files ?? [];
+    assert.equal(
+      attached.some(
+        (file) => file.path === siblingPath && /unauthorized/.test(file.content ?? "")
+      ),
+      false,
+      "must not treat a path-only sibling hit as a ripple"
+    );
+  });
+
+  await test("ship-check reads sibling 401 writers and tests, not path-only hits", async () => {
+    const serverPath = "src/server/authMiddleware.ts";
+    const siblingPath = "src/jobs/jobsApi.ts";
+    const testPath = "src/server/orgApi.test.ts";
+    const serverBody = "export function requireAuth(request) {\n  return Boolean(request.auth);\n}\n";
+    const siblingPad = Array.from({ length: 60 }, (_, i) => `const pad${i} = ${i};`).join("\n");
+    const siblingBody = `${siblingPad}\nexport function handleJobsApiRequest(req, res) {\n  if (!auth) {\n    writeJson(res, 401, { error: "unauthorized" });\n    return;\n  }\n}\n`;
+    const testBody =
+      'test("missing key", () => {\n  assert.equal(json.error, "unauthorized");\n});\n';
+    const reads: string[] = [];
+    let streamed = "";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            {
+              fileName: serverPath,
+              lineNumber: 1,
+              content: "export function requireAuth(request) {",
+              score: 0.95
+            },
+            {
+              fileName: siblingPath,
+              lineNumber: 63,
+              content: 'writeJson(res, 401, { error: "unauthorized" });',
+              score: 0.9
+            },
+            {
+              fileName: testPath,
+              lineNumber: 2,
+              content: 'assert.equal(json.error, "unauthorized");',
+              score: 0.7
+            }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: rel }) => {
+        reads.push(rel);
+        if (rel === serverPath) {
+          return { path: rel, content: serverBody };
+        }
+        if (rel === siblingPath) {
+          return { path: rel, content: siblingBody };
+        }
+        if (rel === testPath) {
+          return { path: rel, content: testBody };
+        }
+        return undefined;
+      }
+    });
+    const result = await orchestrator.run(
+      {
+        message: SHIP_CHECK_ASK,
+        repoId: "acme/demo",
+        action: "locate",
+        maxSteps: 8,
+        openFile: serverPath
+      },
+      {
+        allowedIntegrations: [],
+        planTurn: async () => JSON.stringify({ tool: "search_code", args: { query: "unauthorized" } }),
+        streamAnswer: async ({ conversation }) => {
+          streamed = JSON.stringify(conversation);
+          return "jobsApi.ts writes the same unauthorized 401; orgApi.test.ts asserts that shape.";
+        }
+      }
+    );
+    assert.ok(reads.includes(siblingPath), `must read sibling writer, got ${reads.join(", ")}`);
+    assert.ok(reads.includes(testPath), `must read ship-check tests, got ${reads.join(", ")}`);
+    assert.match(streamed, /writeJson/);
+    assert.match(streamed, /unauthorized/);
+    const attached =
+      (result.context?.read_file as { files?: Array<{ path: string; content: string }> } | undefined)
+        ?.files ?? [];
+    assert.equal(
+      attached.some(
+        (file) => file.path === siblingPath && /writeJson[\s\S]*unauthorized/.test(file.content ?? "")
+      ),
+      true,
+      "sibling 401 body must be attached"
+    );
+    assert.equal(
+      attached.some((file) => file.path === testPath && /unauthorized/.test(file.content ?? "")),
+      true,
+      "test body must be attached"
+    );
+    assert.doesNotMatch(result.answer ?? "", /couldn't find that in this repo/i);
+  });
+
   console.log(`\nAgentOrchestrator: ${passed}/${passed + failed} tests passed`);
   if (failed > 0) {
     process.exit(1);

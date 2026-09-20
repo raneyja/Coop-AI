@@ -33,12 +33,14 @@ import {
   filterWriteRejectFiles,
   isApiRejectAsk,
   contentLooksLikeAskedFieldReject,
+  contentLooksLikeUnauthorizedWrite,
   lineNumberOfWriteReject,
+  lineNumberOfUnauthorizedWrite,
   textMentionsQueryRoles,
   readBodyHasCallerUse,
   lineNumberOfCallerUse
 } from "./searchQuery";
-import { isFileCallerQuery } from "../../context/fileCallerIntent";
+import { isFileCallerQuery, isShipCheckQuery } from "../../context/fileCallerIntent";
 import {
   classifyLocateRead,
   locateReadCountsAsGrounding,
@@ -79,6 +81,8 @@ const INDEX_HUNT_MISS =
 /** On-call API reject — never reuse the named-function miss copy. */
 const API_REJECT_HUNT_MISS =
   "I couldn't find where the API rejects that field. I won't guess a path. Try a more specific error string, or open the write path.";
+/** Cap extra ship-check sibling reads (401 writers + tests) after the definition. */
+const SHIP_CHECK_MAX_RIPPLE_READS = 5;
 /** Cap mid-loop integration calls so the model cannot spray. Search + Open + retry needs headroom. */
 const MAX_INTEGRATION_TOOL_CALLS = 8;
 
@@ -332,7 +336,8 @@ export class AgentOrchestrator {
     let implementationPath: string | undefined;
     const triedSearchQueries = new Set<string>();
     const wantsCallerRead = (): boolean =>
-      isFileCallerQuery(query) && (queryHasNamedSymbol(query) || Boolean(groundedExport));
+      isFileCallerQuery(query) &&
+      (queryHasNamedSymbol(query) || Boolean(groundedExport) || isShipCheckQuery(query));
     const allowedIntegrations = options.allowedIntegrations ?? [];
     this.loopContext = context;
     const vendorState = new Map<AgentToolName, VendorToolState>();
@@ -351,6 +356,20 @@ export class AgentOrchestrator {
       matchingRead = true;
       filesRead = 1;
       lastToolResult = seeded.raw;
+      if (openFile && isShipCheckQuery(query)) {
+        implementationPath = openFile;
+        const captured = await this.captureGroundedExport(
+          openFile,
+          seeded.raw ?? "",
+          query,
+          repoId,
+          emit,
+          context,
+          conversation
+        );
+        groundedExport = captured.exportName;
+        lastToolResult = captured.raw;
+      }
     } else if (allowedRepoTools) {
       const named = await this.seedNamedFileReads(
         repoId,
@@ -385,6 +404,12 @@ export class AgentOrchestrator {
       }
       if (isApiRejectAsk(query)) {
         return contextHasWriteReject(context, query);
+      }
+      if (isShipCheckQuery(query)) {
+        return (
+          matchingRead &&
+          (callerRead || contextHasUnauthorizedSiblingWrite(context, implementationPath))
+        );
       }
       if (queryHasNamedSymbol(query) || queryRoleHints(query).length > 0) {
         if (wantsCallerRead()) {
@@ -629,7 +654,11 @@ export class AgentOrchestrator {
             rawResult = captured.raw;
           }
           this.mergeContext(context, plan.tool, rawResult);
-          if (isFileCallerQuery(query) && queryHasNamedSymbol(query) && !callerRead) {
+          if (
+            isFileCallerQuery(query) &&
+            (queryHasNamedSymbol(query) || isShipCheckQuery(query)) &&
+            !callerRead
+          ) {
             const expanded = await this.expandReadForCallers(
               repoId,
               query,
@@ -752,7 +781,11 @@ export class AgentOrchestrator {
             } else if (huntingCallers) {
               callerRead = true;
             }
-            if (queryHasNamedSymbol(query) && isFileCallerQuery(query) && !callerRead) {
+            if (
+              (queryHasNamedSymbol(query) || isShipCheckQuery(query)) &&
+              isFileCallerQuery(query) &&
+              !callerRead
+            ) {
               const expanded = await this.expandReadForCallers(
                 repoId,
                 query,
@@ -813,7 +846,11 @@ export class AgentOrchestrator {
             groundedExport = captured.exportName;
             lastToolResult = captured.raw;
           }
-          if (queryHasNamedSymbol(query) && isFileCallerQuery(query) && !callerRead) {
+          if (
+            (queryHasNamedSymbol(query) || isShipCheckQuery(query)) &&
+            isFileCallerQuery(query) &&
+            !callerRead
+          ) {
             const expanded = await this.expandReadForCallers(
               repoId,
               query,
@@ -849,13 +886,33 @@ export class AgentOrchestrator {
           callerRead = true;
         }
       }
+      if (isShipCheckQuery(query) && matchingRead && filesRead < AGENT_MAX_FILES_READ) {
+        const ripples = await this.readShipCheckRippleHits(
+          repoId,
+          query,
+          emit,
+          context,
+          conversation,
+          groundedExport,
+          implementationPath,
+          AGENT_MAX_FILES_READ - filesRead
+        );
+        filesRead += ripples.filesRead;
+        if (ripples.callerRead) {
+          callerRead = true;
+        }
+        if (ripples.lastRaw) {
+          lastToolResult = ripples.lastRaw;
+        }
+      }
     }
 
     if (wantsCallerRead() && matchingRead && !callerRead) {
       conversation.push({
         role: "user",
-        content:
-          "You did not read a file that imports or calls the export. Answer from the implementation you read. Do not invent a caller path. Say callers were not found in the index."
+        content: isShipCheckQuery(query)
+          ? "You did not read a sibling file that writes the same unauthorized response. Do not list path-only search hits. Say you could not open other call sites."
+          : "You did not read a file that imports or calls the export. Answer from the implementation you read. Do not invent a caller path. Say callers were not found in the index."
       });
     }
 
@@ -1093,7 +1150,10 @@ export class AgentOrchestrator {
     conversation?: AgentConversationMessage[]
   ): Promise<{ ok: boolean; raw?: string }> {
     const filePath = openFile?.trim();
-    if (!filePath || !isFeatureAddAsk(query)) {
+    if (
+      !filePath ||
+      !(isFeatureAddAsk(query) || (isShipCheckQuery(query) && !queryHasNamedSymbol(query)))
+    ) {
       return { ok: false };
     }
     try {
@@ -1406,7 +1466,8 @@ export class AgentOrchestrator {
         body = "";
       }
       const groundingOk = locateReadCountsAsGrounding({ path: hit.fileName, body, query });
-      const callerOk = preferCallerHits && readBodyHasCallerUse(body, query, groundedExport);
+      const callerOk =
+        preferCallerHits && shipCheckRippleBody(body, query, groundedExport);
       if (!readFilePayloadHasBody(readRaw) || (!preferCallerHits && !groundingOk) || (preferCallerHits && !callerOk)) {
         const fullRaw = await this.executeTool("read_file", { path: hit.fileName, repoId });
         if (readFilePayloadHasBody(fullRaw)) {
@@ -1423,7 +1484,7 @@ export class AgentOrchestrator {
         continue;
       }
       const verdict = classifyLocateRead({ path: hit.fileName, body, query });
-      if (preferCallerHits && !readBodyHasCallerUse(body, query, groundedExport)) {
+      if (preferCallerHits && !shipCheckRippleBody(body, query, groundedExport)) {
         skippedPaths?.add(pathKey);
         emit({
           index: 0,
@@ -1479,7 +1540,20 @@ export class AgentOrchestrator {
           continue;
         }
       }
-      if (preferCallerHits) {
+      if (isShipCheckQuery(query)) {
+        const unauthAttach = await this.jumpUnauthorizedAttachIfNeeded(
+          repoId,
+          hit.fileName,
+          readRaw,
+          usedWindow
+        );
+        if (unauthAttach) {
+          readRaw = unauthAttach.raw;
+          usedWindow = true;
+          startLine = unauthAttach.startLine;
+          endLine = unauthAttach.endLine;
+        }
+      } else if (preferCallerHits) {
         const callerAttach = await this.jumpCallerAttachIfNeeded(
           repoId,
           hit.fileName,
@@ -1686,6 +1760,127 @@ export class AgentOrchestrator {
     } catch {
       return undefined;
     }
+  }
+
+  /**
+   * Ship-check: keep the unauthorized/401 write in the attached window so the
+   * writer history clip still has the shape, not just the file head.
+   */
+  private async jumpUnauthorizedAttachIfNeeded(
+    repoId: string,
+    filePath: string,
+    readRaw: string,
+    usedWindow: boolean
+  ): Promise<{ raw: string; startLine: number; endLine: number } | undefined> {
+    const useBody = stripReadLinePrefixes(readFileBodies(readRaw));
+    if (usedWindow && contentLooksLikeUnauthorizedWrite(useBody)) {
+      return undefined;
+    }
+    const line = lineNumberOfUnauthorizedWrite(useBody);
+    if (!line) {
+      return undefined;
+    }
+    const jumped = await this.readWindowAroundLine(repoId, filePath, line);
+    if (!jumped) {
+      return undefined;
+    }
+    const jumpedBody = stripReadLinePrefixes(readFileBodies(jumped.raw));
+    if (!contentLooksLikeUnauthorizedWrite(jumpedBody)) {
+      return undefined;
+    }
+    return jumped;
+  }
+
+  /**
+   * After the definition is grounded, open remaining 401/unauthorized sibling
+   * hits (and tests) so the writer can name confirmed ripples.
+   */
+  private async readShipCheckRippleHits(
+    repoId: string,
+    query: string,
+    emit: (step: AgentStep) => void,
+    context: AgentSessionContext,
+    conversation: AgentConversationMessage[] | undefined,
+    groundedExport: string | undefined,
+    implementationPath: string | undefined,
+    remainingReads: number
+  ): Promise<{ filesRead: number; callerRead: boolean; lastRaw?: string }> {
+    const cap = Math.min(SHIP_CHECK_MAX_RIPPLE_READS, Math.max(0, remainingReads));
+    if (cap <= 0) {
+      return { filesRead: 0, callerRead: false };
+    }
+    const parsed = context.search_code as (SearchPayload & { preferredHits?: SearchHit[] }) | undefined;
+    let hits = [...(parsed?.preferredHits ?? parsed?.hits ?? [])];
+    if (!hits.some((hit) => contentLooksLikeUnauthorizedWrite(hit.content ?? ""))) {
+      try {
+        const extra = await this.executeTool("search_code", {
+          repoId,
+          query: "unauthorized"
+        });
+        const decorated = this.decorateToolResult("search_code", extra, query);
+        this.mergeContext(context, "search_code", decorated);
+        conversation?.push({
+          role: "assistant",
+          content: JSON.stringify({ tool: "search_code", args: { query: "unauthorized" } })
+        });
+        conversation?.push({ role: "user", content: decorated });
+        emit({
+          index: 0,
+          tool: "search_code",
+          summary: "search_code: unauthorized",
+          completed: true
+        });
+        const extraParsed = JSON.parse(decorated) as SearchPayload & { preferredHits?: SearchHit[] };
+        hits = [...hits, ...(extraParsed.preferredHits ?? extraParsed.hits ?? [])];
+      } catch {
+        // Index miss — still try existing hits.
+      }
+    }
+    const skippedPaths = new Set<string>();
+    for (const file of (context.read_file as ReadFilePayload | undefined)?.files ?? []) {
+      if (file.path) {
+        skippedPaths.add(normalizeHuntPath(file.path));
+      }
+    }
+    if (implementationPath) {
+      skippedPaths.add(normalizeHuntPath(implementationPath));
+    }
+    let filesRead = 0;
+    let callerRead = false;
+    let lastRaw: string | undefined;
+    const seen = new Set<string>();
+    for (const hit of hits) {
+      if (filesRead >= cap) {
+        break;
+      }
+      const key = normalizeHuntPath(hit.fileName ?? "");
+      if (!key || seen.has(key) || skippedPaths.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      const opened = await this.readFirstMatchingHit(
+        repoId,
+        query,
+        [hit],
+        emit,
+        context,
+        conversation,
+        skippedPaths,
+        true,
+        groundedExport,
+        implementationPath
+      );
+      if (!opened.ok) {
+        continue;
+      }
+      filesRead += 1;
+      lastRaw = opened.raw;
+      const body = stripReadLinePrefixes(readFileBodies(opened.raw ?? ""));
+      if (shipCheckRippleBody(body, query, groundedExport)) {
+        callerRead = true;
+      }
+    }
+    return { filesRead, callerRead, lastRaw };
   }
 
   /**
@@ -2130,6 +2325,32 @@ function contextHasWriteReject(
   return files.some((file) =>
     contentLooksLikeAskedFieldReject(file.content ?? "", query, file.path ?? "")
   );
+}
+
+function shipCheckRippleBody(
+  body: string,
+  query: string,
+  groundedExport?: string
+): boolean {
+  return (
+    readBodyHasCallerUse(body, query, groundedExport) ||
+    (isShipCheckQuery(query) && contentLooksLikeUnauthorizedWrite(body))
+  );
+}
+
+function contextHasUnauthorizedSiblingWrite(
+  context: AgentSessionContext | undefined,
+  implementationPath?: string
+): boolean {
+  const files = (context?.read_file as ReadFilePayload | undefined)?.files ?? [];
+  const impl = implementationPath ? normalizeHuntPath(implementationPath) : "";
+  return files.some((file) => {
+    const path = file.path ?? "";
+    if (impl && normalizeHuntPath(path) === impl) {
+      return false;
+    }
+    return contentLooksLikeUnauthorizedWrite(file.content ?? "");
+  });
 }
 
 function pruneContextToWriteReject(context: AgentSessionContext | undefined, query: string): void {

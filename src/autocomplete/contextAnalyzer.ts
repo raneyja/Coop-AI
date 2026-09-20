@@ -325,6 +325,9 @@ function hashContext(parts: Record<string, string | number>): string {
 }
 
 export function wantsMultiLineCompletion(context: ExtractedCodeContext): boolean {
+  if (isInsideTypeLikeBody(context.previousLines, context.currentLinePrefix)) {
+    return false;
+  }
   const prefix = context.currentLinePrefix;
   if (/{\s*$/.test(prefix)) {
     return true;
@@ -342,10 +345,55 @@ export function wantsMultiLineCompletion(context: ExtractedCodeContext): boolean
 }
 
 /**
+ * Cursor is inside `type Foo = { … }` or `interface Foo { … }` (unclosed `{`).
+ * Brace count only — not a TypeScript language service.
+ */
+export function isInsideTypeLikeBody(previousLines: string, currentLinePrefix: string): boolean {
+  const text = `${previousLines}\n${currentLinePrefix}`;
+  const openRe = /(?:^|\n)\s*(?:export\s+)?(?:type|interface)\s+[A-Za-z_$][\w$]*\b[^{;\n]*\{/g;
+  let lastOpen = -1;
+  for (const match of text.matchAll(openRe)) {
+    lastOpen = (match.index ?? 0) + match[0].length - 1;
+  }
+  if (lastOpen < 0) {
+    return false;
+  }
+  const after = text.slice(lastOpen);
+  let depth = 0;
+  let inString: string | false = false;
+  for (let i = 0; i < after.length; i++) {
+    const ch = after[i];
+    if (inString) {
+      if (ch === "\\") {
+        i += 1;
+        continue;
+      }
+      if (ch === inString) {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      inString = ch;
+      continue;
+    }
+    if (ch === "{") {
+      depth += 1;
+    } else if (ch === "}") {
+      depth -= 1;
+    }
+  }
+  return depth > 0;
+}
+
+/**
  * Cursor is on a blank (or indent-only) line, and the next code is a closing brace.
  * Fill the whole body — not a single statement.
  */
 export function isEmptyBlockHole(context: ExtractedCodeContext): boolean {
+  if (isInsideTypeLikeBody(context.previousLines, context.currentLinePrefix)) {
+    return false;
+  }
   if (context.afterDot) {
     return false;
   }

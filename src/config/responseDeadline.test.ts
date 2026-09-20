@@ -57,6 +57,14 @@ async function main(): Promise<void> {
     assert.equal(isResponseDeadlineAbort(controller.signal), false);
   });
 
+  await test("soft gather hitting zero does not abort a stream AbortSignal", () => {
+    const started = Date.now() - MAX_USER_FACING_RESPONSE_MS - 1_000;
+    assert.equal(remainingContextGatherBudgetMs(started), 0);
+    const controller = new AbortController();
+    scheduleResponseDeadline(controller, started);
+    assert.equal(controller.signal.aborted, false);
+  });
+
   await test("abortablePromise rejects when signal aborts (user Stop)", async () => {
     const controller = new AbortController();
     const pending = abortablePromise(new Promise<string>(() => undefined), controller.signal);

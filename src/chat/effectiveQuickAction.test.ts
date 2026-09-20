@@ -25,45 +25,49 @@ test("resolveEffectiveQuickAction prefers explicit quickAction param", () => {
   assert.equal(resolveEffectiveQuickAction("knowledge-gaps", [userMessage("/gaps")]), "knowledge-gaps");
 });
 
-test("resolveEffectiveQuickAction reads /understand slash command", () => {
+test("plain follow-up after /understand does not inherit the action", () => {
   const history = [userMessage("/understand")];
-  assert.equal(resolveEffectiveQuickAction(undefined, history), "understand-repo");
+  assert.equal(resolveEffectiveQuickAction(undefined, history), undefined);
 });
 
-test("resolveEffectiveQuickAction reads quick-action tag from history", () => {
+test("plain follow-up after a [knowledge-gaps] tag does not inherit", () => {
   const history = [userMessage("[knowledge-gaps] Audit documentation and ownership gaps for this area.")];
-  assert.equal(resolveEffectiveQuickAction(undefined, history), "knowledge-gaps");
+  assert.equal(resolveEffectiveQuickAction(undefined, history), undefined);
 });
 
-test("resolveEffectiveQuickAction reads slash command token from history", () => {
+test("plain follow-up after /gaps does not inherit", () => {
   const history = [userMessage("/gaps")];
-  assert.equal(resolveEffectiveQuickAction(undefined, history), "knowledge-gaps");
+  assert.equal(resolveEffectiveQuickAction(undefined, history), undefined);
 });
 
-test("resolveEffectiveQuickAction reads slash aliases", () => {
-  assert.equal(resolveEffectiveQuickAction(undefined, [userMessage("/unknowns")]), "knowledge-gaps");
-  assert.equal(resolveEffectiveQuickAction(undefined, [userMessage("/blast")]), "blast-radius");
+test("plain follow-up after /blast does not inherit Blast", () => {
+  assert.equal(resolveEffectiveQuickAction(undefined, [userMessage("/unknowns")]), undefined);
+  assert.equal(resolveEffectiveQuickAction(undefined, [userMessage("/blast")]), undefined);
 });
 
-test("resolveEffectiveQuickAction reads find-owner slash aliases", () => {
-  assert.equal(resolveEffectiveQuickAction(undefined, [userMessage("/owner")]), "find-owner");
-  assert.equal(resolveEffectiveQuickAction(undefined, [userMessage("/who")]), "find-owner");
-  assert.equal(resolveEffectiveQuickAction(undefined, [userMessage("/find-owner")]), "find-owner");
+test("plain follow-up after /owner aliases does not inherit Find Owner", () => {
+  assert.equal(resolveEffectiveQuickAction(undefined, [userMessage("/owner")]), undefined);
+  assert.equal(resolveEffectiveQuickAction(undefined, [userMessage("/who")]), undefined);
+  assert.equal(resolveEffectiveQuickAction(undefined, [userMessage("/find-owner")]), undefined);
 });
 
-test("resolveEffectiveQuickAction reads find-owner tag from history for follow-ups", () => {
+test("explicit /blast on this send still returns blast-radius", () => {
+  assert.equal(resolveEffectiveQuickAction("blast-radius", [userMessage("/blast")]), "blast-radius");
+});
+
+test("plain follow-up after find-owner tag does not inherit", () => {
   const history = [userMessage("[find-owner] Find who owns this area and how to reach them.\nfile: src/handler.ts · repo: acme/widgets")];
-  assert.equal(resolveEffectiveQuickAction(undefined, history), "find-owner");
+  assert.equal(resolveEffectiveQuickAction(undefined, history), undefined);
 });
 
-test("resolveEffectiveQuickAction reads trace-decision slash commands", () => {
-  assert.equal(resolveEffectiveQuickAction(undefined, [userMessage("/trace")]), "trace-decision");
-  assert.equal(resolveEffectiveQuickAction(undefined, [userMessage("/why")]), "trace-decision");
-  assert.equal(resolveEffectiveQuickAction(undefined, [userMessage("/decision")]), "trace-decision");
-  assert.equal(resolveEffectiveQuickAction(undefined, [userMessage("/history")]), "trace-decision");
+test("plain follow-up after /trace aliases does not inherit Trace", () => {
+  assert.equal(resolveEffectiveQuickAction(undefined, [userMessage("/trace")]), undefined);
+  assert.equal(resolveEffectiveQuickAction(undefined, [userMessage("/why")]), undefined);
+  assert.equal(resolveEffectiveQuickAction(undefined, [userMessage("/decision")]), undefined);
+  assert.equal(resolveEffectiveQuickAction(undefined, [userMessage("/history")]), undefined);
   assert.equal(
     resolveEffectiveQuickAction(undefined, [userMessage("[trace-decision] Trace the engineering decision behind this code.")]),
-    "trace-decision"
+    undefined
   );
 });
 
