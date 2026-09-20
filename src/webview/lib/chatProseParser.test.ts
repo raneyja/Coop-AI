@@ -952,6 +952,70 @@ test("long walkthrough with citations keeps the closing sentence", () => {
   assert.match(text, /careful reviewer would require a matching frontend map/);
 });
 
+test("mixed path:range Copy dump and numeric locator still parse as citations", () => {
+  const input = [
+    "Missing-key 401 is written here:",
+    "",
+    "`src/server/authMiddleware.ts:70-80`",
+    "```typescript",
+    "if (!token) {",
+    "  return { ok: false, status: 401 };",
+    "}",
+    "```",
+    "",
+    "Integration credentials use the same helper:",
+    "",
+    "```",
+    "57:66:src/server/integrationApi.ts",
+    "const auth = await requireAuth(req);",
+    "```",
+    "",
+    "- Then check webhook signature failures."
+  ].join("\n");
+  const doc = parseChatProse(input);
+  const citations = doc.blocks.filter((block) => block.type === "code-citation");
+  assert.ok(
+    citations.length >= 2,
+    `expected two cites, got ${JSON.stringify(doc.blocks.map((block) => block.type))}`
+  );
+  assert.equal(
+    doc.blocks.some((block) => block.type === "code-fence" && block.code.includes("Then check webhook")),
+    false
+  );
+  const paths = citations.map((block) => (block.type === "code-citation" ? block.path : ""));
+  assert.ok(paths.some((path) => path.includes("authMiddleware.ts")));
+  assert.ok(paths.some((path) => path.includes("integrationApi.ts")));
+});
+
+test("unclosed language fence does not swallow a later numeric locator", () => {
+  const input = [
+    "```typescript",
+    "if (!token) {",
+    "  return { ok: false, status: 401 };",
+    "}",
+    "",
+    "57:66:src/server/integrationApi.ts",
+    "const auth = await requireAuth(req);",
+    "",
+    "- Then check webhook signature failures."
+  ].join("\n");
+  const doc = parseChatProse(input);
+  const citations = doc.blocks.filter((block) => block.type === "code-citation");
+  assert.ok(
+    citations.some((block) => block.type === "code-citation" && block.path.includes("integrationApi.ts")),
+    `expected later cite, got ${JSON.stringify(doc.blocks.map((block) => block.type))}`
+  );
+  assert.equal(
+    doc.blocks.some(
+      (block) =>
+        (block.type === "code-fence" || block.type === "code-citation") &&
+        block.code.includes("57:66:src/server/integrationApi.ts")
+    ),
+    false
+  );
+  assert.ok(doc.blocks.some((block) => block.type === "list"));
+});
+
 // ── Summary ────────────────────────────────────────────────────────────────
 const total = passed + failed;
 console.log(`\nchatProseParser: ${passed}/${total} tests passed`);

@@ -1,7 +1,7 @@
 import "./test/vscodeMockSetup";
 import assert from "node:assert/strict";
 import * as vscode from "vscode";
-import { analyzeDocumentContext, isEmptyBlockHole, isFileEligible, languageSpecificHints, wantsMultiLineCompletion, autocompleteGroundingRules } from "./contextAnalyzer";
+import { analyzeDocumentContext, isEmptyBlockHole, isFileEligible, isInsideTypeLikeBody, languageSpecificHints, wantsMultiLineCompletion, autocompleteGroundingRules } from "./contextAnalyzer";
 import { createMockDocument } from "./test/vscodeMockSetup";
 
 let passed = 0;
@@ -123,6 +123,21 @@ test("wantsMultiLineCompletion on unindented empty line in function body", () =>
     new vscode.Position(1, 0)
   );
   assert.equal(wantsMultiLineCompletion(context), true);
+});
+
+test("type-like body is not an empty-block hole", () => {
+  const source = [
+    "export type AuthResolveResult = {",
+    "  const token =",
+    "};"
+  ].join("\n");
+  const context = analyzeDocumentContext(
+    createMockDocument(source, { path: "/workspace/src/server/authMiddleware.ts" }) as never,
+    new vscode.Position(1, 15)
+  );
+  assert.equal(isInsideTypeLikeBody(context.previousLines, context.currentLinePrefix), true);
+  assert.equal(isEmptyBlockHole(context), false);
+  assert.equal(wantsMultiLineCompletion(context), false);
 });
 
 test("isEmptyBlockHole detects extractBearerToken deleted-body fixture", () => {

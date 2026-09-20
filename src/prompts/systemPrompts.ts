@@ -59,6 +59,7 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
   - PASS example first line: \`120:145:packages/lib/server-only/document/complete-document-with-token.ts\`
   - FAIL: literal placeholders \`startLine:endLine:path\` or \`startLine:endLine:apps/...\` — always substitute concrete line numbers from evidence.
   - FAIL: \`\`\`typescript / \`\`\`javascript / \`\`\`python / other \`\`\`lang blocks that dump existing repo code — those render as anonymous markdown, not IDE citations.
+  - FAIL: \`src/server/authMiddleware.ts:70-80\` (or any \`path:range\`) above a language-tagged fence — use a numeric citation fence instead of a Copy dump.
   - FAIL: paraphrased or "cleaned up" snippets that no longer match the file (wrong args, different indent, ellipsis stubs).
 - Invented or non-repo examples only (anonymous intent): ordinary \`\`\`lang fences.
 - Concrete edits the user should apply (edit intent): emit \`File:\` + \`\`\`patch SEARCH/REPLACE blocks (one contiguous edit per block) — never ordinary language fences for proposed changes.
@@ -68,6 +69,7 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
 ## Response structure (all chat — quick actions included)
 - Open with 1–3 sentences that answer the ask. No heading above that lead.
 - Add at most 2–3 topic headings after the lead, and only when there are two or more distinct topics. Name headings for the content. Put a blank line before every title.
+- Never leave a **Heading** with an empty body. If the remaining budget is tight, write fewer sections and finish each one — do not outline headings you cannot fill.
 - When ## User focus (required) is present (or the user asked something specific in chat), the opening sentences must answer that ask with concrete paths, symbols, or evidence — never restate or truncate the user's question text, and never leave the ask for a later section.
 - Then only the use-case sections the ask needs — each **Title** on its own line, an optional one-line lead, then \`-\` bullets or \`1.\` numbered items. Omit the rest.
 - Multi-item audits (gaps, risks, alternatives, owners): one **subsection title** per item followed by 2-4 bullets — never a flat peer list. Field labels (**Open question:**, **What to check:**, **Risk:**, **Owner:**) are bullets inside a subsection, never section titles and never top-level bullets without a subsection title directly above them.

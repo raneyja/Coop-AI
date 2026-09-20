@@ -227,12 +227,19 @@ test("I4 ticket pickup plans locate+decision, not incident reconstruction", () =
   assert.equal(route.kind, "intent-job");
   assert.notEqual(route.kind, "incident");
 
+  const locateTerms = ((plan.jobs ?? []).find((job) => job.capability === "locate")?.terms ?? []).map(
+    (term) => term.toLowerCase()
+  );
   const jiraTerms = (extraTermsForIntegration(plan.jobs, "jira") ?? []).map((term) =>
     term.toLowerCase()
   );
   assert.ok(
-    jiraTerms.some((term) => /coop-101/i.test(term)),
-    `jira terms: ${jiraTerms.join("|")}`
+    locateTerms.some((term) => /coop-101/i.test(term)),
+    `locate terms: ${locateTerms.join("|")}`
+  );
+  assert.ok(
+    locateTerms.some((term) => /requireauth/i.test(term)),
+    `locate terms: ${locateTerms.join("|")}`
   );
   assert.ok(
     jiraTerms.some((term) => /peel|auth|coop-backend/i.test(term)),

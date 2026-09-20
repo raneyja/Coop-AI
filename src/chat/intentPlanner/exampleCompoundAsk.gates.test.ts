@@ -1,7 +1,7 @@
 /**
  * End-to-end planner decision for the product example:
  * "help me understand which files will be impacted… check jira…"
- * Gate: silent blast-radius + jira tool allowlist.
+ * Gate: tools-only + jira fetch, not silent blast-radius.
  */
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -13,7 +13,7 @@ import {
 } from "./intentPlanTrust";
 import { assertAllGatesPass, gateFail, gatePass, type GateResult } from "./gates";
 
-test("Example ask: blast impact + Jira → silent workflow with tools (all phases)", () => {
+test("Example ask: blast impact + Jira → tools-only with jira (not silent Blast)", () => {
   const results: GateResult[] = [];
 
   const plan = planChatIntentFromRules({
@@ -24,19 +24,19 @@ test("Example ask: blast impact + Jira → silent workflow with tools (all phase
   });
 
   try {
-    assert.equal(plan.workflow, "blast-radius");
-    assert.deepEqual(plan.tools, ["jira"]);
-    assert.equal(plan.execution, "silent");
-    assert.equal(plan.mode, "run-workflow");
+    assert.equal(plan.workflow, undefined);
+    assert.ok(plan.tools.includes("jira"));
+    assert.equal(plan.execution, "none");
+    assert.notEqual(plan.mode, "run-workflow");
     results.push(
-      gatePass(2, "EX-G1", "Compound blast+jira plans silent workflow with jira tool")
+      gatePass(2, "EX-G1", "Compound impact+jira stays tools-only with jira tool")
     );
   } catch (error) {
     results.push(
       gateFail(
         2,
         "EX-G1",
-        "Compound blast+jira plans silent workflow with jira tool",
+        "Compound impact+jira stays tools-only with jira tool",
         error instanceof Error ? error.message : String(error)
       )
     );
@@ -44,18 +44,18 @@ test("Example ask: blast impact + Jira → silent workflow with tools (all phase
 
   try {
     const decision = resolveChatIntentExecution(plan);
-    assert.equal(decision.kind, "silent-workflow");
-    if (decision.kind === "silent-workflow") {
-      assert.equal(decision.workflow, "blast-radius");
-      assert.deepEqual(decision.tools, ["jira"]);
+    assert.equal(decision.kind, "tools-only");
+    if (decision.kind === "tools-only") {
+      assert.ok(decision.tools.includes("jira"));
+      assert.equal(decision.plan.workflow, undefined);
     }
-    results.push(gatePass(2, "EX-G2", "Execution resolves to silent-workflow"));
+    results.push(gatePass(2, "EX-G2", "Execution resolves to tools-only, not silent-workflow"));
   } catch (error) {
     results.push(
       gateFail(
         2,
         "EX-G2",
-        "Execution resolves to silent-workflow",
+        "Execution resolves to tools-only, not silent-workflow",
         error instanceof Error ? error.message : String(error)
       )
     );
@@ -63,17 +63,18 @@ test("Example ask: blast impact + Jira → silent workflow with tools (all phase
 
   try {
     const status = buildIntentPlanStatusLine(plan);
-    assert.equal(status, "Checking change impact + Jira");
+    assert.match(status ?? "", /Jira/);
+    assert.doesNotMatch(status ?? "", /change impact/);
     const activity = buildIntentPlanActivityMessages(plan);
-    assert.ok(activity.some((line) => /change impact/i.test(line)));
     assert.ok(activity.some((line) => /Jira/i.test(line)));
-    results.push(gatePass(3, "EX-G3", "Trust status names blast + Jira"));
+    assert.ok(!activity.some((line) => /change impact/i.test(line)));
+    results.push(gatePass(3, "EX-G3", "Trust status names Jira without Blast hijack"));
   } catch (error) {
     results.push(
       gateFail(
         3,
         "EX-G3",
-        "Trust status names blast + Jira",
+        "Trust status names Jira without Blast hijack",
         error instanceof Error ? error.message : String(error)
       )
     );

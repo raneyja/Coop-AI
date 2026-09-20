@@ -69,23 +69,23 @@ export const PHASE1_GATE_CRITERIA = [
 export const PHASE2_GATE_CRITERIA = [
   {
     id: "P2-G1",
-    title: "Blast-shaped ask + open file → workflow blast-radius, execution silent"
+    title: "Blast-shaped English + open file stays plain chat (no silent Blast)"
   },
   {
     id: "P2-G2",
-    title: "Compound Blast + Jira → workflow + tools together"
+    title: "Compound impact + Jira stays tools-only with jira fetch (no silent Blast)"
   },
   {
     id: "P2-G3",
-    title: "Medium-confidence workflow without tools → confirm (suggest-chips)"
+    title: "Medium-confidence English (repo overview) does not offer suggest-chips"
   },
   {
     id: "P2-G4",
-    title: "Model plan parser accepts compound workflow+tools JSON"
+    title: "Model plan parser accepts tools JSON and ignores workflow on unconstrained chat"
   },
   {
     id: "P2-G5",
-    title: "resolveChatIntentExecution maps silent → run-workflow path"
+    title: "resolveChatIntentExecution never returns silent-workflow or confirm-workflow"
   },
   {
     id: "P2-G6",

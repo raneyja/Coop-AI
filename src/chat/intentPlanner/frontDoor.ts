@@ -13,6 +13,7 @@ import type { ComposerMode, IntegrationChatProvider } from "../types";
 import type { IntentSuggestCompleteFn } from "../quickActionIntentModel";
 import { classifyChatIntentPlan, shouldCallChatIntentModel } from "./planChatIntentModel";
 import { planChatIntentFromRules } from "./planChatIntent";
+import { demoteUnconstrainedWorkflow } from "./resolveExecution";
 import {
   classifyChatAskAssignment,
   extraTermsForIntegration,
@@ -232,7 +233,7 @@ export function applyChatCommandConstraint(
 ): ChatIntentPlan {
   const constraint = input.constraint ?? { kind: "none" };
   if (constraint.kind === "none") {
-    return dropRepoTermsWhenTopicExists(plan, input);
+    return demoteUnconstrainedWorkflow(dropRepoTermsWhenTopicExists(plan, input));
   }
   if (constraint.kind === "integration") {
     return constrainToIntegration(plan, constraint.provider, input);
@@ -279,26 +280,30 @@ function mergeFrontDoorPlans(
   const jobs = mergeInterpreterJobs(rulesPlan.jobs, modelPlan.jobs, input);
   const tools =
     rulesPlan.tools.length > 0 ? rulesPlan.tools : modelPlan.tools;
-  const workflow = rulesPlan.workflow ?? modelPlan.workflow;
+  const demotedModel = demoteUnconstrainedWorkflow(modelPlan);
   const tasks = planChatTasks({ jobs, tools });
-  return {
+  // English/model must never copy a workflow onto an unconstrained turn.
+  // `applyChatCommandConstraint` pins workflow only for explicit slash/QA.
+  return demoteUnconstrainedWorkflow({
     ...rulesPlan,
-    workflow,
+    workflow: undefined,
     tools,
     jobs,
     tasks,
     todos: planChatTodos(tasks),
-    mode: rulesPlan.mode === "none" && modelPlan.mode !== "none" ? modelPlan.mode : rulesPlan.mode,
-    execution:
-      rulesPlan.execution === "none" && modelPlan.execution !== "none"
-        ? modelPlan.execution
-        : rulesPlan.execution,
+    mode:
+      rulesPlan.mode === "none" && demotedModel.mode !== "none"
+        ? demotedModel.mode
+        : rulesPlan.mode,
+    execution: "none",
     confidence:
-      rulesPlan.confidence === "low" && modelPlan.confidence !== "low"
-        ? modelPlan.confidence
+      rulesPlan.confidence === "low" && demotedModel.confidence !== "low"
+        ? demotedModel.confidence
         : rulesPlan.confidence,
-    reason: modelPlan.reason ? `${rulesPlan.reason ?? "rules"}+${modelPlan.reason}` : rulesPlan.reason
-  };
+    reason: demotedModel.reason
+      ? `${rulesPlan.reason ?? "rules"}+${demotedModel.reason}`
+      : rulesPlan.reason
+  });
 }
 
 function constrainToIntegration(

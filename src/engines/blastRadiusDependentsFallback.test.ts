@@ -4,7 +4,10 @@ import {
   classifyDependentSurface,
   codePathsFromDependentDetails,
   extractBlastSearchSymbols,
+  extractDefinedNamesFromSource,
   extractExportNamesFromSource,
+  blastUserAskText,
+  sanitizeNamedBlastSymbols,
   buildImportSearchPatterns,
   buildLocalCallerNeedles,
   groupDependentsByTopLevelFolder,
@@ -218,6 +221,109 @@ test("extractBlastSearchSymbols prefers StateGroup from smoke ask", () => {
 test("isGenericBlastImpactAsk ignores default chip copy", () => {
   assert.equal(isGenericBlastImpactAsk("Estimate the impact of changing this code."), true);
   assert.equal(isGenericBlastImpactAsk("What breaks if we rename StateGroup?"), false);
+});
+
+test("isGenericBlastImpactAsk treats canned model prompt and history chips as generic", () => {
+  const canned = [
+    "Analyze what breaks if this area is modified.",
+    "DIRECTIVE",
+    "Context: file src/server/authMiddleware.ts, repo Coop-AI, branch main."
+  ].join("\n");
+  assert.equal(isGenericBlastImpactAsk(canned), true);
+  assert.equal(
+    isGenericBlastImpactAsk(
+      "[blast-radius] Estimate the impact of changing this code.\nfile: src/server/authMiddleware.ts · repo: raneyja/Coop-AI"
+    ),
+    true
+  );
+  assert.equal(isGenericBlastImpactAsk("[blast-radius] requireAuth"), false);
+});
+
+test("bare blast canned prompt does not name authMiddleware", () => {
+  const canned = [
+    "Analyze what breaks if this area is modified.",
+    "DIRECTIVE",
+    "Context: file src/server/authMiddleware.ts, repo Coop-AI, branch main."
+  ].join("\n");
+  const defined = extractDefinedNamesFromSource(`
+export function extractBearerToken() {}
+export async function requireAuth() {}
+export function resolveAuthContext() {}
+export function checkOrgNotSuspended() {}
+`);
+  assert.ok(defined.includes("requireAuth"));
+  assert.ok(!defined.includes("authMiddleware"));
+  const named = resolveNamedBlastSymbols(canned, {
+    file: "src/server/authMiddleware.ts",
+    definedNames: defined
+  });
+  assert.equal(named.includes("authMiddleware"), false);
+  assert.deepEqual(named, []);
+  assert.equal(blastUserAskText(canned), "");
+});
+
+test("display Estimate ask stays generic even with file chip boilerplate", () => {
+  assert.deepEqual(
+    extractBlastSearchSymbols("Estimate the impact of changing this code.", "src/server/authMiddleware.ts"),
+    []
+  );
+  assert.deepEqual(
+    resolveNamedBlastSymbols(
+      "[blast-radius] Estimate the impact of changing this code.\nfile: src/server/authMiddleware.ts · repo: raneyja/Coop-AI",
+      { file: "src/server/authMiddleware.ts" }
+    ),
+    []
+  );
+});
+
+test("file-stem named symbol is stripped unless it is a definition", () => {
+  assert.deepEqual(
+    sanitizeNamedBlastSymbols(["authMiddleware"], { file: "src/server/authMiddleware.ts" }),
+    []
+  );
+  assert.deepEqual(
+    sanitizeNamedBlastSymbols(["authMiddleware"], {
+      file: "src/server/authMiddleware.ts",
+      definedNames: ["requireAuth", "extractBearerToken"]
+    }),
+    []
+  );
+  assert.deepEqual(
+    sanitizeNamedBlastSymbols(["authMiddleware"], {
+      file: "src/server/authMiddleware.ts",
+      definedNames: ["authMiddleware", "requireAuth"]
+    }),
+    ["authMiddleware"]
+  );
+});
+
+test("file-level merge keeps durable importers when named symbols sanitize empty", () => {
+  const durable: BlastRadiusDependentDetail[] = [
+    { path: "src/jobs/jobsApi.ts", depth: 1, source: "import-parse" },
+    { path: "src/server/orgApi.ts", depth: 1, source: "import-parse" },
+    { path: "src/server/sso/samlApi.ts", depth: 1, source: "import-parse" }
+  ];
+  const merged = mergeDurableWithNamedSymbolSearch(durable, [], []);
+  assert.ok(merged.some((entry) => entry.path === "src/jobs/jobsApi.ts"));
+  assert.ok(merged.some((entry) => entry.path === "src/server/orgApi.ts"));
+  const wiped = mergeDurableWithNamedSymbolSearch(durable, [], ["authMiddleware"]);
+  assert.deepEqual(wiped, []);
+});
+
+test("enrichBlastRadiusResponse keeps file-level callers instead of none-confirmed template", () => {
+  const out = enrichBlastRadiusResponse("Direct impact still ranking.", {
+    file: "src/server/authMiddleware.ts",
+    namedAskSymbols: [],
+    directDependents: ["src/jobs/jobsApi.ts", "src/server/orgApi.ts"],
+    dependentDetails: [
+      { path: "src/jobs/jobsApi.ts", depth: 1, source: "import-parse", strength: "strong" },
+      { path: "src/server/orgApi.ts", depth: 1, source: "import-parse", strength: "strong" }
+    ],
+    graphMeta: { source: "import-parse" }
+  });
+  assert.doesNotMatch(out, /None confirmed in the index this turn/);
+  assert.doesNotMatch(out, /authMiddleware\(/);
+  assert.match(out, /jobsApi|orgApi/);
 });
 
 test("extractBlastSearchSymbols skips default blast ask (no Estimate noise)", () => {
@@ -511,6 +617,26 @@ test("named-function blast does not fail-open to file importers when search is e
   assert.ok((merged.warnings as string[]).some((w) => /Named function blast/i.test(w)));
 });
 
+test("named /blast requireAuth stays named-mode and honest", () => {
+  const defined = extractDefinedNamesFromSource(`
+export function extractBearerToken() {}
+export async function requireAuth() {}
+`);
+  const named = resolveNamedBlastSymbols("/blast requireAuth", {
+    file: "src/server/authMiddleware.ts",
+    definedNames: defined
+  });
+  assert.deepEqual(named, ["requireAuth"]);
+  const honest = enrichBlastRadiusResponse("guessed callers", {
+    file: "src/server/authMiddleware.ts",
+    namedAskSymbols: ["requireAuth"],
+    directDependents: [],
+    warnings: ["Impact unverified"]
+  });
+  assert.match(honest, /None confirmed in the index this turn/);
+  assert.match(honest, /requireAuth\(/);
+});
+
 test("contentUsesNamedSymbol requires the named export, not a sibling import", () => {
   assert.equal(
     contentUsesNamedSymbol(
@@ -786,6 +912,33 @@ testAsync("verifyRemoteFilesMentionNamedSymbol keeps requireAuth callers only", 
   );
   assert.equal(verified[0]?.strength, "strong");
 });
+
+testAsync(
+  "searchDependentsFallback stops after the first pattern when shouldAbort",
+  async () => {
+    let searchCalls = 0;
+    const backend = {
+      kind: "cloud" as const,
+      isEnabledForRepo: async () => true,
+      search: async (): Promise<LocalSearchResult> => {
+        searchCalls += 1;
+        return { source: "zoekt", hits: [], symbols: [], stale: false };
+      },
+      dependents: async (): Promise<LocalDependentsResult> => ({
+        file: "src/server/authMiddleware.ts",
+        dependents: [],
+        source: "import-parse"
+      })
+    } as unknown as IndexBackend;
+
+    await searchDependentsFallback(backend, "github:raneyja/Coop-AI", "src/server/authMiddleware.ts", {
+      remoteOnly: true,
+      maxPatterns: 8,
+      shouldAbort: () => true
+    });
+    assert.equal(searchCalls, 1);
+  }
+);
 
 void Promise.all(asyncTests).then(() => {
   const total = passed + failed;

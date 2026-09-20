@@ -1,5 +1,6 @@
 import type { Dirent } from "node:fs";
 import { CODE_HOST_PROVIDERS, isCodeHostProvider } from "../api/codeHosts/types";
+import { looksLikeCannedQuickActionPrompt } from "../context/userFocusQuery";
 import type { IndexBackend } from "../indexing/indexBackend";
 import type { LocalSearchResult } from "../indexing/types";
 
@@ -193,6 +194,102 @@ export function extractExportNamesFromSource(source: string): string[] {
     .slice(0, 8);
 }
 
+/** Basename stem (`authMiddleware.ts` → `authMiddleware`). */
+export function blastTargetFileStem(file: string | undefined): string {
+  const basename = (file ?? "").split("/").pop() ?? "";
+  return basename.replace(/\.[^.]+$/, "").trim();
+}
+
+/**
+ * Function / class / type / const names in the target file — exports plus
+ * body definitions. Used to decide whether a stem or caret chip is a real
+ * named blast, not a filename.
+ */
+export function extractDefinedNamesFromSource(source: string): string[] {
+  const names = new Set(extractExportNamesFromSource(source));
+  const add = (token: string | undefined): void => {
+    if (token && token.length >= 3 && /^[A-Za-z_][A-Za-z0-9_]*$/.test(token)) {
+      names.add(token);
+    }
+  };
+  for (const match of source.matchAll(
+    /(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)/g
+  )) {
+    add(match[1]);
+  }
+  for (const match of source.matchAll(
+    /(?:export\s+)?(?:const|let|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*[=(:]/g
+  )) {
+    add(match[1]);
+  }
+  for (const match of source.matchAll(
+    /(?:export\s+)?(?:type|interface|enum|class)\s+([A-Za-z_][A-Za-z0-9_]*)/g
+  )) {
+    add(match[1]);
+  }
+  for (const match of source.matchAll(/^\s*def\s+([A-Za-z_][A-Za-z0-9_]*)/gm)) {
+    add(match[1]);
+  }
+  return [...names];
+}
+
+const GENERIC_BLAST_DISPLAY_RE = /^estimate the impact of changing this code\.?$/i;
+const GENERIC_BLAST_TASK_RE = /^analyze what breaks if this area is modified\.?$/i;
+
+function firstBlastAskLine(ask: string): string {
+  return ask
+    .replace(/^\[blast-radius\]\s*/i, "")
+    .replace(/^\/blast\s+/i, "")
+    .trim()
+    .split("\n")[0]
+    ?.trim() ?? "";
+}
+
+/**
+ * User-authored blast ask. Strips canned quick-action prompts, history chips,
+ * and `/blast` / `[blast-radius]` wrappers. Empty → file-level.
+ */
+export function blastUserAskText(ask: string | undefined): string {
+  const raw = ask?.trim() ?? "";
+  if (!raw) {
+    return "";
+  }
+  if (looksLikeCannedQuickActionPrompt(raw)) {
+    return "";
+  }
+  const withoutChips = raw
+    .split("\n")
+    .filter((line) => !/^(file|repo|branch|language|source|attached)\s*:/i.test(line.trim()))
+    .join("\n")
+    .replace(/^\[blast-radius\]\s*/i, "")
+    .replace(/^\/blast\s+/i, "")
+    .trim();
+  const first = withoutChips.split("\n")[0]?.trim() ?? "";
+  if (!first || GENERIC_BLAST_DISPLAY_RE.test(first) || GENERIC_BLAST_TASK_RE.test(first)) {
+    return "";
+  }
+  return withoutChips;
+}
+
+/**
+ * Drop filename stems that are not definitions in the target file.
+ * Bare Blast on `authMiddleware.ts` must not named-mode `authMiddleware`.
+ */
+export function sanitizeNamedBlastSymbols(
+  symbols: string[],
+  options?: { file?: string; definedNames?: string[] }
+): string[] {
+  const stem = blastTargetFileStem(options?.file);
+  const defined = options?.definedNames;
+  const definedSet = defined && defined.length > 0 ? new Set(defined) : undefined;
+  return symbols.filter((symbol) => {
+    if (!stem || symbol !== stem) {
+      return true;
+    }
+    return definedSet ? definedSet.has(symbol) : false;
+  });
+}
+
 function quoteSafe(value: string): string {
   return value.replace(/[^a-zA-Z0-9_.]/g, "_");
 }
@@ -203,7 +300,11 @@ export function isGenericBlastImpactAsk(ask: string | undefined): boolean {
   if (!text) {
     return true;
   }
-  return /^estimate the impact of changing this code\.?$/i.test(text);
+  if (looksLikeCannedQuickActionPrompt(text)) {
+    return true;
+  }
+  const first = firstBlastAskLine(text);
+  return GENERIC_BLAST_DISPLAY_RE.test(first) || GENERIC_BLAST_TASK_RE.test(first);
 }
 
 /**
@@ -308,22 +409,29 @@ function looksLikeNamedIdentifier(token: string): boolean {
 }
 
 /**
- * Symbols the blast should filter to: identifiers in the ask, plus the editor
- * chip when the user clicked inside a function (requireAuth, not the whole file).
+ * Symbols the blast should filter to: identifiers in the user ask / slash args,
+ * plus a caret chip when that identifier is a real export/definition.
+ * Never from canned quickActionModelPrompt / `Context: file …` chips.
  */
 export function resolveNamedBlastSymbols(
   ask: string | undefined,
-  options?: { file?: string; selectedSymbol?: string }
+  options?: { file?: string; selectedSymbol?: string; definedNames?: string[] }
 ): string[] {
   const fromAsk = extractBlastSearchSymbols(ask, options?.file);
-  const chip = options?.selectedSymbol?.trim();
+  const defined = options?.definedNames;
+  const definedSet = defined && defined.length > 0 ? new Set(defined) : undefined;
+  let chip = options?.selectedSymbol?.trim();
   if (!chip || !looksLikeNamedIdentifier(chip)) {
-    return fromAsk;
+    chip = undefined;
+  } else if (definedSet && !definedSet.has(chip)) {
+    chip = undefined;
   }
-  if (fromAsk.some((symbol) => symbol === chip)) {
-    return fromAsk;
-  }
-  return [chip, ...fromAsk];
+  const union =
+    chip && !fromAsk.some((symbol) => symbol === chip) ? [chip, ...fromAsk] : fromAsk;
+  return sanitizeNamedBlastSymbols(union, {
+    file: options?.file,
+    definedNames: defined
+  });
 }
 
 /** When hit content is real line text, require the module stem, path suffix, or symbol. */
@@ -429,8 +537,12 @@ export function extractBlastSearchSymbols(ask: string | undefined, file?: string
   if (isGenericBlastImpactAsk(ask)) {
     return [];
   }
+  const userAsk = blastUserAskText(ask);
+  if (!userAsk) {
+    return [];
+  }
   const symbols = new Set<string>();
-  const text = ask?.trim() ?? "";
+  const text = userAsk;
   const consider = (token: string | undefined): void => {
     if (!token || token.length < 3 || BLAST_ASK_STOP.has(token.toLowerCase())) {
       return;
@@ -821,7 +933,13 @@ export async function searchDependentsFallback(
   let skippedUnverified = 0;
 
   if (enabled) {
-    for (const pattern of ordered.slice(0, maxPatterns)) {
+    const patternsToSearch = ordered.slice(0, maxPatterns);
+    for (let patternIndex = 0; patternIndex < patternsToSearch.length; patternIndex++) {
+      // Always try the first pattern; stop later ones once the soft gather budget is gone.
+      if (patternIndex > 0 && options.shouldAbort?.()) {
+        break;
+      }
+      const pattern = patternsToSearch[patternIndex]!;
       try {
         const result = await indexBackend.search(normalizedRepoId, pattern);
         const verifiedHits = result.hits.filter((hit) => {

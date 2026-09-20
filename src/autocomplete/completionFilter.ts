@@ -1,5 +1,5 @@
 import type { AutocompleteSettings, ExtractedCodeContext, RankedCompletion } from "./types";
-import { isEmptyBlockHole, wantsMultiLineCompletion } from "./contextAnalyzer";
+import { isEmptyBlockHole, isInsideTypeLikeBody, wantsMultiLineCompletion } from "./contextAnalyzer";
 
 export type SymbolPlausibilityHints = {
   manifestSymbols?: ReadonlySet<string>;
@@ -199,6 +199,17 @@ export function sanitizeCompletionForContext(
 
   if (rejectsInlineStatementStart(value, context)) {
     return "";
+  }
+
+  if (isInsideTypeLikeBody(context.previousLines, context.currentLinePrefix)) {
+    if (
+      INLINE_STATEMENT_START.test(value.trimStart()) ||
+      /^(?:if|return|for|while|switch|throw)\b/.test(value.trimStart()) ||
+      value.includes("\n") ||
+      DECL_ASSIGNMENT_PREFIX.test(context.currentLinePrefix)
+    ) {
+      return "";
+    }
   }
 
   return value;
@@ -572,6 +583,41 @@ export function failsManifestSymbolPlausibility(
   return unknown.length >= 2 && unknown.length === references.length;
 }
 
+/** Drop invented aliases (getBearerToken) when the file already has extractBearerToken. */
+function rejectsUnknownCalleeWhenKnownSiblingExists(
+  text: string,
+  context: ExtractedCodeContext,
+  fileTextSample: string | undefined,
+  hints?: SymbolPlausibilityHints
+): boolean {
+  if (!JS_LIKE_LANGUAGES.has(context.languageId)) {
+    return false;
+  }
+  const call = /\b([A-Za-z_$][\w$]*)\s*\(/.exec(text);
+  const name = call?.[1];
+  if (!name || JS_KEYWORDS.has(name) || JS_BUILTINS.has(name)) {
+    return false;
+  }
+  const known = buildKnownSymbolsFromContext(context, fileTextSample, hints?.manifestSymbols);
+  if (known.has(name)) {
+    return false;
+  }
+  const stem = name.replace(/^(get|set|is|has|extract|resolve|check)/i, "");
+  if (stem.length < 6) {
+    return false;
+  }
+  for (const identifier of known) {
+    if (identifier === name || JS_KEYWORDS.has(identifier) || JS_BUILTINS.has(identifier)) {
+      continue;
+    }
+    const knownStem = identifier.replace(/^(get|set|is|has|extract|resolve|check)/i, "");
+    if (knownStem.length >= 6 && (identifier.includes(stem) || name.includes(knownStem) || knownStem === stem)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function repeatsSuffixContent(text: string, context: ExtractedCodeContext): boolean {
   const suffix = context.suffixWindow;
   if (!suffix.trim()) {
@@ -613,6 +659,9 @@ function scoreCompletion(
     return { include: false, score: 0 };
   }
   if (failsManifestSymbolPlausibility(text, context, fileTextSample, symbolHints)) {
+    return { include: false, score: 0 };
+  }
+  if (rejectsUnknownCalleeWhenKnownSiblingExists(text, context, fileTextSample, symbolHints)) {
     return { include: false, score: 0 };
   }
 

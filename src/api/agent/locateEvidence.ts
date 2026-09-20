@@ -17,7 +17,8 @@ import {
   queryRoleHints,
   textMentionsNamedSymbol,
   textMentionsQueryRoles,
-  textSatisfiesLocateQuery
+  textSatisfiesLocateQuery,
+  userAskedAboutTests
 } from "./searchQuery";
 
 export type LocateEvidenceClass = "implementation" | "mention" | "unrelated";
@@ -38,7 +39,7 @@ function locateVerdictApplies(query: string): boolean {
 }
 
 function askedAboutTests(query: string): boolean {
-  return /\b(tests?|specs?|unit\s*tests?|contract\s*tests?)\b/i.test(query);
+  return userAskedAboutTests(query);
 }
 
 function extensionOf(fileName: string): string {

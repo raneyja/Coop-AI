@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   languageFromFilePath,
   languageTagMatchesPath,
+  locatorFromProseLine,
   resolveCitePathForLanguageFence,
   tryParseCitationLocator,
   tryParseFenceInfoLocator
@@ -134,6 +135,19 @@ test("lightHighlight colors javascript keywords", () => {
 test("lightHighlight colors go-like unknown langs instead of monochrome", () => {
   const tokens = lightHighlight("func main() {\n  return\n}", "go");
   assert.ok(tokens.some((t) => t.kind === "keyword"));
+});
+
+test("comment-prefixed path:range locators still parse", () => {
+  const slash = locatorFromProseLine("// src/server/authMiddleware.ts:70-80");
+  assert.ok(slash);
+  assert.equal(slash?.startLine, 70);
+  assert.equal(slash?.endLine, 80);
+  assert.equal(slash?.path, "src/server/authMiddleware.ts");
+
+  const hash = tryParseCitationLocator("# 57:66:src/server/integrationApi.ts");
+  assert.ok(hash);
+  assert.equal(hash?.startLine, 57);
+  assert.equal(hash?.path, "src/server/integrationApi.ts");
 });
 
 console.log(`\ncodeCitationLocator: ${passed}/${passed + failed} tests ${failed === 0 ? "passed" : "FAILED"}`);

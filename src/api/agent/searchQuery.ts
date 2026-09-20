@@ -13,6 +13,7 @@ import {
   normalizePath
 } from "../../indexing/evidencePathNoise";
 import { stripLeadingAskLabels } from "../../chat/intentPlanner/planChatJobs";
+import { isShipCheckQuery } from "../../context/fileCallerIntent";
 import { preferredHitsForLocate } from "./locateEvidence";
 
 const STOP = new Set(
@@ -404,6 +405,9 @@ export function fallbackAgentSearchQueries(userMessage: string): string[] {
     return unique.slice(0, MAX_API_REJECT_FALLBACK_QUERIES);
   }
   push(primary);
+  if (isShipCheckQuery(userMessage)) {
+    push("unauthorized");
+  }
   for (const alias of proseLocateSearchAliases(userMessage)) {
     push(alias);
   }
@@ -561,6 +565,17 @@ export function pickSearchHitsToRead<T extends RankedSearchHit & { content?: str
     const decls = pool.filter((hit) => contentLooksLikeDeclaration(hit.content ?? "", userMessage));
     if (decls.length > 0) {
       pool = [...decls, ...pool.filter((hit) => !decls.includes(hit))];
+    }
+  }
+  if (userMessage && isShipCheckQuery(userMessage)) {
+    const unauthorizedHits = pool.filter((hit) =>
+      contentLooksLikeUnauthorizedWrite(hit.content ?? "")
+    );
+    if (unauthorizedHits.length > 0) {
+      pool = [
+        ...unauthorizedHits,
+        ...pool.filter((hit) => !unauthorizedHits.includes(hit))
+      ];
     }
   }
   if (userMessage && isApiRejectAsk(userMessage)) {
@@ -1071,8 +1086,11 @@ export function contentLooksLikeDeclaration(
   return lineLooksLikeSymbolDeclaration(content, callerSymbolForms(userMessage, groundedExport));
 }
 
-function userAskedAboutTests(userMessage: string): boolean {
-  return /\b(tests?|specs?|unit\s*tests?|contract\s*tests?)\b/i.test(userMessage);
+export function userAskedAboutTests(userMessage: string): boolean {
+  return (
+    /\b(tests?|specs?|unit\s*tests?|contract\s*tests?)\b/i.test(userMessage) ||
+    isShipCheckQuery(userMessage)
+  );
 }
 
 function userAskedAboutLocales(userMessage: string): boolean {
@@ -1286,6 +1304,104 @@ function lineLooksLikeWriteReject(line: string): boolean {
 /** Hit body assigns/rejects — not a group enum, seed row, rethrow, or read-only serializer. */
 export function contentLooksLikeWriteReject(content: string): boolean {
   return content.split("\n").some((row) => lineLooksLikeWriteReject(row));
+}
+
+/**
+ * A 401 / unauthorized JSON write — the missing-key (and sibling handler) shape.
+ * Repo-agnostic: writeJson/status(401) plus `error: "unauthorized"`.
+ */
+export function contentLooksLikeUnauthorizedWrite(content: string): boolean {
+  return lineNumberOfUnauthorizedWrite(content) !== undefined;
+}
+
+export function lineNumberOfUnauthorizedWrite(content: string): number | undefined {
+  if (!content.trim()) {
+    return undefined;
+  }
+  const rows = content.split(/\r?\n/);
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i] ?? "";
+    const line = row.replace(/^\d+\|/, "");
+    if (!lineLooksLikeUnauthorizedWrite(line)) {
+      continue;
+    }
+    const prefixed = /^(\d+)\|/.exec(row);
+    if (prefixed) {
+      const numbered = Number(prefixed[1]);
+      if (Number.isInteger(numbered) && numbered >= 1) {
+        return numbered;
+      }
+    }
+    return i + 1;
+  }
+  return undefined;
+}
+
+function lineLooksLikeUnauthorizedWrite(line: string): boolean {
+  const text = line.replace(/^\d+\|/, "");
+  if (!/\bunauthorized\b/i.test(text) && !/\b401\b/.test(text)) {
+    return false;
+  }
+  return (
+    /\bwriteJson\s*\([^)]*\b401\b/i.test(text) ||
+    /\b(?:res(?:ponse)?|reply|ctx)\.status\s*\(\s*401\b/i.test(text) ||
+    /\bstatus\s*\(\s*401\b/i.test(text) ||
+    /\berror\s*:\s*["']unauthorized["']/i.test(text) ||
+    /\berror[\s\S]{0,32}["']unauthorized["']/i.test(text) ||
+    (/\b401\b/.test(text) && /\bunauthorized\b/i.test(text))
+  );
+}
+
+/**
+ * Keep the unauthorized write in a compacted writer excerpt instead of the file head.
+ */
+export function excerptUnauthorizedWrite(content: string, maxChars: number): string | undefined {
+  if (!content || maxChars < 24) {
+    return undefined;
+  }
+  if (!contentLooksLikeUnauthorizedWrite(content)) {
+    return undefined;
+  }
+  if (content.length <= maxChars) {
+    return content;
+  }
+  const rows = content.split(/\r?\n/);
+  let matchAt = -1;
+  for (let i = 0; i < rows.length; i++) {
+    if (lineLooksLikeUnauthorizedWrite((rows[i] ?? "").replace(/^\d+\|/, ""))) {
+      matchAt = i;
+      break;
+    }
+  }
+  if (matchAt < 0) {
+    return undefined;
+  }
+  const matchLine = rows[matchAt] ?? "";
+  if (matchLine.length >= maxChars) {
+    const idx = Math.max(0, matchLine.search(/writeJson|\bunauthorized\b|\b401\b/i));
+    return `${matchLine.slice(idx, idx + maxChars).trimEnd()}…`;
+  }
+  let start = matchAt;
+  let end = matchAt;
+  let size = matchLine.length;
+  while (end < rows.length - 1) {
+    const next = (rows[end + 1] ?? "").length + 1;
+    if (size + next > maxChars) {
+      break;
+    }
+    end += 1;
+    size += next;
+  }
+  while (start > 0) {
+    const prev = (rows[start - 1] ?? "").length + 1;
+    if (size + prev > maxChars) {
+      break;
+    }
+    start -= 1;
+    size += prev;
+  }
+  const slice = rows.slice(start, end + 1).join("\n");
+  return start > 0 ? `…\n${slice}` : slice;
 }
 
 /**

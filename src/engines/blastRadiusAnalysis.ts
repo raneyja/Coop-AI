@@ -13,6 +13,7 @@ import {
   type BlastRadiusDependentDetail,
   type GraphEdgeSource,
   codePathsFromDependentDetails,
+  extractDefinedNamesFromSource,
   extractExportNamesFromSource,
   resolveNamedBlastSymbols,
   isTrustedBlastGraphSource,
@@ -163,16 +164,14 @@ export class BlastRadiusAnalysisEngine {
       ? normalizeGraphRepoId(repoIdFromCoordinates(resolved))
       : normalizeGraphRepoId(`${params.owner}/${params.repo}`);
     const includeTransitive = params.includeTransitive !== false;
-    const askSymbols = resolveNamedBlastSymbols(params.askText, {
-      file,
-      selectedSymbol: params.selectedSymbol
-    });
 
     let directDependents: string[] = [];
     let transitiveDependents: string[] = [];
     let dependentDetails: BlastRadiusDependentDetail[] = [];
     let graphMeta: BlastRadiusReport["graphMeta"];
     let lightningEnabled = false;
+    let definedNames: string[] = [];
+    let askSymbols: string[] = [];
 
     if (this.options.indexBackend) {
       try {
@@ -199,7 +198,7 @@ export class BlastRadiusAnalysisEngine {
           // search. Never scan open VS Code folders (Zero-Clone).
           const durableTrusted =
             directDependents.length > 0 && isTrustedBlastGraphSource(result.source);
-          let exportSymbols: string[] = [];
+          let exportSymbolsForSearch: string[] = [];
           if (resolved) {
             try {
               const fileContent = await this.options.codeHostRouter.getFileContent(file, {
@@ -213,14 +212,20 @@ export class BlastRadiusAnalysisEngine {
                 fileContent.lines?.map((line) => line.text).join("\n") ||
                 "";
               if (text.trim()) {
-                exportSymbols = extractExportNamesFromSource(text);
+                exportSymbolsForSearch = extractExportNamesFromSource(text);
+                definedNames = extractDefinedNamesFromSource(text);
               }
             } catch {
               // Soft gather — path-suffix patterns still run.
             }
           }
+          askSymbols = resolveNamedBlastSymbols(params.askText, {
+            file,
+            selectedSymbol: params.selectedSymbol,
+            definedNames
+          });
           const symbols = [
-            ...exportSymbols,
+            ...exportSymbolsForSearch,
             ...(params.symbols ?? []),
             ...askSymbols
           ];
@@ -228,15 +233,18 @@ export class BlastRadiusAnalysisEngine {
           const readRemoteFile = resolved
             ? (path: string) => this.readRemoteFileBody(path, resolved)
             : undefined;
-          const fallback = await searchDependentsFallback(this.options.indexBackend, repoId, file, {
-            maxPatterns: softBudgetExhausted() ? 4 : askSymbols.length > 0 ? 8 : 12,
-            symbols: searchSymbols,
-            namedAskSymbols: askSymbols,
-            remoteOnly: true,
-            readRemoteFile,
-            knownImporterPaths: directDependents,
-            shouldAbort: softBudgetExhausted
-          });
+          const skipSearchEnrich = durableTrusted && softBudgetExhausted();
+          const fallback = skipSearchEnrich
+            ? { dependents: [] as BlastRadiusDependentDetail[], source: "remote" as const, warnings: [] }
+            : await searchDependentsFallback(this.options.indexBackend, repoId, file, {
+                maxPatterns: softBudgetExhausted() ? 4 : askSymbols.length > 0 ? 8 : 12,
+                symbols: searchSymbols,
+                namedAskSymbols: askSymbols,
+                remoteOnly: true,
+                readRemoteFile,
+                knownImporterPaths: directDependents,
+                shouldAbort: softBudgetExhausted
+              });
           warnings.push(...fallback.warnings);
           if (durableTrusted) {
             const durableList = dependentDetails.map((entry) => ({
@@ -311,6 +319,14 @@ export class BlastRadiusAnalysisEngine {
       }
     } else {
       warnings.push("Index backend unavailable — showing PR and ownership signals only.");
+    }
+
+    if (askSymbols.length === 0) {
+      askSymbols = resolveNamedBlastSymbols(params.askText, {
+        file,
+        selectedSymbol: params.selectedSymbol,
+        definedNames
+      });
     }
 
     const impactedFiles = uniquePaths([file, ...directDependents, ...transitiveDependents]).slice(0, 30);

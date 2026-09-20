@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { isFileCallerQuery } from "./fileCallerIntent";
+import { isFileCallerQuery, isShipCheckQuery } from "./fileCallerIntent";
 
 let passed = 0;
 let failed = 0;
@@ -43,6 +43,25 @@ test("rejects ownership and unrelated asks", () => {
   assert.equal(isFileCallerQuery("What does this file do?"), false);
   assert.equal(isFileCallerQuery("Explain responseDeadline.ts"), false);
   assert.equal(isFileCallerQuery(""), false);
+  assert.equal(isFileCallerQuery("Who owns auth?"), false);
+  assert.equal(isShipCheckQuery("Who owns auth?"), false);
+});
+
+const SHIP_CHECK = [
+  "If I change that missing-key response, what else in this repo should I check before I ship?",
+  "If I modify this function, what else is affected?",
+  "What breaks if I change this handler?",
+  "What's the blast radius of renaming validate_identifier?",
+  "Is it safe to change these enum values?"
+];
+
+test("ship-check / blast-shaped English uses the caller-read pipe", () => {
+  for (const ask of SHIP_CHECK) {
+    assert.equal(isShipCheckQuery(ask), true, ask);
+    assert.equal(isFileCallerQuery(ask), true, ask);
+  }
+  assert.equal(isFileCallerQuery("Who calls sendSigningEmail?"), true);
+  assert.equal(isShipCheckQuery("Who calls sendSigningEmail?"), false);
 });
 
 console.log(`\nfileCallerIntent: ${passed} passed, ${failed} failed`);

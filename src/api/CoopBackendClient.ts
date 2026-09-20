@@ -11,7 +11,8 @@ import type {
   StreamChunk,
   UseCase,
   ChatImageAttachment,
-  V1ChatRequestBody
+  V1ChatRequestBody,
+  FinishReason
 } from "./types";
 import type { LlmProvider } from "./zeroRetentionConfig";
 
@@ -32,6 +33,7 @@ export type StreamChatBody = {
 export type StreamChatResult = {
   content: string;
   usage?: StreamChunk & { type: "done" };
+  finishReason?: FinishReason;
 };
 
 export type InlineCompletionBody = {
@@ -1742,7 +1744,11 @@ export class CoopBackendClient {
       }
     }
 
-    return { content: full, usage };
+    return {
+      content: full,
+      usage,
+      finishReason: usage?.type === "done" ? usage.finishReason : undefined
+    };
   }
 
   public async streamInlineCompletion(

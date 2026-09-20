@@ -1,9 +1,9 @@
 /**
- * Deterministic quick-action suggest classifier for plain chat.
- * Suggest chips confirm before running the same pipelines as grid / slash commands.
+ * Deterministic quick-action suggest classifier.
  *
- * Phrase banks: PRIMARY (must) + SECONDARY (paraphrase / enterprise / slang).
- * Collisions + warning negatives keep chip spam down — see tests.
+ * **Send path must not call this.** Plain English is plain chat. These phrase
+ * banks exist only for tests / possible empty-state teaching — never interrupt
+ * a send with chips or silent Blast/Owner/Trace.
  */
 import type { RepoContext } from "./types";
 import type { QuickActionId } from "../webview/types";

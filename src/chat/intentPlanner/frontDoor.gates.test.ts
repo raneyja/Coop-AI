@@ -200,6 +200,19 @@ test("/blast still runs blast; focus text is interpreted", () => {
   );
 });
 
+test("unconstrained blast-shaped English is not a workflow constraint", () => {
+  const turn = planRawChatAskFromRules("What files are impacted if I change this handler?", {
+    connectedTools: [...CONNECTED],
+    activeFile: "src/chat/handler.ts",
+    useRepo: USE_REPO
+  });
+  assert.equal(turn.constraint.kind, "none");
+  assert.equal(turn.plan.workflow, undefined);
+  assert.notEqual(turn.plan.execution, "silent");
+  assert.notEqual(turn.plan.mode, "run-workflow");
+  assert.notEqual(turn.plan.mode, "suggest-chips");
+});
+
 test("Teams is omitted while TEAMS_COMING_SOON", () => {
   assert.equal(TEAMS_COMING_SOON, true);
   const turn = planRawChatAskFromRules(SLACK_SQL_INJECTION_SLASH_ASK, {
@@ -281,6 +294,16 @@ test("handleChatSend interprets before routeSlashCommand (slash bypass is imposs
     src,
     /currentContext\.owner\?\.trim\(\) \|\| this\.preferences\.owner/,
     "Use-repo chip must win over Settings when resolving useRepo"
+  );
+  assert.doesNotMatch(
+    src,
+    /decision\.kind === "silent-workflow"/,
+    "plain chat must not silently re-enter a quick action"
+  );
+  assert.doesNotMatch(
+    src,
+    /await this\.completeQuickActionSuggestClarification\(/,
+    "plain chat must not interrupt with Want Blast chips"
   );
 });
 

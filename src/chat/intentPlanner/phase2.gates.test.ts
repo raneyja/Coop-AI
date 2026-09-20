@@ -40,6 +40,16 @@ function collectGate(
   }
 }
 
+function assertNotPromoted(plan: ChatIntentPlan): void {
+  assert.equal(plan.workflow, undefined);
+  assert.notEqual(plan.mode, "run-workflow");
+  assert.notEqual(plan.mode, "suggest-chips");
+  assert.notEqual(plan.execution, "silent");
+  assert.notEqual(plan.execution, "confirm");
+  const decision = resolveChatIntentExecution(plan);
+  assert.ok(decision.kind === "none" || decision.kind === "tools-only");
+}
+
 test("Phase 2 Chat Intent Planner gates", () => {
   const results: GateResult[] = [];
 
@@ -50,10 +60,8 @@ test("Phase 2 Chat Intent Planner gates", () => {
       connectedTools: []
     });
 
-    assert.equal(plan.workflow, "blast-radius");
-    assert.equal(plan.mode, "run-workflow");
-    assert.equal(plan.execution, "silent");
-    assert.deepEqual(plan.tools, []);
+    assertNotPromoted(plan);
+    assert.ok(plan.mode === "none" || plan.mode === "plain" || plan.mode === "tools-only");
   });
 
   collectGate(results, phase2Criterion("P2-G2"), () => {
@@ -63,10 +71,10 @@ test("Phase 2 Chat Intent Planner gates", () => {
       connectedTools: ["jira"]
     });
 
-    assert.equal(plan.workflow, "blast-radius");
-    assert.equal(plan.mode, "run-workflow");
-    assert.equal(plan.execution, "silent");
-    assert.deepEqual(plan.tools, ["jira"]);
+    assertNotPromoted(plan);
+    assert.ok(plan.tools.includes("jira"));
+    const decision = resolveChatIntentExecution(plan);
+    assert.equal(decision.kind, "tools-only");
   });
 
   collectGate(results, phase2Criterion("P2-G3"), () => {
@@ -75,11 +83,8 @@ test("Phase 2 Chat Intent Planner gates", () => {
       connectedTools: []
     });
 
-    assert.equal(plan.workflow, "understand-repo");
-    assert.equal(plan.confidence, "medium");
-    assert.equal(plan.mode, "suggest-chips");
-    assert.equal(plan.execution, "confirm");
-    assert.deepEqual(plan.tools, []);
+    assertNotPromoted(plan);
+    assert.notEqual(plan.mode, "suggest-chips");
   });
 
   collectGate(results, phase2Criterion("P2-G4"), () => {
@@ -89,11 +94,10 @@ test("Phase 2 Chat Intent Planner gates", () => {
       "Check the impact and Jira"
     );
 
-    assert.equal(plan.workflow, "blast-radius");
+    assert.equal(plan.workflow, undefined);
     assert.deepEqual(plan.tools, ["jira"]);
-    assert.equal(plan.confidence, "high");
-    assert.equal(plan.mode, "run-workflow");
-    assert.equal(plan.execution, "silent");
+    assert.equal(plan.mode, "tools-only");
+    assert.equal(plan.execution, "none");
   });
 
   collectGate(results, phase2Criterion("P2-G5"), () => {
@@ -107,13 +111,13 @@ test("Phase 2 Chat Intent Planner gates", () => {
     };
     const decision = resolveChatIntentExecution(plan);
 
-    assert.equal(decision.kind, "silent-workflow");
-    if (decision.kind !== "silent-workflow") {
+    assert.equal(decision.kind, "tools-only");
+    if (decision.kind !== "tools-only") {
       return;
     }
-    assert.equal(decision.workflow, "blast-radius");
     assert.deepEqual(decision.tools, ["jira"]);
-    assert.equal(decision.focus, plan.focus);
+    assert.equal(decision.plan.workflow, undefined);
+    assert.equal(decision.plan.execution, "none");
   });
 
   collectGate(results, phase2Criterion("P2-G6"), () => {

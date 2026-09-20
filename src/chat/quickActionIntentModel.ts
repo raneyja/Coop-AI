@@ -1,6 +1,6 @@
 /**
- * Cheap OpenAI mini classifier for quick-action suggest chips.
- * Used only when the local phrase classifier is weak/none (hybrid path).
+ * Cheap OpenAI mini classifier for quick-action labels.
+ * **Not on the chat send path.** Do not re-wire this into handleChatSend.
  * Fail-open: any parse/API/timeout error → no chips (plain chat).
  */
 import type { QuickActionId } from "../webview/types";

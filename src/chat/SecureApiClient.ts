@@ -15,7 +15,7 @@ import { stripUserModelPreferenceUpdates } from "../config/featureModelAssignmen
 import { isCoopDevMode } from "../config/lightningConfig";
 import { isRetryableError, runResilientRequest, statusFromError } from "../api/networkResilience";
 import { formatUserFacingNetworkError } from "../api/userFacingErrors";
-import type { UseCase } from "../api/types";
+import type { UseCase, FinishReason } from "../api/types";
 import type { LlmProvider } from "../api/zeroRetentionConfig";
 import type {
   ChatMessage,
@@ -697,7 +697,11 @@ export class SecureApiClient {
     baseUrl: string,
     signal?: AbortSignal,
     onThinkingChunk?: (chunk: string) => void
-  ): Promise<{ message: ChatMessage; usage?: { inputTokens: number; outputTokens: number; estimatedCostUsd: number; provider: string; model: string } }> {
+  ): Promise<{
+    message: ChatMessage;
+    usage?: { inputTokens: number; outputTokens: number; estimatedCostUsd: number; provider: string; model: string };
+    finishReason?: FinishReason;
+  }> {
     assertCoopEndpoint(baseUrl);
     await this.ensureToken();
     this.setBaseUrl(baseUrl);
@@ -762,7 +766,8 @@ export class SecureApiClient {
         content: result.content,
         timestamp: Date.now()
       },
-      usage
+      usage,
+      finishReason: result.finishReason
     };
   }
 

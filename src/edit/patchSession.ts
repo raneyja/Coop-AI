@@ -107,7 +107,10 @@ export function getPatchRecord(timestamp: number | undefined): PatchRecord | und
 export function listPatchCards(): PatchCardState[] {
   return [...patchRecordsByMessage.values()]
     .map((record) => record.card)
-    .filter((card) => card.files.length > 0)
+    .filter(
+      (card) =>
+        card.files.length > 0 || (card.status === "failed" && Boolean(card.error))
+    )
     .sort((a, b) => (a.messageTimestamp ?? 0) - (b.messageTimestamp ?? 0));
 }
 

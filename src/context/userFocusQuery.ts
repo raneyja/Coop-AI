@@ -56,6 +56,7 @@ const CANNED_TASK_PREFIXES = [
   "Explain this repository for a new engineer",
   "Explain why this code exists and what trade-offs",
   "Analyze the blast radius of changing",
+  "Analyze what breaks if this area is modified",
   "Audit knowledge gaps for",
   "Audit knowledge gaps across"
 ];

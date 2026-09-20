@@ -206,6 +206,106 @@ test("fails when hunks exist without File header", () => {
   assert.match(result.error, /File: header/);
 });
 
+test("parses lowercase file: headers", () => {
+  const content = [
+    "file: `src/foo.ts`",
+    "",
+    "```patch",
+    "<<<<<<< SEARCH",
+    "a",
+    "=======",
+    "b",
+    ">>>>>>> REPLACE",
+    "```"
+  ].join("\n");
+  const result = parsePatchResponse(content);
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+  assert.equal(result.patches.files[0]!.relativePath, "src/foo.ts");
+});
+
+test("infers File from preferredFile when the model omits the header", () => {
+  const content = [
+    "```patch",
+    "<<<<<<< SEARCH",
+    "a",
+    "=======",
+    "b",
+    ">>>>>>> REPLACE",
+    "```"
+  ].join("\n");
+  const result = parsePatchResponse(content, { preferredFile: "src/server/authMiddleware.ts" });
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+  assert.equal(result.patches.files[0]!.relativePath, "src/server/authMiddleware.ts");
+  assert.equal(result.patches.files[0]!.hunks[0]!.search, "a");
+  assert.equal(result.patches.files[0]!.hunks[0]!.replace, "b");
+});
+
+test("parses **File:** markdown wrappers", () => {
+  const content = [
+    "**File:** `src/foo.ts`",
+    "",
+    "```patch",
+    "<<<<<<< SEARCH",
+    "a",
+    "=======",
+    "b",
+    ">>>>>>> REPLACE",
+    "```"
+  ].join("\n");
+  const result = parsePatchResponse(content);
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+  assert.equal(result.patches.files[0]!.relativePath, "src/foo.ts");
+});
+
+test("parses File: as the first line inside the patch fence", () => {
+  const content = [
+    "```patch",
+    "File: src/foo.ts",
+    "<<<<<<< SEARCH",
+    "a",
+    "=======",
+    "b",
+    ">>>>>>> REPLACE",
+    "```"
+  ].join("\n");
+  const result = parsePatchResponse(content);
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+  assert.equal(result.patches.files[0]!.relativePath, "src/foo.ts");
+});
+
+test("attaches hunks that appear before a trailing File: header", () => {
+  const content = [
+    "```patch",
+    "<<<<<<< SEARCH",
+    "a",
+    "=======",
+    "b",
+    ">>>>>>> REPLACE",
+    "```",
+    "",
+    "File: `src/foo.ts`"
+  ].join("\n");
+  const result = parsePatchResponse(content);
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+  assert.equal(result.patches.files[0]!.relativePath, "src/foo.ts");
+  assert.equal(result.patches.files[0]!.hunks[0]!.search, "a");
+});
+
 test("fails when File header has no hunks", () => {
   const result = parsePatchResponse("File: `src/foo.ts`\n\nNo patch here.");
   assert.equal(result.ok, false);

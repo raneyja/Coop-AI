@@ -247,7 +247,8 @@ export const AGENT_REPO_HUNT_RULES = `When <agent_search> or <agent_files> are a
 - Never tell the user to clone the repo, open a local copy, or search on disk. Indexed remote is the workspace. If the write/reject path is not in attached bodies, say what you did read and that those files did not contain the API check — do not send them to a clone.
 - If an attached body has validate() or ValidationError, cite it only when it rejects the field the user asked about. A validate() for a different field is a miss — keep hunting; do not narrate “must be elsewhere in this snippet.” Do not cite OpenAPI/swagger, a read_only serializer class, seed JSON, or a view that only checks permissions.
 - Never open by restating or paraphrasing the user's ask when agent evidence is empty — answer with the miss, then a different symbol spelling to try.
-- Do not dump the question text under a heading as if it were the answer. Do not use a **Your question** heading.`;
+- Do not dump the question text under a heading as if it were the answer. Do not use a **Your question** heading.
+- Never write a heading whose only content is that path hits were found but bodies were not attached. Omit the section. Only name files whose attached bodies confirm the claim.`;
 
 export const EVIDENCE_CITATION_RULES = `Citation rules:
 ${NARRATIVE_CITATION_RULES}

@@ -2,7 +2,9 @@ import "../autocomplete/test/vscodeMockSetup";
 import assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { handlePatchComplete } from "./handlePatchComplete";
-import { listPatchCards, resetPatchSessionForTests } from "./patchSession";
+import { patchCardsForMessages } from "./hydratePatchCardsFromHistory";
+import { getSuppressedMessageTimestamps, listPatchCards, resetPatchSessionForTests } from "./patchSession";
+import { patchFileCapError } from "./patchParser";
 import { clearRemotePatchBuffersForTests } from "./patchTarget";
 
 let passed = 0;
@@ -66,7 +68,7 @@ async function main(): Promise<void> {
   });
 
   await test("edit-mode parse failure still publishes failed suppression path", async () => {
-    const published: Array<{ suppressedMessageTimestamps?: number[] }> = [];
+    const published: Array<{ suppressedMessageTimestamps?: number[]; cards?: unknown[] }> = [];
     const result = await handlePatchComplete("no patches here", {
       messageTimestamp: 7,
       publish: (state) => {
@@ -77,6 +79,50 @@ async function main(): Promise<void> {
     assert.equal(result?.status, "failed");
     assert.equal(published.length, 1);
     assert.deepEqual(published[0]?.suppressedMessageTimestamps, [7]);
+    assert.ok((published[0]?.cards?.length ?? 0) >= 1);
+    assert.ok(getSuppressedMessageTimestamps().includes(7));
+    const echoed = patchCardsForMessages([{ timestamp: 7 }]);
+    assert.ok(echoed.suppressedMessageTimestamps?.includes(7));
+  });
+
+  await test("omitted File: header still builds an Apply card from the open file", async () => {
+    const fileBody = [
+      "export async function checkOrgNotSuspended(",
+      "  orgStore: OrgStore | undefined,",
+      "  orgId: string",
+      "): Promise<boolean> {",
+      "  if (!orgStore || orgId === \"legacy\") {",
+      "    return true;",
+      "  }",
+      "  return !(await orgStore.isOrgSuspended(orgId));",
+      "}"
+    ].join("\n");
+    const content = [
+      "```patch",
+      "<<<<<<< SEARCH",
+      fileBody,
+      "=======",
+      "// Returns true when the organization is not suspended.",
+      fileBody,
+      ">>>>>>> REPLACE",
+      "```"
+    ].join("\n");
+    const result = await handlePatchComplete(content, {
+      messageTimestamp: 24,
+      file: "src/server/authMiddleware.ts",
+      selectedLines: [1, 9],
+      selectionText: fileBody,
+      fileContents: { "src/server/authMiddleware.ts": fileBody },
+      commentOnly: true,
+      publish: () => undefined
+    });
+    assert.equal(result?.status, "pending");
+    assert.equal(result?.files[0]?.relativePath, "src/server/authMiddleware.ts");
+    assert.ok((result?.files[0]?.hunks.length ?? 0) >= 1);
+    assert.equal(listPatchCards().length, 1);
+    const echoed = patchCardsForMessages([{ timestamp: 24 }]);
+    assert.equal(echoed.cards.length, 1);
+    assert.ok(echoed.suppressedMessageTimestamps?.includes(24));
   });
 
   await test("snaps paraphrased SEARCH onto highlighted lines using attached file bytes", async () => {
@@ -322,6 +368,11 @@ async function main(): Promise<void> {
     });
     assert.equal(result?.status, "failed");
     assert.match(result?.error ?? "", /comment only/i);
+    assert.ok(getSuppressedMessageTimestamps().includes(114));
+    const echoed = patchCardsForMessages([{ timestamp: 114 }]);
+    assert.ok(echoed.suppressedMessageTimestamps?.includes(114));
+    assert.equal(echoed.cards.length, 1);
+    assert.equal(echoed.cards[0]?.status, "failed");
   });
 
   await test("preview matches highlighted StateGroup in an untitled Bitbucket tab", async () => {
@@ -557,6 +608,76 @@ async function main(): Promise<void> {
     const joined = (result?.files[0]?.hunks[0]?.lines ?? []).map((line) => line.text).join("\n");
     assert.match(joined, /assert\.equal\(TIMEOUT_MS, 15000\)/);
     assert.doesNotMatch(joined, /30000/);
+  });
+
+  await test("older /edit fences stay suppressed when a newer card lands", async () => {
+    const published: Array<{ suppressedMessageTimestamps?: number[] }> = [];
+    await handlePatchComplete("no patches here", {
+      messageTimestamp: 1,
+      publish: (state) => {
+        published.push(state);
+      }
+    });
+    await handlePatchComplete(SAMPLE_PATCH, {
+      messageTimestamp: 2,
+      publish: (state) => {
+        published.push(state);
+      }
+    });
+    const last = published[published.length - 1];
+    assert.ok(last?.suppressedMessageTimestamps?.includes(1));
+    assert.ok(last?.suppressedMessageTimestamps?.includes(2));
+    const echoed = patchCardsForMessages([{ timestamp: 1 }, { timestamp: 2 }]);
+    assert.ok(echoed.suppressedMessageTimestamps?.includes(1));
+    assert.ok(echoed.suppressedMessageTimestamps?.includes(2));
+    assert.equal(echoed.cards.length, 2);
+  });
+
+  await test("5-file cap publishes a failed card and keeps fences hidden", async () => {
+    const files = ["a", "b", "c", "d", "e", "f"].map((name) =>
+      [
+        `File: \`src/${name}.ts\``,
+        "",
+        "```patch",
+        "<<<<<<< SEARCH",
+        name,
+        "=======",
+        name.toUpperCase(),
+        ">>>>>>> REPLACE",
+        "```"
+      ].join("\n")
+    );
+    const result = await handlePatchComplete(files.join("\n\n"), {
+      messageTimestamp: 51,
+      publish: () => undefined
+    });
+    assert.equal(result?.status, "failed");
+    assert.equal(result?.error, patchFileCapError(6));
+    assert.equal(listPatchCards().length, 1);
+    const echoed = patchCardsForMessages([{ timestamp: 51 }]);
+    assert.equal(echoed.cards.length, 1);
+    assert.ok(echoed.suppressedMessageTimestamps?.includes(51));
+  });
+
+  await test("malformed SEARCH publishes a failed card instead of writing", async () => {
+    const malformed = [
+      "File: `src/a.ts`",
+      "",
+      "```patch",
+      "<<<<<<< SEARCH",
+      "alpha",
+      ">>>>>>> REPLACE",
+      "```"
+    ].join("\n");
+    const result = await handlePatchComplete(malformed, {
+      messageTimestamp: 52,
+      publish: () => undefined
+    });
+    assert.equal(result?.status, "failed");
+    assert.match(result?.error ?? "", /Malformed SEARCH\/REPLACE/);
+    assert.equal(listPatchCards()[0]?.files.length, 0);
+    const echoed = patchCardsForMessages([{ timestamp: 52 }]);
+    assert.ok(echoed.suppressedMessageTimestamps?.includes(52));
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

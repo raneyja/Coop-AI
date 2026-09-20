@@ -13,7 +13,6 @@ import {
 } from "../quickActionIntentModel";
 import {
   emptyChatIntentPlan,
-  isChatIntentWorkflow,
   type ChatCommandConstraint,
   type ChatIntentJob,
   type ChatIntentJobCapability,
@@ -59,13 +58,9 @@ export function buildChatIntentPlanUserMessage(
     "Reply with ONLY a JSON object (no markdown, no prose):",
     '{"workflow":"none"|"find-owner"|"trace-decision"|"blast-radius"|"understand-repo"|"knowledge-gaps","tools":["jira"|"slack"|"teams"|"confluence"|"notion"|"google-docs"],"confidence":"high"|"medium"|"low","jobs":[{"capability":"locate"|"decision"|"docs"|"code-host","verb":"search"|"latest","terms":["topic"]}]}',
     "Rules:",
-    '- Prefer workflow "none" and tools [] for normal code explanations.',
-    '- "blast-radius" = change impact / what breaks / callers of a change.',
-    '- "find-owner" = who owns or maintains this.',
-    '- "trace-decision" = why this was written / decision history.',
-    '- "understand-repo" = whole-repo architecture overview.',
-    '- "knowledge-gaps" = missing docs / undocumented areas.',
-    "- Compound asks MAY set both workflow and tools (e.g. blast-radius + jira).",
+    '- Prefer workflow "none". Workflow is only for an explicit slash/Workflows command constraint.',
+    "- Do not set blast-radius, find-owner, trace-decision, understand-repo, or knowledge-gaps from plain English.",
+    "- Jobs + named tools stay. Compound asks may name tools (e.g. Jira) without a workflow.",
     "- jobs[].terms = the topic in a few words. Hyphens become spaces (SQL-injection → SQL injection).",
     "- jobs[].verb = search (topic) or latest (newest items, no topic). Recency words are not the query.",
     "- Recency-only (most recent, latest, last post, newest) with no real topic → verb latest and terms [].",
@@ -118,13 +113,10 @@ export function parseChatIntentPlanResponse(
   }
   try {
     const parsed = JSON.parse(jsonSlice) as {
-      workflow?: unknown;
       tools?: unknown;
       confidence?: unknown;
       jobs?: unknown;
     };
-    const workflowRaw =
-      typeof parsed.workflow === "string" ? parsed.workflow.trim() : "none";
     const confidenceRaw =
       typeof parsed.confidence === "string"
         ? parsed.confidence.trim().toLowerCase()
@@ -145,30 +137,10 @@ export function parseChatIntentPlanResponse(
         }
       }
     }
-    const workflow =
-      workflowRaw === "none" || !isChatIntentWorkflow(workflowRaw)
-        ? undefined
-        : workflowRaw;
     const jobs = parseModelJobs(parsed.jobs);
 
-    if (!workflow && tools.length === 0 && jobs.length === 0) {
+    if (tools.length === 0 && jobs.length === 0) {
       return emptyChatIntentPlan(focus);
-    }
-
-    if (workflow) {
-      const execution =
-        confidence === "high" ? "silent" : confidence === "medium" ? "confirm" : "none";
-      const plan: ChatIntentPlan = {
-        mode: execution === "confirm" ? "suggest-chips" : execution === "silent" ? "run-workflow" : "none",
-        workflow,
-        tools,
-        jobs,
-        confidence,
-        focus,
-        execution,
-        reason: "model-plan"
-      };
-      return filterPlanToConnected(plan, connectedTools, focus);
     }
 
     return filterPlanToConnected(

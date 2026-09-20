@@ -28,3 +28,29 @@ export function isEditHistoryContent(content: string | undefined): boolean {
   }
   return /^\/edit\b/i.test(trimmed) || /^\[edit\]/i.test(trimmed);
 }
+
+/**
+ * Suggest-chip clarifying chrome is for workflow chips — never for File:/SEARCH
+ * patches. Those must still go through renderBody so the Patch card can attach.
+ */
+export function shouldUseSuggestClarifyingBody(content: string, hasSuggest: boolean): boolean {
+  return hasSuggest && !looksLikePatchStreamingContent(content);
+}
+
+/** Assistant message that follows a /edit user turn — never paint raw SEARCH/REPLACE. */
+export function isAssistantReplyToEdit(
+  messages: ReadonlyArray<{ role: string; content: string; timestamp: number }>,
+  assistantTimestamp: number | undefined
+): boolean {
+  if (assistantTimestamp === undefined || messages.length === 0) {
+    return false;
+  }
+  const index = messages.findIndex((message) => message.timestamp === assistantTimestamp);
+  const start = index === -1 ? messages.length - 1 : index - 1;
+  for (let i = start; i >= 0; i--) {
+    if (messages[i]?.role === "user") {
+      return isEditHistoryContent(messages[i]?.content);
+    }
+  }
+  return false;
+}

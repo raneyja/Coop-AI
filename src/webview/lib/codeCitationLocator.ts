@@ -92,6 +92,10 @@ function unwrapLocatorText(value: string): string {
   if (tick) {
     trimmed = tick[1]!.trim();
   }
+  const comment = trimmed.match(/^(?:\/\/|#)\s+(.*)$/);
+  if (comment) {
+    trimmed = comment[1]!.trim();
+  }
   return trimmed.replace(/[.,;:]+$/, "").trim();
 }
 

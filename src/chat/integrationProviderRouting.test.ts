@@ -27,23 +27,23 @@ test("incident ask with Jira/Slack wording does not single-route to jira", () =>
   );
 });
 
-test("plain jira ask still routes to jira when connected", () => {
+test("named jira in plain chat does not enter the /jira single-route", () => {
   assert.equal(
     resolvePlainChatIntegrationProvider({
       message: "can you look for any jira tickets that refer to this repo?",
       isConnected: allConnected
     }),
-    "jira"
+    undefined
   );
 });
 
-test("named disconnected jira still single-routes so Sources can show not-connected", () => {
+test("named disconnected jira still does not single-route", () => {
   assert.equal(
     resolvePlainChatIntegrationProvider({
       message: "any jira tickets for this?",
       isConnected: () => false
     }),
-    "jira"
+    undefined
   );
 });
 
@@ -51,6 +51,16 @@ test("slack and notion named does not single-route", () => {
   assert.equal(
     resolvePlainChatIntegrationProvider({
       message: "cross-check mentions in slack and notion",
+      isConnected: allConnected
+    }),
+    undefined
+  );
+});
+
+test("named slack in plain chat does not enter the /slack pipeline", () => {
+  assert.equal(
+    resolvePlainChatIntegrationProvider({
+      message: "What did Slack say about the SQL-injection PR?",
       isConnected: allConnected
     }),
     undefined

@@ -193,6 +193,19 @@ test("shouldRunAgentToolLoop is true for a repo hunt (always on)", () => {
   );
 });
 
+test("ship-check blast-shaped English still runs the agent loop", () => {
+  const query =
+    "If I change that missing-key response, what else in this repo should I check before I ship?";
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query,
+      hasQuickAction: false,
+      intentPlan: emptyChatIntentPlan(query)
+    }),
+    true
+  );
+});
+
 test("shouldRunAgentToolLoop is true for /docs slash — vendor loop, not a hunt", () => {
   assert.equal(
     shouldRunAgentToolLoop({

@@ -39,6 +39,7 @@ import {
   type HistoryAttachment
 } from "../lib/parseHistoryAttachments";
 import { buildTimelineEntries, groupTimelineSourceCards } from "./chatTimelineEntries";
+import { shouldUseSuggestClarifyingBody } from "../lib/patchStreamDisplay";
 
 export type ChatMessage = {
   role: "user" | "assistant" | "system";
@@ -432,7 +433,7 @@ function MessageBlock({
             <QuickActionBody body={parsed.body} renderBody={renderBody} />
           ) : isUser ? (
             <PlainChatBody body={parsed.body} renderBody={(content) => renderBody(content, message.relatedArtifactId)} />
-          ) : message.suggest ? (
+          ) : shouldUseSuggestClarifyingBody(parsed.body, Boolean(message.suggest)) ? (
             <div className="chat-message-body">
               <SuggestClarifyingBody content={parsed.body} />
               <SuggestChipRow message={message} onSuggestResolve={onSuggestResolve} />

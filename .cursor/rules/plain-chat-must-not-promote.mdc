@@ -1,0 +1,43 @@
+---
+description: Plain English in chat must never auto-enter slash commands or quick actions
+alwaysApply: true
+---
+
+# Plain chat must not promote into slash / quick actions
+
+**Product law:** Plain English in the composer is **plain chat**. The agent / intent planner may gather, search, name tools, and answer. It must **never** enter a slash-command pipeline or a quick-action pipeline unless the user **explicitly** chose that workflow on **this turn**.
+
+## Explicit (keep)
+
+- Typed slash token on this send (`SLASH_COMMANDS` — `/blast`, `/owner`, `/trace`, `/gaps`, `/understand`, `/edit`, `/fix`, `/compare`, `/slack`, `/jira`, `/teams`, `/confluence`, `/notion`, `/docs`, and aliases)
+- Workflows menu insert (puts `/blast ` etc. in the composer; user then sends)
+- Quick-action grid / editor command / prompt-library entry that already carries an `actionId` or slash
+- Sources-card / evidence-card “run this action” buttons that already send `quickAction`
+
+## Not explicit (never do)
+
+- Phrase-bank matches (“If I change…”, “who owns…”, “what breaks if…”)
+- Cheap intent-suggest model classifying a workflow
+- Planner `execution: "silent"` / `mode: "run-workflow"` from plain text
+- Confirm chips (“Want Blast Radius?” / `Run /blast` / `Just answer`)
+- Sticky inherit of `[blast-radius]` / last `/blast` onto a later **plain** follow-up
+- Auto-setting `composerMode: "edit"` from a change-shaped sentence when the user did not type `/edit` or `/fix`
+- Auto-setting `quickAction` or slash-style `integrationProvider` just because the sentence resembles that command
+
+## Implementation choke
+
+On unconstrained turns (`constraint.kind === "none"`, no `quickAction`, no parsed slash, no composer edit from slash/UI):
+
+- Do not return `silent-workflow` or `confirm-workflow`
+- Do not call `shouldOfferQuickActionSuggest` / chip clarification
+- Do not set `quickAction` from planner `workflow`
+- Do not plan a workflow field (jobs + named tools + `codeIntent` stay)
+- Named Slack/Jira/… may **prefetch** via `fetchIntegrations`; do **not** set `integrationProvider` (that is the slash single-route)
+
+`/edit` `/fix` (or explicit composer edit) may set `composerMode: "edit"`. Plain change asks use the agent loop / `propose_patch`, never anchored-edit hijack.
+
+File-level Blast/Trace error banners are correct **only** after an explicit command.
+
+## Self-check
+
+Would “If I change that missing-key response, what else should I check?” with Use-repo and no file silently enter Blast Radius? If yes, fail.
