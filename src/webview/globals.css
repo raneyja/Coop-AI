@@ -1431,7 +1431,7 @@
   }
 
   .coop-agent-todo {
-    @apply flex items-start gap-2.5 text-[13px] leading-[1.45];
+    @apply flex min-w-0 items-center gap-2.5 text-[13px] leading-[1.45];
   }
 
   .coop-agent-todo--expandable {
@@ -1504,7 +1504,11 @@
   }
 
   .coop-agent-rich-label {
-    @apply min-w-0;
+    @apply flex min-w-0 flex-1 items-baseline gap-1;
+  }
+
+  .coop-agent-rich-label > span {
+    @apply shrink-0 whitespace-nowrap;
   }
 
   .coop-agent-inline-code {
@@ -1512,6 +1516,13 @@
     background: color-mix(in srgb, var(--vscode-textCodeBlock-background, #1e1e1e) 88%, transparent);
     color: color-mix(in srgb, var(--coop-panel-foreground) 88%, var(--vscode-textPreformat-foreground, #d7ba7d) 12%);
     border: 1px solid color-mix(in srgb, var(--coop-composer-border) 50%, transparent);
+  }
+
+  .coop-agent-rich-label .coop-agent-inline-code,
+  .coop-agent-file-row .coop-agent-inline-code {
+    @apply min-w-0 flex-1 truncate;
+    display: inline-block;
+    max-width: 100%;
   }
 
   .coop-agent-fallback-status {
@@ -1635,12 +1646,12 @@
   }
 
   .coop-agent-file-row {
-    @apply flex items-center gap-2 text-[12px];
+    @apply flex min-w-0 items-baseline gap-2 text-[12px];
     color: color-mix(in srgb, var(--coop-panel-muted) 55%, var(--coop-panel-foreground) 45%);
   }
 
   .coop-agent-file-action {
-    @apply w-14 shrink-0 text-[12px] opacity-70;
+    @apply w-16 shrink-0 whitespace-nowrap text-[12px] opacity-70;
   }
 
   .chat-message--model-thinking {

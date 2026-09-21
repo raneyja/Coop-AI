@@ -8338,20 +8338,22 @@ export class CoopChatSession {
         mentionsToResolve.length > 0
           ? await abortablePromise(this.resolveMentionFiles(mentionsToResolve), signal)
           : [];
+      const fileAssistantMessage = isFileAssistantSession(turnContext);
       let apiMessage =
         mentionFiles.length > 0
           ? formatChatMessageWithMentionFiles({
               message: llmMessage,
               files: mentionFiles,
-              owner: turnContext.owner,
-              repo: turnContext.repo,
-              branch: turnContext.branch
+              owner: fileAssistantMessage ? undefined : turnContext.owner,
+              repo: fileAssistantMessage ? undefined : turnContext.repo,
+              branch: fileAssistantMessage ? undefined : turnContext.branch
             })
             : useContextBundle || !localPayload?.files.length
             ? buildUserMessageWithContext(llmMessage, {
-                owner: turnContext.owner,
-                repo: turnContext.repo,
-                branch: turnContext.branch,
+                owner: fileAssistantMessage ? undefined : turnContext.owner,
+                repo: fileAssistantMessage ? undefined : turnContext.repo,
+                branch: fileAssistantMessage ? undefined : turnContext.branch,
+                fileAssistant: fileAssistantMessage,
                 file:
                   effectiveQuickAction === "understand-repo" || integrationProvider
                     ? undefined
@@ -8369,9 +8371,10 @@ export class CoopChatSession {
                 file: turnContext.file,
                 selectedLines: turnContext.selectedLines,
                 selectionText: this.selectedCodeSnippet(4000),
-                owner: turnContext.owner,
-                repo: turnContext.repo,
-                branch: turnContext.branch
+                owner: fileAssistantMessage ? undefined : turnContext.owner,
+                repo: fileAssistantMessage ? undefined : turnContext.repo,
+                branch: fileAssistantMessage ? undefined : turnContext.branch,
+                fileAssistant: fileAssistantMessage
               });
       const projectInstructionsBlock =
         effectiveQuickAction === "understand-repo" ? undefined : await this.buildProjectInstructionsBlock();

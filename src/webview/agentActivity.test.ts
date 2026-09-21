@@ -11,6 +11,7 @@ import {
   toolRowsFromTodos,
   type AgentTodoItem
 } from "./agentActivity";
+import { activityDisplayPath } from "../chat/chatTurnActivity";
 import { ACTIVITY_PHASE_MS, ACTIVITY_START_DELAY_MS } from "./thinkingMessageRotation";
 
 test("classifyActivityTodoKind splits plan from finished research", () => {
@@ -66,6 +67,16 @@ test("extractFileChipsFromLabels picks backtick paths", () => {
   const chips = extractFileChipsFromLabels(["Searched for `**/CODEOWNERS`", "Read foo/bar.ts"]);
   assert.ok(chips.some((chip) => chip.path === "**/CODEOWNERS"));
   assert.ok(chips.some((chip) => chip.path === "foo/bar.ts"));
+});
+
+test("absolute Read path is one chip, not a second Explored row", () => {
+  const path = "/Users/jonraney/Desktop/cody-vs-main/docs/Troubleshooting.md";
+  const chips = extractFileChipsFromLabels([`Read \`${path}\``]);
+  assert.equal(chips.length, 1);
+  assert.equal(chips[0]?.action, "read");
+  assert.equal(chips[0]?.path, path);
+  assert.equal(activityDisplayPath(path), "…/docs/Troubleshooting.md");
+  assert.equal(activityDisplayPath("src/chat/agentRouting.ts"), "src/chat/agentRouting.ts");
 });
 
 test("gather theater does not become file chips or an explored count", () => {

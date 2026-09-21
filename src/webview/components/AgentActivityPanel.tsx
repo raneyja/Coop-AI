@@ -7,9 +7,11 @@ import {
 } from "../agentActivity";
 import { splitNarrativeLabelParts } from "../agentNarrative";
 import {
+  activityDisplayPath,
   formatThoughtLabel,
   formatWorkedForLabel,
-  looksLikeRepoPath
+  looksLikeRepoPath,
+  sameActivityPath
 } from "../../chat/chatTurnActivity";
 import { useChatLinks } from "./ChatLinkContext";
 
@@ -91,13 +93,14 @@ function RichLabel({ text }: { text: string }): React.ReactElement {
               key={`${part.value}-${index}`}
               type="button"
               className="coop-agent-inline-code coop-agent-path-btn"
+              title={part.value}
               onClick={() => onOpenFile(part.value)}
             >
-              {part.value}
+              {activityDisplayPath(part.value)}
             </button>
           ) : (
-            <code key={`${part.value}-${index}`} className="coop-agent-inline-code">
-              {part.value}
+            <code key={`${part.value}-${index}`} className="coop-agent-inline-code" title={part.value}>
+              {looksLikeRepoPath(part.value) ? activityDisplayPath(part.value) : part.value}
             </code>
           )
         ) : (
@@ -280,14 +283,24 @@ export function AgentActivityPanel({
     setThinkingOpen(nextOpen);
   }, [isComplete, thinkingStreaming, trimmedThinking]);
 
-  const fileCount = files.length;
+  const researchPaths = research.flatMap((todo) =>
+    [...todo.content.matchAll(/`([^`]+)`/g)].map((match) => match[1] ?? "")
+  );
+  const extraFiles = files.filter(
+    (file) => !researchPaths.some((path) => path && sameActivityPath(path, file.path))
+  );
+  const fileCount = extraFiles.length;
   const showLiveThinking = !isComplete && thinkingStreaming;
   const showThinkingHeader = Boolean(trimmedThinking) || showLiveThinking;
+  const readCount = research.filter((todo) => /^\s*Read\b/i.test(todo.content)).length;
+  const searchCount = research.filter((todo) => /^\s*Search/i.test(todo.content)).length;
   const researchLabel = researchSectionLabel({
     live: !isComplete,
     exploration,
     researchCount: research.length,
-    fileCount
+    fileCount,
+    reads: readCount,
+    searches: searchCount
   });
   const hasResearch = research.length > 0 || fileCount > 0 || Boolean(exploration);
   const hasAnything =
@@ -357,19 +370,22 @@ export function AgentActivityPanel({
             {research.length > 0 ? <TodoList items={research} /> : null}
             {fileCount > 0 ? (
               <ul className="coop-agent-file-list">
-                {files.map((file) => (
+                {extraFiles.map((file) => (
                   <li key={`${file.action}:${file.path}`} className="coop-agent-file-row">
                     <span className="coop-agent-file-action">{labelForFileAction(file.action)}</span>
                     {onOpenFile ? (
                       <button
                         type="button"
                         className="coop-agent-inline-code coop-agent-path-btn"
+                        title={file.path}
                         onClick={() => onOpenFile(file.path)}
                       >
-                        {file.path}
+                        {activityDisplayPath(file.path)}
                       </button>
                     ) : (
-                      <code className="coop-agent-inline-code">{file.path}</code>
+                      <code className="coop-agent-inline-code" title={file.path}>
+                        {activityDisplayPath(file.path)}
+                      </code>
                     )}
                   </li>
                 ))}
@@ -428,6 +444,8 @@ function researchSectionLabel(input: {
   exploration: ReturnType<typeof summarizeAgentExploration>;
   researchCount: number;
   fileCount: number;
+  reads: number;
+  searches: number;
 }): string {
   if (input.live && input.exploration?.exploring) {
     return input.exploration.exploring;
@@ -439,6 +457,12 @@ function researchSectionLabel(input: {
     return input.live
       ? `Reading ${input.fileCount === 1 ? "1 file" : `${input.fileCount} files`}`
       : `Read ${input.fileCount === 1 ? "1 file" : `${input.fileCount} files`}`;
+  }
+  if (input.reads > 0 && input.searches === 0) {
+    if (input.reads === 1) {
+      return input.live ? "Reading" : "Read";
+    }
+    return input.live ? `Reading ${input.reads} files` : `Read ${input.reads} files`;
   }
   if (input.researchCount === 1) {
     return input.live ? "Searching" : "Searched";

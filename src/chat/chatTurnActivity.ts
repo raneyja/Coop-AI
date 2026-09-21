@@ -155,18 +155,43 @@ export function activityFromAgentSteps(steps: ChatTurnAgentStep[]): {
   return { todos, tools, files };
 }
 
+/** Same file even when one label dropped the leading slash. */
+export function sameActivityPath(left: string, right: string): boolean {
+  const normalize = (value: string) => value.trim().replace(/\\/g, "/").replace(/^\/+/, "");
+  const a = normalize(left);
+  const b = normalize(right);
+  return Boolean(a) && a === b;
+}
+
+/**
+ * One-line label for a narrow activity row.
+ * Short repo paths stay whole. Long absolute paths keep the last two segments.
+ */
+export function activityDisplayPath(path: string): string {
+  const normalized = path.trim().replace(/\\/g, "/");
+  if (normalized.length <= 42) {
+    return normalized;
+  }
+  const parts = normalized.split("/").filter(Boolean);
+  if (parts.length <= 1) {
+    return `…${normalized.slice(-36)}`;
+  }
+  return `…/${parts.slice(-2).join("/")}`;
+}
+
 /** Pull `path`-like tokens from status lines for the files toolbar. */
 export function extractFileChipsFromLabels(labels: string[]): ChatTurnActivityFile[] {
   const chips: ChatTurnActivityFile[] = [];
-  const seen = new Set<string>();
+  const seen: string[] = [];
+  const alreadySeen = (path: string) => seen.some((prior) => sameActivityPath(prior, path));
   for (const label of labels) {
     const backtick = [...label.matchAll(/`([^`]+)`/g)];
     for (const match of backtick) {
       const path = (match[1] ?? "").trim();
-      if (!path || seen.has(path)) {
+      if (!path || alreadySeen(path)) {
         continue;
       }
-      seen.add(path);
+      seen.push(path);
       const lower = label.toLowerCase();
       const action: ChatTurnActivityFile["action"] = lower.includes("read")
         ? "read"
@@ -176,8 +201,8 @@ export function extractFileChipsFromLabels(labels: string[]): ChatTurnActivityFi
       chips.push({ path, action });
     }
     const pathLike = label.match(/\b([\w./-]+\.(?:ts|tsx|js|jsx|py|go|rs|java|md|json|yml|yaml))\b/);
-    if (pathLike?.[1] && !seen.has(pathLike[1])) {
-      seen.add(pathLike[1]);
+    if (pathLike?.[1] && !alreadySeen(pathLike[1])) {
+      seen.push(pathLike[1]);
       chips.push({ path: pathLike[1], action: "explored" });
     }
   }
