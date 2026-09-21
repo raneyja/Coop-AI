@@ -1,39 +1,27 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import {
-  agentsMdAttached,
-  shouldPromptForAgentsMd
-} from "./agentsMdStatus";
+import { agentsMdAttached, canDetachAgentsMd } from "./agentsMdStatus";
 
 test("agentsMdAttached is true only when hasAgentsMd is set", () => {
   assert.equal(agentsMdAttached({ status: "loaded", hasAgentsMd: true }), true);
   assert.equal(agentsMdAttached({ status: "loaded", hasAgentsMd: false }), false);
 });
 
-test("shouldPromptForAgentsMd when AGENTS.md is missing", () => {
+test("canDetachAgentsMd only for a personal attached file", () => {
   assert.equal(
-    shouldPromptForAgentsMd({ status: "loaded", gitRoot: "/repo", hasAgentsMd: false }),
+    canDetachAgentsMd({ status: "loaded", source: "attached", hasAgentsMd: true, canMutate: true }),
     true
   );
   assert.equal(
-    shouldPromptForAgentsMd({ status: "loaded", gitRoot: "/repo", hasAgentsMd: true }),
-    false
-  );
-  assert.equal(shouldPromptForAgentsMd({ status: "no_git", hasAgentsMd: false }), true);
-  assert.equal(shouldPromptForAgentsMd({ status: "disabled" }), false);
-});
-
-test("shouldPromptForAgentsMd stays off for Use-repo and signed-out accounts", () => {
-  assert.equal(
-    shouldPromptForAgentsMd({ status: "missing", source: "repo", hasAgentsMd: false, canMutate: false }),
+    canDetachAgentsMd({ status: "loaded", source: "attached", hasAgentsMd: false, canMutate: true }),
     false
   );
   assert.equal(
-    shouldPromptForAgentsMd({ status: "missing", source: "attached", hasAgentsMd: false, canMutate: false }),
+    canDetachAgentsMd({ status: "loaded", source: "repo", hasAgentsMd: true, canMutate: false }),
     false
   );
   assert.equal(
-    shouldPromptForAgentsMd({ status: "missing", source: "attached", hasAgentsMd: false, canMutate: true }),
-    true
+    canDetachAgentsMd({ status: "loaded", source: "attached", hasAgentsMd: true, canMutate: false }),
+    false
   );
 });

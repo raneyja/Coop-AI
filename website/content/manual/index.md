@@ -277,7 +277,7 @@ Type free-form questions in the composer. Coop streams answers grounded in your 
 
 ### Active file context chip
 
-The chip above the composer (right side) shows which file Coop is using as chat context. It is **not** an `@` mention and is separate from the **AGENTS.md** pill.
+The chip above the composer (right side) shows which file Coop is using as chat context. It is **not** an `@` mention.
 
 <!-- figures lg -->
 ![Active file context chip — L badge, filename, and Local above the Coop chat composer](/screenshots/docs/extension-context-chip-local.png)
@@ -729,7 +729,7 @@ This Owner's Manual (what you're reading) is product documentation. Your repo's 
 
 ### How Coop uses it
 
-When project instructions are enabled, Coop loads `AGENTS.md` (and subtree-specific files in large monorepos) on **every chat turn** — not only for Understand Repo. If no `AGENTS.md` is found, the composer shows an **Attach AGENTS.md** prompt. Keep the top-level file general; add subtree-specific `AGENTS.md` files for large monorepos.
+When project instructions are enabled, Coop loads `AGENTS.md` (and subtree-specific files in large monorepos) on **every chat turn** — not only for Understand Repo. Create or upload a personal file in **Settings → Preferences → AGENTS.md**. Keep the top-level file general; add subtree-specific `AGENTS.md` files for large monorepos.
 
 ### Keep it tool-agnostic
 

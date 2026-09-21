@@ -61,7 +61,7 @@ import { WorkspaceReposPickerModal } from "../WorkspaceReposPickerModal";
 import type { GithubRepoOption } from "../../../chat/types";
 import { CoopNavList, CoopNavRow } from "../CoopNavRow";
 import { AgentsMdTemplateGuide } from "../AgentsMdTemplateGuide";
-import { agentsMdAttached } from "../../lib/agentsMdStatus";
+import { agentsMdAttached, canDetachAgentsMd } from "../../lib/agentsMdStatus";
 import {
   codeHostConfigured,
   integrationConfigured
@@ -187,6 +187,7 @@ export type SettingsDetailProps = {
   onAttachAgentsMd: () => void;
   onOpenAgentsMd: () => void;
   onStartFromAgentsMdTemplate: () => void;
+  onDetachAgentsMd?: () => void;
   onRequestSeatUpgrade?: (usageTier: "pro_plus" | "max") => void;
   onConvertOwnSeat?: (usageTier: "pro_plus" | "max") => void;
   seatConvertResult?: { ok: boolean; message: string } | null;
@@ -1766,8 +1767,10 @@ function AgentsMdSettings({
   prefs,
   onAttachAgentsMd,
   onOpenAgentsMd,
-  onStartFromAgentsMdTemplate
+  onStartFromAgentsMdTemplate,
+  onDetachAgentsMd
 }: SettingsDetailProps): React.ReactElement {
+  const showDetach = Boolean(onDetachAgentsMd) && canDetachAgentsMd(prefs.projectInstructions);
   return (
     <SettingsSection>
       <div className="space-y-2">
@@ -1779,17 +1782,30 @@ function AgentsMdSettings({
           <>
             <div className="coop-agents-md-settings-row">
               {agentsMdAttached(prefs.projectInstructions) ? (
-                <button
-                  type="button"
-                  className="coop-agents-md-chip coop-agents-md-chip--attached coop-agents-md-chip--clickable"
-                  onClick={onOpenAgentsMd}
-                  aria-label="Open AGENTS.md"
-                >
-                  <span className="coop-agents-md-chip-icon" aria-hidden="true">
-                    ✓
-                  </span>
-                  AGENTS.md
-                </button>
+                <span className="coop-agents-md-chip-group">
+                  <button
+                    type="button"
+                    className="coop-agents-md-chip coop-agents-md-chip--attached coop-agents-md-chip--clickable"
+                    onClick={onOpenAgentsMd}
+                    aria-label="Open AGENTS.md"
+                  >
+                    <span className="coop-agents-md-chip-icon" aria-hidden="true">
+                      ✓
+                    </span>
+                    AGENTS.md
+                  </button>
+                  {showDetach ? (
+                    <button
+                      type="button"
+                      className="coop-source-chip-dismiss"
+                      title="Remove AGENTS.md"
+                      aria-label="Remove AGENTS.md"
+                      onClick={onDetachAgentsMd}
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </span>
               ) : (
                 <span className="coop-agents-md-chip coop-agents-md-chip--missing coop-agents-md-chip--static">
                   <span className="coop-agents-md-chip-icon" aria-hidden="true">
