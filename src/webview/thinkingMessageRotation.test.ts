@@ -69,6 +69,22 @@ test("buildThinkingMessageSequence keeps only concrete gather/job lines", () => 
   assert.ok(!sequence.some((line) => /preparing answer|distilling|aggregating/i.test(line)));
 });
 
+test("buildThinkingMessageSequence drops gather theater", () => {
+  const sequence = buildThinkingMessageSequence(
+    {
+      status: "loading",
+      title: "Thinking",
+      activityMessages: [
+        "Gathering workspace context…",
+        "Searching indexed codebase…",
+        "Read `src/a.ts`"
+      ]
+    } satisfies IntentFeedbackState,
+    undefined
+  );
+  assert.deepEqual(sequence, ["Read `src/a.ts`"]);
+});
+
 test("buildThinkingMessageSequence stays empty while awaiting a model with no gather work", () => {
   assert.deepEqual(
     buildThinkingMessageSequence(undefined, undefined, { awaitingResponse: true }),

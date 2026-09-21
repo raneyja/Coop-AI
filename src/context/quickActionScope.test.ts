@@ -47,6 +47,7 @@ async function run(): Promise<void> {
       repo: "widgets",
       branch: "main",
       file: "src/CoopSettingsPanel.ts",
+      fileSource: "remote",
       scope: "file"
     };
     assert.equal(isQuickActionBlocked("understand-repo", withFile), true);
@@ -160,6 +161,40 @@ async function run(): Promise<void> {
       isQuickActionBlocked("find-owner", { owner: "acme", repo: "widgets" }),
       true
     );
+  });
+
+  test("L files block all five workflows with a Coop explorer nudge", () => {
+    const sources = ["workspace", "git", "external"] as const;
+    const files = {
+      workspace: "migrations/010_users_identity_audit.sql",
+      git: "src/foo.ts",
+      external: "/Users/jonraney/Downloads/notes.sql"
+    };
+    for (const fileSource of sources) {
+      const context: RepoContext = {
+        owner: "acme",
+        repo: "plane",
+        file: files[fileSource],
+        fileSource,
+        scope: "file"
+      };
+      for (const action of [
+        "understand-repo",
+        "trace-decision",
+        "find-owner",
+        "blast-radius",
+        "knowledge-gaps"
+      ] as const) {
+        assert.equal(isQuickActionBlocked(action, context), true, `${action} ${fileSource}`);
+        assert.match(quickActionBlockedMessage(action, context), /Coop explorer/i);
+      }
+    }
+    const untitled: RepoContext = { file: "Untitled-1", fileSource: "external", scope: "file" };
+    assert.equal(isQuickActionBlocked("trace-decision", untitled), true);
+    const remote: RepoContext = { file: "src/foo.ts", fileSource: "remote", scope: "file", owner: "acme", repo: "plane" };
+    assert.equal(isQuickActionBlocked("trace-decision", remote), false);
+    const useRepo: RepoContext = { owner: "acme", repo: "plane", scope: "repo" };
+    assert.equal(isQuickActionBlocked("understand-repo", useRepo), false);
   });
 
   test("all quick actions block outside-workspace active file", () => {

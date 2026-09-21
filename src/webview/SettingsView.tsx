@@ -11,6 +11,7 @@ import type { CodeHostProviderPreference, IntegrationChatProvider, SettingsState
 import type { LightningModeState } from "../indexing/lightningTypes";
 import type { SettingsLightningSummary } from "./components/settings/SettingsHub";
 import { EMPTY_IDENTITY_DIRECTORY } from "../identity/types";
+import { reconcileAutocompletePref } from "./components/settings/autocompleteDraft";
 
 type PersistedSettingsState = {
   screen?: SettingsScreen;
@@ -196,6 +197,7 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
   const testTimeoutRef = useRef<number | null>(null);
   const refreshTimeoutRef = useRef<number | null>(null);
   const savedFlashTimerRef = useRef<number | null>(null);
+  const pendingAutocompleteRef = useRef<boolean | null>(null);
   const githubInstalledRef = useRef(false);
   const gitlabInstalledRef = useRef(false);
   const bitbucketInstalledRef = useRef(false);
@@ -416,7 +418,17 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
             setApiKeyDraft("");
             apiKeyBaselineRef.current = null;
           }
-          setPrefs(message.payload);
+          setPrefs(() => {
+            const incoming = message.payload;
+            const reconciled = reconcileAutocompletePref(
+              incoming.autocompleteEnabled,
+              pendingAutocompleteRef.current
+            );
+            pendingAutocompleteRef.current = reconciled.pending;
+            return reconciled.enabled === incoming.autocompleteEnabled
+              ? incoming
+              : { ...incoming, autocompleteEnabled: reconciled.enabled };
+          });
           break;
         case "settings:navigate": {
           const next = migrateSettingsScreen(message.payload.screen);
@@ -605,7 +617,13 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         pendingTest={pendingTest}
         testResult={testResult}
         onClose={handleClose}
-        onUpdate={(partial) => post({ type: "settings:update", payload: partial })}
+        onUpdate={(partial) => {
+          if (typeof partial.autocompleteEnabled === "boolean") {
+            pendingAutocompleteRef.current = partial.autocompleteEnabled;
+            setPrefs((current) => ({ ...current, autocompleteEnabled: partial.autocompleteEnabled! }));
+          }
+          post({ type: "settings:update", payload: partial });
+        }}
         apiKeyDraft={apiKeyDraft}
         onApiKeyDraftChange={setApiKeyDraft}
         onSaveApiKey={() => {

@@ -28,7 +28,15 @@ export type ResolvedEditorFile = {
  * Cmd+O can open files outside the VS Code workspace; those must not be sent as absolute paths.
  */
 export function resolveEditorFile(editor: vscode.TextEditor): ResolvedEditorFile {
-  const uri = editor.document.uri;
+  return resolveDocumentUri(editor.document.uri);
+}
+
+/** Scheme + path only. Untitled is an L file (buffer name), not "no file". */
+export function resolveDocumentUri(uri: vscode.Uri): ResolvedEditorFile {
+  if (uri.scheme === "untitled") {
+    const name = path.posix.basename(uri.path) || "Untitled";
+    return { file: name, fileSource: "external" };
+  }
   if (uri.scheme === "vscode-vfs" || uri.scheme === "github") {
     const remote = parseVfsGithubFile(uri);
     if (remote) {
@@ -141,7 +149,7 @@ function readGithubRemote(gitRoot: string): { owner: string; repo: string } | un
 
 export function findEditorForRepoFile(
   relativePath: string,
-  options?: { includeRemote?: boolean; includeExternal?: boolean }
+  options?: { includeRemote?: boolean; includeExternal?: boolean; preferLocalDisk?: boolean }
 ): vscode.TextEditor | undefined {
   const preferred = relativePath.trim().replace(/\\/g, "/");
   const normalized = preferred.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(preferred)
@@ -172,6 +180,19 @@ export function findEditorForRepoFile(
     }
     return false;
   };
+
+  if (options?.preferLocalDisk) {
+    for (const editor of vscode.window.visibleTextEditors) {
+      const scheme = editor.document.uri.scheme;
+      if (scheme !== "file" && scheme !== "untitled") {
+        continue;
+      }
+      if (matchesPath(resolveEditorFile(editor))) {
+        return editor;
+      }
+    }
+    return undefined;
+  }
 
   for (const editor of vscode.window.visibleTextEditors) {
     if (matchesPath(resolveEditorFile(editor))) {
@@ -422,6 +443,64 @@ export function readExternalOpenFileForChat(options?: {
       files: [
         {
           path: absolutePath,
+          content: sliced.content,
+          encoding: "utf8",
+          ...(sliced.lineRange ? { lineRange: sliced.lineRange } : {})
+        }
+      ],
+      fallbackLevel: "partial"
+    };
+  }
+  return undefined;
+}
+
+/**
+ * L attach: the open editor buffer only (unsaved included).
+ * Does not read disk and does not accept a remote VFS tab.
+ */
+export function readFileAssistantEditorForChat(
+  ctx: Pick<RepoContext, "file" | "fileSource" | "selectedLines">
+): LocalFileContextPayload | undefined {
+  const preferred = ctx.file?.trim();
+  const seen = new Set<vscode.TextEditor>();
+  const editors: vscode.TextEditor[] = [];
+  for (const editor of [vscode.window.activeTextEditor, ...vscode.window.visibleTextEditors]) {
+    if (!editor || seen.has(editor) || editor.document.isClosed) {
+      continue;
+    }
+    seen.add(editor);
+    editors.push(editor);
+  }
+  for (const editor of editors) {
+    const scheme = editor.document.uri.scheme;
+    if (scheme !== "file" && scheme !== "untitled") {
+      continue;
+    }
+    const resolved = resolveEditorFile(editor);
+    if (!resolved.file?.trim()) {
+      continue;
+    }
+    if (preferred && !pathsMatchPreferred(resolved.file, preferred) && resolved.file !== preferred) {
+      continue;
+    }
+    const raw = editor.document.getText();
+    if (!raw.trim()) {
+      continue;
+    }
+    const pathForChat =
+      resolved.fileSource === "external"
+        ? resolved.file.replace(/\\/g, "/")
+        : normalizeRelativePath(resolved.file);
+    const sliced = sliceFileContent(
+      raw,
+      ctx.selectedLines ? { start: ctx.selectedLines[0], end: ctx.selectedLines[1] } : undefined
+    );
+    return {
+      source: "local-workspace",
+      activeFile: pathForChat,
+      files: [
+        {
+          path: pathForChat,
           content: sliced.content,
           encoding: "utf8",
           ...(sliced.lineRange ? { lineRange: sliced.lineRange } : {})

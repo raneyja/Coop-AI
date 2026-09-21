@@ -35,7 +35,31 @@ export type V1InlineCompletionBody = {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  sessionMode?: "file-assistant" | "indexed-repo";
+  fileSource?: "workspace" | "git" | "remote" | "external";
 };
+
+function inlineUsageMetadata(
+  record: { sessionMode?: unknown; fileSource?: unknown },
+  extra: Record<string, unknown>
+): Record<string, unknown> {
+  const sessionMode =
+    record.sessionMode === "file-assistant" || record.sessionMode === "indexed-repo"
+      ? record.sessionMode
+      : undefined;
+  const fileSource =
+    record.fileSource === "workspace" ||
+    record.fileSource === "git" ||
+    record.fileSource === "remote" ||
+    record.fileSource === "external"
+      ? record.fileSource
+      : undefined;
+  return {
+    ...extra,
+    ...(sessionMode ? { sessionMode } : {}),
+    ...(fileSource ? { fileSource } : {})
+  };
+}
 
 const MAX_PREFIX_CHARS = 4_000;
 const MAX_SUFFIX_CHARS = 2_000;
@@ -187,12 +211,12 @@ export async function handleInlineCompletionRequest(
         model,
         userId: org.userId,
         principal: org.principal ?? "anonymous",
-        metadata: {
+        metadata: inlineUsageMetadata(record, {
           source: "inline",
           stream: true,
           fim: route.mode === "fim",
           latencyMs: Date.now() - started
-        },
+        }),
         selection: "auto",
         usageTier: org.usageTier,
         forceAutoBucket: true
@@ -230,7 +254,7 @@ export async function handleInlineCompletionRequest(
       model: result.model,
       userId: org.userId,
       principal: org.principal ?? "anonymous",
-      metadata: { source: "inline", fim: route.mode === "fim", latencyMs },
+      metadata: inlineUsageMetadata(record, { source: "inline", fim: route.mode === "fim", latencyMs }),
       selection: "auto",
       usageTier: org.usageTier,
       forceAutoBucket: true

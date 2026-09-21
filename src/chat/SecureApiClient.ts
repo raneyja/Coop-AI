@@ -52,6 +52,8 @@ export type StreamChatParams = {
   temperature: number;
   maxTokens: number;
   enableThinking?: boolean;
+  sessionMode?: "file-assistant" | "indexed-repo";
+  fileSource?: "workspace" | "git" | "remote" | "external";
 };
 
 export class SecureApiClient {
@@ -742,7 +744,9 @@ export class SecureApiClient {
         useCase: body.useCase,
         temperature: body.temperature,
         maxTokens: body.maxTokens,
-        enableThinking: body.enableThinking === true
+        enableThinking: body.enableThinking === true,
+        sessionMode: body.sessionMode,
+        fileSource: body.fileSource
       },
       onChunk,
       signal,

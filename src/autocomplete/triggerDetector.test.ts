@@ -1,6 +1,8 @@
 import "./test/vscodeMockSetup";
 import assert from "node:assert/strict";
 import * as vscode from "vscode";
+import { analyzeDocumentContext } from "./contextAnalyzer";
+import { createMockDocument } from "./test/vscodeMockSetup";
 import { TriggerDetector, isImmediateTriggerLine } from "./triggerDetector";
 import type { AutocompleteSettings, ExtractedCodeContext, CompletionTriggerContext } from "./types";
 
@@ -70,6 +72,18 @@ test("returns disabled when autocomplete is off", () => {
   const decision = detector.evaluate(baseSettings({ enabled: false }), baseContext(), autoTrigger());
   assert.equal(decision.shouldRequest, false);
   assert.equal(decision.reason, "disabled");
+});
+
+test("skips a cursor inside JSDoc before any completion request", () => {
+  const doc = createMockDocument("/**\n * hello\n */\nexport const x = 1;\n", {
+    path: "/workspace/src/example.ts",
+    languageId: "typescript"
+  });
+  const context = analyzeDocumentContext(doc as never, new vscode.Position(1, 8));
+  const decision = new TriggerDetector().evaluate(baseSettings(), context, autoTrigger());
+  assert.equal(context.inComment, true);
+  assert.equal(decision.shouldRequest, false);
+  assert.equal(decision.reason, "in_comment_or_string");
 });
 
 test("skips comments and strings", () => {

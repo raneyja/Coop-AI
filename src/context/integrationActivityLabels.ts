@@ -81,7 +81,7 @@ export function integrationActivityLabel(
     case "code-host":
       return `Searching ${codeHostToolTitle(codeHostProvider)} estate index…`;
     default:
-      return "Gathering integration context…";
+      return `Searching ${integrationToolTitle(tool, codeHostProvider)}`;
   }
 }
 

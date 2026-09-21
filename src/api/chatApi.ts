@@ -275,7 +275,9 @@ export async function handleChatApiRequest(
             inputTokens: usageTokens.inputTokens,
             outputTokens: usageTokens.outputTokens,
             requestId,
-            visionWeighted
+            visionWeighted,
+            sessionMode: body.sessionMode,
+            fileSource: body.fileSource
           });
           recordedUsage = true;
         }
@@ -310,7 +312,9 @@ export async function handleChatApiRequest(
       inputTokens: usageTokens.inputTokens,
       outputTokens: usageTokens.outputTokens,
       requestId,
-      visionWeighted
+      visionWeighted,
+      sessionMode: body.sessionMode,
+      fileSource: body.fileSource
     });
   }
 
@@ -341,6 +345,8 @@ export async function recordV1ChatUsageTokens(
     outputTokens: number;
     requestId?: string;
     visionWeighted?: boolean;
+    sessionMode?: "file-assistant" | "indexed-repo";
+    fileSource?: "workspace" | "git" | "remote" | "external";
   }
 ): Promise<void> {
   await planQuota.recordTokens(org.orgId, org.plan, {
@@ -351,7 +357,11 @@ export async function recordV1ChatUsageTokens(
     model: honored.model,
     userId: org.userId,
     principal: org.principal,
-    metadata: { requestId: usage.requestId },
+    metadata: {
+      requestId: usage.requestId,
+      ...(usage.sessionMode ? { sessionMode: usage.sessionMode } : {}),
+      ...(usage.fileSource ? { fileSource: usage.fileSource } : {})
+    },
     visionWeighted: usage.visionWeighted,
     selection: honored.selection,
     usageTier: org.usageTier

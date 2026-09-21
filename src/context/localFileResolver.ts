@@ -135,6 +135,37 @@ function searchOpenEditorPaths(pattern: string, limit: number): string[] {
   return matches;
 }
 
+/** Open file/untitled tabs only. No folder walk and no remote index. */
+export function searchOpenLocalEditorPaths(pattern: string, limit = 12): string[] {
+  const needle = pattern.trim().toLowerCase();
+  if (!needle) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const matches: string[] = [];
+  for (const editor of vscode.window.visibleTextEditors) {
+    const scheme = editor.document.uri.scheme;
+    if (scheme !== "file" && scheme !== "untitled") {
+      continue;
+    }
+    const resolved = resolveEditorFile(editor);
+    const filePath = resolved.file?.replace(/\\/g, "/");
+    if (!filePath || !pathMatchesMentionNeedle(filePath, needle)) {
+      continue;
+    }
+    const key = filePath.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    matches.push(filePath);
+    if (matches.length >= limit) {
+      break;
+    }
+  }
+  return matches;
+}
+
 /** Workspace-only @mention search (local disk + open tabs). Case-insensitive on path. */
 export async function searchLocalWorkspaceFiles(
   pattern: string,

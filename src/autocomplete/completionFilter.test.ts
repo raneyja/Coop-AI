@@ -4,6 +4,7 @@ import {
   buildKnownSymbolsFromContext,
   clampCompletionToMaxLength,
   ensureInsertSpacing,
+  acceptedCompletionExpression,
   filterAndRankCompletions,
   normalizeCompletionText,
   sanitizeCompletionForContext,
@@ -433,6 +434,237 @@ test("empty-block hole collapses || vs ?? header lookups to one suggestion", () 
     { ...settings, showMultipleSuggestions: true }
   );
   assert.equal(ranked.length, 1);
+});
+
+const IDENTITY_HOLE_FILE = `
+export class IndexedRepoWorkspace {
+  public constructor(private readonly deps: RepoInventoryDeps) {}
+
+  public getIdentity(target: RepoTarget): RepoIdentity | undefined {
+    return { repoId: target.repoId };
+  }
+
+  public async readFile(target: RepoTarget, path: string): Promise<RepoFileEvidence | undefined> {
+    const cleanPath = path.trim().replace(/^\\/+/, "");
+    if (!cleanPath) {
+      return undefined;
+    }
+    const repoId = target.repoId?.trim();
+    const identity = 
+
+    if (!repoId) {
+      return undefined;
+    }
+
+    const remote = await this.deps.api
+      .getBackendClient()
+      .fetchRepoFile(this.deps.apiBaseUrl, repoId, cleanPath, target.branch);
+    if (identity?.owner && identity?.repo) {
+      await this.deps.codeHostRouter.getFileContent(cleanPath, {
+        owner: identity.owner,
+        repo: identity.repo
+      });
+    }
+    return undefined;
+  }
+}
+`.trim();
+
+function identityHole(prefix: string, afterDot = false): ExtractedCodeContext {
+  return {
+    ...context,
+    filePath: "/workspace/src/workspace/IndexedRepoWorkspace.ts",
+    currentLinePrefix: prefix,
+    currentLineSuffix: "",
+    suffixWindow:
+      "\n    if (!repoId) {\n      return undefined;\n    }\n    const remote = await this.deps.api\n",
+    previousLines:
+      "  public async readFile(target: RepoTarget, path: string): Promise<RepoFileEvidence | undefined> {\n    const cleanPath = path.trim().replace(/^\\/+/, \"\");\n    if (!cleanPath) {\n      return undefined;\n    }\n    const repoId = target.repoId?.trim();",
+    parentSignature:
+      "  public async readFile(target: RepoTarget, path: string): Promise<RepoFileEvidence | undefined> {",
+    indent: "    ",
+    afterDot
+  };
+}
+
+const multi = { ...settings, showMultipleSuggestions: true };
+
+test("sole invented member still shows so the editor is not blank", () => {
+  const ranked = filterAndRankCompletions(
+    ["this.deps.identity;"],
+    identityHole("    const identity = "),
+    settings,
+    IDENTITY_HOLE_FILE
+  );
+  assert.equal(ranked.length, 1);
+  assert.match(ranked[0]?.text ?? "", /deps\.identity/);
+});
+
+test("assignment hole filters invented this.deps.identity behind known getIdentity", () => {
+  const ranked = filterAndRankCompletions(
+    ["this.deps.identity;", "this.getIdentity(target);"],
+    identityHole("    const identity = "),
+    multi,
+    IDENTITY_HOLE_FILE
+  );
+  assert.ok(ranked.length >= 1);
+  assert.match(ranked[0]?.text ?? "", /getIdentity/);
+  assert.equal(
+    ranked.some((item) => /\bdeps\.identity\b/.test(item.text)),
+    false
+  );
+});
+
+test("typed t joins his.deps.identity and still drops the invented member", () => {
+  assert.equal(
+    acceptedCompletionExpression("    const identity = t", "his.deps.identity;"),
+    "this.deps.identity;"
+  );
+  const ranked = filterAndRankCompletions(
+    ["his.deps.identity;", "his.getIdentity(target);", "this.deps.identity;", "this.getIdentity(target);"],
+    identityHole("    const identity = t"),
+    multi,
+    IDENTITY_HOLE_FILE
+  );
+  assert.ok(ranked.length >= 1);
+  assert.match(ranked[0]?.text ?? "", /getIdentity/);
+  assert.equal(
+    ranked.some((item) => /deps\.identity/.test(item.text)),
+    false
+  );
+});
+
+test("partial this. and this.deps. drop members the buffer does not show", () => {
+  const typedTh = filterAndRankCompletions(
+    ["is.deps.identity;", "is.getIdentity(target);"],
+    identityHole("    const identity = th"),
+    multi,
+    IDENTITY_HOLE_FILE
+  );
+  assert.match(typedTh[0]?.text ?? "", /getIdentity/);
+  assert.equal(
+    typedTh.some((item) => /deps\.identity/.test(item.text)),
+    false
+  );
+
+  const afterThis = filterAndRankCompletions(
+    ["notAMember", "getIdentity("],
+    identityHole("    const identity = this.", true),
+    multi,
+    IDENTITY_HOLE_FILE
+  );
+  assert.equal(
+    afterThis.some((item) => /notAMember/.test(item.text)),
+    false
+  );
+  assert.match(afterThis[0]?.text ?? "", /getIdentity/);
+
+  const afterDeps = filterAndRankCompletions(
+    ["identity;", "api"],
+    identityHole("    const identity = this.deps.", true),
+    multi,
+    IDENTITY_HOLE_FILE
+  );
+  assert.equal(
+    afterDeps.some((item) => /^identity/.test(item.text)),
+    false
+  );
+  assert.match(afterDeps.map((item) => item.text).join("\n"), /\bapi\b/);
+});
+
+test("multiline this.deps.api.getBackendClient stays, invented identity does not", () => {
+  const fileSample = `
+export class ClientHolder {
+  public constructor(private readonly deps: { api: Api }) {}
+  public read(): void {
+    this.deps.api.fetchRepoTreeViaCloud();
+    const remote = await this.deps.api
+      .getBackendClient()
+      .fetchRepoFile();
+    const identity =
+  }
+}
+`.trim();
+  const ranked = filterAndRankCompletions(
+    ["his.deps.api.getBackendClient()", "his.deps.identity;"],
+    identityHole("    const identity = t"),
+    multi,
+    fileSample
+  );
+  assert.equal(
+    ranked.some((item) => /getBackendClient/.test(item.text)),
+    true
+  );
+  assert.equal(
+    ranked.some((item) => /deps\.identity/.test(item.text)),
+    false
+  );
+});
+
+test("legal this.deps.api stays when identity is invented", () => {
+  const ranked = filterAndRankCompletions(
+    ["this.deps.identity;", "this.deps.api;", "his.deps.api;"],
+    identityHole("    const identity = t"),
+    multi,
+    IDENTITY_HOLE_FILE
+  );
+  assert.equal(
+    ranked.some((item) => /deps\.identity/.test(item.text)),
+    false
+  );
+  assert.equal(
+    ranked.some((item) => /deps\.api/.test(item.text)),
+    true
+  );
+});
+
+const WIDGET_HOST_FILE = `
+export class WidgetHost {
+  public constructor(private readonly bag: { token: string }) {}
+
+  public getToken(): string {
+    return this.bag.token;
+  }
+
+  public label(): string {
+    const name =
+    return this.getToken();
+  }
+}
+`.trim();
+
+test("invented this.foo.bar on another class is dropped in favor of a known method", () => {
+  const hole: ExtractedCodeContext = {
+    ...context,
+    filePath: "/workspace/src/widgetHost.ts",
+    currentLinePrefix: "    const name = ",
+    parentSignature: "  public label(): string {",
+    indent: "    ",
+    afterDot: false
+  };
+  const ranked = filterAndRankCompletions(
+    ["this.foo.bar;", "this.getToken();"],
+    hole,
+    multi,
+    WIDGET_HOST_FILE
+  );
+  assert.match(ranked[0]?.text ?? "", /getToken/);
+  assert.equal(
+    ranked.some((item) => /foo\.bar/.test(item.text)),
+    false
+  );
+
+  const typed = filterAndRankCompletions(
+    ["his.foo.bar;", "his.getToken();"],
+    { ...hole, currentLinePrefix: "    const name = t" },
+    multi,
+    WIDGET_HOST_FILE
+  );
+  assert.match(typed[0]?.text ?? "", /getToken/);
+  assert.equal(
+    typed.some((item) => /foo\.bar/.test(item.text)),
+    false
+  );
 });
 
 test("clampCompletionToMaxLength truncates on a line boundary instead of dropping", () => {

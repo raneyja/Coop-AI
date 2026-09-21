@@ -19,6 +19,7 @@ import {
 import { snapshotAlreadyOpenDocuments, snapshotOpenDocument } from "./edit/editorWorkingCopy";
 import { registerPatchCommands } from "./edit/registerPatchCommands";
 import { readAutocompleteSettings, clearAutocompleteWorkspaceOverrides } from "./autocomplete/autocompleteConfig";
+import { shouldRefreshSessionsOnCoopConfigChange } from "./autocomplete/autocompletePreferenceSync";
 import { LayeredDegradationCache } from "./cache/degradationCache";
 import { CacheManager } from "./cache/CacheManager";
 import { CodeHostRouter } from "./api/codeHosts/codeHostRouter";
@@ -674,7 +675,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.window.onDidChangeActiveTextEditor((editor) => {
       // Only the focused Coop session follows the editor — never broadcast to every
       // panel/sidebar (that re-chipped Window A's file into a blank new window).
-      coopSessionRegistry.getActive()?.refreshEditorContext(editor);
+      coopSessionRegistry.getActive()?.refreshEditorContext(editor, { userActivatedEditor: true });
     }),
     vscode.window.onDidChangeTextEditorSelection((event) => {
       coopSessionRegistry.getActive()?.refreshEditorContext(event.textEditor, {
@@ -708,13 +709,15 @@ export function activate(context: vscode.ExtensionContext): void {
           void lightningStatusBar.refresh();
         }
         if (event.affectsConfiguration("coopAI.autocomplete.enabled")) {
-          void vscode.commands.executeCommand(
-            "setContext",
-            "coopAI.autocomplete.enabled",
-            readAutocompleteSettings().enabled
-          );
+          const enabled = readAutocompleteSettings().enabled;
+          void vscode.commands.executeCommand("setContext", "coopAI.autocomplete.enabled", enabled);
+          for (const session of coopSessionRegistry.getAll()) {
+            session.applyLocalAutocompleteEnabled(enabled);
+          }
         }
-        void refreshAllSessions();
+        if (shouldRefreshSessionsOnCoopConfigChange((section) => event.affectsConfiguration(section))) {
+          void refreshAllSessions();
+        }
       }
     })
   );
@@ -729,7 +732,8 @@ export function activate(context: vscode.ExtensionContext): void {
     createAutocompleteUsageTelemetryHandler((eventType, metadata) => {
       void api.recordUsageEvents(eventType, metadata).catch(() => undefined);
     }),
-    indexBackend
+    indexBackend,
+    () => ({ remotePinFile: coopSessionRegistry.getActive()?.autocompleteRemotePin() })
   );
   registerAutocompleteCommands(context, api, autocompleteProvider);
   context.subscriptions.push(registerAutocompleteIndexNotifier(context, indexBackend));

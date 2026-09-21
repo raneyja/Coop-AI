@@ -4,6 +4,11 @@ export function agentsMdAttached(state?: ProjectInstructionsState): boolean {
   return Boolean(state?.hasAgentsMd);
 }
 
+/**
+ * Create / Upload card. Off for Use-repo (even when the repo file is missing)
+ * and for an L file with no personal upload. On only for a signed-in account
+ * that can add a personal file and does not have one yet.
+ */
 export function shouldPromptForAgentsMd(state?: ProjectInstructionsState): boolean {
   if (!state || state.status === "disabled") {
     return false;
@@ -11,26 +16,25 @@ export function shouldPromptForAgentsMd(state?: ProjectInstructionsState): boole
   if (state.source === "repo") {
     return false;
   }
+  if (state.hasAgentsMd) {
+    return false;
+  }
   if (state.canMutate === false) {
     return false;
   }
-  return !state.hasAgentsMd;
+  return state.status === "missing" || state.status === "no_git";
 }
 
-export function agentsMdStatusTitle(state?: ProjectInstructionsState): string {
-  if (state?.source === "repo") {
-    return agentsMdAttached(state)
-      ? "AGENTS.md from this repo is loaded on every chat turn."
-      : "This repo has no AGENTS.md yet.";
+/** Personal upload/create only — Use-repo AGENTS.md cannot be removed from Settings. */
+export function canDetachAgentsMd(state?: ProjectInstructionsState): boolean {
+  if (!agentsMdAttached(state)) {
+    return false;
   }
-  if (agentsMdAttached(state)) {
-    if (state?.attachedAgentsMdLabel) {
-      return `AGENTS.md is attached (${state.attachedAgentsMdLabel}) and loaded on every chat turn.`;
-    }
-    return "Your AGENTS.md is loaded on every chat turn.";
+  if (state?.source === "repo") {
+    return false;
   }
   if (state?.canMutate === false) {
-    return "Sign in to create or upload AGENTS.md.";
+    return false;
   }
-  return "Create AGENTS.md or upload an existing file.";
+  return true;
 }

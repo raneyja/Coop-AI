@@ -35,6 +35,8 @@ export type OpenRemotePatchFile = (params: {
 
 export type EnsurePatchTargetOptions = {
   repo?: PatchSessionRepo;
+  /** L file: Apply this disk/untitled tab. Do not open leftover Use-repo on the code host. */
+  preferLocalDisk?: boolean;
   openRemoteFile?: OpenRemotePatchFile;
   /** Captured full-file bytes from /edit send (Zero-Clone untitled buffers have no path). */
   fileContents?: Readonly<Record<string, string>>;
@@ -222,10 +224,41 @@ export function documentMatchesPatchPath(doc: vscode.TextDocument, relativePath:
  * Resolve a patch target for Apply/preview: open editor (including remote VFS),
  * then on-disk workspace path.
  */
-export function resolveEditablePatchTarget(relativePath: string): EditablePatchTarget | undefined {
+export function resolveEditablePatchTarget(
+  relativePath: string,
+  options?: { preferLocalDisk?: boolean }
+): EditablePatchTarget | undefined {
   const normalized = toRepositoryRelativePath(relativePath);
   if (!normalized) {
     return undefined;
+  }
+
+  if (options?.preferLocalDisk) {
+    const localEditor = findEditorForRepoFile(normalized, {
+      includeRemote: false,
+      includeExternal: true,
+      preferLocalDisk: true
+    });
+    if (localEditor) {
+      return {
+        uri: localEditor.document.uri,
+        readText: () => localEditor.document.getText()
+      };
+    }
+    const absolutePath = resolveLocalAbsolutePath(normalized);
+    if (!absolutePath || isRemoteTabAbsolutePath(absolutePath)) {
+      return undefined;
+    }
+    return {
+      uri: vscode.Uri.file(absolutePath),
+      readText: () => {
+        try {
+          return fs.readFileSync(absolutePath, "utf8");
+        } catch {
+          return undefined;
+        }
+      }
+    };
   }
 
   const openEditor = findEditorForRepoFile(normalized, {
@@ -298,9 +331,14 @@ export async function ensureEditablePatchTarget(
   | { ok: true; target: EditablePatchTarget; usedRemoteOpen: boolean }
   | { ok: false; error: string }
 > {
-  const existing = resolveEditablePatchTarget(relativePath);
+  const existing = resolveEditablePatchTarget(relativePath, {
+    preferLocalDisk: options?.preferLocalDisk
+  });
   if (existing) {
     return { ok: true, target: existing, usedRemoteOpen: false };
+  }
+  if (options?.preferLocalDisk) {
+    return { ok: false, error: missingPatchTargetMessage(relativePath) };
   }
 
   const captured = lookupPatchFileContent(relativePath, options?.fileContents);

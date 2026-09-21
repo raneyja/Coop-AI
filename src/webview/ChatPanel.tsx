@@ -14,8 +14,6 @@ import { ChatSignedOutHome } from "./components/ChatSignedOutHome";
 import { chatRequiresSignIn } from "./lib/chatAuthGate";
 import { preferencesSignedIn } from "./components/settings/connectionCopy";
 import { WorkflowsMenu } from "./components/WorkflowsMenu";
-import { AgentsMdStatusChip, ProjectInstructionsNotice } from "./components/ProjectInstructionsNotice";
-import { shouldPromptForAgentsMd } from "./lib/agentsMdStatus";
 import { ConflictResolution } from "./ConflictResolution";
 import { PatchCard, shouldHidePatchMarkdownForMessage, shouldRenderPatchCardForMessage } from "./PatchCard";
 import { compactPatchDiffForPrNotes } from "./prNotesDiff";
@@ -381,7 +379,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const cached = (vscode.getState() as PersistedWebviewState | null) || null;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [context, setContext] = useState<RepoContext>({});
-  const [dismissedAgentsNoticeFor, setDismissedAgentsNoticeFor] = useState<string | undefined>();
   const [input, setInput] = useState(cached?.draftInput || "");
   const [composerFocusNonce, setComposerFocusNonce] = useState(0);
   const [attachments, setAttachments] = useState<ChatImageAttachment[]>([]);
@@ -1225,9 +1222,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         case "context:update":
           setContext(message.payload);
-          if (message.payload.projectInstructions?.hasAgentsMd) {
-            setDismissedAgentsNoticeFor(undefined);
-          }
           break;
         case "chat:history": {
           const payload = message.payload;
@@ -2268,18 +2262,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
 
   const composerStack = (
     <>
-      {shouldPromptForAgentsMd(context.projectInstructions) &&
-      dismissedAgentsNoticeFor !== (context.projectInstructions?.gitRoot ?? "workspace") ? (
-        <ProjectInstructionsNotice
-          state={context.projectInstructions}
-          onAttach={() => post({ type: "agents:attach" })}
-          onStartFromTemplate={() => post({ type: "agents:start-from-template" })}
-          onDismiss={() =>
-            setDismissedAgentsNoticeFor(context.projectInstructions?.gitRoot ?? "workspace")
-          }
-          className="mb-2"
-        />
-      ) : null}
       {commandConfirm ? (
         <CoopNotice
           tone="info"
@@ -2305,12 +2287,6 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           onOpenChange={setPromptMenuOpen}
           onRun={insertPromptLibraryEntry}
           onSeeAll={openPromptLibrary}
-        />
-        <AgentsMdStatusChip
-          state={context.projectInstructions}
-          disabled={isStreaming}
-          onCreate={() => post({ type: "agents:start-from-template" })}
-          onOpen={() => post({ type: "agents:open" })}
         />
         <div className="ml-auto flex min-w-0 items-center gap-2">
           {promptLibrary.hasWorkspace && input.trim() ? (
@@ -2516,13 +2492,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             onDismiss={(conflictId) => handleConflictAction(conflictId, "dismiss")}
             onAction={handleConflictAction}
           />
-          <EmptyState
-            context={context}
-            disabled={isStreaming}
-            launchIntroDone={launchIntroDone}
-            onAttachAgentsMd={() => post({ type: "agents:attach" })}
-            onStartFromAgentsMdTemplate={() => post({ type: "agents:start-from-template" })}
-          />
+          <EmptyState context={context} launchIntroDone={launchIntroDone} />
           <div className="relative z-20 shrink-0 pb-2">
             <p
               className={`coop-launch-sync-whisper px-3 pb-1${

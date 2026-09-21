@@ -143,12 +143,12 @@ export function filterAndRankCompletions(
   ranked.sort((a, b) => b.score - a.score);
   const distinct = collapseNearDuplicateCompletions(ranked);
   const limit = settings.showMultipleSuggestions ? 3 : 1;
-  if (context.afterDot) {
-    return distinct
-      .filter((item) => !rejectsAfterDotCompletion(item.text, context.currentLinePrefix))
-      .slice(0, limit);
-  }
-  return distinct.slice(0, limit);
+  const ordered = context.afterDot
+    ? distinct.filter((item) => !rejectsAfterDotCompletion(item.text, context.currentLinePrefix))
+    : distinct;
+  // Drop an invented member only when a known member is also in this batch.
+  // Dropping the model's only suggestion leaves the editor blank.
+  return preferKnownReceiverMembers(ordered, context, fileTextSample).slice(0, limit);
 }
 
 export function normalizeCompletionText(text: string, context?: ExtractedCodeContext): string {
@@ -521,6 +521,198 @@ function extractSiblingUsageMembers(receiver: string, fileText: string): Set<str
   return members;
 }
 
+function extractReceiverPropertyMembers(receiver: string, fileText: string): Set<string> {
+  const members = new Set<string>();
+  const head = receiver
+    .split(".")
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("\\s*\\??\\.\\s*");
+  // `this.deps.api\n.getBackendClient()` is a real member, not an invention.
+  const usagePattern = new RegExp(`${head}(?:\\(\\s*\\))?\\s*\\??\\.\\s*([\\w$]+)`, "g");
+  for (const match of fileText.matchAll(usagePattern)) {
+    const name = match[1];
+    if (name && !JS_KEYWORDS.has(name)) {
+      members.add(name);
+    }
+  }
+  return members;
+}
+
+function extractFileClassMembers(fileText: string): Set<string> {
+  const members = new Set<string>();
+  for (const match of fileText.matchAll(/\bclass\s+([A-Za-z_$][\w$]*)/g)) {
+    const className = match[1];
+    if (!className) {
+      continue;
+    }
+    for (const name of extractClassMembers(className, fileText)) {
+      members.add(name);
+    }
+  }
+  return members;
+}
+
+function extractThisMemberAccesses(text: string): Array<{ receiver: string; member: string }> {
+  const accesses: Array<{ receiver: string; member: string }> = [];
+  const chainPattern = /\b((?:this|super))((?:(?:\?\.|\.)[A-Za-z_$][\w$]*)+)/g;
+  for (const match of text.matchAll(chainPattern)) {
+    const root = match[1];
+    const hops = match[2];
+    if (!root || !hops) {
+      continue;
+    }
+    const members = hops.split(/\??\./).filter(Boolean);
+    let receiver = root;
+    for (const member of members) {
+      accesses.push({ receiver, member });
+      receiver = `${receiver}.${member}`;
+    }
+  }
+  return accesses;
+}
+
+/**
+ * Expression Tab would accept: already-typed prefix fragment plus the ghost.
+ * FIM often returns only the remainder (`his.deps.identity` after the user typed `t`).
+ */
+export function acceptedCompletionExpression(prefix: string, completion: string): string {
+  const insert = stripOverlapWithPrefix(prefix, completion).replace(/^\s+/, "");
+  if (!insert) {
+    return "";
+  }
+  if (/^(?:this|super)\b/.test(insert)) {
+    return insert;
+  }
+  const typed = typedMemberFragment(prefix);
+  if (!typed) {
+    return insert;
+  }
+  return `${typed}${insert}`;
+}
+
+function typedMemberFragment(prefix: string): string {
+  const chain = /((?:this|super)(?:\.[A-Za-z_$][\w$]*)*\.?)$/.exec(prefix);
+  if (chain?.[1]) {
+    return chain[1];
+  }
+  const ident = /([A-Za-z_$][\w$]*)$/.exec(prefix);
+  return ident?.[1] ?? "";
+}
+
+function knownMembersForReceiver(
+  receiver: string,
+  classMembers: ReadonlySet<string>,
+  fileText: string
+): Set<string> {
+  if (receiver === "this" || receiver === "super") {
+    const members = new Set(classMembers);
+    for (const name of extractReceiverPropertyMembers(receiver, fileText)) {
+      members.add(name);
+    }
+    return members;
+  }
+  if (receiver.startsWith("this.") || receiver.startsWith("super.")) {
+    return extractReceiverPropertyMembers(receiver, fileText);
+  }
+  return new Set();
+}
+
+/** Drop a completion that uses a member the open buffer does not show on that receiver. */
+function rejectsUnknownReceiverMember(
+  text: string,
+  context: ExtractedCodeContext,
+  fileTextSample: string | undefined
+): boolean {
+  if (!JS_LIKE_LANGUAGES.has(context.languageId) || !fileTextSample) {
+    return false;
+  }
+
+  const accesses: Array<{ receiver: string; member: string }> = [];
+  const visible = acceptedCompletionExpression(context.currentLinePrefix, text);
+  if (context.afterDot) {
+    const receiver = trailingThisReceiver(context.currentLinePrefix) ?? parseReceiverFromPrefix(context.currentLinePrefix);
+    const member = extractCompletionMemberName(text);
+    if (
+      receiver &&
+      member &&
+      (receiver === "this" ||
+        receiver === "super" ||
+        receiver.startsWith("this.") ||
+        receiver.startsWith("super."))
+    ) {
+      accesses.push({ receiver: receiver.replace(/\.$/, ""), member });
+    }
+  }
+  accesses.push(...extractThisMemberAccesses(visible));
+  accesses.push(...extractThisMemberAccesses(text));
+  if (accesses.length === 0) {
+    return false;
+  }
+
+  const classMembers = extractFileClassMembers(fileTextSample);
+  const seen = new Set<string>();
+  for (const access of accesses) {
+    const key = `${access.receiver}.${access.member}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    const known = knownMembersForReceiver(access.receiver, classMembers, fileTextSample);
+    if (known.size > 0 && !known.has(access.member)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function trailingThisReceiver(prefix: string): string | null {
+  const match = /((?:this|super)(?:\.[A-Za-z_$][\w$]*)*)\.$/.exec(prefix);
+  return match?.[1] ?? null;
+}
+
+function instanceMethodRankingBoost(
+  text: string,
+  context: ExtractedCodeContext,
+  fileTextSample: string | undefined
+): number {
+  if (!fileTextSample) {
+    return 0;
+  }
+  const visible = acceptedCompletionExpression(context.currentLinePrefix, text);
+  const match = /\bthis\.([A-Za-z_$][\w$]*)\s*\(/.exec(visible);
+  const methodName = match?.[1];
+  if (!methodName) {
+    return 0;
+  }
+  const classMembers = extractFileClassMembers(fileTextSample);
+  return classMembers.has(methodName) ? 0.15 : 0;
+}
+
+/**
+ * Hide an invented receiver member when this batch also has a known one.
+ * If every suggestion fails that check, keep them — an empty list is a dead ghost.
+ */
+function preferKnownReceiverMembers(
+  ranked: RankedCompletion[],
+  context: ExtractedCodeContext,
+  fileTextSample?: string
+): RankedCompletion[] {
+  if (!fileTextSample || ranked.length === 0) {
+    return ranked;
+  }
+  const known = ranked.filter((item) => !rejectsUnknownReceiverMember(item.text, context, fileTextSample));
+  return known.length > 0 ? known : ranked;
+}
+
+/** Same rule as ranking, using the prefix the user has typed now. */
+export function withoutUnknownReceiverMembers(
+  ranked: RankedCompletion[],
+  context: ExtractedCodeContext,
+  fileTextSample?: string
+): RankedCompletion[] {
+  return preferKnownReceiverMembers(ranked, context, fileTextSample);
+}
+
 function extractCompletionMemberName(text: string): string | null {
   const match = /^([\w$]+)/.exec(text.trim());
   return match?.[1] ?? null;
@@ -550,6 +742,11 @@ export function receiverAwareRankingBoost(
   const className = extractClassNameFromReceiver(receiver);
   if (className) {
     const classMembers = extractClassMembers(className, fileTextSample);
+    if (classMembers.has(memberName)) {
+      boost += 0.15;
+    }
+  } else if (receiver === "this" || receiver === "super") {
+    const classMembers = extractFileClassMembers(fileTextSample);
     if (classMembers.has(memberName)) {
       boost += 0.15;
     }
@@ -679,6 +876,8 @@ function scoreCompletion(
   }
   if (context.afterDot) {
     score += receiverAwareRankingBoost(text, context, fileTextSample);
+  } else {
+    score += instanceMethodRankingBoost(text, context, fileTextSample);
   }
   if (isBoilerplate(text)) {
     score -= 0.1;

@@ -1,22 +1,15 @@
 import React from "react";
-import { shouldPromptForAgentsMd } from "../lib/agentsMdStatus";
 import { isExplicitRepoScope } from "../../context/contextScope";
 import type { RepoContext } from "../types";
 
 type EmptyStateProps = {
   context: RepoContext;
-  disabled?: boolean;
   launchIntroDone?: boolean;
-  onAttachAgentsMd?: () => void;
-  onStartFromAgentsMdTemplate?: () => void;
 };
 
 export function EmptyState({
   context,
-  disabled,
-  launchIntroDone = true,
-  onAttachAgentsMd,
-  onStartFromAgentsMdTemplate
+  launchIntroDone = true
 }: EmptyStateProps): React.ReactElement {
   const hasSelectedRepo =
     isExplicitRepoScope(context) && Boolean(context.owner?.trim() && context.repo?.trim());
@@ -37,29 +30,6 @@ export function EmptyState({
             <br />
             <span className="coop-slash-hint-command font-medium">Type / for commands.</span>
           </p>
-
-          {shouldPromptForAgentsMd(context.projectInstructions) ? (
-            <div className="mt-5 text-center">
-              <button
-                type="button"
-                disabled={disabled || !onStartFromAgentsMdTemplate}
-                className="coop-settings-action-btn"
-                onClick={onStartFromAgentsMdTemplate}
-              >
-                Create AGENTS.md
-              </button>
-              {onAttachAgentsMd ? (
-                <button
-                  type="button"
-                  disabled={disabled}
-                  className="coop-text-btn mt-2 block w-full"
-                  onClick={onAttachAgentsMd}
-                >
-                  Upload AGENTS.md
-                </button>
-              ) : null}
-            </div>
-          ) : null}
         </div>
       </div>
     </div>

@@ -79,5 +79,7 @@ export type AutocompleteTelemetryEvent = {
   latencyMs?: number;
   reason?: string;
   languageId?: string;
+  sessionMode?: "file-assistant" | "indexed-repo";
+  fileSource?: "workspace" | "git" | "remote" | "external";
   performance?: PerformanceBatchPayload;
 };

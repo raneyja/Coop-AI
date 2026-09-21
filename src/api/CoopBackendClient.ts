@@ -28,6 +28,8 @@ export type StreamChatBody = {
   temperature: number;
   maxTokens: number;
   enableThinking?: boolean;
+  sessionMode?: "file-assistant" | "indexed-repo";
+  fileSource?: "workspace" | "git" | "remote" | "external";
 };
 
 export type StreamChatResult = {
@@ -42,6 +44,8 @@ export type InlineCompletionBody = {
   stream?: boolean;
   repoId?: string;
   useGraphContext?: boolean;
+  sessionMode?: "file-assistant" | "indexed-repo";
+  fileSource?: "workspace" | "git" | "remote" | "external";
   languageId?: string;
   file?: string;
   provider: LlmProvider;
@@ -1690,6 +1694,8 @@ export class CoopBackendClient {
         temperature: body.temperature,
         maxTokens: body.maxTokens,
         enableThinking: body.enableThinking === true,
+        sessionMode: body.sessionMode,
+        fileSource: body.fileSource,
         stream: true
       }),
       signal
@@ -1777,6 +1783,8 @@ export class CoopBackendClient {
         stream: true,
         repoId: body.repoId,
         useGraphContext: body.useGraphContext,
+        sessionMode: body.sessionMode,
+        fileSource: body.fileSource,
         languageId: body.languageId,
         file: body.file,
         provider: body.provider,
@@ -1879,6 +1887,8 @@ export class CoopBackendClient {
         stream: body.stream,
         repoId: body.repoId,
         useGraphContext: body.useGraphContext,
+        sessionMode: body.sessionMode,
+        fileSource: body.fileSource,
         languageId: body.languageId,
         file: body.file,
         provider: body.provider,

@@ -1,5 +1,7 @@
+import type { RepoContextFileSource } from "../chat/types";
 import type { ContextFetchRequest } from "./requestBatcher";
 import { looksLikeAbsoluteDiskPath } from "./outsideWorkspaceFile";
+import { isFileAssistantSession } from "./sessionMode";
 import { isLocateShapedRepoAsk } from "../chat/repoCodeIntent";
 
 /** Quick actions that auto-fetch all connected doc/discussion integrations. */
@@ -28,6 +30,14 @@ export function isTraceDecisionIntegrationQuickAction(
 }
 
 function isOutsideWorkspaceTarget(request: ContextFetchRequest): boolean {
+  if (
+    isFileAssistantSession({
+      file: request.params.file,
+      fileSource: request.params.fileSource as RepoContextFileSource | undefined
+    })
+  ) {
+    return true;
+  }
   if (looksLikeAbsoluteDiskPath(request.params.file)) {
     return true;
   }

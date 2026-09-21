@@ -2954,6 +2954,10 @@
     @apply inline-flex w-3.5 shrink-0 items-center justify-center text-[10px] leading-none;
   }
 
+  .coop-agents-md-chip-group {
+    @apply inline-flex min-w-0 items-center gap-0.5;
+  }
+
   .coop-agents-md-settings-row {
     @apply flex flex-wrap items-center gap-2;
   }

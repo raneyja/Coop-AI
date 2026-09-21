@@ -72,7 +72,7 @@ test("resolveChatInlineThinkingMessage uses awaitingResponse fallback", () => {
   const message = resolveChatInlineThinkingMessage(undefined, undefined, {
     awaitingResponse: true
   });
-  assert.equal(message, "Preparing answer…");
+  assert.equal(message, "Thinking…");
 });
 
 test("shouldSuppressActivityStripLoading hides chat job and intent rows in thread mode", () => {

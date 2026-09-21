@@ -10,8 +10,8 @@ import {
   resolveAutocompleteActiveRepoId
 } from "./autocompleteConfig";
 import { analyzeDocumentContext, isAutocompleteEditorScheme, isFileEligible } from "./contextAnalyzer";
-import { CompletionRouter } from "./completionRouter";
-import { toInlineInsertText, sanitizeAfterDotMemberText, consolidateAfterDotRanked, isValidAfterDotInsertText } from "./completionFilter";
+import { CompletionRouter, type FetchCompletionsOptions } from "./completionRouter";
+import { toInlineInsertText, sanitizeAfterDotMemberText, consolidateAfterDotRanked, isValidAfterDotInsertText, withoutUnknownReceiverMembers } from "./completionFilter";
 import { fetchAfterDotMemberCompletions } from "./memberCompletionProvider";
 import { discardContextPayload } from "./privacy";
 import { AutocompletePerformanceMonitor } from "./performance";
@@ -23,6 +23,8 @@ import {
 } from "./nextEditSuggestions";
 import { TriggerDetector, triggerContextFromVscode } from "./triggerDetector";
 import { readLightningConfiguration } from "../config/lightningConfig";
+import { resolveDocumentUri } from "../context/editorFileContext";
+import { autocompleteAllowsGraph } from "../context/sessionMode";
 import type { IndexBackend } from "../indexing/indexBackend";
 import type {
   AutocompleteTelemetryEvent,
@@ -30,10 +32,14 @@ import type {
   RankedCompletion
 } from "./types";
 
+export type AutocompleteSessionProbe = () => { remotePinFile?: string } | undefined;
+
 export type CoopAutocompleteProviderOptions = {
   api: SecureApiClient;
   indexBackend?: IndexBackend;
   onTelemetry?: (event: AutocompleteTelemetryEvent) => void;
+  /** Active chat session's remote pin. Same-path clone stays graph-eligible. */
+  sessionProbe?: AutocompleteSessionProbe;
 };
 
 const SHOWN_ITEM_TTL_MS = 30_000;
@@ -96,6 +102,8 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
   private readonly triggerDetector = new TriggerDetector();
   private readonly performance = new AutocompletePerformanceMonitor();
   private readonly router: CompletionRouter;
+  private readonly sessionProbe?: AutocompleteSessionProbe;
+  private lastUsage: { sessionMode?: "file-assistant" | "indexed-repo"; fileSource?: "workspace" | "git" | "remote" | "external" } = {};
   private debounceTimer: ReturnType<typeof setTimeout> | undefined;
   private lastAlternatives: RankedCompletion[] = [];
   private alternativeIndex = 0;
@@ -117,6 +125,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
   private readonly disposables: vscode.Disposable[] = [];
 
   public constructor(private readonly options: CoopAutocompleteProviderOptions) {
+    this.sessionProbe = options.sessionProbe;
     this.router = new CompletionRouter({
       api: options.api,
       performance: this.performance,
@@ -174,6 +183,28 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       armed: this.nes.isArmed(),
       lastShownWasNes: this.nes.wasLastShownNes()
     };
+  }
+
+  public lastCompletionUsage(): {
+    sessionMode?: "file-assistant" | "indexed-repo";
+    fileSource?: "workspace" | "git" | "remote" | "external";
+  } {
+    return this.lastUsage;
+  }
+
+  private completionFetchOptions(document: vscode.TextDocument): FetchCompletionsOptions {
+    const resolved = resolveDocumentUri(document.uri);
+    const allowGraph = autocompleteAllowsGraph({
+      file: resolved.file,
+      fileSource: resolved.fileSource,
+      remotePinFile: this.sessionProbe?.()?.remotePinFile
+    });
+    const usage = {
+      sessionMode: allowGraph ? ("indexed-repo" as const) : ("file-assistant" as const),
+      fileSource: resolved.file ? resolved.fileSource : undefined
+    };
+    this.lastUsage = usage;
+    return { allowGraphContext: allowGraph, ...usage };
   }
 
   public async provideInlineCompletionItems(
@@ -308,7 +339,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     this.lastShownContextHash = contextHash;
     this.lastShownAt = Date.now();
     this.lastShownLanguageId = languageId;
-    this.performance.recordShow(languageId);
+    this.performance.recordShow(languageId, this.lastUsage);
   }
 
   private clearLastShown(): void {
@@ -472,15 +503,20 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
         this.settings,
         abort.signal,
         document.getText().slice(0, 32_768),
-        { recordPerformance: false }
+        { recordPerformance: false, ...this.completionFetchOptions(document) }
       );
-      if (result.completions.length === 0) {
+      const ranked = withoutUnknownReceiverMembers(
+        result.completions,
+        extracted,
+        document.getText().slice(0, 32_768)
+      );
+      if (ranked.length === 0) {
         this.nes.cancel();
         return null;
       }
 
       const items: vscode.InlineCompletionItem[] = [];
-      for (const completion of result.completions) {
+      for (const completion of ranked) {
         const item = this.buildInlineItem(document, predictedPos, extracted, completion);
         if (item) {
           items.push(item);
@@ -492,12 +528,12 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       }
 
       this.nes.markShown();
-      this.lastAlternatives = result.completions;
+      this.lastAlternatives = ranked;
       this.alternativeIndex = 0;
       this.lastScopeHash = extracted.contextHash;
       this.trackShownItem(extracted.contextHash, extracted.languageId);
       discardContextPayload(extracted);
-      return this.settings.showMultipleSuggestions ? items : items.slice(0, 1);
+    return this.settings.showMultipleSuggestions ? items : items.slice(0, 1);
     } catch {
       this.nes.cancel();
       return null;
@@ -543,7 +579,8 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
           extracted,
           this.settings,
           abort.signal,
-          document.getText().slice(0, 32_768)
+          document.getText().slice(0, 32_768),
+          this.completionFetchOptions(document)
         );
         live = this.resolveLiveCompletionContext(document, position);
         if (!this.isCompatibleCompletionContext(extracted, live.extracted)) {
@@ -569,7 +606,8 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
         extracted,
         this.settings,
         abort.signal,
-        document.getText().slice(0, 32_768)
+        document.getText().slice(0, 32_768),
+        this.completionFetchOptions(document)
       );
       live = this.resolveLiveCompletionContext(document, position);
       if (!this.isCompatibleCompletionContext(extracted, live.extracted)) {
@@ -647,17 +685,22 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     ranked: RankedCompletion[],
     latencyMs = 0
   ): vscode.InlineCompletionItem[] | null {
-    if (ranked.length === 0) {
+    const visible = withoutUnknownReceiverMembers(
+      ranked,
+      extracted,
+      document.getText().slice(0, 32_768)
+    );
+    if (visible.length === 0) {
       this.triggerDetector.noteRequestFailed();
       return null;
     }
 
-    this.lastAlternatives = ranked;
+    this.lastAlternatives = visible;
     this.alternativeIndex = 0;
     this.lastScopeHash = extracted.contextHash;
 
     const items: vscode.InlineCompletionItem[] = [];
-    for (const completion of ranked) {
+    for (const completion of visible) {
       const item = this.buildInlineItem(document, position, extracted, completion);
       if (item) {
         items.push(item);
@@ -728,12 +771,14 @@ export function registerCoopAutocomplete(
   context: vscode.ExtensionContext,
   api: SecureApiClient,
   onTelemetry?: (event: AutocompleteTelemetryEvent) => void,
-  indexBackend?: IndexBackend
+  indexBackend?: IndexBackend,
+  sessionProbe?: AutocompleteSessionProbe
 ): CoopAutocompleteProvider {
   const provider = new CoopAutocompleteProvider({
     api,
     indexBackend,
-    onTelemetry
+    onTelemetry,
+    sessionProbe
   });
 
   const selector: vscode.DocumentSelector = [

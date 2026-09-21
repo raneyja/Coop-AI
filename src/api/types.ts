@@ -123,6 +123,9 @@ export type V1ChatRequestBody = {
   stream?: boolean;
   /** Client asks the API to enable provider thinking when supported. */
   enableThinking?: boolean;
+  /** L vs R for this turn. Stored on chat.message metadata. Not a new quota bucket. */
+  sessionMode?: "file-assistant" | "indexed-repo";
+  fileSource?: "workspace" | "git" | "remote" | "external";
 };
 
 export type ProviderThinkingOptions = {
