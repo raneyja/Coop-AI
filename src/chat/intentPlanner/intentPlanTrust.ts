@@ -35,7 +35,7 @@ export function workflowActivityMessage(workflow: ChatIntentWorkflow): string {
     case "knowledge-gaps":
       return "Scanning for knowledge gaps…";
     default:
-      return "Gathering workspace context…";
+      return "";
   }
 }
 
@@ -54,7 +54,7 @@ export function toolActivityMessage(tool: IntegrationChatProvider): string {
     case "google-docs":
       return "Searching Google Docs…";
     default:
-      return "Gathering integration context…";
+      return "";
   }
 }
 
@@ -68,16 +68,20 @@ export function buildIntentPlanActivityMessages(plan: ChatIntentPlan): string[] 
     return [];
   }
   if (plan.workflow) {
-    const messages: string[] = [workflowActivityMessage(plan.workflow)];
+    const line = workflowActivityMessage(plan.workflow);
+    const messages: string[] = line ? [line] : [];
     for (const tool of plan.tools) {
-      messages.push(toolActivityMessage(tool));
+      const toolLine = toolActivityMessage(tool);
+      if (toolLine) {
+        messages.push(toolLine);
+      }
     }
     return messages;
   }
   if (plan.tasks?.length) {
     return plan.tasks.map(taskActivityMessage);
   }
-  return plan.tools.map(toolActivityMessage);
+  return plan.tools.map(toolActivityMessage).filter(Boolean);
 }
 
 /**

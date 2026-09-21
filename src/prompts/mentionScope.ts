@@ -1,3 +1,4 @@
+import type { RepoContextFileSource } from "../chat/types";
 import type { RepoSummaryEvidence } from "../context/contextBundleEvidence";
 import { WORKSPACE_LOCAL_REPO_ID } from "../chat/mentionSearchMerge";
 
@@ -235,14 +236,20 @@ export type PlainChatHistoryContext = {
   scope?: "repo" | "file";
   /** 1-based inclusive editor highlight — stamped like file/repo chips. */
   selectedLines?: [number, number];
+  /** L files must not inherit a leftover Use-repo owner/repo chip. */
+  fileSource?: RepoContextFileSource;
 };
 
-/** Repo/branch chips only for Use-repo or a file bound to owner/repo. */
+/** Repo/branch chips for Use-repo or a remote file. An L file does not inherit leftover owner/repo. */
 function shouldStampRepoChips(context: PlainChatHistoryContext | undefined): boolean {
   if (!context?.owner?.trim() || !context?.repo?.trim()) {
     return false;
   }
-  if (context.file?.trim()) {
+  const file = context.file?.trim();
+  if (file && context.fileSource && context.fileSource !== "remote") {
+    return false;
+  }
+  if (file) {
     return true;
   }
   return context.scope === "repo";

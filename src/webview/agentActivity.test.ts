@@ -68,6 +68,25 @@ test("extractFileChipsFromLabels picks backtick paths", () => {
   assert.ok(chips.some((chip) => chip.path === "foo/bar.ts"));
 });
 
+test("gather theater does not become file chips or an explored count", () => {
+  const chips = extractFileChipsFromLabels([
+    "Gathering workspace context…",
+    "Searching indexed codebase…",
+    "Updating lightweight context…"
+  ]);
+  assert.deepEqual(chips, []);
+  assert.equal(classifyActivityTodoKind("Read `src/a.ts`"), "research");
+  assert.equal(classifyActivityTodoKind("Searched for `requireAuth`"), "research");
+  assert.equal(classifyActivityTodoKind("Gathering workspace context…"), "plan");
+  const tools = toolRowsFromTodos([
+    { id: "1", content: "Gathering workspace context…", status: "completed" },
+    { id: "2", content: "Read `src/a.ts`", status: "completed" }
+  ]);
+  assert.equal(tools.length, 1);
+  assert.equal(tools[0]?.label, "Read `src/a.ts`");
+  assert.equal(summarizeAgentExploration(tools)?.explored, "Explored 1 file");
+});
+
 test("agentStepsToActivity keeps every tool row (no leftover-steps count)", () => {
   const activity = agentStepsToActivity(
     Array.from({ length: 8 }, (_, index) => ({

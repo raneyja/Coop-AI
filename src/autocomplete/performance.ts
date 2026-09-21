@@ -130,8 +130,11 @@ export class AutocompletePerformanceMonitor {
     };
   }
 
-  public recordShow(languageId?: string): void {
-    this.emit({ kind: "show", languageId });
+  public recordShow(
+    languageId?: string,
+    usage?: { sessionMode?: "file-assistant" | "indexed-repo"; fileSource?: "workspace" | "git" | "remote" | "external" }
+  ): void {
+    this.emit({ kind: "show", languageId, sessionMode: usage?.sessionMode, fileSource: usage?.fileSource });
   }
 
   public acceptanceRate(): number {
@@ -230,6 +233,10 @@ export class CompletionCache {
       }
     }
     this.map.set(hash, { text, alternatives, at: Date.now() });
+  }
+
+  public delete(hash: string): void {
+    this.map.delete(hash);
   }
 
   public clear(): void {

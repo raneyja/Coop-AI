@@ -4,15 +4,16 @@ import { buildRepoId } from "../chat/buildRepoId";
 import { toRepositoryRelativePath } from "../context/repoFilePath";
 import type { LlmProvider } from "../api/zeroRetentionConfig";
 import { resolveRuntimeAutocompleteModel } from "../config/featureModelAssignments";
+import { completionRequestsGraphContext } from "../context/sessionMode";
 import { resolveEffectiveUseGraphContext } from "./autocompleteConfig";
 import type { IndexBackend } from "../indexing/indexBackend";
 import { buildPromptContextBlock, isEmptyBlockHole, languageSpecificHints, wantsMultiLineCompletion, autocompleteGroundingRules } from "./contextAnalyzer";
-import { filterAndRankCompletions, normalizeCompletionText, consolidateAfterDotRanked, type SymbolPlausibilityHints } from "./completionFilter";
+import { filterAndRankCompletions, normalizeCompletionText, consolidateAfterDotRanked, withoutUnknownReceiverMembers, type SymbolPlausibilityHints } from "./completionFilter";
 import { biasCompletionsWithProjectStyle, getProjectStyleProfile } from "./customization";
 import { applyEdgeCaseFallbacks } from "./edgeCases";
 import { CompletionCache, createLatencyTimer, type AutocompletePerformanceMonitor } from "./performance";
 import { sanitizeContextForRequest, shouldSkipForPrivacy } from "./privacy";
-import type { AutocompleteSettings, CompletionRouterResult, ExtractedCodeContext, RankedCompletion } from "./types";
+import type { AutocompleteSettings, CompletionRouterResult, ExtractedCodeContext } from "./types";
 import * as vscode from "vscode";
 
 export type CompletionRouterDeps = {
@@ -25,6 +26,13 @@ export type CompletionRouterDeps = {
 export type FetchCompletionsOptions = {
   /** Default true. NES after-accept fetches pass false so they do not move base p50/p95. */
   recordPerformance?: boolean;
+  /**
+   * When false, omit useGraphContext even if Use-repo's index is healthy.
+   * Undefined keeps today's graph-when-healthy behavior (R / no L session).
+   */
+  allowGraphContext?: boolean;
+  sessionMode?: "file-assistant" | "indexed-repo";
+  fileSource?: "workspace" | "git" | "remote" | "external";
 };
 
 const MAX_FIM_PREFIX_CHARS = 4_000;
@@ -69,20 +77,21 @@ export class CompletionRouter {
 
     const cached = this.cache.get(context.contextHash);
     if (cached) {
-      let completions: RankedCompletion[] = [
-        { text: cached.text, score: 1, source: "cache" },
-        ...cached.alternatives.map((text) => ({ text, score: 0.9, source: "cache" as const }))
-      ];
+      const fileSample =
+        rankingFileSample?.slice(0, 32_000) ?? context.previousLines.slice(0, 2000);
+      let completions = filterAndRankCompletions(
+        [cached.text, ...cached.alternatives].filter(Boolean),
+        context,
+        settings,
+        fileSample
+      );
       if (context.afterDot) {
         completions = consolidateAfterDotRanked(completions, context.currentLinePrefix);
-        if (completions.length === 0) {
-          // Stale cache entry from before after-dot sanitization; fetch fresh.
-        } else {
-          return { completions, latencyMs: 0, fromCache: true };
-        }
-      } else {
+      }
+      if (completions.length > 0) {
         return { completions, latencyMs: 0, fromCache: true };
       }
+      this.cache.delete(context.contextHash);
     }
 
     const docKey = context.filePath;
@@ -93,7 +102,16 @@ export class CompletionRouter {
         prefixKey.startsWith(existing.prefix) && prefixKey.length > existing.prefix.length;
       const sameHash = existing.contextHash === context.contextHash;
       if (prefixCompatible || sameHash) {
-        return existing.promise;
+        if (sameHash) {
+          return existing.promise;
+        }
+        const reused = await existing.promise;
+        const fileSample =
+          rankingFileSample?.slice(0, 32_000) ?? context.previousLines.slice(0, 2000);
+        return {
+          ...reused,
+          completions: withoutUnknownReceiverMembers(reused.completions, context, fileSample)
+        };
       }
       existing.controller.abort();
       this.inFlightByDoc.delete(docKey);
@@ -164,7 +182,8 @@ export class CompletionRouter {
           linked,
           maxTokens,
           settings,
-          prefs
+          prefs,
+          options
         ),
         timeoutMs,
         linked
@@ -184,7 +203,7 @@ export class CompletionRouter {
       const profile = getProjectStyleProfile(folder ?? undefined);
       const fileSample =
         rankingFileSample?.slice(0, 32_000) ?? safeContext.previousLines.slice(0, 2000);
-      const symbolHints = await this.resolveSymbolHints(context, settings, prefs);
+      const symbolHints = await this.resolveSymbolHints(context, settings, prefs, options);
 
       let ranked = filterAndRankCompletions(
         [primary, ...alternatives].filter(Boolean),
@@ -242,9 +261,10 @@ export class CompletionRouter {
   private async resolveSymbolHints(
     context: ExtractedCodeContext,
     settings: AutocompleteSettings,
-    prefs: ReturnType<typeof readConfiguration>
+    prefs: ReturnType<typeof readConfiguration>,
+    options?: FetchCompletionsOptions
   ): Promise<SymbolPlausibilityHints | undefined> {
-    if (!settings.useGraphContext) {
+    if (options?.allowGraphContext === false || !settings.useGraphContext) {
       return undefined;
     }
 
@@ -309,7 +329,8 @@ export class CompletionRouter {
     signal: AbortSignal,
     maxTokens: number,
     settings: AutocompleteSettings,
-    prefs: ReturnType<typeof readConfiguration>
+    prefs: ReturnType<typeof readConfiguration>,
+    options?: FetchCompletionsOptions
   ): Promise<{ text: string; alternatives: string[]; model: string; provider: string }> {
     const chatMessage = segments
       ? synthesizeMessageFromSegments(segments, context, prompt)
@@ -318,7 +339,10 @@ export class CompletionRouter {
     const repoStatus = this.deps.indexBackend
       ? await this.deps.indexBackend.getRepoStatus(repoId)
       : undefined;
-    const useGraphContext = resolveEffectiveUseGraphContext(settings, repoStatus);
+    const useGraphContext = completionRequestsGraphContext({
+      allowGraphContext: options?.allowGraphContext,
+      effectiveUseGraph: resolveEffectiveUseGraphContext(settings, repoStatus)
+    });
     const body = {
       message: chatMessage,
       segments,
@@ -328,6 +352,8 @@ export class CompletionRouter {
       model: preset.model,
       maxTokens,
       temperature: 0.15,
+      ...(options?.sessionMode ? { sessionMode: options.sessionMode } : {}),
+      ...(options?.fileSource ? { fileSource: options.fileSource } : {}),
       ...(useGraphContext
         ? {
             useGraphContext: true,
@@ -364,6 +390,8 @@ export class CompletionRouter {
       file: string;
       useGraphContext?: boolean;
       repoId?: string;
+      sessionMode?: "file-assistant" | "indexed-repo";
+      fileSource?: "workspace" | "git" | "remote" | "external";
       provider: LlmProvider;
       model: string;
       maxTokens: number;

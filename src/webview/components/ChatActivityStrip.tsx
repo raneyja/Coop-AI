@@ -65,7 +65,7 @@ export function ChatActivityStrip({
       ? intentFeedback.message || intentFeedback.title
       : undefined;
   const intentLoading = !suppress.intent && intentFeedback?.status === "loading" && !jobLine;
-  const loadingMessage = intentFeedback?.message || "Fetching context…";
+  const loadingMessage = intentFeedback?.message || "Thinking…";
 
   const line = error || (!intentLoading ? intentLine : undefined) || jobLine;
 

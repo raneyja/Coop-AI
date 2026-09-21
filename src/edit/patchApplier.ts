@@ -40,6 +40,8 @@ export type ApplyPatchesOptions = {
   openRemoteFile?: EnsurePatchTargetOptions["openRemoteFile"];
   /** Captured full-file bytes when the live tab cannot be read. */
   fileContents?: Readonly<Record<string, string>>;
+  /** L session: write the open local tab, not a leftover remote buffer. */
+  preferLocalDisk?: boolean;
 };
 
 function fileHunkKey(relativePath: string, hunkIndex: number): string {
@@ -66,10 +68,11 @@ export async function applyPatchesToWorkspace(
 
   for (const filePatch of patches.files) {
     const resolved = await ensureEditablePatchTarget(filePatch.relativePath, {
-      repo: options?.repo,
+      repo: options?.preferLocalDisk ? undefined : options?.repo,
       openRemoteFile: options?.openRemoteFile,
       fileContents: options?.fileContents,
-      search: filePatch.hunks[0]?.search
+      search: filePatch.hunks[0]?.search,
+      preferLocalDisk: options?.preferLocalDisk
     });
     if (!resolved.ok) {
       return {

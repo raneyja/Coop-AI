@@ -1,6 +1,7 @@
 import {
   stripThinkingProcessingTerms
 } from "../context/thinkingProcessingTerms";
+import { isTheaterActivityLabel } from "../context/activityTheater";
 import {
   isIntentInlineLoading,
   isJobInlineLoading
@@ -83,7 +84,9 @@ export function buildConcreteActivityMessages(
     }
   }
 
-  return uniqueMessages(messages).filter((message) => !isTerminalPreparingMessage(message));
+  return uniqueMessages(messages).filter(
+    (message) => !isTerminalPreparingMessage(message) && !isTheaterActivityLabel(message)
+  );
 }
 
 /** Soft waiting labels — unused. Fake Distilling/Aggregating rotation is off. */

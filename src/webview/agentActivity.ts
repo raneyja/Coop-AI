@@ -12,6 +12,7 @@ import {
 } from "./thinkingMessageRotation";
 import type { IntentFeedbackState, JobProgressState } from "./types";
 import { activityFromAgentSteps, extractFileChipsFromLabels } from "../chat/chatTurnActivity";
+import { isTheaterActivityLabel } from "../context/activityTheater";
 
 export { extractFileChipsFromLabels };
 
@@ -237,7 +238,7 @@ function narrativeStatusToTodo(status: NarrativeStep["status"]): AgentTodoStatus
 
 export function toolRowsFromTodos(todos: AgentTodoItem[]): AgentToolRow[] {
   return todos
-    .filter((todo) => todo.status !== "pending")
+    .filter((todo) => todo.status !== "pending" && !isTheaterActivityLabel(todo.content))
     .map((todo) => {
       const icon = narrativeIconForLabel(todo.content, todo.status === "in_progress");
       return {

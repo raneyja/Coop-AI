@@ -35,7 +35,11 @@ export function createAutocompleteUsageTelemetryHandler(
 ): (event: AutocompleteTelemetryEvent) => void {
   return (event) => {
     if (event.kind === "show") {
-      emitUsage("completion.suggested", { languageId: event.languageId });
+      emitUsage("completion.suggested", {
+        languageId: event.languageId,
+        ...(event.sessionMode ? { sessionMode: event.sessionMode } : {}),
+        ...(event.fileSource ? { fileSource: event.fileSource } : {})
+      });
       return;
     }
     if (event.kind === "performance" && event.performance) {
@@ -90,7 +94,12 @@ export function registerAutocompleteCommands(
       (contextHash: string, languageId?: string) => {
         const nes = provider.wasLastShownNes();
         provider.noteSuggestionAccepted(contextHash, languageId);
-        void emitUsage("completion.accepted", { languageId, ...(nes ? { nes: true } : {}) });
+        const usage = provider.lastCompletionUsage();
+        void emitUsage("completion.accepted", {
+          languageId,
+          ...(nes ? { nes: true } : {}),
+          ...usage
+        });
       }
     ),
     vscode.commands.registerCommand("coopAI.internal.autocompleteRejected", (reason?: string) => {
@@ -99,10 +108,12 @@ export function registerAutocompleteCommands(
       if (!rejected) {
         return;
       }
+      const usage = provider.lastCompletionUsage();
       void emitUsage("completion.rejected", {
         reason: resolvedReason,
         languageId,
-        ...(nes ? { nes: true } : {})
+        ...(nes ? { nes: true } : {}),
+        ...usage
       });
     }),
     vscode.commands.registerCommand("coopAI.triggerAutocomplete", async () => {
@@ -136,8 +147,8 @@ export function registerAutocompleteCommands(
         await config.update("enabled", enabled, vscode.ConfigurationTarget.Global);
       }
       void vscode.commands.executeCommand("setContext", "coopAI.autocomplete.enabled", enabled);
-      await syncCopilotInline(enabled);
-      await syncSuggestWidgetCoexistence(enabled);
+      void syncCopilotInline(enabled);
+      void syncSuggestWidgetCoexistence(enabled);
     })
   );
 }

@@ -31,7 +31,12 @@ export function shouldRunAgentToolLoop(options: {
   isEditTurn?: boolean;
   /** Slash /docs /slack /jira etc. — answer from that tool, never a repo hunt. */
   integrationSlash?: boolean;
+  /** L file: no Zoekt / read_file against leftover Use-repo. */
+  fileAssistant?: boolean;
 }): boolean {
+  if (options.fileAssistant) {
+    return false;
+  }
   return agentTurnAction(options) !== "none";
 }
 
@@ -50,7 +55,12 @@ export function agentTurnAction(options: {
   isEditTurn?: boolean;
   /** Slash /docs /slack /jira etc. — vendor loop, never a repo hunt. */
   integrationSlash?: boolean;
+  /** L file: open-file answer only. Named tools stay on the prefetch path. */
+  fileAssistant?: boolean;
 }): RepoCodeAction {
+  if (options.fileAssistant) {
+    return "none";
+  }
   if (options.isEditTurn) {
     return "none";
   }

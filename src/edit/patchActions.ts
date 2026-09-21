@@ -366,7 +366,8 @@ export function setPendingSharedMatchProposal(
 export async function applyPendingPatch(
   publish?: PatchSnapshotPublisher,
   messageTimestamp?: number,
-  matchSelections?: Readonly<Record<string, readonly string[]>>
+  matchSelections?: Readonly<Record<string, readonly string[]>>,
+  applyOptions?: { preferLocalDisk?: boolean }
 ): Promise<boolean> {
   const timestamp = resolveActivePatchTimestamp(messageTimestamp);
   const record = getPatchRecord(timestamp);
@@ -419,14 +420,15 @@ export async function applyPendingPatch(
     return false;
   }
 
-  return applyPendingPatchHunks(publish, timestamp, readyIds);
+  return applyPendingPatchHunks(publish, timestamp, readyIds, applyOptions);
 }
 
 export async function applyPendingPatchHunk(
   publish: PatchSnapshotPublisher | undefined,
   messageTimestamp: number | undefined,
   hunkId: string,
-  matchLocationIds?: readonly string[]
+  matchLocationIds?: readonly string[],
+  applyOptions?: { preferLocalDisk?: boolean }
 ): Promise<boolean> {
   const timestamp = resolveActivePatchTimestamp(messageTimestamp);
   if (timestamp === undefined) {
@@ -447,13 +449,14 @@ export async function applyPendingPatchHunk(
     updatePatchRecordCard(timestamp, { ...next, status: "pending", suppressMarkdown: true });
   }
 
-  return applyPendingPatchHunks(publish, timestamp, [hunkId]);
+  return applyPendingPatchHunks(publish, timestamp, [hunkId], applyOptions);
 }
 
 async function applyPendingPatchHunks(
   publish: PatchSnapshotPublisher | undefined,
   timestamp: number,
-  hunkIds: string[]
+  hunkIds: string[],
+  applyOptions?: { preferLocalDisk?: boolean }
 ): Promise<boolean> {
   const record = getPatchRecord(timestamp);
   if (!record) {
@@ -495,7 +498,8 @@ async function applyPendingPatchHunks(
 
   const result = await applyPatchesToWorkspace(subset, {
     matchIndicesByFileHunk: selections.matchIndicesByFileHunk,
-    fileContents: record.fileContents
+    fileContents: record.fileContents,
+    preferLocalDisk: applyOptions?.preferLocalDisk
   });
   if (!result.ok) {
     setLastPatchApplyError(result.error);

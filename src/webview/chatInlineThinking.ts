@@ -44,11 +44,11 @@ export function resolveChatInlineThinkingMessage(
   }
 
   if (intentFeedback && isIntentInlineLoading(intentFeedback)) {
-    return intentFeedback.message || intentFeedback.title || "Fetching context…";
+    return intentFeedback.message || intentFeedback.title || "Thinking…";
   }
 
   if (options.awaitingResponse) {
-    return "Preparing answer…";
+    return "Thinking…";
   }
 
   return undefined;

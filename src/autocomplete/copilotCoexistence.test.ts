@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as vscode from "vscode";
 import {
   COPILOT_INLINE_ENABLE_SETTING,
+  COPILOT_NEXT_EDIT_SETTING,
   detectCopilotExtensions,
   isCopilotInlineDisabled,
   isCopilotInstalled,
@@ -74,10 +75,12 @@ async function runAsyncTests(): Promise<void> {
     await syncCopilotInlineWithCoopAutocomplete(context, true);
 
     const updates = getMockConfigUpdates();
-    assert.equal(updates.length, 1);
+    assert.equal(updates.length, 2);
     assert.equal(updates[0]?.key, COPILOT_INLINE_ENABLE_SETTING);
     assert.deepEqual(updates[0]?.value, { "*": false });
     assert.equal(updates[0]?.target, vscode.ConfigurationTarget.Global);
+    assert.equal(updates[1]?.key, COPILOT_NEXT_EDIT_SETTING);
+    assert.equal(updates[1]?.value, false);
   });
 
   await asyncTest("syncCopilotInlineWithCoopAutocomplete restores snapshot when Coop autocomplete turns off", async () => {
@@ -92,8 +95,10 @@ async function runAsyncTests(): Promise<void> {
     await syncCopilotInlineWithCoopAutocomplete(context, false);
 
     const updates = getMockConfigUpdates();
-    assert.equal(updates.length, 1);
+    assert.equal(updates.length, 2);
     assert.deepEqual(updates[0]?.value, { "*": true, typescript: true });
+    assert.equal(updates[1]?.key, COPILOT_NEXT_EDIT_SETTING);
+    assert.equal(updates[1]?.value, true);
   });
 
   await asyncTest("syncCopilotInlineWithCoopAutocomplete is a no-op when Copilot is not installed", async () => {

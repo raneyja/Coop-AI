@@ -60,6 +60,32 @@ test("extension does not force-enable autocomplete on startup", () => {
   assert.doesNotMatch(source, /restoreAutocompleteUnlessUserOptedOut/);
 });
 
+test("setAutocompleteEnabled does not wait on Copilot or suggest-widget coexistence", () => {
+  const source = readRepoFile("src/autocomplete/registerAutocomplete.ts");
+  assert.match(source, /void syncCopilotInline\(enabled\)/);
+  assert.match(source, /void syncSuggestWidgetCoexistence\(enabled\)/);
+  assert.doesNotMatch(source, /await syncCopilotInline\(enabled\)/);
+  assert.doesNotMatch(source, /await syncSuggestWidgetCoexistence\(enabled\)/);
+});
+
+test("autocomplete-only settings save skips the full preference reload", () => {
+  const session = readRepoFile("src/chat/CoopChatSession.ts");
+  assert.match(session, /isAutocompleteOnlySettingsUpdate\(message\.payload\)/);
+  assert.match(session, /applyAutocompleteEnabledToAllSessions\(autocompleteEnabled\)/);
+  const extension = readRepoFile("src/extension.ts");
+  assert.match(extension, /shouldRefreshSessionsOnCoopConfigChange/);
+  assert.match(extension, /applyLocalAutocompleteEnabled/);
+});
+
+test("model settings checkbox keeps a pending save instead of snapping to stale prefs", () => {
+  const source = readRepoFile("src/webview/components/settings/SettingsDetailViews.tsx");
+  assert.match(source, /nextAutocompleteDraft/);
+  assert.match(source, /pendingSavedRef/);
+  const settingsView = readRepoFile("src/webview/SettingsView.tsx");
+  assert.match(settingsView, /reconcileAutocompletePref/);
+  assert.match(settingsView, /pendingAutocompleteRef/);
+});
+
 test("package.json does not steal Jump to Bracket for autocomplete trigger", () => {
   const keybindings = packageJson.contributes?.keybindings ?? [];
   const trigger = keybindings.find((binding: { command?: string }) => binding.command === "coopAI.triggerAutocomplete");

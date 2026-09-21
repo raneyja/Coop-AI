@@ -182,6 +182,26 @@ test("named Notion docs ask starts the vendor loop and does not unlock Jira", ()
   );
 });
 
+test("L file drops the agent hunt even when the question would hunt on R", () => {
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query: "Where is auth middleware enforced and what calls it?",
+      hasQuickAction: false,
+      fileAssistant: true,
+      intentPlan: emptyChatIntentPlan("Where is auth middleware enforced and what calls it?")
+    }),
+    false
+  );
+  assert.equal(
+    shouldRunAgentToolLoop({
+      query: "check Slack for this function",
+      hasQuickAction: false,
+      fileAssistant: true
+    }),
+    false
+  );
+});
+
 test("shouldRunAgentToolLoop is true for a repo hunt (always on)", () => {
   assert.equal(
     shouldRunAgentToolLoop({

@@ -19,6 +19,16 @@ function test(name: string, fn: () => void): void {
   }
 }
 
+test("analyzeDocumentContext treats a cursor inside JSDoc as a comment", () => {
+  const doc = createMockDocument("/**\n * hello\n */\nexport const x = 1;\n", {
+    path: "/workspace/src/example.ts",
+    languageId: "typescript"
+  });
+  const context = analyzeDocumentContext(doc as never, new vscode.Position(1, 8));
+  assert.equal(context.inComment, true);
+  assert.match(context.currentLinePrefix, /hello/);
+});
+
 test("analyzeDocumentContext extracts prefix and suffix", () => {
   const doc = createMockDocument("const value = 1;\nconsole.log(value);", {
     path: "/workspace/src/example.ts"

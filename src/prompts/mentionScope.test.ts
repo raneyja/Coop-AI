@@ -352,12 +352,13 @@ test("plainChatContextChips omits prefs-only owner/repo without Use-repo or file
   assert.deepEqual(chips, []);
 });
 
-test("plainChatContextChips keeps repo when a file is bound", () => {
+test("plainChatContextChips keeps repo when a remote file is bound", () => {
   const chips = plainChatContextChips({
     owner: "coopai-group",
     repo: "InspectIQ",
     branch: "main",
     file: "README.md",
+    fileSource: "remote",
     scope: "file"
   });
   assert.deepEqual(chips, [
@@ -365,6 +366,18 @@ test("plainChatContextChips keeps repo when a file is bound", () => {
     { key: "repo", value: "coopai-group/InspectIQ" },
     { key: "branch", value: "main" }
   ]);
+});
+
+test("plainChatContextChips omits leftover Use-repo on an L file", () => {
+  const chips = plainChatContextChips({
+    owner: "coopai-group",
+    repo: "InspectIQ",
+    branch: "main",
+    file: "src/local.ts",
+    fileSource: "workspace",
+    scope: "file"
+  });
+  assert.deepEqual(chips, [{ key: "file", value: "src/local.ts" }]);
 });
 
 console.log(`\nmentionScope: ${passed}/${passed + failed} tests passed`);

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { isFileAssistantSession } from "../../context/sessionMode";
 import { resolveQuickActionItems } from "../lib/quickActionItems";
 import type { QuickActionId, RepoContext } from "../types";
 
@@ -31,7 +32,7 @@ export function WorkflowsMenu({
   context,
   disabled,
   onInsert
-}: WorkflowsMenuProps): React.ReactElement {
+}: WorkflowsMenuProps): React.ReactElement | null {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const actions = useMemo(() => resolveQuickActionItems(context), [context]);
@@ -57,6 +58,10 @@ export function WorkflowsMenu({
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [open]);
+
+  if (isFileAssistantSession(context)) {
+    return null;
+  }
 
   return (
     <div ref={rootRef} className="coop-workflows-menu relative shrink-0">

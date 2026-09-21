@@ -61,7 +61,7 @@ import { WorkspaceReposPickerModal } from "../WorkspaceReposPickerModal";
 import type { GithubRepoOption } from "../../../chat/types";
 import { CoopNavList, CoopNavRow } from "../CoopNavRow";
 import { AgentsMdTemplateGuide } from "../AgentsMdTemplateGuide";
-import { agentsMdAttached, canDetachAgentsMd } from "../../lib/agentsMdStatus";
+import { agentsMdAttached, canDetachAgentsMd, shouldPromptForAgentsMd } from "../../lib/agentsMdStatus";
 import {
   codeHostConfigured,
   integrationConfigured
@@ -1087,7 +1087,10 @@ function agentsMdNavSubtitle(prefs: Preferences): string {
   if (prefs.projectInstructions?.status === "disabled") {
     return "Disabled";
   }
-  return agentsMdAttached(prefs.projectInstructions) ? "Loaded on every message" : "Create or upload";
+  if (agentsMdAttached(prefs.projectInstructions)) {
+    return "Loaded on every message";
+  }
+  return shouldPromptForAgentsMd(prefs.projectInstructions) ? "Create or upload" : "Not prompted";
 }
 
 function contextNavSubtitle(prefs: Preferences): string {
@@ -1771,6 +1774,8 @@ function AgentsMdSettings({
   onDetachAgentsMd
 }: SettingsDetailProps): React.ReactElement {
   const showDetach = Boolean(onDetachAgentsMd) && canDetachAgentsMd(prefs.projectInstructions);
+  const attached = agentsMdAttached(prefs.projectInstructions);
+  const promptCreate = shouldPromptForAgentsMd(prefs.projectInstructions);
   return (
     <SettingsSection>
       <div className="space-y-2">
@@ -1780,8 +1785,9 @@ function AgentsMdSettings({
           </p>
         ) : (
           <>
+            {attached || promptCreate ? (
             <div className="coop-agents-md-settings-row">
-              {agentsMdAttached(prefs.projectInstructions) ? (
+              {attached ? (
                 <span className="coop-agents-md-chip-group">
                   <button
                     type="button"
@@ -1814,7 +1820,7 @@ function AgentsMdSettings({
                   AGENTS.md
                 </span>
               )}
-              {agentsMdAttached(prefs.projectInstructions) ? (
+              {attached ? (
                 <button type="button" className="coop-settings-action-btn ml-auto" onClick={onAttachAgentsMd}>
                   Upload AGENTS.md
                 </button>
@@ -1828,13 +1834,20 @@ function AgentsMdSettings({
                 </button>
               )}
             </div>
-            {!agentsMdAttached(prefs.projectInstructions) ? (
+            ) : null}
+            {!attached && promptCreate ? (
               <button type="button" className="coop-agents-md-guide-link" onClick={onAttachAgentsMd}>
                 Upload AGENTS.md
               </button>
             ) : null}
-            <p className="coop-settings-card-desc !mb-0">Loaded on every message.</p>
-            <AgentsMdTemplateGuide className="mt-1" />
+            {attached || promptCreate ? (
+              <>
+                <p className="coop-settings-card-desc !mb-0">Loaded on every message.</p>
+                <AgentsMdTemplateGuide className="mt-1" />
+              </>
+            ) : (
+              <p className="coop-settings-card-desc !mb-0">No Create AGENTS.md prompt for this file.</p>
+            )}
           </>
         )}
       </div>

@@ -1,7 +1,7 @@
 import "./test/vscodeMockSetup";
 import assert from "node:assert/strict";
 import { resetMockConfiguration, setMockConfiguration } from "./test/vscodeMockSetup";
-import { AutocompletePerformanceMonitor } from "./performance";
+import { AutocompletePerformanceMonitor, CompletionCache } from "./performance";
 import {
   CompletionRouter,
   buildFimSegments,
@@ -316,6 +316,52 @@ async function runAsyncTests(): Promise<void> {
     assert.equal(capturedBody?.file, "src/app.ts");
   });
 
+  await asyncTest("L session omits graph even when the index is healthy", async () => {
+    setMockConfiguration("coopAI", "defaultOwner", "acme");
+    setMockConfiguration("coopAI", "defaultRepo", "app");
+    setMockConfiguration("coopAI", "defaultCodeHost", "github");
+
+    let capturedBody: Record<string, unknown> | undefined;
+    const api = {
+      streamInlineCompletion: async (_base: string, body: Record<string, unknown>) => {
+        capturedBody = body;
+        return { text: "value;", alternatives: [], model: "test", provider: "anthropic" };
+      }
+    };
+    const indexBackend = {
+      getRepoStatus: async () => ({
+        repoId: "github:acme/app",
+        enabled: true,
+        status: "ready" as const,
+        zoektAvailable: true,
+        scipAvailable: false
+      })
+    };
+    const performance = new AutocompletePerformanceMonitor();
+    const router = new CompletionRouter({
+      api: api as never,
+      performance,
+      indexBackend: indexBackend as never
+    });
+
+    await router.fetchCompletions(
+      sampleContext,
+      { ...autocompleteSettings, useGraphContext: true },
+      undefined,
+      undefined,
+      {
+        allowGraphContext: false,
+        sessionMode: "file-assistant",
+        fileSource: "workspace"
+      }
+    );
+
+    assert.equal(capturedBody?.useGraphContext, undefined);
+    assert.equal(capturedBody?.repoId, undefined);
+    assert.equal(capturedBody?.sessionMode, "file-assistant");
+    assert.equal(capturedBody?.fileSource, "workspace");
+  });
+
   await asyncTest("falls back to secondary provider when primary request fails", async () => {
     setMockConfiguration("coopAI", "devMode", false);
     let attempt = 0;
@@ -335,6 +381,127 @@ async function runAsyncTests(): Promise<void> {
     assert.equal(attempt, 2);
     assert.equal(result.completions[0]?.text, "fallback;");
     assert.equal(result.provider, "openai");
+  });
+
+  await asyncTest("re-filters a cached assignment hole against the typed prefix", async () => {
+    let requestCount = 0;
+    const api = {
+      streamInlineCompletion: async () => {
+        requestCount += 1;
+        return { text: "should-not-run;", alternatives: [], model: "test", provider: "anthropic" };
+      }
+    };
+    const cache = new CompletionCache();
+    cache.set("overlap-hash", "his.deps.identity;", ["this.getIdentity(target);"]);
+    const performance = new AutocompletePerformanceMonitor();
+    const router = new CompletionRouter({ api: api as never, performance, cache });
+    const fileSample = `
+export class ClientHolder {
+  public constructor(private readonly deps: { api: string }) {}
+  public getIdentity(target: { repoId: string }): string | undefined {
+    return target.repoId;
+  }
+  public read(): void {
+    this.deps.api;
+    const identity =
+  }
+}
+`.trim();
+    const context: ExtractedCodeContext = {
+      ...sampleContext,
+      contextHash: "overlap-hash",
+      currentLinePrefix: "    const identity = t",
+      filePath: "/workspace/src/clientHolder.ts"
+    };
+
+    const cached = await router.fetchCompletions(
+      context,
+      { ...autocompleteSettings, showMultipleSuggestions: true },
+      undefined,
+      fileSample
+    );
+
+    assert.equal(requestCount, 0);
+    assert.equal(cached.fromCache, true);
+    assert.match(cached.completions[0]?.text ?? "", /getIdentity/);
+    assert.equal(
+      cached.completions.some((item) => /deps\.identity/.test(item.text)),
+      false
+    );
+  });
+
+  await asyncTest("filters a typed-t FIM remainder before caching it", async () => {
+    let requestCount = 0;
+    const api = {
+      streamInlineCompletion: async () => {
+        requestCount += 1;
+        return {
+          text: "his.deps.identity;",
+          alternatives: ["this.getIdentity(target);"],
+          model: "test",
+          provider: "mistral"
+        };
+      }
+    };
+    const performance = new AutocompletePerformanceMonitor();
+    const router = new CompletionRouter({ api: api as never, performance });
+    const fileSample = `
+export class ClientHolder {
+  public constructor(private readonly deps: { api: string }) {}
+  public getIdentity(target: { repoId: string }): string | undefined {
+    return target.repoId;
+  }
+  public read(): void {
+    this.deps.api;
+    const identity =
+  }
+}
+`.trim();
+    const context: ExtractedCodeContext = {
+      ...sampleContext,
+      contextHash: "fim-overlap-hash",
+      currentLinePrefix: "    const identity = t",
+      filePath: "/workspace/src/clientHolder.ts"
+    };
+    const settings = { ...autocompleteSettings, showMultipleSuggestions: true };
+
+    const first = await router.fetchCompletions(context, settings, undefined, fileSample);
+    const second = await router.fetchCompletions(context, settings, undefined, fileSample);
+
+    assert.equal(requestCount, 1);
+    assert.equal(second.fromCache, true);
+    for (const result of [first, second]) {
+      assert.match(result.completions[0]?.text ?? "", /getIdentity/);
+      assert.equal(
+        result.completions.some((item) => /deps\.identity/.test(item.text)),
+        false
+      );
+    }
+  });
+
+  await asyncTest("skips .env files, including vscode-vfs paths, without a network request", async () => {
+    let requestCount = 0;
+    const api = {
+      streamInlineCompletion: async () => {
+        requestCount += 1;
+        return { text: "API_KEY=secret", alternatives: [], model: "test", provider: "mistral" };
+      }
+    };
+    const performance = new AutocompletePerformanceMonitor();
+    const router = new CompletionRouter({ api: api as never, performance });
+    const paths = [
+      "/workspace/.env.backend.example",
+      "/github/raneyja/Coop-AI/.env.backend.example",
+      "vscode-vfs://github/raneyja/Coop-AI/.env.backend"
+    ];
+    for (const filePath of paths) {
+      const result = await router.fetchCompletions(
+        { ...sampleContext, filePath, contextHash: `env-${filePath}` },
+        autocompleteSettings
+      );
+      assert.equal(result.completions.length, 0, filePath);
+    }
+    assert.equal(requestCount, 0);
   });
 
   await asyncTest("returns cached completions without a network request", async () => {

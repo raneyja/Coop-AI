@@ -3,6 +3,7 @@ import { isFileHistoryQuery } from "../context/fileHistoryIntent";
 
 /**
  * Live todos for extra file asks (callers / history).
+ * The gather projector shows these only when that fetch is committed.
  * Do not invent a Read row — that is recorded only after a body is attached.
  */
 export function fileAskActivityMessages(query: string | undefined, file?: string): string[] {

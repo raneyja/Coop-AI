@@ -147,6 +147,54 @@ test("absolute disk path skips integration auto-fetch even without fileSource", 
   assert.equal(shouldFetchNotionContext(absoluteRequest), false);
 });
 
+test("L file does not auto-fetch Trace or Gaps; slash Slack still fetches; R Trace still can", () => {
+  const localTrace = {
+    type: "trace_decision",
+    params: {
+      quickAction: "trace-decision",
+      file: "migrations/010_users_identity_audit.sql",
+      fileSource: "workspace"
+    }
+  } as ContextFetchRequest;
+  assert.equal(shouldFetchTraceDecisionIntegrations(localTrace), false);
+  assert.equal(shouldFetchDiscussionIntegrations(localTrace), false);
+  assert.equal(shouldFetchSlackContext(localTrace), false);
+
+  const localGaps = {
+    type: "knowledge_gaps",
+    params: {
+      quickAction: "knowledge-gaps",
+      file: "src/foo.ts",
+      fileSource: "git"
+    }
+  } as ContextFetchRequest;
+  assert.equal(shouldFetchRepoWideIntegrations(localGaps), false);
+  assert.equal(shouldFetchSlackContext(localGaps), false);
+
+  const slashSlack = {
+    type: "chat_context",
+    params: {
+      integrationProvider: "slack",
+      file: "migrations/010_users_identity_audit.sql",
+      fileSource: "workspace"
+    },
+    intent: { context: { queryText: "/slack was this discussed" } }
+  } as ContextFetchRequest;
+  assert.equal(shouldFetchSlackContext(slashSlack), true);
+  assert.equal(shouldFetchTraceDecisionIntegrations(slashSlack), false);
+
+  const remoteTrace = {
+    type: "trace_decision",
+    params: {
+      quickAction: "trace-decision",
+      file: "src/foo.ts",
+      fileSource: "remote"
+    }
+  } as ContextFetchRequest;
+  assert.equal(shouldFetchTraceDecisionIntegrations(remoteTrace), true);
+  assert.equal(shouldFetchDiscussionIntegrations(remoteTrace), true);
+});
+
 test("integration provider slash commands always fetch", () => {
   const notionRequest = {
     type: "chat_context",

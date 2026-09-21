@@ -3,6 +3,7 @@ import type { QuickActionId } from "../webview/types";
 import { shouldSkipLocalEditorAttachForRepoScope } from "../workspace/repoEvidenceIsolation";
 import { isExplicitRepoScope } from "./contextScope";
 import { openFileRelatedToGapsFocus } from "./knowledgeGapsFocus";
+import { isFileAssistantSession } from "./sessionMode";
 import { isExternalFileContext } from "./outsideWorkspaceFile";
 
 /** Display path for repo-wide ownership analysis (not a real file path). */
@@ -104,6 +105,10 @@ export function shouldWarnOpenFileAttachFailure(options: {
 }
 
 export function isQuickActionBlocked(actionId: QuickActionId, context: RepoContext): boolean {
+  // L file (Explorer, Ctrl+O, git, Downloads, untitled): repo workflows stay on Coop explorer.
+  if (ALL_QUICK_ACTIONS.has(actionId) && isFileAssistantSession(context)) {
+    return true;
+  }
   // Any quick action with a Downloads / Cmd+O tab focused is wrong — do not
   // silently pivot to the settings repo while the user is staring at that file.
   if (ALL_QUICK_ACTIONS.has(actionId) && isExternalFileContext(context)) {
@@ -136,6 +141,9 @@ export function isQuickActionBlockedForSuggest(
   actionId: QuickActionId,
   context: RepoContext
 ): boolean {
+  if (ALL_QUICK_ACTIONS.has(actionId) && isFileAssistantSession(context)) {
+    return true;
+  }
   if (ALL_QUICK_ACTIONS.has(actionId) && isExternalFileContext(context)) {
     return true;
   }
@@ -199,6 +207,9 @@ export function repoContextForActivatedThread(threadRepo: RepoContext | undefine
 }
 
 export function quickActionBlockedMessage(actionId: QuickActionId, context: RepoContext): string {
+  if (ALL_QUICK_ACTIONS.has(actionId) && isFileAssistantSession(context)) {
+    return fileAssistantQuickActionMessage(actionId);
+  }
   if (ALL_QUICK_ACTIONS.has(actionId) && isExternalFileContext(context)) {
     return externalFileMessage(actionId);
   }
@@ -233,6 +244,18 @@ function repoSelectionRequiredMessage(actionId: QuickActionId): string {
   };
   const label = labels[actionId] ?? "This action";
   return `${label} needs a selected repository. Click Use repo in the explorer, or open a file in the editor.`;
+}
+
+function fileAssistantQuickActionMessage(actionId: QuickActionId): string {
+  const labels: Record<QuickActionId, string> = {
+    "understand-repo": "Understand Repo",
+    "trace-decision": "Trace Decision",
+    "find-owner": "Find Owner",
+    "blast-radius": "Blast Radius",
+    "knowledge-gaps": "Knowledge Gaps"
+  };
+  const label = labels[actionId] ?? "This action";
+  return `${label} runs on a file in Coop explorer. Open that file there, then try again.`;
 }
 
 function externalFileMessage(actionId: QuickActionId): string {
