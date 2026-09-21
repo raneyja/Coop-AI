@@ -3,7 +3,7 @@ title: CoopAI vs Cursor
 description: "Compare CoopAI and Cursor for agentic editing vs zero-clone VS Code code intelligence, ownership, blast radius, and stack context."
 section: compare
 order: 3
-lastUpdated: "2026-09-07"
+lastUpdated: "2026-09-21"
 ---
 
 Cursor is an AI-first IDE built for agentic editing and multi-file generation. CoopAI is a **VS Code extension** that Deep-Indexes your repos, queries company Slack and Jira live, and helps you ask, complete, and edit with reviewable diffs — without switching IDEs or cloning the whole monorepo.
@@ -39,7 +39,7 @@ Choose Cursor when you want an **AI-native IDE** and multi-file agent workflows 
 
 ## When CoopAI is the better fit
 
-Choose CoopAI when you want **VS Code code intelligence** on indexed remotes: understand a codebase without cloning everything, pull stack context in-editor, and keep humans reviewing every patch.
+Choose CoopAI when you want **VS Code code intelligence** on repos indexed for your team: understand a codebase without cloning everything, pull stack context in-editor, and keep humans reviewing every patch. A local file still works as a normal assistant — chat, ghost text, and reviewable edits, including the tools your admin connected. Repo slash commands stay on an indexed repo.
 
 ## Related
 

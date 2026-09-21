@@ -1,7 +1,7 @@
 ---
 title: "CoopAI Owner's Manual"
 description: "Install, configure, and use CoopAI in VS Code: Workflows, prompt library, and team conventions."
-lastUpdated: "2026-09-03"
+lastUpdated: "2026-09-21"
 ---
 
 Congratulations on choosing CoopAI. This manual helps you get the most out of it, from your first chat to team-wide prompt libraries.
@@ -10,7 +10,7 @@ Congratulations on choosing CoopAI. This manual helps you get the most out of it
 
 ### The context gap
 
-Most AI coding tools only see the file you have open. CoopAI connects your **code graph**, **Slack threads**, **Jira tickets**, and **docs** so answers reflect how your org actually builds software, not just the current buffer.
+Most AI coding tools only see the file you have open. You can use Coop the same way on a local file, and still ask about Slack, Jira, and docs. CoopAI also connects your **code graph** across every repo indexed for your team, so answers reflect how your org actually builds software, not just the current buffer.
 
 > By just using the beta version of CoopAI I have seen at least a 50% reduction in time I spend asking / answering questions… I spend at least 6 hours each week answering questions and cut that in half this past week.
 > — Senior Engineer, Row Labs
@@ -305,7 +305,7 @@ The chip above the composer (right side) shows which file Coop is using as chat 
 
 A **repo-only** chip (`/RepoName`) appears only when you choose **Use repo** in the explorer with no file selected.
 
-Outside-workspace files (for example Downloads) stay **L** and work for plain chat. Quick actions that need the code graph may stay blocked until you open a repo file — the chip is not removed.
+With an **L** chip, Coop is a normal assistant on that file: chat, ghost text, and reviewable edits. You can still ask about Slack, Jira, and the other tools your admin connected. Repo slash commands (`/understand`, `/blast`, `/owner`, `/trace`, `/gaps`) stay on an indexed repo you picked with **Use repo**. Outside-workspace files (for example Downloads) stay **L**. See [Can I use Coop on a local file?](/docs/faq#can-i-use-coop-on-a-local-file).
 
 ### @-mentions and attachments
 

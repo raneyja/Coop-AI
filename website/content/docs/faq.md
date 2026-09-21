@@ -3,7 +3,7 @@ title: FAQ
 description: Frequently asked questions about CoopAI plans, privacy, security, and features.
 section: help
 order: 2
-lastUpdated: "2026-09-03"
+lastUpdated: "2026-09-21"
 ---
 
 ## General
@@ -84,7 +84,11 @@ Deep-Index builds a searchable code graph on Coop infrastructure for faster cros
 
 ### What is the L / R chip above the chat composer?
 
-That is the **active file context chip** — which file Coop is using for chat. **L** means local disk (workspace, clone, or Cmd+O / Downloads). **R** means you picked the file in Coop’s remote explorer (codehost). It is not an `@` mention. Reloading VS Code does not reopen last session’s file; switching back to a past thread that used a file does. See [Active file context chip](/manual#active-file-context-chip).
+That is the **active file context chip** — which file Coop is using for chat. **L** means local disk (workspace, clone, or Cmd+O / Downloads). **R** means you picked the file in Coop’s remote explorer (codehost). It is not an `@` mention. Reloading VS Code does not reopen last session’s file; switching back to a past thread that used a file does. See [Active file context chip](/manual#active-file-context-chip) and [Can I use Coop on a local file?](#can-i-use-coop-on-a-local-file).
+
+### Can I use Coop on a local file?
+
+Yes. Open the file in VS Code and Coop works as a normal assistant on that file: chat, ghost text, and reviewable edits. You can still ask about Slack, Jira, and the other tools your admin connected. You do not get the repo slash commands (`/understand`, `/blast`, `/owner`, `/trace`, `/gaps`). Those stay on an indexed repo you picked with **Use repo**. You can still work across every repo indexed for your team without cloning them.
 
 ### Can I share prompts with my team?
 
