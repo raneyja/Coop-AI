@@ -49,18 +49,19 @@ export function HomeStackContextSection({ tone = "light" }: HomeStackContextSect
           }`}
         >
           Most copilots only see the file you have open. Agents will happily rewrite a tree they
-          don&apos;t understand. That&apos;s a demo, not how you ship production software — and it is not
-          how you understand a codebase without cloning the monorepo onto every laptop.
+          don&apos;t understand. That&apos;s a demo, not how you ship production software. It is also
+          not how you understand a codebase without cloning the monorepo onto every laptop. You can
+          still use Coop on a local file as a normal assistant if you want to.
         </p>
         <p
           className={`mt-4 max-w-2xl text-base leading-relaxed md:text-lg ${
             dark ? "text-white/55" : "text-gray-700"
           }`}
         >
-          The hard part isn&apos;t generating code. It&apos;s having company Slack and Jira in VS Code —
-          shared org context your admin connected, not each person&apos;s private chat — plus the same
-          CODEOWNERS signal you use to find a code owner, and the blast radius of a change — plus the
-          last few PRs —{" "}
+          The hard part isn&apos;t generating code. It&apos;s having company Slack and Jira in VS Code.
+          That is shared org context your admin connected, not each person&apos;s private chat. You
+          also get the same CODEOWNERS signal you use to find a code owner, the blast radius of a
+          change, and the last few PRs,{" "}
           <span className={`font-medium ${dark ? "text-white" : "text-gray-900"}`}>
             before they touch a line
           </span>

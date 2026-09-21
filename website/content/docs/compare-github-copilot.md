@@ -3,10 +3,10 @@ title: CoopAI vs GitHub Copilot
 description: "Compare CoopAI and GitHub Copilot for VS Code code intelligence, ownership, blast radius, and Slack/Jira context — with a side-by-side matrix."
 section: compare
 order: 2
-lastUpdated: "2026-09-07"
+lastUpdated: "2026-09-21"
 ---
 
-GitHub Copilot is excellent at suggesting the next line and chatting about the file you have open. CoopAI is **VS Code code intelligence** for the rest of the job: understand a codebase without cloning, find a code owner, check blast radius, and bring company Slack and Jira into VS Code before you change production paths.
+GitHub Copilot is excellent at suggesting the next line and chatting about the file you have open. Coop does that on a local file too: chat, ghost text, and reviewable edits, and you can still ask about Slack, Jira, and the other tools your admin connected. CoopAI is also **VS Code code intelligence** for the rest of the job: understand a codebase without cloning, find a code owner, check blast radius, and bring company Slack and Jira into VS Code before you change production paths. Repo slash commands stay on an indexed repo.
 
 If your team already ships with Copilot for autocomplete, CoopAI is the layer that answers *why this exists*, *who owns it*, and *what else breaks* — with evidence from the repo graph and live tools.
 
