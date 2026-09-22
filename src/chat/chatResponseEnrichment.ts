@@ -51,6 +51,7 @@ import {
 } from "../prompts/mentionScope";
 import { rewriteCustomerFacingProse } from "./customerFacingAnswer";
 import { enrichFileAssistantResponse } from "./fileAssistantAnswer";
+import { isolateContextBundleForTurn } from "../workspace/repoEvidenceIsolation";
 
 /**
  * Post-processes assistant responses for quick actions and their slash-command aliases.
@@ -85,8 +86,17 @@ export function enrichChatResponseForAction(options: {
    */
   fileAssistant?: boolean;
 }): string {
-  const { quickAction, integrationProvider, content, contextBundle, activeFile } = options;
+  const { quickAction, integrationProvider, content, activeFile } = options;
   const fileAssistant = Boolean(options.fileAssistant);
+  const contextBundle = Array.isArray(options.contextBundle)
+    ? isolateContextBundleForTurn(options.contextBundle, {
+        owner: options.owner,
+        repo: options.repo,
+        file: activeFile,
+        namedIntegration: integrationProvider,
+        dropRemoteIntegrations: fileAssistant
+      })
+    : options.contextBundle;
   const mentions = options.mentions ?? [];
   const scopeAction: MentionScopeQuickAction | undefined =
     quickAction ??
@@ -159,7 +169,7 @@ export function enrichChatResponseForAction(options: {
     enriched = enrichPlainChatCallerResponse(enriched, blast);
   }
 
-  switch (quickAction) {
+  switch (fileAssistant ? undefined : quickAction) {
     case "trace-decision":
       enriched = enrichTraceDecisionResponse({
         content: enriched,

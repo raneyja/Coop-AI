@@ -28,6 +28,7 @@ import {
   buildIntegrationSearchTermList,
   collectCrossToolSearchText
 } from "./integrationSearchTerms";
+import { evidenceTextIsForeignToRepo } from "../workspace/repoEvidenceIsolation";
 import { buildTraceDecisionSearchSeeds } from "./traceDecisionSearch";
 import type { DecisionTimeline } from "../types/decisionTimeline";
 import {
@@ -478,7 +479,10 @@ async function enrichIntegrationStages(
     data.notionSearch = notionSearch;
   }
 
-  const crossToolText = collectCrossToolSearchText(confluenceSearch, notionSearch);
+  const crossToolText = collectCrossToolSearchText(confluenceSearch, notionSearch).filter(
+    (chunk) =>
+      !evidenceTextIsForeignToRepo(chunk, { owner: options.owner, repo: options.repo })
+  );
   const crossToolKeys = crossToolText.length > 0 ? crossToolText : undefined;
   const docExtraTerms = [...termsFor("google-docs"), ...crossToolText];
 

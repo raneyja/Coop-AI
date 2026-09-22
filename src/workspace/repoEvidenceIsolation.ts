@@ -1,5 +1,8 @@
+import { CODE_HOST_PROVIDERS } from "../api/codeHosts/types";
+import type { IntegrationChatProvider } from "../chat/types";
 import type { RepoContext } from "../chat/types";
 import { isExplicitRepoScope } from "../context/contextScope";
+import { repoNameVariants } from "../context/docSearchQuery";
 import { isOsAbsoluteDiskPath } from "../context/outsideWorkspaceFile";
 
 /**
@@ -190,6 +193,379 @@ export function shouldSkipLocalEditorAttachForRepoScope(ctx: RepoContext): boole
 /** Prompt / Sources label: org docs are supplementary, not repo architecture SoT. */
 export const ORG_DOCS_EVIDENCE_LABEL =
   "Org docs (org-wide Confluence/Notion — not this repository's architecture source of truth)";
+
+/**
+ * This turn's scenario. Slug match (`owner/repo`), not a substring.
+ * Owner `coop-ai` is not the Coop-AI product. Repo `plane` is not Coop-AI.
+ */
+export type TurnIsolationScenario = {
+  owner?: string;
+  repo?: string;
+  provider?: string;
+  file?: string;
+  /** Explicit /slack, /jira, … this turn. Other integration kinds are removed. */
+  namedIntegration?: IntegrationChatProvider;
+  /** /compare: evidence may name either repo. Sticky third repo is not included. */
+  allowedRepos?: RepoCoords[];
+  /** L file-assistant: drop remote integration evidence. The attached file stays. */
+  dropRemoteIntegrations?: boolean;
+};
+
+/** Whole repo slug is the Coop product. Owner `coop-ai` does not qualify. */
+export function activeRepoIsCoopProduct(repo: string | undefined): boolean {
+  const name = repo?.trim().toLowerCase().replace(/[\s_]+/g, "-") ?? "";
+  return name === "coop-ai" || name === "coopai";
+}
+
+const FOREIGN_PRODUCT_MARKERS = ["coop-ai", "coop ai", "coopai"];
+
+const PATH_LIKE_OWNERS = new Set([
+  "src",
+  "app",
+  "apps",
+  "packages",
+  "lib",
+  "docs",
+  "test",
+  "tests",
+  "web",
+  "api",
+  "components",
+  "pages",
+  "public",
+  "dist",
+  "node_modules"
+]);
+
+function allowedReposForScenario(scenario: TurnIsolationScenario): RepoCoords[] {
+  const repos: RepoCoords[] = [];
+  if (scenario.owner?.trim() && scenario.repo?.trim()) {
+    repos.push({
+      owner: scenario.owner,
+      repo: scenario.repo,
+      provider: scenario.provider
+    });
+  }
+  for (const extra of scenario.allowedRepos ?? []) {
+    if (extra.owner?.trim() && extra.repo?.trim()) {
+      repos.push(extra);
+    }
+  }
+  return repos;
+}
+
+function citedRepoSlugs(text: string): RepoCoords[] {
+  const hostPattern = new RegExp(
+    `\\b(?:${CODE_HOST_PROVIDERS.join("|")}):([a-z0-9_.-]+)/([a-z0-9_.-]+)\\b`,
+    "gi"
+  );
+  const barePattern = /\b([a-z0-9_.-]{2,})\/([a-z0-9_.-]{2,})\b/gi;
+  const found: RepoCoords[] = [];
+  const seen = new Set<string>();
+  const push = (owner: string, repo: string) => {
+    const key = `${owner.toLowerCase()}/${repo.toLowerCase()}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    found.push({ owner, repo });
+  };
+  for (const match of text.matchAll(hostPattern)) {
+    if (match[1] && match[2]) {
+      push(match[1], match[2]);
+    }
+  }
+  for (const match of text.matchAll(barePattern)) {
+    const owner = match[1];
+    const repo = match[2];
+    if (!owner || !repo) {
+      continue;
+    }
+    if (PATH_LIKE_OWNERS.has(owner.toLowerCase())) {
+      continue;
+    }
+    if (!/[-_]/.test(repo) && !activeRepoIsCoopProduct(repo)) {
+      continue;
+    }
+    push(owner, repo);
+  }
+  return found;
+}
+
+function textIncludesTerm(haystack: string, term: string): boolean {
+  const escaped = term.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|[^a-z0-9])${escaped}(?:[^a-z0-9]|$)`, "i").test(haystack);
+}
+
+function textNamesRepo(haystack: string, coords: RepoCoords): boolean {
+  const repo = coords.repo?.trim();
+  if (!repo) {
+    return false;
+  }
+  const lower = haystack.toLowerCase();
+  for (const variant of repoNameVariants(repo)) {
+    if (textIncludesTerm(lower, variant)) {
+      return true;
+    }
+  }
+  const owner = coords.owner?.trim().toLowerCase();
+  if (owner) {
+    for (const variant of repoNameVariants(repo)) {
+      if (textIncludesTerm(lower, `${owner}/${variant.toLowerCase()}`)) {
+        return true;
+      }
+    }
+  }
+  if (activeRepoIsCoopProduct(repo)) {
+    if (FOREIGN_PRODUCT_MARKERS.some((marker) => lower.includes(marker))) {
+      return true;
+    }
+    if (/\bcoop-\d+\b/i.test(lower)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * True when text cites a different owner/repo, or a Coop product page while
+ * this turn's repo is not that product. Repo-name substring `/coop/` is not used.
+ */
+export function evidenceTextIsForeignToRepo(
+  text: string,
+  scenario: TurnIsolationScenario,
+  options?: { ignoreTicketKeys?: boolean }
+): boolean {
+  const allowed = allowedReposForScenario(scenario);
+  if (allowed.length === 0) {
+    return false;
+  }
+  const haystack = text.toLowerCase();
+  for (const cited of citedRepoSlugs(haystack)) {
+    const matchesTurn = allowed.some((repo) => sameRepoCoords(cited, repo));
+    if (!matchesTurn) {
+      return true;
+    }
+  }
+  const turnIsCoopProduct = allowed.some((repo) => activeRepoIsCoopProduct(repo.repo));
+  if (!turnIsCoopProduct) {
+    if (FOREIGN_PRODUCT_MARKERS.some((marker) => haystack.includes(marker))) {
+      return true;
+    }
+    if (!options?.ignoreTicketKeys && /\bcoop-\d+\b/i.test(haystack)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** True when text positively names this turn's Use-repo (or either /compare repo). */
+export function evidenceTextNamesActiveRepo(text: string, scenario: TurnIsolationScenario): boolean {
+  const allowed = allowedReposForScenario(scenario);
+  if (allowed.length === 0) {
+    return false;
+  }
+  const haystack = text.toLowerCase();
+  if (allowed.some((repo) => textNamesRepo(haystack, repo))) {
+    return true;
+  }
+  return citedRepoSlugs(haystack).some((cited) =>
+    allowed.some((repo) => sameRepoCoords(cited, repo))
+  );
+}
+
+/**
+ * Keep an integration hit only when it names this turn's repo and does not cite another.
+ * Unlinked hits are dropped (honest empty). No Use-repo pin → keep (caller has no scenario).
+ */
+export function integrationHitBelongsToTurn(
+  text: string,
+  scenario: TurnIsolationScenario,
+  options?: { ignoreTicketKeys?: boolean }
+): boolean {
+  if (scenario.dropRemoteIntegrations) {
+    return false;
+  }
+  if (allowedReposForScenario(scenario).length === 0) {
+    return true;
+  }
+  if (evidenceTextIsForeignToRepo(text, scenario, options)) {
+    return false;
+  }
+  return evidenceTextNamesActiveRepo(text, scenario);
+}
+
+const INTEGRATION_FIELDS: Array<{
+  key: string;
+  kind: IntegrationChatProvider;
+  listKey: "pages" | "documents" | "messages" | "issues";
+}> = [
+  { key: "confluenceSearch", kind: "confluence", listKey: "pages" },
+  { key: "notionSearch", kind: "notion", listKey: "pages" },
+  { key: "googleDocsSearch", kind: "google-docs", listKey: "documents" },
+  { key: "slackSearch", kind: "slack", listKey: "messages" },
+  { key: "teamsSearch", kind: "teams", listKey: "messages" },
+  { key: "jiraSearch", kind: "jira", listKey: "issues" },
+  { key: "confluence", kind: "confluence", listKey: "pages" },
+  { key: "notion", kind: "notion", listKey: "pages" },
+  { key: "googleDocs", kind: "google-docs", listKey: "documents" },
+  { key: "slack", kind: "slack", listKey: "messages" },
+  { key: "teams", kind: "teams", listKey: "messages" },
+  { key: "jira", kind: "jira", listKey: "issues" }
+];
+
+const SNIPPET_KEYS = ["files", "semanticFiles", "snippets", "codeSnippets", "localFiles"];
+
+function asDataRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as Record<string, unknown>;
+}
+
+function integrationHitText(hit: unknown): string {
+  const record = asDataRecord(hit);
+  if (!record) {
+    return "";
+  }
+  return ["title", "excerpt", "summary", "description", "text", "body", "key"]
+    .map((field) => record[field])
+    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+    .join(" ");
+}
+
+function compareReposInBundle(bundle: readonly { data?: unknown }[]): RepoCoords[] | undefined {
+  for (const entry of bundle) {
+    const data = asDataRecord(entry.data);
+    const compare = asDataRecord(data?.dualRepoCompare);
+    const left = asDataRecord(compare?.left);
+    const right = asDataRecord(compare?.right);
+    const leftOwner = typeof left?.owner === "string" ? left.owner : undefined;
+    const leftRepo = typeof left?.repo === "string" ? left.repo : undefined;
+    const rightOwner = typeof right?.owner === "string" ? right.owner : undefined;
+    const rightRepo = typeof right?.repo === "string" ? right.repo : undefined;
+    if (leftOwner && leftRepo && rightOwner && rightRepo) {
+      return [
+        { owner: leftOwner, repo: leftRepo },
+        { owner: rightOwner, repo: rightRepo }
+      ];
+    }
+  }
+  return undefined;
+}
+
+function filterIntegrationValue(
+  value: unknown,
+  field: (typeof INTEGRATION_FIELDS)[number],
+  scenario: TurnIsolationScenario
+): unknown | undefined {
+  if (scenario.dropRemoteIntegrations) {
+    return undefined;
+  }
+  if (scenario.namedIntegration && scenario.namedIntegration !== field.kind) {
+    return undefined;
+  }
+  const record = asDataRecord(value);
+  if (!record) {
+    return value;
+  }
+  const list = record[field.listKey];
+  if (!Array.isArray(list)) {
+    return value;
+  }
+  if (allowedReposForScenario(scenario).length === 0 && !scenario.namedIntegration) {
+    return value;
+  }
+  const kept = list.filter((hit) => integrationHitBelongsToTurn(integrationHitText(hit), scenario));
+  if (kept.length === 0) {
+    if (typeof record.error === "string" && record.error.trim()) {
+      return { ...record, [field.listKey]: [] };
+    }
+    return undefined;
+  }
+  if (kept.length === list.length) {
+    return value;
+  }
+  return { ...record, [field.listKey]: kept };
+}
+
+function filterSnippetList(value: unknown, scenario: TurnIsolationScenario): unknown {
+  if (!Array.isArray(value) || scenario.dropRemoteIntegrations) {
+    return value;
+  }
+  const allowed = allowedReposForScenario(scenario);
+  if (allowed.length === 0) {
+    return value;
+  }
+  return value.filter((item) => {
+    const record = asDataRecord(item);
+    if (!record || typeof record.path !== "string") {
+      return true;
+    }
+    return allowed.some((repo) =>
+      snippetBelongsToActiveRepo(
+        { repoId: typeof record.repoId === "string" ? record.repoId : undefined },
+        repo,
+        { allowMissingRepoId: true }
+      )
+    );
+  });
+}
+
+function isolateDataRecord(
+  data: Record<string, unknown>,
+  scenario: TurnIsolationScenario
+): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...data };
+  for (const field of INTEGRATION_FIELDS) {
+    if (!(field.key in next)) {
+      continue;
+    }
+    const filtered = filterIntegrationValue(next[field.key], field, scenario);
+    if (filtered === undefined) {
+      delete next[field.key];
+    } else {
+      next[field.key] = filtered;
+    }
+  }
+  if (!scenario.dropRemoteIntegrations) {
+    for (const key of SNIPPET_KEYS) {
+      if (key in next) {
+        next[key] = filterSnippetList(next[key], scenario);
+      }
+    }
+  }
+  return next;
+}
+
+/**
+ * Drop foreign Confluence/Notion/Google Docs pages, Slack/Teams threads, Jira
+ * issues, and code snippets whose repoId is another owner/repo.
+ * /compare bundles keep only the two named repos (sticky third repo is foreign).
+ */
+export function isolateContextBundleForTurn<T extends { data?: unknown }>(
+  bundle: readonly T[],
+  scenario: TurnIsolationScenario
+): T[] {
+  const compareRepos = compareReposInBundle(bundle);
+  const effective: TurnIsolationScenario = compareRepos
+    ? {
+        ...scenario,
+        owner: undefined,
+        repo: undefined,
+        allowedRepos: compareRepos,
+        dropRemoteIntegrations: false
+      }
+    : scenario;
+  return bundle.map((entry) => {
+    const data = asDataRecord(entry.data);
+    if (!data) {
+      return entry;
+    }
+    const next = isolateDataRecord(data, effective);
+    return { ...entry, data: next };
+  });
+}
 
 export function orgDocsSynthesisGuardrail(activeOwner?: string, activeRepo?: string): string {
   const label =
