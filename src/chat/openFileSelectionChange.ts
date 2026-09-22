@@ -41,6 +41,13 @@ const SELECTION_CHANGE_LEAD =
 export const REMOTE_SELECTION_UNREADABLE_ERROR =
   "Could not read the open remote file. Keep that file tab open, or reopen it from Remote workspace.";
 
+/**
+ * Change asks that name another symbol via "to requireauth" (no camelCase/backticks).
+ * camelCase/snake_case stay on messageHasNamedCodeSymbol.
+ */
+const CHANGE_TARGET_PREP =
+  /\b(?:to|in|for|on|into)\s+(?!this\b|the\b|that\b|here\b|it\b|a\b|an\b|our\b|your\b)([a-z][a-z0-9_]{4,})\b/i;
+
 function isLiveSelection(lines: [number, number] | undefined): lines is [number, number] {
   if (!lines || lines.length !== 2) {
     return false;
@@ -110,7 +117,10 @@ function namesOtherTarget(message: string, chipFile: string): boolean {
     }
     return true;
   }
-  return messageHasNamedCodeSymbol(stripped);
+  if (messageHasNamedCodeSymbol(stripped)) {
+    return true;
+  }
+  return CHANGE_TARGET_PREP.test(stripped);
 }
 
 export function openFileSelectionOwnsChange(input: OpenFileSelectionChangeInput): boolean {

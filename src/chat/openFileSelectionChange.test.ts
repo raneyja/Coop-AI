@@ -57,6 +57,16 @@ test("named other symbol still hunts", () => {
   );
 });
 
+test("lowercase other symbol without backticks still hunts", () => {
+  assert.equal(
+    openFileSelectionOwnsChange({
+      ...chip,
+      message: "add a guard to requireauth"
+    }),
+    false
+  );
+});
+
 test("repo-wide rename does not own the open file", () => {
   assert.equal(
     openFileSelectionOwnsChange({
@@ -168,7 +178,7 @@ test("highlight + change does not enter the agent loop", () => {
 
 test("named other symbol with a highlight still runs the agent loop", () => {
   const options = {
-    query: "add a guard to `requireAuth`",
+    query: "add a guard to requireauth",
     hasQuickAction: false,
     file: ".dockerignore",
     selectedLines: [11, 11] as [number, number]
