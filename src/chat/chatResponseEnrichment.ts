@@ -50,6 +50,7 @@ import {
   type MentionScopeRef
 } from "../prompts/mentionScope";
 import { rewriteCustomerFacingProse } from "./customerFacingAnswer";
+import { enrichFileAssistantResponse } from "./fileAssistantAnswer";
 
 /**
  * Post-processes assistant responses for quick actions and their slash-command aliases.
@@ -216,8 +217,10 @@ export function enrichChatResponseForAction(options: {
   }
 
   const stripped = stripTemplateSectionHeadings(enriched);
-  // Hunt-miss intern-speak rewrites say "in this repo". Keep the open-file answer.
-  return fileAssistant ? stripped : rewriteCustomerFacingProse(stripped);
+  if (fileAssistant && !quickAction && !integrationProvider) {
+    return enrichFileAssistantResponse(stripped);
+  }
+  return rewriteCustomerFacingProse(stripped);
 }
 
 function packageStructureFromBundle(

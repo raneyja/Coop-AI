@@ -6,6 +6,7 @@ import { readCodeHostProvider } from "../config/codeHostConfig";
 import { findEditorForRepoFile } from "../context/editorFileContext";
 import { parseGithubVfsUri, pathsReferToSameFile, isRemoteTabAbsolutePath } from "../context/githubVfsUri";
 import { resolveLocalAbsolutePath } from "../context/localFileResolver";
+import { rememberedRemoteEntry } from "../context/remoteViewBuffer";
 import { toRepositoryRelativePath } from "../context/repoFilePath";
 import { openRemoteFileInEditor } from "../workspace/repoEditorOpener";
 import { findAllSearchMatches } from "./patchContent";
@@ -119,74 +120,13 @@ export function findOpenDocumentForPatchFile(
   return undefined;
 }
 
-export type RememberedRemoteBuffer = {
-  uriString: string;
-  content: string;
-  owner?: string;
-  repo?: string;
-};
-
-const rememberedRemoteBuffers = new Map<string, RememberedRemoteBuffer>();
-
-function normalizeBufferKey(relativePath: string): string {
-  return (toRepositoryRelativePath(relativePath) ?? relativePath).replace(/\\/g, "/").replace(/^\.?\//, "");
-}
-
-function rememberedRemoteEntry(relativePath: string): RememberedRemoteBuffer | undefined {
-  const key = normalizeBufferKey(relativePath);
-  const direct = rememberedRemoteBuffers.get(key);
-  if (direct) {
-    return direct;
-  }
-  for (const [stored, value] of rememberedRemoteBuffers) {
-    if (pathsReferToSameFile(stored, key)) {
-      return value;
-    }
-  }
-  return undefined;
-}
-
-/** Bitbucket/GitLab Zero-Clone tabs are untitled — remember path → buffer at open. */
-export function rememberRemotePatchBuffer(
-  relativePath: string,
-  uri: vscode.Uri,
-  content: string,
-  identity?: { owner?: string; repo?: string }
-): void {
-  const key = normalizeBufferKey(relativePath);
-  if (!key || !content.trim()) {
-    return;
-  }
-  rememberedRemoteBuffers.set(key, {
-    uriString: uri.toString(),
-    content,
-    owner: identity?.owner?.trim() || undefined,
-    repo: identity?.repo?.trim() || undefined
-  });
-}
-
-export function listRememberedRemoteBuffers(): Array<{ path: string } & RememberedRemoteBuffer> {
-  return [...rememberedRemoteBuffers.entries()].map(([path, value]) => ({ path, ...value }));
-}
-
-export function rememberedRemoteBufferForUri(
-  uriString: string
-): ({ path: string } & RememberedRemoteBuffer) | undefined {
-  const wanted = uriString.trim();
-  if (!wanted) {
-    return undefined;
-  }
-  for (const [path, value] of rememberedRemoteBuffers) {
-    if (value.uriString === wanted) {
-      return { path, ...value };
-    }
-  }
-  return undefined;
-}
-
-export function clearRemotePatchBuffersForTests(): void {
-  rememberedRemoteBuffers.clear();
-}
+export type { RememberedRemoteBuffer } from "../context/remoteViewBuffer";
+export {
+  clearRemotePatchBuffersForTests,
+  listRememberedRemoteBuffers,
+  rememberRemotePatchBuffer,
+  rememberedRemoteBufferForUri
+} from "../context/remoteViewBuffer";
 
 function liveDocumentForUriString(uriString: string): vscode.TextDocument | undefined {
   return vscode.workspace.textDocuments.find((doc) => doc.uri.toString() === uriString);

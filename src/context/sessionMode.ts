@@ -3,6 +3,7 @@ import type { ChatIntentJob, ChatIntentPlan, ChatIntentTask } from "../chat/inte
 import {
   isRemoteChip,
   isSameRepoFilePath,
+  isUntitledScratchFile,
   shouldKeepRemoteProvenance
 } from "./fileChipIdentity";
 import { isOsAbsoluteDiskPath } from "./outsideWorkspaceFile";
@@ -81,6 +82,14 @@ export function decideExplicitEditorChip(input: {
   if (!input.userActivatedEditor || !input.incomingFile?.trim()) {
     return "ignore";
   }
+  // VFS tab or API untitled mapped back to the remote path — never L.
+  if (input.incomingFileSource === "remote" && !isOsAbsoluteDiskPath(input.incomingFile)) {
+    return "keep-remote";
+  }
+  // Leftover / API Untitled-N must not steal a remote explorer pick.
+  if (input.currentIsRemote && isUntitledScratchFile(input.incomingFile, input.incomingFileSource)) {
+    return "ignore";
+  }
   const samePathClone =
     input.currentIsRemote &&
     input.incomingFileSource !== "remote" &&
@@ -92,6 +101,36 @@ export function decideExplicitEditorChip(input: {
     return "keep-remote";
   }
   return "chip-local";
+}
+
+/**
+ * Incoming editor may clear the remote pin only for a real local pick
+ * (Downloads / different workspace file). Untitled scratch and same-path
+ * clones must not demote R → L Untitled-1.
+ */
+export function incomingStealsRemoteChip(input: {
+  incomingFile?: string;
+  incomingFileSource?: RepoContextFileSource;
+  currentFile?: string;
+}): boolean {
+  const incoming = input.incomingFile?.trim();
+  if (!incoming) {
+    return false;
+  }
+  if (input.incomingFileSource === "remote" && !isOsAbsoluteDiskPath(incoming)) {
+    return false;
+  }
+  if (isUntitledScratchFile(incoming, input.incomingFileSource)) {
+    return false;
+  }
+  if (isOsAbsoluteDiskPath(incoming) || input.incomingFileSource === "external") {
+    return true;
+  }
+  return (
+    (input.incomingFileSource === "workspace" || input.incomingFileSource === "git") &&
+    Boolean(input.currentFile?.trim()) &&
+    !isSameRepoFilePath(incoming, input.currentFile)
+  );
 }
 
 /** Autocomplete graph follows the session, not the URI scheme. */
