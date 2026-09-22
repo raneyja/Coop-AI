@@ -1,3 +1,4 @@
+import { isOsAbsoluteDiskPath } from "../../context/outsideWorkspaceFile";
 import {
   CodeHostError,
   type CodeHostProvider,
@@ -241,7 +242,14 @@ export type CreatePullRequestEvaluation =
   | { action: "create"; payload: CreatePullRequestInput }
   | {
       action: "nothing";
-      reason: "cancelled" | "dismissed" | "not_yet" | "empty_files" | "missing_branch" | "missing_title";
+      reason:
+        | "cancelled"
+        | "dismissed"
+        | "not_yet"
+        | "empty_files"
+        | "missing_branch"
+        | "missing_title"
+        | "local-file";
     };
 
 export function evaluateCreatePullRequest(
@@ -262,6 +270,9 @@ export function evaluateCreatePullRequest(
   }
   if (!input.title.trim()) {
     return { action: "nothing", reason: "missing_title" };
+  }
+  if ((input.files ?? []).some((file) => isOsAbsoluteDiskPath(file.path))) {
+    return { action: "nothing", reason: "local-file" };
   }
   const files = normalizeWriteFiles(input.files);
   if (files.length === 0) {
@@ -286,6 +297,9 @@ export function validateCreatePullRequestInput(input: CreatePullRequestInput): s
   }
   if (!input.title.trim()) {
     return "Enter a pull request title.";
+  }
+  if ((input.files ?? []).some((file) => isOsAbsoluteDiskPath(file.path))) {
+    return "Can't create a pull request from a local file.";
   }
   if (normalizeWriteFiles(input.files).length === 0) {
     return "Select at least one file to include in the pull request.";

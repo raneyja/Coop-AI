@@ -96,7 +96,7 @@ Yes. Commit `.coop/prompts.json` to your repo. See [Owner's Manual — Prompt Li
 
 ### Can I create a pull request from Coop?
 
-Yes. After you **Apply** an `/edit`, click **Create pull request** on the patch card. Or type **Create a PR** in chat — that works after Apply **or** after you type in a Use-repo file (no Apply required). Confirm the branch, title, and notes, then submit. Cancel or Escape creates nothing. See [Create pull request](/docs/create-pull-request).
+Yes. After you **Apply** an `/edit` on a Use-repo file, click **Create pull request** on the patch card. Or type **Create a PR** in chat — that works after Apply **or** after you type in a Use-repo file (no Apply required). On a local file, Create pull request stays disabled after Apply. Confirm the branch, title, and notes, then submit. Cancel or Escape creates nothing. See [Create pull request](/docs/create-pull-request).
 
 ## Enterprise SSO
 

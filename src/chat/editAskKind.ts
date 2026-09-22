@@ -1,3 +1,5 @@
+import { isConcreteFileEditAsk } from "./editSendRouting";
+
 /**
  * `/edit` only names the target (open file / highlight / repo). The user's words
  * are the spec. Rewrite the highlighted block only when they explicitly ask.
@@ -77,4 +79,25 @@ export function isCommentOnlyEditAsk(
   options?: { priorUserMessages?: string[] }
 ): boolean {
   return resolveEditAskKind(message, options) === "comment";
+}
+
+const QUESTION_LEAD_RE =
+  /^(?:how|what|why|where|when|should|do i|does|is there|explain|describe|if i)\b/i;
+
+/**
+ * A local-file turn that should be a patch, not a tour of the file.
+ * Questions ("if I change this, what else should I check?") stay briefings.
+ */
+export function isLocalFileChangeAsk(message: string | undefined): boolean {
+  const text = message?.trim();
+  if (!text || QUESTION_LEAD_RE.test(text)) {
+    return false;
+  }
+  if (SLASH_EDIT_RE.test(text)) {
+    return true;
+  }
+  if (isCommentOnlyEditAsk(text)) {
+    return true;
+  }
+  return isConcreteFileEditAsk(text);
 }

@@ -1,6 +1,6 @@
 import type { UseCase } from "../api/types";
 import type { IntegrationChatProvider } from "../chat/types";
-import { resolveEditAskKind, type EditAskKind } from "../chat/editAskKind";
+import { isLocalFileChangeAsk, resolveEditAskKind, type EditAskKind } from "../chat/editAskKind";
 import { isOpenFileReviewAsk } from "../chat/plainChatExplain";
 import { DECISION_HISTORIAN_SYSTEM } from "./decisionSynthesis";
 import { OWNERSHIP_INTELLIGENCE_SYSTEM } from "./ownershipSynthesis";
@@ -786,7 +786,8 @@ Evidence is the attached file body only. You may name imports. Do not describe h
 Shape, then stop:
 - Open with 1–3 sentences that answer the ask from the attached file. Call it a local file and use that path. Name symbols that are actually in the file.
 - Optional: at most 4 bullets that are contracts in that file (signatures, attributes, logging, return types).
-- One honest-limit sentence: other files were not read, so callers / implementations of imported types are unknown.
+- One honest-limit sentence, then stop: Other files were not read, so callers and implementations of imported types are unknown.
+- Do not restate that limit in a second sentence ("I only read this local file" plus the sentence above is one thought — write it once).
 - Stop. No second heading. No offer to patch, search, or attach more files.
 
 “What else should I check?” means contracts in this file — not Blast Radius, not a locate hunt, and not a generic review.
@@ -799,6 +800,24 @@ FAIL: headings like Technical checks / Security & operational / Tests & integrat
 ## Path wording
 The attached path is a local file on the user's computer. Call it a local file and use that path.
 Do not write "in the repo", "this repository", "the codebase", or a GitHub repo name.`;
+
+/** Local-file change: the patch card is the answer. Do not tour the file. */
+export const LOCAL_FILE_EDIT_DIRECTIVE = `## Turn directive (local file edit)
+The user asked for a change. The patch is the answer.
+
+- One short sentence: what the patch changes. Call it a local file and use that path.
+- Then the patch only.
+- Do not list members, signatures, events, attributes, or logging.
+- Do not add a second paragraph. Do not write "Other files were not read".
+- Stop.
+
+## Path wording
+The attached path is a local file on the user's computer. Call it a local file and use that path.
+Do not write "in the repo", "this repository", "the codebase", or a GitHub repo name.`;
+
+export function localFileTurnDirective(message: string | undefined): string {
+  return isLocalFileChangeAsk(message) ? LOCAL_FILE_EDIT_DIRECTIVE : LOCAL_FILE_PATH_DIRECTIVE;
+}
 
 /** Last lines of a C4 turn — models follow this over the long chat template. */
 export const OPEN_FILE_PR_REVIEW_DIRECTIVE = `## Turn directive (PR review)
@@ -850,7 +869,7 @@ export function formatChatMessageWithLocalFiles(options: {
     lines.push("", OPEN_FILE_PR_REVIEW_DIRECTIVE);
   }
   if (options.fileAssistant) {
-    lines.push("", LOCAL_FILE_PATH_DIRECTIVE);
+    lines.push("", localFileTurnDirective(options.message));
   }
   return lines.join("\n");
 }
@@ -1172,7 +1191,7 @@ export function buildUserMessageWithContext(
   }
   lines.push("</attached_context>", "", message.trim());
   if (context?.fileAssistant && context.file?.trim()) {
-    lines.push("", LOCAL_FILE_PATH_DIRECTIVE);
+    lines.push("", localFileTurnDirective(message));
   }
   if (isOpenFileReviewAsk(message)) {
     lines.push("", OPEN_FILE_PR_REVIEW_DIRECTIVE);

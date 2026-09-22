@@ -3,7 +3,7 @@ title: Create pull request
 description: Open a pull request from editor changes or applied /edit patches — from the patch card or by asking in chat.
 section: extension
 order: 5
-lastUpdated: "2026-08-25"
+lastUpdated: "2026-09-22"
 ---
 
 <!-- figures lg -->
@@ -20,7 +20,7 @@ You can open a pull request for your team without leaving VS Code. Three ways �
 
 There is no `/pr` slash command. Chat understands everyday wording — “create a pull request”, “create a pr of the work I just applied”.
 
-You need a **Use repo**. Unsaved buffers count. Cancel never creates a branch or PR.
+You need a **Use repo**. Unsaved buffers count. Cancel never creates a branch or PR. Applying an edit on a local file keeps Apply and Undo; Create pull request stays on the card but is disabled.
 
 ## Open a pull request
 

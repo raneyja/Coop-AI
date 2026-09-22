@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   shouldHidePatchMarkdownForMessage,
   shouldRenderPatchCardForMessage,
+  isCreatePullRequestEnabled,
   showCreatePullRequestButton
 } from "./PatchCard";
 import type { PatchCardState } from "../chat/types";
@@ -128,15 +129,45 @@ test("B-G7 / UX-G4 Create PR is hidden until Apply sets canCreatePr", () => {
     showCreatePullRequestButton({ ...pending, status: "applied", canCreatePr: true }),
     true
   );
-  assert.equal(
-    showCreatePullRequestButton({
-      ...pending,
-      status: "applied",
-      canCreatePr: false,
-      prFiles: [{ path: "src/example.ts", content: "new\n" }]
-    }),
-    true
-  );
+  const appliedWithFiles = {
+    ...pending,
+    status: "applied" as const,
+    canCreatePr: false,
+    prFiles: [{ path: "src/example.ts", content: "new\n" }]
+  };
+  assert.equal(showCreatePullRequestButton(appliedWithFiles), true);
+  assert.equal(isCreatePullRequestEnabled(appliedWithFiles), true);
+});
+
+test("local-file Apply keeps Create PR visible and disabled", () => {
+  const pending: PatchCardState = {
+    status: "pending",
+    messageTimestamp: 10,
+    fileCount: 1,
+    hunkCount: 1,
+    files: baseFiles,
+    prBlockedReason: "local-file"
+  };
+  assert.equal(showCreatePullRequestButton(pending), false);
+  assert.equal(isCreatePullRequestEnabled(pending), false);
+  const applied: PatchCardState = {
+    ...pending,
+    status: "applied",
+    canCreatePr: false,
+    prBlockedReason: "local-file",
+    prFiles: [{ path: "/Users/jon/Desktop/cody-vs-main/src/Foo.cs", content: "// yo\n" }]
+  };
+  assert.equal(showCreatePullRequestButton(applied), true);
+  assert.equal(isCreatePullRequestEnabled(applied), false);
+  const samePathClone: PatchCardState = {
+    ...pending,
+    status: "applied",
+    canCreatePr: true,
+    prBlockedReason: undefined,
+    prFiles: [{ path: "src/Cody.Core/Agent/Foo.cs", content: "// remote\n" }]
+  };
+  assert.equal(showCreatePullRequestButton(samePathClone), true);
+  assert.equal(isCreatePullRequestEnabled(samePathClone), true);
 });
 
 test("landing copy names the class.method and file", () => {

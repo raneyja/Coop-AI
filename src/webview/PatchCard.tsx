@@ -1,4 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
+import {
+  CREATE_PR_LOCAL_FILE_MESSAGE,
+  isEligibleCreatePrCard,
+  isLocalFileCreatePrCard
+} from "../chat/createPrChatRouting";
 import type { CodeHostProviderPreference, PatchCardState, PatchPreviewHunk } from "../chat/types";
 import { PatchDiffView } from "./PatchDiffView";
 import { CreatePullRequestModal } from "./components/CreatePullRequestModal";
@@ -154,7 +159,7 @@ export function PatchCard({
     if (!openCreatePrRequested) {
       return;
     }
-    if (!showCreatePullRequestButton(state)) {
+    if (!isCreatePullRequestEnabled(state)) {
       onOpenCreatePrConsumed?.();
       return;
     }
@@ -326,7 +331,11 @@ export function PatchCard({
           ) : null}
           {showCreatePullRequestButton(state) ? (
             <CreatePullRequestButton
+              disabled={!isCreatePullRequestEnabled(state)}
               onClick={() => {
+                if (!isCreatePullRequestEnabled(state)) {
+                  return;
+                }
                 setPrError(undefined);
                 onClearPrResult?.();
                 setModalFiles(undefined);
@@ -379,9 +388,26 @@ export function PatchCard({
   );
 }
 
-function CreatePullRequestButton({ onClick }: { onClick: () => void }): React.ReactElement {
+function CreatePullRequestButton({
+  onClick,
+  disabled
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+}): React.ReactElement {
   return (
-    <button type="button" className={CREATE_PULL_REQUEST_BUTTON_CLASS} onClick={onClick}>
+    <button
+      type="button"
+      className={CREATE_PULL_REQUEST_BUTTON_CLASS}
+      disabled={disabled}
+      title={disabled ? CREATE_PR_LOCAL_FILE_MESSAGE : undefined}
+      onClick={() => {
+        if (disabled) {
+          return;
+        }
+        onClick();
+      }}
+    >
       {CREATE_PULL_REQUEST_BUTTON_LABEL}
     </button>
   );
@@ -409,10 +435,21 @@ export function showCreatePullRequestButton(state: PatchCardState): boolean {
   if (state.status !== "applied") {
     return false;
   }
+  if (isLocalFileCreatePrCard(state)) {
+    return true;
+  }
   if (state.canCreatePr === true) {
     return true;
   }
   return (state.prFiles ?? []).some((file) => file.path.trim() && file.content.length > 0);
+}
+
+/** Visible after local Apply, but not clickable and must not open confirm. */
+export function isCreatePullRequestEnabled(state: PatchCardState): boolean {
+  if (!showCreatePullRequestButton(state) || isLocalFileCreatePrCard(state)) {
+    return false;
+  }
+  return isEligibleCreatePrCard(state);
 }
 
 export function findPatchCardForMessage(

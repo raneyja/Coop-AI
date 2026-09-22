@@ -261,10 +261,13 @@ export type PatchCardState = {
   appliedFileCount?: number;
   canUndo?: boolean;
   /**
-   * Reserved for Phase C Create pull request. Wave 2 B always leaves this false
-   * (button is a disabled/hidden coop-text-btn, not a new primary row).
+   * True after a successful Apply on Use-repo / remote work with file bodies.
+   * Local-file Apply leaves this false and sets `prBlockedReason`.
+   * The button stays a coop-text-btn, not a new primary row.
    */
   canCreatePr?: boolean;
+  /** Set at Apply. Local-file work keeps the button visible and disabled. */
+  prBlockedReason?: "local-file";
   /**
    * Once a patch card has been shown for this assistant message, keep hiding the raw
    * SEARCH/REPLACE fence for that message.

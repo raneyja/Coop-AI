@@ -25,7 +25,8 @@ import {
   defaultPrTitle,
   prCreateErrorFromResult
 } from "./createPullRequestConfirm";
-import { mergeAppliedPrPreviewFiles } from "../chat/createPrChatRouting";
+import { isLocalFileCreatePrCard, mergeAppliedPrPreviewFiles } from "../chat/createPrChatRouting";
+import { isOsAbsoluteDiskPath } from "../context/outsideWorkspaceFile";
 import { isAssistantReplyToEdit, isEditHistoryContent, looksLikePatchStreamingContent } from "./lib/patchStreamDisplay";
 import { DegradationNotification } from "./DegradationNotification";
 import { IntentFeedback } from "./IntentFeedback";
@@ -855,6 +856,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             codeHostProvider={context.provider}
             defaultBranch={context.branch}
             onCreatePullRequest={(draft) => {
+              const files = draft.files.filter(
+                (file) => file.path.trim() && file.content.length > 0 && !isOsAbsoluteDiskPath(file.path)
+              );
+              if (isLocalFileCreatePrCard(card) || files.length === 0) {
+                return;
+              }
               if (typeof messageTimestamp === "number") {
                 setPrCreateByTimestamp((current) => {
                   const next = { ...current };
@@ -876,7 +883,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
                   title: draft.title,
                   body: draft.body,
                   base: draft.base ?? context.branch,
-                  files: draft.files
+                  files
                 }
               });
             }}
@@ -1524,7 +1531,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             break;
           }
           const files = (message.payload.files ?? []).filter(
-            (file) => file.path.trim() && file.content.length > 0
+            (file) => file.path.trim() && file.content.length > 0 && !isOsAbsoluteDiskPath(file.path)
           );
           if (files.length > 0) {
             setCreatePrFilesByTimestamp((current) => ({ ...current, [timestamp]: files }));
@@ -2581,6 +2588,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             return;
           }
           const timestamp = standaloneCreatePr.timestamp;
+          const files = draft.files.filter(
+            (file) => file.path.trim() && file.content.length > 0 && !isOsAbsoluteDiskPath(file.path)
+          );
+          if (files.length === 0) {
+            return;
+          }
           void standalonePrSubmitGuard(async () => {
             setStandalonePrSubmitting(true);
             setPrCreateByTimestamp((current) => {
@@ -2603,7 +2616,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
                 title: draft.title,
                 body: draft.body,
                 base: draft.base ?? context.branch,
-                files: draft.files
+                files
               }
             });
           });

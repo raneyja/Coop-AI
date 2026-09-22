@@ -431,7 +431,7 @@ Three ways — all open the same confirm step. Cancel, Escape, or clicking away 
 - Type **Create a PR** in chat after Apply — **every** `/edit` you Applied in this thread.
 - Type **Create a PR** in chat after editing a Use-repo file — dirty buffers, **no Apply required**. Unsaved is fine.
 
-There is no `/pr` slash command.
+There is no `/pr` slash command. On a local file, Apply and Undo still work, and Create pull request stays disabled.
 
 <!-- figures lg -->
 ![Create pull request — confirm branch, title, and AI-generated notes](/screenshots/docs/extension-create-pull-request.png)

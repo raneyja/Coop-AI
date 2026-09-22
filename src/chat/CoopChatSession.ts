@@ -574,6 +574,7 @@ import {
 } from "./editSendRouting";
 import {
   createPrChatReply,
+  decideCreatePullRequestWrite,
   isCreatePullRequestAsk,
   resolveCreatePrChatRouting
 } from "./createPrChatRouting";
@@ -5556,28 +5557,33 @@ export class CoopChatSession {
       });
     };
 
-    const repoId = payload.repoId?.trim() || this.currentUseRepoId();
-    if (!repoId) {
-      fail("Pick a Use-repo before creating a pull request.");
-      return;
-    }
-
     const record = getPatchRecord(payload.messageTimestamp);
     const fromPayload = (payload.files ?? []).filter((file) => file.path && file.content);
     const files = fromPayload.length > 0 ? fromPayload : (record?.card.prFiles ?? []);
-    if (!files.length) {
-      fail("No file changes to ship.");
+    const blockedLocal = Boolean(record?.card && record.card.prBlockedReason === "local-file");
+    const decision = decideCreatePullRequestWrite({
+      card: record?.card,
+      files,
+      payloadRepoId: blockedLocal ? undefined : payload.repoId,
+      fallbackRepoId: blockedLocal ? undefined : this.currentUseRepoId()
+    });
+    if (!decision.ok) {
+      fail(decision.error);
       return;
     }
 
     try {
-      const result = await this.options.api.createRepoPullViaCloud(this.preferences.apiBaseUrl, repoId, {
-        branch: payload.branch,
-        title: payload.title,
-        body: payload.body,
-        base: payload.base,
-        files
-      });
+      const result = await this.options.api.createRepoPullViaCloud(
+        this.preferences.apiBaseUrl,
+        decision.repoId,
+        {
+          branch: payload.branch,
+          title: payload.title,
+          body: payload.body,
+          base: payload.base,
+          files: decision.files
+        }
+      );
       if (!result.htmlUrl?.trim()) {
         fail("Created, but the host did not return a link.");
         return;
@@ -5588,7 +5594,7 @@ export class CoopChatSession {
           messageTimestamp: payload.messageTimestamp,
           htmlUrl: result.htmlUrl,
           number: result.number,
-          provider: payload.provider ?? coordinatesFromRepoId(repoId)?.provider
+          provider: payload.provider ?? coordinatesFromRepoId(decision.repoId)?.provider
         }
       });
     } catch (error) {

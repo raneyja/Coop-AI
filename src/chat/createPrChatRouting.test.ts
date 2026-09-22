@@ -3,17 +3,21 @@ import type { PatchCardState } from "./types";
 import {
   CREATE_PR_CHAT_NEED_APPLY,
   CREATE_PR_CHAT_NEED_APPLY_PENDING,
+  CREATE_PR_CHAT_NEED_REMOTE_FILE,
   CREATE_PR_CHAT_NEED_USE_REPO,
   CREATE_PR_CHAT_OPENED,
   CREATE_PR_CHAT_OPENED_MULTI,
+  CREATE_PR_LOCAL_FILE_MESSAGE,
   createPrChatReply,
+  decideCreatePullRequestWrite,
   isCreatePullRequestAsk,
   isEligibleCreatePrCard,
   latestEligibleCreatePrCard,
   mergeAppliedPrFiles,
   mergeAppliedPrPreviewFiles,
   mergeCreatePrFiles,
-  resolveCreatePrChatRouting
+  resolveCreatePrChatRouting,
+  stampAppliedCreatePr
 } from "./createPrChatRouting";
 
 let passed = 0;
@@ -326,6 +330,112 @@ test("resolveCreatePrChatRouting requires Use-repo before opening confirm", () =
   });
   assert.equal(routing.kind, "need-use-repo");
   assert.equal(createPrChatReply(routing), CREATE_PR_CHAT_NEED_USE_REPO);
+});
+
+test("local Apply is not eligible and does not open confirm even with leftover Use-repo", () => {
+  const local = card({
+    status: "applied",
+    messageTimestamp: 12,
+    canCreatePr: false,
+    prBlockedReason: "local-file",
+    prFiles: [{ path: "/Users/jon/Desktop/notes.md", content: "local\n" }]
+  });
+  assert.equal(isEligibleCreatePrCard(local), false);
+  const routing = resolveCreatePrChatRouting({
+    asked: true,
+    hasUseRepo: true,
+    cards: [local]
+  });
+  assert.equal(routing.kind, "need-remote-file");
+  assert.equal(createPrChatReply(routing), CREATE_PR_CHAT_NEED_REMOTE_FILE);
+  const decision = decideCreatePullRequestWrite({
+    card: local,
+    files: local.prFiles ?? [],
+    payloadRepoId: "github:coop-ai/plane",
+    fallbackRepoId: "gitlab:coop-ai/plane"
+  });
+  assert.equal(decision.ok, false);
+  if (!decision.ok) {
+    assert.equal(decision.error, CREATE_PR_LOCAL_FILE_MESSAGE);
+  }
+});
+
+test("stampAppliedCreatePr blocks preferLocalDisk and absolute paths, keeps remote Apply", () => {
+  const remote = stampAppliedCreatePr({
+    status: "applied",
+    preferLocalDisk: false,
+    prFiles: [{ path: "src/a.ts", content: "remote\n" }]
+  });
+  assert.equal(remote.canCreatePr, true);
+  assert.equal(remote.prBlockedReason, undefined);
+
+  const samePathClone = stampAppliedCreatePr({
+    status: "applied",
+    preferLocalDisk: false,
+    prFiles: [{ path: "src/Cody.Core/Agent/Foo.cs", content: "clone\n" }]
+  });
+  assert.equal(samePathClone.canCreatePr, true);
+
+  const local = stampAppliedCreatePr({
+    status: "applied",
+    preferLocalDisk: true,
+    prFiles: [{ path: "src/Foo.cs", content: "// comment\n" }]
+  });
+  assert.equal(local.canCreatePr, false);
+  assert.equal(local.prBlockedReason, "local-file");
+
+  const desktop = stampAppliedCreatePr({
+    status: "applied",
+    prFiles: [{ path: "/Users/jon/Desktop/cody-vs-main/src/Foo.cs", content: "x\n" }]
+  });
+  assert.equal(desktop.prBlockedReason, "local-file");
+  assert.equal(desktop.canCreatePr, false);
+});
+
+test("mixed thread ships remote files only", () => {
+  const routing = resolveCreatePrChatRouting({
+    asked: true,
+    hasUseRepo: true,
+    cards: [
+      card({
+        status: "applied",
+        messageTimestamp: 10,
+        prBlockedReason: "local-file",
+        canCreatePr: false,
+        prFiles: [{ path: "/Users/jon/Desktop/local.cs", content: "local\n" }]
+      }),
+      card({
+        status: "applied",
+        messageTimestamp: 20,
+        canCreatePr: true,
+        prFiles: [{ path: "src/remote.ts", content: "remote\n" }]
+      })
+    ]
+  });
+  assert.equal(routing.kind, "open-confirm");
+  if (routing.kind === "open-confirm") {
+    assert.equal(routing.messageTimestamp, 20);
+    assert.deepEqual(routing.files, [{ path: "src/remote.ts", content: "remote\n" }]);
+    assert.equal(routing.files.some((file) => file.path.startsWith("/Users/")), false);
+  }
+});
+
+test("absolute disk path is rejected before a host write", () => {
+  const decision = decideCreatePullRequestWrite({
+    files: [{ path: "Users/jon/Desktop/Foo.cs", content: "stripped\n" }],
+    payloadRepoId: "bitbucket:acme/widgets",
+    fallbackRepoId: "bitbucket:acme/widgets"
+  });
+  assert.equal(decision.ok, false);
+  const remote = decideCreatePullRequestWrite({
+    card: card({ status: "applied", canCreatePr: true }),
+    files: [{ path: "apps/api/auth.ts", content: "export {}\n" }],
+    fallbackRepoId: "gitlab:acme/widgets"
+  });
+  assert.equal(remote.ok, true);
+  if (remote.ok) {
+    assert.equal(remote.repoId, "gitlab:acme/widgets");
+  }
 });
 
 test("resolveCreatePrChatRouting is none when the phrase did not match", () => {
