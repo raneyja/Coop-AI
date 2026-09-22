@@ -6,7 +6,7 @@ cd "$ROOT"
 
 docker compose cp dist/admin-org.js api:/app/dist/admin-org.js >/dev/null
 
-docker compose exec -T api node dist/admin-org.js create-org "Smoke Cap 2" pro > /tmp/coop-smoke-org.json 2>/dev/null
+docker compose exec -T api node dist/admin-org.js create-org "Smoke Free Cap" free > /tmp/coop-smoke-org.json 2>/dev/null
 ORG_ID="$(node -pe "JSON.parse(require('fs').readFileSync('/tmp/coop-smoke-org.json','utf8')).id")"
 docker compose exec -T api node dist/admin-org.js create-api-key "$ORG_ID" smoke2 > /tmp/coop-smoke-key.json 2>/dev/null
 TOKEN="$(node -pe "JSON.parse(require('fs').readFileSync('/tmp/coop-smoke-key.json','utf8')).rawKey")"

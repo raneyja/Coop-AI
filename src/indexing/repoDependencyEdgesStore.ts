@@ -35,6 +35,13 @@ export class RepoDependencyEdgesStore {
     return Number(result.rows[0]?.count ?? 0);
   }
 
+  public async deleteForRepo(orgId: string, repoId: string): Promise<void> {
+    await this.pool.query(`DELETE FROM repo_dependency_edges WHERE org_id = $1 AND repo_id = $2`, [
+      orgId,
+      repoId
+    ]);
+  }
+
   public async replaceEdges(
     orgId: string,
     repoId: string,

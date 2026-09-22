@@ -6,6 +6,13 @@ const UPSERT_BATCH_SIZE = 100;
 export class RepoManifestStore {
   public constructor(private readonly pool: Pool) {}
 
+  public async deleteForRepo(orgId: string, repoId: string): Promise<void> {
+    await this.pool.query(`DELETE FROM repo_manifests WHERE org_id = $1 AND repo_id = $2`, [
+      orgId,
+      repoId
+    ]);
+  }
+
   public async loadManifest(orgId: string, repoId: string): Promise<ManifestFileEntry[]> {
     const result = await this.pool.query<{ file_path: string; symbols: ManifestSymbol[] }>(
       `SELECT file_path, symbols

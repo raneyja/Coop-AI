@@ -66,16 +66,19 @@ async function fetchSliceData(
   const graphQuery = deps.graphQuery!;
   const [dependentsResult, importsResult, ownershipResult] = await Promise.all([
     graphQuery.queryGraph({
+      orgId,
       repoId,
       query: "getDependents",
       filters: { file }
     }) as Promise<GraphQueryResult<DependencyEdge[]> | undefined>,
     graphQuery.queryGraph({
+      orgId,
       repoId,
       query: "getImports",
       filters: { file }
     }) as Promise<GraphQueryResult<DependencyEdge[]> | undefined>,
     graphQuery.queryGraph({
+      orgId,
       repoId,
       query: "getOwnership",
       filters: { file }

@@ -23,7 +23,7 @@ Contact [support@coop-ai.dev](mailto:support@coop-ai.dev) for Enterprise licensi
 | Service | Purpose |
 | --- | --- |
 | **API** | Chat, completions, webhooks, integrations |
-| **Postgres** | Orgs, users, API keys, integration tokens |
+| **Postgres** | Orgs, users, API keys, integration tokens. Deep-Index (Zoekt shards, graph snapshots, symbol rows) is stored per organization, so one customer’s repo never shows up in another customer’s index. |
 | **Redis** (optional) | Job queue, caching |
 | **Admin portal** | Org admin UI (`admin.coop-ai.dev` or self-hosted) |
 

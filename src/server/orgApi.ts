@@ -62,6 +62,10 @@ import { repoIdFromCoordinates, coordinatesFromRepoId, type CodeHostProvider } f
 import { loadGitLabAppConfig, gitlabApiBaseUrl } from "./gitlabAppConfig";
 import { runCatalogSyncForProvider, CatalogSyncError, codeHostDisplayName } from "./catalogSyncService";
 import { queueOrgRepoIndex, reindexEmbeddingFailures } from "./queueOrgRepoIndex";
+import { filterReposOwnedByOrg, type RepoAccessCaller } from "../indexing/orgRepoMembership";
+import { purgeOrgRepoIndex } from "../indexing/purgeOrgRepoIndex";
+import type { GraphCache } from "../cache/graphCache";
+import type { Pool } from "pg";
 import type { UsageTracker } from "./usageTracker";
 import type { UserStore } from "./users/userStore";
 import { loadBillingConfig } from "./billing/billingConfig";
@@ -100,6 +104,10 @@ export type OrgApiDeps = {
     input: CreatePullRequestInput,
     token: string
   ) => Promise<CreatePullRequestResult>;
+  /** When set, disable also drops this process's org-scoped graph row. */
+  graphCache?: GraphCache;
+  /** Test seam. Production omits this and uses getDbPool(). */
+  dbPool?: Pool | null;
 };
 
 /** Apply index_repository rate limits only when re-queuing a repo that already reached ready. */
@@ -683,8 +691,9 @@ export async function handleOrgApiRequest(
       browseError: undefined,
       browseVerifiedAt: undefined
     });
-    const pool = await getDbPool();
+    const pool = await poolFor(deps);
     let grantsDeleted = 0;
+    let purged = false;
     if (pool) {
       try {
         grantsDeleted = await new UserRepoGrantStore(pool).deleteGrantsForRepo(auth!.orgId, repoId);
@@ -694,9 +703,18 @@ export async function handleOrgApiRequest(
           error instanceof Error ? error.message : error
         );
       }
+      try {
+        await purgeOrgRepoIndex(pool, auth!.orgId, repoId, { graphCache: deps.graphCache });
+        purged = true;
+      } catch (error) {
+        console.error(
+          `[org-api] index purge after disable failed for ${repoId}:`,
+          error instanceof Error ? error.message : error
+        );
+      }
     }
-    await audit(deps, auth!, "repo.lightning.disable", { repoId, grantsDeleted });
-    writeJson(response, 200, { repo: record, grantsDeleted });
+    await audit(deps, auth!, "repo.lightning.disable", { repoId, grantsDeleted, purged });
+    writeJson(response, 200, { repo: record, grantsDeleted, purged });
     return true;
   }
 
@@ -786,6 +804,11 @@ export async function handleOrgApiRequest(
     );
   if (remoteRepoApiMatch) {
     if (!(await requireRemoteCodePlan(deps.orgStore, auth!, response))) {
+      return true;
+    }
+    const catalogMatch = parsed.pathname.match(/^\/v1\/orgs\/repos\/([^/]+)\//);
+    const catalogRepoId = catalogMatch ? decodeURIComponent(catalogMatch[1]) : "";
+    if (!(await rejectUnlessCatalogRepo(deps, auth!, catalogRepoId, response))) {
       return true;
     }
   }
@@ -2066,6 +2089,39 @@ async function handleRemoveCollectionRepo(
     return;
   }
   writeJson(response, 200, { ok: true, collectionId, repoId });
+}
+
+function catalogCaller(auth: AuthContext): RepoAccessCaller | undefined {
+  if (!auth.userId) {
+    return undefined;
+  }
+  return { userId: auth.userId, enforceUserGrants: true };
+}
+
+async function poolFor(deps: OrgApiDeps): Promise<Pool | null> {
+  if (deps.dbPool !== undefined) {
+    return deps.dbPool;
+  }
+  return getDbPool();
+}
+
+async function rejectUnlessCatalogRepo(
+  deps: OrgApiDeps,
+  auth: AuthContext,
+  repoId: string,
+  response: ServerResponse
+): Promise<boolean> {
+  const pool = await poolFor(deps);
+  if (!pool) {
+    writeJson(response, 503, { error: "organization database not configured" });
+    return false;
+  }
+  const owned = await filterReposOwnedByOrg(pool, auth.orgId, [repoId], catalogCaller(auth));
+  if (!owned.includes(repoId)) {
+    writeJson(response, 404, { error: "repo not found" });
+    return false;
+  }
+  return true;
 }
 
 async function handleGetRepoManifest(

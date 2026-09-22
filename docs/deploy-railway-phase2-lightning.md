@@ -17,6 +17,8 @@ Phase 1 alone works for chat + integrations; Lightning Zoekt path stays degraded
 
 Both share a **Railway Volume** mounted at `/zoekt-indexes`.
 
+Shards are flat files in that directory, named with the org id in front of the repo (`{orgId}__github.com/owner/repo`, same pattern for GitLab and Bitbucket). Zoekt only loads `*.zoekt` files sitting directly in `-index`, so orgs are separated by that name prefix, not by subfolders. After this deploy, **reindex every Deep-Indexed repo**. Old shards without the org prefix are not used by search and should be rebuilt.
+
 API service gets: `ZOEKT_URL=http://coop-zoekt.railway.internal:6070` (or Railway private networking URL).
 
 ---

@@ -1,11 +1,12 @@
 import type { Pool } from "pg";
-import { parseRepoId } from "../server/gitCloneService";
 import { CollectionStore } from "../server/collectionStore";
 import { embedQuery } from "./embeddingsClient";
 import { RepoEmbeddingsStore, type SimilarChunkHit } from "./repoEmbeddingsStore";
 import { isGeneratedOrVendorPath } from "./evidencePathNoise";
 import { UNKNOWN_HIT_LINE } from "./graphSearchHit";
 import { mentionPathMinScore, rankMentionPathHits, scoreMentionPath } from "./mentionPathScore";
+import { filterReposOwnedByOrg, type RepoAccessCaller } from "./orgRepoMembership";
+import { buildZoektScopedQuery, repoIdFromZoektRepo } from "./zoektShardIdentity";
 
 export type SearchHitSource = "scip" | "zoekt" | "embedding" | "fallback";
 
@@ -45,6 +46,8 @@ export type LightningSearchOptions = {
   limit?: number;
   /** Path-focused search for @-mention picker (distinct files, no symbol/embedding noise). */
   mention?: boolean;
+  /** Auth principal. Org id is the `orgId` argument, never a field the client sends. */
+  caller?: RepoAccessCaller;
 };
 
 /**
@@ -82,7 +85,7 @@ export async function lightningSearch(
   if (options.mention) {
     const pathHits = await collectMentionPathHits(pool, orgId, repoIds, query, limit * 2);
     const zoektHits = query.includes("/")
-      ? await collectZoektMentionHits(query, repoIds, limit)
+      ? await collectZoektMentionHits(orgId, query, repoIds, limit)
       : [];
     const minScore = mentionPathMinScore(query);
     const hits = rankMentionPathHits(
@@ -113,7 +116,7 @@ export async function lightningSearch(
   // Run all three search strategies in parallel — never wait for one to fail before trying another.
   const [scipOutcome, zoektOutcome, embeddingOutcome] = await Promise.allSettled([
     collectSymbolHits(pool, orgId, repoIds, query, limit * 2),
-    collectZoektHits(query, repoIds, limit * 2),
+    collectZoektHits(orgId, query, repoIds, limit * 2),
     collectEmbeddingHits(pool, orgId, repoIds, query, limit)
   ]);
 
@@ -183,17 +186,21 @@ type ZoektSearchResponse = {
 };
 
 async function collectZoektHits(
+  orgId: string,
   query: string,
   repoIds: string[],
   limit: number
 ): Promise<LightningFileHit[]> {
   const zoektUrl = process.env.ZOEKT_URL;
-  if (!zoektUrl) {
+  if (!zoektUrl || repoIds.length === 0) {
     return [];
   }
 
   try {
-    const scopedQuery = buildZoektScopedQuery(query, repoIds);
+    const scopedQuery = buildZoektScopedQuery(orgId, query, repoIds);
+    if (!scopedQuery) {
+      return [];
+    }
     const url = new URL("/search", zoektUrl.replace(/\/$/, "") + "/");
     url.searchParams.set("q", scopedQuery);
     url.searchParams.set("format", "json");
@@ -222,8 +229,12 @@ async function collectZoektHits(
         const normalizedScore = Math.min(0.95, 0.5 + rawScore / 200);
         const lineNumber = match.LineNum ?? match.LineNumber ?? 1;
 
+        const matchedRepoId = repoIdFromZoektRepo(repoName, orgId, repoIds);
+        if (!matchedRepoId) {
+          continue;
+        }
         hits.push({
-          repoId: repoIdFromZoektRepo(repoName, repoIds),
+          repoId: matchedRepoId,
           path: file.FileName,
           content: fragmentText || match.Line || file.FileName,
           lineNumber,
@@ -242,35 +253,16 @@ async function collectZoektHits(
   }
 }
 
-function buildZoektRepoFilter(repoIds: string[]): string {
-  if (repoIds.length === 0) {
-    return "";
-  }
-  const repoNames = repoIds.map((repoId) => zoektRepoName(repoId));
-  return repoNames.length === 1
-    ? `repo:${quoteZoektToken(repoNames[0])}`
-    : `(${repoNames.map((name) => `repo:${quoteZoektToken(name)}`).join(" or ")})`;
-}
-
-function buildZoektScopedQuery(query: string, repoIds: string[]): string {
-  const repoFilter = buildZoektRepoFilter(repoIds);
-  if (!repoFilter) {
-    return query;
-  }
-  return `${repoFilter} ${query}`.trim();
-}
-
 async function collectZoektMentionHits(
+  orgId: string,
   pathQuery: string,
   repoIds: string[],
   limit: number
 ): Promise<LightningFileHit[]> {
-  const repoFilter = buildZoektRepoFilter(repoIds);
-  if (!repoFilter) {
+  if (repoIds.length === 0) {
     return [];
   }
-  const fileFilter = `file:${quoteZoektToken(pathQuery.trim())}`;
-  return collectZoektHits(`${repoFilter} ${fileFilter}`.trim(), repoIds, limit);
+  return collectZoektHits(orgId, `file:${quoteZoektToken(pathQuery.trim())}`, repoIds, limit);
 }
 
 async function collectMentionPathHits(
@@ -347,39 +339,8 @@ async function collectMentionPathHits(
 
 const isNoisyMentionPath = isGeneratedOrVendorPath;
 
-function zoektRepoName(repoId: string): string {
-  const { provider, owner, repo } = parseRepoId(repoId);
-  if (provider === "gitlab") {
-    return `gitlab.com/${owner}/${repo}`;
-  }
-  if (provider === "bitbucket") {
-    return `bitbucket.org/${owner}/${repo}`;
-  }
-  return `github.com/${owner}/${repo}`;
-}
-
 function quoteZoektToken(value: string): string {
   return value.includes(" ") ? `"${value.replace(/"/g, '\\"')}"` : value;
-}
-
-function repoIdFromZoektRepo(repository: string | undefined, repoIds: string[]): string {
-  if (!repository) {
-    return repoIds[0] ?? "";
-  }
-  const normalizedRepo = repository.toLowerCase();
-  const exact = repoIds.find((id) => zoektRepoName(id).toLowerCase() === normalizedRepo);
-  if (exact) {
-    return exact;
-  }
-  const match = repoIds.find((id) => {
-    const zoektName = zoektRepoName(id).toLowerCase();
-    return (
-      normalizedRepo === zoektName ||
-      normalizedRepo.endsWith(`/${zoektName.split("/").slice(-2).join("/")}`) ||
-      id.toLowerCase().includes(normalizedRepo.replace(/^github\.com\//, ""))
-    );
-  });
-  return match ?? repoIds[0] ?? "";
 }
 
 // ---------------------------------------------------------------------------
@@ -567,26 +528,26 @@ export async function resolveSearchRepoIds(
   orgId: string,
   options: LightningSearchOptions
 ): Promise<string[]> {
+  let candidates: string[] = [];
   if (options.userRepoIds?.length) {
-    return options.userRepoIds;
-  }
-  if (options.collectionId) {
-    return new CollectionStore(pool).listCollectionRepoIds(orgId, options.collectionId);
-  }
-  if (options.scope === "workspace") {
+    candidates = options.userRepoIds;
+  } else if (options.collectionId) {
+    candidates = await new CollectionStore(pool).listCollectionRepoIds(orgId, options.collectionId);
+  } else if (options.scope === "workspace") {
     return [];
-  }
-  if (options.scope === "indexed" || options.scope === "org") {
+  } else if (options.scope === "indexed" || options.scope === "org") {
     const result = await pool.query<{ repo_id: string }>(
       `SELECT repo_id FROM org_repos WHERE org_id = $1 AND lightning_enabled = true ORDER BY repo_id`,
       [orgId]
     );
-    return result.rows.map((row) => String(row.repo_id));
+    candidates = result.rows.map((row) => String(row.repo_id));
+  } else if (options.repoId) {
+    candidates = [options.repoId];
   }
-  if (options.repoId) {
-    return [options.repoId];
+  if (candidates.length === 0) {
+    return [];
   }
-  return [];
+  return filterReposOwnedByOrg(pool, orgId, candidates, options.caller);
 }
 
 function perRepoLimit(limit: number, repoCount: number): number {

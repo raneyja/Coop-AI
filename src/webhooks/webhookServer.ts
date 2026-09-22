@@ -1,9 +1,7 @@
 import { createServer, IncomingMessage, Server, ServerResponse } from "node:http";
 import { URL } from "node:url";
-import { GraphQueryApi, GraphQueryName } from "../api/graphQuery";
-import { lightningSearch, type LightningSearchResult } from "../indexing/lightningSearch";
-import { parseGraphSearchScope } from "../indexing/graphSearchScope";
-import { RepoDependencyEdgesStore } from "../indexing/repoDependencyEdgesStore";
+import { GraphQueryApi } from "../api/graphQuery";
+import { handleGraphHttp } from "./graphHttp";
 import { RateLimitTracker } from "../api/rateLimitTracker";
 import { TokenPool } from "../api/tokenPool";
 import { GraphCache } from "../cache/graphCache";
@@ -447,7 +445,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           ...publicProbe,
           cache: {
             backend: config.cache.backend,
-            repos: cache.listRepoIds().length
+            repos: cache.size()
           },
           webhooks: monitor.getAllHealth(),
           jobs: jobStats,
@@ -742,7 +740,8 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         notionApp,
         googleDocsApp,
         teamsApp,
-        slackApp
+        slackApp,
+        graphCache: cache
       })) {
         return;
       }
@@ -832,110 +831,30 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         if (!(await requireRemoteCodePlan(orgStore, auth!, response))) {
           return;
         }
-        const [repoId, query] = parseGraphPath(parsed.pathname);
-        const filters = {
-          file: parsed.query.get("file") ?? undefined,
-          pattern: parsed.query.get("pattern") ?? undefined,
-          collectionId: parsed.query.get("collectionId") ?? undefined,
-          scope: parseGraphSearchScope(parsed.query.get("scope")),
-          mention: parsed.query.get("mention") === "true",
-          days: numberParam(parsed.query.get("days")),
-          forceRefresh: parsed.query.get("forceRefresh") === "true"
-        };
-        let result: unknown;
-        if (query === "searchFiles" && filters.pattern) {
-          const pool = await getDbPool();
-          if (pool) {
-            const searchOptions = filters.collectionId
-              ? {
-                  collectionId: filters.collectionId,
-                  pattern: filters.pattern,
-                  mention: filters.mention
-                }
-              : filters.scope
-                ? {
-                    scope: filters.scope,
-                    pattern: filters.pattern,
-                    mention: filters.mention
-                  }
-                : {
-                    repoId,
-                    pattern: filters.pattern,
-                    mention: filters.mention
-                  };
-            const lightning = await lightningSearch(pool, auth!.orgId, searchOptions);
-            if (lightning.hits.length > 0 || lightning.symbols.length > 0) {
-              result = formatLightningSearchResult(
-                filters.collectionId ? undefined : repoId,
-                lightning,
-                filters.collectionId
-              );
-            }
-            if (query === "searchFiles") {
-              await usageTracker.record({
-                orgId: auth!.orgId,
-                userId: auth!.userId,
-                principal: authUserId(auth!),
-                eventType: "lightning.search",
-                metadata: {
-                  pattern: filters.pattern,
-                  collectionId: filters.collectionId,
-                  repoId: filters.collectionId ? undefined : repoId,
-                  hitCount: lightning.hits.length + lightning.symbols.length
-                }
-              });
-            }
+        const pool = await getDbPool();
+        if (!pool) {
+          writeJson(response, 503, { error: "organization database not configured" });
+          return;
+        }
+        const graphResult = await handleGraphHttp({
+          pathname: parsed.pathname,
+          searchParams: parsed.query,
+          orgId: auth!.orgId,
+          caller: auth!.userId ? { userId: auth!.userId, enforceUserGrants: true } : undefined,
+          pool,
+          cache,
+          graphQuery,
+          onSearch: async (metadata) => {
+            await usageTracker.record({
+              orgId: auth!.orgId,
+              userId: auth!.userId,
+              principal: authUserId(auth!),
+              eventType: "lightning.search",
+              metadata
+            });
           }
-        }
-        // Prefer durable import/SCIP edges over process-local GraphCache.
-        if (!result && query === "getDependents" && filters.file) {
-          const pool = await getDbPool();
-          if (pool) {
-            try {
-              const edgeStore = new RepoDependencyEdgesStore(pool);
-              const edgeCount = await edgeStore.countEdges(auth!.orgId, repoId);
-              if (edgeCount > 0) {
-                const edges = await edgeStore.loadDependentsForFile(
-                  auth!.orgId,
-                  repoId,
-                  filters.file
-                );
-                // Repo may have thousands of edges overall — never advertise
-                // import-parse/scip freshness when THIS file has zero callers.
-                const source =
-                  edges.length > 0 ? (edges[0]?.source ?? "import-parse") : "remote";
-                result = {
-                  repoId,
-                  data: edges.map((edge) => ({
-                    from: edge.fromPath,
-                    to: edge.toPath,
-                    type: edge.kind,
-                    symbol: edge.symbol,
-                    line: edge.line,
-                    source: edge.source
-                  })),
-                  lastUpdated: new Date(),
-                  freshness: source,
-                  stale: false
-                };
-              }
-            } catch (error) {
-              console.warn(
-                `[graph] durable dependents lookup failed: ${
-                  error instanceof Error ? error.message : String(error)
-                }`
-              );
-            }
-          }
-        }
-        if (!result) {
-          result = await graphQuery.queryGraph({
-            repoId,
-            query,
-            filters
-          });
-        }
-        writeJson(response, result ? 200 : 404, result ?? { error: "graph not found" });
+        });
+        writeJson(response, graphResult.statusCode, graphResult.body);
         return;
       }
 
@@ -1113,70 +1032,6 @@ function slackChallenge(body: unknown): string | undefined {
   return record.type === "url_verification" && typeof record.challenge === "string"
     ? record.challenge
     : undefined;
-}
-
-function parseGraphPath(pathname: string): [string, GraphQueryName] {
-  const parts = pathname.split("/").filter(Boolean);
-  const repoId = decodeURIComponent(parts[1] ?? "");
-  const segment = parts[2] ?? "tree";
-  const queryBySegment: Record<string, GraphQueryName> = {
-    tree: "getFileTree",
-    ownership: "getOwnership",
-    dependents: "getDependents",
-    "transitive-dependents": "getTransitiveDependents",
-    changes: "getRecentChanges",
-    search: "searchFiles",
-    conflicts: "getConflicts"
-  };
-  const query = queryBySegment[segment];
-  if (!repoId || !query) {
-    throw new Error("invalid graph query path");
-  }
-  return [repoId, query];
-}
-
-function numberParam(value: string | null): number | undefined {
-  if (value === null) {
-    return undefined;
-  }
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function formatLightningSearchResult(
-  repoId: string | undefined,
-  search: LightningSearchResult,
-  collectionId?: string
-): unknown {
-  return {
-    repoId,
-    collectionId,
-    data: search.hits.map((hit) => ({
-      repoId: hit.repoId,
-      path: hit.path,
-      content: hit.content,
-      source: hit.source,
-      size: hit.content.length,
-      lastModified: new Date(),
-      lastAuthor: "lightning-index",
-      // `sha` carried the line number before `line` existed; keep it for older extensions.
-      sha: String(hit.lineNumber),
-      line: hit.lineNumber,
-      score: hit.score
-    })),
-    symbols: search.symbols.map((symbol) => ({
-      repoId: symbol.repoId,
-      symbol: symbol.symbol,
-      kind: symbol.kind,
-      file: symbol.file,
-      line: symbol.line,
-      character: 0,
-      displayName: symbol.displayName
-    })),
-    freshness: search.source,
-    lastUpdated: new Date(),
-    stale: false
-  };
 }
 
 if (require.main === module) {

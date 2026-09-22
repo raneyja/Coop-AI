@@ -6,71 +6,125 @@ type PersistOptions = GraphCacheOptions & {
   orgId?: string;
 };
 
+type PendingPersist = {
+  orgId: string;
+  repoId: string;
+};
+
+let loggedMissingOrgPersist = false;
+
 export class PersistingGraphCache extends GraphCache {
   private readonly pool: Pool;
-  private readonly defaultOrgId?: string;
   private persistTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly pendingPersist = new Map<string, PendingPersist>();
 
   public constructor(options: PersistOptions) {
     super(options);
     this.pool = options.pool;
-    this.defaultOrgId = options.orgId;
   }
 
-  public async hydrate(): Promise<void> {
-    const result = await this.pool.query(`SELECT repo_id, payload FROM graph_snapshots`);
+  /**
+   * Load one org into memory. Never reads another org's rows.
+   * Startup does not hydrate the multi-tenant table.
+   */
+  public async hydrateOrg(orgId: string): Promise<void> {
+    const result = await this.pool.query(
+      `SELECT repo_id, payload FROM graph_snapshots WHERE org_id = $1`,
+      [orgId]
+    );
     for (const row of result.rows) {
       const graph = reviveGraph(parseJson(row.payload));
       if (graph) {
-        super.setGraph(graph);
+        super.setGraph(orgId, graph);
       }
     }
   }
 
-  public override setGraph(graph: RepositoryGraph): void {
-    super.setGraph(graph);
-    void this.schedulePersist(graph.repoId);
+  public override async ensureLoaded(orgId: string, repoId: string): Promise<void> {
+    if (!orgId || super.getGraph(orgId, repoId)) {
+      return;
+    }
+    const result = await this.pool.query(
+      `SELECT payload FROM graph_snapshots WHERE org_id = $1 AND repo_id = $2`,
+      [orgId, repoId]
+    );
+    const graph = reviveGraph(parseJson(result.rows[0]?.payload));
+    if (graph) {
+      super.setGraph(orgId, graph);
+    }
+  }
+
+  public override setGraph(orgId: string, graph: RepositoryGraph): void {
+    if (!orgId) {
+      logSkipPersist(graph.repoId);
+      return;
+    }
+    super.setGraph(orgId, graph);
+    this.schedulePersist(orgId, graph.repoId);
   }
 
   public override upsertRepository(
-    ref: Parameters<GraphCache["upsertRepository"]>[0],
-    partial?: Parameters<GraphCache["upsertRepository"]>[1]
+    orgId: string,
+    ref: Parameters<GraphCache["upsertRepository"]>[1],
+    partial?: Parameters<GraphCache["upsertRepository"]>[2]
   ): RepositoryGraph {
-    const graph = super.upsertRepository(ref, partial);
-    void this.schedulePersist(graph.repoId);
+    const graph = super.upsertRepository(orgId, ref, partial);
+    if (orgId) {
+      this.schedulePersist(orgId, graph.repoId);
+    }
     return graph;
   }
 
-  public override deleteGraph(repoId: string): boolean {
-    const deleted = super.deleteGraph(repoId);
-    if (deleted) {
-      void this.pool.query(`DELETE FROM graph_snapshots WHERE repo_id = $1`, [repoId]);
+  public override deleteGraph(orgId: string, repoId: string): boolean {
+    const deleted = super.deleteGraph(orgId, repoId);
+    this.pendingPersist.delete(`${orgId}\u0000${repoId}`);
+    if (orgId) {
+      void this.pool.query(`DELETE FROM graph_snapshots WHERE org_id = $1 AND repo_id = $2`, [
+        orgId,
+        repoId
+      ]);
     }
     return deleted;
   }
 
-  private schedulePersist(repoId: string): void {
+  public async flush(): Promise<void> {
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = undefined;
+    }
+    const pending = [...this.pendingPersist.values()];
+    this.pendingPersist.clear();
+    for (const item of pending) {
+      await this.persistRepo(item.orgId, item.repoId);
+    }
+  }
+
+  private schedulePersist(orgId: string, repoId: string): void {
+    this.pendingPersist.set(`${orgId}\u0000${repoId}`, { orgId, repoId });
     if (this.persistTimer) {
       clearTimeout(this.persistTimer);
     }
     this.persistTimer = setTimeout(() => {
-      void this.persistRepo(repoId);
+      void this.flush();
     }, 250);
   }
 
-  private async persistRepo(repoId: string): Promise<void> {
-    const graph = super.getGraph(repoId);
+  private async persistRepo(orgId: string, repoId: string): Promise<void> {
+    if (!orgId) {
+      logSkipPersist(repoId);
+      return;
+    }
+    const graph = super.getGraph(orgId, repoId);
     if (!graph) {
       return;
     }
     await this.pool.query(
-      `INSERT INTO graph_snapshots (repo_id, org_id, payload, updated_at)
+      `INSERT INTO graph_snapshots (org_id, repo_id, payload, updated_at)
        VALUES ($1, $2, $3, NOW())
-       ON CONFLICT (repo_id) DO UPDATE SET
+       ON CONFLICT (org_id, repo_id) DO UPDATE SET
          payload = EXCLUDED.payload,
-         org_id = COALESCE(EXCLUDED.org_id, graph_snapshots.org_id),
          updated_at = NOW()`,
-      [repoId, this.defaultOrgId ?? null, JSON.stringify(graph, dateReplacer)]
+      [orgId, repoId, JSON.stringify(graph, dateReplacer)]
     );
   }
 }
@@ -84,11 +138,18 @@ export async function createGraphCache(
     if (!pool) {
       throw new Error("GRAPH_CACHE_BACKEND=postgres requires DATABASE_URL");
     }
-    const cache = new PersistingGraphCache({ ...options, pool });
-    await cache.hydrate();
-    return cache;
+    // Do not hydrate every tenant into this process. Rows load on demand per org+repo.
+    return new PersistingGraphCache({ ...options, pool });
   }
   return new GraphCache(options);
+}
+
+function logSkipPersist(repoId: string): void {
+  if (loggedMissingOrgPersist) {
+    return;
+  }
+  loggedMissingOrgPersist = true;
+  console.warn(`[graph-cache] skip persist — missing orgId (first repo ${repoId})`);
 }
 
 function parseJson(value: unknown): unknown {
