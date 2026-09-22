@@ -144,6 +144,55 @@ export class OrgStore {
     return rowToOrg(result.rows[0]);
   }
 
+  /**
+   * New checkout org + Stripe customer id in one INSERT so a retry cannot
+   * create a second organization for the same customer.
+   */
+  public async createOrganizationForCheckout(input: {
+    name: string;
+    billingEmail: string;
+    stripeCustomerId: string;
+    stripeSubscriptionId: string;
+    seatCount: number;
+    usageTier: UsageTier;
+    stripePriceId?: string | null;
+    seatInventory: SeatInventory;
+  }): Promise<Organization> {
+    const seatCount = clampSeatCountForPlan("pro", input.seatCount);
+    try {
+      const result = await this.pool.query(
+        `INSERT INTO organizations (
+           name, plan, usage_tier,
+           billing_email, stripe_customer_id, stripe_subscription_id,
+           seat_count, billing_status, stripe_price_id,
+           seat_inventory_pro, seat_inventory_pro_plus, seat_inventory_max
+         ) VALUES ($1, 'pro', $2, $3, $4, $5, $6, 'active', $7, $8, $9, $10)
+         RETURNING id, name, plan, created_at, usage_tier`,
+        [
+          input.name,
+          input.usageTier,
+          input.billingEmail,
+          input.stripeCustomerId,
+          input.stripeSubscriptionId,
+          seatCount,
+          input.stripePriceId ?? null,
+          Math.max(0, Math.floor(input.seatInventory.pro)),
+          Math.max(0, Math.floor(input.seatInventory.pro_plus)),
+          Math.max(0, Math.floor(input.seatInventory.max))
+        ]
+      );
+      return rowToOrg(result.rows[0]);
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        const existing = await this.findOrganizationByStripeCustomerId(input.stripeCustomerId);
+        if (existing) {
+          return existing;
+        }
+      }
+      throw error;
+    }
+  }
+
   public async getOrganization(orgId: string): Promise<Organization | undefined> {
     const result = await this.pool.query(
       `SELECT id, name, plan, repo_access_mode, created_at, usage_tier FROM organizations WHERE id = $1`,
@@ -809,6 +858,10 @@ function rowToBilling(row: Record<string, unknown>): OrgBilling {
     stripePriceId: row.stripe_price_id ? String(row.stripe_price_id) : undefined,
     seatInventory
   };
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === "object" && error !== null && (error as { code?: string }).code === "23505";
 }
 
 function rowToOrg(row: Record<string, unknown>): Organization {

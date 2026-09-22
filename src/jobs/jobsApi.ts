@@ -6,11 +6,18 @@ import { JobRateLimitError } from "./jobQueue";
 import { JobType, formatWaitTime, serializeJob } from "./types";
 import type { WorkerPool } from "./workerPool";
 
-import type { OrgStore } from "../server/orgStore";
+import type { AuthContext, OrgStore } from "../server/orgStore";
 import type { ServerConfig } from "../server/serverConfig";
-import { authUserId, requireAuth, requireOrgPlan, resolveAuthContext } from "../server/authMiddleware";
+import {
+  authUserId,
+  extractBearerToken,
+  requireAuth,
+  requireOrgPlan,
+  resolveAuthContext
+} from "../server/authMiddleware";
 import { AuditLogger, auditActor } from "../server/audit/auditLogger";
 import type { UserStore } from "../server/users/userStore";
+import type { Job } from "./types";
 
 export type JobsApiDeps = {
   queue: JobQueue;
@@ -32,6 +39,12 @@ type ParsedJobsRequest = {
 
 const JOB_TYPE_SET = new Set(Object.values(JobType));
 
+/** Real org customer (API key or session). Legacy/dev bearers are not customers. */
+type JobsCaller =
+  | { kind: "org"; auth: AuthContext }
+  | { kind: "jobs-token" }
+  | { kind: "dev-open"; auth?: AuthContext };
+
 export async function handleJobsApiRequest(
   parsed: ParsedJobsRequest,
   response: ServerResponse,
@@ -41,12 +54,19 @@ export async function handleJobsApiRequest(
     return false;
   }
 
-  if (!(await authorize(parsed.headers, deps))) {
+  const caller = await resolveJobsCaller(parsed.headers, deps);
+  if (!caller) {
     writeJson(response, 401, { error: "unauthorized" });
     return true;
   }
 
   if (parsed.method === "GET" && parsed.pathname === "/api/jobs/stats") {
+    // Customer tokens must not see other orgs' job ids or error strings.
+    // The jobs API token (COOP_JOBS_API_TOKEN / COOP_API_TOKEN) keeps the operator dashboard.
+    if (caller.kind === "org") {
+      writeJson(response, 404, { error: "not found" });
+      return true;
+    }
     const stats = deps.monitor.getStats(deps.queue);
     writeJson(response, 200, {
       ...stats,
@@ -60,7 +80,7 @@ export async function handleJobsApiRequest(
   }
 
   if (parsed.method === "POST" && parsed.pathname === "/api/jobs") {
-    await handleCreateJob(parsed, response, deps);
+    await handleCreateJob(parsed, response, deps, caller);
     return true;
   }
 
@@ -74,22 +94,22 @@ export async function handleJobsApiRequest(
   const action = match[2];
 
   if (parsed.method === "GET" && action === "result") {
-    await handleGetResult(jobId, response, deps);
+    await handleGetResult(jobId, response, deps, caller);
     return true;
   }
 
   if (parsed.method === "GET" && action === "stream") {
-    await handleJobStream(jobId, response, deps);
+    await handleJobStream(jobId, response, deps, caller);
     return true;
   }
 
   if (parsed.method === "GET" && !action) {
-    await handleGetJob(jobId, response, deps);
+    await handleGetJob(jobId, response, deps, caller);
     return true;
   }
 
   if (parsed.method === "DELETE" && !action) {
-    await handleCancelJob(jobId, response, deps);
+    await handleCancelJob(jobId, response, deps, caller);
     return true;
   }
 
@@ -100,7 +120,8 @@ export async function handleJobsApiRequest(
 async function handleCreateJob(
   parsed: ParsedJobsRequest,
   response: ServerResponse,
-  deps: JobsApiDeps
+  deps: JobsApiDeps,
+  caller: JobsCaller
 ): Promise<void> {
   const body = asRecord(parsed.body);
   const type = String(body.type ?? "");
@@ -109,14 +130,9 @@ async function handleCreateJob(
     return;
   }
 
+  const auth = callerAuth(caller);
+
   try {
-    const auth = await resolveAuthContext(
-      parsed.headers,
-      deps.orgStore,
-      deps.serverConfig?.legacyApiToken,
-      deps.serverConfig?.requireApiAuth ?? false,
-      deps.userStore
-    );
     if (type === JobType.INDEX_REPOSITORY) {
       if (!auth) {
         writeJson(response, 403, { error: "plan_required", message: "INDEX_REPOSITORY requires organization API key auth" });
@@ -127,9 +143,7 @@ async function handleCreateJob(
       }
     }
     const params = asRecord(body.params);
-    if (auth?.orgId) {
-      params.orgId = auth.orgId;
-    }
+    stampCallerOrgId(caller, params);
     const submit = await deps.queue.createJob({
       type: type as JobType,
       priority: readPriority(body.priority),
@@ -164,9 +178,10 @@ async function handleCreateJob(
 async function handleGetJob(
   jobId: string,
   response: ServerResponse,
-  deps: JobsApiDeps
+  deps: JobsApiDeps,
+  caller: JobsCaller
 ): Promise<void> {
-  const job = await deps.queue.getJob(jobId);
+  const job = await loadVisibleJob(jobId, deps, caller);
   if (!job) {
     writeJson(response, 404, { error: "job not found" });
     return;
@@ -187,9 +202,10 @@ async function handleGetJob(
 async function handleGetResult(
   jobId: string,
   response: ServerResponse,
-  deps: JobsApiDeps
+  deps: JobsApiDeps,
+  caller: JobsCaller
 ): Promise<void> {
-  const job = await deps.queue.getJob(jobId);
+  const job = await loadVisibleJob(jobId, deps, caller);
   if (!job) {
     writeJson(response, 404, { error: "job not found" });
     return;
@@ -212,8 +228,14 @@ async function handleGetResult(
 async function handleCancelJob(
   jobId: string,
   response: ServerResponse,
-  deps: JobsApiDeps
+  deps: JobsApiDeps,
+  caller: JobsCaller
 ): Promise<void> {
+  const job = await loadVisibleJob(jobId, deps, caller);
+  if (!job) {
+    writeJson(response, 404, { error: "job not found" });
+    return;
+  }
   const cancelled = await deps.queue.cancelJob(jobId);
   if (!cancelled) {
     writeJson(response, 409, { error: "job cannot be cancelled (already running or finished)" });
@@ -225,9 +247,10 @@ async function handleCancelJob(
 async function handleJobStream(
   jobId: string,
   response: ServerResponse,
-  deps: JobsApiDeps
+  deps: JobsApiDeps,
+  caller: JobsCaller
 ): Promise<void> {
-  const job = await deps.queue.getJob(jobId);
+  const job = await loadVisibleJob(jobId, deps, caller);
   if (!job) {
     writeJson(response, 404, { error: "job not found" });
     return;
@@ -280,22 +303,95 @@ async function handleJobStream(
   request.req?.on("close", cleanup);
 }
 
-async function authorize(headers: Record<string, string | undefined>, deps: JobsApiDeps): Promise<boolean> {
+function callerAuth(caller: JobsCaller): AuthContext | undefined {
+  if (caller.kind === "jobs-token") {
+    return undefined;
+  }
+  return caller.auth;
+}
+
+function isCustomerOrg(auth: AuthContext): boolean {
+  return auth.orgId !== "legacy" && auth.apiKeyId !== "legacy" && auth.apiKeyId !== "legacy-dev";
+}
+
+function productionClosed(deps: JobsApiDeps): boolean {
+  if (deps.serverConfig?.requireApiAuth) {
+    return true;
+  }
+  const nodeEnv = deps.serverConfig?.nodeEnv ?? process.env.NODE_ENV ?? "development";
+  return nodeEnv === "production";
+}
+
+function jobOrgId(job: Job): string | undefined {
+  const value = job.params.orgId;
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function callerCanAccessJob(caller: JobsCaller, job: Job, deps: JobsApiDeps): boolean {
+  if (caller.kind === "jobs-token" || caller.kind === "dev-open") {
+    return true;
+  }
+  const orgId = jobOrgId(job);
+  if (!orgId) {
+    return !productionClosed(deps);
+  }
+  return orgId === caller.auth.orgId;
+}
+
+async function loadVisibleJob(
+  jobId: string,
+  deps: JobsApiDeps,
+  caller: JobsCaller
+): Promise<Job | undefined> {
+  const job = await deps.queue.getJob(jobId);
+  if (!job || !callerCanAccessJob(caller, job, deps)) {
+    return undefined;
+  }
+  return job;
+}
+
+function stampCallerOrgId(caller: JobsCaller, params: Record<string, unknown>): void {
+  if (caller.kind === "org") {
+    params.orgId = caller.auth.orgId;
+    return;
+  }
+  if (caller.kind === "dev-open" && caller.auth?.orgId) {
+    params.orgId = caller.auth.orgId;
+  }
+}
+
+async function resolveJobsCaller(
+  headers: Record<string, string | undefined>,
+  deps: JobsApiDeps
+): Promise<JobsCaller | undefined> {
+  const requireApiAuth = deps.serverConfig?.requireApiAuth ?? false;
   const auth = await resolveAuthContext(
     headers,
     deps.orgStore,
     deps.serverConfig?.legacyApiToken,
-    deps.serverConfig?.requireApiAuth ?? false,
+    requireApiAuth,
     deps.userStore
   );
-  if (requireAuth(auth, deps.serverConfig?.requireApiAuth ?? false)) {
-    return true;
+  const token = extractBearerToken(headers);
+  const jobsToken = deps.config.apiToken;
+  const presentedJobsToken = Boolean(jobsToken && token === jobsToken);
+
+  if (auth && isCustomerOrg(auth)) {
+    return requireAuth(auth, requireApiAuth) ? { kind: "org", auth } : undefined;
   }
-  if (!deps.config.apiToken) {
-    return !(deps.serverConfig?.requireApiAuth ?? false);
+
+  // Operator jobs token. In non-production, resolveAuthContext already maps that
+  // bearer to a legacy dev context — keep that path so local creates stay unchanged.
+  const legacyDevAuth = Boolean(auth && !isCustomerOrg(auth) && !productionClosed(deps));
+  if (presentedJobsToken && !legacyDevAuth) {
+    return { kind: "jobs-token" };
   }
-  const header = headers.authorization ?? "";
-  return header === `Bearer ${deps.config.apiToken}`;
+
+  if (!requireAuth(auth, requireApiAuth)) {
+    return undefined;
+  }
+
+  return { kind: "dev-open", auth };
 }
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
