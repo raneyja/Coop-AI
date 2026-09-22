@@ -77,7 +77,7 @@ export function shouldHidePatchBlock(block: ChatProseBlock): boolean {
     }
   }
   // Parser may recover File: + ```patch as a code-citation — still hide when Patch card owns it.
-  if (block.type === "code-citation" && block.code.includes("<<<<<<< SEARCH")) {
+  if (block.type === "code-citation" && looksLikePatchHunk(block.code)) {
     return true;
   }
   if (block.type === "paragraph") {
@@ -99,6 +99,13 @@ export function shouldHidePatchBlock(block: ChatProseBlock): boolean {
     }
   }
   return false;
+}
+
+function looksLikePatchHunk(text: string): boolean {
+  return (
+    text.includes("<<<<<<< SEARCH") ||
+    (text.includes("=======") && text.includes(">>>>>>> REPLACE"))
+  );
 }
 
 function inlineNodeToPlainText(node: ChatInlineNode): string {

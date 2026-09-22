@@ -7,6 +7,7 @@ import { classifyRepoCodeIntent, isNonCodeHowWhyAsk, needsRepoCode, type RepoCod
 import { isFeatureAddAsk } from "../context/existingCapabilityGrounding";
 import { extractNamedSourceFiles } from "../api/agent/searchQuery";
 import { isRepoStructureQuery } from "../workspace/repoFactIntent";
+import { openFileSelectionOwnsChange } from "./openFileSelectionChange";
 
 /**
  * Whether answering needs the repository's own code.
@@ -33,6 +34,10 @@ export function shouldRunAgentToolLoop(options: {
   integrationSlash?: boolean;
   /** L file: no Zoekt / read_file against leftover Use-repo. */
   fileAssistant?: boolean;
+  /** Chip path on this send. */
+  file?: string;
+  /** Live highlight on this send. */
+  selectedLines?: [number, number];
 }): boolean {
   if (options.fileAssistant) {
     return false;
@@ -57,6 +62,10 @@ export function agentTurnAction(options: {
   integrationSlash?: boolean;
   /** L file: open-file answer only. Named tools stay on the prefetch path. */
   fileAssistant?: boolean;
+  /** Chip path on this send. */
+  file?: string;
+  /** Live highlight on this send. */
+  selectedLines?: [number, number];
 }): RepoCodeAction {
   if (options.fileAssistant) {
     return "none";
@@ -69,6 +78,21 @@ export function agentTurnAction(options: {
   }
   if (options.integrationSlash) {
     return "understand";
+  }
+  // The highlight is already the change target. Do not hunt text the user
+  // asked to insert. Questions, other symbols, and repo-wide asks still hunt.
+  if (
+    openFileSelectionOwnsChange({
+      file: options.file,
+      selectedLines: options.selectedLines,
+      message: options.query,
+      fileAssistant: options.fileAssistant,
+      explicitEdit: options.isEditTurn,
+      hasQuickAction: options.hasQuickAction,
+      integrationSlash: options.integrationSlash
+    })
+  ) {
+    return "none";
   }
   // Inventory / layout facts use IndexedRepoWorkspace, not list_directory samples.
   // How-to / product How-Why must not hunt even if the planner stamped "understand".

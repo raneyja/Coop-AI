@@ -239,6 +239,32 @@ test("resolveChangeSendRouting: explicit /edit without file still rejects", () =
   }
 });
 
+test("resolveChangeSendRouting: live highlight change is not agent-change or /edit", () => {
+  assert.deepEqual(
+    resolveChangeSendRouting({
+      explicitEdit: false,
+      concreteEditAsk: true,
+      hasEditTarget: true,
+      agentCanOwnChange: true,
+      selectionOwnsChange: true
+    }),
+    { kind: "none" }
+  );
+});
+
+test("resolveChangeSendRouting: explicit /edit still anchors when a highlight is present", () => {
+  assert.deepEqual(
+    resolveChangeSendRouting({
+      explicitEdit: true,
+      concreteEditAsk: true,
+      hasEditTarget: true,
+      agentCanOwnChange: false,
+      selectionOwnsChange: false
+    }),
+    { kind: "anchored-edit" }
+  );
+});
+
 test("edit error copy stays actionable (no silent ask demotion)", () => {
   assert.match(EDIT_NO_TARGET_FILE_ERROR, /Open a file/i);
   assert.match(EDIT_NO_TARGET_FILE_ERROR, /\/edit/);

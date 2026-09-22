@@ -63,6 +63,24 @@ test("hides File: headers for multiple files in the same patch response", () => 
   assert.ok(hidden.every(Boolean), "all File: and patch blocks should hide");
 });
 
+test("hides patch cite recovered from **/*.md SEARCH line when patch card owns the turn", () => {
+  const content = [
+    "File: .dockerignore",
+    "",
+    "```patch",
+    "<<<<<<< SEARCH",
+    "**/*.md",
+    "=======",
+    "# testing",
+    "**/*.md",
+    ">>>>>>> REPLACE",
+    "```"
+  ].join("\n");
+  const doc = parseChatProse(content, { activeFilePath: ".dockerignore" });
+  const hidden = doc.blocks.map(shouldHidePatchBlock);
+  assert.ok(hidden.every(Boolean), "File header and patch fence should hide");
+});
+
 test("hides patch fences even when they are not recovered as citations", () => {
   const content = [
     "File: `packages/lib/server-utils/public-api/get-api-token-by-token.ts`",

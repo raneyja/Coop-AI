@@ -1,4 +1,5 @@
 import { stripEmittedPatchBlocks } from "./agentProposedPatch";
+import type { RepoCodeAction } from "./repoCodeIntent";
 
 /** Shown only when there is no answer to keep — never appended to one. */
 export const CUSTOMER_EMPTY_HUNT_ANSWER =
@@ -265,6 +266,31 @@ export function rewriteCustomerFacingProse(content: string): string {
  * If the turn produced prose, that prose is the product. Do not append
  * "couldn't produce an apply-able patch" / "use /edit" / "the index".
  */
+/**
+ * Empty agent change hunts become the canned miss. A turn that is not an
+ * agent change — including a highlight whose target is already on the chip —
+ * keeps the synthesis text, patch fences included.
+ */
+export function applyChangeHuntFinish(options: {
+  agentAction: RepoCodeAction;
+  hasAgentPatch: boolean;
+  content: string;
+  /** L file or a local workspace attach — keep the answer. */
+  preserveAnswer: boolean;
+}): string {
+  if (options.agentAction !== "change" || options.hasAgentPatch || options.preserveAnswer) {
+    return options.content;
+  }
+  const stripped = customerFacingAgentAnswer({
+    content: options.content,
+    hasApplyPatch: false
+  });
+  if (!stripped.trim()) {
+    return CUSTOMER_EMPTY_HUNT_ANSWER;
+  }
+  return stripped;
+}
+
 export function customerFacingAgentAnswer(options: {
   content: string;
   hasApplyPatch: boolean;

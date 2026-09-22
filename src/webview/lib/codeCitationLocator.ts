@@ -72,6 +72,10 @@ export function looksLikeRepoFilePath(path: string): boolean {
   if (!trimmed || /\s/.test(trimmed)) {
     return false;
   }
+  // `.dockerignore` globs and ignore patterns are not repo paths.
+  if (/[*?[\]]/.test(trimmed)) {
+    return false;
+  }
   if (trimmed.startsWith("http:") || trimmed.startsWith("https:")) {
     return false;
   }
