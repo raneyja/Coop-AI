@@ -12,6 +12,10 @@ export type CloneTarget = {
   repo: string;
   provider: "github" | "gitlab" | "bitbucket";
   branch?: string;
+  /** Tenant that owns this clone. Required so two orgs never share a directory. */
+  orgId?: string;
+  /** Job id so concurrent clones of the same org+repo do not rm -rf each other. */
+  jobId?: string;
 };
 
 export type CloneResult = {
@@ -27,9 +31,7 @@ export async function cloneRepository(
   token?: string,
   workRoot?: string
 ): Promise<CloneResult> {
-  const root = workRoot ?? path.join(os.tmpdir(), "coopai-clones");
-  const safeId = target.repoId.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const localPath = path.join(root, safeId);
+  const localPath = resolveCloneLocalPath(target, workRoot);
 
   if (fs.existsSync(localPath)) {
     fs.rmSync(localPath, { recursive: true, force: true });
@@ -51,19 +53,47 @@ export async function cloneRepository(
   return { localPath, branch, headCommit, files };
 }
 
+/** Directory name is `{org}__{job}__{repo}` under the clone root. `..` cannot escape the root. */
+export function resolveCloneLocalPath(target: CloneTarget, workRoot?: string): string {
+  const root = path.resolve(workRoot ?? path.join(os.tmpdir(), "coopai-clones"));
+  const dirName = [
+    sanitizeCloneSegment(target.orgId ?? "no-org"),
+    sanitizeCloneSegment(target.jobId ?? "no-job"),
+    sanitizeCloneSegment(target.repoId)
+  ].join("__");
+  const localPath = path.resolve(root, dirName);
+  if (localPath !== root && !localPath.startsWith(root + path.sep)) {
+    throw new Error("invalid clone path");
+  }
+  return localPath;
+}
+
+export function sanitizeCloneSegment(value: string): string {
+  const cleaned = value.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/\.\./g, "_");
+  if (!cleaned || cleaned === "." || cleaned === "..") {
+    return "_";
+  }
+  return cleaned;
+}
+
 export function removeRepositoryClone(localPath: string): void {
   if (fs.existsSync(localPath)) {
     fs.rmSync(localPath, { recursive: true, force: true });
   }
 }
 
+export function cloneHostForProvider(provider: CloneTarget["provider"]): string {
+  if (provider === "gitlab") {
+    return "gitlab.com";
+  }
+  if (provider === "bitbucket") {
+    return "bitbucket.org";
+  }
+  return "github.com";
+}
+
 function buildCloneUrl(target: CloneTarget, token?: string): string {
-  const host =
-    target.provider === "gitlab"
-      ? "gitlab.com"
-      : target.provider === "bitbucket"
-        ? "bitbucket.org"
-        : "github.com";
+  const host = cloneHostForProvider(target.provider);
   const slug = `${target.owner}/${target.repo}.git`;
   if (token && target.provider === "github") {
     return `https://x-access-token:${encodeURIComponent(token)}@${host}/${slug}`;

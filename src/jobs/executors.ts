@@ -12,6 +12,7 @@ import { getConnector } from "../server/codeHostConnectors/registry";
 import type { CodeHostProvider } from "../api/codeHosts/types";
 import { getDbPool } from "../server/db";
 import type { GitHubAppService } from "../server/githubAppService";
+import { blankRepositoryGraph } from "../cache/graphCache";
 import { cloneRepository, parseRepoId, removeRepositoryClone } from "../server/gitCloneService";
 import { canUseLightningPlan, type OrgStore } from "../server/orgStore";
 import { JobType, type Job } from "./types";
@@ -158,21 +159,31 @@ export async function buildDependencyGraph(
     throw new Error("Job cancelled");
   }
 
-  let graph = ctx.cache.getGraph(repoId);
+  const target = parseRepoId(repoId);
+  let graph = orgId ? ctx.cache.getGraph(orgId, repoId) : undefined;
   if (!graph) {
-    const target = parseRepoId(repoId);
-    graph = ctx.cache.upsertRepository({
-      repoId,
-      owner: target.owner,
-      repo: target.repo,
-      provider: target.provider
-    });
+    graph = orgId
+      ? ctx.cache.upsertRepository(orgId, {
+          repoId,
+          owner: target.owner,
+          repo: target.repo,
+          provider: target.provider
+        })
+      : blankRepositoryGraph({
+          repoId,
+          owner: target.owner,
+          repo: target.repo,
+          provider: target.provider
+        });
+    if (!orgId) {
+      logSkipGraphPersist(repoId);
+    }
   }
 
   await report(50, "Loading durable dependency edges");
   const filePaths = new Set(graph.fileTree.map((f) => f.path));
   const merged = await loadDurableDependencyEdges(orgId, repoId, filePaths);
-  const updated = ctx.cache.setDependencies(repoId, merged);
+  const updated = orgId ? ctx.cache.setDependencies(orgId, repoId, merged) : undefined;
   graph = updated ?? graph;
 
   await report(85, "Building transitive index");
@@ -216,15 +227,25 @@ async function indexRepository(
   }
 
   await report(15, "Preparing repository clone");
-  let graph = ctx.cache.getGraph(repoId);
+  const target = parseRepoId(repoId);
+  let graph = orgId ? ctx.cache.getGraph(orgId, repoId) : undefined;
   if (!graph) {
-    const target = parseRepoId(repoId);
-    graph = ctx.cache.upsertRepository({
-      repoId,
-      owner: target.owner,
-      repo: target.repo,
-      provider: target.provider
-    });
+    if (!orgId) {
+      logSkipGraphPersist(repoId);
+      graph = blankRepositoryGraph({
+        repoId,
+        owner: target.owner,
+        repo: target.repo,
+        provider: target.provider
+      });
+    } else {
+      graph = ctx.cache.upsertRepository(orgId, {
+        repoId,
+        owner: target.owner,
+        repo: target.repo,
+        provider: target.provider
+      });
+    }
   }
 
   let cloneLocalPath: string | undefined;
@@ -246,8 +267,7 @@ async function indexRepository(
       );
     }
     await report(30, "Cloning repository");
-    const target = parseRepoId(repoId);
-    const clone = await cloneRepository(target, token);
+    const clone = await cloneRepository({ ...target, orgId, jobId: job.id }, token);
     cloneLocalPath = clone.localPath;
 
     let scipResult: Awaited<ReturnType<typeof runScipIndexer>> | undefined;
@@ -305,7 +325,11 @@ async function indexRepository(
     graph.metadata.lastIndexedAt = now;
     graph.metadata.indexVersion += 1;
     graph.lastUpdated = now;
-    ctx.cache.setGraph(graph);
+    if (orgId) {
+      ctx.cache.setGraph(orgId, graph);
+    } else {
+      logSkipGraphPersist(repoId);
+    }
 
     // Import graph while clone still exists — durable edges, no filename heuristics.
     // Zoekt is often unavailable in prod; Blast dependents depend on these rows.
@@ -378,7 +402,11 @@ async function indexRepository(
         type: edge.kind === "reference" ? ("reference" as const) : ("import" as const)
       }))
     );
-    ctx.cache.setDependencies(repoId, cacheEdges);
+    if (orgId) {
+      ctx.cache.setDependencies(orgId, repoId, cacheEdges);
+    } else {
+      logSkipGraphPersist(repoId);
+    }
 
     // Measure the repo while the clone still exists — chat answers counts from
     // this record instead of estimating from a retrieval sample.
@@ -500,7 +528,8 @@ async function analyzeOwnership(
 ): Promise<unknown> {
   const repoId = String(job.params.repoId ?? "");
   await report(40, "Analyzing ownership");
-  const graph = ctx.cache.getGraph(repoId);
+  const orgId = job.params.orgId ? String(job.params.orgId) : undefined;
+  const graph = orgId ? ctx.cache.getGraph(orgId, repoId) : undefined;
   if (!graph) {
     throw new Error(`404: Repository graph not found for ${repoId}`);
   }
@@ -524,7 +553,8 @@ async function generateRepoSummary(
 ): Promise<unknown> {
   const repoId = String(job.params.repoId ?? "");
   await report(35, "Generating summary");
-  const graph = ctx.cache.getGraph(repoId);
+  const orgId = job.params.orgId ? String(job.params.orgId) : undefined;
+  const graph = orgId ? ctx.cache.getGraph(orgId, repoId) : undefined;
   if (!graph) {
     throw new Error(`404: Repository graph not found for ${repoId}`);
   }
@@ -542,11 +572,16 @@ async function generateRepoSummary(
 }
 
 function ensureRepoGraph(ctx: JobExecutionContext, repoId: string, params: Record<string, unknown>): void {
-  if (ctx.cache.getGraph(repoId)) {
+  const orgId = params.orgId ? String(params.orgId) : undefined;
+  if (!orgId) {
+    logSkipGraphPersist(repoId);
+    return;
+  }
+  if (ctx.cache.getGraph(orgId, repoId)) {
     return;
   }
   const target = parseRepoId(repoId);
-  ctx.cache.upsertRepository({
+  ctx.cache.upsertRepository(orgId, {
     repoId,
     owner: String(params.owner ?? target.owner),
     repo: String(params.repo ?? target.repo),
@@ -560,7 +595,7 @@ async function loadKnowledgeGapScanSlice(
   params: Record<string, unknown>
 ): Promise<KnowledgeGapGraphSlice | undefined> {
   const orgId = params.orgId ? String(params.orgId) : undefined;
-  const memory = ctx.cache.getGraph(repoId);
+  const memory = orgId ? ctx.cache.getGraph(orgId, repoId) : undefined;
   const candidateIds = knowledgeGapRepoIdCandidates(repoId, params);
   let manifestPaths: string[] = [];
   let durableEdges: DependencyEdge[] = [];
@@ -648,6 +683,16 @@ function normalizeRepoIds(params: Record<string, unknown>): string[] {
  * Load durable edges from Postgres. Never invent filename-heuristic edges.
  * Empty means impact unverified — not "zero impact."
  */
+let loggedMissingOrgGraph = false;
+
+function logSkipGraphPersist(repoId: string): void {
+  if (loggedMissingOrgGraph) {
+    return;
+  }
+  loggedMissingOrgGraph = true;
+  console.warn(`[index] skip graph cache persist — missing orgId (first repo ${repoId})`);
+}
+
 async function loadDurableDependencyEdges(
   orgId: string | undefined,
   repoId: string,

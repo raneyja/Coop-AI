@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import type { ServerResponse } from "node:http";
+import { zoektShardFilePrefix } from "../indexing/zoektShardIdentity";
 import { handleOrgApiRequest, type OrgApiDeps } from "./orgApi";
 import type { AuthContext, OrgRepoRecord, OrgStore } from "./orgStore";
 import type { ServerConfig } from "./serverConfig";
@@ -185,5 +189,95 @@ void (async () => {
   );
   assert.equal(fifth.statusCode, 202);
 
-  console.log("orgApiIndexing: 1/1 tests passed");
-})();
+  const tables: Record<string, Array<{ org_id: string; repo_id: string }>> = {
+    user_repo_grants: [],
+    repo_symbol_index: [
+      { org_id: proOrgId, repo_id: "github:acme/r1" },
+      { org_id: "org-other", repo_id: "github:acme/r1" }
+    ],
+    repo_embeddings: [
+      { org_id: proOrgId, repo_id: "github:acme/r1" },
+      { org_id: "org-other", repo_id: "github:acme/r1" }
+    ],
+    repo_stats: [
+      { org_id: proOrgId, repo_id: "github:acme/r1" },
+      { org_id: "org-other", repo_id: "github:acme/r1" }
+    ],
+    repo_dependency_edges: [
+      { org_id: proOrgId, repo_id: "github:acme/r1" },
+      { org_id: "org-other", repo_id: "github:acme/r1" }
+    ],
+    repo_manifests: [
+      { org_id: proOrgId, repo_id: "github:acme/r1" },
+      { org_id: "org-other", repo_id: "github:acme/r1" }
+    ],
+    graph_snapshots: [
+      { org_id: proOrgId, repo_id: "github:acme/r1" },
+      { org_id: "org-other", repo_id: "github:acme/r1" }
+    ]
+  };
+  const purgePool = {
+    query: async (sql: string, params: unknown[] = []) => {
+      const match = /^DELETE FROM (\w+)/i.exec(sql.trim());
+      if (!match) {
+        return { rows: [], rowCount: 0 };
+      }
+      const table = match[1];
+      const rows = tables[table];
+      if (!rows) {
+        return { rows: [], rowCount: 0 };
+      }
+      const before = rows.length;
+      tables[table] = rows.filter(
+        (row) => !(row.org_id === params[0] && row.repo_id === params[1])
+      );
+      return { rows: [], rowCount: before - tables[table].length };
+    }
+  };
+  const shardRoot = fs.mkdtempSync(path.join(os.tmpdir(), "coop-zoekt-purge-"));
+  const previousIndex = process.env.ZOEKT_INDEX_PATH;
+  process.env.ZOEKT_INDEX_PATH = shardRoot;
+  const ownShard = `${zoektShardFilePrefix(proOrgId, "github:acme/r1")}_v16.00000.zoekt`;
+  const otherShard = `${zoektShardFilePrefix("org-other", "github:acme/r1")}_v16.00000.zoekt`;
+  fs.writeFileSync(path.join(shardRoot, ownShard), "a");
+  fs.writeFileSync(path.join(shardRoot, otherShard), "b");
+  try {
+    const disable = await request(
+      { ...proDeps, dbPool: purgePool as never },
+      "POST",
+      "/v1/orgs/repos/github%3Aacme%2Fr1/lightning/disable"
+    );
+    assert.equal(disable.statusCode, 200);
+    const body = JSON.parse(disable.body ?? "{}") as { purged?: boolean; grantsDeleted?: number };
+    assert.equal(body.purged, true);
+    for (const table of [
+      "repo_symbol_index",
+      "repo_embeddings",
+      "repo_stats",
+      "repo_dependency_edges",
+      "repo_manifests",
+      "graph_snapshots"
+    ]) {
+      assert.equal(
+        tables[table].filter((row) => row.org_id === proOrgId).length,
+        0,
+        table
+      );
+      assert.equal(tables[table].filter((row) => row.org_id === "org-other").length, 1, table);
+    }
+    assert.equal(fs.existsSync(path.join(shardRoot, ownShard)), false);
+    assert.equal(fs.existsSync(path.join(shardRoot, otherShard)), true);
+  } finally {
+    if (previousIndex === undefined) {
+      delete process.env.ZOEKT_INDEX_PATH;
+    } else {
+      process.env.ZOEKT_INDEX_PATH = previousIndex;
+    }
+    fs.rmSync(shardRoot, { recursive: true, force: true });
+  }
+
+  console.log("orgApiIndexing: ok");
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

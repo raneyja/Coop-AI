@@ -82,6 +82,76 @@ RELATION_TYPE_MAP = {
   assert.ok(/\bextend\b/i.test(enriched));
 });
 
+test("file-assistant leftover Use-repo evidence does not rewrite the open-file answer", () => {
+  const answer =
+    "This local file raises SetHtmlEvent. Other files were not searched.";
+  const leftoverBundle = [
+    {
+      data: {
+        jiraSearch: { issues: [] },
+        slackSearch: { messages: [] },
+        file: "src/server/authMiddleware.ts",
+        directDependents: ["src/chat/CoopChatSession.ts"],
+        dependentDetails: [
+          { path: "src/chat/CoopChatSession.ts", depth: 1, source: "scip" }
+        ],
+        graphMeta: { source: "scip", edgeCount: 1 },
+        packageStructure: {
+          packages: ["apps/web", "apps/api", "packages/ui"],
+          workspaceGlobs: ["apps/*", "packages/*"],
+          parents: ["apps", "packages"]
+        }
+      }
+    }
+  ];
+  const wouldInjectCallers = enrichChatResponseForAction({
+    content: answer,
+    userQuestion: "If I change this file, what else should I check?",
+    contextBundle: leftoverBundle
+  });
+  assert.match(wouldInjectCallers, /src\/chat\/CoopChatSession/);
+
+  const incident = enrichChatResponseForAction({
+    content: answer,
+    userQuestion:
+      "Last week’s webhook delivery failures — what Jira tickets and Slack threads are related?",
+    contextBundle: leftoverBundle,
+    incidentReconstruction: {
+      jiraConnected: true,
+      slackConnected: true,
+      codePaths: []
+    },
+    fileAssistant: true
+  });
+  assert.equal(incident, answer);
+  assert.doesNotMatch(incident, /\*\*Code paths\*\*|\*\*Integrations\*\*|\*\*Gaps\*\*/);
+
+  const callers = enrichChatResponseForAction({
+    content: answer,
+    userQuestion: "If I change this file, what else should I check?",
+    contextBundle: leftoverBundle,
+    fileAssistant: true
+  });
+  assert.equal(callers, answer);
+  assert.doesNotMatch(callers, /\*\*Callers|\*\*Concrete packages|src\/chat\/CoopChatSession/);
+
+  const structure = enrichChatResponseForAction({
+    content: answer,
+    userQuestion: "How is this repository structured?",
+    contextBundle: leftoverBundle,
+    fileAssistant: true
+  });
+  assert.equal(structure, answer);
+  assert.doesNotMatch(structure, /apps\/web|Concrete packages/);
+
+  const intern = enrichChatResponseForAction({
+    content: "The index returned no usable matches for `SetHtmlEvent`.",
+    fileAssistant: true
+  });
+  assert.match(intern, /index returned no usable/);
+  assert.doesNotMatch(intern, /in this repo/i);
+});
+
 test("/docs answers that invent repo files are rewritten to titles only", () => {
   const enriched = enrichChatResponseForAction({
     content:

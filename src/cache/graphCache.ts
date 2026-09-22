@@ -86,6 +86,37 @@ type CacheEntry = {
   transitiveDependentsIndex: Map<string, string[]>;
 };
 
+/** In-memory and durable graph rows are keyed by org and repo, never repo alone. */
+export function graphCacheKey(orgId: string, repoId: string): string {
+  return `${orgId}\u0000${repoId}`;
+}
+
+/** A graph object that is not inserted into the cache. Used when orgId is missing. */
+export function blankRepositoryGraph(ref: RepositoryRef): RepositoryGraph {
+  const now = new Date();
+  return {
+    repoId: ref.repoId,
+    owner: ref.owner,
+    repo: ref.repo,
+    lastUpdated: now,
+    fileTree: [],
+    dependencies: [],
+    owners: [],
+    recentCommits: [],
+    pullRequests: [],
+    issues: [],
+    reviews: [],
+    slackDecisions: [],
+    branches: ref.defaultBranch ? [ref.defaultBranch] : [],
+    defaultBranch: ref.defaultBranch,
+    metadata: {
+      language: "unknown",
+      lastIndexedAt: now,
+      indexVersion: 0
+    }
+  };
+}
+
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_MAX_REPOS = 100;
 const DEFAULT_MAX_COMMITS = 250;
@@ -105,8 +136,12 @@ export class GraphCache {
     this.maxAuditMetadataPerRepo = options.maxAuditMetadataPerRepo ?? DEFAULT_MAX_METADATA;
   }
 
-  public upsertRepository(ref: RepositoryRef, partial?: Partial<RepositoryGraph>): RepositoryGraph {
-    const existing = this.entries.get(ref.repoId)?.graph;
+  public upsertRepository(
+    orgId: string,
+    ref: RepositoryRef,
+    partial?: Partial<RepositoryGraph>
+  ): RepositoryGraph {
+    const existing = this.entries.get(this.entryKey(orgId, ref.repoId))?.graph;
     const now = new Date();
     const graph: RepositoryGraph = {
       repoId: ref.repoId,
@@ -139,32 +174,35 @@ export class GraphCache {
       lastIndexedAt: now,
       indexVersion: Math.max(graph.metadata.indexVersion, (existing?.metadata.indexVersion ?? 0) + 1)
     };
-    this.setGraph(graph);
+    this.setGraph(orgId, graph);
     return graph;
   }
 
-  public setGraph(graph: RepositoryGraph): void {
-    this.entries.set(graph.repoId, this.buildEntry(this.sanitizeGraph(graph)));
+  public setGraph(orgId: string, graph: RepositoryGraph): void {
+    this.entries.set(this.entryKey(orgId, graph.repoId), this.buildEntry(this.sanitizeGraph(graph)));
     this.evictExpired();
     this.evictLru();
   }
 
-  public getGraph(repoId: string): RepositoryGraph | undefined {
-    const entry = this.getEntry(repoId);
+  public getGraph(orgId: string, repoId: string): RepositoryGraph | undefined {
+    const entry = this.getEntry(orgId, repoId);
     return entry ? cloneGraph(entry.graph) : undefined;
   }
 
-  public deleteGraph(repoId: string): boolean {
-    return this.entries.delete(repoId);
+  public deleteGraph(orgId: string, repoId: string): boolean {
+    return this.entries.delete(this.entryKey(orgId, repoId));
   }
 
-  public listRepoIds(): string[] {
+  /** Load one org+repo row into memory. Memory cache is already resident. */
+  public async ensureLoaded(_orgId: string, _repoId: string): Promise<void> {}
+
+  public size(): number {
     this.evictExpired();
-    return [...this.entries.keys()];
+    return this.entries.size;
   }
 
-  public updateFiles(repo: RepositoryRef, changes: ChangedFile[]): RepositoryGraph {
-    const graph = this.upsertRepository(repo);
+  public updateFiles(orgId: string, repo: RepositoryRef, changes: ChangedFile[]): RepositoryGraph {
+    const graph = this.upsertRepository(orgId, repo);
     const files = new Map(graph.fileTree.map((file) => [file.path, file]));
     const now = new Date();
 
@@ -194,12 +232,12 @@ export class GraphCache {
     graph.lastUpdated = now;
     graph.metadata.lastIndexedAt = now;
     graph.metadata.indexVersion += 1;
-    this.setGraph(graph);
+    this.setGraph(orgId, graph);
     return cloneGraph(graph);
   }
 
-  public addCommits(repo: RepositoryRef, commits: CommitSummary[]): RepositoryGraph {
-    const graph = this.upsertRepository(repo);
+  public addCommits(orgId: string, repo: RepositoryRef, commits: CommitSummary[]): RepositoryGraph {
+    const graph = this.upsertRepository(orgId, repo);
     const bySha = new Map(graph.recentCommits.map((commit) => [commit.sha, commit]));
     for (const commit of commits) {
       bySha.set(commit.sha, sanitizeCommit(commit));
@@ -211,12 +249,16 @@ export class GraphCache {
     graph.lastUpdated = new Date();
     graph.metadata.lastIndexedAt = graph.lastUpdated;
     graph.metadata.indexVersion += 1;
-    this.setGraph(graph);
+    this.setGraph(orgId, graph);
     return cloneGraph(graph);
   }
 
-  public setDependencies(repoId: string, dependencies: DependencyEdge[]): RepositoryGraph | undefined {
-    const graph = this.getMutableGraph(repoId);
+  public setDependencies(
+    orgId: string,
+    repoId: string,
+    dependencies: DependencyEdge[]
+  ): RepositoryGraph | undefined {
+    const graph = this.getMutableGraph(orgId, repoId);
     if (!graph) {
       return undefined;
     }
@@ -224,48 +266,56 @@ export class GraphCache {
     graph.lastUpdated = new Date();
     graph.metadata.lastIndexedAt = graph.lastUpdated;
     graph.metadata.indexVersion += 1;
-    this.setGraph(graph);
+    this.setGraph(orgId, graph);
     return cloneGraph(graph);
   }
 
-  public upsertPullRequest(repo: RepositoryRef, pullRequest: PullRequestMetadata): RepositoryGraph {
-    const graph = this.upsertRepository(repo);
+  public upsertPullRequest(
+    orgId: string,
+    repo: RepositoryRef,
+    pullRequest: PullRequestMetadata
+  ): RepositoryGraph {
+    const graph = this.upsertRepository(orgId, repo);
     graph.pullRequests = upsertById(graph.pullRequests, sanitizePullRequest(pullRequest))
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
       .slice(0, this.maxAuditMetadataPerRepo);
     graph.lastUpdated = new Date();
     graph.metadata.lastIndexedAt = graph.lastUpdated;
     graph.metadata.indexVersion += 1;
-    this.setGraph(graph);
+    this.setGraph(orgId, graph);
     return cloneGraph(graph);
   }
 
-  public upsertIssue(repo: RepositoryRef, issue: IssueMetadata): RepositoryGraph {
-    const graph = this.upsertRepository(repo);
+  public upsertIssue(orgId: string, repo: RepositoryRef, issue: IssueMetadata): RepositoryGraph {
+    const graph = this.upsertRepository(orgId, repo);
     graph.issues = upsertById(graph.issues, sanitizeIssue(issue))
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
       .slice(0, this.maxAuditMetadataPerRepo);
     graph.lastUpdated = new Date();
     graph.metadata.lastIndexedAt = graph.lastUpdated;
     graph.metadata.indexVersion += 1;
-    this.setGraph(graph);
+    this.setGraph(orgId, graph);
     return cloneGraph(graph);
   }
 
-  public upsertReview(repo: RepositoryRef, review: ReviewMetadata): RepositoryGraph {
-    const graph = this.upsertRepository(repo);
+  public upsertReview(orgId: string, repo: RepositoryRef, review: ReviewMetadata): RepositoryGraph {
+    const graph = this.upsertRepository(orgId, repo);
     graph.reviews = upsertById(graph.reviews, review)
       .sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime())
       .slice(0, this.maxAuditMetadataPerRepo);
     graph.lastUpdated = new Date();
     graph.metadata.lastIndexedAt = graph.lastUpdated;
     graph.metadata.indexVersion += 1;
-    this.setGraph(graph);
+    this.setGraph(orgId, graph);
     return cloneGraph(graph);
   }
 
-  public addSlackDecision(repoId: string, decision: SlackDecisionMetadata): RepositoryGraph | undefined {
-    const graph = this.getMutableGraph(repoId);
+  public addSlackDecision(
+    orgId: string,
+    repoId: string,
+    decision: SlackDecisionMetadata
+  ): RepositoryGraph | undefined {
+    const graph = this.getMutableGraph(orgId, repoId);
     if (!graph) {
       return undefined;
     }
@@ -275,42 +325,51 @@ export class GraphCache {
     graph.lastUpdated = new Date();
     graph.metadata.lastIndexedAt = graph.lastUpdated;
     graph.metadata.indexVersion += 1;
-    this.setGraph(graph);
+    this.setGraph(orgId, graph);
     return cloneGraph(graph);
   }
 
-  public getFileTree(repoId: string): GraphQueryResult<FileNode[]> | undefined {
-    const entry = this.getEntry(repoId);
+  public getFileTree(orgId: string, repoId: string): GraphQueryResult<FileNode[]> | undefined {
+    const entry = this.getEntry(orgId, repoId);
     return entry ? this.result(entry, entry.graph.fileTree.map(cloneFile)) : undefined;
   }
 
-  public getOwnership(repoId: string, file: string): GraphQueryResult<OwnershipEntry | undefined> | undefined {
-    const entry = this.getEntry(repoId);
+  public getOwnership(
+    orgId: string,
+    repoId: string,
+    file: string
+  ): GraphQueryResult<OwnershipEntry | undefined> | undefined {
+    const entry = this.getEntry(orgId, repoId);
     const owner = entry?.fileOwner(file);
     return entry ? this.result(entry, owner ? cloneOwnership(owner) : undefined) : undefined;
   }
 
-  public getDependents(repoId: string, file: string): GraphQueryResult<DependencyEdge[]> | undefined {
-    const entry = this.getEntry(repoId);
+  public getDependents(orgId: string, repoId: string, file: string): GraphQueryResult<DependencyEdge[]> | undefined {
+    const entry = this.getEntry(orgId, repoId);
     return entry ? this.result(entry, [...(entry.dependentsIndex.get(file) ?? [])]) : undefined;
   }
 
-  public getImports(repoId: string, file: string): GraphQueryResult<DependencyEdge[]> | undefined {
-    const entry = this.getEntry(repoId);
+  public getImports(orgId: string, repoId: string, file: string): GraphQueryResult<DependencyEdge[]> | undefined {
+    const entry = this.getEntry(orgId, repoId);
     return entry ? this.result(entry, [...(entry.dependenciesIndex.get(file) ?? [])]) : undefined;
   }
 
-  public getTransitiveDependents(repoId: string, file: string): GraphQueryResult<string[]> | undefined {
-    const entry = this.getEntry(repoId);
+  public getTransitiveDependents(
+    orgId: string,
+    repoId: string,
+    file: string
+  ): GraphQueryResult<string[]> | undefined {
+    const entry = this.getEntry(orgId, repoId);
     return entry ? this.result(entry, [...(entry.transitiveDependentsIndex.get(file) ?? [])]) : undefined;
   }
 
   public getRecentChanges(
+    orgId: string,
     repoId: string,
     days = 7,
     filters: GraphQueryFilters = {}
   ): GraphQueryResult<CommitSummary[]> | undefined {
-    const entry = this.getEntry(repoId);
+    const entry = this.getEntry(orgId, repoId);
     if (!entry) {
       return undefined;
     }
@@ -324,8 +383,13 @@ export class GraphCache {
     return this.result(entry, commits);
   }
 
-  public searchFiles(repoId: string, pattern: string, limit = 50): GraphQueryResult<FileNode[]> | undefined {
-    const entry = this.getEntry(repoId);
+  public searchFiles(
+    orgId: string,
+    repoId: string,
+    pattern: string,
+    limit = 50
+  ): GraphQueryResult<FileNode[]> | undefined {
+    const entry = this.getEntry(orgId, repoId);
     if (!entry) {
       return undefined;
     }
@@ -339,18 +403,29 @@ export class GraphCache {
     return this.result(entry, matches);
   }
 
-  private getMutableGraph(repoId: string): RepositoryGraph | undefined {
-    const entry = this.getEntry(repoId);
+  private entryKey(orgId: string, repoId: string): string {
+    if (!orgId) {
+      throw new Error("graph cache requires orgId");
+    }
+    return graphCacheKey(orgId, repoId);
+  }
+
+  private getMutableGraph(orgId: string, repoId: string): RepositoryGraph | undefined {
+    const entry = this.getEntry(orgId, repoId);
     return entry ? cloneGraph(entry.graph) : undefined;
   }
 
-  private getEntry(repoId: string): (CacheEntry & { fileOwner(file: string): OwnershipEntry | undefined }) | undefined {
-    const entry = this.entries.get(repoId);
+  private getEntry(
+    orgId: string,
+    repoId: string
+  ): (CacheEntry & { fileOwner(file: string): OwnershipEntry | undefined }) | undefined {
+    const key = this.entryKey(orgId, repoId);
+    const entry = this.entries.get(key);
     if (!entry) {
       return undefined;
     }
     if (Date.now() > entry.expiresAt) {
-      this.entries.delete(repoId);
+      this.entries.delete(key);
       return undefined;
     }
     entry.lastAccessedAt = Date.now();

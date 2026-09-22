@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildUserMessageWithContext, formatChatMessageWithLocalFiles, OPEN_FILE_PR_REVIEW_DIRECTIVE, systemPromptForUseCase } from "./systemPrompts";
+import { buildUserMessageWithContext, formatChatMessageWithLocalFiles, LOCAL_FILE_PATH_DIRECTIVE, OPEN_FILE_PR_REVIEW_DIRECTIVE, systemPromptForUseCase } from "./systemPrompts";
 import { COPILOT_C4_ASK } from "../api/agent/dogfoodContract";
 
 let passed = 0;
@@ -436,6 +436,29 @@ test("formatChatMessageWithLocalFiles embeds authoritative file_content", () => 
   assert.ok(message.includes("<file_content"));
   assert.ok(message.includes("deps.githubApp"));
   assert.ok(message.includes("Quote the 503 condition."));
+});
+
+test("local file turn says local path and drops leftover Use-repo", () => {
+  const message = formatChatMessageWithLocalFiles({
+    message: "what does this file do?",
+    file: "/Users/jonraney/Desktop/cody-vs-main/docs/Troubleshooting.md",
+    owner: "raneyja",
+    repo: "Coop-AI",
+    branch: "main",
+    fileAssistant: true,
+    files: [
+      {
+        path: "/Users/jonraney/Desktop/cody-vs-main/docs/Troubleshooting.md",
+        content: "## Troubleshooting Cody for Visual Studio extension"
+      }
+    ]
+  });
+
+  assert.equal(message.includes("repo: raneyja/Coop-AI"), false);
+  assert.equal(message.includes("branch: main"), false);
+  assert.ok(message.includes("local path, not a repository"));
+  assert.ok(message.includes(LOCAL_FILE_PATH_DIRECTIVE));
+  assert.ok(message.includes('Do not write "in the repo"'));
 });
 
 test("C4 open-file review appends Reviewer-checks-only directive", () => {

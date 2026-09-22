@@ -22,6 +22,7 @@ import {
   isOrdinaryLanguageTag,
   isUnfencedCitationStartLine,
   locatorFromProseLine,
+  looksLikeRepoFilePath,
   resolveCitePathForLanguageFence,
   shouldNeverUpgradeLanguageFence,
   tryParseCitationLocator,
@@ -387,7 +388,9 @@ function tryParseBareCitation(
   }
 
   return {
-    block: citationBlockFromLocator(locator, stripCommonIndent(body).join("\n")),
+    block: downgradePathOnlyCitation(
+      citationBlockFromLocator(locator, stripCommonIndent(body).join("\n"))
+    ),
     nextIndex: k
   };
 }
@@ -426,7 +429,7 @@ function tryParseCodeFence(
   let nextIndex = closed ? i + 1 : i;
 
   const finish = (block: ChatProseBlock): ParsedFence => {
-    const trailing = consumeTrailingLocator(lines, nextIndex, block);
+    const trailing = consumeTrailingLocator(lines, nextIndex, downgradePathOnlyCitation(block));
     return { block: trailing.block, nextIndex: trailing.nextIndex };
   };
 
@@ -648,6 +651,13 @@ function parseInlineNodes(input: string): ChatInlineNode[] {
     return [{ type: "text", text: "" }];
   }
 
+  if (!input.includes("\n")) {
+    const trimmed = input.trim();
+    if (looksLikeBareFilePathLine(trimmed)) {
+      return paragraphFromFilePath(trimmed).content;
+    }
+  }
+
   const nodes: ChatInlineNode[] = [];
   let cursor = 0;
   let textBuffer = "";
@@ -737,6 +747,56 @@ function parseInlineNodes(input: string): ChatInlineNode[] {
 
   flushText();
   return mergeAdjacentTextNodes(nodes);
+}
+
+function paragraphFromFilePath(path: string): ChatParagraphBlock {
+  const normalized = path.trim();
+  const fileLineMatch = normalized.match(FILE_LINE_RE);
+  if (fileLineMatch && looksLikeFilePath(fileLineMatch[1])) {
+    return {
+      type: "paragraph",
+      content: [
+        {
+          type: "file-link",
+          path: fileLineMatch[1],
+          line: Number(fileLineMatch[2]),
+          label: normalized
+        }
+      ]
+    };
+  }
+  return {
+    type: "paragraph",
+    content: [{ type: "file-link", path: normalized, label: normalized }]
+  };
+}
+
+function looksLikeBareFilePathLine(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed || /\s/.test(trimmed)) {
+    return false;
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    return false;
+  }
+  if (/^[\[(]/.test(trimmed)) {
+    return false;
+  }
+  if (looksLikeRepoFilePath(trimmed)) {
+    return true;
+  }
+  if (/^(?:\/|[A-Za-z]:[\\/]).+\.[A-Za-z0-9]{1,12}$/.test(trimmed)) {
+    return true;
+  }
+  return looksLikeFilePath(trimmed);
+}
+
+/** Path-only locators belong inline in prose — not a full cite card with no code body. */
+function downgradePathOnlyCitation(block: ChatProseBlock): ChatProseBlock {
+  if (block.type !== "code-citation" || block.code.trim().length > 0) {
+    return block;
+  }
+  return paragraphFromFilePath(block.path);
 }
 
 function asCodeOrFileLink(code: string): ChatInlineNode {

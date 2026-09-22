@@ -85,15 +85,18 @@ export class GraphConsistencyManager {
     }));
   }
 
-  public isStale(repoId: string): boolean {
-    const graph = this.cache.getGraph(repoId);
+  public isStale(orgId: string, repoId: string): boolean {
+    const graph = orgId ? this.cache.getGraph(orgId, repoId) : undefined;
     if (!graph) {
       return true;
     }
     return Date.now() - graph.lastUpdated.getTime() > this.staleAfterMs;
   }
 
-  public rollback(repoId: string, version?: number): RepositoryGraph | undefined {
+  public rollback(orgId: string, repoId: string, version?: number): RepositoryGraph | undefined {
+    if (!orgId) {
+      return undefined;
+    }
     const snapshots = this.snapshots.get(repoId) ?? [];
     const target = version === undefined
       ? snapshots[snapshots.length - 1]
@@ -101,16 +104,23 @@ export class GraphConsistencyManager {
     if (!target) {
       return undefined;
     }
-    this.cache.setGraph(target.graph);
-    return this.cache.getGraph(repoId);
+    this.cache.setGraph(orgId, target.graph);
+    return this.cache.getGraph(orgId, repoId);
   }
 
-  public recoverCorruptGraph(repoId: string, fallback?: RepositoryGraph): RepositoryGraph | undefined {
-    if (fallback) {
-      this.cache.setGraph(fallback);
-      return this.cache.getGraph(repoId);
+  public recoverCorruptGraph(
+    orgId: string,
+    repoId: string,
+    fallback?: RepositoryGraph
+  ): RepositoryGraph | undefined {
+    if (!orgId) {
+      return undefined;
     }
-    return this.rollback(repoId);
+    if (fallback) {
+      this.cache.setGraph(orgId, fallback);
+      return this.cache.getGraph(orgId, repoId);
+    }
+    return this.rollback(orgId, repoId);
   }
 
   private async drain(repoId: string): Promise<void> {
@@ -142,63 +152,9 @@ export class GraphConsistencyManager {
   }
 
   private applyEvent(repoId: string, event: NormalizedWebhookEvent): void {
-    const before = this.cache.getGraph(repoId);
-    if (before) {
-      this.captureSnapshot(before);
-    }
-
-    switch (event.eventType) {
-      case "push":
-        this.cache.addCommits(event.repository, event.commits);
-        this.cache.updateFiles(event.repository, event.changedFiles);
-        break;
-      case "pull_request":
-      case "merge_request":
-        this.cache.upsertPullRequest(event.repository, event.pullRequest);
-        if (event.changedFiles.length > 0) {
-          this.cache.updateFiles(event.repository, event.changedFiles);
-        }
-        break;
-      case "pull_request_review":
-        this.cache.upsertReview(event.repository, event.review);
-        break;
-      case "issues":
-      case "issue":
-        if (event.issue) {
-          this.cache.upsertIssue(event.repository, event.issue);
-        } else {
-          this.cache.upsertRepository(event.repository);
-        }
-        break;
-      case "repository":
-      case "wiki":
-        this.cache.upsertRepository(event.repository);
-        break;
-      case "message":
-      case "app_mention":
-      case "reaction":
-        this.applySlackDecision(event);
-        break;
-    }
-
-    const after = this.cache.getGraph(repoId);
-    this.recordAudit(
-      event,
-      repoId,
-      before?.metadata.indexVersion,
-      after?.metadata.indexVersion,
-      "applied webhook update"
-    );
-  }
-
-  private applySlackDecision(event: Extract<NormalizedWebhookEvent, { provider: "slack" }>): void {
-    for (const ref of event.decision.linkedRefs) {
-      if (!ref.owner || !ref.repo) {
-        continue;
-      }
-      const repoId = `${ref.provider}:${ref.owner}/${ref.repo}`;
-      this.cache.addSlackDecision(repoId, event.decision);
-    }
+    // Webhook deliveries do not carry org id. Do not write a shared graph row
+    // or fan the event out to every tenant that indexed this slug.
+    this.recordAudit(event, repoId, undefined, undefined, "skipped: no org id");
   }
 
   private repoIdFromSlack(event: Extract<NormalizedWebhookEvent, { provider: "slack" }>): string | undefined {

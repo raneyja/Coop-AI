@@ -5,7 +5,8 @@ import { resolvePlainChatSynthesisRoute } from "../synthesisRouting";
 import { planChatIntentFromRules } from "./planChatIntent";
 import {
   buildMultiToolPlainChatUserPrompt,
-  enrichIntentJobResponse
+  enrichIntentJobResponse,
+  shouldApplyIntentJobRemoteMiss
 } from "../../prompts/multiToolPlainChatSynthesis";
 import {
   buildIncidentReconstructionUserPrompt,
@@ -13,6 +14,7 @@ import {
   incidentIntegrationsFromBundle
 } from "../../prompts/incidentReconstruction";
 import { extraTermsForIntegration } from "./planChatJobs";
+import { emptyChatIntentPlan } from "./types";
 import { shouldRunAgentToolLoop } from "../agentRouting";
 import { systemPromptForUseCase } from "../../prompts/systemPrompts";
 
@@ -283,6 +285,105 @@ test("I4 ticket pickup plans locate+decision, not incident reconstruction", () =
   assert.match(userPrompt, /No mention in Slack of /);
   assert.doesNotMatch(userPrompt, /Slack search returned zero hits/i);
   assert.doesNotMatch(userPrompt, /index is stale|If you want I can run/);
+});
+
+test("file-assistant leftover locate does not select intent-job; indexed-repo locate still does", () => {
+  const question = "If I change this file, what else should I check?";
+  const locateOnly = {
+    ...emptyChatIntentPlan(question),
+    jobs: [{ capability: "locate" as const, terms: ["open file"] }]
+  };
+  assert.equal(
+    resolvePlainChatSynthesisRoute({
+      userQuestion: question,
+      intentPlan: locateOnly,
+      sessionMode: "file-assistant"
+    }).kind,
+    "plain"
+  );
+  assert.equal(
+    resolvePlainChatSynthesisRoute({
+      userQuestion: question,
+      intentPlan: locateOnly,
+      sessionMode: "indexed-repo"
+    }).kind,
+    "intent-job"
+  );
+  assert.equal(
+    resolvePlainChatSynthesisRoute({
+      userQuestion: question,
+      intentPlan: locateOnly
+    }).kind,
+    "intent-job"
+  );
+
+  const namedTool = {
+    ...emptyChatIntentPlan(question),
+    tools: ["slack" as const],
+    jobs: [
+      { capability: "locate" as const, terms: ["open file"] },
+      { capability: "decision" as const, terms: ["auth"] }
+    ]
+  };
+  const mixed = resolvePlainChatSynthesisRoute({
+    userQuestion: question,
+    intentPlan: namedTool,
+    sessionMode: "file-assistant"
+  });
+  assert.equal(mixed.kind, "intent-job");
+
+  assert.equal(
+    resolvePlainChatSynthesisRoute({
+      userQuestion: A9_ASK,
+      sessionMode: "file-assistant"
+    }).kind,
+    "plain"
+  );
+  assert.equal(
+    resolvePlainChatSynthesisRoute({
+      userQuestion: A9_ASK,
+      sessionMode: "indexed-repo"
+    }).kind,
+    "incident"
+  );
+});
+
+test("file-assistant open-file answer is not replaced by the remote-search miss", () => {
+  const answer = [
+    "The open file at /Users/someone/Desktop/sample/Widget.cs marks agent calls.",
+    "Notifications return void and requests return Task.",
+    "A signature or name change would matter to uses of the attribute.",
+    "Other files were not searched."
+  ].join("\n");
+  const leftoverLocate = {
+    tools: [] as const,
+    jobs: [{ capability: "locate" as const, terms: ["open file"] }],
+    integrations: {},
+    codePaths: [] as string[]
+  };
+  const enriched = enrichIntentJobResponse(answer, {
+    ...leftoverLocate,
+    fileAssistant: true
+  });
+  assert.equal(enriched, answer);
+  assert.doesNotMatch(
+    enriched,
+    /Code location|Gaps|remote code search|usable implementation file|remote index|no local clone/i
+  );
+
+  const streamedThenFinished = enrichIntentJobResponse(answer, {
+    ...leftoverLocate,
+    localWorkspaceAttached: true
+  });
+  assert.equal(streamedThenFinished, answer);
+  assert.equal(
+    shouldApplyIntentJobRemoteMiss({
+      ...leftoverLocate,
+      localWorkspaceAttached: true
+    }),
+    false
+  );
+  assert.equal(shouldApplyIntentJobRemoteMiss(leftoverLocate), true);
 });
 
 test("I3/I4 intern-speak bubbles rewrite through the chat funnel", () => {

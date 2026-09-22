@@ -37,6 +37,13 @@ export class RepoEmbeddingsStore {
     return Number(result.rows[0]?.count ?? 0);
   }
 
+  public async deleteForRepo(orgId: string, repoId: string): Promise<void> {
+    await this.pool.query(`DELETE FROM repo_embeddings WHERE org_id = $1 AND repo_id = $2`, [
+      orgId,
+      repoId
+    ]);
+  }
+
   public async replaceForRepo(
     orgId: string,
     repoId: string,

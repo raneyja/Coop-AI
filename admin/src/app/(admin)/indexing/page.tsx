@@ -254,7 +254,9 @@ export default function IndexingPage() {
       setError(result.error ?? "Could not turn off Deep-Index.");
       return;
     }
-    setActionMessage(`Turned off Deep-Index for ${shortRepoName(repoId)}.`);
+    setActionMessage(
+      `Turned off Deep-Index for ${shortRepoName(repoId)}. Turning it back on fully reindexes the repo.`
+    );
     await load({ silent: true });
   }
 

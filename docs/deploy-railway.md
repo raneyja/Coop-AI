@@ -104,6 +104,8 @@ Set these on the **Coop-AI** service (**Variables** tab). Source for integration
 
 `DATABASE_URL` — reference from Postgres (Part A3). **`PORT`** — leave unset; Railway sets it automatically.
 
+Jobs API org isolation requires the PR #58 build: an org API key or SSO session only sees that org’s jobs. `COOP_JOBS_API_TOKEN` remains the operator view.
+
 ### Integration OAuth (copy from local `.env.backend`)
 
 `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `SLACK_APP_*`, `ATLASSIAN_APP_*`, `NOTION_APP_*`, `GOOGLE_DOCS_APP_*`, etc.

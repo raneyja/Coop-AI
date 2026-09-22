@@ -15,6 +15,7 @@
  *   npx ts-node scripts/admin-org.ts seed-enterprise-sso-demo
  *   npx ts-node scripts/admin-org.ts seed-analytics-demo
  *   npx ts-node scripts/admin-org.ts reindex-estate <orgId> [--include-in-flight]
+ *   npx ts-node scripts/admin-org.ts delete <orgId>
  */
 
 import { readFileSync } from "node:fs";
@@ -31,6 +32,7 @@ import { JobQueue } from "../src/jobs/jobQueue";
 import { syncOrgCatalog } from "../src/server/catalogSyncService";
 import type { OrgRepoAccessMode } from "../src/server/repoAccessTypes";
 import { principalForUser } from "../src/server/audit/auditLogger";
+import { purgeOrgZoektShards } from "../src/indexing/purgeOrgRepoIndex";
 
 /** Public signing cert from https://mocksaml.com/api/saml/metadata (BoxyHQ MockSAML). */
 const MOCKSAML_IDP_CERT = `-----BEGIN CERTIFICATE-----
@@ -1357,9 +1359,30 @@ async function main(): Promise<void> {
         );
         break;
       }
+      case "delete": {
+        const [orgId] = args;
+        if (!orgId) {
+          throw new Error("usage: delete <orgId>");
+        }
+        const zoektShardsRemoved = purgeOrgZoektShards(orgId);
+        const deleted = await pool.query(`DELETE FROM organizations WHERE id = $1`, [orgId]);
+        console.log(
+          JSON.stringify(
+            {
+              orgId,
+              deleted: deleted.rowCount ?? 0,
+              zoektShardsRemoved,
+              note: "Postgres index rows cascade with the organization. Zoekt shards for this org were removed."
+            },
+            null,
+            2
+          )
+        );
+        break;
+      }
       default:
         console.error(
-          "Commands: create-org, set-plan, upgrade-user-by-email, list-orgs, create-api-key, configure-sso, create-user, set-user-role, seed-repo-access-demo, seed-pro-onboarding, seed-enterprise-sso-demo, seed-governance-demo, seed-analytics-demo, set-repo-access-mode, reindex-estate"
+          "Commands: create-org, set-plan, upgrade-user-by-email, list-orgs, create-api-key, configure-sso, create-user, set-user-role, seed-repo-access-demo, seed-pro-onboarding, seed-enterprise-sso-demo, seed-governance-demo, seed-analytics-demo, set-repo-access-mode, reindex-estate, delete"
         );
         process.exit(1);
     }

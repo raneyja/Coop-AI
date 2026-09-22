@@ -223,21 +223,48 @@ export function buildMultiToolPlainChatUserPrompt(input: MultiToolPlainChatInput
   return lines.join("\n");
 }
 
-/** Remove citations and local-workspace advice that contradict attached job evidence. */
-export function enrichIntentJobResponse(
-  content: string,
-  input: Pick<MultiToolPlainChatInput, "tools" | "integrations" | "jobs"> & {
-    codePaths?: string[];
+export type IntentJobEnrichmentInput = Pick<
+  MultiToolPlainChatInput,
+  "tools" | "integrations" | "jobs"
+> & {
+  codePaths?: string[];
+  /**
+   * L turn: the open local file is the evidence. Never replace the answer
+   * with the remote-search miss, even if a locate job was left on the plan.
+   */
+  fileAssistant?: boolean;
+  /** Disk file already read this turn (`local-workspace`). Same refuse as file-assistant. */
+  localWorkspaceAttached?: boolean;
+};
+
+/**
+ * Finish-time empty-locate swap. Must stay off when the open local file was
+ * already read — that is the evidence, even if session mode or leftover jobs
+ * still look like a remote hunt.
+ */
+export function shouldApplyIntentJobRemoteMiss(input: IntentJobEnrichmentInput): boolean {
+  if (input.fileAssistant || input.localWorkspaceAttached) {
+    return false;
   }
-): string {
   const hasLocateJob = input.jobs?.some((job) => job.capability === "locate") ?? false;
-  const hasDecisionJob = input.jobs?.some((job) => job.capability === "decision") ?? false;
+  if (!hasLocateJob) {
+    return false;
+  }
   const hasCodeEvidence = (input.codePaths?.length ?? 0) > 0;
   const hasIntegrationEvidence = input.tools.some(
     (tool) => resultCount(input.integrations[tool]) > 0
   );
+  return !hasCodeEvidence && !hasIntegrationEvidence;
+}
 
-  if (hasLocateJob && !hasCodeEvidence && !hasIntegrationEvidence) {
+/** Remove citations and local-workspace advice that contradict attached job evidence. */
+export function enrichIntentJobResponse(
+  content: string,
+  input: IntentJobEnrichmentInput
+): string {
+  const hasDecisionJob = input.jobs?.some((job) => job.capability === "decision") ?? false;
+
+  if (shouldApplyIntentJobRemoteMiss(input)) {
     const lines = [
       "I could not verify either part of this request from the evidence attached to this turn.",
       "",
@@ -283,7 +310,12 @@ export function enrichIntentJobResponse(
             )
         )
         .filter((line) => !/^\s*(?:[-*]\s*)?(?:rg|grep)\s+/i.test(line))
-        .filter((line) => !lineHasUnsupportedRepoPath(line, allowedPaths))
+        .filter(
+          (line) =>
+            input.fileAssistant ||
+            input.localWorkspaceAttached ||
+            !lineHasUnsupportedRepoPath(line, allowedPaths)
+        )
         .join("\n")
     )
   );

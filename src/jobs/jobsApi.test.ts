@@ -163,6 +163,16 @@ test("org B cannot read org A's job result", async () => {
   assert.equal(result.marker, "result-secret");
 });
 
+test("org B cannot stream org A's job", async () => {
+  const queue = new JobQueue(queueConfig());
+  const monitor = new JobMonitor({ queueDepthAlertThreshold: 50, failureRateAlertThreshold: 0.5 });
+  const deps = depsFor(queue, monitor);
+  const jobId = await seedOrgJob(queue, ORG_A);
+  const denied = await call(deps, "GET", `/api/jobs/${jobId}/stream`, "key-b");
+  assert.equal(denied.status, 404);
+  assert.equal(denied.raw.includes("secret-repo"), false);
+});
+
 test("org B cannot cancel org A's job", async () => {
   const queue = new JobQueue(queueConfig());
   const monitor = new JobMonitor({ queueDepthAlertThreshold: 50, failureRateAlertThreshold: 0.5 });

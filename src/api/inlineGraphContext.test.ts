@@ -10,8 +10,9 @@ import {
   pickSnippetPaths
 } from "./inlineGraphContext";
 
-function seedGraph(cache: GraphCache, repoId: string, file: string): void {
+function seedGraph(cache: GraphCache, orgId: string, repoId: string, file: string): void {
   cache.upsertRepository(
+    orgId,
     { repoId, provider: "github", owner: "acme", repo: "app" },
     {
       fileTree: [{ path: file, size: 100, lastModified: new Date(), lastAuthor: "dev", sha: "abc" }],
@@ -63,12 +64,12 @@ void (async () => {
   passed++;
 
   const cache = new GraphCache();
-  seedGraph(cache, "github:acme/app", "src/foo.ts");
+  seedGraph(cache, "org-1", "github:acme/app", "src/foo.ts");
   const graphQuery = new GraphQueryApi({ cache });
 
   const freeResult = await fetchInlineGraphSlice(
     { graphQuery },
-    { repoId: "github:acme/app", file: "src/foo.ts", plan: "free" }
+    { repoId: "github:acme/app", file: "src/foo.ts", plan: "free", orgId: "org-1" }
   );
   assert.equal(freeResult.status, "ok");
   if (freeResult.status === "ok") {
@@ -101,7 +102,7 @@ void (async () => {
 
   const proResult = await fetchInlineGraphSlice(
     { graphQuery },
-    { repoId: "github:acme/app", file: "src/foo.ts", plan: "pro" }
+    { repoId: "github:acme/app", file: "src/foo.ts", plan: "pro", orgId: "org-1" }
   );
   assert.equal(proResult.status, "ok");
   if (proResult.status === "ok") {

@@ -443,6 +443,39 @@ test("path-only first line recovers as citation", () => {
   }
 });
 
+test("path-only fence with no code body becomes an inline file link", () => {
+  const path =
+    "/Users/jonraney/Desktop/cody-vs-main/src/Cody.Core/Agent/SecretNotificationHandlers.cs";
+  const input = ["If you change the local file", "", "```", path, "```", "", "(which defines"].join(
+    "\n"
+  );
+  const doc = parseChatProse(input);
+  assert.equal(doc.blocks.length, 3);
+  assert.equal(doc.blocks[1]!.type, "paragraph");
+  if (doc.blocks[1]!.type === "paragraph") {
+    const link = doc.blocks[1]!.content.find((node) => node.type === "file-link");
+    assert.ok(link, "expected file-link paragraph");
+    if (link?.type === "file-link") {
+      assert.equal(link.path, path);
+    }
+  }
+});
+
+test("bare absolute local path line becomes a file link", () => {
+  const path =
+    "/Users/jonraney/Desktop/cody-vs-main/src/Cody.Core/Agent/SecretNotificationHandlers.cs";
+  const doc = parseChatProse(path);
+  const paragraph = doc.blocks[0];
+  assert.equal(paragraph?.type, "paragraph");
+  if (paragraph?.type === "paragraph") {
+    const link = paragraph.content.find((node) => node.type === "file-link");
+    assert.ok(link, "expected file-link in paragraph");
+    if (link?.type === "file-link") {
+      assert.equal(link.path, path);
+    }
+  }
+});
+
 test("language-tagged fence is still a code-fence (not a citation)", () => {
   const input = "```typescript\nif (true) {\n  return;\n}\n```";
   const doc = parseChatProse(input);

@@ -216,6 +216,7 @@ void (async () => {
 
   const graphCache = new GraphCache();
   graphCache.upsertRepository(
+    "org-test",
     { repoId: "github:acme/app", provider: "github", owner: "acme", repo: "app" },
     {
       fileTree: [

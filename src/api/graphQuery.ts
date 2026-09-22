@@ -13,6 +13,7 @@ export type GraphQueryName =
   | "getConflicts";
 
 export type GraphQueryRequest = {
+  orgId?: string;
   repoId: string;
   query: GraphQueryName;
   filters?: GraphQueryFilters & {
@@ -43,32 +44,45 @@ export class GraphQueryApi {
   }
 
   public async queryGraph(request: GraphQueryRequest): Promise<unknown> {
+    if (!request.orgId) {
+      return undefined;
+    }
     if (request.filters?.forceRefresh && this.options.refresh) {
       await this.options.refresh(request.repoId);
     }
 
+    const orgId = request.orgId;
     switch (request.query) {
       case "getFileTree":
-        return this.options.cache.getFileTree(request.repoId);
+        return this.options.cache.getFileTree(orgId, request.repoId);
       case "getOwnership":
-        return this.options.cache.getOwnership(request.repoId, required(request.filters?.file, "file"));
+        return this.options.cache.getOwnership(orgId, request.repoId, required(request.filters?.file, "file"));
       case "getDependents":
-        return this.options.cache.getDependents(request.repoId, required(request.filters?.file, "file"));
+        return this.options.cache.getDependents(orgId, request.repoId, required(request.filters?.file, "file"));
       case "getImports":
-        return this.options.cache.getImports(request.repoId, required(request.filters?.file, "file"));
+        return this.options.cache.getImports(orgId, request.repoId, required(request.filters?.file, "file"));
       case "getTransitiveDependents":
-        return this.options.cache.getTransitiveDependents(request.repoId, required(request.filters?.file, "file"));
+        return this.options.cache.getTransitiveDependents(
+          orgId,
+          request.repoId,
+          required(request.filters?.file, "file")
+        );
       case "getRecentChanges":
-        return this.options.cache.getRecentChanges(request.repoId, request.filters?.days ?? 7, request.filters);
+        return this.options.cache.getRecentChanges(
+          orgId,
+          request.repoId,
+          request.filters?.days ?? 7,
+          request.filters
+        );
       case "searchFiles":
-        return this.options.cache.searchFiles(request.repoId, required(request.filters?.pattern, "pattern"));
+        return this.options.cache.searchFiles(orgId, request.repoId, required(request.filters?.pattern, "pattern"));
       case "getConflicts":
-        return this.getConflicts(request.repoId);
+        return this.getConflicts(orgId, request.repoId);
     }
   }
 
-  private getConflicts(repoId: string): unknown {
-    const graph = this.options.cache.getGraph(repoId);
+  private getConflicts(orgId: string, repoId: string): unknown {
+    const graph = this.options.cache.getGraph(orgId, repoId);
     if (!graph) {
       return undefined;
     }

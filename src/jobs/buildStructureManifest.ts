@@ -1,6 +1,5 @@
 import { createRequire } from "node:module";
 import path from "node:path";
-import type { Pool } from "pg";
 import { codeHostRequestJson } from "../api/codeHosts/codeHostHttp";
 import type { CodeHostProvider } from "../api/codeHosts/types";
 import type { ManifestSymbol } from "../manifest/types";
@@ -642,12 +641,4 @@ function symbolKindFromNode(nodeType: string): ManifestSymbol["kind"] {
     return "export";
   }
   return "function";
-}
-
-export async function listOrgIdsForRepo(pool: Pool, repoId: string): Promise<string[]> {
-  const result = await pool.query<{ org_id: string }>(
-    `SELECT org_id FROM org_repos WHERE repo_id = $1`,
-    [repoId]
-  );
-  return result.rows.map((row) => String(row.org_id));
 }

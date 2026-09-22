@@ -664,10 +664,15 @@ type MentionFileSnippet = ManifestSnippet & { repoId: string };
 function emitLocalFilesBlock(
   lines: string[],
   files: ManifestSnippet[],
-  userMessage?: string
+  userMessage?: string,
+  fileAssistant?: boolean
 ): void {
   lines.push("<local_files>");
-  lines.push("The file_content blocks below are authoritative source code from the user's workspace.");
+  lines.push(
+    fileAssistant
+      ? "The file_content blocks below are a local file on disk. The path is a local path, not a repository."
+      : "The file_content blocks below are authoritative source code from the user's workspace."
+  );
   lines.push(
     "Treat every attached file as source of truth. If a callee is defined in another attached file, copy that signature and add the import — do not invent identifiers, arity, or types from the user's English example."
   );
@@ -770,6 +775,14 @@ function resolveSelectionTextForAttach(options: {
   return sliced || undefined;
 }
 
+/**
+ * Last lines of a local-file turn. Models follow this over the long chat template.
+ * An absolute Desktop/Downloads path is a local file, not the indexed repository.
+ */
+export const LOCAL_FILE_PATH_DIRECTIVE = `## Path wording
+The attached path is a local file on the user's computer. Call it a local file and use that path.
+Do not write "in the repo", "this repository", "the codebase", or a GitHub repo name.`;
+
 /** Last lines of a C4 turn — models follow this over the long chat template. */
 export const OPEN_FILE_PR_REVIEW_DIRECTIVE = `## Turn directive (PR review)
 This turn is a PR review of the **named function** in the attached file (the identifier in the user ask — e.g. requireAuth), not every helper in the file.
@@ -791,12 +804,14 @@ export function formatChatMessageWithLocalFiles(options: {
   owner?: string;
   repo?: string;
   branch?: string;
+  /** L file: local path wording. Do not stamp a leftover Use-repo. */
+  fileAssistant?: boolean;
 }): string {
   const lines: string[] = ["<attached_context>"];
-  if (options.owner && options.repo) {
+  if (!options.fileAssistant && options.owner && options.repo) {
     lines.push(`repo: ${options.owner}/${options.repo}`);
   }
-  if (options.branch) {
+  if (!options.fileAssistant && options.branch) {
     lines.push(`branch: ${options.branch}`);
   }
   if (options.file) {
@@ -812,10 +827,13 @@ export function formatChatMessageWithLocalFiles(options: {
     file: options.file,
     userMessage: options.message
   });
-  emitLocalFilesBlock(lines, options.files, options.message);
+  emitLocalFilesBlock(lines, options.files, options.message, options.fileAssistant);
   lines.push("</attached_context>", "", options.message.trim());
   if (isOpenFileReviewAsk(options.message)) {
     lines.push("", OPEN_FILE_PR_REVIEW_DIRECTIVE);
+  }
+  if (options.fileAssistant) {
+    lines.push("", LOCAL_FILE_PATH_DIRECTIVE);
   }
   return lines.join("\n");
 }
@@ -907,6 +925,8 @@ export function buildUserMessageWithContext(
     languageId?: string;
     contextBundle?: unknown;
     projectInstructions?: ProjectInstructionSnippet[];
+    /** L file: local path wording. Do not stamp a leftover Use-repo. */
+    fileAssistant?: boolean;
   }
 ): string {
   const projectInstructions = context?.projectInstructions ?? [];
@@ -971,10 +991,10 @@ export function buildUserMessageWithContext(
     lines.push(
       `repos: ${dualRepoCompare.left.owner}/${dualRepoCompare.left.repo} vs ${dualRepoCompare.right.owner}/${dualRepoCompare.right.repo}`
     );
-  } else if (context?.owner && context.repo) {
+  } else if (!context?.fileAssistant && context?.owner && context.repo) {
     lines.push(`repo: ${context.owner}/${context.repo}`);
   }
-  if (context?.branch) {
+  if (!context?.fileAssistant && context?.branch) {
     lines.push(`branch: ${context.branch}`);
   }
   if (context?.file) {
@@ -1019,7 +1039,7 @@ export function buildUserMessageWithContext(
     lines.push(...formatPackageStructureForLlm(packageStructure));
   }
   if (localSnippets.length > 0 && !dualRepoCompare) {
-    emitLocalFilesBlock(lines, localSnippets, message);
+    emitLocalFilesBlock(lines, localSnippets, message, context?.fileAssistant);
   }
   if (repoSummarySnippets.length > 0 && !dualRepoCompare) {
     lines.push("<repo_entry_files>");
@@ -1134,6 +1154,9 @@ export function buildUserMessageWithContext(
     lines.push("</graph_context>");
   }
   lines.push("</attached_context>", "", message.trim());
+  if (context?.fileAssistant && context.file?.trim()) {
+    lines.push("", LOCAL_FILE_PATH_DIRECTIVE);
+  }
   if (isOpenFileReviewAsk(message)) {
     lines.push("", OPEN_FILE_PR_REVIEW_DIRECTIVE);
   }

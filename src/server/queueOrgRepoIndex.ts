@@ -1,5 +1,5 @@
 import type { JobQueue } from "../jobs/jobQueue";
-import { JobType } from "../jobs/types";
+import { JobType, type JobPriority } from "../jobs/types";
 import type { OrgStore } from "./orgStore";
 
 export type QueueOrgRepoIndexResult =
@@ -80,6 +80,8 @@ export async function queueOrgRepoIndex(
     userId?: string;
     bypassRateLimit?: boolean;
     force?: boolean;
+    /** Manual Deep-Index stays high. Nightly passes low. */
+    priority?: JobPriority;
   }
 ): Promise<QueueOrgRepoIndexResult> {
   const existing = await deps.orgStore.getOrgRepo(orgId, repoId);
@@ -130,7 +132,7 @@ export async function queueOrgRepoIndex(
   try {
     submit = await deps.jobQueue.createJob({
       type: JobType.INDEX_REPOSITORY,
-      priority: "high",
+      priority: deps.priority ?? "high",
       bypassRateLimit: deps.bypassRateLimit ?? true,
       userId: deps.userId ?? `org:${orgId}`,
       params: { repoId, orgId }

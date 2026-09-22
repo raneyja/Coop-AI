@@ -275,11 +275,13 @@
   }
 
   .coop-chat-action-link {
-    @apply inline cursor-pointer border-0 bg-transparent p-0 text-[#75beff] underline decoration-[#75beff]/55 underline-offset-2 transition-colors hover:text-[#9dd0ff] hover:decoration-current;
+    @apply inline max-w-full cursor-pointer border-0 bg-transparent p-0 text-left text-[#75beff] underline decoration-[#75beff]/55 underline-offset-2 transition-colors hover:text-[#9dd0ff] hover:decoration-current;
   }
 
   .coop-chat-action-link--file {
     @apply font-mono text-[0.92em];
+    white-space: normal;
+    word-break: break-all;
   }
 
   .coop-chat-action-link--external::after {

@@ -142,6 +142,17 @@ function renderBlock(
         <ChatCodeBlock key={`code-${index}`} language={block.language} code={block.code} />
       );
     case "code-citation":
+      if (!block.code.trim()) {
+        return (
+          <p key={`citation-path-${index}`} className="coop-chat-paragraph">
+            <ChatActionLink
+              kind="file"
+              label={block.path}
+              onClick={() => onOpenFile?.(block.path, block.startLine)}
+            />
+          </p>
+        );
+      }
       return (
         <ChatCodeCitation
           key={`citation-${index}`}
