@@ -438,6 +438,14 @@ test("formatChatMessageWithLocalFiles embeds authoritative file_content", () => 
   assert.ok(message.includes("Quote the 503 condition."));
 });
 
+const L4_SECRETS_STYLE_FAIL = [
+  "**Technical checks**",
+  "**Security & operational checks**",
+  "**Tests & integration**",
+  "**Where to look next**",
+  "If you want, I can produce a patch / search for ISecretStorageService if you attach those files."
+].join("\n");
+
 test("local file turn says local path and drops leftover Use-repo", () => {
   const message = formatChatMessageWithLocalFiles({
     message: "what does this file do?",
@@ -459,6 +467,64 @@ test("local file turn says local path and drops leftover Use-repo", () => {
   assert.ok(message.includes("local path, not a repository"));
   assert.ok(message.includes(LOCAL_FILE_PATH_DIRECTIVE));
   assert.ok(message.includes('Do not write "in the repo"'));
+});
+
+test("file-assistant last-line directive stops after the attached file", () => {
+  const local = formatChatMessageWithLocalFiles({
+    message: "If I make any changes to this file, what else should I check?",
+    file: "/Users/jonraney/Desktop/cody-vs-main/src/Cody.Core/Agent/SecretNotificationHandlers.cs",
+    fileAssistant: true,
+    files: [
+      {
+        path: "/Users/jonraney/Desktop/cody-vs-main/src/Cody.Core/Agent/SecretNotificationHandlers.cs",
+        content: "class SecretNotificationHandlers { }"
+      }
+    ]
+  });
+  assert.ok(local.includes(LOCAL_FILE_PATH_DIRECTIVE));
+  assert.ok(local.includes("attached file body only"));
+  assert.ok(local.includes("at most 4 bullets"));
+  assert.ok(local.includes("No offer to patch, search, or attach more files"));
+  assert.ok(local.includes('Do not write "in the repo"'));
+  assert.ok(LOCAL_FILE_PATH_DIRECTIVE.includes("Technical checks"));
+  assert.ok(LOCAL_FILE_PATH_DIRECTIVE.includes("If you want, I can produce a patch"));
+  assert.match(L4_SECRETS_STYLE_FAIL, /Technical checks|If you want, I can produce a patch/);
+
+  const withContext = buildUserMessageWithContext(
+    "If I make any changes to this file, what else should I check?",
+    {
+      file: "/Users/jonraney/Desktop/cody-vs-main/src/Cody.Core/Agent/SecretNotificationHandlers.cs",
+      fileAssistant: true,
+      owner: "raneyja",
+      repo: "Coop-AI",
+      branch: "main"
+    }
+  );
+  assert.ok(withContext.includes(LOCAL_FILE_PATH_DIRECTIVE));
+  assert.equal(withContext.includes("repo: raneyja/Coop-AI"), false);
+  assert.equal(withContext.includes("branch: main"), false);
+
+  const remote = formatChatMessageWithLocalFiles({
+    message: "If I make any changes to this file, what else should I check?",
+    file: "src/Cody.Core/Agent/SecretNotificationHandlers.cs",
+    files: [
+      {
+        path: "src/Cody.Core/Agent/SecretNotificationHandlers.cs",
+        content: "class SecretNotificationHandlers { }"
+      }
+    ]
+  });
+  assert.equal(remote.includes(LOCAL_FILE_PATH_DIRECTIVE), false);
+  assert.equal(remote.includes("attached file body only"), false);
+  assert.equal(remote.includes("at most 4 bullets"), false);
+
+  const remoteContext = buildUserMessageWithContext("If I make any changes to this file, what else should I check?", {
+    file: "src/Cody.Core/Agent/SecretNotificationHandlers.cs",
+    owner: "raneyja",
+    repo: "Coop-AI"
+  });
+  assert.equal(remoteContext.includes(LOCAL_FILE_PATH_DIRECTIVE), false);
+  assert.equal(remoteContext.includes("attached file body only"), false);
 });
 
 test("C4 open-file review appends Reviewer-checks-only directive", () => {

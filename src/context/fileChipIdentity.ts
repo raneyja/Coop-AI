@@ -28,6 +28,25 @@ export function coerceChipFileSource(
   return fileSource;
 }
 
+/**
+ * VS Code scratch name (File → New File, or our API untitled fallback before
+ * identity is mapped). Never an OS path. Must not steal a remote chip.
+ */
+export function isUntitledScratchFile(
+  file: string | undefined,
+  fileSource?: RepoContext["fileSource"]
+): boolean {
+  const name = file?.trim();
+  if (!name || isOsAbsoluteDiskPath(name)) {
+    return false;
+  }
+  if (fileSource === "remote" || fileSource === "workspace" || fileSource === "git") {
+    return false;
+  }
+  const base = name.replace(/\\/g, "/").split("/").pop() ?? name;
+  return /^Untitled(?:-\d+)?$/i.test(base);
+}
+
 /** UI badge: R only for codehost provenance; absolute disk is never R. */
 export function isRemoteChip(ctx: Pick<RepoContext, "file" | "fileSource">): boolean {
   if (isOsAbsoluteDiskPath(ctx.file)) {

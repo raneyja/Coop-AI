@@ -434,6 +434,7 @@ import { looksLikeAbsoluteDiskPath, isOsAbsoluteDiskPath } from "../context/outs
 import {
   isRemoteProvenanceContext,
   isSameRepoFilePath,
+  isUntitledScratchFile,
   preserveRemoteChipSource
 } from "../context/fileChipIdentity";
 import { readOpenTabFilesForChat } from "../context/openTabFileContext";
@@ -446,6 +447,7 @@ import {
 import {
   applyFileAssistantIntentPlan,
   decideExplicitEditorChip,
+  incomingStealsRemoteChip,
   isFileAssistantSession,
   jobsKeptOnFileAssistantTurn,
   projectInstructionsSourcesForTurn,
@@ -2755,20 +2757,22 @@ export class CoopChatSession {
     }
     // Remote provenance: ignore leftover local-clone snaps for the SAME path.
     // Explicit local choice (Downloads / different workspace file) clears remote — Rule B.
+    // Untitled-N (API viewing vehicle or leftover scratch) must never steal R.
     if (this.isWorkingOnRemoteProvenance() && incoming.file?.trim()) {
-      const explicitLocal =
-        incoming.fileSource === "external" || isOsAbsoluteDiskPath(incoming.file);
-      const differentLocalFile =
-        (incoming.fileSource === "workspace" || incoming.fileSource === "git") &&
-        this.currentContext.file?.trim() &&
-        !isSameRepoFilePath(incoming.file, this.currentContext.file);
-      if (explicitLocal || differentLocalFile) {
+      if (
+        incomingStealsRemoteChip({
+          incomingFile: incoming.file,
+          incomingFileSource: incoming.fileSource,
+          currentFile: this.currentContext.file
+        })
+      ) {
         this.remoteProvenanceFile = undefined;
         // Fall through to merge as local.
       } else if (
-        incoming.fileSource !== "remote" &&
-        this.currentContext.file?.trim() &&
-        isSameRepoFilePath(incoming.file, this.currentContext.file)
+        isUntitledScratchFile(incoming.file, incoming.fileSource) ||
+        (incoming.fileSource !== "remote" &&
+          this.currentContext.file?.trim() &&
+          isSameRepoFilePath(incoming.file, this.currentContext.file))
       ) {
         this.currentContext = this.withRemoteProvenance(this.currentContext);
         this.postContext();

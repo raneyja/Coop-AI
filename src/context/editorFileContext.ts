@@ -10,6 +10,7 @@ import {
 } from "./localFileContext";
 import { resolveLocalAbsolutePath } from "./localFileResolver";
 import { parseGithubRemoteFromGitConfig } from "./gitRemoteConfig";
+import { remoteIdentityForUntitledUri } from "./remoteViewBuffer";
 import { toRepositoryRelativePath } from "./repoFilePath";
 
 export type EditorFileSource = "workspace" | "git" | "remote" | "external";
@@ -34,6 +35,10 @@ export function resolveEditorFile(editor: vscode.TextEditor): ResolvedEditorFile
 /** Scheme + path only. Untitled is an L file (buffer name), not "no file". */
 export function resolveDocumentUri(uri: vscode.Uri): ResolvedEditorFile {
   if (uri.scheme === "untitled") {
+    const remote = remoteIdentityForUntitledUri(uri.toString());
+    if (remote) {
+      return remote;
+    }
     const name = path.posix.basename(uri.path) || "Untitled";
     return { file: name, fileSource: "external" };
   }

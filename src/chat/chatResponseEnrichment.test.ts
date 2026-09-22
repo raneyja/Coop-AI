@@ -150,6 +150,15 @@ test("file-assistant leftover Use-repo evidence does not rewrite the open-file a
   });
   assert.match(intern, /index returned no usable/);
   assert.doesNotMatch(intern, /in this repo/i);
+
+  const overproduced = enrichChatResponseForAction({
+    content:
+      "This local file raises SetHtmlEvent.\n\n**Quick checklist (what to search & update)**\n- Search the codebase.\n\nIf you want, I can produce a patch.",
+    fileAssistant: true
+  });
+  assert.match(overproduced, /SetHtmlEvent/);
+  assert.match(overproduced, /Other files were not read/);
+  assert.doesNotMatch(overproduced, /Quick checklist|If you want, I can produce/i);
 });
 
 test("/docs answers that invent repo files are rewritten to titles only", () => {

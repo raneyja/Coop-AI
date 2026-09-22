@@ -8,6 +8,7 @@ import {
   completionRequestsGraphContext,
   contextAfterRemoteProvenance,
   decideExplicitEditorChip,
+  incomingStealsRemoteChip,
   documentIsFileAssistant,
   isFileAssistantSession,
   projectInstructionsSourcesForTurn,
@@ -110,6 +111,62 @@ test("Hard rule A: explicit focus after New Chat chips; init with snap off does 
       currentIsRemote: true
     }),
     "chip-local"
+  );
+});
+
+test("phantom swap: API untitled / leftover Untitled-1 must not steal a remote chip", () => {
+  const workflow = ".github/workflows/branch-build-ce.yml";
+  assert.equal(
+    decideExplicitEditorChip({
+      userActivatedEditor: true,
+      incomingFile: workflow,
+      incomingFileSource: "remote",
+      currentFile: workflow,
+      currentIsRemote: true
+    }),
+    "keep-remote"
+  );
+  assert.equal(
+    decideExplicitEditorChip({
+      userActivatedEditor: true,
+      incomingFile: "Untitled-1",
+      incomingFileSource: "external",
+      currentFile: workflow,
+      currentIsRemote: true
+    }),
+    "ignore"
+  );
+  assert.equal(
+    incomingStealsRemoteChip({
+      incomingFile: "Untitled-1",
+      incomingFileSource: "external",
+      currentFile: workflow
+    }),
+    false
+  );
+  assert.equal(
+    incomingStealsRemoteChip({
+      incomingFile: workflow,
+      incomingFileSource: "remote",
+      currentFile: workflow
+    }),
+    false
+  );
+  assert.equal(
+    incomingStealsRemoteChip({
+      incomingFile: "/Users/jon/Desktop/notes.cs",
+      incomingFileSource: "external",
+      currentFile: workflow
+    }),
+    true
+  );
+  assert.equal(
+    incomingStealsRemoteChip({
+      incomingFile: "src/other.ts",
+      incomingFileSource: "workspace",
+      currentFile: workflow
+    }),
+    true
   );
 });
 

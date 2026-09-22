@@ -778,8 +778,25 @@ function resolveSelectionTextForAttach(options: {
 /**
  * Last lines of a local-file turn. Models follow this over the long chat template.
  * An absolute Desktop/Downloads path is a local file, not the indexed repository.
+ * “What else should I check?” is contracts in this file — not Blast, not a review template.
  */
-export const LOCAL_FILE_PATH_DIRECTIVE = `## Path wording
+export const LOCAL_FILE_PATH_DIRECTIVE = `## Turn directive (local file)
+Evidence is the attached file body only. You may name imports. Do not describe how those types work, get registered, or get called.
+
+Shape, then stop:
+- Open with 1–3 sentences that answer the ask from the attached file. Call it a local file and use that path. Name symbols that are actually in the file.
+- Optional: at most 4 bullets that are contracts in that file (signatures, attributes, logging, return types).
+- One honest-limit sentence: other files were not read, so callers / implementations of imported types are unknown.
+- Stop. No second heading. No offer to patch, search, or attach more files.
+
+“What else should I check?” means contracts in this file — not Blast Radius, not a locate hunt, and not a generic review.
+
+Ban unless those words are in the attached file: Technical checks, Security & operational, Tests & integration, Where to look next, access control, DI / container registration, threading, reentrancy, audit logging, rotation, TTL, encryption at rest, permission failures, a test-plan list.
+
+FAIL: “If you want, I can produce a patch / search if you attach more files.”
+FAIL: headings like Technical checks / Security & operational / Tests & integration / Where to look next.
+
+## Path wording
 The attached path is a local file on the user's computer. Call it a local file and use that path.
 Do not write "in the repo", "this repository", "the codebase", or a GitHub repo name.`;
 

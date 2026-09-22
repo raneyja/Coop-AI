@@ -3,6 +3,7 @@ import {
   coerceChipFileSource,
   isRemoteChip,
   isRemoteProvenanceContext,
+  isUntitledScratchFile,
   preserveRemoteChipSource,
   shouldKeepRemoteProvenance
 } from "./fileChipIdentity";
@@ -32,6 +33,15 @@ async function run(): Promise<void> {
     );
     assert.equal(coerceChipFileSource("src/a.ts", "remote"), "remote");
     assert.equal(coerceChipFileSource("src/a.ts", "workspace"), "workspace");
+  });
+
+  await test("isUntitledScratchFile is only Untitled-N, never a real path", () => {
+    assert.equal(isUntitledScratchFile("Untitled-1", "external"), true);
+    assert.equal(isUntitledScratchFile("Untitled", "external"), true);
+    assert.equal(isUntitledScratchFile("Untitled-12"), true);
+    assert.equal(isUntitledScratchFile(".github/workflows/branch-build.yml", "external"), false);
+    assert.equal(isUntitledScratchFile("Untitled-1", "remote"), false);
+    assert.equal(isUntitledScratchFile("/Users/jon/Desktop/a.ts", "external"), false);
   });
 
   await test("isRemoteChip never treats Downloads as remote", () => {
