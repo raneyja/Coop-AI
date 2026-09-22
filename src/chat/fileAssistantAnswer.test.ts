@@ -50,6 +50,25 @@ test("L4 secrets-style Fail is cut to the lead plus an honest limit", () => {
   assert.doesNotMatch(trimmed, /NuGet|JsonPropertyName|release notes/i);
 });
 
+test("a paraphrase of the honest limit is not followed by a second copy", () => {
+  const lead =
+    "I added a one-line comment above the constructor in the local file /Users/me/Desktop/sample/Widget.cs.";
+  const paraphrase =
+    "I only read this local file; callers and implementations of imported types were not examined.";
+  const once = enrichFileAssistantResponse(`${lead}\n\n${paraphrase}`);
+  assert.match(once, /only read this local file/);
+  assert.doesNotMatch(once, /Other files were not read/);
+  const both = enrichFileAssistantResponse(
+    `${lead}\n\n${paraphrase}\n\nOther files were not read, so callers and implementations of imported types are unknown.`
+  );
+  assert.match(both, /Other files were not read/);
+  assert.doesNotMatch(both, /only read this local file/);
+  assert.equal(both.split(/\n\n+/).filter((part) => /not read|only read this/i.test(part)).length, 1);
+  const sameParagraph = enrichFileAssistantResponse(`${lead} ${paraphrase} Other files were not read, so callers and implementations of imported types are unknown.`);
+  assert.match(sameParagraph, /Other files were not read/);
+  assert.doesNotMatch(sameParagraph, /only read this local file/);
+});
+
 test("already-short L answer keeps its honest limit and is not rewritten", () => {
   const pass =
     "The local file /Users/me/Desktop/sample/Widget.cs wires three callbacks. Other files were not read, so callers and implementations of imported types are unknown.";

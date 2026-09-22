@@ -786,7 +786,8 @@ Evidence is the attached file body only. You may name imports. Do not describe h
 Shape, then stop:
 - Open with 1–3 sentences that answer the ask from the attached file. Call it a local file and use that path. Name symbols that are actually in the file.
 - Optional: at most 4 bullets that are contracts in that file (signatures, attributes, logging, return types).
-- One honest-limit sentence: other files were not read, so callers / implementations of imported types are unknown.
+- One honest-limit sentence, then stop: Other files were not read, so callers and implementations of imported types are unknown.
+- Do not restate that limit in a second sentence ("I only read this local file" plus the sentence above is one thought — write it once).
 - Stop. No second heading. No offer to patch, search, or attach more files.
 
 “What else should I check?” means contracts in this file — not Blast Radius, not a locate hunt, and not a generic review.

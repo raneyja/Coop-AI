@@ -10,8 +10,9 @@ const OFFER_TO_CONTINUE =
 const HONEST_LIMIT =
   "Other files were not read, so callers and implementations of imported types are unknown.";
 
-const HAS_HONEST_LIMIT =
-  /\bother files were not (?:read|searched|attached)\b/i;
+/** Canonical line, or the model's paraphrase of the same limit. */
+const HONEST_LIMIT_PARAPHRASE =
+  /\b(?:other files were not (?:read|searched|attached)|only read this (?:local )?file|callers and implementations of imported types)\b/i;
 
 function isTopicHeading(line: string): boolean {
   const trimmed = line.trim();
@@ -21,9 +22,52 @@ function isTopicHeading(line: string): boolean {
   return /^\*\*[^*]+\*\*\s*$/.test(trimmed);
 }
 
+function paragraphStatesHonestLimit(paragraph: string): boolean {
+  const text = paragraph.replace(/\s+/g, " ").trim();
+  if (!text || text.length > 320) {
+    return false;
+  }
+  return HONEST_LIMIT_PARAPHRASE.test(text);
+}
+
+/**
+ * One limit sentence. If the model already said it, and we would add the
+ * canonical line, keep a single paragraph — the canonical wording when present.
+ */
+function collapseHonestLimit(text: string): string {
+  const parts = text.split(/\n\n+/).filter((part) => part.trim());
+  const limitIndexes = parts
+    .map((part, index) => (paragraphStatesHonestLimit(part) ? index : -1))
+    .filter((index) => index >= 0);
+  if (limitIndexes.length === 0) {
+    return `${text}\n\n${HONEST_LIMIT}`;
+  }
+  if (limitIndexes.length === 1) {
+    return dropParaphraseWhenCanonicalPresent(parts.join("\n\n"));
+  }
+  const keep =
+    limitIndexes.find((index) =>
+      /\bother files were not (?:read|searched|attached)\b/i.test(parts[index] ?? "")
+    ) ?? limitIndexes[0]!;
+  return dropParaphraseWhenCanonicalPresent(
+    parts.filter((part, index) => !paragraphStatesHonestLimit(part) || index === keep).join("\n\n")
+  );
+}
+
+/** Same paragraph can hold the model's wording and the canonical sentence. Keep one. */
+function dropParaphraseWhenCanonicalPresent(text: string): string {
+  if (!/\bother files were not (?:read|searched|attached)\b/i.test(text)) {
+    return text;
+  }
+  return text
+    .replace(/[^.!?\n]*\bonly read this (?:local )?file\b[^.!?\n]*[.!?]?\s*/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 /**
  * Keep the opening answer. Drop extra headings, search checklists, and offers.
- * Append the honest-limit sentence when it is missing.
+ * Append the honest-limit sentence when it is missing. Never leave two.
  */
 export function enrichFileAssistantResponse(content: string): string {
   const raw = content.trim();
@@ -47,8 +91,5 @@ export function enrichFileAssistantResponse(content: string): string {
   if (!text) {
     return raw;
   }
-  if (!HAS_HONEST_LIMIT.test(text)) {
-    text = `${text}\n\n${HONEST_LIMIT}`;
-  }
-  return text;
+  return collapseHonestLimit(text);
 }
