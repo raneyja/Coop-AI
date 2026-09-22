@@ -16,6 +16,46 @@ function mockSubscription(quantity: number, itemId = "si_123"): StripeSubscripti
   };
 }
 
+function freshClaimPool(): NonNullable<BillingApiDeps["pool"]> {
+  const statusById = new Map<string, string>();
+  return {
+    query: async (sql: string, params?: unknown[]) => {
+      const id = String(params?.[0] ?? "");
+      if (sql.includes("INSERT INTO stripe_webhook_events")) {
+        if (statusById.has(id)) {
+          return { rowCount: 0, rows: [] };
+        }
+        statusById.set(id, "processing");
+        return { rowCount: 1, rows: [{ event_id: id }] };
+      }
+      if (sql.includes("SET status = 'processing'")) {
+        if (statusById.get(id) === "failed") {
+          statusById.set(id, "processing");
+          return { rowCount: 1, rows: [{ event_id: id }] };
+        }
+        return { rowCount: 0, rows: [] };
+      }
+      if (sql.includes("SET status = 'completed'")) {
+        if (statusById.get(id) === "processing") {
+          statusById.set(id, "completed");
+        }
+        return { rowCount: 1, rows: [] };
+      }
+      if (sql.includes("SET status = 'failed'")) {
+        if (statusById.get(id) === "processing") {
+          statusById.set(id, "failed");
+        }
+        return { rowCount: 1, rows: [] };
+      }
+      if (sql.includes("SELECT status")) {
+        const status = statusById.get(id);
+        return { rowCount: status ? 1 : 0, rows: status ? [{ status }] : [] };
+      }
+      return { rowCount: 0, rows: [] };
+    }
+  } as NonNullable<BillingApiDeps["pool"]>;
+}
+
 function mockResponse(): ServerResponse & { statusCode?: number; body?: string } {
   const res = {
     statusCode: undefined as number | undefined,
@@ -497,6 +537,7 @@ void (async () => {
       {
         serverConfig: { requireApiAuth: false } as ServerConfig,
         stripeService: stripe,
+        pool: freshClaimPool(),
         userStore: {} as never,
         emailService: {} as never,
         orgStore: {
@@ -566,6 +607,7 @@ void (async () => {
       {
         serverConfig: { requireApiAuth: false } as ServerConfig,
         stripeService: stripe,
+        pool: freshClaimPool(),
         userStore: {} as never,
         emailService: {} as never,
         orgStore: {
@@ -630,6 +672,7 @@ void (async () => {
       {
         serverConfig: { requireApiAuth: false } as ServerConfig,
         stripeService: stripe,
+        pool: freshClaimPool(),
         userStore: {
           clearOrgUsersUsageTiers: async () => {
             clearedTiers = true;
@@ -764,5 +807,175 @@ void (async () => {
     assert.equal(mutated, false);
   }
 
+  {
+    const store = memoryCheckoutStore();
+    const pool = freshClaimPool();
+    const event = checkoutCompletedEvent("evt_checkout_once");
+    const first = await postStripeWebhook(event, store, pool);
+    const second = await postStripeWebhook(event, store, pool);
+    assert.equal(first.statusCode, 200);
+    assert.equal(JSON.parse(first.body ?? "{}").duplicate, undefined);
+    assert.equal(second.statusCode, 200);
+    assert.equal(JSON.parse(second.body ?? "{}").duplicate, true);
+    assert.equal(store.orgs.length, 1);
+    assert.equal(store.users.length, 1);
+    assert.equal(store.orgs[0]?.stripeCustomerId, "cus_replay");
+  }
+
+  {
+    const store = memoryCheckoutStore();
+    store.failNextOrgCreates(1);
+    const pool = freshClaimPool();
+    const event = checkoutCompletedEvent("evt_checkout_retry");
+    const failed = await postStripeWebhook(event, store, pool);
+    assert.equal(failed.statusCode, 500);
+    assert.equal(store.orgs.length, 0);
+    const retried = await postStripeWebhook(event, store, pool);
+    assert.equal(retried.statusCode, 200);
+    assert.equal(JSON.parse(retried.body ?? "{}").duplicate, undefined);
+    assert.equal(store.orgs.length, 1);
+    assert.equal(store.users.length, 1);
+    const third = await postStripeWebhook(event, store, pool);
+    assert.equal(third.statusCode, 200);
+    assert.equal(JSON.parse(third.body ?? "{}").duplicate, true);
+    assert.equal(store.orgs.length, 1);
+    assert.equal(store.users.length, 1);
+  }
+
+  {
+    const store = memoryCheckoutStore();
+    const response = await postStripeWebhook(checkoutCompletedEvent("evt_no_pool"), store, undefined);
+    assert.equal(response.statusCode, 503);
+    assert.match(response.body ?? "", /webhook_dedup_unavailable/);
+    assert.equal(store.orgs.length, 0);
+    assert.equal(store.createOrgCalls, 0);
+  }
+
+  {
+    const store = memoryCheckoutStore();
+    const pool = freshClaimPool();
+    await pool.query(
+      `INSERT INTO stripe_webhook_events (event_id, event_type, status) VALUES ($1, $2, 'processing')`,
+      ["evt_inflight", "checkout.session.completed"]
+    );
+    const response = await postStripeWebhook(checkoutCompletedEvent("evt_inflight"), store, pool);
+    assert.equal(response.statusCode, 500);
+    assert.equal(JSON.parse(response.body ?? "{}").duplicate, undefined);
+    assert.match(response.body ?? "", /webhook_in_progress/);
+    assert.equal(store.createOrgCalls, 0);
+  }
+
   console.log("billingApi.test.ts: ok");
 })();
+
+function checkoutCompletedEvent(id: string): Record<string, unknown> {
+  return {
+    id,
+    type: "checkout.session.completed",
+    data: {
+      object: {
+        id: "cs_replay",
+        customer: "cus_replay",
+        subscription: "sub_replay",
+        customer_email: "buyer@example.com",
+        metadata: {
+          org_name: "Acme",
+          admin_email: "buyer@example.com",
+          seat_count: "2"
+        }
+      }
+    }
+  };
+}
+
+function memoryCheckoutStore(): {
+  orgs: Array<{ id: string; name: string; stripeCustomerId?: string }>;
+  users: Array<{ id: string; orgId: string; email: string }>;
+  createOrgCalls: number;
+  failNextOrgCreates: (count: number) => void;
+  orgStore: OrgStore;
+  userStore: BillingApiDeps["userStore"];
+  emailService: BillingApiDeps["emailService"];
+} {
+  const orgs: Array<{ id: string; name: string; stripeCustomerId?: string }> = [];
+  const users: Array<{ id: string; orgId: string; email: string }> = [];
+  let createOrgCalls = 0;
+  let failCreates = 0;
+  const api = {
+    orgs,
+    users,
+    get createOrgCalls() {
+      return createOrgCalls;
+    },
+    failNextOrgCreates(count: number) {
+      failCreates = count;
+    },
+    orgStore: {
+      findOrganizationByStripeCustomerId: async (customerId: string) =>
+        orgs.find((org) => org.stripeCustomerId === customerId),
+      createOrganization: async (name: string) => {
+        createOrgCalls += 1;
+        if (failCreates > 0) {
+          failCreates -= 1;
+          throw new Error("checkout insert failed");
+        }
+        const org = { id: `org-${orgs.length + 1}`, name };
+        orgs.push(org);
+        return { ...org, plan: "pro" as const, createdAt: new Date() };
+      },
+      updateOrganizationBilling: async (
+        orgId: string,
+        patch: { stripeCustomerId?: string | null }
+      ) => {
+        const org = orgs.find((row) => row.id === orgId);
+        if (org && patch.stripeCustomerId) {
+          org.stripeCustomerId = patch.stripeCustomerId;
+        }
+      }
+    } as unknown as OrgStore,
+    userStore: {
+      findActiveUserByEmail: async (email: string) => users.find((user) => user.email === email),
+      findOrgUserByEmail: async (orgId: string, email: string) =>
+        users.find((user) => user.orgId === orgId && user.email === email),
+      createUser: async (orgId: string, email: string) => {
+        const user = { id: `user-${users.length + 1}`, orgId, email, role: "admin" as const };
+        users.push(user);
+        return { ...user, createdAt: new Date() };
+      }
+    } as BillingApiDeps["userStore"],
+    emailService: {
+      sendWelcome: async () => undefined
+    } as unknown as BillingApiDeps["emailService"]
+  };
+  return api;
+}
+
+async function postStripeWebhook(
+  event: Record<string, unknown>,
+  store: ReturnType<typeof memoryCheckoutStore>,
+  pool: BillingApiDeps["pool"]
+): Promise<ServerResponse & { statusCode?: number; body?: string }> {
+  const response = mockResponse();
+  await handleBillingApiRequest(
+    {
+      method: "POST",
+      pathname: "/webhooks/stripe",
+      headers: { "stripe-signature": "t=1,v1=test" },
+      body: {},
+      rawBody: Buffer.from("{}")
+    },
+    response,
+    {
+      serverConfig: { requireApiAuth: false } as ServerConfig,
+      stripeService: {
+        isConfigured: () => true,
+        verifyWebhookSignature: () => event
+      } as unknown as StripeService,
+      pool,
+      orgStore: store.orgStore,
+      userStore: store.userStore,
+      emailService: store.emailService
+    }
+  );
+  return response;
+}

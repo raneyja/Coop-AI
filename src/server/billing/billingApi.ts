@@ -684,7 +684,15 @@ async function handleStripeWebhook(
   const eventId = String(event.id ?? "");
   if (eventId) {
     const claimed = await claimStripeWebhookEvent(deps.pool, eventId, type);
-    if (!claimed) {
+    if (claimed === "unavailable") {
+      writeJson(response, 503, { error: "webhook_dedup_unavailable" });
+      return true;
+    }
+    if (claimed === "in_progress") {
+      writeJson(response, 500, { error: "webhook_in_progress" });
+      return true;
+    }
+    if (claimed === "duplicate") {
       writeJson(response, 200, { received: true, duplicate: true });
       return true;
     }
@@ -698,7 +706,13 @@ async function handleStripeWebhook(
     } else if (type === "invoice.payment_failed") {
       await handleInvoicePaymentFailed(event, deps);
     }
+    if (eventId) {
+      await completeStripeWebhookEvent(deps.pool, eventId);
+    }
   } catch (error) {
+    if (eventId) {
+      await failStripeWebhookEvent(deps.pool, eventId);
+    }
     console.error("[stripe] webhook handler error:", error);
     captureException(error, { service: "api", route: "/webhooks/stripe" });
     writeJson(response, 500, { error: "webhook_handler_failed" });
@@ -816,27 +830,91 @@ async function handleInvoicePaymentFailed(event: Record<string, unknown>, deps: 
   await deps.orgStore!.updateOrganizationBilling(org.id, { billingStatus: "past_due" });
 }
 
+type WebhookClaim = "claimed" | "duplicate" | "in_progress" | "unavailable";
+
 async function claimStripeWebhookEvent(
   pool: Pool | null | undefined,
   eventId: string,
   eventType: string
-): Promise<boolean> {
+): Promise<WebhookClaim> {
   if (!pool) {
-    return true;
+    return "unavailable";
   }
   try {
-    const result = await pool.query(
-      `INSERT INTO stripe_webhook_events (event_id, event_type)
-       VALUES ($1, $2)
+    const inserted = await pool.query(
+      `INSERT INTO stripe_webhook_events (event_id, event_type, status)
+       VALUES ($1, $2, 'processing')
        ON CONFLICT (event_id) DO NOTHING
        RETURNING event_id`,
       [eventId, eventType]
     );
-    return (result.rowCount ?? 0) > 0;
+    if ((inserted.rowCount ?? 0) > 0) {
+      return "claimed";
+    }
+
+    const reclaimed = await pool.query(
+      `UPDATE stripe_webhook_events
+       SET status = 'processing', event_type = $2, processed_at = now()
+       WHERE event_id = $1 AND status = 'failed'
+       RETURNING event_id`,
+      [eventId, eventType]
+    );
+    if ((reclaimed.rowCount ?? 0) > 0) {
+      return "claimed";
+    }
+
+    const current = await pool.query<{ status?: string }>(
+      `SELECT status FROM stripe_webhook_events WHERE event_id = $1`,
+      [eventId]
+    );
+    const status = String(current.rows[0]?.status ?? "");
+    if (status === "completed") {
+      return "duplicate";
+    }
+    if (!status) {
+      return "unavailable";
+    }
+    return "in_progress";
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`[stripe] webhook dedup check failed for ${eventId}: ${message}`);
-    return true;
+    return "unavailable";
+  }
+}
+
+async function completeStripeWebhookEvent(
+  pool: Pool | null | undefined,
+  eventId: string
+): Promise<void> {
+  if (!pool) {
+    return;
+  }
+  await pool.query(
+    `UPDATE stripe_webhook_events
+     SET status = 'completed', processed_at = now()
+     WHERE event_id = $1 AND status = 'processing'`,
+    [eventId]
+  );
+}
+
+/** Leave the event retryable. A later delivery may claim it again. */
+async function failStripeWebhookEvent(
+  pool: Pool | null | undefined,
+  eventId: string
+): Promise<void> {
+  if (!pool) {
+    return;
+  }
+  try {
+    await pool.query(
+      `UPDATE stripe_webhook_events
+       SET status = 'failed', processed_at = now()
+       WHERE event_id = $1 AND status = 'processing'`,
+      [eventId]
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[stripe] webhook claim release failed for ${eventId}: ${message}`);
   }
 }
 
