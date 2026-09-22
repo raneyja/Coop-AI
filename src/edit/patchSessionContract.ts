@@ -21,7 +21,8 @@ export type PatchSessionRepo = {
  *
  * - SEARCH/REPLACE only; Apply never silently writes for intelligence.
  * - One session; per-file / per-hunk accept, reject, and undo.
- * - `canCreatePr` stays false in Wave 2 B. C flips it after a successful Apply.
+ * - Remote / Use-repo Apply with file bodies sets `canCreatePr`.
+ * - Local-file Apply stamps `prBlockedReason: "local-file"` and leaves `canCreatePr` false.
  */
 export type PatchSession = {
   messageTimestamp: number;
@@ -29,7 +30,10 @@ export type PatchSession = {
   card: PatchCardState;
   repo?: PatchSessionRepo;
   undo?: FileUndoSnapshot[];
-  /** Reserved for Phase C. Default false — do not enable Create PR in Wave 2 B. */
+  /**
+   * True only for Use-repo / remote Apply. Local-file Apply stays false
+   * (`card.prBlockedReason === "local-file"`).
+   */
   canCreatePr: boolean;
 };
 

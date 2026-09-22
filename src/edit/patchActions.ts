@@ -28,6 +28,7 @@ import {
   resolveEditablePatchTarget,
   uriFromUndoSnapshotPath
 } from "./patchTarget";
+import { stampAppliedCreatePr } from "../chat/createPrChatRouting";
 import { pathsReferToSameFile } from "../context/githubVfsUri";
 import {
   getPatchRecord,
@@ -204,7 +205,7 @@ function mergeUndoSnapshots(
 
 function finalizeCardAfterHunkUpdate(
   card: PatchCardState,
-  extras?: { appliedFiles?: Array<{ path: string; content: string }> }
+  extras?: { appliedFiles?: Array<{ path: string; content: string }>; preferLocalDisk?: boolean }
 ): PatchCardState {
   const status = deriveCardStatusFromHunks(card);
   const next: PatchCardState = {
@@ -225,7 +226,9 @@ function finalizeCardAfterHunkUpdate(
     error: undefined,
     suppressMarkdown: true
   };
-  return withCreatePrState(next, extras?.appliedFiles);
+  return withCreatePrState(next, extras?.appliedFiles, {
+    preferLocalDisk: extras?.preferLocalDisk
+  });
 }
 
 /** After Apply, attach live buffer contents so Create PR can commit without a clone. */
@@ -297,16 +300,25 @@ function readAppliedFileContent(
 
 function withCreatePrState(
   card: PatchCardState,
-  appliedFiles?: Array<{ path: string; content: string }>
+  appliedFiles?: Array<{ path: string; content: string }>,
+  options?: { preferLocalDisk?: boolean }
 ): PatchCardState {
   if (card.status !== "applied") {
-    return { ...card, canCreatePr: false, prFiles: undefined };
+    return { ...card, canCreatePr: false, prFiles: undefined, prBlockedReason: undefined };
   }
   const fromApply = (appliedFiles ?? []).filter(
     (file) => file.path.trim() && file.content.length > 0
   );
   const prFiles = fromApply.length > 0 ? fromApply : collectAppliedPrFiles(card);
-  return { ...card, prFiles, canCreatePr: prFiles.length > 0 };
+  return {
+    ...card,
+    ...stampAppliedCreatePr({
+      status: card.status,
+      prFiles,
+      preferLocalDisk: options?.preferLocalDisk,
+      alreadyLocalFile: card.prBlockedReason === "local-file"
+    })
+  };
 }
 
 export function setPendingPatchMatchLocations(
@@ -524,7 +536,11 @@ async function applyPendingPatchHunks(
   for (const hunkId of hunkIds) {
     nextCard = setHunkStatusOnCard(nextCard, hunkId, "applied");
   }
-  nextCard = finalizeCardAfterHunkUpdate(nextCard, { appliedFiles: result.appliedFiles });
+  nextCard = finalizeCardAfterHunkUpdate(nextCard, {
+    appliedFiles: result.appliedFiles,
+    preferLocalDisk:
+      applyOptions?.preferLocalDisk === true || record.card.prBlockedReason === "local-file"
+  });
 
   if (pendingHunkIds(nextCard).length === 0) {
     void vscode.commands.executeCommand("setContext", "coopAI.patchPending", false);
@@ -667,6 +683,7 @@ export async function undoLastPatchWithState(
           appliedFileCount: undefined,
           canCreatePr: false,
           prFiles: undefined,
+          prBlockedReason: undefined,
           error: undefined,
           suppressMarkdown: true,
           files: record.card.files.map((file) => ({

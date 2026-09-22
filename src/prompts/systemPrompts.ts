@@ -1,6 +1,6 @@
 import type { UseCase } from "../api/types";
 import type { IntegrationChatProvider } from "../chat/types";
-import { resolveEditAskKind, type EditAskKind } from "../chat/editAskKind";
+import { isLocalFileChangeAsk, resolveEditAskKind, type EditAskKind } from "../chat/editAskKind";
 import { isOpenFileReviewAsk } from "../chat/plainChatExplain";
 import { DECISION_HISTORIAN_SYSTEM } from "./decisionSynthesis";
 import { OWNERSHIP_INTELLIGENCE_SYSTEM } from "./ownershipSynthesis";
@@ -801,6 +801,24 @@ FAIL: headings like Technical checks / Security & operational / Tests & integrat
 The attached path is a local file on the user's computer. Call it a local file and use that path.
 Do not write "in the repo", "this repository", "the codebase", or a GitHub repo name.`;
 
+/** Local-file change: the patch card is the answer. Do not tour the file. */
+export const LOCAL_FILE_EDIT_DIRECTIVE = `## Turn directive (local file edit)
+The user asked for a change. The patch is the answer.
+
+- One short sentence: what the patch changes. Call it a local file and use that path.
+- Then the patch only.
+- Do not list members, signatures, events, attributes, or logging.
+- Do not add a second paragraph. Do not write "Other files were not read".
+- Stop.
+
+## Path wording
+The attached path is a local file on the user's computer. Call it a local file and use that path.
+Do not write "in the repo", "this repository", "the codebase", or a GitHub repo name.`;
+
+export function localFileTurnDirective(message: string | undefined): string {
+  return isLocalFileChangeAsk(message) ? LOCAL_FILE_EDIT_DIRECTIVE : LOCAL_FILE_PATH_DIRECTIVE;
+}
+
 /** Last lines of a C4 turn — models follow this over the long chat template. */
 export const OPEN_FILE_PR_REVIEW_DIRECTIVE = `## Turn directive (PR review)
 This turn is a PR review of the **named function** in the attached file (the identifier in the user ask — e.g. requireAuth), not every helper in the file.
@@ -851,7 +869,7 @@ export function formatChatMessageWithLocalFiles(options: {
     lines.push("", OPEN_FILE_PR_REVIEW_DIRECTIVE);
   }
   if (options.fileAssistant) {
-    lines.push("", LOCAL_FILE_PATH_DIRECTIVE);
+    lines.push("", localFileTurnDirective(options.message));
   }
   return lines.join("\n");
 }
@@ -1173,7 +1191,7 @@ export function buildUserMessageWithContext(
   }
   lines.push("</attached_context>", "", message.trim());
   if (context?.fileAssistant && context.file?.trim()) {
-    lines.push("", LOCAL_FILE_PATH_DIRECTIVE);
+    lines.push("", localFileTurnDirective(message));
   }
   if (isOpenFileReviewAsk(message)) {
     lines.push("", OPEN_FILE_PR_REVIEW_DIRECTIVE);

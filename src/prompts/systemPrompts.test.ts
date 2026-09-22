@@ -487,6 +487,21 @@ test("file-assistant last-line directive stops after the attached file", () => {
   assert.ok(local.includes("No offer to patch, search, or attach more files"));
   assert.ok(local.includes('Do not write "in the repo"'));
   assert.ok(LOCAL_FILE_PATH_DIRECTIVE.includes("Technical checks"));
+  const comment = formatChatMessageWithLocalFiles({
+    message:
+      'add a one line comment above the row I have highlighted - the comment should say "yo dawg this is a test"',
+    file: "/Users/jonraney/Desktop/cody-vs-main/src/Cody.Core/Agent/IAgentProxy.cs",
+    fileAssistant: true,
+    files: [
+      {
+        path: "/Users/jonraney/Desktop/cody-vs-main/src/Cody.Core/Agent/IAgentProxy.cs",
+        content: "public interface IAgentProxy { bool IsConnected { get; } }"
+      }
+    ]
+  });
+  assert.ok(comment.includes("The patch is the answer"));
+  assert.equal(comment.includes("at most 4 bullets"), false);
+  assert.equal(comment.includes("Other files were not read, so callers"), false);
   assert.ok(LOCAL_FILE_PATH_DIRECTIVE.includes("If you want, I can produce a patch"));
   assert.match(L4_SECRETS_STYLE_FAIL, /Technical checks|If you want, I can produce a patch/);
 

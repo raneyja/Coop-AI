@@ -350,8 +350,14 @@
     color: var(--vscode-textLink-foreground);
   }
 
-  .coop-text-btn:hover {
+  .coop-text-btn:hover:not(:disabled) {
     background: var(--vscode-list-hoverBackground);
+  }
+
+  .coop-text-btn:disabled {
+    color: var(--coop-panel-muted);
+    cursor: not-allowed;
+    opacity: 0.4;
   }
 
   .coop-slash-hint-command {

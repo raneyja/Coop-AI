@@ -228,7 +228,7 @@ export function enrichChatResponseForAction(options: {
 
   const stripped = stripTemplateSectionHeadings(enriched);
   if (fileAssistant && !quickAction && !integrationProvider) {
-    return enrichFileAssistantResponse(stripped);
+    return enrichFileAssistantResponse(stripped, { userQuestion: options.userQuestion });
   }
   return rewriteCustomerFacingProse(stripped);
 }

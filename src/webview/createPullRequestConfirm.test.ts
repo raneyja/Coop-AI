@@ -83,6 +83,22 @@ await test("C-G2 Escape/backdrop dismiss and Cancel create nothing", () => {
   assert.equal(evaluateCreatePullRequest(draft, "dismiss").action, "nothing");
 });
 
+await test("absolute disk path does not confirm a pull request", () => {
+  const result = evaluateCreatePullRequest(
+    {
+      provider: "github",
+      branch: "coop/patch",
+      title: "Fixture",
+      files: [{ path: "/Users/jon/Desktop/cody-vs-main/src/Foo.cs", content: "local\n" }]
+    },
+    "confirm"
+  );
+  assert.equal(result.action, "nothing");
+  if (result.action === "nothing") {
+    assert.equal(result.reason, "local-file");
+  }
+});
+
 await test("C-P4 GitLab and Bitbucket can confirm Create PR", () => {
   assert.equal(isPullRequestWriteSupported("gitlab"), true);
   assert.equal(isPullRequestWriteSupported("bitbucket"), true);

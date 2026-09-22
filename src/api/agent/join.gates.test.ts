@@ -37,13 +37,20 @@ test("J-G1 Apply session wires Create PR (canCreatePr + patch:create-pr handler)
   assert.match(session, /isCreatePullRequestAsk/);
 
   const actions = readRepo("src/edit/patchActions.ts");
-  assert.match(actions, /canCreatePr:\s*prFiles\.length\s*>\s*0/);
+  assert.match(actions, /stampAppliedCreatePr\(/);
+  assert.doesNotMatch(actions, /canCreatePr:\s*prFiles\.length\s*>\s*0/);
+
+  const routing = readRepo("src/chat/createPrChatRouting.ts");
+  assert.match(routing, /prBlockedReason:\s*"local-file"/);
+  assert.match(routing, /canCreatePr:\s*!localFile && input\.prFiles\.length > 0/);
 
   const types = readRepo("src/chat/types.ts");
   assert.match(types, /canCreatePr\?:/);
+  assert.match(types, /prBlockedReason\?:/);
 
   const contract = readRepo("src/edit/patchSessionContract.ts");
   assert.match(contract, /canCreatePr/);
+  assert.match(contract, /local-file/);
 });
 
 test("J-G3 test:agent-ship and test:agent-ship:pressure scripts exist", () => {

@@ -766,6 +766,38 @@ await test("C-P4 GitLab confirm is allowed", () => {
   assert.equal(result.action, "create");
 });
 
+await test("C-P5b absolute disk path is rejected before a host write", () => {
+  const message = "Can't create a pull request from a local file.";
+  assert.equal(
+    validateCreatePullRequestInput({
+      branch: "coop/patch",
+      title: "Fixture",
+      files: [{ path: "/Users/jon/Desktop/cody-vs-main/src/Foo.cs", content: "local\n" }]
+    }),
+    message
+  );
+  assert.equal(
+    validateCreatePullRequestInput({
+      branch: "coop/patch",
+      title: "Fixture",
+      files: [{ path: "Users/jon/Desktop/cody-vs-main/src/Foo.cs", content: "local\n" }]
+    }),
+    message
+  );
+  assert.equal(
+    evaluateCreatePullRequest(
+      {
+        provider: "gitlab",
+        branch: "coop/patch",
+        title: "Fixture",
+        files: [{ path: "/home/dev/src/Foo.rb", content: "local\n" }]
+      },
+      "confirm"
+    ).action,
+    "nothing"
+  );
+});
+
 await test("C-P5 empty file list blocked", () => {
   assert.equal(
     validateCreatePullRequestInput({

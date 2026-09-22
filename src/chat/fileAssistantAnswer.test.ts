@@ -69,6 +69,24 @@ test("a paraphrase of the honest limit is not followed by a second copy", () => 
   assert.doesNotMatch(sameParagraph, /only read this local file/);
 });
 
+test("a local comment edit keeps one sentence and drops the file tour", () => {
+  const asked =
+    'add a one line comment above the row I have highlighted - the comment should say "yo dawg this is a test"';
+  const tour = `Patch below adds the requested one-line comment above the highlighted line in the local file /Users/me/Desktop/sample/IAgentProxy.cs. The interface symbol in that file is IAgentProxy.
+
+bool IsConnected { get; }
+bool IsInitialized { get; }
+void Start() and Task<IAgentApi> Initialize(ClientInfo clientInfo)
+events: EventHandler<ServerInfo> OnInitialized and EventHandler<int> AgentDisconnected
+Other files were not read, so callers and implementations of imported types are unknown.`;
+  const trimmed = enrichFileAssistantResponse(tour, { userQuestion: asked });
+  assert.equal(
+    trimmed,
+    "Patch below adds the requested one-line comment above the highlighted line in the local file /Users/me/Desktop/sample/IAgentProxy.cs. The interface symbol in that file is IAgentProxy."
+  );
+  assert.doesNotMatch(trimmed, /IsConnected|Other files were not read/);
+});
+
 test("already-short L answer keeps its honest limit and is not rewritten", () => {
   const pass =
     "The local file /Users/me/Desktop/sample/Widget.cs wires three callbacks. Other files were not read, so callers and implementations of imported types are unknown.";

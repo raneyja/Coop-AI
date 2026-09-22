@@ -1,3 +1,5 @@
+import { isLocalFileChangeAsk } from "./editAskKind";
+
 /**
  * L-only finish trim. The last-line local-file directive is not enough — models
  * still emit review checklists and “If you want I can” offers. Do not call this
@@ -66,10 +68,27 @@ function dropParaphraseWhenCanonicalPresent(text: string): string {
 }
 
 /**
+ * A change ask is one sentence. Drop the file tour and the honest-limit line.
+ * The patch card is the rest of the answer.
+ */
+function editLeadOnly(text: string): string {
+  const withoutLimit = text
+    .replace(/\n+\s*Other files were not read[\s\S]*$/i, "")
+    .replace(/\n+\s*I only read this (?:local )?file\b[\s\S]*$/i, "")
+    .trim();
+  const first = withoutLimit.split(/\n\n+/)[0]?.trim() ?? withoutLimit;
+  return first.split(/\n/)[0]?.trim() || first;
+}
+
+/**
  * Keep the opening answer. Drop extra headings, search checklists, and offers.
  * Append the honest-limit sentence when it is missing. Never leave two.
+ * A local-file edit keeps the first sentence only.
  */
-export function enrichFileAssistantResponse(content: string): string {
+export function enrichFileAssistantResponse(
+  content: string,
+  options?: { userQuestion?: string }
+): string {
   const raw = content.trim();
   if (!raw) {
     return content;
@@ -90,6 +109,9 @@ export function enrichFileAssistantResponse(content: string): string {
   }
   if (!text) {
     return raw;
+  }
+  if (isLocalFileChangeAsk(options?.userQuestion)) {
+    return editLeadOnly(text);
   }
   return collapseHonestLimit(text);
 }
