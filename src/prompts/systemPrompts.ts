@@ -806,10 +806,10 @@ export const LOCAL_FILE_EDIT_DIRECTIVE = `## Turn directive (local file edit)
 The user asked for a change. The patch is the answer.
 
 - One short sentence: what the patch changes. Call it a local file and use that path.
-- Then the patch only.
+- Immediately after that sentence, emit the File: header and the \`\`\`patch SEARCH/REPLACE block. The patch is required. Without it there is nothing to Apply.
 - Do not list members, signatures, events, attributes, or logging.
 - Do not add a second paragraph. Do not write "Other files were not read".
-- Stop.
+- Stop after the patch.
 
 ## Path wording
 The attached path is a local file on the user's computer. Call it a local file and use that path.
