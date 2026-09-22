@@ -161,6 +161,105 @@ test("file-assistant leftover Use-repo evidence does not rewrite the open-file a
   assert.doesNotMatch(overproduced, /Quick checklist|If you want, I can produce/i);
 });
 
+const leftoverCoopPages = [
+  {
+    title: "ADR: Backend service extraction (COOP-101)",
+    excerpt: "github:raneyja/Coop-AI coop-ai-core coop-backend"
+  },
+  {
+    title: "Developer onboarding — VS Code extension",
+    excerpt: "VS Code extension onboarding for github:raneyja/Coop-AI"
+  },
+  {
+    title: "ADR: Webview vs native sidebar (COOP-55)",
+    excerpt: "gitlab:raneyja/Coop-AI"
+  }
+];
+
+function blastBundleWithLeftoverDocs(): unknown[] {
+  return [
+    {
+      type: "dependencies",
+      data: {
+        file: "apps/api/settings.py",
+        directDependents: [],
+        warnings: ["Impact unverified: no dependents found in index"],
+        confluenceSearch: { pages: leftoverCoopPages }
+      }
+    }
+  ];
+}
+
+const blastAnswer = [
+  "**APIs & integrations**",
+  "",
+  "**Confluence pages reviewed**",
+  "- (attached)",
+  "",
+  "**Operational risk**",
+  "",
+  "Low."
+].join("\n");
+
+test("Blast on coop-ai/plane drops leftover Coop-AI docs and stays unverified", () => {
+  const enriched = enrichChatResponseForAction({
+    quickAction: "blast-radius",
+    content: blastAnswer,
+    contextBundle: blastBundleWithLeftoverDocs(),
+    owner: "coop-ai",
+    repo: "plane",
+    activeFile: "apps/api/settings.py"
+  });
+  assert.doesNotMatch(enriched, /COOP-101|COOP-55|VS Code extension|Related documentation/i);
+  assert.match(enriched, /unverified/i);
+  assert.doesNotMatch(enriched, /src\/chat\/CoopChatSession|apps\/api\/plane/);
+});
+
+test("Blast on raneyja/Coop-AI keeps the same Coop ADRs", () => {
+  const enriched = enrichChatResponseForAction({
+    quickAction: "blast-radius",
+    content: blastAnswer,
+    contextBundle: blastBundleWithLeftoverDocs(),
+    owner: "raneyja",
+    repo: "Coop-AI",
+    activeFile: "apps/api/settings.py"
+  });
+  assert.match(enriched, /Related documentation/);
+  assert.match(enriched, /COOP-101/);
+  assert.match(enriched, /VS Code extension/);
+  assert.match(enriched, /COOP-55/);
+});
+
+test("plain R chat does not attach leftover Blast docs", () => {
+  const answer = "This file configures the preview environment.";
+  const enriched = enrichChatResponseForAction({
+    content: answer,
+    userQuestion: "what does this file do?",
+    contextBundle: blastBundleWithLeftoverDocs(),
+    owner: "coop-ai",
+    repo: "plane",
+    activeFile: "apps/api/settings.py"
+  });
+  assert.equal(enriched, answer);
+  assert.doesNotMatch(enriched, /COOP-101|Related documentation|VS Code extension/i);
+});
+
+test("L Desktop file does not inject leftover Blast docs or callers", () => {
+  const answer = "This local file raises SetHtmlEvent.";
+  const enriched = enrichChatResponseForAction({
+    quickAction: "blast-radius",
+    content: answer,
+    userQuestion: "what does this file do?",
+    contextBundle: blastBundleWithLeftoverDocs(),
+    owner: "coop-ai",
+    repo: "plane",
+    activeFile: "/Users/jon/Desktop/Widget.cs",
+    fileAssistant: true
+  });
+  assert.equal(enriched, answer);
+  assert.doesNotMatch(enriched, /Related documentation|COOP-101|unverified|in this repo/i);
+});
+
 test("/docs answers that invent repo files are rewritten to titles only", () => {
   const enriched = enrichChatResponseForAction({
     content:

@@ -358,9 +358,13 @@ import {
 } from "../context/stickyEditorSelection";
 import {
   dropForeignActiveFileEvidence,
+  isolateContextBundleForTurn,
+  sameRepoCoords,
   shouldIsolateActiveFileForQuickAction,
-  shouldSkipLocalEditorAttachForRepoScope
+  shouldSkipLocalEditorAttachForRepoScope,
+  type TurnIsolationScenario
 } from "../workspace/repoEvidenceIsolation";
+import { mergeContextBundleResults } from "./mergeContextBundle";
 import { gatherPackageBoundaryEvidence } from "../workspace/repoPackageBoundaryEvidence";
 import { buildRepoId } from "./buildRepoId";
 import {
@@ -1811,7 +1815,40 @@ export class CoopChatSession {
     this.activateThread(thread);
   }
 
+  /** Chip / request Use-repo. Settings preferences must not override a set chip. */
+  private isolationScenarioForEvent(event: IntentEvent): TurnIsolationScenario {
+    const file = event.context.file ?? this.currentContext.file;
+    const fileSource = event.context.fileSource ?? this.currentContext.fileSource;
+    return {
+      owner: event.context.owner ?? this.currentContext.owner,
+      repo: event.context.repo ?? this.currentContext.repo,
+      provider: event.context.provider ?? this.currentContext.provider,
+      file,
+      namedIntegration: event.context.integrationProvider,
+      dropRemoteIntegrations: isFileAssistantSession({ file, fileSource })
+    };
+  }
+
+  private isolationScenarioForTurn(options?: {
+    file?: string;
+    namedIntegration?: IntegrationChatProvider;
+    fileAssistant?: boolean;
+  }): TurnIsolationScenario {
+    if (options?.fileAssistant) {
+      return { dropRemoteIntegrations: true, file: options.file ?? this.currentContext.file };
+    }
+    return {
+      owner: this.currentContext.owner,
+      repo: this.currentContext.repo,
+      provider: this.currentContext.provider,
+      file: options?.file ?? this.currentContext.file,
+      namedIntegration: options?.namedIntegration
+    };
+  }
+
   public setRepoContext(context: Pick<RepoContext, "provider" | "owner" | "repo" | "branch">): void {
+    const previousOwner = this.currentContext.owner;
+    const previousRepo = this.currentContext.repo;
     this.contextEpoch += 1;
     this.pinnedContextFile = undefined;
     this.remoteProvenanceFile = undefined;
@@ -1824,6 +1861,21 @@ export class CoopChatSession {
       this.currentContext,
       repoContextForRepoSelect(context) as RepoContext
     );
+    if (
+      previousOwner?.trim() &&
+      previousRepo?.trim() &&
+      !sameRepoCoords(
+        { owner: previousOwner, repo: previousRepo },
+        { owner: context.owner, repo: context.repo }
+      )
+    ) {
+      this.lastContextBundle = isolateContextBundleForTurn(this.lastContextBundle, {
+        owner: context.owner,
+        repo: context.repo,
+        provider: context.provider,
+        file: this.currentContext.file
+      });
+    }
     this.syncPreferencesFromRepoSelection(context);
     this.postContext();
   }
@@ -3126,7 +3178,12 @@ export class CoopChatSession {
             : event.context.buttonClicked === "trace-decision"
               ? turn.contextBundle.filter((entry) => entry.type !== "decision_history")
               : turn.contextBundle;
-        turn.contextBundle = mergeContextBundleResults(priorBundle, results, event.context.file);
+        turn.contextBundle = mergeContextBundleResults(
+          priorBundle,
+          results,
+          event.context.file,
+          this.isolationScenarioForEvent(event)
+        );
         if (this.isViewingThread(turn.threadId)) {
           this.lastContextBundle = turn.contextBundle;
         }
@@ -3142,7 +3199,8 @@ export class CoopChatSession {
       this.lastContextBundle = mergeContextBundleResults(
         priorSessionBundle,
         results,
-        event.context.file
+        event.context.file,
+        this.isolationScenarioForEvent(event)
       );
       return this.lastContextBundle;
     } catch (error) {
@@ -5005,10 +5063,10 @@ export class CoopChatSession {
       codeHostRouter: this.options.codeHostRouter,
       owner: fileAssistantTurn
         ? undefined
-        : request.params.owner ?? this.currentContext.owner ?? this.preferences.owner,
+        : request.params.owner ?? this.currentContext.owner,
       repo: fileAssistantTurn
         ? undefined
-        : request.params.repo ?? this.currentContext.repo ?? this.preferences.repo,
+        : request.params.repo ?? this.currentContext.repo,
       activeFile: activeFileForIntegrations,
       contextText,
       codeHostProvider: gathering.codeHostProvider ?? this.preferences.defaultCodeHost,
@@ -7107,10 +7165,10 @@ export class CoopChatSession {
     }
 
     const label = integrationLabel(provider);
+    const chipOwner = this.currentContext.owner?.trim();
+    const chipRepo = this.currentContext.repo?.trim();
     const repoLabel =
-      this.preferences.owner && this.preferences.repo
-        ? `${this.preferences.owner}/${this.preferences.repo}`
-        : "this repository";
+      chipOwner && chipRepo ? `${chipOwner}/${chipRepo}` : "this repository";
     const userText =
       focus.length > 0
         ? focus
@@ -7322,6 +7380,13 @@ export class CoopChatSession {
     fetchIntegrations?: IntegrationChatProvider[]
   ): Promise<void> {
     await this.withTurnSessionMirrors(turn, async () => {
+      const fileAssistant = isFileAssistantSession(this.currentContext);
+      this.lastContextBundle = isolateContextBundleForTurn(
+        this.lastContextBundle,
+        fileAssistant
+          ? { dropRemoteIntegrations: true, file: this.currentContext.file }
+          : this.isolationScenarioForTurn({ namedIntegration: integrationProvider })
+      );
       const multiTools = (fetchIntegrations ?? []).filter(Boolean);
       if (turn && !this.isViewingThread(turn.threadId)) {
         // Still allocate evidence ids / artifacts onto the turn; skip UI posts.
@@ -7724,7 +7789,14 @@ export class CoopChatSession {
       this.currentContext.file ?? timeline.file,
       codeSnippet
     );
-    return mergeTraceDecisionIntegrationEvidence(withContext, this.lastContextBundle, seeds);
+    return mergeTraceDecisionIntegrationEvidence(
+      withContext,
+      isolateContextBundleForTurn(
+        this.lastContextBundle,
+        this.isolationScenarioForTurn({ file: activeFile })
+      ),
+      seeds
+    );
   }
 
   private async continueChatAfterContext(
@@ -7944,7 +8016,18 @@ export class CoopChatSession {
         this.withTurnSessionMirrors(turn, () => this.injectLocalFilesIntoBundle(localPayload));
       }
 
-      let contextBundle: ContextFetchResult[] = [...turn.contextBundle];
+      let contextBundle: ContextFetchResult[] = isolateContextBundleForTurn(
+        turn.contextBundle,
+        fileAssistantTurn
+          ? { dropRemoteIntegrations: true, file: turnContext.file }
+          : {
+              owner: turnContext.owner,
+              repo: turnContext.repo,
+              provider: turnContext.provider,
+              file: turnContext.file,
+              namedIntegration: options?.integrationProvider
+            }
+      );
       if (localPayload?.files.length && !contextBundle.some((entry) => contextResultHasLocalFiles(entry))) {
         contextBundle = [
           {
@@ -12319,30 +12402,6 @@ function sliceFileLines(content: string, startLine: number, endLine: number): st
   return lines.slice(start - 1, end).join("\n");
 }
 
-/** Preserve evidence types missing from a lighter follow-up fetch (e.g. decision_history). */
-function mergeContextBundleResults(
-  previous: ContextFetchResult[],
-  incoming: ContextFetchResult[],
-  activeFile?: string
-): ContextFetchResult[] {
-  const incomingTypes = new Set(incoming.map((entry) => entry.type));
-  const preserved = previous.filter((entry) => {
-    if (incomingTypes.has(entry.type)) {
-      return false;
-    }
-    if (entry.type === "decision_history" && activeFile?.trim()) {
-      const timeline = (entry.data as { timeline?: DecisionTimeline } | undefined)?.timeline;
-      if (
-        timeline?.file?.trim() &&
-        !pathsReferToSameFile(timeline.file, activeFile)
-      ) {
-        return false;
-      }
-    }
-    return true;
-  });
-  return [...incoming, ...preserved];
-}
 
 function resolveTraceFallbackTimeline(
   timeline: DecisionTimeline | undefined,

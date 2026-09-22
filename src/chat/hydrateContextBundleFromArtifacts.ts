@@ -1,4 +1,8 @@
 import type { ContextFetchResult } from "../context/requestBatcher";
+import {
+  isolateContextBundleForTurn,
+  type TurnIsolationScenario
+} from "../workspace/repoEvidenceIsolation";
 import type { ChatPersistedArtifact, IntegrationChatProvider } from "./types";
 
 function integrationSearchKey(provider: IntegrationChatProvider): string {
@@ -114,13 +118,15 @@ function artifactToBundleEntry(artifact: ChatPersistedArtifact): ContextFetchRes
 
 /** Rebuild a minimal context bundle from the latest persisted evidence per kind. */
 export function hydrateContextBundleFromArtifacts(
-  artifacts: ChatPersistedArtifact[]
+  artifacts: ChatPersistedArtifact[],
+  scenario?: TurnIsolationScenario
 ): ContextFetchResult[] {
   const latestByKind = new Map<ChatPersistedArtifact["kind"], ChatPersistedArtifact>();
   for (const artifact of artifacts) {
     latestByKind.set(artifact.kind, artifact);
   }
-  return [...latestByKind.values()]
+  const bundle = [...latestByKind.values()]
     .map(artifactToBundleEntry)
     .filter((entry): entry is ContextFetchResult => entry !== undefined);
+  return scenario ? isolateContextBundleForTurn(bundle, scenario) : bundle;
 }

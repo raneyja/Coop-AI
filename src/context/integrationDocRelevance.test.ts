@@ -54,6 +54,30 @@ test("filterDocPagesForUseRepo prefers Use-repo pages over Coop bleed", () => {
   assert.ok(!filtered[0]!.excerpt?.includes("\uFFFD"));
 });
 
+test("filterDocPagesForUseRepo drops Coop ADRs when owner is coop-ai and repo is plane", () => {
+  const filtered = filterDocPagesForUseRepo(
+    [
+      {
+        title: "ADR: Backend service extraction (COOP-101)",
+        excerpt: "github:raneyja/Coop-AI coop-ai-core"
+      },
+      {
+        title: "Developer onboarding — VS Code extension",
+        excerpt: "VS Code extension onboarding for github:raneyja/Coop-AI"
+      },
+      { title: "Team lunch notes", excerpt: "Bring a dessert" },
+      { title: "Plane preview environment", excerpt: "apps/api plane states" }
+    ],
+    { owner: "coop-ai", repo: "plane" }
+  );
+  assert.equal(
+    filtered.some((page) => /COOP-\d+|VS Code extension|Team lunch/i.test(page.title)),
+    false
+  );
+  assert.equal(filtered.length, 1);
+  assert.match(filtered[0]!.title, /Plane preview/i);
+});
+
 test("filterDocPagesForUseRepo keeps Coop pages when Use-repo is Coop-AI", () => {
   const filtered = filterDocPagesForUseRepo(
     [{ title: "Coop AI — Architecture Overview", excerpt: "ADR" }],

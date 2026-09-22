@@ -3,21 +3,16 @@
  * Prevents wrong-repo bleed (e.g. Coop-AI ADRs) when auditing another product.
  */
 
-import { repoNameVariants } from "./docSearchQuery";
+import {
+  evidenceTextIsForeignToRepo,
+  evidenceTextNamesActiveRepo,
+  type TurnIsolationScenario
+} from "../workspace/repoEvidenceIsolation";
 
 export type DocPageLike = {
   title: string;
   excerpt?: string;
 };
-
-/** Common foreign product labels that often dominate shared Confluence spaces. */
-const FOREIGN_PRODUCT_MARKERS = [
-  "coop-ai",
-  "coop ai",
-  "coopai",
-  "coop ai —",
-  "coop ai demo"
-];
 
 /**
  * Strip mojibake / Confluence highlight markup / control chars from org-doc snippets.
@@ -51,48 +46,15 @@ function haystackForPage(page: DocPageLike): string {
   return `${page.title} ${page.excerpt ?? ""}`.toLowerCase();
 }
 
-function pageMentionsRepo(haystack: string, owner?: string, repo?: string): boolean {
-  const repoName = repo?.trim();
-  if (!repoName) {
-    return false;
-  }
-  for (const variant of repoNameVariants(repoName)) {
-    if (haystack.includes(variant.toLowerCase())) {
-      return true;
-    }
-  }
-  const ownerName = owner?.trim();
-  if (ownerName) {
-    for (const variant of repoNameVariants(repoName)) {
-      if (haystack.includes(`${ownerName.toLowerCase()}/${variant.toLowerCase()}`)) {
-        return true;
-      }
-    }
-  }
-  return false;
+function turnScenario(options: { owner?: string; repo?: string }): TurnIsolationScenario {
+  return { owner: options.owner, repo: options.repo };
 }
 
-function pageLooksLikeForeignProduct(haystack: string, activeRepo?: string): boolean {
-  const repo = activeRepo?.trim().toLowerCase() ?? "";
-  const activeIsCoop = /coop/.test(repo);
-  for (const marker of FOREIGN_PRODUCT_MARKERS) {
-    if (activeIsCoop && marker.includes("coop")) {
-      continue;
-    }
-    if (haystack.includes(marker)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/** COOP-101 ADRs belong to Coop-AI, not plane. */
-function pageLooksLikeForeignTicket(haystack: string, activeRepo?: string): boolean {
-  const repo = activeRepo?.trim().toLowerCase() ?? "";
-  if (/coop/.test(repo)) {
-    return false;
-  }
-  return /\bcoop-\d+\b/i.test(haystack);
+function focusTermMatches(haystack: string, focusTerms: string[] | undefined): boolean {
+  return (focusTerms ?? []).some((term) => {
+    const normalized = term.trim().toLowerCase().replace(/[-–—]/g, " ");
+    return normalized.length >= 4 && haystack.includes(normalized);
+  });
 }
 
 /**
@@ -110,22 +72,20 @@ export function scoreDocPageForUseRepo(
   const haystack = haystackForPage(page);
   let score = 0;
 
-  if (pageMentionsRepo(haystack, options.owner, options.repo)) {
+  if (evidenceTextNamesActiveRepo(haystack, turnScenario(options))) {
     score += 50;
   }
 
-  for (const term of options.focusTerms ?? []) {
-    const normalized = term.trim().toLowerCase().replace(/[-–—]/g, " ");
-    if (normalized.length >= 4 && haystack.includes(normalized)) {
-      score += 25;
-    }
+  if (focusTermMatches(haystack, options.focusTerms)) {
+    score += 25;
   }
 
-  if (pageLooksLikeForeignProduct(haystack, options.repo)) {
-    score -= 40;
-  }
-  const askedByPhrase = (options.focusTerms ?? []).some((term) => term.trim().length >= 4);
-  if (!askedByPhrase && pageLooksLikeForeignTicket(haystack, options.repo)) {
+  const askedByPhrase = focusTermMatches(haystack, options.focusTerms);
+  if (
+    evidenceTextIsForeignToRepo(haystack, turnScenario(options), {
+      ignoreTicketKeys: askedByPhrase
+    })
+  ) {
     score -= 40;
   }
 
@@ -133,8 +93,8 @@ export function scoreDocPageForUseRepo(
 }
 
 /**
- * Keep Use-repo-linked pages when any exist; otherwise drop clear foreign-product hits.
- * Always sanitizes excerpts.
+ * Keep pages that name this Use-repo. When none do, keep only positive focus matches.
+ * Score-0 foreign and neutral pages do not fill the fallback. Always sanitizes excerpts.
  */
 export function filterDocPagesForUseRepo<T extends DocPageLike>(
   pages: T[],
@@ -160,10 +120,25 @@ export function filterDocPagesForUseRepo<T extends DocPageLike>(
     };
   });
 
-  scored.sort((a, b) => b.score - a.score);
+  const scenario = turnScenario(options);
+  const judged = scored.map((entry) => {
+    const haystack = haystackForPage(entry.page);
+    const askedByPhrase = focusTermMatches(haystack, options.focusTerms);
+    const foreign = evidenceTextIsForeignToRepo(haystack, scenario, {
+      ignoreTicketKeys: askedByPhrase
+    });
+    return {
+      ...entry,
+      foreign,
+      namesRepo: evidenceTextNamesActiveRepo(haystack, scenario)
+    };
+  });
 
-  const repoLinked = scored.filter((entry) => entry.score >= 50);
-  const pool = repoLinked.length > 0 ? repoLinked : scored.filter((entry) => entry.score >= 0);
+  judged.sort((a, b) => b.score - a.score);
+
+  const named = judged.filter((entry) => !entry.foreign && entry.namesRepo);
+  const focused = judged.filter((entry) => !entry.foreign && entry.score > 0);
+  const pool = named.length > 0 ? named : focused;
 
   return pool.slice(0, limit).map((entry) => entry.page);
 }
