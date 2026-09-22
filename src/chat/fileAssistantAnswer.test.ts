@@ -87,6 +87,32 @@ Other files were not read, so callers and implementations of imported types are 
   assert.doesNotMatch(trimmed, /IsConnected|Other files were not read/);
 });
 
+test("a local comment edit keeps the patch block for the Apply card", () => {
+  const asked =
+    'add this comment above the one line i have highlighted';
+  const withPatch = `This patch adds a comment to the local file /Users/me/Desktop/sample/AgentCallbackAttribute.cs.
+
+bool IsConnected { get; }
+Other files were not read, so callers and implementations of imported types are unknown.
+
+File: \`/Users/me/Desktop/sample/AgentCallbackAttribute.cs\`
+
+\`\`\`patch
+<<<<<<< SEARCH
+public string Name { get; private set; }
+=======
+// test test
+public string Name { get; private set; }
+>>>>>>> REPLACE
+\`\`\``;
+  const trimmed = enrichFileAssistantResponse(withPatch, { userQuestion: asked });
+  assert.match(trimmed, /^This patch adds a comment/);
+  assert.match(trimmed, /<<<<<<< SEARCH/);
+  assert.match(trimmed, /\/\/ test test/);
+  assert.match(trimmed, />>>>>>> REPLACE/);
+  assert.doesNotMatch(trimmed, /IsConnected|Other files were not read/);
+});
+
 test("already-short L answer keeps its honest limit and is not rewritten", () => {
   const pass =
     "The local file /Users/me/Desktop/sample/Widget.cs wires three callbacks. Other files were not read, so callers and implementations of imported types are unknown.";

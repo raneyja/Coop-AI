@@ -68,16 +68,51 @@ function dropParaphraseWhenCanonicalPresent(text: string): string {
 }
 
 /**
- * A change ask is one sentence. Drop the file tour and the honest-limit line.
- * The patch card is the rest of the answer.
+ * Prose before the first SEARCH block. The File: line and opening fence stay
+ * with the patch so Apply can still build a card.
+ */
+function detachPatchTail(text: string): { prose: string; patch: string } {
+  const searchAt = text.search(/<<<<<<< SEARCH/);
+  if (searchAt < 0) {
+    return { prose: text, patch: "" };
+  }
+  let start = searchAt;
+  const before = text.slice(0, searchAt);
+  const fenceAt = before.lastIndexOf("```");
+  if (fenceAt >= 0 && searchAt - fenceAt < 160) {
+    start = fenceAt;
+  }
+  const head = text.slice(0, start);
+  const fileHeader = head.match(/(?:^|\n)([ \t]*\*{0,2}File:[^\n]*\s*)$/);
+  if (fileHeader?.index !== undefined) {
+    const offset = fileHeader[0].startsWith("\n") ? 1 : 0;
+    start = fileHeader.index + offset;
+  }
+  return {
+    prose: text.slice(0, start).trim(),
+    patch: text.slice(start).trim()
+  };
+}
+
+/**
+ * A change ask is one sentence of prose. The patch block stays so the card
+ * can render. Drop the file tour and the honest-limit line.
  */
 function editLeadOnly(text: string): string {
-  const withoutLimit = text
+  const { prose, patch } = detachPatchTail(text);
+  const withoutLimit = prose
     .replace(/\n+\s*Other files were not read[\s\S]*$/i, "")
     .replace(/\n+\s*I only read this (?:local )?file\b[\s\S]*$/i, "")
     .trim();
-  const first = withoutLimit.split(/\n\n+/)[0]?.trim() ?? withoutLimit;
-  return first.split(/\n/)[0]?.trim() || first;
+  const first = withoutLimit.split(/\n\n+/)[0]?.trim() ?? "";
+  const lead = first.split(/\n/)[0]?.trim() ?? "";
+  if (!patch) {
+    return lead || withoutLimit;
+  }
+  if (!lead) {
+    return patch;
+  }
+  return `${lead}\n\n${patch}`;
 }
 
 /**
