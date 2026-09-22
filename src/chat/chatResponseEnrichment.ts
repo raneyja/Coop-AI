@@ -78,8 +78,14 @@ export function enrichChatResponseForAction(options: {
   existingCapability?: ExistingCapabilityEvidence;
   /** A8: stuck-status / status-transition write-path evidence. */
   statusTransition?: StatusTransitionEvidence;
+  /**
+   * L turn: leftover Use-repo incident / callers / package structure must not
+   * rewrite the streamed open-file answer. Do not infer this from the question.
+   */
+  fileAssistant?: boolean;
 }): string {
   const { quickAction, integrationProvider, content, contextBundle, activeFile } = options;
+  const fileAssistant = Boolean(options.fileAssistant);
   const mentions = options.mentions ?? [];
   const scopeAction: MentionScopeQuickAction | undefined =
     quickAction ??
@@ -121,7 +127,7 @@ export function enrichChatResponseForAction(options: {
     enriched = enrichStatusTransitionResponse(enriched, options.statusTransition);
   }
 
-  if (options.incidentReconstruction && !quickAction) {
+  if (options.incidentReconstruction && !quickAction && !fileAssistant) {
     enriched = enrichIncidentReconstructionResponse(
       enriched,
       {
@@ -132,6 +138,7 @@ export function enrichChatResponseForAction(options: {
   }
 
   if (
+    !fileAssistant &&
     !quickAction &&
     !integrationProvider &&
     (isRepoPackageBoundaryQuery(options.userQuestion) || isRepoStructureQuery(options.userQuestion))
@@ -146,7 +153,7 @@ export function enrichChatResponseForAction(options: {
   }
 
   // Plain chat "who calls it" — force durable dependents into the answer when present.
-  if (!quickAction && !integrationProvider && isFileCallerQuery(options.userQuestion)) {
+  if (!fileAssistant && !quickAction && !integrationProvider && isFileCallerQuery(options.userQuestion)) {
     const blast = Array.isArray(contextBundle) ? blastRadiusFromBundle(contextBundle) : undefined;
     enriched = enrichPlainChatCallerResponse(enriched, blast);
   }
@@ -208,7 +215,9 @@ export function enrichChatResponseForAction(options: {
     enriched = enrichSourcesFooter(enriched);
   }
 
-  return rewriteCustomerFacingProse(stripTemplateSectionHeadings(enriched));
+  const stripped = stripTemplateSectionHeadings(enriched);
+  // Hunt-miss intern-speak rewrites say "in this repo". Keep the open-file answer.
+  return fileAssistant ? stripped : rewriteCustomerFacingProse(stripped);
 }
 
 function packageStructureFromBundle(

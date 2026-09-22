@@ -246,6 +246,79 @@ test("planner: L drops workflow and keeps a named tool; R plan is not rewritten 
   assert.equal(remote.workflow, "trace-decision");
 });
 
+test("planner: L drops trace-decision and locate jobs; named non-repo tools stay", () => {
+  const plan: ChatIntentPlan = {
+    ...emptyChatIntentPlan("open file"),
+    mode: "run-workflow",
+    workflow: "trace-decision",
+    execution: "silent",
+    tools: ["slack"],
+    jobs: [
+      { capability: "locate", terms: ["open file"] },
+      { capability: "code-host", terms: ["pull requests"] },
+      { capability: "decision", terms: ["auth"] }
+    ],
+    tasks: [
+      {
+        id: "locate-repo",
+        job: "locate",
+        kind: "search-repo",
+        title: "Find the open file in the repo",
+        query: "open file",
+        tool: "repo"
+      },
+      {
+        id: "code-host",
+        job: "code-host",
+        kind: "search-code-host",
+        title: "Search pull requests",
+        query: "pull requests",
+        tool: "code-host"
+      },
+      {
+        id: "decision-slack",
+        job: "decision",
+        kind: "search-integration",
+        title: "Search Slack for auth",
+        query: "auth",
+        tool: "slack"
+      }
+    ],
+    todos: [
+      { id: "locate-repo", content: "Find the open file in the repo" },
+      { id: "code-host", content: "Search pull requests" },
+      { id: "decision-slack", content: "Search Slack for auth" }
+    ],
+    codeIntent: { action: "locate", confidence: "high", reason: "hunt" }
+  };
+  const next = applyFileAssistantIntentPlan(plan);
+  assert.equal(next.workflow, undefined);
+  assert.equal(next.execution, "none");
+  assert.equal(next.mode, "tools-only");
+  assert.deepEqual(next.tools, ["slack"]);
+  assert.equal(
+    next.jobs?.some((job) => job.capability === "locate" || job.capability === "code-host"),
+    false
+  );
+  assert.deepEqual(
+    next.jobs?.map((job) => job.capability),
+    ["decision"]
+  );
+  assert.equal(
+    next.tasks?.some((task) => task.kind === "search-repo" || task.kind === "search-code-host"),
+    false
+  );
+  assert.deepEqual(
+    next.tasks?.map((task) => task.id),
+    ["decision-slack"]
+  );
+  assert.deepEqual(
+    next.todos?.map((todo) => todo.id),
+    ["decision-slack"]
+  );
+  assert.equal(next.codeIntent?.action, "none");
+});
+
 async function main(): Promise<void> {
   for (const run of queue) {
     await run();

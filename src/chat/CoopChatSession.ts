@@ -447,6 +447,7 @@ import {
   applyFileAssistantIntentPlan,
   decideExplicitEditorChip,
   isFileAssistantSession,
+  jobsKeptOnFileAssistantTurn,
   projectInstructionsSourcesForTurn,
   sessionModeForContext
 } from "../context/sessionMode";
@@ -4889,7 +4890,7 @@ export class CoopChatSession {
       } else {
         contentForPatchCard = rewriteCustomerFacingProse(contentForPatchCard);
       }
-      if (!contentForPatchCard.trim()) {
+      if (!contentForPatchCard.trim() && !isFileAssistantSession(turn.context)) {
         contentForPatchCard = CUSTOMER_EMPTY_HUNT_ANSWER;
       }
 
@@ -7758,7 +7759,14 @@ export class CoopChatSession {
       this.attachEditAnchor(turn);
     }
     const turnContext = turn.context;
+    const pendingLocalWorkspace =
+      this.pendingChatLocalFiles?.source === "local-workspace" &&
+      Boolean(this.pendingChatLocalFiles.files.some((file) => file.content?.trim()));
+    const fileAssistantTurn = isFileAssistantSession(turnContext) || pendingLocalWorkspace;
     const intentPlan = options?.intentPlan ?? turn.intentPlan;
+    const synthesisJobs = fileAssistantTurn
+      ? jobsKeptOnFileAssistantTurn(intentPlan.jobs)
+      : intentPlan.jobs;
     const effectiveQuickAction = resolveEffectiveQuickAction(quickAction, turn.history);
     // No artificial minimum — first tokens stream as soon as the LLM produces them,
     // for plain chat, /edit, and quick actions alike.
@@ -7770,7 +7778,8 @@ export class CoopChatSession {
           userQuestion: options?.taskContent ?? content,
           integrationProvider,
           fetchIntegrations: options?.fetchIntegrations,
-          intentPlan
+          intentPlan,
+          sessionMode: fileAssistantTurn ? "file-assistant" : "indexed-repo"
         })
       : undefined;
     let chatUseCase = resolveChatUseCase(
@@ -8264,7 +8273,7 @@ export class CoopChatSession {
                           repo: turnContext.repo ?? this.preferences.repo,
                           file: turnContext.file,
                           tools: synthesisRoute.tools,
-                          jobs: intentPlan.jobs,
+                          jobs: synthesisJobs,
                           integrations: intentJobIntegrations,
                           connected: {
                             jira: this.isIntegrationConnected("jira"),
@@ -8481,7 +8490,6 @@ export class CoopChatSession {
       clearResponseDeadlineForSynthesis(turn.clearResponseDeadline);
       turn.clearResponseDeadline = () => undefined;
 
-      const fileAssistantTurn = isFileAssistantSession(turnContext);
       const result = await this.options.api.streamChat(
         {
           message: apiMessage,
@@ -8569,13 +8577,18 @@ export class CoopChatSession {
         return;
       }
 
+      const localWorkspaceAttached =
+        localPayload?.source === "local-workspace" &&
+        Boolean(localPayload.files.some((file) => file.content?.trim()));
       const routeEnrichedContent =
         synthesisRoute?.kind === "intent-job"
           ? enrichIntentJobResponse(full, {
               tools: synthesisRoute.tools,
-              jobs: intentPlan.jobs,
+              jobs: synthesisJobs,
               integrations: intentJobIntegrations,
-              codePaths: intentJobCodePathsFromBundle(contextBundle)
+              codePaths: intentJobCodePathsFromBundle(contextBundle),
+              fileAssistant: fileAssistantTurn,
+              localWorkspaceAttached
             })
           : full;
       const enrichedContent = enrichChatResponseForAction({
@@ -8594,8 +8607,9 @@ export class CoopChatSession {
           turnContext.file
         ),
         isTraceFollowUp: !quickAction && effectiveQuickAction === "trace-decision",
+        fileAssistant: fileAssistantTurn || localWorkspaceAttached,
         incidentReconstruction:
-          synthesisRoute?.kind === "incident"
+          synthesisRoute?.kind === "incident" && !fileAssistantTurn && !localWorkspaceAttached
             ? {
                 jiraConnected: this.isIntegrationConnected("jira"),
                 slackConnected: this.isIntegrationConnected("slack"),
@@ -8616,7 +8630,7 @@ export class CoopChatSession {
           content: contentForPatchCard,
           hasApplyPatch: false
         });
-        if (!contentForPatchCard.trim()) {
+        if (!contentForPatchCard.trim() && !fileAssistantTurn && !localWorkspaceAttached) {
           contentForPatchCard = CUSTOMER_EMPTY_HUNT_ANSWER;
         }
       }

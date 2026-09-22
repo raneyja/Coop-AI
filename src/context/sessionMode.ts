@@ -1,5 +1,5 @@
 import type { RepoContext, RepoContextFileSource } from "../chat/types";
-import type { ChatIntentPlan } from "../chat/intentPlanner/types";
+import type { ChatIntentJob, ChatIntentPlan, ChatIntentTask } from "../chat/intentPlanner/types";
 import {
   isRemoteChip,
   isSameRepoFilePath,
@@ -130,12 +130,36 @@ export function completionRequestsGraphContext(options: {
   return options.effectiveUseGraph;
 }
 
+/** Locate and code-host hunts belong to indexed-repo. Named Slack/Jira/docs jobs stay. */
+export function jobsKeptOnFileAssistantTurn(jobs: ChatIntentJob[] | undefined): ChatIntentJob[] {
+  return (jobs ?? []).filter((job) => !isRepoHuntCapability(job.capability));
+}
+
+function isRepoHuntCapability(capability: string | undefined): boolean {
+  return capability === "locate" || capability === "code-host";
+}
+
+function isRepoHuntTask(task: ChatIntentTask): boolean {
+  return (
+    isRepoHuntCapability(task.job) || task.kind === "search-repo" || task.kind === "search-code-host"
+  );
+}
+
 /**
  * L turns keep named tools and drop repo workflows / hunts.
+ * Locate and code-host jobs are cleared here so every L caller drops them.
  * Indexed-repo plans are not passed through here.
  */
 export function applyFileAssistantIntentPlan(plan: ChatIntentPlan): ChatIntentPlan {
   const tools = plan.tools ?? [];
+  const jobs = jobsKeptOnFileAssistantTurn(plan.jobs);
+  const droppedTaskIds = new Set(
+    (plan.tasks ?? []).filter((task) => isRepoHuntTask(task)).map((task) => task.id)
+  );
+  const tasks = plan.tasks?.filter((task) => !isRepoHuntTask(task));
+  const todos = plan.todos?.filter(
+    (todo) => !droppedTaskIds.has(todo.id) && todo.id !== "locate-repo" && todo.id !== "code-host"
+  );
   return {
     ...plan,
     workflow: undefined,
@@ -145,6 +169,9 @@ export function applyFileAssistantIntentPlan(plan: ChatIntentPlan): ChatIntentPl
       action: "none",
       confidence: "high",
       reason: "file-assistant — open file only"
-    }
+    },
+    jobs,
+    ...(tasks !== undefined ? { tasks } : {}),
+    ...(todos !== undefined ? { todos } : {})
   };
 }
