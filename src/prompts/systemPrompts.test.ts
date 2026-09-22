@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildUserMessageWithContext, formatChatMessageWithLocalFiles, LOCAL_FILE_PATH_DIRECTIVE, OPEN_FILE_PR_REVIEW_DIRECTIVE, systemPromptForUseCase } from "./systemPrompts";
+import { buildUserMessageWithContext, formatChatMessageWithLocalFiles, LOCAL_FILE_EDIT_DIRECTIVE, LOCAL_FILE_PATH_DIRECTIVE, OPEN_FILE_PR_REVIEW_DIRECTIVE, REMOTE_SELECTION_EDIT_DIRECTIVE, systemPromptForUseCase } from "./systemPrompts";
 import { COPILOT_C4_ASK } from "../api/agent/dogfoodContract";
 
 let passed = 0;
@@ -1018,6 +1018,40 @@ test("pr_summary use case is JSON notes without the chat output contract", () =>
   assert.ok(prompt.includes("files[]"));
   assert.equal(prompt.includes(AUDIENCE_MARKER), false);
   assert.equal(prompt.includes(OUTPUT_CONTRACT_MARKER), false);
+});
+
+test("remote highlight change attaches the chip and selection without local-file wording", () => {
+  const body = ["# syntax", "node_modules", "dist"].join("\n");
+  const message = formatChatMessageWithLocalFiles({
+    message: "put a note here",
+    file: ".dockerignore",
+    selectedLines: [11, 11],
+    owner: "raneyja",
+    repo: "Coop-AI",
+    branch: "main",
+    remoteSelectionChange: true,
+    files: [{ path: ".dockerignore", content: body }]
+  });
+  assert.ok(message.includes('.dockerignore'));
+  assert.ok(message.includes('<editor_selection path=".dockerignore" lines="11-11">'));
+  assert.ok(message.includes(REMOTE_SELECTION_EDIT_DIRECTIVE));
+  assert.equal(message.includes(LOCAL_FILE_EDIT_DIRECTIVE), false);
+  assert.equal(message.includes(LOCAL_FILE_PATH_DIRECTIVE), false);
+  assert.equal(message.includes("Call it a local file"), false);
+  assert.equal(message.includes('Do not write "in the repo"'), false);
+});
+
+test("L highlight change still uses the local-file edit directive", () => {
+  const message = formatChatMessageWithLocalFiles({
+    message: "add a comment that says hello",
+    file: "/Users/me/Desktop/notes.ts",
+    selectedLines: [3, 3],
+    fileAssistant: true,
+    files: [{ path: "/Users/me/Desktop/notes.ts", content: "export const a = 1;\nconst b = 2;\nconst c = 3;\n" }]
+  });
+  assert.ok(message.includes(LOCAL_FILE_EDIT_DIRECTIVE));
+  assert.ok(message.includes("<editor_selection"));
+  assert.equal(message.includes(REMOTE_SELECTION_EDIT_DIRECTIVE), false);
 });
 
 // ── Summary ──────────────────────────────────────────────────────────────────

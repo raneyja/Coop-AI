@@ -427,11 +427,23 @@ function tryParseCodeFence(
   }
 
   let nextIndex = closed ? i + 1 : i;
+  const code = body.join("\n");
+  const fenceLang = infoString?.trim().toLowerCase() ?? "";
 
   const finish = (block: ChatProseBlock): ParsedFence => {
     const trailing = consumeTrailingLocator(lines, nextIndex, downgradePathOnlyCitation(block));
     return { block: trailing.block, nextIndex: trailing.nextIndex };
   };
+
+  // Patch/diff fences must never upgrade to cite — SEARCH lines like `**/*.md`
+  // match path heuristics and would paint a duplicate card beside Patch ready.
+  if (fenceLang === "patch" || fenceLang === "diff" || code.includes("<<<<<<< SEARCH")) {
+    return finish({
+      type: "code-fence",
+      language: infoString,
+      code
+    });
+  }
 
   // Cursor-style: ```startLine:endLine:path on the fence line (also recovers placeholders).
   const infoCitation = infoString ? tryParseFenceInfoLocator(infoString) : null;
@@ -447,7 +459,6 @@ function tryParseCodeFence(
     );
   }
 
-  const code = body.join("\n");
   if (code.trim() && !shouldNeverUpgradeLanguageFence(infoString)) {
     if (!infoString || isOrdinaryLanguageTag(infoString)) {
       const nearby = findCitationNearFence(lines, startIndex, options?.activeFilePath);

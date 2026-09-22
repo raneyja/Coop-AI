@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { customerFacingAgentAnswer, rewriteCustomerFacingProse } from "./customerFacingAnswer";
+import {
+  applyChangeHuntFinish,
+  CUSTOMER_EMPTY_HUNT_ANSWER,
+  customerFacingAgentAnswer,
+  rewriteCustomerFacingProse
+} from "./customerFacingAnswer";
 
 let passed = 0;
 let failed = 0;
@@ -162,6 +167,42 @@ test("drops latency-banner intern copy without blanking a real answer", () => {
   );
   assert.match(out, /requireAuth lives in src\/server\/authMiddleware\.ts/);
   assert.doesNotMatch(out, /soft gather budget exhausted|partial blast evidence|synthesizing with partial/i);
+});
+
+test("highlight change keeps a synthesis patch and does not use the empty-hunt miss", () => {
+  const patch = [
+    "Adding the comment on the highlighted line.",
+    "",
+    "File: .dockerignore",
+    "```patch",
+    "<<<<<<< SEARCH",
+    "node_modules",
+    "=======",
+    "# note",
+    "node_modules",
+    ">>>>>>> REPLACE",
+    "```"
+  ].join("\n");
+  const kept = applyChangeHuntFinish({
+    agentAction: "none",
+    hasAgentPatch: false,
+    content: patch,
+    preserveAnswer: false
+  });
+  assert.equal(kept, patch);
+  assert.equal(kept.includes(CUSTOMER_EMPTY_HUNT_ANSWER), false);
+});
+
+test("empty agent change hunt still uses the canned miss", () => {
+  assert.equal(
+    applyChangeHuntFinish({
+      agentAction: "change",
+      hasAgentPatch: false,
+      content: "",
+      preserveAnswer: false
+    }),
+    CUSTOMER_EMPTY_HUNT_ANSWER
+  );
 });
 
 console.log(`\ncustomerFacingAnswer: ${passed}/${passed + failed} tests passed`);

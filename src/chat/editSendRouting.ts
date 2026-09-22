@@ -33,6 +33,21 @@ const NAMED_CODE_SYMBOL_RE =
 const REPO_WIDE_CHANGE_RE =
   /\b(?:across|throughout)\s+(?:the\s+|this\s+|our\s+)?(?:repo|repository|codebase|code\s?base|project|app)\b|\b(?:repo|repository|project)-wide\b|\beverywhere\b|\bin\s+(?:every|all)\s+\w+/i;
 
+/** Blast / ownership / “why do we…” — never an anchored highlight change. */
+export function isAdvisoryFileAsk(message: string): boolean {
+  return ADVISORY_ASK_RE.test(message.trim());
+}
+
+/** "Rename verifyToken across the repo" — the open tab is not the target. */
+export function isRepoWideChangeMessage(message: string): boolean {
+  return REPO_WIDE_CHANGE_RE.test(message);
+}
+
+/** camelCase / Pascal / snake_case the user typed as a code symbol. */
+export function messageHasNamedCodeSymbol(message: string): boolean {
+  return NAMED_CODE_SYMBOL_RE.test(message);
+}
+
 /** Shown when explicit /edit has no open file / @mention to anchor a patch. */
 export const EDIT_NO_TARGET_FILE_ERROR =
   "Open a file (or @mention one), then use /edit so I can propose a change to Apply.";
@@ -65,6 +80,11 @@ export function resolveChangeSendRouting(options: {
   hasEditTarget: boolean;
   /** This turn may run the repo tool loop (locate/understand/change). */
   agentCanOwnChange: boolean;
+  /**
+   * Open file + live selection already is the change target.
+   * Plain synthesis. Never anchored-edit unless explicitEdit.
+   */
+  selectionOwnsChange?: boolean;
 }): ChangeSendRouting {
   if (options.explicitEdit) {
     if (options.hasEditTarget) {
@@ -73,6 +93,10 @@ export function resolveChangeSendRouting(options: {
     return { kind: "reject-no-target", message: EDIT_NO_TARGET_FILE_ERROR };
   }
   if (!options.concreteEditAsk) {
+    return { kind: "none" };
+  }
+  // Live highlight already is the target. Plain synthesis — not a hunt, not /edit.
+  if (options.selectionOwnsChange) {
     return { kind: "none" };
   }
   // Plain change asks stay in the agent loop. Never auto-set composerMode edit.
@@ -97,7 +121,7 @@ export function isConcreteFileEditAsk(message: string): boolean {
   }
   // Blast / ownership / “why do we…” archaeology — never auto-edit, even when the
   // sentence also contains change/rename + `backticks` (those are impact targets).
-  if (ADVISORY_ASK_RE.test(text)) {
+  if (isAdvisoryFileAsk(text)) {
     return false;
   }
   if (!CONCRETE_EDIT_VERB_RE.test(text)) {

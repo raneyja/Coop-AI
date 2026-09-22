@@ -694,14 +694,20 @@ function emitLocalFilesBlock(
   }
 }
 
-export function selectionEditDirective(kind: EditAskKind): string {
+export function selectionEditDirective(kind: EditAskKind, voice: "anchored-edit" | "open-file" = "anchored-edit"): string {
+  const named =
+    voice === "open-file" ? "The highlighted range is the target" : "/edit named this highlight as the target";
+  const namedPatch =
+    voice === "open-file"
+      ? "The highlighted range is the patch target"
+      : "/edit named this highlight as the patch target";
   if (kind === "comment") {
-    return "Edit directive: Comment-only. /edit named this highlight as the target — not a rewrite. SEARCH is an exact copy of the <editor_selection> body. REPLACE is one comment (or JSDoc) line, then that same SEARCH text unchanged. Do not add private/readonly, do not change parameter lists, types, or any existing line.";
+    return `Edit directive: Comment-only. ${named} — not a rewrite. SEARCH is an exact copy of the <editor_selection> body. REPLACE is one comment (or JSDoc) line, then that same SEARCH text unchanged. Do not add private/readonly, do not change parameter lists, types, or any existing line.`;
   }
   if (kind === "rewrite") {
     return "Edit directive: The user explicitly asked to rewrite/replace/shorten the highlight. SEARCH must equal the <editor_selection> body above character-for-character (including kwargs like request=request). REPLACE is the new version of that whole block. Do not paraphrase from earlier chat.";
   }
-  return "Edit directive: /edit named this highlight as the patch target — not a license to rewrite or improve it. Do exactly the user's request. Do not add private/readonly, extra refactors, or signature changes unless they asked.";
+  return `Edit directive: ${namedPatch} — not a license to rewrite or improve it. Do exactly the user's request. Do not add private/readonly, extra refactors, or signature changes unless they asked.`;
 }
 
 /** Highlighted editor range — primary /edit target when the user refers to "this" / selection. */
@@ -712,6 +718,8 @@ export function emitEditorSelectionBlock(
     selectionText?: string;
     file?: string;
     userMessage?: string;
+    /** Plain highlight change. /edit keeps the anchored-edit wording. */
+    openFile?: boolean;
   }
 ): void {
   if (!options.selectedLines || options.selectedLines.length !== 2) {
@@ -732,7 +740,12 @@ export function emitEditorSelectionBlock(
   lines.push(
     `Edit target: only the highlighted lines ${start}-${end}${options.file?.trim() ? ` in ${options.file.trim()}` : ""}. Do not substitute a different function from the same file.`
   );
-  lines.push(selectionEditDirective(resolveEditAskKind(options.userMessage ?? "")));
+  lines.push(
+    selectionEditDirective(
+      resolveEditAskKind(options.userMessage ?? ""),
+      options.openFile ? "open-file" : "anchored-edit"
+    )
+  );
 }
 
 /** Slice line-numbered content for a 1-based inclusive selection range. */
@@ -819,6 +832,20 @@ export function localFileTurnDirective(message: string | undefined): string {
   return isLocalFileChangeAsk(message) ? LOCAL_FILE_EDIT_DIRECTIVE : LOCAL_FILE_PATH_DIRECTIVE;
 }
 
+/**
+ * Remote Use-repo highlight + change. The patch is the answer.
+ * Do not reuse local-file path wording ("local file", "do not write in the repo").
+ */
+export const REMOTE_SELECTION_EDIT_DIRECTIVE = `## Turn directive (remote file edit)
+The user asked for a change. The highlighted range on the open Use-repo file is the target. The patch is the answer.
+
+- One short sentence: what the patch changes. Use the attached path.
+- Immediately after that sentence, emit the File: header and the \`\`\`patch SEARCH/REPLACE block. The patch is required. Without it there is nothing to Apply.
+- SEARCH is an exact copy of the highlighted range, or the line a new comment is inserted above, following the user's request.
+- Do not search the repository for text the user asked you to insert.
+- Do not invent a different file.
+- Stop after the patch.`;
+
 /** Last lines of a C4 turn — models follow this over the long chat template. */
 export const OPEN_FILE_PR_REVIEW_DIRECTIVE = `## Turn directive (PR review)
 This turn is a PR review of the **named function** in the attached file (the identifier in the user ask — e.g. requireAuth), not every helper in the file.
@@ -842,6 +869,8 @@ export function formatChatMessageWithLocalFiles(options: {
   branch?: string;
   /** L file: local path wording. Do not stamp a leftover Use-repo. */
   fileAssistant?: boolean;
+  /** R highlight + change. Attach the chip and ask for a patch. Not /edit. */
+  remoteSelectionChange?: boolean;
 }): string {
   const lines: string[] = ["<attached_context>"];
   if (!options.fileAssistant && options.owner && options.repo) {
@@ -861,7 +890,8 @@ export function formatChatMessageWithLocalFiles(options: {
     selectedLines: options.selectedLines,
     selectionText: resolveSelectionTextForAttach(options),
     file: options.file,
-    userMessage: options.message
+    userMessage: options.message,
+    openFile: options.remoteSelectionChange
   });
   emitLocalFilesBlock(lines, options.files, options.message, options.fileAssistant);
   lines.push("</attached_context>", "", options.message.trim());
@@ -870,6 +900,8 @@ export function formatChatMessageWithLocalFiles(options: {
   }
   if (options.fileAssistant) {
     lines.push("", localFileTurnDirective(options.message));
+  } else if (options.remoteSelectionChange) {
+    lines.push("", REMOTE_SELECTION_EDIT_DIRECTIVE);
   }
   return lines.join("\n");
 }
@@ -963,6 +995,8 @@ export function buildUserMessageWithContext(
     projectInstructions?: ProjectInstructionSnippet[];
     /** L file: local path wording. Do not stamp a leftover Use-repo. */
     fileAssistant?: boolean;
+    /** R highlight + change. Not local-file wording, not /edit. */
+    remoteSelectionChange?: boolean;
   }
 ): string {
   const projectInstructions = context?.projectInstructions ?? [];
@@ -1049,7 +1083,8 @@ export function buildUserMessageWithContext(
       file: context?.file
     }),
     file: context?.file,
-    userMessage: message
+    userMessage: message,
+    openFile: context?.remoteSelectionChange
   });
   if (projectInstructions.length > 0) {
     lines.push(...formatProjectInstructionsBlock(projectInstructions));
@@ -1192,6 +1227,8 @@ export function buildUserMessageWithContext(
   lines.push("</attached_context>", "", message.trim());
   if (context?.fileAssistant && context.file?.trim()) {
     lines.push("", localFileTurnDirective(message));
+  } else if (context?.remoteSelectionChange) {
+    lines.push("", REMOTE_SELECTION_EDIT_DIRECTIVE);
   }
   if (isOpenFileReviewAsk(message)) {
     lines.push("", OPEN_FILE_PR_REVIEW_DIRECTIVE);

@@ -791,6 +791,36 @@ test("File: path above a patch fence stays a File header, not a citation", () =>
   }
 });
 
+test("patch fence with **/*.md SEARCH line stays a patch fence, not a **/*.md cite", () => {
+  const input = [
+    "This patch adds a comment above the highlighted line.",
+    "",
+    "File: .dockerignore",
+    "",
+    "```patch",
+    "<<<<<<< SEARCH",
+    "**/*.md",
+    "=======",
+    "# testing",
+    "**/*.md",
+    ">>>>>>> REPLACE",
+    "```"
+  ].join("\n");
+  const doc = parseChatProse(input, { activeFilePath: ".dockerignore" });
+  assert.equal(
+    doc.blocks.some((block) => block.type === "code-citation" && block.path === "**/*.md"),
+    false,
+    "SEARCH glob must not become a cite card"
+  );
+  const patch = doc.blocks.find((block) => block.type === "code-fence");
+  assert.ok(patch && patch.type === "code-fence");
+  if (patch?.type === "code-fence") {
+    assert.equal(patch.language, "patch");
+    assert.ok(patch.code.includes("<<<<<<< SEARCH"));
+    assert.ok(patch.code.includes("**/*.md"));
+  }
+});
+
 test("plain language tag typescript is not treated as a path citation", () => {
   const input = "```typescript\nconst x = 1;\n```";
   const doc = parseChatProse(input);

@@ -5,6 +5,7 @@
 import type { ChatIntentPlan } from "../chat/intentPlanner/types";
 import { locateJobTerms } from "../chat/intentPlanner/planChatJobs";
 import { agentTurnAction, shouldSkipAgentHuntForOpenFileFeatureAdd } from "../chat/agentRouting";
+import { openFileSelectionOwnsChange } from "../chat/openFileSelectionChange";
 import type { RepoCodeAction } from "../chat/repoCodeIntent";
 import { isOpenFileReviewAsk } from "../chat/plainChatExplain";
 import { isFileCallerQuery } from "./fileCallerIntent";
@@ -268,13 +269,27 @@ export function committedActivitySeeds(
     options.honestRepoScope ??
     Boolean((file && hasCodeHostCoords) || (hasCodeHostCoords && event.context.repoId));
   const locateTerms = locateJobTerms(options.intentPlan?.jobs);
+  const selectedLines = event.context.lines
+    ? ([event.context.lines.start, event.context.lines.end] as [number, number])
+    : undefined;
+  const selectionOwnsChange = openFileSelectionOwnsChange({
+    file,
+    selectedLines,
+    message: queryText ?? "",
+    fileAssistant,
+    explicitEdit: Boolean(options.codeEditIntent),
+    hasQuickAction: Boolean(action),
+    integrationSlash: Boolean(event.context.integrationProvider)
+  });
   const agentAction = agentTurnAction({
     query: queryText ?? "",
     hasQuickAction: Boolean(action),
     intentPlan: options.intentPlan,
     isEditTurn: options.codeEditIntent,
     integrationSlash: Boolean(event.context.integrationProvider),
-    fileAssistant
+    fileAssistant,
+    file,
+    selectedLines
   });
   const agentOwnsTurn = agentOwnsIndexedGather({
     fileAssistant,
@@ -323,7 +338,7 @@ export function committedActivitySeeds(
     if (fact) {
       messages.push(fact);
     }
-  } else if (willRunIndexedCodeSearch(searchInput)) {
+  } else if (!selectionOwnsChange && willRunIndexedCodeSearch(searchInput)) {
     const label =
       locateTerms.length > 0
         ? searchingRepoActivityLabel(locateTerms)

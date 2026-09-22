@@ -19,6 +19,7 @@ import {
   mergeAnswerWithAgentPatch
 } from "./agentProposedPatch";
 import {
+  applyChangeHuntFinish,
   CUSTOMER_EMPTY_HUNT_ANSWER,
   customerFacingAgentAnswer,
   rewriteCustomerFacingProse
@@ -558,6 +559,10 @@ import { fetchGoogleDocsSearchContext } from "../context/googleDocsContext";
 import type { ResolvedIntegrationScope, ScopedIntegrationProvider } from "../integrationScope/types";
 import { AGENT_JOB_WALL_MS, AGENT_MAX_TOOL_ROUNDS } from "../config/agentJobBudget";
 import { shouldRunAgentToolLoop, agentTurnAction, agentTurnAllowsRepoTools, shouldSkipAgentHuntForOpenFileFeatureAdd, integrationsForAgentLoop } from "./agentRouting";
+import {
+  openFileSelectionOwnsChange,
+  REMOTE_SELECTION_UNREADABLE_ERROR
+} from "./openFileSelectionChange";
 import { buildAgentAnswerPrompt, buildAgentToolPlanPrompt } from "../api/agent/parseAgentToolPlan";
 import type { AgentConversationMessage, AgentPlanTurnInput, AgentStreamAnswerInput } from "../api/agent/agentTypes";
 import { promoteAgentIntegrationSearches } from "../api/agent/promoteAgentIntegrations";
@@ -3226,6 +3231,22 @@ export class CoopChatSession {
     }
   }
 
+  /** Highlight + change on this send. Skip repo search; the chip file is the evidence. */
+  private requestHighlightOwnsChange(request: ContextFetchRequest): boolean {
+    if (this.requestIsFileAssistant(request)) {
+      return false;
+    }
+    const lines = request.params.lines;
+    return openFileSelectionOwnsChange({
+      file: request.params.file,
+      selectedLines: lines ? [lines.start, lines.end] : undefined,
+      message: request.intent.context.queryText ?? "",
+      explicitEdit: this.pendingCodeEditIntent,
+      hasQuickAction: Boolean(request.params.quickAction),
+      integrationSlash: Boolean(request.params.integrationProvider)
+    });
+  }
+
   private async fetchContextRequest(request: ContextFetchRequest): Promise<ContextFetchResult> {
     let result: ContextFetchResult;
     const isUnderstandRepo =
@@ -3250,6 +3271,7 @@ export class CoopChatSession {
         } else if (repoFact) {
           result = await this.enrichChatContextWithRepoInventory(request, result);
         } else if (
+          !this.requestHighlightOwnsChange(request) &&
           willEnrichChatWithSemanticSearch({
             fileAssistant,
             requestType: request.type,
@@ -4972,10 +4994,13 @@ export class CoopChatSession {
       this.clearIntentFeedback(turn.threadId);
       if (this.isViewingThread(turn.threadId)) {
         await this.ensureEditAnchorFile(turn);
-        if (action === "change" || chatUseCase === "code_edit") {
+        const tryPatchCard = action === "change" || chatUseCase === "code_edit";
+        if (tryPatchCard) {
+          // Empty change hunts (named symbol miss) stay prose-only — no failed Patch card.
           await handlePatchComplete(finalMessage.content, {
             messageTimestamp: finalMessage.timestamp,
             publish: (state) => this.postPatchUpdate(state),
+            ignoreParseFailure: !agentPatch,
             ...this.patchCompleteContext(turn)
           });
         } else {
@@ -6218,18 +6243,30 @@ export class CoopChatSession {
         file: this.currentContext.file,
         mentionCount: options?.mentions?.length ?? 0
       });
+      const selectionOwnsChange = openFileSelectionOwnsChange({
+        file: this.currentContext.file,
+        selectedLines: this.currentContext.selectedLines,
+        message,
+        fileAssistant: isFileAssistantSession(this.currentContext),
+        explicitEdit,
+        hasQuickAction: Boolean(quickAction),
+        integrationSlash: Boolean(options?.integrationProvider)
+      });
       const agentCanOwnChange = shouldRunAgentToolLoop({
         query: message,
         hasQuickAction: false,
         intentPlan: turnIntentPlan,
         isEditTurn: false,
-        fileAssistant: isFileAssistantSession(this.currentContext)
+        fileAssistant: isFileAssistantSession(this.currentContext),
+        file: this.currentContext.file,
+        selectedLines: this.currentContext.selectedLines
       });
       const changeRouting = resolveChangeSendRouting({
         explicitEdit,
         concreteEditAsk,
         hasEditTarget: hasTarget,
-        agentCanOwnChange
+        agentCanOwnChange,
+        selectionOwnsChange
       });
       if (changeRouting.kind === "reject-no-target") {
         this.post({
@@ -6643,7 +6680,9 @@ export class CoopChatSession {
       intentPlan: turn.intentPlan,
       isEditTurn: options?.composerMode === "edit",
       integrationSlash: Boolean(options?.integrationProvider && options?.sourceHint),
-      fileAssistant: isFileAssistantSession(this.currentContext)
+      fileAssistant: isFileAssistantSession(this.currentContext),
+      file: this.currentContext.file,
+      selectedLines: this.currentContext.selectedLines
     });
     this.turnAllowsRepoTools = agentTurnAllowsRepoTools({
       intentPlan: turn.intentPlan,
@@ -7846,21 +7885,35 @@ export class CoopChatSession {
       Boolean(this.pendingChatLocalFiles.files.some((file) => file.content?.trim()));
     const fileAssistantTurn = isFileAssistantSession(turnContext) || pendingLocalWorkspace;
     const intentPlan = options?.intentPlan ?? turn.intentPlan;
-    const synthesisJobs = fileAssistantTurn
-      ? jobsKeptOnFileAssistantTurn(intentPlan.jobs)
-      : intentPlan.jobs;
     const effectiveQuickAction = resolveEffectiveQuickAction(quickAction, turn.history);
     // No artificial minimum — first tokens stream as soon as the LLM produces them,
     // for plain chat, /edit, and quick actions alike.
     const minResponseVisibleMs = 0;
     const sourceHint = options?.sourceHint;
     const integrationProvider = options?.integrationProvider;
+    const selectionOwnsChange =
+      !fileAssistantTurn &&
+      openFileSelectionOwnsChange({
+        file: turnContext.file,
+        selectedLines: turnContext.selectedLines,
+        message: content,
+        explicitEdit: options?.composerMode === "edit",
+        hasQuickAction: Boolean(effectiveQuickAction),
+        integrationSlash: Boolean(integrationProvider && sourceHint)
+      });
+    const routePlan = selectionOwnsChange
+      ? { ...intentPlan, jobs: jobsKeptOnFileAssistantTurn(intentPlan.jobs) }
+      : intentPlan;
+    const synthesisJobs =
+      fileAssistantTurn || selectionOwnsChange
+        ? jobsKeptOnFileAssistantTurn(intentPlan.jobs)
+        : intentPlan.jobs;
     const synthesisRoute = !effectiveQuickAction
       ? resolvePlainChatSynthesisRoute({
           userQuestion: options?.taskContent ?? content,
           integrationProvider,
           fetchIntegrations: options?.fetchIntegrations,
-          intentPlan,
+          intentPlan: routePlan,
           sessionMode: fileAssistantTurn ? "file-assistant" : "indexed-repo"
         })
       : undefined;
@@ -8012,6 +8065,16 @@ export class CoopChatSession {
         this.postForThread(turn.threadId, {
           type: "chat:error",
           payload: { message: EDIT_UNREADABLE_FILE_ERROR, threadId: turn.threadId }
+        });
+        this.threadRuns.markError(turn);
+        this.pushThreadsList();
+        this.clearIntentFeedback(turn.threadId);
+        return;
+      }
+      if (selectionOwnsChange && !localPayload?.files.length) {
+        this.postForThread(turn.threadId, {
+          type: "chat:error",
+          payload: { message: REMOTE_SELECTION_UNREADABLE_ERROR, threadId: turn.threadId }
         });
         this.threadRuns.markError(turn);
         this.pushThreadsList();
@@ -8394,7 +8457,7 @@ export class CoopChatSession {
 
       const trustPreamble =
         intentPlan && !effectiveQuickAction
-          ? buildIntentPlanTrustPreamble(intentPlan)
+          ? buildIntentPlanTrustPreamble(routePlan)
           : undefined;
       if (trustPreamble) {
         // Prepend plan disclosure for the model (Sources / activity already show status).
@@ -8441,6 +8504,7 @@ export class CoopChatSession {
           ? await abortablePromise(this.resolveMentionFiles(mentionsToResolve), signal)
           : [];
       const fileAssistantMessage = isFileAssistantSession(turnContext);
+      const remoteSelectionChange = selectionOwnsChange && !fileAssistantMessage;
       let apiMessage =
         mentionFiles.length > 0
           ? formatChatMessageWithMentionFiles({
@@ -8450,12 +8514,25 @@ export class CoopChatSession {
               repo: fileAssistantMessage ? undefined : turnContext.repo,
               branch: fileAssistantMessage ? undefined : turnContext.branch
             })
+            : remoteSelectionChange && localPayload?.files.length
+            ? formatChatMessageWithLocalFiles({
+                message: llmMessage,
+                files: localPayload.files,
+                file: turnContext.file,
+                selectedLines: turnContext.selectedLines,
+                selectionText: this.selectedCodeSnippet(4000),
+                owner: turnContext.owner,
+                repo: turnContext.repo,
+                branch: turnContext.branch,
+                remoteSelectionChange: true
+              })
             : useContextBundle || !localPayload?.files.length
             ? buildUserMessageWithContext(llmMessage, {
                 owner: fileAssistantMessage ? undefined : turnContext.owner,
                 repo: fileAssistantMessage ? undefined : turnContext.repo,
                 branch: fileAssistantMessage ? undefined : turnContext.branch,
                 fileAssistant: fileAssistantMessage,
+                remoteSelectionChange,
                 file:
                   effectiveQuickAction === "understand-repo" || integrationProvider
                     ? undefined
@@ -8476,7 +8553,8 @@ export class CoopChatSession {
                 owner: fileAssistantMessage ? undefined : turnContext.owner,
                 repo: fileAssistantMessage ? undefined : turnContext.repo,
                 branch: fileAssistantMessage ? undefined : turnContext.branch,
-                fileAssistant: fileAssistantMessage
+                fileAssistant: fileAssistantMessage,
+                remoteSelectionChange
               });
       const projectInstructionsBlock =
         effectiveQuickAction === "understand-repo" ? undefined : await this.buildProjectInstructionsBlock();
@@ -8717,16 +8795,12 @@ export class CoopChatSession {
       // patch, strip invented SEARCH blocks so Apply never shows SEARCH not found
       // on a random UI file.
       const agentPatch = extractAgentProposedPatchText(contextBundle);
-      let contentForPatchCard = mergeAnswerWithAgentPatch(enrichedContent, agentPatch);
-      if (this.turnAgentAction === "change" && !agentPatch) {
-        contentForPatchCard = customerFacingAgentAnswer({
-          content: contentForPatchCard,
-          hasApplyPatch: false
-        });
-        if (!contentForPatchCard.trim() && !fileAssistantTurn && !localWorkspaceAttached) {
-          contentForPatchCard = CUSTOMER_EMPTY_HUNT_ANSWER;
-        }
-      }
+      const contentForPatchCard = applyChangeHuntFinish({
+        agentAction: this.turnAgentAction,
+        hasAgentPatch: Boolean(agentPatch),
+        content: mergeAnswerWithAgentPatch(enrichedContent, agentPatch),
+        preserveAnswer: fileAssistantTurn || localWorkspaceAttached
+      });
       const finalMessage: ChatMessage = {
         ...result.message,
         content: contentForPatchCard,

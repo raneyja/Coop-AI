@@ -447,6 +447,32 @@ test("plain chat without a repo target has no estate or workspace line", () => {
   assert.deepEqual(messages, []);
 });
 
+test("remote highlight change does not seed a repo search", () => {
+  const messages = contextGatheringMessagesFor(
+    event({
+      intent: UserIntent.MANUAL_CHAT_SUBMIT,
+      context: {
+        queryText: "add a comment that says testest",
+        file: ".dockerignore",
+        fileSource: "remote",
+        lines: { start: 11, end: 11 },
+        owner: "raneyja",
+        repo: "Coop-AI",
+        repoId: "github:raneyja/Coop-AI"
+      }
+    }),
+    {
+      codeHostProvider: "github",
+      codeHostConnected: true,
+      honestRepoScope: true,
+      repoId: "github:raneyja/Coop-AI",
+      semanticRetrievalEnabled: true,
+      sessionMode: "indexed-repo"
+    }
+  );
+  assert.ok(!messages.some((message) => /Searching repo/i.test(message)));
+});
+
 const total = passed + failed;
 console.log(`\n${passed}/${total} passed`);
 process.exit(failed > 0 ? 1 : 0);
