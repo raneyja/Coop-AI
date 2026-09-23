@@ -9,6 +9,7 @@ import {
   formatQuotaUsageSummary,
   incomingSeatUpgradeCopy,
   indexingHubSubtitle,
+  indexingPlanCapLabel,
   planAdminPortalHref,
   planSeatUpgradeCta,
   planUsageHubSubtitle,
@@ -150,6 +151,11 @@ test("indexingHubSubtitle summarizes lightning state", () => {
     indexingHubSubtitle({ ...basePrefs }, { readyRepos: 2, indexingRepos: 1, indexedRepoCount: 2, indexedRepoLimit: 3 }),
     "2 ready · 1 building"
   );
+  assert.equal(
+    indexingHubSubtitle({ ...basePrefs }, { readyRepos: 1, indexingRepos: 0, indexedRepoCount: 1, indexedRepoLimit: 3 }),
+    "1/3 Deep-Indexed repos"
+  );
+  assert.equal(indexingPlanCapLabel(1, 3), "1 of 3 Deep-Indexed repos on your plan");
 });
 
 test("accountHubSubtitle falls back without email", () => {

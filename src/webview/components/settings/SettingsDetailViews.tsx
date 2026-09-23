@@ -43,6 +43,7 @@ import {
   incomingSeatUpgradeCopy,
   planAdminPortalHref,
   planSeatUpgradeCta,
+  indexingPlanCapLabel,
   preferencesSignedIn,
   quotaUsedPercent
 } from "./connectionCopy";
@@ -57,7 +58,6 @@ import {
 import { CoopNotice } from "../CoopNotice";
 import type { SettingsLightningSummary } from "./SettingsHub";
 import { SettingsCheckboxRow, SettingsSection } from "./SettingsShared";
-import { WorkspaceReposPickerModal } from "../WorkspaceReposPickerModal";
 import type { GithubRepoOption } from "../../../chat/types";
 import { CoopNavList, CoopNavRow } from "../CoopNavRow";
 import { AgentsMdTemplateGuide } from "../AgentsMdTemplateGuide";
@@ -845,7 +845,7 @@ function IndexingDetail(props: SettingsDetailProps): React.ReactElement {
             </p>
             {indexedLimit != null && indexedCount != null ? (
               <p className="mt-1 text-[11px] text-[var(--coop-panel-muted)]">
-                {indexedCount} of {indexedLimit} Deep-Indexed repos on your plan
+                {indexingPlanCapLabel(indexedCount, indexedLimit)}
               </p>
             ) : null}
           </>
@@ -1530,221 +1530,77 @@ function GoogleDocsDetail({
   );
 }
 
-function WorkspaceReposSettings({
-  prefs,
-  onUpdate,
-  onLoadWorkspaceRepos,
-  onSaveWorkspaceRepos,
-  workspacePickerState
-}: SettingsDetailProps): React.ReactElement {
-  const [draft, setDraft] = useState({ owner: prefs.owner, repo: prefs.repo, branch: prefs.branch });
-  const [dirty, setDirty] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [workspacePickerOpen, setWorkspacePickerOpen] = useState(false);
-  const workspaceSavePendingRef = useRef(false);
-  const savedTimer = useRef<number | null>(null);
+function workspaceRepoLabel(repoId: string): string {
+  const colon = repoId.indexOf(":");
+  const rest = colon >= 0 ? repoId.slice(colon + 1) : repoId;
+  return rest || repoId;
+}
 
-  useEffect(() => {
-    if (!dirty) {
-      setDraft({ owner: prefs.owner, repo: prefs.repo, branch: prefs.branch });
-    }
-  }, [prefs.owner, prefs.repo, prefs.branch, dirty]);
-
-  useEffect(
-    () => () => {
-      if (savedTimer.current !== null) {
-        window.clearTimeout(savedTimer.current);
-      }
-    },
-    []
-  );
-
-  useEffect(() => {
-    if (!workspaceSavePendingRef.current || workspacePickerState.saving) {
-      return;
-    }
-    if (workspacePickerState.error) {
-      workspaceSavePendingRef.current = false;
-      return;
-    }
-    if (!workspacePickerState.loading) {
-      workspaceSavePendingRef.current = false;
-      setWorkspacePickerOpen(false);
-    }
-  }, [
-    workspacePickerState.saving,
-    workspacePickerState.loading,
-    workspacePickerState.error,
-    workspacePickerState.selectedCount
-  ]);
-
-  const update = (partial: Partial<typeof draft>) => {
-    setDraft((prev) => ({ ...prev, ...partial }));
-    setDirty(true);
-    setSaved(false);
-  };
-
-  const handleSave = () => {
-    onUpdate({ owner: draft.owner.trim(), repo: draft.repo.trim(), branch: draft.branch.trim() });
-    setDirty(false);
-    setSaved(true);
-    if (savedTimer.current !== null) {
-      window.clearTimeout(savedTimer.current);
-    }
-    savedTimer.current = window.setTimeout(() => setSaved(false), 2000);
-  };
-
+function WorkspaceReposSettings({ prefs }: SettingsDetailProps): React.ReactElement {
   const workspaceRepos = useMemo(() => {
-    if (prefs.workspaceRepoIds && prefs.workspaceRepoIds.length > 0) {
-      return prefs.workspaceRepoIds.map((repoId) => {
-        const match = workspacePickerState.repos.find((repo) => repo.repoId === repoId);
-        return {
-          repoId,
-          label: match ? `${match.owner}/${match.name}` : repoId.replace(/^github:/, "")
-        };
-      });
-    }
-    return [];
-  }, [prefs.workspaceRepoIds, workspacePickerState.repos]);
-
-  const primaryRepoLabel =
-    draft.owner && draft.repo ? `${draft.owner}/${draft.repo}` : undefined;
-
-  const workspaceCountLabel =
-    prefs.workspaceRepoLimit != null
-      ? `${prefs.workspaceRepoCount ?? prefs.workspaceRepoIds?.length ?? 0} / ${prefs.workspaceRepoLimit} repos`
-      : undefined;
+    return (prefs.workspaceRepoIds ?? []).map((repoId) => ({
+      repoId,
+      label: workspaceRepoLabel(repoId)
+    }));
+  }, [prefs.workspaceRepoIds]);
 
   return (
-    <>
-      <SettingsSection title="Workspace repos">
-        <p className="coop-settings-card-desc">
-          {prefs.adminControlledRepos
-            ? prefs.repoAccessMode === "per_user"
-              ? "Your org admin assigned which Deep-Indexed repos you can use. Coop-Search and the folder picker are limited to those repos."
-              : "Your org admin controls which repositories are Deep-Indexed. You can use every indexed repo your organization has authorized."
-            : "Choose up to 3 indexed repos to work in. Coop-Search and the folder picker use these repos. Your first selection is the primary repo for Trace Decision."}
+    <SettingsSection title="Workspace repos">
+      <p className="coop-settings-card-desc">
+        {prefs.adminControlledRepos
+          ? prefs.repoAccessMode === "per_user"
+            ? "Your org admin assigned which Deep-Indexed repos you can use. Coop-Search and the folder picker are limited to those repos."
+            : "Your org admin controls which repositories are Deep-Indexed. You can use every indexed repo your organization has authorized."
+          : "Deep-Indexed repos are already on for everyone signed in to this org. Coop-Search and the folder picker use them."}
+      </p>
+      {isFreeDeveloperPlan(prefs) ? (
+        <p className="coop-settings-card-desc mt-2">
+          Free plan includes the same indexing and search as Pro. AI usage is capped at 80,000 tokens per
+          5-hour window.
         </p>
-        {isFreeDeveloperPlan(prefs) ? (
-          <p className="coop-settings-card-desc mt-2">
-            Free plan includes the same indexing and search as Pro. AI usage is capped at 80,000 tokens per
-            5-hour window.
+      ) : null}
+      <div className="coop-settings-card space-y-3">
+        <div className="min-w-0">
+          {workspaceRepos.length > 0 ? (
+            <div className="coop-indexed-ref-row">
+              {workspaceRepos.map((repo) => (
+                <span key={repo.repoId} className="coop-indexed-ref" title={`${repo.label} · on`}>
+                  {repo.label}
+                </span>
+              ))}
+            </div>
+          ) : prefs.adminControlledRepos ? (
+            <p className="coop-settings-card-desc">
+              {prefs.canInstallIntegrations === true ? (
+                <>
+                  No indexed repos assigned to you yet. Open the admin portal → Users, grant yourself
+                  access, then refresh.
+                </>
+              ) : (
+                <>
+                  No indexed repos assigned to your account yet. Ask your org admin to grant access in
+                  the admin portal.
+                </>
+              )}
+            </p>
+          ) : (
+            <p className="coop-settings-card-desc">
+              Nothing is Deep-Indexed yet. An admin turns repositories on in the admin portal.
+            </p>
+          )}
+        </div>
+        {prefs.githubNeedsReconnect ? (
+          <p className="coop-settings-test-message--error text-[11px]">
+            GitHub access expired. Ask your org admin to reconnect GitHub in the admin portal (Integrations → GitHub).
           </p>
         ) : null}
-        <div className="coop-settings-card space-y-3">
-          <div className="min-w-0">
-            {workspaceCountLabel ? (
-              <p className="coop-workspace-picker-count mb-2 inline-flex">{workspaceCountLabel}</p>
-            ) : null}
-            {workspaceRepos.length > 0 ? (
-              <div className="coop-indexed-ref-row">
-                {workspaceRepos.map((repo) => (
-                  <span key={repo.repoId} className="coop-indexed-ref" title={repo.label}>
-                    {repo.label}
-                  </span>
-                ))}
-              </div>
-            ) : prefs.adminControlledRepos ? (
-              <p className="coop-settings-card-desc">
-                {prefs.canInstallIntegrations === true ? (
-                  <>
-                    No indexed repos assigned to you yet. Open the admin portal → Users, grant yourself
-                    access, then refresh.
-                  </>
-                ) : (
-                  <>
-                    No indexed repos assigned to your account yet. Ask your org admin to grant access in
-                    the admin portal.
-                  </>
-                )}
-              </p>
-            ) : (
-              <p className="coop-settings-card-desc">No workspace repos selected</p>
-            )}
-            {primaryRepoLabel ? (
-              <p className="coop-settings-card-desc mt-1">
-                Primary repo context: <span className="font-medium">{primaryRepoLabel}</span>
-                {draft.branch ? ` · branch ${draft.branch}` : ""}
-                {workspaceRepos.length === 0
-                  ? " — used for chat context; remote browse requires workspace repos above."
-                  : ""}
-              </p>
-            ) : null}
-            {workspaceRepos.length > 0 ? (
-              <p className="coop-settings-card-desc mt-1">
-                {draft.branch ? `Primary branch: ${draft.branch}` : "Pick repos from your org indexed catalog."}
-              </p>
-            ) : null}
-          </div>
-          <div className="coop-settings-actions">
-            {prefs.githubNeedsReconnect ? (
-              <p className="coop-settings-test-message--error text-[11px]">
-                GitHub access expired. Ask your org admin to reconnect GitHub in the admin portal (Integrations → GitHub).
-              </p>
-            ) : null}
-            {prefs.adminControlledRepos ? (
-              <p className="coop-prompt-modal-muted text-[11px]">
-                Repository access is managed by your organization admin.
-              </p>
-            ) : prefs.hasGitHubAppInstalled ? (
-              <button
-                type="button"
-                className="coop-settings-action-btn"
-                onClick={() => {
-                  setWorkspacePickerOpen(true);
-                  onLoadWorkspaceRepos();
-                }}
-              >
-                Choose workspace repos
-              </button>
-            ) : prefs.githubNeedsReconnect ? (
-              <p className="coop-prompt-modal-muted text-[11px]">Re-authorize GitHub first, then return here.</p>
-            ) : (
-              <p className="coop-prompt-modal-muted text-[11px]">
-                Connect GitHub in the admin portal to browse indexed repositories.
-              </p>
-            )}
-          </div>
-          {workspacePickerState.error && !workspacePickerOpen ? (
-            <p className="coop-settings-test-message--error mt-2 text-[11px]">{workspacePickerState.error}</p>
-          ) : null}
-        </div>
-        <label className="coop-settings-field-row mt-3">
-          <span className="coop-settings-label">Primary branch</span>
-          <input
-            type="text"
-            value={draft.branch}
-            onChange={(e) => update({ branch: e.target.value })}
-            className="coop-settings-field"
-            placeholder="main"
-          />
-        </label>
-        <div className="coop-settings-actions">
-          <button type="button" className="coop-settings-action-btn" onClick={handleSave} disabled={!dirty}>
-            Save branch
-          </button>
-          <SaveFlashLabel show={saved} />
-        </div>
-      </SettingsSection>
-
-      <WorkspaceReposPickerModal
-        open={workspacePickerOpen}
-        title="Choose workspace repos"
-        subtitle="Select up to 3 indexed repos from your organization catalog."
-        repos={workspacePickerState.repos}
-        selectedRepoIds={workspacePickerState.selectedRepoIds}
-        limit={workspacePickerState.limit ?? prefs.workspaceRepoLimit ?? 3}
-        loading={workspacePickerState.loading}
-        saving={workspacePickerState.saving}
-        error={workspacePickerState.error}
-        onClose={() => setWorkspacePickerOpen(false)}
-        onRefresh={onLoadWorkspaceRepos}
-        onSave={(repoIds) => {
-          workspaceSavePendingRef.current = true;
-          onSaveWorkspaceRepos(repoIds);
-        }}
-      />
-    </>
+        {prefs.adminControlledRepos ? (
+          <p className="coop-prompt-modal-muted text-[11px]">
+            Repository access is managed by your organization admin.
+          </p>
+        ) : null}
+      </div>
+    </SettingsSection>
   );
 }
 

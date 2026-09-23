@@ -18,6 +18,29 @@ function repo(repoId: string, enabled: boolean, status: OrgRepoRecord["indexStat
   };
 }
 
+async function testFreePlanUsesIndexedReposWithoutStoredSelection() {
+  const orgStore = {
+    getOrganization: async () => ({
+      id: "org-1",
+      name: "Acme",
+      plan: "free" as const,
+      repoAccessMode: "all_indexed" as const,
+      createdAt: new Date()
+    }),
+    listOrgRepos: async () => [
+      repo("github:acme/ready", true, "ready"),
+      repo("github:acme/building", true, "indexing"),
+      { ...repo("github:acme/broken", true, "ready"), browseStatus: "failed" as const },
+      repo("github:acme/plain", false, "idle")
+    ]
+  } as unknown as OrgStore;
+
+  const resolution = await resolveAccessibleRepoIds("org-1", "user-1", "free", { orgStore });
+  assert.deepEqual(resolution.repoIds, ["github:acme/ready"]);
+  assert.equal(resolution.adminControlled, false);
+  assert.equal(resolution.repoAccessMode, null);
+}
+
 async function testAllIndexedMode() {
   const orgStore = {
     getOrganization: async () => ({
@@ -90,6 +113,7 @@ async function testActiveUserRepoGrantIds() {
 }
 
 async function run() {
+  await testFreePlanUsesIndexedReposWithoutStoredSelection();
   await testAllIndexedMode();
   await testPerUserMode();
   await testIndexedHelper();

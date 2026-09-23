@@ -39,6 +39,7 @@ import { summarizePrNotes, type PrNotesCompleteFn } from "../edit/prNotesSummary
 import { activeThemeMode } from "./themeMode";
 import { coopSessionRegistry } from "./CoopSessionRegistry";
 import { authIdentityKey } from "./authIdentity";
+import { chatRepoListFromWorkspaceRepos } from "./workspaceRepoExplorer";
 import {
   readDegradationConfiguration,
   readConflictConfiguration,
@@ -383,6 +384,7 @@ import {
 import { collectOpenEditorFileRefs, collectOpenEditorPaths, editorContextFromRepoContext } from "../context/editorManifestContext";
 import { PRICING_PAGE_URL } from "../config/siteConfig";
 import { isGeneratedOrVendorPath as isNoisyMentionPath } from "../indexing/evidencePathNoise";
+import { isUsableForDeveloperAccess } from "../indexing/verifyRepoBrowse";
 import { hybridEnrichContext } from "../indexing/hybridQuery";
 import {
   mergeRepoSemanticContext,
@@ -10173,7 +10175,7 @@ export class CoopChatSession {
       let emptyHint: "workspace" | "workspace_admin" | "workspace_admin_self" | undefined;
       let listLabel: "workspace" | undefined;
 
-      if (source === "chat" && (await this.options.api.hasToken())) {
+      if (await this.options.api.hasToken()) {
         const workspace = await this.options.api.getWorkspaceRepos(this.preferences.apiBaseUrl);
         if (workspace.repos.length === 0) {
           if (workspace.adminControlled === true || this.preferences.adminControlledRepos) {
@@ -10186,71 +10188,8 @@ export class CoopChatSession {
           }
         } else {
           listLabel = "workspace";
-          entries = workspace.repos.map((entry) => {
-            const providerToken = entry.repoId.includes(":") ? entry.repoId.split(":")[0] : "github";
-            const repoProvider =
-              providerToken === "gitlab" || providerToken === "bitbucket" ? providerToken : "github";
-            return {
-              provider: repoProvider,
-              owner: entry.owner,
-              repo: entry.name,
-              branch: entry.defaultBranch?.trim() || undefined
-            };
-          });
+          entries = chatRepoListFromWorkspaceRepos(workspace.repos);
         }
-      } else if (
-        (provider === "github" || provider === "gitlab" || provider === "bitbucket") &&
-        (await this.options.api.hasToken())
-      ) {
-        try {
-          const workspace = await this.options.api.getWorkspaceRepos(this.preferences.apiBaseUrl);
-          if (workspace.repos.length > 0) {
-            entries = workspace.repos
-              .map((entry) => {
-                const providerToken = entry.repoId.includes(":") ? entry.repoId.split(":")[0] : provider;
-                const repoProvider =
-                  providerToken === "gitlab" || providerToken === "bitbucket" || providerToken === "github"
-                    ? providerToken
-                    : provider;
-                if (repoProvider !== provider) {
-                  return undefined;
-                }
-                return {
-                  provider: repoProvider,
-                  owner: entry.owner,
-                  repo: entry.name,
-                  branch: entry.defaultBranch?.trim() || undefined
-                };
-              })
-              .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
-          }
-        } catch {
-          // Fall through to catalog list for settings flows.
-        }
-        if (entries.length === 0) {
-          const remote = await this.options.api.listCodeHostOrgRepos(this.preferences.apiBaseUrl, provider);
-          entries = remote.map((entry) => ({
-            provider,
-            owner: entry.owner,
-            repo: entry.name,
-            branch: entry.defaultBranch
-          }));
-        }
-      }
-
-      if (entries.length === 0 && source !== "chat") {
-        const repos = await this.options.codeHostRouter.listExplorerRepositories({
-          provider: this.currentContext.provider,
-          owner: this.currentContext.owner,
-          repo: this.currentContext.repo,
-          branch: this.currentContext.branch
-        });
-        entries = repos.map((entry) => ({
-          provider: entry.provider ?? provider,
-          owner: entry.owner,
-          repo: entry.repo,
-          branch: entry.branch
-        }));
       }
 
       const items = entries.map((entry) => ({
@@ -12297,7 +12236,13 @@ export class CoopChatSession {
         }
         const repos = await this.options.api.listOrgRepos(this.preferences.apiBaseUrl);
         const indexed = repos
-          .filter((repo) => repo.lightningEnabled)
+          .filter((repo) =>
+            isUsableForDeveloperAccess({
+              lightningEnabled: repo.lightningEnabled,
+              indexStatus: repo.indexStatus,
+              browseStatus: repo.browseStatus
+            })
+          )
           .map((repo) => repo.repoId)
           .filter(Boolean);
         if (indexed.length > 0) {

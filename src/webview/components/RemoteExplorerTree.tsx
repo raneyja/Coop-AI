@@ -12,7 +12,7 @@ export type ExplorerTreeState = {
   stale?: boolean;
   loading?: boolean;
   provider?: CodeHostProviderPreference;
-  /** When set, empty repo list shows workspace picker guidance instead of connect GitHub copy. */
+  /** When set, an empty repo list explains that nothing usable is indexed yet. */
   emptyHint?: "workspace" | "workspace_admin" | "workspace_admin_self";
   /** Adjusts breadcrumb when listing workspace-selected repos only. */
   listLabel?: "workspace";
@@ -698,17 +698,21 @@ export function RemoteExplorerTreePanel({
                       )}
                       , then click Refresh.
                     </span>
-                  ) : treeState.emptyHint === "workspace" && onOpenSettings ? (
+                  ) : treeState.emptyHint === "workspace" ? (
                     <span>
-                      Select up to 3 repos in{" "}
-                      <button
-                        type="button"
-                        className="coop-explorer-inline-link"
-                        onClick={() => onOpenSettings("indexing")}
-                      >
-                        Settings → Indexing
-                      </button>{" "}
-                      to browse files here.
+                      Nothing is indexed yet. An admin can turn repositories on in the{" "}
+                      {onOpenAdminPortal ? (
+                        <button
+                          type="button"
+                          className="coop-explorer-inline-link"
+                          onClick={onOpenAdminPortal}
+                        >
+                          admin portal
+                        </button>
+                      ) : (
+                        "admin portal"
+                      )}
+                      .
                     </span>
                   ) : trimmedQuery ? (
                     "No repositories match your filter."

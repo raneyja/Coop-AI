@@ -37,8 +37,10 @@ export async function resolveAccessibleRepoIds(
   const orgRepos = await deps.orgStore.listOrgRepos(orgId);
   const indexedIds = indexedOrgRepoIds(orgRepos);
 
+  // Free (and any non-admin plan): every usable indexed repo is already on.
+  // Stored user_workspace_repos rows do not gate what the user can open.
   if (!adminControlled) {
-    return { repoIds: [], repoAccessMode: null, adminControlled: false };
+    return { repoIds: indexedIds, repoAccessMode: null, adminControlled: false };
   }
 
   if (repoAccessMode === "all_indexed") {

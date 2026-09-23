@@ -174,11 +174,25 @@ export class SecureApiClient {
     return this.backend.graphSearch(baseUrl, repoId, pattern, options);
   }
 
-  public async listOrgRepos(baseUrl: string): Promise<Array<{ repoId: string; lightningEnabled?: boolean }>> {
+  public async listOrgRepos(
+    baseUrl: string
+  ): Promise<
+    Array<{
+      repoId: string;
+      lightningEnabled?: boolean;
+      indexStatus?: string;
+      browseStatus?: "pending" | "verified" | "failed" | null;
+    }>
+  > {
     assertCoopEndpoint(baseUrl);
     await this.ensureToken();
     const response = await this.backend.listOrgRepos(baseUrl);
-    return (response.repos ?? []) as Array<{ repoId: string; lightningEnabled?: boolean }>;
+    return (response.repos ?? []) as Array<{
+      repoId: string;
+      lightningEnabled?: boolean;
+      indexStatus?: string;
+      browseStatus?: "pending" | "verified" | "failed" | null;
+    }>;
   }
 
   public async listCatalogOrgRepos(

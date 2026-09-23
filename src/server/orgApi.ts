@@ -54,6 +54,7 @@ import { UserRepoGrantStore } from "./userRepoGrantStore";
 import {
   catalogRepoIsAccessible,
   indexedOrgRepoIds,
+  isIndexedForAccess,
   resolveAccessibleRepoIds
 } from "./resolveAccessibleRepos";
 import { usesAdminRepoAccessPolicy } from "./repoAccessTypes";
@@ -260,7 +261,7 @@ export async function handleOrgApiRequest(
       | undefined;
     if (deps.orgStore && auth.orgId !== "legacy") {
       try {
-        const pool = await getDbPool();
+        const pool = await poolFor(deps);
         if (pool) {
           const workspaceStore = new UserWorkspaceStore(pool);
           workspaceRepoQuota = await workspaceStore.getUserWorkspaceQuota(
@@ -507,16 +508,16 @@ export async function handleOrgApiRequest(
       writeJson(response, 503, { error: "organization database not configured" });
       return true;
     }
-    const pool = requireDbPool(await getDbPool());
-    const workspaceStore = new UserWorkspaceStore(pool);
     const plan = (await resolveOrgPlanFromDb(deps.orgStore, auth)) ?? auth.plan;
     const userId = authUserId(auth);
 
     if (parsed.method === "GET") {
-      await handleGetWorkspaceRepos(response, deps, workspaceStore, auth.orgId, userId, plan);
+      await handleGetWorkspaceRepos(response, deps, auth.orgId, userId, plan);
       return true;
     }
     if (parsed.method === "PUT") {
+      const pool = requireDbPool(await poolFor(deps));
+      const workspaceStore = new UserWorkspaceStore(pool);
       await handlePutWorkspaceRepos(parsed, response, deps, workspaceStore, auth, userId, plan);
       return true;
     }
@@ -996,12 +997,6 @@ async function handleListCatalogRepos(
   }
 
   const query = parsed.query?.get("q")?.trim().toLowerCase() ?? "";
-  const pool = await getDbPool();
-  const selectedIds = pool
-    ? new Set(
-        await new UserWorkspaceStore(pool).listUserWorkspaceRepoIds(auth.orgId, authUserId(auth))
-      )
-    : new Set<string>();
 
   const indexedById = new Map(
     (await deps.orgStore.listOrgRepos(auth.orgId)).map((record) => [record.repoId, record])
@@ -1016,21 +1011,16 @@ async function handleListCatalogRepos(
       ...entry,
       lightningEnabled: indexed?.lightningEnabled,
       indexStatus: indexed?.indexStatus,
-      workspaceSelected: selectedIds.has(entry.repoId)
+      workspaceSelected: false
     });
   }
 
-  // Include org_repos rows that may no longer appear in live discovery (still indexing).
+  // Include usable org_repos rows that no longer appear in live discovery.
   for (const record of indexedById.values()) {
     if (byRepoId.has(record.repoId)) {
       continue;
     }
-    if (
-      !record.lightningEnabled &&
-      record.indexStatus !== "ready" &&
-      record.indexStatus !== "indexing" &&
-      record.indexStatus !== "queued"
-    ) {
+    if (!isIndexedForAccess(record)) {
       continue;
     }
     const coords = coordinatesFromRepoId(record.repoId);
@@ -1042,10 +1032,10 @@ async function handleListCatalogRepos(
       provider: coords.provider,
       owner: coords.owner,
       name: coords.repo,
-      defaultBranch: coords.branch || "main",
+      defaultBranch: record.defaultBranch || coords.branch || "main",
       lightningEnabled: record.lightningEnabled,
       indexStatus: record.indexStatus,
-      workspaceSelected: selectedIds.has(record.repoId)
+      workspaceSelected: false
     });
   }
 
@@ -1060,18 +1050,16 @@ async function handleListCatalogRepos(
 
   const org = await deps.orgStore.getOrganization(auth.orgId);
   const plan = org?.plan ?? auth.plan ?? "free";
-  if (usesAdminRepoAccessPolicy(plan)) {
-    const pool = await getDbPool();
-    const grantStore = pool ? new UserRepoGrantStore(pool) : undefined;
-    const resolution = await resolveAccessibleRepoIds(auth.orgId, authUserId(auth), plan, {
-      orgStore: deps.orgStore,
-      grantStore
-    });
-    const indexedIds = indexedOrgRepoIds([...indexedById.values()]);
-    repos = repos.filter((entry) =>
-      catalogRepoIsAccessible(entry.repoId, indexedIds, resolution)
-    );
-  }
+  const pool = await poolFor(deps);
+  const grantStore = pool ? new UserRepoGrantStore(pool) : undefined;
+  const resolution = await resolveAccessibleRepoIds(auth.orgId, authUserId(auth), plan, {
+    orgStore: deps.orgStore,
+    grantStore
+  });
+  const indexedIds = indexedOrgRepoIds([...indexedById.values()]);
+  repos = repos
+    .filter((entry) => catalogRepoIsAccessible(entry.repoId, indexedIds, resolution))
+    .map((entry) => ({ ...entry, workspaceSelected: true }));
 
   writeJson(response, 200, { repos });
 }
@@ -1304,24 +1292,29 @@ async function handleListCodeHostRepos(
     });
   }
 
-  const indexedById = new Map(
-    (await deps.orgStore.listOrgRepos(auth.orgId)).map((record) => [record.repoId, record])
-  );
-  const pool = await getDbPool();
-  const selectedIds = pool
-    ? new Set(
-        await new UserWorkspaceStore(pool).listUserWorkspaceRepoIds(auth.orgId, authUserId(auth))
-      )
-    : new Set<string>();
-  const repos = discovered.map((entry) => {
-    const indexed = indexedById.get(entry.repoId);
-    return {
-      ...entry,
-      lightningEnabled: indexed?.lightningEnabled,
-      indexStatus: indexed?.indexStatus,
-      workspaceSelected: selectedIds.has(entry.repoId)
-    };
+  const indexedRecords = await deps.orgStore.listOrgRepos(auth.orgId);
+  const indexedById = new Map(indexedRecords.map((record) => [record.repoId, record]));
+  const org = await deps.orgStore.getOrganization(auth.orgId);
+  const plan = org?.plan ?? auth.plan ?? "free";
+  const pool = await poolFor(deps);
+  const grantStore = pool ? new UserRepoGrantStore(pool) : undefined;
+  const resolution = await resolveAccessibleRepoIds(auth.orgId, authUserId(auth), plan, {
+    orgStore: deps.orgStore,
+    grantStore
   });
+  const indexedIds = indexedOrgRepoIds(indexedRecords);
+  const repos = discovered
+    .map((entry) => {
+      const indexed = indexedById.get(entry.repoId);
+      return {
+        ...entry,
+        lightningEnabled: indexed?.lightningEnabled,
+        indexStatus: indexed?.indexStatus,
+        workspaceSelected: false
+      };
+    })
+    .filter((entry) => catalogRepoIsAccessible(entry.repoId, indexedIds, resolution))
+    .map((entry) => ({ ...entry, workspaceSelected: true }));
 
   writeJson(response, 200, { repos });
 }
@@ -1772,7 +1765,7 @@ async function buildDefaultBranchLookup(
 
   await Promise.all(
     repoIds.map(async (repoId) => {
-      const pool = await getDbPool();
+      const pool = await poolFor(deps);
       if (pool) {
         const stats = await new RepoStatsStore(pool).loadStats(orgId, repoId);
         if (stats?.branch?.trim()) {
@@ -1861,51 +1854,30 @@ function workspaceRepoPayload(
 async function handleGetWorkspaceRepos(
   response: ServerResponse,
   deps: OrgApiDeps,
-  workspaceStore: UserWorkspaceStore,
   orgId: string,
   userId: string,
   plan: import("./orgStore").OrgPlan
 ): Promise<void> {
   const orgRepos = await deps.orgStore!.listOrgRepos(orgId);
   const orgRepoById = new Map(orgRepos.map((repo) => [repo.repoId, repo]));
-
-  if (usesAdminRepoAccessPolicy(plan)) {
-    const pool = await getDbPool();
-    const grantStore = pool ? new UserRepoGrantStore(pool) : undefined;
-    const resolution = await resolveAccessibleRepoIds(orgId, userId, plan, {
-      orgStore: deps.orgStore!,
-      grantStore
-    });
-    const defaultBranchLookup = await buildDefaultBranchLookup(orgId, resolution.repoIds, deps);
-    const repos = resolution.repoIds.map((repoId, index) =>
-      workspaceRepoPayload(repoId, index, orgRepoById, defaultBranchLookup)
-    );
-    writeJson(response, 200, {
-      repos,
-      selectedCount: repos.length,
-      limit: null,
-      canAddMore: false,
-      primaryRepoId: repos[0]?.repoId,
-      repoAccessMode: resolution.repoAccessMode,
-      adminControlled: true
-    });
-    return;
-  }
-
-  const selections = await workspaceStore.listUserWorkspaceRepos(orgId, userId);
-  const quota = await workspaceStore.getUserWorkspaceQuota(orgId, userId, plan);
-  const selectionRepoIds = selections.map((selection) => selection.repoId);
-  const defaultBranchLookup = await buildDefaultBranchLookup(orgId, selectionRepoIds, deps);
-  const repos = selections.map((selection, index) =>
-    workspaceRepoPayload(selection.repoId, index, orgRepoById, defaultBranchLookup)
+  const pool = await poolFor(deps);
+  const grantStore = pool ? new UserRepoGrantStore(pool) : undefined;
+  const resolution = await resolveAccessibleRepoIds(orgId, userId, plan, {
+    orgStore: deps.orgStore!,
+    grantStore
+  });
+  const defaultBranchLookup = await buildDefaultBranchLookup(orgId, resolution.repoIds, deps);
+  const repos = resolution.repoIds.map((repoId, index) =>
+    workspaceRepoPayload(repoId, index, orgRepoById, defaultBranchLookup)
   );
   writeJson(response, 200, {
     repos,
-    selectedCount: quota.selectedCount,
-    limit: quota.limit,
-    canAddMore: quota.canAddMore,
-    primaryRepoId: quota.primaryRepoId,
-    adminControlled: false
+    selectedCount: repos.length,
+    limit: null,
+    canAddMore: false,
+    primaryRepoId: repos[0]?.repoId,
+    adminControlled: resolution.adminControlled,
+    ...(resolution.repoAccessMode ? { repoAccessMode: resolution.repoAccessMode } : {})
   });
 }
 
@@ -1945,7 +1917,7 @@ async function handlePutWorkspaceRepos(
     await ensureWorkspaceReposInOrgCatalog(auth.orgId, repoIds, deps);
     await workspaceStore.setUserWorkspaceRepos(auth.orgId, userId, repoIds, plan);
     await audit(deps, auth, "workspace.repos.update", { count: repoIds.length });
-    await handleGetWorkspaceRepos(response, deps, workspaceStore, auth.orgId, userId, plan);
+    await handleGetWorkspaceRepos(response, deps, auth.orgId, userId, plan);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update workspace repos.";
     const status = message.includes("at most") ? 403 : 400;

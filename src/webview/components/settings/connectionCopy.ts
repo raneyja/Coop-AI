@@ -331,6 +331,11 @@ export function indexingHubSubtitle(
   return "No repos indexed yet";
 }
 
+/** Settings → Indexing plan cap. The limit is the plan, not the size of the code host account. */
+export function indexingPlanCapLabel(count: number, limit: number): string {
+  return `${count} of ${limit} Deep-Indexed repos on your plan`;
+}
+
 export function preferencesHubSubtitle(_prefs: Preferences, _pinnedCount: number): string {
   return "AGENTS.md · Context · Model & chat";
 }
