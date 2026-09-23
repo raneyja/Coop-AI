@@ -33,6 +33,23 @@ export function displayUsageTierName(tier: UsageTier | "enterprise"): string {
 }
 
 /**
+ * Plan shown on a person row. Paid tiers (Pro / Pro+ / Max) apply only on a Pro org.
+ * A free signup has no usage tier — that must not fall through to Pro.
+ */
+export function userSeatPlanLabel(orgPlan: string, usageTier?: string | null): string {
+  if (orgPlan === "enterprise") {
+    return "Enterprise";
+  }
+  if (orgPlan !== "pro") {
+    return "Free";
+  }
+  if (usageTier === "pro_plus" || usageTier === "max") {
+    return displayUsageTierName(usageTier);
+  }
+  return displayUsageTierName("pro");
+}
+
+/**
  * Next-plan CTA from this seat's rung: Free → Pro → Pro+ → Max → Enterprise.
  * Mixed team inventory does not hide the ladder — convert leftover Pro seats on Users.
  * Enterprise has no nudge. Pass `seats` when known so 1-seat orgs do not get team-seat copy.

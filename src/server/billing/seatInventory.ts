@@ -112,11 +112,13 @@ export function inventoryFromOrgColumns(row: {
     return stored;
   }
   const seats = Math.max(0, Math.floor(Number(row.seatCount ?? 0) || 0));
-  const tier = parseUsageTier(row.usageTier) ?? "pro";
-  const fallback = emptySeatInventory();
-  if (seats > 0) {
-    fallback[tier] = seats;
+  const tier = parseUsageTier(row.usageTier);
+  // Free orgs default seat_count to 1 with no usage tier. Do not invent a Pro seat from that.
+  if (!tier || seats <= 0) {
+    return emptySeatInventory();
   }
+  const fallback = emptySeatInventory();
+  fallback[tier] = seats;
   return fallback;
 }
 

@@ -77,7 +77,7 @@ export async function handleAdminUsersRequest(
       seatInventory: purchased,
       occupiedSeats: occupied,
       neverFilledSeats: neverFilled,
-      seatMix: displaySeatMix(purchased),
+      seatMix: seatInventoryTotal(purchased) > 0 ? displaySeatMix(purchased) : undefined,
       mixedSeats: isMixedSeatInventory(purchased),
       seatPrices: seatPricesUsd(),
       pendingUpgradeRequests: pendingRequests

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { displayUsageTierName, resolvePlanNudge } from "./planNudge";
+import { resolvePlanNudge, userSeatPlanLabel } from "./planNudge";
 
 assert.equal(resolvePlanNudge({ plan: "enterprise" }), null);
 assert.equal(resolvePlanNudge({ plan: "enterprise", usageTier: "max" }), null);
@@ -48,5 +48,12 @@ assert.equal(mixedPlus?.title, "Upgrade to Max");
 
 const mixedMax = resolvePlanNudge({ plan: "pro", usageTier: "max", seats: 10 });
 assert.equal(mixedMax?.title, "Need more than Max?");
+
+assert.equal(userSeatPlanLabel("free", null), "Free");
+assert.equal(userSeatPlanLabel("free", "pro"), "Free");
+assert.equal(userSeatPlanLabel("pro", null), "Pro");
+assert.equal(userSeatPlanLabel("pro", "pro_plus"), "Pro+");
+assert.equal(userSeatPlanLabel("pro", "max"), "Max");
+assert.equal(userSeatPlanLabel("enterprise", null), "Enterprise");
 
 console.log("planNudge: 1/1 tests passed");

@@ -525,7 +525,7 @@ async function handleOrgDetail(
       onboardingCompleted: Boolean(billing?.onboardingCompletedAt),
       usageTier: billing?.usageTier ?? null,
       seatInventory: purchased,
-      seatMix: purchased ? displaySeatMix(purchased) : undefined,
+      seatMix: purchased && seatInventoryTotal(purchased) > 0 ? displaySeatMix(purchased) : undefined,
       mixedSeats: purchased ? isMixedSeatInventory(purchased) : false
     },
     operator: operatorMeta,

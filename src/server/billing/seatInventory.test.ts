@@ -74,6 +74,14 @@ assert.deepEqual(
   { pro: 0, pro_plus: 4, max: 0 }
 );
 
+assert.deepEqual(
+  inventoryFromOrgColumns({
+    seatCount: 1,
+    usageTier: null
+  }),
+  { pro: 0, pro_plus: 0, max: 0 }
+);
+
 assert.deepEqual(addSeatsToInventory({ pro: 8, pro_plus: 0, max: 2 }, "max", 1), {
   pro: 8,
   pro_plus: 0,

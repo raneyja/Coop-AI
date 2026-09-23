@@ -25,7 +25,7 @@ import {
   seatConvertSuccessCopy,
   upgradeRequestNoticeCopy
 } from "@/lib/billingCopy";
-import { displayUsageTierName } from "@/lib/planNudge";
+import { displayUsageTierName, userSeatPlanLabel } from "@/lib/planNudge";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 import { InviteUserModal } from "@/components/InviteUserModal";
 import { Modal } from "@/components/Modal";
@@ -514,9 +514,7 @@ export default function UsersPage() {
                         ))}
                       </select>
                     ) : (
-                      displayUsageTierName(
-                        user.usageTier === "pro_plus" || user.usageTier === "max" ? user.usageTier : "pro"
-                      )
+                      userSeatPlanLabel(orgPlan, user.usageTier)
                     )}
                   </td>
                   <td className="capitalize">{user.status}</td>
