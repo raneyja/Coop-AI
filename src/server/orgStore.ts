@@ -227,6 +227,44 @@ export class OrgStore {
     return row ? rowToOrg(row) : undefined;
   }
 
+  /**
+   * Rename an organization. Rejects a name another org already uses
+   * (case-insensitive) so SSO lookup, which matches on name, stays unique.
+   */
+  public async updateOrganizationName(
+    orgId: string,
+    name: string
+  ): Promise<
+    { ok: true; org: Organization; previousName: string; changed: boolean } | { ok: false; reason: "not_found" | "taken" }
+  > {
+    const current = await this.getOrganization(orgId);
+    if (!current) {
+      return { ok: false, reason: "not_found" };
+    }
+    if (current.name === name) {
+      return { ok: true, org: current, previousName: current.name, changed: false };
+    }
+    const result = await this.pool.query(
+      `UPDATE organizations SET name = $2
+       WHERE id = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM organizations other
+           WHERE lower(other.name) = lower($2) AND other.id <> $1
+         )
+       RETURNING id, name, plan, repo_access_mode, created_at, usage_tier`,
+      [orgId, name]
+    );
+    const row = result.rows[0];
+    if (row) {
+      return { ok: true, org: rowToOrg(row), previousName: current.name, changed: true };
+    }
+    const stillThere = await this.getOrganization(orgId);
+    if (!stillThere) {
+      return { ok: false, reason: "not_found" };
+    }
+    return { ok: false, reason: "taken" };
+  }
+
   public async setOrganizationPlan(orgId: string, plan: OrgPlan): Promise<Organization | undefined> {
     const result = await this.pool.query(
       `UPDATE organizations

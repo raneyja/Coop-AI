@@ -2,11 +2,30 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { clearSession, displayOrgName, getStoredMe, isAdminRole, signOutRemote } from "@/lib/auth";
+import { FormEvent, useEffect, useState } from "react";
+import {
+  clearSession,
+  displayOrgName,
+  getStoredMe,
+  isAdminRole,
+  setStoredOrgName,
+  signOutRemote
+} from "@/lib/auth";
+import { fetchMe, fetchOrg, updateOrgName } from "@/lib/coopApi";
 import { PlanBadge } from "@/components/PlanBadge";
 import { SettingsRow } from "@/components/SettingsRow";
 import { SettingsSubpage } from "@/components/SettingsSubpage";
 import { useOrgPlan } from "@/hooks/useOrgPlan";
+
+async function loadAdminOrgName(): Promise<string> {
+  const result = await fetchOrg();
+  return result.ok ? (result.data?.name?.trim() ?? "") : "";
+}
+
+async function loadMemberOrgName(): Promise<string> {
+  const result = await fetchMe();
+  return result.ok ? (result.data?.orgName?.trim() ?? "") : "";
+}
 
 function signInMethodLabel(me: ReturnType<typeof getStoredMe>): string {
   switch (me?.authMethod) {
@@ -29,6 +48,52 @@ export default function SettingsAccountPage() {
   const isAdmin = me ? isAdminRole(me) : false;
   const { plan, usageTier, seats } = useOrgPlan();
   const usesPassword = me?.authMethod === "password" || me?.sessionProvider === "password";
+  const initialOrgName = displayOrgName(me);
+  const [orgName, setOrgName] = useState(initialOrgName);
+  const [savedOrgName, setSavedOrgName] = useState(initialOrgName);
+  const [savingName, setSavingName] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [nameSaved, setNameSaved] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const next = isAdmin ? await loadAdminOrgName() : await loadMemberOrgName();
+      if (cancelled || !next) return;
+      setOrgName(next);
+      setSavedOrgName(next);
+      setStoredOrgName(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin]);
+
+  async function handleOrgNameSubmit(event: FormEvent) {
+    event.preventDefault();
+    const next = orgName.trim().replace(/\s+/g, " ");
+    setNameSaved(false);
+    if (!next) {
+      setNameError("Enter an organization name.");
+      return;
+    }
+    if (next === savedOrgName) {
+      setNameError(null);
+      return;
+    }
+    setSavingName(true);
+    setNameError(null);
+    const result = await updateOrgName(next);
+    setSavingName(false);
+    if (!result.ok || !result.data?.name) {
+      setNameError(result.error ?? "Could not update the organization name.");
+      return;
+    }
+    setOrgName(result.data.name);
+    setSavedOrgName(result.data.name);
+    setStoredOrgName(result.data.name);
+    setNameSaved(true);
+  }
 
   async function handleSignOut() {
     await signOutRemote();
@@ -88,7 +153,43 @@ export default function SettingsAccountPage() {
       <section className="admin-card">
         <h2 className="admin-section-label">Organization</h2>
         <dl className="mt-4">
-          <SettingsRow label="Name">{displayOrgName(me)}</SettingsRow>
+          <SettingsRow label="Name">
+            {isAdmin ? (
+              <form onSubmit={(event) => void handleOrgNameSubmit(event)} className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    id="org-name"
+                    type="text"
+                    className="admin-input max-w-xs"
+                    value={orgName}
+                    maxLength={255}
+                    autoComplete="organization"
+                    aria-label="Organization name"
+                    disabled={savingName}
+                    onChange={(event) => {
+                      setOrgName(event.target.value);
+                      setNameError(null);
+                      setNameSaved(false);
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    className="admin-btn-secondary"
+                    disabled={savingName || !orgName.trim() || orgName.trim().replace(/\s+/g, " ") === savedOrgName}
+                  >
+                    {savingName ? "Saving…" : "Save"}
+                  </button>
+                  {nameSaved ? <span className="text-xs text-coop-muted">Saved</span> : null}
+                </div>
+                {nameError ? <p className="text-xs text-red-400">{nameError}</p> : null}
+                {plan === "enterprise" ? (
+                  <p className="text-xs text-coop-muted">SSO sign-in uses this name.</p>
+                ) : null}
+              </form>
+            ) : (
+              orgName
+            )}
+          </SettingsRow>
           <SettingsRow label="Org ID">
             <code className="font-mono text-xs text-coop-muted">{me?.orgId ?? "—"}</code>
           </SettingsRow>

@@ -1,5 +1,8 @@
 import { clearOrgSuspended } from "./orgSuspendedState";
 
+/** Fired on `window` after the signed-in org name is written to session storage. */
+export const ORG_NAME_UPDATED_EVENT = "coop:org-name-updated";
+
 const TOKEN_KEY = "coop_admin_api_token";
 const REFRESH_TOKEN_KEY = "coop_admin_refresh_token";
 const ORG_NAME_KEY = "coop_admin_org_name";
@@ -79,6 +82,20 @@ export function saveSession(
 /** Update cached /v1/me profile without touching tokens. */
 export function updateStoredMe(me: StoredMe): void {
   sessionStorage.setItem(ME_KEY, JSON.stringify(me));
+}
+
+/** Persist a renamed organization so the portal header and settings stay in sync. */
+export function setStoredOrgName(name: string): void {
+  const trimmed = name.trim();
+  if (!trimmed || typeof window === "undefined") return;
+  const me = getStoredMe();
+  const override = getOrgNameOverride();
+  if (me?.orgName === trimmed && !override) return;
+  if (me) {
+    updateStoredMe({ ...me, orgName: trimmed });
+  }
+  sessionStorage.removeItem(ORG_NAME_KEY);
+  window.dispatchEvent(new Event(ORG_NAME_UPDATED_EVENT));
 }
 
 export function clearSession(): void {

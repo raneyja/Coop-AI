@@ -903,6 +903,13 @@ export async function fetchOrg(): Promise<ApiResult<OrgSummary>> {
   return coopFetch<OrgSummary>("/v1/admin/org");
 }
 
+export async function updateOrgName(name: string): Promise<ApiResult<OrgSummary>> {
+  return coopFetch<OrgSummary>("/v1/admin/org", {
+    method: "PATCH",
+    body: JSON.stringify({ name })
+  });
+}
+
 export async function updateRepoAccessMode(
   repoAccessMode: OrgRepoAccessMode
 ): Promise<ApiResult<OrgSummary>> {
