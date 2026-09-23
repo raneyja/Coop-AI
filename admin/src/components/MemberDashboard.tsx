@@ -18,7 +18,7 @@ import { PlanBadge } from "@/components/PlanBadge";
 import { IntegrationStatusList } from "@/components/IntegrationStatusList";
 import { IndexedRepoStatusList } from "@/components/IndexedRepoStatusList";
 
-const EXTENSION_URL = "https://marketplace.visualstudio.com/search?term=coop%20ai&target=VSCode";
+const EXTENSION_URL = "https://marketplace.visualstudio.com/search?term=coopai&target=VSCode";
 
 export function MemberDashboard() {
   const me = getStoredMe();

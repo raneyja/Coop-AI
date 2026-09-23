@@ -386,7 +386,7 @@ export function OnboardingWizard({
                 </p>
               </div>
               <a
-                href="https://marketplace.visualstudio.com/search?term=coop%20ai&target=VSCode"
+                href="https://marketplace.visualstudio.com/search?term=coopai&target=VSCode"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="admin-btn-secondary inline-block"

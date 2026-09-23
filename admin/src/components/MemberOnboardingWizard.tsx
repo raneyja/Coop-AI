@@ -10,7 +10,7 @@ import { useIntegrations } from "@/hooks/useIntegrations";
 import { IntegrationsStep } from "./IntegrationsStep";
 import { IndexedRepoStatusList } from "./IndexedRepoStatusList";
 
-const EXTENSION_URL = "https://marketplace.visualstudio.com/search?term=coop%20ai&target=VSCode";
+const EXTENSION_URL = "https://marketplace.visualstudio.com/search?term=coopai&target=VSCode";
 
 const STEPS = [
   { id: "welcome", label: "Welcome" },
