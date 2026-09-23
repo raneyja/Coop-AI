@@ -1,7 +1,6 @@
 import type { ServerResponse } from "node:http";
 import type { AuthContext } from "./orgStore";
 import type { IntegrationProvider } from "./integrationConnectionStore";
-import { auditActor } from "./audit/auditLogger";
 import { resolveOrgPlanFromDb } from "./authMiddleware";
 import { requireTeamPlan } from "./planGates";
 import { writeJson, type AdminApiDeps } from "./adminApiShared";
@@ -17,7 +16,6 @@ type ParsedRequest = {
   body?: unknown;
 };
 
-const ORG_NAME_MAX_LENGTH = 255;
 
 const TRACKED_PROVIDERS = [
   "github",
@@ -59,42 +57,6 @@ export async function handleAdminOrgRequest(
       memberCount: activeMemberCount,
       integrationSummary,
       onboardingCompleted: Boolean(billing?.onboardingCompletedAt)
-    });
-    return true;
-  }
-
-  if (parsed.method === "PATCH" && parsed.pathname === "/v1/admin/org") {
-    const parsedName = parseOrganizationName(asRecord(parsed.body).name);
-    if (!parsedName.ok) {
-      writeJson(response, 400, { error: parsedName.error, message: parsedName.message });
-      return true;
-    }
-    const renamed = await deps.orgStore!.updateOrganizationName(auth.orgId, parsedName.name);
-    if (!renamed.ok && renamed.reason === "taken") {
-      writeJson(response, 409, {
-        error: "org_name_taken",
-        message: "Another organization already uses that name."
-      });
-      return true;
-    }
-    if (!renamed.ok) {
-      writeJson(response, 404, { error: "organization not found" });
-      return true;
-    }
-    if (renamed.changed) {
-      const actor = auditActor(auth);
-      await deps.auditLogger?.record({
-        orgId: auth.orgId,
-        userId: actor.userId,
-        principal: actor.principal,
-        action: "admin.org.rename",
-        metadata: { previousName: renamed.previousName, name: renamed.org.name }
-      });
-    }
-    writeJson(response, 200, {
-      id: renamed.org.id,
-      name: renamed.org.name,
-      plan: renamed.org.plan
     });
     return true;
   }
@@ -226,32 +188,4 @@ async function buildIntegrationSummary(deps: AdminApiDeps, orgId: string) {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
-}
-
-export function parseOrganizationName(
-  value: unknown
-): { ok: true; name: string } | { ok: false; error: string; message: string } {
-  if (typeof value !== "string") {
-    return { ok: false, error: "invalid_org_name", message: "Enter an organization name." };
-  }
-  const trimmed = value.trim();
-  if (/[\u0000-\u001F\u007F]/.test(trimmed)) {
-    return {
-      ok: false,
-      error: "invalid_org_name",
-      message: "Organization name can't include line breaks."
-    };
-  }
-  const name = trimmed.replace(/\s+/g, " ");
-  if (!name) {
-    return { ok: false, error: "invalid_org_name", message: "Enter an organization name." };
-  }
-  if (name.length > ORG_NAME_MAX_LENGTH) {
-    return {
-      ok: false,
-      error: "invalid_org_name",
-      message: "Organization name must be 255 characters or fewer."
-    };
-  }
-  return { ok: true, name };
 }
