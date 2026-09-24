@@ -270,12 +270,12 @@ export class OrgStore {
       `UPDATE organizations
        SET plan = $2,
            usage_tier = CASE
-             WHEN $2 = 'pro' THEN COALESCE(usage_tier, 'pro')
+             WHEN $3 = 'pro' THEN COALESCE(usage_tier, 'pro')
              ELSE NULL
            END
        WHERE id = $1
        RETURNING id, name, plan, repo_access_mode, created_at, usage_tier`,
-      [orgId, plan]
+      [orgId, plan, plan]
     );
     const row = result.rows[0];
     return row ? rowToOrg(row) : undefined;
