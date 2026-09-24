@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/Button";
 
-type CheckoutState = "idle" | "verifying" | "pending" | "ready" | "invalid";
+type CheckoutState = "idle" | "verifying" | "pending" | "ready" | "invalid" | "unlinked";
 
 type WelcomeContentProps = {
   sessionId?: string;
@@ -62,11 +62,14 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
         return;
       }
 
-      setState("pending");
       attempts += 1;
-      if (attempts < MAX_POLL_ATTEMPTS) {
-        timer = setTimeout(checkStatus, POLL_INTERVAL_MS);
+      if (attempts >= MAX_POLL_ATTEMPTS) {
+        setState("unlinked");
+        return;
       }
+
+      setState("pending");
+      timer = setTimeout(checkStatus, POLL_INTERVAL_MS);
     }
 
     void checkStatus();
@@ -90,6 +93,15 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
             <p className="text-sm font-medium text-gray-900">We couldn&apos;t verify this checkout</p>
             <p className="mt-1 text-sm leading-relaxed text-coop-muted">
               If you just paid, check your email for Activate your account, or contact support.
+            </p>
+          </div>
+        ) : null}
+
+        {state === "unlinked" ? (
+          <div className="border-l-2 border-l-red-500 pl-4">
+            <p className="text-sm font-medium text-gray-900">Your payment was received</p>
+            <p className="mt-1 text-sm leading-relaxed text-coop-muted">
+              This workspace is not linked to that payment yet. Contact support and we&apos;ll attach it.
             </p>
           </div>
         ) : null}
@@ -129,7 +141,7 @@ export function WelcomeContent({ sessionId, fallbackAdminPortalLoginUrl }: Welco
           </p>
         ) : null}
 
-        {state === "invalid" ? (
+        {state === "invalid" || state === "unlinked" ? (
           <Button href="/demo" variant="primary" className="w-full">
             Contact support
           </Button>

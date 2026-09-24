@@ -46,18 +46,30 @@ export async function provisionOrgFromCheckout(
     if (!org) {
       throw new Error(`Upgrade target org not found: ${input.existingOrgId}`);
     }
-    await orgStore.setOrganizationPlan(org.id, "pro");
-    await orgStore.updateOrganizationBilling(org.id, billing);
-    await userStore.backfillOrgUsersUsageTier(org.id, billing.usageTier);
-    await emailService.sendProUpgradeWelcome({
-      to: input.adminEmail,
-      orgName: org.name,
-      adminPortalUrl: loginUrl
-    });
-    return { orgId: org.id, orgName: org.name };
+    return linkPaidCheckoutToExistingOrg(org, orgStore, userStore, emailService, input, billing, loginUrl);
   }
 
   const existing = await orgStore.findOrganizationByStripeCustomerId(input.stripeCustomerId);
+  if (!existing) {
+    const freeOrg = await findFreeOrgForCheckoutAdmin(
+      orgStore,
+      userStore,
+      input.adminEmail,
+      input.stripeCustomerId
+    );
+    if (freeOrg) {
+      return linkPaidCheckoutToExistingOrg(
+        freeOrg,
+        orgStore,
+        userStore,
+        emailService,
+        input,
+        billing,
+        loginUrl
+      );
+    }
+  }
+
   const org = existing ?? (await materializeCheckoutOrg(orgStore, input, billing));
   if (existing) {
     await orgStore.updateOrganizationBilling(existing.id, billing);
@@ -72,14 +84,79 @@ export async function provisionOrgFromCheckout(
     authIdentityStore
   );
 
-  await emailService.sendWelcome({
-    to: input.adminEmail,
-    orgName: org.name,
-    adminPortalUrl: loginUrl,
-    activateAccountUrl
-  });
+  await sendCheckoutEmail("welcome email", org.id, () =>
+    emailService.sendWelcome({
+      to: input.adminEmail,
+      orgName: org.name,
+      adminPortalUrl: loginUrl,
+      activateAccountUrl
+    })
+  );
 
   return { orgId: org.id, orgName: org.name };
+}
+
+/**
+ * Attach a paid subscription to a workspace that already exists.
+ * Email failure must not undo the plan and Stripe link.
+ */
+async function linkPaidCheckoutToExistingOrg(
+  org: Organization,
+  orgStore: OrgStore,
+  userStore: UserStore,
+  emailService: EmailService,
+  input: ProvisionInput,
+  billing: CheckoutBillingPatch,
+  loginUrl: string
+): Promise<ProvisionResult> {
+  await orgStore.setOrganizationPlan(org.id, "pro");
+  await orgStore.updateOrganizationBilling(org.id, billing);
+  await userStore.backfillOrgUsersUsageTier(org.id, billing.usageTier);
+  await sendCheckoutEmail("pro upgrade email", org.id, () =>
+    emailService.sendProUpgradeWelcome({
+      to: input.adminEmail,
+      orgName: org.name,
+      adminPortalUrl: loginUrl
+    })
+  );
+  return { orgId: org.id, orgName: org.name };
+}
+
+async function findFreeOrgForCheckoutAdmin(
+  orgStore: OrgStore,
+  userStore: UserStore,
+  adminEmail: string,
+  stripeCustomerId: string
+): Promise<Organization | undefined> {
+  const user = await userStore.findActiveUserByEmail(adminEmail);
+  if (!user) {
+    return undefined;
+  }
+  const org = await orgStore.getOrganization(user.orgId);
+  if (!org || org.plan !== "free") {
+    return undefined;
+  }
+  if (typeof orgStore.getOrganizationBilling === "function") {
+    const billing = await orgStore.getOrganizationBilling(org.id);
+    const linked = billing?.stripeCustomerId?.trim();
+    if (linked && linked !== stripeCustomerId) {
+      return undefined;
+    }
+  }
+  return org;
+}
+
+async function sendCheckoutEmail(
+  label: string,
+  orgId: string,
+  send: () => Promise<void>
+): Promise<void> {
+  try {
+    await send();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[billing] ${label} failed after org was saved`, { orgId, message });
+  }
 }
 
 type CheckoutBillingPatch = {

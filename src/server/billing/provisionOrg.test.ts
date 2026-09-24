@@ -87,6 +87,12 @@ test("new Pro checkout mints activate-account invite and emails it", async () =>
 test("existing checkout email user gets sign-in welcome without activate link", async () => {
   const orgStore = {
     findOrganizationByStripeCustomerId: async () => undefined,
+    getOrganization: async () => ({
+      id: "other-org",
+      name: "Other",
+      plan: "pro" as const,
+      createdAt: new Date()
+    }),
     createOrganization: async (name: string) => ({
       id: "org-2",
       name,
@@ -402,4 +408,119 @@ test("duplicate stripe customer insert returns the existing org", async () => {
   });
   assert.equal(inserts, 1);
   assert.equal(org.id, "org-existing");
+});
+
+test("paid checkout attaches an existing free org instead of creating another", async () => {
+  let plan: string | undefined;
+  let billing: { stripeCustomerId?: string; billingStatus?: string; seatCount?: number; usageTier?: string } | undefined;
+  let created = 0;
+  const orgStore = {
+    findOrganizationByStripeCustomerId: async () => undefined,
+    getOrganization: async () => ({
+      id: "org-free",
+      name: "jonathanaraney",
+      plan: "free" as const,
+      createdAt: new Date()
+    }),
+    setOrganizationPlan: async (_orgId: string, next: string) => {
+      plan = next;
+    },
+    updateOrganizationBilling: async (
+      _orgId: string,
+      patch: { stripeCustomerId?: string; billingStatus?: string; seatCount?: number; usageTier?: string }
+    ) => {
+      billing = patch;
+    },
+    createOrganization: async () => {
+      created += 1;
+      throw new Error("should not create a second org");
+    }
+  };
+  const userStore = {
+    findActiveUserByEmail: async () => ({
+      id: "user-free",
+      orgId: "org-free",
+      email: "buyer@example.com",
+      role: "admin" as const,
+      createdAt: new Date()
+    }),
+    backfillOrgUsersUsageTier: async () => 1,
+    createUser: async () => {
+      throw new Error("should not create a user");
+    }
+  };
+
+  const result = await provisionOrgFromCheckout(
+    orgStore as never,
+    userStore as never,
+    { sendProUpgradeWelcome: async () => undefined } as never,
+    billingConfig as never,
+    {
+      orgName: "jonathanaraney",
+      adminEmail: "buyer@example.com",
+      seatCount: 1,
+      stripeCustomerId: "cus_free_attach",
+      stripeSubscriptionId: "sub_free_attach"
+    }
+  );
+
+  assert.equal(result.orgId, "org-free");
+  assert.equal(plan, "pro");
+  assert.equal(billing?.stripeCustomerId, "cus_free_attach");
+  assert.equal(billing?.billingStatus, "active");
+  assert.equal(billing?.seatCount, 1);
+  assert.equal(billing?.usageTier, "pro");
+  assert.equal(created, 0);
+});
+
+test("email failure after the org is saved still leaves the org pro and linked", async () => {
+  let plan: string | undefined;
+  let billing: { stripeCustomerId?: string; stripeSubscriptionId?: string; billingStatus?: string } | undefined;
+  const orgStore = {
+    getOrganization: async () => ({
+      id: "org-free",
+      name: "jonathanaraney",
+      plan: "free" as const,
+      createdAt: new Date()
+    }),
+    setOrganizationPlan: async (_orgId: string, next: string) => {
+      plan = next;
+    },
+    updateOrganizationBilling: async (
+      _orgId: string,
+      patch: { stripeCustomerId?: string; stripeSubscriptionId?: string; billingStatus?: string }
+    ) => {
+      billing = patch;
+    }
+  };
+  const userStore = {
+    backfillOrgUsersUsageTier: async () => 1
+  };
+  const emailService = {
+    sendProUpgradeWelcome: async () => {
+      throw new Error("resend down");
+    }
+  };
+
+  const result = await provisionOrgFromCheckout(
+    orgStore as never,
+    userStore as never,
+    emailService as never,
+    billingConfig as never,
+    {
+      orgName: "jonathanaraney",
+      adminEmail: "buyer@example.com",
+      seatCount: 1,
+      stripeCustomerId: "cus_email_fail",
+      stripeSubscriptionId: "sub_email_fail",
+      existingOrgId: "org-free",
+      upgrade: true
+    }
+  );
+
+  assert.equal(result.orgId, "org-free");
+  assert.equal(plan, "pro");
+  assert.equal(billing?.stripeCustomerId, "cus_email_fail");
+  assert.equal(billing?.stripeSubscriptionId, "sub_email_fail");
+  assert.equal(billing?.billingStatus, "active");
 });

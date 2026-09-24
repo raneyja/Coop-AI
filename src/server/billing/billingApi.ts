@@ -11,7 +11,11 @@ import { loadBillingConfig, type BillingConfig } from "./billingConfig";
 import { adminPortalFreshLoginUrl } from "./adminPortalUrl";
 import { StripeService, isTerminalStripeSubscriptionStatus, subscriptionAllowsPaidMutation } from "./stripeService";
 import { handleFreeSignupApiRequest } from "../freeSignupApi";
-import { provisionOrgFromCheckout } from "./provisionOrg";
+import {
+  CheckoutFulfillmentIncompleteError,
+  fulfillPaidCheckoutSession,
+  readStripeCustomerId
+} from "./fulfillCheckout";
 import {
   displayPlanName,
   parseUsageTier,
@@ -316,10 +320,9 @@ async function handleCheckoutStatus(
       billingConfig.adminPortalUrl,
       checkoutEmail ? { email: checkoutEmail } : undefined
     );
-    const paid =
-      session.payment_status === "paid" ||
-      session.payment_status === "no_payment_required" ||
-      session.status === "complete";
+    const paymentSettled =
+      session.payment_status === "paid" || session.payment_status === "no_payment_required";
+    const paid = paymentSettled || session.status === "complete";
 
     if (!paid || session.status === "expired") {
       writeJson(response, 200, {
@@ -332,23 +335,41 @@ async function handleCheckoutStatus(
 
     const customerId = readStripeCustomerId(session.customer);
     const orgName = metadata.org_name?.trim() || undefined;
-
-    if (!customerId || !deps.orgStore) {
+    const pending = () => {
       writeJson(response, 200, {
         status: "pending",
         orgName,
         adminPortalLoginUrl: loginUrl
       });
+    };
+
+    if (!deps.orgStore) {
+      pending();
       return true;
     }
 
-    const org = await deps.orgStore.findOrganizationByStripeCustomerId(customerId);
+    let org = await findReadyCheckoutOrg(deps.orgStore, customerId);
+    if (!org && paymentSettled && deps.userStore && deps.emailService) {
+      try {
+        await fulfillPaidCheckoutSession(session, {
+          orgStore: deps.orgStore,
+          userStore: deps.userStore,
+          emailService: deps.emailService,
+          authTokenStore: deps.authTokenStore,
+          authIdentityStore: deps.authIdentityStore
+        });
+      } catch (error) {
+        if (error instanceof CheckoutFulfillmentIncompleteError) {
+          pending();
+          return true;
+        }
+        throw error;
+      }
+      org = await findReadyCheckoutOrg(deps.orgStore, customerId);
+    }
+
     if (!org) {
-      writeJson(response, 200, {
-        status: "pending",
-        orgName,
-        adminPortalLoginUrl: loginUrl
-      });
+      pending();
       return true;
     }
 
@@ -725,62 +746,39 @@ async function handleStripeWebhook(
 
 async function handleCheckoutCompleted(event: Record<string, unknown>, deps: BillingApiDeps): Promise<void> {
   const session = asRecord(asRecord(event.data).object);
-  const customerId = String(session.customer ?? "");
-  const subscriptionId = String(session.subscription ?? "");
-  const metadata = asRecord(session.metadata);
-  const orgName = String(metadata.org_name ?? session.client_reference_id ?? "New Coop Org").trim();
-  const adminEmail = String(metadata.admin_email ?? session.customer_email ?? "").trim();
-  const seatCount = Math.max(1, Number(metadata.seat_count ?? 1) || 1);
-  const existingOrgId = String(metadata.existing_org_id ?? "").trim();
-  const upgrade = String(metadata.upgrade ?? "")
-    .trim()
-    .toLowerCase() === "true";
-  const usageTier = parseUsageTier(String(metadata.usage_tier ?? "")) ?? "pro";
-  const stripePriceId = String(metadata.stripe_price_id ?? "").trim() || undefined;
-  const googleSub = String(metadata.google_sub ?? "").trim() || undefined;
-
-  if (!customerId || !adminEmail) {
-    console.warn("[stripe] checkout.session.completed skipped: missing customer or admin email", {
-      customerId: customerId || undefined,
-      adminEmail: adminEmail || undefined,
-      sessionId: String(session.id ?? "")
-    });
-    return;
-  }
-
-  const provisioned = await provisionOrgFromCheckout(
-    deps.orgStore!,
-    deps.userStore!,
-    deps.emailService!,
-    loadBillingConfig(),
-    {
-      orgName,
-      adminEmail,
-      seatCount,
-      stripeCustomerId: customerId,
-      stripeSubscriptionId: subscriptionId,
-      existingOrgId: existingOrgId || undefined,
-      upgrade,
-      usageTier,
-      stripePriceId,
-      googleSub
-    },
-    deps.authTokenStore,
-    deps.authIdentityStore
-  );
+  const fulfilled = await fulfillPaidCheckoutSession(session, {
+    orgStore: deps.orgStore!,
+    userStore: deps.userStore!,
+    emailService: deps.emailService!,
+    authTokenStore: deps.authTokenStore,
+    authIdentityStore: deps.authIdentityStore
+  });
 
   await deps.auditLogger?.record({
-    orgId: provisioned.orgId,
+    orgId: fulfilled.orgId,
     action: "billing.checkout.completed",
-    metadata: { orgName, adminEmail, seatCount, stripeCustomerId: customerId, existingOrgId, upgrade }
+    metadata: {
+      orgName: fulfilled.requestedOrgName,
+      adminEmail: fulfilled.adminEmail,
+      seatCount: fulfilled.seatCount,
+      stripeCustomerId: fulfilled.stripeCustomerId,
+      existingOrgId: fulfilled.existingOrgId,
+      upgrade: fulfilled.upgrade
+    }
   });
 }
 
 async function handleSubscriptionChange(event: Record<string, unknown>, deps: BillingApiDeps): Promise<void> {
   const object = asRecord(asRecord(event.data).object);
-  const customerId = String(object.customer ?? "");
+  const customerId = readStripeCustomerId(object.customer);
   const status = String(object.status ?? "");
-  const org = customerId ? await deps.orgStore!.findOrganizationByStripeCustomerId(customerId) : undefined;
+  let org = customerId ? await deps.orgStore!.findOrganizationByStripeCustomerId(customerId) : undefined;
+  if (!org) {
+    const existingOrgId = String(asRecord(object.metadata).existing_org_id ?? "").trim();
+    if (existingOrgId) {
+      org = await deps.orgStore!.getOrganization(existingOrgId);
+    }
+  }
   if (!org) return;
 
   const config = loadBillingConfig();
@@ -796,9 +794,12 @@ async function handleSubscriptionChange(event: Record<string, unknown>, deps: Bi
     ? stripePriceIdForUsageTier(usageTier, stripeUsagePriceIds(config)) ?? items[0]?.priceId
     : items[0]?.priceId ?? readStripePriceIdFromSubscription(object);
 
+  const linkedCustomer = customerId.startsWith("cus_") ? { stripeCustomerId: customerId } : {};
+
   if (status === "active" || status === "trialing") {
     await deps.orgStore!.setOrganizationPlan(org.id, "pro");
     await deps.orgStore!.updateOrganizationBilling(org.id, {
+      ...linkedCustomer,
       billingStatus: "active",
       stripeSubscriptionId: String(object.id ?? ""),
       seatCount: quantity,
@@ -811,6 +812,7 @@ async function handleSubscriptionChange(event: Record<string, unknown>, deps: Bi
     // Drop plan + purchased inventory + per-user SKUs so Max/Pro+ cannot linger.
     await deps.orgStore!.setOrganizationPlan(org.id, "free");
     await deps.orgStore!.updateOrganizationBilling(org.id, {
+      ...linkedCustomer,
       billingStatus: status === "incomplete_expired" ? "canceled" : status,
       usageTier: null,
       stripePriceId: null,
@@ -823,7 +825,7 @@ async function handleSubscriptionChange(event: Record<string, unknown>, deps: Bi
 
 async function handleInvoicePaymentFailed(event: Record<string, unknown>, deps: BillingApiDeps): Promise<void> {
   const object = asRecord(asRecord(event.data).object);
-  const customerId = String(object.customer ?? "");
+  const customerId = readStripeCustomerId(object.customer);
   const org = customerId ? await deps.orgStore!.findOrganizationByStripeCustomerId(customerId) : undefined;
   if (!org) return;
 
@@ -1013,14 +1015,22 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function readStripeCustomerId(customer: unknown): string {
-  if (typeof customer === "string") {
-    return customer;
+async function findReadyCheckoutOrg(
+  orgStore: OrgStore,
+  customerId: string
+): Promise<{ id: string; name: string } | undefined> {
+  if (!customerId.startsWith("cus_")) {
+    return undefined;
   }
-  if (typeof customer === "object" && customer !== null && "id" in customer) {
-    return String((customer as { id?: unknown }).id ?? "");
+  const org = await orgStore.findOrganizationByStripeCustomerId(customerId);
+  if (!org || org.plan !== "pro") {
+    return undefined;
   }
-  return "";
+  const billing = await orgStore.getOrganizationBilling(org.id);
+  if (!billing?.stripeCustomerId || billing.stripeCustomerId !== customerId) {
+    return undefined;
+  }
+  return org;
 }
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {

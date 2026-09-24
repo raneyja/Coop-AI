@@ -865,6 +865,225 @@ void (async () => {
     assert.equal(store.createOrgCalls, 0);
   }
 
+  {
+    const store = memoryCheckoutStore();
+    const pool = freshClaimPool();
+    const event = checkoutCompletedEvent("evt_expanded_customer");
+    const session = (event.data as { object: Record<string, unknown> }).object;
+    session.customer = { id: "cus_expanded" };
+    session.subscription = { id: "sub_expanded" };
+    const response = await postStripeWebhook(event, store, pool);
+    assert.equal(response.statusCode, 200);
+    assert.equal(store.orgs.length, 1);
+    assert.equal(store.orgs[0]?.stripeCustomerId, "cus_expanded");
+    assert.equal(store.orgs[0]?.stripeSubscriptionId, "sub_expanded");
+    assert.notEqual(store.orgs[0]?.stripeCustomerId, "[object Object]");
+  }
+
+  {
+    const store = memoryCheckoutStore();
+    const pool = freshClaimPool();
+    const event = checkoutCompletedEvent("evt_missing_customer");
+    const session = (event.data as { object: Record<string, unknown> }).object;
+    delete session.customer;
+    const first = await postStripeWebhook(event, store, pool);
+    const second = await postStripeWebhook(event, store, pool);
+    assert.equal(first.statusCode, 500);
+    assert.equal(JSON.parse(first.body ?? "{}").duplicate, undefined);
+    assert.equal(second.statusCode, 500);
+    assert.equal(JSON.parse(second.body ?? "{}").duplicate, undefined);
+    assert.equal(store.orgs.length, 0);
+    assert.equal(store.createOrgCalls, 0);
+  }
+
+  {
+    const orgs = [
+      {
+        id: "org-free",
+        name: "Acme",
+        plan: "free" as "free" | "pro",
+        stripeCustomerId: undefined as string | undefined,
+        stripeSubscriptionId: undefined as string | undefined,
+        billingStatus: "none",
+        seatCount: 1,
+        usageTier: undefined as string | undefined
+      }
+    ];
+    let upgradeEmails = 0;
+    let createOrgCalls = 0;
+    const orgStore = {
+      findOrganizationByStripeCustomerId: async (customerId: string) =>
+        orgs.find((org) => org.stripeCustomerId === customerId),
+      getOrganization: async (orgId: string) => orgs.find((org) => org.id === orgId),
+      getOrganizationBilling: async (orgId: string) => {
+        const org = orgs.find((row) => row.id === orgId);
+        if (!org) return undefined;
+        return {
+          stripeCustomerId: org.stripeCustomerId,
+          stripeSubscriptionId: org.stripeSubscriptionId,
+          seatCount: org.seatCount,
+          billingStatus: org.billingStatus,
+          usageTier: org.usageTier
+        };
+      },
+      setOrganizationPlan: async (orgId: string, plan: "free" | "pro") => {
+        const org = orgs.find((row) => row.id === orgId);
+        if (org) org.plan = plan;
+      },
+      updateOrganizationBilling: async (orgId: string, patch: Record<string, unknown>) => {
+        const org = orgs.find((row) => row.id === orgId);
+        if (!org) return;
+        if (typeof patch.stripeCustomerId === "string") org.stripeCustomerId = patch.stripeCustomerId;
+        if (typeof patch.stripeSubscriptionId === "string") org.stripeSubscriptionId = patch.stripeSubscriptionId;
+        if (typeof patch.billingStatus === "string") org.billingStatus = patch.billingStatus;
+        if (typeof patch.seatCount === "number") org.seatCount = patch.seatCount;
+        if (typeof patch.usageTier === "string") org.usageTier = patch.usageTier;
+      },
+      createOrganization: async () => {
+        createOrgCalls += 1;
+        throw new Error("should not create a second org");
+      },
+      createOrganizationForCheckout: async () => {
+        createOrgCalls += 1;
+        throw new Error("should not create a second org");
+      }
+    } as unknown as OrgStore;
+    const stripe = {
+      isConfigured: () => true,
+      retrieveCheckoutSession: async () => ({
+        id: "cs_paid_existing",
+        payment_status: "paid",
+        status: "complete",
+        customer: "cus_paid",
+        subscription: "sub_paid",
+        customer_email: "buyer@example.com",
+        metadata: {
+          admin_email: "buyer@example.com",
+          org_name: "Acme",
+          existing_org_id: "org-free",
+          upgrade: "true",
+          seat_count: "1",
+          usage_tier: "pro",
+          stripe_price_id: "price_pro"
+        }
+      })
+    } as unknown as StripeService;
+    const deps: BillingApiDeps = {
+      serverConfig: { requireApiAuth: false } as ServerConfig,
+      stripeService: stripe,
+      orgStore,
+      userStore: {
+        findActiveUserByEmail: async () => ({
+          id: "user-free",
+          orgId: "org-free",
+          email: "buyer@example.com"
+        }),
+        backfillOrgUsersUsageTier: async () => 1
+      } as unknown as BillingApiDeps["userStore"],
+      emailService: {
+        sendProUpgradeWelcome: async () => {
+          upgradeEmails += 1;
+        },
+        sendWelcome: async () => {
+          throw new Error("existing workspace should get the upgrade email");
+        }
+      } as unknown as BillingApiDeps["emailService"]
+    };
+    const poll = async () => {
+      const response = mockResponse();
+      await handleBillingApiRequest(
+        {
+          method: "GET",
+          pathname: "/v1/billing/checkout-status",
+          query: new URLSearchParams({ session_id: "cs_paid_existing" }),
+          headers: {},
+          body: {},
+          rawBody: Buffer.from("")
+        },
+        response,
+        deps
+      );
+      return response;
+    };
+    const first = await poll();
+    const second = await poll();
+    assert.equal(first.statusCode, 200);
+    assert.equal(JSON.parse(first.body ?? "{}").status, "ready");
+    assert.equal(second.statusCode, 200);
+    assert.equal(JSON.parse(second.body ?? "{}").status, "ready");
+    assert.equal(orgs.length, 1);
+    assert.equal(orgs[0]?.plan, "pro");
+    assert.equal(orgs[0]?.stripeCustomerId, "cus_paid");
+    assert.equal(orgs[0]?.stripeSubscriptionId, "sub_paid");
+    assert.equal(orgs[0]?.billingStatus, "active");
+    assert.equal(orgs[0]?.seatCount, 1);
+    assert.equal(orgs[0]?.usageTier, "pro");
+    assert.equal(createOrgCalls, 0);
+    assert.equal(upgradeEmails, 1);
+  }
+
+  {
+    const billingPatches: Array<Record<string, unknown>> = [];
+    let planSet: string | undefined;
+    let updatedOrgId: string | undefined;
+    const stripe = {
+      isConfigured: () => true,
+      verifyWebhookSignature: () => ({
+        id: "evt_link_existing",
+        type: "customer.subscription.updated",
+        data: {
+          object: {
+            id: "sub_linked",
+            customer: { id: "cus_linked" },
+            status: "active",
+            metadata: { existing_org_id: "org-free" },
+            items: { data: [{ quantity: 1, price: { id: "price_pro" } }] }
+          }
+        }
+      })
+    } as unknown as StripeService;
+    const response = mockResponse();
+    await handleBillingApiRequest(
+      {
+        method: "POST",
+        pathname: "/webhooks/stripe",
+        headers: { "stripe-signature": "t=1,v1=test" },
+        body: {},
+        rawBody: Buffer.from("{}")
+      },
+      response,
+      {
+        serverConfig: { requireApiAuth: false } as ServerConfig,
+        stripeService: stripe,
+        pool: freshClaimPool(),
+        userStore: {} as never,
+        emailService: {} as never,
+        orgStore: {
+          findOrganizationByStripeCustomerId: async () => undefined,
+          getOrganization: async (orgId: string) =>
+            orgId === "org-free"
+              ? { id: "org-free", name: "Acme", plan: "free" as const, createdAt: new Date() }
+              : undefined,
+          setOrganizationPlan: async (orgId: string, plan: string) => {
+            updatedOrgId = orgId;
+            planSet = plan;
+          },
+          updateOrganizationBilling: async (orgId: string, patch: Record<string, unknown>) => {
+            updatedOrgId = orgId;
+            billingPatches.push(patch);
+          }
+        } as unknown as OrgStore
+      }
+    );
+    assert.equal(response.statusCode, 200);
+    assert.equal(updatedOrgId, "org-free");
+    assert.equal(planSet, "pro");
+    assert.equal(billingPatches[0]?.stripeCustomerId, "cus_linked");
+    assert.equal(billingPatches[0]?.stripeSubscriptionId, "sub_linked");
+    assert.equal(billingPatches[0]?.billingStatus, "active");
+    assert.notEqual(billingPatches[0]?.stripeCustomerId, "[object Object]");
+  }
+
   console.log("billingApi.test.ts: ok");
 })();
 
@@ -889,7 +1108,7 @@ function checkoutCompletedEvent(id: string): Record<string, unknown> {
 }
 
 function memoryCheckoutStore(): {
-  orgs: Array<{ id: string; name: string; stripeCustomerId?: string }>;
+  orgs: Array<{ id: string; name: string; stripeCustomerId?: string; stripeSubscriptionId?: string }>;
   users: Array<{ id: string; orgId: string; email: string }>;
   createOrgCalls: number;
   failNextOrgCreates: (count: number) => void;
@@ -897,7 +1116,7 @@ function memoryCheckoutStore(): {
   userStore: BillingApiDeps["userStore"];
   emailService: BillingApiDeps["emailService"];
 } {
-  const orgs: Array<{ id: string; name: string; stripeCustomerId?: string }> = [];
+  const orgs: Array<{ id: string; name: string; stripeCustomerId?: string; stripeSubscriptionId?: string }> = [];
   const users: Array<{ id: string; orgId: string; email: string }> = [];
   let createOrgCalls = 0;
   let failCreates = 0;
@@ -925,11 +1144,15 @@ function memoryCheckoutStore(): {
       },
       updateOrganizationBilling: async (
         orgId: string,
-        patch: { stripeCustomerId?: string | null }
+        patch: { stripeCustomerId?: string | null; stripeSubscriptionId?: string | null }
       ) => {
         const org = orgs.find((row) => row.id === orgId);
-        if (org && patch.stripeCustomerId) {
+        if (!org) return;
+        if (patch.stripeCustomerId) {
           org.stripeCustomerId = patch.stripeCustomerId;
+        }
+        if (patch.stripeSubscriptionId) {
+          org.stripeSubscriptionId = patch.stripeSubscriptionId;
         }
       }
     } as unknown as OrgStore,
