@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Extension icon uses the segmented Coop mark
+
 ## 0.1.0
 
 First Marketplace-ready package of the CoopAI VS Code extension.
