@@ -11,7 +11,8 @@ import { isFullyUsable } from "@/lib/indexingProgress";
 import { IntegrationsStep } from "./IntegrationsStep";
 import { OnboardingPeopleStep } from "./OnboardingPeopleStep";
 import { OnboardingScopeStep } from "./OnboardingScopeStep";
-import { planCapabilities } from "@/lib/planCapabilities";
+import { onboardingStepsForPlan, type OnboardingStepId } from "@/lib/onboardingSteps";
+import { SetupStepper } from "./SetupStepper";
 
 type OnboardingWizardProps = {
   step: number;
@@ -20,40 +21,27 @@ type OnboardingWizardProps = {
   onDismiss: () => void;
 };
 
-type StepDef = {
-  id: string;
-  label: string;
-  include: (plan: string) => boolean;
-};
+const EXTENSION_URL = "https://marketplace.visualstudio.com/search?term=coopai&target=VSCode";
 
-const ONBOARDING_STEP_DEFS: StepDef[] = [
-  { id: "welcome", label: "Welcome", include: () => true },
-  { id: "tools", label: "Connect", include: () => true },
-  {
-    id: "indexing",
-    label: "Index repos",
-    include: (plan) => planCapabilities(plan).showOnboardingIndexingStep
-  },
-  {
-    id: "scope",
-    label: "Access",
-    include: (plan) => planCapabilities(plan).showScopeStep
-  },
-  {
-    id: "team",
-    label: "People",
-    include: (plan) => planCapabilities(plan).showOnboardingTeamStep
-  },
-  {
-    id: "extension",
-    label: "Extension",
-    include: (plan) => planCapabilities(plan).showOnboardingExtensionStep
-  },
-  { id: "done", label: "Done", include: () => true }
-];
-
-function stepsForPlan(plan: string) {
-  return ONBOARDING_STEP_DEFS.filter((entry) => entry.include(plan));
+function stepDetail(id: OnboardingStepId, isFreePlan: boolean): string {
+  switch (id) {
+    case "tools":
+      return isFreePlan
+        ? "Connect GitHub, GitLab, or Bitbucket."
+        : "Connect a code host. Collaboration tools are optional.";
+    case "indexing":
+      return isFreePlan
+        ? "Deep-Index up to 3 repos. Usable repos are available to everyone on this account."
+        : "Deep-Index the repos this account should use. Usable repos are available to everyone.";
+    case "scope":
+      return "Choose what Coop can search in connected collaboration tools.";
+    case "team":
+      return "Invite teammates. They can open Usable repos as soon as they sign in.";
+    case "extension":
+      return "Install the VS Code extension and sign in with this account.";
+    default:
+      return "";
+  }
 }
 
 function collaborationConnected(integrations: IntegrationStatus[]): boolean {
@@ -83,7 +71,7 @@ export function OnboardingWizard({
   } = useIntegrations();
 
   const isFreePlan = orgPlan === "free";
-  const steps = stepsForPlan(orgPlan);
+  const steps = onboardingStepsForPlan(orgPlan);
   const currentStep = steps[step] ?? steps[0];
   const currentStepId = currentStep.id;
   const [mounted, setMounted] = useState(false);
@@ -193,7 +181,7 @@ export function OnboardingWizard({
       />
 
       <div
-        className={`relative z-10 flex max-h-[min(720px,90vh)] w-full flex-col overflow-hidden rounded-lg border border-coop-border bg-coop-surface shadow-2xl shadow-black/40 ${
+        className={`relative z-10 flex max-h-[min(720px,90vh)] w-full flex-col overflow-hidden rounded-xl border border-coop-border bg-coop-surface shadow-2xl shadow-black/50 ${
           wideStep ? "max-w-3xl" : "max-w-2xl"
         }`}
         onClick={(event) => event.stopPropagation()}
@@ -207,7 +195,7 @@ export function OnboardingWizard({
               </h2>
             </div>
             <div className="flex shrink-0 items-center gap-3">
-              <p className="font-mono text-xs text-coop-muted">
+              <p className="text-xs tabular-nums tracking-wide text-coop-muted">
                 Step {Math.min(step + 1, steps.length)} of {steps.length}
               </p>
               <button
@@ -227,72 +215,45 @@ export function OnboardingWizard({
               </button>
             </div>
           </div>
-          <nav className="mt-4 flex gap-1" aria-label="Setup progress">
-            {steps.map((entry, index) => {
-              const active = index === step;
-              const complete = index < step;
-              return (
-                <div key={entry.id} className="flex min-w-0 flex-1 items-center gap-2">
-                  <span
-                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium ${
-                      active
-                        ? "bg-coop-index text-coop-dark"
-                        : complete
-                          ? "bg-white/15 text-white"
-                          : "bg-white/5 text-coop-muted"
-                    }`}
-                  >
-                    {complete ? "✓" : index + 1}
-                  </span>
-                  <span
-                    className={`hidden truncate text-xs sm:inline ${active ? "text-white" : "text-coop-muted"}`}
-                  >
-                    {entry.label}
-                  </span>
-                  {index < steps.length - 1 ? (
-                    <span className="mx-1 hidden h-px flex-1 bg-coop-border/60 sm:block" aria-hidden />
-                  ) : null}
-                </div>
-              );
-            })}
-          </nav>
+          <SetupStepper steps={steps} step={step} />
         </header>
 
         <main className="flex-1 overflow-y-auto px-5 py-6 sm:px-6">
           {currentStepId === "welcome" && (
             <div className="space-y-5">
               <div>
-                <h3 className="text-lg font-semibold text-white">Welcome to CoopAI</h3>
+                <h3 className="text-lg font-semibold tracking-tight text-white">Welcome to Coop</h3>
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">
                   {isFreePlan
-                    ? "Connect your personal developer tools once, then keep coding in the Coop VS Code extension with your own API key."
-                    : "Connect your tools once. You have admin access. Invite teammates later if you add seats."}
+                    ? "Connect a code host, Deep-Index the repos you want, then keep working in the VS Code extension."
+                    : "Connect your tools and Deep-Index the repos this account should use. Teammates get those repos automatically."}
                 </p>
               </div>
-              <ul className="space-y-2 text-sm text-coop-muted">
-                {isFreePlan ? (
-                  <>
-                    <li>1. Connect at least one code host (GitHub, GitLab, or Bitbucket)</li>
-                    <li>2. Deep-Index up to 3 of your repos</li>
-                    <li>3. Install the VS Code extension and sign in</li>
-                  </>
-                ) : (
-                  <>
-                    <li>1. Connect at least one code host (collaboration tools optional)</li>
-                    <li>2. Choose repos to Deep-Index</li>
-                    <li>3. Set collaboration access scope</li>
-                    <li>4. Choose who can open repos. Invite others later if you add seats.</li>
-                  </>
-                )}
-              </ul>
+              <ol className="space-y-3">
+                {steps
+                  .filter((entry) => entry.id !== "welcome" && entry.id !== "done")
+                  .map((entry, index) => (
+                    <li key={entry.id} className="flex gap-3">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-coop-border/80 text-[11px] font-medium text-coop-muted">
+                        {index + 1}
+                      </span>
+                      <div className="min-w-0 pt-0.5">
+                        <p className="text-sm font-medium text-white">{entry.label}</p>
+                        <p className="mt-0.5 text-sm leading-relaxed text-coop-muted">
+                          {stepDetail(entry.id, isFreePlan)}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+              </ol>
             </div>
           )}
 
           {currentStepId === "tools" && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <h3 className="text-lg font-semibold text-white">Connect tools</h3>
-                <p className="mt-2 text-sm text-coop-muted">
+                <h3 className="text-lg font-semibold tracking-tight text-white">Connect tools</h3>
+                <p className="mt-2 text-sm leading-relaxed text-coop-muted">
                   {isFreePlan
                     ? "Connect at least one code host. Additional hosts are optional."
                     : "Connect at least one code host. Collaboration tools are optional."}
@@ -315,11 +276,12 @@ export function OnboardingWizard({
           )}
 
           {currentStepId === "scope" && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <h3 className="text-lg font-semibold text-white">Manage access</h3>
-                <p className="mt-2 text-sm text-coop-muted">
-                  Set what Coop can search in each connected tool.
+                <h3 className="text-lg font-semibold tracking-tight text-white">Set search scope</h3>
+                <p className="mt-2 text-sm leading-relaxed text-coop-muted">
+                  Choose what Coop can search in each connected collaboration tool. You can change this
+                  later.
                 </p>
               </div>
               <OnboardingScopeStep
@@ -332,64 +294,67 @@ export function OnboardingWizard({
           {currentStepId === "team" && <OnboardingPeopleStep memberCount={memberCount} />}
 
           {currentStepId === "indexing" && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <h3 className="text-lg font-semibold text-white">Choose repos to Deep-Index</h3>
+                <h3 className="text-lg font-semibold tracking-tight text-white">
+                  Choose repos to Deep-Index
+                </h3>
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">
-                  {isFreePlan ? (
-                    <>
-                      Open{" "}
-                      <Link href="/indexing" className="admin-link">
-                        Indexing
-                      </Link>{" "}
-                      and configure a code host to choose repos to Deep-Index. Wait until at least one
-                      repo shows <span className="text-white">Usable</span> (browse verified). Free plan
-                      allows up to 3 repos. Upgrade to{" "}
-                      <Link href="/billing" className="admin-link">
-                        Pro
-                      </Link>{" "}
-                      for unlimited indexing.
-                    </>
-                  ) : (
-                    <>
-                      Open{" "}
-                      <Link href="/indexing" className="admin-link">
-                        Indexing
-                      </Link>{" "}
-                      and configure GitHub, GitLab, or Bitbucket to choose repos to Deep-Index.{" "}
-                      <span className="text-white">Usable</span> means the repo is ready to open — next
-                      you&apos;ll choose who gets access.
-                    </>
-                  )}
+                  Open{" "}
+                  <Link href="/indexing" className="admin-link">
+                    Indexing
+                  </Link>{" "}
+                  and select the repositories this account should use. A repo is ready when its status
+                  is <span className="text-white">Usable</span>. Everyone on this account can open
+                  Usable repos in the extension.
                 </p>
-                <ul className="mt-3 space-y-1.5 text-sm text-coop-muted">
-                  <li>
-                    {hasUsableRepo ? "☑" : "☐"} Deep-Index at least one repo
-                    {hasUsableRepo ? ` (${usableRepoCount} Usable)` : ""}
-                  </li>
-                  <li>
-                    {hasUsableRepo ? "☑" : "☐"} Wait for status{" "}
-                    <span className="text-white">Usable</span> (not only Indexed)
-                  </li>
-                  <li>☐ Then continue to People &amp; access</li>
-                </ul>
               </div>
+              <div className="flex items-start gap-3 rounded-md border border-coop-border/70 bg-coop-dark/50 px-4 py-3.5">
+                <span
+                  className={`mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full ${
+                    hasUsableRepo ? "bg-coop-index" : "bg-coop-muted/40"
+                  }`}
+                  aria-hidden
+                />
+                <div>
+                  <p className="text-sm font-medium text-white">
+                    {hasUsableRepo
+                      ? `${usableRepoCount} ${usableRepoCount === 1 ? "repo" : "repos"} ready`
+                      : "No repos ready yet"}
+                  </p>
+                  <p className="mt-1 text-sm leading-relaxed text-coop-muted">
+                    {hasUsableRepo
+                      ? "Available to everyone on this account."
+                      : "Index at least one repo and wait until the status is Usable, not only Indexed."}
+                  </p>
+                </div>
+              </div>
+              {isFreePlan ? (
+                <p className="text-xs leading-relaxed text-coop-muted">
+                  Free includes up to 3 repos.{" "}
+                  <Link href="/billing" className="admin-link">
+                    Upgrade to Pro
+                  </Link>{" "}
+                  for unlimited indexing.
+                </p>
+              ) : null}
             </div>
           )}
 
           {currentStepId === "extension" && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <h3 className="text-lg font-semibold text-white">Install the extension</h3>
+                <h3 className="text-lg font-semibold tracking-tight text-white">Install the extension</h3>
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">
-                  Install the CoopAI VS Code extension from marketplace.
+                  Install Coop from the Visual Studio Marketplace, then sign in with this account.
+                  Usable repos and connected tools show up automatically.
                 </p>
               </div>
               <a
-                href="https://marketplace.visualstudio.com/search?term=coopai&target=VSCode"
+                href={EXTENSION_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="admin-btn-secondary inline-block"
+                className="admin-btn-secondary inline-flex"
               >
                 Open VS Code Marketplace
               </a>
@@ -397,25 +362,15 @@ export function OnboardingWizard({
           )}
 
           {currentStepId === "done" && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <h3 className="text-lg font-semibold text-white">You&apos;re ready</h3>
+                <h3 className="text-lg font-semibold tracking-tight text-white">You&apos;re ready</h3>
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">
-                  {isFreePlan ? (
-                    <>
-                      Install the CoopAI extension and begin connecting your tools.
-                    </>
-                  ) : repoAccessMode === "per_user" ? (
-                    <>
-                      Your team installs the CoopAI extension and signs in. Org tools connect
-                      automatically — repos show up only after you assign them on Users.
-                    </>
-                  ) : (
-                    <>
-                      Your team installs the CoopAI extension and signs in — org tools and Usable repos
-                      are ready automatically.
-                    </>
-                  )}
+                  {isFreePlan
+                    ? "Install the extension and sign in. Usable repos on this account are already available."
+                    : repoAccessMode === "per_user"
+                      ? "Teammates install the extension and sign in. Org tools connect automatically. Repos appear after you assign them on Users."
+                      : "Teammates install the extension and sign in. Org tools and Usable repos are already available to them."}
                 </p>
               </div>
             </div>
@@ -465,7 +420,7 @@ export function OnboardingWizard({
                       className="admin-btn-secondary"
                       onClick={() => goToStep(step + 1)}
                     >
-                      {anyCodeHostConnected ? "I'll Configure Later" : "Continue"}
+                      {anyCodeHostConnected ? "Skip for now" : "Continue"}
                     </button>
                     <Link href="/indexing" className="admin-btn-primary">
                       Open Indexing

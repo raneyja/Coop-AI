@@ -3,12 +3,18 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { completeMemberOnboarding, fetchMeWorkspaceRepos, type WorkspaceRepo } from "@/lib/coopApi";
+import {
+  completeMemberOnboarding,
+  fetchMeWorkspaceRepos,
+  type OrgRepoAccessMode,
+  type WorkspaceRepo
+} from "@/lib/coopApi";
 import { displayOrgName, getStoredMe } from "@/lib/auth";
 import { displayName } from "@/lib/timezones";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { IntegrationsStep } from "./IntegrationsStep";
 import { IndexedRepoStatusList } from "./IndexedRepoStatusList";
+import { SetupStepper } from "./SetupStepper";
 
 const EXTENSION_URL = "https://marketplace.visualstudio.com/search?term=coopai&target=VSCode";
 
@@ -52,7 +58,7 @@ export function MemberOnboardingWizard({
   const [saving, setSaving] = useState(false);
   const [repos, setRepos] = useState<WorkspaceRepo[]>([]);
   const [reposLoading, setReposLoading] = useState(true);
-  const [adminControlled, setAdminControlled] = useState(false);
+  const [repoAccessMode, setRepoAccessMode] = useState<OrgRepoAccessMode | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -73,7 +79,7 @@ export function MemberOnboardingWizard({
       setReposLoading(false);
       if (result.ok && result.data) {
         setRepos(result.data.repos ?? []);
-        setAdminControlled(Boolean(result.data.adminControlled));
+        setRepoAccessMode(result.data.repoAccessMode ?? null);
       }
     }
     void loadRepos();
@@ -105,7 +111,7 @@ export function MemberOnboardingWizard({
       />
 
       <div
-        className="relative z-10 flex max-h-[min(720px,90vh)] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-coop-border bg-coop-surface shadow-2xl shadow-black/40"
+        className="relative z-10 flex max-h-[min(720px,90vh)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-coop-border bg-coop-surface shadow-2xl shadow-black/50"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="shrink-0 border-b border-coop-border/80 px-5 py-4 sm:px-6">
@@ -117,7 +123,7 @@ export function MemberOnboardingWizard({
               </h2>
             </div>
             <div className="flex shrink-0 items-center gap-3">
-              <p className="font-mono text-xs text-coop-muted">
+              <p className="text-xs tabular-nums tracking-wide text-coop-muted">
                 Step {Math.min(step + 1, STEPS.length)} of {STEPS.length}
               </p>
               <button
@@ -137,50 +143,79 @@ export function MemberOnboardingWizard({
               </button>
             </div>
           </div>
+          <SetupStepper steps={[...STEPS]} step={step} />
         </header>
 
         <main className="flex-1 overflow-y-auto px-5 py-6 sm:px-6">
           {currentStep.id === "welcome" && (
             <div className="space-y-5">
               <div>
-                <h3 className="text-lg font-semibold text-white">Welcome, {greeting}</h3>
+                <h3 className="text-lg font-semibold tracking-tight text-white">Welcome, {greeting}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">
-                  You&apos;ve joined <strong className="text-white">{orgName}</strong>. Review your repos,
-                  org tools, and install the extension.
+                  You&apos;ve joined <span className="text-white">{orgName}</span>. Review your
+                  repositories, see which tools are connected, and install the extension.
                 </p>
               </div>
-              <ol className="space-y-2 text-sm text-coop-muted">
-                <li>1. Review repositories assigned to you</li>
-                <li>2. See which org tools are connected</li>
-                <li>3. Install the CoopAI extension and sign in</li>
+              <ol className="space-y-3">
+                {[
+                  {
+                    label: "Repositories",
+                    detail:
+                      repoAccessMode === "per_user"
+                        ? "Review the repos assigned to you."
+                        : "Review the Usable repos on this account."
+                  },
+                  {
+                    label: "Tools",
+                    detail: "See which organization tools are already connected."
+                  },
+                  {
+                    label: "Extension",
+                    detail: "Install the VS Code extension and sign in with this account."
+                  }
+                ].map((item, index) => (
+                  <li key={item.label} className="flex gap-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-coop-border/80 text-[11px] font-medium text-coop-muted">
+                      {index + 1}
+                    </span>
+                    <div className="min-w-0 pt-0.5">
+                      <p className="text-sm font-medium text-white">{item.label}</p>
+                      <p className="mt-0.5 text-sm leading-relaxed text-coop-muted">{item.detail}</p>
+                    </div>
+                  </li>
+                ))}
               </ol>
             </div>
           )}
 
           {currentStep.id === "repos" && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <h3 className="text-lg font-semibold text-white">Indexed repos</h3>
-                <p className="mt-2 text-sm text-coop-muted">
-                  {adminControlled
-                    ? "Assigned by your admin — contact them to request more access."
-                    : "Repositories available in your workspace."}
+                <h3 className="text-lg font-semibold tracking-tight text-white">Indexed repos</h3>
+                <p className="mt-2 text-sm leading-relaxed text-coop-muted">
+                  {repoAccessMode === "per_user"
+                    ? "These repos were assigned to you. Contact your admin if you need another one."
+                    : "Every Usable repo on this account is available to you."}
                 </p>
               </div>
               <IndexedRepoStatusList
                 repos={repos}
                 loading={reposLoading}
-                emptyMessage="No repositories assigned yet. Ask your admin to grant access."
+                emptyMessage={
+                  repoAccessMode === "per_user"
+                    ? "No repositories assigned yet. Ask your admin to grant access."
+                    : "No Usable repos yet. Your admin can add them from Indexing."
+                }
               />
             </div>
           )}
 
           {currentStep.id === "tools" && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <h3 className="text-lg font-semibold text-white">Organization tools</h3>
-                <p className="mt-2 text-sm text-coop-muted">
-                  Your admin connected these — active tools appear in the VS Code extension automatically.
+                <h3 className="text-lg font-semibold tracking-tight text-white">Organization tools</h3>
+                <p className="mt-2 text-sm leading-relaxed text-coop-muted">
+                  Your admin connected these. Active tools appear in the VS Code extension automatically.
                 </p>
               </div>
               <IntegrationsStep
@@ -201,11 +236,12 @@ export function MemberOnboardingWizard({
           )}
 
           {currentStep.id === "extension" && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <h3 className="text-lg font-semibold text-white">Install the extension</h3>
+                <h3 className="text-lg font-semibold tracking-tight text-white">Install the extension</h3>
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">
-                  Install the CoopAI VS Code extension from marketplace.
+                  Install Coop from the Visual Studio Marketplace, then sign in with this account.
+                  Usable repos and organization tools show up automatically.
                 </p>
               </div>
               <a
@@ -220,11 +256,12 @@ export function MemberOnboardingWizard({
           )}
 
           {currentStep.id === "done" && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <h3 className="text-lg font-semibold text-white">You&apos;re ready</h3>
+                <h3 className="text-lg font-semibold tracking-tight text-white">You&apos;re ready</h3>
                 <p className="mt-2 text-sm leading-relaxed text-coop-muted">
-                  Install the CoopAI extension and sign in — your repos and org tools are ready.
+                  Install the extension and sign in. Your repos and organization tools are already
+                  available.
                 </p>
               </div>
               <Link href="/feed" className="admin-link text-sm">

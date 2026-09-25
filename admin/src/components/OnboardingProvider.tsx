@@ -5,20 +5,17 @@ import { usePathname, useRouter } from "next/navigation";
 import { completeOnboarding, fetchOrg } from "@/lib/coopApi";
 import { getStoredMe, isAdminRole } from "@/lib/auth";
 import { clearSetupDismiss, isSetupDismissedToday, recordSetupDismiss } from "@/lib/onboardingDismiss";
+import { onboardingStepsForPlan } from "@/lib/onboardingSteps";
 import { OnboardingWizard } from "./OnboardingWizard";
 
-const SETUP_HELPER_PATHS = new Set(["/integrations", "/users", "/indexing", "/api-keys"]);
-
-const FULL_STEP_LABELS = [
-  "Welcome",
-  "Connect tools",
-  "Index repos",
-  "Manage access",
-  "People & access",
-  "Done"
-] as const;
-
-const FREE_STEP_LABELS = ["Welcome", "Connect", "Index repos", "Extension", "Done"] as const;
+const SETUP_HELPER_PATHS = new Set([
+  "/integrations",
+  "/users",
+  "/indexing",
+  "/api-keys",
+  "/billing",
+  "/settings/repository-access"
+]);
 
 type OnboardingContextValue = {
   refresh: () => Promise<void>;
@@ -44,7 +41,7 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
   const me = getStoredMe();
   const plan = me?.plan ?? "free";
   const isAdmin = me ? isAdminRole(me) : false;
-  const stepLabels = plan === "free" ? FREE_STEP_LABELS : FULL_STEP_LABELS;
+  const stepLabels = onboardingStepsForPlan(plan).map((entry) => entry.label);
 
   const [showSetup, setShowSetup] = useState(false);
   const [dismissedToday, setDismissedToday] = useState(() => isSetupDismissedToday("admin"));

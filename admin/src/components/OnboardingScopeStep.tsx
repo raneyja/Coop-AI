@@ -26,9 +26,13 @@ export function OnboardingScopeStep({ integrations, onRefresh }: OnboardingScope
 
   if (connectedScopable.length === 0) {
     return (
-      <p className="text-sm text-coop-muted">
-        No scopable tools connected yet. Connect Slack, Jira, Notion, or Google Docs on the previous step.
-      </p>
+      <div className="rounded-md border border-coop-border/70 bg-coop-dark/50 px-4 py-3.5">
+        <p className="text-sm font-medium text-white">No collaboration tools connected</p>
+        <p className="mt-1 text-sm leading-relaxed text-coop-muted">
+          Connect Slack, Jira, Notion, or Google Docs on the previous step if you want to limit what
+          Coop can search. You can also do this later from Integrations.
+        </p>
+      </div>
     );
   }
 
@@ -61,7 +65,7 @@ export function OnboardingScopeStep({ integrations, onRefresh }: OnboardingScope
               className="admin-btn-secondary"
               onClick={() => setOpenProvider(def.id)}
             >
-              Manage access
+              Set scope
             </button>
           </div>
         );
