@@ -22,7 +22,7 @@ void (async () => {
   }
 
   assert.equal(lowestCreditModelForProvider("openai").id, "gpt-4o-mini");
-  assert.equal(lowestCreditModelForProvider("gemini").id, "gemini-2.0-flash");
+  assert.equal(lowestCreditModelForProvider("gemini").id, "gemini-2.5-flash");
   assert.equal(lowestCreditModelForProvider("deepseek").id, "deepseek-chat");
 
   assert.equal(getModelCreditWeight("openai", "gpt-5-mini"), 1.5);
@@ -35,7 +35,6 @@ void (async () => {
     "gpt-4o-mini",
     "gpt-5-mini",
     "claude-haiku-4-5-20251001",
-    "gemini-2.0-flash",
     "gemini-2.5-flash",
     "deepseek-chat",
     "codestral-latest"

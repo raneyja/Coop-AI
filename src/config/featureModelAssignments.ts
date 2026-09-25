@@ -136,7 +136,9 @@ export function pickerAppliesToUseCase(useCase: UseCase): boolean {
   return feature === "chat" || feature === "quickActions" || feature === "edit";
 }
 
-const FREE_FORCED_MODEL = { provider: "gemini" as const, model: "gemini-2.0-flash" };
+/** Free plan model. Server quota pricing in `freeAllowance.ts` must use this same id. */
+export const FREE_FLASH_MODEL = "gemini-2.5-flash";
+const FREE_FORCED_MODEL = { provider: "gemini" as const, model: FREE_FLASH_MODEL };
 
 export function resolveRuntimeModelForUseCase(
   useCase: UseCase,

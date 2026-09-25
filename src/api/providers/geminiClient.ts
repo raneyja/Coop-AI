@@ -80,15 +80,12 @@ export class GeminiProviderClient extends BaseProviderClient {
             const usageMetadata = data.usageMetadata as Record<string, unknown> | undefined;
             if (usageMetadata) {
               const inputTokens = readUsageInt(usageMetadata.promptTokenCount);
-              const outputTokens = readUsageInt(usageMetadata.candidatesTokenCount);
-              const totalTokens = readUsageInt(usageMetadata.totalTokenCount);
+              const outputTokens = geminiBilledOutputTokens(usageMetadata);
               if (inputTokens !== undefined) {
                 state.inputTokens = inputTokens;
               }
               if (outputTokens !== undefined) {
                 state.outputTokens = outputTokens;
-              } else if (totalTokens !== undefined && inputTokens !== undefined) {
-                state.outputTokens = Math.max(0, totalTokens - inputTokens);
               }
             }
             const candidates = data.candidates as Array<Record<string, unknown>> | undefined;
@@ -153,4 +150,19 @@ export function parseGeminiParts(
 function readUsageInt(value: unknown): number | undefined {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : undefined;
+}
+
+/** Visible answer tokens plus thinking tokens. Google bills both as output. */
+export function geminiBilledOutputTokens(usageMetadata: Record<string, unknown>): number | undefined {
+  const candidates = readUsageInt(usageMetadata.candidatesTokenCount);
+  const thoughts = readUsageInt(usageMetadata.thoughtsTokenCount) ?? 0;
+  if (candidates !== undefined) {
+    return candidates + thoughts;
+  }
+  const total = readUsageInt(usageMetadata.totalTokenCount);
+  const input = readUsageInt(usageMetadata.promptTokenCount);
+  if (total !== undefined && input !== undefined) {
+    return Math.max(0, total - input);
+  }
+  return thoughts > 0 ? thoughts : undefined;
 }

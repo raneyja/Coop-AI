@@ -59,10 +59,9 @@ test("GPT-5 picker models get reasoning_effort; GPT-4o mini does not", () => {
   assert.equal("reasoning_effort" in applyOpenAiThinking({ model: "gpt-4o-mini" }, classic), false);
 });
 
-test("Gemini 2.5 asks for thought parts; Gemini 2.0 does not", () => {
+test("Gemini 2.5 asks for thought parts", () => {
   const flash25 = resolveProviderThinking("gemini", "gemini-2.5-flash", 16_000);
   const pro = resolveProviderThinking("gemini", "gemini-2.5-pro", 16_000);
-  const flash20 = resolveProviderThinking("gemini", "gemini-2.0-flash", 16_000);
   const withThoughts = applyGeminiThinking({ generationConfig: { temperature: 0.5 } }, flash25);
   assert.deepEqual((withThoughts.generationConfig as { thinkingConfig?: unknown }).thinkingConfig, {
     includeThoughts: true
@@ -71,11 +70,6 @@ test("Gemini 2.5 asks for thought parts; Gemini 2.0 does not", () => {
     (applyGeminiThinking({ generationConfig: {} }, pro).generationConfig as { thinkingConfig?: unknown })
       .thinkingConfig,
     { includeThoughts: true }
-  );
-  assert.equal(
-    "thinkingConfig" in
-      ((applyGeminiThinking({ generationConfig: {} }, flash20).generationConfig as object) ?? {}),
-    false
   );
 });
 

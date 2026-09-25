@@ -1,13 +1,18 @@
 import type { UseCase } from "../api/types";
+import { FREE_FLASH_MODEL } from "../config/featureModelAssignments";
 
-export const FREE_FLASH_MODEL = "gemini-2.0-flash";
+export { FREE_FLASH_MODEL };
+/** Shut down June 2026. Spend already recorded under this id still counts. */
+export const RETIRED_FREE_FLASH_MODEL = "gemini-2.0-flash";
+const FREE_FLASH_MODEL_IDS = new Set([FREE_FLASH_MODEL, RETIRED_FREE_FLASH_MODEL]);
+
 export const FREE_CYCLE_MESSAGE_LIMIT = 20;
-export const FREE_CYCLE_USD = 0.5;
-export const FREE_WEEK_USD = 2;
+export const FREE_CYCLE_USD = 2;
+export const FREE_WEEK_USD = 8;
 export const FREE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 export const FREE_NEAR_LIMIT_RATIO = 0.8;
-export const FREE_FLASH_USD_PER_MILLION_IN = 0.1;
-export const FREE_FLASH_USD_PER_MILLION_OUT = 0.4;
+export const FREE_FLASH_USD_PER_MILLION_IN = 0.3;
+export const FREE_FLASH_USD_PER_MILLION_OUT = 2.5;
 
 export type FreeBlockedWindow = "cycle" | "week";
 
@@ -33,7 +38,7 @@ export type FreeAllowanceTotals = {
   resetsAt: Date;
 };
 
-/** Gemini 2.0 Flash list cost. No 1.5× weight and no per-call 1-cent floor. */
+/** Gemini 2.5 Flash list cost. No 1.5× weight and no per-call 1-cent floor. */
 export function flashListCostUsd(inputTokens: number, outputTokens: number): number {
   const input = Math.max(0, inputTokens);
   const output = Math.max(0, outputTokens);
@@ -41,7 +46,7 @@ export function flashListCostUsd(inputTokens: number, outputTokens: number): num
 }
 
 export function isFreeFlashModel(model: string | undefined): boolean {
-  return (model ?? "").trim() === FREE_FLASH_MODEL;
+  return FREE_FLASH_MODEL_IDS.has((model ?? "").trim());
 }
 
 export function countsAsFreeQuotaMessage(useCase: UseCase | string | undefined): boolean {

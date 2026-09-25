@@ -18,7 +18,7 @@ function countPreamble(text: string): number {
 function systemTextFor(provider: "openai" | "anthropic" | "gemini", messages: ChatRequestMessage[]): string {
   const body = formatZeroRetentionRequest({
     provider,
-    model: provider === "anthropic" ? "claude-sonnet-4-6" : provider === "gemini" ? "gemini-2.0-flash" : "gpt-4o-mini",
+    model: provider === "anthropic" ? "claude-sonnet-4-6" : provider === "gemini" ? "gemini-2.5-flash" : "gpt-4o-mini",
     messages,
     allowUnapprovedProvider: true
   }).body;

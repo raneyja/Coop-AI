@@ -33,7 +33,7 @@ export const INLINE_CUSTOM_FALLBACK = INLINE_MODEL_PRESETS.haiku.fallback;
 export const INLINE_DEFAULT_MODEL_BY_PROVIDER: Record<LlmProvider, string> = {
   anthropic: INLINE_MODEL_PRESETS.haiku.model,
   openai: INLINE_MODEL_PRESETS.gpt35.model,
-  gemini: "gemini-2.0-flash",
+  gemini: "gemini-2.5-flash",
   deepseek: FIM_DEEPSEEK_MODEL,
   mistral: FIM_MISTRAL_MODEL
 };

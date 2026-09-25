@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyGeminiThinking, parseGeminiParts } from "./geminiClient";
+import { applyGeminiThinking, geminiBilledOutputTokens, parseGeminiParts } from "./geminiClient";
 
 test("applyGeminiThinking only adds includeThoughts for gemini-thoughts mode", () => {
   const applied = applyGeminiThinking(
@@ -14,6 +14,14 @@ test("applyGeminiThinking only adds includeThoughts for gemini-thoughts mode", (
   });
   const skipped = applyGeminiThinking({ generationConfig: { temperature: 0.5 } }, { mode: "adaptive" });
   assert.equal("thinkingConfig" in (skipped.generationConfig as object), false);
+});
+
+test("gemini billed output includes thinking tokens", () => {
+  assert.equal(
+    geminiBilledOutputTokens({ candidatesTokenCount: 40, thoughtsTokenCount: 120 }),
+    160
+  );
+  assert.equal(geminiBilledOutputTokens({ totalTokenCount: 200, promptTokenCount: 50 }), 150);
 });
 
 test("parseGeminiParts splits thought parts from answer text", () => {

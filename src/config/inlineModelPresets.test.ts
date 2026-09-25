@@ -71,7 +71,7 @@ test("custom preset without model id falls back to haiku", () => {
 test("defaultInlineModelForProvider aligns extension and server defaults", () => {
   assert.equal(defaultInlineModelForProvider("anthropic"), INLINE_MODEL_PRESETS.haiku.model);
   assert.equal(defaultInlineModelForProvider("openai"), INLINE_MODEL_PRESETS.gpt35.model);
-  assert.equal(defaultInlineModelForProvider("gemini"), "gemini-2.0-flash");
+  assert.equal(defaultInlineModelForProvider("gemini"), "gemini-2.5-flash");
   assert.equal(defaultInlineModelForProvider("mistral"), FIM_MISTRAL_MODEL);
   assert.equal(defaultInlineModelForProvider("deepseek"), FIM_DEEPSEEK_MODEL);
 });

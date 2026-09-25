@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { FREE_FLASH_MODEL, RETIRED_FREE_FLASH_MODEL } from "./freeAllowance";
 
 export type UsageEventEntry = {
   orgId: string;
@@ -202,11 +203,11 @@ export class UsageTracker {
        WHERE org_id = $1
          AND event_type = ANY($2::text[])
          AND (
-           metadata->>'model' = 'gemini-2.0-flash'
+           metadata->>'model' = ANY($3::text[])
            OR metadata->>'countsAsMessage' = 'true'
            OR COALESCE(metadata->>'quotaTurnId', '') <> ''
          )`,
-      [orgId, eventTypes]
+      [orgId, eventTypes, [FREE_FLASH_MODEL, RETIRED_FREE_FLASH_MODEL]]
     );
     const oldest = result.rows[0]?.oldest;
     return oldest ? new Date(String(oldest)) : undefined;

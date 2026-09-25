@@ -30,7 +30,6 @@ export const CATALOG_THINKING_KIND: Record<string, CatalogThinkingKind> = {
   "claude-haiku-4-5-20251001": "anthropic-extended",
   "gemini-2.5-flash": "gemini-thoughts",
   "gemini-2.5-pro": "gemini-thoughts",
-  "gemini-2.0-flash": "none",
   "deepseek-chat": "none",
   "deepseek-reasoner": "parse-only",
   "codestral-latest": "none"

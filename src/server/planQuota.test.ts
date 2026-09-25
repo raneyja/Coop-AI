@@ -123,7 +123,7 @@ void (async () => {
       created_at: now.toISOString(),
       input_tokens: 100,
       output_tokens: 50,
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       use_case: "chat",
       quota_turn_id: turnId,
       counts_as_message: "true",
@@ -166,17 +166,17 @@ void (async () => {
       created_at: new Date(now.getTime() - 60_000).toISOString(),
       input_tokens: 2_000_000,
       output_tokens: 750_000,
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       use_case: "chat",
       quota_turn_id: "cost-1",
       counts_as_message: "true",
-      flash_cost_usd: 0.5
+      flash_cost_usd: 2
     }
   ];
   const dollarQuota = new PlanQuotaService(new UsageTracker(allowancePool(dollarBlocked) as never), config);
   try {
     await dollarQuota.check("org-free", "free", 0, now);
-    assert.fail("expected $0.50 cycle cap to refuse");
+    assert.fail("expected $2 cycle cap to refuse");
   } catch (error) {
     assert.ok(error instanceof PlanQuotaExceededError);
     assert.equal(error.blockedWindow, "cycle");
@@ -188,17 +188,17 @@ void (async () => {
       created_at: new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString(),
       input_tokens: 8_000_000,
       output_tokens: 3_000_000,
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       use_case: "chat",
       quota_turn_id: "week-1",
       counts_as_message: "true",
-      flash_cost_usd: 2
+      flash_cost_usd: 8
     }
   ];
   const weekQuota = new PlanQuotaService(new UsageTracker(allowancePool(weekBlocked) as never), config);
   try {
     await weekQuota.check("org-free", "free", 0, now);
-    assert.fail("expected weekly $2 cap to refuse");
+    assert.fail("expected weekly $8 cap to refuse");
   } catch (error) {
     assert.ok(error instanceof PlanQuotaExceededError);
     assert.equal(error.blockedWindow, "week");
@@ -213,7 +213,7 @@ void (async () => {
       created_at: new Date(now.getTime() - 60_000).toISOString(),
       input_tokens: 80,
       output_tokens: 40,
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       use_case: "intent_suggest",
       counts_as_message: "false",
       flash_cost_usd: flashTiny
@@ -230,7 +230,7 @@ void (async () => {
       created_at: new Date(now.getTime() - 30_000).toISOString(),
       input_tokens: 1_000,
       output_tokens: 400,
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       use_case: "chat",
       quota_turn_id: "same-send",
       counts_as_message: "true",
@@ -240,7 +240,7 @@ void (async () => {
       created_at: new Date(now.getTime() - 20_000).toISOString(),
       input_tokens: 800,
       output_tokens: 200,
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       use_case: "chat",
       quota_turn_id: "same-send",
       counts_as_message: "true",
@@ -299,7 +299,7 @@ void (async () => {
     inputTokens: 10,
     outputTokens: 10,
     provider: "gemini",
-    model: "gemini-2.0-flash",
+    model: "gemini-2.5-flash",
     principal: "user:test",
     useCase: "chat",
     quotaTurnId: "tiny"

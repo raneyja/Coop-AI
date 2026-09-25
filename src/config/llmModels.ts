@@ -136,8 +136,8 @@ const CATALOG: ModelDefinition[] = [
     summary: "Fast Gemini with a long context window.",
     contextWindowTokens: 1_000_000,
     pool: "auto",
-    usdPerMillionIn: 0.15,
-    usdPerMillionOut: 0.6
+    usdPerMillionIn: 0.3,
+    usdPerMillionOut: 2.5
   },
   {
     id: "gemini-2.5-pro",
@@ -151,19 +151,6 @@ const CATALOG: ModelDefinition[] = [
     pool: "frontier",
     usdPerMillionIn: 1.25,
     usdPerMillionOut: 10
-  },
-  {
-    id: "gemini-2.0-flash",
-    provider: "gemini",
-    creditWeight: 1,
-    tier: "budget",
-    label: "Gemini 2.0 Flash",
-    docsUrl: "https://ai.google.dev/gemini-api/docs/models/gemini-2.0-flash",
-    summary: "Fast, inexpensive Gemini for straightforward work.",
-    contextWindowTokens: 1_000_000,
-    pool: "auto",
-    usdPerMillionIn: 0.1,
-    usdPerMillionOut: 0.4
   },
   // DeepSeek
   {
