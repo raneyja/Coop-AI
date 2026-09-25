@@ -1084,6 +1084,72 @@ void (async () => {
     assert.notEqual(billingPatches[0]?.stripeCustomerId, "[object Object]");
   }
 
+  {
+    let checkout:
+      | {
+          existingOrgId?: string;
+          upgrade?: boolean;
+          usageTier?: string;
+        }
+      | undefined;
+    const prevPro = process.env.STRIPE_PRICE_ID_PRO;
+    process.env.STRIPE_PRICE_ID_PRO = "price_pro";
+    const stripe = {
+      isConfigured: () => true,
+      createCheckoutSession: async (input: {
+        existingOrgId?: string;
+        upgrade?: boolean;
+        usageTier?: string;
+      }) => {
+        checkout = input;
+        return { id: "cs_upgrade", url: "https://checkout.stripe.com/upgrade" };
+      }
+    } as unknown as StripeService;
+    const response = mockResponse();
+    await handleBillingApiRequest(
+      {
+        method: "POST",
+        pathname: "/v1/billing/upgrade-checkout-session",
+        headers: { authorization: "Bearer free-admin" },
+        body: { tier: "pro" },
+        rawBody: Buffer.from("")
+      },
+      response,
+      {
+        serverConfig: { requireApiAuth: true } as ServerConfig,
+        stripeService: stripe,
+        orgStore: {
+          resolveAuth: async () => ({
+            orgId: "org-free",
+            orgName: "Acme",
+            plan: "free",
+            apiKeyId: "key-admin",
+            role: "admin"
+          }),
+          getOrganization: async () => ({ id: "org-free", name: "Acme", plan: "free" }),
+          getOrganizationBilling: async () => ({
+            billingEmail: "admin@acme.com",
+            seatCount: 1
+          })
+        } as unknown as OrgStore,
+        userStore: {
+          listOrgUsers: async () => [{ email: "admin@acme.com", role: "admin" }],
+          getUser: async () => ({ email: "admin@acme.com" })
+        } as unknown as BillingApiDeps["userStore"]
+      }
+    );
+    if (prevPro === undefined) {
+      delete process.env.STRIPE_PRICE_ID_PRO;
+    } else {
+      process.env.STRIPE_PRICE_ID_PRO = prevPro;
+    }
+    assert.equal(response.statusCode, 200);
+    assert.equal(JSON.parse(response.body ?? "{}").url, "https://checkout.stripe.com/upgrade");
+    assert.equal(checkout?.existingOrgId, "org-free");
+    assert.equal(checkout?.upgrade, true);
+    assert.equal(checkout?.usageTier, "pro");
+  }
+
   console.log("billingApi.test.ts: ok");
 })();
 

@@ -30,6 +30,7 @@ export type StreamChatBody = {
   enableThinking?: boolean;
   sessionMode?: "file-assistant" | "indexed-repo";
   fileSource?: "workspace" | "git" | "remote" | "external";
+  quotaTurnId?: string;
 };
 
 export type StreamChatResult = {
@@ -70,9 +71,10 @@ export type HealthResponse = {
 };
 
 export type PlanQuotaCredits = {
-  usedCredits: number;
-  limitCredits: number;
-  remainingCredits: number;
+  usedRatio: number;
+  exhausted?: boolean;
+  nearLimit?: boolean;
+  blockedWindow?: "cycle" | "week";
   windowHours: number;
   resetsAt: string;
   retryAfterMs: number;
@@ -111,6 +113,7 @@ export type ChatQuotaExceededPayload = {
   limitCredits?: number;
   pool?: "paid" | "auto" | "frontier" | "free";
   upgradePlan?: "pro" | "pro_plus" | "max";
+  blockedWindow?: "cycle" | "week";
 };
 
 export class ChatQuotaExceededError extends Error {
@@ -130,6 +133,8 @@ export class ChatQuotaExceededError extends Error {
 
   public readonly upgradePlan?: "pro" | "pro_plus" | "max";
 
+  public readonly blockedWindow?: "cycle" | "week";
+
   public constructor(payload: ChatQuotaExceededPayload) {
     super(payload.message);
     this.name = "ChatQuotaExceededError";
@@ -140,6 +145,7 @@ export class ChatQuotaExceededError extends Error {
     this.limitCredits = payload.limitCredits;
     this.pool = payload.pool;
     this.upgradePlan = payload.upgradePlan;
+    this.blockedWindow = payload.blockedWindow;
   }
 }
 
@@ -378,6 +384,29 @@ export class CoopBackendClient {
       throw new Error("Upgrade request was not created.");
     }
     return { request: response.data.request };
+  }
+
+  public async createUpgradeCheckoutSession(
+    baseUrl: string,
+    opts?: { email?: string; seats?: number; tier?: "pro" | "pro_plus" | "max" }
+  ): Promise<{ sessionId: string; url: string }> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.post<{ sessionId?: string; url?: string } & CoopApiErrorBody>(
+      "/v1/billing/upgrade-checkout-session",
+      { tier: opts?.tier ?? "pro", ...(opts?.email ? { email: opts.email } : {}), ...(opts?.seats != null ? { seats: opts.seats } : {}) },
+      {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        headers: await this.authHeaders(),
+        validateStatus: () => true
+      }
+    );
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data));
+    }
+    if (!response.data?.url) {
+      throw new Error("Checkout did not return a Stripe URL.");
+    }
+    return { sessionId: response.data.sessionId ?? "", url: response.data.url };
   }
 
   public async convertOwnSeat(
@@ -1696,6 +1725,7 @@ export class CoopBackendClient {
         enableThinking: body.enableThinking === true,
         sessionMode: body.sessionMode,
         fileSource: body.fileSource,
+        quotaTurnId: body.quotaTurnId,
         stream: true
       }),
       signal
@@ -2037,6 +2067,7 @@ function readChatQuotaExceededPayload(
     upgradePlan:
       body.upgradePlan === "pro" || body.upgradePlan === "pro_plus" || body.upgradePlan === "max"
         ? body.upgradePlan
-        : undefined
+        : undefined,
+    blockedWindow: body.blockedWindow === "week" || body.blockedWindow === "cycle" ? body.blockedWindow : undefined
   };
 }

@@ -1,4 +1,5 @@
 import type { IntegrationChatProvider } from "../../../chat/types";
+import { formatFreeAllowanceCopy, FREE_NEAR_LIMIT_COPY } from "../../../chat/quotaNotice";
 import type { Preferences } from "./types";
 import {
   codeHostConfigured,
@@ -265,19 +266,27 @@ export function accountDetailIdentity(prefs: Preferences): string {
 
 export function formatQuotaUsageSummary(
   quota: {
-    usedCredits: number;
-    limitCredits: number;
-    remainingCredits: number;
-    windowHours: number;
+    usedRatio?: number;
+    exhausted?: boolean;
+    nearLimit?: boolean;
+    blockedWindow?: "cycle" | "week";
+    resetsAt?: string;
+    timezone?: string;
   },
-  options?: { exhausted?: boolean }
+  options?: { exhausted?: boolean; timezone?: string }
 ): string {
-  const used = quota.usedCredits ?? Math.max(0, quota.limitCredits - quota.remainingCredits);
-  const counts = `${used}K of ${quota.limitCredits}K AI credits used`;
-  if (options?.exhausted) {
-    return counts;
+  const exhausted = options?.exhausted ?? quota.exhausted ?? false;
+  if (exhausted) {
+    return formatFreeAllowanceCopy({
+      resetsAt: quota.resetsAt,
+      blockedWindow: quota.blockedWindow,
+      timezone: options?.timezone ?? quota.timezone
+    });
   }
-  return `${counts} - ${quota.windowHours}-hour rolling window`;
+  if (quota.nearLimit) {
+    return FREE_NEAR_LIMIT_COPY;
+  }
+  return "";
 }
 
 export function quotaUsedPercent(used: number, limit: number): number {
@@ -293,10 +302,7 @@ export function planUsageHubSubtitle(prefs: Preferences): string {
   }
   const plan = displayPlanLabel(prefs);
   if (prefs.plan === "free" && prefs.quotaCredits) {
-    const used =
-      prefs.quotaCredits.usedCredits ??
-      Math.max(0, prefs.quotaCredits.limitCredits - prefs.quotaCredits.remainingCredits);
-    return `${plan} · ${used}K of ${prefs.quotaCredits.limitCredits}K used`;
+    return plan;
   }
   if (prefs.usageMeters) {
     const usedRatio =

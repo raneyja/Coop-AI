@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactElement } from "react";
+import { type ReactElement } from "react";
 import Link from "next/link";
 import type { QuotaSnapshot } from "@/lib/coopApi";
 import {
@@ -8,11 +8,7 @@ import {
   quotaUsedPercent,
   resolveFreeQuotaCredits
 } from "@/lib/quotaSnapshot";
-import {
-  formatFreeQuotaResumeParts,
-  formatPaidUsageResetCopy,
-  formatQuotaUsageSummary
-} from "@/lib/usageResetCopy";
+import { formatPaidUsageResetCopy } from "@/lib/usageResetCopy";
 import { stackedUsagePercents } from "@/lib/stackedUsagePercents";
 import { SeatUsageHelper, SeatUsageLegend } from "@/components/SeatUsageBar";
 import { USAGE_METER_YOUR_SEAT_BODY, USAGE_METER_YOUR_SEAT_TITLE } from "@/lib/usageMeterCopy";
@@ -26,47 +22,30 @@ type UsageQuotaMeterProps = {
 };
 
 function FreeUsageMeter({
-  credits
+  credits,
+  nearLimit
 }: {
   credits: NonNullable<ReturnType<typeof resolveFreeQuotaCredits>>;
+  nearLimit?: boolean;
 }): ReactElement {
   const exhausted = isFreeQuotaExhausted(credits);
   const pct = quotaUsedPercent(credits.usedCredits, credits.limitCredits);
-  const [now, setNow] = useState(() => new Date());
-
-  useEffect(() => {
-    if (!exhausted) {
-      return;
-    }
-    const id = window.setInterval(() => setNow(new Date()), 1000);
-    return () => window.clearInterval(id);
-  }, [exhausted]);
-
-  const resume = exhausted
-    ? formatFreeQuotaResumeParts(
-        { resetsAt: credits.resetsAt, windowHours: credits.windowHours },
-        now
-      )
-    : null;
+  const caption = exhausted
+    ? undefined
+    : nearLimit
+      ? "You're close to the free limit."
+      : "";
 
   return (
     <div className="space-y-2">
       <div
         className="flex h-2 overflow-hidden rounded-full bg-white/10"
         role="img"
-        aria-label={`${pct}% of free AI credits used`}
+        aria-label="Free allowance used"
       >
         {pct > 0 ? <div className="h-full bg-coop-index" style={{ width: `${pct}%` }} /> : null}
       </div>
-      <p className="text-sm text-coop-muted">{formatQuotaUsageSummary(credits, { exhausted })}</p>
-      {resume ? (
-        <p className="text-sm text-white" aria-live="polite">
-          Paused at <span className="font-medium">{resume.pausedAtLabel}</span>
-          {" · resumes at "}
-          <span className="font-medium">{resume.resumesAtLabel}</span>
-          <span className="text-coop-muted"> ({resume.countdown})</span>
-        </p>
-      ) : null}
+      {caption ? <p className="text-sm text-coop-muted">{caption}</p> : null}
     </div>
   );
 }
@@ -83,7 +62,6 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true, sea
     typeof meters?.usedRatio === "number" ? meters.usedRatio : Math.min(1, autoRatio + frontierRatio);
   const segments = stackedUsagePercents(autoRatio, frontierRatio);
   const totalPct = Math.round(Math.max(0, Math.min(100, totalRatio * 100)));
-  const windowHours = freeCredits?.windowHours ?? snapshot?.windowHours ?? 5;
   const signedInAs = seatLabel?.trim() ? `Signed in as ${seatLabel.trim()}.` : null;
 
   return (
@@ -94,7 +72,7 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true, sea
           <p className="mt-1 text-sm text-coop-muted">
             {isPaidMeters
               ? USAGE_METER_YOUR_SEAT_BODY
-              : `Free credits for you — ${freeCredits?.limitCredits ?? 80}K every ${windowHours} hours. Not a company pool.`}
+              : "Free allowance for this workspace. Upgrade to Pro for a monthly allowance."}
           </p>
           {signedInAs ? <p className="mt-1 text-xs text-coop-muted">{signedInAs}</p> : null}
         </div>
@@ -139,7 +117,7 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true, sea
           {paidResetLabel ? <p className="text-xs text-coop-muted">{paidResetLabel}</p> : null}
         </div>
       ) : freeCredits ? (
-        <FreeUsageMeter credits={freeCredits} />
+        <FreeUsageMeter credits={freeCredits} nearLimit={snapshot?.nearLimit} />
       ) : (
         <div className="space-y-2">
           <p className="text-sm text-coop-muted">Usage for your seat is not available yet.</p>

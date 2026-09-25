@@ -1,5 +1,5 @@
 import { estimateTokensFromText } from "../api/costEstimate";
-import type { ChatOrgPlan } from "../api/types";
+import type { ChatOrgPlan, UseCase } from "../api/types";
 import type { LlmProvider } from "../api/zeroRetentionConfig";
 import {
   billTokensForQuota,
@@ -9,6 +9,15 @@ import {
 } from "../config/modelCreditWeights";
 import { DEMO_PAGE_URL, PRICING_PAGE_URL } from "../config/siteConfig";
 import { formatWaitTime } from "../jobs/types";
+import {
+  countsAsFreeQuotaMessage,
+  flashListCostUsd,
+  isFreeFlashModel,
+  summarizeFreeAllowance,
+  currentWeekWindow,
+  type FreeBlockedWindow,
+  type FreeAllowanceEvent
+} from "./freeAllowance";
 import type { OrgPlan } from "./orgStore";
 import type { TokenUsageEvent, UsageTracker } from "./usageTracker";
 import {
@@ -43,15 +52,17 @@ export type PlanQuotaConfig = {
 
 export type PlanQuotaSnapshot = {
   plan: "free";
-  usedTokens: number;
-  limitTokens: number;
-  remainingTokens: number;
-  usedCredits: number;
-  limitCredits: number;
-  remainingCredits: number;
+  usedRatio: number;
+  exhausted: boolean;
+  nearLimit: boolean;
+  blockedWindow?: FreeBlockedWindow;
   windowHours: number;
   resetsAt: string;
   retryAfterMs: number;
+  /** Operator-only ratio mapping. Not rendered in the extension. */
+  usedTokens: number;
+  limitTokens: number;
+  remainingTokens: number;
 };
 
 export type UsagePoolMeter = {
@@ -99,6 +110,7 @@ export type PlanQuotaExceededExtras = {
   usedCents?: number;
   limitCents?: number;
   message?: string;
+  blockedWindow?: FreeBlockedWindow;
 };
 
 export class PlanQuotaExceededError extends Error {
@@ -107,6 +119,7 @@ export class PlanQuotaExceededError extends Error {
   public readonly upgradePlan?: UsageTier;
   public readonly usedCents?: number;
   public readonly limitCents?: number;
+  public readonly blockedWindow?: FreeBlockedWindow;
 
   public constructor(
     public readonly retryAfterMs: number,
@@ -116,12 +129,13 @@ export class PlanQuotaExceededError extends Error {
     public readonly resetsAt: Date,
     extras: PlanQuotaExceededExtras = {}
   ) {
-    super(extras.message ?? buildQuotaLimitMessage(retryAfterMs, resetsAt, upgradeUrl));
+    super(extras.message ?? buildQuotaLimitMessage(retryAfterMs, resetsAt, extras.blockedWindow));
     this.name = "PlanQuotaExceededError";
     this.pool = extras.pool ?? "free";
     this.upgradePlan = extras.upgradePlan;
     this.usedCents = extras.usedCents;
     this.limitCents = extras.limitCents;
+    this.blockedWindow = extras.blockedWindow;
   }
 }
 
@@ -156,8 +170,8 @@ export class PlanQuotaService {
     if (!this.appliesToPlan(plan) || orgId === "dev") {
       return undefined;
     }
-    const usage = await this.getRollingUsage(orgId, now);
-    return buildSnapshot(usage.usedTokens, this.config.freeTokenLimit, usage.resetsAt, this.config.rollingWindowMs);
+    const usage = await this.getFreeAllowance(orgId, now);
+    return buildSnapshot(usage, this.config.rollingWindowMs);
   }
 
   public async getUsageMeters(
@@ -222,7 +236,8 @@ export class PlanQuotaService {
     plan: OrgPlan | ChatOrgPlan,
     _estimatedAdditionalTokens = 0,
     now = new Date(),
-    paid?: PaidQuotaContext
+    paid?: PaidQuotaContext,
+    options?: { skipFreeAllowance?: boolean }
   ): Promise<void> {
     if (orgId === "dev") {
       return;
@@ -232,24 +247,19 @@ export class PlanQuotaService {
       await this.checkPaid(orgId, tier, now, paid?.periodAnchor, paid?.userId);
       return;
     }
-    if (!this.appliesToPlan(plan)) {
+    if (options?.skipFreeAllowance || !this.appliesToPlan(plan)) {
       return;
     }
-    const usage = await this.getRollingUsage(orgId, now);
-    const remainingTokens = this.config.freeTokenLimit - usage.usedTokens;
-    // Block new requests only when already exhausted. Do not use estimated tokens —
-    // a request that starts with any remaining budget may finish even if it goes over.
-    if (remainingTokens <= 0) {
-      const retryAfterMs = Math.max(0, usage.resetsAt.getTime() - Date.now());
-      throw new PlanQuotaExceededError(
-        retryAfterMs,
-        usage.usedTokens,
-        this.config.freeTokenLimit,
-        this.config.upgradeUrl,
-        usage.resetsAt,
-        { pool: "free", upgradePlan: "pro" }
-      );
+    const usage = await this.getFreeAllowance(orgId, now);
+    if (!usage.exhausted) {
+      return;
     }
+    const retryAfterMs = Math.max(0, usage.resetsAt.getTime() - Date.now());
+    throw new PlanQuotaExceededError(retryAfterMs, 0, 0, this.config.upgradeUrl, usage.resetsAt, {
+      pool: "free",
+      upgradePlan: "pro",
+      blockedWindow: usage.blockedWindow
+    });
   }
 
   public async recordTokens(
@@ -268,6 +278,9 @@ export class PlanQuotaService {
       selection?: string | null;
       usageTier?: UsageTier | null;
       forceAutoBucket?: boolean;
+      useCase?: UseCase | string;
+      quotaTurnId?: string;
+      countsAsMessage?: boolean;
     }
   ): Promise<void> {
     if (orgId === "dev") {
@@ -296,6 +309,12 @@ export class PlanQuotaService {
       forceAutoBucket: entry.forceAutoBucket
     });
     const tier = effectiveUsageTier(plan, entry.usageTier);
+    const useCase = typeof entry.useCase === "string" ? entry.useCase : undefined;
+    const countsAsMessage =
+      entry.countsAsMessage ?? (entry.eventType === "chat.message" && countsAsFreeQuotaMessage(useCase));
+    const flashCostUsd = isFreeFlashModel(entry.model)
+      ? flashListCostUsd(entry.inputTokens, entry.outputTokens)
+      : undefined;
     await this.usageTracker?.record({
       orgId,
       userId: entry.userId,
@@ -316,7 +335,11 @@ export class PlanQuotaService {
         plan,
         bucket,
         usdCents: usd.usdCents,
-        usageTier: tier ?? undefined
+        usageTier: tier ?? undefined,
+        ...(useCase ? { useCase } : {}),
+        ...(entry.quotaTurnId?.trim() ? { quotaTurnId: entry.quotaTurnId.trim() } : {}),
+        countsAsMessage,
+        ...(flashCostUsd != null ? { flashCostUsd } : {})
       }
     });
   }
@@ -367,28 +390,33 @@ export class PlanQuotaService {
     return { autoCents, frontierCents };
   }
 
-  private async getRollingUsage(orgId: string, now = new Date()): Promise<{
-    usedTokens: number;
-    resetsAt: Date;
-    events: TokenUsageEvent[];
-  }> {
-    const range = rollingWindowRange(now, this.config.rollingWindowMs);
-    const events = await this.listTokenEvents(orgId, range);
-    const usedTokens = Math.max(
-      0,
-      events.reduce((sum, event) => sum + event.tokens, 0)
-    );
-    const resetsAt =
-      computeQuotaResetsAt(events, usedTokens, this.config.freeTokenLimit, this.config.rollingWindowMs, now) ??
-      new Date(now.getTime() + this.config.rollingWindowMs);
-    return { usedTokens, resetsAt, events };
+  private async getFreeAllowance(orgId: string, now = new Date()) {
+    const eventTypes = [...LLM_USAGE_EVENT_TYPES];
+    const cycleRange = rollingWindowRange(now, this.config.rollingWindowMs);
+    const weekAnchor =
+      (await this.usageTracker?.oldestAllowanceEventAt(orgId, eventTypes)) ?? now;
+    const week = currentWeekWindow(weekAnchor, now);
+    const [cycleEvents, weekEvents] = await Promise.all([
+      this.listAllowanceEvents(orgId, cycleRange),
+      this.listAllowanceEvents(orgId, week)
+    ]);
+    return summarizeFreeAllowance({
+      cycleEvents,
+      weekEvents,
+      weekEnd: week.to,
+      windowMs: this.config.rollingWindowMs,
+      now
+    });
   }
 
-  private async listTokenEvents(orgId: string, range: { from: Date; to: Date }): Promise<TokenUsageEvent[]> {
+  private async listAllowanceEvents(
+    orgId: string,
+    range: { from: Date; to: Date }
+  ): Promise<FreeAllowanceEvent[]> {
     if (!this.usageTracker) {
       return [];
     }
-    return this.usageTracker.listTokenEventsForOrg(orgId, range, [...LLM_USAGE_EVENT_TYPES]);
+    return this.usageTracker.listAllowanceEventsForOrg(orgId, range, [...LLM_USAGE_EVENT_TYPES]);
   }
 }
 
@@ -476,25 +504,28 @@ export function writePlanQuotaExceededResponse(
   error: PlanQuotaExceededError
 ): void {
   response.writeHead(429, { "content-type": "application/json; charset=utf-8" });
-  response.end(
-    JSON.stringify({
-      error: error.code,
-      legacyError: "daily_limit_reached",
-      message: error.message,
-      retryAfterMs: error.retryAfterMs,
-      retryAfter: formatQuotaRetryAfter(error.retryAfterMs),
-      resetsAt: error.resetsAt.toISOString(),
-      usedTokens: error.usedTokens,
-      limitTokens: error.limitTokens,
-      usedCredits: tokensToCredits(error.usedTokens),
-      limitCredits: tokensToCredits(error.limitTokens),
-      upgradeUrl: error.upgradeUrl,
-      pool: error.pool,
-      upgradePlan: error.upgradePlan,
-      usedCents: error.usedCents,
-      limitCents: error.limitCents
-    })
-  );
+  const payload: Record<string, unknown> = {
+    error: error.code,
+    legacyError: "daily_limit_reached",
+    message: error.message,
+    retryAfterMs: error.retryAfterMs,
+    retryAfter: formatQuotaRetryAfter(error.retryAfterMs),
+    resetsAt: error.resetsAt.toISOString(),
+    upgradeUrl: error.upgradeUrl,
+    pool: error.pool,
+    upgradePlan: error.upgradePlan
+  };
+  if (error.pool === "free") {
+    payload.blockedWindow = error.blockedWindow;
+  } else {
+    payload.usedTokens = error.usedTokens;
+    payload.limitTokens = error.limitTokens;
+    payload.usedCredits = tokensToCredits(error.usedTokens);
+    payload.limitCredits = tokensToCredits(error.limitTokens);
+    payload.usedCents = error.usedCents;
+    payload.limitCents = error.limitCents;
+  }
+  response.end(JSON.stringify(payload));
 }
 
 export function writePlanQuotaUnavailableResponse(
@@ -523,31 +554,43 @@ export function msUntilUtcDayEnd(now = new Date()): number {
 }
 
 function buildSnapshot(
-  usedTokens: number,
-  limitTokens: number,
-  resetsAt: Date,
+  usage: {
+    usedRatio: number;
+    exhausted: boolean;
+    nearLimit: boolean;
+    blockedWindow?: FreeBlockedWindow;
+    resetsAt: Date;
+  },
   rollingWindowMs: number
 ): PlanQuotaSnapshot {
-  const clampedUsed = Math.max(0, usedTokens);
-  const remainingTokens = Math.max(0, limitTokens - clampedUsed);
-  const retryAfterMs = Math.max(0, resetsAt.getTime() - Date.now());
+  const retryAfterMs = Math.max(0, usage.resetsAt.getTime() - Date.now());
+  const usedTokens = Math.round(usage.usedRatio * 1000);
   return {
     plan: "free",
-    usedTokens: clampedUsed,
-    limitTokens,
-    remainingTokens,
-    usedCredits: tokensToCredits(clampedUsed),
-    limitCredits: tokensToCredits(limitTokens),
-    remainingCredits: tokensToCredits(remainingTokens),
+    usedRatio: usage.usedRatio,
+    exhausted: usage.exhausted,
+    nearLimit: usage.nearLimit,
+    blockedWindow: usage.blockedWindow,
     windowHours: rollingWindowMs / 3_600_000,
-    resetsAt: resetsAt.toISOString(),
-    retryAfterMs
+    resetsAt: usage.resetsAt.toISOString(),
+    retryAfterMs,
+    usedTokens,
+    limitTokens: 1000,
+    remainingTokens: Math.max(0, 1000 - usedTokens)
   };
 }
 
-function buildQuotaLimitMessage(_retryAfterMs: number, resetsAt: Date, _upgradeUrl: string): string {
-  const atLabel = formatResetsAtLocal(resetsAt);
-  return `You've reached your free AI credits limit. Try again at ${atLabel} or upgrade to Pro for a monthly allowance.`;
+function buildQuotaLimitMessage(
+  _retryAfterMs: number,
+  resetsAt: Date,
+  blockedWindow?: FreeBlockedWindow
+): string {
+  const clock = formatResetsAtLocal(resetsAt);
+  if (blockedWindow === "week") {
+    const weekday = resetsAt.toLocaleDateString(undefined, { weekday: "long" });
+    return `You can continue on ${weekday} at ${clock}. Upgrade to Pro for a monthly allowance.`;
+  }
+  return `You can continue at ${clock}. Upgrade to Pro for a monthly allowance.`;
 }
 
 export function buildPaidCapMessage(upgradePlan?: UsageTier): string {

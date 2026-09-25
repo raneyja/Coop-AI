@@ -410,12 +410,10 @@ export type UserPreferences = {
   /** IANA timezone id; defaults to US Pacific (PST). */
   timezone?: string;
   quotaCredits?: {
-    usedTokens?: number;
-    limitTokens?: number;
-    remainingTokens?: number;
-    usedCredits: number;
-    limitCredits: number;
-    remainingCredits: number;
+    usedRatio: number;
+    exhausted?: boolean;
+    nearLimit?: boolean;
+    blockedWindow?: "cycle" | "week";
     windowHours: number;
     resetsAt: string;
     retryAfterMs: number;
@@ -621,6 +619,7 @@ export type WebviewInbound =
   | { type: "settings:complete-onboarding" }
   | { type: "settings:request-seat-upgrade"; payload: { usageTier: "pro_plus" | "max" } }
   | { type: "settings:convert-own-seat"; payload: { usageTier: "pro_plus" | "max" } }
+  | { type: "billing:upgrade-to-pro" }
   | { type: "settings:auth-cancel" }
   | { type: "settings:update-github-token"; payload: { token: string } }
   | { type: "settings:clear-github-token" }
@@ -814,6 +813,7 @@ export type WebviewOutbound =
         retryAfterMs?: number;
         message?: string;
         pool?: "paid" | "auto" | "frontier" | "free";
+        blockedWindow?: "cycle" | "week";
       };
     }
   | { type: "chat:quota-cleared" }
@@ -878,6 +878,7 @@ export type WebviewOutbound =
   | { type: "settings:navigate"; payload: { screen: string } }
   | { type: "settings:test-result"; payload: { ok: boolean; message: string } }
   | { type: "settings:convert-own-seat-result"; payload: { ok: boolean; message: string } }
+  | { type: "settings:upgrade-to-pro-result"; payload: { ok: boolean; message: string } }
   | { type: "settings:refresh-result"; payload: { ok: boolean; message: string } }
   | { type: "settings:api-key-revealed"; payload: { apiKey: string } }
   | { type: "degradation:notification"; payload: DegradationNotificationPayload }

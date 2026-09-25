@@ -124,6 +124,8 @@ type SettingsPanelProps = {
   onCompleteOnboarding?: () => void;
   onRequestSeatUpgrade?: (usageTier: "pro_plus" | "max") => void;
   onConvertOwnSeat?: (usageTier: "pro_plus" | "max") => void;
+  onUpgradeToPro?: () => void;
+  upgradeToProError?: string | null;
   seatConvertResult?: { ok: boolean; message: string } | null;
 };
 

@@ -149,6 +149,7 @@ type InboundMessage =
         retryAfterMs?: number;
         message?: string;
         pool?: "paid" | "auto" | "frontier" | "free";
+        blockedWindow?: "cycle" | "week";
       };
     }
   | { type: "chat:quota-cleared" }
@@ -332,12 +333,14 @@ function ChatFooter({
   conflictCount,
   hideInlineActivity,
   inlineThinkingOptions,
+  onUpgradeToPro,
   children
 }: {
   error: string;
   onDismissError: () => void;
   quotaNotice?: QuotaExceededNoticeState;
   onDismissQuotaNotice?: () => void;
+  onUpgradeToPro?: () => void;
   contextWarning?: string;
   onDismissContextWarning?: () => void;
   intentFeedback?: IntentFeedbackState;
@@ -354,7 +357,11 @@ function ChatFooter({
   return (
     <footer className="chat-footer">
       {quotaNotice && onDismissQuotaNotice ? (
-        <QuotaExceededNotice notice={quotaNotice} onDismiss={onDismissQuotaNotice} />
+        <QuotaExceededNotice
+          notice={quotaNotice}
+          onDismiss={onDismissQuotaNotice}
+          onUpgradeToPro={onUpgradeToPro}
+        />
       ) : null}
       <ChatActivityStrip
         error={quotaNotice ? undefined : error || undefined}
@@ -1441,7 +1448,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             upgradeUrl: message.payload.upgradeUrl,
             timezone: message.payload.timezone,
             message: message.payload.message,
-            pool: message.payload.pool
+            pool: message.payload.pool,
+            blockedWindow: message.payload.blockedWindow
           });
           setIsStreaming(false);
           setStreamingBuffer("");
@@ -2443,6 +2451,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             conflictCount={conflictCount}
             hideInlineActivity
             inlineThinkingOptions={inlineThinkingOptions}
+            onUpgradeToPro={() => post({ type: "billing:upgrade-to-pro" })}
           >
             {composerStack}
           </ChatFooter>

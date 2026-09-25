@@ -255,7 +255,7 @@ export async function loadOrgUsageSnapshot(input: {
       includeMix ? input.usageTracker.eventsByType(input.org.id, range) : Promise.resolve([])
     ]);
     const usedRatio = snapshot
-      ? unclampedRatio(snapshot.usedTokens, snapshot.limitTokens) ?? 0
+      ? snapshot.usedRatio
       : 0;
     return {
       capKind,
@@ -372,7 +372,7 @@ export async function loadUserUsageSnapshot(input: {
         usedTokens: snapshot.usedTokens,
         limitTokens: snapshot.limitTokens,
         remainingTokens: snapshot.remainingTokens,
-        usedRatio: unclampedRatio(snapshot.usedTokens, snapshot.limitTokens) ?? 0,
+        usedRatio: snapshot.usedRatio,
         resetsAt: snapshot.resetsAt
       };
     }

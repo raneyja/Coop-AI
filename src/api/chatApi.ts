@@ -30,6 +30,7 @@ import {
   writePlanQuotaExceededResponse,
   writePlanQuotaUnavailableResponse
 } from "../server/planQuota";
+import { countsAsFreeQuotaMessage } from "../server/freeAllowance";
 import type { UsageTier } from "../server/usageTiers";
 import { isValidPaperclipDataUrl, isAcceptedPaperclipMimeType, isVisionWeightedPaperclipAttachment } from "../chat/paperclipAttachments";
 
@@ -117,7 +118,8 @@ export async function handleChatApiRequest(
           model,
           forceAutoBucket: true,
           periodAnchor: org.createdAt
-        }
+        },
+        { skipFreeAllowance: true }
       );
     } catch (error) {
       if (error instanceof PlanQuotaExceededError) {
@@ -277,7 +279,9 @@ export async function handleChatApiRequest(
             requestId,
             visionWeighted,
             sessionMode: body.sessionMode,
-            fileSource: body.fileSource
+            fileSource: body.fileSource,
+            useCase,
+            quotaTurnId: typeof body.quotaTurnId === "string" ? body.quotaTurnId : undefined
           });
           recordedUsage = true;
         }
@@ -314,7 +318,9 @@ export async function handleChatApiRequest(
       requestId,
       visionWeighted,
       sessionMode: body.sessionMode,
-      fileSource: body.fileSource
+      fileSource: body.fileSource,
+      useCase,
+      quotaTurnId: typeof body.quotaTurnId === "string" ? body.quotaTurnId : undefined
     });
   }
 
@@ -347,6 +353,8 @@ export async function recordV1ChatUsageTokens(
     visionWeighted?: boolean;
     sessionMode?: "file-assistant" | "indexed-repo";
     fileSource?: "workspace" | "git" | "remote" | "external";
+    useCase?: UseCase;
+    quotaTurnId?: string;
   }
 ): Promise<void> {
   await planQuota.recordTokens(org.orgId, org.plan, {
@@ -364,7 +372,10 @@ export async function recordV1ChatUsageTokens(
     },
     visionWeighted: usage.visionWeighted,
     selection: honored.selection,
-    usageTier: org.usageTier
+    usageTier: org.usageTier,
+    useCase: usage.useCase,
+    quotaTurnId: usage.quotaTurnId,
+    countsAsMessage: countsAsFreeQuotaMessage(usage.useCase)
   });
 }
 

@@ -1,5 +1,9 @@
 import React from "react";
-import { formatQuotaRetryClock, isPaidQuotaPool, PAID_USAGE_EXHAUSTED_COPY } from "../../chat/quotaNotice";
+import {
+  formatFreeAllowanceCopy,
+  isPaidQuotaPool,
+  PAID_USAGE_EXHAUSTED_COPY
+} from "../../chat/quotaNotice";
 import { CoopNotice } from "./CoopNotice";
 
 export type QuotaExceededNoticeState = {
@@ -8,35 +12,50 @@ export type QuotaExceededNoticeState = {
   timezone?: string;
   message?: string;
   pool?: "paid" | "auto" | "frontier" | "free";
+  blockedWindow?: "cycle" | "week";
 };
 
 type QuotaExceededNoticeProps = {
   notice: QuotaExceededNoticeState;
   onDismiss: () => void;
+  onUpgradeToPro?: () => void;
 };
 
-export function QuotaExceededNotice({ notice, onDismiss }: QuotaExceededNoticeProps): React.ReactElement {
-  const retryAt = formatQuotaRetryClock(notice.resetsAt, notice.timezone);
+export function QuotaExceededNotice({
+  notice,
+  onDismiss,
+  onUpgradeToPro
+}: QuotaExceededNoticeProps): React.ReactElement {
   const paid = isPaidQuotaPool(notice.pool);
-  const body = notice.message?.trim()
-    ? notice.message
-    : paid
-      ? PAID_USAGE_EXHAUSTED_COPY
-      : `You've reached your free AI credits limit. Try again at ${retryAt}.`;
+  const body = paid
+    ? notice.message?.trim() || PAID_USAGE_EXHAUSTED_COPY
+    : formatFreeAllowanceCopy({
+        resetsAt: notice.resetsAt,
+        blockedWindow: notice.blockedWindow,
+        timezone: notice.timezone
+      });
 
   return (
     <CoopNotice tone="warning" compact onDismiss={onDismiss} className="chat-quota-notice">
       <p className="coop-notice-body">
         {body}{" "}
-        <a
-          className="coop-text-btn !inline !px-0 !py-0 align-baseline"
-          href={notice.upgradeUrl}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Upgrade
-        </a>
-        {paid ? " for more included usage." : " for a monthly allowance."}
+        {paid ? (
+          <>
+            <a
+              className="coop-text-btn !inline !px-0 !py-0 align-baseline"
+              href={notice.upgradeUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Upgrade
+            </a>
+            {" for more included usage."}
+          </>
+        ) : (
+          <button type="button" className="coop-text-btn !inline !px-0 !py-0 align-baseline" onClick={onUpgradeToPro}>
+            Upgrade to Pro
+          </button>
+        )}
       </p>
     </CoopNotice>
   );

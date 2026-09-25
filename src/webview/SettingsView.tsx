@@ -29,6 +29,7 @@ type InboundMessage =
   | { type: "settings:navigate"; payload: { screen: string } }
   | { type: "settings:test-result"; payload: { ok: boolean; message: string } }
   | { type: "settings:convert-own-seat-result"; payload: { ok: boolean; message: string } }
+  | { type: "settings:upgrade-to-pro-result"; payload: { ok: boolean; message: string } }
   | { type: "settings:refresh-result"; payload: { ok: boolean; message: string } }
   | { type: "settings:api-key-revealed"; payload: { apiKey: string } }
   | {
@@ -187,6 +188,7 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
     saving: false
   });
   const [lightningState, setLightningState] = useState<SettingsLightningSummary | null>(null);
+  const [upgradeToProError, setUpgradeToProError] = useState<string | null>(null);
   const [seatConvertResult, setSeatConvertResult] = useState<{ ok: boolean; message: string } | null>(
     null
   );
@@ -443,6 +445,9 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           break;
         case "settings:convert-own-seat-result":
           setSeatConvertResult(message.payload);
+          break;
+        case "settings:upgrade-to-pro-result":
+          setUpgradeToProError(message.payload.ok ? null : message.payload.message);
           break;
         case "settings:refresh-result":
           completeRefresh(message.payload);
@@ -871,6 +876,8 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
           setPrefs((current) => ({ ...current, onboardingCompleted: true }));
           post({ type: "settings:complete-onboarding" });
         }}
+        onUpgradeToPro={() => post({ type: "billing:upgrade-to-pro" })}
+        upgradeToProError={upgradeToProError}
         onRequestSeatUpgrade={(usageTier) =>
           post({ type: "settings:request-seat-upgrade", payload: { usageTier } })
         }

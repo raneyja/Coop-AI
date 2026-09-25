@@ -6,6 +6,7 @@ import {
   formatFreeQuotaResumeParts,
   formatPaidUsageResetCopy,
   formatPaidUsageResetParts,
+  formatFreeAllowanceCopy,
   formatQuotaRetryClock,
   isFreeQuotaExhausted,
   isPaidQuotaPool,
@@ -33,6 +34,24 @@ assert.equal(isFreeQuotaExhausted({ remainingTokens: 500 }), false);
 assert.equal(isFreeQuotaExhausted({ usedTokens: 80_000, limitTokens: 80_000 }), true);
 assert.equal(isFreeQuotaExhausted({ usedTokens: 56_287, limitTokens: 80_000 }), false);
 assert.equal(isFreeQuotaExhausted({ remainingCredits: 0 }), true);
+assert.equal(isFreeQuotaExhausted({ exhausted: true, usedRatio: 1 }), true);
+assert.equal(isFreeQuotaExhausted({ usedRatio: 0.4 }), false);
+assert.match(
+  formatFreeAllowanceCopy({
+    resetsAt: "2026-07-01T01:44:00.000Z",
+    blockedWindow: "cycle",
+    timezone: "America/Los_Angeles"
+  }),
+  /You can continue at .+\. Upgrade to Pro for a monthly allowance\./
+);
+assert.match(
+  formatFreeAllowanceCopy({
+    resetsAt: "2026-07-07T22:00:00.000Z",
+    blockedWindow: "week",
+    timezone: "America/Los_Angeles"
+  }),
+  /You can continue on .+\ at .+\. Upgrade to Pro for a monthly allowance\./
+);
 
 assert.equal(isPaidQuotaPool("paid"), true);
 assert.equal(isPaidQuotaPool("auto"), true);

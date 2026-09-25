@@ -166,8 +166,35 @@ const honoredFreeTamper = resolveHonoredChatModel({
   useCase: "chat",
   clientModel: "claude-opus-4-8"
 });
-assert.equal(honoredFreeTamper.model, "gpt-5-mini");
+assert.equal(honoredFreeTamper.provider, "gemini");
+assert.equal(honoredFreeTamper.model, "gemini-2.0-flash");
 assert.equal(honoredFreeTamper.selection, "auto");
+
+const honoredFreeQuickAction = resolveHonoredChatModel({
+  allowUnapprovedProvider: false,
+  plan: "free",
+  useCase: "blast_radius",
+  clientModel: "claude-sonnet-4-6"
+});
+assert.equal(honoredFreeQuickAction.model, "gemini-2.0-flash");
+
+const honoredFreeEdit = resolveHonoredChatModel({
+  allowUnapprovedProvider: false,
+  plan: "free",
+  useCase: "code_edit",
+  clientModel: "gpt-5.1"
+});
+assert.equal(honoredFreeEdit.model, "gemini-2.0-flash");
+
+const honoredFreeIntent = resolveHonoredChatModel({
+  allowUnapprovedProvider: false,
+  plan: "free",
+  useCase: "intent_suggest"
+});
+assert.equal(honoredFreeIntent.model, "gemini-2.0-flash");
+
+const freeRuntimeQa = resolveRuntimeModelForUseCase("ownership", { plan: "free", model: "claude-sonnet-4-6" });
+assert.equal(freeRuntimeQa.model, "gemini-2.0-flash");
 
 const honoredUnknown = resolveHonoredChatModel({
   allowUnapprovedProvider: false,

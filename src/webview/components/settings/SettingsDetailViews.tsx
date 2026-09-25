@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  formatFreeQuotaResumeParts,
+  formatFreeAllowanceCopy,
   formatPaidUsageResetParts,
+  FREE_NEAR_LIMIT_COPY,
   isFreeQuotaExhausted,
   type PaidUsageResetParts
 } from "../../../chat/quotaNotice";
@@ -38,7 +39,6 @@ import {
   accountDetailIdentity,
   displayOrgName,
   displayPlanLabel,
-  formatQuotaUsageSummary,
   integrationListSubtitle,
   incomingSeatUpgradeCopy,
   planAdminPortalHref,
@@ -190,6 +190,8 @@ export type SettingsDetailProps = {
   onDetachAgentsMd?: () => void;
   onRequestSeatUpgrade?: (usageTier: "pro_plus" | "max") => void;
   onConvertOwnSeat?: (usageTier: "pro_plus" | "max") => void;
+  onUpgradeToPro?: () => void;
+  upgradeToProError?: string | null;
   seatConvertResult?: { ok: boolean; message: string } | null;
 };
 
@@ -454,45 +456,31 @@ function FreePlanUsageMeter({
   timezone?: string;
 }): React.ReactElement {
   const exhausted = isFreeQuotaExhausted(quota);
-  const used = quota.usedCredits ?? Math.max(0, quota.limitCredits - quota.remainingCredits);
-  const pct = quotaUsedPercent(used, quota.limitCredits);
-  const [now, setNow] = useState(() => new Date());
-
-  useEffect(() => {
-    if (!exhausted) {
-      return;
-    }
-    const id = window.setInterval(() => setNow(new Date()), 1000);
-    return () => window.clearInterval(id);
-  }, [exhausted]);
-
-  const resume = exhausted
-    ? formatFreeQuotaResumeParts(
-        { resetsAt: quota.resetsAt, windowHours: quota.windowHours, timezone },
-        now
-      )
-    : null;
+  const pct = quotaUsedPercent(quota.usedRatio ?? 0, 1);
+  const caption = exhausted
+    ? formatFreeAllowanceCopy({
+        resetsAt: quota.resetsAt,
+        blockedWindow: quota.blockedWindow,
+        timezone
+      })
+    : quota.nearLimit
+      ? FREE_NEAR_LIMIT_COPY
+      : "";
 
   return (
     <>
       <div
         className="coop-usage-track !mt-0"
         role="img"
-        aria-label={`${pct}% of free AI credits used`}
+        aria-label="Free allowance used"
       >
         {pct > 0 ? (
           <div className="coop-usage-seg coop-usage-seg--auto" style={{ width: `${pct}%` }} />
         ) : null}
       </div>
-      <p className="text-[11px] text-[var(--coop-panel-muted)]">
-        {formatQuotaUsageSummary(quota, { exhausted })}
-      </p>
-      {resume ? (
-        <p className="text-[13px]" aria-live="polite">
-          Paused at <span className="font-medium">{resume.pausedAtLabel}</span>
-          {" · resumes at "}
-          <span className="font-medium">{resume.resumesAtLabel}</span>
-          <span className="text-[var(--coop-panel-muted)]"> ({resume.countdown})</span>
+      {caption ? (
+        <p className="text-[11px] text-[var(--coop-panel-muted)]" aria-live="polite">
+          {caption}
         </p>
       ) : null}
     </>
@@ -503,10 +491,11 @@ function PlanUsageDetail({
   prefs,
   onRequestSeatUpgrade,
   onConvertOwnSeat,
+  onUpgradeToPro,
+  upgradeToProError,
   seatConvertResult
 }: SettingsDetailProps): React.ReactElement {
   const orgName = displayOrgName(prefs);
-  const adminBase = (prefs.adminPortalUrl ?? "https://admin.coop-ai.dev").replace(/\/$/, "");
   const adminHref = planAdminPortalHref(prefs);
   const meters = prefs.usageMeters;
   const resetParts = formatPaidUsageResetParts(meters?.periodEnd);
@@ -769,11 +758,14 @@ function PlanUsageDetail({
           Open admin portal
         </a>
         {isFreeDeveloperPlan(prefs) ? (
-          <a className="coop-settings-action-btn" href={`${adminBase}/billing`} target="_blank" rel="noreferrer">
+          <button type="button" className="coop-settings-action-btn" onClick={onUpgradeToPro}>
             Upgrade to Pro
-          </a>
+          </button>
         ) : null}
       </div>
+      {upgradeToProError ? (
+        <p className="coop-settings-test-message--error mt-2">{upgradeToProError}</p>
+      ) : null}
 
       {convertPhase === "confirm" && convertCopy && upgradeCta.kind === "admin-convert" ? (
         <div

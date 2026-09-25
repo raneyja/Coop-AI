@@ -126,6 +126,8 @@ export type V1ChatRequestBody = {
   /** L vs R for this turn. Stored on chat.message metadata. Not a new quota bucket. */
   sessionMode?: "file-assistant" | "indexed-repo";
   fileSource?: "workspace" | "git" | "remote" | "external";
+  /** Groups model calls from one composer send / quick action / edit. */
+  quotaTurnId?: string;
 };
 
 export type ProviderThinkingOptions = {

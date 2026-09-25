@@ -136,10 +136,15 @@ export function pickerAppliesToUseCase(useCase: UseCase): boolean {
   return feature === "chat" || feature === "quickActions" || feature === "edit";
 }
 
+const FREE_FORCED_MODEL = { provider: "gemini" as const, model: "gemini-2.0-flash" };
+
 export function resolveRuntimeModelForUseCase(
   useCase: UseCase,
   prefs: RuntimeModelPrefs
 ): { provider: LlmProvider; model: string } {
+  if (prefs.plan === "free" && useCase !== "inline_completion") {
+    return FREE_FORCED_MODEL;
+  }
   if (prefs.devMode === true && !isAutoModelSelection(prefs.model) && prefs.model?.trim()) {
     return {
       provider: (prefs.llmProvider ?? "openai") as LlmProvider,
@@ -167,6 +172,9 @@ export function resolveHonoredChatModel(input: {
   clientModel?: string;
 }): { provider: LlmProvider; model: string; selection: string } {
   const assigned = resolveAssignedModelForUseCase(input.useCase);
+  if (input.plan === "free" && input.useCase !== "inline_completion") {
+    return { ...FREE_FORCED_MODEL, selection: "auto" };
+  }
   if (input.allowUnapprovedProvider && input.clientModel && !isAutoModelSelection(input.clientModel)) {
     return {
       provider: input.clientProvider ?? assigned.provider,

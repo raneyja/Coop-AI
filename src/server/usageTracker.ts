@@ -18,6 +18,17 @@ export type TokenUsageEvent = {
   tokens: number;
 };
 
+export type AllowanceUsageEvent = {
+  createdAt: Date;
+  inputTokens: number;
+  outputTokens: number;
+  model: string;
+  useCase?: string;
+  quotaTurnId?: string;
+  countsAsMessage: boolean;
+  flashCostUsd?: number;
+};
+
 export type ProductMix = {
   chat: number;
   completions: number;
@@ -42,6 +53,31 @@ export const JSONB_SIGNED_INT_REGEX = "^-?\\d+$";
 
 export function isSignedIntJson(value: string): boolean {
   return /^-?\d+$/.test(value);
+}
+
+function parseAllowanceRow(row: {
+  created_at?: unknown;
+  input_tokens?: unknown;
+  output_tokens?: unknown;
+  model?: unknown;
+  use_case?: unknown;
+  quota_turn_id?: unknown;
+  counts_as_message?: unknown;
+  flash_cost_usd?: unknown;
+}): AllowanceUsageEvent {
+  const inputTokens = Number(row.input_tokens ?? 0);
+  const outputTokens = Number(row.output_tokens ?? 0);
+  const flashCost = Number(row.flash_cost_usd);
+  return {
+    createdAt: new Date(String(row.created_at)),
+    inputTokens: Number.isFinite(inputTokens) ? inputTokens : 0,
+    outputTokens: Number.isFinite(outputTokens) ? outputTokens : 0,
+    model: typeof row.model === "string" ? row.model : "",
+    useCase: typeof row.use_case === "string" ? row.use_case : undefined,
+    quotaTurnId: typeof row.quota_turn_id === "string" && row.quota_turn_id.trim() ? row.quota_turn_id.trim() : undefined,
+    countsAsMessage: row.counts_as_message === true || row.counts_as_message === "true",
+    flashCostUsd: Number.isFinite(flashCost) ? flashCost : undefined
+  };
 }
 
 function jsonSignedIntSql(key: string): string {
@@ -126,6 +162,54 @@ export class UsageTracker {
       createdAt: new Date(String(row.created_at)),
       tokens: Number(row.tokens ?? 0)
     }));
+  }
+
+  public async listAllowanceEventsForOrg(
+    orgId: string,
+    range: UsageDateRange,
+    eventTypes: string[]
+  ): Promise<AllowanceUsageEvent[]> {
+    if (!this.pool || eventTypes.length === 0) {
+      return [];
+    }
+    const result = await this.pool.query(
+      `SELECT created_at,
+              metadata->>'inputTokens' AS input_tokens,
+              metadata->>'outputTokens' AS output_tokens,
+              metadata->>'model' AS model,
+              metadata->>'useCase' AS use_case,
+              metadata->>'quotaTurnId' AS quota_turn_id,
+              metadata->>'countsAsMessage' AS counts_as_message,
+              metadata->>'flashCostUsd' AS flash_cost_usd
+       FROM usage_events
+       WHERE org_id = $1
+         AND created_at >= $2
+         AND created_at < $3
+         AND event_type = ANY($4::text[])
+       ORDER BY created_at ASC`,
+      [orgId, range.from, range.to, eventTypes]
+    );
+    return result.rows.map((row) => parseAllowanceRow(row));
+  }
+
+  public async oldestAllowanceEventAt(orgId: string, eventTypes: string[]): Promise<Date | undefined> {
+    if (!this.pool || eventTypes.length === 0) {
+      return undefined;
+    }
+    const result = await this.pool.query(
+      `SELECT MIN(created_at) AS oldest
+       FROM usage_events
+       WHERE org_id = $1
+         AND event_type = ANY($2::text[])
+         AND (
+           metadata->>'model' = 'gemini-2.0-flash'
+           OR metadata->>'countsAsMessage' = 'true'
+           OR COALESCE(metadata->>'quotaTurnId', '') <> ''
+         )`,
+      [orgId, eventTypes]
+    );
+    const oldest = result.rows[0]?.oldest;
+    return oldest ? new Date(String(oldest)) : undefined;
   }
 
   public async sumTokensForOrg(

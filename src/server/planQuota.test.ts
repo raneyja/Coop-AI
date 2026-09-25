@@ -11,6 +11,7 @@ import {
   rollingWindowRange,
   tokensToCredits
 } from "./planQuota";
+import { flashListCostUsd } from "./freeAllowance";
 import type { TokenUsageEvent } from "./usageTracker";
 import { UsageTracker } from "./usageTracker";
 
@@ -85,62 +86,170 @@ void (async () => {
   const blockedReset = computeQuotaResetsAt(events, 11_000, 10_000, DEFAULT_ROLLING_WINDOW_MS, now);
   assert.equal(blockedReset?.toISOString(), "2026-06-12T16:00:00.000Z");
 
-  const pool = {
-    query: async (sql: string, params: unknown[]) => {
-      if (sql.includes("ORDER BY created_at ASC")) {
-        assert.deepEqual(params[3], [...LLM_USAGE_EVENT_TYPES]);
-        return {
-          rows: [
-            { created_at: "2026-06-12T11:00:00.000Z", tokens: 6_000 },
-            { created_at: "2026-06-12T13:00:00.000Z", tokens: 3_500 }
-          ]
-        };
-      }
-      return { rows: [] };
-    }
+  type AllowanceRow = {
+    created_at: string;
+    input_tokens: number;
+    output_tokens: number;
+    model: string;
+    use_case?: string;
+    quota_turn_id?: string;
+    counts_as_message?: string;
+    flash_cost_usd?: number;
   };
 
-  const tracker = new UsageTracker(pool as never);
-  const quota = new PlanQuotaService(tracker, config);
-
-  const snapshot = await quota.getSnapshot("org-free", "free");
-  assert.ok(snapshot);
-  assert.equal(snapshot?.usedTokens, 9_500);
-  assert.equal(snapshot?.remainingTokens, 500);
-  assert.equal(snapshot?.limitCredits, 10);
-  assert.equal(snapshot?.windowHours, 5);
-
-  // With 9,500 used and 500 remaining, requests should still be allowed.
-  await quota.check("org-free", "free", 600);
-
-  const exhaustedPool = {
-    query: async (sql: string, params: unknown[]) => {
-      if (sql.includes("ORDER BY created_at ASC")) {
-        return {
-          rows: [
-            { created_at: "2026-06-12T11:00:00.000Z", tokens: 6_000 },
-            { created_at: "2026-06-12T13:00:00.000Z", tokens: 4_000 }
-          ]
-        };
+  function allowancePool(rows: AllowanceRow[], oldest = rows[0]?.created_at) {
+    return {
+      query: async (sql: string, params: unknown[]) => {
+        if (sql.includes("MIN(created_at)")) {
+          return { rows: oldest ? [{ oldest }] : [] };
+        }
+        if (sql.includes("flash_cost_usd")) {
+          const from = new Date(String(params[1]));
+          const to = new Date(String(params[2]));
+          return {
+            rows: rows.filter((row) => {
+              const createdAt = new Date(row.created_at);
+              return createdAt >= from && createdAt < to;
+            })
+          };
+        }
+        return { rows: [] };
       }
-      return { rows: [] };
-    }
-  };
-  const exhaustedQuota = new PlanQuotaService(new UsageTracker(exhaustedPool as never), config);
-  try {
-    await exhaustedQuota.check("org-free", "free", 1);
-    assert.fail("expected quota check to reject when exhausted");
-  } catch (error) {
-    assert.ok(error instanceof PlanQuotaExceededError);
-    assert.equal(error.code, "quota_limit_reached");
-    assert.equal(error.usedTokens, 10_000);
-    assert.equal(error.limitTokens, 10_000);
-    assert.match(error.message, /upgrade to Pro/i);
-    assert.match(error.message, /Try again at/i);
+    };
   }
 
-  await quota.check("org-free", "pro", 50_000);
-  await quota.check("dev", "free", 50_000);
+  function messageRow(_index: number, turnId: string): AllowanceRow {
+    return {
+      created_at: now.toISOString(),
+      input_tokens: 100,
+      output_tokens: 50,
+      model: "gemini-2.0-flash",
+      use_case: "chat",
+      quota_turn_id: turnId,
+      counts_as_message: "true",
+      flash_cost_usd: 0.000025
+    };
+  }
+
+  const nineteenMessages: AllowanceRow[] = Array.from({ length: 19 }, (_, index) =>
+    messageRow(index, `turn-${index}`)
+  );
+  nineteenMessages.forEach((row, index) => {
+    row.created_at = new Date(now.getTime() - (19 - index) * 60_000).toISOString();
+  });
+
+  const nineteenQuota = new PlanQuotaService(new UsageTracker(allowancePool(nineteenMessages) as never), config);
+  await nineteenQuota.check("org-free", "free", 0, now);
+  const nineteenSnapshot = await nineteenQuota.getSnapshot("org-free", "free", now);
+  assert.ok(nineteenSnapshot);
+  assert.equal(nineteenSnapshot?.exhausted, false);
+
+  const twentyMessages = [
+    ...nineteenMessages,
+    { ...messageRow(20, "turn-20"), created_at: new Date(now.getTime() - 1_000).toISOString() }
+  ];
+  const twentyOneQuota = new PlanQuotaService(new UsageTracker(allowancePool(twentyMessages) as never), config);
+  try {
+    await twentyOneQuota.check("org-free", "free", 0, now);
+    assert.fail("expected the 21st message to be refused after 20 were recorded");
+  } catch (error) {
+    assert.ok(error instanceof PlanQuotaExceededError);
+    assert.equal(error.blockedWindow, "cycle");
+    assert.doesNotMatch(error.message, /token/i);
+    assert.doesNotMatch(error.message, /20/);
+    assert.match(error.message, /You can continue at/);
+    assert.match(error.message, /Upgrade to Pro for a monthly allowance/);
+  }
+
+  const dollarBlocked: AllowanceRow[] = [
+    {
+      created_at: new Date(now.getTime() - 60_000).toISOString(),
+      input_tokens: 2_000_000,
+      output_tokens: 750_000,
+      model: "gemini-2.0-flash",
+      use_case: "chat",
+      quota_turn_id: "cost-1",
+      counts_as_message: "true",
+      flash_cost_usd: 0.5
+    }
+  ];
+  const dollarQuota = new PlanQuotaService(new UsageTracker(allowancePool(dollarBlocked) as never), config);
+  try {
+    await dollarQuota.check("org-free", "free", 0, now);
+    assert.fail("expected $0.50 cycle cap to refuse");
+  } catch (error) {
+    assert.ok(error instanceof PlanQuotaExceededError);
+    assert.equal(error.blockedWindow, "cycle");
+    assert.match(error.message, /You can continue at/);
+  }
+
+  const weekBlocked: AllowanceRow[] = [
+    {
+      created_at: new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+      input_tokens: 8_000_000,
+      output_tokens: 3_000_000,
+      model: "gemini-2.0-flash",
+      use_case: "chat",
+      quota_turn_id: "week-1",
+      counts_as_message: "true",
+      flash_cost_usd: 2
+    }
+  ];
+  const weekQuota = new PlanQuotaService(new UsageTracker(allowancePool(weekBlocked) as never), config);
+  try {
+    await weekQuota.check("org-free", "free", 0, now);
+    assert.fail("expected weekly $2 cap to refuse");
+  } catch (error) {
+    assert.ok(error instanceof PlanQuotaExceededError);
+    assert.equal(error.blockedWindow, "week");
+    assert.match(error.message, /You can continue on/);
+    assert.doesNotMatch(error.message, /five hours/i);
+  }
+
+  const flashTiny = flashListCostUsd(80, 40);
+  assert.ok(flashTiny < 0.01);
+  const intentOnly: AllowanceRow[] = [
+    {
+      created_at: new Date(now.getTime() - 60_000).toISOString(),
+      input_tokens: 80,
+      output_tokens: 40,
+      model: "gemini-2.0-flash",
+      use_case: "intent_suggest",
+      counts_as_message: "false",
+      flash_cost_usd: flashTiny
+    }
+  ];
+  const intentQuota = new PlanQuotaService(new UsageTracker(allowancePool(intentOnly) as never), config);
+  await intentQuota.check("org-free", "free", 0, now);
+  const intentSnapshot = await intentQuota.getSnapshot("org-free", "free", now);
+  assert.equal(intentSnapshot?.exhausted, false);
+  assert.ok((intentSnapshot?.usedRatio ?? 1) < 0.05);
+
+  const dualCall: AllowanceRow[] = [
+    {
+      created_at: new Date(now.getTime() - 30_000).toISOString(),
+      input_tokens: 1_000,
+      output_tokens: 400,
+      model: "gemini-2.0-flash",
+      use_case: "chat",
+      quota_turn_id: "same-send",
+      counts_as_message: "true",
+      flash_cost_usd: flashListCostUsd(1_000, 400)
+    },
+    {
+      created_at: new Date(now.getTime() - 20_000).toISOString(),
+      input_tokens: 800,
+      output_tokens: 200,
+      model: "gemini-2.0-flash",
+      use_case: "chat",
+      quota_turn_id: "same-send",
+      counts_as_message: "true",
+      flash_cost_usd: flashListCostUsd(800, 200)
+    }
+  ];
+  const dualQuota = new PlanQuotaService(new UsageTracker(allowancePool(dualCall) as never), config);
+  const dualSnapshot = await dualQuota.getSnapshot("org-free", "free", now);
+  assert.ok((dualSnapshot?.usedRatio ?? 1) < 0.1);
 
   let recorded: Record<string, unknown> | undefined;
   const recordingPool = {
@@ -181,42 +290,26 @@ void (async () => {
     visionWeighted: true,
     plan: "free",
     bucket: "auto",
-    usdCents: 2
+    usdCents: 2,
+    countsAsMessage: true
   });
 
+  await recordingQuota.recordTokens("org-free", "free", {
+    eventType: "chat.message",
+    inputTokens: 10,
+    outputTokens: 10,
+    provider: "gemini",
+    model: "gemini-2.0-flash",
+    principal: "user:test",
+    useCase: "chat",
+    quotaTurnId: "tiny"
+  });
+  const tinyMeta = recorded?.metadata as Record<string, unknown>;
+  assert.equal(tinyMeta.flashCostUsd, flashListCostUsd(10, 10));
+  assert.ok(Number(tinyMeta.flashCostUsd) < 0.01);
+  assert.notEqual(tinyMeta.usdCents, tinyMeta.flashCostUsd);
+
   assert.equal(DEFAULT_FREE_TOKEN_LIMIT, 80_000);
-
-  const windowMs = DEFAULT_ROLLING_WINDOW_MS;
-  const usageRows = [{ created_at: "2026-06-12T11:00:00.000Z", tokens: 10_000 }];
-  const rollingPool = {
-    query: async (sql: string, params: unknown[]) => {
-      if (!sql.includes("ORDER BY created_at ASC")) {
-        return { rows: [] };
-      }
-      const from = new Date(String(params[1]));
-      const to = new Date(String(params[2]));
-      const rows = usageRows.filter((row) => {
-        const createdAt = new Date(row.created_at);
-        return createdAt >= from && createdAt < to;
-      });
-      return { rows };
-    }
-  };
-  const rollingQuota = new PlanQuotaService(new UsageTracker(rollingPool as never), config);
-  const exhaustedAt = new Date("2026-06-12T15:00:00.000Z");
-  try {
-    await rollingQuota.check("org-free", "free", 0, exhaustedAt);
-    assert.fail("expected quota check to reject when rolling window is full");
-  } catch (error) {
-    assert.ok(error instanceof PlanQuotaExceededError);
-    assert.equal(error.resetsAt.toISOString(), "2026-06-12T16:00:00.000Z");
-  }
-
-  const afterReset = new Date("2026-06-12T16:00:01.000Z");
-  await rollingQuota.check("org-free", "free", 0, afterReset);
-  const recovered = await rollingQuota.getSnapshot("org-free", "free", afterReset);
-  assert.equal(recovered?.usedTokens, 0);
-  assert.equal(recovered?.remainingTokens, 10_000);
 
   const paidNow = new Date("2026-09-15T12:00:00.000Z");
   const centsByKey = new Map<string, { auto: number; frontier: number }>();

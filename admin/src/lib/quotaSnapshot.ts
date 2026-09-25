@@ -13,6 +13,10 @@ export type QuotaSnapshotFields = {
   plan?: string;
   usageTier?: string | null;
   unlimited?: boolean;
+  usedRatio?: number;
+  exhausted?: boolean;
+  nearLimit?: boolean;
+  blockedWindow?: "cycle" | "week";
   usedTokens?: number;
   limitTokens?: number;
   remainingTokens?: number;
@@ -51,13 +55,16 @@ export function normalizeQuotaSnapshot(data?: QuotaSnapshotFields | null): Quota
       : typeof nested?.plan === "string" && nested.plan.trim()
         ? nested.plan.trim()
         : "free";
+  const usedRatio = pickFiniteNumber(data?.usedRatio, nested?.usedRatio);
   const usedTokens = pickFiniteNumber(data?.usedTokens, nested?.usedTokens);
   const limitTokens = pickFiniteNumber(data?.limitTokens, nested?.limitTokens);
   const remainingTokens = pickFiniteNumber(data?.remainingTokens, nested?.remainingTokens);
   const usedCredits =
-    pickFiniteNumber(data?.usedCredits, nested?.usedCredits) ?? tokensToCredits(usedTokens);
+    pickFiniteNumber(data?.usedCredits, nested?.usedCredits) ??
+    (typeof usedRatio === "number" ? undefined : tokensToCredits(usedTokens));
   const limitCredits =
-    pickFiniteNumber(data?.limitCredits, nested?.limitCredits) ?? tokensToCredits(limitTokens);
+    pickFiniteNumber(data?.limitCredits, nested?.limitCredits) ??
+    (typeof usedRatio === "number" ? undefined : tokensToCredits(limitTokens));
   const remainingCredits =
     pickFiniteNumber(data?.remainingCredits, nested?.remainingCredits) ??
     (typeof usedCredits === "number" && typeof limitCredits === "number"
@@ -68,6 +75,7 @@ export function normalizeQuotaSnapshot(data?: QuotaSnapshotFields | null): Quota
     ...nested,
     ...data,
     plan,
+    usedRatio,
     usedTokens,
     limitTokens,
     remainingTokens,
@@ -83,6 +91,15 @@ export function normalizeQuotaSnapshot(data?: QuotaSnapshotFields | null): Quota
 
 export function resolveFreeQuotaCredits(snapshot?: QuotaSnapshotFields | null): QuotaCredits | null {
   const normalized = normalizeQuotaSnapshot(snapshot ?? undefined);
+  if (typeof normalized.usedRatio === "number") {
+    return {
+      usedCredits: Math.round(normalized.usedRatio * 100),
+      limitCredits: 100,
+      remainingCredits: Math.max(0, 100 - Math.round(normalized.usedRatio * 100)),
+      windowHours: normalized.windowHours ?? 5,
+      resetsAt: normalized.resetsAt
+    };
+  }
   const limitCredits = normalized.limitCredits;
   const usedCredits = normalized.usedCredits;
   if (typeof limitCredits !== "number" || typeof usedCredits !== "number") {

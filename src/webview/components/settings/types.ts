@@ -60,9 +60,10 @@ export type Preferences = {
   }>;
   usageMeters?: import("../../../api/CoopBackendClient").PaidUsageMeters;
   quotaCredits?: {
-    usedCredits: number;
-    limitCredits: number;
-    remainingCredits: number;
+    usedRatio: number;
+    exhausted?: boolean;
+    nearLimit?: boolean;
+    blockedWindow?: "cycle" | "week";
     windowHours: number;
     resetsAt: string;
     retryAfterMs: number;

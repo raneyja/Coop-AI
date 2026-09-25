@@ -54,11 +54,18 @@ export type StreamChatParams = {
   enableThinking?: boolean;
   sessionMode?: "file-assistant" | "indexed-repo";
   fileSource?: "workspace" | "git" | "remote" | "external";
+  quotaTurnId?: string;
 };
 
 export class SecureApiClient {
   private http: AxiosInstance;
   private readonly backend: CoopBackendClient;
+  private quotaTurnId?: string;
+
+  public beginQuotaTurn(id = crypto.randomUUID()): string {
+    this.quotaTurnId = id;
+    return id;
+  }
 
   public constructor(private readonly secrets: vscode.SecretStorage) {
     this.http = axios.create({ timeout: 60_000 });
@@ -326,6 +333,13 @@ export class SecureApiClient {
 
   public async convertOwnSeat(baseUrl: string, usageTier: "pro_plus" | "max") {
     return this.backend.convertOwnSeat(baseUrl, usageTier);
+  }
+
+  public async createUpgradeCheckoutSession(
+    baseUrl: string,
+    opts?: { email?: string; seats?: number; tier?: "pro" | "pro_plus" | "max" }
+  ) {
+    return this.backend.createUpgradeCheckoutSession(baseUrl, opts);
   }
 
   public async fetchMeIntegrations(baseUrl: string) {
@@ -760,7 +774,8 @@ export class SecureApiClient {
         maxTokens: body.maxTokens,
         enableThinking: body.enableThinking === true,
         sessionMode: body.sessionMode,
-        fileSource: body.fileSource
+        fileSource: body.fileSource,
+        quotaTurnId: body.quotaTurnId ?? this.quotaTurnId
       },
       onChunk,
       signal,

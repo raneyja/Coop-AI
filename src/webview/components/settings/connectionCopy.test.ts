@@ -76,7 +76,7 @@ test("accountHubSubtitle reports sign-in with user email", () => {
       orgName: "Acme Corp",
       userEmail: "jon@acme.com",
       plan: "free",
-      quotaCredits: { remainingCredits: 3, limitCredits: 10, usedCredits: 7, windowHours: 24, resetsAt: "", retryAfterMs: 0 }
+      quotaCredits: { usedRatio: 0.7, windowHours: 5, resetsAt: "", retryAfterMs: 0 }
     }),
     "Signed in · jon@acme.com"
   );
@@ -89,9 +89,9 @@ test("planUsageHubSubtitle shows plan and used credits", () => {
       ...basePrefs,
       orgName: "Acme Corp",
       plan: "free",
-      quotaCredits: { remainingCredits: 24, limitCredits: 80, usedCredits: 56, windowHours: 5, resetsAt: "", retryAfterMs: 0 }
+      quotaCredits: { usedRatio: 0.7, windowHours: 5, resetsAt: "", retryAfterMs: 0 }
     }),
-    "Free · 56K of 80K used"
+    "Free"
   );
   assert.equal(planUsageHubSubtitle({ ...basePrefs, hasApiKey: false, isSignedIn: false }), "Sign in to view plan");
   assert.equal(
@@ -117,27 +117,32 @@ test("planUsageHubSubtitle shows plan and used credits", () => {
   );
 });
 
-test("formatQuotaUsageSummary shows used credits in K format", () => {
+test("formatQuotaUsageSummary has no digits under the limit", () => {
   assert.equal(
     formatQuotaUsageSummary({
-      usedCredits: 56,
-      limitCredits: 80,
-      remainingCredits: 24,
-      windowHours: 5
+      usedRatio: 0.4
     }),
-    "56K of 80K AI credits used - 5-hour rolling window"
+    ""
   );
   assert.equal(
+    formatQuotaUsageSummary({
+      usedRatio: 0.82,
+      nearLimit: true
+    }),
+    "You're close to the free limit."
+  );
+  assert.match(
     formatQuotaUsageSummary(
       {
-        usedCredits: 80,
-        limitCredits: 80,
-        remainingCredits: 0,
-        windowHours: 5
+        usedRatio: 1,
+        exhausted: true,
+        blockedWindow: "cycle",
+        resetsAt: "2026-09-04T01:44:00.000Z",
+        timezone: "America/Los_Angeles"
       },
-      { exhausted: true }
+      { exhausted: true, timezone: "America/Los_Angeles" }
     ),
-    "80K of 80K AI credits used"
+    /You can continue at/
   );
   assert.equal(quotaUsedPercent(12, 80), 15);
   assert.equal(quotaUsedPercent(80, 80), 100);

@@ -2411,6 +2411,9 @@ export class CoopChatSession {
       case "settings:convert-own-seat":
         await this.handleConvertOwnSeat(message.payload.usageTier);
         return;
+      case "billing:upgrade-to-pro":
+        await this.handleUpgradeToPro();
+        return;
       case "settings:install-github-app":
         await this.handleInstallGithubApp();
         return;
@@ -5033,7 +5036,8 @@ export class CoopChatSession {
             timezone: this.preferences.timezone,
             retryAfterMs: error.retryAfterMs,
             message: error.message,
-            pool: error.pool
+            pool: error.pool,
+            blockedWindow: error.blockedWindow
           }
         });
         return;
@@ -5905,6 +5909,30 @@ export class CoopChatSession {
     }
   }
 
+  private async handleUpgradeToPro(): Promise<void> {
+    try {
+      const session = await this.options.api.createUpgradeCheckoutSession(this.preferences.apiBaseUrl, {
+        tier: "pro"
+      });
+      this.postToSettings({ type: "settings:upgrade-to-pro-result", payload: { ok: true, message: "" } });
+      await vscode.env.openExternal(vscode.Uri.parse(session.url));
+      const disposable = vscode.window.onDidChangeWindowState((state) => {
+        if (!state.focused) {
+          return;
+        }
+        disposable.dispose();
+        void this.refreshAllSessionsPreferences();
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : "Could not start checkout. Stripe may be unavailable, or you need to be an org admin.";
+      this.postToSettings({ type: "settings:upgrade-to-pro-result", payload: { ok: false, message } });
+      void vscode.window.showErrorMessage(message);
+    }
+  }
+
   private async handleTestCodeHost(
     provider: import("./types").CodeHostProviderPreference,
     source: "chat" | "settings"
@@ -6115,6 +6143,7 @@ export class CoopChatSession {
       skipChatIntentPlanner?: boolean;
     }
   ): Promise<void> {
+    this.options.api.beginQuotaTurn();
     // A new send abandons any unanswered suggest chips.
     if (!options?.skipQuickActionSuggest && !options?.skipUserHistoryPush) {
       this.dismissPendingQuickActionSuggest();
@@ -8877,7 +8906,8 @@ export class CoopChatSession {
             timezone: this.preferences.timezone,
             retryAfterMs: error.retryAfterMs,
             message: error.message,
-            pool: error.pool
+            pool: error.pool,
+            blockedWindow: error.blockedWindow
           }
         });
         return;
@@ -8905,6 +8935,7 @@ export class CoopChatSession {
     retryAfterMs?: number;
     message?: string;
     pool?: "paid" | "auto" | "frontier" | "free";
+    blockedWindow?: "cycle" | "week";
   }): void {
     this.post({
       type: "chat:quota-exceeded",
@@ -8914,7 +8945,8 @@ export class CoopChatSession {
         timezone: this.preferences.timezone,
         retryAfterMs: payload.retryAfterMs,
         message: payload.message,
-        pool: payload.pool
+        pool: payload.pool,
+        blockedWindow: payload.blockedWindow ?? this.preferences.quotaCredits?.blockedWindow
       }
     });
   }

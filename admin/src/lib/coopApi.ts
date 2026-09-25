@@ -1067,6 +1067,10 @@ export type QuotaSnapshot = {
   plan: string;
   usageTier?: string | null;
   unlimited?: boolean;
+  usedRatio?: number;
+  exhausted?: boolean;
+  nearLimit?: boolean;
+  blockedWindow?: "cycle" | "week";
   usedTokens?: number;
   limitTokens?: number;
   remainingTokens?: number;

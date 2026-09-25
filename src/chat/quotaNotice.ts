@@ -108,7 +108,34 @@ export function buildQuotaExceededUpgradeUrl(adminPortalUrl?: string): string {
   return adminPortal ? `${adminPortal}/billing` : "https://coop-ai.dev/pricing";
 }
 
+export const FREE_NEAR_LIMIT_COPY = "You're close to the free limit.";
+export const FREE_UPGRADE_CLAUSE = "Upgrade to Pro for a monthly allowance.";
+
+export function formatFreeAllowanceCopy(
+  input: { resetsAt?: string; blockedWindow?: "cycle" | "week"; timezone?: string }
+): string {
+  const time =
+    input.resetsAt
+      ? formatTimeInTimezone(input.resetsAt, resolveTimezone(input.timezone), {
+          hour: "numeric",
+          minute: "2-digit"
+        })
+      : undefined;
+  const clock = time ?? "later";
+  if (input.blockedWindow === "week") {
+    const weekday = input.resetsAt
+      ? formatTimeInTimezone(input.resetsAt, resolveTimezone(input.timezone), { weekday: "long" })
+      : undefined;
+    return `You can continue on ${weekday ?? "the next week"} at ${clock}. ${FREE_UPGRADE_CLAUSE}`;
+  }
+  return `You can continue at ${clock}. ${FREE_UPGRADE_CLAUSE}`;
+}
+
 export type QuotaCreditsSnapshot = {
+  usedRatio?: number;
+  exhausted?: boolean;
+  nearLimit?: boolean;
+  blockedWindow?: "cycle" | "week";
   remainingTokens?: number;
   remainingCredits?: number;
   usedTokens?: number;
@@ -117,10 +144,16 @@ export type QuotaCreditsSnapshot = {
   retryAfterMs?: number;
 };
 
-/** True when the org has no AI credits left for a new request. */
+/** True when the org has no free allowance left for a new request. */
 export function isFreeQuotaExhausted(quota?: QuotaCreditsSnapshot | null): boolean {
   if (!quota) {
     return false;
+  }
+  if (quota.exhausted === true) {
+    return true;
+  }
+  if (typeof quota.usedRatio === "number") {
+    return quota.usedRatio >= 1;
   }
   if (typeof quota.remainingTokens === "number") {
     return quota.remainingTokens <= 0;
