@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getStoredMe } from "@/lib/auth";
@@ -24,6 +24,11 @@ import { ConfirmOrgNameModal } from "@/components/ConfirmOrgNameModal";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 import { OperatorOrgStatusBadge } from "@/components/StatusBadge";
 import { UsageMeterBar } from "@/components/UsageMeterBar";
+import {
+  sortCustomers,
+  parseCustomerSort,
+  type CustomerSortColumn
+} from "@/lib/customerTableSort";
 
 type ConfirmAction = "suspend" | "cancel";
 
@@ -47,9 +52,9 @@ export default function CustomersPage() {
   const [onboardingIncomplete, setOnboardingIncomplete] = useState(
     searchParams.get("onboardingIncomplete") === "true"
   );
-  const [sort, setSort] = useState<"name" | "usage">(
-    searchParams.get("sort") === "usage" ? "usage" : "name"
-  );
+  const initialSort = parseCustomerSort(searchParams.get("sort"), searchParams.get("order"));
+  const [sortColumn, setSortColumn] = useState<CustomerSortColumn>(initialSort.column);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(initialSort.order);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -59,8 +64,6 @@ export default function CustomersPage() {
       plan: plan || undefined,
       billingStatus: billingStatus || undefined,
       onboardingIncomplete: onboardingIncomplete || undefined,
-      sort,
-      order: sort === "usage" ? "desc" : "asc",
       limit: 100
     });
     setLoading(false);
@@ -75,7 +78,7 @@ export default function CustomersPage() {
       return;
     }
     setOrganizations(result.data?.organizations ?? []);
-  }, [q, plan, billingStatus, onboardingIncomplete, sort]);
+  }, [q, plan, billingStatus, onboardingIncomplete]);
 
   useEffect(() => {
     void load();
@@ -88,7 +91,10 @@ export default function CustomersPage() {
     if (plan) params.set("plan", plan);
     if (billingStatus) params.set("billingStatus", billingStatus);
     if (onboardingIncomplete) params.set("onboardingIncomplete", "true");
-    if (sort === "usage") params.set("sort", "usage");
+    if (!(sortColumn === "name" && sortOrder === "asc")) {
+      params.set("sort", sortColumn);
+      params.set("order", sortOrder);
+    }
     const query = params.toString();
     router.replace(query ? `/customers?${query}` : "/customers");
     void load();
@@ -147,6 +153,31 @@ export default function CustomersPage() {
   }
 
   const showActions = Boolean(me && canSuperAdmin(me));
+  const sortedOrganizations = useMemo(
+    () => sortCustomers(organizations, sortColumn, sortOrder),
+    [organizations, sortColumn, sortOrder]
+  );
+
+  function writeSortToUrl(column: CustomerSortColumn, order: "asc" | "desc") {
+    const params = new URLSearchParams();
+    if (q.trim()) params.set("q", q.trim());
+    if (plan) params.set("plan", plan);
+    if (billingStatus) params.set("billingStatus", billingStatus);
+    if (onboardingIncomplete) params.set("onboardingIncomplete", "true");
+    if (!(column === "name" && order === "asc")) {
+      params.set("sort", column);
+      params.set("order", order);
+    }
+    const query = params.toString();
+    router.replace(query ? `/customers?${query}` : "/customers");
+  }
+
+  function toggleColumnSort(column: CustomerSortColumn) {
+    const nextOrder = sortColumn === column && sortOrder === "asc" ? "desc" : "asc";
+    setSortColumn(column);
+    setSortOrder(nextOrder);
+    writeSortToUrl(column, nextOrder);
+  }
 
   return (
     <div className="space-y-6">
@@ -239,20 +270,6 @@ export default function CustomersPage() {
           />
           Onboarding incomplete
         </label>
-        <div>
-          <label htmlFor="sort" className="admin-label">
-            Sort
-          </label>
-          <select
-            id="sort"
-            className="admin-input"
-            value={sort}
-            onChange={(e) => setSort(e.target.value === "usage" ? "usage" : "name")}
-          >
-            <option value="name">Name</option>
-            <option value="usage">Highest usage</option>
-          </select>
-        </div>
         <button type="submit" className="admin-btn-secondary">
           Apply filters
         </button>
@@ -267,16 +284,36 @@ export default function CustomersPage() {
         <table className="admin-table">
           <thead>
             <tr>
-              <th>Organization</th>
-              <th>Plan</th>
-              <th>Billing</th>
-              <th>Seats</th>
-              <th>Usage</th>
-              <th>Billed</th>
-              <th>Cost</th>
-              <th>Margin</th>
-              <th>Status</th>
-              <th>Created</th>
+              {(
+                [
+                  ["name", "Organization"],
+                  ["plan", "Plan"],
+                  ["billing", "Billing"],
+                  ["seats", "Seats"],
+                  ["usage", "Usage"],
+                  ["billed", "Billed"],
+                  ["cost", "Cost"],
+                  ["margin", "Margin"],
+                  ["status", "Status"],
+                  ["created", "Created"]
+                ] as const
+              ).map(([column, label]) => {
+                const active = sortColumn === column;
+                return (
+                  <th key={column} aria-sort={active ? (sortOrder === "asc" ? "ascending" : "descending") : "none"}>
+                    <button
+                      type="button"
+                      className={`admin-sort-btn${active ? " admin-sort-btn--active" : ""}`}
+                      onClick={() => toggleColumnSort(column)}
+                    >
+                      {label}
+                      <span aria-hidden="true" className="w-3 text-[10px]">
+                        {active ? (sortOrder === "asc" ? "▲" : "▼") : ""}
+                      </span>
+                    </button>
+                  </th>
+                );
+              })}
               {showActions && <th>Actions</th>}
             </tr>
           </thead>
@@ -294,7 +331,7 @@ export default function CustomersPage() {
                 </td>
               </tr>
             ) : (
-              organizations.map((org) => (
+              sortedOrganizations.map((org) => (
                 <tr key={org.id} className="hover:bg-white/[0.02]">
                   <td>
                     <Link href={`/customers/${org.id}`} className="admin-link font-medium">

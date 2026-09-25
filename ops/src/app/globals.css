@@ -181,6 +181,14 @@
     @apply border-b border-coop-border px-4 py-2 text-xs font-medium uppercase tracking-wide text-coop-muted;
   }
 
+  .admin-sort-btn {
+    @apply inline-flex items-center gap-1 text-left uppercase tracking-wide text-coop-muted transition hover:text-white;
+  }
+
+  .admin-sort-btn--active {
+    @apply text-white;
+  }
+
   .admin-table td {
     @apply border-b border-coop-border/40 px-4 py-2;
   }
