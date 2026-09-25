@@ -117,20 +117,14 @@ test("planUsageHubSubtitle shows plan and used credits", () => {
   );
 });
 
-test("formatQuotaUsageSummary has no digits under the limit", () => {
+test("formatQuotaUsageSummary is blank until the free limit is reached", () => {
   assert.equal(
     formatQuotaUsageSummary({
       usedRatio: 0.4
     }),
     ""
   );
-  assert.equal(
-    formatQuotaUsageSummary({
-      usedRatio: 0.82,
-      nearLimit: true
-    }),
-    "You're close to the free limit."
-  );
+  assert.equal(formatQuotaUsageSummary({ usedRatio: 0.82 }), "");
   assert.match(
     formatQuotaUsageSummary(
       {
@@ -143,6 +137,10 @@ test("formatQuotaUsageSummary has no digits under the limit", () => {
       { exhausted: true, timezone: "America/Los_Angeles" }
     ),
     /You can continue at/
+  );
+  assert.doesNotMatch(
+    formatQuotaUsageSummary({ usedRatio: 0.4 }),
+    /credits used|rolling window|\d/
   );
   assert.equal(quotaUsedPercent(12, 80), 15);
   assert.equal(quotaUsedPercent(80, 80), 100);

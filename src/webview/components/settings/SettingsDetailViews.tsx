@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   formatFreeAllowanceCopy,
   formatPaidUsageResetParts,
-  FREE_NEAR_LIMIT_COPY,
   isFreeQuotaExhausted,
   type PaidUsageResetParts
 } from "../../../chat/quotaNotice";
@@ -463,9 +462,7 @@ function FreePlanUsageMeter({
         blockedWindow: quota.blockedWindow,
         timezone
       })
-    : quota.nearLimit
-      ? FREE_NEAR_LIMIT_COPY
-      : "";
+    : "";
 
   return (
     <>

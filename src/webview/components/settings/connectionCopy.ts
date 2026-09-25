@@ -1,5 +1,5 @@
 import type { IntegrationChatProvider } from "../../../chat/types";
-import { formatFreeAllowanceCopy, FREE_NEAR_LIMIT_COPY } from "../../../chat/quotaNotice";
+import { formatFreeAllowanceCopy } from "../../../chat/quotaNotice";
 import type { Preferences } from "./types";
 import {
   codeHostConfigured,
@@ -268,7 +268,6 @@ export function formatQuotaUsageSummary(
   quota: {
     usedRatio?: number;
     exhausted?: boolean;
-    nearLimit?: boolean;
     blockedWindow?: "cycle" | "week";
     resetsAt?: string;
     timezone?: string;
@@ -276,17 +275,14 @@ export function formatQuotaUsageSummary(
   options?: { exhausted?: boolean; timezone?: string }
 ): string {
   const exhausted = options?.exhausted ?? quota.exhausted ?? false;
-  if (exhausted) {
-    return formatFreeAllowanceCopy({
-      resetsAt: quota.resetsAt,
-      blockedWindow: quota.blockedWindow,
-      timezone: options?.timezone ?? quota.timezone
-    });
+  if (!exhausted) {
+    return "";
   }
-  if (quota.nearLimit) {
-    return FREE_NEAR_LIMIT_COPY;
-  }
-  return "";
+  return formatFreeAllowanceCopy({
+    resetsAt: quota.resetsAt,
+    blockedWindow: quota.blockedWindow,
+    timezone: options?.timezone ?? quota.timezone
+  });
 }
 
 export function quotaUsedPercent(used: number, limit: number): number {

@@ -4,7 +4,6 @@ import { type ReactElement } from "react";
 import Link from "next/link";
 import type { QuotaSnapshot } from "@/lib/coopApi";
 import {
-  isFreeQuotaExhausted,
   quotaUsedPercent,
   resolveFreeQuotaCredits
 } from "@/lib/quotaSnapshot";
@@ -22,19 +21,11 @@ type UsageQuotaMeterProps = {
 };
 
 function FreeUsageMeter({
-  credits,
-  nearLimit
+  credits
 }: {
   credits: NonNullable<ReturnType<typeof resolveFreeQuotaCredits>>;
-  nearLimit?: boolean;
 }): ReactElement {
-  const exhausted = isFreeQuotaExhausted(credits);
   const pct = quotaUsedPercent(credits.usedCredits, credits.limitCredits);
-  const caption = exhausted
-    ? undefined
-    : nearLimit
-      ? "You're close to the free limit."
-      : "";
 
   return (
     <div className="space-y-2">
@@ -45,7 +36,6 @@ function FreeUsageMeter({
       >
         {pct > 0 ? <div className="h-full bg-coop-index" style={{ width: `${pct}%` }} /> : null}
       </div>
-      {caption ? <p className="text-sm text-coop-muted">{caption}</p> : null}
     </div>
   );
 }
@@ -117,7 +107,7 @@ export function UsageQuotaMeter({ snapshot, loading, showUpgradeLink = true, sea
           {paidResetLabel ? <p className="text-xs text-coop-muted">{paidResetLabel}</p> : null}
         </div>
       ) : freeCredits ? (
-        <FreeUsageMeter credits={freeCredits} nearLimit={snapshot?.nearLimit} />
+        <FreeUsageMeter credits={freeCredits} />
       ) : (
         <div className="space-y-2">
           <p className="text-sm text-coop-muted">Usage for your seat is not available yet.</p>
