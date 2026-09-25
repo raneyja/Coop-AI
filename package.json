@@ -2,7 +2,7 @@
   "name": "coop-ai",
   "displayName": "CoopAI",
   "description": "Code intelligence for VS Code. Understand production code with your repo graph, Slack, and tickets.",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "publisher": "coop-ai",
   "license": "MIT",
   "icon": "media/coop-icon.png",
