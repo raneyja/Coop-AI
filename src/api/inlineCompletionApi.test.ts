@@ -287,7 +287,7 @@ void (async () => {
     freeRes,
     router,
     router["config"],
-    { orgId: "org-free", plan: "free" },
+    { orgId: "org-test", plan: "free" },
     undefined,
     { graphQuery }
   );
