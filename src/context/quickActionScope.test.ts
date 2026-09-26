@@ -7,7 +7,8 @@ import {
   quickActionWorksWithoutFile,
   repoContextForActivatedThread,
   shouldSkipOpenFileAttach,
-  shouldWarnOpenFileAttachFailure
+  shouldWarnOpenFileAttachFailure,
+  stripLeftoverUntitledOverRepo
 } from "./quickActionScope";
 import type { RepoContext } from "../chat/types";
 
@@ -195,6 +196,32 @@ async function run(): Promise<void> {
     assert.equal(isQuickActionBlocked("trace-decision", remote), false);
     const useRepo: RepoContext = { owner: "acme", repo: "plane", scope: "repo" };
     assert.equal(isQuickActionBlocked("understand-repo", useRepo), false);
+  });
+
+  test("Untitled leftover over Use-repo coords does not block Understand Repo", () => {
+    const stolen: RepoContext = {
+      owner: "acme",
+      repo: "strata",
+      branch: "main",
+      file: "Untitled-2",
+      fileSource: "external",
+      scope: "file"
+    };
+    const recovered = stripLeftoverUntitledOverRepo(stolen);
+    assert.equal(recovered.scope, "repo");
+    assert.equal(recovered.file, undefined);
+    assert.equal(isQuickActionBlocked("understand-repo", stolen), false);
+    assert.equal(isQuickActionBlocked("knowledge-gaps", stolen), false);
+    assert.equal(isQuickActionBlocked("find-owner", stolen), false);
+    // Real Downloads path still blocks.
+    const downloads: RepoContext = {
+      owner: "acme",
+      repo: "strata",
+      file: "/Users/jon/Downloads/notes.md",
+      fileSource: "external",
+      scope: "file"
+    };
+    assert.equal(isQuickActionBlocked("understand-repo", downloads), true);
   });
 
   test("all quick actions block outside-workspace active file", () => {

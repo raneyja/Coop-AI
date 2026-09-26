@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.8
+
+- Keep Use-repo and quick actions honest when Untitled scratch tabs or local-clone snaps appear
+- Treat a Deep-Indexed Use-repo host as online for quick actions even if the live probe is down
+- Extension Host launch uses VS Code explicitly and a single `build:extension-dev` task
+
 ## 0.1.2
 
 - Extension icon uses the segmented Coop mark

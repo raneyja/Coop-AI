@@ -3,6 +3,8 @@ import { CODE_HOST_PROVIDERS, type CodeHostProvider } from "../api/codeHosts/typ
 import type { IntegrationHealth, IntegrationProvider, IntegrationStatus } from "../integrations/healthMonitor";
 import {
   fallbackStatusForFeature,
+  indexedUseRepoHosts,
+  promoteIndexedOrConnectedCodeHosts,
   promoteOrgConnectedCodeHosts,
   providersForFeature,
   type QuickActionFeatureId
@@ -94,5 +96,65 @@ assert.equal(promoted.find((entry) => entry.provider === "gitlab")?.status, "hea
 assert.equal(promoted.find((entry) => entry.provider === "github")?.status, "offline");
 assert.equal(promoted.find((entry) => entry.provider === "bitbucket")?.status, "offline");
 assert.equal(promoted.find((entry) => entry.provider === "slack")?.status, "offline");
+
+const GATED_ACTIONS: QuickActionFeatureId[] = [
+  "find-owner",
+  "knowledge-gaps",
+  "blast-radius",
+  "trace-decision"
+];
+
+function probeOffline(active: CodeHostProvider): IntegrationHealth[] {
+  return [health(active, "offline"), ...otherHostsOffline(active), health("slack", "offline")];
+}
+
+for (const host of CODE_HOST_PROVIDERS) {
+  const indexedOnly = indexedUseRepoHosts(host, true);
+  const notIndexed = indexedUseRepoHosts(host, false);
+  assert.equal(notIndexed.size, 0, `${host} must not promote when the Use-repo is not indexed`);
+  assert.deepEqual([...indexedOnly], [host]);
+
+  for (const action of GATED_ACTIONS) {
+    const offline = probeOffline(host);
+    const byIndex = promoteIndexedOrConnectedCodeHosts(offline, new Set(), indexedOnly);
+    const indexedStatus = fallbackStatusForFeature(action, byIndex, host);
+    assert.notEqual(
+      indexedStatus.level,
+      "unavailable",
+      `${action} on indexed ${host} must not be unavailable when the probe is offline`
+    );
+
+    const byOrg = promoteIndexedOrConnectedCodeHosts(offline, new Set([host]), notIndexed);
+    const connectedStatus = fallbackStatusForFeature(action, byOrg, host);
+    assert.notEqual(
+      connectedStatus.level,
+      "unavailable",
+      `${action} on org-connected ${host} must not be unavailable when the probe is offline`
+    );
+
+    const neither = promoteIndexedOrConnectedCodeHosts(offline, new Set(), notIndexed);
+    const blocked = fallbackStatusForFeature(action, neither, host);
+    assert.equal(
+      blocked.level,
+      "unavailable",
+      `${action} on ${host} stays unavailable when not indexed and not connected`
+    );
+  }
+
+  const cross = promoteIndexedOrConnectedCodeHosts(
+    CODE_HOST_PROVIDERS.map((entry) => health(entry, "offline")),
+    new Set(),
+    indexedOnly
+  );
+  for (const other of CODE_HOST_PROVIDERS) {
+    assert.equal(
+      cross.find((entry) => entry.provider === other)?.status,
+      other === host ? "healthy" : "offline",
+      `indexing ${host} must not change ${other}`
+    );
+  }
+}
+
+assert.equal(indexedUseRepoHosts(undefined, true).size, 0);
 
 console.log("degradation/fallbackMatrix: ok");

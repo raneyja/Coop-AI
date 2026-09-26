@@ -41,11 +41,14 @@ export async function blastRadius(context: FeatureExecutionContext) {
         true
       );
     }
-    // Zero-Clone: never fall back to local workspace disk.
-    return unavailableResult(
-      context,
-      `${evidenceCodeHostDisplayName(provider)} is offline and no cached blast radius data is available.`
-    );
+    // Unavailable + no cache: hard fail. Cached without a row: try durable graph/engine
+    // (Zero-Clone — never local workspace disk).
+    if (context.status.level === "unavailable") {
+      return unavailableResult(
+        context,
+        `${evidenceCodeHostDisplayName(provider)} is offline and no cached blast radius data is available.`
+      );
+    }
   }
 
   const codeHost = resolveRepoCoordinates(params);

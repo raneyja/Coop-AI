@@ -137,6 +137,17 @@ test("phantom swap: API untitled / leftover Untitled-1 must not steal a remote c
     "ignore"
   );
   assert.equal(
+    decideExplicitEditorChip({
+      userActivatedEditor: true,
+      incomingFile: "Untitled-2",
+      incomingFileSource: "external",
+      currentFile: undefined,
+      currentIsRemote: false,
+      currentIsUseRepo: true
+    }),
+    "ignore"
+  );
+  assert.equal(
     incomingStealsRemoteChip({
       incomingFile: "Untitled-1",
       incomingFileSource: "external",

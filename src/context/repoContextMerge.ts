@@ -2,6 +2,7 @@ import type { RepoContext } from "../chat/types";
 import { isExplicitRepoScope, normalizeRepoContext } from "./contextScope";
 import {
   coerceChipFileSource,
+  isUntitledScratchFile,
   shouldKeepRemoteProvenance
 } from "./fileChipIdentity";
 import { isLocalDiskFileSource } from "./localFileContext";
@@ -103,6 +104,22 @@ export function mergeRepoContext(existing: RepoContext, incoming: RepoContext): 
     const incomingFile = incoming.file?.trim();
     if (!incomingFile) {
       return stripStaleContextWarning(normalizeRepoContext({ ...existing }));
+    }
+    // Blank Untitled-N (File → New File / leftover scratch) is labeled external but is
+    // not a real Downloads pick — never demote Use-repo to L Untitled-2.
+    if (isUntitledScratchFile(incomingFile, incoming.fileSource)) {
+      return stripStaleContextWarning(
+        normalizeRepoContext({
+          ...existing,
+          scope: "repo",
+          file: undefined,
+          fileSource: undefined,
+          selectedLines: undefined,
+          selectedSymbol: undefined,
+          languageId: undefined,
+          contextWarning: undefined
+        })
+      );
     }
     const outside =
       isOsAbsoluteDiskPath(incomingFile) || incoming.fileSource === "external";

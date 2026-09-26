@@ -2,9 +2,9 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "npm: build:extension-dev",
-      "type": "shell",
-      "command": "npm run build:extension && npm run build:webview",
+      "label": "build:extension-dev",
+      "type": "npm",
+      "script": "build:extension-dev",
       "options": {
         "cwd": "${workspaceFolder}"
       },

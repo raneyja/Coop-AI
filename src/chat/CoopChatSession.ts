@@ -66,7 +66,8 @@ import type {
 } from "../conflicts";
 import { codeHostForDegradationRequest, runFeatureFallback } from "../degradation/features";
 import {
-  promoteOrgConnectedCodeHosts,
+  indexedUseRepoHosts,
+  promoteIndexedOrConnectedCodeHosts,
   providersForFeature,
   type QuickActionFeatureId
 } from "../degradation/fallbackMatrix";
@@ -226,6 +227,7 @@ import { evidenceCodeHostDisplayName } from "../api/codeHosts/codeHostLabels";
 import {
   coordinatesFromRepoId,
   repoIdFromCoordinates,
+  resolveCodeHostProvider,
   type CodeHostProvider,
   type RepoCoordinates
 } from "../api/codeHosts/types";
@@ -388,12 +390,14 @@ import {
   mergeTraceDecisionIntegrationEvidence
 } from "../context/traceDecisionSearch";
 import {
+  hasExplicitRepoSelection,
   isHonestRepoIntelligenceScope,
   isQuickActionBlocked,
   quickActionBlockedMessage,
   repoContextForActivatedThread,
   shouldSkipOpenFileAttach,
-  shouldWarnOpenFileAttachFailure
+  shouldWarnOpenFileAttachFailure,
+  stripLeftoverUntitledOverRepo
 } from "../context/quickActionScope";
 import { collectOpenEditorFileRefs, collectOpenEditorPaths, editorContextFromRepoContext } from "../context/editorManifestContext";
 import { PRICING_PAGE_URL } from "../config/siteConfig";
@@ -1054,7 +1058,8 @@ export class CoopChatSession {
         incomingFile: resolved?.file,
         incomingFileSource: resolved?.fileSource,
         currentFile: this.currentContext.file,
-        currentIsRemote: this.isWorkingOnRemoteProvenance()
+        currentIsRemote: this.isWorkingOnRemoteProvenance(),
+        currentIsUseRepo: hasExplicitRepoSelection(this.currentContext)
       });
       if (decision !== "chip-local") {
         return;
@@ -2834,11 +2839,14 @@ export class CoopChatSession {
       // User switched files in the editor — release the prior quick-action pin.
       this.pinnedContextFile = undefined;
     }
-    // Remote provenance: ignore leftover local-clone snaps for the SAME path.
+    // Remote provenance / Use-repo: ignore leftover local-clone snaps for the SAME path.
     // Explicit local choice (Downloads / different workspace file) clears remote — Rule B.
-    // Untitled-N (API viewing vehicle or leftover scratch) must never steal R.
-    if (this.isWorkingOnRemoteProvenance() && incoming.file?.trim()) {
+    // Untitled-N (API viewing vehicle or leftover scratch) must never steal R or Use-repo.
+    const protectUseRepoOrRemote =
+      this.isWorkingOnRemoteProvenance() || hasExplicitRepoSelection(this.currentContext);
+    if (protectUseRepoOrRemote && incoming.file?.trim()) {
       if (
+        this.isWorkingOnRemoteProvenance() &&
         incomingStealsRemoteChip({
           incomingFile: incoming.file,
           incomingFileSource: incoming.fileSource,
@@ -2849,7 +2857,8 @@ export class CoopChatSession {
         // Fall through to merge as local.
       } else if (
         isUntitledScratchFile(incoming.file, incoming.fileSource) ||
-        (incoming.fileSource !== "remote" &&
+        (this.isWorkingOnRemoteProvenance() &&
+          incoming.fileSource !== "remote" &&
           this.currentContext.file?.trim() &&
           isSameRepoFilePath(incoming.file, this.currentContext.file))
       ) {
@@ -6383,6 +6392,16 @@ export class CoopChatSession {
 
     if (!isFileAssistantSession(this.currentContext)) {
       await this.pinCanonicalRepoBranchForTurn();
+    }
+
+    // Untitled-N leftover over Use-repo coords: clear before the L gate so
+    // Understand Repo / Gaps / Owner are not blocked by an empty scratch tab.
+    if (quickAction && isQuickActionId(quickAction)) {
+      const stripped = stripLeftoverUntitledOverRepo(this.currentContext);
+      if (stripped.file !== this.currentContext.file || stripped.scope !== this.currentContext.scope) {
+        this.currentContext = stripped;
+        this.postContext();
+      }
     }
 
     // L file: the five workflows never run, and must not strip this tab first.
@@ -11671,18 +11690,53 @@ export class CoopChatSession {
     codeHost?: CodeHostProvider
   ): Promise<IntegrationHealth[]> {
     const { required, optional } = providersForFeature(action, codeHost);
-    const health = await Promise.all(
-      [...required, ...optional].map((provider) => this.options.healthMonitor.updateHealth(provider))
-    );
-    return this.applyOrgCodeHostHealthOverrides(health);
+    const cloud = readLightningBackend() === "cloud";
+    const [health, indexed] = await Promise.all([
+      Promise.all(
+        [...required, ...optional].map((provider) => this.options.healthMonitor.updateHealth(provider))
+      ),
+      cloud ? this.indexedUseRepoHostsFor(codeHost) : Promise.resolve(new Set<CodeHostProvider>())
+    ]);
+    return this.applyOrgCodeHostHealthOverrides(health, indexed);
   }
 
-  /** Align quick-action health with Settings → Tools for every connected code host. */
-  private applyOrgCodeHostHealthOverrides(health: IntegrationHealth[]): IntegrationHealth[] {
+  /**
+   * Active Use-repo only. A ready Deep-Index on this host is online for QA
+   * even when the live probe is offline. Never promotes a different host.
+   */
+  private async indexedUseRepoHostsFor(codeHost?: CodeHostProvider): Promise<Set<CodeHostProvider>> {
+    if (!codeHost) {
+      return new Set();
+    }
+    const owner = this.currentContext.owner?.trim() || this.preferences.owner?.trim();
+    const repo = this.currentContext.repo?.trim() || this.preferences.repo?.trim();
+    if (!owner || !repo) {
+      return new Set();
+    }
+    const contextHost = resolveCodeHostProvider({ provider: this.currentContext.provider });
+    if (contextHost && contextHost !== codeHost) {
+      return new Set();
+    }
+    const provider = contextHost ?? codeHost;
+    const repoId = `${provider}:${owner}/${repo}`;
+    try {
+      const status = await this.options.indexBackend.getRepoStatus(repoId);
+      const indexReady = Boolean(status?.enabled && status.status === "ready");
+      return indexedUseRepoHosts(provider, indexReady);
+    } catch {
+      return new Set();
+    }
+  }
+
+  /** Org-installed or indexed Use-repo hosts stay online for quick actions. */
+  private applyOrgCodeHostHealthOverrides(
+    health: IntegrationHealth[],
+    indexed: ReadonlySet<CodeHostProvider>
+  ): IntegrationHealth[] {
     if (readLightningBackend() !== "cloud") {
       return health;
     }
-    return promoteOrgConnectedCodeHosts(health, this.orgConnectedCodeHosts());
+    return promoteIndexedOrConnectedCodeHosts(health, this.orgConnectedCodeHosts(), indexed);
   }
 
   private orgConnectedCodeHosts(): Set<CodeHostProvider> {

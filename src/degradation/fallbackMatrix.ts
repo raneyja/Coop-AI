@@ -225,6 +225,31 @@ export function explainFallback(
   return `${displayFeature(canonicalFeature)} — some sources could not be loaded.`;
 }
 
+/** Deep-Indexed Use-repo host only. Empty unless that host's index is ready. */
+export function indexedUseRepoHosts(
+  provider: CodeHostProvider | undefined,
+  indexReady: boolean
+): Set<CodeHostProvider> {
+  const hosts = new Set<CodeHostProvider>();
+  if (indexReady && isCodeHostProvider(provider)) {
+    hosts.add(provider);
+  }
+  return hosts;
+}
+
+/**
+ * Org-installed or Deep-Indexed Use-repo hosts are online for quick actions,
+ * even if the last live probe said offline. Other hosts stay as probed.
+ */
+export function promoteIndexedOrConnectedCodeHosts(
+  health: IntegrationHealth[],
+  connected: ReadonlySet<CodeHostProvider>,
+  indexed: ReadonlySet<CodeHostProvider>
+): IntegrationHealth[] {
+  const online = new Set<CodeHostProvider>([...connected, ...indexed]);
+  return promoteOrgConnectedCodeHosts(health, online);
+}
+
 /** A connected org code host is online for quick actions, even if the last probe said offline. */
 export function promoteOrgConnectedCodeHosts(
   health: IntegrationHealth[],

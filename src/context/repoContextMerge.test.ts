@@ -138,6 +138,19 @@ async function run(): Promise<void> {
     assert.equal(merged.repo, "plane");
   });
 
+  await test("mergeRepoContext keeps Use-repo sticky against Untitled scratch", () => {
+    const merged = mergeRepoContext(
+      { owner: "acme", repo: "strata", branch: "main", scope: "repo" },
+      { file: "Untitled-2", fileSource: "external", scope: "file" }
+    );
+    assert.equal(merged.scope, "repo");
+    assert.equal(merged.file, undefined);
+    assert.equal(merged.fileSource, undefined);
+    assert.equal(merged.owner, "acme");
+    assert.equal(merged.repo, "strata");
+    assert.equal(merged.branch, "main");
+  });
+
   await test("mergeRepoContext keeps absolute path for real outside-workspace editor", () => {
     const merged = mergeRepoContext(
       {

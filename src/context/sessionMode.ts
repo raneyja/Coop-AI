@@ -78,6 +78,8 @@ export function decideExplicitEditorChip(input: {
   incomingFileSource?: RepoContextFileSource;
   currentFile?: string;
   currentIsRemote: boolean;
+  /** Explicit explorer Use-repo (no file). Untitled must not steal Strata → L Untitled-2. */
+  currentIsUseRepo?: boolean;
 }): ExplicitEditorChipDecision {
   if (!input.userActivatedEditor || !input.incomingFile?.trim()) {
     return "ignore";
@@ -86,8 +88,11 @@ export function decideExplicitEditorChip(input: {
   if (input.incomingFileSource === "remote" && !isOsAbsoluteDiskPath(input.incomingFile)) {
     return "keep-remote";
   }
-  // Leftover / API Untitled-N must not steal a remote explorer pick.
-  if (input.currentIsRemote && isUntitledScratchFile(input.incomingFile, input.incomingFileSource)) {
+  // Leftover / API Untitled-N must not steal a remote file chip or Use-repo.
+  if (
+    (input.currentIsRemote || input.currentIsUseRepo) &&
+    isUntitledScratchFile(input.incomingFile, input.incomingFileSource)
+  ) {
     return "ignore";
   }
   const samePathClone =
@@ -106,7 +111,7 @@ export function decideExplicitEditorChip(input: {
 /**
  * Incoming editor may clear the remote pin only for a real local pick
  * (Downloads / different workspace file). Untitled scratch and same-path
- * clones must not demote R → L Untitled-1.
+ * clones must not demote R → L Untitled-1, and must not demote Use-repo.
  */
 export function incomingStealsRemoteChip(input: {
   incomingFile?: string;
@@ -120,6 +125,7 @@ export function incomingStealsRemoteChip(input: {
   if (input.incomingFileSource === "remote" && !isOsAbsoluteDiskPath(incoming)) {
     return false;
   }
+  // Scratch buffers are never an intentional local pick over Use-repo / remote.
   if (isUntitledScratchFile(incoming, input.incomingFileSource)) {
     return false;
   }

@@ -2,6 +2,7 @@ import type { RepoContext } from "../chat/types";
 import type { QuickActionId } from "../webview/types";
 import { shouldSkipLocalEditorAttachForRepoScope } from "../workspace/repoEvidenceIsolation";
 import { isExplicitRepoScope } from "./contextScope";
+import { isUntitledScratchFile } from "./fileChipIdentity";
 import { openFileRelatedToGapsFocus } from "./knowledgeGapsFocus";
 import { isFileAssistantSession } from "./sessionMode";
 import { isExternalFileContext } from "./outsideWorkspaceFile";
@@ -24,6 +25,30 @@ const ALL_QUICK_ACTIONS = new Set<QuickActionId>([
   "blast-radius",
   "knowledge-gaps"
 ]);
+
+/**
+ * Blank Untitled-N that stole the chip while owner/repo coords remain from Use-repo.
+ * Treat as repo-wide for gates; send clears the scratch before running.
+ */
+export function stripLeftoverUntitledOverRepo(context: RepoContext): RepoContext {
+  if (
+    !isUntitledScratchFile(context.file, context.fileSource) ||
+    !context.owner?.trim() ||
+    !context.repo?.trim()
+  ) {
+    return context;
+  }
+  return {
+    ...context,
+    file: undefined,
+    fileSource: undefined,
+    selectedLines: undefined,
+    selectedSymbol: undefined,
+    languageId: undefined,
+    scope: "repo",
+    contextWarning: undefined
+  };
+}
 
 export function isFileLevelQuickAction(actionId: QuickActionId): boolean {
   return FILE_LEVEL_ACTIONS.has(actionId);
@@ -105,22 +130,23 @@ export function shouldWarnOpenFileAttachFailure(options: {
 }
 
 export function isQuickActionBlocked(actionId: QuickActionId, context: RepoContext): boolean {
+  const gated = stripLeftoverUntitledOverRepo(context);
   // L file (Explorer, Ctrl+O, git, Downloads, untitled): repo workflows stay on Coop explorer.
-  if (ALL_QUICK_ACTIONS.has(actionId) && isFileAssistantSession(context)) {
+  if (ALL_QUICK_ACTIONS.has(actionId) && isFileAssistantSession(gated)) {
     return true;
   }
   // Any quick action with a Downloads / Cmd+O tab focused is wrong — do not
   // silently pivot to the settings repo while the user is staring at that file.
-  if (ALL_QUICK_ACTIONS.has(actionId) && isExternalFileContext(context)) {
+  if (ALL_QUICK_ACTIONS.has(actionId) && isExternalFileContext(gated)) {
     return true;
   }
 
   // Understand Repo is always repo-wide — never bind to a file chip.
   if (actionId === "understand-repo") {
-    return Boolean(context.file?.trim()) || !hasExplicitRepoSelection(context);
+    return Boolean(gated.file?.trim()) || !hasExplicitRepoSelection(gated);
   }
 
-  if (context.file?.trim()) {
+  if (gated.file?.trim()) {
     return false;
   }
   if (!quickActionWorksWithoutFile(actionId)) {
@@ -129,7 +155,7 @@ export function isQuickActionBlocked(actionId: QuickActionId, context: RepoConte
   // Prefs-seeded owner/repo is NOT a selection. Repo-wide actions need an explicit
   // explorer "Use repo" (scope:"repo") or an open file — otherwise empty-state
   // actions silently analyze the Workspace default.
-  return !hasExplicitRepoSelection(context);
+  return !hasExplicitRepoSelection(gated);
 }
 
 /**
@@ -141,24 +167,25 @@ export function isQuickActionBlockedForSuggest(
   actionId: QuickActionId,
   context: RepoContext
 ): boolean {
-  if (ALL_QUICK_ACTIONS.has(actionId) && isFileAssistantSession(context)) {
+  const gated = stripLeftoverUntitledOverRepo(context);
+  if (ALL_QUICK_ACTIONS.has(actionId) && isFileAssistantSession(gated)) {
     return true;
   }
-  if (ALL_QUICK_ACTIONS.has(actionId) && isExternalFileContext(context)) {
+  if (ALL_QUICK_ACTIONS.has(actionId) && isExternalFileContext(gated)) {
     return true;
   }
   if (actionId === "understand-repo") {
-    if (hasExplicitRepoSelection(context)) {
+    if (hasExplicitRepoSelection(gated)) {
       return false;
     }
     // File-scoped Use-repo still has owner/repo coordinates.
     return !(
-      Boolean(context.file?.trim()) &&
-      Boolean(context.owner?.trim()) &&
-      Boolean(context.repo?.trim())
+      Boolean(gated.file?.trim()) &&
+      Boolean(gated.owner?.trim()) &&
+      Boolean(gated.repo?.trim())
     );
   }
-  return isQuickActionBlocked(actionId, context);
+  return isQuickActionBlocked(actionId, gated);
 }
 
 /** Explicit explorer "Use repo" with coordinates — not Settings prefs alone. */
@@ -207,14 +234,15 @@ export function repoContextForActivatedThread(threadRepo: RepoContext | undefine
 }
 
 export function quickActionBlockedMessage(actionId: QuickActionId, context: RepoContext): string {
-  if (ALL_QUICK_ACTIONS.has(actionId) && isFileAssistantSession(context)) {
+  const gated = stripLeftoverUntitledOverRepo(context);
+  if (ALL_QUICK_ACTIONS.has(actionId) && isFileAssistantSession(gated)) {
     return fileAssistantQuickActionMessage(actionId);
   }
-  if (ALL_QUICK_ACTIONS.has(actionId) && isExternalFileContext(context)) {
+  if (ALL_QUICK_ACTIONS.has(actionId) && isExternalFileContext(gated)) {
     return externalFileMessage(actionId);
   }
   if (actionId === "understand-repo") {
-    if (context.file?.trim()) {
+    if (gated.file?.trim()) {
       return "Understand Repo is repo-wide only. Click Use repo in the Remote workspace picker (select the repository, not a file), then try again.";
     }
     return "Understand Repo needs a selected repository. Click Use repo in the Remote workspace picker.";
@@ -225,10 +253,10 @@ export function quickActionBlockedMessage(actionId: QuickActionId, context: Repo
   if (actionId === "blast-radius") {
     return fileLevelOnlyMessage("Blast Radius");
   }
-  if (quickActionWorksWithoutFile(actionId) && !context.file?.trim() && !hasExplicitRepoSelection(context)) {
+  if (quickActionWorksWithoutFile(actionId) && !gated.file?.trim() && !hasExplicitRepoSelection(gated)) {
     return repoSelectionRequiredMessage(actionId);
   }
-  if (isExplicitRepoScope(context)) {
+  if (isExplicitRepoScope(gated)) {
     return "Select a file in the explorer or open one in the editor.";
   }
   return "Open a file in the editor first.";

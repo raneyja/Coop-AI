@@ -47,10 +47,14 @@ export async function knowledgeGaps(context: FeatureExecutionContext) {
         true
       );
     }
-    return unavailableResult(
-      context,
-      `${evidenceCodeHostDisplayName(provider)} is offline and file structure is required for knowledge-gap analysis.`
-    );
+    // Unavailable + no cache: hard fail (honest Connect banner when not indexed/not installed).
+    // Cached level without a row: fall through — durable index scan can still answer.
+    if (context.status.level === "unavailable") {
+      return unavailableResult(
+        context,
+        `${evidenceCodeHostDisplayName(provider)} is offline and file structure is required for knowledge-gap analysis.`
+      );
+    }
   }
 
   const docsOffline =
