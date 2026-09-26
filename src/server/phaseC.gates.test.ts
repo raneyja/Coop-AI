@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import type { ServerResponse } from "node:http";
+import type { Pool } from "pg";
 import { CodeHostError, type CreatePullRequestResult } from "../api/codeHosts/types";
 import {
   GITHUB_WRITE_PERMISSION_MESSAGE,
@@ -13,6 +14,21 @@ import type { ServerConfig } from "./serverConfig";
 import type { ResolvedUserSession, UserStore } from "./users/userStore";
 
 const originalFetch = globalThis.fetch;
+const FIXTURE_REPO_ID = "github:acme/plane";
+
+function catalogPool(ownedRepoIds: string[]): Pool {
+  return {
+    query: async (sql: string, params?: unknown[]) => {
+      if (sql.includes("FROM org_repos")) {
+        const wanted = new Set((params?.[1] as string[] | undefined) ?? []);
+        return {
+          rows: ownedRepoIds.filter((id) => wanted.has(id)).map((repo_id) => ({ repo_id }))
+        };
+      }
+      return { rows: [] };
+    }
+  } as unknown as Pool;
+}
 
 function mockResponse(): ServerResponse & { statusCode?: number; body?: string } {
   const res = {
@@ -85,6 +101,7 @@ function baseDeps(
     orgStore: mockOrgStore("org-test"),
     userStore: mockUserStore(),
     serverConfig,
+    dbPool: catalogPool([FIXTURE_REPO_ID]),
     createPullFromFiles,
     auditLogger: {
       record: async (entry: { action: string; metadata?: Record<string, unknown> }) => {
