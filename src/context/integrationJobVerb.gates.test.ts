@@ -257,6 +257,8 @@ test("Confluence search opens ADR page body after a hit", async () => {
   const opened: string[] = [];
   const result = await fetchConfluenceSearchContext({
     secrets,
+    owner: "raneyja",
+    repo: "Coop-AI",
     extraTerms: ["peel auth"],
     jobScoped: true,
     client: {
@@ -283,6 +285,8 @@ test("Notion search opens ADR page body after a hit", async () => {
   const opened: string[] = [];
   const result = await fetchNotionSearchContext({
     secrets,
+    owner: "raneyja",
+    repo: "Coop-AI",
     extraTerms: ["peel auth"],
     jobScoped: true,
     client: {
@@ -308,6 +312,8 @@ test("Google Docs search opens ADR document body after a hit", async () => {
   const opened: string[] = [];
   const result = await fetchGoogleDocsSearchContext({
     secrets,
+    owner: "raneyja",
+    repo: "Coop-AI",
     extraTerms: ["peel auth"],
     jobScoped: true,
     client: {
@@ -403,6 +409,8 @@ test("Notion job-scoped search opens top hit when title is not ADR-shaped", asyn
   const opened: string[] = [];
   const result = await fetchNotionSearchContext({
     secrets,
+    owner: "acme",
+    repo: "peel",
     extraTerms: ["peel auth"],
     jobScoped: true,
     client: {
@@ -714,6 +722,8 @@ test("knowledge-gaps Notion openAfterHit opens top hit when title is not ADR-sha
   const opened: string[] = [];
   const result = await fetchNotionSearchContext({
     secrets,
+    owner: "acme",
+    repo: "peel",
     extraTerms: ["peel auth"],
     openAfterHit: true,
     client: {
