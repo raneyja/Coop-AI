@@ -814,6 +814,9 @@ export type WebviewOutbound =
         message?: string;
         pool?: "paid" | "auto" | "frontier" | "free";
         blockedWindow?: "cycle" | "week";
+        upgradeAction?: "checkout-pro" | "convert-seat" | "request-seat" | "enterprise-contact" | "none";
+        nextTier?: "pro_plus" | "max";
+        nextTierLabel?: string;
       };
     }
   | { type: "chat:quota-cleared" }
@@ -878,7 +881,14 @@ export type WebviewOutbound =
   | { type: "settings:navigate"; payload: { screen: string } }
   | { type: "settings:test-result"; payload: { ok: boolean; message: string } }
   | { type: "settings:convert-own-seat-result"; payload: { ok: boolean; message: string } }
-  | { type: "settings:upgrade-to-pro-result"; payload: { ok: boolean; message: string } }
+  | {
+      type: "settings:upgrade-to-pro-result";
+      payload: {
+        ok: boolean;
+        message: string;
+        phase?: "confirming" | "success" | "timeout" | "error";
+      };
+    }
   | { type: "settings:refresh-result"; payload: { ok: boolean; message: string } }
   | { type: "settings:api-key-revealed"; payload: { apiKey: string } }
   | { type: "degradation:notification"; payload: DegradationNotificationPayload }

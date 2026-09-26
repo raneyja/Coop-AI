@@ -3,7 +3,7 @@ title: FAQ
 description: Frequently asked questions about CoopAI plans, privacy, security, and features.
 section: help
 order: 2
-lastUpdated: "2026-09-21"
+lastUpdated: "2026-09-25"
 ---
 
 ## General
@@ -34,7 +34,12 @@ Full tool connectivity (GitHub, GitLab, Bitbucket, Slack, Jira, Notion, Google D
 
 ### How do I upgrade to Pro?
 
-[Pricing](/pricing) → Stripe checkout → admin portal setup. See [Plans & billing](/docs/plans-billing).
+| Who | Path |
+| --- | --- |
+| **New account** (no Coop login yet) | [Pricing](/pricing) → **Start Pro** → Stripe checkout → admin portal setup |
+| **Existing Free account** | **Extension** → Settings → **Plan & Usage** → **Upgrade to Pro**, **or** **Admin portal** → **Billing** → **Upgrade to Pro** → Stripe. Do **not** use Pricing **Start Pro** with the same email (that creates a second checkout conflict). |
+
+See [Plans & billing](/docs/plans-billing).
 
 ### Do you offer Enterprise self-hosting?
 

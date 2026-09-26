@@ -30,7 +30,7 @@ import {
 } from "./usageTiers";
 
 export const QUOTA_CREDIT_EVENT_TYPE = "quota.credit" as const;
-export const LLM_USAGE_EVENT_TYPES = ["chat.message", "completion.requested", QUOTA_CREDIT_EVENT_TYPE] as const;
+export const LLM_USAGE_EVENT_TYPES = ["chat.message", "completion.accepted", QUOTA_CREDIT_EVENT_TYPE] as const;
 
 export const DEFAULT_FREE_TOKEN_LIMIT = 80_000;
 /** @deprecated Use DEFAULT_FREE_TOKEN_LIMIT */
@@ -237,13 +237,16 @@ export class PlanQuotaService {
     _estimatedAdditionalTokens = 0,
     now = new Date(),
     paid?: PaidQuotaContext,
-    options?: { skipFreeAllowance?: boolean }
+    options?: { skipFreeAllowance?: boolean; skipPaidCap?: boolean }
   ): Promise<void> {
     if (orgId === "dev") {
       return;
     }
     const tier = effectiveUsageTier(plan, paid?.usageTier);
     if (tier) {
+      if (options?.skipPaidCap) {
+        return;
+      }
       await this.checkPaid(orgId, tier, now, paid?.periodAnchor, paid?.userId);
       return;
     }

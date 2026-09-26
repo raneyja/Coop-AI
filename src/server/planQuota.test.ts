@@ -28,6 +28,10 @@ void (async () => {
   const disabled = loadPlanQuotaConfig({ COOP_PLAN_QUOTA_DISABLED: "true" });
   assert.equal(disabled.enabled, false);
 
+  assert.ok(LLM_USAGE_EVENT_TYPES.includes("completion.accepted"));
+  assert.ok(!LLM_USAGE_EVENT_TYPES.includes("completion.requested" as (typeof LLM_USAGE_EVENT_TYPES)[number]));
+  assert.ok(LLM_USAGE_EVENT_TYPES.includes("chat.message"));
+
   assert.equal(tokensToCredits(1), 1);
   assert.equal(tokensToCredits(1000), 1);
   assert.equal(tokensToCredits(1001), 2);

@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { randomUUID } from "node:crypto";
 import { createRequestId, ModelRouter } from "./ModelRouter";
 import type { LlmServerConfig } from "./llmServerConfig";
 import { loadLlmServerConfig } from "./llmServerConfig";
@@ -38,28 +39,6 @@ export type V1InlineCompletionBody = {
   sessionMode?: "file-assistant" | "indexed-repo";
   fileSource?: "workspace" | "git" | "remote" | "external";
 };
-
-function inlineUsageMetadata(
-  record: { sessionMode?: unknown; fileSource?: unknown },
-  extra: Record<string, unknown>
-): Record<string, unknown> {
-  const sessionMode =
-    record.sessionMode === "file-assistant" || record.sessionMode === "indexed-repo"
-      ? record.sessionMode
-      : undefined;
-  const fileSource =
-    record.fileSource === "workspace" ||
-    record.fileSource === "git" ||
-    record.fileSource === "remote" ||
-    record.fileSource === "external"
-      ? record.fileSource
-      : undefined;
-  return {
-    ...extra,
-    ...(sessionMode ? { sessionMode } : {}),
-    ...(fileSource ? { fileSource } : {})
-  };
-}
 
 const MAX_PREFIX_CHARS = 4_000;
 const MAX_SUFFIX_CHARS = 2_000;
@@ -176,8 +155,6 @@ export async function handleInlineCompletionRequest(
     const abortController = new AbortController();
     bindAbort(rawRequest, abortController);
 
-    let usageTokens: { inputTokens: number; outputTokens: number } | undefined;
-
     try {
       for await (const chunk of router.streamInline(
         completionRequest,
@@ -185,12 +162,6 @@ export async function handleInlineCompletionRequest(
         abortController.signal
       )) {
         writeSse(response, chunk);
-        if (chunk.type === "done") {
-          usageTokens = {
-            inputTokens: chunk.usage.inputTokens,
-            outputTokens: chunk.usage.outputTokens
-          };
-        }
         if (chunk.type === "error") {
           break;
         }
@@ -202,26 +173,7 @@ export async function handleInlineCompletionRequest(
       });
     }
 
-    if (usageTokens) {
-      await org.planQuota?.recordTokens(org.orgId, org.plan, {
-        eventType: "completion.requested",
-        inputTokens: usageTokens.inputTokens,
-        outputTokens: usageTokens.outputTokens,
-        provider: resolvedProvider,
-        model,
-        userId: org.userId,
-        principal: org.principal ?? "anonymous",
-        metadata: inlineUsageMetadata(record, {
-          source: "inline",
-          stream: true,
-          fim: route.mode === "fim",
-          latencyMs: Date.now() - started
-        }),
-        selection: "auto",
-        usageTier: org.usageTier,
-        forceAutoBucket: true
-      });
-    }
+    // Ghost fetch: no planQuota record. Accept bills completion.accepted.
 
     response.end();
     return;
@@ -230,6 +182,7 @@ export async function handleInlineCompletionRequest(
   try {
     const result = await router.completeInline(completionRequest, isFim ? undefined : INLINE_SYSTEM);
 
+    const completionQuotaId = randomUUID();
     writeJson(
       response,
       200,
@@ -240,25 +193,13 @@ export async function handleInlineCompletionRequest(
         provider: result.provider,
         latencyMs: Date.now() - started,
         usage: result.usage,
-        fim: route.mode === "fim"
+        fim: route.mode === "fim",
+        completionQuotaId
       },
       responseHeaders
     );
 
-    const latencyMs = Date.now() - started;
-    await org.planQuota?.recordTokens(org.orgId, org.plan, {
-      eventType: "completion.requested",
-      inputTokens: result.usage.inputTokens,
-      outputTokens: result.usage.outputTokens,
-      provider: result.provider,
-      model: result.model,
-      userId: org.userId,
-      principal: org.principal ?? "anonymous",
-      metadata: inlineUsageMetadata(record, { source: "inline", fim: route.mode === "fim", latencyMs }),
-      selection: "auto",
-      usageTier: org.usageTier,
-      forceAutoBucket: true
-    });
+    // Ghost fetch: no planQuota record. Accept bills completion.accepted with usage from client.
   } catch (error) {
     writeJson(response, 502, {
       error: "provider_failure",

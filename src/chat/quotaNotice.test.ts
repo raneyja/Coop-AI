@@ -11,7 +11,8 @@ import {
   isFreeQuotaExhausted,
   isPaidQuotaPool,
   isPaidUsageExhausted,
-  PAID_USAGE_EXHAUSTED_COPY
+  PAID_USAGE_EXHAUSTED_COPY,
+  resolveQuotaUpgradeAction
 } from "./quotaNotice";
 import { buildPaidCapMessage } from "../server/planQuota";
 
@@ -28,6 +29,41 @@ assert.equal(
 
 assert.equal(buildQuotaExceededUpgradeUrl("https://admin.coop-ai.dev/"), "https://admin.coop-ai.dev/billing");
 assert.equal(buildQuotaExceededUpgradeUrl(undefined), "https://coop-ai.dev/pricing");
+assert.equal(buildQuotaExceededUpgradeUrl(undefined, { forPaid: true }), "");
+assert.equal(
+  buildQuotaExceededUpgradeUrl("https://admin.coop-ai.dev/", { forPaid: true }),
+  "https://admin.coop-ai.dev/billing"
+);
+
+assert.deepEqual(
+  resolveQuotaUpgradeAction({ pool: "free" }),
+  { upgradeAction: "checkout-pro" }
+);
+assert.deepEqual(
+  resolveQuotaUpgradeAction({ pool: "paid", userRole: "admin", nextTier: "pro_plus" }),
+  { upgradeAction: "convert-seat", nextTier: "pro_plus", nextTierLabel: "Pro+" }
+);
+assert.deepEqual(
+  resolveQuotaUpgradeAction({ pool: "paid", userRole: "member", nextTier: "pro_plus" }),
+  { upgradeAction: "request-seat", nextTier: "pro_plus", nextTierLabel: "Pro+" }
+);
+assert.deepEqual(
+  resolveQuotaUpgradeAction({ pool: "paid", userRole: "admin", nextTier: "max" }),
+  { upgradeAction: "convert-seat", nextTier: "max", nextTierLabel: "Max" }
+);
+assert.deepEqual(
+  resolveQuotaUpgradeAction({ pool: "paid", userRole: "admin" }),
+  { upgradeAction: "enterprise-contact" }
+);
+assert.deepEqual(
+  resolveQuotaUpgradeAction({
+    pool: "paid",
+    userRole: "admin",
+    nextTier: "pro_plus",
+    pendingSeatUpgrade: true
+  }),
+  { upgradeAction: "none" }
+);
 
 assert.equal(isFreeQuotaExhausted({ remainingTokens: 0 }), true);
 assert.equal(isFreeQuotaExhausted({ remainingTokens: 500 }), false);

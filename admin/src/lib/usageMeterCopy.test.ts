@@ -13,10 +13,11 @@ assert.equal(USAGE_METER_FRONTIER_LABEL, "Frontier model");
 assert.equal(USAGE_METER_BASE_LABEL.toLowerCase().includes("auto"), false);
 assert.match(USAGE_METER_HELPER, /Base models use less/);
 assert.match(USAGE_METER_HELPER, /Frontier models fill it faster/);
+assert.match(USAGE_METER_HELPER, /accept a suggestion/);
 assert.doesNotMatch(USAGE_METER_HELPER, /\bAuto\b/);
 assert.match(USAGE_METER_PERIOD_HINT, /Monthly included usage/);
 assert.doesNotMatch(USAGE_METER_PERIOD_HINT, /\bAuto\b/);
-assert.equal(USAGE_METER_YOUR_SEAT_TITLE, "Your seat");
+assert.equal(USAGE_METER_YOUR_SEAT_TITLE, "Your Usage");
 assert.match(USAGE_METER_YOUR_SEAT_BODY, /not the company/);
 assert.doesNotMatch(USAGE_METER_YOUR_SEAT_BODY, /\bAuto\b/);
 

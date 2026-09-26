@@ -150,9 +150,21 @@ type InboundMessage =
         message?: string;
         pool?: "paid" | "auto" | "frontier" | "free";
         blockedWindow?: "cycle" | "week";
+        upgradeAction?: "checkout-pro" | "convert-seat" | "request-seat" | "enterprise-contact" | "none";
+        nextTier?: "pro_plus" | "max";
+        nextTierLabel?: string;
       };
     }
   | { type: "chat:quota-cleared" }
+  | { type: "settings:convert-own-seat-result"; payload: { ok: boolean; message: string } }
+  | {
+      type: "settings:upgrade-to-pro-result";
+      payload: {
+        ok: boolean;
+        message: string;
+        phase?: "confirming" | "success" | "timeout" | "error";
+      };
+    }
   | { type: "settings:state"; payload: SettingsStatePayload }
   | {
       type: "repo:tree";
@@ -334,6 +346,9 @@ function ChatFooter({
   hideInlineActivity,
   inlineThinkingOptions,
   onUpgradeToPro,
+  onConvertOwnSeat,
+  onRequestSeatUpgrade,
+  seatConvertResult,
   children
 }: {
   error: string;
@@ -341,6 +356,9 @@ function ChatFooter({
   quotaNotice?: QuotaExceededNoticeState;
   onDismissQuotaNotice?: () => void;
   onUpgradeToPro?: () => void;
+  onConvertOwnSeat?: (usageTier: "pro_plus" | "max") => void;
+  onRequestSeatUpgrade?: (usageTier: "pro_plus" | "max") => void;
+  seatConvertResult?: { ok: boolean; message: string } | null;
   contextWarning?: string;
   onDismissContextWarning?: () => void;
   intentFeedback?: IntentFeedbackState;
@@ -361,6 +379,9 @@ function ChatFooter({
           notice={quotaNotice}
           onDismiss={onDismissQuotaNotice}
           onUpgradeToPro={onUpgradeToPro}
+          onConvertOwnSeat={onConvertOwnSeat}
+          onRequestSeatUpgrade={onRequestSeatUpgrade}
+          convertResult={seatConvertResult}
         />
       ) : null}
       <ChatActivityStrip
@@ -398,6 +419,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const [mentionHint, setMentionHint] = useState("");
   const [error, setError] = useState("");
   const [quotaNotice, setQuotaNotice] = useState<QuotaExceededNoticeState | undefined>();
+  const [seatConvertResult, setSeatConvertResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [upgradeConfirming, setUpgradeConfirming] = useState(false);
   const [streamingBuffer, setStreamingBuffer] = useState("");
   const [thinkingBuffer, setThinkingBuffer] = useState("");
   const [agentOverlay, setAgentOverlay] = useState<AgentActivityState | undefined>();
@@ -1443,13 +1466,17 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             current?.deliverable === "standalone" ? current : undefined
           );
           setError("");
+          setSeatConvertResult(null);
           setQuotaNotice({
             resetsAt: message.payload.resetsAt,
             upgradeUrl: message.payload.upgradeUrl,
             timezone: message.payload.timezone,
             message: message.payload.message,
             pool: message.payload.pool,
-            blockedWindow: message.payload.blockedWindow
+            blockedWindow: message.payload.blockedWindow,
+            upgradeAction: message.payload.upgradeAction,
+            nextTier: message.payload.nextTier,
+            nextTierLabel: message.payload.nextTierLabel
           });
           setIsStreaming(false);
           setStreamingBuffer("");
@@ -1458,6 +1485,22 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         case "chat:quota-cleared":
           setQuotaNotice(undefined);
+          setSeatConvertResult(null);
+          break;
+        case "settings:convert-own-seat-result":
+          setSeatConvertResult(message.payload);
+          break;
+        case "settings:upgrade-to-pro-result":
+          if (message.payload.phase === "confirming") {
+            setUpgradeConfirming(true);
+          } else if (message.payload.phase === "success" || message.payload.phase === "timeout") {
+            setUpgradeConfirming(false);
+            if (message.payload.phase === "success") {
+              setQuotaNotice(undefined);
+            }
+          } else if (!message.payload.ok) {
+            setUpgradeConfirming(false);
+          }
           break;
         case "repo:tree":
           setTreeState({
@@ -2438,7 +2481,11 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           <ChatFooter
             error={error}
             onDismissError={() => setError("")}
-            quotaNotice={quotaNotice}
+            quotaNotice={
+              quotaNotice
+                ? { ...quotaNotice, upgradeConfirming: upgradeConfirming || quotaNotice.upgradeConfirming }
+                : undefined
+            }
             onDismissQuotaNotice={() => setQuotaNotice(undefined)}
             contextWarning={context.contextWarning}
             onDismissContextWarning={() => post({ type: "context:dismiss-warning" })}
@@ -2451,7 +2498,18 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             conflictCount={conflictCount}
             hideInlineActivity
             inlineThinkingOptions={inlineThinkingOptions}
-            onUpgradeToPro={() => post({ type: "billing:upgrade-to-pro" })}
+            onUpgradeToPro={() => {
+              setUpgradeConfirming(true);
+              post({ type: "billing:upgrade-to-pro" });
+            }}
+            onConvertOwnSeat={(usageTier) => {
+              setSeatConvertResult(null);
+              post({ type: "settings:convert-own-seat", payload: { usageTier } });
+            }}
+            onRequestSeatUpgrade={(usageTier) =>
+              post({ type: "settings:request-seat-upgrade", payload: { usageTier } })
+            }
+            seatConvertResult={seatConvertResult}
           >
             {composerStack}
           </ChatFooter>

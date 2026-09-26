@@ -3,7 +3,7 @@ title: Plans & billing
 description: Free, Pro, Pro+, Max, and Enterprise — seats, included usage, and upgrade paths.
 section: plans
 order: 1
-lastUpdated: "2026-09-17"
+lastUpdated: "2026-09-25"
 ---
 
 ## Plan comparison
@@ -30,6 +30,8 @@ See current pricing at [coop-ai.dev/pricing](/pricing).
 
 Paid seats include a monthly usage bar **for that person**. **Base model** (green) is cheaper models. **Frontier model** (blue) is more expensive models — those fill the bar faster. Auto in the picker can land in either slice. Together they are utilization. When the bar is full, requests stop until you upgrade that seat — there is no on-demand spend. The bar shows a percent, not a second dollar price. Unused empty seats do not add usage to anyone else.
 
+**Inline suggestions:** Coop may show ghost text while you type without using your monthly usage bar. **When you accept a suggestion** (Tab), that completion counts toward your monthly usage. Dismissing or ignoring suggestions does not.
+
 Capability gates (team invites, Collections, Deep-Index) stay on the `pro` plan. Usage amounts come from the usage tier (Pro / Pro+ / Max).
 
 ## Free
@@ -43,17 +45,23 @@ Free includes the same tool connectivity and cloud indexing as Pro. Limits are t
 
 ## Pro, Pro+, and Max
 
+**New accounts** (no Coop login yet):
+
 1. **Browser** → [Pricing](/pricing) → **Start Pro** (or Pro+ / Max)
 2. Checkout is **for you** by default (1 seat, you are the admin). Choose **Start a team** if you need multiple seats.
 3. Stripe payment → [Welcome page](/welcome) provisioning
 4. You already have admin portal access. Connect GitHub and integrations (same flow as free)
 5. If you bought seats for a team, invite people from the admin portal
 
+**Existing Free accounts** — upgrade the same org (do not start a second checkout with the same email):
+
+1. **Extension** → Settings → **Plan & Usage** → **Upgrade to Pro**, **or**
+2. **Admin portal** → **Billing** → **Upgrade to Pro**
+3. Stripe Checkout opens for that signed-in org; after payment you stay on the same org as Pro
+
 These plans are **seat-based**. An individual buys one seat. A team buys several at checkout, or adds seats later from Billing. In the admin portal, **Current plan** stays Pro / Pro+ / Max for 1 paid seat, and becomes **Team** once there are 2 or more paid seats. The admin pays for the group on one Stripe bill. Each paid seat includes the extension, unlimited Deep-Indexed repos, Collections, and **that person's** monthly included usage. A teammate hitting their cap does not stop everyone else. Unused empty seats do not spill usage to anyone. Hit the cap and you must upgrade that seat — Coop does not sell extra usage on demand.
 
 Checkout is still **one plan × N**. After you start a team, an admin can convert a person's seat to Pro+ or Max (or confirm a member's request) without upgrading the whole team. Occupied seats stay with that person — deactivating someone does not free their seat for someone else.
-
-If you already have a free account, sign in and upgrade from **Admin portal → Billing**. Do not start a second checkout with the same email.
 
 Public names: **Pro** ($25), **Pro+** ($60), **Max** ($100). There is no Ultra / $200 individual plan. Above Max is Enterprise.
 

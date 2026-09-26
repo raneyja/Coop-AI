@@ -186,8 +186,9 @@ export default function PricingPage() {
             start a team — most people can stay on Pro while a few use Pro+ or Max.{" "}
             <Link href="/login" className="font-medium text-gray-900 hover:underline">
               Already have an account? Sign in
-            </Link>
-            .
+            </Link>{" "}
+            and upgrade from the extension (Plan &amp; Usage) or Admin → Billing — not a second Start Pro
+            checkout with the same email.
           </p>
         </div>
       </section>

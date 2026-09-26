@@ -1,3 +1,4 @@
+import { resolveCodeHostProvider, type CodeHostProvider } from "../../api/codeHosts/types";
 import type { DegradationCache } from "../../cache/degradationCache";
 import type { ContextFetchRequest, ContextFetchResult } from "../../context/requestBatcher";
 import type { IntegrationHealth } from "../../integrations/healthMonitor";
@@ -21,18 +22,28 @@ export type FeatureDegradationOptions = {
   now?: () => Date;
 };
 
+export function codeHostForDegradationRequest(request: ContextFetchRequest): CodeHostProvider | undefined {
+  const provider = request.params.provider;
+  const repoId = request.params.repoId;
+  return resolveCodeHostProvider({
+    provider: typeof provider === "string" ? provider : undefined,
+    repoId: typeof repoId === "string" ? repoId : undefined
+  });
+}
+
 export async function runFeatureFallback(options: FeatureDegradationOptions): Promise<ContextFetchResult | undefined> {
   const action = options.request.params.quickAction as QuickActionFeatureId | undefined;
+  const codeHost = codeHostForDegradationRequest(options.request);
   if (!action) {
     // Plain-chat PR review requests ownership without a Find Owner click.
     if (options.request.type === "ownership") {
-      const status = fallbackStatusForFeature("find-owner", options.health);
+      const status = fallbackStatusForFeature("find-owner", options.health, codeHost);
       return ownershipMap({ ...options, status });
     }
     return undefined;
   }
   const feature = resolveFeatureForRequest(action, options.request.type);
-  const status = fallbackStatusForFeature(action, options.health);
+  const status = fallbackStatusForFeature(action, options.health, codeHost);
   const context = { ...options, status };
   switch (feature) {
     case "trace_why":

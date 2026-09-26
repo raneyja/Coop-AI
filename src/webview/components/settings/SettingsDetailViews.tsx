@@ -191,6 +191,7 @@ export type SettingsDetailProps = {
   onConvertOwnSeat?: (usageTier: "pro_plus" | "max") => void;
   onUpgradeToPro?: () => void;
   upgradeToProError?: string | null;
+  upgradeToProPhase?: "idle" | "confirming" | "success" | "timeout" | "error";
   seatConvertResult?: { ok: boolean; message: string } | null;
 };
 
@@ -490,6 +491,7 @@ function PlanUsageDetail({
   onConvertOwnSeat,
   onUpgradeToPro,
   upgradeToProError,
+  upgradeToProPhase = "idle",
   seatConvertResult
 }: SettingsDetailProps): React.ReactElement {
   const orgName = displayOrgName(prefs);
@@ -754,12 +756,22 @@ function PlanUsageDetail({
         <a className="coop-settings-action-btn" href={adminHref} target="_blank" rel="noreferrer">
           Open admin portal
         </a>
-        {isFreeDeveloperPlan(prefs) ? (
+        {isFreeDeveloperPlan(prefs) && upgradeToProPhase !== "confirming" && upgradeToProPhase !== "success" ? (
           <button type="button" className="coop-settings-action-btn" onClick={onUpgradeToPro}>
             Upgrade to Pro
           </button>
         ) : null}
       </div>
+      {upgradeToProPhase === "confirming" ? (
+        <p className="coop-settings-card-desc mt-2" role="status">
+          Confirming upgrade… Finish Stripe Checkout, then return here. This usually takes a few seconds.
+        </p>
+      ) : null}
+      {upgradeToProPhase === "success" ? (
+        <p className="coop-settings-card-desc mt-2" role="status">
+          You&apos;re on Pro.
+        </p>
+      ) : null}
       {upgradeToProError ? (
         <p className="coop-settings-test-message--error mt-2">{upgradeToProError}</p>
       ) : null}

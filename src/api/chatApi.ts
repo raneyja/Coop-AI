@@ -100,6 +100,8 @@ export async function handleChatApiRequest(
           ? (inlineBody.segments as { prefix: string }).prefix
           : "";
     try {
+      // Ghost fetch must not consume paid monthly usage. Free already skips allowance.
+      // Accept path bills via completion.accepted (see usageEventsApi).
       await planQuota.check(
         org.orgId,
         org.plan,
@@ -119,7 +121,7 @@ export async function handleChatApiRequest(
           forceAutoBucket: true,
           periodAnchor: org.createdAt
         },
-        { skipFreeAllowance: true }
+        { skipFreeAllowance: true, skipPaidCap: true }
       );
     } catch (error) {
       if (error instanceof PlanQuotaExceededError) {

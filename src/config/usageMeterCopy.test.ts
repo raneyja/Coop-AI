@@ -11,6 +11,7 @@ assert.equal(USAGE_METER_FRONTIER_LABEL, "Frontier model");
 assert.equal(USAGE_METER_BASE_LABEL.toLowerCase().includes("auto"), false);
 assert.match(USAGE_METER_HELPER, /Base models use less/);
 assert.match(USAGE_METER_HELPER, /Frontier models fill it faster/);
+assert.match(USAGE_METER_HELPER, /accept a suggestion/);
 assert.doesNotMatch(USAGE_METER_HELPER, /\bAuto\b/);
 assert.match(USAGE_METER_PICKER_HINT, /faster than base models/);
 assert.doesNotMatch(USAGE_METER_PICKER_HINT, /\bAuto\b/);

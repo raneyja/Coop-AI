@@ -65,7 +65,7 @@ Login requires `canInstallIntegrations: true` or role `owner` / `admin` for admi
 | `/indexing` | Admin | Repo catalog, Deep-Index enable/disable, estate sync |
 | `/collections` | Pro/Ent admin | Repo groupings — linked from **Settings** (not sidebar) |
 | `/users` | Admin | Invite and manage users; per-user repo grants |
-| `/analytics` | Admin | Organization usage — DAU, chat, completions, CSV export |
+| `/analytics` | Admin (2+ members) | Organization usage — DAU, chat, completions, CSV export. Hidden for solo accounts; redirect to `/analytics/my` |
 | `/analytics/my` | All signed-in users | Personal usage analytics (overview, chat, completions) |
 | `/my-usage` | — | Redirects to `/analytics/my` |
 | `/my-activity` | Member | Personal audit log |

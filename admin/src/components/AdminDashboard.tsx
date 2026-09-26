@@ -175,7 +175,6 @@ export function AdminDashboard() {
               {quotaLoading ? "—" : seatStatValue(quota) ?? "—"}
             </p>
             <p className="mt-0.5 text-xs text-coop-muted">
-              You, not the company.{" "}
               <Link href="/analytics/my" className="admin-link text-xs">
                 My Analytics →
               </Link>

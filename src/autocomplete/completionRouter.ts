@@ -235,7 +235,9 @@ export class CompletionRouter {
         latencyMs: breakdown.totalMs,
         fromCache: false,
         model: result.model,
-        provider: result.provider
+        provider: result.provider,
+        usage: result.usage,
+        completionQuotaId: result.completionQuotaId
       };
     } catch (error) {
       timer.markNetworkEnd();
@@ -331,7 +333,14 @@ export class CompletionRouter {
     settings: AutocompleteSettings,
     prefs: ReturnType<typeof readConfiguration>,
     options?: FetchCompletionsOptions
-  ): Promise<{ text: string; alternatives: string[]; model: string; provider: string }> {
+  ): Promise<{
+    text: string;
+    alternatives: string[];
+    model: string;
+    provider: string;
+    usage?: { inputTokens: number; outputTokens: number };
+    completionQuotaId?: string;
+  }> {
     const chatMessage = segments
       ? synthesizeMessageFromSegments(segments, context, prompt)
       : prompt;
@@ -400,7 +409,14 @@ export class CompletionRouter {
     baseUrl: string,
     signal: AbortSignal,
     context: ExtractedCodeContext
-  ): Promise<{ text: string; alternatives: string[]; model: string; provider: string }> {
+  ): Promise<{
+    text: string;
+    alternatives: string[];
+    model: string;
+    provider: string;
+    usage?: { inputTokens: number; outputTokens: number };
+    completionQuotaId?: string;
+  }> {
     let buffered = "";
     let lastValid = "";
 

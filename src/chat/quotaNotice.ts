@@ -103,9 +103,59 @@ export function formatFreeQuotaResumeCopy(
   return `Paused at ${parts.pausedAtLabel} · resumes at ${parts.resumesAtLabel} (${parts.countdown})`;
 }
 
-export function buildQuotaExceededUpgradeUrl(adminPortalUrl?: string): string {
+/**
+ * Billing deep-link for free fallback only. Paid cap must use in-app convert/request
+ * (`resolveQuotaUpgradeAction`) — never send a signed-in paid user to marketing pricing.
+ */
+export function buildQuotaExceededUpgradeUrl(
+  adminPortalUrl?: string,
+  options?: { forPaid?: boolean }
+): string {
   const adminPortal = adminPortalUrl?.trim().replace(/\/+$/, "");
-  return adminPortal ? `${adminPortal}/billing` : "https://coop-ai.dev/pricing";
+  if (adminPortal) {
+    return `${adminPortal}/billing`;
+  }
+  if (options?.forPaid) {
+    return "";
+  }
+  return "https://coop-ai.dev/pricing";
+}
+
+export type QuotaUpgradeAction = "checkout-pro" | "convert-seat" | "request-seat" | "enterprise-contact" | "none";
+
+export type ResolvedQuotaUpgrade = {
+  upgradeAction: QuotaUpgradeAction;
+  nextTier?: "pro_plus" | "max";
+  nextTierLabel?: string;
+};
+
+function isQuotaPlanAdminRole(role?: string): boolean {
+  const normalized = String(role ?? "").toLowerCase();
+  return normalized === "admin" || normalized === "owner";
+}
+
+/** Same ladder as Settings Plan & Usage — chat Upgrade must not detour to /billing alone. */
+export function resolveQuotaUpgradeAction(input: {
+  pool?: "paid" | "auto" | "frontier" | "free";
+  userRole?: string;
+  nextTier?: "pro" | "pro_plus" | "max";
+  pendingSeatUpgrade?: boolean;
+}): ResolvedQuotaUpgrade {
+  if (!isPaidQuotaPool(input.pool)) {
+    return { upgradeAction: "checkout-pro" };
+  }
+  if (input.pendingSeatUpgrade) {
+    return { upgradeAction: "none" };
+  }
+  const next = input.nextTier;
+  if (next === "pro_plus" || next === "max") {
+    const nextTierLabel = next === "max" ? "Max" : "Pro+";
+    if (isQuotaPlanAdminRole(input.userRole)) {
+      return { upgradeAction: "convert-seat", nextTier: next, nextTierLabel };
+    }
+    return { upgradeAction: "request-seat", nextTier: next, nextTierLabel };
+  }
+  return { upgradeAction: "enterprise-contact" };
 }
 
 export const FREE_NEAR_LIMIT_COPY = "You're close to the free limit.";

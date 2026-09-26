@@ -63,6 +63,8 @@ export type CompletionRouterResult = {
   model?: string;
   provider?: string;
   error?: string;
+  usage?: { inputTokens: number; outputTokens: number };
+  completionQuotaId?: string;
 };
 
 export type PerformanceBatchPayload = {

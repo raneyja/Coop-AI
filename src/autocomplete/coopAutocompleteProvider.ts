@@ -103,7 +103,27 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
   private readonly performance = new AutocompletePerformanceMonitor();
   private readonly router: CompletionRouter;
   private readonly sessionProbe?: AutocompleteSessionProbe;
-  private lastUsage: { sessionMode?: "file-assistant" | "indexed-repo"; fileSource?: "workspace" | "git" | "remote" | "external" } = {};
+  private lastUsage: {
+    sessionMode?: "file-assistant" | "indexed-repo";
+    fileSource?: "workspace" | "git" | "remote" | "external";
+    inputTokens?: number;
+    outputTokens?: number;
+    provider?: string;
+    model?: string;
+    completionQuotaId?: string;
+    fromCache?: boolean;
+  } = {};
+  private pendingAcceptByHash = new Map<
+    string,
+    {
+      inputTokens: number;
+      outputTokens: number;
+      provider: string;
+      model: string;
+      completionQuotaId: string;
+      fromCache: boolean;
+    }
+  >();
   private debounceTimer: ReturnType<typeof setTimeout> | undefined;
   private lastAlternatives: RankedCompletion[] = [];
   private alternativeIndex = 0;
@@ -188,8 +208,60 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
   public lastCompletionUsage(): {
     sessionMode?: "file-assistant" | "indexed-repo";
     fileSource?: "workspace" | "git" | "remote" | "external";
+    inputTokens?: number;
+    outputTokens?: number;
+    provider?: string;
+    model?: string;
+    completionQuotaId?: string;
+    fromCache?: boolean;
   } {
     return this.lastUsage;
+  }
+
+  public takePendingAcceptQuota(contextHash: string): {
+    inputTokens: number;
+    outputTokens: number;
+    provider: string;
+    model: string;
+    completionQuotaId: string;
+    fromCache: boolean;
+  } | undefined {
+    const pending = this.pendingAcceptByHash.get(contextHash);
+    if (pending) {
+      this.pendingAcceptByHash.delete(contextHash);
+    }
+    return pending;
+  }
+
+  private noteCompletionQuota(
+    contextHash: string,
+    result: {
+      fromCache: boolean;
+      usage?: { inputTokens: number; outputTokens: number };
+      model?: string;
+      provider?: string;
+      completionQuotaId?: string;
+    }
+  ): void {
+    if (result.fromCache || !result.usage || result.usage.inputTokens + result.usage.outputTokens <= 0) {
+      this.pendingAcceptByHash.set(contextHash, {
+        inputTokens: 0,
+        outputTokens: 0,
+        provider: result.provider ?? "mistral",
+        model: result.model ?? "codestral-latest",
+        completionQuotaId: result.completionQuotaId ?? contextHash,
+        fromCache: true
+      });
+      return;
+    }
+    this.pendingAcceptByHash.set(contextHash, {
+      inputTokens: result.usage.inputTokens,
+      outputTokens: result.usage.outputTokens,
+      provider: result.provider ?? "mistral",
+      model: result.model ?? "codestral-latest",
+      completionQuotaId: result.completionQuotaId ?? contextHash,
+      fromCache: false
+    });
   }
 
   private completionFetchOptions(document: vscode.TextDocument): FetchCompletionsOptions {
@@ -514,6 +586,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
         this.nes.cancel();
         return null;
       }
+      this.noteCompletionQuota(extracted.contextHash, result);
 
       const items: vscode.InlineCompletionItem[] = [];
       for (const completion of ranked) {
@@ -593,6 +666,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
           llmFallback.completions,
           extracted.currentLinePrefix
         );
+        this.noteCompletionQuota(extracted.contextHash, llmFallback);
         return this.returnRankedInlineItems(
           document,
           position,
@@ -624,6 +698,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       }
 
       const ranked = result.completions;
+      this.noteCompletionQuota(extracted.contextHash, result);
       return this.returnRankedInlineItems(
         document,
         position,

@@ -60,6 +60,8 @@ export type InlineCompletionResult = {
   alternatives: string[];
   model: string;
   provider: string;
+  usage?: { inputTokens: number; outputTokens: number };
+  completionQuotaId?: string;
 };
 
 export type HealthResponse = {
@@ -1854,6 +1856,8 @@ export class CoopBackendClient {
     let full = "";
     let model = body.model;
     let provider = body.provider;
+    let usage: { inputTokens: number; outputTokens: number } | undefined;
+    let completionQuotaId: string | undefined;
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
@@ -1881,6 +1885,17 @@ export class CoopBackendClient {
           if (typeof event.provider === "string") {
             provider = event.provider as LlmProvider;
           }
+          const usageRaw = event.usage as { inputTokens?: unknown; outputTokens?: unknown } | undefined;
+          if (
+            usageRaw &&
+            typeof usageRaw.inputTokens === "number" &&
+            typeof usageRaw.outputTokens === "number"
+          ) {
+            usage = { inputTokens: usageRaw.inputTokens, outputTokens: usageRaw.outputTokens };
+          }
+          if (typeof event.completionQuotaId === "string") {
+            completionQuotaId = event.completionQuotaId;
+          }
         } else if (event.type === "error") {
           throw new Error(typeof event.message === "string" ? event.message : "Inline stream error.");
         }
@@ -1890,7 +1905,7 @@ export class CoopBackendClient {
       }
     }
 
-    return { text: full, alternatives: [], model, provider };
+    return { text: full, alternatives: [], model, provider, usage, completionQuotaId };
   }
 
   public async fetchInlineCompletion(
@@ -1952,13 +1967,23 @@ export class CoopBackendClient {
     }
 
     const data = (await response.json()) as Record<string, unknown>;
+    const usageRaw = data.usage as { inputTokens?: unknown; outputTokens?: unknown } | undefined;
+    const usage =
+      usageRaw &&
+      typeof usageRaw.inputTokens === "number" &&
+      typeof usageRaw.outputTokens === "number"
+        ? { inputTokens: usageRaw.inputTokens, outputTokens: usageRaw.outputTokens }
+        : undefined;
     return {
       text: typeof data.text === "string" ? data.text : "",
       alternatives: Array.isArray(data.alternatives)
         ? data.alternatives.filter((value): value is string => typeof value === "string")
         : [],
       model: typeof data.model === "string" ? data.model : body.model,
-      provider: typeof data.provider === "string" ? data.provider : body.provider
+      provider: typeof data.provider === "string" ? data.provider : body.provider,
+      usage,
+      completionQuotaId:
+        typeof data.completionQuotaId === "string" ? data.completionQuotaId : undefined
     };
   }
 
@@ -1971,7 +1996,7 @@ export class CoopBackendClient {
     if (!token) {
       return;
     }
-    await this.http.post(
+    const response = await this.http.post(
       "/v1/usage/events",
       { events },
       {
@@ -1979,9 +2004,22 @@ export class CoopBackendClient {
         headers: {
           authorization: `Bearer ${token}`,
           "content-type": "application/json"
-        }
+        },
+        validateStatus: () => true
       }
     );
+    if (response.status === 429) {
+      const quota = readChatQuotaExceededPayload(
+        response.status,
+        response.data as Record<string, unknown> | undefined
+      );
+      if (quota) {
+        throw new ChatQuotaExceededError(quota);
+      }
+    }
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data as CoopApiErrorBody));
+    }
   }
 
   public async fetchIdentityDirectory(baseUrl: string): Promise<IdentityDirectory> {

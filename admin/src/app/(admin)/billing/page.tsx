@@ -37,6 +37,7 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
+  const [confirmingUpgrade, setConfirmingUpgrade] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [upgraded, setUpgraded] = useState(false);
   const [enterpriseFormOpen, setEnterpriseFormOpen] = useState(false);
@@ -67,6 +68,65 @@ export default function BillingPage() {
   }, [load]);
 
   useEffect(() => {
+    if (typeof window === "undefined" || loading) {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("session_id")?.trim() ?? "";
+    const pendingRaw = sessionStorage.getItem("coop.upgradeCheckoutPending");
+    const pendingAt = pendingRaw ? Number(pendingRaw) : 0;
+    const pendingFresh =
+      Number.isFinite(pendingAt) && pendingAt > 0 && Date.now() - pendingAt < 5 * 60_000;
+    if (!sessionId && !pendingFresh) {
+      return;
+    }
+    if (billing?.plan === "pro" || billing?.plan === "enterprise") {
+      sessionStorage.removeItem("coop.upgradeCheckoutPending");
+      setUpgraded(true);
+      return;
+    }
+    if (billing?.plan && billing.plan !== "free") {
+      return;
+    }
+
+    let cancelled = false;
+    const started = Date.now();
+    setConfirmingUpgrade(true);
+    setError(null);
+
+    const poll = async () => {
+      while (!cancelled && Date.now() - started < 60_000) {
+        const result = await fetchBilling();
+        if (cancelled) {
+          return;
+        }
+        if (result.ok && result.data) {
+          setBilling(result.data);
+          setBillingEmailDraft(result.data.billingEmail ?? "");
+          if (result.data.plan === "pro" || result.data.plan === "enterprise") {
+            sessionStorage.removeItem("coop.upgradeCheckoutPending");
+            setConfirmingUpgrade(false);
+            setUpgraded(true);
+            return;
+          }
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 2_000));
+      }
+      if (!cancelled) {
+        setConfirmingUpgrade(false);
+        sessionStorage.removeItem("coop.upgradeCheckoutPending");
+        setError(
+          "Still confirming your upgrade. Refresh in a minute — do not start a second checkout with the same email."
+        );
+      }
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, billing?.plan]);
+
+  useEffect(() => {
     if (billing?.usageTier === "pro" || billing?.usageTier === "pro_plus" || billing?.usageTier === "max") {
       setAddTier(billing.usageTier);
     }
@@ -92,6 +152,11 @@ export default function BillingPage() {
     if (!result.ok || !result.data?.url) {
       setError(result.error ?? "Could not start checkout.");
       return;
+    }
+    try {
+      sessionStorage.setItem("coop.upgradeCheckoutPending", String(Date.now()));
+    } catch {
+      // Ignore quota / private mode.
     }
     window.location.href = result.data.url;
   }
@@ -250,12 +315,18 @@ export default function BillingPage() {
             type="button"
             className="admin-btn-primary"
             onClick={() => void handleUpgrade()}
-            disabled={upgrading}
+            disabled={upgrading || confirmingUpgrade}
           >
-            {upgrading ? "Redirecting…" : "Upgrade to Pro"}
+            {confirmingUpgrade ? "Confirming upgrade…" : upgrading ? "Redirecting…" : "Upgrade to Pro"}
           </button>
         ) : null}
       </div>
+
+      {confirmingUpgrade ? (
+        <div className="admin-panel-inset text-sm text-coop-muted" role="status">
+          Confirming upgrade… Finish Stripe Checkout, then return here. This usually takes a few seconds.
+        </div>
+      ) : null}
 
       {upgraded ? (
         <div className="admin-panel-inset text-sm text-coop-index">

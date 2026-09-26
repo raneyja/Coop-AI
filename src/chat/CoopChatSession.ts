@@ -64,8 +64,12 @@ import type {
   DetectedConflict,
   MetadataConflictInput
 } from "../conflicts";
-import { runFeatureFallback } from "../degradation/features";
-import { providersForFeature, type QuickActionFeatureId } from "../degradation/fallbackMatrix";
+import { codeHostForDegradationRequest, runFeatureFallback } from "../degradation/features";
+import {
+  promoteOrgConnectedCodeHosts,
+  providersForFeature,
+  type QuickActionFeatureId
+} from "../degradation/fallbackMatrix";
 import type { HealthMonitor, IntegrationHealth, IntegrationProvider } from "../integrations/healthMonitor";
 import type { IntentConfig } from "../config/intentConfig";
 import {
@@ -169,7 +173,15 @@ import { resolveGitUserEmail } from "./resolveGitUserEmail";
 import { formatUserFacingNetworkError } from "../api/userFacingErrors";
 import { ChatQuotaExceededError } from "../api/CoopBackendClient";
 import { CHAT_STOPPED_MESSAGE } from "./chatStopped";
-import { buildQuotaExceededUpgradeUrl, isFreeQuotaExhausted, isPaidUsageExhausted } from "./quotaNotice";
+import {
+  buildQuotaExceededUpgradeUrl,
+  isFreeQuotaExhausted,
+  isPaidQuotaPool,
+  isPaidUsageExhausted,
+  resolveQuotaUpgradeAction
+} from "./quotaNotice";
+import { pollUntilPaidPlan } from "./planUpgradePoll";
+import { buildPaidCapMessage } from "../server/planQuota";
 import type { DecisionTimeline } from "../types/decisionTimeline";
 import type { OwnershipReport } from "../types/ownership";
 import { buildDecisionSynthesisUserPrompt } from "../prompts/decisionSynthesis";
@@ -210,9 +222,11 @@ import {
 import { isFileCallerQuery } from "../context/fileCallerIntent";
 import { isFileHistoryQuery } from "../context/fileHistoryIntent";
 import { isOpenFileReviewAsk } from "./plainChatExplain";
+import { evidenceCodeHostDisplayName } from "../api/codeHosts/codeHostLabels";
 import {
   coordinatesFromRepoId,
   repoIdFromCoordinates,
+  type CodeHostProvider,
   type RepoCoordinates
 } from "../api/codeHosts/types";
 import { enrichChatResponseForAction } from "./chatResponseEnrichment";
@@ -711,6 +725,8 @@ export class CoopChatSession {
   private pendingDualRepoCompare?: DualRepoComparePlan;
   /** Set during /edit sends so semantic retrieval uses the edit gate. */
   private pendingCodeEditIntent = false;
+  /** Cancels Free→Pro checkout plan poll (new upgrade or dispose). */
+  private upgradePollAbort?: AbortController;
   /** Agent action for this turn (set during gather; drives model + patch path). */
   private turnAgentAction: RepoCodeAction = "none";
   private turnAllowsRepoTools = true;
@@ -4368,10 +4384,11 @@ export class CoopChatSession {
 
     if (this.degradationConfig.enableGracefulFallback) {
       const action = request.params.quickAction as QuickActionFeatureId | undefined;
+      const codeHost = codeHostForDegradationRequest(request);
       const health = action
-        ? await this.healthForQuickAction(action)
+        ? await this.healthForQuickAction(action, codeHost)
         : request.type === "ownership"
-          ? await this.healthForQuickAction("find-owner")
+          ? await this.healthForQuickAction("find-owner", codeHost)
           : [];
       const degraded = await runFeatureFallback({
         request,
@@ -5028,18 +5045,7 @@ export class CoopChatSession {
       this.threadRuns.markError(turn);
       this.pushThreadsList();
       if (error instanceof ChatQuotaExceededError) {
-        this.postForThread(turn.threadId, {
-          type: "chat:quota-exceeded",
-          payload: {
-            resetsAt: error.resetsAt ?? new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
-            upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
-            timezone: this.preferences.timezone,
-            retryAfterMs: error.retryAfterMs,
-            message: error.message,
-            pool: error.pool,
-            blockedWindow: error.blockedWindow
-          }
-        });
+        this.postQuotaExceededFromError(error, turn.threadId);
         return;
       }
       const message = formatUserFacingNetworkError(error);
@@ -5903,9 +5909,12 @@ export class CoopChatSession {
       const toName = result.to === "max" ? "Max" : "Pro+";
       const message = `Your seat is now ${toName}. The card on file was charged.`;
       this.postToSettings({ type: "settings:convert-own-seat-result", payload: { ok: true, message } });
+      this.postToChat({ type: "settings:convert-own-seat-result", payload: { ok: true, message } });
+      void vscode.window.showInformationMessage(message);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not upgrade this seat.";
       this.postToSettings({ type: "settings:convert-own-seat-result", payload: { ok: false, message } });
+      this.postToChat({ type: "settings:convert-own-seat-result", payload: { ok: false, message } });
     }
   }
 
@@ -5914,22 +5923,77 @@ export class CoopChatSession {
       const session = await this.options.api.createUpgradeCheckoutSession(this.preferences.apiBaseUrl, {
         tier: "pro"
       });
-      this.postToSettings({ type: "settings:upgrade-to-pro-result", payload: { ok: true, message: "" } });
+      this.upgradePollAbort?.abort();
+      const pollAbort = new AbortController();
+      this.upgradePollAbort = pollAbort;
+      this.postUpgradeToProStatus({
+        ok: true,
+        message: "",
+        phase: "confirming"
+      });
       await vscode.env.openExternal(vscode.Uri.parse(session.url));
-      const disposable = vscode.window.onDidChangeWindowState((state) => {
-        if (!state.focused) {
+      const focusDisposable = vscode.window.onDidChangeWindowState((state) => {
+        if (!state.focused || pollAbort.signal.aborted) {
           return;
         }
-        disposable.dispose();
         void this.refreshAllSessionsPreferences();
       });
+      void this.runUpgradePlanPoll(pollAbort, focusDisposable);
     } catch (error) {
       const message =
         error instanceof Error && error.message.trim()
           ? error.message
           : "Could not start checkout. Stripe may be unavailable, or you need to be an org admin.";
-      this.postToSettings({ type: "settings:upgrade-to-pro-result", payload: { ok: false, message } });
+      this.postUpgradeToProStatus({ ok: false, message, phase: "error" });
       void vscode.window.showErrorMessage(message);
+    }
+  }
+
+  private postUpgradeToProStatus(payload: {
+    ok: boolean;
+    message: string;
+    phase?: "confirming" | "success" | "timeout" | "error";
+  }): void {
+    this.postToSettings({ type: "settings:upgrade-to-pro-result", payload });
+    this.postToChat({ type: "settings:upgrade-to-pro-result", payload });
+  }
+
+  private async runUpgradePlanPoll(
+    pollAbort: AbortController,
+    focusDisposable: { dispose(): void }
+  ): Promise<void> {
+    try {
+      const result = await pollUntilPaidPlan({
+        signal: pollAbort.signal,
+        fetchPlan: async () => {
+          await this.refreshAllSessionsPreferences();
+          return this.preferences.plan ?? "free";
+        }
+      });
+      if (result.status === "upgraded") {
+        this.postUpgradeToProStatus({
+          ok: true,
+          message: "You're on Pro.",
+          phase: "success"
+        });
+        void vscode.window.showInformationMessage("You're on Pro.");
+        return;
+      }
+      if (result.status === "cancelled") {
+        this.postUpgradeToProStatus({ ok: true, message: "", phase: undefined });
+        return;
+      }
+      this.postUpgradeToProStatus({
+        ok: false,
+        message:
+          "Still confirming your upgrade. Check Plan & Usage in a minute — do not start a second checkout with the same email.",
+        phase: "timeout"
+      });
+    } finally {
+      focusDisposable.dispose();
+      if (this.upgradePollAbort === pollAbort) {
+        this.upgradePollAbort = undefined;
+      }
     }
   }
 
@@ -8898,18 +8962,7 @@ export class CoopChatSession {
       this.threadRuns.markError(turn);
       this.pushThreadsList();
       if (error instanceof ChatQuotaExceededError) {
-        this.postForThread(turn.threadId, {
-          type: "chat:quota-exceeded",
-          payload: {
-            resetsAt: error.resetsAt ?? new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
-            upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
-            timezone: this.preferences.timezone,
-            retryAfterMs: error.retryAfterMs,
-            message: error.message,
-            pool: error.pool,
-            blockedWindow: error.blockedWindow
-          }
-        });
+        this.postQuotaExceededFromError(error, turn.threadId);
         return;
       }
       const message = formatUserFacingNetworkError(error);
@@ -8931,24 +8984,71 @@ export class CoopChatSession {
 
   private postQuotaExceeded(payload: {
     resetsAt: string;
-    upgradeUrl: string;
+    upgradeUrl?: string;
     retryAfterMs?: number;
     message?: string;
     pool?: "paid" | "auto" | "frontier" | "free";
     blockedWindow?: "cycle" | "week";
+    nextTier?: "pro" | "pro_plus" | "max";
   }): void {
+    const pool = payload.pool;
+    const paid = isPaidQuotaPool(pool);
+    const resolved = resolveQuotaUpgradeAction({
+      pool,
+      userRole: this.preferences.userRole,
+      nextTier: payload.nextTier ?? this.preferences.usageMeters?.nextTier,
+      pendingSeatUpgrade: Boolean(this.preferences.pendingSeatUpgrade)
+    });
+    const upgradeUrl = paid
+      ? buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl, { forPaid: true })
+      : (payload.upgradeUrl ?? buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl));
     this.post({
       type: "chat:quota-exceeded",
       payload: {
         resetsAt: payload.resetsAt,
-        upgradeUrl: payload.upgradeUrl,
+        upgradeUrl,
         timezone: this.preferences.timezone,
         retryAfterMs: payload.retryAfterMs,
         message: payload.message,
-        pool: payload.pool,
-        blockedWindow: payload.blockedWindow ?? this.preferences.quotaCredits?.blockedWindow
+        pool,
+        blockedWindow: payload.blockedWindow ?? this.preferences.quotaCredits?.blockedWindow,
+        upgradeAction: resolved.upgradeAction,
+        nextTier: resolved.nextTier,
+        nextTierLabel: resolved.nextTierLabel
       }
     });
+  }
+
+  private postQuotaExceededFromError(error: ChatQuotaExceededError, threadId?: string): void {
+    const pool = error.pool;
+    const paid = isPaidQuotaPool(pool);
+    const nextTier = error.upgradePlan ?? this.preferences.usageMeters?.nextTier;
+    const resolved = resolveQuotaUpgradeAction({
+      pool,
+      userRole: this.preferences.userRole,
+      nextTier,
+      pendingSeatUpgrade: Boolean(this.preferences.pendingSeatUpgrade)
+    });
+    const upgradeUrl = paid
+      ? buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl, { forPaid: true })
+      : buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl);
+    const payload = {
+      resetsAt: error.resetsAt ?? new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
+      upgradeUrl,
+      timezone: this.preferences.timezone,
+      retryAfterMs: error.retryAfterMs,
+      message: error.message,
+      pool,
+      blockedWindow: error.blockedWindow,
+      upgradeAction: resolved.upgradeAction,
+      nextTier: resolved.nextTier,
+      nextTierLabel: resolved.nextTierLabel
+    };
+    if (threadId) {
+      this.postForThread(threadId, { type: "chat:quota-exceeded", payload });
+      return;
+    }
+    this.post({ type: "chat:quota-exceeded", payload });
   }
 
   private async blockIfFreeQuotaExhausted(): Promise<boolean> {
@@ -8975,7 +9075,6 @@ export class CoopChatSession {
       this.clearIntentFeedback();
       this.postQuotaExceeded({
         resetsAt: quota?.resetsAt ?? new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
-        upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
         retryAfterMs: quota?.retryAfterMs,
         pool: "free"
       });
@@ -8984,11 +9083,12 @@ export class CoopChatSession {
 
     if (isPaidUsageExhausted(this.preferences.usageMeters)) {
       this.clearIntentFeedback();
+      const nextTier = this.preferences.usageMeters?.nextTier;
       this.postQuotaExceeded({
         resetsAt: this.preferences.usageMeters?.periodEnd ?? "",
-        upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
         pool: "paid",
-        message: "You've used this month's included usage. Upgrade to continue."
+        nextTier,
+        message: buildPaidCapMessage(nextTier === "pro" ? undefined : nextTier)
       });
       return true;
     }
@@ -9009,7 +9109,6 @@ export class CoopChatSession {
       }
       this.postQuotaExceeded({
         resetsAt: quota.resetsAt ?? "",
-        upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
         retryAfterMs: quota.retryAfterMs,
         pool: "free"
       });
@@ -9018,11 +9117,12 @@ export class CoopChatSession {
     if (!isPaidUsageExhausted(this.preferences.usageMeters)) {
       return;
     }
+    const nextTier = this.preferences.usageMeters?.nextTier;
     this.postQuotaExceeded({
       resetsAt: this.preferences.usageMeters?.periodEnd ?? "",
-      upgradeUrl: buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl),
       pool: "paid",
-      message: "You've used this month's included usage. Upgrade to continue."
+      nextTier,
+      message: buildPaidCapMessage(nextTier === "pro" ? undefined : nextTier)
     });
   }
 
@@ -11566,40 +11666,37 @@ export class CoopChatSession {
     });
   }
 
-  private async healthForQuickAction(action: QuickActionFeatureId): Promise<IntegrationHealth[]> {
-    const { required, optional } = providersForFeature(action);
+  private async healthForQuickAction(
+    action: QuickActionFeatureId,
+    codeHost?: CodeHostProvider
+  ): Promise<IntegrationHealth[]> {
+    const { required, optional } = providersForFeature(action, codeHost);
     const health = await Promise.all(
       [...required, ...optional].map((provider) => this.options.healthMonitor.updateHealth(provider))
     );
     return this.applyOrgCodeHostHealthOverrides(health);
   }
 
-  /** Align quick-action health with Settings → Tools (org GitHub App / OAuth). */
+  /** Align quick-action health with Settings → Tools for every connected code host. */
   private applyOrgCodeHostHealthOverrides(health: IntegrationHealth[]): IntegrationHealth[] {
     if (readLightningBackend() !== "cloud") {
       return health;
     }
-    const provider = this.preferences.defaultCodeHost ?? "github";
-    const orgConnected =
-      provider === "github"
-        ? this.preferences.hasGitHubAppInstalled
-        : provider === "gitlab"
-          ? this.preferences.hasGitLabAppInstalled
-          : this.preferences.hasBitbucketAppInstalled;
-    if (!orgConnected) {
-      return health;
+    return promoteOrgConnectedCodeHosts(health, this.orgConnectedCodeHosts());
+  }
+
+  private orgConnectedCodeHosts(): Set<CodeHostProvider> {
+    const connected = new Set<CodeHostProvider>();
+    if (this.preferences.hasGitHubAppInstalled) {
+      connected.add("github");
     }
-    return health.map((entry) =>
-      entry.provider === provider && entry.status === "offline"
-        ? {
-            ...entry,
-            status: "healthy",
-            error: undefined,
-            errorRate: 0,
-            recoveryStrategy: "retry"
-          }
-        : entry
-    );
+    if (this.preferences.hasGitLabAppInstalled) {
+      connected.add("gitlab");
+    }
+    if (this.preferences.hasBitbucketAppInstalled) {
+      connected.add("bitbucket");
+    }
+    return connected;
   }
 
   private async handleDegradationRefresh(payload?: { feature?: string; retrace?: boolean }): Promise<void> {
@@ -11642,7 +11739,7 @@ export class CoopChatSession {
         intent: UserIntent.QUICK_ACTION_CLICKED,
         actionId: "trace-decision",
         title: "Refreshing trace",
-        message: "Fetching fresh GitHub history…",
+        message: `Fetching fresh ${evidenceCodeHostDisplayName(this.currentContext.provider)} history…`,
         progress: 35
       });
       const event = this.intentDetector.fromQuickAction("trace-decision", this.currentContext);
@@ -11695,7 +11792,9 @@ export class CoopChatSession {
         id: `${request.id}:degradation`,
         severity: "warning",
         title: "Using local workspace",
-        message: result.message ?? "GitHub offline — analyzing from files on disk.",
+        message:
+          result.message ??
+          `${evidenceCodeHostDisplayName(codeHostForDegradationRequest(request))} offline — analyzing from files on disk.`,
         feature: typeof request.params.quickAction === "string" ? request.params.quickAction : undefined,
         action: "refresh"
       });

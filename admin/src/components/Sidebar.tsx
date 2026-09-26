@@ -28,7 +28,7 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
   { href: "/integrations", label: "Integrations" },
   { href: "/users", label: "Users" },
   { href: "/requests", label: "Requests" },
-  { href: "/analytics", label: "Analytics" },
+  { href: "/analytics/my", label: "Analytics" },
   { href: "/billing", label: "Billing" },
   { href: "/audit", label: "Audit" },
   { href: "/feed", label: "Chat Feed" },

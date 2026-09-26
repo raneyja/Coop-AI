@@ -56,8 +56,20 @@ export function registerAutocompleteCommands(
   const emitUsage = async (eventType: string, metadata?: Record<string, unknown>) => {
     try {
       await api.recordUsageEvents(eventType, metadata);
-    } catch {
-      // fail-open — usage telemetry must not block editor UX
+    } catch (error) {
+      if (
+        eventType === "completion.accepted" &&
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        (error as { code?: string }).code === "quota_limit_reached"
+      ) {
+        void vscode.window.showWarningMessage(
+          error instanceof Error ? error.message : "You've used this month's included usage."
+        );
+        return;
+      }
+      // Other usage telemetry fails open.
     }
   };
 
@@ -95,10 +107,22 @@ export function registerAutocompleteCommands(
         const nes = provider.wasLastShownNes();
         provider.noteSuggestionAccepted(contextHash, languageId);
         const usage = provider.lastCompletionUsage();
+        const pending = provider.takePendingAcceptQuota(contextHash);
         void emitUsage("completion.accepted", {
           languageId,
           ...(nes ? { nes: true } : {}),
-          ...usage
+          ...usage,
+          ...(pending
+            ? {
+                inputTokens: pending.inputTokens,
+                outputTokens: pending.outputTokens,
+                provider: pending.provider,
+                model: pending.model,
+                completionQuotaId: pending.completionQuotaId,
+                fromCache: pending.fromCache,
+                cached: pending.fromCache
+              }
+            : {})
         });
       }
     ),

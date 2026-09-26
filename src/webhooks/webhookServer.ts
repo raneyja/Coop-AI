@@ -30,6 +30,7 @@ import { AuthPolicyStore } from "../server/sso/authPolicyStore";
 import { SamlService } from "../server/sso/samlService";
 import { AuditLogger } from "../server/audit/auditLogger";
 import { UsageTracker } from "../server/usageTracker";
+import { createPlanQuotaService } from "../server/planQuota";
 import { handleUsageEventsApiRequest } from "../server/usageEventsApi";
 import { handleChatThreadsApiRequest } from "../server/chatThreadsApi";
 import { handleSamlApiRequest } from "../server/sso/samlApi";
@@ -181,6 +182,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
   const authPolicyStore = pool ? new AuthPolicyStore(pool) : undefined;
   const auditLogger = new AuditLogger(pool ?? null);
   const usageTracker = new UsageTracker(pool ?? null);
+  const planQuota = createPlanQuotaService(usageTracker);
   const operatorStore = pool ? new OperatorStore(pool) : undefined;
   const operatorAuthConfig = loadOperatorAuthConfig();
   if (operatorStore && operatorAuthConfig.googleClientId) {
@@ -604,7 +606,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
             body: parsed.body
           },
           response,
-          { orgStore, userStore, serverConfig, usageTracker }
+          { orgStore, userStore, serverConfig, usageTracker, planQuota }
         )
       ) {
         return;
