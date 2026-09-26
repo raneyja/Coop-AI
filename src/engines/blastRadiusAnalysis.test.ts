@@ -46,7 +46,10 @@ assert.equal(assessCompletenessFromSignals(["a.ts"], [], undefined), "partial");
 assert.equal(assessCompletenessFromSignals(["a.ts"], [{ number: 1 } as never], { messages: [{}] }), "full");
 assert.equal(assessCompletenessFromSignals([], [], undefined), "minimal");
 
-assert.equal(remainingContextGatherBudgetMs(Date.now()), MAX_USER_FACING_RESPONSE_MS - RESERVED_SYNTHESIS_MS);
+assert.equal(
+  remainingContextGatherBudgetMs(0, 0),
+  MAX_USER_FACING_RESPONSE_MS - RESERVED_SYNTHESIS_MS
+);
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
