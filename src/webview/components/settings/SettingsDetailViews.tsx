@@ -29,6 +29,7 @@ import type { PromptLibraryItem } from "../promptLibraryTypes";
 import type { CodeHostProviderPreference, IntegrationChatProvider, LlmProviderPreference } from "../../../chat/types";
 import { isTeamsComingSoon } from "../../../integrations/teamsAvailability";
 import type { Preferences, SettingsDetailScreen } from "./types";
+import { nextAutocompleteDraft } from "./autocompleteDraft";
 import { ConnectionCard } from "./ConnectionCard";
 import { IntegrationConnectionShell } from "./IntegrationConnectionShell";
 import {
@@ -273,14 +274,22 @@ function ModelDetail({
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   const savedTimer = useRef<number | null>(null);
+  const pendingSavedRef = useRef<boolean | null>(null);
   const pickerCatalog = listPickerCatalogModels();
 
   useEffect(() => {
-    if (!dirty) {
-      setDraft({
-        autocompleteEnabled: prefs.autocompleteEnabled
-      });
+    const next = nextAutocompleteDraft(
+      prefs.autocompleteEnabled,
+      dirty,
+      pendingSavedRef.current
+    );
+    if (next === "keep") {
+      return;
     }
+    if (pendingSavedRef.current !== null && next === pendingSavedRef.current) {
+      pendingSavedRef.current = null;
+    }
+    setDraft({ autocompleteEnabled: next });
   }, [prefs.autocompleteEnabled, dirty]);
 
   useEffect(
@@ -299,6 +308,7 @@ function ModelDetail({
   };
 
   const handleSave = () => {
+    pendingSavedRef.current = draft.autocompleteEnabled;
     onUpdate({
       autocompleteEnabled: draft.autocompleteEnabled
     });
