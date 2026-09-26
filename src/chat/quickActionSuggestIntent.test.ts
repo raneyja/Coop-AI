@@ -35,7 +35,8 @@ const repoWithFile: RepoContext = {
   repo: "app",
   branch: "main",
   scope: "file",
-  file: "packages/lib/jobs/definitions/emails/send-signing-email.ts"
+  file: "packages/lib/jobs/definitions/emails/send-signing-email.ts",
+  fileSource: "remote"
 };
 
 const repoWide: RepoContext = {
