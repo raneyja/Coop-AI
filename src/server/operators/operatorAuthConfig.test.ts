@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
-import { loadOperatorAuthConfig } from "./operatorAuthConfig";
+import {
+  allowedOperatorGoogleRedirectUris,
+  isAllowedOperatorGoogleRedirectUri,
+  loadOperatorAuthConfig
+} from "./operatorAuthConfig";
 
 void (async () => {
   const config = loadOperatorAuthConfig({
@@ -22,6 +26,20 @@ void (async () => {
     GOOGLE_AUTH_CLIENT_SECRET: "auth-secret"
   });
   assert.equal(override.googleClientId, "ops-id.apps.googleusercontent.com");
+
+  const prodish = loadOperatorAuthConfig({
+    GOOGLE_AUTH_CLIENT_ID: "auth-id.apps.googleusercontent.com",
+    GOOGLE_AUTH_CLIENT_SECRET: "auth-secret",
+    COOP_OPS_PORTAL_URL: "https://ops.coop-ai.dev",
+    COOP_OPERATOR_ALLOWLIST_EMAILS: "ops@coop-ai.dev"
+  });
+  const uris = allowedOperatorGoogleRedirectUris(prodish);
+  assert.ok(uris.includes("https://ops.coop-ai.dev/api/auth/google/callback"));
+  assert.ok(uris.includes("http://localhost:3003/api/auth/google/callback"));
+  assert.equal(
+    isAllowedOperatorGoogleRedirectUri(prodish, "http://localhost:3003/api/auth/google/callback"),
+    true
+  );
 
   console.log("operatorAuthConfig.test.ts: ok");
 })();

@@ -17,9 +17,7 @@ import {
   fetchOrganization,
   fetchOrganizationApiKeys,
   fetchOrganizationAudit,
-  fetchOrganizationUsage,
   fetchOrganizationUsers,
-  formatBilledAmount,
   formatDate,
   formatDateTime,
   formatUsdFromCents,
@@ -44,11 +42,11 @@ import {
   type CustomerUser,
   type OrgAuditEntry,
   type OrgPlan,
-  type OrgUsageSnapshot,
   type RepoAccessMode
 } from "@/lib/coopApi";
 import { ApiKeyRevealModal } from "@/components/ApiKeyRevealModal";
 import { ConfirmOrgNameModal } from "@/components/ConfirmOrgNameModal";
+import { CustomerUsageCostPanel } from "@/components/CustomerUsageCostPanel";
 import { OperatorOrgStatusBadge } from "@/components/StatusBadge";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 import { UsageMeterBar } from "@/components/UsageMeterBar";
@@ -61,7 +59,6 @@ export default function CustomerDetailPage() {
   const focus = searchParams.get("focus");
 
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
-  const [usage, setUsage] = useState<OrgUsageSnapshot | null>(null);
   const [users, setUsers] = useState<CustomerUser[]>([]);
   const [keys, setKeys] = useState<CustomerApiKey[]>([]);
   const [audit, setAudit] = useState<OrgAuditEntry[]>([]);
@@ -92,12 +89,11 @@ export default function CustomerDetailPage() {
     setLoading(true);
     setError(null);
 
-    const [detailRes, usersRes, keysRes, auditRes, usageRes] = await Promise.all([
+    const [detailRes, usersRes, keysRes, auditRes] = await Promise.all([
       fetchOrganization(orgId),
       fetchOrganizationUsers(orgId),
       fetchOrganizationApiKeys(orgId),
-      fetchOrganizationAudit(orgId, { limit: 20 }),
-      fetchOrganizationUsage(orgId)
+      fetchOrganizationAudit(orgId, { limit: 20 })
     ]);
 
     setLoading(false);
@@ -123,8 +119,6 @@ export default function CustomerDetailPage() {
     if (usersRes.ok) setUsers(usersRes.data?.users ?? []);
     if (keysRes.ok) setKeys(keysRes.data?.keys ?? []);
     if (auditRes.ok) setAudit(auditRes.data?.entries ?? []);
-    if (usageRes.ok) setUsage(usageRes.data ?? null);
-    else setUsage(null);
   }, [orgId]);
 
   useEffect(() => {
@@ -450,85 +444,96 @@ export default function CustomerDetailPage() {
         <a href="#ops-billing" className="admin-page-nav-link">
           Billing
         </a>
+        <a href="#ops-health" className="admin-page-nav-link">
+          Health
+        </a>
       </nav>
 
-      <section id="ops-usage" className="admin-card">
-        <h2 className="admin-section-label">Usage & cost</h2>
-        {usage ? (
-          <>
-            <div>
-              <p className="admin-stat-label">LLM cost this period</p>
-              <p className="mt-1 text-2xl font-semibold text-white">
-                {formatUsdFromCents(usage.usedCents)}
-                <span className="ml-2 text-base font-normal text-coop-muted">
-                  of{" "}
-                  {usage.capKind === "free_credits" && usage.free
-                    ? `${Math.round(usage.free.limitTokens / 1000)}K credits`
-                    : formatUsdFromCents(usage.includedCents)}
-                </span>
-              </p>
-              <div className="mt-3">
-                <UsageMeterBar
-                  size="lg"
-                  ratio={usage.usedRatio}
-                  label={`${formatUsagePercent(usage.usedRatio)} of included`}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-              <div>
-                <p className="admin-stat-label">Billed</p>
-                <p className="admin-stat-value--quiet">{formatBilledAmount(usage.seatRevenueCents)}</p>
-              </div>
-              <div>
-                <p className="admin-stat-label">Margin</p>
-                <p
-                  className={`admin-stat-value--quiet ${
-                    usage.marginCents != null && usage.marginCents < 0 ? "text-coop-warn" : ""
-                  }`}
-                >
-                  {formatUsdFromCents(usage.marginCents)}
-                </p>
-              </div>
-            </div>
-            <div className="admin-mix">
-              <span>Chat {usage.productMix.chat}</span>
-              <span>Completions {usage.productMix.completions}</span>
-              <span>Quick actions {usage.productMix.quickActions}</span>
-              <span>Lightning {usage.productMix.lightning}</span>
-            </div>
-          </>
-        ) : (
-          <p className="text-sm text-coop-muted">Usage is unavailable for this customer right now.</p>
-        )}
-      </section>
+      <CustomerUsageCostPanel orgId={orgId} usersHref={`#ops-users`} />
 
-      <section className="admin-card">
-        <h2 className="admin-section-label">Health</h2>
-        <div className="admin-stat-row">
-          <div className="admin-stat">
-            <p className="admin-stat-label">Integrations</p>
-            <p className="admin-stat-value--quiet">{detail.health?.integrationsCount ?? "—"}</p>
-          </div>
-          <div className="admin-stat">
-            <p className="admin-stat-label">Indexed repos</p>
-            <p className="admin-stat-value--quiet">{detail.health?.indexedRepos ?? "—"}</p>
-          </div>
-          <div className="admin-stat">
-            <p className="admin-stat-label">Indexing errors</p>
-            <p className={`admin-stat-value--quiet ${(detail.health?.indexingErrors ?? 0) > 0 ? "text-coop-warn" : ""}`}>
-              {detail.health?.indexingErrors ?? 0}
-            </p>
-          </div>
-          <div className="admin-stat">
-            <p className="admin-stat-label">Last admin login</p>
-            <p className="admin-stat-value--quiet">{formatDateTime(detail.health?.lastAdminLogin)}</p>
-          </div>
-          <div className="admin-stat">
-            <p className="admin-stat-label">Repo access</p>
-            <p className="admin-stat-value--quiet font-mono">{detail.repoAccessMode ?? "all_indexed"}</p>
-          </div>
+      <section id="ops-users" className="admin-card">
+        <h2 className="admin-section-label">Users</h2>
+        {me && canMutateSupport(me) && (
+          <form onSubmit={handleInvite} className="mt-3 flex flex-wrap items-end gap-3">
+            <div className="min-w-[220px] flex-1">
+              <label className="admin-label">Invite admin</label>
+              <input
+                type="email"
+                className="admin-input"
+                placeholder="admin@customer.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+              />
+            </div>
+            <button type="submit" className="admin-btn-secondary" disabled={busy === "invite"}>
+              Send invite
+            </button>
+          </form>
+        )}
+        <div className="admin-card--table mt-4">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Seat</th>
+                <th>Usage</th>
+                <th>Cost</th>
+                <th>Last active</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-6 text-center text-coop-muted">
+                    No users yet.
+                  </td>
+                </tr>
+              ) : (
+                users.map((user) => (
+                  <tr key={user.id}>
+                    <td>
+                      <Link href={`/customers/${orgId}/users/${user.id}`} className="admin-link">
+                        {user.email}
+                      </Link>
+                    </td>
+                    <td className="text-xs">{user.role}</td>
+                    <td className="text-xs">{usageTierLabel(user.usageTier)}</td>
+                    <td>
+                      <UsageMeterBar ratio={user.usedRatio} label={formatUsagePercent(user.usedRatio)} />
+                    </td>
+                    <td className="text-xs">{formatUsdFromCents(user.usedCents)}</td>
+                    <td className="text-xs text-coop-muted">{formatDateTime(user.lastActiveAt)}</td>
+                    <td className="text-xs">{user.status}</td>
+                    <td>
+                      {user.status !== "deactivated" && me && canMutateSupport(me) ? (
+                        <button
+                          type="button"
+                          className="admin-btn-secondary text-xs"
+                          onClick={() => handleResendInvite(user.id)}
+                          disabled={busy === `resend-${user.id}`}
+                        >
+                          {busy === `resend-${user.id}`
+                            ? "Sending…"
+                            : user.status === "invited"
+                              ? "Resend invite"
+                              : "Resend activation"}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-coop-muted">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
+        <p className="mt-2 text-xs text-coop-muted">
+          Cost column is the plan period / free window. Use the chart above for 7d / 30d / month spend.
+        </p>
       </section>
 
       <section id="ops-billing" className="admin-card">
@@ -712,85 +717,31 @@ export default function CustomerDetailPage() {
         )}
       </section>
 
-      <section id="ops-users" className="admin-card">
-        <h2 className="admin-section-label">Users</h2>
-        {me && canMutateSupport(me) && (
-          <form onSubmit={handleInvite} className="mt-3 flex flex-wrap items-end gap-3">
-            <div className="min-w-[220px] flex-1">
-              <label className="admin-label">Invite admin</label>
-              <input
-                type="email"
-                className="admin-input"
-                placeholder="admin@customer.com"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-              />
-            </div>
-            <button type="submit" className="admin-btn-secondary" disabled={busy === "invite"}>
-              Send invite
-            </button>
-          </form>
-        )}
-        <div className="admin-card--table mt-4">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Seat</th>
-                <th>Usage</th>
-                <th>Cost</th>
-                <th>Last active</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-6 text-center text-coop-muted">
-                    No users yet.
-                  </td>
-                </tr>
-              ) : (
-                users.map((user) => (
-                  <tr key={user.id}>
-                    <td>
-                      <Link href={`/customers/${orgId}/users/${user.id}`} className="admin-link">
-                        {user.email}
-                      </Link>
-                    </td>
-                    <td className="text-xs">{user.role}</td>
-                    <td className="text-xs">{usageTierLabel(user.usageTier)}</td>
-                    <td>
-                      <UsageMeterBar ratio={user.usedRatio} label={formatUsagePercent(user.usedRatio)} />
-                    </td>
-                    <td className="text-xs">{formatUsdFromCents(user.usedCents)}</td>
-                    <td className="text-xs text-coop-muted">{formatDateTime(user.lastActiveAt)}</td>
-                    <td className="text-xs">{user.status}</td>
-                    <td>
-                      {user.status !== "deactivated" && me && canMutateSupport(me) ? (
-                        <button
-                          type="button"
-                          className="admin-btn-secondary text-xs"
-                          onClick={() => handleResendInvite(user.id)}
-                          disabled={busy === `resend-${user.id}`}
-                        >
-                          {busy === `resend-${user.id}`
-                            ? "Sending…"
-                            : user.status === "invited"
-                              ? "Resend invite"
-                              : "Resend activation"}
-                        </button>
-                      ) : (
-                        <span className="text-xs text-coop-muted">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      <section id="ops-health" className="admin-card">
+        <h2 className="admin-section-label">Health</h2>
+        <div className="admin-stat-row">
+          <div className="admin-stat">
+            <p className="admin-stat-label">Integrations</p>
+            <p className="admin-stat-value--quiet">{detail.health?.integrationsCount ?? "—"}</p>
+          </div>
+          <div className="admin-stat">
+            <p className="admin-stat-label">Indexed repos</p>
+            <p className="admin-stat-value--quiet">{detail.health?.indexedRepos ?? "—"}</p>
+          </div>
+          <div className="admin-stat">
+            <p className="admin-stat-label">Indexing errors</p>
+            <p className={`admin-stat-value--quiet ${(detail.health?.indexingErrors ?? 0) > 0 ? "text-coop-warn" : ""}`}>
+              {detail.health?.indexingErrors ?? 0}
+            </p>
+          </div>
+          <div className="admin-stat">
+            <p className="admin-stat-label">Last admin login</p>
+            <p className="admin-stat-value--quiet">{formatDateTime(detail.health?.lastAdminLogin)}</p>
+          </div>
+          <div className="admin-stat">
+            <p className="admin-stat-label">Repo access</p>
+            <p className="admin-stat-value--quiet font-mono">{detail.repoAccessMode ?? "all_indexed"}</p>
+          </div>
         </div>
       </section>
 

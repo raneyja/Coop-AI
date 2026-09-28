@@ -938,6 +938,40 @@ void (async () => {
   );
   assert.equal(noTracker.statusCode, 503);
 
+  const usageCost = mockResponse();
+  const costHandled = await handleOperatorApiRequest(
+    {
+      method: "GET",
+      pathname: "/v1/operator/organizations/org-1/usage/cost",
+      query: new URLSearchParams({ range: "7d" }),
+      headers: { authorization: "Bearer ops-token" },
+      body: {}
+    },
+    usageCost,
+    baseDeps({
+      orgStore: usageOrgStore,
+      userStore: usageUserStore as never,
+      usageTracker: {
+        ...usageTracker,
+        sumUsdCentsByDay: async () => [
+          { day: "2026-09-22", autoCents: 200, frontierCents: 50 }
+        ],
+        sumUsdCentsByUserIds: async () =>
+          new Map([["user-1", { autoCents: 200, frontierCents: 50 }]])
+      } as never,
+      operatorStore: {
+        resolveSession: async () => viewer
+      } as unknown as OperatorStore
+    })
+  );
+  assert.equal(costHandled, true);
+  assert.equal(usageCost.statusCode, 200);
+  const costBody = JSON.parse(usageCost.body ?? "{}") as {
+    cost?: { totals?: { usedCents?: number }; byUser?: Array<{ email?: string }> };
+  };
+  assert.equal(costBody.cost?.totals?.usedCents, 250);
+  assert.equal(costBody.cost?.byUser?.[0]?.email, "a@example.com");
+
   const userDetail = mockResponse();
   await handleOperatorApiRequest(
     {

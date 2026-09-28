@@ -21,6 +21,7 @@ import {
   type UsageCreditTargetRatio
 } from "@/lib/coopApi";
 import { ConfirmUsageCreditModal } from "@/components/ConfirmUsageCreditModal";
+import { CustomerUsageCostPanel } from "@/components/CustomerUsageCostPanel";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 import { UsageMeterBar } from "@/components/UsageMeterBar";
 
@@ -175,11 +176,13 @@ export default function CustomerUserPage() {
       {actionError && <p className="text-sm text-red-400">{actionError}</p>}
       {actionNotice && <p className="text-sm text-coop-index">{actionNotice}</p>}
 
+      <CustomerUsageCostPanel orgId={orgId} userId={user.id} />
+
       <section className="admin-card">
-        <h2 className="admin-section-label">Usage vs plan</h2>
+        <h2 className="admin-section-label">Plan allowance & credits</h2>
         {user.capKind === "free_credits" && user.free ? (
           <div className="mb-4">
-            <p className="admin-stat-label">Org free credits (5-hour window)</p>
+            <p className="admin-stat-label">Org free credits (shared pool)</p>
             <p className="mt-1 text-2xl font-semibold text-white">
               {tokensToCredits(user.free.usedTokens)}K
               <span className="ml-2 text-base font-normal text-coop-muted">
@@ -195,13 +198,13 @@ export default function CustomerUserPage() {
             </div>
             <p className="mt-2 text-sm text-coop-muted">
               Free credits are org-wide. Crediting this person lowers the shared pool that blocks
-              chat.
+              chat. This is not the same as Coop’s model $ cost above.
             </p>
           </div>
-        ) : (
+        ) : user.capKind === "paid_included" ? (
           <div>
             <p className="admin-stat-label">
-              {usageTierLabel(user.usageTier)} seat · LLM cost this period
+              {usageTierLabel(user.usageTier)} seat · included this billing period
             </p>
             <p className="mt-1 text-2xl font-semibold text-white">
               {formatUsdFromCents(user.usedCents)}
@@ -221,16 +224,11 @@ export default function CustomerUserPage() {
               </div>
             ) : null}
           </div>
-        )}
-        {(user.autoCents != null || user.frontierCents != null) && (
+        ) : (
           <p className="text-sm text-coop-muted">
-            Auto {formatUsdFromCents(user.autoCents ?? 0)} · Frontier {formatUsdFromCents(user.frontierCents ?? 0)}
-            {user.capKind === "free_credits" ? " · this person’s LLM spend" : ""}
+            Enterprise seats have no included-$ cap. Cost above is Coop’s LLM spend.
           </p>
         )}
-        {user.capKind === "unlimited" ? (
-          <p className="text-sm text-coop-muted">Enterprise seats have no included-$ cap. Cost is Coop’s LLM spend.</p>
-        ) : null}
         {canCredit ? (
           <div className="mt-4 flex flex-wrap gap-2">
             {CREDIT_TARGETS.map((target) => (
@@ -250,30 +248,32 @@ export default function CustomerUserPage() {
             ))}
           </div>
         ) : null}
-        <div className="admin-mix">
-          <span>Chat {user.productMix?.chat ?? 0}</span>
-          <span>Completions {user.productMix?.completions ?? 0}</span>
-          <span>Quick actions {user.productMix?.quickActions ?? 0}</span>
-          <span>Lightning {user.productMix?.lightning ?? 0}</span>
-        </div>
       </section>
 
       <section className="admin-card">
         <h2 className="admin-section-label">Account</h2>
         <div className="admin-stat-row">
           <div className="admin-stat">
-            <p className="admin-stat-label">Last active</p>
-            <p className="admin-stat-value--quiet">{formatDateTime(user.lastActiveAt)}</p>
+            <p className="admin-stat-label">Last login</p>
+            <p className="admin-stat-value--quiet">{formatDateTime(user.lastLoginAt ?? undefined)}</p>
           </div>
           <div className="admin-stat">
-            <p className="admin-stat-label">Last login</p>
-            <p className="admin-stat-value--quiet">{formatDateTime(user.lastLoginAt)}</p>
+            <p className="admin-stat-label">Last active</p>
+            <p className="admin-stat-value--quiet">{formatDateTime(user.lastActiveAt ?? undefined)}</p>
+          </div>
+          <div className="admin-stat">
+            <p className="admin-stat-label">Seat</p>
+            <p className="admin-stat-value--quiet">{usageTierLabel(user.usageTier)}</p>
           </div>
         </div>
-        {me && canMutateSupport(me) && user.status !== "deactivated" ? (
+        {user.status !== "deactivated" && me && canMutateSupport(me) ? (
           <form onSubmit={handleResend} className="mt-4">
             <button type="submit" className="admin-btn-secondary" disabled={busy}>
-              {busy ? "Sending…" : user.status === "invited" ? "Resend invite" : "Resend activation"}
+              {busy
+                ? "Sending…"
+                : user.status === "invited"
+                  ? "Resend invite"
+                  : "Resend activation"}
             </button>
           </form>
         ) : null}
@@ -281,14 +281,12 @@ export default function CustomerUserPage() {
 
       <ConfirmUsageCreditModal
         open={creditTarget != null}
-        email={user.email}
-        currentRatio={usedRatio}
         targetRatio={creditTarget}
+        currentRatio={usedRatio}
+        email={user.email}
         loading={busy}
-        onConfirm={handleCredit}
-        onClose={() => {
-          if (!busy) setCreditTarget(null);
-        }}
+        onClose={() => setCreditTarget(null)}
+        onConfirm={(reason) => void handleCredit(reason)}
       />
     </div>
   );

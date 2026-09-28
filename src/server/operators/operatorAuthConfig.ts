@@ -65,7 +65,10 @@ export function loadOperatorAuthConfig(env: NodeJS.ProcessEnv = process.env): Op
 
 export function allowedOperatorGoogleRedirectUris(config: OperatorAuthConfig): string[] {
   const ops = config.opsPortalUrl.replace(/\/$/, "");
-  return [`${ops}/api/auth/google/callback`];
+  const uris = new Set<string>([`${ops}/api/auth/google/callback`]);
+  // Local Ops (`npm run dev` on :3003) against either local or production API.
+  uris.add("http://localhost:3003/api/auth/google/callback");
+  return [...uris];
 }
 
 export function isAllowedOperatorGoogleRedirectUri(

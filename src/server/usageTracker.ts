@@ -343,6 +343,63 @@ export class UsageTracker {
     return totals;
   }
 
+  /**
+   * Daily Auto/Frontier `usdCents` totals for an org (or one user).
+   * Days with no spend are omitted — callers fill gaps for charts.
+   */
+  public async sumUsdCentsByDay(
+    orgId: string,
+    range: UsageDateRange,
+    eventTypes: string[],
+    userId?: string | null
+  ): Promise<Array<{ day: string; autoCents: number; frontierCents: number }>> {
+    if (!this.pool || eventTypes.length === 0) {
+      return [];
+    }
+    const userFilter = userId?.trim() ? " AND user_id = $5" : "";
+    const params: unknown[] = [orgId, range.from, range.to, eventTypes];
+    if (userId?.trim()) {
+      params.push(userId.trim());
+    }
+    const result = await this.pool.query(
+      `SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day,
+              metadata->>'bucket' AS bucket,
+              COALESCE(SUM(
+                CASE
+                  ${jsonSignedIntSql("usdCents")}
+                  ELSE 0
+                END
+              ), 0)::int AS total
+       FROM usage_events
+       WHERE org_id = $1
+         AND created_at >= $2
+         AND created_at < $3
+         AND event_type = ANY($4::text[])
+         AND metadata->>'bucket' IN ('auto', 'frontier')${userFilter}
+       GROUP BY 1, 2
+       ORDER BY 1`,
+      params
+    );
+    const byDay = new Map<string, { autoCents: number; frontierCents: number }>();
+    for (const row of result.rows as Array<{ day?: string; bucket?: string; total?: number }>) {
+      const day = String(row.day ?? "").slice(0, 10);
+      if (!day) {
+        continue;
+      }
+      const current = byDay.get(day) ?? { autoCents: 0, frontierCents: 0 };
+      const amount = Number(row.total ?? 0);
+      if (row.bucket === "frontier") {
+        current.frontierCents += amount;
+      } else if (row.bucket === "auto") {
+        current.autoCents += amount;
+      }
+      byDay.set(day, current);
+    }
+    return [...byDay.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([day, cents]) => ({ day, ...cents }));
+  }
+
   public async countEvents(orgId: string, range: UsageDateRange): Promise<number> {
     if (!this.pool) {
       return 0;

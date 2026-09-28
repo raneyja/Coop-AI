@@ -539,3 +539,205 @@ export function splitUsageQueueItems(input: {
 
   return { usageNearCap, usageAtCap, unprofitable };
 }
+
+/** Operator cost chart ranges — independent of Free allowance windows and Pro billing period. */
+export type OperatorCostRangeKind = "7d" | "30d" | "month";
+
+export type OperatorCostDayPoint = {
+  day: string;
+  autoCents: number;
+  frontierCents: number;
+  usedCents: number;
+};
+
+export type OperatorCostUserRow = {
+  userId: string;
+  email: string;
+  autoCents: number;
+  frontierCents: number;
+  usedCents: number;
+};
+
+export type OperatorCostBreakdown = {
+  range: {
+    kind: OperatorCostRangeKind;
+    label: string;
+    from: string;
+    to: string;
+  };
+  totals: {
+    usedCents: number;
+    autoCents: number;
+    frontierCents: number;
+  };
+  productMix: ProductMix;
+  days: OperatorCostDayPoint[];
+  byUser: OperatorCostUserRow[];
+};
+
+export function parseOperatorCostRangeKind(raw: string | null | undefined): OperatorCostRangeKind {
+  const value = (raw ?? "").trim().toLowerCase();
+  if (value === "7d" || value === "week" || value === "weekly") {
+    return "7d";
+  }
+  if (value === "month" || value === "monthly" || value === "calendar_month") {
+    return "month";
+  }
+  return "30d";
+}
+
+export function resolveOperatorCostRange(
+  kind: OperatorCostRangeKind,
+  now = new Date()
+): { kind: OperatorCostRangeKind; label: string; from: Date; to: Date } {
+  const to = now;
+  if (kind === "7d") {
+    return {
+      kind,
+      label: "Last 7 days",
+      from: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+      to
+    };
+  }
+  if (kind === "month") {
+    return {
+      kind,
+      label: "This month",
+      from: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
+      to
+    };
+  }
+  return {
+    kind: "30d",
+    label: "Last 30 days",
+    from: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
+    to
+  };
+}
+
+function utcDayKey(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/** Inclusive UTC day list from `from` through the UTC day containing `to` (exclusive end clamped). */
+export function enumerateUtcDays(from: Date, to: Date): string[] {
+  const start = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate());
+  const endExclusive = to.getTime();
+  const days: string[] = [];
+  for (let cursor = start; cursor < endExclusive; cursor += 24 * 60 * 60 * 1000) {
+    days.push(new Date(cursor).toISOString().slice(0, 10));
+  }
+  if (days.length === 0) {
+    days.push(utcDayKey(from));
+  }
+  return days;
+}
+
+export function fillCostDays(
+  sparse: Array<{ day: string; autoCents: number; frontierCents: number }>,
+  from: Date,
+  to: Date
+): OperatorCostDayPoint[] {
+  const byDay = new Map(
+    sparse.map((row) => [
+      row.day.slice(0, 10),
+      {
+        autoCents: row.autoCents,
+        frontierCents: row.frontierCents
+      }
+    ])
+  );
+  return enumerateUtcDays(from, to).map((day) => {
+    const cents = byDay.get(day) ?? { autoCents: 0, frontierCents: 0 };
+    return {
+      day,
+      autoCents: cents.autoCents,
+      frontierCents: cents.frontierCents,
+      usedCents: cents.autoCents + cents.frontierCents
+    };
+  });
+}
+
+/**
+ * Coop LLM spend for an org (or one user) over an operator-selected range.
+ * Always uses `usdCents` — works for Free (no Stripe) the same as Pro.
+ */
+export async function loadOrgCostBreakdown(input: {
+  orgId: string;
+  users: UserRecord[];
+  usageTracker: UsageTracker;
+  rangeKind?: OperatorCostRangeKind | string | null;
+  userId?: string | null;
+  now?: Date;
+}): Promise<OperatorCostBreakdown> {
+  const now = input.now ?? new Date();
+  const kind = parseOperatorCostRangeKind(
+    typeof input.rangeKind === "string" ? input.rangeKind : input.rangeKind ?? undefined
+  );
+  const resolved = resolveOperatorCostRange(kind, now);
+  const range = { from: resolved.from, to: resolved.to };
+  const eventTypes = [...LLM_USAGE_EVENT_TYPES];
+  const filterUserId = input.userId?.trim() || undefined;
+
+  const mixPromise = (async () => {
+    if (!filterUserId) {
+      return input.usageTracker.eventsByType(input.orgId, range);
+    }
+    const user = input.users.find((row) => row.id === filterUserId);
+    if (!user) {
+      return [];
+    }
+    return input.usageTracker.eventsByTypeForPrincipals(
+      input.orgId,
+      principalAliasesForUser(user),
+      range
+    );
+  })();
+
+  const [dailySparse, byType, byUserMap] = await Promise.all([
+    input.usageTracker.sumUsdCentsByDay(input.orgId, range, eventTypes, filterUserId),
+    mixPromise,
+    input.usageTracker.sumUsdCentsByUserIds(
+      input.orgId,
+      range,
+      eventTypes,
+      filterUserId ? [filterUserId] : input.users.map((user) => user.id)
+    )
+  ]);
+
+  const days = fillCostDays(dailySparse, resolved.from, resolved.to);
+  let autoCents = 0;
+  let frontierCents = 0;
+  for (const day of days) {
+    autoCents += day.autoCents;
+    frontierCents += day.frontierCents;
+  }
+
+  const emailById = new Map(input.users.map((user) => [user.id, user.email]));
+  const byUser: OperatorCostUserRow[] = [...byUserMap.entries()]
+    .map(([userId, cents]) => ({
+      userId,
+      email: emailById.get(userId) ?? userId,
+      autoCents: cents.autoCents,
+      frontierCents: cents.frontierCents,
+      usedCents: cents.autoCents + cents.frontierCents
+    }))
+    .sort((a, b) => b.usedCents - a.usedCents || a.email.localeCompare(b.email));
+
+  return {
+    range: {
+      kind: resolved.kind,
+      label: resolved.label,
+      from: resolved.from.toISOString(),
+      to: resolved.to.toISOString()
+    },
+    totals: {
+      usedCents: autoCents + frontierCents,
+      autoCents,
+      frontierCents
+    },
+    productMix: productMixFromEventTypes(byType),
+    days,
+    byUser
+  };
+}

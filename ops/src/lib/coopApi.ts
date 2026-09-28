@@ -66,6 +66,40 @@ export type OrgUsageSnapshot = OrgUsageSummary & {
   };
 };
 
+export type OperatorCostRangeKind = "7d" | "30d" | "month";
+
+export type OrgCostDayPoint = {
+  day: string;
+  autoCents: number;
+  frontierCents: number;
+  usedCents: number;
+};
+
+export type OrgCostUserRow = {
+  userId: string;
+  email: string;
+  autoCents: number;
+  frontierCents: number;
+  usedCents: number;
+};
+
+export type OrgCostBreakdown = {
+  range: {
+    kind: OperatorCostRangeKind;
+    label: string;
+    from: string;
+    to: string;
+  };
+  totals: {
+    usedCents: number;
+    autoCents: number;
+    frontierCents: number;
+  };
+  productMix: OperatorProductMix;
+  days: OrgCostDayPoint[];
+  byUser: OrgCostUserRow[];
+};
+
 export type UsageQueueItem = {
   orgId: string;
   orgName: string;
@@ -354,6 +388,52 @@ function normalizeOrgUsageSnapshot(raw: unknown): OrgUsageSnapshot | undefined {
             resetsAt: String(free.resetsAt ?? "")
           }
         : undefined
+  };
+}
+
+function normalizeOrgCostBreakdown(raw: unknown): OrgCostBreakdown | undefined {
+  const record = asRecord(raw);
+  const range = asRecord(record.range);
+  const totals = asRecord(record.totals);
+  const kindRaw = String(range.kind ?? "30d");
+  const kind: OperatorCostRangeKind =
+    kindRaw === "7d" || kindRaw === "month" ? kindRaw : "30d";
+  const daysRaw = Array.isArray(record.days) ? record.days : [];
+  const byUserRaw = Array.isArray(record.byUser) ? record.byUser : [];
+  return {
+    range: {
+      kind,
+      label: String(range.label ?? ""),
+      from: String(range.from ?? ""),
+      to: String(range.to ?? "")
+    },
+    totals: {
+      usedCents: Number(totals.usedCents ?? 0),
+      autoCents: Number(totals.autoCents ?? 0),
+      frontierCents: Number(totals.frontierCents ?? 0)
+    },
+    productMix: normalizeProductMix(record.productMix),
+    days: daysRaw.map((row) => {
+      const day = asRecord(row);
+      return {
+        day: String(day.day ?? "").slice(0, 10),
+        autoCents: Number(day.autoCents ?? 0),
+        frontierCents: Number(day.frontierCents ?? 0),
+        usedCents: Number(day.usedCents ?? Number(day.autoCents ?? 0) + Number(day.frontierCents ?? 0))
+      };
+    }),
+    byUser: byUserRaw.map((row) => {
+      const user = asRecord(row);
+      const autoCents = Number(user.autoCents ?? 0);
+      const frontierCents = Number(user.frontierCents ?? 0);
+      return {
+        userId: String(user.userId ?? ""),
+        email: String(user.email ?? ""),
+        autoCents,
+        frontierCents,
+        usedCents: Number(user.usedCents ?? autoCents + frontierCents)
+      };
+    })
   };
 }
 
@@ -729,6 +809,31 @@ export async function fetchOrganizationUsage(
     return { ok: false, status: 502, error: "Usage payload was incomplete." };
   }
   return { ok: true, status: result.status, data: usage };
+}
+
+export async function fetchOrganizationUsageCost(
+  orgId: string,
+  options?: { range?: OperatorCostRangeKind; userId?: string }
+): Promise<ApiResult<OrgCostBreakdown>> {
+  const params = new URLSearchParams();
+  if (options?.range) {
+    params.set("range", options.range);
+  }
+  if (options?.userId) {
+    params.set("userId", options.userId);
+  }
+  const qs = params.toString();
+  const result = await coopFetch<{ cost?: RawRecord }>(
+    `/v1/operator/organizations/${encodeURIComponent(orgId)}/usage/cost${qs ? `?${qs}` : ""}`
+  );
+  if (!result.ok || !result.data) {
+    return { ok: false, status: result.status, error: result.error, unavailable: result.unavailable };
+  }
+  const cost = normalizeOrgCostBreakdown(result.data.cost ?? result.data);
+  if (!cost) {
+    return { ok: false, status: 502, error: "Cost payload was incomplete." };
+  }
+  return { ok: true, status: result.status, data: cost };
 }
 
 export async function lookupUserByEmail(email: string): Promise<

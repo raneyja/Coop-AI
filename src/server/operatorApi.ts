@@ -32,11 +32,13 @@ import type { OperatorStore, OperatorContext } from "./operators/operatorStore";
 import type { OrgRepoAccessMode } from "./repoAccessTypes";
 import type { UsageTracker } from "./usageTracker";
 import {
+  loadOrgCostBreakdown,
   loadOrgUsageSnapshot,
   loadOrgUsageSummary,
   loadUserUsageSnapshot,
   loadUserUsageSummaries,
   operatorUserStatus,
+  parseOperatorCostRangeKind,
   splitUsageQueueItems,
   type OperatorUsageQueueItem
 } from "./operatorUsage";
@@ -469,6 +471,9 @@ async function handleOrgScopedRequest(
   }
   if (suffix === "/usage" && parsed.method === "GET") {
     return handleOrgUsage(orgId, response, deps, operator);
+  }
+  if (suffix === "/usage/cost" && parsed.method === "GET") {
+    return handleOrgUsageCost(orgId, parsed, response, deps, operator);
   }
 
   writeJson(response, 404, { error: "not_found" });
@@ -1140,6 +1145,45 @@ async function handleOrgUsage(
     usageTracker: deps.usageTracker
   });
   writeJson(response, 200, { organization: { id: org.id, name: org.name, plan: org.plan }, usage });
+  return true;
+}
+
+async function handleOrgUsageCost(
+  orgId: string,
+  parsed: ParsedRequest,
+  response: ServerResponse,
+  deps: OperatorApiDeps,
+  operator: OperatorContext
+): Promise<boolean> {
+  if (!requireOperatorRole(operator, "viewer", response)) {
+    return true;
+  }
+  const org = await deps.orgStore!.getOrganization(orgId);
+  if (!org) {
+    writeJson(response, 404, { error: "organization not found" });
+    return true;
+  }
+  if (!deps.usageTracker?.canRead()) {
+    writeJson(response, 503, { error: "usage tracking not configured" });
+    return true;
+  }
+  const users = deps.userStore ? await deps.userStore.listOrgUsers(orgId) : [];
+  const userId = parsed.query?.get("userId")?.trim() || undefined;
+  if (userId && !users.some((user) => user.id === userId)) {
+    writeJson(response, 404, { error: "user not found" });
+    return true;
+  }
+  const cost = await loadOrgCostBreakdown({
+    orgId,
+    users,
+    usageTracker: deps.usageTracker,
+    rangeKind: parseOperatorCostRangeKind(parsed.query?.get("range")),
+    userId
+  });
+  writeJson(response, 200, {
+    organization: { id: org.id, name: org.name, plan: org.plan },
+    cost
+  });
   return true;
 }
 
