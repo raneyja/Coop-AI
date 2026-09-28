@@ -69,6 +69,8 @@ When giving setup, env, or test steps (not code review), follow:
 
 Jon asks the agent to commit and push. Before commit or push, the agent must run **`npm run lint`** (same as GitHub Actions Lint) and ship **complete** diffs (call sites + matching types/clients). See **`.cursor/rules/agent-git-workflow.mdc`**.
 
+**Marketplace listing:** category/copy/banner are enforced by **`npm run test:marketplace-listing`** (in `test:ci`) and **`.cursor/rules/vscode-marketplace-listing.mdc`**. Do not reintroduce Machine Learning or replace the Stack README hero without an intentional listing change.
+
 ## Boris bar
 
 **Boris bar** is Coop’s quality bar: **Claude Code / Anthropic-grade craft**, not vibe-coded output. When the user says *“make sure this meets the Boris bar”*, treat it as a **ship gate** — would this pass review on a serious agentic coding product, or does it feel like a demo that only works in the happy path?

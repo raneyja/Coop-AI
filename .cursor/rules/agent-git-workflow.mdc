@@ -14,7 +14,8 @@ GitHub Actions Lint is `npm run lint` (`tsc --noEmit` on extension, webview, and
 1. Run `git status` and `git diff` (staged + unstaged). Stage **all files required** for the change to typecheck — not only the file you edited last.
 2. Related surfaces that often get left behind: `src/chat/types.ts`, `SecureApiClient.ts`, `CoopBackendClient.ts`, webview message handlers, admin mirrors of the same API.
 3. Run **`npm run lint`** from the repo root. Fix failures (or include missing files) before `git commit`.
-4. Do **not** commit if lint fails. Do **not** push a known-red commit “to fix later” unless the user explicitly overrides.
+4. If the commit touches Marketplace listing surfaces (`package.json` categories/description, root `README.md`, Stack banner under `website/public/screenshots/docs/`), also run **`npm run test:marketplace-listing`**. See `.cursor/rules/vscode-marketplace-listing.mdc`.
+5. Do **not** commit if lint (or that marketplace gate) fails. Do **not** push a known-red commit “to fix later” unless the user explicitly overrides.
 
 ## Before every push the user requested
 

@@ -1,0 +1,43 @@
+---
+description: Keep VS Code Marketplace listing (category, copy, Stack banner) correct on every publish
+alwaysApply: true
+---
+
+# VS Code Marketplace listing — do not regress
+
+Marketplace listing content is **sourced from the VSIX**, which packs `package.json` + root `README.md`. Every publish **overwrites** the live listing. Portal-only edits are temporary and get wiped.
+
+Publisher / item: `coop-ai.coop-ai`  
+Listing: https://marketplace.visualstudio.com/items?itemName=coop-ai.coop-ai
+
+## Source of truth
+
+| Listing field | Edit here only |
+|---|---|
+| Short description | `package.json` → `description` |
+| Categories | `package.json` → `categories` — **exactly** `["AI", "Chat"]` |
+| Overview + first screenshot | Root `README.md` (opening paragraphs + first image) |
+| Banner asset | `website/public/screenshots/docs/extension-from-your-stack.png` (must stay reachable at the README URL) |
+
+## Hard fails (never ship)
+
+| Reject | Prefer |
+|---|---|
+| Adding `Machine Learning` (or any third category) | `AI` first, then `Chat` only |
+| Replacing the README opener with old “repo graph, Slack, and tickets” copy | Keep the three-paragraph AI / zero-clone / indexed-map opener |
+| First README image pointing at `extension-sidebar-light.png` (or any non-Stack hero) | First image = Stack banner URL |
+| Deleting the Stack PNG without updating README + redeploying the site | Update URL + asset together |
+| Relying on Publisher Management to “remember” category/copy | Fix git, bump version, upload new VSIX |
+
+## Before packaging / publishing
+
+1. Run **`npm run test:marketplace-listing`** (also in `test:ci`).
+2. Bump `package.json` `version` + `CHANGELOG.md` (+ `COOP_EXTENSION_BUILD_ID` when shipping a distinguishable VSIX).
+3. `npm run package` → upload `coop-ai.vsix` (or `vsce publish` with a PAT).
+4. Confirm site image is live before relying on the README screenshot URL.
+
+Playbook: `docs/distribution/02-vscode-marketplace.md`.
+
+## Self-check
+
+Would the next VSIX put the listing back under **Machine Learning** or restore the old sidebar-first screenshot? If yes, fail.
