@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.9
+
+- Evidence-bound answers: thin or empty evidence stays short and honest (Blast, Understand, L file)
+- Extension Host F5 defaults to no-debug so Coop loads instead of hanging on inspect-brk
+- Keep Deep-Indexed / Settings-connected code hosts online for quick actions with request-scoped Use-repo identity
+
 ## 0.1.8
 
 - Keep Use-repo and quick actions honest when Untitled scratch tabs or local-clone snaps appear

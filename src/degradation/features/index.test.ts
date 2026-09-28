@@ -3,7 +3,7 @@ import { CODE_HOST_PROVIDERS, type CodeHostProvider } from "../../api/codeHosts/
 import type { DegradationCache } from "../../cache/degradationCache";
 import type { ContextFetchRequest } from "../../context/requestBatcher";
 import type { IntegrationHealth, IntegrationProvider, IntegrationStatus } from "../../integrations/healthMonitor";
-import { indexedUseRepoHosts, promoteIndexedOrConnectedCodeHosts } from "../fallbackMatrix";
+import { indexedUseRepoHosts, promoteIndexedOrConnectedCodeHosts, connectedCodeHostsFromPrefs } from "../fallbackMatrix";
 import { runFeatureFallback } from "./index";
 import { resolveFeatureForRequest } from "./resolveFeatureForRequest";
 
@@ -35,7 +35,7 @@ function health(provider: IntegrationProvider, status: IntegrationStatus): Integ
 
 function request(
   host: CodeHostProvider,
-  type: "ownership" | "dependencies" | "knowledge_gaps" | "decision_history",
+  type: "ownership" | "dependencies" | "knowledge_gaps" | "decision_history" | "file_metadata",
   quickAction?: string
 ): ContextFetchRequest {
   return {
@@ -62,7 +62,7 @@ function request(
 }
 
 const FANOUT: Array<{
-  type: "ownership" | "dependencies" | "knowledge_gaps" | "decision_history";
+  type: "ownership" | "dependencies" | "knowledge_gaps" | "decision_history" | "file_metadata";
   quickAction?: string;
 }> = [
   { type: "ownership", quickAction: "knowledge-gaps" },
@@ -71,6 +71,7 @@ const FANOUT: Array<{
   { type: "ownership", quickAction: "find-owner" },
   { type: "dependencies", quickAction: "blast-radius" },
   { type: "decision_history", quickAction: "trace-decision" },
+  { type: "file_metadata", quickAction: "understand-repo" },
   { type: "ownership" }
 ];
 
@@ -88,8 +89,67 @@ async function assertIndexedFanoutHasNoOfflineBanner(): Promise<void> {
         cache
       });
       const copy = `${result?.error ?? ""} ${result?.message ?? ""}`;
-      assert.equal(result?.error, undefined, `${fan.type} on indexed ${host} must not hard-fail`);
-      assert.doesNotMatch(copy, /is offline/, `${fan.type} on indexed ${host} must not say the host is offline`);
+      assert.doesNotMatch(
+        copy,
+        /is offline/,
+        `${fan.type} on indexed ${host} must not say the host is offline`
+      );
+      // Understand Repo without a registered summary loader still asks to connect —
+      // that is not the false offline hard-gate.
+      if (fan.quickAction !== "understand-repo") {
+        assert.equal(
+          result?.error,
+          undefined,
+          `${fan.type}/${fan.quickAction ?? "plain"} on indexed ${host} must not hard-fail`
+        );
+      }
+    }
+
+    // Settings Ready via org statuses only (AppInstalled false)
+    const connectedOnly = promoteIndexedOrConnectedCodeHosts(
+      offline,
+      connectedCodeHostsFromPrefs({
+        orgIntegrationStatuses: [{ provider: host, installed: true }],
+        hasGitHubAppInstalled: false,
+        hasGitLabAppInstalled: false,
+        hasBitbucketAppInstalled: false
+      }),
+      new Set()
+    );
+    for (const action of [
+      "blast-radius",
+      "find-owner",
+      "knowledge-gaps",
+      "trace-decision",
+      "understand-repo"
+    ] as const) {
+      const type =
+        action === "blast-radius"
+          ? "dependencies"
+          : action === "trace-decision"
+            ? "decision_history"
+            : action === "knowledge-gaps"
+              ? "knowledge_gaps"
+              : action === "understand-repo"
+                ? "file_metadata"
+                : "ownership";
+      const result = await runFeatureFallback({
+        request: request(host, type, action),
+        health: connectedOnly,
+        cache
+      });
+      assert.doesNotMatch(
+        `${result?.error ?? ""} ${result?.message ?? ""}`,
+        /is offline/,
+        `${action} on orgStatuses-Ready ${host} must not emit offline banner`
+      );
+      if (action !== "understand-repo") {
+        assert.equal(
+          result?.error,
+          undefined,
+          `${action} on orgStatuses-Ready ${host} must not hard-fail`
+        );
+      }
     }
 
     const blocked = await runFeatureFallback({

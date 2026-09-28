@@ -66,9 +66,12 @@ import type {
 } from "../conflicts";
 import { codeHostForDegradationRequest, runFeatureFallback } from "../degradation/features";
 import {
+  connectedCodeHostsFromPrefs,
   indexedUseRepoHosts,
+  isDeepIndexedForQuickActions,
   promoteIndexedOrConnectedCodeHosts,
   providersForFeature,
+  repoIdCandidatesForIndexStatus,
   type QuickActionFeatureId
 } from "../degradation/fallbackMatrix";
 import type { HealthMonitor, IntegrationHealth, IntegrationProvider } from "../integrations/healthMonitor";
@@ -4395,9 +4398,9 @@ export class CoopChatSession {
       const action = request.params.quickAction as QuickActionFeatureId | undefined;
       const codeHost = codeHostForDegradationRequest(request);
       const health = action
-        ? await this.healthForQuickAction(action, codeHost)
+        ? await this.healthForQuickAction(action, codeHost, request)
         : request.type === "ownership"
-          ? await this.healthForQuickAction("find-owner", codeHost)
+          ? await this.healthForQuickAction("find-owner", codeHost, request)
           : [];
       const degraded = await runFeatureFallback({
         request,
@@ -11687,70 +11690,86 @@ export class CoopChatSession {
 
   private async healthForQuickAction(
     action: QuickActionFeatureId,
-    codeHost?: CodeHostProvider
+    codeHost?: CodeHostProvider,
+    request?: ContextFetchRequest
   ): Promise<IntegrationHealth[]> {
     const { required, optional } = providersForFeature(action, codeHost);
-    const cloud = readLightningBackend() === "cloud";
     const [health, indexed] = await Promise.all([
       Promise.all(
         [...required, ...optional].map((provider) => this.options.healthMonitor.updateHealth(provider))
       ),
-      cloud ? this.indexedUseRepoHostsFor(codeHost) : Promise.resolve(new Set<CodeHostProvider>())
+      this.indexedUseRepoHostsFor(codeHost, request)
     ]);
     return this.applyOrgCodeHostHealthOverrides(health, indexed);
   }
 
   /**
-   * Active Use-repo only. A ready Deep-Index on this host is online for QA
+   * Request Use-repo host only. A ready Deep-Index on that host is online for QA
    * even when the live probe is offline. Never promotes a different host.
+   * Request provider/repoId win over sticky currentContext when they disagree.
    */
-  private async indexedUseRepoHostsFor(codeHost?: CodeHostProvider): Promise<Set<CodeHostProvider>> {
+  private async indexedUseRepoHostsFor(
+    codeHost?: CodeHostProvider,
+    request?: ContextFetchRequest
+  ): Promise<Set<CodeHostProvider>> {
     if (!codeHost) {
       return new Set();
     }
-    const owner = this.currentContext.owner?.trim() || this.preferences.owner?.trim();
-    const repo = this.currentContext.repo?.trim() || this.preferences.repo?.trim();
-    if (!owner || !repo) {
+    const params = request?.params ?? {};
+    const requestHost = resolveCodeHostProvider({
+      provider: typeof params.provider === "string" ? params.provider : undefined,
+      repoId: typeof params.repoId === "string" ? params.repoId : undefined
+    });
+    // Sticky context must not zero indexed promotion when the request host is clear.
+    if (requestHost && requestHost !== codeHost) {
       return new Set();
     }
-    const contextHost = resolveCodeHostProvider({ provider: this.currentContext.provider });
-    if (contextHost && contextHost !== codeHost) {
+    const owner =
+      (typeof params.owner === "string" ? params.owner.trim() : undefined) ||
+      this.currentContext.owner?.trim() ||
+      this.preferences.owner?.trim();
+    const repo =
+      (typeof params.repo === "string" ? params.repo.trim() : undefined) ||
+      this.currentContext.repo?.trim() ||
+      this.preferences.repo?.trim();
+    const requestRepoId = typeof params.repoId === "string" ? params.repoId.trim() : undefined;
+    if (!requestRepoId && (!owner || !repo)) {
       return new Set();
     }
-    const provider = contextHost ?? codeHost;
-    const repoId = `${provider}:${owner}/${repo}`;
+    const candidates = repoIdCandidatesForIndexStatus({
+      codeHost,
+      requestRepoId,
+      owner,
+      repo,
+      workspaceRepoIds: this.preferences.workspaceRepoIds
+    });
     try {
-      const status = await this.options.indexBackend.getRepoStatus(repoId);
-      const indexReady = Boolean(status?.enabled && status.status === "ready");
-      return indexedUseRepoHosts(provider, indexReady);
+      for (const repoId of candidates) {
+        const status = await this.options.indexBackend.getRepoStatus(repoId);
+        if (isDeepIndexedForQuickActions(status)) {
+          return indexedUseRepoHosts(codeHost, true);
+        }
+      }
+      return indexedUseRepoHosts(codeHost, false);
     } catch {
       return new Set();
     }
   }
 
-  /** Org-installed or indexed Use-repo hosts stay online for quick actions. */
+  /**
+   * Settings-connected or Deep-Indexed Use-repo hosts stay online for quick actions.
+   * Connected promotion always applies (matches Settings Ready). Indexed promotion
+   * uses cloud/index backend status when available.
+   */
   private applyOrgCodeHostHealthOverrides(
     health: IntegrationHealth[],
     indexed: ReadonlySet<CodeHostProvider>
   ): IntegrationHealth[] {
-    if (readLightningBackend() !== "cloud") {
-      return health;
-    }
     return promoteIndexedOrConnectedCodeHosts(health, this.orgConnectedCodeHosts(), indexed);
   }
 
   private orgConnectedCodeHosts(): Set<CodeHostProvider> {
-    const connected = new Set<CodeHostProvider>();
-    if (this.preferences.hasGitHubAppInstalled) {
-      connected.add("github");
-    }
-    if (this.preferences.hasGitLabAppInstalled) {
-      connected.add("gitlab");
-    }
-    if (this.preferences.hasBitbucketAppInstalled) {
-      connected.add("bitbucket");
-    }
-    return connected;
+    return connectedCodeHostsFromPrefs(this.preferences);
   }
 
   private async handleDegradationRefresh(payload?: { feature?: string; retrace?: boolean }): Promise<void> {

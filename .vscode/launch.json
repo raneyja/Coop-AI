@@ -5,26 +5,42 @@
       "name": "Run Extension",
       "type": "extensionHost",
       "request": "launch",
-      "runtimeExecutable": "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}",
         "--enable-proposed-api=coop-ai.coop-ai",
+        "--disable-extension=coop-ai.coop-ai",
         "${workspaceFolder}/.vscode/extension-dev.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/dist/**/*.js"],
-      "preLaunchTask": "build:extension-dev"
+      "preLaunchTask": "build:extension-dev",
+      "noDebug": true
+    },
+    {
+      "name": "Debug Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "--enable-proposed-api=coop-ai.coop-ai",
+        "--disable-extension=coop-ai.coop-ai",
+        "${workspaceFolder}/.vscode/extension-dev.code-workspace"
+      ],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "preLaunchTask": "build:extension-dev",
+      "stopOnEntry": false
     },
     {
       "name": "Run Extension (skip build)",
       "type": "extensionHost",
       "request": "launch",
-      "runtimeExecutable": "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}",
         "--enable-proposed-api=coop-ai.coop-ai",
+        "--disable-extension=coop-ai.coop-ai",
         "${workspaceFolder}/.vscode/extension-dev.code-workspace"
       ],
-      "outFiles": ["${workspaceFolder}/dist/**/*.js"]
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "noDebug": true
     }
   ]
 }

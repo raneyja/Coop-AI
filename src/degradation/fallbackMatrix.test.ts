@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { CODE_HOST_PROVIDERS, type CodeHostProvider } from "../api/codeHosts/types";
 import type { IntegrationHealth, IntegrationProvider, IntegrationStatus } from "../integrations/healthMonitor";
 import {
+  connectedCodeHostsFromPrefs,
   fallbackStatusForFeature,
   indexedUseRepoHosts,
+  isDeepIndexedForQuickActions,
   promoteIndexedOrConnectedCodeHosts,
   promoteOrgConnectedCodeHosts,
   providersForFeature,
@@ -101,7 +103,8 @@ const GATED_ACTIONS: QuickActionFeatureId[] = [
   "find-owner",
   "knowledge-gaps",
   "blast-radius",
-  "trace-decision"
+  "trace-decision",
+  "understand-repo"
 ];
 
 function probeOffline(active: CodeHostProvider): IntegrationHealth[] {
@@ -130,6 +133,35 @@ for (const host of CODE_HOST_PROVIDERS) {
       connectedStatus.level,
       "unavailable",
       `${action} on org-connected ${host} must not be unavailable when the probe is offline`
+    );
+
+    // Settings-equivalent: org statuses Ready, AppInstalled flags false
+    const byOrgStatuses = promoteIndexedOrConnectedCodeHosts(
+      offline,
+      connectedCodeHostsFromPrefs({
+        orgIntegrationStatuses: [{ provider: host, installed: true }],
+        hasGitHubAppInstalled: false,
+        hasGitLabAppInstalled: false,
+        hasBitbucketAppInstalled: false
+      }),
+      notIndexed
+    );
+    assert.notEqual(
+      fallbackStatusForFeature(action, byOrgStatuses, host).level,
+      "unavailable",
+      `${action} on orgIntegrationStatuses-Ready ${host} must not be unavailable`
+    );
+
+    // Picker Indexed: ready without lightningEnabled
+    const byReadyOnly = promoteIndexedOrConnectedCodeHosts(
+      offline,
+      new Set(),
+      indexedUseRepoHosts(host, isDeepIndexedForQuickActions({ status: "ready", enabled: false }))
+    );
+    assert.notEqual(
+      fallbackStatusForFeature(action, byReadyOnly, host).level,
+      "unavailable",
+      `${action} on ready-without-enabled ${host} must not be unavailable`
     );
 
     const neither = promoteIndexedOrConnectedCodeHosts(offline, new Set(), notIndexed);

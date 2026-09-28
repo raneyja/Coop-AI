@@ -1,5 +1,16 @@
 import { isCodeHostProvider, type CodeHostProvider } from "../api/codeHosts/types";
 import type { IntegrationHealth, IntegrationProvider } from "../integrations/healthMonitor";
+import { indexedHostsFromReadyProvider } from "./codeHostOnlineForQuickActions";
+
+export {
+  connectedCodeHostsFromPrefs,
+  isCodeHostOnlineForQuickActions,
+  isDeepIndexedForQuickActions,
+  isHostConnectedForQuickActions,
+  repoIdCandidatesForIndexStatus,
+  type CodeHostConnectionPrefs,
+  type DeepIndexStatusLike
+} from "./codeHostOnlineForQuickActions";
 
 export type FeatureId =
   | "trace_why"
@@ -230,11 +241,7 @@ export function indexedUseRepoHosts(
   provider: CodeHostProvider | undefined,
   indexReady: boolean
 ): Set<CodeHostProvider> {
-  const hosts = new Set<CodeHostProvider>();
-  if (indexReady && isCodeHostProvider(provider)) {
-    hosts.add(provider);
-  }
-  return hosts;
+  return indexedHostsFromReadyProvider(provider, indexReady);
 }
 
 /**
