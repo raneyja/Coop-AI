@@ -261,6 +261,7 @@ export async function handleChatApiRequest(
           useCase,
           allowUnapprovedProvider: config.allowUnapprovedProvider,
           enableThinking: body.enableThinking === true,
+          sessionMode: body.sessionMode,
           modelConfig: {
             provider,
             model,

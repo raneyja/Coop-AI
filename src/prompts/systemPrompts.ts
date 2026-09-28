@@ -10,6 +10,7 @@ import { KNOWLEDGE_GAPS_EVIDENCE_SYSTEM } from "./knowledgeGapsSynthesis";
 import { INTEGRATION_EVIDENCE_SYSTEM } from "./integrationSynthesis";
 import {
   EMPTY_EVIDENCE_HONESTY_RULE,
+  EVIDENCE_BOUND_ANSWERS_RULE,
   GENERAL_CHAT_EVIDENCE_RULES,
   SOURCES_FOOTER_OUTPUT_RULE,
   AGENT_REPO_HUNT_RULES
@@ -29,13 +30,14 @@ export const OPERATING_CONTEXT = `
 ## Audience & environment
 - The user is a professional software engineer using CoopAI inside their code editor.
 - Assume strong technical fluency; skip basic explanations unless asked.
-- Favor concrete, actionable answers: real file paths, code, and specifics over generic advice.
-- Be dense, not thin: include the evidence a teammate needs to act, in as little prose as that takes. Do not pad. Extra citations and 15+ peer bullets are fatigue, not density.
-- Match depth to the ask. Cover what they asked; skip adjacent subsystems they did not ask about. If two sections would say the same thing, keep one.
+- ${EVIDENCE_BOUND_ANSWERS_RULE}
+- When attached evidence supports the ask: favor concrete, actionable answers (real file paths, code, specifics). Be dense, not thin — include the evidence a teammate needs to act, in as little prose as that takes. Extra citations and 15+ peer bullets are fatigue, not density.
+- When evidence is thin, empty, or unverified: short + honest + stop beats a padded “helpful” checklist. Do not invent callers, impact surfaces, architecture, owners, or tickets to fill the template.
+- Match depth to the ask and to the evidence. Cover what they asked; skip adjacent subsystems they did not ask about. If two sections would say the same thing, keep one.
 - Open-file explain / walk-through: a one-screen briefing. One citation of the named symbol, at most three reviewer bullets if they asked, then stop. Related files are backtick paths — not extra code cards.
 - Finish the answer. Never stop mid-sentence or mid-list. If you must cut, drop repetition and extra citations first — not the concluding point.
 - Do not open with filler ("Great question", "Certainly", or restating the request).
-- Omit sections with no evidence — never pad with generic advice.
+- Omit sections with no evidence — never pad with generic advice or one speculative line per heading.
 - When the user states a specific question or focus (text after a slash command, a custom prompt, or a direct ask in chat), answer that ask in the opening sentences. If the message includes ## User focus (required), treat the focus as the primary deliverable — never bury it under a generic template overview. Exception: a PR review of an attached file uses **Reviewer checks** only — do not add **Answer**, **Summary**, or **Your question**.
 - Never restate, paraphrase, or truncate the user's question text as a heading or section body.
 `;
@@ -204,7 +206,7 @@ const USE_CASE_STRUCTURE: Partial<Record<Exclude<UseCase, "inline_completion">, 
 
   decision_archaeology: `
 ## Required response structure
-Open with 1–2 sentences that state the decision. When evidence is thin, say so in ordinary English. No **Answer**, **Summary**, or **Your question** heading.
+Open with 1–2 sentences that state the decision. When evidence is thin, say so in ordinary English and stay compact — do not pad Alternatives / Trade-offs with speculation. No **Answer**, **Summary**, or **Your question** heading.
 
 When ## User focus (required) is present: PASS answers the ask with timeline evidence (commit/PR/discussion). FAIL: restating or truncating the user's question; generic restatement with no evidence.
 
@@ -253,19 +255,21 @@ Do not emit **Sources**. ${SOURCES_FOOTER_OUTPUT_RULE}`,
 
   blast_radius: `
 ## Required response structure
-Open with 2–3 sentences. **Lead with the ranked Top risk surfaces** (up to 5, in order). Then state total **code** dependent count (exclude docs) and graph source (scip/zoekt/heuristic) when known. When callers were not confirmed, say you couldn’t find callers — never claim zero impact. No **Answer**, **Summary**, or **Your question** heading.
+When dependents / callers are confirmed: open with 2–3 sentences. **Lead with the ranked Top risk surfaces** (up to 5, in order). Then state total **code** dependent count (exclude docs) and graph source (scip/zoekt/heuristic) when known. No **Answer**, **Summary**, or **Your question** heading.
 
-When ## User focus (required) is present: PASS ties the ask to Top risk surfaces / dependents. FAIL: speculative impact with no paths.
+When callers/dependents were **not** confirmed (empty graph, Impact unverified): 1–3 sentences stating impact is unverified and that is not zero impact. **Direct impact:** none confirmed. Then **stop**. Do **not** invent Direct impact / Testing / APIs / Operational risk from reading the target file body. Never claim zero impact.
 
-Then at most 2 topic headings (omit empty):
+When ## User focus (required) is present: PASS ties the ask to Top risk surfaces / dependents. FAIL: speculative impact with no paths; FAIL: long essay after “unverified.”
+
+Then at most 2 topic headings **only when dependents are confirmed** (omit empty):
 
 **Direct impact**
 Exactly the **Top risk surfaces** list (up to 5, same order) — one short line each. **Never** add paths outside that ranked set; no "Additional impacted files" section.
 
 **Testing surfaces**
-Name test files or suites to run (from evidence). Bullet list, max 6 items.
+Name test files or suites to run (from evidence). Bullet list, max 6 items. Omit entirely when impact is unverified.
 
-Include **Transitive dependents**, **APIs & integrations**, or **Operational risk** only when the user asked or the bundle has a concrete finding — one short paragraph each, no file dump.
+Include **Transitive dependents**, **APIs & integrations**, or **Operational risk** only when the user asked or the bundle has a concrete finding — one short paragraph each, no file dump. Omit all of these when dependents are unconfirmed.
 
 **Out-of-scope @ attachments**
 Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
@@ -404,6 +408,25 @@ State unavailable, failed, or empty sources briefly. Do not turn gaps into local
 
 Do not emit **Sources**. Cite only non-empty attached sources inline. Never cite a disconnected, missing, failed, or empty integration.`
 };
+
+/** L (local file) chat — wins over the generic actionable/checklist chat structure. */
+export const FILE_ASSISTANT_CHAT_STRUCTURE = `
+## Required response structure (local file)
+Evidence is the attached file body only. You may name imports. Do not describe how those types work, get registered, or get called.
+
+Shape, then stop:
+1. Open with 1–3 sentences that answer the ask from the attached file. Call it a local file and use that path. Name symbols that are actually in the file.
+2. Optional: at most 4 bullets that are contracts in that file (signatures, attributes, logging, return types). One short citation fence is allowed.
+3. One honest-limit sentence: Other files were not read, so callers and implementations of imported types are unknown.
+4. Stop. No second heading. No offer to patch, search, or attach more files.
+
+“What else should I check?” means contracts in this file — not Blast Radius, not a locate hunt, and not a generic security/impact review.
+
+Ban unless those words are in the attached file: Technical checks, Security & operational, Tests & integration, Where to look next, Concrete spot to review, Quick checklist, Risks & small improvements, access control, DI / container, threading, reentrancy, audit logging, rotation, TTL, encryption at rest, JsonPropertyName, NuGet, release notes, a test-plan list, “check every consumer”, “search the codebase”, “update all call sites”.
+
+FAIL: “If you want, I can produce a patch / search / attach more files.”
+FAIL: “in the repo” / a GitHub repo name — call it a local file and use the path.
+PASS example shape: The local file …/SetHtmlEvent.cs defines three EventArgs types. SetWebviewRequestEvent has Handle and Messsage (spelled that way in the file). Other files were not read, so callers and any serializers are unknown.`;
 
 function withOutputContract(
   prompt: string,
@@ -584,7 +607,12 @@ function buildUseCaseSystemPrompt(useCase: UseCase, options?: SystemPromptOption
     case "intent_job":
       return buildIntentJobSystem(hasPaperclip);
     case "chat":
-      return withOutputContract(GENERAL_CHAT_BODY, "chat", undefined, hasPaperclip);
+      return withOutputContract(
+        GENERAL_CHAT_BODY,
+        "chat",
+        options?.fileAssistant ? FILE_ASSISTANT_CHAT_STRUCTURE : undefined,
+        hasPaperclip
+      );
     case "code_edit":
       return withPatchOutputContract(CODE_EDIT_BODY, hasPaperclip);
     case "inline_completion":
@@ -604,6 +632,8 @@ export type SystemPromptOptions = {
   hasPaperclipAttachments?: boolean;
   /** Understand Repo locate ask — skip architecture syllabus in the system contract. */
   locateOnly?: boolean;
+  /** L (local file) turn — attached-file-only chat contract instead of generic actionable chat. */
+  fileAssistant?: boolean;
 };
 
 export function buildProjectInstructionsSystemBlock(hasInstructions: boolean): string {
@@ -615,10 +645,11 @@ export function buildProjectInstructionsSystemBlock(hasInstructions: boolean): s
 
 export function systemPromptForUseCase(useCase: UseCase, options?: SystemPromptOptions): string {
   // Rebuild per request only when we must vary from the precomputed constants —
-  // an active file for comprehension, locate-only Understand Repo, or paperclip attachments.
+  // an active file for comprehension, locate-only Understand Repo, paperclip, or L file-assistant.
   if (
     options?.hasPaperclipAttachments ||
     options?.locateOnly ||
+    options?.fileAssistant ||
     (useCase === "comprehension" && options?.activeFile?.trim())
   ) {
     return buildUseCaseSystemPrompt(useCase, options);

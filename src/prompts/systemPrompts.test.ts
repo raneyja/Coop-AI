@@ -48,12 +48,26 @@ test("chat use case asks for right-sized dense answers that still finish", () =>
   assert.ok(prompt.includes("Be dense, not thin"));
   assert.ok(prompt.includes("Extra citations and 15+ peer bullets are fatigue, not density"));
   assert.ok(prompt.includes("Match depth to the ask"));
+  assert.ok(prompt.includes("Evidence-bound answers"));
+  assert.ok(prompt.includes("short + honest + stop"));
   assert.ok(prompt.includes("Finish the answer"));
   assert.ok(prompt.includes("one screen"));
   assert.ok(prompt.includes("Complete the last thought"));
   assert.ok(prompt.includes("only what the ask requires"));
   assert.ok(prompt.includes("Greetings and pings are not overview requests"));
   assert.ok(prompt.includes("Do not lead with a census because inventory is present"));
+});
+
+test("fileAssistant chat uses attached-file-only structure instead of generic checklist chat", () => {
+  const l = systemPromptForUseCase("chat", { fileAssistant: true });
+  const r = systemPromptForUseCase("chat");
+  assert.ok(l.includes("Required response structure (local file)"));
+  assert.ok(l.includes("Evidence is the attached file body only"));
+  assert.ok(l.includes("check every consumer"));
+  assert.ok(l.includes("Other files were not read"));
+  assert.ok(!l.includes("**Reviewer checks** (if they asked to review as a PR"));
+  assert.ok(r.includes("**Reviewer checks**"));
+  assert.ok(!r.includes("Required response structure (local file)"));
 });
 
 test("comprehension keeps its full required section list (not thinned by chat density rules)", () => {
@@ -212,6 +226,8 @@ test("blast_radius use case includes impact sections", () => {
   const prompt = systemPromptForUseCase("blast_radius");
   assert.ok(prompt.includes("**Transitive dependents**"));
   assert.ok(prompt.includes("**Testing surfaces**"));
+  assert.ok(prompt.includes("Impact unverified"));
+  assert.ok(prompt.includes("Do **not** invent Direct impact"));
 });
 
 test("inline_completion excludes audience and output contract", () => {

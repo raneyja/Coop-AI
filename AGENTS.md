@@ -18,6 +18,8 @@ All production URLs use the **`coop-ai.dev`** domain (with hyphen).
 
 Aim to **start** answers within **15 seconds** (stop gathering, synthesize with what you have). This applies to **all** chat answers: plain chat, quick actions, quick-action slash commands, integration slash commands (`/slack`, `/jira`, `/teams`, `/confluence`, `/notion`, `/docs`), and `/edit`. Use `MAX_USER_FACING_RESPONSE_MS` / `remainingContextGatherBudgetMs` in `src/config/responseDeadline.ts`. See `.cursor/rules/response-latency.mdc`. **Never** abort the turn or replace an answer with a timeout message solely because 15s elapsed — AbortSignal is for user Stop only. Do not add per-call gather timeouts of 30–120s+ on the interactive hot path.
 
+**Evidence-bound answers:** thin or empty evidence → short + honest + stop. Never pad invented impact/architecture. See `.cursor/rules/evidence-bound-answers.mdc`.
+
 ## Indexed repo = remote workspace layer (Zero-Clone)
 
 Deep-Index builds a **searchable map plus durable facts**, then deletes the transient clone. It does **not** keep a copy of every source file. File bodies are fetched on demand from the code host.

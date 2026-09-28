@@ -37,3 +37,5 @@ Exact asks live on the canvas.
 ## After
 
 Paste answers on the canvas, mark Completed, then **Ask chat to review**.
+
+**Code host offline round:** Connection checks vs quality backlog live in [code-host-offline-dogfood-notes.md](./code-host-offline-dogfood-notes.md). Do not block connection pass on answer-quality gaps — capture them there for a later pass.

@@ -212,3 +212,31 @@ export function isGithubOnlyRepoSummaryEvidence(summary: RepoSummaryEvidence): b
     shouldIncludeIntegrationInSourcesChecklist(summary.googleDocs)
   );
 }
+
+/**
+ * Narrow anchors: enough to prove connection, not enough to claim a full product story.
+ * Rich inventory + tree with a few samples is NOT narrow. Thin → short + partial confidence.
+ */
+export function isNarrowRepoSummaryEvidence(summary: RepoSummaryEvidence): boolean {
+  const entries = (summary.entryFiles ?? []).filter((file) => file.path?.trim()).length;
+  const focusPaths = (summary.focusSearchPaths ?? []).filter((path) => path.trim()).length;
+  const anchors = Math.max(entries, focusPaths);
+  if (anchors === 0) {
+    return true;
+  }
+  const topDirs =
+    summary.treeOverview &&
+    typeof summary.treeOverview === "object" &&
+    Array.isArray((summary.treeOverview as { topLevelDirs?: unknown }).topLevelDirs)
+      ? ((summary.treeOverview as { topLevelDirs: unknown[] }).topLevelDirs?.length ?? 0)
+      : 0;
+  const hasTree = topDirs >= 2;
+  const hasInventory = Boolean(summary.repoInventory?.fileCount || summary.manifest?.fileCount);
+  if (hasTree && hasInventory && anchors >= 2) {
+    return false;
+  }
+  if (anchors <= 2) {
+    return true;
+  }
+  return anchors <= 3 && !hasTree;
+}

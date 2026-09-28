@@ -10,6 +10,7 @@ import {
   appendUserFocusInstructions,
   ATTACHED_FACTS_HEADING,
   buildSourcesChecklistFromKeys,
+  EVIDENCE_BOUND_ANSWERS_RULE,
   EVIDENCE_CITATION_RULES,
   extractCitationKeysFromSourcesSection,
   GENERAL_CHAT_EVIDENCE_RULES,
@@ -57,8 +58,17 @@ test("appendEvidenceQualityInstructions adds grounding without intern-speak", ()
   assert.ok(section.includes("Answer only from attached facts"));
   assert.ok(section.includes("missing PR, issue, discussion, or documentation"));
   assert.ok(section.includes("inference"));
+  assert.ok(section.includes("1–3 sentence lead"));
+  assert.ok(section.includes("omit empty sections"));
+  assert.equal(section.includes("one line per section"), false);
   assert.equal(section.includes("evidence bundle"), false);
   assert.equal(section.includes("evidence strength (strong / medium / weak"), false);
+});
+
+test("EVIDENCE_BOUND_ANSWERS_RULE is short-honest-stop", () => {
+  assert.match(EVIDENCE_BOUND_ANSWERS_RULE, /Answer only from attached evidence/i);
+  assert.match(EVIDENCE_BOUND_ANSWERS_RULE, /1–3 sentences and stop/i);
+  assert.match(EVIDENCE_BOUND_ANSWERS_RULE, /Never pad/i);
 });
 
 test("appendUserFocusInstructions requires opening prose for specific asks", () => {

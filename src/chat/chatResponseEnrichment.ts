@@ -198,16 +198,18 @@ export function enrichChatResponseForAction(options: {
         googleDocs: extractGoogleDocsFromBundle(contextBundle),
         activeFile
       };
-      enriched = enrichIntegrationDocsResponse(enriched, docContext);
-      enriched = enrichCompactIntegrationDocs(enriched, docContext, {
-        mode: quickAction === "understand-repo" ? "understand-repo" : "blast-radius"
-      });
+      // Empty-graph honesty replace first — then attach in-scope docs so ADR
+      // sections are not wiped by the unverified rewrite.
       if (quickAction === "blast-radius") {
         const blast = Array.isArray(contextBundle)
           ? blastRadiusFromBundle(contextBundle)
           : undefined;
         enriched = enrichBlastRadiusResponse(enriched, blast);
       }
+      enriched = enrichIntegrationDocsResponse(enriched, docContext);
+      enriched = enrichCompactIntegrationDocs(enriched, docContext, {
+        mode: quickAction === "understand-repo" ? "understand-repo" : "blast-radius"
+      });
       break;
     }
     default:

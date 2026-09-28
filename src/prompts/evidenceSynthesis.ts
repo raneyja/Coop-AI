@@ -54,12 +54,28 @@ export const NARRATIVE_CITATION_RULES = `Narrative citation rules:
 /** Writer-facing heading for attached facts. Never “Evidence bundle”. */
 export const ATTACHED_FACTS_HEADING = "## What we found";
 
+/**
+ * Product law: thin/empty evidence → short + honest + stop.
+ * Wired into OPERATING_CONTEXT and Grounding. See `.cursor/rules/evidence-bound-answers.mdc`.
+ */
+export const EVIDENCE_BOUND_ANSWERS_RULE = `Evidence-bound answers:
+- Answer only from attached evidence for this turn.
+- If dependents, anchors, owners, docs, or file bodies are missing, empty, or unverified: say that in 1–3 sentences and stop.
+- Do not invent impact surfaces, architecture stories, callers, owners, tickets, or “what to check next” from the file body, training data, or another project.
+- Thin evidence → short answer. Never pad. Omit empty template sections entirely — do not fill each with one speculative line.
+- Density and “actionable” depth apply only when attached evidence supports action.`;
+
 export function appendEvidenceQualityInstructions(lines: string[]): void {
   lines.push("## Grounding");
   lines.push("- Answer only from attached facts.");
   lines.push("- Distinguish what the sources say from your inference.");
   lines.push("- Call out missing PR, issue, discussion, or documentation when not present.");
-  lines.push("- When evidence is thin, use one line per section — do not pad with generic software trade-offs.");
+  lines.push(
+    "- When evidence is thin or unverified: 1–3 sentence lead, omit empty sections, stop. Do not invent one speculative line per template heading."
+  );
+  lines.push(
+    "- Do not invent impact surfaces, architecture stories, callers, owners, or tickets from the file body or training data."
+  );
   lines.push("");
 }
 
@@ -297,7 +313,7 @@ export function appendUserFocusInstructions(lines: string[], userFocus?: string)
     "**Risks & unknowns** — PASS: only evidence-tied gaps relevant to the focus (missing files, thin docs). FAIL: padding with generic testing/config advice unrelated to the ask."
   );
   lines.push(
-    "If focus-search evidence is thin or missing: say so in the opening sentences — do not invent the happy-path workflow."
+    "If focus-search evidence is thin or missing: say so in the opening sentences and stop padding later sections — do not invent the happy-path workflow."
   );
   lines.push("");
 }

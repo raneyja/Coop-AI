@@ -34,7 +34,8 @@ function buildChatSystemContent(request: CompletionRequest, overridePrompt?: str
     locateOnly:
       request.useCase === "comprehension" &&
       typeof request.message === "string" &&
-      request.message.includes(REPO_SUMMARY_LOCATE_ONLY_MARKER)
+      request.message.includes(REPO_SUMMARY_LOCATE_ONLY_MARKER),
+    fileAssistant: request.sessionMode === "file-assistant"
   });
   const instructionsBlock =
     request.useCase !== "inline_completion" &&

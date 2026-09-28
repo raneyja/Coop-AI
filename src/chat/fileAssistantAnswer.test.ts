@@ -48,6 +48,16 @@ test("L4 secrets-style Fail is cut to the lead plus an honest limit", () => {
   assert.doesNotMatch(trimmed, /Concrete spot to review|Quick checklist|Risks & small improvements/i);
   assert.doesNotMatch(trimmed, /Search the codebase|If you want, I can produce/i);
   assert.doesNotMatch(trimmed, /NuGet|JsonPropertyName|release notes/i);
+  assert.doesNotMatch(trimmed, /check every consumer|serialized contracts that depend|update callers, serializers/i);
+});
+
+test("L hunt-lead without headings still drops invented consumers", () => {
+  const invented =
+    "If you change the local file /Users/me/Desktop/sample/Widget.cs, check every consumer and update callers, serializers, docs, and tests. Widget exposes OnReady and OnError.";
+  const trimmed = enrichFileAssistantResponse(invented);
+  assert.match(trimmed, /Widget\.cs|OnReady|OnError/);
+  assert.match(trimmed, /Other files were not read/);
+  assert.doesNotMatch(trimmed, /check every consumer|serializers, docs, and tests/i);
 });
 
 test("a paraphrase of the honest limit is not followed by a second copy", () => {

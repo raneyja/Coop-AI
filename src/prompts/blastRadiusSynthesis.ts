@@ -135,6 +135,28 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
 
 function appendBlastRadiusSummaryGuidance(lines: string[], evidence: BlastRadiusEvidence): void {
   const named = (evidence.namedAskSymbols ?? []).filter((symbol) => symbol.trim());
+  const hasCodeDependents =
+    (evidence.directDependents?.length ?? 0) > 0 ||
+    (evidence.transitiveDependents?.length ?? 0) > 0 ||
+    (evidence.dependentDetails?.length ?? 0) > 0;
+
+  if (!hasCodeDependents) {
+    lines.push("## Thin evidence (required)");
+    lines.push(
+      "- No code dependents were confirmed this turn. Answer in 1–3 sentences: impact is unverified (not zero impact). **Direct impact:** none confirmed. Then stop."
+    );
+    lines.push(
+      "- Do **not** invent Direct impact, Testing surfaces, APIs, or Operational risk from reading the target file body."
+    );
+    if (named.length > 0) {
+      lines.push(
+        `- Callers of ${named.join(", ")} were not confirmed. Changing them would break actual callers — this graph slice did not list those files. Next: search for \`${named[0]}(\` — do not list guessed paths.`
+      );
+    }
+    lines.push("");
+    return;
+  }
+
   if (named.length > 0 && !(evidence.directDependents?.length)) {
     lines.push("## When callers are unconfirmed");
     lines.push(
@@ -453,6 +475,23 @@ export function blastResponseClaimsZeroImpact(content: string): boolean {
 }
 
 /**
+ * Empty-graph blast: replace the essay so “unverified” cannot sit above
+ * invented Direct impact / Testing / APIs from the file body alone.
+ */
+export function honestUnverifiedBlastAnswer(file?: string): string {
+  const where = file?.trim() ? ` \`${file.trim()}\`` : " this file";
+  return [
+    `Impact for${where} is **unverified** — no dependents were confirmed in the index this turn.`,
+    "",
+    "That is not the same as zero impact. I can’t list will-break files or invent APIs / testing surfaces from the file body alone.",
+    "",
+    "**Direct impact**",
+    "",
+    "None confirmed."
+  ].join("\n");
+}
+
+/**
  * Named-function blast with no confirmed callers: replace the essay so
  * “unverified” cannot sit above a guessed Direct impact list.
  */
@@ -461,17 +500,15 @@ export function honestNamedFunctionBlastAnswer(symbols: string[], file?: string)
   const named = names[0] ?? "this function";
   const where = file?.trim() ? ` in \`${file.trim()}\`` : "";
   return [
-    "## Summary",
-    "",
     `\`${named}\` is defined${where}. Changing it would break whatever actually calls it — not every file that imports a different helper from the same module.`,
     "",
     "This turn’s graph did not confirm those call sites, so I can’t list will-break files with confidence. That is not the same as nothing breaks.",
     "",
-    "## Direct impact",
+    "**Direct impact**",
     "",
     "None confirmed in the index this turn.",
     "",
-    "## What to do next",
+    "**What to do next**",
     "",
     `Search this repo for \`${named}(\` (the call). An import of a sibling export from the same file is not a \`${named}\` breakage.`
   ].join("\n");
@@ -480,6 +517,7 @@ export function honestNamedFunctionBlastAnswer(symbols: string[], file?: string)
 /**
  * Prevent “0 dependents / no impact” claims when evidence is empty/unverified,
  * and prepend production-ranked callers when the model omitted them.
+ * Empty graph: **replace** the essay — never prepend a caveat and keep fluff.
  */
 export function enrichBlastRadiusResponse(
   content: string,
@@ -494,12 +532,11 @@ export function enrichBlastRadiusResponse(
   const trimmed = content.trim();
   const claimsZero = blastResponseClaimsZeroImpact(trimmed);
   const hasDependents = ranked.length > 0;
-  const unverifiedWarning = (evidence.warnings ?? []).some((w) =>
-    /impact unverified|no dependents found/i.test(w)
-  );
 
-  if (named.length > 0 && !hasDependents) {
-    return honestNamedFunctionBlastAnswer(named, evidence.file);
+  if (!hasDependents) {
+    return named.length > 0
+      ? honestNamedFunctionBlastAnswer(named, evidence.file)
+      : honestUnverifiedBlastAnswer(evidence.file);
   }
 
   if (hasDependents) {
@@ -527,19 +564,6 @@ export function enrichBlastRadiusResponse(
     ]
       .filter((line) => line !== undefined)
       .join("\n");
-    return `${lead}${trimmed}`;
-  }
-
-  if (claimsZero || unverifiedWarning) {
-    const lead = [
-      "**Impact status**",
-      "",
-      "Impact is **unverified** — no dependents were confirmed in the index/search for this turn. Do not claim zero impact or that nothing will break.",
-      ""
-    ].join("\n");
-    if (!claimsZero && trimmed.includes("Impact unverified")) {
-      return content;
-    }
     return `${lead}${trimmed}`;
   }
 

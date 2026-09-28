@@ -57,6 +57,7 @@ When ### Focus file excerpts are attached, you MAY name documentation, ownership
 When focus excerpts are absent, list scan-backed gaps and integration hits only — never invent gap subsections from code inspection or generic framework knowledge.
 Documentation gap subsections must come from knowledge gap scan entries, opened Confluence/Notion/Google Docs Body lines, Jira Body lines, opened Slack/Teams Body lines, explicit integration errors in the bundle, or attached focus file excerpts.
 Titles alone are not documentation gaps — summarize attached Body content (or state Body not attached).
+Never treat a local or wrong-project AGENTS.md / Cursor rule as Use-repo gaps evidence. If scan evidence is empty, say the scan could not verify gaps — do not claim “no gaps” from an unrelated AGENTS file.
 The primary audit target is stated in ## Task — do not center the audit on out-of-scope @ attachments.
 When ## User focus / ## Primary topic is present, audit those subsystems first — leftover open-editor ownership is secondary at most.
 Org Confluence/Notion hits are org-wide supplementary docs — never the active repository's architecture source of truth.

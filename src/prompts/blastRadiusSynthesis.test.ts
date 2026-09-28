@@ -132,7 +132,7 @@ test("blast-radius synthesis skips partial caveat when remote graph has verified
   assert.ok(prompt.includes("Verified import-parse"));
 });
 
-test("blast-radius synthesis leads Summary with partial index caveat when graph is empty", () => {
+test("blast-radius synthesis uses thin-evidence stop when graph is empty", () => {
   const prompt = buildBlastRadiusSynthesisUserPrompt({
     evidence: {
       file: "src/server/githubAppApi.ts",
@@ -144,8 +144,8 @@ test("blast-radius synthesis leads Summary with partial index caveat when graph 
     owner: "raneyja",
     repo: "Coop-AI"
   });
-  assert.ok(prompt.includes("## Opening guidance"));
-  assert.ok(prompt.includes("partial index coverage caveat"));
+  assert.ok(prompt.includes("## Thin evidence (required)"));
+  assert.ok(prompt.includes("Do **not** invent Direct impact"));
   assert.ok(prompt.includes("Index coverage is partial"));
   const checklistStart = prompt.indexOf("## Source labels (inline only");
   const checklistEnd = prompt.indexOf("## Grounding", checklistStart);
@@ -206,8 +206,9 @@ test("named-function blast with no callers locks Direct impact empty", () => {
     file: "src/server/authMiddleware.ts",
     userFocus: "What breaks if we change requireAuth to return 401?"
   });
-  assert.ok(prompt.includes("When callers are unconfirmed"));
-  assert.ok(/Do not list file paths/i.test(prompt));
+  assert.ok(prompt.includes("Thin evidence (required)"));
+  assert.ok(prompt.includes("none confirmed"));
+  assert.ok(prompt.includes("Do **not** invent Direct impact"));
   assert.ok(!prompt.includes("partial index coverage caveat"));
 });
 
@@ -234,6 +235,35 @@ test("enrichBlastRadiusResponse replaces guessed callers when named-function cal
   assert.doesNotMatch(out, /Your question/);
   assert.doesNotMatch(out, /adminOrgApi/);
   assert.doesNotMatch(out, /chatApi/);
+});
+
+test("enrichBlastRadiusResponse replaces file-level essay when graph is empty", () => {
+  const essay = [
+    "Impact is unverified — engine unavailable.",
+    "",
+    "**Direct impact**",
+    "",
+    "- The compose file itself is the main surface — services web, api, postgres",
+    "",
+    "**APIs & integrations**",
+    "",
+    "- Changing ports will break local Docker workflows",
+    "",
+    "**Testing surfaces**",
+    "",
+    "- Re-run docker compose up"
+  ].join("\n");
+  const out = enrichBlastRadiusResponse(essay, {
+    file: "docker/development/compose.yml",
+    directDependents: [],
+    transitiveDependents: [],
+    warnings: ["Impact unverified"]
+  });
+  assert.match(out, /Impact for `docker\/development\/compose\.yml` is \*\*unverified\*\*/);
+  assert.match(out, /None confirmed/);
+  assert.doesNotMatch(out, /compose file itself is the main surface/);
+  assert.doesNotMatch(out, /Changing ports will break/);
+  assert.doesNotMatch(out, /Re-run docker compose/);
 });
 
 test("enrichBlastRadiusResponse does not replace requireAuth callers from stub search", () => {

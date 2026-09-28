@@ -82,6 +82,8 @@ export type CompletionRequest = {
   allowUnapprovedProvider?: boolean;
   /** Enable provider thinking when the model/provider supports it. */
   enableThinking?: boolean;
+  /** L vs R for this turn — drives file-assistant system contract when set. */
+  sessionMode?: "file-assistant" | "indexed-repo";
 };
 
 export type FimStreamOptions = {

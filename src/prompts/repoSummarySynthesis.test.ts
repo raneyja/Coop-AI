@@ -140,8 +140,9 @@ async function run(): Promise<void> {
     assert.ok(prompt.includes("docker-entrypoint"));
     assert.ok(prompt.includes("Deploy/CI"));
     assert.ok(prompt.includes("never as the Architecture story"));
-    assert.ok(prompt.includes("**Find Owner**"));
-    assert.ok(prompt.includes("**Blast Radius**"));
+    assert.ok(prompt.includes("Thin / narrow anchors (required)"));
+    assert.ok(prompt.includes("partial / low confidence"));
+    assert.ok(!prompt.includes("Close with a one-line pointer to the matching quick action"));
   });
 
   test("buildRepoSummarySynthesisUserPrompt steers concrete Sources, honest risks, and GitHub-only confidence", () => {
@@ -166,7 +167,26 @@ async function run(): Promise<void> {
     assert.ok(prompt.includes("Do **not** treat disconnected or empty Coop integrations"));
     assert.ok(prompt.includes("Avoid generic \"read the README\""));
     assert.ok(prompt.includes("Forbidden filler"));
+    assert.ok(prompt.includes("1–3 sentence lead with low/partial confidence") || prompt.includes("omit empty Architecture"));
     assert.ok(!prompt.includes("summarize what this source contributed"));
+    assert.ok(!prompt.includes("Thin / narrow anchors (required)"));
+  });
+
+  test("buildRepoSummarySynthesisUserPrompt marks narrow anchors as partial confidence", () => {
+    const prompt = buildRepoSummarySynthesisUserPrompt({
+      owner: "coopai-group",
+      repo: "Coop-AI",
+      summary: {
+        entryFiles: [
+          { path: "src/server/webhooks.ts", content: "export function handleWebhook() {}" },
+          { path: "src/api/githubAppApi.ts", content: "export async function ingest() {}" }
+        ]
+      }
+    });
+    assert.ok(prompt.includes("Thin / narrow anchors (required)"));
+    assert.ok(prompt.includes("partial / low confidence"));
+    assert.ok(prompt.includes("Do **not** overfit the whole product story"));
+    assert.ok(!prompt.includes("Close with a one-line pointer to the matching quick action"));
   });
 
   test("buildRepoSummarySynthesisUserPrompt requires attached doc titles and guards supplementary citations", () => {

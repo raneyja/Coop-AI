@@ -21,6 +21,7 @@ import {
   listRepoSummarySourceLabels,
   listRepoSummarySourcesChecklist,
   isGithubOnlyRepoSummaryEvidence,
+  isNarrowRepoSummaryEvidence,
   repoSummarySourceLabelDependencies,
   repoSummarySourceLabelOwnership
 } from "./repoSummarySourceLabels";
@@ -137,11 +138,21 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
   if (!locateOnly) {
     appendRepoSummaryCraftInstructions(lines, summaryEvidence);
   }
+  if (!locateOnly && isNarrowRepoSummaryEvidence(summaryEvidence)) {
+    lines.push("## Thin / narrow anchors (required)");
+    lines.push(
+      "- Attached entry/focus files are narrow. State **partial / low confidence** in the opening. Do **not** overfit the whole product story to one route, webhook, or API file."
+    );
+    lines.push(
+      "- Prefer inventory + tree facts when present. Otherwise: 1–3 sentences on what the anchors actually show, then stop. Omit padded **Architecture** / **Key subsystems** / **Suggested next steps** speculation."
+    );
+    lines.push("");
+  }
   lines.push("Synthesize from evidence only. Follow the required response structure in your system instructions.");
   lines.push(
     "Do not emit a **Sources** footer. If you use an inline \`[Sources: …]\` label, it must be an exact citation key from the list. Never use filler like \"contributed insights\" or \"provided details\"."
   );
-  if (!locateOnly) {
+  if (!locateOnly && !isNarrowRepoSummaryEvidence(summaryEvidence)) {
     lines.push(
       "Close with a one-line pointer to the matching quick action for paths that need deeper follow-up: **Trace Decision** for decision history, **Find Owner** for CODEOWNERS and escalation, **Blast Radius** before editing a hot path, **Knowledge Gaps** for documentation holes."
     );
@@ -162,7 +173,9 @@ function appendRepoSummaryCraftInstructions(lines: string[], summary: RepoSummar
     );
   }
   lines.push("- Distinguish provenance (direct source facts) from rationale (your synthesis).");
-  lines.push("- When evidence is thin, use one line per section — do not pad with generic software trade-offs.");
+  lines.push(
+    "- When evidence is thin or narrow: 1–3 sentence lead with low/partial confidence, omit empty Architecture / Key subsystems / Suggested next steps padding, stop. Do not invent one speculative line per section."
+  );
   lines.push(
     "- **Risks & unknowns**: only path-tied or evidence-tied risks (config, deploy, missing docs *in the repo*). Do **not** treat disconnected or empty Coop integrations (Slack, Jira, Confluence, etc.) as repository risks unless the user asked about those tools or code evidence shows they are required."
   );

@@ -225,6 +225,14 @@ export function enrichCompactIntegrationDocs(
     result = injectRelatedDocsAfterActiveFileSection(result, context);
   } else {
     result = collapseVerboseDocReviewSections(result, context);
+    // Empty-graph honesty may have replaced the essay (no APIs section left).
+    // Still surface attached in-scope docs when present.
+    if (!result.includes(RELATED_DOCUMENTATION_HEADING) && countAttachedDocPages(context) > 0) {
+      const compact = buildCompactRelatedDocumentationBlock(context);
+      if (compact) {
+        result = `${result.trimEnd()}\n\n${compact}`;
+      }
+    }
   }
   return result;
 }

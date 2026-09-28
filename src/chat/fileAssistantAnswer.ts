@@ -16,6 +16,10 @@ const HONEST_LIMIT =
 const HONEST_LIMIT_PARAPHRASE =
   /\b(?:other files were not (?:read|searched|attached)|only read this (?:local )?file|callers and implementations of imported types)\b/i;
 
+/** Invented hunt / review language that must not survive an L finish gate. */
+const HUNT_OR_REVIEW_PHRASE =
+  /\b(?:check every consumer|search the codebase|update all call sites|update callers, serializers, docs, and tests|serialized contracts that depend|JsonPropertyName|NuGet|release notes|Quick checklist|Concrete spot to review|Technical checks|Security & operational|Tests & integration|Where to look next)\b/i;
+
 function isTopicHeading(line: string): boolean {
   const trimmed = line.trim();
   if (/^#{1,6}\s+\S/.test(trimmed)) {
@@ -65,6 +69,66 @@ function dropParaphraseWhenCanonicalPresent(text: string): string {
     .replace(/[^.!?\n]*\bonly read this (?:local )?file\b[^.!?\n]*[.!?]?\s*/gi, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+/** Remove hunt clauses; keep in-file facts in the same sentence when present. */
+function scrubHuntClauses(text: string): string {
+  return text
+    .replace(/\bcheck every consumer(?: and[^—.!?]*)?/gi, "")
+    .replace(/\bany serialized contracts that depend[^—.!?]*/gi, "")
+    .replace(/\brenaming a property is a breaking change\.?/gi, "")
+    .replace(/\band treat it as a public API change:\s*/gi, "")
+    .replace(/\bupdate callers, serializers, docs, and tests\.?/gi, "")
+    .replace(/\bupdate all call sites\.?/gi, "")
+    .replace(/\bsearch the codebase[^.!?]*/gi, "")
+    .replace(/\bJsonPropertyName\b[^.!?]*/gi, "")
+    .replace(/\bNuGet\b[^.!?]*/gi, "")
+    .replace(/\brelease notes\b[^.!?]*/gi, "")
+    .replace(/[—–-]\s*(?=[.!]|$)/g, "")
+    .replace(/\s*,\s*,/g, ",")
+    .replace(/,\s*([A-Z])/g, ". $1")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([.,;:])/g, "$1")
+    .replace(/^[,;:\s]+/g, "")
+    .trim();
+}
+
+/**
+ * Drop hunt/review language from the lead. Keep in-file facts (typos, type names).
+ * If nothing remains, fall back to the honest-limit only.
+ */
+function stripHuntLeadLanguage(text: string): string {
+  const paragraphs = text.split(/\n\n+/).filter((part) => part.trim());
+  if (paragraphs.length === 0) {
+    return text;
+  }
+  const cleaned: string[] = [];
+  for (const paragraph of paragraphs) {
+    if (paragraphStatesHonestLimit(paragraph)) {
+      cleaned.push(paragraph);
+      continue;
+    }
+    const sentences = paragraph
+      .split(/(?<=[.!?])\s+/)
+      .map((sentence) => sentence.trim())
+      .filter(Boolean);
+    const kept: string[] = [];
+    for (const sentence of sentences) {
+      const scrubbed = scrubHuntClauses(sentence);
+      if (!scrubbed || scrubbed.length < 12) {
+        continue;
+      }
+      if (HUNT_OR_REVIEW_PHRASE.test(scrubbed)) {
+        continue;
+      }
+      kept.push(scrubbed);
+    }
+    if (kept.length > 0) {
+      cleaned.push(kept.join(" "));
+    }
+  }
+  const joined = cleaned.join("\n\n").trim();
+  return joined || HONEST_LIMIT;
 }
 
 /**
@@ -117,7 +181,7 @@ function editLeadOnly(text: string): string {
 
 /**
  * Keep the opening answer. Drop extra headings, search checklists, and offers.
- * Append the honest-limit sentence when it is missing. Never leave two.
+ * Strip invented hunt/review lead phrases. Append the honest-limit when missing.
  * A local-file edit keeps the first sentence only.
  */
 export function enrichFileAssistantResponse(
@@ -148,5 +212,6 @@ export function enrichFileAssistantResponse(
   if (isLocalFileChangeAsk(options?.userQuestion)) {
     return editLeadOnly(text);
   }
+  text = stripHuntLeadLanguage(text);
   return collapseHonestLimit(text);
 }
