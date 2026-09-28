@@ -1,60 +1,157 @@
-# 06 — Directories (pick 2–3 max)
+# 06 — Directories (after Marketplace is public)
 
-Spray-and-pray directories waste time and can look spammy. Submit only where developers or buyers actually browse.
+## Gate (read this first)
 
-## Priority list
+**Do not submit directories while the VS Code Marketplace listing is still a draft.**
 
-| Directory | Why | Homepage field |
-| --- | --- | --- |
-| AlternativeTo | Ranks for “X alternatives” | https://coop-ai.dev |
-| SaaSHub / similar AI-tools lists | Category pages get indexed | https://coop-ai.dev |
-| There’s An AI For That (optional) | High traffic, mixed quality | Only if listing stays accurate |
+Wait until CoopAI is **publicly installable** on the Marketplace, then run the waves below. Listings that point at a product buyers can’t install convert poorly and look unfinished.
 
-Skip paid “guest post + link” farms.
+**Trigger to start:** Marketplace listing is live (not draft) at  
+https://marketplace.visualstudio.com/items?itemName=coop-ai.coop-ai
 
-## Generic submission fields
+Until then: keep this list ready; skip submissions.
+
+---
+
+## How to use this list
+
+1. Marketplace goes public  
+2. Wave A (same week) — highest ROI  
+3. Wave B (following 1–2 weeks) — AI + SaaS catalogs  
+4. Wave C (optional) — review sites / stretch  
+5. Cap total effort: **~10–15 quality listings**, not 50 spam farms  
+
+Skip paid “guest post + backlink” packages. Free listing first; paid boosts only if a directory already sends real traffic.
+
+---
+
+## Paste copy (use on every form)
 
 ### Product name
 ```text
 CoopAI
 ```
 
+### Website
+```text
+https://coop-ai.dev
+```
+
 ### One-liner
 ```text
-VS Code code intelligence: understand production repos without cloning, with company Slack & Jira context.
+AI coding assistant for VS Code. Zero-clone indexing for any repo on any code host, with Slack, Jira, Confluence, and the rest of your stack.
 ```
 
-### Description (short)
+### Short description
 ```text
-CoopAI is a VS Code extension for production engineering teams. It Deep-Indexes repositories into a remote graph (zero-clone), queries company Slack, Jira, and docs live from an admin-connected workspace, and helps you ask, complete, and edit with reviewable diffs. It is not an autonomous coding agent.
+CoopAI is an AI coding assistant for VS Code. Zero-clone indexing works with any repo on any code host. Answers and edits use your code graph plus company Slack, Jira, Confluence, and more — so work matches how your team ships. You review every change.
 ```
 
-### Description (long)
+### Long description
 ```text
-CoopAI brings code intelligence into stock VS Code.
+CoopAI is an AI coding assistant for VS Code that brings your engineering stack into every answer, completion, and edit.
 
-Teams use it when the expensive work is context—not keystrokes: who owns a path, what else breaks, why a decision shipped, and how to answer that without cloning every service.
+Zero-clone indexing works with repos on any code host. Answers and edits use your code graph plus company Slack, Jira, Confluence, PRs, and ownership — so suggestions match how your team actually ships. You review every change; CoopAI is not an autonomous agent that rewrites the tree on its own.
 
-Core loop:
-1) Deep-Index selected repos (transient clone → graph → clone deleted)
-2) Query company Slack/Jira/docs live (org admin connects once)
-3) Ask, complete, and edit in VS Code with human-reviewed patches
-
-Compared to Copilot/Cursor/Claude Code: those tools excel at generation and agentic edits. CoopAI excels at organizational understanding next to the code.
-
-Canonical explainer: https://coop-ai.dev/docs/what-is-coopai
-Comparisons: https://coop-ai.dev/docs/compare
+Canonical: https://coop-ai.dev/docs/what-is-coopai
+Compare: https://coop-ai.dev/docs/compare
+Marketplace: https://marketplace.visualstudio.com/items?itemName=coop-ai.coop-ai
 ```
 
-### Categories / alternatives
-List as alternative to: GitHub Copilot, Cursor, Sourcegraph Cody — with honest positioning (“complements Copilot; different job than Cursor agents”).
+### Alternatives / “similar to”
+GitHub Copilot, Cursor, Sourcegraph Cody — honest line: “complements Copilot; different job than Cursor agents.”
 
-### Links
-- Website: https://coop-ai.dev  
-- Docs: https://coop-ai.dev/docs/what-is-coopai  
-- Pricing: https://coop-ai.dev/pricing  
+### Categories (pick what fits each form)
+Developer tools, AI coding, Code editors / VS Code, Productivity, SaaS
+
+---
+
+## Wave A — do first (same week Marketplace goes live)
+
+| # | Directory | Why | Start here |
+| --- | --- | --- | --- |
+| 1 | **AlternativeTo** | Ranks for “X alternatives” | https://alternativeto.net — Suggest / add app (login may be required) |
+| 2 | **SaaSHub** | Strong SaaS/AI catalog + alternatives pages | https://www.saashub.com — Add product |
+| 3 | **Product Hunt** (ship page / launch later) | High authority; launch day optional | https://www.producthunt.com — create product; launch when ready ([03-product-hunt.md](./03-product-hunt.md)) |
+| 4 | **DevHunt** | Devtools-focused launch/directory | https://devhunt.org |
+| 5 | **BetaList** (if still early) | Early-adopter lists | https://betalist.com |
+
+**Also link Marketplace URL** in every Wave A form when there’s a “download” / “install” field.
+
+---
+
+## Wave B — AI + SaaS catalogs (week 2–3)
+
+| # | Directory | Why | Start here |
+| --- | --- | --- | --- |
+| 6 | **There’s An AI For That (TAAFT)** | Highest-traffic AI directory | https://theresanaiforthat.com — submit/suggest |
+| 7 | **Futurepedia** | Large AI tools index + newsletter | https://www.futurepedia.io — submit tool |
+| 8 | **Toolify** | Broad AI tool categories | https://www.toolify.ai |
+| 9 | **Future Tools** | Curated AI discovery | https://www.futuretools.io |
+| 10 | **SaaSworthy** | SaaS comparison pages | https://www.saasworthy.com |
+| 11 | **Startup Stash** | Startup/tool roundups | https://startupstash.com |
+| 12 | **Uneed** | Indie/launch directory | https://www.uneed.best |
+| 13 | **Dang.ai** / similar curated AI lists | Niche AI discovery | Search current submit form when ready |
+| 14 | **AI Tool Directory / TopAI.tools** | Extra AI index coverage | Submit only if form is free + accurate |
+
+---
+
+## Wave C — review / enterprise discovery (optional, heavier)
+
+| # | Directory | Why | Notes |
+| --- | --- | --- | --- |
+| 15 | **G2** | B2B SEO + “reviews” queries | Free profile; reviews take time — https://www.g2.com |
+| 16 | **Capterra** / **GetApp** / **Software Advice** | Same Gartner family; buyer intent | Vendor onboarding can be slow |
+| 17 | **TrustRadius** | Enterprise review surface | Optional |
+| 18 | **SourceForge** | High DA software index | Fine for freemium/dev tools |
+| 19 | **Slashdot Software** / **SourceForge siblings** | Extra software-index coverage | Low priority |
+| 20 | **Crunchbase** | Company entity (not a tool dir) | Create org page when you’re ready for a public company footprint |
+
+---
+
+## Communities that are *not* directories (don’t confuse)
+
+Use these from the other playbook docs — not as “submit product” forms:
+
+| Surface | Doc |
+| --- | --- |
+| Hacker News (Show HN / replies) | [04-hacker-news.md](./04-hacker-news.md) |
+| Reddit (real answers only) | [05-reddit.md](./05-reddit.md) |
+| Indie Hackers | Optional brand account; no personal LinkedIn |
+
+---
+
+## Skip / low value
+
+- Paid “50 directories for $99” blasts  
+- Random “AI tools” sites with no traffic and spammy outbound links  
+- Duplicate submissions of the same thin copy 20 times in one day  
+
+---
+
+## Tracking checklist (copy into a note when Marketplace is live)
+
+```text
+[ ] Marketplace public
+[ ] AlternativeTo
+[ ] SaaSHub
+[ ] DevHunt
+[ ] TAAFT
+[ ] Futurepedia
+[ ] Toolify
+[ ] Future Tools
+[ ] SaaSworthy
+[ ] G2 (optional)
+[ ] Capterra (optional)
+```
+
+For each: date submitted · live URL · notes.
+
+---
 
 ## Success
 
-- Listing goes live and indexes in Google within a few weeks
-- Description still says “not an autonomous agent”
+- Marketplace install link works from directory pages  
+- 5–10 quality listings live within 30 days of Marketplace public  
+- Descriptions still say **AI coding assistant** + **you review every change** / not an autonomous rewrite agent  
+- Prefer linking **What is** (`/docs/what-is-coopai`) when a “docs” field exists  
