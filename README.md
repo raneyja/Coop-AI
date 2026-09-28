@@ -1,10 +1,12 @@
 # CoopAI
 
-Code intelligence for VS Code. Understand production code with your repo graph, Slack, and tickets — then complete and edit the way your team already writes.
+AI Code intelligence for VS Code.
 
-You do not need a local clone of every repo. CoopAI answers from an indexed remote map plus on-demand file fetches.
+Understand, write, search, and edit code from any codehost, without downloading to your local machine. Add context from any tool within your stack to improve accuracy.
 
-![CoopAI sidebar in VS Code](https://coop-ai.dev/screenshots/docs/extension-sidebar-light.png)
+CoopAI answers from an indexed remote map plus on-demand file fetches.
+
+![From your Stack. To your Codebase.](https://coop-ai.dev/screenshots/docs/extension-from-your-stack.png)
 
 ## What you can do
 

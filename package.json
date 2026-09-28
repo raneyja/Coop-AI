@@ -1,8 +1,8 @@
 {
   "name": "coop-ai",
   "displayName": "CoopAI",
-  "description": "Code intelligence for VS Code. Understand production code with your repo graph, Slack, and tickets.",
-  "version": "0.1.9",
+  "description": "AI Code intelligence for VS Code. Understand, write, search, and edit code from any codehost — without downloading to your local machine.",
+  "version": "0.1.10",
   "publisher": "coop-ai",
   "license": "MIT",
   "icon": "media/coop-icon.png",
@@ -30,8 +30,7 @@
   },
   "categories": [
     "AI",
-    "Chat",
-    "Machine Learning"
+    "Chat"
   ],
   "activationEvents": [
     "onStartupFinished"

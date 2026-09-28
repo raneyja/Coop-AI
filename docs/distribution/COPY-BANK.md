@@ -68,7 +68,7 @@ Compare: https://coop-ai.dev/docs/compare
 
 ### Short description
 ```text
-Code intelligence for VS Code: understand production repos without cloning, with company Slack & Jira context and reviewable edits.
+AI Code intelligence for VS Code. Understand, write, search, and edit code from any codehost — without downloading to your local machine.
 ```
 
 ### Long description

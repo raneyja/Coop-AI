@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.10
+
+- Marketplace listing: AI category (drop Machine Learning), refreshed overview copy, Stack banner as first screenshot
+
 ## 0.1.9
 
 - Evidence-bound answers: thin or empty evidence stays short and honest (Blast, Understand, L file)

@@ -21,7 +21,7 @@ Open [Visual Studio Marketplace Publisher Management](https://marketplace.visual
 ### Short description (Marketplace one-liner)
 
 ```text
-Code intelligence for VS Code: understand production repos without cloning, with company Slack & Jira context and reviewable edits.
+AI Code intelligence for VS Code. Understand, write, search, and edit code from any codehost — without downloading to your local machine.
 ```
 
 ### Long description (Marketplace README — if Marketplace uses package README, the repo README is the source; otherwise paste below)
@@ -54,7 +54,7 @@ CoopAI at [coop-ai.dev](https://coop-ai.dev) is VS Code code intelligence. It is
 
 ### Categories / tags
 
-Keep: AI, Chat, Machine Learning  
+Keep: AI, Chat (primary category must be AI — do not list Machine Learning)  
 Keywords already in `package.json` are fine; prefer adding `code-intelligence`, `ownership`, `blast-radius` only if Marketplace allows without keyword stuffing.
 
 ## Success
