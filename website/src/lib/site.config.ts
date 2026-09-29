@@ -92,9 +92,9 @@ export const siteConfig = {
   },
   nav: [
     { label: "Product", href: "/#product" },
-    { label: "Security", href: "/security" },
-    { label: "For Eng Managers", href: "/for-engineering-managers" },
     { label: "Pricing", href: "/pricing" },
+    { label: "Security", href: "/security" },
+    { label: "Owner's Manual", href: "/manual" },
     { label: "Docs", href: "/docs" }
   ] as const,
   quotes: [

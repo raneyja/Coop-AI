@@ -1,4 +1,4 @@
-import { Button, InstallExtensionButton } from "./Button";
+import { InstallExtensionButton } from "./Button";
 import { HeroDemoArtifact } from "./HeroDemoArtifact";
 import { HeroGalaxyBackground } from "./HeroGalaxyBackground";
 import { siteConfig } from "@/lib/site.config";
@@ -27,9 +27,6 @@ export function Hero() {
               variant="inverse"
               label="Install the free VS Code extension"
             />
-            <Button href={siteConfig.links.demo} variant="inverse-secondary">
-              Book a 20-minute demo on your repo
-            </Button>
           </div>
           <p className="mx-auto mt-4 max-w-xl text-xs leading-relaxed text-white/35 lg:mx-0">
             Works alongside Copilot, Claude, Cursor, Codex, and more.
