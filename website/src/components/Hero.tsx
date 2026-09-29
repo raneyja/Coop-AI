@@ -16,19 +16,27 @@ export function Hero() {
             <br />
             {rest.trim()}
           </h1>
+          <p className="mx-auto mt-3 max-w-xl font-mono text-xs uppercase tracking-wide text-white/35 md:text-[13px] lg:mx-0">
+            {siteConfig.heroKicker}
+          </p>
           <p className="mx-auto mt-4 max-w-xl text-[15px] leading-relaxed text-white/50 md:text-base lg:mx-0">
             {siteConfig.subheadline}
+          </p>
+          <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:justify-start">
+            <InstallExtensionButton
+              variant="inverse"
+              label="Install the free VS Code extension"
+            />
+            <Button href={siteConfig.links.demo} variant="inverse-secondary">
+              Book a 20-minute demo on your repo
+            </Button>
+          </div>
+          <p className="mx-auto mt-4 max-w-xl text-xs leading-relaxed text-white/35 lg:mx-0">
+            Works alongside Copilot, Claude, Cursor, Codex, and more.
           </p>
         </div>
 
         <HeroDemoArtifact tone="dark" />
-
-        <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
-          <InstallExtensionButton variant="inverse" />
-          <Button href="/demo" variant="inverse-secondary">
-            Book a demo
-          </Button>
-        </div>
       </div>
     </section>
   );

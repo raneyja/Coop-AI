@@ -67,6 +67,7 @@ export function Header() {
               variant={dark ? "inverse" : "primary"}
               size="sm"
               className="hidden sm:inline-flex"
+              label="Install in VS Code"
             />
             <button
               type="button"
@@ -117,6 +118,7 @@ export function Header() {
               <InstallExtensionButton
                 variant={dark ? "inverse" : "primary"}
                 className="w-full rounded-full px-5 py-3 text-sm"
+                label="Install in VS Code"
               />
             </div>
             <Link

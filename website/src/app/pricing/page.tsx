@@ -190,10 +190,51 @@ export default function PricingPage() {
             and upgrade from the extension (Plan &amp; Usage) or Admin → Billing — not a second Start Pro
             checkout with the same email.
           </p>
+
+          <p className="mt-6 text-center text-sm text-coop-muted">
+            Design-partner pricing is available for teams putting CoopAI on a production monorepo in
+            the next 30 days.
+          </p>
+
+          <div className="mx-auto mt-16 max-w-3xl">
+            <h2 className="text-center text-xl font-semibold text-gray-900">FAQ</h2>
+            <dl className="mt-8 space-y-6">
+              <div>
+                <dt className="font-medium text-gray-900">Do we replace Copilot / Cursor / Codex?</dt>
+                <dd className="mt-2 text-sm leading-relaxed text-coop-muted">
+                  No. We sit beside them with org context.
+                </dd>
+              </div>
+              <div>
+                <dt className="font-medium text-gray-900">Does source leave our infrastructure?</dt>
+                <dd className="mt-2 text-sm leading-relaxed text-coop-muted">
+                  Zero-clone. See{" "}
+                  <Link href="/security" className="font-medium text-gray-900 hover:underline">
+                    /security
+                  </Link>
+                  .
+                </dd>
+              </div>
+              <div>
+                <dt className="font-medium text-gray-900">Do you train on our code?</dt>
+                <dd className="mt-2 text-sm leading-relaxed text-coop-muted">No.</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-gray-900">Can we start on two teams / ~20 users?</dt>
+                <dd className="mt-2 text-sm leading-relaxed text-coop-muted">
+                  Yes. That is the intended first install.
+                </dd>
+              </div>
+            </dl>
+          </div>
         </div>
       </section>
 
-      <CTASection showInstall={false} />
+      <CTASection
+        showInstall
+        primaryLabel="Book a 20-minute demo on your repo"
+        description="Install the extension, or spend 20 minutes on your actual repo with the founder."
+      />
     </>
   );
 }

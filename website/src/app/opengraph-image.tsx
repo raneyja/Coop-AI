@@ -44,7 +44,9 @@ export default function OpenGraphImage() {
           <div style={{ fontSize: 58, fontWeight: 700, lineHeight: 1.08, letterSpacing: -2 }}>
             {siteConfig.tagline}
           </div>
-          <div style={{ fontSize: 28, lineHeight: 1.35, color: "#52525b" }}>{siteConfig.subheadline}</div>
+          <div style={{ fontSize: 28, lineHeight: 1.35, color: "#52525b" }}>
+            {siteConfig.heroKicker}
+          </div>
         </div>
 
         <div style={{ display: "flex", gap: 12 }}>

@@ -31,7 +31,8 @@ export default function BlogPage() {
 
       <CTASection
         title="See CoopAI on your codebase"
-        description="Book a demo with our team or install the free VS Code extension from the Marketplace."
+        description="Install the extension, or spend 20 minutes on your actual repo with the founder."
+        primaryLabel="Book a 20-minute demo on your repo"
       />
     </>
   );

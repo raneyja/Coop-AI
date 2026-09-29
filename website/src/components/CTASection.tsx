@@ -10,8 +10,8 @@ type CTASectionProps = {
 
 export function CTASection({
   title = "See CoopAI on your codebase",
-  description = "Book a demo with our team or install the free VS Code extension from the Marketplace.",
-  primaryLabel = "Book a demo",
+  description = "Install the extension, or spend 20 minutes on your actual repo with the founder.",
+  primaryLabel = "Book a 20-minute demo on your repo",
   primaryHref = "/demo",
   showInstall = true
 }: CTASectionProps) {
@@ -32,7 +32,9 @@ export function CTASection({
             <p className="mt-3 max-w-xl text-sm leading-relaxed text-coop-muted">{description}</p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button href={primaryHref}>{primaryLabel}</Button>
-              {showInstall && <InstallExtensionButton />}
+              {showInstall && (
+                <InstallExtensionButton label="Install the free VS Code extension" />
+              )}
             </div>
             <p className="mt-6 text-xs text-gray-500">code intelligence from your entire stack</p>
           </div>

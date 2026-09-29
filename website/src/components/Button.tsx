@@ -64,18 +64,20 @@ export function Button({
 export function InstallExtensionButton({
   className = "",
   variant = "secondary",
-  size = "md"
+  size = "md",
+  label = "Install extension"
 }: {
   className?: string;
   variant?: ButtonVariant;
   size?: ButtonSize;
+  label?: string;
 }) {
   const href = installExtensionHref();
   const external = href.startsWith("http");
 
   return (
     <Button href={href} variant={variant} size={size} external={external} className={className}>
-      Install extension
+      {label}
     </Button>
   );
 }

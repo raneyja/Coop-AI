@@ -1,6 +1,7 @@
 import { Hero } from "@/components/Hero";
 import { HomePartnerLogos } from "@/components/HomePartnerLogos";
 import { HomeStackContextSection } from "@/components/HomeStackContextSection";
+import { HomeSecurityStrip } from "@/components/HomeSecurityStrip";
 import { HomeCloseSection } from "@/components/HomeCloseSection";
 import { HomePageTheme } from "@/components/HomePageTheme";
 import { Testimonial } from "@/components/Testimonial";
@@ -18,12 +19,15 @@ export const metadata: Metadata = {
   },
   openGraph: {
     ...homeMetadata.openGraph,
-    title: homeTitle
+    title: homeTitle,
+    description: siteConfig.seo.defaultDescription
   },
   twitter: {
     ...homeMetadata.twitter,
-    title: homeTitle
-  }
+    title: homeTitle,
+    description: siteConfig.seo.defaultDescription
+  },
+  description: siteConfig.seo.defaultDescription
 };
 
 export default function HomePage() {
@@ -38,6 +42,7 @@ export default function HomePage() {
         </div>
       </section>
 
+      <HomeSecurityStrip tone="dark" />
       <Testimonial tone="dark" />
       <HomeCloseSection />
     </HomePageTheme>

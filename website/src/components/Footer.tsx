@@ -49,18 +49,18 @@ export function Footer() {
             <h3 className={heading}>Product</h3>
             <ul className="mt-4 space-y-3">
               <li>
-                <Link href="/product" className={link}>
-                  Features
+                <Link href="/" className={link}>
+                  Home
                 </Link>
               </li>
               <li>
-                <Link href="/how-it-works" className={link}>
-                  How it works
+                <Link href="/security" className={link}>
+                  Security
                 </Link>
               </li>
               <li>
-                <Link href="/integrations" className={link}>
-                  Integrations
+                <Link href="/for-engineering-managers" className={link}>
+                  For engineering managers
                 </Link>
               </li>
               <li>
@@ -69,28 +69,8 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/demo" className={link}>
-                  Book a demo
-                </Link>
-              </li>
-              <li>
-                <Link href="/manual" className={link}>
-                  Owner&apos;s Manual
-                </Link>
-              </li>
-              <li>
-                <Link href="/docs" className={link}>
-                  Documentation
-                </Link>
-              </li>
-              <li>
-                <Link href="/docs/what-is-coopai" className={link}>
-                  What is CoopAI?
-                </Link>
-              </li>
-              <li>
-                <Link href="/docs/compare" className={link}>
-                  Compare CoopAI
+                <Link href={siteConfig.links.docs} className={link}>
+                  Docs
                 </Link>
               </li>
             </ul>
@@ -100,29 +80,14 @@ export function Footer() {
             <h3 className={heading}>Company</h3>
             <ul className="mt-4 space-y-3">
               <li>
-                <Link href="/enterprise" className={link}>
-                  Enterprise
-                </Link>
-              </li>
-              <li>
-                <Link href="/security" className={link}>
-                  Security
-                </Link>
-              </li>
-              <li>
-                <Link href="/docs/sso" className={link}>
-                  Single sign-on
-                </Link>
-              </li>
-              <li>
-                <Link href="/blog" className={link}>
-                  Blog
-                </Link>
-              </li>
-              <li>
                 <a href={`mailto:${siteConfig.contactEmail}`} className={link}>
-                  Contact
+                  {siteConfig.contactEmail}
                 </a>
+              </li>
+              <li>
+                <Link href={siteConfig.links.demo} className={link}>
+                  Book a demo
+                </Link>
               </li>
             </ul>
           </div>
@@ -151,9 +116,6 @@ export function Footer() {
         >
           <p className={`text-sm ${dark ? "text-white/40" : "text-coop-muted"}`}>
             © {new Date().getFullYear()} CoopAI. All rights reserved.
-          </p>
-          <p className={`text-xs ${dark ? "text-white/30" : "text-coop-muted/80"}`}>
-            CoopAI is in active development. Features and availability may change.
           </p>
         </div>
       </div>

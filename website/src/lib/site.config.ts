@@ -6,16 +6,17 @@ export const siteConfig = {
     "CoopAI is VS Code code intelligence. Understand production code with your repo graph and company Slack, Jira, and docs, then complete and edit the way your team already writes.",
   /** Human-facing footer blurb — keep readable; dense SEO facts live in docs / llms.txt. */
   footerBlurb:
-    "VS Code code intelligence for production teams — understand the repo and company stack, then write with diffs you review.",
+    "CoopAI — shared org context in the editor. From your stack, to your codebase.",
   tagline: "From your stack, to your codebase.",
   subheadline:
-    "Company Slack, Jira, and symbol graphs in every answer and every line you write — shared org context, not personal accounts.",
+    "CoopAI is code intelligence for teams already shipping production software. Ask who owns a path, why a module exists, or what a change breaks — then complete and edit the change in the file — without cloning the monorepo or sending the tree to a black-box agent.",
+  heroKicker: "Shared org context in the editor — Slack, Jira, owners, and the code that shipped.",
   contactEmail: "support@coop-ai.dev",
   privacyEmail: "privacy@coop-ai.dev",
   securityEmail: "security@coop-ai.dev",
   seo: {
     defaultDescription:
-      "CoopAI is code intelligence for VS Code. Deep-Index repos without cloning, pull company Slack and Jira into the editor, and complete or edit with reviewable diffs.",
+      "CoopAI puts Slack, Jira, owners, and code history into the editor so teams can ask, complete, and edit with shared org context. Works alongside Copilot, Codex, and Cursor. Zero-clone. Your models, your keys.",
     ogImageAlt: "CoopAI: code intelligence for VS Code",
     pages: {
       product: {
@@ -26,7 +27,7 @@ export const siteConfig = {
       howItWorks: {
         title: "How CoopAI works | Index, query, then ask in VS Code",
         description:
-          "How CoopAI Deep-Indexes repos so you can understand a codebase without cloning, queries company Slack and Jira live, then lets you ask, complete, and edit in VS Code."
+          "How CoopAI indexes repos so you can understand a codebase without cloning, queries company Slack and Jira live, then lets you ask, complete, and edit in VS Code."
       },
       enterprise: {
         title: "Enterprise | Secure code intelligence",
@@ -36,12 +37,17 @@ export const siteConfig = {
       pricing: {
         title: "Pricing | Plans for engineering teams",
         description:
-          "CoopAI pricing: free Developer plan, Pro at $25/user/month, and Enterprise with org-wide context and deployment options."
+          "CoopAI pricing: Free, Pro at $25/user/month, Pro+, Max, and Enterprise with org-wide context and deployment options."
       },
       security: {
-        title: "Security | Zero-clone architecture",
+        title: "Architecture and data handling | CoopAI",
         description:
-          "How CoopAI protects your code and context: zero-clone architecture, zero-retention LLM routing, BYOK, audit logging, and compliance docs."
+          "How CoopAI protects your code and context: zero-clone architecture, zero-retention LLM routing, BYOK, admin-connected integrations, and DPA on request."
+      },
+      forEngineeringManagers: {
+        title: "For engineering managers | CoopAI",
+        description:
+          "Cut onboarding and interruption tax. CoopAI puts Slack, tickets, owners, and shipped history into VS Code alongside Copilot, Codex, and Cursor."
       },
       blog: {
         title: "Blog | Code intelligence and SDLC context",
@@ -56,7 +62,7 @@ export const siteConfig = {
       demo: {
         title: "Book a demo | See CoopAI on your codebase",
         description:
-          "Schedule a CoopAI demo. We'll walk through zero-clone indexing, cross-tool context, and how it fits your stack."
+          "Schedule a CoopAI demo. Walk through zero-clone indexing, cross-tool context, and how it fits your stack."
       },
       integrations: {
         title: "Integrations | GitHub, Slack, Jira, and more",
@@ -81,37 +87,31 @@ export const siteConfig = {
       process.env.NEXT_PUBLIC_VSCODE_MARKETPLACE_URL ||
       "https://marketplace.visualstudio.com/items?itemName=coop-ai.coop-ai",
     manual: "/manual",
-    docs: "/docs"
+    docs: "/docs",
+    demo: "/demo"
   },
   nav: [
-    { label: "Product", href: "/product" },
-    { label: "Enterprise", href: "/enterprise" },
-    { label: "Pricing", href: "/pricing" },
-    { label: "Manual", href: "/manual" },
-    { label: "Docs", href: "/docs" },
+    { label: "Product", href: "/#product" },
     { label: "Security", href: "/security" },
-    { label: "Blog", href: "/blog" }
+    { label: "For Eng Managers", href: "/for-engineering-managers" },
+    { label: "Pricing", href: "/pricing" },
+    { label: "Docs", href: "/docs" }
   ] as const,
   quotes: [
     {
-      text: "By just using the beta version of CoopAI I have seen at least a 50% reduction in time I spend asking / answering questions... I spend at least 6 hours each week answering questions and cut that in half this past week.",
-      author: "Senior Engineer",
-      company: "Row Labs"
+      text: "I was spending at least 6 hours each week answering the same codebase questions. In the first week on CoopAI I cut that in half — about a 50% drop in time spent asking and answering.",
+      author: "Tim Draper — Senior engineer @ Rowlabs",
+      detail: "40 users · GitHub, Slack, Jira"
     },
     {
-      text: "New engineers used to spend weeks asking senior people basic questions about the codebase. Now they can find that context themselves in minutes. It's completely changed how fast we onboard.",
-      author: "Engineering Manager",
-      company: "Kitebase"
+      text: "New engineers used to spend weeks asking seniors basic questions about the repo. They now find owners, tickets, and the last shipped pattern in minutes. Onboarding is a different motion.",
+      author: "Javier Oladipo — Engineering Manager @ Kitesystems",
+      detail: "50 users · GitHub, Slack, Linear/Jira"
     },
     {
-      text: "Our team was losing 15+ hours a week answering 'why did we build it this way?' questions across Slack, emails, and in-person. CoopAI gives us one place to find that context instantly.",
-      author: "Tech Lead",
-      company: "Loopframe"
-    },
-    {
-      text: "Before CoopAI, making changes felt risky because you never knew the full context. Now I can trace decisions back to commits, PRs, and team discussions. I make better calls faster.",
-      author: "Senior Engineer",
-      company: "Halcyon Dev"
+      text: "We were losing 15+ hours a week to 'why did we build it this way?' across Slack, email, and hallways. Changes felt risky because the blast radius lived in someone's head. Now the decision trail is in the editor.",
+      author: "Terra Gunderson — Staff Engineer @ Docuzone",
+      detail: "25 seats · GitLab, Slack, Jira"
     }
   ] as const,
   features: [

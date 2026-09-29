@@ -16,9 +16,9 @@ function test(name: string, fn: () => void): void {
   }
 }
 
-test("footer blurb is human-readable code intelligence copy", () => {
-  assert.match(siteConfig.footerBlurb, /VS Code code intelligence/i);
-  assert.match(siteConfig.footerBlurb, /review/i);
+test("footer blurb is human-readable shared-context copy", () => {
+  assert.match(siteConfig.footerBlurb, /shared org context/i);
+  assert.match(siteConfig.footerBlurb, /From your stack, to your codebase/);
   assert.equal(siteConfig.footerBlurb.includes(": Deep-Index"), false);
   assert.equal(siteConfig.footerBlurb.includes("query company Slack and Jira live"), false);
 });

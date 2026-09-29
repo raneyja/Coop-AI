@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { SectionHeading } from "@/components/SectionHeading";
 
 const WITHOUT = [
@@ -9,11 +8,59 @@ const WITHOUT = [
 ] as const;
 
 const WITH_STACK = [
-  { source: "Symbol graph", detail: "Dependents, callers, real types" },
-  { source: "GitHub / GitLab", detail: "PRs, blame, the pattern that shipped" },
-  { source: "Slack & tickets", detail: "Company workspace, shared in VS Code" },
-  { source: "CODEOWNERS", detail: "Find the code owner before you merge" },
-  { source: "Blast radius", detail: "What else breaks if this changes" }
+  {
+    source: "Callers, dependents, real types",
+    detail: "See what this symbol touches before you change it."
+  },
+  {
+    source: "The change that actually shipped",
+    detail: "PRs, blame, and the pattern your team already merged — not a guessed rewrite."
+  },
+  {
+    source: "Company Slack and tickets",
+    detail: "Ask against the workspace your admin connected, not each person’s private DMs."
+  },
+  {
+    source: "Find the owner before you open the PR",
+    detail: "CODEOWNERS and ownership history in the editor, before merge."
+  },
+  {
+    source: "See what else breaks",
+    detail: "Blast radius of the change, while you are still in the file."
+  }
+] as const;
+
+const JTBD_ROLES = [
+  {
+    label: "New hire",
+    body: "Spends the first month asking who owns what."
+  },
+  {
+    label: "Staff engineer",
+    body: "Answers the same Slack questions every week."
+  },
+  {
+    label: "Anyone changing a module",
+    body: "Cannot see blast radius, last PRs, or the ticket that created the design."
+  }
+] as const;
+
+const HOW_IT_WORKS = [
+  {
+    step: "1",
+    title: "Admin connects the stack",
+    body: "GitHub or GitLab, Slack, Jira, and the rest of the workspace — once, for the org."
+  },
+  {
+    step: "2",
+    title: "Index stays on your side",
+    body: "Ownership, history, and repo metadata are indexed on your infrastructure. Developers do not clone the monorepo onto every laptop to understand it."
+  },
+  {
+    step: "3",
+    title: "Ask, complete, and edit in VS Code",
+    body: "Answers cite the PR, ticket, owner, or thread. Edits stay in the file."
+  }
 ] as const;
 
 type HomeStackContextSectionProps = {
@@ -21,8 +68,7 @@ type HomeStackContextSectionProps = {
 };
 
 /**
- * Homepage market-problem section: enterprises need stack-wide context,
- * not agents that generate without knowing the repo or the org.
+ * Homepage JTBD + comparison: context tax, then Without / With CoopAI, then how it works.
  */
 export function HomeStackContextSection({ tone = "light" }: HomeStackContextSectionProps) {
   const dark = tone === "dark";
@@ -38,37 +84,59 @@ export function HomeStackContextSection({ tone = "light" }: HomeStackContextSect
       <div className="mx-auto max-w-6xl px-6">
         <SectionHeading
           tone={tone}
-          label="the_gap"
-          title="Your team doesn't need another coding agent"
-          description="They need VS Code code intelligence that already knows the repo, the tickets, and the people who own the code."
+          label="The problem"
+          title="The tax is not writing code. It's finding the correct context."
+          description="Most teams already have a coding assistant. They still lose hours reconstructing ownership, history, and intent from Slack, tickets, and hallway questions."
         />
 
+        <div className="mt-10 grid gap-4 md:grid-cols-3 md:gap-6">
+          {JTBD_ROLES.map((role) => (
+            <div
+              key={role.label}
+              className={
+                dark
+                  ? "rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:p-6"
+                  : "rounded-2xl border border-coop-border bg-white p-5 md:p-6"
+              }
+            >
+              <p
+                className={`font-mono text-xs uppercase tracking-wide ${
+                  dark ? "text-white/35" : "text-gray-400"
+                }`}
+              >
+                {role.label}
+              </p>
+              <p
+                className={`mt-3 text-sm leading-relaxed ${
+                  dark ? "text-white/65" : "text-gray-700"
+                }`}
+              >
+                {role.body}
+              </p>
+            </div>
+          ))}
+        </div>
+
         <p
-          className={`mt-6 max-w-2xl text-base leading-relaxed md:text-lg ${
+          className={`mt-8 max-w-3xl text-base leading-relaxed md:text-lg ${
             dark ? "text-white/55" : "text-gray-700"
           }`}
         >
-          Most copilots only see the file you have open. Agents will happily rewrite a tree they
-          don&apos;t understand. That&apos;s a demo, not how you ship production software. It is also
-          not how you understand a codebase without cloning the monorepo onto every laptop. You can
-          still use Coop on a local file as a normal assistant if you want to.
-        </p>
-        <p
-          className={`mt-4 max-w-2xl text-base leading-relaxed md:text-lg ${
-            dark ? "text-white/55" : "text-gray-700"
-          }`}
-        >
-          The hard part isn&apos;t generating code. It&apos;s having company Slack and Jira in VS Code.
-          That is shared org context your admin connected, not each person&apos;s private chat. You
-          also get the same CODEOWNERS signal you use to find a code owner, the blast radius of a
-          change, and the last few PRs,{" "}
-          <span className={`font-medium ${dark ? "text-white" : "text-gray-900"}`}>
-            before they touch a line
-          </span>
-          .
+          CoopAI indexes ownership, history, and live Slack/Jira, then lets you ask, complete, and
+          edit in VS Code with that context in the file.
         </p>
 
-        <div className="mt-14 grid gap-6 lg:grid-cols-2 lg:gap-8">
+        <p
+          className={`mt-6 max-w-3xl text-base leading-relaxed md:text-lg ${
+            dark ? "text-white/55" : "text-gray-700"
+          }`}
+        >
+          Your team does not need another coding agent. Copilot, Codex, and Cursor already write
+          lines. CoopAI is the layer that already knows the repo, the tickets, and the people who
+          own the code, so the edit you make is grounded in how this organization actually ships.
+        </p>
+
+        <div id="product" className="mt-14 scroll-mt-24 grid gap-6 lg:grid-cols-2 lg:gap-8">
           <div
             className={
               dark
@@ -123,21 +191,18 @@ export function HomeStackContextSection({ tone = "light" }: HomeStackContextSect
               With CoopAI
             </p>
             <h3 className="relative mt-3 text-xl font-semibold tracking-tight">
-              Know the stack. Stay in the file.
+              Know the stack. Stay in the file. Ask, complete, and edit.
             </h3>
-            <p className="relative mt-3 text-sm leading-relaxed text-white/65">
-              Ask, complete, and edit with the same graph your team already uses — VS Code code
-              intelligence that stays in the file. No greenfield toy. Nothing chewing through the
-              tree on its own.
-            </p>
             <ul className="relative mt-8 space-y-4">
               {WITH_STACK.map((item) => (
                 <li
                   key={item.source}
-                  className="flex items-start justify-between gap-4 border-t border-white/10 pt-4 first:border-t-0 first:pt-0"
+                  className="flex flex-col gap-1 border-t border-white/10 pt-4 first:border-t-0 first:pt-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
                 >
                   <span className="font-mono text-sm text-white">{item.source}</span>
-                  <span className="text-right text-sm text-white/45">{item.detail}</span>
+                  <span className="text-sm text-white/45 sm:max-w-[55%] sm:text-right">
+                    {item.detail}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -145,56 +210,41 @@ export function HomeStackContextSection({ tone = "light" }: HomeStackContextSect
         </div>
 
         <div
-          className={`mt-12 flex flex-col items-start justify-between gap-4 border-t pt-10 sm:flex-row sm:items-center ${
-            dark ? "border-white/10" : "border-coop-border"
-          }`}
+          className={`mt-14 border-t pt-10 ${dark ? "border-white/10" : "border-coop-border"}`}
         >
-          <p className={`max-w-xl text-sm leading-relaxed ${dark ? "text-white/45" : "text-coop-muted"}`}>
-            How it works is the loop: Deep-Index the code so you can understand the codebase without
-            cloning, query company Slack and Jira live, then ask, complete, and edit in VS Code. Product
-            walks through Ask, Change, and Indexed.
-          </p>
-          <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
-            <Link
-              href="/how-it-works"
-              className={
-                dark
-                  ? "text-sm font-medium text-white/80 underline-offset-4 hover:text-white hover:underline"
-                  : "text-sm font-medium text-gray-900 underline-offset-4 hover:underline"
-              }
-            >
-              How CoopAI works →
-            </Link>
-            <Link
-              href="/docs/what-is-coopai"
-              className={
-                dark
-                  ? "text-sm font-medium text-white/80 underline-offset-4 hover:text-white hover:underline"
-                  : "text-sm font-medium text-gray-900 underline-offset-4 hover:underline"
-              }
-            >
-              What is CoopAI? →
-            </Link>
-            <Link
-              href="/docs/compare"
-              className={
-                dark
-                  ? "text-sm font-medium text-white/80 underline-offset-4 hover:text-white hover:underline"
-                  : "text-sm font-medium text-gray-900 underline-offset-4 hover:underline"
-              }
-            >
-              Compare CoopAI →
-            </Link>
-            <Link
-              href="/product"
-              className={
-                dark
-                  ? "text-sm font-medium text-white/80 underline-offset-4 hover:text-white hover:underline"
-                  : "text-sm font-medium text-gray-900 underline-offset-4 hover:underline"
-              }
-            >
-              Explore the product →
-            </Link>
+          <h3
+            className={`text-lg font-semibold tracking-tight ${
+              dark ? "text-white" : "text-gray-900"
+            }`}
+          >
+            How it works
+          </h3>
+          <div className="mt-8 grid gap-6 md:grid-cols-3 md:gap-8">
+            {HOW_IT_WORKS.map((item) => (
+              <div key={item.step}>
+                <p
+                  className={`font-mono text-xs uppercase tracking-wide ${
+                    dark ? "text-white/35" : "text-gray-400"
+                  }`}
+                >
+                  Step {item.step}
+                </p>
+                <h4
+                  className={`mt-2 text-base font-semibold ${
+                    dark ? "text-white" : "text-gray-900"
+                  }`}
+                >
+                  {item.title}
+                </h4>
+                <p
+                  className={`mt-2 text-sm leading-relaxed ${
+                    dark ? "text-white/50" : "text-coop-muted"
+                  }`}
+                >
+                  {item.body}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       </div>

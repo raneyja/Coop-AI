@@ -29,6 +29,7 @@ CoopAI is a VS Code extension — not an autonomous coding agent. It helps engin
 - Integrations: https://coop-ai.dev/integrations
 - Pricing: https://coop-ai.dev/pricing
 - Security: https://coop-ai.dev/security
+- For engineering managers: https://coop-ai.dev/for-engineering-managers
 - Docs: https://coop-ai.dev/docs
 - Compare CoopAI: https://coop-ai.dev/docs/compare
 - FAQ: https://coop-ai.dev/docs/faq

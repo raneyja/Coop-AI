@@ -9,6 +9,8 @@ const HIGH_PRIORITY_PATHS = new Set([
   "/how-it-works",
   "/enterprise",
   "/pricing",
+  "/security",
+  "/for-engineering-managers",
   "/integrations",
   "/manual"
 ]);
@@ -20,6 +22,7 @@ const STATIC_PATHS = [
   "/enterprise",
   "/integrations",
   "/pricing",
+  "/for-engineering-managers",
   "/manual",
   "/docs",
   "/security",
@@ -31,15 +34,16 @@ const STATIC_PATHS = [
 
 /** Approximate last-updated dates for static marketing pages. Update when page content changes. */
 const STATIC_LAST_MODIFIED: Partial<Record<(typeof STATIC_PATHS)[number], string>> = {
-  "/": "2026-09-07",
+  "/": "2026-09-29",
   "/product": "2026-09-07",
   "/how-it-works": "2026-09-07",
   "/enterprise": "2026-09-07",
   "/integrations": "2026-09-07",
-  "/pricing": "2026-07-06",
+  "/pricing": "2026-09-29",
+  "/for-engineering-managers": "2026-09-29",
   "/manual": "2026-08-21",
   "/docs": "2026-09-07",
-  "/security": "2026-09-07",
+  "/security": "2026-09-29",
   "/blog": "2026-09-07",
   "/privacy": "2026-05-29",
   "/terms": "2026-05-29",

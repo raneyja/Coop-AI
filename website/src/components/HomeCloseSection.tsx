@@ -1,4 +1,5 @@
 import { Button, InstallExtensionButton } from "./Button";
+import { siteConfig } from "@/lib/site.config";
 
 export function HomeCloseSection() {
   return (
@@ -8,12 +9,15 @@ export function HomeCloseSection() {
           See CoopAI on your codebase
         </h2>
         <p className="mt-3 text-[15px] leading-relaxed text-white/50">
-          Book a demo with our team or install the free VS Code extension from the Marketplace.
+          Install the extension, or spend 20 minutes on your actual repo with the founder.
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <InstallExtensionButton variant="inverse" />
-          <Button href="/demo" variant="inverse-secondary">
-            Book a demo
+          <InstallExtensionButton
+            variant="inverse"
+            label="Install the free VS Code extension"
+          />
+          <Button href={siteConfig.links.demo} variant="inverse-secondary">
+            Book a 20-minute demo on your repo
           </Button>
         </div>
       </div>

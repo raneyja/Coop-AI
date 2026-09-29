@@ -10,7 +10,7 @@ type Tone = "light" | "dark";
 /** Soft emphasis on concrete outcomes — keeps the rest of the quote calm. */
 function emphasizeProof(text: string, tone: Tone) {
   const pattern =
-    /(\d+%\+?|\d+\+?\s*hours?(?:\s+each\s+week)?|\d+\+?\s*hours?\s+a\s+week|weeks?|minutes?|cut that in half)/gi;
+    /(\d+%\+?|\d+\+?\s*hours?(?:\s+each\s+week)?|\d+\+?\s*hours?\s+a\s+week|weeks?|minutes?|cut that in half|50% drop)/gi;
   const parts: ReactNode[] = [];
   let last = 0;
   let match: RegExpExecArray | null;
@@ -32,117 +32,56 @@ function emphasizeProof(text: string, tone: Tone) {
   return parts.length > 0 ? parts : text;
 }
 
-function QuoteAttribution({
+function QuoteCard({
   quote,
-  compact = false,
+  visible,
+  delayMs,
   tone
 }: {
   quote: Quote;
-  compact?: boolean;
+  visible: boolean;
+  delayMs: number;
   tone: Tone;
 }) {
-  const company = "company" in quote ? quote.company : undefined;
   const dark = tone === "dark";
   return (
-    <figcaption
-      className={`border-t ${dark ? "border-white/10" : "border-coop-border"} ${
-        compact ? "mt-5 pt-4" : "mt-8 pt-5"
-      }`}
+    <figure
+      className={`relative flex h-full flex-col rounded-2xl border p-5 transition-all duration-500 ease-out motion-reduce:transition-none md:p-6 ${
+        dark ? "border-white/10 bg-white/[0.03]" : "border-coop-border bg-white"
+      } ${visible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}
+      style={{ transitionDelay: visible ? `${delayMs}ms` : "0ms" }}
     >
-      <p className={`font-medium ${dark ? "text-white" : "text-gray-900"} ${compact ? "text-sm" : "text-base"}`}>
-        {quote.author}
-      </p>
-      {company ? (
-        <p
-          className={`mt-0.5 font-mono ${dark ? "text-white/40" : "text-coop-muted"} ${
-            compact ? "text-xs" : "text-sm"
-          }`}
-        >
-          {company}
+      <blockquote
+        className={`flex-1 text-sm font-medium leading-relaxed md:text-[15px] ${
+          dark ? "text-white/70" : "text-gray-800"
+        }`}
+      >
+        {emphasizeProof(quote.text, tone)}
+      </blockquote>
+      <figcaption
+        className={`mt-5 border-t pt-4 ${
+          dark ? "border-white/10" : "border-coop-border"
+        }`}
+      >
+        <p className={`text-xs font-medium leading-relaxed ${dark ? "text-white/70" : "text-gray-800"}`}>
+          {quote.author}
         </p>
-      ) : null}
-    </figcaption>
-  );
-}
-
-function QuoteMark({ className = "", tone }: { className?: string; tone: Tone }) {
-  return (
-    <span
-      className={`pointer-events-none select-none font-serif leading-none ${
-        tone === "dark" ? "text-white/10" : "text-gray-200"
-      } ${className}`.trim()}
-      aria-hidden
-    >
-      &ldquo;
-    </span>
-  );
-}
-
-function FeaturedQuote({
-  quote,
-  visible,
-  delayMs,
-  tone
-}: {
-  quote: Quote;
-  visible: boolean;
-  delayMs: number;
-  tone: Tone;
-}) {
-  return (
-    <figure
-      className={`relative transition-all duration-500 ease-out motion-reduce:transition-none ${
-        visible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
-      }`}
-      style={{ transitionDelay: visible ? `${delayMs}ms` : "0ms" }}
-    >
-      <QuoteMark tone={tone} className="absolute -left-1 -top-6 text-[5.5rem] md:-top-8 md:text-[7rem]" />
-      <blockquote
-        className={`relative pl-1 pt-6 text-xl font-medium leading-relaxed md:pt-8 md:text-2xl md:leading-snug ${
-          tone === "dark" ? "text-white/75" : "text-gray-800"
-        }`}
-      >
-        {emphasizeProof(quote.text, tone)}
-      </blockquote>
-      <QuoteAttribution quote={quote} tone={tone} />
-    </figure>
-  );
-}
-
-function SecondaryQuote({
-  quote,
-  visible,
-  delayMs,
-  tone
-}: {
-  quote: Quote;
-  visible: boolean;
-  delayMs: number;
-  tone: Tone;
-}) {
-  return (
-    <figure
-      className={`relative transition-all duration-500 ease-out motion-reduce:transition-none ${
-        visible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
-      }`}
-      style={{ transitionDelay: visible ? `${delayMs}ms` : "0ms" }}
-    >
-      <QuoteMark tone={tone} className="absolute -left-0.5 -top-3 text-4xl" />
-      <blockquote
-        className={`relative pl-0.5 pt-4 text-base font-medium leading-relaxed ${
-          tone === "dark" ? "text-white/70" : "text-gray-800"
-        }`}
-      >
-        {emphasizeProof(quote.text, tone)}
-      </blockquote>
-      <QuoteAttribution quote={quote} compact tone={tone} />
+        {"detail" in quote && quote.detail ? (
+          <p
+            className={`mt-1 font-mono text-xs leading-relaxed ${
+              dark ? "text-white/40" : "text-coop-muted"
+            }`}
+          >
+            {quote.detail}
+          </p>
+        ) : null}
+      </figcaption>
     </figure>
   );
 }
 
 export function Testimonial({ tone = "light" }: { tone?: Tone }) {
   const quotes = siteConfig.quotes;
-  const [featured, ...rest] = quotes;
   const sectionRef = useRef<HTMLElement>(null);
   const [visible, setVisible] = useState(false);
   const dark = tone === "dark";
@@ -179,31 +118,44 @@ export function Testimonial({ tone = "light" }: { tone?: Tone }) {
         <SectionHeading
           tone={tone}
           label="social_proof"
-          title="Teams using CoopAI"
-          description="Engineers and leads who stopped hunting context across Slack, tickets, and hallway conversations."
+          title="What our customers measure"
+          description="Engineering teams using CoopAI on real production repos."
         />
 
-        <div className="mt-12 md:mt-14">
-          <FeaturedQuote quote={featured} visible={visible} delayMs={0} tone={tone} />
+        <div className="mt-12 grid gap-5 md:grid-cols-3">
+          {quotes.map((quote, i) => (
+            <QuoteCard
+              key={quote.text.slice(0, 40)}
+              quote={quote}
+              visible={visible}
+              delayMs={i * 90}
+              tone={tone}
+            />
+          ))}
         </div>
 
-        {rest.length > 0 ? (
-          <div
-            className={`mt-14 grid gap-10 border-t pt-12 md:mt-16 md:grid-cols-3 md:gap-8 md:pt-14 ${
-              dark ? "border-white/10" : "border-coop-border"
+        <div
+          className={`mt-8 flex min-h-[9rem] flex-col justify-center rounded-2xl border border-dashed p-6 md:p-8 ${
+            dark ? "border-white/20 bg-white/[0.02]" : "border-gray-300 bg-gray-50/80"
+          }`}
+        >
+          <p
+            className={`text-sm font-medium leading-relaxed ${
+              dark ? "text-white/70" : "text-gray-800"
             }`}
           >
-            {rest.map((quote, i) => (
-              <SecondaryQuote
-                key={quote.text.slice(0, 40)}
-                quote={quote}
-                visible={visible}
-                delayMs={120 + i * 90}
-                tone={tone}
-              />
-            ))}
-          </div>
-        ) : null}
+            Ask &lsquo;who owns this?&rsquo; and get CODEOWNERS + the Slack thread + the last PR —
+            citations in the editor.
+          </p>
+          <p
+            className={`mt-3 font-mono text-xs leading-relaxed ${
+              dark ? "text-white/35" : "text-coop-muted"
+            }`}
+          >
+            Replace this frame with a redacted screenshot or 30-second loom from a design-partner
+            repo.
+          </p>
+        </div>
       </div>
     </section>
   );
