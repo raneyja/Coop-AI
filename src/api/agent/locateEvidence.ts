@@ -10,8 +10,20 @@ import {
   isTestPath
 } from "../../indexing/evidencePathNoise";
 import {
+  contentLooksLikeCreateHandler,
   contentLooksLikeDeclaration,
+  contentLooksLikeRequestAuthEnforcement,
   isApiRejectAsk,
+  isBackendStateDefinitionHit,
+  isBackendStateLocateAsk,
+  isCompoundAuthAndStateLocateAsk,
+  isCreateDefinitionHit,
+  isCreateLocateAsk,
+  isDefinitionLocateAsk,
+  isUnrelatedSerializerForStateLocate,
+  isRequestAuthEnforcementHit,
+  isRequestAuthLocateAsk,
+  pathLooksLikeRequestAuthEnforcement,
   queryHasNamedSymbol,
   queryNamesSourceFile,
   queryRoleHints,
@@ -35,7 +47,7 @@ function locateVerdictApplies(query: string): boolean {
   if (isApiRejectAsk(query)) {
     return false;
   }
-  return queryHasNamedSymbol(query) || queryRoleHints(query).length > 0;
+  return isDefinitionLocateAsk(query);
 }
 
 function askedAboutTests(query: string): boolean {
@@ -234,13 +246,33 @@ function classifyLocateSnippet(path: string, snippet: string, query: string): Lo
   if (hasLanguageMismatch(path, snippet)) {
     return "mention";
   }
-  if (textMentionsQueryRoles(path, query) && hasNativeForExtension(path, snippet)) {
+  if (textMentionsQueryRoles(path, query) && queryRoleHints(query).length > 0 && hasNativeForExtension(path, snippet)) {
     return "implementation";
   }
   if (contentLooksLikeDeclaration(snippet, query)) {
     return "implementation";
   }
   if (namedSymbolInCode(stripStringsAndComments(snippet), query)) {
+    return "implementation";
+  }
+  if (
+    isBackendStateLocateAsk(query) &&
+    isBackendStateDefinitionHit({ fileName: path, content: snippet })
+  ) {
+    return "implementation";
+  }
+  if (
+    isRequestAuthLocateAsk(query) &&
+    (pathLooksLikeRequestAuthEnforcement(path) ||
+      contentLooksLikeRequestAuthEnforcement(snippet) ||
+      isRequestAuthEnforcementHit({ fileName: path, content: snippet }))
+  ) {
+    return "implementation";
+  }
+  if (
+    isCreateLocateAsk(query) &&
+    isCreateDefinitionHit({ fileName: path, content: snippet })
+  ) {
     return "implementation";
   }
   return "uncertain";
@@ -273,8 +305,36 @@ export function classifyLocateRead(input: LocateReadInput): LocateEvidenceClass 
   if (contentLooksLikeDeclaration(code, query)) {
     return "implementation";
   }
-  if (textMentionsQueryRoles(path, query) && hasNativeForExtension(path, code)) {
+  if (
+    queryRoleHints(query).length > 0 &&
+    textMentionsQueryRoles(path, query) &&
+    hasNativeForExtension(path, code)
+  ) {
     return "implementation";
+  }
+  if (
+    isBackendStateLocateAsk(query) &&
+    !isUnrelatedSerializerForStateLocate({ fileName: path, content: body }) &&
+    isBackendStateDefinitionHit({ fileName: path, content: body })
+  ) {
+    return "implementation";
+  }
+  if (
+    isRequestAuthLocateAsk(query) &&
+    isRequestAuthEnforcementHit({ fileName: path, content: body })
+  ) {
+    return "implementation";
+  }
+  if (
+    isCreateLocateAsk(query) &&
+    (isCreateDefinitionHit({ fileName: path, content: body }) ||
+      contentLooksLikeCreateHandler(body))
+  ) {
+    return "implementation";
+  }
+  // Compound asks: a single half is not enough for the whole question.
+  if (isCompoundAuthAndStateLocateAsk(query)) {
+    return "mention";
   }
   return "mention";
 }

@@ -199,6 +199,31 @@ export function locateJobTerms(jobs: ChatIntentJob[] | undefined): string[] {
   );
 }
 
+/**
+ * Index-ready criteria for repo hunt / reject short-circuit.
+ * Prefer per-job `searchCriteria` (quarterback); fall back to locate terms.
+ */
+export function plannedCodeSearchQueries(
+  jobs: ChatIntentJob[] | undefined,
+  max = 8
+): string[] {
+  const locateJobs = (jobs ?? []).filter((job) => job.capability === "locate");
+  const fromCriteria = uniqueTerms(
+    locateJobs.flatMap((job) => job.searchCriteria ?? [])
+  );
+  if (fromCriteria.length > 0) {
+    return fromCriteria.slice(0, Math.max(1, max));
+  }
+  return locateJobTerms(locateJobs).slice(0, Math.max(1, max));
+}
+
+/** True when any locate job carries an explicit write-reject evidence hint. */
+export function jobsHintWriteReject(jobs: ChatIntentJob[] | undefined): boolean {
+  return (jobs ?? []).some(
+    (job) => job.capability === "locate" && job.evidenceClass === "write-reject"
+  );
+}
+
 function matchingIntegrationJobs(
   jobs: ChatIntentJob[] | undefined,
   provider: IntegrationChatProvider

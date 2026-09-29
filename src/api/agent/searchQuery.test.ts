@@ -6,7 +6,12 @@ import {
   COPILOT_T2_ASK,
   COPILOT_ASSIGNEE_REJECT_ASK,
   DOGFOOD_HUNT_QUESTION,
-  DOGFOOD_HUNT_SEARCH_QUERY
+  DOGFOOD_HUNT_SEARCH_QUERY,
+  PLANE_LOCATE_AUTH_AND_STATE_ASK,
+  WORK_ITEM_STATE_LOCATE_ASK,
+  API_KEY_AUTH_LOCATE_ASK,
+  API_AUTH_AND_STATE_SERVER_LOCATE_ASK,
+  API_CREATE_ISSUE_LOCATE_ASK
 } from "./dogfoodContract";
 import {
   extractAgentSearchQuery,
@@ -19,14 +24,30 @@ import {
   contentLooksLikeWriteReject,
   contentLooksLikeUnauthorizedWrite,
   contentLooksLikeStateTransitionReject,
+  contentLooksLikeCreateHandler,
   apiRejectSearchQueries,
+  inventAskDerivedSearchCriteria,
+  mergePlannedAgentSearchQueries,
+  isGenericRejectSlogan,
+  isRejectShapedSearchCriterion,
   contentLooksLikeAskedFieldReject,
   contentLooksLikeWrongFieldReject,
   filterWriteRejectFiles,
   isApiRejectAsk,
+  isApiRejectNoisePath,
+  isActionableApiRejectHit,
+  isRequestAuthLocateAsk,
+  isBackendStateLocateAsk,
+  isBackendStateDefinitionHit,
+  isCompoundAuthAndStateLocateAsk,
+  isCreateLocateAsk,
+  isCreateDefinitionHit,
+  isNonStateIssueSerializerHit,
+  isUnrelatedSerializerForStateLocate,
   askedRejectFieldTokens,
   askedRejectJobTokens,
   lineNumberOfWriteReject,
+  lineNumberOfCreateHandler,
   pickSearchHitsToRead,
   pickSymbolHitsToRead,
   pickTopSearchHit,
@@ -43,6 +64,20 @@ import {
   textMentionsNamedSymbol,
   textMentionsQueryRoles
 } from "./searchQuery";
+import { stripPleaseOpenAttachedPaths } from "../../chat/customerFacingAnswer";
+import {
+  isClientUiPath,
+  isQueryFilterPath,
+  isSharedTypePackagePath,
+  isEmptyStatePackagePath,
+  isHtmlTemplatePath,
+  isIconOrAssetPath,
+  isMigrationPath
+} from "../../indexing/evidencePathNoise";
+import {
+  classifyLocateRead,
+  locateReadCountsAsGrounding
+} from "./locateEvidence";
 
 let passed = 0;
 let failed = 0;
@@ -893,6 +928,270 @@ test("API-reject hunt is a class: C2, parent, and assignee fields all match", ()
   assert.equal(isApiRejectAsk("Where does the API create an issue?"), false);
 });
 
+test("calm locate with API + work-item is not the ValidationError scavenger hunt", () => {
+  assert.equal(isApiRejectAsk(PLANE_LOCATE_AUTH_AND_STATE_ASK), false);
+  assert.equal(isApiRejectAsk(WORK_ITEM_STATE_LOCATE_ASK), false);
+  assert.equal(isApiRejectAsk(DOGFOOD_HUNT_QUESTION), false);
+
+  const planePrimary = extractAgentSearchQuery(PLANE_LOCATE_AUTH_AND_STATE_ASK);
+  assert.equal(
+    /^validationerror$/i.test(planePrimary),
+    false,
+    `plane locate primary must not be ValidationError, got ${planePrimary}`
+  );
+  const planeFallbacks = fallbackAgentSearchQueries(PLANE_LOCATE_AUTH_AND_STATE_ASK);
+  const planeBlob = [planePrimary, ...planeFallbacks].join(" ").toLowerCase();
+  assert.equal(
+    planeFallbacks[0]?.toLowerCase() === "validationerror",
+    false,
+    `plane locate must not lead with ValidationError, got ${planeFallbacks.join(", ")}`
+  );
+  assert.equal(
+    /\bvalidationerror\b/.test(planeBlob),
+    false,
+    `plane locate must not hunt ValidationError, got ${planeFallbacks.join(", ")}`
+  );
+  assert.equal(
+    /\b(auth|authentication|api\s*key)\b/.test(planeBlob),
+    true,
+    `plane locate must search auth / API key, got ${planePrimary} / ${planeFallbacks.join(", ")}`
+  );
+  assert.equal(
+    /\b(issue|state)\b/.test(planeBlob),
+    true,
+    `plane locate must still search issue/state, got ${planeFallbacks.join(", ")}`
+  );
+
+  const stateFallbacks = fallbackAgentSearchQueries(WORK_ITEM_STATE_LOCATE_ASK);
+  assert.equal(
+    stateFallbacks.some((q) => /validate_state|invalid state|ValidationError|state validation/.test(q)),
+    false,
+    `calm work-item locate must not use reject slogans, got ${stateFallbacks.join(", ")}`
+  );
+  assert.equal(
+    stateFallbacks.some((q) => /issue state|issue\b|class State|state model/.test(q)),
+    true,
+    `calm work-item locate should map to issue/state, got ${stateFallbacks.join(", ")}`
+  );
+});
+
+test("client UI path class covers hooks/stores, not API trees", () => {
+  assert.equal(isClientUiPath("apps/space/hooks/store/use-state.ts"), true);
+  assert.equal(isClientUiPath("packages/ui/src/components/Button.tsx"), true);
+  assert.equal(isClientUiPath("web/hooks/use-session.ts"), true);
+  assert.equal(
+    isClientUiPath("apps/api/plane/api/middleware/api_authentication.py"),
+    false
+  );
+  assert.equal(isClientUiPath("apps/api/plane/db/models/state.py"), false);
+});
+
+test("C2 skips product-UI hooks/stores and never reads them over a server reject", () => {
+  const ask = COPILOT_C2_ASK;
+  assert.equal(
+    shouldSkipEvidencePath("apps/space/hooks/store/use-state.ts", ask),
+    true
+  );
+  assert.equal(
+    shouldSkipEvidencePath("apps/space/hooks/store/use-state.ts", "Where is useState defined?"),
+    false
+  );
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "apps/space/hooks/store/use-state.ts",
+        lineNumber: 4,
+        content: 'const state = get("state");\nexport const useProjectState = () => state;',
+        score: 0.99
+      },
+      {
+        fileName: "apps/api/issues/serializers/work_item.py",
+        lineNumber: 40,
+        content:
+          'raise serializers.ValidationError("State is not valid please pass a valid state_id")',
+        score: 0.2
+      }
+    ],
+    2,
+    ask
+  );
+  assert.equal(picked[0]?.fileName, "apps/api/issues/serializers/work_item.py");
+  assert.equal(
+    picked.some((hit) => /hooks\/store|use-state/.test(hit.fileName)),
+    false
+  );
+});
+
+test("API key / request-auth locate prefers enforcement over config and secret gates", () => {
+  const ask = API_KEY_AUTH_LOCATE_ASK;
+  assert.equal(isRequestAuthLocateAsk(ask), true);
+  assert.equal(isApiRejectAsk(ask), false);
+  assert.equal(extractAgentSearchQuery(ask), "APIKeyAuthentication");
+  assert.equal(
+    shouldSkipEvidencePath("apps/web/core/hooks/use-keypress.tsx", ask),
+    true
+  );
+  assert.equal(
+    shouldSkipEvidencePath("apps/api/instance_config_variables/core.py", ask),
+    true
+  );
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "apps/api/instance_config_variables/core.py",
+        lineNumber: 1,
+        content: 'INSTANCE_CONFIG = {"API_KEY": "api_key"}',
+        score: 0.99
+      },
+      {
+        fileName: "apps/live/src/auth-middleware.ts",
+        lineNumber: 10,
+        content:
+          'export function requireSecretKey(req) {\n  if (!req.headers["x-secret"]) throw new Error("missing");\n}',
+        score: 0.95
+      },
+      {
+        fileName: "apps/api/middleware/api_authentication.py",
+        lineNumber: 12,
+        content:
+          "class APIKeyAuthentication:\n    def authenticate(self, request):\n        return True",
+        score: 0.35
+      }
+    ],
+    2,
+    ask
+  );
+  assert.equal(picked.length, 1);
+  assert.equal(picked[0]?.fileName, "apps/api/middleware/api_authentication.py");
+});
+
+test("backend work-item state locate prefers server state paths over UI hooks", () => {
+  const ask = WORK_ITEM_STATE_LOCATE_ASK;
+  assert.equal(isBackendStateLocateAsk(ask), true);
+  assert.equal(isApiRejectAsk(ask), false);
+  assert.equal(extractAgentSearchQuery(ask), "class State");
+  assert.equal(
+    shouldSkipEvidencePath("apps/space/hooks/store/use-state.ts", ask),
+    true
+  );
+  assert.equal(
+    shouldSkipEvidencePath(
+      "apps/web/core/components/power-k/ui/pages/context-based/work-item/commands.ts",
+      ask
+    ),
+    true
+  );
+  assert.equal(
+    shouldSkipEvidencePath("apps/api/plane/seeds/data/issues.json", ask),
+    true
+  );
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "apps/space/hooks/store/use-state.ts",
+        lineNumber: 1,
+        content: "export const useStates = () => store;",
+        score: 0.99
+      },
+      {
+        fileName: "apps/web/core/components/work-item/commands.ts",
+        lineNumber: 198,
+        content: "handleUpdateEntity({ state_id: stateId });",
+        score: 0.95
+      },
+      {
+        fileName: "apps/api/plane/seeds/data/issues.json",
+        lineNumber: 4,
+        content: '"state_id": 3,',
+        score: 0.97
+      },
+      {
+        fileName: "apps/api/app/serializers/issue.py",
+        lineNumber: 728,
+        content: "comment_html = serializers.CharField()",
+        score: 0.9
+      },
+      {
+        fileName: "apps/api/db/models/state.py",
+        lineNumber: 14,
+        content: "class State(BaseModel):\n    name = models.CharField()",
+        score: 0.3
+      }
+    ],
+    2,
+    ask
+  );
+  assert.equal(picked[0]?.fileName, "apps/api/db/models/state.py");
+  assert.equal(
+    picked.some((hit) => /hooks\/|commands\.ts|seeds\//.test(hit.fileName)),
+    false
+  );
+  assert.deepEqual(
+    pickSearchHitsToRead(
+      [
+        {
+          fileName: "apps/api/plane/seeds/data/issues.json",
+          lineNumber: 4,
+          content: '"state_id": 3,',
+          score: 0.99
+        }
+      ],
+      2,
+      ask
+    ),
+    []
+  );
+});
+
+test("compound auth + states locate keeps enforcement and a state definition", () => {
+  const ask = API_AUTH_AND_STATE_SERVER_LOCATE_ASK;
+  assert.equal(isRequestAuthLocateAsk(ask), true);
+  assert.equal(isBackendStateLocateAsk(ask), true);
+  assert.equal(isApiRejectAsk(ask), false);
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "apps/live/src/auth-middleware.ts",
+        lineNumber: 10,
+        content: "export function requireSecretKey(req) { return true; }",
+        score: 0.99
+      },
+      {
+        fileName: "apps/space/hooks/store/use-state.ts",
+        lineNumber: 1,
+        content: "export const useStates = () => store;",
+        score: 0.98
+      },
+      {
+        fileName: "apps/api/middleware/api_authentication.py",
+        lineNumber: 12,
+        content: "class APIKeyAuthentication:\n    def authenticate(self, request):\n        return True",
+        score: 0.4
+      },
+      {
+        fileName: "apps/api/db/models/state.py",
+        lineNumber: 14,
+        content: "class State(BaseModel):\n    name = models.CharField()",
+        score: 0.35
+      }
+    ],
+    3,
+    ask
+  );
+  assert.equal(
+    picked.some((hit) => hit.fileName.includes("api_authentication.py")),
+    true
+  );
+  assert.equal(
+    picked.some((hit) => hit.fileName.includes("state.py")),
+    true
+  );
+  assert.equal(
+    picked.some((hit) => /hooks\/store|auth-middleware/.test(hit.fileName)),
+    false
+  );
+});
+
 test("T2 hunt searches parent field access, not bare issue_id", () => {
   const primary = extractAgentSearchQuery(COPILOT_T2_ASK);
   assert.match(primary, /parent/i);
@@ -912,6 +1211,183 @@ test("T2 hunt searches parent field access, not bare issue_id", () => {
     apiRejectSearchQueries(COPILOT_T2_ASK).some((q) => /get\("parent"\)/.test(q)),
     true
   );
+});
+
+test("planned quarterback criteria run before slogan backup", () => {
+  const planned = ["parent not in this project", "Parent is not valid issue_id"];
+  const merged = mergePlannedAgentSearchQueries({
+    userMessage: COPILOT_T2_ASK,
+    planned,
+    max: 12
+  });
+  assert.equal(merged[0], planned[0]);
+  assert.equal(merged[1], planned[1]);
+  assert.ok(
+    merged.some((q) => /get\("parent"\)/.test(q)),
+    "slogan backup still pads after planned"
+  );
+});
+
+test("invent and merge never lead with reject-a-bad slogans", () => {
+  for (const ask of [COPILOT_T2_ASK, COPILOT_C2_ASK]) {
+    const invented = inventAskDerivedSearchCriteria(ask);
+    assert.equal(
+      invented.some((q) => isGenericRejectSlogan(q)),
+      false,
+      `invent must not emit slogans for: ${ask.slice(0, 40)}… got ${invented.join(" | ")}`
+    );
+    const merged = mergePlannedAgentSearchQueries({ userMessage: ask, planned: [], max: 8 });
+    assert.equal(merged.some((q) => isGenericRejectSlogan(q)), false);
+    assert.equal(
+      /^rejects?\s+a\s+bad/i.test(merged[0] ?? ""),
+      false,
+      `first merge query must not be reject-a-bad, got ${merged[0]}`
+    );
+  }
+  const t2Merged = mergePlannedAgentSearchQueries({
+    userMessage: COPILOT_T2_ASK,
+    planned: [],
+    max: 8
+  });
+  assert.ok(
+    t2Merged.slice(0, 4).some((q) => /parent|ValidationError|is not valid/i.test(q)),
+    `T2 should lead with parent/ValidationError shape, got ${t2Merged.slice(0, 4).join(", ")}`
+  );
+  const c2Merged = mergePlannedAgentSearchQueries({
+    userMessage: COPILOT_C2_ASK,
+    planned: [],
+    max: 8
+  });
+  assert.ok(
+    c2Merged.slice(0, 4).some((q) => /state|transition|ValidationError|out of backlog/i.test(q)),
+    `C2 should lead with state/transition shape, got ${c2Merged.slice(0, 4).join(", ")}`
+  );
+});
+
+test("reject hunt ignores locate-only planned criteria like work item state", () => {
+  assert.equal(isRejectShapedSearchCriterion("work item state"), false);
+  assert.equal(isRejectShapedSearchCriterion("rejects a bad transition"), false);
+  assert.equal(isRejectShapedSearchCriterion("ValidationError state"), true);
+  assert.equal(isRejectShapedSearchCriterion('get("state_id")'), true);
+  const merged = mergePlannedAgentSearchQueries({
+    userMessage: COPILOT_C2_ASK,
+    planned: ["work item state", "rejects a bad transition", "ValidationError state"],
+    max: 8
+  });
+  assert.equal(merged.includes("work item state"), false);
+  assert.equal(merged.includes("rejects a bad transition"), false);
+  assert.equal(merged[0], "ValidationError state");
+});
+
+test("novel T2 paraphrase invents ask-derived criteria without a new slogan", () => {
+  const paraphrase =
+    "API 400 when the parent issue isn't in this project — where is that rejected?";
+  assert.equal(isApiRejectAsk(paraphrase), true);
+  const invented = inventAskDerivedSearchCriteria(paraphrase);
+  assert.ok(
+    invented.some((q) => /isn'?t in this project|not in this project|parent/i.test(q)),
+    `expected ask-derived parent/project fragment, got ${invented.join(" | ")}`
+  );
+  const merged = mergePlannedAgentSearchQueries({
+    userMessage: paraphrase,
+    planned: [],
+    max: 12
+  });
+  assert.ok(merged.length > 0);
+  assert.ok(
+    merged.slice(0, 4).some((q) => /parent|project|ValidationError|is not valid/i.test(q)),
+    `fail-open merge should lead with ask invent or field criteria, got ${merged.slice(0, 4).join(", ")}`
+  );
+});
+
+test("C2 skips shared types packages, utils filters, and non-actionable symbols", () => {
+  const ask = COPILOT_C2_ASK;
+  assert.equal(isSharedTypePackagePath("packages/types/src/collaboration.ts"), true);
+  assert.equal(isQueryFilterPath("apps/api/plane/utils/issue_filters.py"), true);
+  assert.equal(shouldSkipEvidencePath("packages/types/src/collaboration.ts", ask), true);
+  assert.equal(shouldSkipEvidencePath("apps/api/plane/utils/issue_filters.py", ask), true);
+  assert.equal(
+    isActionableApiRejectHit({
+      fileName: "apps/api/plane/utils/issue_filters.py",
+      content: "def filter_state_group(self, queryset, name, value):"
+    }),
+    false
+  );
+  assert.equal(
+    isActionableApiRejectHit({
+      fileName: "apps/api/plane/app/serializers/issue.py",
+      content: "state = serializers.PrimaryKeyRelatedField"
+    }),
+    true
+  );
+  const symbols = pickSymbolHitsToRead(
+    [
+      {
+        file: "packages/types/src/collaboration.ts",
+        line: 40,
+        symbol: "state",
+        displayName: "state",
+        kind: "property"
+      },
+      {
+        file: "apps/api/plane/app/serializers/issue.py",
+        line: 100,
+        symbol: "state",
+        displayName: "state",
+        kind: "field"
+      }
+    ],
+    5,
+    ask
+  );
+  assert.equal(
+    symbols.some((s) => /collaboration\.ts$/.test(s.file)),
+    false
+  );
+  assert.ok(symbols.some((s) => /serializers\/issue\.py$/.test(s.file)));
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "packages/types/src/collaboration.ts",
+        lineNumber: 40,
+        content: "state?: string;",
+        score: 0.99
+      },
+      {
+        fileName: "apps/web/core/components/issues/issue-detail/title-update/debounce.ts",
+        lineNumber: 12,
+        content: "const [state, setState]",
+        score: 0.95
+      },
+      {
+        fileName: "apps/api/plane/utils/issue_filters.py",
+        lineNumber: 80,
+        content: "def filter_state_group(self, queryset, name, value):",
+        score: 0.9
+      },
+      {
+        fileName: "apps/api/plane/app/serializers/issue.py",
+        lineNumber: 790,
+        content:
+          'raise serializers.ValidationError({"state_id": "State is not valid"})',
+        score: 0.5
+      }
+    ],
+    5,
+    ask
+  );
+  assert.equal(picked.length, 1);
+  assert.equal(picked[0]?.fileName, "apps/api/plane/app/serializers/issue.py");
+});
+
+test("empty planned criteria fail open into invent + fallback", () => {
+  const merged = mergePlannedAgentSearchQueries({
+    userMessage: COPILOT_T2_ASK,
+    planned: undefined,
+    max: 8
+  });
+  assert.ok(merged.length >= 3);
+  assert.ok(merged.some((q) => /parent/i.test(q)));
 });
 
 test("API-reject hunts do not latch *_id as a named symbol", () => {
@@ -1249,6 +1725,275 @@ test("lineNumberOfCallerUse returns the use line, not the declaration", () => {
   const def = "export function requireAuth(request) {\n  return Boolean(request.auth);\n}\n";
   assert.equal(lineNumberOfCallerUse(handler, ask, "requireAuth"), 2);
   assert.equal(lineNumberOfCallerUse(def, ask, "requireAuth"), undefined);
+});
+
+test("L3: defined-on-server compound is auth+state locate, not reject", () => {
+  const ask = API_AUTH_AND_STATE_SERVER_LOCATE_ASK;
+  assert.equal(isCompoundAuthAndStateLocateAsk(ask), true);
+  assert.equal(isBackendStateLocateAsk(ask), true);
+  assert.equal(isRequestAuthLocateAsk(ask), true);
+  assert.equal(isApiRejectAsk(ask), false);
+  assert.equal(isCreateLocateAsk(ask), false);
+});
+
+test("L3: comment_html issue serializer is not state definition evidence", () => {
+  const ask = API_AUTH_AND_STATE_SERVER_LOCATE_ASK;
+  const htmlValidate = [
+    "def validate(self, data):",
+    "    if data.get(\"comment_html\"):",
+    "        raise serializers.ValidationError({\"comment_html\": \"HTML content is not valid\"})",
+    "    return data"
+  ].join("\n");
+  assert.equal(
+    isNonStateIssueSerializerHit({
+      fileName: "apps/api/app/serializers/issue.py",
+      content: htmlValidate
+    }),
+    true
+  );
+  assert.equal(
+    isBackendStateDefinitionHit({
+      fileName: "apps/api/app/serializers/issue.py",
+      content: htmlValidate
+    }),
+    false
+  );
+  assert.equal(
+    locateReadCountsAsGrounding({
+      path: "apps/api/app/serializers/issue.py",
+      body: htmlValidate,
+      query: ask
+    }),
+    false
+  );
+  assert.equal(
+    classifyLocateRead({
+      path: "apps/api/app/serializers/issue.py",
+      body: htmlValidate,
+      query: ask
+    }),
+    "mention"
+  );
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "apps/api/middleware/api_authentication.py",
+        lineNumber: 12,
+        content:
+          "class APIKeyAuthentication:\n    def authenticate(self, request):\n        return True",
+        score: 0.4
+      },
+      {
+        fileName: "apps/api/app/serializers/issue.py",
+        lineNumber: 728,
+        content: htmlValidate,
+        score: 0.95
+      },
+      {
+        fileName: "apps/api/app/serializers/state.py",
+        lineNumber: 10,
+        content: "class StateSerializer(serializers.ModelSerializer):\n    class Meta:\n        model = State",
+        score: 0.3
+      }
+    ],
+    3,
+    ask
+  );
+  assert.equal(
+    picked.some((hit) => hit.fileName.includes("api_authentication.py")),
+    true
+  );
+  assert.equal(
+    picked.some((hit) => hit.fileName.includes("serializers/state.py")),
+    true
+  );
+  assert.equal(
+    picked.some((hit) => hit.fileName.includes("serializers/issue.py")),
+    false
+  );
+});
+
+test("L3: auth alone without state definition must not satisfy compound pick padding", () => {
+  const ask = API_AUTH_AND_STATE_SERVER_LOCATE_ASK;
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "apps/api/middleware/api_authentication.py",
+        lineNumber: 12,
+        content:
+          "class APIKeyAuthentication:\n    def authenticate(self, request):\n        return True",
+        score: 0.5
+      },
+      {
+        fileName: "apps/api/app/serializers/issue.py",
+        lineNumber: 728,
+        content: "comment_html = serializers.CharField()\ndef validate(self, data): return data",
+        score: 0.9
+      }
+    ],
+    3,
+    ask
+  );
+  assert.equal(picked.length, 1);
+  assert.equal(picked[0]?.fileName, "apps/api/middleware/api_authentication.py");
+});
+
+test("C2: reject hunt skips migrations, icons, empty-state, seeds, OpenAPI, HTML", () => {
+  const ask = COPILOT_C2_ASK;
+  assert.equal(isMigrationPath("apps/api/db/migrations/0112_alter_state.py"), true);
+  assert.equal(isIconOrAssetPath("packages/ui/icons/done-icon.tsx"), true);
+  assert.equal(isEmptyStatePackagePath("packages/ui/empty-state/types.ts"), true);
+  assert.equal(isHtmlTemplatePath("apps/api/templates/csrf_failure.html"), true);
+  assert.equal(isApiRejectNoisePath("apps/api/db/migrations/0112_alter_state.py"), true);
+  assert.equal(shouldSkipEvidencePath("apps/api/db/migrations/0112_alter_state.py", ask), true);
+  assert.equal(shouldSkipEvidencePath("packages/ui/icons/done-icon.tsx", ask), true);
+  assert.equal(shouldSkipEvidencePath("packages/ui/empty-state/types.ts", ask), true);
+  assert.equal(shouldSkipEvidencePath("apps/api/bgtasks/workspace_seed_task.py", ask), true);
+  assert.equal(shouldSkipEvidencePath("apps/api/bgtasks/dummy_data_task.py", ask), true);
+  assert.equal(shouldSkipEvidencePath("apps/api/plane/settings/openapi/__init__.py", ask), true);
+  assert.equal(shouldSkipEvidencePath("apps/api/templates/csrf_failure.html", ask), true);
+  assert.equal(shouldSkipEvidencePath("apps/api/templates/notification.html", ask), true);
+  assert.equal(shouldSkipEvidencePath("packages/types/src/collaboration.ts", ask), true);
+  assert.equal(shouldSkipEvidencePath("apps/api/plane/utils/issue_filters.py", ask), true);
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "packages/ui/icons/done-icon.tsx",
+        lineNumber: 1,
+        content: 'export const DoneIcon = () => null; // state',
+        score: 0.99
+      },
+      {
+        fileName: "packages/ui/empty-state/types.ts",
+        lineNumber: 1,
+        content: "export type EmptyState = { title: string };",
+        score: 0.98
+      },
+      {
+        fileName: "apps/api/bgtasks/workspace_seed_task.py",
+        lineNumber: 1,
+        content: "def seed_states(): pass",
+        score: 0.97
+      },
+      {
+        fileName: "apps/api/db/migrations/0112_alter_state.py",
+        lineNumber: 1,
+        content: "class Migration: pass",
+        score: 0.96
+      },
+      {
+        fileName: "apps/api/settings/openapi/__init__.py",
+        lineNumber: 1,
+        content: "openapi = {}",
+        score: 0.95
+      },
+      {
+        fileName: "apps/api/templates/csrf_failure.html",
+        lineNumber: 1,
+        content: "<html>csrf</html>",
+        score: 0.94
+      },
+      {
+        fileName: "apps/api/issues/serializers/work_item.py",
+        lineNumber: 40,
+        content:
+          'raise serializers.ValidationError("State is not valid please pass a valid state_id")',
+        score: 0.2
+      }
+    ],
+    2,
+    ask
+  );
+  assert.equal(picked[0]?.fileName, "apps/api/issues/serializers/work_item.py");
+  assert.equal(
+    picked.some((hit) =>
+      /icon|empty-state|seed_task|migrations|openapi|csrf_failure/.test(hit.fileName)
+    ),
+    false
+  );
+});
+
+test("Create locate prefers ViewSet/create serializer and jumps to create line", () => {
+  const ask = API_CREATE_ISSUE_LOCATE_ASK;
+  assert.equal(isCreateLocateAsk(ask), true);
+  assert.equal(isApiRejectAsk(ask), false);
+  assert.equal(extractAgentSearchQuery(ask), "IssueCreateSerializer");
+  const viewBody = [
+    "class IssueViewSet(viewsets.ModelViewSet):",
+    "    serializer_class = IssueSerializer",
+    "",
+    "    def create(self, request, *args, **kwargs):",
+    "        return super().create(request, *args, **kwargs)",
+    "",
+    "    def perform_create(self, serializer):",
+    "        serializer.save()"
+  ].join("\n");
+  assert.equal(contentLooksLikeCreateHandler(viewBody), true);
+  assert.equal(
+    isCreateDefinitionHit({
+      fileName: "apps/api/app/views/issue/base.py",
+      content: viewBody
+    }),
+    true
+  );
+  assert.equal(lineNumberOfCreateHandler(viewBody), 4);
+  const picked = pickSearchHitsToRead(
+    [
+      {
+        fileName: "apps/web/hooks/use-create-issue.ts",
+        lineNumber: 1,
+        content: "export function useCreateIssue() {}",
+        score: 0.99
+      },
+      {
+        fileName: "apps/api/tests/test_issue_create.py",
+        lineNumber: 1,
+        content: "def test_create_issue(): pass",
+        score: 0.9
+      },
+      {
+        fileName: "apps/api/app/views/issue/base.py",
+        lineNumber: 1,
+        content: viewBody,
+        score: 0.4
+      },
+      {
+        fileName: "apps/api/app/serializers/issue.py",
+        lineNumber: 20,
+        content: "class IssueCreateSerializer(serializers.ModelSerializer):\n    pass",
+        score: 0.35
+      }
+    ],
+    2,
+    ask
+  );
+  assert.equal(
+    picked.some((hit) => hit.fileName.includes("views/issue/base.py")),
+    true
+  );
+  assert.equal(
+    picked.some((hit) => /hooks\/|tests\//.test(hit.fileName)),
+    false
+  );
+  assert.equal(
+    locateReadCountsAsGrounding({
+      path: "apps/api/app/views/issue/base.py",
+      body: viewBody,
+      query: ask
+    }),
+    true
+  );
+});
+
+test("Create finish honesty strips please-open for an already-read path", () => {
+  const answer =
+    "Create lives on IssueViewSet. Please open apps/api/app/views/issue/base.py for me to see create.";
+  const cleaned = stripPleaseOpenAttachedPaths(answer, [
+    "apps/api/app/views/issue/base.py"
+  ]);
+  assert.match(cleaned, /IssueViewSet/);
+  assert.doesNotMatch(cleaned, /please open/i);
+  assert.doesNotMatch(cleaned, /for me/i);
 });
 
 console.log(`\nsearchQuery: ${passed}/${passed + failed} tests passed`);

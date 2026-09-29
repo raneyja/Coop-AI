@@ -1,13 +1,18 @@
 import {
   isBarrelPath,
   isClientUiPath,
+  isEmptyStatePackagePath,
   isGeneratedOrVendorPath,
+  isHtmlTemplatePath,
+  isIconOrAssetPath,
   isLocaleCatalogPath,
+  isMigrationPath,
   isMutationHandlerPath,
   isSchemaCatalogPath,
   isSeedOrFixturePath,
   isDocOrSpecPath,
   isQueryFilterPath,
+  isSharedTypePackagePath,
   isServerWritePath,
   isTestPath,
   normalizePath
@@ -225,6 +230,22 @@ export function extractAgentSearchQuery(userMessage: string): string {
     }
   }
 
+  // Create-issue locate: land on ViewSet/create serializer, not reject slogans.
+  if (isCreateLocateAsk(trimmed)) {
+    return clip("IssueCreateSerializer");
+  }
+
+  // Calm backend-state locate: "work-item states live backend" floods issue seeds.
+  // Lead with the model/class name repos actually use.
+  if (isBackendStateLocateAsk(trimmed)) {
+    return clip("class State");
+  }
+
+  // API key / request-auth locate: prefer the Authentication class over config catalogs.
+  if (isApiKeyRequestAuthLocateAsk(trimmed)) {
+    return clip("APIKeyAuthentication");
+  }
+
   const identifier = firstIdentifier(trimmed);
   if (identifier && !(isApiRejectAsk(trimmed) && isApiFieldIdToken(identifier))) {
     return clip(identifier);
@@ -323,6 +344,39 @@ export function shouldSkipEvidencePath(fileName: string, userMessage?: string): 
     return true;
   }
   if (userMessage && isApiRejectAsk(userMessage) && isClientUiPath(fileName)) {
+    return true;
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && isApiRejectNoisePath(fileName)) {
+    return true;
+  }
+  if (userMessage && isBackendStateLocateAsk(userMessage) && isClientUiPath(fileName)) {
+    return true;
+  }
+  if (
+    userMessage &&
+    isBackendStateLocateAsk(userMessage) &&
+    (isSeedOrFixturePath(fileName) || isDocOrSpecPath(fileName))
+  ) {
+    return true;
+  }
+  if (userMessage && isRequestAuthLocateAsk(userMessage) && isClientUiPath(fileName)) {
+    return true;
+  }
+  if (userMessage && isRequestAuthLocateAsk(userMessage) && pathLooksLikeConfigCatalog(fileName)) {
+    return true;
+  }
+  if (userMessage && isCreateLocateAsk(userMessage) && isClientUiPath(fileName)) {
+    return true;
+  }
+  if (
+    userMessage &&
+    isCreateLocateAsk(userMessage) &&
+    (isSeedOrFixturePath(fileName) ||
+      isDocOrSpecPath(fileName) ||
+      isMigrationPath(fileName) ||
+      isHtmlTemplatePath(fileName) ||
+      isIconOrAssetPath(fileName))
+  ) {
     return true;
   }
   if (userMessage && isApiRejectAsk(userMessage) && isSchemaCatalogPath(fileName)) {
@@ -436,6 +490,148 @@ export function fallbackAgentSearchQueries(userMessage: string): string[] {
     }
   }
   return unique.slice(0, MAX_FALLBACK_QUERIES);
+}
+
+/**
+ * Ask-derived index queries from THIS paste's wording — not a fixed slogan bank.
+ * Prefer distinctive error fragments the user actually wrote. Never lead with
+ * English slogans like "reject a bad X" (those match noise, not ValidationError).
+ */
+export function inventAskDerivedSearchCriteria(userMessage: string): string[] {
+  const text = userMessage.replace(/\s+/g, " ").trim();
+  if (text.length < 8) {
+    return [];
+  }
+  const unique: string[] = [];
+  const push = (candidate: string | undefined): void => {
+    const clipped = clip(candidate ?? "");
+    if (!clipped || clipped.length < 3) {
+      return;
+    }
+    if (isGenericRejectSlogan(clipped)) {
+      return;
+    }
+    if (unique.some((seen) => seen.toLowerCase() === clipped.toLowerCase())) {
+      return;
+    }
+    unique.push(clipped);
+  };
+
+  for (const match of text.matchAll(/"([^"]{3,80})"|`([^`]{3,80})`/g)) {
+    push(match[1] ?? match[2]);
+  }
+
+  // Distinctive situational / error fragments — not "reject a bad transition".
+  const fragmentPatterns = [
+    /\b([a-z][a-z0-9_]*(?:\s+[a-z][a-z0-9_]*){0,5}\s+(?:isn'?t|is not|not)\s+(?:in|a|an|valid|on)\s+[a-z][a-z0-9_]*(?:\s+[a-z][a-z0-9_]*){0,3})/gi,
+    /\b((?:must|does not|doesn't)\s+(?:belong|exist|match)(?:\s+[a-z][a-z0-9_]*){0,6})/gi,
+    /\b(out of\s+[a-z][a-z0-9_]+)\b/gi
+  ];
+  for (const pattern of fragmentPatterns) {
+    pattern.lastIndex = 0;
+    for (const match of text.matchAll(pattern)) {
+      push(match[1]);
+    }
+  }
+
+  if (isApiRejectAsk(userMessage)) {
+    for (const field of askedRejectFieldTokens(userMessage)) {
+      const stem = field.replace(/_id$/i, "");
+      if (stem.length >= 3) {
+        push(`${stem} is not valid`);
+        push(`ValidationError ${stem}`);
+        push(`${stem} ValidationError`);
+      }
+    }
+  }
+
+  return unique.slice(0, 8);
+}
+
+/**
+ * English about the bug ("reject a bad parent") — not index-ready. Slogan pad
+ * and ValidationError/get("field") lists cover the code shape instead.
+ */
+export function isGenericRejectSlogan(query: string): boolean {
+  const q = query.replace(/\s+/g, " ").trim().toLowerCase();
+  if (!q) {
+    return false;
+  }
+  if (/^rejects?\s+(a\s+)?bad\b/.test(q)) {
+    return true;
+  }
+  if (/^bad\s+(parent|assignee|state|transition|estimate)(?:\s+\w+){0,3}$/.test(q)) {
+    return true;
+  }
+  if (/^rejects?\s+a\s+bad\s+(parent|assignee|state|transition)/.test(q)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Planned quarterback criteria useful for an API-reject hunt. Calm locate
+ * topics ("work item state") and generic reject slogans are ignored — fail open
+ * to invent + slogan pad.
+ */
+export function isRejectShapedSearchCriterion(query: string): boolean {
+  const q = query.replace(/\s+/g, " ").trim().toLowerCase();
+  if (!q || isGenericRejectSlogan(q)) {
+    return false;
+  }
+  if (
+    /^(work[-\s]?items?|work[-\s]?item\s+states?|api\s*key|request\s+authentication|authentication)\b/.test(
+      q
+    ) &&
+    !/(valid|error|reject|validation|get\(|400)/.test(q)
+  ) {
+    return false;
+  }
+  return (
+    /validationerror|get\s*\(|\["|raise\b|is not valid|not valid|must belong|does not (?:exist|belong)|isn'?t in|\b400\b|invalid\s+\w+|_id\b/.test(
+      q
+    ) ||
+    (/\b(parent|assignee|state|transition|estimate)\b/.test(q) &&
+      /(valid|error|reject|validation|project|belong)/.test(q))
+  );
+}
+
+/**
+ * Quarterback planned criteria first (reject-shaped only on reject asks), then
+ * ask-derived invent, then slogan/fallback pad. Fail-open everywhere.
+ */
+export function mergePlannedAgentSearchQueries(options: {
+  userMessage: string;
+  planned?: string[];
+  max?: number;
+}): string[] {
+  const max = options.max ?? MAX_API_REJECT_FALLBACK_QUERIES;
+  const unique: string[] = [];
+  const push = (candidate: string | undefined): void => {
+    const clipped = clip(candidate ?? "");
+    if (!clipped) {
+      return;
+    }
+    if (unique.some((seen) => seen.toLowerCase() === clipped.toLowerCase())) {
+      return;
+    }
+    unique.push(clipped);
+  };
+
+  const rejectAsk = isApiRejectAsk(options.userMessage);
+  for (const planned of options.planned ?? []) {
+    if (rejectAsk && !isRejectShapedSearchCriterion(planned)) {
+      continue;
+    }
+    push(planned);
+  }
+  for (const invented of inventAskDerivedSearchCriteria(options.userMessage)) {
+    push(invented);
+  }
+  for (const fallback of fallbackAgentSearchQueries(options.userMessage)) {
+    push(fallback);
+  }
+  return unique.slice(0, Math.max(1, max));
 }
 
 /**
@@ -605,6 +801,70 @@ export function pickSearchHitsToRead<T extends RankedSearchHit & { content?: str
       pool = [...mutators, ...pool.filter((hit) => !mutators.includes(hit))];
     }
   }
+  if (userMessage && isCreateLocateAsk(userMessage)) {
+    const creates = pool.filter((hit) => isCreateDefinitionHit(hit));
+    if (creates.length > 0) {
+      pool = creates;
+    } else {
+      pool = pool.filter(
+        (hit) =>
+          !isClientUiPath(hit.fileName) &&
+          !isTestPath(hit.fileName) &&
+          (isServerWritePath(hit.fileName) || isMutationHandlerPath(hit.fileName))
+      );
+    }
+  }
+  if (userMessage && isRequestAuthLocateAsk(userMessage) && isBackendStateLocateAsk(userMessage)) {
+    // Compound Monday ask: keep auth enforcement AND state definition hits together.
+    const enforcement = pool.filter((hit) => isRequestAuthEnforcementHit(hit));
+    const definitions = pool.filter((hit) => isBackendStateDefinitionHit(hit));
+    const preferred = [
+      ...enforcement,
+      ...definitions.filter((hit) => !enforcement.includes(hit))
+    ];
+    if (preferred.length > 0) {
+      // Auth alone must not pad with a wrong-field issue serializer as "state".
+      pool = preferred;
+    } else {
+      pool = pool.filter(
+        (hit) =>
+          !isClientUiPath(hit.fileName) &&
+          !pathLooksLikeConfigCatalog(hit.fileName) &&
+          !contentLooksLikeSecondarySecretGate(hit.content ?? "") &&
+          !isUnrelatedSerializerForStateLocate(hit)
+      );
+    }
+  } else if (userMessage && isRequestAuthLocateAsk(userMessage)) {
+    const enforcement = pool.filter((hit) => isRequestAuthEnforcementHit(hit));
+    if (enforcement.length > 0) {
+      pool = enforcement;
+    } else {
+      pool = pool.filter(
+        (hit) =>
+          !pathLooksLikeConfigCatalog(hit.fileName) &&
+          !contentLooksLikeSecondarySecretGate(hit.content ?? "")
+      );
+    }
+  } else if (userMessage && isBackendStateLocateAsk(userMessage)) {
+    const definitions = pool.filter((hit) => isBackendStateDefinitionHit(hit));
+    if (definitions.length > 0) {
+      pool = definitions;
+    } else {
+      const backend = pool.filter(
+        (hit) =>
+          !isClientUiPath(hit.fileName) &&
+          !isUnrelatedSerializerForStateLocate(hit) &&
+          (isServerWritePath(hit.fileName) ||
+            isSchemaCatalogPath(hit.fileName) ||
+            isMutationHandlerPath(hit.fileName))
+      );
+      if (backend.length > 0) {
+        pool = backend;
+      } else {
+        pool = pool.filter((hit) => !isClientUiPath(hit.fileName));
+      }
+    }
+  }
   if (userMessage) {
     pool = preferredHitsForLocate(pool, userMessage);
   }
@@ -650,9 +910,19 @@ export function pickSymbolHitsToRead<T extends RankedSymbolHit>(
   }
   const ident = normalizeSymbol(extractAgentSearchQuery(userMessage));
   const terms = queryTerms(userMessage);
+  const rejectAsk = isApiRejectAsk(userMessage);
   const scored = symbols
     .map((symbol) => ({ symbol, score: symbolNameScore(symbol, ident, terms, userMessage) }))
-    .filter((entry) => entry.score > 0 && !shouldSkipEvidencePath(entry.symbol.file, userMessage))
+    .filter((entry) => {
+      if (entry.score <= 0 || shouldSkipEvidencePath(entry.symbol.file, userMessage)) {
+        return false;
+      }
+      // Reject hunts: symbol index must not prefer types packages or filter utils.
+      if (rejectAsk) {
+        return isActionableApiRejectHit({ fileName: entry.symbol.file, content: "" });
+      }
+      return true;
+    })
     .sort((a, b) => b.score - a.score);
 
   const picked: T[] = [];
@@ -870,6 +1140,15 @@ export function namedSymbolKeys(userMessage: string): string[] {
   }
   // On-call API reject: issue_id is the field, not a C1-style symbol latch.
   if (isApiRejectAsk(userMessage) && isApiFieldIdToken(primary)) {
+    return [];
+  }
+  // Create locate primary is a synthetic alias (IssueCreateSerializer), not a
+  // symbol the user typed — do not require it in every read body.
+  if (isCreateLocateAsk(userMessage)) {
+    return [];
+  }
+  // Calm state/auth locate primaries are aliases too (class State / APIKey…).
+  if (isBackendStateLocateAsk(userMessage) || isApiKeyRequestAuthLocateAsk(userMessage)) {
     return [];
   }
   const keys = new Set<string>([normalizeSymbol(primary)]);
@@ -1099,9 +1378,43 @@ function userAskedAboutLocales(userMessage: string): boolean {
   );
 }
 
-/** On-call paste: API error / write / reject — not board grouping or i18n. */
+/**
+ * Explicit on-call / reject language — not bare “API” or “work-item”.
+ * Locate asks (“where is auth…”, “where do states live”) share those nouns
+ * and must not enter the ValidationError scavenger hunt.
+ */
+function hasExplicitApiRejectSignal(text: string): boolean {
+  return (
+    /\b(4xx|rejects?|rejecting|illegal|invalid)\b/.test(text) ||
+    /\breturns?\s+an?\s+error\b/.test(text) ||
+    /\bcan'?t\b/.test(text) ||
+    /\bcannot\b/.test(text) ||
+    /\b(isn'?t|is not|not valid)\b/.test(text) ||
+    /\bbad\s+[a-z][a-z0-9_]*\b/.test(text) ||
+    /\bvalidationerror\b/.test(text)
+  );
+}
+
+/**
+ * Calm locate / “where does X live” with no reject/error complaint.
+ * Compound Monday asks (auth + work-item states) must stay here.
+ */
+function isLocateWithoutRejectComplaint(text: string): boolean {
+  const locateShaped =
+    /\bwhere\s+(?:is|are|do(?:es)?|can)\b/.test(text) ||
+    /\b(?:defined|lives?|live)\b/.test(text) ||
+    /\bpoint\s+me\s+at\b/.test(text) ||
+    /\bfind\s+(?:the\s+)?(?:existing\s+)?(?:function|file|class|middleware)\b/.test(text);
+  return locateShaped && !hasExplicitApiRejectSignal(text);
+}
+
+/** On-call paste: API error / write / reject — not board grouping, i18n, or calm locate. */
 export function isApiRejectAsk(userMessage: string): boolean {
   const text = userMessage.toLowerCase();
+  // "Where is API key… and where do work-item states live?" is locate, not C2.
+  if (isLocateWithoutRejectComplaint(text)) {
+    return false;
+  }
   const apiOrError = /\b(api|4xx|rejects?|rejecting|illegal|invalid)\b/.test(text);
   const writeOrTransition = /\b(written|writes?|transition|backlog|work[-\s]?item)\b/.test(
     text
@@ -1111,7 +1424,340 @@ export function isApiRejectAsk(userMessage: string): boolean {
     /\b(parent|assignee|estimate)\b/.test(text) ||
     /\bbad\s+[a-z][a-z0-9_]*\b/.test(text) ||
     /\b(isn'?t|is not|not valid)\b/.test(text);
-  return apiOrError && (writeOrTransition || fieldReject);
+  // Bare "api" + "work-item" is not enough — need an explicit reject/error signal
+  // (or a non-locate field-reject paste that already carries isn't/bad/…).
+  if (apiOrError && (writeOrTransition || fieldReject)) {
+    if (/\bapi\b/.test(text) && !hasExplicitApiRejectSignal(text)) {
+      return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Calm locate: where is API key / request authentication defined.
+ * Prefer DRF/Auth middleware enforcement over env catalogs and secondary secret gates.
+ */
+export function isRequestAuthLocateAsk(userMessage: string): boolean {
+  if (isApiRejectAsk(userMessage)) {
+    return false;
+  }
+  const text = userMessage.toLowerCase();
+  return (
+    /\bapi\s*key\b/.test(text) ||
+    /\brequest\s+authentication\b/.test(text) ||
+    (/\bauthenticat/.test(text) && /\b(api|request|key|defined|middleware)\b/.test(text))
+  );
+}
+
+/** Narrower than request-auth: API key / request authentication (not bare middleware hunts). */
+export function isApiKeyRequestAuthLocateAsk(userMessage: string): boolean {
+  if (isApiRejectAsk(userMessage)) {
+    return false;
+  }
+  const text = userMessage.toLowerCase();
+  return /\bapi\s*key\b/.test(text) || /\brequest\s+authentication\b/.test(text);
+}
+
+/**
+ * Calm locate that must ground on an implementation — not seeds, UI, or catalogs.
+ * Used by the agent loop finish gate (same bar as named-symbol / role locates).
+ */
+export function isDefinitionLocateAsk(userMessage: string): boolean {
+  return (
+    isBackendStateLocateAsk(userMessage) ||
+    isRequestAuthLocateAsk(userMessage) ||
+    isCreateLocateAsk(userMessage) ||
+    queryHasNamedSymbol(userMessage) ||
+    queryRoleHints(userMessage).length > 0
+  );
+}
+
+/** Compound auth + work-item/issue state locate — both halves must ground. */
+export function isCompoundAuthAndStateLocateAsk(userMessage: string): boolean {
+  return isRequestAuthLocateAsk(userMessage) && isBackendStateLocateAsk(userMessage);
+}
+
+/**
+ * Calm locate: where does the API create an issue / work item.
+ * Prefer ViewSet create / CreateSerializer — not reject hunts or UI.
+ */
+export function isCreateLocateAsk(userMessage: string): boolean {
+  if (isApiRejectAsk(userMessage)) {
+    return false;
+  }
+  const text = userMessage.toLowerCase();
+  if (!/\bcreates?\b/.test(text) && !/\bcreating\b/.test(text)) {
+    return false;
+  }
+  const resource = /\b(issues?|work[-\s]?items?)\b/.test(text);
+  if (!resource) {
+    return false;
+  }
+  return (
+    /\b(api|endpoint|viewset|serializer|server|backend)\b/.test(text) ||
+    /\bwhere\s+(?:does|do|is|are)\b/.test(text)
+  );
+}
+
+/**
+ * Calm locate: where do work-item / issue states live on the backend/server.
+ * Prefer models/views/serializers — not client hooks/stores/commands.
+ */
+export function isBackendStateLocateAsk(userMessage: string): boolean {
+  if (isApiRejectAsk(userMessage)) {
+    return false;
+  }
+  const text = userMessage.toLowerCase();
+  if (!/\bstates?\b/.test(text)) {
+    return false;
+  }
+  return (
+    /\b(backend|server)\b/.test(text) ||
+    /\bwork[-\s]?items?\b/.test(text) ||
+    /\bissues?\b/.test(text) ||
+    (/\bapi\b/.test(text) && /\b(defined|live|lives)\b/.test(text))
+  );
+}
+
+/** Path looks like request-auth enforcement (Authentication class / auth middleware). */
+export function pathLooksLikeRequestAuthEnforcement(fileName: string): boolean {
+  const n = normalizePath(fileName);
+  const base = n.split("/").pop() ?? "";
+  if (/authentication/.test(base) || /^api_auth/.test(base) || /^auth_middleware\./.test(base)) {
+    return true;
+  }
+  const segments = n.split("/");
+  if (segments.includes("authentication")) {
+    return true;
+  }
+  if (segments.includes("middleware") && /auth/.test(n)) {
+    return true;
+  }
+  if (segments.includes("auth") && isServerWritePath(fileName)) {
+    return true;
+  }
+  return false;
+}
+
+/** Env / instance config catalogs — they list API_KEY names, they do not authenticate. */
+export function pathLooksLikeConfigCatalog(fileName: string): boolean {
+  const n = normalizePath(fileName);
+  return (
+    n.includes("config_variables") ||
+    n.includes("instance_config") ||
+    (n.includes("/config/") && (n.includes("variable") || n.includes("constant"))) ||
+    (n.includes("/settings/") && n.includes("variable"))
+  );
+}
+
+/** Snippet is a primary request-auth class / authenticate() — not a secret-key gate. */
+export function contentLooksLikeRequestAuthEnforcement(content: string): boolean {
+  if (!content) {
+    return false;
+  }
+  return (
+    /\bAPIKeyAuthentication\b/.test(content) ||
+    /\bclass\s+\w*Authentication\b/.test(content) ||
+    /\bdef\s+authenticate\s*\(/.test(content) ||
+    /\bauthenticate\s*\(\s*self\s*,\s*request/.test(content) ||
+    /\bHTTP_X_API_KEY\b/i.test(content) ||
+    /\bX-Api-Key\b/i.test(content)
+  );
+}
+
+/** Secondary service secret gate (requireSecretKey-shaped) — not API request auth. */
+export function contentLooksLikeSecondarySecretGate(content: string): boolean {
+  if (!content || contentLooksLikeRequestAuthEnforcement(content)) {
+    return false;
+  }
+  return /\brequireSecretKey\b|\brequire_secret_key\b|\bSECRET_KEY\b|x-secret-key/i.test(
+    content
+  );
+}
+
+export function isRequestAuthEnforcementHit(hit: {
+  fileName: string;
+  content?: string;
+}): boolean {
+  if (pathLooksLikeConfigCatalog(hit.fileName)) {
+    return false;
+  }
+  if (contentLooksLikeSecondarySecretGate(hit.content ?? "")) {
+    return false;
+  }
+  return (
+    pathLooksLikeRequestAuthEnforcement(hit.fileName) ||
+    contentLooksLikeRequestAuthEnforcement(hit.content ?? "")
+  );
+}
+
+/**
+ * Serializer (or similar mutation handler) whose snippet is not a state
+ * definition — wrong-field validate, or no State class / state path signal.
+ * Used so calm state locate does not latch a generic resource serializer.
+ */
+export function isUnrelatedSerializerForStateLocate(hit: {
+  fileName: string;
+  content?: string;
+}): boolean {
+  const n = normalizePath(hit.fileName);
+  const isSerializer =
+    /(^|\/)serializers?\//.test(n) || /\.serializer\.(py|ts|go|rb)$/.test(n);
+  if (!isSerializer) {
+    return false;
+  }
+  if (isBackendStateDefinitionHitIgnoringSerializerGate(hit)) {
+    return false;
+  }
+  const base = n.split("/").pop() ?? "";
+  if (/^state\./.test(base) || /_state\./.test(base) || n.includes("/state/") || n.includes("/states/")) {
+    return false;
+  }
+  const content = hit.content ?? "";
+  if (
+    /\bclass\s+State\b/.test(content) ||
+    /\bStateSerializer\b/.test(content) ||
+    /\bStateViewSet\b/.test(content) ||
+    /\bclass\s+\w*State(ViewSet|Serializer|Model)?\b/.test(content)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/** Same as isBackendStateDefinitionHit but without the unrelated-serializer gate. */
+function isBackendStateDefinitionHitIgnoringSerializerGate(hit: {
+  fileName: string;
+  content?: string;
+}): boolean {
+  if (isClientUiPath(hit.fileName)) {
+    return false;
+  }
+  const n = normalizePath(hit.fileName);
+  const base = n.split("/").pop() ?? "";
+  const pathAboutState =
+    /^state\./.test(base) ||
+    /_state\./.test(base) ||
+    n.includes("/state/") ||
+    n.includes("/states/");
+  if (
+    pathAboutState &&
+    (isServerWritePath(hit.fileName) ||
+      isSchemaCatalogPath(hit.fileName) ||
+      isMutationHandlerPath(hit.fileName))
+  ) {
+    return true;
+  }
+  const content = hit.content ?? "";
+  if (!content) {
+    return false;
+  }
+  return (
+    /\bclass\s+State\b/.test(content) ||
+    /\bclass\s+\w*State(ViewSet|Serializer|Model)?\b/.test(content) ||
+    /\bStateViewSet\b/.test(content) ||
+    /\bStateSerializer\b/.test(content)
+  );
+}
+
+export function isBackendStateDefinitionHit(hit: {
+  fileName: string;
+  content?: string;
+}): boolean {
+  if (isUnrelatedSerializerForStateLocate(hit)) {
+    return false;
+  }
+  return isBackendStateDefinitionHitIgnoringSerializerGate(hit);
+}
+
+/** @deprecated Use isUnrelatedSerializerForStateLocate — kept as alias for tests. */
+export function isNonStateIssueSerializerHit(hit: {
+  fileName: string;
+  content?: string;
+}): boolean {
+  return isUnrelatedSerializerForStateLocate(hit);
+}
+
+/** Migrations, icons, empty-state packages, HTML templates, shared types — burn reject reads. */
+export function isApiRejectNoisePath(fileName: string): boolean {
+  return (
+    isMigrationPath(fileName) ||
+    isIconOrAssetPath(fileName) ||
+    isEmptyStatePackagePath(fileName) ||
+    isHtmlTemplatePath(fileName) ||
+    isSharedTypePackagePath(fileName)
+  );
+}
+
+/** Snippet shows create / perform_create / CreateSerializer for an issue API. */
+export function contentLooksLikeCreateHandler(content: string): boolean {
+  if (!content) {
+    return false;
+  }
+  return (
+    /\bperform_create\s*\(/.test(content) ||
+    /\b(?:async\s+)?def\s+create\s*\(/.test(content) ||
+    /\b(?:async\s+)?create\s*\(\s*(?:self|req|request|ctx)\b/.test(content) ||
+    /\bclass\s+\w*Create\w*Serializer\b/.test(content) ||
+    /\bIssueCreateSerializer\b/.test(content)
+  );
+}
+
+export function isCreateDefinitionHit(hit: {
+  fileName: string;
+  content?: string;
+}): boolean {
+  if (
+    isClientUiPath(hit.fileName) ||
+    isSeedOrFixturePath(hit.fileName) ||
+    isDocOrSpecPath(hit.fileName) ||
+    isMigrationPath(hit.fileName) ||
+    isHtmlTemplatePath(hit.fileName) ||
+    isTestPath(hit.fileName)
+  ) {
+    return false;
+  }
+  const content = hit.content ?? "";
+  if (contentLooksLikeCreateHandler(content)) {
+    return true;
+  }
+  const n = normalizePath(hit.fileName);
+  if (
+    /\bviewset\b/.test(n) &&
+    (isServerWritePath(hit.fileName) || isMutationHandlerPath(hit.fileName))
+  ) {
+    return /\bcreate\b/.test(content) || /\bIssueViewSet\b/.test(content);
+  }
+  if (
+    /create/.test(n) &&
+    (isServerWritePath(hit.fileName) || isMutationHandlerPath(hit.fileName))
+  ) {
+    return true;
+  }
+  return (
+    /\bclass\s+\w*ViewSet\b/.test(content) &&
+    /\bcreate\b/i.test(content) &&
+    (isServerWritePath(hit.fileName) || isMutationHandlerPath(hit.fileName))
+  );
+}
+
+export function lineNumberOfCreateHandler(content: string): number | undefined {
+  const rows = content.split(/\r?\n/).map((row) => row.replace(/^\d+\|/, ""));
+  const preferred =
+    /\bperform_create\s*\(|\b(?:async\s+)?def\s+create\s*\(|\bclass\s+\w*Create\w*Serializer\b|\bIssueCreateSerializer\b/;
+  for (let i = 0; i < rows.length; i++) {
+    if (preferred.test(rows[i] ?? "")) {
+      return i + 1;
+    }
+  }
+  for (let i = 0; i < rows.length; i++) {
+    if (/\bclass\s+\w*ViewSet\b/.test(rows[i] ?? "")) {
+      return i + 1;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -1575,7 +2221,8 @@ export function isActionableApiRejectHit(hit: {
     isSchemaCatalogPath(hit.fileName) ||
     isClientUiPath(hit.fileName) ||
     isDocOrSpecPath(hit.fileName) ||
-    isQueryFilterPath(hit.fileName)
+    isQueryFilterPath(hit.fileName) ||
+    isApiRejectNoisePath(hit.fileName)
   ) {
     return false;
   }
@@ -1591,12 +2238,16 @@ export function isActionableApiRejectHit(hit: {
   if (contentLooksLikeReadOnlyState(content)) {
     return false;
   }
-  // Views/services without a reject in the snippet are permission checks and
-  // fetches — not the write. Do not spend a read on them.
+  // Views/services without a reject snippet are permission checks — not the write.
   if (isMutationHandlerPath(hit.fileName)) {
     return false;
   }
-  return isServerWritePath(hit.fileName);
+  // Server write trees (e.g. work_item_state.py) stay candidates so the hunt can
+  // open and jump. Exclude utils/helpers — those are grouping/filter helpers.
+  if (isServerWritePath(hit.fileName) && !/(^|\/)(utils|helpers)\//.test(path)) {
+    return true;
+  }
+  return false;
 }
 
 /** Keep only file bodies that actually reject/write — drop OpenAPI and read-only classes. */
@@ -1709,6 +2360,47 @@ function rankHit(hit: RankedSearchHit, terms: string[], userMessage?: string): n
   if (userMessage && isApiRejectAsk(userMessage) && isClientUiPath(hit.fileName)) {
     rank -= 16;
   }
+  if (userMessage && isApiRejectAsk(userMessage) && isApiRejectNoisePath(hit.fileName)) {
+    rank -= 20;
+  }
+  if (userMessage && isRequestAuthLocateAsk(userMessage)) {
+    if (isRequestAuthEnforcementHit(hit)) {
+      rank += 22;
+    }
+    if (pathLooksLikeConfigCatalog(hit.fileName)) {
+      rank -= 20;
+    }
+    if (contentLooksLikeSecondarySecretGate((hit as { content?: string }).content ?? "")) {
+      rank -= 18;
+    }
+  }
+  if (userMessage && isBackendStateLocateAsk(userMessage)) {
+    if (isBackendStateDefinitionHit(hit)) {
+      rank += 22;
+    }
+    if (isNonStateIssueSerializerHit(hit) || isUnrelatedSerializerForStateLocate(hit)) {
+      rank -= 18;
+    }
+    if (isClientUiPath(hit.fileName)) {
+      rank -= 20;
+    } else if (
+      isServerWritePath(hit.fileName) ||
+      isSchemaCatalogPath(hit.fileName) ||
+      isMutationHandlerPath(hit.fileName)
+    ) {
+      rank += 12;
+    }
+  }
+  if (userMessage && isCreateLocateAsk(userMessage)) {
+    if (isCreateDefinitionHit(hit)) {
+      rank += 24;
+    }
+    if (isClientUiPath(hit.fileName) || isTestPath(hit.fileName)) {
+      rank -= 16;
+    } else if (isServerWritePath(hit.fileName) || isMutationHandlerPath(hit.fileName)) {
+      rank += 12;
+    }
+  }
   if (
     userMessage &&
     namedSymbolKeys(userMessage).length > 0 &&
@@ -1777,6 +2469,8 @@ function isSearchablePascal(word: string, text: string): boolean {
 /**
  * English the user typed mapped to words repos actually use.
  * "work item" / backlog / transition → issue / state / workflow.
+ * Reject/validation slogans only when this is an on-call API-reject ask —
+ * calm “where do work-item states live?” must not hunt ValidationError.
  * Repo-agnostic — no product or folder names.
  */
 export function proseLocateSearchAliases(userMessage: string): string[] {
@@ -1797,23 +2491,43 @@ export function proseLocateSearchAliases(userMessage: string): string[] {
         aliases.push(field);
       }
     }
+    if (hasWorkItem || hasTransition) {
+      aliases.push("validate_state");
+      aliases.push("invalid state");
+      aliases.push("state transition");
+      aliases.push("state validation");
+      aliases.push("state_id");
+    }
+    if (hasWorkItem || hasBacklog) {
+      aliases.push("issue state");
+    }
+    aliases.push("ValidationError");
+    return aliases;
   }
-  if (hasWorkItem || hasTransition) {
-    aliases.push("validate_state");
-    aliases.push("invalid state");
-  }
-  if (hasWorkItem || hasBacklog) {
+  // Calm locate: map product English → repo words, not reject slogans.
+  if (isCreateLocateAsk(userMessage)) {
+    aliases.push("IssueCreateSerializer");
+    aliases.push("perform_create");
+    aliases.push("IssueViewSet");
+    aliases.push("create_issue");
+  } else if (isBackendStateLocateAsk(userMessage)) {
+    // Do not lead with bare "issue" — that floods seed/issue rows before State.
+    aliases.push("class State");
+    aliases.push("StateSerializer");
+    aliases.push("state model");
     aliases.push("issue state");
+  } else if (hasWorkItem || hasBacklog) {
+    aliases.push("issue state");
+    aliases.push("issue");
   }
-  if (hasTransition || hasWorkItem) {
+  if (hasTransition) {
     aliases.push("state transition");
   }
-  if (hasWorkItem || hasTransition) {
-    aliases.push("state validation");
-    aliases.push("state_id");
-  }
-  if (isApiRejectAsk(userMessage)) {
-    aliases.push("ValidationError");
+  if (isRequestAuthLocateAsk(userMessage) || /\bauthenticat/i.test(text) || /\bapi\s*key\b/i.test(text)) {
+    aliases.push("authentication");
+    aliases.push("API key");
+    aliases.push("api_authentication");
+    aliases.push("APIKeyAuthentication");
   }
   return aliases;
 }

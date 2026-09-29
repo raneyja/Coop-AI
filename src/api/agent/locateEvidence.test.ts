@@ -109,6 +109,114 @@ test("plane-shaped middleware folder + class is implementation", () => {
   );
 });
 
+test("backend state locate grounds on State model, not seed JSON", () => {
+  const ask = "Where do work-item states live in the backend?";
+  assert.equal(
+    classifyLocateRead({
+      path: "apps/api/db/models/state.py",
+      body: "class State(BaseModel):\n    name = models.CharField()",
+      query: ask
+    }),
+    "implementation"
+  );
+  assert.equal(
+    classifyLocateRead({
+      path: "apps/api/seeds/data/issues.json",
+      body: '[{"id": 1, "state_id": 3}]',
+      query: ask
+    }),
+    "mention"
+  );
+  assert.equal(
+    locateReadCountsAsGrounding({
+      path: "apps/api/db/models/state.py",
+      body: "class State(BaseModel):\n    name = models.CharField()",
+      query: ask
+    }),
+    true
+  );
+  assert.equal(
+    locateReadCountsAsGrounding({
+      path: "apps/api/seeds/data/issues.json",
+      body: '[{"id": 1, "state_id": 3}]',
+      query: ask
+    }),
+    false
+  );
+});
+
+test("API key auth locate grounds on Authentication class", () => {
+  const ask = "Where is API key / request authentication defined in this repo?";
+  assert.equal(
+    classifyLocateRead({
+      path: PLANE_SHAPED_PATH,
+      body: PLANE_SHAPED_BODY,
+      query: ask
+    }),
+    "implementation"
+  );
+  assert.equal(
+    locateReadCountsAsGrounding({
+      path: "web/hooks/use-keypress.tsx",
+      body: "export function useKeypress() {}",
+      query: ask
+    }),
+    false
+  );
+});
+
+test("L3 compound: comment_html validate is mention; StateSerializer grounds", () => {
+  const ask =
+    "Where does the API authenticate requests with an API key, and where are issue/work-item states defined on the server?";
+  const htmlValidate = [
+    "def validate(self, data):",
+    '    if data.get("comment_html"):',
+    '        raise serializers.ValidationError({"comment_html": "HTML content is not valid"})',
+    "    return data"
+  ].join("\n");
+  assert.equal(
+    classifyLocateRead({
+      path: "apps/api/app/serializers/issue.py",
+      body: htmlValidate,
+      query: ask
+    }),
+    "mention"
+  );
+  assert.equal(
+    locateReadCountsAsGrounding({
+      path: "apps/api/app/serializers/state.py",
+      body: "class StateSerializer(serializers.ModelSerializer):\n    pass",
+      query: ask
+    }),
+    true
+  );
+});
+
+test("create locate grounds on ViewSet create, not a mention-only window", () => {
+  const ask = "Where does the API create an issue?";
+  const viewBody = [
+    "class IssueViewSet(viewsets.ModelViewSet):",
+    "    def create(self, request, *args, **kwargs):",
+    "        return super().create(request, *args, **kwargs)"
+  ].join("\n");
+  assert.equal(
+    classifyLocateRead({
+      path: "apps/api/app/views/issue/base.py",
+      body: viewBody,
+      query: ask
+    }),
+    "implementation"
+  );
+  assert.equal(
+    locateReadCountsAsGrounding({
+      path: "apps/api/app/views/issue/base.py",
+      body: viewBody,
+      query: ask
+    }),
+    true
+  );
+});
+
 test("named-symbol implementation only on the export file", () => {
   assert.equal(
     classifyLocateRead({ path: SERVER_TS_PATH, body: SERVER_TS_BODY, query: REQUIRE_AUTH_ASK }),

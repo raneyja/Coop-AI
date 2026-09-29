@@ -1,6 +1,6 @@
 /**
- * Optional cheap-model layer for Chat Intent Planner.
- * Names workflow, tools, and job search terms (the topic in a few words).
+ * Optional cheap-model layer for Chat Intent Planner (intent quarterback).
+ * Names jobs, tools, and index-ready search criteria invented for this ask.
  * Does not search, cite, or answer. Fail-open: any error → undefined
  * (caller keeps the rules plan).
  */
@@ -14,6 +14,7 @@ import {
 import {
   emptyChatIntentPlan,
   type ChatCommandConstraint,
+  type ChatIntentEvidenceClass,
   type ChatIntentJob,
   type ChatIntentJobCapability,
   type ChatIntentPlan,
@@ -41,6 +42,14 @@ const TOOLS = new Set<string>([
 
 const CONFIDENCES = new Set(["high", "medium", "low"]);
 
+const EVIDENCE_CLASSES = new Set<ChatIntentEvidenceClass>([
+  "write-reject",
+  "definition-locate",
+  "decision",
+  "docs",
+  "code-host"
+]);
+
 export function buildChatIntentPlanUserMessage(
   question: string,
   options?: {
@@ -53,15 +62,20 @@ export function buildChatIntentPlanUserMessage(
   const file = options?.activeFile?.trim();
   const connected = (options?.connectedTools ?? []).join("|") || "none";
   const lines = [
-    "Classify this developer question for Coop chat intent planning.",
-    "You name the jobs and the search words. You do not search, cite, or answer.",
+    "You are Coop's intent quarterback. Interpret this developer ask for gather planning.",
+    "You invent jobs and search criteria for THIS ask. You do not search, cite, or answer.",
     "Reply with ONLY a JSON object (no markdown, no prose):",
-    '{"workflow":"none"|"find-owner"|"trace-decision"|"blast-radius"|"understand-repo"|"knowledge-gaps","tools":["jira"|"slack"|"teams"|"confluence"|"notion"|"google-docs"],"confidence":"high"|"medium"|"low","jobs":[{"capability":"locate"|"decision"|"docs"|"code-host","verb":"search"|"latest","terms":["topic"]}]}',
+    '{"workflow":"none","tools":["jira"|"slack"|"teams"|"confluence"|"notion"|"google-docs"],"confidence":"high"|"medium"|"low","purpose":"short done-looks-like","jobs":[{"capability":"locate"|"decision"|"docs"|"code-host","verb":"search"|"latest","terms":["topic"],"searchCriteria":["index query"],"evidenceClass":"write-reject"|"definition-locate"|"decision"|"docs"|"code-host"}]}',
     "Rules:",
     '- Prefer workflow "none". Workflow is only for an explicit slash/Workflows command constraint.',
     "- Do not set blast-radius, find-owner, trace-decision, understand-repo, or knowledge-gaps from plain English.",
     "- Jobs + named tools stay. Compound asks may name tools (e.g. Jira) without a workflow.",
+    "- purpose = one short sentence: what done looks like for this paste.",
     "- jobs[].terms = the topic in a few words. Hyphens become spaces (SQL-injection → SQL injection).",
+    "- For locate/code jobs: jobs[].searchCriteria = 2-6 index-ready queries invented from THIS ask (field names, symbols, ValidationError-shaped phrases, distinctive error wording the user used). Not Slack chit-chat topics.",
+    '- For API error / reject / bad field pastes: evidenceClass "write-reject". searchCriteria MUST be index phrases that hit a server raise/ValidationError/get("field") — never calm locate topics like "work item state" or English slogans like "reject a bad transition".',
+    '- For calm "where is X defined/live" pastes: evidenceClass "definition-locate".',
+    "- Compound pastes → multiple jobs with distinct terms/searchCriteria.",
     "- jobs[].verb = search (topic) or latest (newest items, no topic). Recency words are not the query.",
     "- Recency-only (most recent, latest, last post, newest) with no real topic → verb latest and terms [].",
     "- A real topic (SQL-injection, a ticket key, a file) → verb search with that topic, even if the user also said latest.",
@@ -116,6 +130,7 @@ export function parseChatIntentPlanResponse(
       tools?: unknown;
       confidence?: unknown;
       jobs?: unknown;
+      purpose?: unknown;
     };
     const confidenceRaw =
       typeof parsed.confidence === "string"
@@ -138,6 +153,10 @@ export function parseChatIntentPlanResponse(
       }
     }
     const jobs = parseModelJobs(parsed.jobs);
+    const purpose =
+      typeof parsed.purpose === "string"
+        ? parsed.purpose.replace(/\s+/g, " ").trim().slice(0, 160)
+        : undefined;
 
     if (tools.length === 0 && jobs.length === 0) {
       return emptyChatIntentPlan(focus);
@@ -151,6 +170,7 @@ export function parseChatIntentPlanResponse(
         confidence: confidence === "low" ? "medium" : confidence,
         focus,
         execution: "none",
+        purpose: purpose || undefined,
         reason: jobs.length > 0 ? "model-jobs" : "model-tools"
       },
       connectedTools,
@@ -188,38 +208,74 @@ function parseModelJobs(raw: unknown): ChatIntentJob[] {
     if (!item || typeof item !== "object") {
       continue;
     }
-    const row = item as { capability?: unknown; verb?: unknown; terms?: unknown };
+    const row = item as {
+      capability?: unknown;
+      verb?: unknown;
+      terms?: unknown;
+      searchCriteria?: unknown;
+      evidenceClass?: unknown;
+    };
     if (typeof row.capability !== "string" || !JOB_CAPABILITIES.has(row.capability as ChatIntentJobCapability)) {
       continue;
     }
     const verb = row.verb === "latest" ? "latest" : "search";
-    const terms: string[] = [];
-    if (Array.isArray(row.terms)) {
-      for (const term of row.terms) {
-        if (typeof term !== "string") {
-          continue;
-        }
-        const trimmed = term.replace(/\s+/g, " ").trim();
-        if (trimmed.length >= 2 && trimmed.length <= 48 && trimmed.split(/\s+/).length <= 6) {
-          terms.push(trimmed);
-        }
-      }
-    }
-    if (terms.length === 0 && verb !== "latest") {
+    const terms = parseStringList(row.terms, { maxLen: 48, maxWords: 6 });
+    const searchCriteria = parseStringList(row.searchCriteria, { maxLen: 64, maxWords: 8, maxItems: 8 });
+    const evidenceRaw =
+      typeof row.evidenceClass === "string" ? row.evidenceClass.trim().toLowerCase() : "";
+    const evidenceClass = EVIDENCE_CLASSES.has(evidenceRaw as ChatIntentEvidenceClass)
+      ? (evidenceRaw as ChatIntentEvidenceClass)
+      : undefined;
+    if (terms.length === 0 && verb !== "latest" && searchCriteria.length === 0) {
       continue;
     }
-    jobs.push({
+    const job: ChatIntentJob = {
       capability: row.capability as ChatIntentJobCapability,
-      verb: terms.length > 0 ? "search" : verb,
+      verb: terms.length > 0 || searchCriteria.length > 0 ? "search" : verb,
       terms
-    });
+    };
+    if (searchCriteria.length > 0) {
+      job.searchCriteria = searchCriteria;
+    }
+    if (evidenceClass) {
+      job.evidenceClass = evidenceClass;
+    }
+    jobs.push(job);
   }
   return jobs;
 }
 
+function parseStringList(
+  raw: unknown,
+  options: { maxLen: number; maxWords: number; maxItems?: number }
+): string[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const out: string[] = [];
+  for (const term of raw) {
+    if (typeof term !== "string") {
+      continue;
+    }
+    const trimmed = term.replace(/\s+/g, " ").trim();
+    if (
+      trimmed.length >= 2 &&
+      trimmed.length <= options.maxLen &&
+      trimmed.split(/\s+/).length <= options.maxWords
+    ) {
+      out.push(trimmed);
+    }
+    if (options.maxItems && out.length >= options.maxItems) {
+      break;
+    }
+  }
+  return out;
+}
+
 /**
- * Call the cheap model when rules found nothing, or when a command constraint
- * still needs the interpreter to name the topic. Rules stay the fail-open plan.
+ * Call the cheap quarterback when rules found nothing, when a command constraint
+ * still needs topic terms, or when a locate/change ask needs index criteria
+ * invented for this wording (not a slogan bank).
  */
 export function shouldCallChatIntentModel(
   plan: ChatIntentPlan,
@@ -229,11 +285,23 @@ export function shouldCallChatIntentModel(
   if (constraint && constraint.kind !== "none" && (input?.message?.trim().length ?? 0) >= 8) {
     return true;
   }
+  if (needsCodeCriteriaQuarterback(plan)) {
+    return true;
+  }
   return (
     plan.mode === "none" &&
     (plan.jobs?.length ?? 0) === 0 &&
     (plan.codeIntent?.action ?? "none") === "none"
   );
+}
+
+/** Locate / change asks need invented index criteria even when rules already planned jobs. */
+export function needsCodeCriteriaQuarterback(plan: ChatIntentPlan): boolean {
+  if ((plan.jobs ?? []).some((job) => job.capability === "locate")) {
+    return true;
+  }
+  const action = plan.codeIntent?.action;
+  return action === "locate" || action === "change";
 }
 
 /**
@@ -298,7 +366,8 @@ export async function classifyChatIntentPlan(
       jobs,
       tasks,
       todos: planChatTodos(tasks),
-      tools
+      tools,
+      purpose: plan.purpose
     };
   } catch {
     return undefined;
@@ -316,13 +385,28 @@ function preferModelJobTerms(
     merged.set(job.capability, job);
   }
   for (const job of modelJobs ?? []) {
-    if (job.terms.length > 0) {
-      merged.set(job.capability, { ...job, verb: "search" });
+    const existing = merged.get(job.capability);
+    const hasCriteria = (job.searchCriteria?.length ?? 0) > 0;
+    if (!existing) {
+      if (job.terms.length > 0 || hasCriteria) {
+        merged.set(job.capability, { ...job, verb: "search" });
+      } else if (job.verb === "latest") {
+        merged.set(job.capability, job);
+      }
       continue;
     }
-    if (job.verb === "latest" && !merged.has(job.capability)) {
-      merged.set(job.capability, job);
-    }
+    merged.set(job.capability, {
+      ...existing,
+      terms: job.terms.length > 0 ? job.terms : existing.terms,
+      searchCriteria: hasCriteria ? job.searchCriteria : existing.searchCriteria,
+      evidenceClass: job.evidenceClass ?? existing.evidenceClass,
+      verb:
+        job.terms.length > 0 || hasCriteria
+          ? "search"
+          : job.verb === "latest"
+            ? "latest"
+            : existing.verb
+    });
   }
   return [...merged.values()];
 }

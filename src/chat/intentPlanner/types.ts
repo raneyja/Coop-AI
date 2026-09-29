@@ -29,17 +29,36 @@ export type ChatIntentPlanMode =
 /**
  * One gather job. `capability` selects today's search machine;
  * `verb` is the work to run (search a topic, or list newest items);
- * `terms` are that job's query (empty is valid for `latest`).
+ * `terms` are that job's topic (empty is valid for `latest`);
+ * `searchCriteria` are index-ready queries invented for this ask (code jobs).
  */
 export type ChatIntentJobCapability = "locate" | "decision" | "docs" | "code-host";
 
 /** Shared assignment — not a per-vendor field and not a magic terms[] sentinel. */
 export type ChatIntentJobVerb = "search" | "latest";
 
+/**
+ * Evidence class hint for rails (rank/finish). Not a workflow — never promotes
+ * Blast/Owner/Trace from plain English.
+ */
+export type ChatIntentEvidenceClass =
+  | "write-reject"
+  | "definition-locate"
+  | "decision"
+  | "docs"
+  | "code-host";
+
 export type ChatIntentJob = {
   capability: ChatIntentJobCapability;
   verb?: ChatIntentJobVerb;
   terms: string[];
+  /**
+   * Index-ready search strings invented for this ask (symbols, field names,
+   * ValidationError-shaped phrases). Prefer these over slogan banks when present.
+   */
+  searchCriteria?: string[];
+  /** Hint for hunt/finish rails — never sets execution/workflow. */
+  evidenceClass?: ChatIntentEvidenceClass;
 };
 
 /** One executable step derived from a job (repo hunt, Jira search, …). */
@@ -85,6 +104,11 @@ export type ChatIntentPlan = {
   execution: ChatIntentExecution;
   /** Human-readable reason (debug / activity). */
   reason?: string;
+  /**
+   * Short purpose / done-looks-like from the quarterback (debug + synthesis grounding).
+   * Never drives silent workflow promotion.
+   */
+  purpose?: string;
   /**
    * Whether the turn needs the repository's own code, and what for.
    * Set when no workflow claims the turn — this is what lets the agent loop run

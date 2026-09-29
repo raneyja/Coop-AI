@@ -87,21 +87,34 @@ export function isMutationHandlerPath(fileName: string): boolean {
 }
 
 /**
- * Web/client trees. They post `state_id`; they do not reject the API call.
+ * Product UI trees — web apps, hooks, stores, components. They post `state_id`
+ * or hold MobX/React state; they do not reject the API call.
+ * Never classify API/server write trees as UI (even if a path contains `hooks`).
  */
 export function isClientUiPath(fileName: string): boolean {
+  if (isServerWritePath(fileName)) {
+    return false;
+  }
   const n = normalizePath(fileName);
-  return /(^|\/)(web|frontend|client)\//.test(n);
+  return (
+    /(^|\/)(web|frontend|client)\//.test(n) ||
+    /(^|\/)hooks\//.test(n) ||
+    /(^|\/)stores?\//.test(n) ||
+    /(^|\/)(components|pages)\//.test(n)
+  );
 }
 
 /**
- * Seed/fixture JSON — sample rows with state_id, not the API that rejects.
+ * Seed/fixture JSON and seed/dummy task modules — sample rows, not the API
+ * that rejects a transition.
  */
 export function isSeedOrFixturePath(fileName: string): boolean {
   const n = normalizePath(fileName);
+  const base = n.split("/").pop() ?? "";
   return (
     /(^|\/)(seeds?|fixtures?|factories)\//.test(n) ||
-    /\.json$/.test(n)
+    /\.json$/.test(n) ||
+    /(seed|dummy|fixture)/.test(base)
   );
 }
 
@@ -113,19 +126,75 @@ export function isDocOrSpecPath(fileName: string): boolean {
   const n = normalizePath(fileName);
   return (
     /(^|\/)(docs?|documentation)\//.test(n) ||
+    /(^|\/)(openapi|swagger)\//.test(n) ||
     /(^|\/)openapi\.(py|yml|yaml|json|ts)$/.test(n) ||
     /(^|\/)swagger\.(py|yml|yaml|json|ts)$/.test(n) ||
     /(^|\/)(readme|changelog|agents?|setup|contributing)(\.|$)/.test(n)
   );
 }
 
+/** Schema migrations — rename columns; they do not reject a live write. */
+export function isMigrationPath(fileName: string): boolean {
+  const n = normalizePath(fileName);
+  return (
+    /(^|\/)migrations?\//.test(n) ||
+    /(^|\/)\d{4}_[^/]+\.(py|rb|sql)$/.test(n)
+  );
+}
+
+/**
+ * Icon / static asset trees — they match product words ("done", "state") and
+ * burn reject-hunt reads.
+ */
+export function isIconOrAssetPath(fileName: string): boolean {
+  const n = normalizePath(fileName);
+  return (
+    /(^|\/)(icons?|assets?|static|images?|img)\//.test(n) ||
+    /(-|\.)icon\.(tsx?|jsx?|svg|png|ico)$/.test(n) ||
+    /(^|\/)[^/]*icon[^/]*\.(tsx?|jsx?|svg)$/.test(n)
+  );
+}
+
+/** Empty-state UI packages — placeholders, not API write/reject. */
+export function isEmptyStatePackagePath(fileName: string): boolean {
+  const n = normalizePath(fileName);
+  return /(^|\/)empty[-_]?states?\//.test(n);
+}
+
+/** HTML / template surfaces — CSRF pages, notification mail, not serializers. */
+export function isHtmlTemplatePath(fileName: string): boolean {
+  const n = normalizePath(fileName);
+  return (
+    /\.(html|htm|jinja2?|j2)$/.test(n) ||
+    /(^|\/)templates?\//.test(n)
+  );
+}
+
 /**
  * Query-filter helpers — they validate filter values, they do not write a
  * work-item field or reject a state transition.
+ * Matches `filters/` trees and `*_filters.py` / `filter_*.py` under utils.
  */
 export function isQueryFilterPath(fileName: string): boolean {
   const n = normalizePath(fileName);
-  return /(^|\/)(filters?|querysets?)\//.test(n);
+  const base = n.split("/").pop() ?? "";
+  return (
+    /(^|\/)(filters?|querysets?)\//.test(n) ||
+    /filters?\.(py|ts|js|rb|go)$/.test(base)
+  );
+}
+
+/**
+ * Shared type packages / ambient declarations — they mention every field name
+ * and burn reject-hunt reads. Not the server write/reject body.
+ */
+export function isSharedTypePackagePath(fileName: string): boolean {
+  const n = normalizePath(fileName);
+  return (
+    /\.d\.ts$/.test(n) ||
+    /(^|\/)packages\/types?\//.test(n) ||
+    /(^|\/)(types?|typings)\//.test(n)
+  );
 }
 
 export function normalizePath(fileName: string): string {

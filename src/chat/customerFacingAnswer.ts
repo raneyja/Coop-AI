@@ -260,6 +260,44 @@ export function rewriteCustomerFacingProse(content: string): string {
 }
 
 /**
+ * Model sometimes asks the user to open a path that is already in attached
+ * evidence (create ViewSet). Drop those sentences when the path was read.
+ */
+export function stripPleaseOpenAttachedPaths(answer: string, attachedPaths: string[]): string {
+  if (!answer.trim() || attachedPaths.length === 0) {
+    return answer;
+  }
+  const norms = attachedPaths.map((path) => path.replace(/\\/g, "/").toLowerCase());
+  const bases = norms.map((path) => path.split("/").pop() ?? path);
+  const pieces = answer.split(/([.!?]+)(\s+|$)/);
+  const kept: string[] = [];
+  for (let i = 0; i < pieces.length; i += 3) {
+    const sentence = pieces[i] ?? "";
+    const punct = pieces[i + 1] ?? "";
+    const space = pieces[i + 2] ?? "";
+    if (!sentence.trim()) {
+      kept.push(sentence, punct, space);
+      continue;
+    }
+    const lower = sentence.toLowerCase();
+    const asksOpen =
+      /\b(?:please\s+)?open\b/.test(lower) ||
+      /\bopen\s+(?:the\s+)?(?:file|viewset|serializer|class)\b/.test(lower) ||
+      /\bfor\s+me\b/.test(lower);
+    if (asksOpen) {
+      const mentionsAttached = norms.some(
+        (path, idx) => lower.includes(path) || (bases[idx] && lower.includes(bases[idx]!))
+      );
+      if (mentionsAttached) {
+        continue;
+      }
+    }
+    kept.push(sentence, punct, space);
+  }
+  return kept.join("").replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/**
  * Chat bubbles are customer-facing. Hunt/index/patch internals belong in
  * activity, never concatenated onto an answer that already shipped.
  *

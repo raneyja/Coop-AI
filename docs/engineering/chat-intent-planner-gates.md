@@ -55,6 +55,12 @@ Run: `npx tsx src/chat/intentPlanner/phase4.gates.test.ts`
 
 Leading labels (`Pager:`, `On-call:`) are metadata, not search terms. Writer does not search tools — prefetch runs each job on today's index / Slack / Teams / Jira / docs / code-host fetchers, then one model writes. Soft 15s gather still applies; do not abort the turn.
 
+## Intent quarterback (code search criteria)
+
+Locate / change / reject asks call the cheap interpreter even when rules already planned jobs. The model invents per-ask `jobs[].searchCriteria` (index-ready queries) and optional `evidenceClass` / `purpose`. Agent reject hunt and calm locate search prefer those criteria first; slogan lists (`apiRejectSearchQueries`) are fail-open pad only. Unconstrained English still never sets `execution: silent` / `run-workflow`.
+
+Run: `npx tsx src/chat/intentPlanner/intentQuarterback.gates.test.ts`
+
 ## How to run all gates
 
 ```bash

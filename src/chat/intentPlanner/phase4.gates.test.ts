@@ -343,7 +343,7 @@ test("who decided plus where is stays a job turn, not silent Trace Decision", ()
   assert.ok(plan.todos?.some((todo) => /Jira/i.test(todo.content)));
 });
 
-test("deterministic rules plans cannot be overwritten by the model classifier", () => {
+test("locate/decision rules plans call quarterback refine (criteria invent, not skip)", () => {
   const asks = [
     N5_EXACT_ASK,
     "Where is date math implemented and what did we decide about the SQL-injection PR?",
@@ -356,7 +356,7 @@ test("deterministic rules plans cannot be overwritten by the model classifier", 
       activeFile: "src/server/authMiddleware.ts",
       connectedTools: ["slack", "jira"]
     });
-    assert.equal(shouldCallChatIntentModel(plan), false, message);
+    assert.equal(shouldCallChatIntentModel(plan), true, message);
     assert.ok((plan.jobs?.length ?? 0) > 0 || plan.codeIntent?.action !== "none", message);
   }
 });

@@ -257,13 +257,13 @@ test("model JSON can write job terms; whole-sentence terms are rejected later by
   assert.deepEqual(plan.jobs, [{ capability: "decision", verb: "search", terms: ["SQL injection"] }]);
 });
 
-test("N5 rules plans still skip the model without a command constraint", () => {
+test("N5 locate+decision plans call quarterback refine without a command constraint", () => {
   const plan = planChatFrontDoorFromRules({
     message: N5_COMPOUND_ASK,
     activeFile: "web/reports.jsp",
     connectedTools: ["slack", "jira"]
   });
-  assert.equal(shouldCallChatIntentModel(plan), false);
+  assert.equal(shouldCallChatIntentModel(plan), true);
   assert.equal(
     shouldCallChatIntentModel(plan, {
       constraint: { kind: "integration", provider: "slack" },

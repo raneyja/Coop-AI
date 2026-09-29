@@ -1,3 +1,4 @@
+import { stripPleaseOpenAttachedPaths } from "../../chat/customerFacingAnswer";
 import {
   AGENT_JOB_WALL_MS,
   AGENT_MAX_FILES_READ,
@@ -17,7 +18,7 @@ import type {
 import type { AgentToolContext } from "./agentToolContext";
 import { agentSearchSkipNote, parseAgentToolPlan } from "./parseAgentToolPlan";
 import {
-  fallbackAgentSearchQueries,
+  mergePlannedAgentSearchQueries,
   extractAgentSearchQuery,
   extractNamedSourceFiles,
   identifierSearchAliases,
@@ -32,8 +33,16 @@ import {
   shouldSkipEvidencePath,
   filterWriteRejectFiles,
   isApiRejectAsk,
+  isBackendStateDefinitionHit,
+  isCompoundAuthAndStateLocateAsk,
+  isCreateDefinitionHit,
+  isCreateLocateAsk,
+  isDefinitionLocateAsk,
+  isRequestAuthEnforcementHit,
   contentLooksLikeAskedFieldReject,
+  contentLooksLikeCreateHandler,
   contentLooksLikeUnauthorizedWrite,
+  lineNumberOfCreateHandler,
   lineNumberOfWriteReject,
   lineNumberOfUnauthorizedWrite,
   textMentionsQueryRoles,
@@ -228,6 +237,11 @@ export type AgentRunOptions = {
   allowedRepoTools?: boolean;
   /** Cheap per-Open Interpret before the Talk track. */
   interpretOpens?: (artifacts: OpenedVendorArtifact[]) => Promise<string | undefined>;
+  /**
+   * Intent-quarterback index queries for this turn (prefer over slogan banks).
+   * Empty/omitted → invent + fallbackAgentSearchQueries fail-open.
+   */
+  plannedSearchQueries?: string[];
 };
 
 /**
@@ -245,6 +259,7 @@ export class AgentOrchestrator {
   private runSignal?: AbortSignal;
   private loopContext?: AgentSessionContext;
   private allowedRepoTools = true;
+  private runPlannedSearchQueries: string[] = [];
 
   public constructor(private readonly ctx: AgentToolContext) {
     this.registry = createAgentToolRegistry(ctx);
@@ -289,6 +304,7 @@ export class AgentOrchestrator {
     this.runSearchIntegration = options?.searchIntegration;
     this.runSignal = options?.signal;
     this.allowedRepoTools = options?.allowedRepoTools !== false;
+    this.runPlannedSearchQueries = options?.plannedSearchQueries ?? [];
     try {
       const action = request.action ?? "none";
       const openFile = request.openFile?.trim();
@@ -302,6 +318,7 @@ export class AgentOrchestrator {
       this.runSignal = undefined;
       this.loopContext = undefined;
       this.allowedRepoTools = true;
+      this.runPlannedSearchQueries = [];
     }
   }
 
@@ -411,7 +428,15 @@ export class AgentOrchestrator {
           (callerRead || contextHasUnauthorizedSiblingWrite(context, implementationPath))
         );
       }
-      if (queryHasNamedSymbol(query) || queryRoleHints(query).length > 0) {
+      if (isCompoundAuthAndStateLocateAsk(query)) {
+        return (
+          contextHasRequestAuthEnforcement(context) && contextHasBackendStateDefinition(context)
+        );
+      }
+      if (isCreateLocateAsk(query)) {
+        return contextHasCreateDefinition(context);
+      }
+      if (isDefinitionLocateAsk(query)) {
         if (wantsCallerRead()) {
           return matchingRead && callerRead;
         }
@@ -631,6 +656,28 @@ export class AgentOrchestrator {
               path,
               skipNote:
                 "This snippet does not write or reject the asked field. Search a serializer validate() or ValidationError."
+            });
+            judged = { raw: rawResult, matchesSymbol: false };
+          }
+        }
+        if (isCreateLocateAsk(query) && path) {
+          const jumped = await this.loadCreateHandlerWindow(repoId, path);
+          if (jumped) {
+            rawResult = jumped.raw;
+            args.startLine = jumped.startLine;
+            args.endLine = jumped.endLine;
+            judged = { raw: jumped.raw, matchesSymbol: true };
+          } else if (
+            !contentLooksLikeCreateHandler(readFileBodies(rawResult)) &&
+            !isCreateDefinitionHit({
+              fileName: path,
+              content: readFileBodies(rawResult)
+            })
+          ) {
+            rawResult = JSON.stringify({
+              path,
+              skipNote:
+                "This snippet is not the create handler. Search IssueViewSet create / CreateSerializer / perform_create."
             });
             judged = { raw: rawResult, matchesSymbol: false };
           }
@@ -1012,6 +1059,14 @@ export class AgentOrchestrator {
         }
       }
     }
+    if (isCompoundAuthAndStateLocateAsk(query)) {
+      matchingRead =
+        contextHasRequestAuthEnforcement(result.context) &&
+        contextHasBackendStateDefinition(result.context);
+    }
+    if (isCreateLocateAsk(query)) {
+      matchingRead = contextHasCreateDefinition(result.context);
+    }
     const history =
       conversation && conversation.length > 0
         ? conversation
@@ -1071,17 +1126,35 @@ export class AgentOrchestrator {
       if (artifacts.length > 0 && options.interpretOpens && !options.signal?.aborted) {
         interpretNotes = await options.interpretOpens(artifacts);
       }
+      const historyForAnswer = filledHistory ?? history;
+      if (
+        historyForAnswer &&
+        ((isCreateLocateAsk(query) && contextHasCreateDefinition(result.context)) ||
+          (isCompoundAuthAndStateLocateAsk(query) &&
+            contextHasRequestAuthEnforcement(result.context) &&
+            contextHasBackendStateDefinition(result.context)))
+      ) {
+        historyForAnswer.push({
+          role: "user",
+          content:
+            "Cite the attached create / auth / state definition evidence. Do not ask the user to open a path you already read."
+        });
+      }
       const answer = await options.streamAnswer({
         message: query,
         repoId,
-        conversation: filledHistory ?? history,
+        conversation: historyForAnswer,
         action,
         openedEvidence: formatOpenedIntegrationEvidence(result.context),
         interpretNotes
       });
+      const cleaned =
+        isCreateLocateAsk(query) || isCompoundAuthAndStateLocateAsk(query)
+          ? stripPleaseOpenAttachedPaths(answer, attachedReadPaths(result.context))
+          : answer;
       return {
         ...result,
-        answer,
+        answer: cleaned,
         context: result.steps.length ? result.context : undefined
       };
     } catch {
@@ -1540,6 +1613,25 @@ export class AgentOrchestrator {
           continue;
         }
       }
+      if (isCreateLocateAsk(query)) {
+        const createJump = await this.loadCreateHandlerWindow(repoId, hit.fileName);
+        if (createJump) {
+          readRaw = createJump.raw;
+          usedWindow = true;
+          startLine = createJump.startLine;
+          endLine = createJump.endLine;
+          body = readBodiesUnprefixed(JSON.parse(readRaw) as ReadFilePayload);
+        } else if (!contentLooksLikeCreateHandler(body) && !isCreateDefinitionHit({ fileName: hit.fileName, content: body })) {
+          skippedPaths?.add(pathKey);
+          emit({
+            index: 0,
+            tool: "read_file",
+            summary: `read_file skipped (no create handler): ${hit.fileName}`,
+            completed: true
+          });
+          continue;
+        }
+      }
       if (isShipCheckQuery(query)) {
         const unauthAttach = await this.jumpUnauthorizedAttachIfNeeded(
           repoId,
@@ -1699,6 +1791,41 @@ export class AgentOrchestrator {
       groundedExport,
       implementationPath
     );
+  }
+
+  /**
+   * Create locate: index often lands on class IssueViewSet while create() is
+   * further down. Jump the attached window to create / perform_create.
+   */
+  private async loadCreateHandlerWindow(
+    repoId: string,
+    filePath: string
+  ): Promise<{ raw: string; startLine: number; endLine: number } | undefined> {
+    const fullRaw = await this.executeTool("read_file", { path: filePath, repoId });
+    if (!readFilePayloadHasBody(fullRaw)) {
+      return undefined;
+    }
+    const parsed = JSON.parse(fullRaw) as ReadFilePayload;
+    const body = (parsed.files ?? []).map((file) => file.content).join("\n");
+    const line = lineNumberOfCreateHandler(body);
+    if (!line) {
+      return undefined;
+    }
+    const jumped = await this.readWindowAroundLine(repoId, filePath, line);
+    if (!jumped) {
+      return undefined;
+    }
+    const windowBody = (JSON.parse(jumped.raw) as ReadFilePayload).files
+      ?.map((file) => file.content)
+      .join("\n");
+    if (
+      !windowBody ||
+      (!contentLooksLikeCreateHandler(windowBody) &&
+        !isCreateDefinitionHit({ fileName: filePath, content: windowBody }))
+    ) {
+      return undefined;
+    }
+    return jumped;
   }
 
   /**
@@ -1958,7 +2085,11 @@ export class AgentOrchestrator {
     conversation?: AgentConversationMessage[]
   ): Promise<boolean> {
     const cap = isApiRejectAsk(query) ? MAX_API_REJECT_SEARCH_ATTEMPTS : MAX_SEARCH_ATTEMPTS;
-    const queries = fallbackAgentSearchQueries(query).slice(0, cap);
+    const queries = mergePlannedAgentSearchQueries({
+      userMessage: query,
+      planned: this.runPlannedSearchQueries,
+      max: cap
+    });
     const skippedPaths = new Set<string>();
     const triedQueries = new Set<string>();
     for (const searchQuery of queries) {
@@ -2014,7 +2145,14 @@ export class AgentOrchestrator {
     skipQueries: Set<string> = new Set(),
     searchQueries?: string[]
   ): Promise<{ toRead: SearchHit[] } | undefined> {
-    const queries = (searchQueries ?? fallbackAgentSearchQueries(query))
+    const queries = (
+      searchQueries ??
+      mergePlannedAgentSearchQueries({
+        userMessage: query,
+        planned: this.runPlannedSearchQueries,
+        max: MAX_SEARCH_ATTEMPTS
+      })
+    )
       .filter((candidate) => !skipQueries.has(candidate))
       .slice(0, MAX_SEARCH_ATTEMPTS);
     let stepIndex = 0;
@@ -2325,6 +2463,34 @@ function contextHasWriteReject(
   return files.some((file) =>
     contentLooksLikeAskedFieldReject(file.content ?? "", query, file.path ?? "")
   );
+}
+
+function contextHasRequestAuthEnforcement(context: AgentSessionContext | undefined): boolean {
+  const files = (context?.read_file as ReadFilePayload | undefined)?.files ?? [];
+  return files.some((file) =>
+    isRequestAuthEnforcementHit({ fileName: file.path ?? "", content: file.content ?? "" })
+  );
+}
+
+function contextHasBackendStateDefinition(context: AgentSessionContext | undefined): boolean {
+  const files = (context?.read_file as ReadFilePayload | undefined)?.files ?? [];
+  return files.some((file) =>
+    isBackendStateDefinitionHit({ fileName: file.path ?? "", content: file.content ?? "" })
+  );
+}
+
+function contextHasCreateDefinition(context: AgentSessionContext | undefined): boolean {
+  const files = (context?.read_file as ReadFilePayload | undefined)?.files ?? [];
+  return files.some(
+    (file) =>
+      isCreateDefinitionHit({ fileName: file.path ?? "", content: file.content ?? "" }) ||
+      contentLooksLikeCreateHandler(file.content ?? "")
+  );
+}
+
+function attachedReadPaths(context: AgentSessionContext | undefined): string[] {
+  const files = (context?.read_file as ReadFilePayload | undefined)?.files ?? [];
+  return files.map((file) => file.path ?? "").filter(Boolean);
 }
 
 function shipCheckRippleBody(

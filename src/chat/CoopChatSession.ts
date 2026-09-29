@@ -263,6 +263,7 @@ import {
   emptyChatIntentPlan,
   integrationFillQueries,
   locateJobTerms,
+  plannedCodeSearchQueries,
   shouldOverlapIntegrationPrefetch,
   type ChatCommandConstraint,
   type ChatIntentPlan
@@ -4910,6 +4911,7 @@ export class CoopChatSession {
         plan: turn.intentPlan
       });
       const allowedRepoTools = this.turnAllowsRepoTools;
+      const plannedSearchQueries = plannedCodeSearchQueries(turn.intentPlan.jobs);
       const agentResult = await this.options.agentOrchestrator.run(
         {
           message: query,
@@ -4924,6 +4926,8 @@ export class CoopChatSession {
           startedAt: turn.startedAt,
           allowedIntegrations,
           allowedRepoTools,
+          plannedSearchQueries:
+            plannedSearchQueries.length > 0 ? plannedSearchQueries : undefined,
           fillIntegrations: turn.intentPlan.tools.filter(
             (tool): tool is IntegrationChatProvider => Boolean(tool)
           ),
