@@ -8,8 +8,6 @@ export const siteConfig = {
   footerBlurb:
     "CoopAI — shared org context in the editor. From your stack, to your codebase.",
   tagline: "From your stack, to your codebase.",
-  subheadline:
-    "CoopAI is code intelligence for teams already shipping production software. Ask who owns a path, why a module exists, or what a change breaks — then complete and edit the change in the file — without cloning the monorepo or sending the tree to a black-box agent.",
   heroKicker: "Shared org context in the editor — Slack, Jira, owners, and the code that shipped.",
   contactEmail: "support@coop-ai.dev",
   privacyEmail: "privacy@coop-ai.dev",

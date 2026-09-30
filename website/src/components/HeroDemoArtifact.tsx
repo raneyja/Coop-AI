@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ConfluenceIcon,
   GitHubIcon,
@@ -229,9 +229,6 @@ const TOOLS = [
   }
 ];
 
-const DEMO_MESSAGE_CARD_LIGHT = "rounded-lg border border-gray-200 bg-gray-50 p-4";
-const DEMO_MESSAGE_CARD_DARK = "rounded-lg border border-white/10 bg-white/[0.04] p-4";
-
 const TIMING = {
   questionCharMs: 26,
   afterQuestionMs: 850,
@@ -372,44 +369,193 @@ function hidePartialBoldMarker(text: string): string {
   return text;
 }
 
-/** Renders `**bold**` markers in streamed text (Coop-style section headings). */
-function renderStreamedBoldText(text: string): React.ReactNode {
-  const sanitized = hidePartialBoldMarker(text);
-  const nodes: React.ReactNode[] = [];
-  let i = 0;
-  let key = 0;
+type AnswerListItem = { name: string; detail: string };
 
-  while (i < sanitized.length) {
-    const open = sanitized.indexOf("**", i);
-    if (open === -1) {
-      nodes.push(sanitized.slice(i));
-      break;
+type AnswerBlock =
+  | { kind: "lead"; text: string }
+  | { kind: "prose"; title: string | null; text: string }
+  | { kind: "list"; title: string | null; items: AnswerListItem[] };
+
+function peelHeading(raw: string): { title: string | null; rest: string; open: boolean } {
+  if (!raw.startsWith("**")) return { title: null, rest: raw, open: false };
+  const close = raw.indexOf("**", 2);
+  if (close === -1) {
+    return { title: raw.slice(2).replace(/\*$/, ""), rest: "", open: true };
+  }
+  const title = raw.slice(2, close).trim().replace(/:$/, "");
+  let rest = raw.slice(close + 2);
+  if (rest.startsWith(":")) rest = rest.slice(1);
+  if (rest.startsWith(" ")) rest = rest.slice(1);
+  return { title, rest, open: false };
+}
+
+function parseBulletLine(line: string): AnswerListItem {
+  const cleaned = line.trim().replace(/^[•-]\s*/, "");
+  const splitAt = cleaned.indexOf(": ");
+  if (splitAt === -1) return { name: cleaned, detail: "" };
+  return { name: cleaned.slice(0, splitAt), detail: cleaned.slice(splitAt + 2) };
+}
+
+function isBulletLine(line: string): boolean {
+  const trimmed = line.trim();
+  return trimmed.startsWith("•") || trimmed.startsWith("- ");
+}
+
+/** Turn streamed `**heading**` / bullet copy into chat blocks. Markers never reach the screen. */
+function parseAnswerBlocks(raw: string): AnswerBlock[] {
+  const text = hidePartialBoldMarker(raw);
+  if (!text.trim()) return [];
+
+  const blocks: AnswerBlock[] = [];
+  const chunks = text.split(/\n\n/);
+
+  chunks.forEach((chunk, index) => {
+    const { title, rest, open } = peelHeading(chunk);
+    const isShortAnswer = title != null && /^short answer$/i.test(title);
+    const lines = rest.split("\n").map((line) => line.trim()).filter(Boolean);
+    const bullets = lines.filter(isBulletLine);
+    const proseLines = lines.filter((line) => !isBulletLine(line));
+
+    if (index === 0 && (open || isShortAnswer || title == null)) {
+      if (open && !rest.trim()) return;
+      const lead = proseLines.join(" ");
+      if (!lead) return;
+      blocks.push({ kind: "lead", text: lead });
+      return;
     }
-    if (open > i) nodes.push(sanitized.slice(i, open));
 
-    const close = sanitized.indexOf("**", open + 2);
-    if (close === -1) {
-      // Still streaming inside a heading — render as bold immediately (no visible **).
-      const content = sanitized.slice(open + 2);
-      if (content) {
-        nodes.push(
-          <strong key={key++} className="font-semibold text-gray-900">
-            {content}
-          </strong>
-        );
+    if (bullets.length > 0 && proseLines.length === 0) {
+      blocks.push({
+        kind: "list",
+        title: isShortAnswer ? null : title,
+        items: bullets.map(parseBulletLine)
+      });
+      return;
+    }
+
+    const body = proseLines.join(" ");
+    if (!title && !body) return;
+    if (open && !body && !title) return;
+    blocks.push({ kind: "prose", title: isShortAnswer ? null : title, text: body });
+  });
+
+  return blocks;
+}
+
+function ResponseCursor() {
+  return <span className="hero-demo-response-cursor text-sky-400">|</span>;
+}
+
+function CoopAssistantMark({ dark }: { dark: boolean }) {
+  return (
+    <span
+      className={
+        dark
+          ? "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-semibold tracking-tight text-neutral-950"
+          : "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-[11px] font-semibold tracking-tight text-white"
       }
-      break;
-    }
+      aria-hidden="true"
+    >
+      C
+    </span>
+  );
+}
 
-    nodes.push(
-      <strong key={key++} className="font-semibold text-gray-900">
-        {sanitized.slice(open + 2, close)}
-      </strong>
-    );
-    i = close + 2;
+function UserAskMark({ dark }: { dark: boolean }) {
+  return (
+    <span
+      className={
+        dark
+          ? "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-500/20 text-[10px] font-semibold tracking-tight text-sky-300"
+          : "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-50 text-[10px] font-semibold tracking-tight text-blue-600"
+      }
+      aria-hidden="true"
+    >
+      Y
+    </span>
+  );
+}
+
+function renderChatAnswer(text: string, dark: boolean, showCursor: boolean): React.ReactNode {
+  const blocks = parseAnswerBlocks(text);
+  const lead = dark ? "text-[15px] leading-relaxed text-neutral-100" : "text-[15px] leading-relaxed text-gray-900";
+  const title = dark
+    ? "text-[12px] font-semibold uppercase tracking-[0.04em] text-white/45"
+    : "text-[12px] font-semibold uppercase tracking-[0.04em] text-gray-400";
+  const body = dark ? "text-[14px] leading-relaxed text-neutral-200" : "text-[14px] leading-relaxed text-gray-800";
+  const name = dark ? "text-[14px] font-medium leading-snug text-white" : "text-[14px] font-medium leading-snug text-gray-900";
+  const detail = dark
+    ? "mt-0.5 text-[13px] leading-snug text-white/55"
+    : "mt-0.5 text-[13px] leading-snug text-gray-500";
+  const dot = dark
+    ? "mt-[0.45rem] h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400/80"
+    : "mt-[0.45rem] h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500/70";
+
+  if (blocks.length === 0) {
+    return showCursor ? <ResponseCursor /> : null;
   }
 
-  return nodes;
+  return (
+    <div className="space-y-4">
+      {blocks.map((block, index) => {
+        const isLast = index === blocks.length - 1;
+        const cursor = isLast && showCursor ? <ResponseCursor /> : null;
+
+        if (block.kind === "lead") {
+          return (
+            <p key={index} className={lead}>
+              {block.text}
+              {cursor}
+            </p>
+          );
+        }
+
+        if (block.kind === "list") {
+          return (
+            <div key={index}>
+              {block.title ? <h3 className={title}>{block.title}</h3> : null}
+              <ul className={block.title ? "mt-2.5 list-none space-y-2.5 p-0" : "list-none space-y-2.5 p-0"}>
+                {block.items.map((item, itemIndex) => {
+                  const lastItem = isLast && itemIndex === block.items.length - 1;
+                  return (
+                    <li key={itemIndex} className="flex items-start gap-2.5">
+                      <span className={dot} aria-hidden="true" />
+                      <div className="min-w-0">
+                        <div className={name}>
+                          {item.name}
+                          {lastItem && !item.detail ? cursor : null}
+                        </div>
+                        {item.detail ? (
+                          <div className={detail}>
+                            {item.detail}
+                            {lastItem ? cursor : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        }
+
+        return (
+          <div key={index}>
+            {block.title ? <h3 className={title}>{block.title}</h3> : null}
+            {block.text ? (
+              <p className={block.title ? `mt-1.5 ${body}` : body}>
+                {block.text}
+                {cursor}
+              </p>
+            ) : (
+              cursor
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 /** Smooth constant-rate text reveal via rAF (avoids per-char setTimeout stutter). */
@@ -466,6 +612,8 @@ export function HeroDemoArtifact({ tone = "light" }: { tone?: "light" | "dark" }
   const [completePhase, setCompletePhase] = useState<HeroCompletePhase>("typing");
   const [revealedGhostChars, setRevealedGhostChars] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [lockedHeightPx, setLockedHeightPx] = useState<number | null>(null);
+  const sectionRef = useRef<HTMLDivElement | null>(null);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const responseStreamTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const responseRafRef = useRef<number | null>(null);
@@ -492,6 +640,43 @@ export function HeroDemoArtifact({ tone = "light" }: { tone?: "light" | "dark" }
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
   }, []);
+
+  /** Ratchet the demo height up only — never shrink mid-carousel (stops page jump). */
+  useLayoutEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
+
+    const measure = () => {
+      const visible = section.querySelector<HTMLElement>(".hero-demo-stage-visible");
+      if (!visible) return;
+      const contentH = Math.ceil(visible.getBoundingClientRect().height);
+      if (contentH <= 0) return;
+      // Inline minHeight would override CSS — never lock below the stylesheet floor.
+      const cssFloor = Math.ceil(parseFloat(getComputedStyle(section).minHeight) || 0);
+      const floor = Math.max(cssFloor, contentH);
+      setLockedHeightPx((prev) => (prev == null ? floor : Math.max(prev, floor)));
+    };
+
+    measure();
+
+    const onResize = () => {
+      setLockedHeightPx(null);
+      requestAnimationFrame(measure);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [
+    stage,
+    scenarioIndex,
+    typedQuestion,
+    streamedSummary,
+    streamedCode,
+    revealedDiffLines,
+    revealedGhostChars,
+    patchPhase,
+    completePhase,
+    responseStreaming
+  ]);
 
   const clearQuestionTimers = useCallback(() => {
     timersRef.current.forEach(clearTimeout);
@@ -799,23 +984,35 @@ export function HeroDemoArtifact({ tone = "light" }: { tone?: "light" | "dark" }
 
   const responseLabel = patchScenario ? "// edit" : completeScenario ? "// complete" : "// response";
   const dark = tone === "dark";
-  const messageCard = dark ? DEMO_MESSAGE_CARD_DARK : DEMO_MESSAGE_CARD_LIGHT;
   const stageLabel = dark ? "font-mono text-sm text-white/40" : "font-mono text-sm text-gray-500";
-  const bodyText = dark
-    ? "font-mono text-sm leading-relaxed text-neutral-100"
-    : "font-mono text-sm leading-relaxed text-gray-800";
-  const proseText = dark
-    ? "whitespace-pre-wrap text-sm leading-relaxed text-neutral-100"
-    : "whitespace-pre-wrap text-sm leading-relaxed text-gray-800";
+  const chatShell = dark
+    ? "rounded-2xl border border-white/10 bg-white/[0.045] px-4 py-4 sm:px-5"
+    : "rounded-2xl border border-gray-200 bg-white px-4 py-4 shadow-sm sm:px-5";
+  const chatHeader = dark
+    ? "mb-3 flex items-center gap-2.5 border-b border-white/10 pb-3"
+    : "mb-3 flex items-center gap-2.5 border-b border-gray-100 pb-3";
+  const chatLabel = dark
+    ? "text-[13px] font-medium text-white"
+    : "text-[13px] font-medium text-gray-900";
+  const chatMeta = dark ? "text-[11px] text-white/35" : "text-[11px] text-gray-400";
+  const questionBody = dark
+    ? "text-[15px] leading-relaxed text-neutral-100"
+    : "text-[15px] leading-relaxed text-gray-900";
+  const codeFrame = dark
+    ? "mt-4 overflow-hidden rounded-xl border border-white/10 bg-black/50"
+    : "mt-4 overflow-hidden rounded-xl border border-gray-200 bg-gray-50";
+  const codeHeader = dark
+    ? "flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2 font-mono text-[11px]"
+    : "flex items-center justify-between gap-3 border-b border-gray-200 bg-white px-3 py-2 font-mono text-[11px]";
+  const codePath = dark ? "truncate text-sky-300" : "truncate text-blue-600";
+  const codeMeta = dark ? "shrink-0 text-white/35" : "shrink-0 text-gray-400";
   const codePre = dark
-    ? "overflow-x-auto rounded-md border border-white/10 bg-black/40 p-3 font-mono text-xs leading-relaxed text-neutral-200"
-    : "overflow-x-auto rounded-md border border-gray-200 bg-white p-3 font-mono text-xs leading-relaxed text-gray-800";
-  const citePath = dark
-    ? "mb-2 block border-b border-white/10 pb-1.5 font-mono text-[11px] normal-case tracking-normal text-sky-400"
-    : "mb-2 block border-b border-gray-100 pb-1.5 font-mono text-[11px] normal-case tracking-normal text-blue-500";
+    ? "overflow-x-auto p-3 font-mono text-[11px] leading-5 text-neutral-200"
+    : "overflow-x-auto bg-white p-3 font-mono text-[11px] leading-5 text-gray-800";
   const contextBox = dark
     ? "space-y-4 rounded-lg border border-white/10 bg-white/[0.04] p-4"
     : "space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4";
+  const asking = stage === 1 && typedQuestion.length < scenario.question.length;
 
   return (
     <div
@@ -829,20 +1026,31 @@ export function HeroDemoArtifact({ tone = "light" }: { tone?: "light" | "dark" }
         }
       }}
     >
-      <div className="hero-demo-section">
+      <div
+        className="hero-demo-section"
+        ref={sectionRef}
+        style={lockedHeightPx != null ? { minHeight: lockedHeightPx } : undefined}
+      >
         <div className={`hero-demo-stage ${stageClass(stage === 1)}`}>
           <div className={`mb-4 ${stageLabel}`}>// question</div>
-          <div className={messageCard}>
-            <p className={bodyText}>
+          <div className={chatShell}>
+            <div className={chatHeader}>
+              <UserAskMark dark={dark} />
+              <div className="min-w-0">
+                <div className={chatLabel}>You</div>
+                <div className={chatMeta}>{asking ? "Asking…" : "Question"}</div>
+              </div>
+            </div>
+            <p className={questionBody}>
               {renderTypedQuestion(typedQuestion, scenario.question, scenario.questionFiles)}
-              {stage === 1 ? <span className="hero-demo-response-cursor text-blue-500">|</span> : null}
+              {stage === 1 ? <ResponseCursor /> : null}
             </p>
           </div>
         </div>
 
         <div className={`hero-demo-stage ${stageClass(stage === 2)}`}>
           <div className={`mb-6 ${stageLabel}`}>// pulling context from</div>
-          <div className="grid grid-cols-3 gap-6">
+          <div className="hero-demo-logo-grid">
             {TOOLS.map((tool) => (
               <div
                 key={tool.id}
@@ -912,42 +1120,42 @@ export function HeroDemoArtifact({ tone = "light" }: { tone?: "light" | "dark" }
               tone={tone}
             />
           ) : (
-            <div className={`${messageCard} space-y-4`}>
-              <p className={proseText}>
-                {renderStreamedBoldText(streamedSummary)}
-                {showSummaryCursor ? (
-                  <span className="hero-demo-response-cursor text-blue-500">|</span>
-                ) : null}
-              </p>
+            <div className={chatShell}>
+              <div className={chatHeader}>
+                <CoopAssistantMark dark={dark} />
+                <div className="min-w-0">
+                  <div className={chatLabel}>CoopAI</div>
+                  <div className={chatMeta}>
+                    {responseStreaming ? "Answering…" : "Answer"}
+                  </div>
+                </div>
+              </div>
+              {renderChatAnswer(streamedSummary, dark, showSummaryCursor)}
               {codeText && summaryComplete && (streamedCode.length > 0 || showCodeCursor) ? (
-                <pre className={codePre}>
+                <div className={codeFrame}>
                   {proseScenario?.response.codeFile
                     ? (() => {
                         const cite = parseCiteCodeFile(proseScenario.response.codeFile);
+                        const range = proseScenario.response.codeFile.split(":").slice(1).join(":");
                         return (
                           <>
-                            <span className={citePath}>
-                              {cite.path}
-                              {cite.startLine != null ? (
-                                <span className="text-gray-400">
-                                  :
-                                  {proseScenario.response.codeFile.split(":").slice(1).join(":")}
-                                </span>
-                              ) : null}
-                            </span>
-                            {renderCitedCodeLines(streamedCode, cite.startLine, showCodeCursor)}
+                            <div className={codeHeader}>
+                              <span className={codePath}>{cite.path}</span>
+                              {range ? <span className={codeMeta}>{range}</span> : null}
+                            </div>
+                            <pre className={codePre}>
+                              {renderCitedCodeLines(streamedCode, cite.startLine, showCodeCursor)}
+                            </pre>
                           </>
                         );
                       })()
                     : (
-                      <>
+                      <pre className={codePre}>
                         {streamedCode}
-                        {showCodeCursor ? (
-                          <span className="hero-demo-response-cursor text-blue-500">|</span>
-                        ) : null}
-                      </>
+                        {showCodeCursor ? <ResponseCursor /> : null}
+                      </pre>
                     )}
-                </pre>
+                </div>
               ) : null}
             </div>
           )}

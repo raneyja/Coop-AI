@@ -19,9 +19,6 @@ export function Hero() {
           <p className="mx-auto mt-3 max-w-xl font-mono text-xs uppercase tracking-wide text-white/35 md:text-[13px] lg:mx-0">
             {siteConfig.heroKicker}
           </p>
-          <p className="mx-auto mt-4 max-w-xl text-[15px] leading-relaxed text-white/50 md:text-base lg:mx-0">
-            {siteConfig.subheadline}
-          </p>
           <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:justify-start">
             <InstallExtensionButton
               variant="inverse"

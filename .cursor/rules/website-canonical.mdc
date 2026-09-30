@@ -23,7 +23,7 @@ Dark environment with **deployed page order**: hero → the gap → logos → qu
 | Quotes | `website/src/components/Testimonial.tsx` |
 | Demo artefacts | `website/src/components/HeroDemoArtifact.tsx` |
 | Home close | `website/src/components/HomeCloseSection.tsx` (no zsh terminal) |
-| Site copy | `website/src/lib/site.config.ts` (`tagline`, `subheadline`) |
+| Site copy | `website/src/lib/site.config.ts` (`tagline`, `heroKicker`) |
 | Light inner pages | `website/src/components/SiteAtmosphere.tsx` + `layout.tsx` (paper, grid, wash) |
 
 Ask / Change / Indexed live on `/product`, not the homepage.
