@@ -56,7 +56,7 @@ function sortValue(org: CustomerSummary, column: CustomerSortColumn): string | n
     case "billed":
       return org.usage?.seatRevenueCents ?? null;
     case "cost":
-      return org.usage?.usedCents ?? null;
+      return org.usage?.costCents ?? null;
     case "margin":
       return org.usage?.marginCents ?? null;
     case "status":

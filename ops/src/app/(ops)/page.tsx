@@ -20,7 +20,7 @@ function UsageAlertRow({ item, hrefFocus }: { item: UsageQueueItem; hrefFocus: "
       <div className="min-w-0">
         <p className="truncate font-medium text-white">{item.orgName}</p>
         <p className="text-xs text-coop-muted">
-          {who} · {ratioLabel} of plan · cost {formatUsdFromCents(item.usedCents)}
+          {who} · {ratioLabel} of plan · cost {formatUsdFromCents(item.costCents)}
           {item.marginCents != null ? ` · margin ${formatUsdFromCents(item.marginCents)}` : ""}
         </p>
       </div>

@@ -31,7 +31,7 @@ import { OperatorGoogleAuthService } from "./operators/operatorGoogleAuth";
 import type { OperatorStore, OperatorContext } from "./operators/operatorStore";
 import type { OrgRepoAccessMode } from "./repoAccessTypes";
 import type { UsageTracker } from "./usageTracker";
-import { LLM_USAGE_EVENT_TYPES } from "./planQuota";
+import { LLM_COST_EVENT_TYPES } from "./planQuota";
 import {
   loadOrgCostBreakdown,
   loadOrgUsageSnapshot,
@@ -926,6 +926,7 @@ async function handleListUsers(
         usageTier: user.usageTier ?? null,
         lastActiveAt: usage?.lastActiveAt ?? null,
         usedCents: usage?.usedCents,
+        costCents: usage?.costCents,
         includedCents: usage?.includedCents ?? null,
         usedRatio: usage?.usedRatio ?? null,
         alerts: usage?.alerts ?? []
@@ -1178,7 +1179,7 @@ async function handlePlatformFinancials(
   }
   const range = resolveOperatorCostRange(parseOperatorCostRangeKind(parsed.query?.get("range")));
   const [sparse, customers] = await Promise.all([
-    deps.usageTracker.sumUsdCentsByDay(null, range, [...LLM_USAGE_EVENT_TYPES]),
+    deps.usageTracker.sumUsdCentsByDay(null, range, [...LLM_COST_EVENT_TYPES]),
     deps.orgStore!.listOperatorBillingCustomers()
   ]);
   const days = fillCostDays(sparse, range.from, range.to);

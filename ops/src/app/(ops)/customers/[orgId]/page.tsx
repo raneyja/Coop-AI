@@ -504,7 +504,7 @@ export default function CustomerDetailPage() {
                     <td>
                       <UsageMeterBar ratio={user.usedRatio} label={formatUsagePercent(user.usedRatio)} />
                     </td>
-                    <td className="text-xs">{formatUsdFromCents(user.usedCents)}</td>
+                    <td className="text-xs">{formatUsdFromCents(user.costCents)}</td>
                     <td className="text-xs text-coop-muted">{formatDateTime(user.lastActiveAt)}</td>
                     <td className="text-xs">{user.status}</td>
                     <td>
@@ -532,7 +532,7 @@ export default function CustomerDetailPage() {
           </table>
         </div>
         <p className="mt-2 text-xs text-coop-muted">
-          Cost column is the plan period / free window. Use the chart above for 7d / 30d / 90d spend.
+          Cost column shows incurred model spend in the plan period / free window, before allowance credits. Use the chart above for 7d / 30d / 90d spend.
         </p>
       </section>
 

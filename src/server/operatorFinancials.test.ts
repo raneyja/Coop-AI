@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import type { Pool } from "pg";
 import { UsageTracker } from "./usageTracker";
-import { fillCostDays, resolveOperatorCostRange, parseOperatorCostRangeKind } from "./operatorUsage";
+import { fillCostDays, resolveOperatorCostRange, parseOperatorCostRangeKind, loadOrgCostBreakdown, loadOrgUsageSnapshot, loadUserUsageSummaries } from "./operatorUsage";
 import { StripeService } from "./billing/stripeService";
+import { applyOperatorUsageCredit } from "./operatorUsageCredit";
+import type { Organization } from "./orgStore";
+import type { UserRecord } from "./users/userStore";
+import type { UsageEventEntry } from "./usageTracker";
 import type { BillingConfig } from "./billing/billingConfig";
 
 void (async () => {
@@ -22,6 +26,48 @@ void (async () => {
   assert.equal(days.find(day => day.day === "2026-09-22")?.usedCents, 1317);
   assert.equal(parseOperatorCostRangeKind("90d"), "90d");
   assert.equal(resolveOperatorCostRange("90d", to).from.toISOString(), "2026-07-03T00:00:00.000Z");
+
+  // A real operator reset changes allowance meters, never incurred model spend.
+  const now = new Date("2026-09-28T12:00:00Z");
+  const org = { id: "org-1", name: "Test", plan: "pro", createdAt: from } as Organization;
+  const user = { id: "user-1", email: "test@example.com", role: "owner", usageTier: "pro" } as UserRecord;
+  const ledger: UsageEventEntry[] = [
+    { orgId: org.id, userId: user.id, principal: user.id, eventType: "chat.message", metadata: { usdCents: 138, bucket: "auto" } },
+    { orgId: org.id, userId: user.id, principal: user.id, eventType: "chat.message", metadata: { usdCents: 1179, bucket: "frontier" } }
+  ];
+  const sum = (types: string[], bucket: string) => ledger.filter(event => types.includes(event.eventType) && event.metadata?.bucket === bucket)
+    .reduce((total, event) => total + Number(event.metadata?.usdCents ?? 0), 0);
+  const ledgerTracker = {
+    canRead: () => true,
+    record: async (entry: UsageEventEntry) => { ledger.push(entry); },
+    eventsByType: async () => [], eventsByTypeForPrincipals: async () => [], lastActiveAtByPrincipal: async () => [],
+    sumUsdCentsForOrg: async (_org: string, _range: unknown, types: string[], bucket: string) => sum(types, bucket),
+    sumUsdCentsByUserIds: async (_org: string, _range: unknown, types: string[]) => new Map([[user.id, { autoCents: sum(types, "auto"), frontierCents: sum(types, "frontier") }]]),
+    sumUsdCentsByDay: async (_org: string, _range: unknown, types: string[]) => [{ day: "2026-09-22", autoCents: sum(types, "auto"), frontierCents: sum(types, "frontier") }]
+  } as unknown as UsageTracker;
+  const input = { org, users: [user], usageTracker: ledgerTracker, now };
+  const before = await loadOrgCostBreakdown({ ...input, orgId: org.id });
+  const reset = await applyOperatorUsageCredit({ ...input, user, targetUsedRatio: 0, reason: "Dogfood testing", operatorEmail: "ops@example.com" });
+  assert.equal(reset.ok, true);
+  if (!reset.ok) throw new Error("Reset failed");
+  assert.equal(reset.afterUsedRatio, 0);
+  const after = await loadOrgCostBreakdown({ ...input, orgId: org.id });
+  assert.deepEqual(after.totals, before.totals);
+  assert.equal(after.totals.usedCents, 1317);
+  assert.equal(after.byUser[0]?.usedCents, 1317);
+  assert.deepEqual(after.days, before.days);
+  const orgSnapshot = await loadOrgUsageSnapshot(input);
+  assert.equal(orgSnapshot.usedCents, 0);
+  assert.equal(orgSnapshot.usedRatio, 0);
+  assert.equal(orgSnapshot.costCents, 1317);
+  assert.equal(orgSnapshot.marginCents, 2500 - 1317);
+  const userSummary = (await loadUserUsageSummaries(input)).get(user.id);
+  assert.equal(userSummary?.usedCents, 0);
+  assert.equal(userSummary?.costCents, 1317);
+  // New consumption after a reset adds to real costs and starts using allowance again.
+  ledger.push({ ...ledger[0], metadata: { usdCents: 100, bucket: "auto" } });
+  assert.equal((await loadOrgCostBreakdown({ ...input, orgId: org.id })).totals.usedCents, 1417);
+  assert.equal((await loadOrgUsageSnapshot(input)).usedCents, 100);
 
   const originalFetch = globalThis.fetch;
   const stripe = new StripeService({ stripeSecretKey: "test" } as BillingConfig);

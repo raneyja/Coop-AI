@@ -366,7 +366,7 @@ export default function CustomersPage() {
                   <td className="whitespace-nowrap text-xs">
                     {formatBilledAmount(org.usage?.seatRevenueCents)}
                   </td>
-                  <td className="text-xs">{formatUsdFromCents(org.usage?.usedCents)}</td>
+                  <td className="text-xs">{formatUsdFromCents(org.usage?.costCents)}</td>
                   <td
                     className={`text-xs ${
                       org.usage?.marginCents != null && org.usage.marginCents < 0 ? "text-coop-warn" : "text-coop-muted"

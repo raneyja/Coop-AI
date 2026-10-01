@@ -46,6 +46,7 @@ export type OrgUsageSummary = {
   periodStart: string;
   periodEnd: string;
   usedCents: number;
+  costCents?: number;
   includedCents: number | null;
   usedRatio: number | null;
   seatRevenueCents: number | null;
@@ -107,6 +108,7 @@ export type UsageQueueItem = {
   orgName: string;
   plan: OrgPlan;
   usedCents: number;
+  costCents?: number;
   includedCents: number | null;
   usedRatio: number | null;
   seatRevenueCents: number | null;
@@ -206,6 +208,7 @@ export type CustomerUser = {
   usageTier?: string | null;
   lastActiveAt?: string;
   usedCents?: number;
+  costCents?: number;
   includedCents?: number | null;
   usedRatio?: number | null;
   alerts?: UsageAlertCode[];
@@ -247,6 +250,7 @@ type BackendCustomerUser = {
   usageTier?: string | null;
   lastActiveAt?: string | null;
   usedCents?: number;
+  costCents?: number;
   includedCents?: number | null;
   usedRatio?: number | null;
   alerts?: UsageAlertCode[];
@@ -266,6 +270,7 @@ function normalizeUser(user: BackendCustomerUser): CustomerUser {
     usageTier: user.usageTier ?? null,
     lastActiveAt: user.lastActiveAt ?? undefined,
     usedCents: user.usedCents,
+    costCents: user.costCents,
     includedCents: user.includedCents ?? null,
     usedRatio: user.usedRatio ?? null,
     alerts: user.alerts ?? []
@@ -350,6 +355,7 @@ function normalizeUsageSummary(raw: unknown): OrgUsageSummary | undefined {
     periodStart: String(record.periodStart ?? ""),
     periodEnd: String(record.periodEnd ?? ""),
     usedCents: Number(record.usedCents ?? 0),
+    costCents: record.costCents == null ? undefined : Number(record.costCents),
     includedCents: record.includedCents == null ? null : Number(record.includedCents),
     usedRatio: record.usedRatio == null ? null : Number(record.usedRatio),
     seatRevenueCents: record.seatRevenueCents == null ? null : Number(record.seatRevenueCents),
@@ -447,6 +453,7 @@ function normalizeUsageQueueItem(raw: RawRecord): UsageQueueItem {
     orgName: String(raw.orgName ?? ""),
     plan: String(raw.plan ?? "free") as OrgPlan,
     usedCents: Number(raw.usedCents ?? 0),
+    costCents: raw.costCents == null ? undefined : Number(raw.costCents),
     includedCents: raw.includedCents == null ? null : Number(raw.includedCents),
     usedRatio: raw.usedRatio == null ? null : Number(raw.usedRatio),
     seatRevenueCents: raw.seatRevenueCents == null ? null : Number(raw.seatRevenueCents),

@@ -9,6 +9,7 @@ import type { OrgBilling, OrgPlan, Organization } from "./orgStore";
 import {
   createPlanQuotaService,
   LLM_USAGE_EVENT_TYPES,
+  LLM_COST_EVENT_TYPES,
   rollingWindowRange,
   type PaidUsageMeters,
   type PlanQuotaService
@@ -35,6 +36,7 @@ export type OperatorOrgUsageSummary = {
   periodStart: string;
   periodEnd: string;
   usedCents: number;
+  costCents?: number;
   includedCents: number | null;
   usedRatio: number | null;
   seatRevenueCents: number | null;
@@ -67,6 +69,7 @@ export type OperatorUserUsageSnapshot = {
   periodStart: string;
   periodEnd: string;
   usedCents: number;
+  costCents?: number;
   includedCents: number | null;
   usedRatio: number | null;
   autoCents: number;
@@ -87,6 +90,7 @@ export type OperatorUsageQueueItem = {
   orgName: string;
   plan: OrgPlan;
   usedCents: number;
+  costCents?: number;
   includedCents: number | null;
   usedRatio: number | null;
   seatRevenueCents: number | null;
@@ -217,9 +221,9 @@ function principalAliasesForUser(user: UserRecord): string[] {
 async function sumLlmCents(
   usageTracker: UsageTracker,
   orgId: string,
-  range: { from: Date; to: Date }
+  range: { from: Date; to: Date },
+  eventTypes: string[] = [...LLM_USAGE_EVENT_TYPES]
 ): Promise<{ autoCents: number; frontierCents: number; usedCents: number }> {
-  const eventTypes = [...LLM_USAGE_EVENT_TYPES];
   const [autoCents, frontierCents] = await Promise.all([
     usageTracker.sumUsdCentsForOrg(orgId, range, eventTypes, "auto"),
     usageTracker.sumUsdCentsForOrg(orgId, range, eventTypes, "frontier")
@@ -250,9 +254,10 @@ export async function loadOrgUsageSnapshot(input: {
     const snapshot = await quota.getSnapshot(input.org.id, "free", now);
     const windowMs = snapshot ? snapshot.windowHours * 3_600_000 : 5 * 60 * 60 * 1000;
     const range = rollingWindowRange(now, windowMs);
-    const [cents, byType] = await Promise.all([
+    const [cents, byType, costs] = await Promise.all([
       sumLlmCents(input.usageTracker, input.org.id, range),
-      includeMix ? input.usageTracker.eventsByType(input.org.id, range) : Promise.resolve([])
+      includeMix ? input.usageTracker.eventsByType(input.org.id, range) : Promise.resolve([]),
+    sumLlmCents(input.usageTracker, input.org.id, range, [...LLM_COST_EVENT_TYPES])
     ]);
     const usedRatio = snapshot
       ? snapshot.usedRatio
@@ -262,6 +267,7 @@ export async function loadOrgUsageSnapshot(input: {
       periodStart: range.from.toISOString(),
       periodEnd: snapshot?.resetsAt ?? now.toISOString(),
       usedCents: cents.usedCents,
+      costCents: costs.usedCents,
       includedCents: null,
       usedRatio,
       seatRevenueCents: 0,
@@ -283,9 +289,10 @@ export async function loadOrgUsageSnapshot(input: {
   }
 
   const { periodStart, periodEnd, range } = periodIso(input.org.createdAt, now);
-  const [cents, byType] = await Promise.all([
+  const [cents, byType, costs] = await Promise.all([
     sumLlmCents(input.usageTracker, input.org.id, range),
-    includeMix ? input.usageTracker.eventsByType(input.org.id, range) : Promise.resolve([])
+    includeMix ? input.usageTracker.eventsByType(input.org.id, range) : Promise.resolve([]),
+    sumLlmCents(input.usageTracker, input.org.id, range, [...LLM_COST_EVENT_TYPES])
   ]);
   const economics = paidPlanEconomics(input.org.plan, input.billing, input.users);
   const productMix = productMixFromEventTypes(byType);
@@ -294,13 +301,14 @@ export async function loadOrgUsageSnapshot(input: {
     capKind === "paid_included" ? unclampedRatio(cents.usedCents, economics.includedCents) : null;
   const seatRevenueCents = economics.seatRevenueCents;
   const marginCents =
-    seatRevenueCents != null ? seatRevenueCents - cents.usedCents : null;
+    seatRevenueCents != null ? seatRevenueCents - costs.usedCents : null;
 
   return {
     capKind,
     periodStart,
     periodEnd,
     usedCents: cents.usedCents,
+    costCents: costs.usedCents,
     includedCents: economics.includedCents,
     usedRatio,
     seatRevenueCents,
@@ -309,7 +317,7 @@ export async function loadOrgUsageSnapshot(input: {
       capKind === "paid_included"
         ? alertsForPaidOrg({
             usedRatio,
-            usedCents: cents.usedCents,
+            usedCents: costs.usedCents,
             seatRevenueCents
           })
         : [],
@@ -333,6 +341,7 @@ export async function loadOrgUsageSummary(input: {
     periodStart: snapshot.periodStart,
     periodEnd: snapshot.periodEnd,
     usedCents: snapshot.usedCents,
+    costCents: snapshot.costCents,
     includedCents: snapshot.includedCents,
     usedRatio: snapshot.usedRatio,
     seatRevenueCents: snapshot.seatRevenueCents,
@@ -378,7 +387,6 @@ export async function loadUserUsageSnapshot(input: {
     }
   }
   const aliases = principalAliasesForUser(input.user);
-  const eventTypes = [...LLM_USAGE_EVENT_TYPES];
   const [byType, lastActiveRows, metersByUser, pooledCents] = await Promise.all([
     input.usageTracker.eventsByTypeForPrincipals(input.org.id, aliases, range),
     input.usageTracker.lastActiveAtByPrincipal(input.org.id, aliases),
@@ -391,9 +399,7 @@ export async function loadUserUsageSnapshot(input: {
           input.org.createdAt
         )
       : Promise.resolve(new Map<string, PaidUsageMeters>()),
-    capKind === "paid_included"
-      ? Promise.resolve(new Map<string, { autoCents: number; frontierCents: number }>())
-      : input.usageTracker.sumUsdCentsByUserIds(input.org.id, range, eventTypes, [input.user.id])
+    input.usageTracker.sumUsdCentsByUserIds(input.org.id, range, [...LLM_COST_EVENT_TYPES], [input.user.id])
   ]);
   const meters = metersByUser.get(input.user.id);
   const pooled = pooledCents.get(input.user.id);
@@ -420,6 +426,7 @@ export async function loadUserUsageSnapshot(input: {
     periodStart,
     periodEnd,
     usedCents,
+    costCents: pooled ? pooled.autoCents + pooled.frontierCents : 0,
     includedCents,
     usedRatio: unclampedRatio(usedCents, includedCents),
     autoCents,
@@ -437,7 +444,7 @@ export async function loadUserUsageSummaries(input: {
   usageTracker: UsageTracker;
   now?: Date;
   quota?: PlanQuotaService;
-}): Promise<Map<string, Pick<OperatorUserUsageSnapshot, "usedCents" | "includedCents" | "usedRatio" | "lastActiveAt" | "alerts" | "usageTier">>> {
+}): Promise<Map<string, Pick<OperatorUserUsageSnapshot, "usedCents" | "costCents" | "includedCents" | "usedRatio" | "lastActiveAt" | "alerts" | "usageTier">>> {
   const now = input.now ?? new Date();
   const capKind = capKindForPlan(input.org.plan);
   const quota = input.quota ?? createPlanQuotaService(input.usageTracker);
@@ -457,19 +464,17 @@ export async function loadUserUsageSummaries(input: {
         )
       : Promise.resolve(new Map<string, PaidUsageMeters>()),
     input.usageTracker.lastActiveAtByPrincipal(input.org.id),
-    capKind === "paid_included"
-      ? Promise.resolve(new Map<string, { autoCents: number; frontierCents: number }>())
-      : input.usageTracker.sumUsdCentsByUserIds(
-          input.org.id,
-          range,
-          [...LLM_USAGE_EVENT_TYPES],
-          input.users.map((user) => user.id)
-        )
+    input.usageTracker.sumUsdCentsByUserIds(
+      input.org.id,
+      range,
+      [...LLM_COST_EVENT_TYPES],
+      input.users.map((user) => user.id)
+    )
   ]);
   const lastActiveByPrincipal = new Map(lastActiveRows.map((row) => [row.principal, row.lastActiveAt] as const));
   const summaries = new Map<
     string,
-    Pick<OperatorUserUsageSnapshot, "usedCents" | "includedCents" | "usedRatio" | "lastActiveAt" | "alerts" | "usageTier">
+    Pick<OperatorUserUsageSnapshot, "usedCents" | "costCents" | "includedCents" | "usedRatio" | "lastActiveAt" | "alerts" | "usageTier">
   >();
   for (const user of input.users) {
     const meters = metersByUser.get(user.id);
@@ -486,6 +491,7 @@ export async function loadUserUsageSummaries(input: {
     summaries.set(user.id, {
       usageTier: user.usageTier ?? null,
       usedCents,
+      costCents: pooled ? pooled.autoCents + pooled.frontierCents : 0,
       includedCents,
       usedRatio: unclampedRatio(usedCents, includedCents),
       lastActiveAt: lastActiveAt ? lastActiveAt.toISOString() : null,
@@ -511,6 +517,7 @@ export function splitUsageQueueItems(input: {
     orgName: input.orgName,
     plan: input.plan,
     usedCents: input.summary.usedCents,
+    costCents: input.summary.costCents,
     includedCents: input.summary.includedCents,
     usedRatio: input.summary.usedRatio,
     seatRevenueCents: input.summary.seatRevenueCents,
@@ -679,7 +686,7 @@ export async function loadOrgCostBreakdown(input: {
   );
   const resolved = resolveOperatorCostRange(kind, now);
   const range = { from: resolved.from, to: resolved.to };
-  const eventTypes = [...LLM_USAGE_EVENT_TYPES];
+  const eventTypes = [...LLM_COST_EVENT_TYPES];
   const filterUserId = input.userId?.trim() || undefined;
 
   const mixPromise = (async () => {

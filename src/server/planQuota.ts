@@ -30,7 +30,9 @@ import {
 } from "./usageTiers";
 
 export const QUOTA_CREDIT_EVENT_TYPE = "quota.credit" as const;
-export const LLM_USAGE_EVENT_TYPES = ["chat.message", "completion.accepted", QUOTA_CREDIT_EVENT_TYPE] as const;
+/** Provider spend excludes allowance adjustments; quota meters include those credits. */
+export const LLM_COST_EVENT_TYPES = ["chat.message", "completion.accepted"] as const;
+export const LLM_USAGE_EVENT_TYPES = [...LLM_COST_EVENT_TYPES, QUOTA_CREDIT_EVENT_TYPE] as const;
 
 export const DEFAULT_FREE_TOKEN_LIMIT = 80_000;
 /** @deprecated Use DEFAULT_FREE_TOKEN_LIMIT */
