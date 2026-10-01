@@ -189,7 +189,7 @@ export default function ProvisionCustomerPage() {
         ))}
       </div>
 
-      <form onSubmit={step === STEPS.length - 1 ? handleSubmit : (e) => e.preventDefault()} className="space-y-6">
+      <form onSubmit={step === STEPS.length - 1 ? handleSubmit : (e) => e.preventDefault()} className="mx-auto max-w-3xl space-y-6">
         {step === 0 && (
           <div className="space-y-4">
             <div>

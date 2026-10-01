@@ -101,6 +101,43 @@ export class StripeService {
     return Boolean(this.config.stripeSecretKey && this.config.stripePriceIdPro);
   }
 
+  /** Finalized USD invoice totals, net of credit notes, including tax, by invoice creation date. */
+  public async billedCentsInRange(from: Date, to: Date, customerIds: string[]): Promise<number> {
+    if (!this.config.stripeSecretKey) throw new Error("Stripe billing is not configured");
+    if (customerIds.length === 0) return 0;
+    const customers = new Set(customerIds);
+    let cursor: string | undefined;
+    let total = 0;
+    do {
+      const params = new URLSearchParams({
+        limit: "100",
+        "created[gte]": String(Math.ceil(from.getTime() / 1000)),
+        "created[lt]": String(Math.ceil(to.getTime() / 1000))
+      });
+      if (customerIds.length === 1) params.set("customer", customerIds[0]);
+      if (cursor) params.set("starting_after", cursor);
+      const response = await fetch(`https://api.stripe.com/v1/invoices?${params}`, {
+        headers: { Authorization: `Bearer ${this.config.stripeSecretKey}` }
+      });
+      if (!response.ok) throw new Error(`Stripe invoices unavailable (${response.status})`);
+      const page = await response.json() as { data: Array<{
+        id: string; customer: string; currency: string; status: string;
+        total_excluding_tax: number | null; total: number;
+        pre_payment_credit_notes_amount: number; post_payment_credit_notes_amount: number;
+      }>; has_more: boolean };
+      for (const invoice of page.data) {
+        if (!customers.has(invoice.customer) || invoice.status === "draft" || invoice.status === "void") continue;
+        if (invoice.currency !== "usd") throw new Error("Non-USD billing cannot be combined with USD costs");
+        total += invoice.total
+          - (invoice.pre_payment_credit_notes_amount ?? 0) - (invoice.post_payment_credit_notes_amount ?? 0);
+      }
+      const next = page.has_more ? page.data.at(-1)?.id : undefined;
+      if (page.has_more && (!next || next === cursor)) throw new Error("Stripe invoice pagination was incomplete");
+      cursor = next;
+    } while (cursor);
+    return total;
+  }
+
   public async createCheckoutSession(input: {
     orgName: string;
     email: string;

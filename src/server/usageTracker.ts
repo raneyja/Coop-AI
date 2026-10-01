@@ -348,7 +348,7 @@ export class UsageTracker {
    * Days with no spend are omitted — callers fill gaps for charts.
    */
   public async sumUsdCentsByDay(
-    orgId: string,
+    orgId: string | null,
     range: UsageDateRange,
     eventTypes: string[],
     userId?: string | null
@@ -362,7 +362,7 @@ export class UsageTracker {
       params.push(userId.trim());
     }
     const result = await this.pool.query(
-      `SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date AS day,
+      `SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date::text AS day,
               metadata->>'bucket' AS bucket,
               COALESCE(SUM(
                 CASE
@@ -371,7 +371,7 @@ export class UsageTracker {
                 END
               ), 0)::int AS total
        FROM usage_events
-       WHERE org_id = $1
+       WHERE ($1::text IS NULL OR org_id = $1)
          AND created_at >= $2
          AND created_at < $3
          AND event_type = ANY($4::text[])
@@ -381,8 +381,8 @@ export class UsageTracker {
       params
     );
     const byDay = new Map<string, { autoCents: number; frontierCents: number }>();
-    for (const row of result.rows as Array<{ day?: string; bucket?: string; total?: number }>) {
-      const day = String(row.day ?? "").slice(0, 10);
+    for (const row of result.rows as Array<{ day?: string | Date; bucket?: string; total?: number }>) {
+      const day = (row.day instanceof Date ? row.day.toISOString() : String(row.day ?? "")).slice(0, 10);
       if (!day) {
         continue;
       }

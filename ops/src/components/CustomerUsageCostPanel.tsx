@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { CostLineChart } from "@/components/charts/CostLineChart";
 import { UsageMeterBar } from "@/components/UsageMeterBar";
 import {
   fetchOrganizationUsage,
+  fetchPlatformFinancials,
   fetchOrganizationUsageCost,
-  formatBilledAmount,
   formatDateTime,
   formatUsdFromCents,
   formatUsagePercent,
@@ -20,50 +21,60 @@ import {
 const RANGE_OPTIONS: Array<{ kind: OperatorCostRangeKind; label: string }> = [
   { kind: "7d", label: "7 days" },
   { kind: "30d", label: "30 days" },
-  { kind: "month", label: "Month" }
+  { kind: "90d", label: "90 days" }
 ];
 
 export function CustomerUsageCostPanel({
   orgId,
   userId,
-  usersHref
+  usersHref,
+  onRangeChange
 }: {
-  orgId: string;
+  orgId?: string;
   /** When set, chart + totals are scoped to this seat. */
   userId?: string;
   /** Optional deep-link for “see all users” from org view. */
   usersHref?: string;
+  onRangeChange?: (range: OperatorCostRangeKind) => void;
 }) {
-  const [rangeKind, setRangeKind] = useState<OperatorCostRangeKind>("30d");
+  const searchParams = useSearchParams();
+  const initialRange = searchParams.get("range");
+  const [rangeKind, setRangeKind] = useState<OperatorCostRangeKind>(
+    initialRange === "7d" || initialRange === "90d" ? initialRange : "30d"
+  );
   const [usage, setUsage] = useState<OrgUsageSnapshot | null>(null);
   const [cost, setCost] = useState<OrgCostBreakdown | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const [usageRes, costRes] = await Promise.all([
-      fetchOrganizationUsage(orgId),
-      fetchOrganizationUsageCost(orgId, { range: rangeKind, userId })
-    ]);
-    setLoading(false);
-    if (usageRes.ok) {
-      setUsage(usageRes.data ?? null);
-    } else {
-      setUsage(null);
-    }
-    if (!costRes.ok || !costRes.data) {
-      setCost(null);
-      setError(costRes.error ?? "Could not load model cost.");
-      return;
-    }
-    setCost(costRes.data);
-  }, [orgId, rangeKind, userId]);
-
   useEffect(() => {
+    let active = true;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      const [usageRes, costRes] = await Promise.all([
+        orgId ? fetchOrganizationUsage(orgId) : Promise.resolve({ ok: true, data: undefined }),
+        orgId ? fetchOrganizationUsageCost(orgId, { range: rangeKind, userId }) : fetchPlatformFinancials(rangeKind)
+      ]);
+      if (!active) return;
+      setLoading(false);
+      if (usageRes.ok) {
+        setUsage(usageRes.data ?? null);
+      } else {
+        setUsage(null);
+      }
+      if (!costRes.ok || !costRes.data) {
+        setCost(null);
+        setError(costRes.error ?? "Could not load model cost.");
+        return;
+      }
+      setCost(costRes.data);
+    };
     void load();
-  }, [load]);
+    return () => {
+      active = false;
+    };
+  }, [orgId, rangeKind, userId]);
 
   const showByUser = !userId && (cost?.byUser.length ?? 0) > 0;
 
@@ -71,9 +82,9 @@ export function CustomerUsageCostPanel({
     <section id="ops-usage" className="admin-card">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="admin-section-label">Usage & cost</h2>
+          <h2 className="admin-section-label">{orgId ? "Usage & cost" : "All customers · financial overview"}</h2>
           <p className="mt-1 text-sm text-coop-muted">
-            Coop’s real model spend — shown whether or not the customer was billed.
+            Finalized invoice amounts (including tax, net of credit notes), by creation date. Profit = billed − model cost; excludes other operating costs.
           </p>
         </div>
         <div className="flex flex-wrap gap-1 rounded-md border border-coop-border/60 bg-coop-surface/40 p-1">
@@ -86,7 +97,10 @@ export function CustomerUsageCostPanel({
                   ? "bg-white/[0.08] text-white"
                   : "text-coop-muted hover:bg-white/[0.04] hover:text-white"
               }`}
-              onClick={() => setRangeKind(option.kind)}
+              onClick={() => {
+                setRangeKind(option.kind);
+                onRangeChange?.(option.kind);
+              }}
               aria-pressed={rangeKind === option.kind}
             >
               {option.label}
@@ -95,60 +109,50 @@ export function CustomerUsageCostPanel({
         </div>
       </div>
 
-      {loading && !cost ? (
+      {loading ? (
         <p className="text-sm text-coop-muted">Loading cost…</p>
-      ) : error && !cost ? (
+      ) : error ? (
         <p className="text-sm text-red-400">{error}</p>
       ) : cost ? (
         <>
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-            <div>
-              <p className="admin-stat-label">LLM cost · {cost.range.label}</p>
-              <p className="mt-1 text-3xl font-semibold tracking-tight text-white">
-                {formatUsdFromCents(cost.totals.usedCents)}
-              </p>
-              <p className="mt-2 text-sm text-coop-muted">
-                Auto {formatUsdFromCents(cost.totals.autoCents)} · Frontier{" "}
-                {formatUsdFromCents(cost.totals.frontierCents)}
-              </p>
-              <div className="mt-4 grid grid-cols-2 gap-4">
-                <div>
-                  <p className="admin-stat-label">Billed (seats)</p>
-                  <p className="admin-stat-value--quiet">
-                    {formatBilledAmount(usage?.seatRevenueCents)}
-                  </p>
-                </div>
-                <div>
-                  <p className="admin-stat-label">Margin</p>
-                  <p
-                    className={`admin-stat-value--quiet ${
-                      usage?.marginCents != null && usage.marginCents < 0 ? "text-coop-warn" : ""
-                    }`}
-                  >
-                    {usage?.marginCents == null
-                      ? "—"
-                      : formatUsdFromCents(usage.marginCents)}
-                  </p>
-                </div>
-              </div>
-              <div className="admin-mix mt-4">
-                <span>Chat {cost.productMix.chat}</span>
-                <span>Completions {cost.productMix.completions}</span>
-                <span>Quick actions {cost.productMix.quickActions}</span>
-                <span>Lightning {cost.productMix.lightning}</span>
-              </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="admin-metric">
+              <p className="admin-stat-label">Total Billed</p>
+              <p className="admin-metric-value">{formatUsdFromCents(cost.totals.billedCents)}</p>
+              <p className="mt-2 text-xs text-coop-muted">{cost.range.label}</p>
             </div>
-
-            <div>
-              <CostLineChart
-                data={cost.days.map((day) => ({
-                  day: day.day,
-                  autoCents: day.autoCents,
-                  frontierCents: day.frontierCents
-                }))}
-              />
+            <div className="admin-metric">
+              <p className="admin-stat-label">Total Cost</p>
+              <p className="admin-metric-value">{formatUsdFromCents(cost.totals.usedCents)}</p>
+              <p className="mt-2 text-xs text-coop-muted">
+                Auto {formatUsdFromCents(cost.totals.autoCents)} · Frontier {formatUsdFromCents(cost.totals.frontierCents)}
+              </p>
+            </div>
+            <div className="admin-metric">
+              <p className="admin-stat-label">Total Profit</p>
+              <p className={`admin-metric-value ${cost.totals.profitCents != null && cost.totals.profitCents < 0 ? "!text-coop-warn" : ""}`}>
+                {formatUsdFromCents(cost.totals.profitCents)}
+              </p>
+              <p className="mt-2 text-xs text-coop-muted">Billed less model cost</p>
             </div>
           </div>
+          {cost.totals.billedCents == null ? (
+            <p className="text-xs text-coop-muted">
+              {userId ? "Invoices are billed to the organization; billed revenue and profit are not attributed to individual users." : "Invoice data is unavailable. Billed and profit are not estimated."}
+            </p>
+          ) : null}
+          <div>
+            <p className="mb-3 text-sm font-medium text-white/90">Model cost over time</p>
+            <CostLineChart data={cost.days.map((day) => ({
+              day: day.day, autoCents: day.autoCents, frontierCents: day.frontierCents
+            }))} />
+          </div>
+          {orgId ? <div className="admin-mix">
+            <span>Chat {cost.productMix.chat}</span>
+            <span>Completions {cost.productMix.completions}</span>
+            <span>Quick actions {cost.productMix.quickActions}</span>
+            <span>Lightning {cost.productMix.lightning}</span>
+          </div> : null}
 
           {usage?.capKind === "free_credits" && usage.free ? (
             <div className="rounded-md border border-coop-border/50 bg-white/[0.02] p-4">
@@ -208,7 +212,9 @@ export function CustomerUsageCostPanel({
                   <thead>
                     <tr>
                       <th>Email</th>
-                      <th>Cost</th>
+                      <th>Total Billed</th>
+                      <th>Total Cost</th>
+                      <th>Total Profit</th>
                       <th>Auto</th>
                       <th>Frontier</th>
                     </tr>
@@ -218,13 +224,15 @@ export function CustomerUsageCostPanel({
                       <tr key={row.userId}>
                         <td>
                           <Link
-                            href={`/customers/${orgId}/users/${row.userId}`}
+                            href={`/customers/${orgId}/users/${row.userId}?range=${rangeKind}`}
                             className="admin-link"
                           >
                             {row.email}
                           </Link>
                         </td>
+                        <td className="text-xs text-coop-muted" title="Organization invoices are not attributed to users">—</td>
                         <td className="text-xs">{formatUsdFromCents(row.usedCents)}</td>
+                        <td className="text-xs text-coop-muted" title="Requires user billing attribution">—</td>
                         <td className="text-xs text-coop-muted">
                           {formatUsdFromCents(row.autoCents)}
                         </td>

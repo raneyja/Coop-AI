@@ -954,7 +954,7 @@ void (async () => {
       usageTracker: {
         ...usageTracker,
         sumUsdCentsByDay: async () => [
-          { day: "2026-09-22", autoCents: 200, frontierCents: 50 }
+          { day: new Date().toISOString().slice(0, 10), autoCents: 200, frontierCents: 50 }
         ],
         sumUsdCentsByUserIds: async () =>
           new Map([["user-1", { autoCents: 200, frontierCents: 50 }]])
@@ -971,6 +971,46 @@ void (async () => {
   };
   assert.equal(costBody.cost?.totals?.usedCents, 250);
   assert.equal(costBody.cost?.byUser?.[0]?.email, "a@example.com");
+
+  // Platform totals are independent of the paginated/filtered customer list.
+  const platformFinancials = mockResponse();
+  const platformDeps = baseDeps({
+    orgStore: {
+      listOperatorBillingCustomers: async () => ["cus_1", "cus_2"]
+    } as unknown as OrgStore,
+    operatorStore: { resolveSession: async () => viewer } as unknown as OperatorStore,
+    usageTracker: {
+      canRead: () => true,
+      sumUsdCentsByDay: async (orgId: string | null) => {
+        assert.equal(orgId, null);
+        return [{ day: new Date().toISOString().slice(0, 10), autoCents: 138, frontierCents: 1179 }];
+      }
+    } as never,
+    stripeService: {
+      billedCentsInRange: async (_from: Date, _to: Date, customers: string[]) => {
+        assert.deepEqual(customers, ["cus_1", "cus_2"]);
+        return 5000;
+      }
+    } as never
+  });
+  const platformRequest = {
+    method: "GET", pathname: "/v1/operator/financials",
+    query: new URLSearchParams({ range: "90d", q: "filtered-customer" }),
+    headers: { authorization: "Bearer ops-token" }, body: {}
+  };
+  await handleOperatorApiRequest(platformRequest, platformFinancials, platformDeps);
+  assert.equal(platformFinancials.statusCode, 200);
+  const platformCost = JSON.parse(platformFinancials.body ?? "{}").cost;
+  assert.equal(platformCost.range.kind, "90d");
+  assert.equal(platformCost.totals.usedCents, 1317);
+  assert.equal(platformCost.totals.billedCents, 5000);
+  assert.equal(platformCost.totals.profitCents, 3683);
+  const billingUnavailable = mockResponse();
+  await handleOperatorApiRequest(platformRequest, billingUnavailable, { ...platformDeps, stripeService: undefined });
+  const unavailableTotals = JSON.parse(billingUnavailable.body ?? "{}").cost.totals;
+  assert.equal(unavailableTotals.usedCents, 1317);
+  assert.equal(unavailableTotals.billedCents, null);
+  assert.equal(unavailableTotals.profitCents, null);
 
   const userDetail = mockResponse();
   await handleOperatorApiRequest(

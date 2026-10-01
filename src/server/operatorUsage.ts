@@ -541,7 +541,7 @@ export function splitUsageQueueItems(input: {
 }
 
 /** Operator cost chart ranges — independent of Free allowance windows and Pro billing period. */
-export type OperatorCostRangeKind = "7d" | "30d" | "month";
+export type OperatorCostRangeKind = "7d" | "30d" | "90d" | "month";
 
 export type OperatorCostDayPoint = {
   day: string;
@@ -566,6 +566,8 @@ export type OperatorCostBreakdown = {
     to: string;
   };
   totals: {
+    billedCents?: number | null;
+    profitCents?: number | null;
     usedCents: number;
     autoCents: number;
     frontierCents: number;
@@ -580,6 +582,7 @@ export function parseOperatorCostRangeKind(raw: string | null | undefined): Oper
   if (value === "7d" || value === "week" || value === "weekly") {
     return "7d";
   }
+  if (value === "90d") return "90d";
   if (value === "month" || value === "monthly" || value === "calendar_month") {
     return "month";
   }
@@ -591,11 +594,11 @@ export function resolveOperatorCostRange(
   now = new Date()
 ): { kind: OperatorCostRangeKind; label: string; from: Date; to: Date } {
   const to = now;
-  if (kind === "7d") {
+  if (kind === "7d" || kind === "90d") {
     return {
       kind,
-      label: "Last 7 days",
-      from: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+      label: kind === "90d" ? "Last 90 days" : "Last 7 days",
+      from: new Date(now.getTime() - (kind === "90d" ? 90 : 7) * 24 * 60 * 60 * 1000),
       to
     };
   }

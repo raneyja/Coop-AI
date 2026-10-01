@@ -31,6 +31,7 @@ import { OperatorGoogleAuthService } from "./operators/operatorGoogleAuth";
 import type { OperatorStore, OperatorContext } from "./operators/operatorStore";
 import type { OrgRepoAccessMode } from "./repoAccessTypes";
 import type { UsageTracker } from "./usageTracker";
+import { LLM_USAGE_EVENT_TYPES } from "./planQuota";
 import {
   loadOrgCostBreakdown,
   loadOrgUsageSnapshot,
@@ -39,6 +40,8 @@ import {
   loadUserUsageSummaries,
   operatorUserStatus,
   parseOperatorCostRangeKind,
+  resolveOperatorCostRange,
+  fillCostDays,
   splitUsageQueueItems,
   type OperatorUsageQueueItem
 } from "./operatorUsage";
@@ -137,6 +140,10 @@ export async function handleOperatorApiRequest(
 
   if (parsed.method === "GET" && parsed.pathname === "/v1/operator/attention-queue") {
     return handleAttentionQueue(response, deps, operator);
+  }
+
+  if (parsed.method === "GET" && parsed.pathname === "/v1/operator/financials") {
+    return handlePlatformFinancials(parsed, response, deps, operator);
   }
 
   if (parsed.method === "GET" && parsed.pathname === "/v1/operator/organizations") {
@@ -1148,6 +1155,46 @@ async function handleOrgUsage(
   return true;
 }
 
+async function loadRangeBilledCents(
+  deps: OperatorApiDeps, from: Date, to: Date, customerIds: string[]
+): Promise<number | null> {
+  if (customerIds.length === 0) return 0;
+  if (!deps.stripeService) return null;
+  try {
+    return await deps.stripeService.billedCentsInRange(from, to, customerIds);
+  } catch (error) {
+    console.warn("[operator] Range billing unavailable", error instanceof Error ? error.message : "unknown error");
+    return null;
+  }
+}
+
+async function handlePlatformFinancials(
+  parsed: ParsedRequest, response: ServerResponse, deps: OperatorApiDeps, operator: OperatorContext
+): Promise<boolean> {
+  if (!requireOperatorRole(operator, "viewer", response)) return true;
+  if (!deps.usageTracker?.canRead()) {
+    writeJson(response, 503, { error: "usage tracking not configured" });
+    return true;
+  }
+  const range = resolveOperatorCostRange(parseOperatorCostRangeKind(parsed.query?.get("range")));
+  const [sparse, customers] = await Promise.all([
+    deps.usageTracker.sumUsdCentsByDay(null, range, [...LLM_USAGE_EVENT_TYPES]),
+    deps.orgStore!.listOperatorBillingCustomers()
+  ]);
+  const days = fillCostDays(sparse, range.from, range.to);
+  const autoCents = days.reduce((sum, day) => sum + day.autoCents, 0);
+  const frontierCents = days.reduce((sum, day) => sum + day.frontierCents, 0);
+  const usedCents = autoCents + frontierCents;
+  const billedCents = await loadRangeBilledCents(deps, range.from, range.to, customers);
+  writeJson(response, 200, { cost: {
+    range: { ...range, from: range.from.toISOString(), to: range.to.toISOString() },
+    totals: { autoCents, frontierCents, usedCents, billedCents,
+      profitCents: billedCents == null ? null : billedCents - usedCents },
+    days, byUser: [], productMix: { chat: 0, completions: 0, quickActions: 0, lightning: 0 }
+  } });
+  return true;
+}
+
 async function handleOrgUsageCost(
   orgId: string,
   parsed: ParsedRequest,
@@ -1180,6 +1227,13 @@ async function handleOrgUsageCost(
     rangeKind: parseOperatorCostRangeKind(parsed.query?.get("range")),
     userId
   });
+  const billing = await deps.orgStore!.getOrganizationBilling(orgId);
+  const billedCents = userId ? null : await loadRangeBilledCents(
+    deps, new Date(cost.range.from), new Date(cost.range.to),
+    billing?.stripeCustomerId ? [billing.stripeCustomerId] : []
+  );
+  cost.totals.billedCents = billedCents;
+  cost.totals.profitCents = billedCents == null ? null : billedCents - cost.totals.usedCents;
   writeJson(response, 200, {
     organization: { id: org.id, name: org.name, plan: org.plan },
     cost

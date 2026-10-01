@@ -26,7 +26,7 @@
   }
 
   .admin-card {
-    @apply space-y-4 rounded-md border border-coop-border/80 bg-coop-surface/40 p-5;
+    @apply space-y-5 rounded-xl border border-coop-border/40 bg-coop-surface/60 p-6;
   }
 
   .admin-card--table {
@@ -38,7 +38,7 @@
   }
 
   .admin-page-nav {
-    @apply flex flex-wrap gap-1 rounded-md border border-coop-border/60 bg-coop-surface/40 p-1;
+    @apply flex flex-wrap gap-1 rounded-lg border border-coop-border/40 bg-coop-dark/95 p-1.5;
   }
 
   .admin-page-nav-link {
@@ -126,7 +126,7 @@
   }
 
   .admin-section-label {
-    @apply text-sm font-medium text-white;
+    @apply text-base font-semibold text-white;
   }
 
   .admin-stat-label {
@@ -146,7 +146,7 @@
   }
 
   .admin-btn {
-    @apply inline-flex items-center justify-center rounded-md px-3 py-1.5 font-mono text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-coop-index disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center rounded-md px-3.5 py-2 font-sans text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-coop-index disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .admin-btn-primary {
@@ -162,11 +162,11 @@
   }
 
   .admin-input {
-    @apply w-full rounded-md border border-coop-border bg-coop-dark px-3 py-2 font-mono text-sm text-white placeholder:text-coop-muted/60 focus:border-coop-index focus:outline-none focus:ring-1 focus:ring-coop-index/30;
+    @apply w-full rounded-md border border-coop-border bg-coop-dark px-3 py-2 font-sans text-sm text-white placeholder:text-coop-muted/60 focus:border-coop-index focus:outline-none focus:ring-1 focus:ring-coop-index/30;
   }
 
   .admin-label {
-    @apply mb-1.5 block font-mono text-xs text-coop-muted;
+    @apply mb-1.5 block text-sm font-medium text-coop-muted;
   }
 
   .admin-link {
@@ -178,7 +178,7 @@
   }
 
   .admin-table th {
-    @apply border-b border-coop-border px-4 py-2 text-xs font-medium uppercase tracking-wide text-coop-muted;
+    @apply border-b border-coop-border bg-white/[0.02] px-5 py-3 text-xs font-medium uppercase tracking-wide text-coop-muted;
   }
 
   .admin-sort-btn {
@@ -190,15 +190,41 @@
   }
 
   .admin-table td {
-    @apply border-b border-coop-border/40 px-4 py-2;
+    @apply border-b border-coop-border/25 px-5 py-3.5;
   }
 
   .admin-page-title {
-    @apply text-xl font-semibold text-white;
+    @apply text-2xl font-semibold tracking-tight text-white;
+  }
+
+
+  .admin-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  .admin-table tbody tr {
+    @apply transition-colors hover:bg-white/[0.025];
+  }
+
+  .admin-table td {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .admin-metric {
+    @apply min-w-0 rounded-lg border border-coop-border/30 bg-coop-dark/50 p-5;
+  }
+
+  .admin-metric-value {
+    @apply mt-2 text-3xl font-semibold tracking-tight text-white;
+    font-variant-numeric: tabular-nums;
+  }
+
+  section[id] {
+    scroll-margin-top: 90px;
   }
 
   .attention-card {
-    @apply rounded-md border border-coop-border/80 bg-coop-surface/40 p-4 transition-colors hover:border-coop-border;
+    @apply rounded-xl border border-coop-border/40 bg-coop-surface/60 p-5 transition-colors hover:border-coop-border;
   }
 
   .attention-card--warn {

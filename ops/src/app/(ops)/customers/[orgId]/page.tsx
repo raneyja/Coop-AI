@@ -434,7 +434,7 @@ export default function CustomerDetailPage() {
       {actionError && <p className="text-sm text-red-400">{actionError}</p>}
       {actionNotice && <p className="text-sm text-coop-index">{actionNotice}</p>}
 
-      <nav className="admin-page-nav">
+      <nav className="admin-page-nav sticky top-3 z-10 backdrop-blur" aria-label="Jump to customer section">
         <a href="#ops-usage" className="admin-page-nav-link">
           Usage
         </a>
@@ -532,7 +532,7 @@ export default function CustomerDetailPage() {
           </table>
         </div>
         <p className="mt-2 text-xs text-coop-muted">
-          Cost column is the plan period / free window. Use the chart above for 7d / 30d / month spend.
+          Cost column is the plan period / free window. Use the chart above for 7d / 30d / 90d spend.
         </p>
       </section>
 

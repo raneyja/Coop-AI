@@ -769,6 +769,14 @@ export class OrgStore {
     return result.rowCount ?? 0;
   }
 
+  /** Complete customer set for platform financial reporting; independent of list filters. */
+  public async listOperatorBillingCustomers(): Promise<string[]> {
+    const result = await this.pool.query(
+      "SELECT DISTINCT stripe_customer_id FROM organizations WHERE stripe_customer_id IS NOT NULL"
+    );
+    return result.rows.map((row: { stripe_customer_id: string }) => row.stripe_customer_id);
+  }
+
   public async listOrganizationsForOperator(filters: {
     search?: string;
     plan?: OrgPlan;

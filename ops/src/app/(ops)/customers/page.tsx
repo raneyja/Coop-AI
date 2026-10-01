@@ -18,8 +18,10 @@ import {
   planLabel,
   suspendOrganization,
   type CustomerSummary,
+  type OperatorCostRangeKind,
   type OrgPlan
 } from "@/lib/coopApi";
+import { CustomerUsageCostPanel } from "@/components/CustomerUsageCostPanel";
 import { ConfirmOrgNameModal } from "@/components/ConfirmOrgNameModal";
 import { UnavailableBanner } from "@/components/UnavailableBanner";
 import { OperatorOrgStatusBadge } from "@/components/StatusBadge";
@@ -36,6 +38,9 @@ export default function CustomersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const me = getStoredMe();
+  const [financialRange, setFinancialRange] = useState<OperatorCostRangeKind>(
+    searchParams.get("range") === "90d" ? "90d" : searchParams.get("range") === "7d" ? "7d" : "30d"
+  );
   const [organizations, setOrganizations] = useState<CustomerSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
@@ -194,6 +199,8 @@ export default function CustomersPage() {
         </Link>
       </div>
 
+      <CustomerUsageCostPanel onRangeChange={setFinancialRange} />
+
       <form onSubmit={handleUserLookup} className="admin-card flex flex-wrap items-end gap-3">
         <div className="min-w-[260px] flex-1">
           <label htmlFor="user-email" className="admin-label">
@@ -334,7 +341,7 @@ export default function CustomersPage() {
               sortedOrganizations.map((org) => (
                 <tr key={org.id} className="hover:bg-white/[0.02]">
                   <td>
-                    <Link href={`/customers/${org.id}`} className="admin-link font-medium">
+                    <Link href={`/customers/${org.id}?range=${financialRange}`} className="admin-link font-medium">
                       {org.name}
                     </Link>
                     <p className="mt-0.5 truncate font-mono text-xs text-coop-muted">

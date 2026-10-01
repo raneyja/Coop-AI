@@ -66,7 +66,7 @@ export type OrgUsageSnapshot = OrgUsageSummary & {
   };
 };
 
-export type OperatorCostRangeKind = "7d" | "30d" | "month";
+export type OperatorCostRangeKind = "7d" | "30d" | "90d" | "month";
 
 export type OrgCostDayPoint = {
   day: string;
@@ -91,6 +91,8 @@ export type OrgCostBreakdown = {
     to: string;
   };
   totals: {
+    billedCents?: number | null;
+    profitCents?: number | null;
     usedCents: number;
     autoCents: number;
     frontierCents: number;
@@ -397,7 +399,7 @@ function normalizeOrgCostBreakdown(raw: unknown): OrgCostBreakdown | undefined {
   const totals = asRecord(record.totals);
   const kindRaw = String(range.kind ?? "30d");
   const kind: OperatorCostRangeKind =
-    kindRaw === "7d" || kindRaw === "month" ? kindRaw : "30d";
+    kindRaw === "7d" || kindRaw === "90d" || kindRaw === "month" ? kindRaw : "30d";
   const daysRaw = Array.isArray(record.days) ? record.days : [];
   const byUserRaw = Array.isArray(record.byUser) ? record.byUser : [];
   return {
@@ -408,6 +410,8 @@ function normalizeOrgCostBreakdown(raw: unknown): OrgCostBreakdown | undefined {
       to: String(range.to ?? "")
     },
     totals: {
+      billedCents: totals.billedCents == null ? null : Number(totals.billedCents),
+      profitCents: totals.profitCents == null ? null : Number(totals.profitCents),
       usedCents: Number(totals.usedCents ?? 0),
       autoCents: Number(totals.autoCents ?? 0),
       frontierCents: Number(totals.frontierCents ?? 0)
@@ -809,6 +813,12 @@ export async function fetchOrganizationUsage(
     return { ok: false, status: 502, error: "Usage payload was incomplete." };
   }
   return { ok: true, status: result.status, data: usage };
+}
+
+export async function fetchPlatformFinancials(range: OperatorCostRangeKind): Promise<ApiResult<OrgCostBreakdown>> {
+  const result = await coopFetch<{ cost?: RawRecord }>(`/v1/operator/financials?range=${range}`);
+  if (!result.ok || !result.data) return { ...result, data: undefined };
+  return { ok: true, status: result.status, data: normalizeOrgCostBreakdown(result.data.cost) };
 }
 
 export async function fetchOrganizationUsageCost(

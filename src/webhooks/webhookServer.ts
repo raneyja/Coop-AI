@@ -89,6 +89,7 @@ import { handleOperatorApiRequest } from "../server/operatorApi";
 import { loadOperatorAuthConfig } from "../server/operators/operatorAuthConfig";
 import { OperatorStore } from "../server/operators/operatorStore";
 import { handleBillingApiRequest } from "../server/billing/billingApi";
+import { StripeService } from "../server/billing/stripeService";
 import { loadBillingConfig } from "../server/billing/billingConfig";
 import { EmailService } from "../server/email/emailService";
 import { applyCors, loadCorsOrigins } from "../server/cors";
@@ -400,6 +401,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
   });
   const chatRouter = createChatRouter();
   const billingConfig = loadBillingConfig();
+  const operatorStripeService = new StripeService(billingConfig);
   const emailService = new EmailService(billingConfig);
 
   const corsOrigins = loadCorsOrigins();
@@ -680,6 +682,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
           integrationStore,
           serverConfig,
           operatorAuthConfig,
+          stripeService: operatorStripeService,
           emailService,
           auditLogger,
           jobQueue: jobs.queue,
