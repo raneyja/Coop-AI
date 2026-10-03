@@ -1,5 +1,7 @@
 "use client";
 
+import { EXTENSION_MARKETPLACE_URL } from "@/lib/extension";
+
 import {
   clearSession,
   displayOrgName,
@@ -42,6 +44,14 @@ export function TopBar() {
       </div>
       <div className="flex items-center gap-3">
         <UpgradeRequestNotifier />
+        <a
+          href={EXTENSION_MARKETPLACE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="admin-btn-secondary whitespace-nowrap text-xs"
+        >
+          Install in VS Code
+        </a>
         <button type="button" onClick={() => void signOut()} className="admin-btn-secondary text-xs">
           Sign out
         </button>

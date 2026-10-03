@@ -49,6 +49,9 @@ export function Footer() {
             <h3 className={heading}>Product</h3>
             <ul className="mt-4 space-y-3">
               <li>
+                <a href={siteConfig.links.adminPortal} className={link}>Admin portal</a>
+              </li>
+              <li>
                 <Link href="/" className={link}>
                   Home
                 </Link>

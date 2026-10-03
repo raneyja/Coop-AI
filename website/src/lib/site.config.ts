@@ -80,6 +80,7 @@ export const siteConfig = {
     }
   },
   links: {
+    adminPortal: "https://admin.coop-ai.dev/login",
     github: "https://github.com/coop-ai",
     vscodeMarketplace:
       process.env.NEXT_PUBLIC_VSCODE_MARKETPLACE_URL ||

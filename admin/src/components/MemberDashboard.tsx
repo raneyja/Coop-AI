@@ -1,5 +1,7 @@
 "use client";
 
+import { EXTENSION_MARKETPLACE_URL } from "@/lib/extension";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { displayOrgName, getStoredMe } from "@/lib/auth";
@@ -18,7 +20,7 @@ import { PlanBadge } from "@/components/PlanBadge";
 import { IntegrationStatusList } from "@/components/IntegrationStatusList";
 import { IndexedRepoStatusList } from "@/components/IndexedRepoStatusList";
 
-const EXTENSION_URL = "https://marketplace.visualstudio.com/search?term=coopai&target=VSCode";
+
 
 export function MemberDashboard() {
   const me = getStoredMe();
@@ -123,7 +125,7 @@ export function MemberDashboard() {
           Your assigned repositories and org context load automatically.
         </p>
         <a
-          href={EXTENSION_URL}
+          href={EXTENSION_MARKETPLACE_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="admin-btn-primary mt-4 inline-block"

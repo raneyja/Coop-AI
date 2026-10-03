@@ -1,5 +1,7 @@
 "use client";
 
+import { EXTENSION_MARKETPLACE_URL } from "@/lib/extension";
+
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
@@ -16,7 +18,7 @@ import { IntegrationsStep } from "./IntegrationsStep";
 import { IndexedRepoStatusList } from "./IndexedRepoStatusList";
 import { SetupStepper } from "./SetupStepper";
 
-const EXTENSION_URL = "https://marketplace.visualstudio.com/search?term=coopai&target=VSCode";
+
 
 const STEPS = [
   { id: "welcome", label: "Welcome" },
@@ -245,7 +247,7 @@ export function MemberOnboardingWizard({
                 </p>
               </div>
               <a
-                href={EXTENSION_URL}
+                href={EXTENSION_MARKETPLACE_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="admin-btn-secondary inline-block"

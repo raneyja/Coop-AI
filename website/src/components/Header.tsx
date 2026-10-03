@@ -34,7 +34,7 @@ export function Header() {
         </Link>
 
         {quiet ? null : (
-          <nav className="hidden items-center gap-8 md:flex">
+          <nav className="hidden items-center gap-5 lg:gap-8 lg:flex">
             {siteConfig.nav.map((item) => (
               <Link
                 key={item.href}
@@ -53,16 +53,14 @@ export function Header() {
 
         {quiet ? null : (
           <div className="flex items-center gap-3">
-            <Link
-              href="/demo"
-              className={
-                dark
-                  ? "hidden text-xs font-medium text-white/55 transition hover:text-white sm:inline-flex"
-                  : "hidden text-xs font-medium text-coop-muted transition hover:text-gray-900 sm:inline-flex"
-              }
+            <a
+              href={siteConfig.links.adminPortal}
+              className={dark
+                ? "hidden whitespace-nowrap text-xs font-medium text-white/70 transition hover:text-white sm:inline-flex"
+                : "hidden whitespace-nowrap text-xs font-medium text-coop-muted transition hover:text-gray-900 sm:inline-flex"}
             >
-              Book a demo
-            </Link>
+              Sign in
+            </a>
             <InstallExtensionButton
               variant={dark ? "inverse" : "primary"}
               size="sm"
@@ -73,8 +71,8 @@ export function Header() {
               type="button"
               className={
                 dark
-                  ? "inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/30 md:hidden"
-                  : "inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-gray-900 transition hover:border-gray-300 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300 md:hidden"
+                  ? "inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/30 lg:hidden"
+                  : "inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-gray-900 transition hover:border-gray-300 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300 lg:hidden"
               }
               aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
               aria-controls="mobile-site-menu"
@@ -95,8 +93,8 @@ export function Header() {
           id="mobile-site-menu"
           className={
             dark
-              ? "border-t border-white/10 bg-neutral-950 px-6 py-5 md:hidden"
-              : "border-t border-coop-border bg-white px-6 py-5 shadow-lg md:hidden"
+              ? "border-t border-white/10 bg-neutral-950 px-6 py-5 lg:hidden"
+              : "border-t border-coop-border bg-white px-6 py-5 shadow-lg lg:hidden"
           }
         >
           <nav className="mx-auto flex max-w-6xl flex-col gap-1" aria-label="Mobile navigation">
@@ -114,6 +112,15 @@ export function Header() {
                 {item.label}
               </Link>
             ))}
+            <a
+              href={siteConfig.links.adminPortal}
+              className={dark
+                ? "rounded-2xl px-4 py-3 text-base font-medium text-white/70 hover:text-white"
+                : "rounded-2xl px-4 py-3 text-base font-medium text-coop-muted hover:text-gray-900"}
+              onClick={closeMobileMenu}
+            >
+              Sign in
+            </a>
             <div className="mt-3" onClick={closeMobileMenu}>
               <InstallExtensionButton
                 variant={dark ? "inverse" : "primary"}
