@@ -134,28 +134,6 @@ export function Testimonial({ tone = "light" }: { tone?: Tone }) {
           ))}
         </div>
 
-        <div
-          className={`mt-8 flex min-h-[9rem] flex-col justify-center rounded-2xl border border-dashed p-6 md:p-8 ${
-            dark ? "border-white/20 bg-white/[0.02]" : "border-gray-300 bg-gray-50/80"
-          }`}
-        >
-          <p
-            className={`text-sm font-medium leading-relaxed ${
-              dark ? "text-white/70" : "text-gray-800"
-            }`}
-          >
-            Ask &lsquo;who owns this?&rsquo; and get CODEOWNERS + the Slack thread + the last PR —
-            citations in the editor.
-          </p>
-          <p
-            className={`mt-3 font-mono text-xs leading-relaxed ${
-              dark ? "text-white/35" : "text-coop-muted"
-            }`}
-          >
-            Replace this frame with a redacted screenshot or 30-second loom from a design-partner
-            repo.
-          </p>
-        </div>
       </div>
     </section>
   );

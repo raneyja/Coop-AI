@@ -12,7 +12,7 @@
     "mainCommit": "3d1507d0e999b151b30eaf6d068d92da59ebe87f",
     "alternateCommit": "cb41ae8bef8bade85dceae2bc7da1385f0c83432",
     "renamedCommit": "bf1490e7a3ae824e76318e503a6c00963b2e91e9",
-    "currentIndexedBranch": "alternate",
+    "currentIndexedBranch": "renamed",
     "sourceOracleUse": "Authored expected values only; product reads remote code host."
   },
   "observations": [
@@ -72,13 +72,44 @@
     {
       "case": "Unicode source path and citation",
       "result": "PASS for fixture: src/\u76ee\u5f55/\u8fb9\u754c.ts source returned; citation opened remotely fetched clamp function with lines 1\u20134 selected."
+    },
+    {
+      "case": "Missing-symbol evidence baseline",
+      "runId": "df7664fb-f3f5-4f29-a967-d828029cd7f5",
+      "result": "FAIL: honest miss but unrelated README included and marked verified."
+    },
+    {
+      "case": "Missing-symbol identifier repair",
+      "runId": "0e77a5e4-97dc-4a4f-a5eb-21b0eed31492",
+      "answerStartMs": 9003,
+      "result": "PASS for exact ask: short miss, no attached evidence; README/untrusted document ledger entries remain untested."
+    },
+    {
+      "case": "Parent paraphrase final identifier package",
+      "runId": "5e16b032-03dd-4bb1-b455-bfe2f6b22451",
+      "answerStartMs": 9955,
+      "remoteRef": "a8e53b6ac7b87bd8e3e931d21188f7679c7ab6c4",
+      "result": "Correct guard at apps/api/plane/api/serializers/issue.py:128\u2013137; no irrelevant state wording. Citation opening did not visibly complete; diagnostic retest pending."
+    },
+    {
+      "case": "Renamed generation setup",
+      "result": "Synthetic fixture default changed to renamed; admin reindex displayed Usable/Complete. Source lookup and citation retest pending."
+    },
+    {
+      "case": "Canonical website and placeholder",
+      "result": "Homepage, pricing and docs each returned HTTP 200 on October 4. Removed unfinished screenshot placeholder in source; website build and loopback Chrome visual preview passed. Not deployed."
     }
   ],
   "candidate": {
     "bundle": "f5df81af2e4463ede4c9deaa4342978a336c30141071dec841b57c0c3605e51c",
     "vsix": "b44279f63c83e3b3f9fdfdd7a9a11e57a5865fc864dab62b5d407ffca4024032",
     "branchGuardLive": "PASS on explicit main vs indexed alternate: mismatch answered in 2897ms; no search/read tools",
-    "automated": "Full CI, package, final lint passed"
+    "automated": "Full CI, package, final lint passed",
+    "identifierRepairBundle": "196c7e7ae7ca309d0a318d0e8e9002324e165ebd624b610b773a34421ef47a55",
+    "identifierRepairVsix": "64c92cca017a2d87bf519be2ea26971f33593fdcfb0a21ce1294f7126cbd68f5",
+    "citationDiagnosticBundle": "7d8acfc656ad404e1c0d841f1bfd4a46fb69b5b303fae73773acf5e775735265",
+    "citationDiagnosticVsix": "2769fc7a6073e4491c76a26508c62a5f3b8bd470cfc2676e47eb526fce618e07",
+    "citationDiagnosticLive": "Installed; Reload and click trace pending working desktop input."
   },
   "historicalMatrix": "Not promoted by these narrow live observations."
 }

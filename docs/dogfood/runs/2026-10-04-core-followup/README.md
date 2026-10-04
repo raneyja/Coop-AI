@@ -29,3 +29,19 @@ Plane and Documenso remain external forked fixtures. Product repairs are in Coop
 Verify final-bundle Parent paraphrase, Unicode and late-method citation openings, renamed generation, missing symbol and the remaining edit/session/quick-action scenarios. Preserve exact candidate/ref provenance for each observation. Review integration fixture destinations before requesting authorization to post test content. Teams is not connected. Organization isolation and denied-access extension checks still need distinct account/grant fixtures, even though API-only sandbox checks passed. The existing Stripe test key returns `api_key_expired`; replacement was requested, with no payment attempted. No new production deployment or Marketplace publish occurred.
 
 Detailed scoped results and pending work are in [observations](observations.json). Diagnostic traces preserve failed attempts alongside passing retests.
+
+## Missing-symbol follow-up
+
+The first missing-symbol result honestly reported a miss, but attached an unrelated README and classified it as verified evidence. Mixed PascalCase with an underscore suffix was omitted by identifier extraction. The shared parser now retains that complete identifier. All 100 query regressions passed. On bundle `196c7e7ae7ca309d0a318d0e8e9002324e165ebd624b610b773a34421ef47a55`, the exact ask returned a short miss in 9,003 ms with no evidence files attached and no verified unrelated ledger entries. Full CI, lint and packaging passed for that source repair.
+
+The Parent paraphrase without “API” then returned the correct guard on preview, starting in 9,955 ms. Its citation opening remains unqualified after repeated native UI actions produced no visible editor; an opt-in citation diagnostic is being prepared before attributing the problem to app code. Native coordinate input also reported no available window, so the cause remains uncertain.
+
+The private fixture is now indexed on renamed. The admin UI shows Usable/Complete; [screenshot](evidence/fixture-index-admin.jpg). The corresponding source lookup has not yet run.
+
+## Access pause and website cleanup
+
+Native VS Code input ceased changing the visible page, while browser DOM controls continued to work. An awake, unlocked test window was requested; application diagnosis remains pending instead of inferring a citation bug from the stalled controls. Citation diagnostic bundle `7d8acfc656ad404e1c0d841f1bfd4a46fb69b5b303fae73773acf5e775735265` (VSIX `2769fc7a6073e4491c76a26508c62a5f3b8bd470cfc2676e47eb526fce618e07`) is installed but has not been reloaded. It adds opt-in context metadata at citation click handling without logging file bodies. Lint, package and selected-ref citation regressions passed; the full CI evidence immediately precedes this small diagnostic addition. The first standalone citation command omitted the required VS Code test stub; the correct stubbed command passed.
+
+Live homepage, docs and pricing returned HTTP 200. The homepage’s unfinished “Replace this frame…” screenshot placeholder was removed from Testimonial.tsx. The website build passed and the loopback-only preview was visually checked in Chrome; [preview screenshot](evidence/homepage-placeholder-removed.jpg). Existing testimonials were preserved; their authenticity was not independently verified. This source cleanup is not deployed. The local preview uses port 31801, bound to 127.0.0.1.
+
+Immediate continuation: restore desktop input, Reload the installed diagnostic package, click the existing Parent citation and inspect the citation-open trace. Then select the renamed fixture generation and verify src/mathRenamed.ts and renamed-oracle without stale math.ts. Stripe replacement remains pending. No new production deployment, Marketplace publication or external collaboration message was sent.

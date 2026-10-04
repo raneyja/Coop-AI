@@ -1,0 +1,77 @@
+
+> coop-ai-website@0.1.0 build
+> next build
+
+   ▲ Next.js 15.5.18
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 2.7s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/87) ...
+   Generating static pages (21/87)
+   Generating static pages (43/87)
+   Generating static pages (65/87)
+ ✓ Generating static pages (87/87)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                  Size  First Load JS
+┌ ○ /                                     16.8 kB         123 kB
+├ ○ /_not-found                             996 B         103 kB
+├ ƒ /api/auth/forgot-password               173 B         103 kB
+├ ƒ /api/auth/google/start                  173 B         103 kB
+├ ƒ /api/auth/login                         173 B         103 kB
+├ ƒ /api/auth/register                      173 B         103 kB
+├ ƒ /api/auth/reset-password                173 B         103 kB
+├ ƒ /api/auth/verify-email                  173 B         103 kB
+├ ƒ /api/checkout                           173 B         103 kB
+├ ƒ /api/checkout-status                    173 B         103 kB
+├ ƒ /api/signup/free                        173 B         103 kB
+├ ƒ /api/submit                             173 B         103 kB
+├ ○ /blog                                 4.99 kB         111 kB
+├ ● /blog/[slug]                            182 B         106 kB
+├   ├ /blog/best-code-intelligence-tools
+├   ├ /blog/coopai-vs-claude-code
+├   ├ /blog/coopai-vs-cursor
+├   └ [+5 more paths]
+├ ƒ /demo                                 1.36 kB         107 kB
+├ ○ /docs                                 1.64 kB         107 kB
+├ ● /docs/[slug]                           2.7 kB         152 kB
+├   ├ /docs/admin-portal
+├   ├ /docs/api-reference
+├   ├ /docs/compare
+├   └ [+36 more paths]
+├ ○ /email-preview                        1.55 kB         107 kB
+├ ○ /enterprise                           4.73 kB         111 kB
+├ ○ /file-context-demo                     5.1 kB         123 kB
+├ ○ /for-engineering-managers               182 B         106 kB
+├ ○ /forgot-password                      1.99 kB         108 kB
+├ ○ /how-it-works                           182 B         106 kB
+├ ○ /icon.png                                 0 B            0 B
+├ ○ /integrations                           182 B         106 kB
+├ ○ /login                                2.04 kB         108 kB
+├ ○ /manual                               2.61 kB         152 kB
+├ ○ /opengraph-image                        173 B         103 kB
+├ ○ /pricing                                182 B         106 kB
+├ ○ /privacy                                173 B         103 kB
+├ ○ /product                              17.8 kB         136 kB
+├ ○ /reset-password                        5.8 kB         112 kB
+├ ○ /robots.txt                             173 B         103 kB
+├ ○ /security                               182 B         106 kB
+├ ○ /signup                               3.58 kB         109 kB
+├ ○ /signup/free                          3.26 kB         109 kB
+├ ○ /sitemap.xml                            173 B         103 kB
+├ ○ /terms                                  173 B         103 kB
+├ ○ /verify-email                         5.54 kB         111 kB
+└ ƒ /welcome                              4.72 kB         111 kB
++ First Load JS shared by all              102 kB
+  ├ chunks/1255-b28ea36bf0cdbd65.js       46.2 kB
+  ├ chunks/4bd1b696-f785427dddbba9fb.js   54.2 kB
+  └ other shared chunks (total)           1.94 kB
+
+
+○  (Static)   prerendered as static content
+●  (SSG)      prerendered as static HTML (uses generateStaticParams)
+ƒ  (Dynamic)  server-rendered on demand

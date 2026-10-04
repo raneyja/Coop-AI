@@ -10,7 +10,7 @@
   dist/extension.js      3.1mb ⚠️
   dist/extension.js.map  6.2mb
 
-⚡ Done in 93ms
+⚡ Done in 81ms
 
 > coop-ai@0.1.10 build:webview
 > esbuild src/webview/index.tsx --bundle --platform=browser --format=iife --sourcemap --outfile=dist/webview.js --external:node:fs --external:node:path && npm run build:webview:css
@@ -19,7 +19,7 @@
   dist/webview.js      1.9mb ⚠️
   dist/webview.js.map  3.3mb
 
-⚡ Done in 48ms
+⚡ Done in 45ms
 
 > coop-ai@0.1.10 build:webview:css
 > tailwindcss -i ./src/webview/globals.css -o ./dist/webview.css --minify
@@ -30,7 +30,7 @@ Browserslist: caniuse-lite is outdated. Please run:
 
 Rebuilding...
 
-Done in 762ms.
+Done in 557ms.
  INFO  Files included in the VSIX:
 coop-ai.vsix
 ├─ [Content_Types].xml

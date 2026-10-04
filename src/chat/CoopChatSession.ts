@@ -2970,6 +2970,13 @@ export class CoopChatSession {
   }): Promise<void> {
     const { path, line, preserveContext } = intent;
 
+    this.logAgentDiagnostic(this.activeThreadId(), {
+      stage: "citation-open", path, line, preserveContext: Boolean(preserveContext),
+      branch: this.currentContext.branch, scope: this.currentContext.scope,
+      fileAssistant: isFileAssistantSession(this.currentContext),
+      explicitRepo: hasExplicitRepoSelection(this.currentContext)
+    });
+
     if (preserveContext) {
       await this.openRepoFileForReview(path, line, intent.endLine);
       this.postContext();

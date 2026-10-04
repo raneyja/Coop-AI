@@ -59,7 +59,7 @@ const STOP = new Set(
 );
 
 const IDENTIFIER =
-  /\b(?:[a-z][a-zA-Z]*[A-Z][a-zA-Z0-9]*|[A-Z][a-z]+[A-Z][a-zA-Z0-9]*|[a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/g;
+  /\b(?:[a-z][a-zA-Z]*[A-Z][a-zA-Z0-9_]*|[A-Z][a-z]+[A-Z][a-zA-Z0-9_]*|[a-zA-Z][a-zA-Z0-9]*(?:_[a-zA-Z0-9]+)+)\b/g;
 const MAX_SEARCH_CHARS = 48;
 /** Reject error strings from the ask are longer than name hunts — keep them searchable. */
 const MAX_REJECT_SEARCH_CHARS = 80;

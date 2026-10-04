@@ -2287,6 +2287,14 @@ test("Parent ValidationError lookup without the word API remains a rejection hun
 });
 
 
+test("mixed-case symbols with underscore suffixes retain their complete locate identity", () => {
+  const ask = "On indexed branch alternate of fixture, where is DefinitelyMissingCoopSymbol_20261003 defined?";
+  assert.equal(extractAgentSearchQuery(ask), "DefinitelyMissingCoopSymbol_20261003");
+  assert.equal(queryHasNamedSymbol(ask), true);
+  assert.equal(locateReadCountsAsGrounding({ path: "README.md", body: "Private synthetic source for Coop tests.", query: ask }), false);
+  assert.equal(locateReadCountsAsGrounding({ path: "src/service.ts", body: "export function DefinitelyMissingCoopSymbol_20261003() { return 1; }", query: ask }), true);
+});
+
 console.log(`\nsearchQuery: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);

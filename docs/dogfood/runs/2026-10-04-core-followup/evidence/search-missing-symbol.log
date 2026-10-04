@@ -1,0 +1,102 @@
+  ✓ prefers the symbol the user named over a prose phrase
+  ✓ extracts camelCase without grabbing Where
+  ✓ falls back to a role noun phrase when no symbol is named
+  ✓ sanitize replaces the whole question
+  ✓ sanitize keeps a short model-chosen identifier
+  ✓ fallback queries broaden from symbol to plain words
+  ✓ identifier aliases bridge camelCase and snake_case
+  ✓ index retrieval OR-covers both casings
+  ✓ fallback queries never repeat the whole question
+  ✓ ranks a path that matches the question's words above one that does not
+  ✓ pickSearchHitsToRead skips barrels
+  ✓ pickSearchHitsToRead skips build output and vendored code
+  ✓ does not drop a UI path just because the question sounds backend
+  ✓ exact symbol path beats a weak auth UI path for requireAuth asks
+  ✓ drops auth UI hits that never mention requireAuth
+  ✓ role-noun hunts keep middleware hits and drop collab auth
+  ✓ role-noun hunts drop leftover latency hits that never say middleware
+  ✓ pickSearchHitsToRead keeps the server and drops a language-mismatch story
+  ✓ pickSearchHitsToRead returns empty when every hit is a mention
+  ✓ locate skips docs and fixtures but not a story path
+  ✓ does not treat require_authentication filenames as requireAuth
+  ✓ symbol index rejects require_authentication as a requireAuth match
+  ✓ skips test paths for named-symbol hunts unless the user asked about tests
+  ✓ ship-check ask does not skip handler tests
+  ✓ keeps a barrel when the user named that exact file
+  ✓ picks the declaration whose name matches the symbol the user asked about
+  ✓ ignores declarations unrelated to the question
+  ✓ ignores declarations inside vendored code
+  ✓ isBarrelPath
+  ✓ isGeneratedOrVendorPath
+  ✓ queryRoleHints extracts middleware from a locate ask
+  ✓ textMentionsQueryRoles requires the role in the file or path
+  ✓ C1 prose locate does not require Authorization as a named symbol
+  ✓ prose parsing ranks a parser declaration ahead of token storage filename overlap
+  ✓ C2 prose locate does not require Users as a named symbol
+  ✓ C2 skips locale catalogs and prefers API write paths over client grouping
+  ✓ C2 skips state catalogs and client posts; prefers the write/reject handler
+  ✓ C2 skips seed JSON and read-only serializers; prefers the reject snippet
+  ✓ filterWriteRejectFiles drops OpenAPI and read-only serializer windows
+  ✓ C2 skips OpenAPI specs and does not treat partial_update as a reject
+  ✓ C2 skips query-filter converters and does not stop on generic ValidationError
+  ✓ C2 does not pick a permission-only view when a reject snippet exists
+  ✓ lineNumberOfWriteReject prefers ValidationError near state
+  ✓ lineNumberOfWriteReject ignores filter ValidationError that is not a state transition
+  ✓ Where is requireAuth defined still requires that symbol
+  ✓ Where is the Button component still searches Button
+  ✓ edit tests-for-X prefers the callee over the test-file stem
+  ✓ filename asks are file hunts, not required in-body symbols
+  ✓ named files are path-shaped, not a language allowlist
+  ✓ API-reject hunt is a class: C2, parent, and assignee fields all match
+  ✓ calm locate with API + work-item is not the ValidationError scavenger hunt
+  ✓ client UI path class covers hooks/stores, not API trees
+  ✓ C2 skips product-UI hooks/stores and never reads them over a server reject
+  ✓ API key / request-auth locate prefers enforcement over config and secret gates
+  ✓ backend work-item state locate prefers server state paths over UI hooks
+  ✓ calm state locate requires the opened State declaration and caps duplicate fallbacks
+  ✓ compound auth + states locate keeps enforcement and a state definition
+  ✓ T2 hunt searches parent field access, not bare issue_id
+  ✓ planned quarterback criteria run before slogan backup
+  ✓ invent and merge never lead with reject-a-bad slogans
+  ✓ codehost fail-open only for reject / quoted error strings
+  ✓ lightningHitsSatisfySearchQuery requires phrase evidence for long queries
+  ✓ utils/error_codes is reject noise — not a write-reject site
+  ✓ reject hunt ignores locate-only planned criteria like work item state
+  ✓ novel T2 paraphrase invents ask-derived criteria without a new slogan
+  ✓ C2 skips shared types packages, utils filters, and non-actionable symbols
+  ✓ empty planned criteria fail open into invent + fallback
+  ✓ API-reject hunts do not latch *_id as a named symbol
+  ✓ asked-field tokens use the qualifier, not a type suffix like issue_id
+  ✓ wrong-field validate() is not an asked-field reject
+  ✓ asked-field reject matches Zoekt string-only error line (no raise keyword)
+  ✓ asked-field reject matches Zoekt Match span that omits the field word
+  ✓ askedRejectErrorQuotes extracts Exact Parent message and is empty for COPILOT_T2_ASK
+  ✓ sanitize keeps Exact Parent error string instead of rewriting to get(parent)
+  ✓ Gate A: Exact Parent quote-first — not ValidationError / bare issue_id / get(parent)
+  ✓ Gate A: exact-string locate must not latch bare issue_id
+  ✓ asked-field reject keeps the matching ValidationError and drops converters
+  ✓ API-reject pick prefers asked-field reject over a different field's validate()
+  ✓ API-reject pick keeps a serializer with a wrong-field snippet so hunt can jump in-file
+  ✓ filterWriteRejectFiles keeps the asked field reject, not OpenAPI
+  ✓ asked-field reject matches a raise whose message does not repeat the field
+  ✓ API-reject job: invite email is not a signup email reject
+  ✓ API-reject hunt ignores invite callers that rethrow and pass email through
+  ✓ readBodyHasCallerUse uses the grounded export when the ask has no named symbol
+  ✓ readBodyHasCallerUse still counts same-file extractBearerToken( for a named-symbol ask
+  ✓ lineNumberOfCallerUse returns the use line, not the declaration
+  ✓ L3: defined-on-server compound is auth+state locate, not reject
+  ✓ L3: comment_html issue serializer is not state definition evidence
+  ✓ L3: auth alone without state definition must not satisfy compound pick padding
+  ✓ C2: reject hunt skips migrations, icons, empty-state, seeds, OpenAPI, HTML
+  ✓ Create locate prefers ViewSet/create serializer and jumps to create line
+  ✓ Create finish honesty strips please-open for an already-read path
+  ✓ reject jump prefers the named field over an overlapping adjacent reject
+  ✓ state catalog validation is not a work-item transition rejection
+  ✓ server status rejection uses field evidence rather than imports
+  ✓ calm status definition stays a locate question
+  ✓ signing operation does not freeze on a PDF download status guard
+  ✓ named definition misses do not expand into generic question prose
+  ✓ Parent ValidationError lookup without the word API remains a rejection hunt
+  ✓ mixed-case symbols with underscore suffixes retain their complete locate identity
+
+searchQuery: 100/100 tests passed
