@@ -23,6 +23,7 @@ const CASES: Case[] = [
   { q: "Is rate limiting implemented anywhere?", expect: "locate" },
   { q: "Do we have a retry helper in this codebase?", expect: "locate" },
   { q: "Find all usages of verifyToken", expect: "locate" },
+  { q: "On indexed branch renamed of coop-dogfood-launch, locate lateFixtureMethod and cite its complete implementation.", expect: "locate" },
   { q: "Find authMiddleware.ts and show me the export.", expect: "locate" },
   { q: "Read src/server/authMiddleware.ts and show me the export.", expect: "locate" },
   { q: "Where does the webhook handler live?", expect: "locate" },

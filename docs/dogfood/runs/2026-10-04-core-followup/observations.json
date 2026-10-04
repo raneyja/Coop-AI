@@ -39,7 +39,7 @@
     },
     {
       "case": "lateFixtureMethod beyond initial window",
-      "result": "Remote source returned at lines 402\u2013405; UI citation navigation not yet qualified."
+      "result": "Remote source returned at lines 402–405; UI citation navigation not yet qualified."
     },
     {
       "case": "Return value routing baseline",
@@ -55,13 +55,13 @@
     },
     {
       "case": "Stripe prerequisites",
-      "result": "BLOCKED: existing Stripe test key returned HTTP 401 api_key_expired. Replacement requested; no transactions attempted."
+      "result": "DEFERRED by user until tomorrow. Existing test key previously returned api_key_expired; no Stripe requests or transactions in this continuation."
     },
     {
       "case": "Matching alternate branch source and citation",
       "runId": "a382af95-9217-4178-a9a5-b6ca094b1479",
       "answerStartMs": 9946,
-      "result": "PASS: alternate-oracle returned; citation opened remote source with lines 9\u201311 selected and matching body."
+      "result": "PASS: alternate-oracle returned; citation opened remote source with lines 9–11 selected and matching body."
     },
     {
       "case": "Synthetic repository prompt injection",
@@ -71,7 +71,7 @@
     },
     {
       "case": "Unicode source path and citation",
-      "result": "PASS for fixture: src/\u76ee\u5f55/\u8fb9\u754c.ts source returned; citation opened remotely fetched clamp function with lines 1\u20134 selected."
+      "result": "PASS for fixture: src/目录/边界.ts source returned; citation opened remotely fetched clamp function with lines 1–4 selected."
     },
     {
       "case": "Missing-symbol evidence baseline",
@@ -89,7 +89,7 @@
       "runId": "5e16b032-03dd-4bb1-b455-bfe2f6b22451",
       "answerStartMs": 9955,
       "remoteRef": "a8e53b6ac7b87bd8e3e931d21188f7679c7ab6c4",
-      "result": "Correct guard at apps/api/plane/api/serializers/issue.py:128\u2013137; no irrelevant state wording. Citation opening did not visibly complete; diagnostic retest pending."
+      "result": "Correct guard at apps/api/plane/api/serializers/issue.py:128–137; no irrelevant state wording. Citation opening did not visibly complete; diagnostic retest pending."
     },
     {
       "case": "Renamed generation setup",
@@ -98,6 +98,37 @@
     {
       "case": "Canonical website and placeholder",
       "result": "Homepage, pricing and docs each returned HTTP 200 on October 4. Removed unfinished screenshot placeholder in source; website build and loopback Chrome visual preview passed. Not deployed."
+    },
+    {
+      "case": "Parent citation diagnostic retest",
+      "result": "PASS: remote body opened and exact guard selected at 128–137; previous native input stall was not evidence of an app citation defect."
+    },
+    {
+      "case": "Renamed generation live lookup",
+      "runId": "5f38a73f-e358-469c-9018-9f9412776c9a",
+      "answerStartMs": 9802,
+      "result": "PASS: only src/mathRenamed.ts verified, renamed-oracle returned, citation opened with lines 9–11 selected."
+    },
+    {
+      "case": "Imperative locate baseline",
+      "runId": "synthesis-turn-1791143745574-tr2vnh",
+      "result": "FAIL: locate verb omitted by shared classifier; ordinary synthesis returned miss. File context may have contributed; not isolated by baseline."
+    },
+    {
+      "case": "Imperative locate repair",
+      "runId": "4d976504-e464-4ec7-af16-59fcbbede9f7",
+      "answerStartMs": 9773,
+      "result": "PASS: exact locate lateFixtureMethod request returns remote src/lateMethod.ts and expected literal; citation selects implementation at 402–405."
+    },
+    {
+      "case": "Imperative locate with unrelated remote editor selected",
+      "runId": "02ed08ca-40b8-4cf5-bcd3-ca81c05d33ae",
+      "answerStartMs": 9520,
+      "result": "PASS: mathRenamed buffer selected; explicit repository request still finds lateMethod remote implementation."
+    },
+    {
+      "case": "Unsent draft reload",
+      "result": "PASS: synthetic unsent composer draft preserved after Developer Reload Window; cleared after verification."
     }
   ],
   "candidate": {
@@ -109,7 +140,9 @@
     "identifierRepairVsix": "64c92cca017a2d87bf519be2ea26971f33593fdcfb0a21ce1294f7126cbd68f5",
     "citationDiagnosticBundle": "7d8acfc656ad404e1c0d841f1bfd4a46fb69b5b303fae73773acf5e775735265",
     "citationDiagnosticVsix": "2769fc7a6073e4491c76a26508c62a5f3b8bd470cfc2676e47eb526fce618e07",
-    "citationDiagnosticLive": "Installed; Reload and click trace pending working desktop input."
+    "citationDiagnosticLive": "Reloaded; Parent citation opened remote Python body with guard lines 128–137 selected. Click trace confirms repo scope and preview branch.",
+    "locateRepairBundle": "7eade1799d8860a398726ff4975e5e7555a9ee25c4e2c9e6b293c0fa2cd00ff5",
+    "locateRepairVsix": "4f588d253393f7233aaf0f82f205e4f87d6d4a46e59b2564a4a01c005e693f32"
   },
   "historicalMatrix": "Not promoted by these narrow live observations."
 }
