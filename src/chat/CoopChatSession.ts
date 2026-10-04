@@ -115,6 +115,7 @@ import {
 import { readSemanticRetrievalEnabled } from "../config/semanticRetrievalConfig";
 import { CacheEntry, RateLimitAwareExecutor } from "../context/rateLimitAwareExecution";
 import { createChatOutputGate, delayUntilMinResponseVisible } from "./chatResponseTiming";
+import { shouldEnableSynthesisThinking } from "../config/chatSynthesisThinking";
 import { createStreamDeltaBatcher } from "./streamDeltaBatcher";
 import { resolveChatOutputMaxTokens } from "../config/chatOutputBudget";
 import { summarizeAgentToolResultForHistory } from "./agentAnswerHistory";
@@ -441,6 +442,7 @@ import {
   openFileRelatedToGapsFocus,
   resolveKnowledgeGapsAuditScope
 } from "../context/knowledgeGapsFocus";
+import { readKnowledgeGapsNamedFocus } from "../context/knowledgeGapsNamedFocus";
 import {
   knowledgeGapScanCoverageFromJobScan,
   knowledgeGapScanGapsWithoutInfra
@@ -3653,7 +3655,8 @@ export class CoopChatSession {
     request: ContextFetchRequest,
     result: ContextFetchResult
   ): Promise<ContextFetchResult> {
-    const gatherQuery = knowledgeGapsGatherQuery(request.intent.context.queryText);
+    const gatherQuery = knowledgeGapsGatherQuery(request.intent.context.queryText) ??
+      locateJobTerms(request.params.intentPlan?.jobs).join(" ");
     if (!gatherQuery) {
       return result;
     }
@@ -3679,6 +3682,31 @@ export class CoopChatSession {
         : this.preferences.defaultCodeHost;
 
     try {
+      const namedFocus = await Promise.race([
+        readKnowledgeGapsNamedFocus({
+          query: request.intent.context.queryText,
+          jobs: request.params.intentPlan?.jobs,
+          target,
+          workspace: this.indexedRepoWorkspace()
+        }),
+        delayMs(remainingMs).then(() => undefined)
+      ]);
+      if (namedFocus?.namedPaths.length) {
+        return {
+          ...result,
+          data: {
+            ...data,
+            file: namedFocus.namedPaths.length === 1 ? namedFocus.namedPaths[0] : undefined,
+            focusSearchQuery: gatherQuery,
+            focusSearchPaths: namedFocus.namedPaths,
+            focusFiles: namedFocus.files
+          }
+        };
+      }
+      const searchRemainingMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
+      if (searchRemainingMs <= 0) {
+        return { ...result, data };
+      }
       const focusSearch = await Promise.race([
         searchRepoForFocusQuery({
           repoId,
@@ -3694,7 +3722,7 @@ export class CoopChatSession {
           provider
         }),
         new Promise<undefined>((resolve) => {
-          setTimeout(() => resolve(undefined), remainingMs);
+          setTimeout(() => resolve(undefined), searchRemainingMs);
         })
       ]);
       if (focusSearch?.files.length) {
@@ -9037,6 +9065,10 @@ export class CoopChatSession {
       clearResponseDeadlineForSynthesis(turn.clearResponseDeadline);
       turn.clearResponseDeadline = () => undefined;
 
+      const enableSynthesisThinking = shouldEnableSynthesisThinking({
+        quickAction: effectiveQuickAction,
+        startedAt: turn.startedAt
+      });
       this.logAgentDiagnostic(turn.threadId, {
         stage: "synthesis-request", turnId: turn.id, runId: `synthesis-${turn.id}`,
         elapsedMs: Date.now() - turn.startedAt,
@@ -9045,6 +9077,7 @@ export class CoopChatSession {
         selectedLines: turnContext.selectedLines,
         commentOnly: this.patchCompleteContext(turn).commentOnly,
         hasAgentPatch: Boolean(extractAgentProposedPatchText(contextBundle)),
+        enableThinking: enableSynthesisThinking,
         buildId: COOP_EXTENSION_BUILD_ID, bundleId: COOP_EXTENSION_BUNDLE_ID
       });
 
@@ -9067,7 +9100,7 @@ export class CoopChatSession {
           useCase: chatUseCase,
           temperature: this.preferences.temperature,
           maxTokens: resolveChatOutputMaxTokens(this.preferences.maxTokens),
-          enableThinking: true
+          enableThinking: enableSynthesisThinking
         },
         (chunk) => {
           outputGate.push(chunk);
@@ -10394,7 +10427,7 @@ export class CoopChatSession {
       manifestPaths: paths
     });
     const detected = detectRepoKnowledgeGaps(slice, {
-      file: this.currentContext.file?.trim()
+      file: knowledgeGapsFromBundle(this.lastContextBundle)?.file?.trim() ?? this.currentContext.file?.trim()
     });
     if (detected.scannedFileCount === 0) {
       return;
@@ -10591,7 +10624,7 @@ export class CoopChatSession {
   }
 
   private async handleRepoListRepos(source: "chat" | "settings"): Promise<void> {
-    const provider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
+    let provider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
     const audience = source === "settings" ? "settings" : "chat";
     this.postRepoExplorer(
       {
@@ -10601,6 +10634,8 @@ export class CoopChatSession {
       audience
     );
     try {
+      await this.initialize();
+      provider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
       let entries: Array<{ provider: typeof provider; owner: string; repo: string; branch?: string }> = [];
       let emptyHint: "workspace" | "workspace_admin" | "workspace_admin_self" | undefined;
       let listLabel: "workspace" | undefined;
@@ -10620,6 +10655,8 @@ export class CoopChatSession {
           listLabel = "workspace";
           entries = chatRepoListFromWorkspaceRepos(workspace.repos);
         }
+      } else {
+        throw new Error("Sign in to Coop AI to load your workspace repositories.");
       }
 
       const items = entries.map((entry) => ({

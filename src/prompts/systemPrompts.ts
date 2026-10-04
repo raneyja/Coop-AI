@@ -3,7 +3,8 @@ import type { IntegrationChatProvider } from "../chat/types";
 import { isLocalFileChangeAsk, resolveEditAskKind, type EditAskKind } from "../chat/editAskKind";
 import { isOpenFileReviewAsk } from "../chat/plainChatExplain";
 import { DECISION_HISTORIAN_SYSTEM } from "./decisionSynthesis";
-import { OWNERSHIP_INTELLIGENCE_SYSTEM } from "./ownershipSynthesis";
+import { OWNERSHIP_INTELLIGENCE_SYSTEM, formatOwnershipReportForPrompt } from "./ownershipSynthesis";
+import type { OwnershipReport } from "../types/ownership";
 import { REPO_SUMMARY_EVIDENCE_SYSTEM } from "./repoSummarySynthesis";
 import { BLAST_RADIUS_EVIDENCE_SYSTEM } from "./blastRadiusSynthesis";
 import { KNOWLEDGE_GAPS_EVIDENCE_SYSTEM } from "./knowledgeGapsSynthesis";
@@ -238,15 +239,15 @@ Follow-up turns: stay compact — often 4-8 sentences total when evidence is lim
 ## Required response structure
 Open with who to contact first and why, in 1–2 sentences. No **Answer**, **Summary**, or **Your question** heading.
 
-When ## User focus (required) is present: PASS names owners/paths from the ownership bundle. FAIL: generic “ask the team”.
+When ## User focus (required) is present: name evidenced contact candidates or declared CODEOWNERS for the requested path. State when declared ownership is unavailable.
 
 Then at most 2 topic headings:
 
 **Suggested reviewers**
-Bullets per person: tier (primary / secondary / backup), evidence (commits, reviews). Do not cite numeric ownership scores or points.
+Bullets per person: sampled contributor rank and evidence (commits, reviews), or an explicit declared CODEOWNERS role. A rank is not a maintainer or backup appointment. Do not cite numeric ownership scores or points.
 
-**Risk signals**
-Single points of failure, stale ownership, bus factor. Include a one-line escalation only when evidence names a backup.
+**Evidence and unknowns**
+Report retrieved contribution counts and dated activity, then missing ownership or backup evidence. Sample concentration does not establish who knows the code, a bus factor, personnel risk, or absence of maintainers. Do not infer these claims. Label admin fallback as a recommendation unless a verified policy is attached.
 
 **Out-of-scope @ attachments**
 Include only when the user message ## @ attachments section lists out-of-repo paths. **Never** include when all @ files are in scope.
@@ -1815,7 +1816,7 @@ function formatKnowledgeGapJobScanForLlm(scan: KnowledgeGapJobScanSnippet): stri
     const file = gap.file ? ` file="${escapeXml(gap.file)}"` : "";
     const type = gap.type ? ` type="${escapeXml(gap.type)}"` : "";
     const priority = gap.priority ? ` priority="${escapeXml(gap.priority)}"` : "";
-    lines.push(`<gap${file}${type}${priority}>${escapeXml(gap.message ?? "")}</gap>`);
+    lines.push(`<gap${file}${type}${priority}>${escapeXml(qualifiedKnowledgeGapObservation(gap.type, gap.message ?? ""))}</gap>`);
   }
   lines.push("</knowledge_gap_scan>");
   return lines;
@@ -2230,6 +2231,12 @@ export function formatFileHistoryForLlm(evidence: FileHistoryEvidence): string[]
   return lines;
 }
 
+function qualifiedKnowledgeGapObservation(type: unknown, message: string): string {
+  return type === "missing_owner" || type === "missing_docs"
+    ? "Scan observation: matching evidence was not retrieved in this scan; absence is unproven."
+    : message;
+}
+
 function sanitizeContextBundleForLlm(bundle: unknown): unknown {
   if (!Array.isArray(bundle)) {
     return bundle;
@@ -2240,6 +2247,9 @@ function sanitizeContextBundleForLlm(bundle: unknown): unknown {
     }
     const record = entry as {
       data?: {
+        report?: OwnershipReport;
+        ownershipReport?: OwnershipReport;
+        jobScan?: { gaps?: Array<Record<string, unknown>>; [key: string]: unknown };
         localFiles?: { files?: Array<{ path: string; content: string; lineRange?: [number, number] }> };
         jiraSearch?: { issues: unknown[] };
         slackSearch?: { messages: unknown[] };
@@ -2282,6 +2292,36 @@ function sanitizeContextBundleForLlm(bundle: unknown): unknown {
 
     let mutated = false;
     const data: Record<string, unknown> = { ...source };
+
+    for (const key of ["report", "ownershipReport"] as const) {
+      const report = source[key];
+      if (report && Array.isArray(report.scores) && report.teamGraph && report.risk && Array.isArray(report.history)) {
+        mutated = true;
+        // Raw derived flags/narratives contradict the evidence-qualified prompt.
+        // Serialize the same mechanical observations used by live synthesis.
+        data[key] = { evidenceSummary: formatOwnershipReportForPrompt(report) };
+      }
+    }
+    if (source.jobScan?.gaps?.length) {
+      mutated = true;
+      data.jobScan = {
+        ...source.jobScan,
+        gaps: source.jobScan.gaps.map((gap) => {
+          const gapType = gap.type ?? gap.kind;
+          if (gapType !== "missing_owner" && gapType !== "missing_docs") {
+            return gap;
+          }
+          const observation = qualifiedKnowledgeGapObservation(gapType, "");
+          const safeGap: Record<string, unknown> = { ...gap, message: observation, absenceProven: false };
+          for (const key of ["summary", "description", "title"] as const) {
+            if (typeof gap[key] === "string") {
+              safeGap[key] = observation;
+            }
+          }
+          return safeGap;
+        })
+      };
+    }
 
     if (source.entryFiles?.length) {
       mutated = true;

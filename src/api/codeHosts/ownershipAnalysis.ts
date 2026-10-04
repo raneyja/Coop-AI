@@ -319,10 +319,16 @@ export function computeOwnershipRisk(
     experts.length > 0 &&
     experts.every((s) => {
       const act = activity.find((a) => a.author === s.owner);
-      if (!act?.lastActiveDate) {
-        return true;
-      }
-      return new Date(act.lastActiveDate).getTime() < inactiveThreshold;
+      // Missing/invalid activity is unknown, not inactivity. Dated commits from
+      // this attached identity also prevent a stale aggregate marking them idle.
+      const identities = new Set([s.owner, ...(s.githubLogin ? [s.githubLogin] : [])]);
+      const dates = [
+        act?.lastActiveDate,
+        ...commits.filter((commit) => identities.has(authorKey(commit))).map((commit) => commit.date)
+      ].filter((date): date is string => Boolean(date))
+        .map((date) => Date.parse(date))
+        .filter((stamp) => Number.isFinite(stamp) && stamp <= now);
+      return dates.length > 0 && Math.max(...dates) < inactiveThreshold;
     });
 
   return {

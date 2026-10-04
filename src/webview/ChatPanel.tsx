@@ -1277,6 +1277,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   }, [post]);
 
   const requestRepos = useCallback(() => {
+    setTreeState({ path: "", items: [], scope: "repos", loading: true });
     post({ type: "repo:list", payload: { scope: "repos" } });
   }, [post]);
 

@@ -350,15 +350,6 @@ function topicHasCodeEvidence(
   });
 }
 
-function isDocsPath(path: string): boolean {
-  const normalized = path.replace(/\\/g, "/").toLowerCase();
-  return (
-    /(^|\/)docs\//.test(normalized) ||
-    /(^|\/)readme\.md$/.test(normalized) ||
-    /\.md$/.test(normalized)
-  );
-}
-
 function huntEvidenceClassStubs(topic: string): Array<Record<string, unknown>> {
   return [
     {
@@ -409,7 +400,6 @@ export function knowledgeGapsFocusTopicGapStubs(options: {
   );
   const bodies = options.focusFiles ?? [];
   const anyHits = hits.length > 0 || bodies.some((file) => (file.content ?? "").trim());
-  const docsAttached = [...hits, ...bodies.map((file) => file.path)].some(isDocsPath);
   const huntAsk = isHuntLocateGapsAsk(`${options.userFocus ?? ""} ${topics.join(" ")}`);
   const gaps: Array<Record<string, unknown>> = [];
   for (const topic of topics) {
@@ -419,23 +409,12 @@ export function knowledgeGapsFocusTopicGapStubs(options: {
       continue;
     }
     if (topicHasCodeEvidence(topic, hits, bodies)) {
-      if (!docsAttached) {
-        gaps.push({
-          type: "default_on_risk",
-          priority: "medium",
-          topic,
-          message: `${topic} is implemented in attached code; no operator default-on runbook in attached docs.`
-        });
-      }
+      // A source body proves implementation, not missing documentation or a
+      // default-on operational risk. Those findings need independent evidence.
       continue;
     }
     if (anyHits) {
-      gaps.push({
-        type: "missing_docs",
-        priority: "medium",
-        topic,
-        message: `Docs/runbook may be thin for focus topic: ${topic}`
-      });
+      // Partial retrieval cannot establish that docs/runbooks are thin.
       continue;
     }
     gaps.push({
@@ -450,7 +429,7 @@ export function knowledgeGapsFocusTopicGapStubs(options: {
 
 /**
  * Merge focus topic stubs into an existing job scan (including empty job results).
- * Pass: empty job + focus ask → structured missing_docs stubs for uncovered topics.
+ * Pass: empty job + no focus hits → honest focus_search_miss coverage stubs.
  * Fail: leaving foundGaps=0 when focus topics have no evidence.
  */
 export function mergeKnowledgeGapsFocusStubsIntoScan(

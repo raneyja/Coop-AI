@@ -1,0 +1,6 @@
+
+> coop-ai@0.1.10 test:repo-list
+> NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/chat/repoListInitialization.test.ts && npx tsx src/webview/components/RemoteExplorerTree.test.tsx
+
+repoListInitialization: 3/3 passed
+RemoteExplorerTree: 4/4 passed

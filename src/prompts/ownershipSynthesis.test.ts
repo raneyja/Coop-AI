@@ -179,8 +179,62 @@ test("ownership synthesis cites Slack presence when discussions are empty", () =
 
 test("a sole scored author is contribution evidence, not proof of exclusive knowledge", () => {
   const formatted = formatOwnershipReportForPrompt({...report, risk: {...report.risk, singlePointOfFailure: true}});
-  assert.match(formatted, /one primary contributor.*sampled evidence; knowledge coverage is unverified/);
+  assert.match(formatted, /Scored primary contributors: 1/);
+  assert.match(formatted, /Scored secondary contributors: 0/);
+  assert.match(formatted, /Broader maintainer, backup and knowledge coverage: unavailable/);
   assert.doesNotMatch(formatted, /only one person knows/);
+});
+
+test("today's dated commit contradicts stale risk rather than becoming inactive ownership", () => {
+  const now = new Date("2026-10-04T22:00:00.000Z");
+  const today: OwnershipReport = {
+    ...report,
+    risk: {...report.risk, orphaned: true, expertUnavailable: true},
+    pathEvolution: {recentCommitCount: 1, lastModifiedAt: "2026-10-04T20:00:00.000Z", lastModifiedAuthor: "alice"},
+    signals: {commits: [{author: "Alice", authorLogin: "alice", counts: {sixMonths: 1, oneYear: 1, allTime: 1}, recencyScore: 1, lastCommitDate: "2026-10-04T20:00:00.000Z", messages: []}], reviews: [], issues: [], activity: [], specialties: []}
+  };
+  const prompt = buildOwnershipSynthesisUserPrompt({report: today, file: today.path, now});
+  assert.match(prompt, /Analysis time \(UTC\): 2026-10-04T22:00:00.000Z/);
+  assert.match(prompt, /last commit 2026-10-04T20:00:00.000Z/);
+  assert.match(prompt, /Recent dated activity conflicts/);
+  assert.doesNotMatch(prompt, /Orphaned — no commits in 6\+ months|All experts appear unavailable \(inactive 3\+ months\)/);
+});
+
+test("sampled author and Slack away cannot establish declared ownership or inactivity", () => {
+  assert.match(OWNERSHIP_INTELLIGENCE_SYSTEM, /contact candidate, not a declared owner/);
+  assert.match(OWNERSHIP_INTELLIGENCE_SYSTEM, /Slack away\/offline indicates presence only/);
+  const prompt = formatOwnershipReportForPrompt(report, undefined, new Date("2026-10-04T22:00:00Z"));
+  assert.match(prompt, /Score tiers rank sampled contributors; they do not declare ownership/);
+  assert.match(prompt, /Missing or contradictory recency evidence is unknown/);
+});
+
+test("sole author and derived admin fallback preserve unknown ownership coverage", () => {
+  const sampled = {...report, risk: {...report.risk, singlePointOfFailure: true}, teamGraph: {...report.teamGraph, escalationPath: "Escalate via repository admins/maintainers"}};
+  const prompt = buildOwnershipSynthesisUserPrompt({report: sampled, file: sampled.path});
+  assert.match(prompt, /sampled Primary contributor/);
+  assert.match(prompt, /Suggested escalation \(not a verified policy\)/);
+  assert.match(prompt, /Missing a scored secondary does not establish that no secondary owner exists/);
+  assert.match(prompt, /Repository admins are a suggested fallback/);
+  assert.match(OWNERSHIP_INTELLIGENCE_SYSTEM, /coverage question, not proof the repository is a single point of failure/);
+  assert.match(prompt, /Retrieved counts are sampled evidence, not complete history/);
+  assert.match(OWNERSHIP_INTELLIGENCE_SYSTEM, /single seed commit cannot prove no commits in earlier quarters\/years/);
+});
+
+test("all derived risk booleans remain mechanical sample counts rather than personnel-risk facts", () => {
+  const formatted = formatOwnershipReportForPrompt({...report, risk: {singlePointOfFailure: true, expertUnavailable: true, orphaned: true, highTurnover: true, teamDispersion: true}});
+  assert.match(formatted, /Scored primary contributors: 1/);
+  assert.match(formatted, /Scored secondary contributors: 0/);
+  assert.doesNotMatch(formatted, /single.point.of.failure|Orphaned|High turnover|Team dispersion|All experts appear unavailable/i);
+  assert.doesNotMatch(OWNERSHIP_INTELLIGENCE_SYSTEM, /Highlights any single-point-of-failure risks/);
+});
+
+test("derived history and cross-team prose cannot reintroduce unproven ownership risk", () => {
+  const formatted = formatOwnershipReportForPrompt({...report,
+    history: [{period: "recent", label: "Recent sample", primaryOwner: "alice", secondaryOwners: [], narrative: "Confirmed single-point-of-failure repository; no backup exists"}],
+    teamGraph: {...report.teamGraph, crossTeamNote: "Team dispersion confirmed; only Alice knows this code"}
+  });
+  assert.match(formatted, /highest-ranked contributor alice; other ranked contributors none retrieved/);
+  assert.doesNotMatch(formatted, /Confirmed single-point|no backup exists|Team dispersion confirmed|only Alice knows/);
 });
 
 console.log(`\nownershipSynthesis: ${passed}/${passed + failed} tests passed`);

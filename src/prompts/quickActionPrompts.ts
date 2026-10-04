@@ -241,8 +241,8 @@ export function quickActionPromptParts(
             { key: "repo", value: repo }
           ];
       const task = repoWide
-        ? "Map repository-wide ownership: top experts, CODEOWNERS coverage, team structure, and escalation paths."
-        : "Identify true owners for this path and who to contact first.";
+        ? "Map repository-wide ownership evidence: sampled contributors, declared CODEOWNERS coverage, team structure, and suggested contacts."
+        : "Identify evidenced contributors, any declared owners for this path, and who to contact first.";
       return {
         display: repoWide
           ? "Map repository ownership and who to contact."
@@ -257,8 +257,8 @@ export function quickActionPromptParts(
           "Use ownership scores, commit/review history, Slack presence, and org identity links from attached sources.",
           ...(mentions.length ? [mentionModelGuidance("find-owner", mentions, ctx)] : []),
           repoWide
-            ? "Highlight single points of failure, cross-team boundaries, and who to ask first for unfamiliar areas — not a single-file deep dive."
-            : "Include confidence plus an escalation avenue (CODEOWNERS team/path owners/recent reviewers) or an explicit evidence-backed admin gap — never invent people or end with empty backup guidance.",
+            ? "Report sampled contributors, evidenced team boundaries, and suggested contacts. State that broader maintainer and backup coverage is unverified when only sampled authors are available."
+            : "State sampled evidence scope, declared ownership versus contact candidates, and a verified CODEOWNERS/reviewer contact or explicitly recommended admin fallback. Do not invent confidence or people.",
           repoWide ? FIND_OWNER_REPO_WIDE_CROSS_ACTION_HINT : ""
         ]
           .filter(Boolean)

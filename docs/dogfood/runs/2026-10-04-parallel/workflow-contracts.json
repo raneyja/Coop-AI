@@ -1,0 +1,1676 @@
+{
+  "schemaVersion": 1,
+  "createdDate": "2026-10-04",
+  "scope": "Existing five core repository workflows; engineering verification ledger, not launch certification.",
+  "candidateUnderReview": {
+    "bundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+    "vsixSha256": "b85688d0ebf90e0b97b06aafed0d9ec587ffa2ff5ded84fb12026fd9aaa09620",
+    "immutableCandidate": true,
+    "laterSourceEditsInheritPasses": false,
+    "fullCiStatus": "Passed",
+    "fullCiLog": "evidence/test-ci-final.log"
+  },
+  "statusVocabulary": [
+    "AutomatedPass",
+    "ReadyforReloadDogfood",
+    "FixedLivePass",
+    "Remaininglimitation"
+  ],
+  "claimRules": [
+    "No five-workflow completion claim.",
+    "Automated source/test coverage is not a live product pass.",
+    "Historical observations never promote a later package.",
+    "A FixedLivePass dimension is limited to the exact named ask and candidate.",
+    "First-answer latency is distinct from total turn duration."
+  ],
+  "dimensions": [
+    "intentRoute",
+    "repoFileBranchIsolation",
+    "retrievalCompleteness",
+    "provenanceAndClickableCitations",
+    "emptyAndDegradedHonesty",
+    "responseStartLatency",
+    "finalUsefulness",
+    "followupAndApplicableOutput",
+    "automatedCoverage",
+    "liveExtensionHost"
+  ],
+  "workflows": [
+    {
+      "workflow": "UnderstandRepo",
+      "command": "/understand",
+      "overallStatus": "Remaininglimitation",
+      "dimensions": [
+        {
+          "dimension": "intentRoute",
+          "contract": "The command and supported UI entry points resolve to the intended workflow, preserving explicit focus.",
+          "status": "AutomatedPass",
+          "qualificationScope": "Automated coverage included in final CI; supported live routes and broader behavior remain unqualified.",
+          "rationale": "Recorded quick-action prompt and command-route regressions pass. Current supported UI routes still require exact live coverage.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/prompts/quickActionPrompts.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "src/context/slashCommands.test.ts",
+              "kind": "test-source"
+            }
+          ]
+        },
+        {
+          "dimension": "repoFileBranchIsolation",
+          "contract": "Frozen selected repo/ref and explicit file provenance control evidence; no local-clone repository intelligence or cross-thread bleed.",
+          "status": "AutomatedPass",
+          "qualificationScope": "Automated coverage included in final CI; supported live routes and broader behavior remain unqualified.",
+          "rationale": "Recorded selected-branch, workspace and foreign-evidence isolation regressions pass. No blanket current workflow isolation pass is claimed.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/context/resolveRepoBranch.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "src/workspace/repoEvidenceIsolation.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "src/context/quickActionScope.test.ts",
+              "kind": "test-source"
+            }
+          ]
+        },
+        {
+          "dimension": "retrievalCompleteness",
+          "contract": "Read the bodies and relevant graph/history/doc evidence needed for the exact ask; state missing coverage plainly.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Historical cold overview omitted relevant fixture bodies. Prior candidate named implementation ask reads mathRenamed.ts, but broad overview coverage and cold/warm/switch behavior remain unqualified. Final candidate exact named implementation ask returned0/0/3 and renamed-oracle; verbatim citations1\u20137/9\u201311, clicked9\u201311 opening remote Untitled7 with75selected chars. This is a narrow behavior/citation pass; no full comprehension or branch-intent qualification.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "kind": "historical-live-observation",
+              "candidateBundleSha256": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584",
+              "turnId": "turn-1791150245070-ireua4",
+              "source": "Parent live observation and embedded observedDiagnosticEvents below.",
+              "qualificationScope": "Named math fixture only; current workflow remains incomplete.",
+              "askTranscriptionVerified": true,
+              "exactAsk": "/understand Explain positiveSum and fixtureBranchLabel in src/mathRenamed.ts on indexed branch renamed. Explain the exact results for [], [5], and [1,2,3] from the implementation, cite source lines, and label unavailable evidence.",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            },
+            {
+              "kind": "current-live-observation",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "exactAsk": "/understand Explain positiveSum and fixtureBranchLabel in src/mathRenamed.ts on indexed branch renamed. Give the exact results for [], [5], and [1,2,3] from the implementation, cite source lines, and label unavailable evidence.",
+              "qualificationScope": "Exact fixture behavior and citation navigation only; broader comprehension remains open.",
+              "source": "Parent live observation",
+              "paths": [
+                "docs/dogfood/runs/2026-10-04-parallel/live/understand-final-exact-results.jpg",
+                "docs/dogfood/runs/2026-10-04-parallel/live/understand-final-citation.jpg"
+              ]
+            }
+          ]
+        },
+        {
+          "dimension": "provenanceAndClickableCitations",
+          "contract": "Every source claim identifies its provider/repo/ref/path/range; clicking opens that exact source.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: New immutable package needs live qualification. Prior candidate observation: Parent clicked citation 9\u201311 on this candidate. Remote Untitled3 opened with 75 characters selected through line 11, covering fixtureBranchLabel and return renamed-oracle. This qualifies that exact citation, not every workflow source. Final candidate exact named implementation ask returned0/0/3 and renamed-oracle; verbatim citations1\u20137/9\u201311, clicked9\u201311 opening remote Untitled7 with75selected chars. This is a narrow behavior/citation pass; no full comprehension or branch-intent qualification.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/chat/remoteCitationReview.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "kind": "historical-live-observation",
+              "candidateBundleSha256": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584",
+              "turnId": "turn-1791150245070-ireua4",
+              "source": "Parent live observation and embedded observedDiagnosticEvents below.",
+              "qualificationScope": "Named math fixture only; current workflow remains incomplete.",
+              "askTranscriptionVerified": true,
+              "exactAsk": "/understand Explain positiveSum and fixtureBranchLabel in src/mathRenamed.ts on indexed branch renamed. Explain the exact results for [], [5], and [1,2,3] from the implementation, cite source lines, and label unavailable evidence.",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            },
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/live/understand-citation.jpg",
+              "kind": "historical-live-screenshot",
+              "candidateBundleSha256": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584",
+              "qualificationScope": "Named fixture citation 9\u201311 only; broader repository and provider click matrix remains open.",
+              "source": "Parent live observation",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            },
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/live/understand-exact-results.jpg",
+              "kind": "historical-live-screenshot",
+              "candidateBundleSha256": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584",
+              "qualificationScope": "Exact named math implementation output only.",
+              "source": "Parent live observation",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            },
+            {
+              "kind": "current-live-observation",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "exactAsk": "/understand Explain positiveSum and fixtureBranchLabel in src/mathRenamed.ts on indexed branch renamed. Give the exact results for [], [5], and [1,2,3] from the implementation, cite source lines, and label unavailable evidence.",
+              "qualificationScope": "Exact fixture behavior and citation navigation only; broader comprehension remains open.",
+              "source": "Parent live observation",
+              "paths": [
+                "docs/dogfood/runs/2026-10-04-parallel/live/understand-final-exact-results.jpg",
+                "docs/dogfood/runs/2026-10-04-parallel/live/understand-final-citation.jpg"
+              ]
+            }
+          ],
+          "priorCandidateQualification": "Named fixture citation 9\u201311 only; broader repository and provider click matrix remains open."
+        },
+        {
+          "dimension": "emptyAndDegradedHonesty",
+          "contract": "Unavailable, empty, stale or partial evidence yields a short truthful answer without invented absence or impact.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Recorded response-contract regressions require unavailable implementation/config to remain unknown. Prior candidate narrow ask qualified unavailable test/build configuration as not attached; broader overview still needs live qualification.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            }
+          ]
+        },
+        {
+          "dimension": "responseStartLatency",
+          "contract": "First meaningful answer starts within the soft 15000 ms guideline; Stop remains user-controlled and answers are never aborted solely for latency.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Final exact named fixture turn-1791155042916-4z91c2 started synthesis at6347 ms with thinking enabled and visible answer at14933 ms. This narrow ask met the15000 ms guideline; broad cold/warm/after-switch latency remains open.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/config/responseDeadline.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/autocomplete-session/quick-action-synthesis-latency.md",
+              "kind": "diagnostic-report"
+            },
+            {
+              "kind": "historical-live-observation",
+              "candidateBundleSha256": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584",
+              "turnId": "turn-1791150245070-ireua4",
+              "source": "Parent live observation and embedded observedDiagnosticEvents below.",
+              "qualificationScope": "Named math fixture only; current workflow remains incomplete.",
+              "askTranscriptionVerified": true,
+              "exactAsk": "/understand Explain positiveSum and fixtureBranchLabel in src/mathRenamed.ts on indexed branch renamed. Explain the exact results for [], [5], and [1,2,3] from the implementation, cite source lines, and label unavailable evidence.",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            },
+            {
+              "kind": "current-live-diagnostic",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "turnId": "turn-1791155042916-4z91c2",
+              "answerStartMs": 14933,
+              "synthesisRequestMs": 6347,
+              "enableThinking": true,
+              "qualificationScope": "Exact named fixture ask only."
+            }
+          ]
+        },
+        {
+          "dimension": "finalUsefulness",
+          "contract": "The finished answer answers the named ask accurately with supported conclusions and visible uncertainty.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: New immutable package needs live qualification. Prior candidate observation: Parent verified prior candidate exact math ask explains the seeded off-by-one and fixture label correctly: [] -> 0, [5] -> 0, [1,2,3] -> 3. This is a narrow implementation-correctness pass, not a broad repository-overview pass. Final candidate exact named implementation ask returned0/0/3 and renamed-oracle; verbatim citations1\u20137/9\u201311, clicked9\u201311 opening remote Untitled7 with75selected chars. This is a narrow behavior/citation pass; no full comprehension or branch-intent qualification.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "kind": "historical-live-observation",
+              "candidateBundleSha256": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584",
+              "turnId": "turn-1791150245070-ireua4",
+              "source": "Parent live observation and embedded observedDiagnosticEvents below.",
+              "qualificationScope": "Named math fixture only; current workflow remains incomplete.",
+              "askTranscriptionVerified": true,
+              "exactAsk": "/understand Explain positiveSum and fixtureBranchLabel in src/mathRenamed.ts on indexed branch renamed. Explain the exact results for [], [5], and [1,2,3] from the implementation, cite source lines, and label unavailable evidence.",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            },
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/live/understand-exact-results.jpg",
+              "kind": "historical-live-screenshot",
+              "candidateBundleSha256": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584",
+              "qualificationScope": "Named math outputs [] -> 0, [5] -> 0, [1,2,3] -> 3.",
+              "source": "Parent live observation",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            },
+            {
+              "kind": "current-live-observation",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "exactAsk": "/understand Explain positiveSum and fixtureBranchLabel in src/mathRenamed.ts on indexed branch renamed. Give the exact results for [], [5], and [1,2,3] from the implementation, cite source lines, and label unavailable evidence.",
+              "qualificationScope": "Exact fixture behavior and citation navigation only; broader comprehension remains open.",
+              "source": "Parent live observation",
+              "paths": [
+                "docs/dogfood/runs/2026-10-04-parallel/live/understand-final-exact-results.jpg",
+                "docs/dogfood/runs/2026-10-04-parallel/live/understand-final-citation.jpg"
+              ]
+            }
+          ],
+          "priorCandidateQualification": "Current bundle only when explicitly stated; otherwise recorded historical automated coverage or remaining check."
+        },
+        {
+          "dimension": "followupAndApplicableOutput",
+          "contract": "Scoped follow-up retains the correct history/ref and any offered actionable output is concrete, reviewable and applicable.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: A broad overview follow-up that resolves a named function and retains exact ref remains open on the prior candidate candidate. Narrow remote selection-to-New Chat passed: identity, renamed ref and lines 9\u201311 survived and fixtureBranchLabel returned the correct literal from its body. Broader overview follow-up and applicable outputs remain open.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/live/selection-new-chat.jpg",
+              "kind": "historical-live-screenshot",
+              "candidateBundleSha256": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584",
+              "qualificationScope": "Remote selection identity/ref/range and named function follow-up only.",
+              "source": "Parent live observation",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            }
+          ]
+        },
+        {
+          "dimension": "automatedCoverage",
+          "contract": "Relevant route/isolation/evidence/honesty tests and required release gates pass on the final source checkpoint.",
+          "status": "AutomatedPass",
+          "qualificationScope": "Final candidate automated coverage only; live workflow remains open.",
+          "rationale": "Full final CI, lint, package and backend build passed on the final source candidate. Automated green does not establish this complete live workflow.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/context/understandRepoBranchContract.test.ts",
+              "kind": "test-source",
+              "executionEvidence": "See CI/run report only where that test is actually included; source presence alone is not execution proof."
+            },
+            {
+              "path": "src/context/understandRepoDomainAttach.test.ts",
+              "kind": "test-source",
+              "executionEvidence": "See CI/run report only where that test is actually included; source presence alone is not execution proof."
+            },
+            {
+              "path": "src/prompts/repoSummarySynthesis.test.ts",
+              "kind": "test-source",
+              "executionEvidence": "See CI/run report only where that test is actually included; source presence alone is not execution proof."
+            },
+            {
+              "kind": "automated-run",
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci-final.log",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "candidateScope": "Final full CI exit 0; parent-confirmed."
+            }
+          ]
+        },
+        {
+          "dimension": "liveExtensionHost",
+          "contract": "The same packaged candidate passes named cold, warm and after-repo-switch asks through supported extension UI routes.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Prior candidate packaged workflow contract has not received complete live qualification. Final candidate exact named implementation ask returned0/0/3 and renamed-oracle; verbatim citations1\u20137/9\u201311, clicked9\u201311 opening remote Untitled7 with75selected chars. This is a narrow behavior/citation pass; no full comprehension or branch-intent qualification.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/README.md",
+              "kind": "run-report"
+            },
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/live/diagnostics.jsonl",
+              "kind": "historical-live-trace",
+              "candidateBundleSha256": "7eade1799d8860a398726ff4975e5e7555a9ee25c4e2c9e6b293c0fa2cd00ff5",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            },
+            {
+              "kind": "historical-live-observation",
+              "candidateBundleSha256": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584",
+              "turnId": "turn-1791150245070-ireua4",
+              "source": "Parent live observation and embedded observedDiagnosticEvents below.",
+              "qualificationScope": "Named math fixture only; current workflow remains incomplete.",
+              "askTranscriptionVerified": true,
+              "exactAsk": "/understand Explain positiveSum and fixtureBranchLabel in src/mathRenamed.ts on indexed branch renamed. Explain the exact results for [], [5], and [1,2,3] from the implementation, cite source lines, and label unavailable evidence.",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            },
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/live/understand-citation.jpg",
+              "kind": "historical-live-screenshot",
+              "candidateBundleSha256": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584",
+              "qualificationScope": "Narrow clicked citation proof only.",
+              "source": "Parent live observation",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            },
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/live/selection-new-chat.jpg",
+              "kind": "historical-live-screenshot",
+              "candidateBundleSha256": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584",
+              "qualificationScope": "Narrow remote selection follow-up only.",
+              "source": "Parent live observation",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            },
+            {
+              "kind": "current-live-observation",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "exactAsk": "/understand Explain positiveSum and fixtureBranchLabel in src/mathRenamed.ts on indexed branch renamed. Give the exact results for [], [5], and [1,2,3] from the implementation, cite source lines, and label unavailable evidence.",
+              "qualificationScope": "Exact fixture behavior and citation navigation only; broader comprehension remains open.",
+              "source": "Parent live observation",
+              "paths": [
+                "docs/dogfood/runs/2026-10-04-parallel/live/understand-final-exact-results.jpg",
+                "docs/dogfood/runs/2026-10-04-parallel/live/understand-final-citation.jpg"
+              ]
+            }
+          ]
+        }
+      ],
+      "historicalObservations": [
+        "Cold start 30725 ms; warm start 16228 ms and unsupported unimplemented claim. See run report."
+      ],
+      "historicalCandidateBundleSha256": null,
+      "requiredNextVerification": "Final candidate: named cold, warm and after-repo-switch asks; independently verify evidence, click source citations, finish useful output, and record first-answer timing."
+    },
+    {
+      "workflow": "TraceDecision",
+      "command": "/trace",
+      "overallStatus": "Remaininglimitation",
+      "dimensions": [
+        {
+          "dimension": "intentRoute",
+          "contract": "The command and supported UI entry points resolve to the intended workflow, preserving explicit focus.",
+          "status": "AutomatedPass",
+          "qualificationScope": "Automated coverage included in final CI; supported live routes and broader behavior remain unqualified.",
+          "rationale": "Recorded quick-action prompt and command-route regressions pass. Current supported UI routes still require exact live coverage.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/prompts/quickActionPrompts.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "src/context/slashCommands.test.ts",
+              "kind": "test-source"
+            }
+          ]
+        },
+        {
+          "dimension": "repoFileBranchIsolation",
+          "contract": "Frozen selected repo/ref and explicit file provenance control evidence; no local-clone repository intelligence or cross-thread bleed.",
+          "status": "AutomatedPass",
+          "qualificationScope": "Automated coverage included in final CI; supported live routes and broader behavior remain unqualified.",
+          "rationale": "Recorded selected-branch, workspace and foreign-evidence isolation regressions pass. No blanket current workflow isolation pass is claimed.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/context/resolveRepoBranch.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "src/workspace/repoEvidenceIsolation.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "src/context/quickActionScope.test.ts",
+              "kind": "test-source"
+            }
+          ]
+        },
+        {
+          "dimension": "retrievalCompleteness",
+          "contract": "Read the bodies and relevant graph/history/doc evidence needed for the exact ask; state missing coverage plainly.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: A complete source-grounded historical timeline with independently verified commit/decision links has not passed the prior candidate candidate live.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            }
+          ]
+        },
+        {
+          "dimension": "provenanceAndClickableCitations",
+          "contract": "Every source claim identifies its provider/repo/ref/path/range; clicking opens that exact source.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Prior candidate packaged workflow contract has not received complete live qualification.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/chat/remoteCitationReview.test.ts",
+              "kind": "test-source"
+            }
+          ]
+        },
+        {
+          "dimension": "emptyAndDegradedHonesty",
+          "contract": "Unavailable, empty, stale or partial evidence yields a short truthful answer without invented absence or impact.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Shared evidence-bound and source-label coverage exists; empty history and missing decision-link honesty remain current-candidate live checks.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            }
+          ]
+        },
+        {
+          "dimension": "responseStartLatency",
+          "contract": "First meaningful answer starts within the soft 15000 ms guideline; Stop remains user-controlled and answers are never aborted solely for latency.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Historical timing is candidate-specific; repeated cold/warm/switch latency on the final package remains open.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/config/responseDeadline.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/autocomplete-session/quick-action-synthesis-latency.md",
+              "kind": "diagnostic-report"
+            }
+          ]
+        },
+        {
+          "dimension": "finalUsefulness",
+          "contract": "The finished answer answers the named ask accurately with supported conclusions and visible uncertainty.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Earlier long trace was intentionally stopped; cancellation success does not establish correctness or usefulness of a completed decision narrative.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            }
+          ]
+        },
+        {
+          "dimension": "followupAndApplicableOutput",
+          "contract": "Scoped follow-up retains the correct history/ref and any offered actionable output is concrete, reviewable and applicable.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Historical partial Stop and the next source question recovered correctly. Finished Trace follow-up and concrete source-navigation output remain open.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/live/partial-stop.json",
+              "kind": "historical-live-observation",
+              "candidateBundleSha256": "7eade1799d8860a398726ff4975e5e7555a9ee25c4e2c9e6b293c0fa2cd00ff5",
+              "scope": "Partial Stop and next-turn recovery only.",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            }
+          ]
+        },
+        {
+          "dimension": "automatedCoverage",
+          "contract": "Relevant route/isolation/evidence/honesty tests and required release gates pass on the final source checkpoint.",
+          "status": "AutomatedPass",
+          "qualificationScope": "Final candidate automated coverage only; live workflow remains open.",
+          "rationale": "Full final CI, lint, package and backend build passed on the final source candidate. Automated green does not establish this complete live workflow.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/context/traceDecisionSearch.test.ts",
+              "kind": "test-source",
+              "executionEvidence": "See CI/run report only where that test is actually included; source presence alone is not execution proof."
+            },
+            {
+              "path": "src/engines/traceFileGrounding.test.ts",
+              "kind": "test-source",
+              "executionEvidence": "See CI/run report only where that test is actually included; source presence alone is not execution proof."
+            },
+            {
+              "path": "src/prompts/decisionSynthesis.test.ts",
+              "kind": "test-source",
+              "executionEvidence": "See CI/run report only where that test is actually included; source presence alone is not execution proof."
+            },
+            {
+              "kind": "automated-run",
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci-final.log",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "candidateScope": "Final full CI exit 0; parent-confirmed."
+            }
+          ]
+        },
+        {
+          "dimension": "liveExtensionHost",
+          "contract": "The same packaged candidate passes named cold, warm and after-repo-switch asks through supported extension UI routes.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Prior candidate packaged workflow contract has not received complete live qualification.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/README.md",
+              "kind": "run-report"
+            },
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/live/diagnostics.jsonl",
+              "kind": "historical-live-trace",
+              "candidateBundleSha256": "7eade1799d8860a398726ff4975e5e7555a9ee25c4e2c9e6b293c0fa2cd00ff5",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            }
+          ]
+        }
+      ],
+      "historicalObservations": [
+        "Trace ask first answer 15828 ms on turn-1791145632566-or02ed; separate historical turns 13596 and 13153 ms. Partial Stop at 13823 ms with hadPartial=true."
+      ],
+      "historicalCandidateBundleSha256": "7eade1799d8860a398726ff4975e5e7555a9ee25c4e2c9e6b293c0fa2cd00ff5",
+      "requiredNextVerification": "Final candidate: named cold, warm and after-repo-switch asks; independently verify evidence, click source citations, finish useful output, and record first-answer timing."
+    },
+    {
+      "workflow": "FindOwner",
+      "command": "/owner",
+      "overallStatus": "Remaininglimitation",
+      "dimensions": [
+        {
+          "dimension": "intentRoute",
+          "contract": "The command and supported UI entry points resolve to the intended workflow, preserving explicit focus.",
+          "status": "AutomatedPass",
+          "qualificationScope": "Automated coverage included in final CI; supported live routes and broader behavior remain unqualified.",
+          "rationale": "Recorded quick-action prompt and command-route regressions pass. Current supported UI routes still require exact live coverage.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/prompts/quickActionPrompts.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "src/context/slashCommands.test.ts",
+              "kind": "test-source"
+            }
+          ]
+        },
+        {
+          "dimension": "repoFileBranchIsolation",
+          "contract": "Frozen selected repo/ref and explicit file provenance control evidence; no local-clone repository intelligence or cross-thread bleed.",
+          "status": "AutomatedPass",
+          "qualificationScope": "Automated coverage included in final CI; supported live routes and broader behavior remain unqualified.",
+          "rationale": "Recorded selected-branch, workspace and foreign-evidence isolation regressions pass. No blanket current workflow isolation pass is claimed.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/context/resolveRepoBranch.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "src/workspace/repoEvidenceIsolation.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "src/context/quickActionScope.test.ts",
+              "kind": "test-source"
+            }
+          ]
+        },
+        {
+          "dimension": "retrievalCompleteness",
+          "contract": "Read the bodies and relevant graph/history/doc evidence needed for the exact ask; state missing coverage plainly.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Ownership evidence reached the historical GitLab authMiddleware answer and pane. Contributor counts, alias resolution and coverage were not independently certified.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            }
+          ]
+        },
+        {
+          "dimension": "provenanceAndClickableCitations",
+          "contract": "Every source claim identifies its provider/repo/ref/path/range; clicking opens that exact source.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Prior candidate packaged workflow contract has not received complete live qualification.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/chat/remoteCitationReview.test.ts",
+              "kind": "test-source"
+            }
+          ]
+        },
+        {
+          "dimension": "emptyAndDegradedHonesty",
+          "contract": "Unavailable, empty, stale or partial evidence yields a short truthful answer without invented absence or impact.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Final candidate fresh selected-file /owner at 15:53 PDT still produced old Risk signals/SPOF wording and unsupported inference. Full workflow failed. A stale production backend prompt is probable from endpoint and server prompt assembly evidence, but exact deployed revision is unverified; automated prompt guards do not close the live failure.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "kind": "current-live-observation",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "source": "Parent live observation at 15:53 PDT.",
+              "qualificationScope": "Selected-file ownership answer failed supported-inference contract; attribution pending."
+            },
+            {
+              "kind": "current-live-screenshot",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "path": "docs/dogfood/runs/2026-10-04-parallel/live/owner-final-risk-failure.jpg",
+              "turnId": "turn-1791154417295-4z0kcf",
+              "synthesisRequestMs": 14840,
+              "answerStartMs": 19444,
+              "enableThinking": true,
+              "qualificationScope": "Selected-file ownership failure only."
+            }
+          ]
+        },
+        {
+          "dimension": "responseStartLatency",
+          "contract": "First meaningful answer starts within the soft 15000 ms guideline; Stop remains user-controlled and answers are never aborted solely for latency.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Final ownership turn-1791154417295-4z0kcf started synthesis at14840 ms with thinking true and answer at19444 ms, above the15000 ms guideline. Full workflow remains open.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/config/responseDeadline.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/autocomplete-session/quick-action-synthesis-latency.md",
+              "kind": "diagnostic-report"
+            },
+            {
+              "kind": "current-live-screenshot",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "path": "docs/dogfood/runs/2026-10-04-parallel/live/owner-final-risk-failure.jpg",
+              "turnId": "turn-1791154417295-4z0kcf",
+              "synthesisRequestMs": 14840,
+              "answerStartMs": 19444,
+              "enableThinking": true,
+              "qualificationScope": "Selected-file ownership failure only."
+            }
+          ]
+        },
+        {
+          "dimension": "finalUsefulness",
+          "contract": "The finished answer answers the named ask accurately with supported conclusions and visible uncertainty.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Final candidate fresh selected-file /owner at 15:53 PDT still produced old Risk signals/SPOF wording and unsupported inference. Full workflow failed. A stale production backend prompt is probable from endpoint and server prompt assembly evidence, but exact deployed revision is unverified; automated prompt guards do not close the live failure.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "kind": "current-live-observation",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "source": "Parent live observation at 15:53 PDT.",
+              "qualificationScope": "Selected-file ownership answer failed supported-inference contract; attribution pending."
+            },
+            {
+              "kind": "current-live-screenshot",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "path": "docs/dogfood/runs/2026-10-04-parallel/live/owner-final-risk-failure.jpg",
+              "turnId": "turn-1791154417295-4z0kcf",
+              "synthesisRequestMs": 14840,
+              "answerStartMs": 19444,
+              "enableThinking": true,
+              "qualificationScope": "Selected-file ownership failure only."
+            }
+          ]
+        },
+        {
+          "dimension": "followupAndApplicableOutput",
+          "contract": "Scoped follow-up retains the correct history/ref and any offered actionable output is concrete, reviewable and applicable.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Follow-up owner identity/alias explanation with exact supporting source and an actionable next contact remains unqualified.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            }
+          ]
+        },
+        {
+          "dimension": "automatedCoverage",
+          "contract": "Relevant route/isolation/evidence/honesty tests and required release gates pass on the final source checkpoint.",
+          "status": "AutomatedPass",
+          "qualificationScope": "Final candidate automated coverage only; live workflow remains open.",
+          "rationale": "Full final CI, lint, package and backend build passed on the final source candidate. Automated green does not establish this complete live workflow.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/api/codeHosts/ownershipAnalysis.test.ts",
+              "kind": "test-source",
+              "executionEvidence": "See CI/run report only where that test is actually included; source presence alone is not execution proof."
+            },
+            {
+              "path": "src/prompts/ownershipSynthesis.test.ts",
+              "kind": "test-source",
+              "executionEvidence": "See CI/run report only where that test is actually included; source presence alone is not execution proof."
+            },
+            {
+              "kind": "automated-run",
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci-final.log",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "candidateScope": "Final full CI exit 0; parent-confirmed."
+            }
+          ]
+        },
+        {
+          "dimension": "liveExtensionHost",
+          "contract": "The same packaged candidate passes named cold, warm and after-repo-switch asks through supported extension UI routes.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Final candidate fresh selected-file /owner at 15:53 PDT still produced old Risk signals/SPOF wording and unsupported inference. Full workflow failed. A stale production backend prompt is probable from endpoint and server prompt assembly evidence, but exact deployed revision is unverified; automated prompt guards do not close the live failure.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/README.md",
+              "kind": "run-report"
+            },
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/live/diagnostics.jsonl",
+              "kind": "historical-live-trace",
+              "candidateBundleSha256": "7eade1799d8860a398726ff4975e5e7555a9ee25c4e2c9e6b293c0fa2cd00ff5",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            },
+            {
+              "kind": "current-live-observation",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "source": "Parent live observation at 15:53 PDT.",
+              "qualificationScope": "Selected-file ownership answer failed supported-inference contract; attribution pending."
+            },
+            {
+              "kind": "current-live-screenshot",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "path": "docs/dogfood/runs/2026-10-04-parallel/live/owner-final-risk-failure.jpg",
+              "turnId": "turn-1791154417295-4z0kcf",
+              "synthesisRequestMs": 14840,
+              "answerStartMs": 19444,
+              "enableThinking": true,
+              "qualificationScope": "Selected-file ownership failure only."
+            }
+          ]
+        }
+      ],
+      "historicalObservations": [
+        "Historical turn-1791145480909-jxjvvz answer-start 18319 ms exceeded the response-start guideline."
+      ],
+      "historicalCandidateBundleSha256": "7eade1799d8860a398726ff4975e5e7555a9ee25c4e2c9e6b293c0fa2cd00ff5",
+      "requiredNextVerification": "Final candidate: named cold, warm and after-repo-switch asks; independently verify evidence, click source citations, finish useful output, and record first-answer timing.",
+      "finalCandidateReloadQualification": {
+        "status": "Remaininglimitation",
+        "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+        "scope": "Named ownership/gaps sampled-evidence, activity recency, and fallback qualification corrections only; no whole-workflow completion claim.",
+        "liveStatus": "Final selected-file ownership failed; production backend mismatch probable, exact revision unverified.",
+        "sourceEvidence": [
+          "src/prompts/ownershipSynthesis.ts",
+          "src/prompts/ownershipSynthesis.test.ts",
+          "src/api/codeHosts/ownershipAnalysis.ts",
+          "src/api/codeHosts/ownershipAnalysis.test.ts"
+        ],
+        "requiredChecks": [
+          "Today commit never classified inactive; unknown dates remain unknown",
+          "Sampled author is contact candidate, not declared owner",
+          "No sampled secondary does not prove nonexistent secondary",
+          "Derived admin fallback is recommendation, not verified policy",
+          "Seed commit does not prove complete history or absent maintenance"
+        ]
+      }
+    },
+    {
+      "workflow": "BlastRadius",
+      "command": "/blast",
+      "overallStatus": "Remaininglimitation",
+      "dimensions": [
+        {
+          "dimension": "intentRoute",
+          "contract": "The command and supported UI entry points resolve to the intended workflow, preserving explicit focus.",
+          "status": "AutomatedPass",
+          "qualificationScope": "Automated coverage included in final CI; supported live routes and broader behavior remain unqualified.",
+          "rationale": "Recorded quick-action prompt and command-route regressions pass. Current supported UI routes still require exact live coverage.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/prompts/quickActionPrompts.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "src/context/slashCommands.test.ts",
+              "kind": "test-source"
+            }
+          ]
+        },
+        {
+          "dimension": "repoFileBranchIsolation",
+          "contract": "Frozen selected repo/ref and explicit file provenance control evidence; no local-clone repository intelligence or cross-thread bleed.",
+          "status": "AutomatedPass",
+          "qualificationScope": "Automated coverage included in final CI; supported live routes and broader behavior remain unqualified.",
+          "rationale": "Recorded selected-branch, workspace and foreign-evidence isolation regressions pass. No blanket current workflow isolation pass is claimed.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/context/resolveRepoBranch.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "src/workspace/repoEvidenceIsolation.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "src/context/quickActionScope.test.ts",
+              "kind": "test-source"
+            }
+          ]
+        },
+        {
+          "dimension": "retrievalCompleteness",
+          "contract": "Read the bodies and relevant graph/history/doc evidence needed for the exact ask; state missing coverage plainly.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Historical remote authMiddleware output exposed 25 direct dependents. Exact completeness, named-symbol versus file scope, and current-candidate graph degradation remain unqualified.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            }
+          ]
+        },
+        {
+          "dimension": "provenanceAndClickableCitations",
+          "contract": "Every source claim identifies its provider/repo/ref/path/range; clicking opens that exact source.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Prior candidate packaged workflow contract has not received complete live qualification.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/chat/remoteCitationReview.test.ts",
+              "kind": "test-source"
+            }
+          ]
+        },
+        {
+          "dimension": "emptyAndDegradedHonesty",
+          "contract": "Unavailable, empty, stale or partial evidence yields a short truthful answer without invented absence or impact.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Recorded Blast regressions reject zero-impact claims from empty graph and keep verified callers. Exact prior candidate empty/degraded live behavior remains open.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            }
+          ]
+        },
+        {
+          "dimension": "responseStartLatency",
+          "contract": "First meaningful answer starts within the soft 15000 ms guideline; Stop remains user-controlled and answers are never aborted solely for latency.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Historical timing is candidate-specific; repeated cold/warm/switch latency on the final package remains open.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/config/responseDeadline.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/autocomplete-session/quick-action-synthesis-latency.md",
+              "kind": "diagnostic-report"
+            }
+          ]
+        },
+        {
+          "dimension": "finalUsefulness",
+          "contract": "The finished answer answers the named ask accurately with supported conclusions and visible uncertainty.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Historical dependency output is a narrow evidence-wiring observation, not an independently complete impact analysis or current-bundle pass.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            }
+          ]
+        },
+        {
+          "dimension": "followupAndApplicableOutput",
+          "contract": "Scoped follow-up retains the correct history/ref and any offered actionable output is concrete, reviewable and applicable.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: A proposed change followed by supported affected tests/callers and actionable verification remains open on the prior candidate package.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            }
+          ]
+        },
+        {
+          "dimension": "automatedCoverage",
+          "contract": "Relevant route/isolation/evidence/honesty tests and required release gates pass on the final source checkpoint.",
+          "status": "AutomatedPass",
+          "qualificationScope": "Final candidate automated coverage only; live workflow remains open.",
+          "rationale": "Full final CI, lint, package and backend build passed on the final source candidate. Automated green does not establish this complete live workflow.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/engines/blastRadiusDependentsFallback.test.ts",
+              "kind": "test-source",
+              "executionEvidence": "See CI/run report only where that test is actually included; source presence alone is not execution proof."
+            },
+            {
+              "path": "src/engines/blastRadiusAnalysis.test.ts",
+              "kind": "test-source",
+              "executionEvidence": "See CI/run report only where that test is actually included; source presence alone is not execution proof."
+            },
+            {
+              "path": "src/prompts/blastRadiusSynthesis.test.ts",
+              "kind": "test-source",
+              "executionEvidence": "See CI/run report only where that test is actually included; source presence alone is not execution proof."
+            },
+            {
+              "kind": "automated-run",
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci-final.log",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "candidateScope": "Final full CI exit 0; parent-confirmed."
+            }
+          ]
+        },
+        {
+          "dimension": "liveExtensionHost",
+          "contract": "The same packaged candidate passes named cold, warm and after-repo-switch asks through supported extension UI routes.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Prior candidate packaged workflow contract has not received complete live qualification.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/README.md",
+              "kind": "run-report"
+            },
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/live/diagnostics.jsonl",
+              "kind": "historical-live-trace",
+              "candidateBundleSha256": "7eade1799d8860a398726ff4975e5e7555a9ee25c4e2c9e6b293c0fa2cd00ff5",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            }
+          ]
+        }
+      ],
+      "historicalObservations": [
+        "Historical turn-1791145590063-y9nsau answer-start 12610 ms met the start guideline for that one ask only."
+      ],
+      "historicalCandidateBundleSha256": "7eade1799d8860a398726ff4975e5e7555a9ee25c4e2c9e6b293c0fa2cd00ff5",
+      "requiredNextVerification": "Final candidate: named cold, warm and after-repo-switch asks; independently verify evidence, click source citations, finish useful output, and record first-answer timing."
+    },
+    {
+      "workflow": "KnowledgeGaps",
+      "command": "/gaps",
+      "overallStatus": "Remaininglimitation",
+      "dimensions": [
+        {
+          "dimension": "intentRoute",
+          "contract": "The command and supported UI entry points resolve to the intended workflow, preserving explicit focus.",
+          "status": "AutomatedPass",
+          "qualificationScope": "Automated coverage included in final CI; supported live routes and broader behavior remain unqualified.",
+          "rationale": "Recorded quick-action prompt and command-route regressions pass. Current supported UI routes still require exact live coverage.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/prompts/quickActionPrompts.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "src/context/slashCommands.test.ts",
+              "kind": "test-source"
+            }
+          ]
+        },
+        {
+          "dimension": "repoFileBranchIsolation",
+          "contract": "Frozen selected repo/ref and explicit file provenance control evidence; no local-clone repository intelligence or cross-thread bleed.",
+          "status": "AutomatedPass",
+          "qualificationScope": "Automated coverage included in final CI; supported live routes and broader behavior remain unqualified.",
+          "rationale": "Recorded selected-branch, workspace and foreign-evidence isolation regressions pass. No blanket current workflow isolation pass is claimed.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/context/resolveRepoBranch.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "src/workspace/repoEvidenceIsolation.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "src/context/quickActionScope.test.ts",
+              "kind": "test-source"
+            }
+          ]
+        },
+        {
+          "dimension": "retrievalCompleteness",
+          "contract": "Read the bodies and relevant graph/history/doc evidence needed for the exact ask; state missing coverage plainly.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Prior candidate named positiveSum ask read the correct mathRenamed.ts body, but unrelated scan/runbook recommendations remained; complete focused retrieval and filtering are not qualified. Final candidate 15:54 PDT named positiveSum/src/mathRenamed.ts ask on renamed branch read the correct body; Reviewed source 1\u201312 opened remote Untitled7 with 263 characters selected across lines 1\u201312. This is a narrow retrieval/citation/navigation pass, not the complete gaps contract.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "/private/tmp/coop-next-gaps.log",
+              "kind": "targeted-automated-run",
+              "candidateBundleSha256": null,
+              "observed": "Includes 4/4 cold named-target enrichment cases; not live proof."
+            },
+            {
+              "kind": "historical-live-observation",
+              "candidateBundleSha256": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584",
+              "turnId": "turn-1791149968309-2tek84",
+              "exactAsk": "Identify concrete supported gaps for positiveSum in src/mathRenamed.ts on indexed branch renamed. Label unknowns and cite evidence.",
+              "source": "Parent live observation and embedded observedDiagnosticEvents below.",
+              "qualificationScope": "Named math fixture only; current workflow remains incomplete.",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            },
+            {
+              "kind": "current-live-observation",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "source": "Parent live observation at 15:54 PDT; no current screenshot asserted.",
+              "qualificationScope": "Named source retrieval, reviewed-source citation and remote navigation only.",
+              "file": "src/mathRenamed.ts",
+              "branch": "renamed",
+              "openedBuffer": "Untitled7",
+              "selectedLines": [
+                1,
+                12
+              ],
+              "selectedCharacters": 263
+            }
+          ]
+        },
+        {
+          "dimension": "provenanceAndClickableCitations",
+          "contract": "Every source claim identifies its provider/repo/ref/path/range; clicking opens that exact source.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Prior candidate packaged workflow contract has not received complete live qualification. Final candidate 15:54 PDT named positiveSum/src/mathRenamed.ts ask on renamed branch read the correct body; Reviewed source 1\u201312 opened remote Untitled7 with 263 characters selected across lines 1\u201312. This is a narrow retrieval/citation/navigation pass, not the complete gaps contract.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/chat/remoteCitationReview.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "kind": "historical-live-observation",
+              "candidateBundleSha256": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584",
+              "turnId": "turn-1791149968309-2tek84",
+              "exactAsk": "Identify concrete supported gaps for positiveSum in src/mathRenamed.ts on indexed branch renamed. Label unknowns and cite evidence.",
+              "source": "Parent live observation and embedded observedDiagnosticEvents below.",
+              "qualificationScope": "Named math fixture only; current workflow remains incomplete.",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            },
+            {
+              "kind": "current-live-observation",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "source": "Parent live observation at 15:54 PDT; no current screenshot asserted.",
+              "qualificationScope": "Named source retrieval, reviewed-source citation and remote navigation only.",
+              "file": "src/mathRenamed.ts",
+              "branch": "renamed",
+              "openedBuffer": "Untitled7",
+              "selectedLines": [
+                1,
+                12
+              ],
+              "selectedCharacters": 263
+            }
+          ]
+        },
+        {
+          "dimension": "emptyAndDegradedHonesty",
+          "contract": "Unavailable, empty, stale or partial evidence yields a short truthful answer without invented absence or impact.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Unknown scan/doc coverage improved. Historical unsupported absence and proposed-as-applied claims remain preserved; prior candidate scan/runbook output is still an open failure.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "/private/tmp/coop-next-gaps.log",
+              "kind": "targeted-automated-run",
+              "candidateBundleSha256": null,
+              "observed": "Includes 4/4 cold named-target enrichment cases; not live proof."
+            }
+          ]
+        },
+        {
+          "dimension": "responseStartLatency",
+          "contract": "First meaningful answer starts within the soft 15000 ms guideline; Stop remains user-controlled and answers are never aborted solely for latency.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Final named fixture gaps turn-1791154460156-vud56y started synthesis at 11518 ms with thinking false and visible answer at 12463 ms. Narrow ask met 15000 ms guideline; broader cold/warm/switch latency remains open.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/config/responseDeadline.test.ts",
+              "kind": "test-source"
+            },
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/autocomplete-session/quick-action-synthesis-latency.md",
+              "kind": "diagnostic-report"
+            },
+            {
+              "kind": "historical-live-observation",
+              "candidateBundleSha256": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584",
+              "turnId": "turn-1791149968309-2tek84",
+              "exactAsk": "Identify concrete supported gaps for positiveSum in src/mathRenamed.ts on indexed branch renamed. Label unknowns and cite evidence.",
+              "source": "Parent live observation and embedded observedDiagnosticEvents below.",
+              "qualificationScope": "Named math fixture only; current workflow remains incomplete.",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            },
+            {
+              "kind": "current-live-diagnostic",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "turnId": "turn-1791154460156-vud56y",
+              "synthesisRequestMs": 11518,
+              "answerStartMs": 12463,
+              "enableThinking": false,
+              "qualificationScope": "Named final math fixture ask only; complete latency contract remains open.",
+              "source": "Parent-confirmed fresh diagnostic events; raw trace retained separately."
+            }
+          ],
+          "priorCandidateQualification": "Current bundle only when explicitly stated; otherwise recorded historical automated coverage or remaining check."
+        },
+        {
+          "dimension": "finalUsefulness",
+          "contract": "The finished answer answers the named ask accurately with supported conclusions and visible uncertainty.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Prior candidate body read is correct, but parent reports unrelated unknown-scan/runbook recommendations. The workflow is not a complete live pass.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "kind": "historical-live-observation",
+              "candidateBundleSha256": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584",
+              "turnId": "turn-1791149968309-2tek84",
+              "exactAsk": "Identify concrete supported gaps for positiveSum in src/mathRenamed.ts on indexed branch renamed. Label unknowns and cite evidence.",
+              "source": "Parent live observation and embedded observedDiagnosticEvents below.",
+              "qualificationScope": "Named math fixture only; current workflow remains incomplete.",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            }
+          ]
+        },
+        {
+          "dimension": "followupAndApplicableOutput",
+          "contract": "Scoped follow-up retains the correct history/ref and any offered actionable output is concrete, reviewable and applicable.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Recommendations must remain prospective and applicable; failed Apply cannot be described as completed. Prior candidate recommendation and follow-up output remain open.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            }
+          ]
+        },
+        {
+          "dimension": "automatedCoverage",
+          "contract": "Relevant route/isolation/evidence/honesty tests and required release gates pass on the final source checkpoint.",
+          "status": "AutomatedPass",
+          "qualificationScope": "Final candidate automated coverage only; live workflow remains open.",
+          "rationale": "Full final CI, lint, package and backend build passed on the final source candidate. Automated green does not establish this complete live workflow.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci.log",
+              "kind": "automated-run",
+              "candidateBundleSha256": null,
+              "candidateScope": "Historical source checkpoint. This log alone does not establish current-bundle validation."
+            },
+            {
+              "path": "src/chat/knowledgeGapsNamedFocus.test.ts",
+              "kind": "test-source",
+              "executionEvidence": "See CI/run report only where that test is actually included; source presence alone is not execution proof."
+            },
+            {
+              "path": "src/context/knowledgeGapsFocus.test.ts",
+              "kind": "test-source",
+              "executionEvidence": "See CI/run report only where that test is actually included; source presence alone is not execution proof."
+            },
+            {
+              "path": "src/prompts/knowledgeGapsSynthesis.test.ts",
+              "kind": "test-source",
+              "executionEvidence": "See CI/run report only where that test is actually included; source presence alone is not execution proof."
+            },
+            {
+              "path": "src/prompts/knowledgeGapsEnrichment.test.ts",
+              "kind": "test-source",
+              "executionEvidence": "See CI/run report only where that test is actually included; source presence alone is not execution proof."
+            },
+            {
+              "path": "/private/tmp/coop-next-gaps.log",
+              "kind": "targeted-automated-run",
+              "candidateBundleSha256": null,
+              "observed": "Includes 4/4 cold named-target enrichment cases; not live proof."
+            },
+            {
+              "kind": "automated-run",
+              "path": "docs/dogfood/runs/2026-10-04-parallel/evidence/test-ci-final.log",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "candidateScope": "Final full CI exit 0; parent-confirmed."
+            }
+          ]
+        },
+        {
+          "dimension": "liveExtensionHost",
+          "contract": "The same packaged candidate passes named cold, warm and after-repo-switch asks through supported extension UI routes.",
+          "status": "Remaininglimitation",
+          "qualificationScope": "Final live contract remains open; prior observations are historical unless explicitly tagged with final bundle.",
+          "rationale": "Historical qualification context: Prior candidate packaged workflow contract has not received complete live qualification. Final candidate 15:54 PDT named positiveSum/src/mathRenamed.ts ask on renamed branch read the correct body; Reviewed source 1\u201312 opened remote Untitled7 with 263 characters selected across lines 1\u201312. This is a narrow retrieval/citation/navigation pass, not the complete gaps contract.",
+          "evidence": [
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/README.md",
+              "kind": "run-report"
+            },
+            {
+              "path": "docs/dogfood/runs/2026-10-04-parallel/live/diagnostics.jsonl",
+              "kind": "historical-live-trace",
+              "candidateBundleSha256": "7eade1799d8860a398726ff4975e5e7555a9ee25c4e2c9e6b293c0fa2cd00ff5",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            },
+            {
+              "kind": "historical-live-observation",
+              "candidateBundleSha256": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584",
+              "turnId": "turn-1791149968309-2tek84",
+              "exactAsk": "Identify concrete supported gaps for positiveSum in src/mathRenamed.ts on indexed branch renamed. Label unknowns and cite evidence.",
+              "source": "Parent live observation and embedded observedDiagnosticEvents below.",
+              "qualificationScope": "Named math fixture only; current workflow remains incomplete.",
+              "candidateScope": "Historical observation only; does not qualify the final candidate."
+            },
+            {
+              "kind": "current-live-observation",
+              "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+              "source": "Parent live observation at 15:54 PDT; no current screenshot asserted.",
+              "qualificationScope": "Named source retrieval, reviewed-source citation and remote navigation only.",
+              "file": "src/mathRenamed.ts",
+              "branch": "renamed",
+              "openedBuffer": "Untitled7",
+              "selectedLines": [
+                1,
+                12
+              ],
+              "selectedCharacters": 263
+            }
+          ]
+        }
+      ],
+      "historicalObservations": [
+        "Historical turn-1791149422324-nlydsn start 48327 ms after synthesis at 13921 ms on bundle 92085e30ec8d583795d5043d5f424e6b3c0fc06af2175646b29e0a1804da189a."
+      ],
+      "historicalCandidateBundleSha256": null,
+      "requiredNextVerification": "Final candidate: named cold, warm and after-repo-switch asks; independently verify evidence, click source citations, finish useful output, and record first-answer timing.",
+      "finalCandidateReloadQualification": {
+        "status": "Remaininglimitation",
+        "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+        "scope": "Named ownership/gaps sampled-evidence, activity recency, and fallback qualification corrections only; no whole-workflow completion claim.",
+        "liveStatus": "Final named gaps body/citation/navigation passed narrowly; complete gaps recommendations contract remains open.",
+        "sourceEvidence": [
+          "src/prompts/ownershipSynthesis.ts",
+          "src/prompts/ownershipSynthesis.test.ts",
+          "src/api/codeHosts/ownershipAnalysis.ts",
+          "src/api/codeHosts/ownershipAnalysis.test.ts"
+        ],
+        "requiredChecks": [
+          "Today commit never classified inactive; unknown dates remain unknown",
+          "Sampled author is contact candidate, not declared owner",
+          "No sampled secondary does not prove nonexistent secondary",
+          "Derived admin fallback is recommendation, not verified policy",
+          "Seed commit does not prove complete history or absent maintenance"
+        ]
+      }
+    }
+  ],
+  "observedDiagnosticSource": "/private/tmp/coop-dogfood-clean-20261004/user/logs/20261004T100016/window4/exthost/output_logging_20261004T143842/1-CoopAI Agent Diagnostics.log",
+  "observedDiagnosticEvents": [
+    {
+      "at": "2026-10-04T21:39:38.283Z",
+      "threadId": "thread-1791149933050-7gqrcv",
+      "stage": "synthesis-request",
+      "turnId": "turn-1791149968309-2tek84",
+      "runId": "synthesis-turn-1791149968309-2tek84",
+      "elapsedMs": 12865,
+      "useCase": "knowledge_gaps",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "requestChars": 19316,
+      "historyCount": 0,
+      "commentOnly": false,
+      "hasAgentPatch": false,
+      "enableThinking": false,
+      "buildId": "0.1.10",
+      "bundleId": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584"
+    },
+    {
+      "at": "2026-10-04T21:39:39.568Z",
+      "threadId": "thread-1791149933050-7gqrcv",
+      "stage": "answer-start",
+      "turnId": "turn-1791149968309-2tek84",
+      "runId": "synthesis-turn-1791149968309-2tek84",
+      "elapsedMs": 14150,
+      "selectedBranch": "renamed",
+      "buildId": "0.1.10",
+      "bundleId": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584"
+    },
+    {
+      "at": "2026-10-04T21:44:08.396Z",
+      "threadId": "thread-1791150218829-6xgeqg",
+      "stage": "synthesis-request",
+      "turnId": "turn-1791150245070-ireua4",
+      "runId": "synthesis-turn-1791150245070-ireua4",
+      "elapsedMs": 5938,
+      "useCase": "comprehension",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "requestChars": 17239,
+      "historyCount": 0,
+      "commentOnly": false,
+      "hasAgentPatch": false,
+      "enableThinking": true,
+      "buildId": "0.1.10",
+      "bundleId": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584"
+    },
+    {
+      "at": "2026-10-04T21:44:18.931Z",
+      "threadId": "thread-1791150218829-6xgeqg",
+      "stage": "answer-start",
+      "turnId": "turn-1791150245070-ireua4",
+      "runId": "synthesis-turn-1791150245070-ireua4",
+      "elapsedMs": 16473,
+      "selectedBranch": "renamed",
+      "buildId": "0.1.10",
+      "bundleId": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584"
+    }
+  ],
+  "remainingReleaseQualification": [
+    "All five complete final-candidate live workflow contracts remain open.",
+    "Final ownership selected-file failure needs diagnosis and repair; stale backend prompt suspicion remains unverified.",
+    "Final named gaps retrieval/citation/navigation passed narrowly; full scan, honest recommendations, latency and applicable follow-up remain open.",
+    "Understand, Trace, Blast and broad cold/warm/after-switch supported UI-route qualification remain open.",
+    "Cold picker passed three times on final candidate; broader provider/access checks remain open.",
+    "No production deployment or Stripe qualification performed."
+  ],
+  "excludedScope": [
+    "Stripe",
+    "New integrations",
+    "New multi-repository features",
+    "Production deployment",
+    "Marketplace publication"
+  ],
+  "historicalCandidates": [
+    {
+      "bundleSha256": "282f8b2adf550fbe8a9120a8043691e953b5718238af036f3792cee8ac9ce584",
+      "vsixSha256": "79e857394f0b1a82c3cd758f76ac168ce5baf6448e16aa9903346f47510f254c",
+      "immutableCandidate": true,
+      "laterSourceEditsInheritPasses": false
+    },
+    {
+      "bundleSha256": "546df4a7968410b12c373e789214232b6f76e7796c81ceae8cdf6a0efb5efd04",
+      "vsixSha256": "6ffe8195c1c373077ede40a35987cfbbab4eb9c7448e4f8e0d7dd1435a2e00e4",
+      "immutableCandidate": true,
+      "laterSourceEditsInheritPasses": false,
+      "fullCiStatus": "Historical pending report superseded; final CI passed on final candidate.",
+      "parentCiSession": 64664,
+      "qualificationScope": "Historical candidate only; no results inherited by final candidate."
+    }
+  ],
+  "finalValidation": {
+    "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+    "fullCi": "passed (exit 0)",
+    "log": "evidence/test-ci-final.log",
+    "lint": "passed",
+    "package": "passed",
+    "backendBuild": "passed",
+    "targetedPromptAssembly": "47/47 passed",
+    "repoPicker": "host 3/3 and UI 4/4 passed; cold first-open live passed three times on final bundle",
+    "live": "Only explicitly listed final-candidate narrow observations; all five complete contracts remain open.",
+    "evidence": {
+      "fullCi": "evidence/test-ci-final.log",
+      "lint": "evidence/lint-final.log",
+      "package": "evidence/package-final.log",
+      "backendBuild": "evidence/backend-final.log",
+      "systemPrompts": "evidence/system-prompts-final.log",
+      "ownershipPrompts": "evidence/ownership-prompts-final.log",
+      "knowledgeGaps": "evidence/knowledge-gaps-final.log",
+      "repoPicker": "evidence/repo-list-final.log"
+    }
+  },
+  "currentCandidateLiveObservations": [
+    {
+      "case": "Cold Remote workspace first open",
+      "result": "Narrow live pass three times: authenticated indexed repositories appeared on first open without Refresh.",
+      "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+      "screenshot": "live/cold-repository-picker-final.jpg",
+      "qualificationScope": "First-open picker behavior only; no full workflow or provider/access matrix pass."
+    },
+    {
+      "case": "Named gaps source retrieval/citation/navigation",
+      "result": "Correct mathRenamed body and Reviewed source 1\u201312; clicked remote Untitled7 selecting 263 chars L1\u201312.",
+      "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+      "qualificationScope": "Retrieval/citation/navigation only.",
+      "turnId": "turn-1791154460156-vud56y",
+      "answerStartMs": 12463,
+      "synthesisRequestMs": 11518,
+      "enableThinking": false
+    },
+    {
+      "case": "Selected-file ownership",
+      "result": "FAIL: old Risk signals/SPOF wording and unsupported inference. Stale backend prompt suspected, unverified.",
+      "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+      "qualificationScope": "Full ownership contract remains open.",
+      "turnId": "turn-1791154417295-4z0kcf",
+      "answerStartMs": 19444,
+      "synthesisRequestMs": 14840,
+      "enableThinking": true,
+      "screenshot": "live/owner-final-risk-failure.jpg"
+    },
+    {
+      "case": "Understand exact named implementation and citation",
+      "candidateBundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+      "exactAsk": "/understand Explain positiveSum and fixtureBranchLabel in src/mathRenamed.ts on indexed branch renamed. Give the exact results for [], [5], and [1,2,3] from the implementation, cite source lines, and label unavailable evidence.",
+      "context": "Fresh repository-only thread, indexed branch renamed.",
+      "result": "Correct positiveSum results 0/0/3 and fixtureBranchLabel renamed-oracle; verbatim source citations1\u20137 and9\u201311; clicked9\u201311 opened remote Untitled7 with75chars selected through Ln11Col2.",
+      "qualificationScope": "Exact fixture behavior and citation navigation only; broader comprehension remains open.",
+      "remainingLimits": "Answer described almost-certain bug and branch-identity intent; attached documentation unavailable. Broad cold repository overview and after-switch qualification remain open.",
+      "screenshots": [
+        "live/understand-final-exact-results.jpg",
+        "live/understand-final-citation.jpg"
+      ],
+      "answerStartMs": 14933,
+      "turnId": "turn-1791155042916-4z91c2",
+      "synthesisRequestMs": 6347,
+      "enableThinking": true
+    }
+  ],
+  "observedDiagnosticSourceScope": "Embedded pre-final events are retained historical evidence; they do not qualify the final bundle.",
+  "productionBackendQualification": {
+    "endpoint": "https://api.coop-ai.dev",
+    "causeAssessment": "Probable stale production backend; not revision-verified.",
+    "rationale": "Active endpoint is strongly supported as production https://api.coop-ai.dev: no profile override and default/production-force resolution. Server ModelRouter constructs system prompts and reserializes raw context. Current source says Evidence and unknowns, while live answer retained Risk signals, so stale production backend is probable; exact deployed revision is unknown. Production deployment awaits authorization; no backend live repair is claimed.",
+    "productionDeployment": "Awaiting authorization",
+    "liveBackendFixClaim": false
+  }
+}

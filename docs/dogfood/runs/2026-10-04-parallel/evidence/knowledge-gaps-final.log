@@ -1,0 +1,112 @@
+
+> coop-ai@0.1.10 test:knowledge-gaps-enrichment
+> npx tsx src/prompts/knowledgeGapsEnrichment.test.ts && npx tsx src/chat/chatResponseEnrichment.test.ts && npx tsx src/context/knowledgeGapsFocus.test.ts && npx tsx src/prompts/knowledgeGapsSynthesis.test.ts && npx tsx src/context/docSearchQuery.test.ts && npx tsx src/context/integrationDocRelevance.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/chat/knowledgeGapsNamedFocus.test.ts
+
+  ✓ buildConfluencePagesReviewedBlock links titles when htmlUrl is present
+  ✓ enrichKnowledgeGapsResponse moves Confluence pages to top of Documentation gaps
+  ✓ enrichKnowledgeGapsResponse strips invented Ownership and Integration sections
+  ✓ enrichKnowledgeGapsResponse linkifies file paths and Confluence title mentions
+  ✓ buildConfluencePagesReviewedBlock uses keyword heuristics for runbook pages
+  ✓ enrichKnowledgeGapsResponse numbers recommended next steps
+  ✓ enrichKnowledgeGapsResponse rebuilds fastify.js scenario with Notion pages and scan gaps
+  ✓ buildScanGapSubsection uses scan message for What to check
+  ✓ extractNotionPagesFromBundle and extractJobScanGapsFromBundle read bundle entries
+  ✓ buildNotionPagesReviewedBlock links titles when htmlUrl is present
+  ✓ extractConfluencePagesFromBundle reads pages and urls from context bundle
+  ✓ enrichIntegrationDocsResponse linkifies attached page titles
+  ✓ empty documentation evidence cannot preserve model absence claims
+  ✓ missing-docs and owner scan flags are coverage limits rather than absence proof
+
+14 passed, 0 failed
+  ✓ gaps final output supplies a verbatim interactive source citation when omitted
+  ✓ gaps final output never invents line offsets for arbitrary snippets
+  ✓ knowledge gaps final response rejects absence inferred from empty review evidence
+  ✓ incident reconstruction enriches code-only skim with tickets + gaps
+  ✓ incident reconstruction with disconnected tools still has gaps
+  ✓ existing-capability enricher corrects greenfield blocked_by advice
+  ✓ file-assistant leftover Use-repo evidence does not rewrite the open-file answer
+  ✓ Blast on coop-ai/plane drops leftover Coop-AI docs and stays unverified
+  ✓ Blast on raneyja/Coop-AI keeps the same Coop ADRs
+  ✓ plain R chat does not attach leftover Blast docs
+  ✓ L Desktop file does not inject leftover Blast docs or callers
+  ✓ /docs answers that invent repo files are rewritten to titles only
+  ✓ /docs preserves code paths actually described by the opened document body
+  ✓ /docs final response supplies the opened document source link once
+
+chatResponseEnrichment: 14/14 tests passed
+  ✓ knowledgeGapsGatherQuery keeps focus as primary gather query
+  ✓ knowledgeGapsFocusTopics splits webhook + certificate subsystems
+  ✓ knowledgeGapsFocusTopics covers notifications and webhooks
+  ✓ signing/document-status NL ask extracts subsystem topics — not documentation meta
+  ✓ openFileRelatedToGapsFocus rejects unrelated helper file
+  ✓ resolveKnowledgeGapsAuditScope demotes unrelated open file when focus present
+  ✓ knowledgeGapsFocusGatherTerms puts webhook/cert tokens first
+  ✓ focus gather terms for signing ask prefer signing/status — not documentation meta flood
+  ✓ knowledgeGapsFocusTopicGapStubs emit honest miss stubs per topic without hits
+  ✓ partial document-path hits do not establish missing signing documentation
+  ✓ mergeKnowledgeGapsFocusStubsIntoScan fills empty job scan with focus stubs
+  ✓ synthesis builder includes focus as primary topic — not unrelated open-file ownership headline
+  ✓ synthesis with notifications/webhooks focus keeps focus primary for plane-style ask
+  ✓ buildConfluenceCql ANDs Use-repo with focus extras (no documentation OR bleed)
+  ✓ buildConfluenceRepoOnlyCql is repo-scoped without focus extras
+  ✓ filterDocPagesForUseRepo drops Coop-AI ADRs when Use-repo is documenso
+  ✓ sanitizeIntegrationSnippet strips mojibake and Confluence highlight markers
+  ✓ scoreDocPageForUseRepo penalizes foreign Coop pages for documenso
+  ✓ E6 ask keeps Slack/Jira as one topic and drops the safety question
+  ✓ E6 index queries are not hunt-shortened to Focus
+  ✓ E6 stubs stay silent on no-indexed-code when AgentOrchestrator and slack paths exist
+  ✓ hunt/locate risk index queries attach hunt files not Focus
+  ✓ hunt/locate risk stubs name evidence-class gaps not runbook-only
+  ✓ unrelated chip is secondary for hunt/locate Gaps focus
+  ✓ named body without attached docs cannot fabricate default-on runbook gaps
+  ✓ matching implementation alone does not prove thin documentation
+
+knowledgeGapsFocus: 26/26 tests passed
+  ✓ knowledge-gaps synthesis includes primary target and out-of-scope @ attachments
+  ✓ knowledge-gaps synthesis supports repository-wide scope without file
+  ✓ knowledge-gaps synthesis forbids invented gaps when scan is missing
+  ✓ knowledge-gaps synthesis uses response contract instead of invented enrichment
+  ✓ knowledge-gaps synthesis requires Notion pages and scan gaps in response contract
+  ✓ knowledge-gaps synthesis includes Notion opened excerpt in Attached facts
+  ✓ knowledge-gaps synthesis includes Google Docs opened excerpt in Attached facts
+  ✓ knowledge-gaps synthesis includes Jira opened description not just summary
+  ✓ knowledge-gaps synthesis includes Slack opened thread body when threadOpened
+  ✓ knowledge-gaps synthesis labels unattached Notion bodies honestly
+  ✓ knowledge-gaps synthesis includes Teams opened thread body when threadOpened
+  ✓ knowledge-gaps synthesis flags limited evidence when scan missing
+  ✓ knowledge-gaps synthesis frames zero-gap scan with attached docs in response contract
+  ✓ knowledge-gaps synthesis treats missing graph as incomplete not a docs gap
+  ✓ knowledge-gaps synthesis labels Confluence as org docs not repo architecture SoT
+  ✓ knowledge-gaps with focus excerpts audits attached code instead of claiming it is missing
+  ✓ hunt/locate risk prompt names evidence-class gaps not runbook-only
+  ✓ gap recommendations cannot assume earlier proposed edits were applied
+  ✓ gaps synthesis preserves dated ownership evidence and labels scan absence as unproven
+  ✓ gaps full remote bodies retain real line offsets for source citations
+  ✓ gaps arbitrary focus snippets cannot invent source line offsets
+  ✓ gap behavior claims require traced conditions and an evidenced expected contract
+
+knowledgeGapsSynthesis: 22/22 tests passed
+  ✓ buildConfluenceCql requires repo ∩ extras when both present
+  ✓ buildConfluenceCql falls back to OR when only repo terms exist
+  ✓ buildConfluenceRepoOnlyCql ignores extras
+  ✓ buildRepoSearchTerms prefixes every shipped code host
+  ✓ buildRepoSearchTerms does not prefix every hyphen/underscore mutation
+  ✓ buildRepoSearchTerms puts the Use-repo host first among prefixes
+  ✓ decisionSearchPhrase picks the longest sanitized decision term
+  ✓ sanitizeAtlassianContainsTerm strips hyphens and reserved words
+  ✓ buildConfluenceCql sanitizes hyphenated extras
+  ✓ buildConfluenceCql strips host prefixes that break CQL
+  ✓ buildConfluenceCql extrasOnly skips hyphenated repo slugs
+  ✓ buildRepoOrQuery still joins extras with OR for non-CQL tools
+
+docSearchQuery: 12/12 tests passed
+  ✓ sanitizeIntegrationSnippet removes replacement chars and highlight markers
+  ✓ filterDocPagesForUseRepo drops COOP ticket ADRs when Use-repo is not Coop
+  ✓ filterDocPagesForUseRepo prefers Use-repo pages over Coop bleed
+  ✓ filterDocPagesForUseRepo drops Coop ADRs when owner is coop-ai and repo is plane
+  ✓ filterDocPagesForUseRepo keeps Coop pages when Use-repo is Coop-AI
+  ✓ decision focus keeps a COOP ticket page when the phrase matches
+  ✓ scoreDocPageForUseRepo boosts focus term matches
+
+integrationDocRelevance: 7/7 tests passed
+knowledgeGapsNamedFocus: 4/4 cold named-target enrichment cases passed

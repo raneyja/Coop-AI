@@ -150,9 +150,7 @@ test("knowledgeGapsFocusTopicGapStubs emit honest miss stubs per topic without h
   assert.ok(stubs.some((gap) => String(gap.message).includes("certificate")));
 });
 
-test("signing focus stubs survive weak document-path hits (focus influences Gaps gather)", () => {
-  // Index may return document-status helpers; that must not wipe the signing topic stub,
-  // and must not treat the whole NL ask as "covered" via the word documentation/document.
+test("partial document-path hits do not establish missing signing documentation", () => {
   const stubs = knowledgeGapsFocusTopicGapStubs({
     userFocus: SIGNING_FOCUS,
     focusHitPaths: [
@@ -161,10 +159,7 @@ test("signing focus stubs survive weak document-path hits (focus influences Gaps
       "README.md"
     ]
   });
-  assert.ok(
-    stubs.some((gap) => String(gap.topic ?? gap.message).toLowerCase().includes("signing")),
-    `expected signing stub, got ${JSON.stringify(stubs)}`
-  );
+  assert.deepEqual(stubs, []);
 });
 
 test("mergeKnowledgeGapsFocusStubsIntoScan fills empty job scan with focus stubs", () => {
@@ -398,6 +393,23 @@ test("unrelated chip is secondary for hunt/locate Gaps focus", () => {
   assert.equal(scope.focusPrimary, true);
   assert.equal(scope.relatedOpenFile, undefined);
   assert.equal(scope.secondaryUnrelatedFile, "src/config/responseDeadline.ts");
+});
+
+test("named body without attached docs cannot fabricate default-on runbook gaps", () => {
+  const stubs = knowledgeGapsFocusTopicGapStubs({
+    userFocus: "Identify concrete supported gaps for positiveSum in src/mathRenamed.ts on indexed branch renamed. Label unknowns and cite evidence.",
+    focusHitPaths: ["src/mathRenamed.ts"],
+    focusFiles: [{ path: "src/mathRenamed.ts", content: "export function positiveSum(values: number[]) { return 0; }" }]
+  });
+  assert.deepEqual(stubs, []);
+});
+
+test("matching implementation alone does not prove thin documentation", () => {
+  const stubs = knowledgeGapsFocusTopicGapStubs({
+    userFocus: "positiveSum",
+    focusFiles: [{ path: "src/mathRenamed.ts", content: "export function positiveSum() {}" }]
+  });
+  assert.deepEqual(stubs, []);
 });
 
 const total = passed + failed;

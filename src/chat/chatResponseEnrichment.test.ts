@@ -1,9 +1,30 @@
 import assert from "node:assert/strict";
 import { enrichChatResponseForAction } from "./chatResponseEnrichment";
 import { extractExistingCapabilityEvidence } from "../context/existingCapabilityGrounding";
+import { parseChatProse } from "../webview/lib/chatProseParser";
 
 let passed = 0;
 let failed = 0;
+
+test("gaps final output supplies a verbatim interactive source citation when omitted", () => {
+  const body = "\nexport function positiveSum(values: number[]) {\n  return values[0];\n}";
+  const bundle = [{ type: "knowledge_gaps", data: { focusFiles: [{ path: "src/mathRenamed.ts", content: body, startLine: 1 }] } }];
+  const enriched = enrichChatResponseForAction({ content: "A source defect needs review.", quickAction: "knowledge-gaps", contextBundle: bundle });
+  assert.ok(enriched.includes("```2:4:src/mathRenamed.ts\nexport function positiveSum(values: number[]) {\n  return values[0];\n}"));
+  const cite = parseChatProse(enriched).blocks.find((block) => block.type === "code-citation");
+  assert.ok(cite?.type === "code-citation");
+  assert.equal(cite.path, "src/mathRenamed.ts");
+  assert.equal(cite.startLine, 2);
+  assert.equal(cite.endLine, 4);
+  assert.equal(cite.code, body.slice(1));
+  const again = enrichChatResponseForAction({ content: enriched, quickAction: "knowledge-gaps", contextBundle: bundle });
+  assert.equal((again.match(/2:4:src\/mathRenamed.ts/g) ?? []).length, 1);
+});
+
+test("gaps final output never invents line offsets for arbitrary snippets", () => {
+  const enriched = enrichChatResponseForAction({ content: "Review helper.", quickAction: "knowledge-gaps", contextBundle: [{ type: "knowledge_gaps", data: { focusFiles: [{ path: "src/helper.ts", content: "const helper = 1;" }] } }] });
+  assert.equal(enriched.includes("**Reviewed source**"), false);
+});
 
 test("knowledge gaps final response rejects absence inferred from empty review evidence", () => {
   const enriched = enrichChatResponseForAction({

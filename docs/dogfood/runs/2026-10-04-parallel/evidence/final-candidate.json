@@ -1,0 +1,26 @@
+{
+  "bundleSha256": "ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d",
+  "vsixSha256": "b85688d0ebf90e0b97b06aafed0d9ec587ffa2ff5ded84fb12026fd9aaa09620",
+  "parentCheckpoint": "b53d8d6",
+  "validation": {
+    "ci": "passed",
+    "lint": "passed",
+    "package": "passed",
+    "backendBuild": "passed"
+  },
+  "activeApi": "https://api.coop-ai.dev",
+  "backendDeployedByThisRun": false,
+  "liveResults": {
+    "repositoryPicker": "first-open load observed twice without Refresh",
+    "gapsSourceCitation": "src/mathRenamed.ts on renamed, lines 1\u201312, 263 selected characters",
+    "gapsAnswerStartMs": 12463,
+    "ownershipAnswerStartMs": 19444,
+    "ownership": "failed evidence discipline: unsupported single-point-of-failure inference"
+  },
+  "limits": [
+    "No five-workflow completion claim",
+    "Backend deployment revision unverified; obsolete ownership template suggests stale server prompts",
+    "Stripe deferred",
+    "Historical candidate passes do not transfer"
+  ]
+}

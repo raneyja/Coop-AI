@@ -1,19 +1,19 @@
 # October 4 parallel launch qualification
 
-Status: checkpoint prepared for continued launch qualification, not launch ready. Three observed failures passed their named packaged-extension retests. Other repairs remain Automated Pass. Stripe testing remains deferred. Plane and Documenso are forked test repositories; repairs belong to Coop AI.
+Status: checkpoint prepared for continued launch qualification, not launch ready. Earlier failures passed their named historical packaged-extension retests. Final-candidate qualification is limited to the checks listed at the end; all five full workflow contracts remain open. Stripe testing remains deferred. Plane and Documenso are forked test repositories; repairs belong to Coop AI.
 
-## Live candidate
+## Historical live candidates
 
 The observations below used checkpoint `4f2c54c`, bundle SHA-256 `7eade1799d8860a398726ff4975e5e7555a9ee25c4e2c9e6b293c0fa2cd00ff5`, VSIX SHA-256 `4f588d253393f7233aaf0f82f205e4f87d6d4a46e59b2564a4a01c005e693f32`, installed in the disposable VS Code profile. Later source changes do not inherit these live results.
 
-## Narrow live passes
+## Historical narrow live passes
 
 - Partial final-answer Stop: `/trace Explain the historical evidence for this authentication code in detail, including the source timeline, code changes and remaining unknowns.` Stop registered at 13,823 ms with `hadPartial: true`. The partial remained unchanged after the next question, which correctly answered that `extractBearerToken` returns `undefined` for a missing Authorization header. See [partial preservation evidence](live/partial-stop.json). Scope: cancellation and next-turn recovery, not accuracy of the stopped historical narrative.
 - Paid model selection: Claude Haiku 4.5 persisted through Reload and the synthesis trace used `claude-haiku-4-5-20251001`. GPT-4o mini selection also reached synthesis. Auto was restored after testing. Free-account restrictions remain separately unqualified.
 - Ownership evidence reached the live answer and evidence pane for GitLab Coop-AI `src/server/authMiddleware.ts`; contributor counts and alias resolution were not independently certified.
 - Blast Radius on that remotely selected file exposed 25 direct dependents from the dependency graph. Exact completeness of the count remains unqualified.
 
-## Repairs with named live passes
+## Historical repairs with named live passes
 
 Source explanation and citation navigation passed on bundle `de1eeadfdce5a2644d90b4fdf4669e448f4eb686884cfd98be51d8f76ee401ad`, VSIX `174143cb1462890e1a77ac1bd39489a626a1a07a1b43827d222c1ddf086944b1`. The exact ask was: “On indexed branch renamed of coop-dogfood-launch, explain positiveSum and fixtureBranchLabel step by step, including all edge cases, with source citations.” The prior generic miss came from the routing policy excluding understand turns from remote source tools. The repaired result read the implementation, explained the deliberately seeded off-by-one, and opened its citation. See [answer](live/source-explanation.jpg) and [citation](live/source-citation.jpg).
 
@@ -32,10 +32,18 @@ Google Docs body retrieval passed with GitLab Coop-AI selected, run `c3d4240d-9d
 
 ## Automated work
 
-Full CI passed three times in this batch; final lint and packaging passed. The last complete CI run preceded the final small Docs-link and gaps enrichment changes; their targeted regressions, lint, and packaging passed afterward. General-language classifier cases passed 87/87 and agent routing policy cases 28/28. Auth guard, autocomplete, thread/session, integration scope, and gaps/understand response-contract coverage remain automated evidence unless explicitly listed above as a named live pass. In particular, stricter prompts about unknown implementation and missing attached documentation require broad cold live retests. No automated result is promoted to a live pass without its named Extension Host retest.
+The final candidate passed [full CI](evidence/test-ci-final.log) (exit 0), [lint](evidence/lint-final.log), [packaging](evidence/package-final.log) and [backend build](evidence/backend-final.log). [System prompt tests](evidence/system-prompts-final.log) passed 47/47; [repository picker tests](evidence/repo-list-final.log) passed host 3/3 and UI 4/4. [Ownership prompt](evidence/ownership-prompts-final.log) and [gaps enrichment](evidence/knowledge-gaps-final.log) checks also passed. Earlier automated and live observations above remain historical, with their exact candidate scopes. Automated green does not qualify the complete live workflows.
 
 Remaining work includes Stripe credentials and billing verification, distinct-account extension quota/isolation/denied-access checks, indexed autocomplete live qualification, broader provider and cold/warm/switch scenarios, broad `/understand` and `/gaps` live retests, unresolved unresponsive-window attribution, and final release qualification. Deployment and Marketplace publication require approval after the candidate is reviewable. No production deployment, Marketplace publication, external collaboration message, access expansion, or Stripe transaction occurred in this batch.
 
 ## Final checkpoint candidate
 
-Bundle SHA-256 `92085e30ec8d583795d5043d5f424e6b3c0fc06af2175646b29e0a1804da189a`; VSIX SHA-256 `bcc459279fe62f2e02404fa995b394f0679c2ee5734c60f46d868c0058c70c2b`. The fresh renamed-fixture gaps response now labels missing scan matches as coverage limits. It still missed the named file body and produced a broad scan; this does not close the full gaps workflow. Synthesis began at 13,921 ms and the answer at 48,327 ms. See [coverage correction](live/gaps-coverage-correction.jpg) and [earlier failure](live/gaps-evidence-fail.jpg).
+Bundle SHA-256 `ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d`; VSIX SHA-256 `b85688d0ebf90e0b97b06aafed0d9ec587ffa2ff5ded84fb12026fd9aaa09620`. No prior candidate passes are inherited.
+
+- Cold Remote workspace first-open passed three times: authenticated indexed repositories appeared without Refresh; [final-candidate screenshot](live/cold-repository-picker-final.jpg). This qualifies picker first-open behavior only.
+- At 15:54 PDT, the named gaps ask for `positiveSum` in `src/mathRenamed.ts` on `renamed` read the correct body. Reviewed source lines 1–12 opened remote Untitled7 with 263 characters selected across lines 1–12. This is a narrow retrieval/citation/navigation pass. Turn `turn-1791154460156-vud56y` started synthesis at 11,518 ms with thinking disabled and answering at 12,463 ms, meeting the guideline for this exact ask. Scan quality, supported recommendations, broader latency and applicable follow-up still require qualification.
+- At 15:53 PDT, a fresh selected-file ownership ask still produced old Risk signals/SPOF wording and unsupported inference. The ownership workflow failed; [current failure screenshot](live/owner-final-risk-failure.jpg). Turn `turn-1791154417295-4z0kcf` started synthesis at 14,840 ms with thinking enabled and answering at 19,444 ms, above the guideline. The active endpoint is strongly supported as production `https://api.coop-ai.dev`, with no profile override. The server assembles system prompts and raw context; the old live wording versus current source makes a stale production backend probable. Its exact deployed revision is unverified. Production deployment awaits authorization; no backend live repair is claimed.
+
+- Current-candidate `/understand` in a fresh repository-only thread asked: “Explain positiveSum and fixtureBranchLabel in src/mathRenamed.ts on indexed branch renamed. Give the exact results for [], [5], and [1,2,3] from the implementation, cite source lines, and label unavailable evidence.” It correctly returned **0 / 0 / 3** and `renamed-oracle`, with verbatim citations 1–7 and 9–11. Clicking 9–11 opened remote Untitled7 at Ln11 Col2 with 75 characters selected; [answer](live/understand-final-exact-results.jpg), [citation](live/understand-final-citation.jpg). This qualifies exact fixture behavior and citation navigation only. It still described an “almost certainly” bug and branch-identity intent without independently qualified intent evidence; Turn `turn-1791155042916-4z91c2` started synthesis at 6,347 ms with thinking enabled and answering at 14,933 ms, meeting the guideline narrowly for this ask. Broad repository comprehension, cold/switch coverage, and broader latency remain open.
+
+All five full workflow contracts remain open: Understand Repo, Trace Decision, Find Owner, Blast Radius and Knowledge Gaps. The [workflow verification contracts](workflow-contracts.json) retain historical observations explicitly and record only the exact final-candidate checks above. Stripe remains deferred; deployment and publication require separate approval.

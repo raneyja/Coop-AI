@@ -106,7 +106,7 @@ export type KnowledgeGapsEvidence = {
   focusSearchQuery?: string;
   focusSearchPaths?: string[];
   /** Focus-ranked file bodies from index search (capped). */
-  focusFiles?: Array<{ path: string; content?: string; truncated?: boolean; repoId?: string }>;
+  focusFiles?: Array<{ path: string; content?: string; truncated?: boolean; repoId?: string; startLine?: number }>;
   warnings?: string[];
 };
 
@@ -824,4 +824,3 @@ export function contextBundleHasRepoFactEvidence(bundle: unknown): boolean {
   }
   return false;
 }
-

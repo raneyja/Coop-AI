@@ -1,0 +1,53 @@
+
+> coop-ai@0.1.10 test:system-prompts
+> npx tsx src/prompts/systemPrompts.test.ts
+
+  ✓ chat use case includes audience and output contract
+  ✓ chat use case asks for right-sized dense answers that still finish
+  ✓ fileAssistant chat uses attached-file-only structure instead of generic checklist chat
+  ✓ comprehension keeps its full required section list (not thinned by chat density rules)
+  ✓ chat use case requires opening-prose answers and applyable edit patches
+  ✓ chat PR-review contract stays in the file and forbids A8 headings
+  ✓ chat open-file explain is a one-screen briefing, not a walkthrough dump
+  ✓ paperclip attachment rule is gated on hasPaperclipAttachments (B6)
+  ✓ chat use case includes enterprise evidence rules
+  ✓ intent_job uses the same audience and user-facing contract as chat
+  ✓ comprehension use case includes audience block via withOutputContract
+  ✓ comprehension locate-only omits architecture syllabus
+  ✓ comprehension use case requires active file section when activeFile is set
+  ✓ knowledge_gaps use case requires grouped subsection structure
+  ✓ blast_radius use case includes impact sections
+  ✓ inline_completion excludes audience and output contract
+  ✓ code_edit use case uses patch output contract without Summary template
+  ✓ buildUserMessageWithContext renders jira_tickets from context bundle
+  ✓ buildUserMessageWithContext keeps named Jira tickets when a key is missing
+  ✓ buildUserMessageWithContext renders slack_messages from context bundle
+  ✓ buildUserMessageWithContext renders code_host_activity from context bundle
+  ✓ buildUserMessageWithContext renders confluence_pages from context bundle
+  ✓ formatChatMessageWithLocalFiles embeds authoritative file_content
+  ✓ local file turn says local path and drops leftover Use-repo
+  ✓ file-assistant last-line directive stops after the attached file
+  ✓ C4 open-file review appends Reviewer-checks-only directive
+  ✓ formatChatMessageWithLocalFiles includes editor_selection for highlighted range
+  ✓ formatChatMessageWithLocalFiles keeps L56–61 even when the full file is attached
+  ✓ buildUserMessageWithContext renders local_files from context bundle
+  ✓ buildUserMessageWithContext tolerates partial integration payloads in blast-radius bundle
+  ✓ buildUserMessageWithContext renders repo entry files from context bundle
+  ✓ buildUserMessageWithContext renders concrete package structure over workspace globs
+  ✓ buildUserMessageWithContext renders project instructions and dedupes AGENTS.md entry files
+  ✓ buildUserMessageWithContext adds monorepo note when treeOverview has multiple top-level dirs
+  ✓ buildUserMessageWithContext omits monorepo note for single top-level dir
+  ✓ buildUserMessageWithContext renders repo_inventory for file-count questions
+  ✓ buildUserMessageWithContext renders line_count for LOC questions
+  ✓ buildUserMessageWithContext forbids estimating a missing line count
+  ✓ repo_inventory is declared the only source for totals
+  ✓ buildUserMessageWithContext marks semantic files as a retrieval sample
+  ✓ buildUserMessageWithContext renders dual repo_compare evidence for both sides
+  ✓ buildUserMessageWithContext renders live tree overview
+  ✓ pr_summary use case is JSON notes without the chat output contract
+  ✓ remote highlight change attaches the chip and selection without local-file wording
+  ✓ L highlight change still uses the local-file edit directive
+  ✓ complete ownership system contract requests evidence without demanding personnel risk
+  ✓ assembled ownership and gaps graph context contains observations without raw derived risk
+
+systemPrompts: 47/47 tests passed

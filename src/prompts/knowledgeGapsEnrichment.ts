@@ -1,4 +1,5 @@
 import { sanitizeIntegrationSnippet } from "../context/integrationDocRelevance";
+import { tryParseCitationLocator, tryParseFenceInfoLocator } from "../webview/lib/codeCitationLocator";
 
 export type IntegrationPageForEnrichment = {
   title: string;
@@ -21,6 +22,7 @@ export type IntegrationDocsEnrichmentContext = {
 
 export type KnowledgeGapsEnrichmentContext = IntegrationDocsEnrichmentContext & {
   jobScanGaps?: KnowledgeGapScanGap[];
+  focusFiles?: Array<{ path: string; content?: string; startLine?: number }>;
 };
 
 const CONFLUENCE_REVIEWED_HEADING = "**Confluence pages reviewed**";
@@ -513,7 +515,32 @@ export function enrichKnowledgeGapsResponse(
   result = rebuildMainSection(result, "**Integration & operations**", integrationBlocks);
 
   result = normalizeRecommendedNextSteps(result);
-  return enrichIntegrationDocsResponse(result, context);
+  return appendVerifiedFocusCitation(enrichIntegrationDocsResponse(result, context), context?.focusFiles);
+}
+
+function appendVerifiedFocusCitation(content: string, files?: KnowledgeGapsEnrichmentContext["focusFiles"]): string {
+  const citedPaths = new Set(content.split("\n").flatMap((line) => {
+    const location = tryParseCitationLocator(line.trim()) ?? tryParseFenceInfoLocator(line.replace(/^\s*```/, "").trim());
+    return location?.startLine !== undefined ? [location.path] : [];
+  }));
+  for (const file of files ?? []) {
+    if (citedPaths.has(file.path) || !file.content?.trim() || !Number.isInteger(file.startLine) || Number(file.startLine) < 1) continue;
+    // Quote complete original lines only, capped to one small interactive source citation.
+    const lines = file.content.split("\n");
+    const first = lines.findIndex((line) => line.trim());
+    if (first < 0) continue;
+    const excerpt: string[] = [];
+    let chars = 0;
+    for (const line of lines.slice(first, first + 20)) {
+      if (chars + line.length > 1200) break;
+      excerpt.push(line);
+      chars += line.length + 1;
+    }
+    if (!excerpt.length || excerpt.some((line) => line.includes("```"))) continue;
+    const start = Number(file.startLine) + first;
+    return `${content}\n\n**Reviewed source**\n\n\`\`\`${start}:${start + excerpt.length - 1}:${file.path}\n${excerpt.join("\n")}\n\`\`\``;
+  }
+  return content;
 }
 
 /** Linkify attached Confluence/Notion/Google Docs titles and file paths in narrative responses. */

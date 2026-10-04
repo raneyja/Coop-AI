@@ -49,10 +49,12 @@ import {
   listKnowledgeGapsSourceLabels,
   listKnowledgeGapsSourcesChecklist
 } from "./knowledgeGapsSourceLabels";
-import { ownershipTierLabel } from "./ownershipSourceLabels";
+import { formatOwnershipReportForPrompt } from "./ownershipSynthesis";
 import { ORG_DOCS_EVIDENCE_LABEL, orgDocsSynthesisGuardrail } from "../workspace/repoEvidenceIsolation";
 
 export const KNOWLEDGE_GAPS_EVIDENCE_SYSTEM = `You audit engineering health using only attached evidence from the Sources card and synthesis bundle.
+Universal behavior claims require tracing the relevant input conditions in attached source. Do not infer "every nonempty input fails" from one example: identify the condition that causes failure and check relevant counterexamples. Describe a defect with the narrowest condition the implementation supports.
+Separate observed implementation behavior from the expected contract. A function name alone is not a formal specification. Without attached tests, documentation, or an explicit user requirement establishing intent, describe a potential defect conditional on the expected behavior and ask for that intent to be confirmed.
 When ### Focus file excerpts are attached, you MAY name documentation, ownership, or default-on risks that are visible in those excerpts (allowlists, call caps, missing confirmation). Cite the path. Still fail: inventing files not attached, foreign-repo paths, or a 40-bullet dump.
 When focus excerpts are absent, list scan-backed gaps and integration hits only — never invent gap subsections from code inspection or generic framework knowledge.
 Documentation gap subsections must come from knowledge gap scan entries, opened Confluence/Notion/Google Docs Body lines, Jira Body lines, opened Slack/Teams Body lines, explicit integration errors in the bundle, or attached focus file excerpts.
@@ -282,6 +284,9 @@ function appendKnowledgeGapsResponseContract(
     "Missing search hits or unattached source bodies establish a coverage limit, not that documentation, ownership, or an implementation does not exist. Describe such results as unknown or not found in this pass. Only assert absence when attached evidence actually proves it; never turn unavailable evidence into a confirmed gap.",
     "Recommendations are prospective: describe what should be checked or changed. Never assume a proposed patch was applied or repeat a prior chat claim of a fix as fact. The actual attached source body is authoritative for current behavior; an unapplied suggestion does not change it."
   );
+  lines.push(
+    "Ownership coverage flags (missing_owner, orphaned, absent scores) are retrieval or scan limits, not proof that no declared owner or CODEOWNERS entry exists. Apply this distinction to every section, including reviewer checks, recommendations, and suggested contacts. Authors/reviewers are contact candidates, not declared owners. Aggregate commit counts do not establish last-quarter inactivity; use dated activity and the attached analysis time. Missing or contradictory dates mean recency is unknown. Slack presence does not establish repository activity."
+  );
   if (focusPrimary) {
     lines.push(
       "The opening must lead with the ## Primary topic focus subsystems (docs/ownership gaps or explicit no-evidence). Do not make ownership of an unrelated open editor the headline."
@@ -444,7 +449,12 @@ function formatKnowledgeGapsForPrompt(
         (scan.gaps?.length
           ? scan.gaps
               .slice(0, 20)
-              .map((gap) => `- ${String(gap.message ?? gap.summary ?? gap.description ?? "gap")}`)
+              .map((gap) => {
+                const message = String(gap.message ?? gap.summary ?? gap.description ?? "gap");
+                return gap.type === "missing_owner" || gap.type === "missing_docs"
+                  ? `- Coverage flag (${gap.type}): scan reported ${message}; absence is not established.`
+                  : `- ${message}`;
+              })
               .join("\n") + truncationNote(scan.gaps.length, 20)
           : "- (scan completed with no structured gaps in this pass)")
     );
@@ -560,16 +570,7 @@ function formatKnowledgeGapsForPrompt(
   if (evidence.ownershipReport) {
     sections.push(
       `### ${knowledgeGapsSourceLabelOwnership()}\n` +
-        (evidence.ownershipReport.scores?.length
-          ? evidence.ownershipReport.scores
-              .slice(0, 8)
-              .map(
-                (score) =>
-                  `- @${score.owner} (${ownershipTierLabel(score.tier)})` +
-                  `${score.commitCount ? ` · ${score.commitCount} commits (6mo)` : ""}`
-              )
-              .join("\n") + truncationNote(evidence.ownershipReport.scores.length, 8)
-          : "- No ownership scores for this path")
+        formatOwnershipReportForPrompt(evidence.ownershipReport)
     );
   }
   if (evidence.dependencyGraph) {
@@ -624,10 +625,15 @@ function formatFocusFileExcerpts(
     .filter((file) => file.path.trim() && (file.content ?? "").trim())
     .slice(0, 6)
     .map((file) => {
-      const body = (file.content ?? "").trim();
+      const body = file.content ?? "";
       const truncated = body.length > FOCUS_EXCERPT_CHARS;
-      const shown = truncated ? `${body.slice(0, FOCUS_EXCERPT_CHARS)}\n… [truncated]` : body;
-      return `#### ${file.path}\n${shown}`;
+      const shown = truncated ? body.slice(0, FOCUS_EXCERPT_CHARS) : body;
+      if (Number.isInteger(file.startLine) && Number(file.startLine) >= 1) {
+        const start = Number(file.startLine);
+        const numbered = shown.split("\n").map((line, index) => `L${start + index}: ${line}`).join("\n");
+        return `#### ${file.path}\nVerified source lines ${start}–${start + shown.split("\n").length - 1}. Cite implementation claims with numeric start:end:path citation fences using only these supplied lines; omit L prefixes from the quoted code.\n${numbered}${truncated ? "\n… [truncated]" : ""}`;
+      }
+      return `#### ${file.path}\nSource line offsets unavailable. Cite this path without inventing line numbers.\n${shown}${truncated ? "\n… [truncated]" : ""}`;
     });
   if (excerpts.length === 0) {
     return undefined;

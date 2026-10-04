@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildTeamDomainGraph, calculateOwnershipScores, collectEscalationAvenues } from "./ownershipAnalysis";
+import { buildTeamDomainGraph, calculateOwnershipScores, collectEscalationAvenues, computeOwnershipRisk } from "./ownershipAnalysis";
 import type { OwnershipScore, OwnershipSignals } from "../../types/ownership";
 
 let passed = 0;
@@ -152,6 +152,23 @@ test("collectEscalationAvenues never invents handles outside evidence", () => {
   assert.match(joined, /recent reviewers @bob/);
   assert.doesNotMatch(joined, /@invented/);
   assert.doesNotMatch(joined, /@dguyen/);
+});
+
+test("missing or invalid expert activity is unknown rather than unavailable", () => {
+  const experts = [score({owner: "alice", tier: "primary", score: 100})];
+  const now = Date.parse("2026-10-04T22:00:00Z");
+  assert.equal(computeOwnershipRisk(experts, [], [], now).expertUnavailable, false);
+  assert.equal(computeOwnershipRisk(experts, [], [{author: "alice", lastActiveDate: "invalid", weight: 0, inactive: true}], now).expertUnavailable, false);
+});
+
+test("today's matching commit defeats stale expert inactivity but not unrelated authors", () => {
+  const experts = [score({owner: "Alice", githubLogin: "alice", tier: "primary", score: 100})];
+  const now = Date.parse("2026-10-04T22:00:00Z");
+  const activity = [{author: "Alice", lastActiveDate: "2025-01-01T00:00:00Z", weight: 0, inactive: true}];
+  const commit = {sha: "today", author: "Alice", authorLogin: "alice", date: "2026-10-04T20:00:00Z", message: "seed"};
+  assert.equal(computeOwnershipRisk(experts, [commit], activity, now).expertUnavailable, false);
+  assert.equal(computeOwnershipRisk(experts, [{...commit, author: "Bob", authorLogin: "bob"}], activity, now).expertUnavailable, true);
+  assert.equal(computeOwnershipRisk(experts, [], activity, now).expertUnavailable, true);
 });
 
 console.log(`\nownershipAnalysis: ${passed} passed, ${failed} failed`);

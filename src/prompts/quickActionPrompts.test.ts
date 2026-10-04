@@ -291,6 +291,19 @@ async function run(): Promise<void> {
     }
   });
 
+  test("repository owner task does not demand inferred single-point-of-failure claims", () => {
+    const model = quickActionModelPrompt("find-owner", {...ctx, file: undefined});
+    assert.match(model, /Report sampled contributors/);
+    assert.match(model, /broader maintainer and backup coverage is unverified/);
+    assert.doesNotMatch(model, /Highlight single points of failure/);
+  });
+  test("file owner task requests evidence scope instead of invented confidence", () => {
+    const model = quickActionModelPrompt("find-owner", ctx);
+    assert.match(model, /State sampled evidence scope, declared ownership versus contact candidates/);
+    assert.match(model, /explicitly recommended admin fallback/);
+    assert.doesNotMatch(model, /Include confidence/);
+  });
+
   const total = passed + failed;
   console.log(`\nquickActionPrompts: ${passed}/${total} tests passed`);
   if (failed > 0) {

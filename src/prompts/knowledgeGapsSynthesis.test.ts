@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildKnowledgeGapsSynthesisUserPrompt } from "./knowledgeGapsSynthesis";
+import { buildKnowledgeGapsSynthesisUserPrompt, KNOWLEDGE_GAPS_EVIDENCE_SYSTEM } from "./knowledgeGapsSynthesis";
 
 let passed = 0;
 let failed = 0;
@@ -322,6 +322,56 @@ test("gap recommendations cannot assume earlier proposed edits were applied", ()
   assert.ok(prompt.includes("Recommendations are prospective"));
   assert.ok(prompt.includes("Never assume a proposed patch was applied"));
   assert.ok(prompt.includes("actual attached source body is authoritative"));
+});
+
+test("gaps synthesis preserves dated ownership evidence and labels scan absence as unproven", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({
+    file: "src/mathRenamed.ts",
+    evidence: {
+      jobScan: { gaps: [{ type: "missing_owner", message: "No owner declared", file: "src/mathRenamed.ts" }] },
+      ownershipReport: {
+        owner: "org", repo: "fixture", path: "src/mathRenamed.ts", completeness: "partial",
+        scores: [{ owner: "raneyja", score: 80, tier: "primary", commitCount: 3 }],
+        signals: {
+          commits: [{ author: "Jon", authorLogin: "raneyja", counts: { sixMonths: 3, oneYear: 3, allTime: 3 }, recencyScore: 1, lastCommitDate: "2026-10-04T21:00:00Z", messages: [] }],
+          reviews: [], issues: [], activity: [], specialties: []
+        },
+        risk: { singlePointOfFailure: false, expertUnavailable: true, orphaned: true, highTurnover: false, teamDispersion: false },
+        teamGraph: { escalationPath: "Unknown", members: [] }, history: [],
+        messageDraft: { text: "", recipient: "" }, warnings: []
+      }
+    }
+  });
+  assert.ok(prompt.includes("Coverage flag (missing_owner)"));
+  assert.ok(prompt.includes("absence is not established"));
+  assert.ok(prompt.includes("last commit 2026-10-04T21:00:00Z"));
+  assert.ok(prompt.includes("Analysis time (UTC)"));
+  assert.ok(prompt.includes("reviewer checks, recommendations, and suggested contacts"));
+  assert.ok(prompt.includes("Aggregate commit counts do not establish last-quarter inactivity"));
+});
+
+test("gaps full remote bodies retain real line offsets for source citations", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({ evidence: {
+    focusFiles: [{ path: "src/mathRenamed.ts", startLine: 1, content: "\nexport function positiveSum() {\n  return 0;\n}" }]
+  } });
+  assert.ok(prompt.includes("L1: \nL2: export function positiveSum()"));
+  assert.ok(prompt.includes("Verified source lines 1–4"));
+  assert.ok(prompt.includes("numeric start:end:path citation fences"));
+});
+
+test("gaps arbitrary focus snippets cannot invent source line offsets", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({ evidence: {
+    focusFiles: [{ path: "src/helper.ts", content: "export const helper = 1;" }]
+  } });
+  assert.ok(prompt.includes("Source line offsets unavailable"));
+  assert.equal(prompt.includes("L1: export const helper"), false);
+});
+
+test("gap behavior claims require traced conditions and an evidenced expected contract", () => {
+  assert.ok(KNOWLEDGE_GAPS_EVIDENCE_SYSTEM.includes("Universal behavior claims require tracing"));
+  assert.match(KNOWLEDGE_GAPS_EVIDENCE_SYSTEM, /check relevant counterexamples/);
+  assert.ok(KNOWLEDGE_GAPS_EVIDENCE_SYSTEM.includes("function name alone is not a formal specification"));
+  assert.ok(KNOWLEDGE_GAPS_EVIDENCE_SYSTEM.includes("potential defect conditional on the expected behavior"));
 });
 
 console.log(`\nknowledgeGapsSynthesis: ${passed}/${passed + failed} tests passed`);

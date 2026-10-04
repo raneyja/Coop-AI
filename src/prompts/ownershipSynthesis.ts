@@ -37,7 +37,7 @@ export const OWNERSHIP_INTELLIGENCE_SYSTEM = `You are an organizational intellig
 
 Synthesize a response that:
 1. Identifies evidenced authors, reviewers and declared owners for the target path or repository
-2. Highlights any single-point-of-failure risks
+2. Describes retrieved contributor counts and identifies what ownership coverage remains unverified
 3. Always includes an on-call escalation path: CODEOWNERS team, CODEOWNERS path owners, and/or recent reviewers from attached sources — or an explicit evidence-backed gap ("no CODEOWNERS/team; escalate via repository admins/maintainers") with source labels. Never end on "no backup" / "no strong secondary" with zero escalation guidance.
 4. Identifies expertise coverage gaps — recommend pairing, a secondary owner, or escalation before any staffing change
 5. Recommends knowledge transfer targets (who should learn this)
@@ -45,6 +45,9 @@ Synthesize a response that:
 Be pragmatic: if someone is listed as owner but inactive, say who to actually ask.
 Distinguish code authors from reviewers. Use plain language in narrative sections; reserve \`[Sources: …]\` labels for **Sources** (at most 1-2 inline in **Summary**).
 Commit concentration shows activity in the sampled history; it does not prove sole knowledge, maintainership, or an on-call policy. State missing ownership or escalation evidence plainly. Label any suggested contact as a recommendation, not a verified escalation policy. Merge identity aliases only when attached account identifiers or verified identity evidence connects them.
+An author or reviewer is a contact candidate, not a declared owner. Only explicit attached CODEOWNERS/team ownership evidence supports a declared-owner claim. Compare activity dates with the attached analysis time: a commit today is recent, never inactive or "no commits last quarter". Missing dates and conflicting aggregates mean recency is unknown; do not invent an activity window. Slack away/offline indicates presence only, not repository inactivity or lack of ownership.
+No scored secondary means no secondary was identified in the sampled evidence; never say no secondary owner exists. A contribution-concentration flag is a coverage question, not proof the repository is a single point of failure. Derived teamGraph escalation text is a suggested fallback, never a verified escalation policy or proof that admins are the only available contacts.
+Commit counts and their time buckets describe the retrieved sample, not complete repository history. A single seed commit cannot prove no commits in earlier quarters/years, absence of ongoing maintenance, or confirmed personnel/knowledge risk. Only independently established complete coverage supports an absence claim; otherwise say the earlier history or maintenance pattern is unverified.
 Never invent people or Slack handles — every named human or team must appear in the attached sources (commits, reviews, CODEOWNERS) with a source label.
 Never attribute ownership from the target repository to @-attached files from other repositories or workspaces.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
@@ -60,6 +63,8 @@ export type OwnershipSynthesisInput = {
   userFocus?: string;
   mentionedFiles?: MentionScopeRef[];
   activeRepoId?: string;
+  /** Injectable clock for reproducible activity interpretation. */
+  now?: Date;
 };
 
 export function buildOwnershipSynthesisUserPrompt(input: OwnershipSynthesisInput): string {
@@ -86,7 +91,7 @@ export function buildOwnershipSynthesisUserPrompt(input: OwnershipSynthesisInput
   appendMentionScopeSection(lines, input);
   lines.push("");
   lines.push(ATTACHED_FACTS_HEADING);
-  lines.push(formatOwnershipReportForPrompt(report, input.slackSearch));
+  lines.push(formatOwnershipReportForPrompt(report, input.slackSearch, input.now));
   lines.push("");
   const citationKeys = listOwnershipSourceLabels(report, input.slackSearch);
   const sourcesChecklist = listOwnershipSourcesChecklist(report, input.slackSearch);
@@ -102,7 +107,7 @@ export function buildOwnershipSynthesisUserPrompt(input: OwnershipSynthesisInput
   appendPathEvolutionGuidance(lines, report.pathEvolution);
   if (repoWide) {
     lines.push(
-      "Synthesize repository-wide ownership from attached sources — top experts, CODEOWNERS coverage, team boundaries, and escalation paths."
+      "Describe repository-wide ownership evidence from attached sources — sampled contributors, declared CODEOWNERS coverage, evidenced team boundaries, and suggested contacts."
     );
     lines.push(
       "When CODEOWNERS data is present, lead with the owning team, then escalation order (primary → secondary → manager or Slack channel)."
@@ -111,7 +116,7 @@ export function buildOwnershipSynthesisUserPrompt(input: OwnershipSynthesisInput
     lines.push("Synthesize from evidence only.");
   }
   lines.push(
-    "Required on-call shape: name the primary expert with a source label, then give at least one escalation avenue from teamGraph.escalationPath / CODEOWNERS / recent reviewers — or quote the explicit admin-gap wording from the evidence. Do not invent contacts."
+    "Required on-call shape: name an evidenced contact candidate with a source label, then give a declared CODEOWNERS contact or a recommended avenue from derived teamGraph / recent reviewers. Label missing policy evidence and admin fallback as recommendations. Do not invent contacts or claim a fallback is the only verified route."
   );
   lines.push("Follow the required response structure in your system instructions.");
 
@@ -149,14 +154,15 @@ function appendMentionScopeSection(lines: string[], input: OwnershipSynthesisInp
     targetLabel: `${input.report.owner}/${input.report.repo}`,
     scope,
     inScopeInstruction: "include ownership for these paths",
-    excludeFromLabel: "True experts / ownership analysis",
+    excludeFromLabel: "Contributor / ownership analysis",
     alternateActionLabel: "Find Owner"
   });
 }
 
 export function formatOwnershipReportForPrompt(
   report: OwnershipReport,
-  slackSearch?: SlackSearchEvidence
+  slackSearch?: SlackSearchEvidence,
+  now = new Date()
 ): string {
   const sections: string[] = [];
 
@@ -172,6 +178,8 @@ export function formatOwnershipReportForPrompt(
     );
   }
 
+  sections.push(`### Activity interpretation\n- Analysis time (UTC): ${now.toISOString()}\n- Score tiers rank sampled contributors; they do not declare ownership. Missing or contradictory recency evidence is unknown. Slack presence is not repository activity.\n- Retrieved counts are sampled evidence, not complete history. Do not infer empty earlier quarters/years, absent ongoing maintenance, or confirmed knowledge risk from a seed commit or missing secondary.`);
+
   if (report.scores.length > 0) {
     sections.push(
       `### ${ownershipSourceLabelGitHub()}\n` +
@@ -179,7 +187,7 @@ export function formatOwnershipReportForPrompt(
           .slice(0, 10)
           .map(
             (s) =>
-              `- @${s.owner} (${ownershipTierLabel(s.tier)})` +
+              `- @${s.owner} (sampled ${ownershipTierLabel(s.tier)} contributor)` +
               `${s.specialty ? ` · specialty: ${s.specialty}` : ""}` +
               `${s.commitCount ? ` · ${s.commitCount} commits (6mo)` : ""}` +
               `${s.reviewApprovals ? ` · ${s.reviewApprovals} PR approvals` : ""}` +
@@ -204,21 +212,39 @@ export function formatOwnershipReportForPrompt(
     );
   }
 
-  const riskFlags = Object.entries(report.risk)
-    .filter(([, value]) => value)
-    .map(([key]) => key);
-  sections.push(
-    "### Risk flags\n" + (riskFlags.length ? riskFlags.map((f) => `- ${humanizeRiskFlag(f)}`).join("\n") : "- None flagged")
-  );
-
-  sections.push(`### Team graph\n- Escalation: ${report.teamGraph.escalationPath}`);
-  if (report.teamGraph.crossTeamNote) {
-    sections.push(`- Cross-team: ${report.teamGraph.crossTeamNote}`);
+  const activityDates = [
+    report.pathEvolution?.lastModifiedAt,
+    ...(report.signals?.commits.map((s) => s.lastCommitDate) ?? []),
+    ...(report.signals?.reviews.map((s) => s.lastReviewDate) ?? []),
+    ...(report.signals?.activity.map((s) => s.lastActiveDate) ?? [])
+  ].filter((date): date is string => Boolean(date));
+  const recentActivity = activityDates.some((date) => {
+    const stamp = Date.parse(date);
+    return Number.isFinite(stamp) && stamp <= now.getTime() && stamp >= now.getTime() - 90 * 86400000;
+  });
+  if (report.signals?.commits.length) {
+    sections.push("### Dated sampled contributors\n" + report.signals.commits.slice(0, 10)
+      .map((s) => `- ${s.authorLogin ? `@${s.authorLogin}` : s.author}: last commit ${s.lastCommitDate ?? "unknown"}; sampled counts 6mo=${s.counts.sixMonths}, 1yr=${s.counts.oneYear}, all=${s.counts.allTime}`)
+      .join("\n"));
   }
+  const conflictingRisk = recentActivity && (report.risk.expertUnavailable || report.risk.orphaned);
+  // Risk booleans are derived from a bounded sample. Do not present their
+  // personnel/coverage interpretations as attached facts for synthesis.
+  const primaryCount = report.scores.filter((score) => score.tier === "primary").length;
+  const secondaryCount = report.scores.filter((score) => score.tier === "secondary").length;
+  sections.push(
+    `### Retrieved contributor sample\n- Scored primary contributors: ${primaryCount}\n- Scored secondary contributors: ${secondaryCount}\n- Total scored contributors: ${report.scores.length}\n- Broader maintainer, backup and knowledge coverage: unavailable from these counts.`
+  );
+  if (conflictingRisk) {
+    sections.push("### Recency conflict\n- Recent dated activity conflicts with inactivity/stale aggregate flags. Do not claim no recent commits or inactive ownership; aggregate recency is unknown. Availability and declared ownership remain separate questions.");
+  }
+
+  sections.push(`### Derived contact recommendations\n- Suggested escalation (not a verified policy): ${report.teamGraph.escalationPath}\n- Missing a scored secondary does not establish that no secondary owner exists. Repository admins are a suggested fallback; their identities and escalation policy require separate evidence.`);
+  // crossTeamNote is derived prose, not independently evidenced team policy.
   if (report.teamGraph.members.length) {
     sections.push(
       report.teamGraph.members
-        .map((m) => `- @${m.owner} (${m.role}, ${m.available ? "available" : "inactive"})`)
+        .map((m) => `- @${m.owner} (sampled ${m.role} contributor, ${m.available ? "available" : "availability unverified"})`)
         .join("\n")
     );
   }
@@ -231,8 +257,8 @@ export function formatOwnershipReportForPrompt(
 
   if (report.history.length) {
     sections.push(
-      "### Ownership evolution\n" +
-        report.history.map((h) => `- ${h.label}: ${h.narrative}`).join("\n")
+      "### Sampled contributor ranking by period (not declared ownership)\n" +
+        report.history.map((h) => `- ${h.label}: highest-ranked contributor ${h.primaryOwner || "unknown"}; other ranked contributors ${h.secondaryOwners.join(", ") || "none retrieved"}`).join("\n")
     );
   }
 
@@ -280,21 +306,4 @@ function appendPathEvolutionGuidance(
   );
   lines.push("- Mention this activity in **Summary** when recommending who to contact today.");
   lines.push("");
-}
-
-function humanizeRiskFlag(flag: string): string {
-  switch (flag) {
-    case "singlePointOfFailure":
-      return "Observed contribution concentration — one primary contributor and no scored secondary in the sampled evidence; knowledge coverage is unverified";
-    case "expertUnavailable":
-      return "All experts appear unavailable (inactive 3+ months)";
-    case "orphaned":
-      return "Orphaned — no commits in 6+ months";
-    case "highTurnover":
-      return "High turnover — many authors, no clear expert";
-    case "teamDispersion":
-      return "Team dispersion — expertise scattered";
-    default:
-      return flag;
-  }
 }

@@ -457,12 +457,17 @@ export function RemoteExplorerTreePanel({
   }, [isRepoList, trimmedQuery, onSearch]);
 
   const filteredNodes = useMemo(() => {
-    if (!isRepoList || !trimmedQuery) {
+    if (!isRepoList) {
       return nodes;
     }
+    // Repo rows are a complete snapshot, not lazily expanded directory state.
+    // Read the snapshot directly so a fresh mount never paints a false empty
+    // list before the nodes synchronization effect runs.
+    const repoNodes = treeState.items.map((item) => toTreeNode(item, treeState.loading));
+    if (!trimmedQuery) return repoNodes;
     const needle = trimmedQuery.toLowerCase();
-    return nodes.filter((node) => node.name.toLowerCase().includes(needle));
-  }, [isRepoList, nodes, trimmedQuery]);
+    return repoNodes.filter((node) => node.name.toLowerCase().includes(needle));
+  }, [isRepoList, nodes, trimmedQuery, treeState.items, treeState.loading]);
 
   const localSearchMatches = useMemo(() => {
     if (!isFileSearch) {
@@ -717,7 +722,7 @@ export function RemoteExplorerTreePanel({
                   ) : trimmedQuery ? (
                     "No repositories match your filter."
                   ) : (
-                    "No repositories found. Connect GitHub in Settings."
+                    "No repositories were returned. Click Refresh to try again."
                   )
                 ) : (
                   "No files in this directory."

@@ -41,7 +41,7 @@ import {
 } from "../workspace/repoPackageBoundaryEvidence";
 import { isRepoPackageBoundaryQuery, isRepoStructureQuery } from "../workspace/repoFactIntent";
 import { isFileCallerQuery } from "../context/fileCallerIntent";
-import { blastRadiusFromBundle } from "../context/contextBundleEvidence";
+import { blastRadiusFromBundle, knowledgeGapsFromBundle } from "../context/contextBundleEvidence";
 import { enrichBlastRadiusResponse } from "../prompts/blastRadiusSynthesis";
 import { enrichPlainChatCallerResponse } from "../prompts/plainChatCallerEnrichment";
 import {
@@ -186,6 +186,7 @@ export function enrichChatResponseForAction(options: {
         notionPages: extractNotionPagesFromBundle(contextBundle),
         googleDocs: extractGoogleDocsFromBundle(contextBundle),
         jobScanGaps: extractJobScanGapsFromBundle(contextBundle),
+        focusFiles: Array.isArray(contextBundle) ? knowledgeGapsFromBundle(contextBundle)?.focusFiles : undefined,
         activeFile
       });
       break;

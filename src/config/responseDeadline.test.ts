@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { shouldEnableSynthesisThinking } from "./chatSynthesisThinking";
 import {
   MAX_USER_FACING_RESPONSE_MS,
   RESPONSE_DEADLINE_REASON,
@@ -30,6 +31,20 @@ async function test(name: string, fn: () => void | Promise<void>): Promise<void>
 }
 
 async function main(): Promise<void> {
+  await test("gathered read-only synthesis skips another thinking phase at the gather boundary", () => {
+    const startedAt = 1000;
+    const boundary = startedAt + MAX_USER_FACING_RESPONSE_MS - RESERVED_SYNTHESIS_MS;
+    for (const quickAction of ["knowledge-gaps", "understand-repo"]) {
+      assert.equal(shouldEnableSynthesisThinking({ quickAction, startedAt, now: boundary - 1 }), true);
+      assert.equal(shouldEnableSynthesisThinking({ quickAction, startedAt, now: boundary }), false);
+      assert.equal(shouldEnableSynthesisThinking({ quickAction, startedAt, now: startedAt + 60000 }), false);
+    }
+  });
+  await test("complex chat, edit, and other quick actions retain reasoning after the soft budget", () => {
+    for (const quickAction of [undefined, "edit", "blast-radius", "compare", "trace", "owner"]) {
+      assert.equal(shouldEnableSynthesisThinking({ quickAction, startedAt: 1000, now: 61000 }), true);
+    }
+  });
   await test("remainingResponseBudgetMs clamps at zero", () => {
     assert.equal(remainingResponseBudgetMs(Date.now() - 20_000), 0);
     assert.ok(remainingResponseBudgetMs(Date.now()) <= MAX_USER_FACING_RESPONSE_MS);

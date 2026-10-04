@@ -1070,6 +1070,40 @@ test("L highlight change still uses the local-file edit directive", () => {
   assert.equal(message.includes(REMOTE_SELECTION_EDIT_DIRECTIVE), false);
 });
 
+test("complete ownership system contract requests evidence without demanding personnel risk", () => {
+  const prompt = systemPromptForUseCase("ownership");
+  assert.match(prompt, /\*\*Evidence and unknowns\*\*/);
+  assert.match(prompt, /A rank is not a maintainer or backup appointment/);
+  assert.doesNotMatch(prompt, /\*\*Risk signals\*\*|Single points of failure, stale ownership, bus factor/);
+});
+
+test("assembled ownership and gaps graph context contains observations without raw derived risk", () => {
+  const report = {
+    owner: "acme", repo: "fixture", path: "src/math.ts", completeness: "full",
+    scores: [{owner: "alice", tier: "primary", score: 100, commitCount: 1}],
+    risk: {singlePointOfFailure: true, expertUnavailable: false, orphaned: false, highTurnover: false, teamDispersion: false},
+    teamGraph: {members: [], escalationPath: "Ask repository admins", crossTeamNote: "Only Alice knows the code"},
+    history: [{period: "recent", label: "Recent sample", primaryOwner: "alice", secondaryOwners: [], narrative: "Confirmed single point of failure"}],
+    warnings: [], pathEvolution: {recentCommitCount: 1, lastModifiedAt: "2026-10-04T20:00:00Z", lastModifiedAuthor: "alice"}
+  };
+  const bundle = [{type: "ownership", data: {report}}, {type: "knowledge_gaps", data: {ownershipReport: report, jobScan: {gaps: [
+    {type: "missing_owner", message: "No owner declared", description: "Nobody owns the module", summary: "Confirmed orphaned module", file: "src/math.ts", evidence: ["sample-1"]},
+    {type: "missing_docs", message: "No nearby docs", file: "src/math.ts"},
+    {type: "other", message: "Literal supported observation"}
+  ]}}}];
+  const message = buildUserMessageWithContext("Find owner and gaps", {owner: "acme", repo: "fixture", contextBundle: bundle});
+  assert.doesNotMatch(message, /"singlePointOfFailure":true|Only Alice knows|Confirmed single point of failure|No owner declared|No nearby docs|Nobody owns the module|Confirmed orphaned module/);
+  assert.match(message, /Scored primary contributors: 1/);
+  assert.match(message, /Scored secondary contributors: 0/);
+  assert.match(message, /2026-10-04T20:00:00Z/);
+  assert.match(message, /Analysis time \(UTC\)/);
+  assert.match(message, /absence is unproven/);
+  assert.match(message, /sample-1/);
+  assert.match(message, /Literal supported observation/);
+  assert.equal(report.risk.singlePointOfFailure, true, "serialization must not mutate UI evidence");
+  assert.equal(bundle[1].data.jobScan?.gaps[0].message, "No owner declared");
+});
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 const total = passed + failed;
 console.log(`\nsystemPrompts: ${passed}/${total} tests passed`);

@@ -1,0 +1,63 @@
+
+> coop-ai@0.1.10 test:quick-action-prompts
+> npx tsx src/prompts/quickActionPrompts.test.ts && npx tsx src/prompts/ownershipSynthesis.test.ts && npx tsx src/api/codeHosts/ownershipAnalysis.test.ts
+
+  ✓ display text omits format instructions for knowledge-gaps
+  ✓ model prompt includes evidence sources for knowledge-gaps
+  ✓ history content uses chip line separator
+  ✓ quickActionHistoryContent uses knowledge-gaps tag prefix
+  ✓ quickActionHistoryContent preserves slash args and mentions for knowledge-gaps
+  ✓ knowledge-gaps model prompt supports repo-wide scope without file
+  ✓ find-owner model prompt supports repo-wide scope without file
+  ✓ understand-repo model prompt supports repo-wide scope without file
+  ✓ understand-repo model prompt steers repo-wide
+  ✓ trace-decision model prompt references integration evidence
+  ✓ trace-decision history content uses unified bubble format
+  ✓ trace-decision slash args preserved in history bubble
+  ✓ trace-decision model prompt handles out-of-scope @ attachments
+  ✓ find-owner model prompt references identity links
+  ✓ find-owner history content matches grid button format
+  ✓ find-owner model prompt handles out-of-scope @ attachments
+  ✓ blast-radius model prompt prioritizes top ranked risk surfaces
+  ✓ understand-repo repo-wide model prompt defers cross-action pointer to the synthesis closer
+  ✓ find-owner repo-wide model prompt suggests cross-actions
+  ✓ blast-radius history includes branch chip
+  ✓ appendQuickActionMentionScope adds blast-radius guidance
+  ✓ quickActionHistoryContent matches grid button format
+  ✓ quickActionHistoryContent preserves user args after slash command
+  ✓ quickActionHistoryContent shows attached files in bubble chips
+  ✓ quickActionHistoryContent shows attached files with slash args
+  ✓ quickActionHistoryContent labels local workspace attachments
+  ✓ understand-repo model prompt excludes foreign paths from target repo architecture
+  ✓ appendQuickActionMentionScope adds guidance to slash args
+  ✓ display and model differ for all actions
+  ✓ repository owner task does not demand inferred single-point-of-failure claims
+  ✓ file owner task requests evidence scope instead of invented confidence
+
+quickActionPrompts: 31/31 tests passed
+  ✓ ownership synthesis includes citation keys and sources checklist
+  ✓ ownership synthesis splits out-of-repo @ attachments
+  ✓ ownership synthesis supports repository-wide scope
+  ✓ ownership synthesis surfaces CODEOWNERS orgContext prominently
+  ✓ ownership synthesis omits outreach draft and includes pathEvolution guidance
+  ✓ ownership synthesis requires on-call escalation or explicit admin gap
+  ✓ ownership synthesis cites Slack presence when discussions are empty
+  ✓ a sole scored author is contribution evidence, not proof of exclusive knowledge
+  ✓ today's dated commit contradicts stale risk rather than becoming inactive ownership
+  ✓ sampled author and Slack away cannot establish declared ownership or inactivity
+  ✓ sole author and derived admin fallback preserve unknown ownership coverage
+  ✓ all derived risk booleans remain mechanical sample counts rather than personnel-risk facts
+  ✓ derived history and cross-team prose cannot reintroduce unproven ownership risk
+
+ownershipSynthesis: 13/13 tests passed
+  ✓ calculateOwnershipScores propagates github login from commit stats
+  ✓ sparse-commit primary + CODEOWNERS team yields escalation avenue (smoke retest shape)
+  ✓ sparse-commit primary + CODEOWNERS path owners (no team slug) yields path-owner escalation
+  ✓ sparse-commit primary + recent reviewers yields reviewer escalation when CODEOWNERS missing
+  ✓ sparse-commit primary with no CODEOWNERS/reviewers yields explicit admin gap (not empty backup)
+  ✓ score-tier secondary still preferred over CODEOWNERS for backup contact
+  ✓ collectEscalationAvenues never invents handles outside evidence
+  ✓ missing or invalid expert activity is unknown rather than unavailable
+  ✓ today's matching commit defeats stale expert inactivity but not unrelated authors
+
+ownershipAnalysis: 9 passed, 0 failed
