@@ -1,3 +1,7 @@
+import { gatherRequest } from "./gatherRequest";
+import { formatVerifiedFieldHandlingAnswer } from "./fieldHandlingEvidence";
+import { remainingContextGatherBudgetMs } from "../../config/responseDeadline";
+import { randomUUID } from "node:crypto";
 import { stripPleaseOpenAttachedPaths } from "../../chat/customerFacingAnswer";
 import {
   AGENT_JOB_WALL_MS,
@@ -16,6 +20,7 @@ import type {
   AgentToolName
 } from "./agentTypes";
 import type { AgentToolContext } from "./agentToolContext";
+import { createRunToolContext } from "./runToolContext";
 import { agentSearchSkipNote, parseAgentToolPlan } from "./parseAgentToolPlan";
 import {
   mergePlannedAgentSearchQueries,
@@ -32,7 +37,9 @@ import {
   sanitizeAgentSearchQuery,
   shouldSkipEvidencePath,
   filterWriteRejectFiles,
+  verifiedFieldHandlingEvidence,
   isApiRejectAsk,
+  isBackendStateLocateAsk,
   isBackendStateDefinitionHit,
   isCompoundAuthAndStateLocateAsk,
   isCreateDefinitionHit,
@@ -42,13 +49,27 @@ import {
   contentLooksLikeAskedFieldReject,
   contentLooksLikeCreateHandler,
   contentLooksLikeUnauthorizedWrite,
+  contentLooksLikeWriteReject,
   lineNumberOfCreateHandler,
   lineNumberOfWriteReject,
   lineNumberOfUnauthorizedWrite,
   textMentionsQueryRoles,
   readBodyHasCallerUse,
-  lineNumberOfCallerUse
+  lineNumberOfCallerUse,
+  isFailOpenRejectHit,
+  askedRejectErrorQuotes,
+  askedRejectFieldTokens,
+  askRejectJobTokens,
+  rejectEvidenceMatchesAskJob,
+  isWeakRejectTwinForAsk,
+  rejectInventPathRank,
+  relatedSerializerPathsFromWeakTwin,
+  scoreRejectPathForAskJob,
+  inventRejectSymbolSearchCriteria,
+  contentIncludesAskedRejectQuote,
+  isParserLocateAsk
 } from "./searchQuery";
+import { findQueryMatchLine } from "./tools/searchCode";
 import { isFileCallerQuery, isShipCheckQuery } from "../../context/fileCallerIntent";
 import {
   classifyLocateRead,
@@ -59,7 +80,7 @@ import {
 } from "./locateEvidence";
 import { createAgentToolRegistry } from "./tools/registry";
 import { handleIntegrationSearch } from "./tools/integrationSearch";
-import { stripReadLinePrefixes } from "./tools/readFile";
+import { stripReadLinePrefixes, numberReadLines } from "./tools/readFile";
 import { formatOpenedIntegrationEvidence, listOpenedIntegrationArtifacts, type OpenedVendorArtifact } from "./openedIntegrationEvidence";
 import {
   agentToolForIntegrationProvider,
@@ -74,6 +95,7 @@ import {
   vendorDoneBlockReason,
   type VendorToolState
 } from "./vendorLoop";
+import { isMutationHandlerPath, isServerWritePath } from "../../indexing/evidencePathNoise";
 
 export { pickTopSearchHit };
 
@@ -81,15 +103,45 @@ const DEFAULT_MAX_STEPS = AGENT_MAX_TOOL_ROUNDS;
 const READ_LINE_PADDING = 25;
 /** Each retry is another round trip — the gather budget is shared with the answer. */
 const MAX_SEARCH_ATTEMPTS = 8;
-/** Field-reject hunts search access patterns after slogan misses. */
-const MAX_API_REJECT_SEARCH_ATTEMPTS = 12;
+/**
+ * Fail-open / no-planTurn only — small seed, not the 12-query scavenger brain.
+ * Live reject asks use planTurn; this caps deterministic fallback.
+ */
+const MAX_API_REJECT_SEED_SEARCHES = 4;
+/** Cap attached reject sites compared under multi-hit gather (no first-twin freeze). */
+const MAX_REJECT_SHORTLIST = 3;
+/** Cap consecutive search_code without a consuming read on reject (blocks 10/0 parade). */
+const MAX_REJECT_SEARCH_STREAK = 4;
+/** Rails-only ledger of attachable reject snippets across search overwrites. */
+const MAX_REJECT_HIT_LEDGER = 5;
+
+type RejectHitLedgerEntry = {
+  fileName: string;
+  content: string;
+  lineNumber: number;
+};
+
+type UnusedRejectEvidence =
+  | { kind: "snippet"; path: string; content: string; lineNumber: number }
+  | { kind: "jump"; path: string };
 /** Read budget when the index returned a hit with no line number. */
 const UNPOSITIONED_READ_LINES = 120;
 const INDEX_HUNT_MISS =
   "I couldn't find that in this repo. Try a more specific name, or open the file.";
 /** On-call API reject — never reuse the named-function miss copy. */
-const API_REJECT_HUNT_MISS =
-  "I couldn't find where the API rejects that field. I won't guess a path. Try a more specific error string, or open the write path.";
+function apiRejectHuntMiss(steps: AgentStep[]): string {
+  const opened = steps.some(
+    (step) =>
+      step.tool === "read_file" &&
+      !/failed|skipped|search snippet only|not remotely verified/i.test(step.summary)
+  );
+  const snippetOnly = steps.some((step) => /search snippet only|not remotely verified/i.test(step.summary));
+  return opened
+    ? "I couldn't find where the API rejects that field: the opened candidate content did not confirm the server-side reject. I won't guess a path."
+    : snippetOnly
+      ? "I couldn't confirm where the API rejects that field: search found a matching snippet, but no opened remote file body verified it. I won't cite an unverified source."
+    : "I couldn't find where the API rejects that field: the indexed searches yielded no attachable reject snippet, and no opened file confirmed it. I won't guess a path.";
+}
 /** Cap extra ship-check sibling reads (401 writers + tests) after the definition. */
 const SHIP_CHECK_MAX_RIPPLE_READS = 5;
 /** Cap mid-loop integration calls so the model cannot spray. Search + Open + retry needs headroom. */
@@ -118,7 +170,11 @@ type SearchPayload = {
 
 type ReadFilePayload = {
   path?: string;
-  files?: Array<{ path: string; content: string }>;
+  files?: Array<{
+    path: string;
+    content: string;
+    evidenceSource?: "remote-read" | "search-snippet";
+  }>;
   error?: string;
   skipNote?: string;
 };
@@ -208,7 +264,10 @@ function preferredLineForPath(
 }
 
 export type AgentRunOptions = {
+  repoTarget?: import("../../workspace/indexedRepoWorkspaceTypes").RepoTarget;
   onStep?: (step: AgentStep, steps: AgentStep[]) => void;
+  /** Opt-in, content-minimized trace for diagnosing indexed-repo hunts. */
+  onDiagnostic?: (event: Record<string, unknown>) => void;
   /** When set, the same model conversation chooses tools. Missing/invalid first plan → deterministic fallback. */
   planTurn?: AgentPlanTurnFn;
   /** Same conversation, after tools: stream the user-visible answer. */
@@ -240,8 +299,14 @@ export type AgentRunOptions = {
   /**
    * Intent-quarterback index queries for this turn (prefer over slogan banks).
    * Empty/omitted → invent + fallbackAgentSearchQueries fail-open.
+   * Seeds only — the agent loop owns further gather.
    */
   plannedSearchQueries?: string[];
+  /**
+   * Quarterback job brief for planTurn context (purpose / evidence class /
+   * done-looks-like). Never sets silent workflows. Fail-open when omitted.
+   */
+  intentBrief?: string;
 };
 
 /**
@@ -253,6 +318,7 @@ export type AgentRunOptions = {
  * Deterministic search→read is only the no-planTurn fallback (tests / fail-open).
  */
 export class AgentOrchestrator {
+  private preserveCompoundWriteEvidence = false;
   private readonly registry;
   private runAllowedIntegrations: IntegrationChatProvider[] = [];
   private runSearchIntegration?: AgentRunOptions["searchIntegration"];
@@ -260,6 +326,14 @@ export class AgentOrchestrator {
   private loopContext?: AgentSessionContext;
   private allowedRepoTools = true;
   private runPlannedSearchQueries: string[] = [];
+  /** Rails-only: attachable reject snippets across search_code overwrites. */
+  private rejectHitLedger: RejectHitLedgerEntry[] = [];
+  /** Rails-only: serializer/server-write paths seen this turn (survive search overwrite). */
+  private rejectJumpPathLedger = new Set<string>();
+  /** One-shot last-chance quote searches before canned miss. */
+  private rejectQuoteLastChanceTried = new Set<string>();
+  /** One-shot: ask-derived symbol invent when quote + codehost still miss. */
+  private rejectInventLastChanceTried = false;
 
   public constructor(private readonly ctx: AgentToolContext) {
     this.registry = createAgentToolRegistry(ctx);
@@ -267,7 +341,7 @@ export class AgentOrchestrator {
 
   public async executeTool(tool: AgentToolName, args: Record<string, unknown>): Promise<string> {
     if (isAgentIntegrationTool(tool)) {
-      return handleIntegrationSearch(
+      return gatherRequest(this.ctx, "integration-search", () => handleIntegrationSearch(
         {
           ...this.ctx,
           allowedIntegrations: this.runAllowedIntegrations,
@@ -277,7 +351,7 @@ export class AgentOrchestrator {
         },
         tool,
         args
-      );
+      ), JSON.stringify({ error: "Integration evidence unavailable" }));
     }
     const handler = this.registry[tool];
     if (!handler) {
@@ -287,6 +361,56 @@ export class AgentOrchestrator {
   }
 
   public async run(
+    request: AgentSessionRequest,
+    options?: AgentRunOptions
+  ): Promise<AgentSessionResult> {
+    if (!request.repoId?.trim() || !request.message.trim() || options?.signal?.aborted) {
+      return { steps: [], context: undefined };
+    }
+    const runId = randomUUID();
+    const diagnostic = options?.onDiagnostic;
+    const startedAt = Date.now();
+    options = { ...options, onDiagnostic: diagnostic ? (event) => diagnostic({ runId, turnElapsedMs: Date.now() - startedAt, ...event }) : undefined };
+    const requested = { ...options?.repoTarget, repoId: request.repoId.trim() };
+    const gatherContext = { ...this.ctx, researchQuery: request.message,
+      gatherStartedAt: options.startedAt ?? startedAt, searchSignal: options.signal, onDiagnostic: options.onDiagnostic };
+    let target: import("../../workspace/indexedRepoWorkspaceTypes").RepoTarget | undefined;
+    try {
+      target = this.ctx.resolveRepoTarget
+        ? await gatherRequest(gatherContext, "target-resolution", () => this.ctx.resolveRepoTarget!(requested), undefined)
+        : requested;
+    } catch (error) {
+      options.onDiagnostic?.({ stage: "outcome", repoId: requested.repoId, requestedBranch: requested.branch,
+        outcome: "target-error", stopped: Boolean(options.signal?.aborted) });
+      if (options.signal?.aborted) return { steps: [], context: undefined };
+      throw error;
+    }
+    if (!target?.repoId) {
+      options.onDiagnostic?.({ stage: "outcome", repoId: requested.repoId, requestedBranch: requested.branch,
+        outcome: "target-unavailable", elapsedMs: Date.now() - startedAt });
+      return { steps: [], answer: "I couldn’t verify the selected repository and branch for this turn, so I can’t identify its source safely." };
+    }
+    const run = new AgentOrchestrator(createRunToolContext(gatherContext, target, options.onDiagnostic));
+    options?.onDiagnostic?.({ stage: "target", repoId: target.repoId, requestedBranch: requested.branch, resolvedBranch: target.branch });
+    try {
+      const result = await run.runInternal(request, options);
+      for (const file of (result.context?.read_file as ReadFilePayload | undefined)?.files ?? []) {
+        if (file.evidenceSource !== "remote-read" || !file.path || !file.content) continue;
+        const body = stripReadLinePrefixes(file.content);
+        const verified = isApiRejectAsk(request.message)
+          ? contentLooksLikeAskedFieldReject(body, request.message, file.path) || Boolean(verifiedFieldHandlingEvidence({ path: file.path, content: file.content, evidenceSource: file.evidenceSource }, request.message))
+          : locateReadCountsAsGrounding({ path: file.path, body, query: request.message });
+        if (verified) run.ctx.candidateLedger?.record(target.repoId!, file.path, request.message, "verified");
+      }
+      options?.onDiagnostic?.({ stage: "outcome", candidateLedger: run.ctx.candidateLedger?.snapshot(target.repoId!), repoId: target.repoId, resolvedBranch: target.branch, elapsedMs: Date.now() - startedAt, stopped: Boolean(options?.signal?.aborted), stepCount: result.steps.length, hasAnswer: Boolean(result.answer), evidencePaths: ((result.context?.read_file as ReadFilePayload | undefined)?.files ?? []).map((file) => file.path) });
+      return result;
+    } catch (error) {
+      options?.onDiagnostic?.({ stage: "outcome", repoId: target.repoId, resolvedBranch: target.branch, elapsedMs: Date.now() - startedAt, outcome: "error", stopped: Boolean(options?.signal?.aborted) });
+      throw error;
+    }
+  }
+
+  private async runInternal(
     request: AgentSessionRequest,
     options?: AgentRunOptions
   ): Promise<AgentSessionResult> {
@@ -338,6 +462,29 @@ export class AgentOrchestrator {
     const steps: AgentStep[] = [];
     const context: AgentSessionContext = {};
     const conversation: AgentConversationMessage[] = [{ role: "user", content: query }];
+    if (options.intentBrief?.trim()) {
+      conversation.push({ role: "user", content: options.intentBrief.trim() });
+    } else if (isApiRejectAsk(query) && action !== "change") {
+      const quoteHints = askedRejectErrorQuotes(query).slice(0, 1);
+      const jobTokens = askRejectJobTokens(query);
+      conversation.push({
+        role: "user",
+        content: [
+          "Job brief: find the server write/reject for the asked field.",
+          quoteHints.length > 0
+            ? `Exact error quote to search early: "${quoteHints[0]}".`
+            : "When the ask quotes an error string, search that Exact quote first (not ValidationError or bare field_id).",
+          jobTokens.length > 0
+            ? `Ask job words: ${jobTokens.join("/")}. If the first raise site does not mention them, search/read another sibling under budget.`
+            : "",
+          "Done = a read_file body that raises/ValidationError/rejects that field is attached.",
+          "Prefer API serializers/views. Do not stop on web components, types, error_codes catalogs, or bgtasks.",
+          "Seed searchCriteria are optional hints — invent further queries from results."
+        ]
+          .filter(Boolean)
+          .join(" ")
+      });
+    }
     const emit = (step: AgentStep) => {
       steps.push(step);
       options.onStep?.(step, [...steps]);
@@ -351,7 +498,15 @@ export class AgentOrchestrator {
     let callerRead = false;
     let groundedExport = queryHasNamedSymbol(query) ? extractAgentSearchQuery(query) : undefined;
     let implementationPath: string | undefined;
+    /** Server-write / serializer paths opened this turn — jump before abandoning / miss. */
+    const openedServerWritePaths = new Set<string>();
     const triedSearchQueries = new Set<string>();
+    let rejectSearchStreak = 0;
+    this.rejectHitLedger = [];
+    this.rejectJumpPathLedger = new Set();
+    this.rejectQuoteLastChanceTried = new Set();
+    this.rejectInventLastChanceTried = false;
+    let rejectMultiHitNudgeSent = false;
     const wantsCallerRead = (): boolean =>
       isFileCallerQuery(query) &&
       (queryHasNamedSymbol(query) || Boolean(groundedExport) || isShipCheckQuery(query));
@@ -359,6 +514,82 @@ export class AgentOrchestrator {
     this.loopContext = context;
     const vendorState = new Map<AgentToolName, VendorToolState>();
     const allowedRepoTools = options.allowedRepoTools !== false;
+    const diagnostic = options.onDiagnostic;
+    diagnostic?.({
+      stage: "turn",
+      repoId,
+      action,
+      hunt: isApiRejectAsk(query)
+        ? "api-reject"
+        : isBackendStateLocateAsk(query)
+          ? "backend-state-locate"
+          : isDefinitionLocateAsk(query)
+            ? "definition-locate"
+            : "other",
+      taskQuery: query,
+      plannedSearchQueries: this.runPlannedSearchQueries.slice(0, 4),
+      requiredEvidence: options.intentBrief?.match(/evidence=[^\s.]+/g) ?? []
+    });
+    const requiresWriteSiteAndReject =
+      requiresStateWriteAndReject(query, options.intentBrief);
+    this.preserveCompoundWriteEvidence = requiresWriteSiteAndReject;
+    const hasRequiredRejectEvidence = (): boolean =>
+      contextHasVerifiedFieldBehavior(context, query) &&
+      (!requiresWriteSiteAndReject || (contextHasWriteReject(context, query) && contextHasStateWriteSite(context)));
+    const rejectGatherNudge = (): string =>
+      "Reply with tool JSON: search_code or read_file. Done only after a write-reject for the asked field is attached — not a named-symbol locate.";
+    /** Pure: may keep comparing reject siblings under budget (no nudge side effects). */
+    const rejectGatherMayContinue = (): boolean => {
+      if (!contextHasWriteReject(context, query) && contextHasVerifiedFieldBehavior(context, query)) return false;
+      const files = remoteReadEvidenceFiles(
+        (context.read_file as ReadFilePayload | undefined)?.files
+      );
+      if (rejectEvidenceMatchesAskJob(files, query)) {
+        return false;
+      }
+      const rejectSites = files.filter((file) =>
+        contentLooksLikeAskedFieldReject(file.content ?? "", query, file.path ?? "")
+      ).length;
+      if (rejectSites >= MAX_REJECT_SHORTLIST) {
+        return false;
+      }
+      if (remainingContextGatherBudgetMs(startedAt) <= 0 || Date.now() - startedAt > wallMs - 1500) {
+        return false;
+      }
+      return true;
+    };
+    /** After a write-reject attach: freeze only when job matched, shortlist full, or budget gone. */
+    const shouldStopAfterRejectAttach = (): boolean => {
+      if (requiresWriteSiteAndReject && contextHasWriteReject(context, query) && contextHasStateWriteSite(context)) return true;
+      if (requiresWriteSiteAndReject && contextHasWriteReject(context, query) && !contextHasStateWriteSite(context)) {
+        lastToolResult = JSON.stringify({
+          note: "Write-reject attached. The compound ask also needs the server-side state write/update site. Use read_file on the attached file's create/update method before repeating searches; follow its delegation if persistence lives elsewhere.",
+          verifiedFileOutlines: (context.search_code as Record<string, unknown> | undefined)?.verifiedFileOutlines
+        });
+        conversation.push({ role: "user", content: lastToolResult });
+        return false;
+      }
+      if (!rejectGatherMayContinue()) {
+        return true;
+      }
+      if (!rejectMultiHitNudgeSent) {
+        rejectMultiHitNudgeSent = true;
+        const jobTokens = askRejectJobTokens(query);
+        lastToolResult = JSON.stringify({
+          note:
+            jobTokens.length > 0
+              ? `Write-reject attached, but ask job words (${jobTokens.join("/")}) are not clearly matched in that evidence. While budget remains, search_code/read_file another sibling — or {"done":true} if this is the only site.`
+              : `Write-reject attached. While budget remains you may compare one more sibling, or {"done":true}.`
+        });
+        conversation.push({ role: "user", content: lastToolResult });
+      }
+      return false;
+    };
+    /** True when a weak twin is attached and gather may still compare siblings. */
+    const wantsMoreRejectSiblings = (): boolean =>
+      isApiRejectAsk(query) &&
+      contextHasVerifiedFieldBehavior(context, query) &&
+      rejectGatherMayContinue();
     const seeded = allowedRepoTools
       ? await this.seedOpenFileReadIfFeatureAdd(
           repoId,
@@ -420,7 +651,10 @@ export class AgentOrchestrator {
         return steps.length > 0;
       }
       if (isApiRejectAsk(query)) {
-        return contextHasWriteReject(context, query);
+        return hasRequiredRejectEvidence();
+      }
+      if (isBackendStateLocateAsk(query)) {
+        return contextHasGroundedLocateRead(context, query);
       }
       if (isShipCheckQuery(query)) {
         return (
@@ -448,36 +682,51 @@ export class AgentOrchestrator {
       return steps.length > 0;
     };
 
-    if (isApiRejectAsk(query) && action !== "change") {
-      const hunted = await this.huntWriteReject(repoId, query, emit, context, conversation);
-      if (hunted) {
-        matchingRead = true;
+    // Reject + planTurn: criteria are hints in the brief only — no pre-loop parade.
+    if (isApiRejectAsk(query) && action !== "change" && allowedRepoTools) {
+      if (this.runPlannedSearchQueries.length > 0 && !options.intentBrief?.trim()) {
+        conversation.push({
+          role: "user",
+          content: `Suggested searchCriteria (hints only, not executed): ${this.runPlannedSearchQueries
+            .slice(0, 4)
+            .join("; ")}`
+        });
       }
-      // Index already said yes or no. Do not start a second hunt of the same queries.
-      return this.finishWithAnswer(
-        { steps, context },
-        query,
-        repoId,
-        action,
-        options,
-        conversation,
-        matchingRead
-      );
     }
 
-    const skipDeterministicFallback = !allowedRepoTools;
-
+    const skipDeterministicFallback = !allowedRepoTools || isApiRejectAsk(query);
+    const askedFields = askedRejectFieldTokens(query).map((field) =>
+      field.replace(/_id$/i, "")
+    );
+    const firstRejectFieldCriteria = /\b(?:state|transition|backlog)\b/i.test(query)
+      ? ["validate_state"]
+      : askedFields.some((field) => /^parent$/i.test(field))
+        ? [/\bissue_id\b/i.test(query) ? "Parent is not valid issue_id" : "validate_parent"]
+        : askedFields.map((field) => `get("${field}")`);
+    // Domain status can use enum/property checks. Do not replace a model's
+    // signing-handler query with an assumed dictionary accessor.
+    const modelOwnsStatusSearch = askedFields.includes("status") &&
+      askedRejectErrorQuotes(query).length === 0;
+    const firstRejectSearchQuery =
+      isApiRejectAsk(query) && action !== "change" && allowedRepoTools && !modelOwnsStatusSearch &&
+        (firstRejectFieldCriteria.length > 0 || askedRejectErrorQuotes(query).length > 0)
+        ? mergePlannedAgentSearchQueries({
+            userMessage: query,
+            planned: firstRejectFieldCriteria,
+            max: 1
+          })[0]
+        : undefined;
     for (let round = 0; round < maxSteps; round++) {
       if (options.signal?.aborted) {
         break;
       }
-      if (Date.now() - startedAt > wallMs) {
+      if (remainingContextGatherBudgetMs(startedAt) <= 0 || Date.now() - startedAt > wallMs) {
         break;
       }
 
       let raw: string;
       try {
-        raw = await planTurn({
+        raw = await gatherRequest(this.ctx, "tool-plan", () => planTurn({
           message: query,
           repoId,
           round,
@@ -485,7 +734,7 @@ export class AgentOrchestrator {
           lastToolResult,
           conversation: [...conversation],
           allowedIntegrations
-        });
+        }), "");
       } catch {
         if (steps.length === 0 && !skipDeterministicFallback) {
           const fallback = await this.runDeterministic(repoId, query, maxSteps, options, openFile);
@@ -498,13 +747,44 @@ export class AgentOrchestrator {
             undefined,
             Boolean(
               (fallback.context?.read_file as { files?: unknown[] } | undefined)?.files?.length
-            )
+            ),
+            openedServerWritePaths
           );
+        }
+        if (isApiRejectAsk(query)) {
+          lastToolResult = JSON.stringify({ error: rejectGatherNudge() });
+          conversation.push({
+            role: "user",
+            content: lastToolResult
+          });
+          continue;
         }
         break;
       }
 
-      const plan = parseAgentToolPlan(raw, { allowedIntegrations, allowedRepoTools });
+      const modelPlan = parseAgentToolPlan(raw, { allowedIntegrations, allowedRepoTools });
+      // Make the first reject search deterministic and ask-derived. The model
+      // still owns every later refinement after it sees the actual results.
+      const plan = round === 0 && firstRejectSearchQuery
+        ? { kind: "call" as const, tool: "search_code" as const, args: { query: firstRejectSearchQuery } }
+        : modelPlan;
+      diagnostic?.({
+        stage: "plan",
+        round,
+        result: plan.kind,
+        ...(plan.kind === "call"
+          ? {
+              tool: plan.tool,
+              query: plan.tool === "search_code" && typeof plan.args.query === "string"
+                ? plan.args.query.slice(0, 180)
+                : undefined,
+              path: plan.tool === "read_file" && typeof plan.args.path === "string"
+                ? plan.args.path
+                : undefined,
+              forcedFirstRejectSearch: round === 0 && Boolean(firstRejectSearchQuery)
+            }
+          : {})
+      });
       if (plan.kind === "invalid") {
         if (steps.length === 0 && !skipDeterministicFallback) {
           const fallback = await this.runDeterministic(repoId, query, maxSteps, options, openFile);
@@ -517,10 +797,11 @@ export class AgentOrchestrator {
             undefined,
             Boolean(
               (fallback.context?.read_file as { files?: unknown[] } | undefined)?.files?.length
-            )
+            ),
+            openedServerWritePaths
           );
         }
-        if (canAnswerNow() && looksLikeProseAnswer(raw)) {
+        if (action !== "locate" && canAnswerNow() && looksLikeProseAnswer(raw)) {
           return this.finishWithAnswer(
             { steps, context, answer: raw.trim() },
             query,
@@ -528,7 +809,8 @@ export class AgentOrchestrator {
             action,
             options,
             conversation,
-            true
+            true,
+            openedServerWritePaths
           );
         }
         const block = vendorBlock();
@@ -538,7 +820,11 @@ export class AgentOrchestrator {
             : canAnswerNow()
               ? 'Reply {"done":true} so the next turn can answer the user, or call another allowed tool.'
               : allowedRepoTools
-                ? "Reply with a tool JSON call. You have not read an implementation of the named symbol or role — do not answer yet."
+                ? isApiRejectAsk(query)
+                  ? requiresWriteSiteAndReject && contextHasWriteReject(context, query) && !contextHasStateWriteSite(context)
+                    ? "Reply with tool JSON: search_code or read_file. The reject is attached, but the compound ask also needs the server-side state write/update site."
+                    : rejectGatherNudge()
+                  : "Reply with a tool JSON call. You have not read an implementation of the named symbol or role — do not answer yet."
                 : "Reply with a vendor Search or Open JSON call."
         });
         conversation.push({ role: "assistant", content: raw.slice(0, 2000) });
@@ -553,7 +839,11 @@ export class AgentOrchestrator {
             error:
               block ??
               (allowedRepoTools
-                ? "Do not finish yet. You have not read an implementation of the named symbol or role. Call search_code or read_file on a different path — do not answer from a mention, UI, test, or form."
+                ? isApiRejectAsk(query)
+                  ? requiresWriteSiteAndReject && contextHasWriteReject(context, query) && !contextHasStateWriteSite(context)
+                    ? "Do not finish yet. The reject is attached, but the compound ask also needs the server-side state write/update site. Call search_code or read_file."
+                    : "Do not finish yet. Attach a write-reject for the asked field (ValidationError / raise / reject) — call search_code or read_file. preferredHits come first."
+                  : "Do not finish yet. You have not read an implementation of the named symbol or role. Call search_code or read_file on a different path — do not answer from a mention, UI, test, or form."
                 : "Do not finish yet. Search, then Open chosen ids (or retry Search once if empty).")
           });
           conversation.push({ role: "assistant", content: '{"done":true}' });
@@ -584,6 +874,78 @@ export class AgentOrchestrator {
         }
       }
 
+      // Reject: consume preferredHits / attachable snippets before another search spray.
+      if (
+        plan.tool === "search_code" &&
+        isApiRejectAsk(query) &&
+        !contextHasVerifiedFieldBehavior(context, query)
+      ) {
+        const preferred = [...searchPreferredHits(context), ...searchRawHits(context)];
+        const actionablePreferred = [
+          ...new Map(
+            preferred
+              .filter(
+                (hit) =>
+                  isFailOpenRejectHit(hit, query) || isRejectJumpCandidatePath(hit.fileName)
+              )
+              .map((hit) => [
+                `${normalizeHuntPath(hit.fileName)}:${hit.lineNumber ?? 0}`,
+                hit
+              ])
+          ).values()
+        ];
+        const attachable = this.findAttachableRejectHit(
+          [...this.rejectHitLedger, ...actionablePreferred, ...searchRawHits(context)],
+          query
+        );
+        if (attachable) {
+          const attached = await this.readFirstMatchingHit(
+            repoId,
+            query,
+            [attachable],
+            emit,
+            context,
+            conversation
+          );
+          if (attached.ok) {
+            matchingRead = true;
+            filesRead += 1;
+            lastToolResult = attached.raw;
+            rejectSearchStreak = 0;
+            if (shouldStopAfterRejectAttach()) {
+              break;
+            }
+            continue;
+          }
+        }
+        if (actionablePreferred.length > 0 && filesRead < AGENT_MAX_FILES_READ) {
+          const opened = await this.readFirstMatchingHit(
+            repoId,
+            query,
+            actionablePreferred,
+            emit,
+            context,
+            conversation
+          );
+          if (opened.ok) {
+            matchingRead = true;
+            filesRead += 1;
+            lastToolResult = opened.raw;
+            rejectSearchStreak = 0;
+            if (contextHasVerifiedFieldBehavior(context, query)) {
+              if (shouldStopAfterRejectAttach()) {
+                break;
+              }
+              continue;
+            }
+          }
+          // Actionable preferred exhausted without reject — allow a new search.
+        }
+        if (rejectSearchStreak >= MAX_REJECT_SEARCH_STREAK) {
+          break;
+        }
+      }
+
       if (plan.tool === "read_file") {
         if (filesRead >= AGENT_MAX_FILES_READ) {
           break;
@@ -600,8 +962,20 @@ export class AgentOrchestrator {
       const args = this.prepareToolArgs(plan.tool, plan.args, repoId, query, {
         callerSearch: matchingRead && wantsCallerRead() && !callerRead ? groundedExport : undefined
       });
+      if (plan.tool === "search_code" && typeof args.query === "string" &&
+          [...triedSearchQueries].some((used) => used.toLowerCase() === (args.query as string).toLowerCase())) {
+        lastToolResult = JSON.stringify({
+          error: "This query was already searched in this turn. Repeating it will not establish the requested operation. Choose a different identifier or error phrase from the observed source, or read a different candidate.",
+          query: args.query,
+          verifiedFileOutlines: (context.search_code as Record<string, unknown> | undefined)?.verifiedFileOutlines
+        });
+        conversation.push({ role: "assistant", content: JSON.stringify({ tool: plan.tool, args }) });
+        conversation.push({ role: "user", content: lastToolResult });
+        continue;
+      }
+      const gatheringWriteSite = requiresWriteSiteAndReject && contextHasVerifiedFieldBehavior(context, query) && !contextHasStateWriteSite(context);
       if (plan.tool === "read_file") {
-        this.applyPreferredReadWindow(args, context);
+        if (!gatheringWriteSite) this.applyPreferredReadWindow(args, context);
         const path = typeof args.path === "string" ? args.path : "";
         if (shouldSkipEvidencePath(path, query)) {
           lastToolResult = JSON.stringify({
@@ -634,7 +1008,9 @@ export class AgentOrchestrator {
       }
 
       if (plan.tool === "read_file") {
-        let judged = this.judgeReadResult(rawResult, query, args);
+        let judged = gatheringWriteSite && readFilePayloadHasBody(rawResult)
+          ? { raw: rawResult, matchesSymbol: true }
+          : this.judgeReadResult(rawResult, query, args);
         if (!judged.matchesSymbol) {
           const retried = await this.retryReadWithoutWindow(args, repoId, query);
           if (retried) {
@@ -644,19 +1020,51 @@ export class AgentOrchestrator {
         }
         rawResult = judged.raw;
         const path = typeof args.path === "string" ? args.path : "";
-        if (isApiRejectAsk(query) && path) {
+        if (isApiRejectAsk(query) || isBackendStateLocateAsk(query)) {
+          const body = readFileBodies(rawResult);
+          diagnostic?.({
+            stage: "read",
+            round,
+            repoId,
+            path,
+            requestedStartLine: args.startLine,
+            requestedEndLine: args.endLine,
+            hasRemoteBody: readFilePayloadHasBody(rawResult),
+            bodyLines: body ? body.split(/\r?\n/).length : 0,
+            acceptedByReadGate: judged.matchesSymbol,
+            locateVerdict: isDefinitionLocateAsk(query)
+              ? classifyLocateRead({ path, body, query })
+              : undefined,
+            rejectMatch: isApiRejectAsk(query)
+              ? contentLooksLikeAskedFieldReject(body, query, path)
+              : undefined,
+            skipNote: (() => {
+              try {
+                const parsed = JSON.parse(rawResult) as { skipNote?: unknown; error?: unknown };
+                return typeof parsed.skipNote === "string"
+                  ? parsed.skipNote.slice(0, 180)
+                  : typeof parsed.error === "string"
+                    ? parsed.error.slice(0, 180)
+                    : undefined;
+              } catch {
+                return undefined;
+              }
+            })()
+          });
+        }
+        if (isApiRejectAsk(query) && path && !gatheringWriteSite) {
+          if (isRejectJumpCandidatePath(path)) {
+            openedServerWritePaths.add(normalizeHuntPath(path));
+          }
           const jumped = await this.loadWriteRejectWindow(repoId, path, query);
           if (jumped) {
             rawResult = jumped.raw;
             args.startLine = jumped.startLine;
             args.endLine = jumped.endLine;
             judged = { raw: jumped.raw, matchesSymbol: true };
+            rejectSearchStreak = 0;
           } else if (!contentLooksLikeAskedFieldReject(readFileBodies(rawResult), query, path)) {
-            rawResult = JSON.stringify({
-              path,
-              skipNote:
-                "This snippet does not write or reject the asked field. Search a serializer validate() or ValidationError."
-            });
+            // Keep body for finish jump — do not wipe with skipNote while unused.
             judged = { raw: rawResult, matchesSymbol: false };
           }
         }
@@ -687,7 +1095,7 @@ export class AgentOrchestrator {
           if (!implementationPath && path) {
             implementationPath = path;
           }
-          if (!groundedExport) {
+          if (!groundedExport && !gatheringWriteSite) {
             const captured = await this.captureGroundedExport(
               path,
               rawResult,
@@ -726,8 +1134,16 @@ export class AgentOrchestrator {
           // do not treat it as definition evidence.
           this.mergeContext(context, plan.tool, rawResult);
         }
-        if (isApiRejectAsk(query) && contextHasWriteReject(context, query)) {
-          break;
+        if (isApiRejectAsk(query) && contextHasVerifiedFieldBehavior(context, query)) {
+          if (gatheringWriteSite) {
+            conversation.push({ role: "assistant", content: JSON.stringify({ tool: plan.tool, args }) });
+            conversation.push({ role: "user", content: rawResult });
+            emit({ index: steps.length, tool: "read_file", summary: `read_file: ${path} (write-site candidate)`, completed: true });
+          }
+          if (shouldStopAfterRejectAttach()) {
+            break;
+          }
+          continue;
         }
       } else {
         const rankQuery =
@@ -738,8 +1154,30 @@ export class AgentOrchestrator {
           groundedExport
             ? groundedExport
             : query;
-        rawResult =
-          plan.tool === "search_code" ? this.decorateToolResult(plan.tool, rawResult, rankQuery) : rawResult;
+        if (plan.tool === "search_code") {
+          const rawSearch = this.parseSearchDiagnostic(rawResult);
+          rawResult = this.decorateToolResult(plan.tool, rawResult, rankQuery);
+          const decoratedSearch = this.parseSearchDiagnostic(rawResult);
+          if (isApiRejectAsk(query) || isBackendStateLocateAsk(query)) {
+            diagnostic?.({
+              stage: "search",
+              round,
+              repoId,
+              query: typeof args.query === "string" ? args.query.slice(0, 180) : "",
+              source: rawSearch.source,
+              stale: rawSearch.stale,
+              codeHostFallbackAttempted: rawSearch.codeHostFallbackAttempted,
+              codeHostFallback: rawSearch.codeHostFallback,
+              codeHostFallbackStatus: rawSearch.codeHostFallbackStatus,
+              filenameFallbackStatus: rawSearch.filenameFallbackStatus,
+              rawHitCount: rawSearch.hits.length,
+              rawSymbolCount: rawSearch.symbols.length,
+              rawHits: rawSearch.hits.slice(0, 12),
+              preferredHits: decoratedSearch.preferredHits.slice(0, 8),
+              modelVisibleHits: decoratedSearch.hits.slice(0, 8)
+            });
+          }
+        }
         this.mergeContext(context, plan.tool, rawResult);
       }
 
@@ -763,7 +1201,72 @@ export class AgentOrchestrator {
         if (used) {
           triedSearchQueries.add(used);
         }
-        if (!hits.length) {
+        if (isApiRejectAsk(query)) {
+          rejectSearchStreak += 1;
+          this.recordRejectHitLedger(
+            [...hits, ...((parsed.hits as SearchHit[] | undefined) ?? [])],
+            query
+          );
+        }
+        // Reject: if the Zoekt snippet already IS the write-reject, attach it now.
+        // Live dogfood: 10 searches / 0 reads when body fetch failed or auto-read
+        // never opened preferredHits — the index already had the raise line.
+        // Multi-hit: also attach a new sibling path while ask job is still unmatched.
+        if (
+          isApiRejectAsk(query) &&
+          (!contextHasVerifiedFieldBehavior(context, query) || wantsMoreRejectSiblings())
+        ) {
+          const snippetHits = [
+            ...this.rejectHitLedger,
+            ...hits,
+            ...((parsed.hits as SearchHit[] | undefined) ?? [])
+          ];
+          const attached = await this.attachRejectFromSearchHits(
+            repoId,
+            snippetHits,
+            query,
+            emit,
+            context,
+            conversation,
+            new Set(attachedReadPaths(context).map((path) => normalizeHuntPath(path)))
+          );
+          if (attached.ok) {
+            matchingRead = true;
+            filesRead += 1;
+            lastToolResult = attached.raw;
+            rejectSearchStreak = 0;
+            if (shouldStopAfterRejectAttach()) {
+              break;
+            }
+            continue;
+          }
+        }
+        // A server serializer hit can be actionable by path even when Zoekt
+        // returned only a class/import line. Consume that path now so the
+        // model cannot overwrite it with another search first.
+        if (isApiRejectAsk(query) && !contextHasVerifiedFieldBehavior(context, query)) {
+          const beforeReads = (context.read_file as ReadFilePayload | undefined)?.files?.length ?? 0;
+          await this.resolveUnusedRejectEvidence(
+            repoId,
+            query,
+            emit,
+            context,
+            conversation,
+            openedServerWritePaths,
+            false
+          );
+          const afterReads = (context.read_file as ReadFilePayload | undefined)?.files?.length ?? 0;
+          if (contextHasVerifiedFieldBehavior(context, query)) {
+            matchingRead = true;
+            filesRead += Math.max(1, afterReads - beforeReads);
+            lastToolResult = JSON.stringify(context.read_file);
+            if (shouldStopAfterRejectAttach()) {
+              break;
+            }
+            continue;
+          }
+        }
+        if (!hits.length && !isApiRejectAsk(query)) {
           const found = await this.searchUntilReadableHits(
             repoId,
             query,
@@ -777,21 +1280,36 @@ export class AgentOrchestrator {
             conversation[conversation.length - 1] = { role: "user", content: lastToolResult };
           }
         }
+        // Reject: preferHits emptied by decorate — still try raw hits for auto-read,
+        // but never restore error_codes / UI noise (live Fail class).
+        if (isApiRejectAsk(query) && !hits.length && Array.isArray(parsed.hits)) {
+          hits = parsed.hits.filter(
+            (hit) =>
+              Boolean(hit.fileName) &&
+              !shouldSkipEvidencePath(hit.fileName, query) &&
+              (isFailOpenRejectHit(hit, query) || isRejectJumpCandidatePath(hit.fileName))
+          );
+        }
         const huntingCallers = matchingRead && wantsCallerRead() && !callerRead;
         const roleHints = queryRoleHints(query);
         const autoReadHits =
           huntingCallers
             ? hits
-            : roleHints.length > 0
-              ? hits.filter((hit) =>
-                  textMentionsQueryRoles(`${hit.fileName}\n${hit.content ?? ""}`, query)
-                )
-              : hits;
+            : isApiRejectAsk(query)
+              ? hits.filter((hit) => !shouldSkipEvidencePath(hit.fileName, query))
+              : roleHints.length > 0
+                ? hits.filter((hit) =>
+                    textMentionsQueryRoles(`${hit.fileName}\n${hit.content ?? ""}`, query)
+                  )
+                : hits;
         if (
           autoReadHits.length > 0 &&
           filesRead < AGENT_MAX_FILES_READ &&
-          (!matchingRead || huntingCallers)
+          (!matchingRead || huntingCallers || wantsMoreRejectSiblings())
         ) {
+          const skippedAttached = wantsMoreRejectSiblings()
+            ? new Set(attachedReadPaths(context).map((path) => normalizeHuntPath(path)))
+            : undefined;
           const seeded = await this.readFirstMatchingHit(
             repoId,
             query,
@@ -799,14 +1317,16 @@ export class AgentOrchestrator {
             emit,
             context,
             conversation,
-            undefined,
+            skippedAttached,
             huntingCallers,
             groundedExport,
-            implementationPath
+            implementationPath,
+            diagnostic
           );
           if (seeded.ok) {
             filesRead += 1;
             lastToolResult = seeded.raw;
+            rejectSearchStreak = 0;
             if (!matchingRead) {
               matchingRead = true;
               if (!implementationPath && seeded.path) {
@@ -848,10 +1368,16 @@ export class AgentOrchestrator {
                 callerRead = true;
               }
             }
-            if (isApiRejectAsk(query) && contextHasWriteReject(context, query)) {
-              break;
+            if (isApiRejectAsk(query) && contextHasVerifiedFieldBehavior(context, query)) {
+              if (shouldStopAfterRejectAttach()) {
+                break;
+              }
+              continue;
             }
           }
+        }
+        if (isApiRejectAsk(query) && rejectSearchStreak >= MAX_REJECT_SEARCH_STREAK) {
+          break;
         }
       }
       if (plan.tool === "propose_patch") {
@@ -864,15 +1390,25 @@ export class AgentOrchestrator {
 
     if (allowedRepoTools && filesRead < AGENT_MAX_FILES_READ) {
       if (!matchingRead) {
-        const grounded = await this.lastChanceReadMatchingHit(
-          repoId,
-          query,
-          emit,
-          context,
-          conversation,
-          false,
-          triedSearchQueries
-        );
+        // Reject asks: do not resurrect the slogan scavenger via lastChance.
+        // Preferred hits + finish jump rail are enough; agent owns further gather.
+        const grounded = isApiRejectAsk(query)
+          ? await this.lastChancePreferredHitsOnly(
+              repoId,
+              query,
+              emit,
+              context,
+              conversation
+            )
+          : await this.lastChanceReadMatchingHit(
+              repoId,
+              query,
+              emit,
+              context,
+              conversation,
+              false,
+              triedSearchQueries
+            );
         if (grounded.ok) {
           matchingRead = true;
           filesRead += 1;
@@ -963,6 +1499,27 @@ export class AgentOrchestrator {
       });
     }
 
+    // Right file, wrong floor: never emit reject-miss while a preferred
+    // serializer/server-write path was opened (or preferred) without a jump.
+    if (
+      isApiRejectAsk(query) &&
+      action !== "change" &&
+      !contextHasVerifiedFieldBehavior(context, query)
+    ) {
+      await this.resolveUnusedRejectEvidence(
+        repoId,
+        query,
+        emit,
+        context,
+        conversation,
+        openedServerWritePaths,
+        false
+      );
+      if (contextHasVerifiedFieldBehavior(context, query)) {
+        matchingRead = true;
+      }
+    }
+
     return this.finishWithAnswer(
       { steps, context },
       query,
@@ -970,7 +1527,8 @@ export class AgentOrchestrator {
       action,
       options,
       conversation,
-      matchingRead
+      matchingRead,
+      openedServerWritePaths
     );
   }
 
@@ -1043,19 +1601,96 @@ export class AgentOrchestrator {
     action: NonNullable<AgentSessionRequest["action"]>,
     options: AgentRunOptions,
     conversation?: AgentConversationMessage[],
-    matchingRead = false
+    matchingRead = false,
+    openedServerWritePaths: Set<string> = new Set()
   ): Promise<AgentSessionResult> {
+    const requiresWriteSiteAndReject =
+      requiresStateWriteAndReject(query, options.intentBrief);
+    const hasRequiredRejectEvidence = (): boolean =>
+      contextHasVerifiedFieldBehavior(result.context, query) &&
+      (!requiresWriteSiteAndReject || (contextHasWriteReject(result.context, query) && contextHasStateWriteSite(result.context)));
+    if (requiresWriteSiteAndReject && contextHasWriteReject(result.context, query) && !contextHasStateWriteSite(result.context)) {
+      const files = remoteReadEvidenceFiles((result.context?.read_file as ReadFilePayload | undefined)?.files);
+      for (const file of files) {
+        if (!file.path || !contentLooksLikeAskedFieldReject(stripReadLinePrefixes(file.content ?? ""), query, file.path)) continue;
+        // The opened guard already fetched this entire remote file into the
+        // turn cache. Retain its same-class update implementation without
+        // spending another planning round on a truncated window.
+        const remote = await this.ctx.readRemoteFile?.({ path: file.path, repoId });
+        const window = remote?.content && sameClassSerializerUpdateWindow(remote.content, stripReadLinePrefixes(file.content ?? ""));
+        if (!window) continue;
+        const raw = JSON.stringify({ path: file.path, files: [{ path: file.path,
+          content: numberReadLines(window.content, window.startLine), evidenceSource: "remote-read" }] });
+        this.replaceReadFileAttach(result.context!, conversation, file.path, raw, window);
+        const step: AgentStep = { index: result.steps.length, tool: "read_file", completed: true,
+          summary: `read_file verified update from opened remote body: ${file.path}:${window.startLine}-${window.endLine}` };
+        result.steps.push(step);
+        options.onStep?.(step, [...result.steps]);
+        break;
+      }
+    }
     if (isApiRejectAsk(query)) {
-      pruneContextToWriteReject(result.context, query);
+      // Miss forbidden while unused reject evidence remains — attach / jump first.
+      if (!contextHasVerifiedFieldBehavior(result.context, query) && action !== "change") {
+        const emit: (step: AgentStep) => void = (step) => {
+          result.steps.push({ ...step, index: result.steps.length });
+          options.onStep?.(step, [...result.steps]);
+        };
+        const ctx = (result.context ?? {}) as AgentSessionContext;
+        result.context = ctx;
+        await this.resolveUnusedRejectEvidence(
+          repoId,
+          query,
+          emit,
+          ctx,
+          conversation,
+          openedServerWritePaths,
+          typeof options.planTurn !== "function"
+        );
+      }
+      if (!requiresWriteSiteAndReject) {
+        pruneContextToWriteReject(result.context, query);
+      }
       conversation = compactApiRejectConversation(query, result.context);
-      if (!contextHasWriteReject(result.context, query)) {
+      conversation.push({ role: "user", content: "Explain only the checks and persistence/delegation shown in attached source. If the complete attached method filters the submitted field instead of raising the assumed error, correct that premise and describe the shown filter; do not claim that no other validation can fail or that no rejection exists elsewhere. Distinguish the observed validation from any policy the question assumes but the source does not establish. Copy any code excerpt verbatim with its attached line numbers; do not invent an equivalent implementation." });
+      const files = (result.context?.read_file as ReadFilePayload | undefined)?.files ?? [];
+      if (!hasRequiredRejectEvidence()) {
         matchingRead = false;
         if (action !== "change") {
+          const answer = requiresWriteSiteAndReject && contextHasWriteReject(result.context, query) && !contextHasStateWriteSite(result.context)
+            ? "I found the server-side state rejection, but not the state write/update site, so I can’t answer both parts from attached evidence."
+            : requiresWriteSiteAndReject && contextHasVerifiedFieldBehavior(result.context, query)
+              ? "I found source-backed field handling, but it does not establish the claimed rejection, so I can’t answer both parts from the attached evidence."
+              : apiRejectHuntMiss(result.steps);
           return {
             ...result,
-            answer: API_REJECT_HUNT_MISS,
+            answer,
             context: result.steps.length ? result.context : undefined
           };
+        }
+      } else {
+        matchingRead = true;
+        if (action === "locate" && requiresWriteSiteAndReject && !this.contextHasIntegrationHits(result.context)) {
+          for (const file of remoteReadEvidenceFiles(files)) {
+            if (!file.path || !contentLooksLikeAskedFieldReject(file.content ?? "", query, file.path)) continue;
+            const remote = await this.ctx.readRemoteFile?.({ path: file.path, repoId });
+            if (!remote?.content) continue;
+            const guard = completePythonRejectWindow(remote.content, query, file.path);
+            const update = guard && sameClassSerializerUpdateWindow(remote.content, guard.content);
+            if (!guard || !update) continue;
+            const cite = (window: { content: string; startLine: number; endLine: number }): string =>
+              `\`\`\`python ${file.path}:${window.startLine}-${window.endLine}\n${window.content}\n\`\`\``;
+            return { ...result, answer: `The opened serializer rejects the submitted state in this guard:\n\n${cite(guard)}\n\nAccepted updates delegate to \`super().update(instance, validated_data)\` in the same class:\n\n${cite(update)}\n\nThis establishes the shown validation and update delegation. A policy for the specific transition described remains unverified.`, context: result.context };
+          }
+        }
+        if (action === "locate" && !requiresWriteSiteAndReject && !contextHasWriteReject(result.context, query) && !this.contextHasIntegrationHits(result.context)) {
+          for (const file of files) {
+            const source = { path: file.path, content: file.content, evidenceSource: file.evidenceSource };
+            const handling = verifiedFieldHandlingEvidence(source, query);
+            if (handling) {
+              return { ...result, answer: formatVerifiedFieldHandlingAnswer(source, handling), context: result.context };
+            }
+          }
         }
       }
     }
@@ -1067,7 +1702,20 @@ export class AgentOrchestrator {
     if (isCreateLocateAsk(query)) {
       matchingRead = contextHasCreateDefinition(result.context);
     }
-    const history =
+    if (
+      (isBackendStateLocateAsk(query) || isParserLocateAsk(query)) &&
+      !contextHasGroundedLocateRead(result.context, query)
+    ) {
+      return {
+        ...result,
+        answer: INDEX_HUNT_MISS,
+        context: result.steps.length ? result.context : undefined
+      };
+    }
+    const history = action === "locate" && !isShipCheckQuery(query) && !this.contextHasIntegrationHits(result.context)
+      ? [...compactApiRejectConversation(query, result.context), { role: "user" as const,
+          content: "Answer only from the opened remote source above. Search snippets and planning guesses are discovery leads, not source evidence. Cite only opened paths and copy code verbatim with its attached line numbers." }]
+      :
       conversation && conversation.length > 0
         ? conversation
         : this.conversationFromContext(query, result);
@@ -1124,7 +1772,7 @@ export class AgentOrchestrator {
       const artifacts = listOpenedIntegrationArtifacts(result.context);
       let interpretNotes: string | undefined;
       if (artifacts.length > 0 && options.interpretOpens && !options.signal?.aborted) {
-        interpretNotes = await options.interpretOpens(artifacts);
+        interpretNotes = await gatherRequest(this.ctx, "integration-interpret", () => options.interpretOpens!(artifacts), undefined);
       }
       const historyForAnswer = filledHistory ?? history;
       if (
@@ -1140,6 +1788,7 @@ export class AgentOrchestrator {
             "Cite the attached create / auth / state definition evidence. Do not ask the user to open a path you already read."
         });
       }
+      options.onDiagnostic?.({ stage: "synthesis-start" });
       const answer = await options.streamAnswer({
         message: query,
         repoId,
@@ -1374,7 +2023,7 @@ export class AgentOrchestrator {
   ): { raw: string; matchesSymbol: boolean } {
     const needsNamed = queryHasNamedSymbol(query);
     const needsRole = queryRoleHints(query).length > 0;
-    if (!needsNamed && !needsRole) {
+    if (!needsNamed && !needsRole && !isParserLocateAsk(query)) {
       return { raw, matchesSymbol: true };
     }
     try {
@@ -1459,6 +2108,15 @@ export class AgentOrchestrator {
       return { steps, context };
     }
 
+    // Fail-open reject path when planTurn is missing: small seed, not 12 slogans.
+    if (isApiRejectAsk(query)) {
+      const hunted = await this.huntWriteReject(repoId, query, emit, context);
+      if (hunted) {
+        return { steps, context };
+      }
+      return { steps, context };
+    }
+
     const found = await this.searchUntilReadableHits(repoId, query, emit, context);
     if (!found || steps.length >= maxSteps) {
       return { steps, context };
@@ -1493,7 +2151,8 @@ export class AgentOrchestrator {
     skippedPaths?: Set<string>,
     preferCallerHits = false,
     groundedExport?: string,
-    implementationPath?: string
+    implementationPath?: string,
+    diagnostic?: AgentRunOptions["onDiagnostic"]
   ): Promise<{ ok: boolean; raw?: string; path?: string }> {
     const implementationKey = implementationPath ? normalizeHuntPath(implementationPath) : "";
     for (const hit of hits) {
@@ -1554,9 +2213,66 @@ export class AgentOrchestrator {
         }
       }
       if (!readFilePayloadHasBody(readRaw)) {
+        diagnostic?.({
+          stage: "candidate-read",
+          repoId,
+          path: hit.fileName,
+          line: hit.lineNumber,
+          result: "empty-body",
+          windowStart: startLine,
+          windowEnd: endLine
+        });
+        // Retain the snippet for an honest explanation, but keep looking for a
+        // remotely readable sibling; the snippet cannot satisfy the evidence gate.
+        if (
+          isApiRejectAsk(query) &&
+          hit.content &&
+          contentLooksLikeAskedFieldReject(hit.content, query, hit.fileName)
+        ) {
+          const attached = this.attachRejectSnippetPayload(
+            hit.fileName,
+            hit.content,
+            hit.lineNumber,
+            query,
+            emit,
+            context,
+            conversation
+          );
+          if (attached.ok) {
+            skippedPaths?.add(pathKey);
+          }
+        }
+        emit({
+          index: 0,
+          tool: "read_file",
+          summary: `read_file failed (empty body): ${hit.fileName}`,
+          completed: true
+        });
         continue;
       }
+      // Field-behavior hunts verify the full remote method before locate-only gates.
+      // A filtering implementation need not contain rejection keywords.
+      if (isApiRejectAsk(query)) {
+        const verifiedField = await this.readWriteRejectInSameFile(repoId, hit.fileName, query, emit, context, conversation);
+        if (verifiedField.ok) return verifiedField;
+      }
       const verdict = classifyLocateRead({ path: hit.fileName, body, query });
+      if (isDefinitionLocateAsk(query) || isApiRejectAsk(query)) {
+        diagnostic?.({
+          stage: "candidate-read",
+          repoId,
+          path: hit.fileName,
+          line: hit.lineNumber,
+          result: verdict,
+          bodyLines: body.split(/\r?\n/).length,
+          bodyChars: body.length,
+          rejectMatch: isApiRejectAsk(query)
+            ? contentLooksLikeAskedFieldReject(body, query, hit.fileName)
+            : undefined,
+          windowStart: startLine,
+          windowEnd: endLine
+        });
+      }
       if (preferCallerHits && !shipCheckRippleBody(body, query, groundedExport)) {
         skippedPaths?.add(pathKey);
         emit({
@@ -1591,18 +2307,25 @@ export class AgentOrchestrator {
         continue;
       }
       if (isApiRejectAsk(query)) {
-        const jumped = await this.readWriteRejectInSameFile(
-          repoId,
-          hit.fileName,
-          query,
-          emit,
-          context,
-          conversation
-        );
-        if (jumped.ok) {
-          return jumped;
-        }
         if (!contentLooksLikeAskedFieldReject(body, query, hit.fileName)) {
+          // Wrong-body / wrong-floor: hit snippet may already be the reject.
+          if (
+            hit.content &&
+            contentLooksLikeAskedFieldReject(hit.content, query, hit.fileName)
+          ) {
+            const attached = this.attachRejectSnippetPayload(
+              hit.fileName,
+              hit.content,
+              hit.lineNumber,
+              query,
+              emit,
+              context,
+              conversation
+            );
+            if (attached.ok) {
+              return attached;
+            }
+          }
           skippedPaths?.add(pathKey);
           emit({
             index: 0,
@@ -1683,6 +2406,67 @@ export class AgentOrchestrator {
     return { ok: false };
   }
 
+  private parseSearchDiagnostic(raw: string): {
+    source?: string;
+    stale?: boolean;
+    codeHostFallbackAttempted?: boolean;
+    codeHostFallback?: boolean;
+    codeHostFallbackStatus?: string;
+    filenameFallbackStatus?: string;
+    hits: Array<{ path: string; line: number; score?: number }>;
+    preferredHits: Array<{ path: string; line: number; score?: number }>;
+    symbols: Array<{ path: string; line: number; symbol?: string }>;
+  } {
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const summarizeHits = (value: unknown) =>
+        (Array.isArray(value) ? value : [])
+          .flatMap((item) => {
+            if (!item || typeof item !== "object") return [];
+            const hit = item as Record<string, unknown>;
+            const path = typeof hit.fileName === "string" ? hit.fileName : "";
+            if (!path) return [];
+            return [{
+              path,
+              line: Number.isInteger(hit.lineNumber) ? Number(hit.lineNumber) : 0,
+              ...(typeof hit.score === "number" ? { score: hit.score } : {})
+            }];
+          });
+      const symbols = (Array.isArray(parsed.symbols) ? parsed.symbols : [])
+        .flatMap((item) => {
+          if (!item || typeof item !== "object") return [];
+          const symbol = item as Record<string, unknown>;
+          const path = typeof symbol.file === "string" ? symbol.file : "";
+          if (!path) return [];
+          return [{
+            path,
+            line: Number.isInteger(symbol.line) ? Number(symbol.line) : 0,
+            ...(typeof symbol.symbol === "string" ? { symbol: symbol.symbol } : {})
+          }];
+        });
+      return {
+        source: typeof parsed.source === "string" ? parsed.source : undefined,
+        stale: typeof parsed.stale === "boolean" ? parsed.stale : undefined,
+        codeHostFallbackAttempted:
+          typeof parsed.codeHostFallbackAttempted === "boolean"
+            ? parsed.codeHostFallbackAttempted
+            : undefined,
+        codeHostFallback:
+          typeof parsed.codeHostFallback === "boolean" ? parsed.codeHostFallback : undefined,
+        codeHostFallbackStatus:
+          typeof parsed.codeHostFallbackStatus === "string"
+            ? parsed.codeHostFallbackStatus
+            : undefined,
+        hits: summarizeHits(parsed.hits),
+        filenameFallbackStatus: typeof parsed.filenameFallbackStatus === "string" ? parsed.filenameFallbackStatus : undefined,
+        preferredHits: summarizeHits(parsed.preferredHits),
+        symbols
+      };
+    } catch {
+      return { hits: [], preferredHits: [], symbols: [] };
+    }
+  }
+
   /**
    * A definition window (L10–17) is not proof there are no callers. Re-read the
    * whole file; same-file `extractBearerToken(` at L77 counts.
@@ -1727,6 +2511,37 @@ export class AgentOrchestrator {
    * Preferred hits existed but were never opened, or named-symbol searches missed
    * an OR role phrase. Read a matching hit before INDEX_HUNT_MISS or vendor fill.
    */
+  /**
+   * Reject fail-open: open preferred hits already in context — no new slogan
+   * search parade (that was the script brain).
+   */
+  private async lastChancePreferredHitsOnly(
+    repoId: string,
+    query: string,
+    emit: (step: AgentStep) => void,
+    context: AgentSessionContext,
+    conversation?: AgentConversationMessage[]
+  ): Promise<{ ok: boolean; raw?: string; path?: string }> {
+    const parsed = context.search_code as (SearchPayload & { preferredHits?: SearchHit[] }) | undefined;
+    const preferred = parsed?.preferredHits ?? [];
+    const rawHits = (parsed?.hits as SearchHit[] | undefined) ?? [];
+    const allHits = [...this.rejectHitLedger, ...preferred, ...rawHits];
+    if (isApiRejectAsk(query) && !contextHasVerifiedFieldBehavior(context, query)) {
+      const attached = await this.attachRejectFromSearchHits(repoId, allHits, query, emit, context, conversation);
+      if (attached.ok) {
+        return attached;
+      }
+    }
+    let hits = preferred.filter((hit) => Boolean(hit.fileName));
+    if (!hits.length && isApiRejectAsk(query)) {
+      hits = allHits.filter((hit) => hit.fileName && isFailOpenRejectHit(hit, query));
+    }
+    if (!hits.length) {
+      return { ok: false };
+    }
+    return this.readFirstMatchingHit(repoId, query, hits, emit, context, conversation);
+  }
+
   private async lastChanceReadMatchingHit(
     repoId: string,
     query: string,
@@ -1831,6 +2646,8 @@ export class AgentOrchestrator {
   /**
    * C2: the index hit is often a read-only serializer class in the same file as
    * `validate()` / ValidationError. Open the file and jump to that line.
+   * Right-file-wrong-floor: if the asked-field reject exists anywhere in the
+   * body, always jump before abandoning the path.
    */
   private async loadWriteRejectWindow(
     repoId: string,
@@ -1843,18 +2660,60 @@ export class AgentOrchestrator {
     }
     const parsed = JSON.parse(fullRaw) as ReadFilePayload;
     const body = (parsed.files ?? []).map((file) => file.content).join("\n");
-    const line = lineNumberOfWriteReject(body, query, filePath);
-    if (!line) {
-      return undefined;
+    let line = lineNumberOfWriteReject(body, query, filePath);
+    if (!line && contentLooksLikeAskedFieldReject(body, query, filePath)) {
+      line = lineNumberOfAnyWriteReject(body);
     }
-    const jumped = await this.readWindowAroundLine(repoId, filePath, line);
+    if (!line) {
+      const handling = (parsed.files ?? []).map((file) => verifiedFieldHandlingEvidence({
+        path: file.path ?? filePath, content: file.content ?? "", evidenceSource: file.evidenceSource
+      }, query)).find(Boolean);
+      if (!handling) return undefined;
+      const raw = await this.executeTool("read_file", {
+        path: filePath, repoId, startLine: handling.startLine, endLine: handling.endLine
+      });
+      const files = (JSON.parse(raw) as ReadFilePayload).files ?? [];
+      if (!files.some((file) => verifiedFieldHandlingEvidence({ path: file.path ?? filePath,
+        content: file.content ?? "", evidenceSource: file.evidenceSource }, query))) return undefined;
+      return { raw, startLine: handling.startLine, endLine: handling.endLine };
+    }
+    let jumped = await this.readWindowAroundLine(repoId, filePath, line);
     if (!jumped) {
       return undefined;
     }
-    const windowBody = (JSON.parse(jumped.raw) as ReadFilePayload).files
+    let windowBody = (JSON.parse(jumped.raw) as ReadFilePayload).files
       ?.map((file) => file.content)
       .join("\n");
     if (!windowBody || !contentLooksLikeAskedFieldReject(windowBody, query, filePath)) {
+      // Narrow window missed the field tokens — widen once around the same line.
+      const wideStart = Math.max(1, line - READ_LINE_PADDING * 2);
+      const wideEnd = line + READ_LINE_PADDING * 2;
+      try {
+        const wideRaw = await this.executeTool("read_file", {
+          path: filePath,
+          repoId,
+          startLine: wideStart,
+          endLine: wideEnd
+        });
+        if (readFilePayloadHasBody(wideRaw)) {
+          windowBody = (JSON.parse(wideRaw) as ReadFilePayload).files
+            ?.map((file) => file.content)
+            .join("\n");
+          if (windowBody && contentLooksLikeAskedFieldReject(windowBody, query, filePath)) {
+            return { raw: wideRaw, startLine: wideStart, endLine: wideEnd };
+          }
+        }
+      } catch {
+        /* fall through */
+      }
+      // Full body already proven — attach it rather than miss after opening the right file.
+      if (contentLooksLikeAskedFieldReject(body, query, filePath)) {
+        return {
+          raw: fullRaw,
+          startLine: 1,
+          endLine: Math.max(1, body.split("\n").length)
+        };
+      }
       return undefined;
     }
     return jumped;
@@ -2065,17 +2924,719 @@ export class AgentOrchestrator {
     emit({
       index: 0,
       tool: "read_file",
-      summary: `read_file: ${filePath} (validate/reject)`,
+      summary: `read_file: ${filePath} (field validation)`,
       completed: true
     });
     return { ok: true, raw: jumped.raw };
   }
 
   /**
-   * C2: do not stop at the first ranked hit list. OpenAPI and read-only
-   * classes often fill preferredHits; keep searching until a body actually
-   * rejects/writes, then answer from that window only.
-   * One pass: never re-search a query, never re-read a path already proven not a reject.
+   * Miss-forbidden contract: resolve unused snippet attach or jump before canned miss.
+   * Live Fail: wrong opens (__init__.py / urls) must not burn the jump loop and
+   * skip ask-derived invent — invent always runs if still no write-reject.
+   */
+  private async resolveUnusedRejectEvidence(
+    repoId: string,
+    query: string,
+    emit: (step: AgentStep) => void,
+    context: AgentSessionContext,
+    conversation: AgentConversationMessage[] | undefined,
+    openedServerWritePaths: Set<string>,
+    allowLastChanceSearch = true
+  ): Promise<void> {
+    const dropJumpPath = (path: string): void => {
+      const key = normalizeHuntPath(path);
+      openedServerWritePaths.delete(key);
+      this.rejectJumpPathLedger.delete(key);
+    };
+
+    for (let guard = 0; guard < 6; guard++) {
+      if (contextHasVerifiedFieldBehavior(context, query)) {
+        return;
+      }
+      const unused = this.unusedRejectEvidence(context, query, openedServerWritePaths);
+      if (!unused) {
+        break;
+      }
+      if (unused.kind === "jump" && shouldSkipEvidencePath(unused.path, query)) {
+        dropJumpPath(unused.path);
+        continue;
+      }
+      if (unused.kind === "snippet") {
+        const attached = this.attachRejectSnippetPayload(
+          unused.path,
+          unused.content,
+          unused.lineNumber,
+          query,
+          emit,
+          context,
+          conversation
+        );
+        if (attached.ok) {
+          return;
+        }
+        this.rejectHitLedger = this.rejectHitLedger.filter(
+          (entry) =>
+            !(
+              normalizeHuntPath(entry.fileName) === normalizeHuntPath(unused.path) &&
+              entry.content === unused.content
+            )
+        );
+        continue;
+      }
+      const jumped = await this.readWriteRejectInSameFile(
+        repoId,
+        unused.path,
+        query,
+        emit,
+        context,
+        conversation
+      );
+      if (jumped.ok) {
+        return;
+      }
+      dropJumpPath(unused.path);
+    }
+
+    // Finish is an evidence rail, not another gather brain. The agent loop
+    // owns searches; deterministic no-planTurn fallback gathers before finish.
+    if (contextHasVerifiedFieldBehavior(context, query)) {
+      return;
+    }
+    // Bounded fail-open recovery only after the ledger and every known write
+    // path were consumed. This is not the old multi-query scavenger loop.
+    if (!allowLastChanceSearch) {
+      return;
+    }
+    const quoteSearched = await this.lastChanceAskedRejectQuoteSearch(
+      repoId,
+      query,
+      emit,
+      context,
+      conversation,
+      openedServerWritePaths
+    );
+    if (quoteSearched || contextHasVerifiedFieldBehavior(context, query)) {
+      return;
+    }
+    await this.lastChanceRejectInventedSymbolSearch(
+      repoId,
+      query,
+      emit,
+      context,
+      conversation,
+      openedServerWritePaths
+    );
+  }
+
+  /**
+   * Before canned miss: one search with the Exact asked error quote (rails fail-open).
+   * sanitize used to rewrite these to get("parent") — never leave that as the only try.
+   */
+  private async lastChanceAskedRejectQuoteSearch(
+    repoId: string,
+    query: string,
+    emit: (step: AgentStep) => void,
+    context: AgentSessionContext,
+    conversation: AgentConversationMessage[] | undefined,
+    openedServerWritePaths: Set<string>
+  ): Promise<boolean> {
+    if (contextHasVerifiedFieldBehavior(context, query)) {
+      return false;
+    }
+    const quotes = askedRejectErrorQuotes(query);
+    const candidates = [
+      ...quotes,
+      ...askedRejectFieldTokens(query)
+        .filter((field) => !field.endsWith("_id") || field === "parent_id")
+        .slice(0, 1)
+        .map((field) => {
+          const stem = field.replace(/_id$/i, "");
+          return `${stem} is not valid`;
+        })
+    ].filter(Boolean);
+    for (const raw of candidates) {
+      const searchQuery = sanitizeAgentSearchQuery(raw, query);
+      const key = searchQuery.toLowerCase();
+      if (!searchQuery || this.rejectQuoteLastChanceTried.has(key)) {
+        continue;
+      }
+      this.rejectQuoteLastChanceTried.add(key);
+      try {
+        const searchRaw = await this.executeTool("search_code", { query: searchQuery, repoId });
+        const decorated = this.decorateToolResult("search_code", searchRaw, query);
+        this.mergeContext(context, "search_code", decorated);
+        conversation?.push({
+          role: "assistant",
+          content: JSON.stringify({ tool: "search_code", args: { query: searchQuery } })
+        });
+        conversation?.push({ role: "user", content: decorated });
+        emit({
+          index: 0,
+          tool: "search_code",
+          summary: `search_code: ${truncateSummary(searchQuery)} (reject quote)`,
+          completed: true
+        });
+        const parsed = JSON.parse(decorated) as SearchPayload & { preferredHits?: SearchHit[] };
+        const allHits = [
+          ...(parsed.preferredHits ?? []),
+          ...((parsed.hits as SearchHit[] | undefined) ?? [])
+        ];
+        this.recordRejectHitLedger(allHits, query);
+        const attached = await this.attachRejectFromSearchHits(
+          repoId,
+          allHits,
+          query,
+          emit,
+          context,
+          conversation
+        );
+        if (attached.ok) {
+          return true;
+        }
+        for (const hit of allHits) {
+          if (hit.fileName && isRejectJumpCandidatePath(hit.fileName)) {
+            openedServerWritePaths.add(normalizeHuntPath(hit.fileName));
+          }
+        }
+        if (allHits.some((hit) => hit.fileName && isFailOpenRejectHit(hit, query))) {
+          const opened = await this.readFirstMatchingHit(
+            repoId,
+            query,
+            allHits.filter((hit) => hit.fileName && isFailOpenRejectHit(hit, query)),
+            emit,
+            context,
+            conversation
+          );
+          if (opened.ok && contextHasVerifiedFieldBehavior(context, query)) {
+            return true;
+          }
+        }
+        return this.unusedRejectEvidence(context, query, openedServerWritePaths) !== null;
+      } catch {
+        continue;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Live Fail (Parent): Exact quote absent from Lightning; codehost empty/403;
+   * agent sprayed quote variants then done. Before canned miss, search ≤2
+   * ask-derived symbols (IssueCreateSerializer from issue+create, validate_*)
+   * and attach if the asked quote/reject is in the body.
+   *
+   * Live Fail (2026-09-30 14:03): invent opened draft.py twin first and froze.
+   * Prefer job-matching paths (create/update in path/class); only keep a weak
+   * twin if no stronger site appears after ranked candidates.
+   */
+  private async lastChanceRejectInventedSymbolSearch(
+    repoId: string,
+    query: string,
+    emit: (step: AgentStep) => void,
+    context: AgentSessionContext,
+    conversation: AgentConversationMessage[] | undefined,
+    openedServerWritePaths: Set<string>
+  ): Promise<boolean> {
+    if (this.rejectInventLastChanceTried || contextHasVerifiedFieldBehavior(context, query)) {
+      return false;
+    }
+    this.rejectInventLastChanceTried = true;
+    const seeds = inventRejectSymbolSearchCriteria(query).slice(0, 2);
+    if (seeds.length === 0) {
+      return false;
+    }
+
+    const tryAttachFromBody = async (
+      filePath: string,
+      content: string
+    ): Promise<"strong" | "weak" | "none"> => {
+      if (shouldSkipEvidencePath(filePath, query)) {
+        return "none";
+      }
+      if (
+        !contentIncludesAskedRejectQuote(content, query) &&
+        !contentLooksLikeAskedFieldReject(content, query, filePath)
+      ) {
+        return "none";
+      }
+      const quotes = askedRejectErrorQuotes(query);
+      const match =
+        (quotes[0] ? findQueryMatchLine(content, quotes[0]) : undefined) ??
+        (() => {
+          const line = lineNumberOfWriteReject(content, query, filePath);
+          if (!line) {
+            return undefined;
+          }
+          const rows = content.split(/\r?\n/);
+          return { lineNumber: line, content: rows[line - 1] ?? "" };
+        })();
+      if (!match) {
+        return "none";
+      }
+      const weak = isWeakRejectTwinForAsk(filePath, content, query);
+      if (weak) {
+        return "weak";
+      }
+      const attached = this.attachRejectSnippetPayload(
+        filePath,
+        match.content,
+        match.lineNumber,
+        query,
+        emit,
+        context,
+        conversation
+      );
+      if (attached.ok) {
+        openedServerWritePaths.add(normalizeHuntPath(filePath));
+        return "strong";
+      }
+      const jumped = await this.readWriteRejectInSameFile(
+        repoId,
+        filePath,
+        query,
+        emit,
+        context,
+        conversation
+      );
+      if (jumped.ok) {
+        openedServerWritePaths.add(normalizeHuntPath(filePath));
+        return rejectEvidenceMatchesAskJob(
+          remoteReadEvidenceFiles((context.read_file as ReadFilePayload | undefined)?.files),
+          query
+        )
+          ? "strong"
+          : "weak";
+      }
+      return "none";
+    };
+
+    let weakCandidate: { path: string; content: string; lineNumber: number } | undefined;
+
+    for (const seed of seeds) {
+      const key = seed.toLowerCase();
+      if (this.rejectQuoteLastChanceTried.has(key)) {
+        continue;
+      }
+      this.rejectQuoteLastChanceTried.add(key);
+      try {
+        const searchRaw = await this.executeTool("search_code", { query: seed, repoId });
+        const decorated = this.decorateToolResult("search_code", searchRaw, query);
+        this.mergeContext(context, "search_code", decorated);
+        conversation?.push({
+          role: "assistant",
+          content: JSON.stringify({ tool: "search_code", args: { query: seed } })
+        });
+        conversation?.push({ role: "user", content: decorated });
+        emit({
+          index: 0,
+          tool: "search_code",
+          summary: `search_code: ${truncateSummary(seed)} (reject invent)`,
+          completed: true
+        });
+        const parsed = JSON.parse(decorated) as SearchPayload & {
+          preferredHits?: SearchHit[];
+          symbols?: Array<{ file?: string; path?: string }>;
+        };
+        const allHits = [
+          ...(parsed.preferredHits ?? []),
+          ...((parsed.hits as SearchHit[] | undefined) ?? [])
+        ];
+        this.recordRejectHitLedger(allHits, query);
+
+        // Attach from snippets only when the hit is job-strong — never freeze on draft twin.
+        const strongHits = [...allHits]
+          .filter(
+            (hit) =>
+              hit.fileName &&
+              !shouldSkipEvidencePath(hit.fileName, query) &&
+              !isWeakRejectTwinForAsk(hit.fileName, hit.content ?? "", query)
+          )
+          .sort(
+            (a, b) =>
+              scoreRejectPathForAskJob(b.fileName ?? "", b.content ?? "", query) -
+              scoreRejectPathForAskJob(a.fileName ?? "", a.content ?? "", query)
+          );
+        const attached = await this.attachRejectFromSearchHits(
+          repoId,
+          strongHits,
+          query,
+          emit,
+          context,
+          conversation
+        );
+        if (
+          attached.ok &&
+          rejectEvidenceMatchesAskJob(
+            remoteReadEvidenceFiles((context.read_file as ReadFilePayload | undefined)?.files),
+            query
+          )
+        ) {
+          return true;
+        }
+
+        // Remember weak snippet twins; attach only if nothing stronger appears.
+        for (const hit of allHits) {
+          if (
+            !hit.fileName ||
+            !hit.content?.trim() ||
+            shouldSkipEvidencePath(hit.fileName, query)
+          ) {
+            continue;
+          }
+          if (
+            isWeakRejectTwinForAsk(hit.fileName, hit.content, query) &&
+            contentLooksLikeAskedFieldReject(hit.content, query, hit.fileName)
+          ) {
+            if (
+              !weakCandidate ||
+              scoreRejectPathForAskJob(hit.fileName, hit.content, query) >
+                scoreRejectPathForAskJob(
+                  weakCandidate.path,
+                  weakCandidate.content,
+                  query
+                )
+            ) {
+              weakCandidate = {
+                path: hit.fileName,
+                content: hit.content,
+                lineNumber: hit.lineNumber ?? 1
+              };
+            }
+          }
+        }
+
+        const pathScores = new Map<string, number>();
+        const rememberPath = (filePath: string, content = ""): void => {
+          if (!filePath || shouldSkipEvidencePath(filePath, query)) {
+            return;
+          }
+          const score = Math.max(
+            pathScores.get(normalizeHuntPath(filePath)) ?? -999,
+            scoreRejectPathForAskJob(filePath, content, query),
+            rejectInventPathRank(filePath, query)
+          );
+          pathScores.set(normalizeHuntPath(filePath), score);
+          if (isRejectJumpCandidatePath(filePath)) {
+            openedServerWritePaths.add(normalizeHuntPath(filePath));
+          }
+        };
+        for (const hit of allHits) {
+          if (hit.fileName) {
+            rememberPath(hit.fileName, hit.content ?? "");
+          }
+        }
+        for (const sym of parsed.symbols ?? []) {
+          const file = (sym.file ?? (sym as { path?: string }).path)?.trim();
+          if (file) {
+            rememberPath(file);
+          }
+        }
+
+        const rankedPaths = [...pathScores.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([pathKey]) => {
+            const hit = allHits.find(
+              (entry) => normalizeHuntPath(entry.fileName ?? "") === pathKey
+            );
+            return hit?.fileName ?? pathKey;
+          })
+          .slice(0, 4);
+
+        for (const filePath of rankedPaths) {
+          const file = await this.ctx.readRemoteFile?.({ path: filePath, repoId });
+          if (!file?.content?.trim()) {
+            continue;
+          }
+          emit({
+            index: 0,
+            tool: "read_file",
+            summary: `read_file: ${filePath} (reject invent)`,
+            completed: true
+          });
+          const result = await tryAttachFromBody(filePath, file.content);
+          if (result === "strong") {
+            return true;
+          }
+          if (result === "weak") {
+            const quotes = askedRejectErrorQuotes(query);
+            const match =
+              (quotes[0] ? findQueryMatchLine(file.content, quotes[0]) : undefined) ??
+              (() => {
+                const line = lineNumberOfWriteReject(file.content, query, filePath);
+                if (!line) {
+                  return undefined;
+                }
+                const rows = file.content.split(/\r?\n/);
+                return { lineNumber: line, content: rows[line - 1] ?? "" };
+              })();
+            if (match) {
+              weakCandidate = {
+                path: filePath,
+                content: match.content,
+                lineNumber: match.lineNumber
+              };
+            }
+            // Live: IssueCreateSerializer invent ranked draft.py — follow imports / peer issue.py.
+            for (const related of relatedSerializerPathsFromWeakTwin(
+              filePath,
+              file.content,
+              query
+            )) {
+              if (shouldSkipEvidencePath(related, query)) {
+                continue;
+              }
+              if (normalizeHuntPath(related) === normalizeHuntPath(filePath)) {
+                continue;
+              }
+              const relatedFile = await this.ctx.readRemoteFile?.({
+                path: related,
+                repoId
+              });
+              if (!relatedFile?.content?.trim()) {
+                continue;
+              }
+              emit({
+                index: 0,
+                tool: "read_file",
+                summary: `read_file: ${related} (reject invent related)`,
+                completed: true
+              });
+              const relatedResult = await tryAttachFromBody(related, relatedFile.content);
+              if (relatedResult === "strong") {
+                return true;
+              }
+            }
+          }
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    // Before settling on a weak twin: open it and follow related create/update peers.
+    if (weakCandidate && !contextHasVerifiedFieldBehavior(context, query)) {
+      const weakBody =
+        (
+          await this.ctx.readRemoteFile?.({ path: weakCandidate.path, repoId })
+        )?.content ?? weakCandidate.content;
+      for (const related of relatedSerializerPathsFromWeakTwin(
+        weakCandidate.path,
+        weakBody,
+        query
+      )) {
+        if (shouldSkipEvidencePath(related, query)) {
+          continue;
+        }
+        const relatedFile = await this.ctx.readRemoteFile?.({ path: related, repoId });
+        if (!relatedFile?.content?.trim()) {
+          continue;
+        }
+        emit({
+          index: 0,
+          tool: "read_file",
+          summary: `read_file: ${related} (reject invent related)`,
+          completed: true
+        });
+        if ((await tryAttachFromBody(related, relatedFile.content)) === "strong") {
+          return true;
+        }
+      }
+    }
+
+    // No create/update site — honest partial: attach best weak twin if any.
+    if (weakCandidate && !contextHasVerifiedFieldBehavior(context, query)) {
+      const attached = this.attachRejectSnippetPayload(
+        weakCandidate.path,
+        weakCandidate.content,
+        weakCandidate.lineNumber,
+        query,
+        emit,
+        context,
+        conversation
+      );
+      return attached.ok;
+    }
+    return contextHasVerifiedFieldBehavior(context, query);
+  }
+
+  private unusedRejectEvidence(
+    context: AgentSessionContext | undefined,
+    query: string,
+    openedServerWritePaths: Set<string>
+  ): UnusedRejectEvidence | null {
+    if (!context || contextHasVerifiedFieldBehavior(context, query)) {
+      return null;
+    }
+    const attachable = this.findAttachableRejectHit(
+      [
+        ...this.rejectHitLedger,
+        ...searchPreferredHits(context),
+        ...searchRawHits(context)
+      ],
+      query
+    );
+    if (attachable) {
+      return {
+        kind: "snippet",
+        path: attachable.fileName,
+        content: attachable.content,
+        lineNumber: attachable.lineNumber
+      };
+    }
+    const candidates = collectRejectJumpCandidates(
+      context,
+      openedServerWritePaths,
+      this.rejectJumpPathLedger
+    );
+    for (const path of candidates) {
+      return { kind: "jump", path };
+    }
+    return null;
+  }
+
+  private findAttachableRejectHit(
+    hits: Array<{ fileName?: string; content?: string; lineNumber?: number }>,
+    query: string
+  ): RejectHitLedgerEntry | undefined {
+    const seen = new Set<string>();
+    for (const hit of hits) {
+      if (!hit.fileName || !hit.content?.trim()) {
+        continue;
+      }
+      const key = `${normalizeHuntPath(hit.fileName)}::${hit.content.slice(0, 120)}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      if (shouldSkipEvidencePath(hit.fileName, query)) {
+        continue;
+      }
+      if (!contentLooksLikeAskedFieldReject(hit.content, query, hit.fileName)) {
+        continue;
+      }
+      return {
+        fileName: hit.fileName,
+        content: hit.content,
+        lineNumber: Number.isInteger(hit.lineNumber) && (hit.lineNumber as number) >= 1
+          ? (hit.lineNumber as number)
+          : 1
+      };
+    }
+    return undefined;
+  }
+
+  private recordRejectHitLedger(hits: SearchHit[], query: string): void {
+    for (const hit of hits) {
+      if (!hit.fileName) {
+        continue;
+      }
+      if (shouldSkipEvidencePath(hit.fileName, query)) {
+        continue;
+      }
+      if (isRejectJumpCandidatePath(hit.fileName)) {
+        this.rejectJumpPathLedger.add(normalizeHuntPath(hit.fileName));
+      }
+      if (!hit.content?.trim()) {
+        continue;
+      }
+      if (!contentLooksLikeAskedFieldReject(hit.content, query, hit.fileName)) {
+        continue;
+      }
+      const key = normalizeHuntPath(hit.fileName);
+      if (this.rejectHitLedger.some((entry) => normalizeHuntPath(entry.fileName) === key)) {
+        continue;
+      }
+      this.rejectHitLedger.push({
+        fileName: hit.fileName,
+        content: hit.content,
+        lineNumber: hit.lineNumber ?? 1
+      });
+      if (this.rejectHitLedger.length > MAX_REJECT_HIT_LEDGER) {
+        this.rejectHitLedger.shift();
+      }
+    }
+  }
+
+  /** Open ranked reject candidates remotely; index-only excerpts never satisfy evidence. */
+  private async attachRejectFromSearchHits(
+    repoId: string,
+    hits: SearchHit[],
+    query: string,
+    emit: (step: AgentStep) => void,
+    context: AgentSessionContext,
+    conversation?: AgentConversationMessage[],
+    skipPaths?: Set<string>
+  ): Promise<{ ok: boolean; raw?: string; path?: string }> {
+    const seen = new Set<string>();
+    const candidates: SearchHit[] = [];
+    for (const hit of hits) {
+      if (!hit.fileName || !hit.content?.trim()) {
+        continue;
+      }
+      const key = normalizeHuntPath(hit.fileName);
+      if (seen.has(key) || skipPaths?.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      if (shouldSkipEvidencePath(hit.fileName, query)) {
+        continue;
+      }
+      if (!contentLooksLikeAskedFieldReject(hit.content, query, hit.fileName)) {
+        continue;
+      }
+      candidates.push(hit);
+    }
+    return this.readFirstMatchingHit(
+      repoId,
+      query,
+      candidates,
+      emit,
+      context,
+      conversation,
+      skipPaths
+    );
+  }
+
+  private attachRejectSnippetPayload(
+    filePath: string,
+    content: string,
+    lineNumber: number,
+    query: string,
+    emit: (step: AgentStep) => void,
+    context: AgentSessionContext,
+    conversation?: AgentConversationMessage[]
+  ): { ok: boolean; raw?: string; path?: string } {
+    const start = Number.isInteger(lineNumber) && lineNumber >= 1 ? lineNumber : 1;
+    const numbered = content
+      .split("\n")
+      .map((row, index) => `${start + index}|${row.replace(/^\d+\|/, "")}`)
+      .join("\n");
+    if (!contentLooksLikeAskedFieldReject(numbered, query, filePath)) {
+      return { ok: false };
+    }
+    const raw = JSON.stringify({
+      path: filePath,
+      startLine: start,
+      files: [{ path: filePath, content: numbered, evidenceSource: "search-snippet" }]
+    });
+    this.mergeContext(context, "read_file", raw);
+    conversation?.push({
+      role: "user",
+      content: `Search-result snippet only (not an opened remote file): ${filePath}:${start}\n${numbered}`
+    });
+    emit({
+      index: 0,
+      tool: "read_file",
+      summary: `search snippet only (not remotely verified): ${filePath}`,
+      completed: true
+    });
+    return { ok: true, raw, path: filePath };
+  }
+
+  /**
+   * Fail-open / no-planTurn only: small deterministic seed (≤4), not the
+   * 12-slogan scavenger. Live path uses planTurn.
    */
   private async huntWriteReject(
     repoId: string,
@@ -2084,11 +3645,10 @@ export class AgentOrchestrator {
     context: AgentSessionContext,
     conversation?: AgentConversationMessage[]
   ): Promise<boolean> {
-    const cap = isApiRejectAsk(query) ? MAX_API_REJECT_SEARCH_ATTEMPTS : MAX_SEARCH_ATTEMPTS;
     const queries = mergePlannedAgentSearchQueries({
       userMessage: query,
       planned: this.runPlannedSearchQueries,
-      max: cap
+      max: MAX_API_REJECT_SEED_SEARCHES
     });
     const skippedPaths = new Set<string>();
     const triedQueries = new Set<string>();
@@ -2109,12 +3669,33 @@ export class AgentOrchestrator {
           completed: true
         });
         const parsed = JSON.parse(decorated) as SearchPayload & { preferredHits?: SearchHit[] };
-        const toRead = (parsed.preferredHits ?? []).filter((hit) => {
+        const allHits = [
+          ...(parsed.preferredHits ?? []),
+          ...((parsed.hits as SearchHit[] | undefined) ?? [])
+        ];
+        this.recordRejectHitLedger(allHits, query);
+        const attached = await this.attachRejectFromSearchHits(repoId, allHits, query, emit, context, conversation);
+        if (attached.ok && contextHasVerifiedFieldBehavior(context, query)) {
+          return true;
+        }
+        let toRead = (parsed.preferredHits ?? []).filter((hit) => {
           if (!hit.fileName) {
+            return false;
+          }
+          if (shouldSkipEvidencePath(hit.fileName, query)) {
             return false;
           }
           return !skippedPaths.has(normalizeHuntPath(hit.fileName));
         });
+        if (!toRead.length) {
+          toRead = allHits.filter(
+            (hit) =>
+              hit.fileName &&
+              !shouldSkipEvidencePath(hit.fileName, query) &&
+              !skippedPaths.has(normalizeHuntPath(hit.fileName)) &&
+              isFailOpenRejectHit(hit, query)
+          );
+        }
         if (!toRead.length) {
           continue;
         }
@@ -2127,7 +3708,7 @@ export class AgentOrchestrator {
           conversation,
           skippedPaths
         );
-        if (opened.ok && contextHasWriteReject(context, query)) {
+        if (opened.ok && contextHasVerifiedFieldBehavior(context, query)) {
           return true;
         }
       } catch {
@@ -2258,6 +3839,7 @@ export class AgentOrchestrator {
       if (!parsed.hits?.length && !parsed.symbols?.length) {
         return raw;
       }
+      const originalHits = [...(parsed.hits ?? [])];
       // A symbol is a declaration site with a real line; a text hit is only a
       // mention. For "where is X defined", read the declaration first.
       const definitions = pickSymbolHitsToRead(parsed.symbols ?? [], 2, userMessage);
@@ -2269,11 +3851,42 @@ export class AgentOrchestrator {
           preferred.push(hit);
         }
       }
+      // Reject: never discard every hit — empty preferredHits → 10 searches / 0 reads.
+      // Also: preferred may be non-empty UI/noise while originalHits still hold the reject
+      // fragment — inject asked-field / fail-open hits so attach can see them.
+      if (isApiRejectAsk(userMessage)) {
+        const hasAskedField = preferred.some((hit) =>
+          contentLooksLikeAskedFieldReject(hit.content ?? "", userMessage, hit.fileName)
+        );
+        if (preferred.length === 0 || !hasAskedField) {
+          for (const hit of originalHits) {
+            if (!hit.fileName || preferred.some((seen) => seen.fileName === hit.fileName)) {
+              continue;
+            }
+            if (!isFailOpenRejectHit(hit, userMessage)) {
+              continue;
+            }
+            // Prefer inject when asked-field / quote-overlap; else only if preferred empty.
+            const asked = contentLooksLikeAskedFieldReject(
+              hit.content ?? "",
+              userMessage,
+              hit.fileName
+            );
+            if (!asked && preferred.length > 0) {
+              continue;
+            }
+            preferred.unshift(hit);
+            if (preferred.length >= 5) {
+              break;
+            }
+          }
+        }
+      }
       parsed.preferredHits = preferred.slice(0, 5);
       // Drop near-miss symbols/hits from model context — otherwise synthesis
       // invents patches for test_all_endpoints_require_authentication.
       parsed.symbols = definitions;
-      parsed.hits = textHits;
+      parsed.hits = preferred.length > 0 ? preferred : textHits;
       parsed.skipNote = preferred.length
         ? definitions.length
           ? "preferredHits starts with declaration sites from the symbol index — read those lines, not the top of the file."
@@ -2304,11 +3917,11 @@ export class AgentOrchestrator {
     }
     const prev = context.read_file as ReadFilePayload | undefined;
     const keptFiles = (prev?.files ?? []).filter(
-      (file) => !sameHuntPath(file.path ?? "", path)
+      (file) => this.preserveCompoundWriteEvidence || !sameHuntPath(file.path ?? "", path)
     );
     const incoming = (next.files ?? []).filter(
       (file) => !file.path || sameHuntPath(file.path, path)
-    );
+    ).map((file) => ({ ...file, evidenceSource: file.evidenceSource ?? "remote-read" as const }));
     context.read_file = { ...next, files: [...keptFiles, ...incoming] };
     if (!conversation) {
       return;
@@ -2316,13 +3929,13 @@ export class AgentOrchestrator {
     const keptMessages: AgentConversationMessage[] = [];
     for (let i = 0; i < conversation.length; i++) {
       const msg = conversation[i];
-      if (msg.role === "assistant" && messageIsReadFileOfPath(msg.content, path)) {
+      if (!this.preserveCompoundWriteEvidence && msg.role === "assistant" && messageIsReadFileOfPath(msg.content, path)) {
         if (conversation[i + 1]?.role === "user") {
           i += 1;
         }
         continue;
       }
-      if (msg.role === "user" && payloadIsReadFileOfPath(msg.content, path)) {
+      if (!this.preserveCompoundWriteEvidence && msg.role === "user" && payloadIsReadFileOfPath(msg.content, path)) {
         continue;
       }
       keptMessages.push(msg);
@@ -2351,6 +3964,10 @@ export class AgentOrchestrator {
     if (tool === "read_file") {
       const prev = context.read_file as ReadFilePayload | undefined;
       const next = parsed as ReadFilePayload;
+      next.files = (next.files ?? []).map((file) => ({
+        ...file,
+        evidenceSource: file.evidenceSource ?? "remote-read"
+      }));
       const files = [...(prev?.files ?? []), ...(next.files ?? [])];
       context.read_file = { ...next, files };
       return;
@@ -2455,14 +4072,129 @@ function readFileContextHasBody(context: AgentSessionContext | undefined): boole
   return files.some((file) => Boolean(file.content?.trim()));
 }
 
+function contextHasVerifiedFieldBehavior(context: AgentSessionContext | undefined, query: string): boolean {
+  return contextHasWriteReject(context, query) || ((context?.read_file as ReadFilePayload | undefined)?.files ?? [])
+    .some((file) => Boolean(verifiedFieldHandlingEvidence({ path: file.path ?? "", content: file.content ?? "", evidenceSource: file.evidenceSource }, query)));
+}
+
 function contextHasWriteReject(
   context: AgentSessionContext | undefined,
   query: string
 ): boolean {
-  const files = (context?.read_file as ReadFilePayload | undefined)?.files ?? [];
+  const files = remoteReadEvidenceFiles(
+    (context?.read_file as ReadFilePayload | undefined)?.files
+  );
   return files.some((file) =>
     contentLooksLikeAskedFieldReject(file.content ?? "", query, file.path ?? "")
   );
+}
+
+function requiresStateWriteAndReject(query: string, intentBrief?: string): boolean {
+  return (intentBrief?.includes("evidence=write-site") === true && intentBrief.includes("evidence=write-reject")) ||
+    (isApiRejectAsk(query) && /\bstate\b/i.test(query) && /\b(written|persisted|saved|write|writes|updates?)\b/i.test(query));
+}
+
+function contextHasStateWriteSite(context: AgentSessionContext | undefined): boolean {
+  const files = remoteReadEvidenceFiles(
+    (context?.read_file as ReadFilePayload | undefined)?.files
+  );
+  const stateMutation =
+    /(?:\.\s*state(?:_id)?\s*=|\[\s*["']state(?:_id)?["']\s*\]\s*=|\bstate(?:_id)?\s*=\s*(?:validated_data|data)\b|\b(?:update|setattr)\s*\([^)]*state(?:_id)?)/i;
+  const bodies = new Map<string, string>();
+  for (const file of files) {
+    const path = file.path ?? "";
+    bodies.set(path, `${bodies.get(path) ?? ""}\n${stripReadLinePrefixes(file.content ?? "")}`);
+  }
+  return [...bodies].some(([path, body]) => {
+    const stateInput = /(?:\.get\(\s*["']state["']|\[\s*["']state["']\s*\])/.exec(body);
+    const updateStart = body.search(/\bdef\s+update\([^)]*validated_data/);
+    const sameClassStateInput = stateInput && updateStart > stateInput.index &&
+      !/^\s*class\s+\w+/m.test(body.slice(stateInput.index, updateStart));
+    return (
+      (isServerWritePath(path) || isMutationHandlerPath(path)) &&
+      (stateMutation.test(body) ||
+        (/\bdef\s+update\([^)]*validated_data/.test(body) &&
+          /\bsuper\(\)\.update\(\s*instance\s*,\s*validated_data\s*\)/.test(body) &&
+          sameClassStateInput))
+    );
+  });
+}
+
+function completePythonRejectWindow(body: string, query: string, path: string): { content: string; startLine: number; endLine: number } | undefined {
+  const line = lineNumberOfWriteReject(body, query, path);
+  if (!line) return undefined;
+  const rows = body.split(/\r?\n/);
+  for (let start = line - 2; start >= Math.max(0, line - 30); start--) {
+    const guard = rows[start]!.match(/^(\s*)(?:if|elif)\b/);
+    if (!guard) continue;
+    let end = line;
+    while (end < rows.length && (!rows[end]!.trim() || rows[end]!.match(/^\s*/)![0].length > guard[1]!.length)) end++;
+    while (end > start + 1 && !rows[end - 1]!.trim()) end--;
+    const content = rows.slice(start, end).join("\n");
+    if (end - start <= 60 && contentLooksLikeAskedFieldReject(content, query, path)) return { content, startLine: start + 1, endLine: end };
+  }
+  return undefined;
+}
+
+function sameClassSerializerUpdateWindow(body: string, guard: string): { content: string; startLine: number; endLine: number } | undefined {
+  const anchor = body.indexOf(guard.trimEnd());
+  if (anchor < 0 || !guard.trim()) return undefined;
+  const rows = body.split(/\r?\n/);
+  const anchorLine = body.slice(0, anchor).split(/\r?\n/).length - 1;
+  let classStart = -1;
+  let classEnd = rows.length;
+  for (let candidate = 0; candidate <= anchorLine; candidate++) {
+    if (!/^\s*class\s+\w+/.test(rows[candidate]!)) continue;
+    const indent = rows[candidate]!.match(/^\s*/)![0].length;
+    let end = rows.length;
+    for (let line = candidate + 1; line < rows.length; line++) {
+      const row = rows[line]!;
+      if (row.trim() && !row.trimStart().startsWith("#") && row.match(/^\s*/)![0].length <= indent) { end = line; break; }
+    }
+    // A nested configuration class before validate has already ended. Choose
+    // the innermost class whose actual indentation scope contains the guard.
+    if (anchorLine < end) { classStart = candidate; classEnd = end; }
+  }
+  if (classStart < 0) return undefined;
+  for (let start = classStart + 1; start < classEnd; start++) {
+    const declaration = rows[start]!.match(/^(\s*)def\s+update\([^)]*\bvalidated_data\b[^)]*\):\s*$/);
+    if (!declaration) continue;
+    let end = start + 1;
+    while (end < classEnd && (!rows[end]!.trim() || rows[end]!.trimStart().startsWith("#") || rows[end]!.match(/^\s*/)![0].length > declaration[1]!.length)) end++;
+    while (end > start + 1 && !rows[end - 1]!.trim()) end--;
+    const content = rows.slice(start, end).join("\n");
+    if (end - start > 200 || /^\s*(?:\.\.\.|…)\s*$/m.test(content) ||
+        !/\breturn\s+super\(\)\.update\(\s*instance\s*,\s*validated_data\s*\)/.test(content)) continue;
+    return { content, startLine: start + 1, endLine: end };
+  }
+  return undefined;
+}
+
+function contextHasGroundedLocateRead(
+  context: AgentSessionContext | undefined,
+  query: string
+): boolean {
+  const files = remoteReadEvidenceFiles(
+    (context?.read_file as ReadFilePayload | undefined)?.files
+  );
+  return files.some((file) =>
+    locateReadCountsAsGrounding({
+      path: file.path ?? "",
+      body: stripReadLinePrefixes(file.content ?? ""),
+      query
+    })
+  );
+}
+
+/** First line that looks like a write/reject raise — used when field-aware scan misses. */
+function lineNumberOfAnyWriteReject(content: string): number | undefined {
+  const rows = content.split("\n").map((row) => row.replace(/^\d+\|/, ""));
+  for (let i = 0; i < rows.length; i++) {
+    if (contentLooksLikeWriteReject(rows[i] ?? "")) {
+      return i + 1;
+    }
+  }
+  return undefined;
 }
 
 function contextHasRequestAuthEnforcement(context: AgentSessionContext | undefined): boolean {
@@ -2489,8 +4221,79 @@ function contextHasCreateDefinition(context: AgentSessionContext | undefined): b
 }
 
 function attachedReadPaths(context: AgentSessionContext | undefined): string[] {
-  const files = (context?.read_file as ReadFilePayload | undefined)?.files ?? [];
+  const files = remoteReadEvidenceFiles(
+    (context?.read_file as ReadFilePayload | undefined)?.files
+  );
   return files.map((file) => file.path ?? "").filter(Boolean);
+}
+
+function remoteReadEvidenceFiles(
+  files: ReadFilePayload["files"]
+): NonNullable<ReadFilePayload["files"]> {
+  return (files ?? []).filter((file) => file.evidenceSource !== "search-snippet");
+}
+
+function isRejectJumpCandidatePath(fileName: string): boolean {
+  if (!fileName.trim()) {
+    return false;
+  }
+  const n = fileName.replace(/\\/g, "/").toLowerCase();
+  return (
+    isServerWritePath(fileName) ||
+    isMutationHandlerPath(fileName) ||
+    /(^|\/)serializers?\//.test(n) ||
+    /\.serializer\.(py|ts|go|rb)$/.test(n)
+  );
+}
+
+function searchPreferredHits(context: AgentSessionContext | undefined): SearchHit[] {
+  const parsed = context?.search_code as (SearchPayload & { preferredHits?: SearchHit[] }) | undefined;
+  return (parsed?.preferredHits ?? []).filter((hit) => Boolean(hit.fileName));
+}
+
+function searchRawHits(context: AgentSessionContext | undefined): SearchHit[] {
+  const parsed = context?.search_code as SearchPayload | undefined;
+  return ((parsed?.hits as SearchHit[] | undefined) ?? []).filter((hit) => Boolean(hit.fileName));
+}
+
+function collectRejectJumpCandidates(
+  context: AgentSessionContext | undefined,
+  openedServerWritePaths: Set<string>,
+  jumpPathLedger: Set<string> = new Set()
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (path: string | undefined) => {
+    if (!path?.trim()) {
+      return;
+    }
+    const key = normalizeHuntPath(path);
+    if (seen.has(key)) {
+      return;
+    }
+    if (
+      !isRejectJumpCandidatePath(path) &&
+      !openedServerWritePaths.has(key) &&
+      !jumpPathLedger.has(key)
+    ) {
+      return;
+    }
+    seen.add(key);
+    out.push(path);
+  };
+  for (const path of openedServerWritePaths) {
+    push(path);
+  }
+  for (const path of jumpPathLedger) {
+    push(path);
+  }
+  for (const path of attachedReadPaths(context)) {
+    push(path);
+  }
+  for (const hit of [...searchPreferredHits(context), ...searchRawHits(context)]) {
+    push(hit.fileName);
+  }
+  return out;
 }
 
 function shipCheckRippleBody(
@@ -2524,7 +4327,10 @@ function pruneContextToWriteReject(context: AgentSessionContext | undefined, que
     return;
   }
   const payload = context.read_file as ReadFilePayload;
-  const files = filterWriteRejectFiles(payload.files ?? [], query);
+  const files = (payload.files ?? []).filter((file) =>
+    filterWriteRejectFiles([file], query).length > 0 || Boolean(verifiedFieldHandlingEvidence({
+      path: file.path ?? "", content: file.content ?? "", evidenceSource: file.evidenceSource
+    }, query)));
   context.read_file = { ...payload, files };
 }
 

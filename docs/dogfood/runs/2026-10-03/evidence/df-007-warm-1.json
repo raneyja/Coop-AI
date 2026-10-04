@@ -1,0 +1,1466 @@
+{
+  "scenario": {
+    "id": "DF-007",
+    "area": "Repository questions",
+    "fixture": "CoopAI-Corp/plane; preview pinned SHA; no chip",
+    "action": "Users can't move a work item out of backlog \u2014 the API returns an error. I don't have this repo cloned. Where is work-item state written, and what rejects a bad transition?",
+    "passCriteria": "Shows verified state writer and validation evidence; distinguishes invalid state from an unverified transition policy.",
+    "modes": [
+      "cold",
+      "warm",
+      "after-repo-switch"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T17:22:13.961029+00:00",
+    "status": "FAIL",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "github:CoopAI-Corp/plane@preview",
+    "action": "Users can't move a work item out of backlog \u2014 the API returns an error. I don't have this repo cloned. Where is work-item state written, and what rejects a bad transition?",
+    "actualResult": "Plane preview no chip; compound write+reject asks returns same canned reject miss, neither actual writer nor validation shown. indexed_map_unavailable seen in current run. No unsupported transition policy asserted, but task incomplete.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-007-warm-1.json",
+    "criteriaReview": "NOT_ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": 9005,
+    "durationMs": 9005,
+    "threadId": "thread-1791048108245-7g86dr"
+  },
+  "diagnosticEvents": [
+    {
+      "at": "2026-10-03T17:21:55.497Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 225,
+      "stage": "target",
+      "repoId": "github:CoopAI-Corp/plane",
+      "requestedBranch": "preview",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:55.497Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 225,
+      "stage": "turn",
+      "repoId": "github:CoopAI-Corp/plane",
+      "action": "locate",
+      "hunt": "api-reject",
+      "taskQuery": "Users can't move a work item out of backlog \u2014 the API returns an error. I don't have this repo cloned. Where is work-item state written, and what rejects a bad transition?",
+      "plannedSearchQueries": [
+        "work item state"
+      ],
+      "requiredEvidence": []
+    },
+    {
+      "at": "2026-10-03T17:21:56.344Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 1072,
+      "stage": "plan",
+      "round": 0,
+      "result": "call",
+      "tool": "search_code",
+      "query": "validate_state",
+      "forcedFirstRejectSearch": true
+    },
+    {
+      "at": "2026-10-03T17:21:56.606Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 1334,
+      "stage": "index-search-start",
+      "query": "validate_state",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:57.484Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 2212,
+      "stage": "index-search",
+      "query": "validate_state",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 878,
+      "hitCount": 18,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "packages/types/src/intake/index.ts",
+          "line": 1,
+          "score": 0.4567368881737359
+        },
+        {
+          "path": "apps/web/core/hooks/store/use-project-state.ts",
+          "line": 1,
+          "score": 0.4278857212614131
+        },
+        {
+          "path": "apps/space/hooks/store/use-state.ts",
+          "line": 1,
+          "score": 0.4241093935810294
+        },
+        {
+          "path": "apps/web/core/components/project-states/create-update/update.tsx",
+          "line": 1,
+          "score": 0.4172724402775041
+        },
+        {
+          "path": "packages/constants/src/event-tracker/core.ts",
+          "line": 12,
+          "score": 0.4162696800687522
+        },
+        {
+          "path": "apps/web/core/components/project-states/options/delete.tsx",
+          "line": 1,
+          "score": 0.4009514178449063
+        },
+        {
+          "path": "packages/editor/src/core/hooks/use-yjs-setup.ts",
+          "line": 7,
+          "score": 0.4008833146721348
+        },
+        {
+          "path": "apps/web/core/components/project-states/create-update/create.tsx",
+          "line": 1,
+          "score": 0.3961992966096316
+        },
+        {
+          "path": "packages/utils/src/work-item/state.ts",
+          "line": 1,
+          "score": 0.3957281927117714
+        },
+        {
+          "path": "packages/i18n/src/locales/zh-CN/workflow.json",
+          "line": 2,
+          "score": 0.3955276574201929
+        },
+        {
+          "path": "packages/propel/src/input/input.stories.tsx",
+          "line": 19,
+          "score": 0.3911654591105529
+        },
+        {
+          "path": "apps/web/core/components/project-states/state-delete-modal.tsx",
+          "line": 1,
+          "score": 0.38504103154579716
+        },
+        {
+          "path": "apps/web/core/components/project-states/group-item.tsx",
+          "line": 2,
+          "score": 0.38471610647049104
+        },
+        {
+          "path": "apps/web/core/components/project-states/state-item.tsx",
+          "line": 3,
+          "score": 0.3845590217313577
+        },
+        {
+          "path": "packages/i18n/src/locales/en/project-settings.json",
+          "line": 6,
+          "score": 0.3813035253066448
+        },
+        {
+          "path": "apps/web/core/components/automation/auto-close-automation.tsx",
+          "line": 4,
+          "score": 0.38065867167793976
+        },
+        {
+          "path": "apps/space/components/issues/issue-layouts/properties/state.tsx",
+          "line": 1,
+          "score": 0.37414196600665994
+        },
+        {
+          "path": "apps/web/core/components/settings/profile/content/pages/notifications/email-notification-form.tsx",
+          "line": 2,
+          "score": 0.37300840509626454
+        }
+      ],
+      "symbols": [],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:57.485Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 2213,
+      "stage": "index-search-start",
+      "query": "Users can't move a work item out of backlog \u2014 the API returns an error. I don't have this repo cloned. Where is work-item state written, and what rejects a bad transition?",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:58.126Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 2854,
+      "stage": "index-search",
+      "query": "Users can't move a work item out of backlog \u2014 the API returns an error. I don't have this repo cloned. Where is work-item state written, and what rejects a bad transition?",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 641,
+      "hitCount": 18,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "packages/i18n/src/locales/en/workflow.json",
+          "line": 1,
+          "score": 0.532445603813894
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item.json",
+          "line": 5,
+          "score": 0.4853144117130367
+        },
+        {
+          "path": "packages/i18n/src/locales/es/workflow.json",
+          "line": 1,
+          "score": 0.4738554335046201
+        },
+        {
+          "path": "apps/web/core/components/inbox/content/issue-root.tsx",
+          "line": 2,
+          "score": 0.4708584110216135
+        },
+        {
+          "path": "packages/i18n/src/locales/ru/workflow.json",
+          "line": 1,
+          "score": 0.4707500005051972
+        },
+        {
+          "path": "packages/i18n/src/locales/pt-BR/workflow.json",
+          "line": 1,
+          "score": 0.4705875235104784
+        },
+        {
+          "path": "packages/i18n/src/locales/fr/workflow.json",
+          "line": 1,
+          "score": 0.4618230833068563
+        },
+        {
+          "path": "packages/i18n/src/locales/de/workflow.json",
+          "line": 1,
+          "score": 0.46113352760264825
+        },
+        {
+          "path": "packages/i18n/src/locales/en/inbox.json",
+          "line": 1,
+          "score": 0.4604052623804573
+        },
+        {
+          "path": "packages/i18n/src/locales/cs/workflow.json",
+          "line": 1,
+          "score": 0.4593457307156297
+        },
+        {
+          "path": "packages/i18n/src/locales/id/workflow.json",
+          "line": 1,
+          "score": 0.4559386329037902
+        },
+        {
+          "path": "packages/i18n/src/locales/it/workflow.json",
+          "line": 1,
+          "score": 0.4545157896356007
+        },
+        {
+          "path": "packages/i18n/src/locales/ja/workflow.json",
+          "line": 1,
+          "score": 0.45167172575737646
+        },
+        {
+          "path": "packages/i18n/src/locales/sk/workflow.json",
+          "line": 1,
+          "score": 0.4511733419192434
+        },
+        {
+          "path": "packages/i18n/src/locales/ua/workflow.json",
+          "line": 1,
+          "score": 0.439832244528333
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item-type.json",
+          "line": 9,
+          "score": 0.43952217198760757
+        },
+        {
+          "path": "apps/api/plane/seeds/data/issues.json",
+          "line": 9,
+          "score": 0.4373220929960171
+        },
+        {
+          "path": "packages/i18n/src/locales/zh-TW/workflow.json",
+          "line": 1,
+          "score": 0.436481557022226
+        }
+      ],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:58.127Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 2855,
+      "query": "validate_state",
+      "outcome": "error",
+      "code": "unsupported",
+      "status": 400,
+      "stage": "host-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:58.128Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 2856,
+      "stage": "filename-criteria",
+      "query": "validate_state",
+      "criteria": [
+        "transition",
+        "issue.",
+        "state.",
+        "project."
+      ],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:58.128Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 2856,
+      "query": "transition",
+      "stage": "filename-search-start",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:58.687Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 3415,
+      "stage": "indexed-map-response",
+      "requestedRepoId": "github:CoopAI-Corp/plane",
+      "requestedBranch": "preview",
+      "status": 200,
+      "responseRepoId": "github:CoopAI-Corp/plane",
+      "stale": false,
+      "hasDataArray": true,
+      "fileCount": 4616,
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:58.687Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 3415,
+      "query": "transition",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 559,
+      "stage": "filename-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:58.688Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 3416,
+      "query": "issue.",
+      "stage": "filename-search-start",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:58.688Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 3416,
+      "query": "issue.",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 0,
+      "stage": "filename-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:58.688Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 3416,
+      "query": "state.",
+      "stage": "filename-search-start",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:58.688Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 3416,
+      "query": "state.",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 0,
+      "stage": "filename-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:58.688Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 3416,
+      "query": "project.",
+      "stage": "filename-search-start",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:58.688Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 3416,
+      "query": "project.",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 0,
+      "stage": "filename-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:58.728Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 3456,
+      "stage": "search",
+      "round": 0,
+      "repoId": "github:CoopAI-Corp/plane",
+      "query": "validate_state",
+      "source": "embedding",
+      "stale": false,
+      "codeHostFallbackAttempted": true,
+      "codeHostFallbackStatus": "error",
+      "filenameFallbackStatus": "error",
+      "rawHitCount": 36,
+      "rawSymbolCount": 0,
+      "rawHits": [
+        {
+          "path": "packages/types/src/intake/index.ts",
+          "line": 1,
+          "score": 0.4567368881737359
+        },
+        {
+          "path": "apps/web/core/hooks/store/use-project-state.ts",
+          "line": 1,
+          "score": 0.4278857212614131
+        },
+        {
+          "path": "apps/space/hooks/store/use-state.ts",
+          "line": 1,
+          "score": 0.4241093935810294
+        },
+        {
+          "path": "apps/web/core/components/project-states/create-update/update.tsx",
+          "line": 1,
+          "score": 0.4172724402775041
+        },
+        {
+          "path": "packages/constants/src/event-tracker/core.ts",
+          "line": 12,
+          "score": 0.4162696800687522
+        },
+        {
+          "path": "apps/web/core/components/project-states/options/delete.tsx",
+          "line": 1,
+          "score": 0.4009514178449063
+        },
+        {
+          "path": "packages/editor/src/core/hooks/use-yjs-setup.ts",
+          "line": 7,
+          "score": 0.4008833146721348
+        },
+        {
+          "path": "apps/web/core/components/project-states/create-update/create.tsx",
+          "line": 1,
+          "score": 0.3961992966096316
+        },
+        {
+          "path": "packages/utils/src/work-item/state.ts",
+          "line": 1,
+          "score": 0.3957281927117714
+        },
+        {
+          "path": "packages/i18n/src/locales/zh-CN/workflow.json",
+          "line": 2,
+          "score": 0.3955276574201929
+        },
+        {
+          "path": "packages/propel/src/input/input.stories.tsx",
+          "line": 19,
+          "score": 0.3911654591105529
+        },
+        {
+          "path": "apps/web/core/components/project-states/state-delete-modal.tsx",
+          "line": 1,
+          "score": 0.38504103154579716
+        }
+      ],
+      "preferredHits": [],
+      "modelVisibleHits": []
+    },
+    {
+      "at": "2026-10-03T17:21:58.728Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "stage": "activity-step",
+      "tool": "search_code",
+      "summary": "search_code: validate_state"
+    },
+    {
+      "at": "2026-10-03T17:21:59.736Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 4463,
+      "stage": "plan",
+      "round": 1,
+      "result": "call",
+      "tool": "search_code",
+      "query": "\"work-item\" state",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T17:21:59.911Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 4639,
+      "stage": "index-search-start",
+      "query": "\"work-item\" state",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:22:00.692Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 5420,
+      "stage": "index-search",
+      "query": "\"work-item\" state",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 781,
+      "hitCount": 14,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "apps/api/plane/seeds/data/issues.json",
+          "line": 10,
+          "score": 0.6050853557252615
+        },
+        {
+          "path": "packages/i18n/src/locales/en/workflow.json",
+          "line": 1,
+          "score": 0.5889387576310257
+        },
+        {
+          "path": "packages/i18n/src/locales/de/project-settings.json",
+          "line": 7,
+          "score": 0.5745981998346199
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item.json",
+          "line": 3,
+          "score": 0.5643522950384029
+        },
+        {
+          "path": "packages/i18n/src/locales/en/project-settings.json",
+          "line": 6,
+          "score": 0.5630383385671262
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item-type.json",
+          "line": 7,
+          "score": 0.5588264651741293
+        },
+        {
+          "path": "apps/web/core/components/power-k/ui/pages/context-based/work-item/commands.ts",
+          "line": 4,
+          "score": 0.554273939005274
+        },
+        {
+          "path": "packages/i18n/src/locales/it/project-settings.json",
+          "line": 7,
+          "score": 0.5451045741177358
+        },
+        {
+          "path": "packages/i18n/src/locales/it/workflow.json",
+          "line": 1,
+          "score": 0.5412753810974675
+        },
+        {
+          "path": "packages/i18n/src/locales/fr/work-item.json",
+          "line": 7,
+          "score": 0.5375445323485303
+        },
+        {
+          "path": "packages/i18n/src/locales/id/workflow.json",
+          "line": 1,
+          "score": 0.5374503562407053
+        },
+        {
+          "path": "packages/i18n/src/locales/zh-CN/work-item.json",
+          "line": 4,
+          "score": 0.5371269705914928
+        },
+        {
+          "path": "packages/i18n/src/locales/pt-BR/workflow.json",
+          "line": 1,
+          "score": 0.5352237734299681
+        },
+        {
+          "path": "packages/i18n/src/locales/de/workflow.json",
+          "line": 1,
+          "score": 0.532056867949661
+        }
+      ],
+      "symbols": [],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:22:00.692Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 5420,
+      "stage": "index-search-start",
+      "query": "Users can't move a work item out of backlog \u2014 the API returns an error. I don't have this repo cloned. Where is work-item state written, and what rejects a bad transition?",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:22:00.693Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 5421,
+      "stage": "index-search",
+      "query": "Users can't move a work item out of backlog \u2014 the API returns an error. I don't have this repo cloned. Where is work-item state written, and what rejects a bad transition?",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 1,
+      "hitCount": 18,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "packages/i18n/src/locales/en/workflow.json",
+          "line": 1,
+          "score": 0.532445603813894
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item.json",
+          "line": 5,
+          "score": 0.4853144117130367
+        },
+        {
+          "path": "packages/i18n/src/locales/es/workflow.json",
+          "line": 1,
+          "score": 0.4738554335046201
+        },
+        {
+          "path": "apps/web/core/components/inbox/content/issue-root.tsx",
+          "line": 2,
+          "score": 0.4708584110216135
+        },
+        {
+          "path": "packages/i18n/src/locales/ru/workflow.json",
+          "line": 1,
+          "score": 0.4707500005051972
+        },
+        {
+          "path": "packages/i18n/src/locales/pt-BR/workflow.json",
+          "line": 1,
+          "score": 0.4705875235104784
+        },
+        {
+          "path": "packages/i18n/src/locales/fr/workflow.json",
+          "line": 1,
+          "score": 0.4618230833068563
+        },
+        {
+          "path": "packages/i18n/src/locales/de/workflow.json",
+          "line": 1,
+          "score": 0.46113352760264825
+        },
+        {
+          "path": "packages/i18n/src/locales/en/inbox.json",
+          "line": 1,
+          "score": 0.4604052623804573
+        },
+        {
+          "path": "packages/i18n/src/locales/cs/workflow.json",
+          "line": 1,
+          "score": 0.4593457307156297
+        },
+        {
+          "path": "packages/i18n/src/locales/id/workflow.json",
+          "line": 1,
+          "score": 0.4559386329037902
+        },
+        {
+          "path": "packages/i18n/src/locales/it/workflow.json",
+          "line": 1,
+          "score": 0.4545157896356007
+        },
+        {
+          "path": "packages/i18n/src/locales/ja/workflow.json",
+          "line": 1,
+          "score": 0.45167172575737646
+        },
+        {
+          "path": "packages/i18n/src/locales/sk/workflow.json",
+          "line": 1,
+          "score": 0.4511733419192434
+        },
+        {
+          "path": "packages/i18n/src/locales/ua/workflow.json",
+          "line": 1,
+          "score": 0.439832244528333
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item-type.json",
+          "line": 9,
+          "score": 0.43952217198760757
+        },
+        {
+          "path": "apps/api/plane/seeds/data/issues.json",
+          "line": 9,
+          "score": 0.4373220929960171
+        },
+        {
+          "path": "packages/i18n/src/locales/zh-TW/workflow.json",
+          "line": 1,
+          "score": 0.436481557022226
+        }
+      ],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:22:00.694Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 5422,
+      "stage": "filename-criteria",
+      "query": "\"work-item\" state",
+      "criteria": [
+        "transition",
+        "issue.",
+        "work.",
+        "item."
+      ],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:22:00.694Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 5422,
+      "query": "work.",
+      "stage": "filename-search-start",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:22:00.695Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 5423,
+      "query": "work.",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 1,
+      "stage": "filename-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:22:00.695Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 5423,
+      "query": "item.",
+      "stage": "filename-search-start",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:22:00.695Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 5423,
+      "query": "item.",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 0,
+      "stage": "filename-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:22:00.725Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 5453,
+      "stage": "search",
+      "round": 1,
+      "repoId": "github:CoopAI-Corp/plane",
+      "query": "\"work-item\" state",
+      "source": "embedding",
+      "stale": false,
+      "codeHostFallbackAttempted": false,
+      "codeHostFallbackStatus": "not_attempted",
+      "filenameFallbackStatus": "error",
+      "rawHitCount": 27,
+      "rawSymbolCount": 0,
+      "rawHits": [
+        {
+          "path": "apps/api/plane/seeds/data/issues.json",
+          "line": 10,
+          "score": 0.6050853557252615
+        },
+        {
+          "path": "packages/i18n/src/locales/en/workflow.json",
+          "line": 1,
+          "score": 0.5889387576310257
+        },
+        {
+          "path": "packages/i18n/src/locales/de/project-settings.json",
+          "line": 7,
+          "score": 0.5745981998346199
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item.json",
+          "line": 3,
+          "score": 0.5643522950384029
+        },
+        {
+          "path": "packages/i18n/src/locales/en/project-settings.json",
+          "line": 6,
+          "score": 0.5630383385671262
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item-type.json",
+          "line": 7,
+          "score": 0.5588264651741293
+        },
+        {
+          "path": "apps/web/core/components/power-k/ui/pages/context-based/work-item/commands.ts",
+          "line": 4,
+          "score": 0.554273939005274
+        },
+        {
+          "path": "packages/i18n/src/locales/it/project-settings.json",
+          "line": 7,
+          "score": 0.5451045741177358
+        },
+        {
+          "path": "packages/i18n/src/locales/it/workflow.json",
+          "line": 1,
+          "score": 0.5412753810974675
+        },
+        {
+          "path": "packages/i18n/src/locales/fr/work-item.json",
+          "line": 7,
+          "score": 0.5375445323485303
+        },
+        {
+          "path": "packages/i18n/src/locales/id/workflow.json",
+          "line": 1,
+          "score": 0.5374503562407053
+        },
+        {
+          "path": "packages/i18n/src/locales/zh-CN/work-item.json",
+          "line": 4,
+          "score": 0.5371269705914928
+        }
+      ],
+      "preferredHits": [],
+      "modelVisibleHits": []
+    },
+    {
+      "at": "2026-10-03T17:22:00.725Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "stage": "activity-step",
+      "tool": "search_code",
+      "summary": "search_code: \"work-item\" state"
+    },
+    {
+      "at": "2026-10-03T17:22:01.740Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 6468,
+      "stage": "plan",
+      "round": 2,
+      "result": "call",
+      "tool": "search_code",
+      "query": "\"work item\" state",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T17:22:01.945Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 6673,
+      "stage": "index-search-start",
+      "query": "\"work item\" state",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:22:02.728Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 7456,
+      "stage": "index-search",
+      "query": "\"work item\" state",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 783,
+      "hitCount": 14,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "apps/api/plane/seeds/data/issues.json",
+          "line": 10,
+          "score": 0.6355857236844125
+        },
+        {
+          "path": "packages/i18n/src/locales/en/workflow.json",
+          "line": 1,
+          "score": 0.6098495355691611
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item.json",
+          "line": 6,
+          "score": 0.6077585968408985
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item-type.json",
+          "line": 7,
+          "score": 0.5921113426821396
+        },
+        {
+          "path": "packages/i18n/src/locales/de/project-settings.json",
+          "line": 7,
+          "score": 0.5825637428510281
+        },
+        {
+          "path": "packages/i18n/src/locales/id/workflow.json",
+          "line": 1,
+          "score": 0.5778312476232714
+        },
+        {
+          "path": "packages/i18n/src/locales/en/project-settings.json",
+          "line": 7,
+          "score": 0.5701550680268334
+        },
+        {
+          "path": "packages/i18n/src/locales/zh-CN/work-item.json",
+          "line": 4,
+          "score": 0.5656325441615809
+        },
+        {
+          "path": "packages/i18n/src/locales/it/workflow.json",
+          "line": 1,
+          "score": 0.5629472121816811
+        },
+        {
+          "path": "packages/i18n/src/locales/it/project-settings.json",
+          "line": 7,
+          "score": 0.5628711626975121
+        },
+        {
+          "path": "packages/i18n/src/locales/en/workspace.json",
+          "line": 6,
+          "score": 0.5626007976545289
+        },
+        {
+          "path": "apps/api/plane/settings/openapi.py",
+          "line": 6,
+          "score": 0.5624156113998593
+        },
+        {
+          "path": "packages/i18n/src/locales/en/inbox.json",
+          "line": 1,
+          "score": 0.5597649391523378
+        },
+        {
+          "path": "packages/i18n/src/locales/zh-TW/work-item.json",
+          "line": 4,
+          "score": 0.5581518437313422
+        }
+      ],
+      "symbols": [],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:22:02.728Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 7456,
+      "stage": "index-search-start",
+      "query": "Users can't move a work item out of backlog \u2014 the API returns an error. I don't have this repo cloned. Where is work-item state written, and what rejects a bad transition?",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:22:02.728Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 7456,
+      "stage": "index-search",
+      "query": "Users can't move a work item out of backlog \u2014 the API returns an error. I don't have this repo cloned. Where is work-item state written, and what rejects a bad transition?",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 0,
+      "hitCount": 18,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "packages/i18n/src/locales/en/workflow.json",
+          "line": 1,
+          "score": 0.532445603813894
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item.json",
+          "line": 5,
+          "score": 0.4853144117130367
+        },
+        {
+          "path": "packages/i18n/src/locales/es/workflow.json",
+          "line": 1,
+          "score": 0.4738554335046201
+        },
+        {
+          "path": "apps/web/core/components/inbox/content/issue-root.tsx",
+          "line": 2,
+          "score": 0.4708584110216135
+        },
+        {
+          "path": "packages/i18n/src/locales/ru/workflow.json",
+          "line": 1,
+          "score": 0.4707500005051972
+        },
+        {
+          "path": "packages/i18n/src/locales/pt-BR/workflow.json",
+          "line": 1,
+          "score": 0.4705875235104784
+        },
+        {
+          "path": "packages/i18n/src/locales/fr/workflow.json",
+          "line": 1,
+          "score": 0.4618230833068563
+        },
+        {
+          "path": "packages/i18n/src/locales/de/workflow.json",
+          "line": 1,
+          "score": 0.46113352760264825
+        },
+        {
+          "path": "packages/i18n/src/locales/en/inbox.json",
+          "line": 1,
+          "score": 0.4604052623804573
+        },
+        {
+          "path": "packages/i18n/src/locales/cs/workflow.json",
+          "line": 1,
+          "score": 0.4593457307156297
+        },
+        {
+          "path": "packages/i18n/src/locales/id/workflow.json",
+          "line": 1,
+          "score": 0.4559386329037902
+        },
+        {
+          "path": "packages/i18n/src/locales/it/workflow.json",
+          "line": 1,
+          "score": 0.4545157896356007
+        },
+        {
+          "path": "packages/i18n/src/locales/ja/workflow.json",
+          "line": 1,
+          "score": 0.45167172575737646
+        },
+        {
+          "path": "packages/i18n/src/locales/sk/workflow.json",
+          "line": 1,
+          "score": 0.4511733419192434
+        },
+        {
+          "path": "packages/i18n/src/locales/ua/workflow.json",
+          "line": 1,
+          "score": 0.439832244528333
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item-type.json",
+          "line": 9,
+          "score": 0.43952217198760757
+        },
+        {
+          "path": "apps/api/plane/seeds/data/issues.json",
+          "line": 9,
+          "score": 0.4373220929960171
+        },
+        {
+          "path": "packages/i18n/src/locales/zh-TW/workflow.json",
+          "line": 1,
+          "score": 0.436481557022226
+        }
+      ],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:22:02.729Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 7457,
+      "stage": "filename-criteria",
+      "query": "\"work item\" state",
+      "criteria": [
+        "transition",
+        "issue.",
+        "work.",
+        "item."
+      ],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:22:02.765Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 7493,
+      "stage": "search",
+      "round": 2,
+      "repoId": "github:CoopAI-Corp/plane",
+      "query": "\"work item\" state",
+      "source": "embedding",
+      "stale": false,
+      "codeHostFallbackAttempted": false,
+      "codeHostFallbackStatus": "not_attempted",
+      "filenameFallbackStatus": "error",
+      "rawHitCount": 28,
+      "rawSymbolCount": 0,
+      "rawHits": [
+        {
+          "path": "apps/api/plane/seeds/data/issues.json",
+          "line": 10,
+          "score": 0.6355857236844125
+        },
+        {
+          "path": "packages/i18n/src/locales/en/workflow.json",
+          "line": 1,
+          "score": 0.6098495355691611
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item.json",
+          "line": 6,
+          "score": 0.6077585968408985
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item-type.json",
+          "line": 7,
+          "score": 0.5921113426821396
+        },
+        {
+          "path": "packages/i18n/src/locales/de/project-settings.json",
+          "line": 7,
+          "score": 0.5825637428510281
+        },
+        {
+          "path": "packages/i18n/src/locales/id/workflow.json",
+          "line": 1,
+          "score": 0.5778312476232714
+        },
+        {
+          "path": "packages/i18n/src/locales/en/project-settings.json",
+          "line": 7,
+          "score": 0.5701550680268334
+        },
+        {
+          "path": "packages/i18n/src/locales/zh-CN/work-item.json",
+          "line": 4,
+          "score": 0.5656325441615809
+        },
+        {
+          "path": "packages/i18n/src/locales/it/workflow.json",
+          "line": 1,
+          "score": 0.5629472121816811
+        },
+        {
+          "path": "packages/i18n/src/locales/it/project-settings.json",
+          "line": 7,
+          "score": 0.5628711626975121
+        },
+        {
+          "path": "packages/i18n/src/locales/en/workspace.json",
+          "line": 6,
+          "score": 0.5626007976545289
+        },
+        {
+          "path": "apps/api/plane/settings/openapi.py",
+          "line": 6,
+          "score": 0.5624156113998593
+        }
+      ],
+      "preferredHits": [],
+      "modelVisibleHits": []
+    },
+    {
+      "at": "2026-10-03T17:22:02.765Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "stage": "activity-step",
+      "tool": "search_code",
+      "summary": "search_code: \"work item\" state"
+    },
+    {
+      "at": "2026-10-03T17:22:03.773Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 8501,
+      "stage": "plan",
+      "round": 3,
+      "result": "call",
+      "tool": "search_code",
+      "query": "work-item/state",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T17:22:03.962Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 8690,
+      "stage": "index-search-start",
+      "query": "work-item/state",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:22:04.015Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 8743,
+      "stage": "gather-handoff",
+      "waitingStage": "index-search"
+    },
+    {
+      "at": "2026-10-03T17:22:04.015Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 8743,
+      "stage": "index-search",
+      "query": "work-item/state",
+      "source": "fallback",
+      "stale": true,
+      "elapsedMs": 53,
+      "hitCount": 0,
+      "symbolCount": 0,
+      "hits": [],
+      "symbols": [],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:22:04.016Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 8744,
+      "stage": "filename-criteria",
+      "query": "work-item/state",
+      "criteria": [
+        "transition",
+        "work.",
+        "item."
+      ],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:22:04.016Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "63577ac3-3759-4101-93b3-13e607ed7bfd",
+      "turnElapsedMs": 8744,
+      "stage": "search",
+      "round": 3,
+      "repoId": "github:CoopAI-Corp/plane",
+      "query": "work-item/state",
+      "source": "fallback",
+      "stale": true,
+      "codeHostFallbackAttempted": false,
+      "codeHostFallbackStatus": "not_attempted",
+      "filenameFallbackStatus": "error",
+      "rawHitCount": 0,
+      "rawSymbolCount": 0,
+      "rawHits": [],
+      "preferredHits": [],
+      "modelVisibleHits": []
+    },
+    {
+      "at": "2026-10-03T17:22:04.016Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "stage": "activity-step",
+      "tool": "search_code",
+      "summary": "search_code: work-item/state"
+    },
+    {
+      "at": "2026-10-03T17:22:04.019Z",
+      "threadId": "thread-1791048108245-7g86dr",
+      "stage": "answer-start",
+      "elapsedMs": 9005,
+      "selectedBranch": "preview",
+      "repoId": "github:CoopAI-Corp/plane",
+      "delivery": "complete",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016"
+    }
+  ]
+}

@@ -1,0 +1,413 @@
+{
+  "scenario": {
+    "id": "DF-019",
+    "area": "Editing and code generation",
+    "fixture": "Disposable branch/worktree; seeded bug and independent assertions; never production branch",
+    "action": "Add two tests to src/server/authMiddleware.test.ts for extractBearerToken: (1) missing Authorization header returns undefined, (2) \"Bearer abc\" returns abc. Match this file's node:test style. Do not rewrite the existing suite.",
+    "passCriteria": "Reviewable minimal patch; applies once; both behavioral tests run and pass; existing tests preserved.",
+    "modes": [
+      "fresh"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T17:39:36.309927+00:00",
+    "status": "FAIL",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "gitlab:coopai-group/Coop-AI@main",
+    "action": "Add two tests to src/server/authMiddleware.test.ts for extractBearerToken: (1) missing Authorization header returns undefined, (2) \"Bearer abc\" returns abc. Match this file's node:test style. Do not rewrite the existing suite.",
+    "actualResult": "Exact code-generation ask reads authMiddleware.test.ts and executes propose_patch twice, but final answer is I could not find that in this repo; no Apply card or tests. First answer18330ms exceeds soft15s target. Cannot run requested new tests because no patch delivered.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-019-fresh-1.json",
+    "criteriaReview": "NOT_ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": 18330,
+    "durationMs": 19128,
+    "threadId": "thread-1791049115884-zqcyub"
+  },
+  "diagnosticEvents": [
+    {
+      "at": "2026-10-03T17:38:43.284Z",
+      "threadId": "thread-1791049115884-zqcyub",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "db5869ab-a838-4200-ac5f-e55a2141720c",
+      "turnElapsedMs": 214,
+      "stage": "target",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "requestedBranch": "main",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:38:43.285Z",
+      "threadId": "thread-1791049115884-zqcyub",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "db5869ab-a838-4200-ac5f-e55a2141720c",
+      "turnElapsedMs": 215,
+      "stage": "turn",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "action": "change",
+      "hunt": "definition-locate",
+      "taskQuery": "Add two tests to src/server/authMiddleware.test.ts for extractBearerToken: (1) missing Authorization header returns undefined, (2) \"Bearer abc\" returns abc. Match this file's node:test style. Do not rewrite the existing suite.",
+      "plannedSearchQueries": [],
+      "requiredEvidence": []
+    },
+    {
+      "at": "2026-10-03T17:38:44.157Z",
+      "threadId": "thread-1791049115884-zqcyub",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "db5869ab-a838-4200-ac5f-e55a2141720c",
+      "turnElapsedMs": 1087,
+      "path": "src/server/authMiddleware.test.ts",
+      "returnedPath": "src/server/authMiddleware.test.ts",
+      "outcome": "body",
+      "bodyChars": 6609,
+      "cacheHit": false,
+      "elapsedMs": 871,
+      "stage": "remote-read",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:38:44.157Z",
+      "threadId": "thread-1791049115884-zqcyub",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file: src/server/authMiddleware.test.ts"
+    },
+    {
+      "at": "2026-10-03T17:38:45.139Z",
+      "threadId": "thread-1791049115884-zqcyub",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "db5869ab-a838-4200-ac5f-e55a2141720c",
+      "turnElapsedMs": 2069,
+      "stage": "plan",
+      "round": 0,
+      "result": "call",
+      "tool": "search_code",
+      "query": "extractBearerToken",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T17:38:45.338Z",
+      "threadId": "thread-1791049115884-zqcyub",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "db5869ab-a838-4200-ac5f-e55a2141720c",
+      "turnElapsedMs": 2268,
+      "stage": "index-search-start",
+      "query": "extractBearerToken",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:38:46.478Z",
+      "threadId": "thread-1791049115884-zqcyub",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "db5869ab-a838-4200-ac5f-e55a2141720c",
+      "turnElapsedMs": 3408,
+      "stage": "index-search",
+      "query": "extractBearerToken",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 1140,
+      "hitCount": 16,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "src/server/authMiddleware.ts",
+          "line": 1,
+          "score": 0.6151080314245915
+        },
+        {
+          "path": "admin/src/lib/serverCoopApi.ts",
+          "line": 8,
+          "score": 0.5765927209413368
+        },
+        {
+          "path": "ops/src/lib/serverCoopApi.ts",
+          "line": 9,
+          "score": 0.5765300684579744
+        },
+        {
+          "path": "src/server/bitbucketAppService.ts",
+          "line": 4,
+          "score": 0.5121609594653374
+        },
+        {
+          "path": "ops/src/lib/auth.ts",
+          "line": 2,
+          "score": 0.511354070043468
+        },
+        {
+          "path": "admin/src/lib/auth.ts",
+          "line": 2,
+          "score": 0.5112644619567159
+        },
+        {
+          "path": "src/api/byokHandler.ts",
+          "line": 15,
+          "score": 0.493675418455332
+        },
+        {
+          "path": "src/api/dataSanitization.ts",
+          "line": 19,
+          "score": 0.48911541018285987
+        },
+        {
+          "path": "src/server/gitlabAppService.ts",
+          "line": 4,
+          "score": 0.48766676904263395
+        },
+        {
+          "path": "src/server/auth/authTokenStore.ts",
+          "line": 2,
+          "score": 0.4876182549977095
+        },
+        {
+          "path": "src/server/auth/sessionDelivery.ts",
+          "line": 5,
+          "score": 0.48261658672255503
+        },
+        {
+          "path": "src/server/integrationConnectionStore.ts",
+          "line": 6,
+          "score": 0.47966749244388684
+        },
+        {
+          "path": "admin/src/lib/coopApi.ts",
+          "line": 16,
+          "score": 0.4707454698331994
+        },
+        {
+          "path": "ops/src/lib/coopApi.ts",
+          "line": 27,
+          "score": 0.46681578100298693
+        },
+        {
+          "path": "src/server/integrationApi.ts",
+          "line": 7,
+          "score": 0.4654769569973468
+        },
+        {
+          "path": "src/server/users/userStore.ts",
+          "line": 7,
+          "score": 0.46521011873865936
+        }
+      ],
+      "symbols": [],
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:38:46.492Z",
+      "threadId": "thread-1791049115884-zqcyub",
+      "stage": "activity-step",
+      "tool": "search_code",
+      "summary": "search_code: extractBearerToken"
+    },
+    {
+      "at": "2026-10-03T17:38:49.410Z",
+      "threadId": "thread-1791049115884-zqcyub",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "db5869ab-a838-4200-ac5f-e55a2141720c",
+      "turnElapsedMs": 6340,
+      "stage": "plan",
+      "round": 1,
+      "result": "call",
+      "tool": "propose_patch",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T17:38:49.411Z",
+      "threadId": "thread-1791049115884-zqcyub",
+      "stage": "activity-step",
+      "tool": "propose_patch",
+      "summary": "propose_patch"
+    },
+    {
+      "at": "2026-10-03T17:38:51.616Z",
+      "threadId": "thread-1791049115884-zqcyub",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "db5869ab-a838-4200-ac5f-e55a2141720c",
+      "turnElapsedMs": 8546,
+      "stage": "plan",
+      "round": 2,
+      "result": "call",
+      "tool": "propose_patch",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T17:38:51.616Z",
+      "threadId": "thread-1791049115884-zqcyub",
+      "stage": "activity-step",
+      "tool": "propose_patch",
+      "summary": "propose_patch"
+    },
+    {
+      "at": "2026-10-03T17:38:51.818Z",
+      "threadId": "thread-1791049115884-zqcyub",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "db5869ab-a838-4200-ac5f-e55a2141720c",
+      "turnElapsedMs": 8748,
+      "stage": "gather-handoff",
+      "waitingStage": "tool-plan",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:38:51.819Z",
+      "threadId": "thread-1791049115884-zqcyub",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "db5869ab-a838-4200-ac5f-e55a2141720c",
+      "turnElapsedMs": 8749,
+      "stage": "plan",
+      "round": 3,
+      "result": "invalid"
+    },
+    {
+      "at": "2026-10-03T17:38:51.820Z",
+      "threadId": "thread-1791049115884-zqcyub",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "db5869ab-a838-4200-ac5f-e55a2141720c",
+      "turnElapsedMs": 8750,
+      "stage": "synthesis-start"
+    },
+    {
+      "at": "2026-10-03T17:39:01.147Z",
+      "threadId": "thread-1791049115884-zqcyub",
+      "stage": "answer-start",
+      "elapsedMs": 18330,
+      "selectedBranch": "main",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016"
+    },
+    {
+      "at": "2026-10-03T17:39:02.198Z",
+      "threadId": "thread-1791049115884-zqcyub",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "db5869ab-a838-4200-ac5f-e55a2141720c",
+      "turnElapsedMs": 19128,
+      "stage": "outcome",
+      "candidateLedger": [
+        {
+          "path": "src/server/authMiddleware.test.ts",
+          "criterion": "add two tests to src/server/auth_middleware.test.ts for extract_bearer_token: (1) missing authorization header returns undefined, (2) \"bearer abc\" returns abc. match this file's node:test style. do not rewrite the existing suite.",
+          "status": "verified"
+        },
+        {
+          "path": "src/server/authMiddleware.ts",
+          "criterion": "add two tests to src/server/auth_middleware.test.ts for extract_bearer_token: (1) missing authorization header returns undefined, (2) \"bearer abc\" returns abc. match this file's node:test style. do not rewrite the existing suite.",
+          "status": "untested"
+        },
+        {
+          "path": "admin/src/lib/serverCoopApi.ts",
+          "criterion": "add two tests to src/server/auth_middleware.test.ts for extract_bearer_token: (1) missing authorization header returns undefined, (2) \"bearer abc\" returns abc. match this file's node:test style. do not rewrite the existing suite.",
+          "status": "untested"
+        },
+        {
+          "path": "ops/src/lib/serverCoopApi.ts",
+          "criterion": "add two tests to src/server/auth_middleware.test.ts for extract_bearer_token: (1) missing authorization header returns undefined, (2) \"bearer abc\" returns abc. match this file's node:test style. do not rewrite the existing suite.",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/bitbucketAppService.ts",
+          "criterion": "add two tests to src/server/auth_middleware.test.ts for extract_bearer_token: (1) missing authorization header returns undefined, (2) \"bearer abc\" returns abc. match this file's node:test style. do not rewrite the existing suite.",
+          "status": "untested"
+        },
+        {
+          "path": "ops/src/lib/auth.ts",
+          "criterion": "add two tests to src/server/auth_middleware.test.ts for extract_bearer_token: (1) missing authorization header returns undefined, (2) \"bearer abc\" returns abc. match this file's node:test style. do not rewrite the existing suite.",
+          "status": "untested"
+        },
+        {
+          "path": "admin/src/lib/auth.ts",
+          "criterion": "add two tests to src/server/auth_middleware.test.ts for extract_bearer_token: (1) missing authorization header returns undefined, (2) \"bearer abc\" returns abc. match this file's node:test style. do not rewrite the existing suite.",
+          "status": "untested"
+        },
+        {
+          "path": "src/api/byokHandler.ts",
+          "criterion": "add two tests to src/server/auth_middleware.test.ts for extract_bearer_token: (1) missing authorization header returns undefined, (2) \"bearer abc\" returns abc. match this file's node:test style. do not rewrite the existing suite.",
+          "status": "untested"
+        },
+        {
+          "path": "src/api/dataSanitization.ts",
+          "criterion": "add two tests to src/server/auth_middleware.test.ts for extract_bearer_token: (1) missing authorization header returns undefined, (2) \"bearer abc\" returns abc. match this file's node:test style. do not rewrite the existing suite.",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/gitlabAppService.ts",
+          "criterion": "add two tests to src/server/auth_middleware.test.ts for extract_bearer_token: (1) missing authorization header returns undefined, (2) \"bearer abc\" returns abc. match this file's node:test style. do not rewrite the existing suite.",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/auth/authTokenStore.ts",
+          "criterion": "add two tests to src/server/auth_middleware.test.ts for extract_bearer_token: (1) missing authorization header returns undefined, (2) \"bearer abc\" returns abc. match this file's node:test style. do not rewrite the existing suite.",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/auth/sessionDelivery.ts",
+          "criterion": "add two tests to src/server/auth_middleware.test.ts for extract_bearer_token: (1) missing authorization header returns undefined, (2) \"bearer abc\" returns abc. match this file's node:test style. do not rewrite the existing suite.",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/integrationConnectionStore.ts",
+          "criterion": "add two tests to src/server/auth_middleware.test.ts for extract_bearer_token: (1) missing authorization header returns undefined, (2) \"bearer abc\" returns abc. match this file's node:test style. do not rewrite the existing suite.",
+          "status": "untested"
+        },
+        {
+          "path": "admin/src/lib/coopApi.ts",
+          "criterion": "add two tests to src/server/auth_middleware.test.ts for extract_bearer_token: (1) missing authorization header returns undefined, (2) \"bearer abc\" returns abc. match this file's node:test style. do not rewrite the existing suite.",
+          "status": "untested"
+        },
+        {
+          "path": "ops/src/lib/coopApi.ts",
+          "criterion": "add two tests to src/server/auth_middleware.test.ts for extract_bearer_token: (1) missing authorization header returns undefined, (2) \"bearer abc\" returns abc. match this file's node:test style. do not rewrite the existing suite.",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/integrationApi.ts",
+          "criterion": "add two tests to src/server/auth_middleware.test.ts for extract_bearer_token: (1) missing authorization header returns undefined, (2) \"bearer abc\" returns abc. match this file's node:test style. do not rewrite the existing suite.",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/users/userStore.ts",
+          "criterion": "add two tests to src/server/auth_middleware.test.ts for extract_bearer_token: (1) missing authorization header returns undefined, (2) \"bearer abc\" returns abc. match this file's node:test style. do not rewrite the existing suite.",
+          "status": "untested"
+        }
+      ],
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main",
+      "elapsedMs": 19128,
+      "stopped": false,
+      "stepCount": 4,
+      "hasAnswer": true,
+      "evidencePaths": [
+        "src/server/authMiddleware.test.ts"
+      ]
+    }
+  ]
+}

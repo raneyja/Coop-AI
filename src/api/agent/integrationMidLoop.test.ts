@@ -83,6 +83,7 @@ async function main(): Promise<void> {
     const calls: string[] = [];
     const orchestrator = createAgentOrchestrator({
       indexBackend: {
+        isEnabledForRepo: async () => true,
         async search() {
           return { hits: [], symbols: [] };
         }
@@ -157,6 +158,7 @@ async function main(): Promise<void> {
     const calls: string[] = [];
     const orchestrator = createAgentOrchestrator({
       indexBackend: {
+        isEnabledForRepo: async () => true,
         async search() {
           return { hits: [], symbols: [] };
         }
@@ -186,6 +188,7 @@ async function main(): Promise<void> {
     const calls: string[] = [];
     const orchestrator = createAgentOrchestrator({
       indexBackend: {
+        isEnabledForRepo: async () => true,
         async search() {
           return {
             hits: [
@@ -250,6 +253,7 @@ async function main(): Promise<void> {
     let openedEvidence: string | undefined;
     const orchestrator = createAgentOrchestrator({
       indexBackend: {
+        isEnabledForRepo: async () => true,
         async search() {
           return {
             hits: [

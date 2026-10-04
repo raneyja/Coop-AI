@@ -1,0 +1,5 @@
+
+> coop-ai@0.1.10 test:repo-grants-ui
+> cd admin && npx tsx --tsconfig tsconfig.json src/lib/activeGrantRepoIds.test.ts
+
+activeGrantRepoIds.test.ts: ok

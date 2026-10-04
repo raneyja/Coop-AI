@@ -1,0 +1,31 @@
+{
+  "scenario": {
+    "id": "DF-034",
+    "area": "Quick actions",
+    "fixture": "Coop-AI pinned ref; authMiddleware.ts selected where relevant",
+    "action": "/trace",
+    "passCriteria": "Decision evidence from connected tools or honest unavailable; no fabricated rationale.",
+    "modes": [
+      "slash",
+      "workflow",
+      "editor-context-menu"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T18:02:41.832363+00:00",
+    "status": "FAIL",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "see notes@see notes",
+    "action": "/trace",
+    "actualResult": "Trace cited commit rationale for soft start deadline but did not reconcile selected current remote source declaring Hard ceiling and controller.abort; claims active design without reconciling source. Worked 30s. Commit evidence still needs independent inspection.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-034-slash-1.json",
+    "criteriaReview": "NOT_ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": null,
+    "durationMs": null,
+    "threadId": null
+  },
+  "diagnosticEvents": []
+}

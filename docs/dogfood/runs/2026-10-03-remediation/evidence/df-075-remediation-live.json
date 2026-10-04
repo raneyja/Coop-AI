@@ -1,0 +1,27 @@
+{
+  "scenario": "DF-075",
+  "actualAction": "Explain this function and its edge cases.",
+  "selection": {
+    "path": "src/server/authMiddleware.ts",
+    "startLine": 10,
+    "endLine": 17,
+    "provider": "gitlab",
+    "owner": "coopai-group",
+    "repo": "Coop-AI",
+    "branch": "main"
+  },
+  "threadId": "thread-1791060057820-4y9n7y",
+  "turnId": "turn-1791060068122-4siec5",
+  "runId": "synthesis-turn-1791060068122-4siec5",
+  "submittedAt": "2026-10-03T20:41:07.397Z",
+  "firstAnswerAt": "2026-10-03T20:41:23.754Z",
+  "firstAnswerMs": 16357,
+  "functionalStatus": "PASS",
+  "timingStatus": "FAIL",
+  "observations": [
+    "New chat retained exact remote parser selection L10–17 and repo/ref",
+    "Answer explained extractBearerToken and missing, empty, case-sensitive, whitespace and non-Bearer edge cases without clarification",
+    "Citation opened existing Untitled-32 without another editor group"
+  ],
+  "releaseEvidenceComplete": false
+}

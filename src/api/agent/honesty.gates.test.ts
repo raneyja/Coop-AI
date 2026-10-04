@@ -8,6 +8,7 @@ import * as path from "node:path";
 import { emptyChatIntentPlan } from "../../chat/intentPlanner/types";
 import { planChatIntentFromRules } from "../../chat/intentPlanner/planChatIntent";
 import { agentTurnAllowsRepoTools, shouldRunAgentToolLoop } from "../../chat/agentRouting";
+import { resolveEffectiveQuickAction } from "../../chat/effectiveQuickAction";
 import { agentStepsToActivity } from "../../webview/agentActivity";
 import { HONESTY_GATE_IDS } from "./gates";
 import { DOGFOOD_HUNT_QUESTION, DOGFOOD_HUNT_SEARCH_QUERY } from "./dogfoodContract";
@@ -140,8 +141,14 @@ test("H-G8 no Agent toggle in Workflows header or composer (UX-G9)", () => {
 
 test("H-G9 leftover Blast/Owner chips must not steal the dogfood hunt", () => {
   const session = readRepo("src/chat/CoopChatSession.ts");
-  assert.match(session, /shouldSuppressSuggestChipsForAgentHunt/);
-  assert.match(session, /emptyChatIntentPlan\(message\)/);
+  assert.match(session, /this\.dismissPendingQuickActionSuggest\(\)/);
+  assert.match(session, /resolveEffectiveQuickAction\(quickAction, turn\.history\)/);
+  for (const content of ["/blast auth", "[blast-radius] auth", "/owner auth", "[find-owner] auth"]) {
+    const action = resolveEffectiveQuickAction(undefined, [{ role: "user", content, timestamp: 1 }]);
+    assert.equal(action, undefined, content);
+    assert.equal(shouldRunAgentToolLoop({ query: DOGFOOD_HUNT_QUESTION, hasQuickAction: Boolean(action), intentPlan: emptyChatIntentPlan(DOGFOOD_HUNT_QUESTION) }), true, content);
+  }
+  assert.equal(resolveEffectiveQuickAction("blast-radius", []), "blast-radius", "explicit new action still wins");
 
   assert.equal(
     shouldRunAgentToolLoop({

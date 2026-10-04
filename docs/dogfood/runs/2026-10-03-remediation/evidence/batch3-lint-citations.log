@@ -1,0 +1,4 @@
+
+> coop-ai@0.1.10 lint
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.webview.json && tsc --noEmit -p tsconfig.backend.json
+

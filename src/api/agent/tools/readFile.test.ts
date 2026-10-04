@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { handleReadFile, numberReadLines, stripReadLinePrefixes } from "./readFile";
 import type { AgentToolContext } from "../agentToolContext";
+import { summarizeAgentToolResultForHistory } from "../../../chat/agentAnswerHistory";
 
 let passed = 0;
 let failed = 0;
@@ -26,6 +27,13 @@ function ctx(content: string): AgentToolContext {
 }
 
 async function main(): Promise<void> {
+  await test("ordinary remote guard read survives final answer compaction", async () => {
+    const body = [...Array.from({ length: 60 }, (_, i) => `// header ${i}`),
+      "if (document.status !== Status.PENDING) throw new Error('Cannot sign');"].join("\n");
+    const raw = await handleReadFile(ctx(body), { path: "server/sign.ts" });
+    const summarized = JSON.parse(summarizeAgentToolResultForHistory(raw));
+    assert.match(summarized.files[0].content, /61\|if \(document.status !== Status.PENDING\)/);
+  });
   await test("startLine-only does not return just the copyright line", async () => {
     const body = [
       "# Copyright (c) 2023-present Plane Software, Inc. and contributors",

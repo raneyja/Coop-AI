@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "extensionPath": "/private/tmp/coop-dogfood-clean-20261003-continuation/extensions/coop-ai.coop-ai-0.1.10",
+  "version": "0.1.10",
+  "isActive": true,
+  "commands": [
+    "coopAI.newChat",
+    "coopAI.newChatEditor"
+  ],
+  "scope": "Official Extension Host activation and registration; interactive scenario matrix not executed"
+}

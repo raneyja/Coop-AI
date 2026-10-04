@@ -11,7 +11,11 @@ import { omitTeamsWhileComingSoon } from "../../integrations/teamsAvailability";
 import { isQuickActionId } from "../../webview/types";
 import type { ComposerMode, IntegrationChatProvider } from "../types";
 import type { IntentSuggestCompleteFn } from "../quickActionIntentModel";
-import { classifyChatIntentPlan, shouldCallChatIntentModel } from "./planChatIntentModel";
+import {
+  classifyChatIntentPlan,
+  ensureCompoundWriteRejectJobs,
+  shouldCallChatIntentModel
+} from "./planChatIntentModel";
 import { planChatIntentFromRules } from "./planChatIntent";
 import { demoteUnconstrainedWorkflow } from "./resolveExecution";
 import {
@@ -161,7 +165,8 @@ export function planChatFrontDoorFromRules(input: ChatIntentPlannerInput): ChatI
   }
   const rules =
     message.length < 8 ? emptyChatIntentPlan(message) : planChatIntentFromRules(input);
-  return applyChatCommandConstraint(rules, input);
+  const jobs = ensureCompoundWriteRejectJobs(rules.jobs ?? [], message);
+  return applyChatCommandConstraint({ ...rules, jobs }, input);
 }
 
 export async function planChatFrontDoor(
@@ -255,19 +260,26 @@ export function mergeInterpreterJobs(
   modelJobs: ChatIntentJob[] | undefined,
   input: Pick<ChatIntentPlannerInput, "message" | "useRepo">
 ): ChatIntentJob[] {
-  const merged = new Map<ChatIntentJobCapability, ChatIntentJob>();
+  const merged = new Map<string, ChatIntentJob>();
+  const keyFor = (job: ChatIntentJob): string =>
+    job.evidenceClass ? `${job.capability}:${job.evidenceClass}` : job.capability;
   for (const job of rulesJobs ?? []) {
-    merged.set(job.capability, { ...job, terms: [...job.terms] });
+    merged.set(keyFor(job), { ...job, terms: [...job.terms] });
   }
   for (const job of modelJobs ?? []) {
     const terms = uniqueTerms(
       job.terms.filter((term) => isValidInterpreterTerm(term, input))
     );
-    if (terms.length === 0 && job.verb !== "latest") {
+    const searchCriteria = job.searchCriteria?.filter((term) =>
+      term.trim().length >= 2 && term.length <= 64 &&
+      term.trim().split(/\s+/).length <= 8 && !isRepoSlugTerm(term, input.useRepo));
+    if (terms.length === 0 && !searchCriteria?.length && job.verb !== "latest") {
       continue;
     }
-    const verb = terms.length > 0 ? "search" : job.verb === "latest" ? "latest" : "search";
-    merged.set(job.capability, { capability: job.capability, verb, terms });
+    const verb = terms.length > 0 || searchCriteria?.length ? "search" : job.verb === "latest" ? "latest" : "search";
+    if (job.evidenceClass) merged.delete(job.capability);
+    merged.set(keyFor(job), { ...job, verb, terms,
+      ...(searchCriteria ? { searchCriteria } : {}) });
   }
   return [...merged.values()];
 }

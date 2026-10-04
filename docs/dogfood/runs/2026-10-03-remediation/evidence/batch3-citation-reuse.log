@@ -1,0 +1,42 @@
+
+> coop-ai@0.1.10 test:chat-threads
+> npx tsx src/chat/chatThreadRestore.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/chat/chatThreadStore.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/chat/remoteCitationReview.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/context/remoteViewBuffer.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/chat/threadActivation.test.ts && npx tsx src/chat/exclusiveDisposable.test.ts && npx tsx src/chat/sessionInitialization.test.ts && npx tsx src/webview/lib/chatHydration.test.ts
+
+  ✓ isChatSessionIdle is false when idle timeout is disabled
+  ✓ isChatSessionIdle is true after the threshold passes
+  ✓ shouldStartFreshThreadOnRestore keeps empty threads on landing
+  ✓ shouldStartFreshThreadOnRestore restores recent threads with messages
+  ✓ shouldStartFreshThreadOnRestore starts fresh after idle when messages exist
+  ✓ resolveLastActiveAt migrates legacy snapshots from thread timestamps
+
+6 passed, 0 failed
+  ✓ isDraftChatThread is true until a message or artifact exists
+  ✓ completed remote repo selection survives reload without a submitted turn or local-editor takeover
+  ✓ empty composer is not listed in thread history
+  ✓ clicking New Chat on an empty draft reuses it instead of stacking history
+  ✓ New Chat after a prompt keeps the conversation and hides the unused draft
+  ✓ unsent draft and exact remote selection survive switching and storage reload
+  ✓ switching away from an unused New Chat discards it
+  ✓ load drops leftover empty threads from history
+  ✓ idle restore opens a blank composer without adding New Chat to history
+  ✓ assistant activity trail survives thread restore
+  ✓ startNewThread without inherit does not copy the prior repo
+  ✓ startNewThread does not reuse a draft that still has Use-repo
+  ✓ persisting empty context clears Use-repo on the thread
+  ✓ threadStorageScopeKey isolates accounts in the same folder
+  ✓ Alice's chats are invisible after rebinding to Bob
+  ✓ signed-in store does not read the legacy unkeyed folder bucket
+
+16 passed, 0 failed
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+false !== true
+
+    at run (/Users/jonraney/Coop-AI/src/chat/remoteCitationReview.test.ts:83:12) {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: 'strictEqual',
+  diff: 'simple'
+}

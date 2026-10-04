@@ -59,7 +59,7 @@ export function isLocaleCatalogPath(fileName: string): boolean {
  */
 export function isServerWritePath(fileName: string): boolean {
   const n = normalizePath(fileName);
-  return /(^|\/)(api|server|backend|svc)\//.test(n);
+  return /(^|\/)(api|server(?:-only)?|backend|svc)\//.test(n);
 }
 
 /**

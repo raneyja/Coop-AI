@@ -1,0 +1,104 @@
+
+> coop-ai@0.1.10 test:patch
+> npx tsx src/edit/patchParser.test.ts && npx tsx src/edit/patchApplier.test.ts && npx tsx src/edit/patchDiffPreview.test.ts && npx tsx src/edit/patchTarget.test.ts && npx tsx src/edit/editorWorkingCopy.test.ts && npx tsx src/edit/patchFileContents.test.ts && npx tsx src/edit/handlePatchComplete.test.ts && npx tsx src/edit/hydratePatchCardsFromHistory.test.ts && npx tsx src/edit/snapPatchToSelection.test.ts && npx tsx src/webview/components/ChatProse.test.ts && npx tsx src/webview/PatchCard.test.ts && npx tsx src/webview/lib/patchStreamDisplay.test.ts
+
+  ✓ parses single-file patch with backticks
+  ✓ parses File header without backticks
+  ✓ parses multiple hunks in one file
+  ✓ parses multiple files
+  ✓ parses ask-mode narrative plus applyable patches
+  ✓ merges repeated File headers for the same path
+  ✓ fails when hunks exist without File header
+  ✓ parses lowercase file: headers
+  ✓ infers File from preferredFile when the model omits the header
+  ✓ parses **File:** markdown wrappers
+  ✓ parses File: as the first line inside the patch fence
+  ✓ attaches hunks that appear before a trailing File: header
+  ✓ fails when File header has no hunks
+  ✓ preserves leading and trailing whitespace inside hunks
+  ✓ privacy-redacted target resolves only through unambiguous captured binding
+
+15 passed, 0 failed
+  ✓ applies a single hunk
+  ✓ applies multiple hunks sequentially
+  ✓ fails when search text is missing
+  ✓ fails when search text is ambiguous without selection
+  ✓ applies ambiguous search to selected match indices
+  ✓ applies ambiguous search to multiple selected match indices
+  ✓ multi-hunk apply uses original offsets so index 0 stays the first match
+  ✓ preserves whitespace in search blocks
+  ✓ fuzzy match tolerates trimmed line differences
+  ✓ fuzzy match normalizes indentation in replace block
+  ✓ fuzzy match trims trailing whitespace on lines
+  ✓ fuzzy match fails when trimmed lines are ambiguous without selection
+  ✓ fuzzy match fails when no trimmed line block matches
+  ✓ fuzzy match tolerates self-kwargs like request=request
+
+14 passed, 0 failed
+  ✓ buildPatchCardState returns pending metadata
+  ✓ buildPatchCardState includes add/remove diff lines
+  ✓ buildPatchCardState lists all locations when SEARCH is ambiguous
+  ✓ buildPatchCardState preserves prior location selection
+  ✓ pairs equal ambiguous hunks to unique lines (no duplicate options)
+  ✓ shared group lists each line once when hunk/match counts differ
+  ✓ pairs ambiguous hunks that hit the same spans even when SEARCH text differs
+  ✓ buildPatchCardState matches SEARCH using an aliased fileContents key
+  ✓ buildPatchCardState matches SEARCH in an untitled Zero-Clone tab without fileContents
+  ✓ buildPatchCardState prefers the live untitled tab over stale captured bytes
+  ✓ preview names StateManager.get_queryset and includes the class line
+  ✓ insert-above preview line numbers include the blank line Apply will write
+
+patchDiffPreview: 12 passed, 0 failed
+  ✓ documentMatchesPatchPath matches github vfs URIs
+  ✓ documentMatchesPatchPath matches github vfs URIs with ref query
+  ✓ undo snapshot round-trips remote URIs
+  ✓ undo snapshot keeps local fs paths
+  ✓ undo snapshot round-trips untitled API buffers
+  ✓ findOpenDocumentForPatchFile matches untitled API buffers by captured bytes
+  ✓ ensureEditablePatchTarget applies from captured bytes when GitHub VFS is unavailable
+  ✓ collectOpenPatchFileBytes reads a remembered untitled API buffer
+  ✓ collectOpenPatchFileBytes finds an untitled tab by unique SEARCH
+
+patchTarget: 9 passed, 0 failed
+  ✓ GitHub VFS typed change is included
+  ✓ unchanged GitHub VFS tab is excluded
+  ✓ GitLab untitled remembered tab is included
+  ✓ Bitbucket untitled remembered tab is included
+  ✓ foreign file:// workspace is excluded even when dirty
+  ✓ Use-repo file:// dirty buffer is included when the clone matches
+  ✓ GitHub VFS for a different repo is excluded
+  ✓ dirty buffer without snapshot is included; clean needs remote
+  ✓ remote baseline skip when current matches fetched file
+  ✓ compactWorkingCopyDiff shows editor lines
+
+editorWorkingCopy: 10 passed, 0 failed
+  ✓ lookupPatchFileContent matches a repo-relative alias of the same file
+  ✓ lookupPatchFileContent ignores empty bodies
+
+patchFileContents: 2 passed, 0 failed
+  ✗ captured private target reaches applicable preview without disabling sanitization
+    Expected values to be strictly equal:
++ actual - expected
+
++ undefined
+- '/private/tmp/dogfood/fixture.ts'
+
+  ✓ ignoreParseFailure leaves session untouched when no patches
+  ✓ ignoreParseFailure still elevates valid ask-mode patches
+  ✓ edit-mode parse failure still publishes failed suppression path
+  ✓ omitted File: header still builds an Apply card from the open file
+  ✓ snaps paraphrased SEARCH onto highlighted lines using attached file bytes
+  ✓ preview matches when highlight IS the SEARCH block and file bytes use a path alias
+  ✓ expanding Backlog REPLACE does not duplicate the selected dict
+  ✓ duplicate requireAuth signature snaps to one JSDoc above the function
+  ✓ comment-only ask rejects a constructor rewrite with no comment
+  ✓ preview matches highlighted StateGroup in an untitled Bitbucket tab
+  ✓ comment-only In Progress duplicate snaps onto get_queryset, not DEFAULT_STATES
+  ✓ /edit tests rewrite gather>0 to the attached SUT
+  ✓ /edit tests rewrite MAX-RESERVED asserts when the SUT nests a helper
+  ✓ /edit tests rewrite a wrong constant equality from attached SUT
+  ✓ older /edit fences stay suppressed when a newer card lands
+  ✓ 5-file cap publishes a failed card and keeps fences hidden
+  ✓ malformed SEARCH publishes a failed card instead of writing
+
+17 passed, 1 failed

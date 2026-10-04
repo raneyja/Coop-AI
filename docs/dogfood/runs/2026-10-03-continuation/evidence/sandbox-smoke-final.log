@@ -1,0 +1,6 @@
+PASS login, identity, role and plan: free-admin@demo.local
+PASS login, identity, role and plan: pro-admin@demo.local
+PASS login, identity, role and plan: pro-member@demo.local
+PASS login, identity, role and plan: enterprise-admin@demo.local
+PASS tenant isolation, member admin denial, cross-tenant denial, billing unavailable, logout revocation
+API smoke only: no Extension Host, real codehost, model, integration or Stripe checkout certification.

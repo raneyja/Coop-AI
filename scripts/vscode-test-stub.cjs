@@ -1,8 +1,19 @@
 "use strict";
 
 const Module = require("node:module");
+class Position {
+  constructor(line, character) { this.line = line; this.character = character; }
+}
+class Range {
+  constructor(start, end) { this.start = start; this.end = end; }
+}
+class Selection extends Range {
+  constructor(start, end) { super(start, end); this.anchor = start; this.active = end; }
+}
 
 const stub = {
+  Position, Range, Selection,
+  TextEditorRevealType: { InCenter: 1 },
   env: {
     isTelemetryEnabled: true,
     onDidChangeTelemetryEnabled() {

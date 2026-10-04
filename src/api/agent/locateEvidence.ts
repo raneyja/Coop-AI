@@ -13,6 +13,7 @@ import {
   contentLooksLikeCreateHandler,
   contentLooksLikeDeclaration,
   contentLooksLikeRequestAuthEnforcement,
+  contentLooksLikeStateModelDeclaration,
   isApiRejectAsk,
   isBackendStateDefinitionHit,
   isBackendStateLocateAsk,
@@ -20,6 +21,8 @@ import {
   isCreateDefinitionHit,
   isCreateLocateAsk,
   isDefinitionLocateAsk,
+  isParserLocateAsk,
+  contentLooksLikeRequestedParser,
   isUnrelatedSerializerForStateLocate,
   isRequestAuthEnforcementHit,
   isRequestAuthLocateAsk,
@@ -48,6 +51,10 @@ function locateVerdictApplies(query: string): boolean {
     return false;
   }
   return isDefinitionLocateAsk(query);
+}
+
+function isSimpleBackendStateLocateAsk(query: string): boolean {
+  return isBackendStateLocateAsk(query) && !isRequestAuthLocateAsk(query);
 }
 
 function askedAboutTests(query: string): boolean {
@@ -246,6 +253,13 @@ function classifyLocateSnippet(path: string, snippet: string, query: string): Lo
   if (hasLanguageMismatch(path, snippet)) {
     return "mention";
   }
+  if (isSimpleBackendStateLocateAsk(query)) {
+    // A StateSerializer/import can direct a follow-up read, but it does not
+    // establish where the State model is declared.
+    return contentLooksLikeStateModelDeclaration(stripStringsAndComments(snippet))
+      ? "implementation"
+      : "uncertain";
+  }
   if (textMentionsQueryRoles(path, query) && queryRoleHints(query).length > 0 && hasNativeForExtension(path, snippet)) {
     return "implementation";
   }
@@ -294,6 +308,15 @@ export function classifyLocateRead(input: LocateReadInput): LocateEvidenceClass 
   }
   if (hasLanguageMismatch(path, body)) {
     return "mention";
+  }
+  if (isParserLocateAsk(query)) {
+    return contentLooksLikeRequestedParser(stripStringsAndComments(body), query)
+      ? "implementation" : "mention";
+  }
+  if (isSimpleBackendStateLocateAsk(query)) {
+    return contentLooksLikeStateModelDeclaration(stripStringsAndComments(body))
+      ? "implementation"
+      : "mention";
   }
   if (roleOnlyInNonCode(path, body, query)) {
     return "mention";

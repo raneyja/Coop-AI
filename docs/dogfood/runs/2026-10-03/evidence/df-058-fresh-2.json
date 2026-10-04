@@ -1,0 +1,29 @@
+{
+  "scenario": {
+    "id": "DF-058",
+    "area": "Session, settings and resilience",
+    "fixture": "Sandbox account(s); recorded repo/ref; deterministic fault fixtures",
+    "action": "Copy answer and code; reopen a citation.",
+    "passCriteria": "Copied code is usable; citation opens exact remote path/ref/range.",
+    "modes": [
+      "fresh"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T18:53:05.259179+00:00",
+    "status": "FAIL",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "see notes@see notes",
+    "action": "Copy answer and code; reopen a citation.",
+    "actualResult": "Correction to earlier observation: actual remote scratch source measured from focused editor value is 264 lines / 7292 characters, authUserId starts203; earlier 241-line description was inaccurate. Copied answer and code verified exact and clean; clicked203\u2013208 reopens correct body, but source chip L1\u2013519 and later L1\u2013531 is inflated. No tracked source changed. Exact range provenance still fails.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-058-fresh-2.json",
+    "criteriaReview": "NOT_ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": null,
+    "durationMs": null,
+    "threadId": null
+  },
+  "diagnosticEvents": []
+}

@@ -1,0 +1,18 @@
+
+> coop-ai@0.1.10 test:status-transition
+> npx tsx src/context/statusTransitionGrounding.test.ts
+
+  ✓ C4 PR-touching review is not a status-transition ask
+  ✓ isStatusTransitionAsk detects stuck PENDING / where status moves
+  ✓ A9 incident ask is not stolen by status-transition via 'still open'
+  ✓ incident + clear PENDING→COMPLETED still counts as status-transition
+  ✓ parseAskedStatusTransition reads PENDING→COMPLETED
+  ✓ fixture with seal-document job → shaped output names that write path
+  ✓ fixture with only throws → must not claim COMPLETED was written in-file
+  ✓ separates hard aborts from waiting-on-next-signer paths
+  ✓ clarifies recipient SigningStatus vs envelope DocumentStatus
+  ✓ statusTransitionGatherQuery prefers seal-document job name
+  ✓ followed seal handler can add direct COMPLETED write without inventing it in open file
+  ✓ enrichStatusTransitionResponse injects seal job and enum distinction
+
+statusTransitionGrounding: 12/12 tests passed

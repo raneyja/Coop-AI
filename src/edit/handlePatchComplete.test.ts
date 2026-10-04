@@ -6,6 +6,7 @@ import { patchCardsForMessages } from "./hydratePatchCardsFromHistory";
 import { getSuppressedMessageTimestamps, listPatchCards, resetPatchSessionForTests } from "./patchSession";
 import { patchFileCapError } from "./patchParser";
 import { clearRemotePatchBuffersForTests } from "./patchTarget";
+import { sanitizedPatchTargetBindings } from "./patchFileContents";
 
 let passed = 0;
 let failed = 0;
@@ -36,6 +37,15 @@ const SAMPLE_PATCH = [
 ].join("\n");
 
 async function main(): Promise<void> {
+  await test("captured private target reaches applicable preview without disabling sanitization", async () => {
+    const target = "/private/tmp/dogfood/fixture.ts";
+    const result = await handlePatchComplete(SAMPLE_PATCH.replace("`src/foo.ts`", "[INTERNAL_PATH]"), {
+      file: target, fileContents: {[target]: "const x = 1;"},
+      targetAliases: sanitizedPatchTargetBindings([target]), messageTimestamp: 1
+    });
+    assert.equal(result?.status, "pending");
+    assert.equal(result?.files[0]?.relativePath, target);
+  });
   await test("ignoreParseFailure leaves session untouched when no patches", async () => {
     const published: unknown[] = [];
     const result = await handlePatchComplete("**Answer**\nJust advice, no edits.", {

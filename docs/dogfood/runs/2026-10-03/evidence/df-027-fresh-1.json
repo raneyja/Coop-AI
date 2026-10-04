@@ -1,0 +1,29 @@
+{
+  "scenario": {
+    "id": "DF-027",
+    "area": "Editing and code generation",
+    "fixture": "Disposable branch/worktree; seeded bug and independent assertions; never production branch",
+    "action": "Stop during patch generation, then submit another edit.",
+    "passCriteria": "No partial writes or late first-turn mutation; new edit succeeds.",
+    "modes": [
+      "fresh"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T18:36:17.848699+00:00",
+    "status": "FAIL",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "see notes@see notes",
+    "action": "Stop during patch generation, then submit another edit.",
+    "actualResult": "Stopped broad edit after 5s; UI displayed Stopped. Immediately asked only Rename header to authorizationHeader in extractBearerToken. New turn completed 39s with 2 files/4 edits: BearerToken object return-type change, resolveAuthContext replacement and test changes from cancelled broad request. Narrow next edit failed intent isolation. No patches applied; Reject all confirmed Patch rejected. Buffer remained original string-return parser. Not claiming delayed write, but cancelled request contaminated next proposal.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-027-fresh-1.json",
+    "criteriaReview": "NOT_ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": null,
+    "durationMs": null,
+    "threadId": null
+  },
+  "diagnosticEvents": []
+}

@@ -1,0 +1,56 @@
+{
+  "recordedAt": "2026-10-03T20:09:54.554360+00:00",
+  "scenario": "DF-027",
+  "mode": "fresh",
+  "status": "FAIL",
+  "candidate": {
+    "recordedAt": "2026-10-03T20:07:11.854538+00:00",
+    "head": "c7796ed10c8bcc5cd2848d44b0bab6eb283684fc",
+    "extensionHash": "3f369e90c9d0de80fecaeb704acac4abbe91de40e2dac9676168ab9793fa3308",
+    "webviewHash": "c7b4756b3ac9894f8a690fb57c2e2d9bbea9c14a1fb1e8d859daac75cad7fa70",
+    "trackedDiffHash": "4da7ca2a1375df3f2afb1484e30dbda3d82ccaf1211c106f31544abd8f5212ad",
+    "backendDeployment": null,
+    "vsixHash": null,
+    "loadedInHost": false
+  },
+  "threadId": "thread-1791058087485-3f3fh6",
+  "turnId": null,
+  "runId": null,
+  "firstAnswerMs": null,
+  "durationMs": null,
+  "actualAction": "Stop structured BearerToken/all-callers edit; request only header\u2192authorizationHeader rename.",
+  "actualResult": "Stopped turn remained visible. Narrow response preview contained one file/one edit and only header references changed, preserving string return type. Target remained literal [INTERNAL_PATH]; rejected without applying. Apply acceptance remains open for Batch 3.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "/edit Change extractBearerToken to return a structured BearerToken object and update all callers and tests.\nfile: /private/tmp/coop-app-dogfood/fixture.ts \u00b7 selection: L9\u201314",
+      "timestamp": 1791058104890,
+      "cancelled": true
+    },
+    {
+      "role": "assistant",
+      "content": "Stopped.",
+      "timestamp": 1791058112860,
+      "cancelled": true
+    },
+    {
+      "role": "user",
+      "content": "/edit Rename only header to authorizationHeader in extractBearerToken. Preserve its string return type and change no other function or file.\nfile: /private/tmp/coop-app-dogfood/fixture.ts \u00b7 selection: L9\u201314",
+      "timestamp": 1791058124281,
+      "cancelled": null
+    },
+    {
+      "role": "assistant",
+      "content": "This patch renames `header` to `authorizationHeader` in the `extractBearerToken` function in the local file `[INTERNAL_PATH]`.\n\nFile: `[INTERNAL_PATH]`\n\n```patch\n<<<<<<< SEARCH\nexport function extractBearerToken(headers: Record<string, string | undefined>): string | undefined {\n  const header = headers.authorization ?? '';\n  if (!header.startsWith('Bearer ')) return undefined;\n  const token = header.slice('Bearer '.length).trim();\n  return token || undefined;\n}\n=======\nexport function extractBearerToken(headers: Record<string, string | undefined>): string | undefined {\n  const authorizationHeader = headers.authorization ?? '';\n  if (!authorizationHeader.startsWith('Bearer ')) return undefined;\n  const token = authorizationHeader.slice('Bearer '.length).trim();\n  return token || undefined;\n}\n>>>>>>> REPLACE\n```",
+      "timestamp": 1791058127834,
+      "cancelled": null
+    }
+  ],
+  "fixtureSha256": "771ff97ee8e29364a08cbb7652205f6f9b4ff0a31c0fc02d296345c9a2697ed0",
+  "missingEvidence": [
+    "first-answer timing",
+    "standard synthesis run diagnostics",
+    "verified backend deployment",
+    "packaged VSIX"
+  ]
+}

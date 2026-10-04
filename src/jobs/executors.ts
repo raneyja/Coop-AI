@@ -322,6 +322,8 @@ async function indexRepository(
       lastAuthor: "cloud-index",
       sha: clone.headCommit ?? "local"
     }));
+    graph.metadata.indexedBranch = clone.branch ?? target.branch;
+    graph.metadata.indexedCommit = clone.headCommit;
     graph.metadata.lastIndexedAt = now;
     graph.metadata.indexVersion += 1;
     graph.lastUpdated = now;

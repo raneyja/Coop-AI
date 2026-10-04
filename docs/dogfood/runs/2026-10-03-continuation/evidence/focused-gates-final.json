@@ -1,0 +1,52 @@
+[
+  {
+    "name": "test:code-citation-locator",
+    "exitCode": 0,
+    "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-code-citation-locator-final.log"
+  },
+  {
+    "name": "test:prompt-library",
+    "exitCode": 0,
+    "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-prompt-library-final.log"
+  },
+  {
+    "name": "test:project-instructions",
+    "exitCode": 0,
+    "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-project-instructions-final.log"
+  },
+  {
+    "name": "test:chat-response-timing",
+    "exitCode": 0,
+    "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-chat-response-timing-final.log"
+  },
+  {
+    "name": "test:request-batcher",
+    "exitCode": 0,
+    "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-request-batcher-final.log"
+  },
+  {
+    "name": "test:status-transition",
+    "exitCode": 0,
+    "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-status-transition-final.log"
+  },
+  {
+    "name": "test:email-template-grounding",
+    "exitCode": 0,
+    "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-email-template-grounding-final.log"
+  },
+  {
+    "name": "test:existing-capability",
+    "exitCode": 0,
+    "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-existing-capability-final.log"
+  },
+  {
+    "name": "test:fim",
+    "exitCode": 0,
+    "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-fim-final.log"
+  },
+  {
+    "name": "test:repo-grants-ui",
+    "exitCode": 0,
+    "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-repo-grants-ui-final.log"
+  }
+]

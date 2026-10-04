@@ -555,17 +555,17 @@ export class BitbucketClient implements CodeHostClient {
 
   public async searchCode(coords: RepoCoordinates, query: string, limit = 20): Promise<Array<{ path: string }>> {
     const params = new URLSearchParams({
-      search_query: `repo:${coords.owner}/${coords.repo} ${query}`,
+      search_query: `repo:${coords.repo} ${query}`,
       fields: "values.file.path,values.content_match_count"
     });
     const payload = await codeHostRequestJson<BitbucketPaginated<BitbucketSearchHit>>(
-      `${BITBUCKET_API}/search/code?${params.toString()}`,
+      `${BITBUCKET_API}/workspaces/${encodeURIComponent(coords.owner)}/search/code?${params.toString()}`,
       {
         headers: this.headers,
         provider: this.provider,
         rateLimitTracker: this.options.rateLimitTracker
       }
-    ).catch(() => ({ values: [] as BitbucketSearchHit[] }));
+    );
     const paths: string[] = [];
     for (const hit of payload.values ?? []) {
       const path = hit.file?.path;

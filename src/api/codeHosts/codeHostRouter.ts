@@ -56,6 +56,8 @@ export type CloudCodeHostSearchFetcher = (options: {
   query: string;
   coords: RepoCoordinates;
   limit?: number;
+  excludeClientUi?: boolean;
+  searchKind?: "content";
 }) => Promise<Array<{ path: string; name: string }>>;
 
 export type CloudCodeHostRepoListFetcher = (
@@ -306,7 +308,8 @@ export class CodeHostRouter {
   public async searchRepositoryFiles(
     query: string,
     coords?: Partial<RepoCoordinates>,
-    limit = 30
+    limit = 30,
+    options?: { excludeClientUi?: boolean }
   ): Promise<Array<{ path: string; name: string }>> {
     const trimmed = query.trim();
     if (!trimmed) {
@@ -316,12 +319,13 @@ export class CodeHostRouter {
     if (this.options.useCloudCodeHostProxy?.() && this.options.cloudCodeHostSearchFetcher) {
       try {
         const repoId = repoIdFromCoordinates(resolved);
-        return await this.cached(this.key("search", resolved, trimmed, String(limit)), "search", async () => {
+        return await this.cached(this.key("search", resolved, trimmed, String(limit), String(Boolean(options?.excludeClientUi))), "search", async () => {
           const hits = await this.options.cloudCodeHostSearchFetcher!({
             repoId,
             query: trimmed,
             coords: resolved,
-            limit
+            limit,
+            excludeClientUi: options?.excludeClientUi
           });
           return sortExplorerSearchHitsByQuery(hits, trimmed);
         });
@@ -352,6 +356,43 @@ export class CodeHostRouter {
       })),
       trimmed
     );
+  }
+
+  /**
+   * Full-text code search on the native code-host API (no `path:` explorer wrap,
+   * no Lightning/graph cloud search proxy). Agent fail-open when the index is empty.
+   */
+  public async searchRepositoryCodeContent(
+    query: string,
+    coords?: Partial<RepoCoordinates>,
+    limit = 20
+  ): Promise<Array<{ path: string; name: string }>> {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      return [];
+    }
+    const resolved = await this.resolveCoordinates(coords);
+    if (this.options.useCloudCodeHostProxy?.()) {
+      if (!this.options.cloudCodeHostSearchFetcher) {
+        throw new CodeHostError("Cloud content search is unavailable; use remote filename discovery.", "unsupported", 400, resolved.provider);
+      }
+      return this.options.cloudCodeHostSearchFetcher({repoId: repoIdFromCoordinates(resolved),
+        query: trimmed, coords: resolved, limit, searchKind: "content"});
+    }
+    const client = await this.getClient(resolved.provider);
+    if (!client.searchCode) {
+      throw new CodeHostError(
+        "File search isn't supported for this code host yet.",
+        "unsupported",
+        400,
+        resolved.provider
+      );
+    }
+    const hits = await client.searchCode(resolved, trimmed, limit);
+    return hits.map((hit) => ({
+      path: hit.path,
+      name: hit.path.split("/").pop() ?? hit.path
+    }));
   }
 
   /** Repositories shown in the remote explorer picker (pinned config, settings, and live host list). */
@@ -941,4 +982,3 @@ function buildCrossRepoSearchTargets(
   }
   return targets.length > 0 ? targets : [source];
 }
-

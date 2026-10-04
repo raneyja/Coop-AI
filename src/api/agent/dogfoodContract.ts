@@ -40,6 +40,24 @@ export const API_CREATE_ISSUE_LOCATE_ASK = "Where does the API create an issue?"
 export const COPILOT_C2_ASK =
   "Users can't move a work item out of backlog — the API returns an error. I don't have this repo cloned. Where is work-item state written, and what rejects a bad transition?";
 
+/**
+ * Live Extension Host ship gate for Parent reject (plane / preview / no chip).
+ * Soft `COPILOT_T2_ASK` is a regression only — never a substitute for this ask.
+ *
+ * ## Rigorous Pass / Fail (Gate C) — all Pass rows required; any Fail row = Fail
+ *
+ * | Pass (must all be true) | Fail (any one = Fail) |
+ * |---|---|
+ * | Answer cites the Parent ValidationError (exact or near-exact quote) | Canned `API_REJECT_HUNT_MISS` / “couldn't find where the API rejects…” |
+ * | Evidence path is the raise site under `serializers/…/issue.py` (or attached snippet from that file) | Only opened `utils/error_codes.py`, UI, types, or migrations |
+ * | Tool activity shows a read/attach of that raise (not search-only) | 5+ searches + 0 reads of a write-reject body |
+ * | Answer stops after citing the raise — no padded “backend probably…” essay | Speculative path with no attached reject |
+ *
+ * Automated green ≠ Pass. Do not call this fixed until Gate C live Pass.
+ */
+export const LIVE_PARENT_PASS_ASK =
+  'In Plane issue create/update, the API raises ValidationError "Parent is not valid issue_id please pass a valid issue_id" when the parent isn\'t in the project. Where is that raised?';
+
 /** Same job as C2, different field — must not canned-miss or latch `issue_id`. */
 export const COPILOT_T2_ASK =
   "A client sent a parent that isn’t in this project — the API returns an error. I don’t have this repo cloned. Where does the API reject a bad parent issue_id?";

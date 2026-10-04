@@ -1,0 +1,437 @@
+{
+  "scenario": {
+    "id": "DF-002",
+    "area": "Repository questions",
+    "fixture": "Coop-AI; pinned remote ref; no chip",
+    "action": "Where is requireAuth or authentication middleware defined in this repo?",
+    "passCriteria": "Actual definition is read and cited; no invented helper or local workspace fallback.",
+    "modes": [
+      "cold",
+      "warm",
+      "after-repo-switch"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T17:18:15.560593+00:00",
+    "status": "PASS",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "gitlab:coopai-group/Coop-AI@main",
+    "action": "Where is requireAuth or authentication middleware defined in this repo?",
+    "actualResult": "Fresh no-chip chat. Answer identifies src/server/authMiddleware.ts and actual exported authentication helpers. Read source and rendered source card. Quality finding: includes full 241-line file rather than bounded requireAuth definition; requested symbol not explicitly named in prose. Correct file, but concise-answer quality needs review.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-002-warm-1.json",
+    "criteriaReview": "ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": 7471,
+    "durationMs": 9518,
+    "threadId": "thread-1791047843958-0n9mxj"
+  },
+  "diagnosticEvents": [
+    {
+      "at": "2026-10-03T17:17:30.532Z",
+      "threadId": "thread-1791047843958-0n9mxj",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "e0a04c8b-f1c7-4dc0-ad04-04641f5fd36c",
+      "turnElapsedMs": 155,
+      "stage": "target",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "requestedBranch": "main",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:17:30.533Z",
+      "threadId": "thread-1791047843958-0n9mxj",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "e0a04c8b-f1c7-4dc0-ad04-04641f5fd36c",
+      "turnElapsedMs": 156,
+      "stage": "turn",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "action": "locate",
+      "hunt": "definition-locate",
+      "taskQuery": "Where is requireAuth or authentication middleware defined in this repo?",
+      "plannedSearchQueries": [
+        "requireAuth"
+      ],
+      "requiredEvidence": []
+    },
+    {
+      "at": "2026-10-03T17:17:31.860Z",
+      "threadId": "thread-1791047843958-0n9mxj",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "e0a04c8b-f1c7-4dc0-ad04-04641f5fd36c",
+      "turnElapsedMs": 1483,
+      "stage": "plan",
+      "round": 0,
+      "result": "call",
+      "tool": "search_code",
+      "query": "requireAuth",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T17:17:32.043Z",
+      "threadId": "thread-1791047843958-0n9mxj",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "e0a04c8b-f1c7-4dc0-ad04-04641f5fd36c",
+      "turnElapsedMs": 1666,
+      "stage": "index-search-start",
+      "query": "requireAuth",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:17:33.135Z",
+      "threadId": "thread-1791047843958-0n9mxj",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "e0a04c8b-f1c7-4dc0-ad04-04641f5fd36c",
+      "turnElapsedMs": 2758,
+      "stage": "index-search",
+      "query": "requireAuth",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 1092,
+      "hitCount": 14,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "src/server/authMiddleware.ts",
+          "line": 7,
+          "score": 0.4758213556439146
+        },
+        {
+          "path": "src/server/operatorApi.ts",
+          "line": 10,
+          "score": 0.46487942182979425
+        },
+        {
+          "path": "src/server/authMiddleware.test.ts",
+          "line": 15,
+          "score": 0.46140073132154824
+        },
+        {
+          "path": "src/jobs/jobsApi.ts",
+          "line": 8,
+          "score": 0.45558722874306046
+        },
+        {
+          "path": "src/server/auth/userAuthApi.ts",
+          "line": 23,
+          "score": 0.4539767807477202
+        },
+        {
+          "path": "src/server/auth/userAuthApi.inviteGoogle.test.ts",
+          "line": 6,
+          "score": 0.44781779408038036
+        },
+        {
+          "path": "src/server/enterpriseApi.test.ts",
+          "line": 11,
+          "score": 0.4477061836495888
+        },
+        {
+          "path": "src/server/notionAppApi.ts",
+          "line": 4,
+          "score": 0.44077044019091516
+        },
+        {
+          "path": "src/api/byokHandler.ts",
+          "line": 20,
+          "score": 0.4381548790245733
+        },
+        {
+          "path": "src/server/audit/auditLogger.ts",
+          "line": 4,
+          "score": 0.4379968653273383
+        },
+        {
+          "path": "src/webhooks/webhookServer.ts",
+          "line": 8,
+          "score": 0.4368577372107376
+        },
+        {
+          "path": "src/server/sso/samlApi.ts",
+          "line": 6,
+          "score": 0.4345536196565214
+        },
+        {
+          "path": "src/server/auth/userAuthApi.policy.test.ts",
+          "line": 4,
+          "score": 0.43399802315499936
+        },
+        {
+          "path": "src/server/adminUsersApi.ts",
+          "line": 2,
+          "score": 0.432321710252909
+        }
+      ],
+      "symbols": [],
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:17:33.153Z",
+      "threadId": "thread-1791047843958-0n9mxj",
+      "stage": "activity-step",
+      "tool": "search_code",
+      "summary": "search_code: requireAuth"
+    },
+    {
+      "at": "2026-10-03T17:17:33.919Z",
+      "threadId": "thread-1791047843958-0n9mxj",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "e0a04c8b-f1c7-4dc0-ad04-04641f5fd36c",
+      "turnElapsedMs": 3542,
+      "path": "src/server/authMiddleware.ts",
+      "returnedPath": "src/server/authMiddleware.ts",
+      "outcome": "body",
+      "bodyChars": 7293,
+      "cacheHit": false,
+      "elapsedMs": 766,
+      "stage": "remote-read",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:17:33.920Z",
+      "threadId": "thread-1791047843958-0n9mxj",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "e0a04c8b-f1c7-4dc0-ad04-04641f5fd36c",
+      "turnElapsedMs": 3543,
+      "stage": "candidate-read",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "path": "src/server/authMiddleware.ts",
+      "line": 7,
+      "result": "implementation",
+      "bodyLines": 51,
+      "bodyChars": 1463,
+      "windowStart": 1,
+      "windowEnd": 32
+    },
+    {
+      "at": "2026-10-03T17:17:33.921Z",
+      "threadId": "thread-1791047843958-0n9mxj",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file: src/server/authMiddleware.ts"
+    },
+    {
+      "at": "2026-10-03T17:17:35.150Z",
+      "threadId": "thread-1791047843958-0n9mxj",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "e0a04c8b-f1c7-4dc0-ad04-04641f5fd36c",
+      "turnElapsedMs": 4773,
+      "stage": "plan",
+      "round": 1,
+      "result": "call",
+      "tool": "read_file",
+      "path": "src/server/authMiddleware.ts",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T17:17:35.152Z",
+      "threadId": "thread-1791047843958-0n9mxj",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "e0a04c8b-f1c7-4dc0-ad04-04641f5fd36c",
+      "turnElapsedMs": 4775,
+      "path": "src/server/authMiddleware.ts",
+      "returnedPath": "src/server/authMiddleware.ts",
+      "outcome": "body",
+      "bodyChars": 7293,
+      "cacheHit": true,
+      "elapsedMs": 1,
+      "stage": "remote-read",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:17:35.154Z",
+      "threadId": "thread-1791047843958-0n9mxj",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file: src/server/authMiddleware.ts"
+    },
+    {
+      "at": "2026-10-03T17:17:36.136Z",
+      "threadId": "thread-1791047843958-0n9mxj",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "e0a04c8b-f1c7-4dc0-ad04-04641f5fd36c",
+      "turnElapsedMs": 5759,
+      "stage": "plan",
+      "round": 2,
+      "result": "call",
+      "tool": "read_file",
+      "path": "src/server/authMiddleware.ts",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T17:17:36.137Z",
+      "threadId": "thread-1791047843958-0n9mxj",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "e0a04c8b-f1c7-4dc0-ad04-04641f5fd36c",
+      "turnElapsedMs": 5760,
+      "path": "src/server/authMiddleware.ts",
+      "returnedPath": "src/server/authMiddleware.ts",
+      "outcome": "body",
+      "bodyChars": 7293,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:17:36.139Z",
+      "threadId": "thread-1791047843958-0n9mxj",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file: src/server/authMiddleware.ts"
+    },
+    {
+      "at": "2026-10-03T17:17:36.924Z",
+      "threadId": "thread-1791047843958-0n9mxj",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "e0a04c8b-f1c7-4dc0-ad04-04641f5fd36c",
+      "turnElapsedMs": 6547,
+      "stage": "plan",
+      "round": 3,
+      "result": "done"
+    },
+    {
+      "at": "2026-10-03T17:17:36.924Z",
+      "threadId": "thread-1791047843958-0n9mxj",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "e0a04c8b-f1c7-4dc0-ad04-04641f5fd36c",
+      "turnElapsedMs": 6547,
+      "stage": "synthesis-start"
+    },
+    {
+      "at": "2026-10-03T17:17:37.655Z",
+      "threadId": "thread-1791047843958-0n9mxj",
+      "stage": "answer-start",
+      "elapsedMs": 7471,
+      "selectedBranch": "main",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016"
+    },
+    {
+      "at": "2026-10-03T17:17:39.895Z",
+      "threadId": "thread-1791047843958-0n9mxj",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "e0a04c8b-f1c7-4dc0-ad04-04641f5fd36c",
+      "turnElapsedMs": 9518,
+      "stage": "outcome",
+      "candidateLedger": [
+        {
+          "path": "src/server/authMiddleware.ts",
+          "criterion": "where is require_auth or authentication middleware defined in this repo?",
+          "status": "verified"
+        },
+        {
+          "path": "src/server/operatorApi.ts",
+          "criterion": "where is require_auth or authentication middleware defined in this repo?",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/authMiddleware.test.ts",
+          "criterion": "where is require_auth or authentication middleware defined in this repo?",
+          "status": "untested"
+        },
+        {
+          "path": "src/jobs/jobsApi.ts",
+          "criterion": "where is require_auth or authentication middleware defined in this repo?",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/auth/userAuthApi.ts",
+          "criterion": "where is require_auth or authentication middleware defined in this repo?",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/auth/userAuthApi.inviteGoogle.test.ts",
+          "criterion": "where is require_auth or authentication middleware defined in this repo?",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/enterpriseApi.test.ts",
+          "criterion": "where is require_auth or authentication middleware defined in this repo?",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/notionAppApi.ts",
+          "criterion": "where is require_auth or authentication middleware defined in this repo?",
+          "status": "untested"
+        },
+        {
+          "path": "src/api/byokHandler.ts",
+          "criterion": "where is require_auth or authentication middleware defined in this repo?",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/audit/auditLogger.ts",
+          "criterion": "where is require_auth or authentication middleware defined in this repo?",
+          "status": "untested"
+        },
+        {
+          "path": "src/webhooks/webhookServer.ts",
+          "criterion": "where is require_auth or authentication middleware defined in this repo?",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/sso/samlApi.ts",
+          "criterion": "where is require_auth or authentication middleware defined in this repo?",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/auth/userAuthApi.policy.test.ts",
+          "criterion": "where is require_auth or authentication middleware defined in this repo?",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/adminUsersApi.ts",
+          "criterion": "where is require_auth or authentication middleware defined in this repo?",
+          "status": "untested"
+        }
+      ],
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main",
+      "elapsedMs": 9518,
+      "stopped": false,
+      "stepCount": 4,
+      "hasAnswer": true,
+      "evidencePaths": [
+        "src/server/authMiddleware.ts",
+        "src/server/authMiddleware.ts",
+        "src/server/authMiddleware.ts"
+      ]
+    }
+  ]
+}

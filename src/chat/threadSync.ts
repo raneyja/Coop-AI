@@ -69,7 +69,9 @@ export async function syncThreadToBackend(
             mimeType: attachment.mimeType
           })),
           relatedArtifactId: message.relatedArtifactId,
-          modelContent: message.modelContent
+          modelContent: message.modelContent,
+          cancelled: message.cancelled,
+          patchCard: message.patchCard
         }
       }))
     };

@@ -51,6 +51,7 @@ ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
 ${EVIDENCE_CITATION_RULES}
 State confidence when evidence is thin. Keep answers concise — limited evidence warrants short sections, not speculative essays.
+Historical commits and discussions describe the decision at that time. Declare it active only when the selected current source independently supports the same behavior. If current source is absent or conflicts with the historical account, say current status is unverified or changed; do not infer continuity from a commit title.
 Follow-up questions use the same required section structure; omit sections the user did not ask about when they have no evidence.
 For **Alternatives considered** and **Trade-offs**, ground every claim in a PR review comment, Slack/Jira/Teams message, or extracted alternative — quote or paraphrase with plain provenance (e.g. "PR #1506 review by @alice"). If no discussion source documents options, write unknown — never invent them.
 When only an introducing commit is attached (no PR, Slack, Jira, or design doc), say alternatives and trade-offs are unknown — never invent them.

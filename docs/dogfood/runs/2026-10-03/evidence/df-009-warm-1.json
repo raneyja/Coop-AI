@@ -1,0 +1,1150 @@
+{
+  "scenario": {
+    "id": "DF-009",
+    "area": "Repository questions",
+    "fixture": "CoopAI-Corp/plane; preview pinned SHA; no chip",
+    "action": "Where do work-item states live in the backend?",
+    "passCriteria": "Reads actual State model; does not substitute a rejection hunt.",
+    "modes": [
+      "cold",
+      "warm",
+      "after-repo-switch"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T17:24:12.564810+00:00",
+    "status": "FAIL",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "github:CoopAI-Corp/plane@preview",
+    "action": "Where do work-item states live in the backend?",
+    "actualResult": "Calm State-model locate returns could not find that in this repo, no model evidence. Plane preview no chip; indexed map response lacks provenance fields and is rejected.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-009-warm-1.json",
+    "criteriaReview": "NOT_ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": 6871,
+    "durationMs": 6871,
+    "threadId": "thread-1791048209216-ojvyxy"
+  },
+  "diagnosticEvents": [
+    {
+      "at": "2026-10-03T17:23:35.934Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 171,
+      "stage": "target",
+      "repoId": "github:CoopAI-Corp/plane",
+      "requestedBranch": "preview",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:35.934Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 171,
+      "stage": "turn",
+      "repoId": "github:CoopAI-Corp/plane",
+      "action": "locate",
+      "hunt": "backend-state-locate",
+      "taskQuery": "Where do work-item states live in the backend?",
+      "plannedSearchQueries": [
+        "work item states"
+      ],
+      "requiredEvidence": []
+    },
+    {
+      "at": "2026-10-03T17:23:36.712Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 949,
+      "stage": "plan",
+      "round": 0,
+      "result": "invalid"
+    },
+    {
+      "at": "2026-10-03T17:23:36.888Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 1125,
+      "stage": "index-search-start",
+      "query": "work item states",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:37.858Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 2095,
+      "stage": "index-search",
+      "query": "work item states",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 970,
+      "hitCount": 14,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "packages/i18n/src/locales/en/workflow.json",
+          "line": 1,
+          "score": 0.5857097692189424
+        },
+        {
+          "path": "packages/i18n/src/locales/en/project-settings.json",
+          "line": 6,
+          "score": 0.5788337156155835
+        },
+        {
+          "path": "apps/api/plane/seeds/data/issues.json",
+          "line": 10,
+          "score": 0.5735279291828758
+        },
+        {
+          "path": "packages/i18n/src/locales/id/workflow.json",
+          "line": 1,
+          "score": 0.5659212261750849
+        },
+        {
+          "path": "packages/i18n/src/locales/de/project-settings.json",
+          "line": 7,
+          "score": 0.5582931525563012
+        },
+        {
+          "path": "apps/api/plane/settings/openapi.py",
+          "line": 6,
+          "score": 0.5496809088969038
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item.json",
+          "line": 5,
+          "score": 0.5441527440697819
+        },
+        {
+          "path": "packages/i18n/src/locales/de/workflow.json",
+          "line": 1,
+          "score": 0.5395871631758314
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item-type.json",
+          "line": 7,
+          "score": 0.538496997464714
+        },
+        {
+          "path": "apps/web/core/components/power-k/ui/pages/context-based/work-item/commands.ts",
+          "line": 4,
+          "score": 0.5356745553994356
+        },
+        {
+          "path": "packages/i18n/src/locales/it/workflow.json",
+          "line": 1,
+          "score": 0.5336314574779455
+        },
+        {
+          "path": "packages/i18n/src/locales/ko/workflow.json",
+          "line": 1,
+          "score": 0.5294395742332791
+        },
+        {
+          "path": "packages/i18n/src/locales/zh-CN/workflow.json",
+          "line": 1,
+          "score": 0.5291357022701485
+        },
+        {
+          "path": "packages/constants/src/event-tracker/core.ts",
+          "line": 10,
+          "score": 0.5251824572343882
+        }
+      ],
+      "symbols": [],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:37.859Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 2096,
+      "stage": "filename-criteria",
+      "query": "work item states",
+      "criteria": [
+        "state.",
+        "locale.",
+        "plane.",
+        "workflow."
+      ],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:37.859Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 2096,
+      "query": "state.",
+      "stage": "filename-search-start",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:38.443Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 2680,
+      "stage": "indexed-map-response",
+      "requestedRepoId": "github:CoopAI-Corp/plane",
+      "requestedBranch": "preview",
+      "status": 200,
+      "responseRepoId": "github:CoopAI-Corp/plane",
+      "stale": false,
+      "hasDataArray": true,
+      "fileCount": 4616,
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:38.443Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 2680,
+      "query": "state.",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 584,
+      "stage": "filename-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:38.443Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 2680,
+      "query": "locale.",
+      "stage": "filename-search-start",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:38.443Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 2680,
+      "query": "locale.",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 0,
+      "stage": "filename-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:38.443Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 2680,
+      "query": "plane.",
+      "stage": "filename-search-start",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:38.443Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 2680,
+      "query": "plane.",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 0,
+      "stage": "filename-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:38.443Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 2680,
+      "query": "workflow.",
+      "stage": "filename-search-start",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:38.443Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 2680,
+      "query": "workflow.",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 0,
+      "stage": "filename-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:38.445Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "stage": "activity-step",
+      "tool": "search_code",
+      "summary": "search_code: work item states"
+    },
+    {
+      "at": "2026-10-03T17:23:38.672Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 2909,
+      "stage": "index-search-start",
+      "query": "class State",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:39.400Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 3637,
+      "stage": "index-search",
+      "query": "class State",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 728,
+      "hitCount": 19,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "apps/web/core/components/project-states/state-list.tsx",
+          "line": 1,
+          "score": 0.4892314692306352
+        },
+        {
+          "path": "packages/types/src/intake/index.ts",
+          "line": 1,
+          "score": 0.48908796256729625
+        },
+        {
+          "path": "packages/utils/src/work-item/state.ts",
+          "line": 1,
+          "score": 0.46369845532197695
+        },
+        {
+          "path": "apps/web/core/components/project-states/create-update/create.tsx",
+          "line": 1,
+          "score": 0.44659209331060623
+        },
+        {
+          "path": "apps/space/hooks/store/use-state.ts",
+          "line": 1,
+          "score": 0.42574976963674516
+        },
+        {
+          "path": "apps/web/core/hooks/store/use-project-state.ts",
+          "line": 1,
+          "score": 0.4172026035452774
+        },
+        {
+          "path": "apps/space/components/issues/issue-layouts/utils.tsx",
+          "line": 4,
+          "score": 0.40548983893689394
+        },
+        {
+          "path": "packages/propel/src/empty-state/detailed-empty-state.stories.tsx",
+          "line": 11,
+          "score": 0.404692473217105
+        },
+        {
+          "path": "apps/web/core/components/project-states/group-item.tsx",
+          "line": 2,
+          "score": 0.40346774962156096
+        },
+        {
+          "path": "apps/web/core/components/project-states/options/mark-as-default.tsx",
+          "line": 1,
+          "score": 0.3950881087749293
+        },
+        {
+          "path": "packages/propel/src/input/input.stories.tsx",
+          "line": 19,
+          "score": 0.39315056786762237
+        },
+        {
+          "path": "packages/i18n/src/locales/it/project-settings.json",
+          "line": 2,
+          "score": 0.39202517717163854
+        },
+        {
+          "path": "packages/propel/src/empty-state/compact-empty-state.stories.tsx",
+          "line": 1,
+          "score": 0.39166493601476815
+        },
+        {
+          "path": "apps/web/core/components/project-states/create-update/update.tsx",
+          "line": 1,
+          "score": 0.38923812066031294
+        },
+        {
+          "path": "packages/constants/src/event-tracker/core.ts",
+          "line": 13,
+          "score": 0.3892071217129627
+        },
+        {
+          "path": "apps/web/core/components/project-states/index.ts",
+          "line": 1,
+          "score": 0.38688563749492766
+        },
+        {
+          "path": "apps/web/core/components/cycles/analytics-sidebar/progress-stats.tsx",
+          "line": 3,
+          "score": 0.3860269512920489
+        },
+        {
+          "path": "apps/web/core/components/home/widgets/index.ts",
+          "line": 1,
+          "score": 0.38513458247392407
+        },
+        {
+          "path": "packages/services/src/state/index.ts",
+          "line": 1,
+          "score": 0.3839182710390986
+        }
+      ],
+      "symbols": [],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:39.400Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 3637,
+      "stage": "filename-criteria",
+      "query": "class State",
+      "criteria": [
+        "state.",
+        "project.",
+        "create."
+      ],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:39.400Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 3637,
+      "query": "project.",
+      "stage": "filename-search-start",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:39.400Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 3637,
+      "query": "project.",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 0,
+      "stage": "filename-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:39.400Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 3637,
+      "query": "create.",
+      "stage": "filename-search-start",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:39.400Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 3637,
+      "query": "create.",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 0,
+      "stage": "filename-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:39.402Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "stage": "activity-step",
+      "tool": "search_code",
+      "summary": "search_code: class State"
+    },
+    {
+      "at": "2026-10-03T17:23:39.611Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 3848,
+      "stage": "index-search-start",
+      "query": "State model",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:40.332Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 4568,
+      "stage": "index-search",
+      "query": "State model",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 720,
+      "hitCount": 19,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "apps/web/core/components/project-states/state-list.tsx",
+          "line": 1,
+          "score": 0.3812544188725413
+        },
+        {
+          "path": "packages/types/src/intake/index.ts",
+          "line": 1,
+          "score": 0.38050136032912596
+        },
+        {
+          "path": "packages/propel/src/empty-state/detailed-empty-state.stories.tsx",
+          "line": 1,
+          "score": 0.37677604816191457
+        },
+        {
+          "path": "packages/propel/src/empty-state/compact-empty-state.stories.tsx",
+          "line": 1,
+          "score": 0.37550842667811934
+        },
+        {
+          "path": "apps/web/core/components/project-states/state-item.tsx",
+          "line": 1,
+          "score": 0.3731301888998908
+        },
+        {
+          "path": "packages/utils/src/work-item/index.ts",
+          "line": 1,
+          "score": 0.3597414837000821
+        },
+        {
+          "path": "packages/propel/src/empty-state/assets-showcase.stories.tsx",
+          "line": 1,
+          "score": 0.3582927740786821
+        },
+        {
+          "path": "packages/shared-state/package.json",
+          "line": 1,
+          "score": 0.3566858913437505
+        },
+        {
+          "path": "packages/propel/src/input/input.stories.tsx",
+          "line": 19,
+          "score": 0.3520420946295628
+        },
+        {
+          "path": "apps/web/core/components/project-states/create-update/create.tsx",
+          "line": 1,
+          "score": 0.3507137284674795
+        },
+        {
+          "path": "apps/web/core/components/project-states/create-update/update.tsx",
+          "line": 1,
+          "score": 0.3487145725550005
+        },
+        {
+          "path": "apps/web/core/components/project-states/root.tsx",
+          "line": 1,
+          "score": 0.34646503771585047
+        },
+        {
+          "path": "apps/web/core/components/project-states/state-delete-modal.tsx",
+          "line": 1,
+          "score": 0.3454644831753002
+        },
+        {
+          "path": "packages/propel/src/empty-state/index.ts",
+          "line": 1,
+          "score": 0.34522682983630504
+        },
+        {
+          "path": "packages/utils/src/work-item/state.ts",
+          "line": 1,
+          "score": 0.3368891280928141
+        },
+        {
+          "path": "apps/web/core/components/settings/profile/content/pages/notifications/email-notification-form.tsx",
+          "line": 2,
+          "score": 0.33590918499248756
+        },
+        {
+          "path": "apps/web/core/components/cycles/analytics-sidebar/progress-stats.tsx",
+          "line": 3,
+          "score": 0.33192958965024766
+        },
+        {
+          "path": "apps/web/core/components/project-states/options/mark-as-default.tsx",
+          "line": 1,
+          "score": 0.33177686530455974
+        },
+        {
+          "path": "apps/web/core/components/project-states/group-item.tsx",
+          "line": 2,
+          "score": 0.33025585312714534
+        }
+      ],
+      "symbols": [],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:40.332Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 4569,
+      "stage": "filename-criteria",
+      "query": "State model",
+      "criteria": [
+        "state.",
+        "project."
+      ],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:40.334Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "stage": "activity-step",
+      "tool": "search_code",
+      "summary": "search_code: State model"
+    },
+    {
+      "at": "2026-10-03T17:23:40.793Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 5030,
+      "path": "packages/utils/src/work-item/state.ts",
+      "returnedPath": "packages/utils/src/work-item/state.ts",
+      "outcome": "body",
+      "bodyChars": 1986,
+      "cacheHit": false,
+      "elapsedMs": 459,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:40.794Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 5031,
+      "path": "packages/utils/src/work-item/state.ts",
+      "returnedPath": "packages/utils/src/work-item/state.ts",
+      "outcome": "body",
+      "bodyChars": 1986,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:40.794Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (mention): packages/utils/src/work-item/state.ts"
+    },
+    {
+      "at": "2026-10-03T17:23:41.201Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 5438,
+      "path": "packages/propel/src/empty-state/detailed-empty-state.stories.tsx",
+      "returnedPath": "packages/propel/src/empty-state/detailed-empty-state.stories.tsx",
+      "outcome": "body",
+      "bodyChars": 7817,
+      "cacheHit": false,
+      "elapsedMs": 407,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:41.202Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 5439,
+      "path": "packages/propel/src/empty-state/detailed-empty-state.stories.tsx",
+      "returnedPath": "packages/propel/src/empty-state/detailed-empty-state.stories.tsx",
+      "outcome": "body",
+      "bodyChars": 7817,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:41.202Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (mention): packages/propel/src/empty-state/detailed-empty-state.stories.tsx"
+    },
+    {
+      "at": "2026-10-03T17:23:41.651Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 5888,
+      "path": "packages/propel/src/empty-state/compact-empty-state.stories.tsx",
+      "returnedPath": "packages/propel/src/empty-state/compact-empty-state.stories.tsx",
+      "outcome": "body",
+      "bodyChars": 3654,
+      "cacheHit": false,
+      "elapsedMs": 449,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:41.651Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 5888,
+      "path": "packages/propel/src/empty-state/compact-empty-state.stories.tsx",
+      "returnedPath": "packages/propel/src/empty-state/compact-empty-state.stories.tsx",
+      "outcome": "body",
+      "bodyChars": 3654,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:41.652Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (mention): packages/propel/src/empty-state/compact-empty-state.stories.tsx"
+    },
+    {
+      "at": "2026-10-03T17:23:42.061Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 6298,
+      "path": "packages/propel/src/empty-state/assets-showcase.stories.tsx",
+      "returnedPath": "packages/propel/src/empty-state/assets-showcase.stories.tsx",
+      "outcome": "body",
+      "bodyChars": 7727,
+      "cacheHit": false,
+      "elapsedMs": 409,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:42.061Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 6298,
+      "path": "packages/propel/src/empty-state/assets-showcase.stories.tsx",
+      "returnedPath": "packages/propel/src/empty-state/assets-showcase.stories.tsx",
+      "outcome": "body",
+      "bodyChars": 7727,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:42.061Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (mention): packages/propel/src/empty-state/assets-showcase.stories.tsx"
+    },
+    {
+      "at": "2026-10-03T17:23:42.409Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 6646,
+      "path": "packages/propel/src/input/input.stories.tsx",
+      "returnedPath": "packages/propel/src/input/input.stories.tsx",
+      "outcome": "body",
+      "bodyChars": 4308,
+      "cacheHit": false,
+      "elapsedMs": 348,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:42.410Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 6647,
+      "path": "packages/propel/src/input/input.stories.tsx",
+      "returnedPath": "packages/propel/src/input/input.stories.tsx",
+      "outcome": "body",
+      "bodyChars": 4308,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:23:42.410Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (mention): packages/propel/src/input/input.stories.tsx"
+    },
+    {
+      "at": "2026-10-03T17:23:42.410Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "e7ebf96a-da4b-48b0-a71a-fedc7358bf27",
+      "turnElapsedMs": 6647,
+      "stage": "outcome",
+      "candidateLedger": [
+        {
+          "path": "packages/i18n/src/locales/en/workflow.json",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/i18n/src/locales/en/project-settings.json",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/api/plane/seeds/data/issues.json",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/i18n/src/locales/id/workflow.json",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/i18n/src/locales/de/project-settings.json",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/api/plane/settings/openapi.py",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item.json",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/i18n/src/locales/de/workflow.json",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item-type.json",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/web/core/components/power-k/ui/pages/context-based/work-item/commands.ts",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/i18n/src/locales/it/workflow.json",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/i18n/src/locales/ko/workflow.json",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/i18n/src/locales/zh-CN/workflow.json",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/constants/src/event-tracker/core.ts",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/web/core/components/project-states/state-list.tsx",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/types/src/intake/index.ts",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/utils/src/work-item/state.ts",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/web/core/components/project-states/create-update/create.tsx",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/space/hooks/store/use-state.ts",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/web/core/hooks/store/use-project-state.ts",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/space/components/issues/issue-layouts/utils.tsx",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/propel/src/empty-state/detailed-empty-state.stories.tsx",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/web/core/components/project-states/group-item.tsx",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/web/core/components/project-states/options/mark-as-default.tsx",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/propel/src/input/input.stories.tsx",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/i18n/src/locales/it/project-settings.json",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/propel/src/empty-state/compact-empty-state.stories.tsx",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/web/core/components/project-states/create-update/update.tsx",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/web/core/components/project-states/index.ts",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/web/core/components/cycles/analytics-sidebar/progress-stats.tsx",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/web/core/components/home/widgets/index.ts",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/services/src/state/index.ts",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/web/core/components/project-states/state-item.tsx",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/utils/src/work-item/index.ts",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/propel/src/empty-state/assets-showcase.stories.tsx",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/shared-state/package.json",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/web/core/components/project-states/root.tsx",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/web/core/components/project-states/state-delete-modal.tsx",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/propel/src/empty-state/index.ts",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/web/core/components/settings/profile/content/pages/notifications/email-notification-form.tsx",
+          "criterion": "where do work-item states live in the backend?",
+          "status": "untested"
+        }
+      ],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview",
+      "elapsedMs": 6647,
+      "stopped": false,
+      "stepCount": 8,
+      "hasAnswer": true,
+      "evidencePaths": []
+    },
+    {
+      "at": "2026-10-03T17:23:42.411Z",
+      "threadId": "thread-1791048209216-ojvyxy",
+      "stage": "answer-start",
+      "elapsedMs": 6871,
+      "selectedBranch": "preview",
+      "repoId": "github:CoopAI-Corp/plane",
+      "delivery": "complete",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016"
+    }
+  ]
+}

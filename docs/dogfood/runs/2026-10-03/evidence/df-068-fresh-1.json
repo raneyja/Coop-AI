@@ -1,0 +1,29 @@
+{
+  "scenario": {
+    "id": "DF-068",
+    "area": "Session, settings and resilience",
+    "fixture": "Sandbox account(s); recorded repo/ref; deterministic fault fixtures",
+    "action": "Keyboard-only send, Stop, citation, patch preview and settings.",
+    "passCriteria": "Controls accessible and focus usable; no trapped modal.",
+    "modes": [
+      "fresh"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T18:48:49.158993+00:00",
+    "status": "FAIL",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "see notes@see notes",
+    "action": "Keyboard-only send, Stop, citation, patch preview and settings.",
+    "actualResult": "Keyboard subchecks: composer Return sends; Tab three controls reaches Stop and Return cancels partial response; reverse Tab reaches Copy code and source citation; Return opens remote source. Palette keyboard CoopAI Extension Settings opens @ext:coop-ai.coop-ai settings and focus usable. Keyboard edit request had no preview: final canned Code location/Gaps miss and No patch blocks found despite existing source. Full keyboard preview workflow unmet; no accessibility focus trap demonstrated. Settings unchanged.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-068-fresh-1.json",
+    "criteriaReview": "NOT_ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": null,
+    "durationMs": null,
+    "threadId": null
+  },
+  "diagnosticEvents": []
+}

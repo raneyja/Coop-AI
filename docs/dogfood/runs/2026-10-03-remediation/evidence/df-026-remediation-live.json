@@ -1,0 +1,31 @@
+{
+  "scenario": "DF-026",
+  "mode": "fresh",
+  "recordedAt": "2026-10-03T20:28:50.261018+00:00",
+  "candidate": {
+    "recordedAt": "2026-10-03T20:18:26.452611+00:00",
+    "head": "c7796ed10c8bcc5cd2848d44b0bab6eb283684fc",
+    "extensionHash": "2adfe63f6b22165a33fb48d7c1d267917ba934771ce06dd9fc41ce285efbbf7a",
+    "webviewHash": "db520cae3766823dd58d038f1d59b442fbe69b8e0529a984c1126e747d8af0fe",
+    "backendDeployment": null,
+    "vsixHash": null,
+    "loadedInHost": true,
+    "loadEvidence": "Developer: Reload Window followed by output-channel bundleId matching extensionHash."
+  },
+  "functionalStatus": "PASS",
+  "actualAction": "After Undo, double-clicked Apply on the same proposal.",
+  "actualResult": "Exactly single-application bytes; no duplicated function or code.",
+  "firstAnswerMs": null,
+  "durationMs": null,
+  "timingKind": "ui-operation",
+  "threadId": "thread-1791059002492-xfuofi",
+  "turnId": "turn-1791059016207-9cvtp2",
+  "runId": "synthesis-turn-1791059016207-9cvtp2",
+  "fixtureEvidence": "docs/dogfood/runs/2026-10-03-remediation/evidence/batch3-applied-offbyone.ts",
+  "fixtureRestoredSha256": "771ff97ee8e29364a08cbb7652205f6f9b4ff0a31c0fc02d296345c9a2697ed0",
+  "missingReleaseEvidence": [
+    "exact completion duration",
+    "verified backend deployment",
+    "VSIX identity"
+  ]
+}

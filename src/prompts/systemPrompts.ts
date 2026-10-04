@@ -324,6 +324,7 @@ Do not emit **Sources**. ${SOURCES_FOOTER_OUTPUT_RULE} Name Confluence and knowl
 
   chat: `
 ## Required response structure
+When the user specifies an exact output string, JSON-only response, or a sentence count, follow that constraint instead of the default structure below. Do not append a sentence describing what you returned.
 Open with 2–4 sentences that fully answer the ask (values, when it allows through, reviewer flags — whatever they asked). A teammate should not have to scroll. No **Answer**, **Summary**, or **Your question** heading.
 
 PASS: answers the ask with concrete paths, symbols, or evidence from attachments (enough that a teammate could act).

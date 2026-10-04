@@ -35,6 +35,21 @@ test("splitCompareArgTokens extracts two repos and topic", () => {
   assert.equal(split.topic, "auth and tenancy");
 });
 
+test("natural Compare grammar preserves topic and resolves two independent catalog identities", () => {
+  for (const args of [
+    "Compare authentication between plane and documenso",
+    "authentication in plane and documenso",
+    "plane versus documenso authentication"
+  ]) {
+    const parsed = parseDualRepoCompareArgs(args, {catalogRepoIds: CATALOG});
+    assert.ok(parsed.ok, args);
+    if (!parsed.ok) continue;
+    assert.equal(parsed.plan.left.repoId, CATALOG[0]);
+    assert.equal(parsed.plan.right.repoId, CATALOG[1]);
+    assert.equal(parsed.plan.topic, "authentication");
+  }
+});
+
 test("resolveCompareRepoToken resolves short names from catalog", () => {
   const plane = resolveCompareRepoToken("plane", {
     catalogRepoIds: CATALOG,

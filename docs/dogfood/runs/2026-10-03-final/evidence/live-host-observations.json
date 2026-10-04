@@ -1,0 +1,43 @@
+{
+  "timestamp": "2026-10-03",
+  "candidate": {
+    "extensionHash": "5c9e57a1c820e994450ae630d5b7e53d05b12cc18c387c041292c49ed7228d06",
+    "webviewHash": "f4b581c38087fe272ec5fe2dc0fc2f69bab87475307c4ad166c2559abdb79f0e",
+    "vsixHash": "d255f8007808b1ddb3c721a35e9847a02fe8bd1f2a3c65ae31289e7a75679d1a"
+  },
+  "extensionHost": "VS Code Extension Development Host; VS Code 1.139.1; macOS 26.6.2 arm64",
+  "providerIsolation": {
+    "action": "Temporarily set workspace github.copilot.enable to {\"*\":false} for the Coop-AI extension-dev workspace only.",
+    "authorization": "User explicitly approved temporary Copilot isolation and restoration.",
+    "restoration": "Removed the temporary key and restored the exact pre-test workspace JSON, including its existing trailing comma. User-level Copilot settings were not changed."
+  },
+  "observations": [
+    {
+      "surface": "Remote workspace picker",
+      "result": "No repositories found. Connect GitHub in Settings.",
+      "implication": "No indexed remote repo/ref/commit was available for the required autocomplete fixture or repo-backed live scenarios."
+    },
+    {
+      "surface": "Local disposable fixture /private/tmp/coop-app-dogfood/fixture.ts",
+      "action": "Ran CoopAI: Trigger Inline Autocomplete with the cursor after return total; while Copilot was isolated.",
+      "result": "No visible inline suggestion appeared; the fixture text remained unchanged.",
+      "implication": "Autocomplete provenance was not established. This is not a live pass; indexed-repo fixture prerequisites were unavailable."
+    },
+    {
+      "surface": "Remote repo comparison",
+      "result": "Not run on this candidate because the Extension Host exposed no remote repositories.",
+      "implication": "The earlier compare failure belongs to a prior bundle and is not scored as a current-candidate attempt."
+    },
+    {
+      "surface": "Clean-profile VSIX install",
+      "action": "Installed coop-ai.vsix into /private/tmp/coop-clean-extensions using /private/tmp/coop-clean-profile.",
+      "result": "The CLI confirmed the extension was successfully installed. A separate clean-profile window did not appear in the VS Code Window menu after launch, so packaged extension activation was not observed.",
+      "implication": "DF-074 remains blocked at clean-host launch; the package is present in the isolated extensions directory, but the clean-host scenario is not a pass."
+    }
+  ],
+  "limitations": [
+    "Signed-in account tier/org identity was not exposed by the Extension Host UI.",
+    "Remote fixture provider, ref, commit, and index generation were unavailable.",
+    "The VSIX was installed into an isolated extensions directory, but a separate clean-profile Extension Host window did not appear, so activation was not verified."
+  ]
+}

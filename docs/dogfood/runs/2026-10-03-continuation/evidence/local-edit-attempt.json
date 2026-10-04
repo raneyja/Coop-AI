@@ -1,0 +1,9 @@
+{
+  "action": "Explicit local positiveSum.ts selection L1-7; /edit Fix the off-by-one bug in positiveSum so every element is included. Change only the loop bound.",
+  "before": "docs/dogfood/runs/2026-10-03-continuation/evidence/local-edit-before.ts",
+  "after": "docs/dogfood/runs/2026-10-03-continuation/evidence/local-edit-after.ts",
+  "verification": "docs/dogfood/runs/2026-10-03-continuation/evidence/local-edit-assertions.log",
+  "undo": "docs/dogfood/runs/2026-10-03-continuation/evidence/local-edit-undo.log",
+  "result": "Only loop bound changed; all five independent checks passed after saving. Undo restored original bytes.",
+  "candidateNote": "Isolation candidate before final patch-decision persistence changes; historical evidence, not final release pass."
+}

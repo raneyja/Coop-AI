@@ -1,0 +1,31 @@
+{
+  "scenario": {
+    "id": "DF-037",
+    "area": "Integrations",
+    "fixture": "Slack; sandbox scope containing known unique marker and inaccessible control item",
+    "action": "/slack Find the dogfood decision containing COOP_DOGFOOD_DECISION_20261003 and summarize it with a source link.",
+    "passCriteria": "Finds accessible marker, accurate summary and working source link; inaccessible control absent.",
+    "modes": [
+      "connected",
+      "disconnected",
+      "scope-denied"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T18:15:32.753054+00:00",
+    "status": "BLOCKED",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "see notes@see notes",
+    "action": "/slack Find the dogfood decision containing COOP_DOGFOOD_DECISION_20261003 and summarize it with a source link.",
+    "actualResult": "Supplemental live /slack Find discussions about COOP-101 returned no Slack results, honest no decision/source. No independently seeded marker or accessible known Slack thread provided, so recall/citation criterion cannot be verified; unrelated Jira/docs unavailable statement also misleading for tool-specific scope.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-037-connected-1.json",
+    "criteriaReview": "NOT_ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": null,
+    "durationMs": null,
+    "threadId": null
+  },
+  "diagnosticEvents": []
+}

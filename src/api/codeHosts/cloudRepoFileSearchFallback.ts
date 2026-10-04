@@ -27,7 +27,8 @@ export function isRemoteFileSearchFallbackCandidate(error: unknown): boolean {
 export async function searchFilesViaCloudTree(
   fetchTree: (path: string) => Promise<CloudTreeListing>,
   query: string,
-  limit = 30
+  limit = 30,
+  acceptPath: (path: string) => boolean = () => true
 ): Promise<Array<{ path: string; name: string }>> {
   const normalizedQuery = query.trim().replace(/^\/+/, "");
   if (!normalizedQuery) {
@@ -41,7 +42,7 @@ export async function searchFilesViaCloudTree(
     try {
       const tree = await fetchTree(parent);
       const filePaths = tree.entries
-        .filter((entry) => entry.type === "file")
+        .filter((entry) => entry.type === "file" && acceptPath(entry.path))
         .map((entry) => entry.path);
       return rankExplorerFilePaths(filePaths, normalizedQuery, limit).map((path) => ({
         path,
@@ -56,8 +57,22 @@ export async function searchFilesViaCloudTree(
   const queue: string[] = ["", "src", "lib", "server", "src/server"];
   const visited = new Set<string>();
   const maxDirs = 48;
+  const directoryPriority = (dir: string): number => {
+    const segments = dir.toLowerCase().split("/");
+    const queryWords = normalizedQuery.toLowerCase().match(/[a-z][a-z0-9_]+/g) ?? [];
+    const leaf = segments.at(-1) ?? "";
+    const source = /^(server(?:-only)?|backend|api)$/;
+    return (source.test(leaf) ? 5 : 0) +
+      (/^(src|lib|packages|services|functions|handlers)$/.test(leaf) ? 2 : 0) +
+      (queryWords.some((word) => leaf.includes(word)) ? 4 : 0) +
+      (segments.slice(0, -1).some((segment) => source.test(segment)) ? 2 : 0) -
+      (segments.some((segment) => /^(node_modules|vendor|dist|build|docs|migrations|\.git|\.github|\.agents)$/.test(segment)) ? 8 : 0) - segments.length * 0.5;
+  };
 
   while (queue.length > 0 && visited.size < maxDirs) {
+    // Spend the bounded remote walk on likely source areas before tooling and
+    // documentation. Plain BFS exhausts wide monorepos before reaching handlers.
+    queue.sort((a, b) => directoryPriority(b) - directoryPriority(a));
     const dir = queue.shift() ?? "";
     if (visited.has(dir)) {
       continue;
@@ -70,7 +85,7 @@ export async function searchFilesViaCloudTree(
       continue;
     }
     for (const entry of tree.entries) {
-      if (entry.type === "file") {
+      if (entry.type === "file" && acceptPath(entry.path)) {
         filePaths.push(entry.path);
       } else if (entry.type === "dir" && !visited.has(entry.path)) {
         queue.push(entry.path);

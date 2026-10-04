@@ -1,0 +1,29 @@
+{
+  "scenario": {
+    "id": "DF-058",
+    "area": "Session, settings and resilience",
+    "fixture": "Sandbox account(s); recorded repo/ref; deterministic fault fixtures",
+    "action": "Copy answer and code; reopen a citation.",
+    "passCriteria": "Copied code is usable; citation opens exact remote path/ref/range.",
+    "modes": [
+      "fresh"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T18:40:52.035078+00:00",
+    "status": "FAIL",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "see notes@see notes",
+    "action": "Copy answer and code; reopen a citation.",
+    "actualResult": "Copy message pasted exact complete prose+Markdown into disposable Untitled-2; Copy code pasted usable plain authUserId function without line numbers/fences. Both pastes undone. Citation 203\u2013208 reopened correct remote main authMiddleware body in Untitled-28. However composer attached source chip says authMiddleware.ts L1\u2013519, inconsistent with clicked 203\u2013208 and 241-line source; exact range provenance criterion failed. Copy controls pass subchecks; no tracked source saved.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-058-fresh-1.json",
+    "criteriaReview": "NOT_ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": null,
+    "durationMs": null,
+    "threadId": null
+  },
+  "diagnosticEvents": []
+}

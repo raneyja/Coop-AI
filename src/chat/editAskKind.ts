@@ -64,11 +64,11 @@ export function resolveEditAskKind(
     return "rewrite";
   }
   const prior = options?.priorUserMessages ?? [];
-  if (text.length > 0 && text.length <= 120 && !rewriteAsk) {
-    for (let i = prior.length - 1; i >= 0; i -= 1) {
-      if (resolveEditAskKind(prior[i] ?? "") === "comment") {
-        return "comment";
-      }
+  // A concrete new edit owns its intent, even after an earlier documentation
+  // request. Only an immediate, otherwise ambiguous follow-up can inherit it.
+  if (text.length > 0 && text.length <= 120 && !isConcreteFileEditAsk(text)) {
+    if (resolveEditAskKind(prior.at(-1) ?? "") === "comment") {
+      return "comment";
     }
   }
   return "default";

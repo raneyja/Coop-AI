@@ -1,0 +1,1 @@
+PASS only three total identifiers renamed to result; numeric signature, loop bound and all other bytes preserved. Empty and mixed numeric behavior verified.

@@ -65,6 +65,19 @@ test("ordinary change asks stay default (do exactly the words)", () => {
   assert.equal(resolveEditAskKind("wire up the new helper in this file"), "default");
 });
 
+test("a new rename does not inherit a previous comment-only edit", () => {
+  assert.equal(resolveEditAskKind(
+    "/edit Rename header to authorizationHeader in extractBearerToken only.",
+    { priorUserMessages: ["Add a JSDoc above extractBearerToken."] }
+  ), "default");
+});
+
+test("a distant comment edit does not control an ambiguous follow-up", () => {
+  assert.equal(resolveEditAskKind("make it clearer", {
+    priorUserMessages: ["Add a comment above this.", "Rename header to authorizationHeader."]
+  }), "default");
+});
+
 console.log(`\neditAskKind: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);

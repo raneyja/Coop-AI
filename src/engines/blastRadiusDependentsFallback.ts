@@ -328,25 +328,26 @@ export function mapSearchSourceToGraphSource(source: LocalSearchResult["source"]
 }
 
 /**
- * True when the body uses the named identifier (call, binding, or import of
- * that export). Importing a sibling export from the same module is not a use.
+ * True when source uses the identifier beyond its import declaration.
+ * An unused named import is a module dependency, not a function caller.
  */
 export function contentUsesNamedSymbol(content: string, symbol: string): boolean {
   if (symbol.length < 3) {
     return false;
   }
   const escaped = symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  if (
-    new RegExp(
-      `import\\s*\\{[^}]*\\b${escaped}\\b[^}]*\\}|from\\s+\\S+\\s+import\\s+[^\\n]*\\b${escaped}\\b`
-    ).test(content)
-  ) {
-    return true;
-  }
+  const aliases = [...content.matchAll(new RegExp(`\\b${escaped}\\s+as\\s+([A-Za-z_$][\\w$]*)`, "g"))]
+    .map(match => match[1]!)
+    .filter(alias => new RegExp(`import\\s*\\{[^}]*\\b${escaped}\\s+as\\s+${alias}\\b[^}]*\\}`).test(content) ||
+      new RegExp(`from\\s+\\S+\\s+import\\s+[^\\n]*\\b${escaped}\\s+as\\s+${alias}\\b`).test(content));
   const withoutImportLines = content
+    .replace(/\bimport\s*\{[^}]*\}\s*from\s*["'][^"']+["']\s*;?/g, "")
     .replace(/^\s*import\s.+$/gm, "")
-    .replace(/^\s*from\s+\S+\s+import\s+.+$/gm, "");
-  return new RegExp(`\\b${escaped}\\b`).test(withoutImportLines);
+    .replace(/^\s*from\s+\S+\s+import\s+.+$/gm, "")
+    .replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, "")
+    .replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*|^\s*#[^\n]*/gm, "");
+  return [symbol, ...aliases].some(name =>
+    new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(withoutImportLines));
 }
 
 /** Graph search often fills `content` with the path when the snippet is missing. */

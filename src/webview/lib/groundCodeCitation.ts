@@ -1,4 +1,4 @@
-import { tryParseCitationLocator } from "./codeCitationLocator";
+import { shouldNeverUpgradeLanguageFence, tryParseCitationLocator } from "./codeCitationLocator";
 
 export type GroundedCitation = {
   startLine: number;
@@ -50,6 +50,28 @@ function shouldRestoreStrippedClaimedSlice(fileSlice: string[], snippet: string[
   return snippet.length * 5 >= fileSlice.length * 3;
 }
 
+/** Restore explicit omissions only between exact source blocks in a bounded range. */
+function hasVerifiedElision(fileSlice: string[], snippet: string[]): boolean {
+  if (fileSlice.length > 120 || !snippet.some((line) => line.trim() === "...")) return false;
+  const blocks: string[][] = [[]];
+  for (const line of snippet) {
+    if (line.trim() === "...") blocks.push([]);
+    else blocks.at(-1)!.push(line);
+  }
+  if (blocks.length < 2 || blocks.some((block) => block.filter((line) => line.trim()).length < 2)) return false;
+  if (!linesMatch(fileSlice.slice(0, blocks[0]!.length), blocks[0]!)) return false;
+  const last = blocks.at(-1)!;
+  const lastStart = fileSlice.length - last.length;
+  if (!linesMatch(fileSlice.slice(lastStart), last)) return false;
+  let cursor = blocks[0]!.length;
+  for (const block of blocks.slice(1, -1)) {
+    const start = findSnippetStart(fileSlice.slice(cursor, lastStart), block);
+    if (start < 0) return false;
+    cursor += start + block.length;
+  }
+  return cursor <= lastStart;
+}
+
 function sliceLines(fileLines: string[], startLine: number, endLine: number): string[] {
   return fileLines.slice(Math.max(0, startLine - 1), Math.max(startLine, endLine));
 }
@@ -82,7 +104,15 @@ export function groundCodeCitation(
   claimedEnd?: number
 ): GroundedCitation {
   const fileLines = splitFileLines(fileText);
-  const snippetLines = trimSnippetLines(snippet);
+  const rawSnippetLines = trimSnippetLines(snippet);
+  const numberedLines = [...rawSnippetLines];
+  while (/^\s*(?:\d+\s*\|\s*)?(?:`{2,}|\d+:\d+:[^\s]+`*)\s*$/.test(numberedLines.at(-1) ?? "")) numberedLines.pop();
+  const numbered = numberedLines.map((line) => line.match(/^\s*(\d+)\s*\| ?(.*)$/));
+  const isSequential = numbered.length > 0 && numbered.every((match, index) =>
+    match && (index === 0 || Number(match[1]) === Number(numbered[index - 1]![1]) + 1));
+  // Number prefixes are presentation metadata only. Recover them only when
+  // the resulting verbatim snippet matches the actual remote source below.
+  const snippetLines = isSequential ? numbered.map((match) => match![2]!) : rawSnippetLines;
 
   if (snippetLines.length === 0) {
     return {
@@ -95,7 +125,7 @@ export function groundCodeCitation(
 
   if (claimedStart != null && claimedEnd != null && claimedEnd >= claimedStart) {
     const claimedSlice = sliceLines(fileLines, claimedStart, claimedEnd);
-    if (linesMatch(claimedSlice, snippetLines) || shouldRestoreStrippedClaimedSlice(claimedSlice, snippetLines)) {
+    if (linesMatch(claimedSlice, snippetLines) || shouldRestoreStrippedClaimedSlice(claimedSlice, snippetLines) || hasVerifiedElision(claimedSlice, snippetLines)) {
       return {
         startLine: claimedStart,
         endLine: claimedEnd,
@@ -116,17 +146,34 @@ export function groundCodeCitation(
       grounded: true
     };
   }
+  if (isSequential) {
+    const dedentedAt = findSnippetStart(fileLines.map((line) => line.trimStart()), snippetLines.map((line) => line.trimStart()));
+    if (dedentedAt >= 0) {
+      return { startLine: dedentedAt + 1, endLine: dedentedAt + snippetLines.length,
+        code: fileLines.slice(dedentedAt, dedentedAt + snippetLines.length).join("\n"), grounded: true };
+    }
+  }
 
   return {
     startLine: claimedStart ?? 1,
     endLine: claimedEnd ?? claimedStart ?? snippetLines.length,
-    code: snippetLines.join("\n"),
+    code: rawSnippetLines.join("\n"),
     grounded: false
   };
 }
 
 function normalizePath(path: string): string {
   return path.trim().replace(/\\/g, "/").replace(/^\.\//, "");
+}
+
+function nearbyLocator(lines: string[]): ReturnType<typeof tryParseCitationLocator> {
+  for (const line of lines.slice(-6).reverse()) {
+    for (const match of line.matchAll(/`([^`]+)`/g)) {
+      const locator = tryParseCitationLocator(match[1]!);
+      if (locator) return locator;
+    }
+  }
+  return null;
 }
 
 /**
@@ -143,17 +190,17 @@ export function applyGroundedCitations(markdown: string, filesByPath: Map<string
 
   while (i < lines.length) {
     const line = lines[i]!;
-    if (!line.startsWith("```")) {
+    if (!line.trimStart().startsWith("```")) {
       out.push(line);
       i += 1;
       continue;
     }
 
     const open = line;
-    const info = open.slice(3).trim();
+    const info = open.trimStart().slice(3).trim();
     const body: string[] = [];
     i += 1;
-    while (i < lines.length && !lines[i]!.startsWith("```")) {
+    while (i < lines.length && !lines[i]!.trimStart().startsWith("```")) {
       body.push(lines[i]!);
       i += 1;
     }
@@ -164,7 +211,7 @@ export function applyGroundedCitations(markdown: string, filesByPath: Map<string
 
     const infoLocator = info ? tryParseCitationLocator(info) : null;
     const bodyLocator = body[0] ? tryParseCitationLocator(body[0]) : null;
-    const locator = infoLocator ?? bodyLocator;
+    const locator = infoLocator ?? bodyLocator ?? (shouldNeverUpgradeLanguageFence(info) ? null : nearbyLocator(out));
     const codeLines = infoLocator ? body : bodyLocator ? body.slice(1) : body;
     const file = locator ? filesByPath.get(normalizePath(locator.path)) : undefined;
 
@@ -174,6 +221,10 @@ export function applyGroundedCitations(markdown: string, filesByPath: Map<string
     }
 
     const grounded = groundCodeCitation(file, codeLines.join("\n"), locator.startLine, locator.endLine);
+    if (!grounded.grounded) {
+      out.push(open, ...body, close);
+      continue;
+    }
     const newLocator = `${grounded.startLine}:${grounded.endLine}:${locator.path}`;
     if (infoLocator) {
       out.push(`\`\`\`${newLocator}`);
@@ -197,14 +248,15 @@ export function citationPathsInMarkdown(markdown: string): string[] {
   const lines = splitFileLines(markdown);
   let i = 0;
   while (i < lines.length) {
-    if (!lines[i]!.startsWith("```")) {
+    if (!lines[i]!.trimStart().startsWith("```")) {
       i += 1;
       continue;
     }
-    const info = lines[i]!.slice(3).trim();
+    const preceding = lines.slice(0, i);
+    const info = lines[i]!.trimStart().slice(3).trim();
     i += 1;
     const body: string[] = [];
-    while (i < lines.length && !lines[i]!.startsWith("```")) {
+    while (i < lines.length && !lines[i]!.trimStart().startsWith("```")) {
       body.push(lines[i]!);
       i += 1;
     }
@@ -213,7 +265,7 @@ export function citationPathsInMarkdown(markdown: string): string[] {
     }
     const locator =
       (info ? tryParseCitationLocator(info) : null) ??
-      (body[0] ? tryParseCitationLocator(body[0]) : null);
+      (body[0] ? tryParseCitationLocator(body[0]) : null) ?? (shouldNeverUpgradeLanguageFence(info) ? null : nearbyLocator(preceding));
     if (locator?.path) {
       paths.add(locator.path);
     }

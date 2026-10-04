@@ -23,6 +23,7 @@ export type RepoContextFileSource = "workspace" | "git" | "remote" | "external";
 export type CodeHostProviderPreference = "github" | "gitlab" | "bitbucket";
 
 export type RepoContext = {
+  repoSelectionPending?: boolean;
   provider?: CodeHostProviderPreference;
   owner?: string;
   repo?: string;

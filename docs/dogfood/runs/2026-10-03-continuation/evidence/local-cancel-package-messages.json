@@ -1,0 +1,201 @@
+{
+  "threadId": "thread-1791068274134-vjdcrp",
+  "context": null,
+  "messages": [
+    {
+      "clientSubmissionId": "1791072248131-1",
+      "role": "user",
+      "content": "/edit Rewrite positiveSum to return a structured result, add exhaustive tests and update every caller. Propose changes only.\nfile: /private/tmp/coop-dogfood-disposable-edit/positiveSum.ts \u00b7 selection: L1\u20137",
+      "timestamp": 1791072250163,
+      "cancelled": true
+    },
+    {
+      "role": "assistant",
+      "cancelled": true,
+      "content": "Stopped.",
+      "timestamp": 1791072255485,
+      "links": [],
+      "activity": {
+        "durationMs": 7354,
+        "tools": [
+          {
+            "id": "line-tool:0",
+            "kind": "read",
+            "label": "Read `/private/tmp/coop-dogfood-disposable-edit/positiveSum.ts`",
+            "status": "done"
+          }
+        ],
+        "files": [
+          {
+            "path": "/private/tmp/coop-dogfood-disposable-edit/positiveSum.ts",
+            "action": "read"
+          }
+        ],
+        "steps": [
+          {
+            "id": "line:0:Read `/private/tmp/coop-dogfood-disposable-edit/positiveSum.ts`",
+            "content": "Read `/private/tmp/coop-dogfood-disposable-edit/positiveSum.ts`",
+            "status": "completed"
+          }
+        ]
+      }
+    },
+    {
+      "clientSubmissionId": "1791072263573-2",
+      "role": "user",
+      "content": "/edit Rename total to result in positiveSum only.\nfile: /private/tmp/coop-dogfood-disposable-edit/positiveSum.ts \u00b7 selection: L1\u20137",
+      "timestamp": 1791072266090
+    },
+    {
+      "role": "assistant",
+      "content": "This patch renames `total` to `result` in the local file `[INTERNAL_PATH]`.\n\nFile: `[INTERNAL_PATH]`\n\n```patch\n<<<<<<< SEARCH\nexport function positiveSum(values: readonly number[]): number {\n  let total = 0;\n  for (let i = 0; i < values.length - 1; i++) {\n    if (values[i]! > 0) total += values[i]!;\n  }\n  return total;\n}\n=======\nexport function positiveSum(values: readonly number[]): number {\n  let result = 0;\n  for (let i = 0; i < values.length - 1; i++) {\n    if (values[i]! > 0) result += values[i]!;\n  }\n  return result;\n}\n>>>>>>> REPLACE\n```",
+      "timestamp": 1791072270904,
+      "activity": {
+        "durationMs": 7333,
+        "tools": [
+          {
+            "id": "line-tool:0",
+            "kind": "read",
+            "label": "Read `/private/tmp/coop-dogfood-disposable-edit/positiveSum.ts`",
+            "status": "done"
+          }
+        ],
+        "files": [
+          {
+            "path": "/private/tmp/coop-dogfood-disposable-edit/positiveSum.ts",
+            "action": "read"
+          }
+        ],
+        "steps": [
+          {
+            "id": "line:0:Read `/private/tmp/coop-dogfood-disposable-edit/positiveSum.ts`",
+            "content": "Read `/private/tmp/coop-dogfood-disposable-edit/positiveSum.ts`",
+            "status": "completed"
+          }
+        ]
+      },
+      "patchCard": {
+        "status": "applied",
+        "messageTimestamp": 1791072270904,
+        "fileCount": 1,
+        "hunkCount": 1,
+        "files": [
+          {
+            "relativePath": "/private/tmp/coop-dogfood-disposable-edit/positiveSum.ts",
+            "hunks": [
+              {
+                "id": "hunk-0",
+                "lines": [
+                  {
+                    "kind": "remove",
+                    "text": "export function positiveSum(values: readonly number[]): number {",
+                    "lineNumber": 1
+                  },
+                  {
+                    "kind": "remove",
+                    "text": "  let total = 0;",
+                    "lineNumber": 2
+                  },
+                  {
+                    "kind": "remove",
+                    "text": "  for (let i = 0; i < values.length - 1; i++) {",
+                    "lineNumber": 3
+                  },
+                  {
+                    "kind": "remove",
+                    "text": "    if (values[i]! > 0) total += values[i]!;",
+                    "lineNumber": 4
+                  },
+                  {
+                    "kind": "remove",
+                    "text": "  }",
+                    "lineNumber": 5
+                  },
+                  {
+                    "kind": "remove",
+                    "text": "  return total;",
+                    "lineNumber": 6
+                  },
+                  {
+                    "kind": "remove",
+                    "text": "}",
+                    "lineNumber": 7
+                  },
+                  {
+                    "kind": "add",
+                    "text": "export function positiveSum(values: readonly number[]): number {",
+                    "lineNumber": 1
+                  },
+                  {
+                    "kind": "add",
+                    "text": "  let result = 0;",
+                    "lineNumber": 2
+                  },
+                  {
+                    "kind": "add",
+                    "text": "  for (let i = 0; i < values.length - 1; i++) {",
+                    "lineNumber": 3
+                  },
+                  {
+                    "kind": "add",
+                    "text": "    if (values[i]! > 0) result += values[i]!;",
+                    "lineNumber": 4
+                  },
+                  {
+                    "kind": "add",
+                    "text": "  }",
+                    "lineNumber": 5
+                  },
+                  {
+                    "kind": "add",
+                    "text": "  return result;",
+                    "lineNumber": 6
+                  },
+                  {
+                    "kind": "add",
+                    "text": "}",
+                    "lineNumber": 7
+                  },
+                  {
+                    "kind": "context",
+                    "text": "",
+                    "lineNumber": 8
+                  },
+                  {
+                    "kind": "context",
+                    "text": "// Intervening dogfood edit: preserve this marker.",
+                    "lineNumber": 9
+                  }
+                ],
+                "matchStatus": "matched",
+                "status": "applied",
+                "anchorLabel": "positiveSum",
+                "startLine": 1,
+                "endLine": 7
+              }
+            ]
+          }
+        ],
+        "appliedFileCount": 1,
+        "canUndo": true,
+        "canCreatePr": false,
+        "suppressMarkdown": true,
+        "prFiles": [
+          {
+            "path": "/private/tmp/coop-dogfood-disposable-edit/positiveSum.ts",
+            "content": "export function positiveSum(values: readonly number[]): number {\n  let result = 0;\n  for (let i = 0; i < values.length - 1; i++) {\n    if (values[i]! > 0) result += values[i]!;\n  }\n  return result;\n}\n\n// Intervening dogfood edit: preserve this marker.\n"
+          }
+        ],
+        "prBlockedReason": "local-file",
+        "suppressedMessageTimestamps": [
+          1791068311826,
+          1791069817300,
+          1791069903860,
+          1791070745762,
+          1791070847122,
+          1791072270904
+        ]
+      }
+    }
+  ]
+}

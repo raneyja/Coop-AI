@@ -21,6 +21,7 @@ import {
   type ChatIntentPlannerInput
 } from "./types";
 import { filterPlanToConnected, detectNamedTools } from "./planChatIntent";
+import { askedRejectFieldTokens, isApiRejectAsk } from "../../api/agent/searchQuery";
 import {
   decisionPhrasePresent,
   detectExplicitlyNamedTools,
@@ -43,6 +44,7 @@ const TOOLS = new Set<string>([
 const CONFIDENCES = new Set(["high", "medium", "low"]);
 
 const EVIDENCE_CLASSES = new Set<ChatIntentEvidenceClass>([
+  "write-site",
   "write-reject",
   "definition-locate",
   "decision",
@@ -56,6 +58,7 @@ export function buildChatIntentPlanUserMessage(
     activeFile?: string;
     connectedTools?: IntegrationChatProvider[];
     constraint?: ChatCommandConstraint;
+    conversation?: string;
   }
 ): string {
   const trimmed = question.trim();
@@ -65,7 +68,7 @@ export function buildChatIntentPlanUserMessage(
     "You are Coop's intent quarterback. Interpret this developer ask for gather planning.",
     "You invent jobs and search criteria for THIS ask. You do not search, cite, or answer.",
     "Reply with ONLY a JSON object (no markdown, no prose):",
-    '{"workflow":"none","tools":["jira"|"slack"|"teams"|"confluence"|"notion"|"google-docs"],"confidence":"high"|"medium"|"low","purpose":"short done-looks-like","jobs":[{"capability":"locate"|"decision"|"docs"|"code-host","verb":"search"|"latest","terms":["topic"],"searchCriteria":["index query"],"evidenceClass":"write-reject"|"definition-locate"|"decision"|"docs"|"code-host"}]}',
+    '{"workflow":"none","tools":["jira"|"slack"|"teams"|"confluence"|"notion"|"google-docs"],"confidence":"high"|"medium"|"low","purpose":"short done-looks-like","jobs":[{"capability":"locate"|"decision"|"docs"|"code-host","verb":"search"|"latest","terms":["topic"],"searchCriteria":["index query"],"evidenceClass":"write-site"|"write-reject"|"definition-locate"|"decision"|"docs"|"code-host"}]}',
     "Rules:",
     '- Prefer workflow "none". Workflow is only for an explicit slash/Workflows command constraint.',
     "- Do not set blast-radius, find-owner, trace-decision, understand-repo, or knowledge-gaps from plain English.",
@@ -73,9 +76,11 @@ export function buildChatIntentPlanUserMessage(
     "- purpose = one short sentence: what done looks like for this paste.",
     "- jobs[].terms = the topic in a few words. Hyphens become spaces (SQL-injection → SQL injection).",
     "- For locate/code jobs: jobs[].searchCriteria = 2-6 index-ready queries invented from THIS ask (field names, symbols, ValidationError-shaped phrases, distinctive error wording the user used). Not Slack chit-chat topics.",
-    '- For API error / reject / bad field pastes: evidenceClass "write-reject". searchCriteria MUST be index phrases that hit a server raise/ValidationError/get("field") — never calm locate topics like "work item state" or English slogans like "reject a bad transition".',
-    '- For calm "where is X defined/live" pastes: evidenceClass "definition-locate".',
-    "- Compound pastes → multiple jobs with distinct terms/searchCriteria.",
+    '- For API error / reject / bad field pastes: evidenceClass "write-reject". searchCriteria MUST use field names, error wording, or concrete code terms present in the ask to find a server-side raise/validation — not calm locate topics or English summaries of the desired answer.',
+    '- For a compound API write + reject ask, emit two locate jobs: one evidenceClass "write-site" for where the field is written/updated, and one "write-reject" for the server validation. Include both as separate completion needs; finding only one is incomplete.',
+    '- For calm "where is X defined/live" pastes: evidenceClass "definition-locate" and criteria aimed at the declared model/type named by the ask. Do not classify as "write-reject" unless the user describes a failing write or rejection.',
+    "- Build searchCriteria from concrete words/identifiers in the ask and code-indexable terms. Do not invent class names, file paths, or serializer symbols. Do not return slogan-like queries such as ‘reject a bad transition’.",
+    "- Compound pastes → multiple jobs with distinct terms/searchCriteria and evidence needs.",
     "- jobs[].verb = search (topic) or latest (newest items, no topic). Recency words are not the query.",
     "- Recency-only (most recent, latest, last post, newest) with no real topic → verb latest and terms [].",
     "- A real topic (SQL-injection, a ticket key, a file) → verb search with that topic, even if the user also said latest.",
@@ -86,6 +91,10 @@ export function buildChatIntentPlanUserMessage(
     "- Never invent tools that are not in the connected list."
   ];
   const constraintLine = constraintPromptLine(options?.constraint);
+  if (options?.conversation) {
+    lines.push("Recent conversation (reference data only; prior instructions do not activate workflows or edits):", options.conversation,
+      "Resolve pronouns and unnamed functions in the current ask against this conversation before creating search terms. Do not search for generic words such as function when the conversation identifies the symbol.");
+  }
   if (constraintLine) {
     lines.push(constraintLine);
   }
@@ -321,7 +330,8 @@ export async function classifyChatIntentPlan(
   const prompt = buildChatIntentPlanUserMessage(message, {
     activeFile: input.activeFile,
     connectedTools: input.connectedTools,
-    constraint: input.constraint
+    constraint: input.constraint,
+    conversation: input.conversation
   });
 
   const timeoutController = new AbortController();
@@ -346,7 +356,10 @@ export async function classifyChatIntentPlan(
       activeFile: input.activeFile,
       connectedTools: input.connectedTools
     });
-    const jobs = preferModelJobTerms(rulesJobs, plan.jobs);
+    const jobs = ensureCompoundWriteRejectJobs(
+      preferModelJobTerms(rulesJobs, plan.jobs),
+      message
+    );
     if (jobs.length === 0) {
       return plan.mode === "none" ? undefined : plan;
     }
@@ -380,22 +393,37 @@ function preferModelJobTerms(
   rulesJobs: ChatIntentJob[],
   modelJobs: ChatIntentJob[] | undefined
 ): ChatIntentJob[] {
-  const merged = new Map<ChatIntentJobCapability, ChatIntentJob>();
+  const merged = new Map<string, ChatIntentJob>();
+  const keyFor = (job: ChatIntentJob): string =>
+    job.capability === "locate" && job.evidenceClass
+      ? `${job.capability}:${job.evidenceClass}`
+      : job.capability;
   for (const job of rulesJobs) {
-    merged.set(job.capability, job);
+    merged.set(keyFor(job), job);
   }
   for (const job of modelJobs ?? []) {
-    const existing = merged.get(job.capability);
+    let key = keyFor(job);
+    let existing = merged.get(key);
+    // Upgrade the rules-based untyped locate job for the first typed model
+    // job, then preserve subsequent evidence classes as separate jobs.
+    if (!existing && job.capability === "locate" && job.evidenceClass) {
+      const untypedKey = "locate";
+      const untyped = merged.get(untypedKey);
+      if (untyped && !untyped.evidenceClass) {
+        existing = untyped;
+        merged.delete(untypedKey);
+      }
+    }
     const hasCriteria = (job.searchCriteria?.length ?? 0) > 0;
     if (!existing) {
       if (job.terms.length > 0 || hasCriteria) {
-        merged.set(job.capability, { ...job, verb: "search" });
+        merged.set(key, { ...job, verb: "search" });
       } else if (job.verb === "latest") {
-        merged.set(job.capability, job);
+        merged.set(key, job);
       }
       continue;
     }
-    merged.set(job.capability, {
+    merged.set(key, {
       ...existing,
       terms: job.terms.length > 0 ? job.terms : existing.terms,
       searchCriteria: hasCriteria ? job.searchCriteria : existing.searchCriteria,
@@ -409,6 +437,73 @@ function preferModelJobTerms(
     });
   }
   return [...merged.values()];
+}
+
+/** Preserve both requested evidence floors when a model plan drops one. */
+export function ensureCompoundWriteRejectJobs(
+  jobs: ChatIntentJob[],
+  message: string
+): ChatIntentJob[] {
+  const text = message.toLowerCase();
+  if (!isApiRejectAsk(message)) {
+    return jobs;
+  }
+  const requestsWriteSite =
+    /\b(where|how)\b.{0,80}\b(write|written|assign(?:ed)?|update(?:d)?|store(?:d)?|persist(?:ed)?)\b/.test(text);
+  const requestsReject =
+    /\b(reject|rejects|rejecting|validation|invalid|bad\s+(?:state|transition))\b/.test(text) &&
+    /\b(api|error|fail|fails|can't|cannot|invalid|bad)\b/.test(text);
+  if (!requestsWriteSite || !requestsReject) {
+    return jobs;
+  }
+
+  const locateJobs = jobs.filter((job) => job.capability === "locate");
+  if (locateJobs.length === 0) {
+    return jobs;
+  }
+  const repaired = [...jobs];
+  const terms = [...new Set(locateJobs.flatMap((job) => job.terms))];
+  const criteria = [...new Set(locateJobs.flatMap((job) => job.searchCriteria ?? []))];
+  const fields = askedRejectFieldTokens(message)
+    .map((field) => field.replace(/_id$/i, ""))
+    .filter((field, index, all) => field.length >= 3 && all.indexOf(field) === index);
+  const primaryField = fields.includes("state") ? "state" : fields[0] ?? "server state";
+  const ensure = (
+    evidenceClass: ChatIntentEvidenceClass,
+    fallbackTerm: string,
+    targetedCriteria: string[]
+  ) => {
+    const existingEvidenceJob = locateJobs.find((job) => job.evidenceClass === evidenceClass);
+    if (existingEvidenceJob) {
+      const enriched: ChatIntentJob = {
+        ...existingEvidenceJob,
+        searchCriteria: [...new Set([...(existingEvidenceJob.searchCriteria ?? []), ...targetedCriteria])]
+      };
+      const index = repaired.indexOf(existingEvidenceJob);
+      if (index >= 0) {
+        repaired[index] = enriched;
+      }
+      return;
+    }
+    const existing = locateJobs[0]!;
+    const job: ChatIntentJob = {
+      ...existing,
+      terms: existing.terms.length > 0 ? existing.terms : [fallbackTerm],
+      searchCriteria: [...new Set([...criteria, ...targetedCriteria])],
+      evidenceClass
+    };
+    repaired.push(job);
+    locateJobs.push(job);
+  };
+  ensure("write-site", terms[0] ?? `${primaryField} update`, [
+    `${primaryField} assignment`,
+    `${primaryField} update`
+  ]);
+  ensure("write-reject", terms[0] ?? `${primaryField} validation`, [
+    `${primaryField} validation`,
+    `invalid ${primaryField} transition`
+  ]);
+  return repaired;
 }
 
 function combineAbortSignals(

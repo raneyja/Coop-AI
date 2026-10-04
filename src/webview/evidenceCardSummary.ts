@@ -105,7 +105,7 @@ export type EvidenceCardSummary = {
 const WEAK_COMMIT_MESSAGE_RE = /^(wip|fix|update|changes?|misc|tmp|test|merge|refactor)\b/i;
 
 const OWNERSHIP_RISK_LABELS: Record<keyof OwnershipRisk, string> = {
-  singlePointOfFailure: "Ownership appears concentrated in one person.",
+  singlePointOfFailure: "Observed contributions are concentrated in one person; knowledge coverage is unverified.",
   expertUnavailable: "Top experts appear unavailable.",
   orphaned: "Recent ownership activity looks stale.",
   highTurnover: "Ownership appears unstable due to high turnover.",

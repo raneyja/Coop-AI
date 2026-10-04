@@ -2297,6 +2297,11 @@ async function handleGetRepoSearch(
   deps: OrgApiDeps,
   auth: NonNullable<Awaited<ReturnType<typeof resolveAuthContext>>>
 ): Promise<void> {
+  const searchKind = parsed.query?.get("searchKind") ?? "filename";
+  if (searchKind !== "filename" && searchKind !== "content") {
+    writeJson(response, 400, {error: "searchKind must be filename or content"});
+    return;
+  }
   const query = parsed.query?.get("q")?.trim() ?? "";
   if (!query) {
     writeJson(response, 400, { error: "q query parameter is required" });
@@ -2319,7 +2324,7 @@ async function handleGetRepoSearch(
   const branch = parsed.query?.get("branch")?.trim() || undefined;
   const coords = { provider: target.provider, owner: target.owner, repo: target.repo, branch };
   try {
-    const hits = await searchRepoFiles(coords, query, token, limit);
+    const hits = await searchRepoFiles(coords, query, token, limit, searchKind);
     const mapped = hits.map((hit) => ({
       path: hit.path,
       name: hit.path.split("/").pop() ?? hit.path
@@ -2327,6 +2332,7 @@ async function handleGetRepoSearch(
     writeJson(response, 200, {
       repoId,
       query,
+      searchKind,
       hits: sortExplorerSearchHitsByQuery(mapped, query)
     });
   } catch (error) {
@@ -2349,11 +2355,12 @@ async function searchRepoFiles(
   coords: RepoCoordinates,
   query: string,
   token: string,
-  limit: number
+  limit: number,
+  searchKind: "filename" | "content" = "filename"
 ): Promise<Array<{ path: string }>> {
   switch (coords.provider) {
     case "github": {
-      const searchQuery = buildExplorerFileSearchQuery(query, coords.provider);
+      const searchQuery = searchKind === "content" ? query : buildExplorerFileSearchQuery(query, coords.provider);
       return new GitHubClient({ token }).searchCode(coords, searchQuery, limit);
     }
     case "gitlab":
@@ -2361,7 +2368,7 @@ async function searchRepoFiles(
         return await gitlabClientForOrg(token).searchCode(coords, query, limit);
       } catch (error) {
         // GitLab Advanced Search is often disabled → 400. Empty lets the extension tree-walk.
-        if (error instanceof CodeHostError && (error.status === 400 || error.status === 403)) {
+        if (searchKind === "filename" && error instanceof CodeHostError && (error.status === 400 || error.status === 403)) {
           return [];
         }
         throw error;

@@ -92,7 +92,8 @@ export function ThreadHeaderSwitcher({
   }, [open]);
 
   const activeRunning = threads.some((thread) => thread.id === activeId && thread.isRunning);
-  const savedThreads = threads.filter((thread) => thread.messageCount > 0);
+  // The host excludes unused blank threads and includes persisted unsent drafts.
+  const savedThreads = threads;
 
   return (
     <div ref={rootRef} className="thread-switcher min-w-0 flex-1">
@@ -159,7 +160,7 @@ export function ThreadHeaderSwitcher({
                           ? "Generating…"
                           : thread.messageCount > 0
                             ? `${thread.messageCount} msgs · `
-                            : ""}
+                            : "Draft · "}
                         {thread.isRunning ? "" : formatRelativeTime(thread.updatedAt)}
                       </span>
                     </button>

@@ -58,5 +58,26 @@ void (async () => {
   passed += 1;
   console.log("ok - createChatOutputGate still honors an explicit minVisibleMs when a caller opts in");
 
+  const completed: string[] = [];
+  const completionGate = createChatOutputGate({
+    startedAt: Date.now(), isCancelled: () => false,
+    onChunk: chunk => completed.push(chunk)
+  });
+  await completionGate.complete("A final-only answer");
+  await completionGate.complete("A final-only answer");
+  assert.deepEqual(completed, ["A final-only answer"]);
+  await immediateGate.complete("xy");
+  assert.deepEqual(immediate, ["x", "y"], "completion does not duplicate streamed text");
+  await delayedGate.complete("abc");
+  assert.deepEqual(delayed, ["a", "b", "c"], "queued output is not replaced by completion");
+  const cancelledOutput: string[] = [];
+  await createChatOutputGate({
+    startedAt: Date.now(), isCancelled: () => true,
+    onChunk: chunk => cancelledOutput.push(chunk)
+  }).complete("Late answer");
+  assert.deepEqual(cancelledOutput, [], "cancelled completion cannot write to a new turn");
+  passed += 1;
+  console.log("ok - completion preserves final-only output without duplication or cancelled writes");
+
   console.log(`\n${passed} passed`);
 })();

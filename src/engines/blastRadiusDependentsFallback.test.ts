@@ -638,6 +638,13 @@ export async function requireAuth() {}
 });
 
 test("contentUsesNamedSymbol requires the named export, not a sibling import", () => {
+  for (const source of [
+    `import { gateRequest } from "./gates";`,
+    `import {\n gateRequest\n} from "./gates";\nexport const ready = true;`,
+    `// gateRequest(auth)\nconst explanation = "gateRequest";`
+  ]) {
+    assert.equal(contentUsesNamedSymbol(source, "gateRequest"), false, source);
+  }
   assert.equal(
     contentUsesNamedSymbol(
       `import { parseToken } from "./gates";\nexport function ready() { return parseToken(); }`,
@@ -656,6 +663,8 @@ test("contentUsesNamedSymbol requires the named export, not a sibling import", (
     contentUsesNamedSymbol(`router.use(gateRequest);`, "gateRequest"),
     true
   );
+  assert.equal(contentUsesNamedSymbol(`import { gateRequest as enforce } from "./gates";\nrouter.use(enforce);`, "gateRequest"), true);
+  assert.equal(contentUsesNamedSymbol(`import { gateRequest as enforce } from "./gates";`, "gateRequest"), false);
 });
 
 test("resolveNamedBlastSymbols unions the editor chip with the ask", () => {

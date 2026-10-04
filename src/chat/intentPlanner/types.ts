@@ -42,6 +42,7 @@ export type ChatIntentJobVerb = "search" | "latest";
  * Blast/Owner/Trace from plain English.
  */
 export type ChatIntentEvidenceClass =
+  | "write-site"
   | "write-reject"
   | "definition-locate"
   | "decision"
@@ -136,6 +137,8 @@ export type ChatCommandConstraint =
 
 export type ChatIntentPlannerInput = {
   message: string;
+  /** Recent completed messages, used only to resolve references in the current ask. */
+  conversation?: string;
   activeFile?: string;
   /** Only tools the org/user has connected. */
   connectedTools: IntegrationChatProvider[];

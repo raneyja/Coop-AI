@@ -46,6 +46,7 @@ export type VisibleMemoryFact = {
 };
 
 export type RepoContext = {
+  repoSelectionPending?: boolean;
   provider?: CodeHostProviderPreference;
   owner?: string;
   repo?: string;
@@ -132,10 +133,13 @@ export type ChatTurnActivity = {
 };
 
 export type ChatMessage = {
+  clientSubmissionId?: string;
   role: "user" | "assistant" | "system";
   content: string;
   /** Full payload sent to the model for this user turn (may differ from visible bubble). */
   modelContent?: string;
+  /** Display history is retained, but stopped instructions must never be replayed. */
+  cancelled?: boolean;
   timestamp: number;
   links?: Array<{ label: string; url: string }>;
   attachments?: ChatImageAttachment[];
@@ -144,6 +148,8 @@ export type ChatMessage = {
   suggest?: ChatSuggestPayload;
   /** Collapsed “Worked for…” trail. Display-only — never sent back to the model. */
   activity?: ChatTurnActivity;
+  /** Display-only patch decision, retained through window reload. */
+  patchCard?: PatchCardState;
 };
 
 /** Serializable evidence card stored with chat thread history. */
@@ -161,6 +167,8 @@ export type ChatPersistedArtifact = {
 };
 
 export type ChatHistoryPayload = {
+  threadId?: string;
+  revision?: number;
   messages: ChatMessage[];
   artifacts: ChatPersistedArtifact[];
   /** Restored with the thread so /edit chrome is not lost on reopen. */
@@ -528,6 +536,7 @@ export type WebviewInbound =
   | {
       type: "chat:send";
       payload: {
+        clientSubmissionId?: string;
         message: string;
         quickAction?: string;
         savedPromptId?: string;
@@ -574,6 +583,7 @@ export type WebviewInbound =
   | { type: "chat:clear" }
   | { type: "threads:switch"; payload: { threadId: string } }
   | { type: "threads:new" }
+  | { type: "threads:draft"; payload: { threadId: string; text: string } }
   | {
       type: "repo:list";
       payload: {
@@ -600,7 +610,7 @@ export type WebviewInbound =
     }
   | { type: "repo:select"; payload: { provider: CodeHostProviderPreference; owner: string; repo: string; branch?: string } }
   | { type: "repo:open-repo"; payload: { provider: CodeHostProviderPreference; owner: string; repo: string; branch?: string } }
-  | { type: "repo:open-file"; payload: { path: string; line?: number; preserveContext?: boolean } }
+  | { type: "repo:open-file"; payload: { path: string; line?: number; endLine?: number; preserveContext?: boolean } }
   | { type: "link:open"; payload: { url: string } }
   | { type: "github:repos:list"; payload?: { query?: string; requestId?: string } }
   | { type: "workspace:repos:save"; payload: { repoIds: string[] } }
@@ -787,7 +797,7 @@ export type WebviewOutbound =
   | { type: "context:update"; payload: RepoContext }
   | { type: "chat:history"; payload: ChatHistoryPayload | ChatMessage[] }
   | { type: "threads:list"; payload: ChatThreadsListPayload }
-  | { type: "chat:thread-changed"; payload: { threadId: string; title: string } }
+  | { type: "chat:thread-changed"; payload: { threadId: string; title: string; preserveDraft?: boolean; draftInput?: string } }
   | { type: "chat:delta"; payload: { chunk: string; threadId?: string } }
   | { type: "chat:thinking-delta"; payload: { chunk: string; threadId?: string } }
   | {

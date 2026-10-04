@@ -1,0 +1,33 @@
+
+> coop-ai@0.1.10 build:extension-dev
+> npm run build:extension && npm run build:webview
+
+
+> coop-ai@0.1.10 build:extension
+> esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --sourcemap --outfile=dist/extension.js
+
+
+  dist/extension.js      3.0mb ⚠️
+  dist/extension.js.map  6.1mb
+
+⚡ Done in 135ms
+
+> coop-ai@0.1.10 build:webview
+> esbuild src/webview/index.tsx --bundle --platform=browser --format=iife --sourcemap --outfile=dist/webview.js --external:node:fs --external:node:path && npm run build:webview:css
+
+
+  dist/webview.js      1.9mb ⚠️
+  dist/webview.js.map  3.3mb
+
+⚡ Done in 53ms
+
+> coop-ai@0.1.10 build:webview:css
+> tailwindcss -i ./src/webview/globals.css -o ./dist/webview.css --minify
+
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+
+Rebuilding...
+
+Done in 771ms.

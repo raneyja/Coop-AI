@@ -16,6 +16,14 @@ import type {
 } from "./types";
 import type { LlmProvider } from "./zeroRetentionConfig";
 
+export type IndexedRepoFileMap = {
+  repoId: string;
+  data: Array<{ path: string }>;
+  indexedBranch: string;
+  indexedCommit?: string;
+  stale: boolean;
+};
+
 export type StreamChatBody = {
   message: string;
   history: ChatHistoryMessage[];
@@ -246,6 +254,46 @@ export class CoopBackendClient {
       validateStatus: () => true
     });
     return response.data ?? { ok: response.status >= 200 && response.status < 300 };
+  }
+
+  public async fetchIndexedRepoFileMap(
+    baseUrl: string,
+    repoId: string,
+    branch?: string,
+    diagnostic?: (event: Record<string, unknown>) => void
+  ): Promise<IndexedRepoFileMap | undefined> {
+    assertCoopEndpoint(baseUrl);
+    const response = await runResilientRequest({
+      timeoutMs: MAX_USER_FACING_RESPONSE_MS,
+      policy: { maxRetries: 0 },
+      shouldRetryError: isRetryableError,
+      run: async () => this.http.get<IndexedRepoFileMap>(`/graph/${encodeURIComponent(repoId)}/tree`, {
+        baseURL: baseUrl.replace(/\/$/, ""),
+        params: branch ? { branch } : undefined,
+        headers: await this.authHeaders(),
+        validateStatus: () => true
+      })
+    });
+    diagnostic?.({
+      stage: "indexed-map-response",
+      requestedRepoId: repoId, requestedBranch: branch, status: response.status,
+      responseRepoId: response.data?.repoId, indexedBranch: response.data?.indexedBranch,
+      indexedCommit: response.data?.indexedCommit, stale: response.data?.stale,
+      hasDataArray: Array.isArray(response.data?.data),
+      fileCount: Array.isArray(response.data?.data) ? response.data.data.length : undefined
+    });
+    if (response.status === 404) {
+      return undefined;
+    }
+    if (response.status >= 400) {
+      throw new Error(formatCoopApiError(response.status, response.data as CoopApiErrorBody));
+    }
+    const map = response.data;
+    if (map?.repoId !== repoId || !map.indexedBranch ||
+        (branch && map.indexedBranch !== branch) || !Array.isArray(map.data)) {
+      return undefined;
+    }
+    return map;
   }
 
   public async graphSearch(
@@ -958,7 +1006,8 @@ export class CoopBackendClient {
     repoId: string,
     query: string,
     branch?: string,
-    limit = 30
+    limit = 30,
+    searchKind?: "content"
   ): Promise<{
     repoId: string;
     query: string;
@@ -972,10 +1021,15 @@ export class CoopBackendClient {
       run: async () =>
         this.http.get(`/v1/orgs/repos/${encodedRepo}/search`, {
           baseURL: baseUrl.replace(/\/$/, ""),
-          params: { q: query, branch, limit },
+          params: { q: query, branch, limit, ...(searchKind ? {searchKind} : {}) },
           headers: await this.authHeaders()
         })
     });
+    if (searchKind && response.data?.searchKind !== searchKind) {
+      throw Object.assign(new Error("This backend does not support cloud content search; use indexed filename discovery."), {
+        code: "unsupported"
+      });
+    }
     return response.data;
   }
 

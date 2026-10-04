@@ -1,0 +1,29 @@
+{
+  "scenario": {
+    "id": "DF-024",
+    "area": "Editing and code generation",
+    "fixture": "Disposable branch/worktree; seeded bug and independent assertions; never production branch",
+    "action": "Reject a proposed patch.",
+    "passCriteria": "Working files unchanged and UI returns to usable state.",
+    "modes": [
+      "fresh"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T17:37:30.851862+00:00",
+    "status": "PASS",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "see notes@see notes",
+    "action": "Reject a proposed patch.",
+    "actualResult": "Rejected the reviewed rename patch after Undo. Card shows Patch rejected, Not applied \u2014 Undo to review again. Application authMiddleware disk byte-identical to saved before; visible parser source unchanged; composer available.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-024-fresh-1.json",
+    "criteriaReview": "ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": null,
+    "durationMs": null,
+    "threadId": null
+  },
+  "diagnosticEvents": []
+}

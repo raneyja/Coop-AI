@@ -22,7 +22,7 @@ function webviewAssetUri(
 export function renderWebviewHtml(
   webview: vscode.Webview,
   extensionUri: vscode.Uri,
-  options?: { view?: WebviewViewMode; enforceMinWidth?: boolean }
+  options?: { view?: WebviewViewMode; enforceMinWidth?: boolean; panelSessionId?: string }
 ): string {
   const view = options?.view ?? "chat";
   const enforceMinWidth = options?.enforceMinWidth ?? false;
@@ -43,6 +43,7 @@ export function renderWebviewHtml(
     <div id="root" style="color:#d4d4d4;padding:16px;font:13px/1.4 -apple-system,BlinkMacSystemFont,sans-serif">Starting CoopAI…</div>
     <script nonce="${nonce}">
       window.__COOP_VIEW__ = "${view}";
+      window.__COOP_CHAT_SESSION_ID__ = ${JSON.stringify(options?.panelSessionId ?? null).replace(/</g, "\\u003c")};
       window.__COOP_ENFORCE_MIN_WIDTH__ = ${enforceMinWidth ? "true" : "false"};
       window.addEventListener("error", function (event) {
         var root = document.getElementById("root");

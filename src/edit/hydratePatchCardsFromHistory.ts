@@ -1,6 +1,6 @@
-import type { PatchCardsUpdatePayload } from "../chat/types";
+import type { ChatMessage, PatchCardState, PatchCardsUpdatePayload } from "../chat/types";
 import { buildPatchCardState, withSuppressionRegistry } from "./patchDiffPreview";
-import { lookupPatchFileContent } from "./patchFileContents";
+import { lookupPatchFileContent, sanitizedPatchTargetBindings } from "./patchFileContents";
 import { parsePatchResponse } from "./patchParser";
 import {
   getPatchRecord,
@@ -16,6 +16,7 @@ export type HistoryPatchMessage = {
   role: string;
   content: string;
   timestamp: number;
+  patchCard?: PatchCardState;
 };
 
 function messageLooksLikePatch(content: string): boolean {
@@ -71,7 +72,13 @@ export function hydratePatchCardsFromHistory(
       continue;
     }
     const preferredFile = filePathFromEditHistoryContent(previousUser?.content);
-    const parsed = parsePatchResponse(message.content, { preferredFile });
+    const savedCard = message.patchCard?.messageTimestamp === message.timestamp
+      ? message.patchCard
+      : undefined;
+    const parsed = parsePatchResponse(message.content, {
+      preferredFile,
+      targetAliases: savedCard ? sanitizedPatchTargetBindings(savedCard.files.map(file => file.relativePath)) : undefined
+    });
     if (!parsed.ok) {
       markMessageMarkdownSuppressed(message.timestamp);
       continue;
@@ -83,11 +90,14 @@ export function hydratePatchCardsFromHistory(
         collectOpenPatchFileBytes(relativePath)
     });
     const pending = withSuppressionRegistry({
-      ...buildPatchCardState(patches, {
+      ...(savedCard
+        ? { ...savedCard, canUndo: savedCard.status === "rejected" && savedCard.canUndo,
+            canCreatePr: false }
+        : buildPatchCardState(patches, {
         status: "pending",
         messageTimestamp: message.timestamp,
         fileContents: options?.fileContents
-      }),
+      })),
       suppressMarkdown: true
     });
     if (pending.files.length === 0) {
@@ -100,6 +110,15 @@ export function hydratePatchCardsFromHistory(
     hydrated += 1;
   }
   return hydrated;
+}
+
+/** Store the card with its originating message, including partial hunk decisions. */
+export function retainPatchCardsOnMessages(messages: ChatMessage[], cards = listPatchCards()): ChatMessage[] {
+  const byTimestamp = new Map(cards.map(card => [card.messageTimestamp, card]));
+  return messages.map(message => {
+    const card = message.role === "assistant" ? byTimestamp.get(message.timestamp) : undefined;
+    return card ? { ...message, patchCard: structuredClone(card) } : message;
+  });
 }
 
 /** Cards that belong to the messages currently on screen — not other threads. */

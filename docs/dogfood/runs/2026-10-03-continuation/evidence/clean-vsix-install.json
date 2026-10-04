@@ -1,0 +1,9 @@
+{
+  "profile": "/private/tmp/coop-dogfood-clean-20261003-continuation",
+  "extensionVersion": "0.1.10",
+  "installedPath": "/private/tmp/coop-dogfood-clean-20261003-continuation/extensions/coop-ai.coop-ai-0.1.10",
+  "verification": "Installation and packaged bytes only; no clean-profile live behavior certification.",
+  "dist/extension.js": "fbd567eb7f4739ca37ea7648f1413fde3f284684143561e36980469b4e55b28d",
+  "dist/webview.js": "b90947ec2d81f4078c867b89dec6bf6429a27700cb4cc737b608f64c82520d7d",
+  "dist/webview.css": "7fe0c091395e717db3a9ebcdf557ab516423a365cfaa94ed86451f3cd4a7d2bc"
+}

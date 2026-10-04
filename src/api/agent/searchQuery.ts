@@ -1,3 +1,4 @@
+import { classifyFieldHandlingEvidence, type FieldHandlingSource, type VerifiedFieldHandling } from "./fieldHandlingEvidence";
 import {
   isBarrelPath,
   isClientUiPath,
@@ -60,6 +61,8 @@ const STOP = new Set(
 const IDENTIFIER =
   /\b(?:[a-z][a-zA-Z]*[A-Z][a-zA-Z0-9]*|[A-Z][a-z]+[A-Z][a-zA-Z0-9]*|[a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/g;
 const MAX_SEARCH_CHARS = 48;
+/** Reject error strings from the ask are longer than name hunts — keep them searchable. */
+const MAX_REJECT_SEARCH_CHARS = 80;
 const MAX_FALLBACK_QUERIES = 9;
 /** API-reject hunts need field-access queries, not only “is not valid” slogans. */
 const MAX_API_REJECT_FALLBACK_QUERIES = 12;
@@ -111,7 +114,7 @@ export {
  * sentence. Deliberately repo-agnostic — no product, folder, or framework names.
  */
 const ROLE_NOUN =
-  /\b([a-z][a-z0-9]+\s+(?:middleware|service|controller|provider|handler|adapter|repository|resolver|guard|interceptor|client|store|queue|worker|migration|schema))\b/i;
+  /\b((?!(?:this|the|that|our|your|an)\b)[a-z][a-z0-9]+\s+(?:middleware|service|controller|provider|handler|adapter|repository|resolver|guard|interceptor|client|store|queue|worker|migration|schema))\b/i;
 
 /** Specific enough that a read must mention them — not generic “service/api”. */
 const ROLE_HINTS = [
@@ -221,13 +224,23 @@ export function extractAgentSearchQuery(userMessage: string): string {
     return trimmed;
   }
 
-  // On-call API reject: search the field's ValidationError, not `issue_id`
-  // (that query floods converters / OpenAPI and never opens the serializer).
+  // On-call API reject: Exact pasted error quote first — not ValidationError /
+  // bare issue_id / get("parent") scavenger (those open error_codes / UI).
   if (isApiRejectAsk(trimmed)) {
+    const quoteFirst = rejectQuoteFirstSearchQueries(trimmed)[0];
+    if (quoteFirst) {
+      return clip(quoteFirst, MAX_REJECT_SEARCH_CHARS);
+    }
     const rejectQuery = apiRejectSearchQueries(trimmed)[0];
     if (rejectQuery) {
-      return clip(rejectQuery);
+      return clip(rejectQuery, MAX_REJECT_SEARCH_CHARS);
     }
+  }
+
+  // “Where does this exact string appear: …” — search the phrase, not issue_id.
+  const exactNeedle = extractPastedExactStringNeedle(trimmed);
+  if (exactNeedle) {
+    return clip(exactNeedle, MAX_REJECT_SEARCH_CHARS);
   }
 
   // Create-issue locate: land on ViewSet/create serializer, not reject slogans.
@@ -283,6 +296,21 @@ export function sanitizeAgentSearchQuery(query: string, userMessage: string): st
   const extracted = extractAgentSearchQuery(userMessage);
   if (!q) {
     return extracted;
+  }
+  // Reject hunts: keep ValidationError / “Parent is not valid…” criteria.
+  // Rewriting long error strings to get("parent") is why Exact Parent never hit Zoekt.
+  if (isApiRejectAsk(userMessage) && isRejectShapedSearchCriterion(q)) {
+    return clip(q, MAX_REJECT_SEARCH_CHARS);
+  }
+  if (
+    isApiRejectAsk(userMessage) &&
+    askedRejectErrorQuotes(userMessage).some((quote) => {
+      const needle = quote.toLowerCase().replace(/\s+/g, " ");
+      const hay = q.toLowerCase().replace(/\s+/g, " ").replace(/^["']|["']$/g, "");
+      return needle.includes(hay) || hay.includes(needle.slice(0, Math.min(needle.length, 24)));
+    })
+  ) {
+    return clip(q, MAX_REJECT_SEARCH_CHARS);
   }
   if (q.length > MAX_SEARCH_CHARS || q === userMessage.trim() || looksLikeFullQuestion(q)) {
     return extracted;
@@ -450,15 +478,40 @@ export function fallbackAgentSearchQueries(userMessage: string): string[] {
     }
   }
   if (isApiRejectAsk(userMessage)) {
+    // Quote-first: long error strings need the reject clip budget (not 48).
+    for (const quote of rejectQuoteFirstSearchQueries(userMessage)) {
+      const clipped = clip(quote, MAX_REJECT_SEARCH_CHARS);
+      if (clipped && !unique.some((seen) => seen.toLowerCase() === clipped.toLowerCase())) {
+        unique.push(clipped);
+      }
+    }
     for (const rejectQuery of apiRejectSearchQueries(userMessage)) {
-      push(rejectQuery);
+      const clipped = clip(rejectQuery, MAX_REJECT_SEARCH_CHARS);
+      if (clipped && !unique.some((seen) => seen.toLowerCase() === clipped.toLowerCase())) {
+        unique.push(clipped);
+      }
     }
     for (const alias of proseLocateSearchAliases(userMessage)) {
       push(alias);
     }
     return unique.slice(0, MAX_API_REJECT_FALLBACK_QUERIES);
   }
+  // Calm state-definition locate is a small symbol hunt. Keep its fallback
+  // budget to distinct definition-oriented terms instead of splitting the
+  // natural-language ask into repeated state/work-item synonyms.
+  if (isBackendStateLocateAsk(userMessage) && !isRequestAuthLocateAsk(userMessage)) {
+    push("class State");
+    push("State model");
+    return unique.slice(0, 3);
+  }
   push(primary);
+  if (identifiers.length && !role && !isShipCheckQuery(userMessage)) {
+    for (const id of identifiers) {
+      push(id);
+      for (const alias of identifierSearchAliases(id)) push(alias);
+    }
+    return unique.slice(0, MAX_FALLBACK_QUERIES);
+  }
   if (isShipCheckQuery(userMessage)) {
     push("unauthorized");
   }
@@ -503,8 +556,12 @@ export function inventAskDerivedSearchCriteria(userMessage: string): string[] {
     return [];
   }
   const unique: string[] = [];
+  const rejectAsk = isApiRejectAsk(userMessage);
   const push = (candidate: string | undefined): void => {
-    const clipped = clip(candidate ?? "");
+    const clipped = clip(
+      candidate ?? "",
+      rejectAsk ? MAX_REJECT_SEARCH_CHARS : MAX_SEARCH_CHARS
+    );
     if (!clipped || clipped.length < 3) {
       return;
     }
@@ -516,6 +573,15 @@ export function inventAskDerivedSearchCriteria(userMessage: string): string[] {
     }
     unique.push(clipped);
   };
+
+  const named = allIdentifiers(text);
+  if (!rejectAsk && named.length && !text.match(ROLE_NOUN) && !isShipCheckQuery(text)) {
+    for (const id of named) {
+      push(id);
+      for (const alias of identifierSearchAliases(id)) push(alias);
+    }
+    return unique;
+  }
 
   for (const match of text.matchAll(/"([^"]{3,80})"|`([^`]{3,80})`/g)) {
     push(match[1] ?? match[2]);
@@ -588,7 +654,7 @@ export function isRejectShapedSearchCriterion(query: string): boolean {
     return false;
   }
   return (
-    /validationerror|get\s*\(|\["|raise\b|is not valid|not valid|must belong|does not (?:exist|belong)|isn'?t in|\b400\b|invalid\s+\w+|_id\b/.test(
+    /validationerror|get\s*\(|\["|raise\b|is not valid|not valid|must belong|does not (?:exist|belong)|isn'?t in|\b400\b|invalid\s+\w+|^validate_[a-z][a-z0-9_]*$|_id\b/.test(
       q
     ) ||
     (/\b(parent|assignee|state|transition|estimate)\b/.test(q) &&
@@ -597,8 +663,292 @@ export function isRejectShapedSearchCriterion(query: string): boolean {
 }
 
 /**
- * Quarterback planned criteria first (reject-shaped only on reject asks), then
- * ask-derived invent, then slogan/fallback pad. Fail-open everywhere.
+ * When Lightning returns zero hits, try code-host full-text search for
+ * reject-shaped or long quoted error strings — not every empty locate.
+ */
+export function shouldFailOpenCodeHostSearch(query: string): boolean {
+  const q = query.replace(/\s+/g, " ").trim();
+  if (!q || q.length < 8) {
+    return false;
+  }
+  if (isRejectShapedSearchCriterion(q)) {
+    return true;
+  }
+  if (/["'][^"']{12,}["']/.test(q)) {
+    return true;
+  }
+  return /\bis not valid\b|\bValidationError\b|\braise\b/i.test(q);
+}
+
+/**
+ * Lightning "satisfied" this search only if hits actually carry the phrase for
+ * multi-word / quoted error queries. Short tokens (ValidationError) keep any hit.
+ * Prevents: ValidationError → error_codes noise → skip codehost on later quotes.
+ */
+export function lightningHitsSatisfySearchQuery(
+  hits: Array<{ content?: string }>,
+  query: string
+): boolean {
+  if (hits.length === 0) {
+    return false;
+  }
+  if (!shouldFailOpenCodeHostSearch(query)) {
+    return true;
+  }
+  const needle = query
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+  // Short / single-token criteria — any Lightning hit is enough for this step.
+  if (needle.length < 16 || !/\s/.test(needle)) {
+    return true;
+  }
+  const prefix = needle.slice(0, Math.min(28, needle.length));
+  return hits.some((hit) => {
+    const hay = (hit.content ?? "").toLowerCase().replace(/\s+/g, " ");
+    if (!hay) {
+      return false;
+    }
+    if (hay.includes(needle) || hay.includes(prefix)) {
+      return true;
+    }
+    // Hit is a Match span inside the asked phrase.
+    if (needle.includes(hay.replace(/^["'`]+|["'`]+$/g, "").trim()) && hay.trim().length >= 12) {
+      return true;
+    }
+    return false;
+  });
+}
+
+/**
+ * Mutation / job words from the ask that distinguish twin raise sites
+ * (e.g. create/update vs an unrelated draft sibling). Not path hardcoding —
+ * used only to decide whether gather may continue under budget after a first attach.
+ */
+export function askRejectJobTokens(userMessage: string): string[] {
+  const raw = userMessage.toLowerCase();
+  const tokens: string[] = [];
+  const push = (token: string): void => {
+    if (!tokens.includes(token)) {
+      tokens.push(token);
+    }
+  };
+  if (/\bcreat(e|es|ed|ing)\b/.test(raw)) {
+    push("create");
+  }
+  if (/\bupdat(e|es|ed|ing)\b/.test(raw)) {
+    push("update");
+  }
+  if (/\bassign(s|ed|ing|ee)?\b/.test(raw)) {
+    push("assign");
+  }
+  if (/\btransition(s|ed|ing)?\b/.test(raw)) {
+    push("transition");
+  }
+  if (/\bdelet(e|es|ed|ing)\b/.test(raw)) {
+    push("delete");
+  }
+  if (/\binvent(s|ed|ing)?\b/.test(raw)) {
+    push("invent");
+  }
+  if (/\bpatch(es|ed|ing)?\b/.test(raw)) {
+    push("patch");
+  }
+  if (/\b(?:signer|signing|signature|sign(?:s|ed)?)\b/.test(raw) &&
+      !/\bsign[ -]?(?:in|up)\b/.test(raw)) {
+    push("sign");
+  }
+  return tokens;
+}
+
+/** True when attached reject evidence mentions ask job tokens (or ask has none). */
+export function rejectEvidenceMatchesAskJob(
+  files: Array<{ path?: string; content?: string }>,
+  userMessage: string
+): boolean {
+  const tokens = askRejectJobTokens(userMessage);
+  if (tokens.length === 0) {
+    return true;
+  }
+  return files.some((file) => {
+    const path = (file.path ?? "").toLowerCase().replace(/\\/g, "/");
+    const content = file.content ?? "";
+    return tokens.some((token) => {
+      // Path segment (create_issue.py) or defining class (class IssueCreateSerializer).
+      // Do NOT count imports — live Fail: draft.py imports IssueCreateSerializer.
+      if (path.includes(token)) {
+        return true;
+      }
+      return new RegExp(`\\b(?:class|def|function)\\s+\\w*${token}\\w*`, "i").test(content) ||
+        new RegExp(`\\b(?:const|let)\\s+\\w*${token}\\w*\\s*=\\s*(?:async\\s*)?(?:function\\b|\\([^)]*\\)\\s*=>|\\w+\\s*=>)`, "i").test(content);
+    });
+  });
+}
+
+/**
+ * Ask has create/update/… but this path/snippet does not — a twin raise site
+ * (live: draft.py when ask said create/update). Demote; do not freeze invent.
+ */
+export function isWeakRejectTwinForAsk(
+  path: string,
+  content: string,
+  userMessage: string
+): boolean {
+  const tokens = askRejectJobTokens(userMessage);
+  if (tokens.length === 0) {
+    return false;
+  }
+  return !rejectEvidenceMatchesAskJob([{ path, content }], userMessage);
+}
+
+/** Higher = prefer first when inventing reject sites under a job-constrained ask. */
+export function rejectInventPathRank(path: string, userMessage: string): number {
+  const tokens = askRejectJobTokens(userMessage);
+  const n = path.replace(/\\/g, "/").toLowerCase();
+  let score = 0;
+  for (const token of tokens) {
+    if (n.includes(token)) {
+      score += 4;
+    }
+  }
+  // Alternate write surface not named in the ask — demote, don't path-hardcode ban.
+  if (tokens.length > 0 && /\bdraft\b/.test(n)) {
+    score -= 3;
+  }
+  if (/(^|\/)serializers?\//.test(n) && !/\bdraft\b/.test(n)) {
+    score += 1;
+  }
+  return score;
+}
+
+/**
+ * When invent opens a weak twin (draft.py), follow relative imports that name
+ * ask job serializers (IssueCreateSerializer) — evidence-driven, not a path table.
+ */
+export function relatedSerializerPathsFromWeakTwin(
+  weakPath: string,
+  body: string,
+  userMessage: string
+): string[] {
+  const tokens = askRejectJobTokens(userMessage);
+  if (tokens.length === 0) {
+    return [];
+  }
+  const normalized = weakPath.replace(/\\/g, "/");
+  const slash = normalized.lastIndexOf("/");
+  const dir = slash >= 0 ? normalized.slice(0, slash) : "";
+  const out: string[] = [];
+  const push = (rel: string): void => {
+    const path = dir ? `${dir}/${rel}` : rel;
+    if (!out.includes(path)) {
+      out.push(path);
+    }
+  };
+  for (const match of body.matchAll(
+    /from\s+\.(\w+)\s+import\s+([^\n]+)/g
+  )) {
+    const mod = match[1] ?? "";
+    const names = match[2] ?? "";
+    if (
+      tokens.some((token) => new RegExp(token, "i").test(names)) ||
+      /CreateSerializer|UpdateSerializer/i.test(names)
+    ) {
+      push(`${mod}.py`);
+    }
+  }
+  // Same-folder peer: draft.py → issue.py when ask wants create/update.
+  const base = slash >= 0 ? normalized.slice(slash + 1) : normalized;
+  if (/\bdraft\b/i.test(base) && (tokens.includes("create") || tokens.includes("update"))) {
+    push("issue.py");
+  }
+  return out;
+}
+
+/**
+ * Rank a candidate reject path for ask job words (create/update/…).
+ * Higher = better twin. Live Fail: IssueCreateSerializer invent opened draft.py first.
+ */
+export function scoreRejectPathForAskJob(
+  path: string,
+  content: string,
+  userMessage: string
+): number {
+  const tokens = askRejectJobTokens(userMessage);
+  if (tokens.length === 0) {
+    return 0;
+  }
+  const pathLower = path.toLowerCase().replace(/\\/g, "/");
+  const hay = `${pathLower}\n${content}`.toLowerCase();
+  let score = 0;
+  for (const token of tokens) {
+    if (pathLower.includes(token)) {
+      score += 4;
+    }
+    // Defining class embeds the job: IssueCreateSerializer — not an import line.
+    if (new RegExp(`\\bclass\\s+\\w*${token}\\w*`, "i").test(content)) {
+      score += 5;
+    }
+  }
+  return score;
+}
+
+/**
+ * Ask-derived symbol / validate queries when Exact error quote is absent from
+ * Lightning + codehost. Built from field stems and entity+create/update nouns
+ * in THIS ask — not a Plane path table. Finish rail may run ≤2 of these before miss.
+ */
+export function inventRejectSymbolSearchCriteria(userMessage: string): string[] {
+  if (!isApiRejectAsk(userMessage)) {
+    return [];
+  }
+  const out: string[] = [];
+  const push = (candidate: string): void => {
+    const clipped = clip(candidate, MAX_REJECT_SEARCH_CHARS);
+    if (!clipped || out.some((seen) => seen.toLowerCase() === clipped.toLowerCase())) {
+      return;
+    }
+    out.push(clipped);
+  };
+
+  const entities: string[] = [];
+  if (/\bissues?\b/i.test(userMessage)) {
+    entities.push("Issue");
+  }
+  if (/\bwork[-\s]?items?\b/i.test(userMessage) && !entities.includes("Issue")) {
+    entities.push("Issue");
+  }
+  if (/\bprojects?\b/i.test(userMessage) && /\b(create|update|assign)\b/i.test(userMessage)) {
+    entities.push("Project");
+  }
+
+  const jobs = askRejectJobTokens(userMessage);
+  // Prefer class-definition queries — SCIP often re-exports to __init__.py (live Fail).
+  for (const entity of entities) {
+    for (const job of jobs) {
+      const pascal = `${job.charAt(0).toUpperCase()}${job.slice(1)}`;
+      push(`class ${entity}${pascal}Serializer`);
+      push(`${entity}${pascal}Serializer`);
+    }
+    push(`class ${entity}Serializer`);
+    push(`${entity}Serializer`);
+  }
+
+  for (const field of askedRejectFieldTokens(userMessage)) {
+    const stem = field.replace(/_id$/i, "");
+    if (stem.length >= 3) {
+      push(`validate_${stem}`);
+    }
+  }
+
+  return out.slice(0, 4);
+}
+
+/**
+ * Quote-first on reject (Exact Parent law), then quarterback planned (reject-shaped
+ * only), then invent, then slogan/fallback pad. Never lead with ValidationError
+ * when the ask already pasted the error string.
+ * Fail-open / no-planTurn pad only — must not drive live Activity when planTurn exists.
  */
 export function mergePlannedAgentSearchQueries(options: {
   userMessage: string;
@@ -607,8 +957,12 @@ export function mergePlannedAgentSearchQueries(options: {
 }): string[] {
   const max = options.max ?? MAX_API_REJECT_FALLBACK_QUERIES;
   const unique: string[] = [];
+  const rejectAsk = isApiRejectAsk(options.userMessage);
   const push = (candidate: string | undefined): void => {
-    const clipped = clip(candidate ?? "");
+    const clipped = clip(
+      candidate ?? "",
+      rejectAsk ? MAX_REJECT_SEARCH_CHARS : MAX_SEARCH_CHARS
+    );
     if (!clipped) {
       return;
     }
@@ -618,10 +972,27 @@ export function mergePlannedAgentSearchQueries(options: {
     unique.push(clipped);
   };
 
-  const rejectAsk = isApiRejectAsk(options.userMessage);
+  if (rejectAsk) {
+    for (const quote of rejectQuoteFirstSearchQueries(options.userMessage)) {
+      push(quote);
+    }
+  }
+  const hasExactQuote = rejectAsk && rejectQuoteFirstSearchQueries(options.userMessage).length > 0;
   for (const planned of options.planned ?? []) {
     if (rejectAsk && !isRejectShapedSearchCriterion(planned)) {
       continue;
+    }
+    // Do not let planned ValidationError / get("field") / bare field tokens outrank Exact quote.
+    if (hasExactQuote) {
+      const p = planned.trim();
+      if (
+        /^ValidationError\b/i.test(p) ||
+        /^get\s*\(/i.test(p) ||
+        /^[a-z][a-z0-9]*_id$/i.test(p) ||
+        /^(parent|assignee|state|issue_id)$/i.test(p)
+      ) {
+        continue;
+      }
     }
     push(planned);
   }
@@ -1421,7 +1792,7 @@ export function isApiRejectAsk(userMessage: string): boolean {
   );
   const fieldReject =
     /\b[a-z][a-z0-9]*_id\b/.test(text) ||
-    /\b(parent|assignee|estimate)\b/.test(text) ||
+    /\b(parent|assignee|estimate|status)\b/.test(text) ||
     /\bbad\s+[a-z][a-z0-9_]*\b/.test(text) ||
     /\b(isn'?t|is not|not valid)\b/.test(text);
   // Bare "api" + "work-item" is not enough — need an explicit reject/error signal
@@ -1466,12 +1837,31 @@ export function isApiKeyRequestAuthLocateAsk(userMessage: string): boolean {
  */
 export function isDefinitionLocateAsk(userMessage: string): boolean {
   return (
+    isParserLocateAsk(userMessage) ||
     isBackendStateLocateAsk(userMessage) ||
     isRequestAuthLocateAsk(userMessage) ||
     isCreateLocateAsk(userMessage) ||
     queryHasNamedSymbol(userMessage) ||
     queryRoleHints(userMessage).length > 0
   );
+}
+
+/** Prose parsing asks need a parser declaration, not a token store or caller. */
+export function isParserLocateAsk(query: string): boolean {
+  return /\b(?:parse|parses|parsing|extract|extracts|extracting|decode|decodes|decoding)\b/i.test(query) &&
+    /\b(?:where|find|existing|implementation|function)\b/i.test(query) && !isApiRejectAsk(query);
+}
+
+export function contentLooksLikeRequestedParser(content: string, query: string): boolean {
+  const terms = queryTerms(query);
+  const declarations = /\b(?:function|def|func|fn)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(|\b(?:const|let|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:async\s*)?\(/g;
+  for (const match of content.matchAll(declarations)) {
+    const name = match[1] ?? match[2];
+    if (!/^(?:parse|extract|decode)(?:[A-Z_]|$)/.test(name)) continue;
+    const subject = name.replace(/^(?:parse|extract|decode)/, "").toLowerCase();
+    if (terms.some((term) => term.length >= 3 && subject.includes(term))) return true;
+  }
+  return false;
 }
 
 /** Compound auth + work-item/issue state locate — both halves must ground. */
@@ -1672,6 +2062,14 @@ export function isBackendStateDefinitionHit(hit: {
   return isBackendStateDefinitionHitIgnoringSerializerGate(hit);
 }
 
+/** True only when the opened source declares the State type itself. */
+export function contentLooksLikeStateModelDeclaration(content: string): boolean {
+  if (!content.trim()) {
+    return false;
+  }
+  return /\bclass\s+State\b|\btype\s+State\s+struct\b|\bstruct\s+State\b/.test(content);
+}
+
 /** @deprecated Use isUnrelatedSerializerForStateLocate — kept as alias for tests. */
 export function isNonStateIssueSerializerHit(hit: {
   fileName: string;
@@ -1682,12 +2080,27 @@ export function isNonStateIssueSerializerHit(hit: {
 
 /** Migrations, icons, empty-state packages, HTML templates, shared types — burn reject reads. */
 export function isApiRejectNoisePath(fileName: string): boolean {
+  const n = normalizePath(fileName);
   return (
     isMigrationPath(fileName) ||
     isIconOrAssetPath(fileName) ||
     isEmptyStatePackagePath(fileName) ||
     isHtmlTemplatePath(fileName) ||
-    isSharedTypePackagePath(fileName)
+    isSharedTypePackagePath(fileName) ||
+    isRejectErrorCatalogPath(fileName)
+  );
+}
+
+/**
+ * ValidationError / error-code catalogs (utils/error_codes.py) — live Fail when
+ * preferred over serializers. Not a write-reject site.
+ */
+export function isRejectErrorCatalogPath(fileName: string): boolean {
+  const n = normalizePath(fileName);
+  return (
+    /(^|\/)(utils|helpers)\/[^/]*error_codes?\.[a-z]+$/.test(n) ||
+    /(^|\/)error_codes?\.(py|ts|js|go)$/.test(n) ||
+    /(^|\/)(constants|const)\/[^/]*(error|status)_?codes?\.[a-z]+$/.test(n)
   );
 }
 
@@ -1761,8 +2174,63 @@ export function lineNumberOfCreateHandler(content: string): number | undefined {
 }
 
 /**
+ * Exact error strings the user pasted — search these before ValidationError /
+ * get("field") / bare *_id. Empty when the ask has no long quoted error.
+ */
+export function rejectQuoteFirstSearchQueries(userMessage: string): string[] {
+  if (!isApiRejectAsk(userMessage)) {
+    return [];
+  }
+  const unique: string[] = [];
+  for (const quote of askedRejectErrorQuotes(userMessage)) {
+    const clipped = clip(quote, MAX_REJECT_SEARCH_CHARS);
+    if (!clipped || clipped.length < 12) {
+      continue;
+    }
+    if (unique.some((seen) => seen.toLowerCase() === clipped.toLowerCase())) {
+      continue;
+    }
+    unique.push(clipped);
+  }
+  return unique;
+}
+
+/**
+ * Needle from “Where does this exact string appear: …” (quoted or bare).
+ * Prevents latching bare `issue_id` from the pasted error text.
+ */
+export function extractPastedExactStringNeedle(userMessage: string): string | undefined {
+  const text = userMessage.replace(/\s+/g, " ").trim();
+  if (!text) {
+    return undefined;
+  }
+  const quoted = askedRejectErrorQuotes(text)[0];
+  if (quoted && quoted.length >= 12) {
+    return clip(quoted, MAX_REJECT_SEARCH_CHARS);
+  }
+  const afterLabel = text.match(
+    /\b(?:exact\s+string|this\s+exact\s+string|exact\s+error(?:\s+string)?)\b[^:]*:\s*(.+)$/i
+  );
+  if (afterLabel?.[1]) {
+    const phrase = afterLabel[1].trim().replace(/^["'`]+|["'`]+$/g, "");
+    if (phrase.length >= 12) {
+      return clip(phrase, MAX_REJECT_SEARCH_CHARS);
+    }
+  }
+  // Unquoted long ValidationError-shaped fragment in the sentence.
+  const fragment = text.match(
+    /\b([A-Z][a-zA-Z]*(?:\s+\w+){2,12}\s+is not valid\b[^"'`]{0,60})/
+  );
+  if (fragment?.[1] && fragment[1].trim().length >= 16) {
+    return clip(fragment[1].trim(), MAX_REJECT_SEARCH_CHARS);
+  }
+  return undefined;
+}
+
+/**
  * Index queries that land on the asked field's ValidationError — not a bare
  * `issue_id` / `parent_id` token (those match converters and OpenAPI first).
+ * When the ask quotes an error string, that quote leads the list.
  */
 export function apiRejectSearchQueries(userMessage: string): string[] {
   if (!isApiRejectAsk(userMessage)) {
@@ -1770,7 +2238,7 @@ export function apiRejectSearchQueries(userMessage: string): string[] {
   }
   const unique: string[] = [];
   const push = (candidate: string | undefined): void => {
-    const clipped = clip(candidate ?? "");
+    const clipped = clip(candidate ?? "", MAX_REJECT_SEARCH_CHARS);
     if (!clipped) {
       return;
     }
@@ -1779,6 +2247,10 @@ export function apiRejectSearchQueries(userMessage: string): string[] {
     }
     unique.push(clipped);
   };
+  // Quote-first product law — never lead Exact Parent with get("parent").
+  for (const quote of rejectQuoteFirstSearchQueries(userMessage)) {
+    push(quote);
+  }
   const fields = askedRejectFieldTokens(userMessage);
   const jobs = askedRejectJobTokens(userMessage);
   const stems = [...new Set(fields.map((field) => field.replace(/_id$/i, "")))];
@@ -1787,6 +2259,7 @@ export function apiRejectSearchQueries(userMessage: string): string[] {
     ...preferred.filter((stem) => stems.includes(stem)),
     ...stems.filter((stem) => !preferred.includes(stem))
   ];
+  const hasExactQuote = unique.length > 0;
   for (const job of jobs) {
     push(job);
     for (const stem of orderedStems) {
@@ -1799,12 +2272,15 @@ export function apiRejectSearchQueries(userMessage: string): string[] {
     if (stem.length < 3) {
       continue;
     }
-    // Field access first — many APIs raise “user not in project”, not “X is not valid”.
-    push(`get("${stem}")`);
-    push(`get("${stem}_id")`);
-    push(`["${stem}"]`);
-    push(stem);
-    push(`${stem}_id`);
+    // Field access — pad after quotes. Skip bare stem / *_id when we already
+    // have the Exact message (those flood UI / converters before the raise).
+    if (!hasExactQuote) {
+      push(`get("${stem}")`);
+      push(`get("${stem}_id")`);
+      push(`["${stem}"]`);
+      push(stem);
+      push(`${stem}_id`);
+    }
     push(`${stem} is not valid`);
     push(`${stem} is required`);
     push(`not valid ${stem}`);
@@ -1816,7 +2292,10 @@ export function apiRejectSearchQueries(userMessage: string): string[] {
       push(`not valid ${field}`);
     }
   }
-  push("ValidationError");
+  // Bare ValidationError last — Lightning noise (error_codes.py), never lead.
+  if (!hasExactQuote) {
+    push("ValidationError");
+  }
   return unique;
 }
 
@@ -1830,7 +2309,8 @@ const REJECT_QUALIFIER_STEMS = [
   "estimate",
   "owner",
   "label",
-  "priority"
+  "priority",
+  "status"
 ] as const;
 
 function addRejectFieldStem(tokens: Set<string>, raw: string): void {
@@ -2061,7 +2541,7 @@ export function contentLooksLikeStateTransitionReject(content: string): boolean 
   return (
     /\b(state_id|is_valid_transition|validate_state)\b/i.test(content) ||
     /invalid.{0,16}transition/i.test(content) ||
-    /valid state/i.test(content)
+    /\bvalid state\b/i.test(content)
   );
 }
 
@@ -2095,10 +2575,13 @@ function fieldTokenInText(text: string, field: string): boolean {
 function contentHasAskedFieldGuard(content: string, fields: string[]): boolean {
   return fields.some((field) => {
     const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // A client checking an HTTP response code does not establish a domain-status guard.
+    const comparisonValue = field === "status" ? "(?!\\s*[12345]\\d{2}\\b)" : "";
     return (
       new RegExp(`\\.get\\(\\s*['"]${escaped}['"]`, "i").test(content) ||
       new RegExp(`\\[\\s*['"]${escaped}['"]\\s*\\]`, "i").test(content) ||
       new RegExp(`if\\s*\\(\\s*!+\\s*(?:[\\w$]+\\.)*${escaped}\\b`, "i").test(content) ||
+      new RegExp(`if\\s*\\(\\s*(?:[\\w$]+\\.)*${escaped}\\b\\s*(?:===|!==|==|!=)(?!=)${comparisonValue}`, "i").test(content) ||
       new RegExp(`if\\s+not\\s+(?:[\\w$]+\\.)*${escaped}\\b`, "i").test(content) ||
       new RegExp(`\\b${escaped}\\s*(?:===|!==|==|!=)\\s*(?:['"]['']|null|undefined|None)`, "i").test(
         content
@@ -2108,8 +2591,85 @@ function contentHasAskedFieldGuard(content: string, fields: string[]): boolean {
 }
 
 function quotedRejectText(content: string): string {
-  const quotes = [...content.matchAll(/["']([^"']{2,})["']/g)].map((match) => match[1] ?? "");
+  const quotes = [...content.matchAll(/["'“”]([^"'“”]{2,})["'“”]/g)].map((match) => match[1] ?? "");
   return `${validationErrorMessages(content)}\n${quotes.join("\n")}`;
+}
+
+/**
+ * Error strings the user quoted in the ask (straight or curly **double** quotes).
+ * Do not treat apostrophes in don't / isn't as quote delimiters — that invented a
+ * fake C2 “quote” and outranked ValidationError state (live Fail class).
+ * Zoekt often returns only that message line — no `raise` / `ValidationError`.
+ */
+export function askedRejectErrorQuotes(userMessage: string): string[] {
+  const patterns: RegExp[] = [/"([^"]{12,})"/g, /“([^”]{12,})”/g, /«([^»]{12,})»/g];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const pattern of patterns) {
+    pattern.lastIndex = 0;
+    for (const match of userMessage.matchAll(pattern)) {
+      const quote = (match[1] ?? "").trim();
+      if (quote.length < 12) {
+        continue;
+      }
+      const key = quote.toLowerCase();
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      out.push(quote);
+    }
+  }
+  return out;
+}
+
+/** Hit body contains the exact (or near-exact) error string from the ask. */
+export function contentIncludesAskedRejectQuote(content: string, userMessage: string): boolean {
+  const hay = content.toLowerCase().replace(/\s+/g, " ");
+  for (const quote of askedRejectErrorQuotes(userMessage)) {
+    const needle = quote.toLowerCase().replace(/\s+/g, " ");
+    if (needle.length >= 12 && hay.includes(needle)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Live Zoekt Fragments[].Match is often only the matched span — e.g. the ask
+ * quotes the full Parent message, but the hit is `is not valid issue_id please…`
+ * without the word Parent. Treat a substantial overlap as the same evidence.
+ */
+export function contentOverlapsAskedRejectQuote(content: string, userMessage: string): boolean {
+  if (contentIncludesAskedRejectQuote(content, userMessage)) {
+    return true;
+  }
+  const hay = content
+    .split("\n")
+    .map((row) => row.replace(/^\d+\|/, ""))
+    .join("\n")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .trim();
+  if (hay.length < 12) {
+    return false;
+  }
+  for (const quote of askedRejectErrorQuotes(userMessage)) {
+    const needle = quote.toLowerCase().replace(/\s+/g, " ").trim();
+    if (needle.length < 12) {
+      continue;
+    }
+    // Hit is a span inside the quoted error, or a long prefix of it.
+    if (needle.includes(hay)) {
+      return true;
+    }
+    const prefixLen = Math.min(needle.length, Math.max(24, Math.floor(needle.length * 0.6)));
+    if (hay.includes(needle.slice(0, prefixLen))) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** ±12 lines around each raise/throw so a sibling field's validate() does not count. */
@@ -2140,15 +2700,90 @@ function contentMentionsAskedField(content: string, fields: string[]): boolean {
 }
 
 /**
+ * Zoekt often returns only the API error message (no raise / ValidationError).
+ * Match field-shaped error copy on serializer / server-write paths.
+ */
+function lineLooksLikeApiErrorMessage(line: string): boolean {
+  const text = line.replace(/^\d+\|/, "").replace(/^["'`]+|["'`]+$/g, "").trim();
+  return (
+    /\bnot valid\b/i.test(text) ||
+    /\bis required\b/i.test(text) ||
+    /\bplease pass a valid\b/i.test(text) ||
+    /\bmust belong\b/i.test(text) ||
+    /\bdoes not (?:exist|belong)\b/i.test(text) ||
+    /\bisn'?t in\b/i.test(text) ||
+    (/\binvalid\b/i.test(text) && /\b(id|issue|state|parent|assignee|field)\b/i.test(text))
+  );
+}
+
+function pathAllowsFieldShapedReject(fileName: string): boolean {
+  if (!fileName.trim()) {
+    // Unknown path — allow when message + field match (snippet-only attach).
+    return true;
+  }
+  const n = normalizePath(fileName);
+  if (
+    isClientUiPath(fileName) ||
+    isSeedOrFixturePath(fileName) ||
+    isSchemaCatalogPath(fileName) ||
+    isDocOrSpecPath(fileName) ||
+    isQueryFilterPath(fileName) ||
+    isLocaleCatalogPath(fileName) ||
+    isHtmlTemplatePath(fileName)
+  ) {
+    return false;
+  }
+  return (
+    isServerWritePath(fileName) ||
+    isMutationHandlerPath(fileName) ||
+    /(^|\/)serializers?\//.test(n) ||
+    /\.serializer\.(py|ts|go|rb)$/.test(n)
+  );
+}
+
+/**
+ * Raise-less Zoekt line that names the asked field and looks like API error copy.
+ * Unquoted paraphrase asks (COPILOT_T2_ASK) need this — quote recovery alone is not enough.
+ */
+export function contentLooksLikeFieldShapedApiError(
+  content: string,
+  userMessage: string,
+  fileName = ""
+): boolean {
+  if (!pathAllowsFieldShapedReject(fileName)) {
+    return false;
+  }
+  const fields = askedRejectFieldTokens(userMessage);
+  if (fields.length === 0) {
+    return false;
+  }
+  return content.split(/\n/).some((row) => {
+    const text = row.replace(/^\d+\|/, "");
+    if (!lineLooksLikeApiErrorMessage(text)) {
+      return false;
+    }
+    return fields.some((field) => fieldTokenInText(text, field));
+  });
+}
+
+/**
  * Serializer/view reject for the field the user asked about — parent, state,
  * assignee, or any `*_id`. Generic filter ValidationError does not count.
+ *
+ * Also Pass when the hit is only the quoted API error string from the ask
+ * (live Zoekt often omits `raise` / `ValidationError` on that line), or a
+ * field-shaped message-only line on a serializer/server-write path.
  */
 export function contentLooksLikeAskedFieldReject(
   content: string,
   userMessage: string,
   fileName = ""
 ): boolean {
-  if (!contentLooksLikeWriteReject(content)) {
+  // A status guard in a neighboring operation is not the signing rejection.
+  // Match the operation's path/declaration, rather than incidental "signed"
+  // text in a PDF-download message or an imported signature type.
+  if (askRejectJobTokens(userMessage).includes("sign") &&
+      !rejectEvidenceMatchesAskJob([{ path: fileName, content }], userMessage)) {
     return false;
   }
   const jobs = askedRejectJobTokens(userMessage);
@@ -2156,6 +2791,54 @@ export function contentLooksLikeAskedFieldReject(
     return false;
   }
   const fields = askedRejectFieldTokens(userMessage);
+  const requiredStatus = /\bmust\s+be\s+([a-z_]+)\s+(?:for|before|to)\b/i.exec(userMessage)?.[1];
+  if (fields.includes("status") && requiredStatus &&
+      !rejectWindows(content).some((window) => contentHasAskedFieldGuard(window, ["status"]) &&
+        fieldTokenInText(window, requiredStatus))) {
+    return false;
+  }
+  if (/\btransition\b/i.test(userMessage) && fields.includes("state") &&
+      !contentHasAskedFieldGuard(content, ["state", "state_id"]) &&
+      !contentLooksLikeStateTransitionReject(content)) {
+    return false;
+  }
+  // Exact error copy from the ask — attach even without raise/ValidationError keywords.
+  if (contentIncludesAskedRejectQuote(content, userMessage)) {
+    if (fields.length === 0) {
+      return true;
+    }
+    if (contentMentionsAskedField(content, fields)) {
+      return true;
+    }
+    // Ask quote / Zoekt message line names the field ("Parent is not valid…").
+    if (
+      askedRejectErrorQuotes(userMessage).some((quote) =>
+        fields.some((field) => fieldTokenInText(quote, field))
+      )
+    ) {
+      return true;
+    }
+    return fields.some((field) => fieldTokenInText(content, field));
+  }
+  // Zoekt Match span is a substring of the asked quote (Parent omitted from fragment).
+  if (contentOverlapsAskedRejectQuote(content, userMessage)) {
+    if (
+      fields.length === 0 ||
+      askedRejectErrorQuotes(userMessage).some((quote) =>
+        fields.some((field) => fieldTokenInText(quote, field))
+      ) ||
+      fields.some((field) => fieldTokenInText(content, field))
+    ) {
+      return pathAllowsFieldShapedReject(fileName);
+    }
+  }
+  // Unquoted ask + message-only Zoekt (no raise keywords).
+  if (contentLooksLikeFieldShapedApiError(content, userMessage, fileName)) {
+    return true;
+  }
+  if (!contentLooksLikeWriteReject(content)) {
+    return false;
+  }
   if (fields.length === 0) {
     return contentLooksLikeStateTransitionReject(content);
   }
@@ -2173,6 +2856,21 @@ export function contentLooksLikeAskedFieldReject(
  * one the user asked about (comment_html vs parent). Generic write/reject
  * snippets without a sibling field stay eligible.
  */
+export function verifiedFieldHandlingEvidence(
+  file: FieldHandlingSource,
+  userMessage: string
+): VerifiedFieldHandling | undefined {
+  if (!isApiRejectAsk(userMessage) || !pathAllowsFieldShapedReject(file.path) || isTestPath(file.path)) {
+    return undefined;
+  }
+  if (!contentMentionsAskedJob(file.content, file.path, askedRejectJobTokens(userMessage)) ||
+      contentLooksLikeAskedFieldReject(file.content, userMessage, file.path)) {
+    return undefined;
+  }
+  return classifyFieldHandlingEvidence(file, askedRejectFieldTokens(userMessage));
+}
+
+
 export function contentLooksLikeWrongFieldReject(
   content: string,
   userMessage: string
@@ -2250,6 +2948,26 @@ export function isActionableApiRejectHit(hit: {
   return false;
 }
 
+/**
+ * preferredHits fail-open pool for reject: actionable ∪ asked-field ∪ server-write.
+ * Shared by decorateToolResult, seed, and lastChance.
+ */
+export function isFailOpenRejectHit(
+  hit: { fileName: string; content?: string },
+  userMessage: string
+): boolean {
+  if (!hit.fileName || shouldSkipEvidencePath(hit.fileName, userMessage)) {
+    return false;
+  }
+  if (isActionableApiRejectHit(hit)) {
+    return true;
+  }
+  if (isServerWritePath(hit.fileName)) {
+    return true;
+  }
+  return contentLooksLikeAskedFieldReject(hit.content ?? "", userMessage, hit.fileName);
+}
+
 /** Keep only file bodies that actually reject/write — drop OpenAPI and read-only classes. */
 export function filterWriteRejectFiles<T extends { path?: string; content?: string }>(
   files: T[],
@@ -2271,6 +2989,15 @@ export function lineNumberOfWriteReject(
 ): number | undefined {
   const rows = content.split("\n").map((row) => row.replace(/^\d+\|/, ""));
   const fields = userMessage ? askedRejectFieldTokens(userMessage) : [];
+  // Prefer the rejection that names the asked field itself. A nearby window
+  // can overlap the next field's guard in multi-field validators.
+  if (fields.length > 0) {
+    const direct = rows.findIndex((row) =>
+      contentLooksLikeWriteReject(row) && contentMentionsAskedField(row, fields) &&
+      (!userMessage || contentMentionsAskedJob(row, fileName ?? "", askedRejectJobTokens(userMessage)))
+    );
+    if (direct >= 0) return direct + 1;
+  }
   for (let i = 0; i < rows.length; i++) {
     if (!contentLooksLikeWriteReject(rows[i])) {
       continue;
@@ -2310,6 +3037,10 @@ export function selectChatEvidencePaths(paths: string[], userQuery: string, max 
 function rankHit(hit: RankedSearchHit, terms: string[], userMessage?: string): number {
   let rank = hit.score ?? 0;
   const path = normalizePath(hit.fileName);
+  if (userMessage && isParserLocateAsk(userMessage) &&
+      contentLooksLikeRequestedParser((hit as { content?: string }).content ?? "", userMessage)) {
+    rank += 24;
+  }
   for (const term of terms) {
     if (path.includes(term)) {
       rank += 3;
@@ -2350,6 +3081,11 @@ function rankHit(hit: RankedSearchHit, terms: string[], userMessage?: string): n
   }
   if (userMessage && isApiRejectAsk(userMessage) && isServerWritePath(hit.fileName)) {
     rank += 18;
+    const basename = path.split("/").pop() ?? "";
+    for (const operation of askRejectJobTokens(userMessage)) {
+      if (basename.includes(operation)) rank += 12;
+      if (basename.split(/[_.-]/)[0] === operation) rank += 10;
+    }
   }
   if (userMessage && isApiRejectAsk(userMessage) && isMutationHandlerPath(hit.fileName)) {
     rank += 12;
@@ -2359,6 +3095,11 @@ function rankHit(hit: RankedSearchHit, terms: string[], userMessage?: string): n
   }
   if (userMessage && isApiRejectAsk(userMessage) && isClientUiPath(hit.fileName)) {
     rank -= 16;
+  }
+  if (userMessage && isApiRejectAsk(userMessage) && askRejectJobTokens(userMessage).includes("sign") &&
+      /^(?:sign|log)[-_]?(?:in|out|up)(?:\.|$)/.test(path.split("/").pop() ?? "")) {
+    // Document signing is a distinct operation from authentication entry/exit.
+    rank -= 24;
   }
   if (userMessage && isApiRejectAsk(userMessage) && isApiRejectNoisePath(hit.fileName)) {
     rank -= 20;
@@ -2375,6 +3116,10 @@ function rankHit(hit: RankedSearchHit, terms: string[], userMessage?: string): n
     }
   }
   if (userMessage && isBackendStateLocateAsk(userMessage)) {
+    // A definition question asks for the declared type, not its API wrappers.
+    if (isSchemaCatalogPath(hit.fileName)) {
+      rank += 18;
+    }
     if (isBackendStateDefinitionHit(hit)) {
       rank += 22;
     }
@@ -2566,7 +3311,7 @@ function looksLikeFullQuestion(q: string): boolean {
   return /\b(where|what|how|which)\b/i.test(q) && q.split(/\s+/).length >= 8;
 }
 
-function clip(text: string): string {
+function clip(text: string, maxChars = MAX_SEARCH_CHARS): string {
   const t = text.trim();
-  return t.length > MAX_SEARCH_CHARS ? `${t.slice(0, MAX_SEARCH_CHARS).trim()}` : t;
+  return t.length > maxChars ? `${t.slice(0, maxChars).trim()}` : t;
 }

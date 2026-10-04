@@ -71,6 +71,7 @@ export type HandlePatchCompleteOptions = {
   selectionText?: string;
   /** File bodies already loaded for this turn (pending attach / open tab). */
   fileContents?: Readonly<Record<string, string>>;
+  targetAliases?: Readonly<Record<string, string>>;
   /** User asked for a comment/summary only — do not apply signature rewrites. */
   commentOnly?: boolean;
   /** /edit ask — used to encode attached SUT numbers instead of user English. */
@@ -158,7 +159,7 @@ export async function handlePatchComplete(
   content: string,
   options: HandlePatchCompleteOptions = {}
 ): Promise<PatchCardState | undefined> {
-  const parsed = parsePatchResponse(content, { preferredFile: options.file });
+  const parsed = parsePatchResponse(content, { preferredFile: options.file, targetAliases: options.targetAliases });
   if (!parsed.ok) {
     if (options.ignoreParseFailure) {
       return undefined;

@@ -1,0 +1,192 @@
+
+> coop-ai@0.1.10 test:agent-routing
+> npx tsx src/chat/agentRouting.test.ts && npx tsx src/chat/editSendRouting.test.ts && npx tsx src/chat/createPrChatRouting.test.ts && npx tsx src/chat/editAskKind.test.ts && npx tsx src/chat/quickActionSuggestIntent.test.ts && npx tsx src/chat/quickActionIntentModel.test.ts && npx tsx src/chat/integrationProviderRouting.test.ts && npx tsx src/chat/plainChatMustNotPromote.test.ts && npx tsx src/prompts/mentionScope.test.ts && npx tsx src/context/fileCallerIntent.test.ts
+
+  ✓ shouldRunAgentToolLoop is false for quick actions
+  ✓ shouldRunAgentToolLoop is false for local explain even on a hunt-shaped leftover (A-P8)
+  ✓ shouldRunAgentToolLoop is true for hunt + Slack compound ask without jobs (fail-open)
+  ✓ shouldRunAgentToolLoop is true when locate+decision jobs are planned
+  ✓ I3 compound locate+decision enters the agent loop; slash still loops without a hunt
+  ✓ shouldRunAgentToolLoop is true for Slack-named ask without a repo hunt (A-P9)
+  ✓ named Notion docs ask starts the vendor loop and does not unlock Jira
+  ✓ L file drops the agent hunt even when the question would hunt on R
+  ✓ shouldRunAgentToolLoop is true for a repo hunt (always on)
+  ✓ ship-check blast-shaped English still runs the agent loop
+  ✓ shouldRunAgentToolLoop is true for /docs slash — vendor loop, not a hunt
+  ✓ shouldRunAgentToolLoop is false for a file-count inventory ask
+  ✓ shouldRunAgentToolLoop is false for how-to and product How/Why asks
+  ✓ shouldRunAgentToolLoop is false for thanks follow-up (UX-G7)
+  ✓ shouldRunAgentToolLoop is false for /edit (UX-G8)
+  ✓ plannerAllowsAgentRepoLoop allows named-file follow-ups even when the plan is plain
+  ✓ plannerAllowsAgentRepoLoop allows rely-on / who-created file asks even when the plan is plain
+  ✓ plannerAllowsAgentRepoLoop blocks workflows
+  ✓ shouldSuppressSuggestChipsForAgentHunt is true for a location hunt
+  ✓ shouldSuppressSuggestChipsForAgentHunt is false for thanks
+  ✓ suggest-chips leftover plan blocks the loop; none plan after Just answer allows it
+  ✓ isRepoInvestigationQuery requires length and hunt language
+  ✓ open-file feature-add skips the agent hunt so A10 can read the chip file
+  ✓ ticket pickup with requireAuth and Jira still runs the hunt (3b)
+  ✓ code-only locate does not unlock connected vendors (FAIL 2)
+  ✓ I3 compound locate+jira stays on jira, not the full connected list
+
+agentRouting: 26/26 tests passed
+  ✓ isConcreteFileEditAsk detects applyable identifier validation asks
+  ✓ isConcreteFileEditAsk does not treat bare fix this as a patch spec
+  ✓ isConcreteFileEditAsk rejects advisory where/which questions
+  ✓ isConcreteFileEditAsk rejects ownership / archaeology asks
+  ✓ isConcreteFileEditAsk rejects blast-shaped what-breaks asks with change/rename + backticks
+  ✓ isConcreteFileEditAsk accepts a named symbol as the target (Copilot /fix shape)
+  ✓ isConcreteFileEditAsk leaves repo-wide changes to the agent hunt
+  ✓ isConcreteFileEditAsk still rejects a named symbol inside an advisory ask
+  ✓ named symbol without an edit verb is not an edit ask
+  ✓ J4: prose fix + open file stays agent-change, not auto /edit
+  ✓ shouldTrackEditRequest is true for edit composer without quick action
+  ✓ shouldTrackEditRequest is false for ask composer or quick actions
+  ✓ resolveEditTrackingMessage prefers historyContent over raw message
+  ✓ resolveEditTrackingMessage appends mention scope to bubble text
+  ✓ hasEditTargetInScope requires active remote/local file or @mention for composerMode edit
+  ✓ shouldBypassAdvisoryGroundingForEdit blocks PENDING/OPEN status hijacks on /edit
+  ✓ resolveEditEditorSnapPreference prefers remote tabs for /edit (Zero-Clone)
+  ✓ resolveChangeSendRouting: no file + Agent can hunt → agent-change (not hard error)
+  ✓ resolveChangeSendRouting: no file + cannot hunt → still not /edit (plain/agent)
+  ✓ resolveChangeSendRouting: file in scope without /edit → agent-change
+  ✓ resolveChangeSendRouting: explicit /edit with file → anchored-edit
+  ✓ resolveChangeSendRouting: explicit /edit without file still rejects
+  ✓ resolveChangeSendRouting: live highlight change is not agent-change or /edit
+  ✓ resolveChangeSendRouting: explicit /edit still anchors when a highlight is present
+  ✓ edit error copy stays actionable (no silent ask demotion)
+
+editSendRouting: 25/25 tests passed
+  ✓ isCreatePullRequestAsk matches ship commands
+  ✓ isCreatePullRequestAsk rejects questions and new-work asks
+  ✓ latestEligibleCreatePrCard is the newest applied card with files
+  ✓ mergeAppliedPrFiles keeps later Apply for the same path
+  ✓ mergeAppliedPrFiles unions different files from every Apply
+  ✓ mergeAppliedPrPreviewFiles stacks hunks from every Apply
+  ✓ resolveCreatePrChatRouting opens confirm for last applied work
+  ✓ resolveCreatePrChatRouting bundles every Apply in the thread
+  ✓ resolveCreatePrChatRouting asks to Apply when a patch is still pending
+  ✓ resolveCreatePrChatRouting asks for changes when this thread has no applied work
+  ✓ resolveCreatePrChatRouting opens confirm for editor files without an Apply
+  ✓ resolveCreatePrChatRouting prefers live editor body over Applied prFiles
+  ✓ resolveCreatePrChatRouting opens confirm when pending /edit and editor files exist
+  ✓ mergeCreatePrFiles lets editor files win
+  ✓ resolveCreatePrChatRouting requires Use-repo before opening confirm
+  ✓ local Apply is not eligible and does not open confirm even with leftover Use-repo
+  ✓ stampAppliedCreatePr blocks preferLocalDisk and absolute paths, keeps remote Apply
+  ✓ mixed thread ships remote files only
+  ✓ absolute disk path is rejected before a host write
+  ✓ resolveCreatePrChatRouting is none when the phrase did not match
+
+createPrChatRouting: 20 passed, 0 failed
+  ✓ /edit leave a comment above the highlight is comment-only
+  ✓ one-sentence follow-up after a comment /edit stays comment-only
+  ✓ rewrite / shorten the highlight is not comment-only
+  ✓ rewrite the comment still counts as comment-only
+  ✓ /edit by itself is not a rewrite
+  ✓ C3 one-line JSDoc /edit stays comment-only
+  ✓ ordinary change asks stay default (do exactly the words)
+
+editAskKind: 7/7 tests passed
+  ✓ owner: signing-request email delivery example → find-owner high
+  ✓ owner: who maintains / CODEOWNERS / who to ask
+  ✓ trace: why was this written / decision history
+  ✓ blast: what breaks / callers / if I change
+  ✓ understand: repo architecture / overview
+  ✓ gaps: missing docs / knowledge gaps
+  ✓ negatives: normal chat does not suggest
+  ✓ negatives: explicit slash / tag never suggest
+  ✓ negatives: explain this file is not Understand Repo
+  ✓ disabled option returns empty
+  ✓ collision: who owns this decision prefers Trace (or Trace+Owner)
+  ✓ collision: max two suggestions
+  ✓ warnings: business impact and test coverage stay quiet
+  ✓ filter: blast/trace blocked without file
+  ✓ filter: blast available with file
+  ✓ filter: owner available repo-wide with explicit scope
+  ✓ filter: owner blocked with empty context
+  ✓ filter: understand offered even with sticky file (repo-wide chip)
+  ✓ filter: understand still blocked with empty context
+  ✓ shouldOffer: owner example with file context
+  ✓ shouldOffer: undefined when all actions blocked
+  ✓ shouldOffer: undefined for normal chat
+  ✓ suggestRunChipLabel uses slash tokens
+  ✓ golden corpus: primary + secondary paraphrases
+  ✓ regression: responseDeadline blast ask offers chip when file in scope
+  ✓ regression: estimate impact of changing offers blast chip
+  ✓ negatives: more normal chat stays quiet
+  ✓ shouldOfferQuickActionSuggest skips inventory and where-defined facts
+
+quickActionSuggestIntent: 28/28 tests passed
+  ✓ assignment: intentSuggest is gpt-4o-mini / openai
+  ✓ parse: clean JSON
+  ✓ parse: fenced JSON + prose noise
+  ✓ parse: invalid → none/low (fail-open)
+  ✓ shouldOffer: none/low rejected; medium/high accepted
+  ✓ regex: estimate impact of changing → blast (not soft-dialed)
+  ✓ user message includes optional active file
+  ✓ classify: golden mocked responses
+  ✓ classify: complete throws → undefined (fail-open)
+  ✓ classify: timeout → undefined (fail-open)
+quickActionIntentModel: 10/10 tests passed
+  ✓ incident ask with Jira/Slack wording does not single-route to jira
+  ✓ named jira in plain chat does not enter the /jira single-route
+  ✓ named disconnected jira still does not single-route
+  ✓ slack and notion named does not single-route
+  ✓ named slack in plain chat does not enter the /slack pipeline
+
+integrationProviderRouting: 5/5 tests passed
+  ✓ blast-shaped stays plain: If I change that missing-key response, what else in this repo should I check before I ship?
+  ✓ blast-shaped stays plain: If I modify this function, what else is affected?
+  ✓ blast-shaped stays plain: What breaks if I change this handler?
+  ✓ blast-shaped stays plain: What's the blast radius of renaming validate_identifier?
+  ✓ blast-shaped stays plain: Who calls sendSigningEmail?
+  ✓ blast-shaped stays plain: Is it safe to change these enum values?
+  ✓ QA-shaped stays plain: Who owns auth?
+  ✓ QA-shaped stays plain: Why was this designed this way?
+  ✓ QA-shaped stays plain: How is this repository structured?
+  ✓ QA-shaped stays plain: What are the knowledge gaps in auth?
+  ✓ edit-shaped English does not set anchored /edit
+  ✓ explicit /edit still anchors
+  ✓ named Slack prefetches tools but does not set /slack constraint
+  ✓ explicit /blast still pins the blast engine
+  ✓ explicit /slack still pins Slack
+  ✓ plain follow-up after /blast does not inherit Blast
+
+plainChatMustNotPromote: 16/16 tests passed
+  ✓ pathLikelyInTargetRepo accepts paths under known top-level dirs
+  ✓ pathLikelyInTargetRepo rejects foreign workspace paths
+  ✓ partitionMentionsForRepoSummary splits in-repo vs out-of-repo attachments
+  ✓ pathLikelyInTargetRepo rejects paths when tree overview is missing
+  ✓ partitionMentionsForOwnership treats local workspace as out of repo
+  ✓ partitionMentionsForOwnership splits by repo id
+  ✓ partitionMentionsForTraceDecision treats local workspace as out of repo
+  ✓ mentionDisplayPath keeps parent directory for clarity
+  ✓ appendMentionScopePromptSection forbids out-of-scope section when all mentions in-repo
+  ✓ partitionMentionsForQuickAction routes blast-radius through file-scoped rules
+  ✓ partitionMentionsForQuickAction routes understand-repo through tree rules
+  ✓ mentionAttachmentLabel marks local workspace files
+  ✓ allMentionsOutOfScopeForActiveRepo is true when every attachment is foreign
+  ✓ plainChatRefersToAttachedFile detects deictic file questions
+  ✓ plainChatHistoryContent preserves @ attachments in bubble text
+  ✓ plainChatHistoryContent adds file/repo/branch chips when includeContextChips is set
+  ✓ plainChatHistoryContent stamps selection lines next to the file
+  ✓ withContextChipLine upgrades a bare /edit history line with selection
+  ✓ withContextChipLine stamps /edit comment ask with L56–61 on state.py
+  ✓ plainChatHistoryContent can omit chips when includeContextChips is false
+  ✓ plainChatHistoryContent stamps repo/branch chips on follow-up messages
+  ✓ plainChatHistoryContent omits prefs-only owner/repo chips
+  ✓ withContextChipLine stamps scope onto bare slash history lines
+  ✓ historyContentHasScopeChips detects repo/file footers and ignores attached-only
+  ✓ plainChatContextChips keeps repo scope for explicit Use-repo
+  ✓ plainChatContextChips omits prefs-only owner/repo without Use-repo or file
+  ✓ plainChatContextChips keeps repo when a remote file is bound
+  ✓ plainChatContextChips omits leftover Use-repo on an L file
+
+mentionScope: 28/28 tests passed
+  ✓ smoke ask: what does this file do, and who calls it
+  ✓ caller / import phrasings
+  ✓ rejects ownership and unrelated asks
+  ✓ ship-check / blast-shaped English uses the caller-read pipe
+
+fileCallerIntent: 4 passed, 0 failed

@@ -1,0 +1,56 @@
+
+> coop-ai@0.1.10 test:agent-ship:b
+> npx tsx src/edit/phaseB.gates.test.ts && npx tsx src/edit/phaseB.pressure.test.ts && npx tsx src/context/stickyEditorSelection.test.ts && npx tsx src/context/enclosingDefinitionRange.test.ts
+
+  ✓ B-G1 /edit two-file patch yields a Patch card
+  ✓ B-G1 agent propose_patch yields parseable 2-file SEARCH/REPLACE
+  ✓ B-G1 registry expose propose_patch without applying
+  ✓ B-G2 remote auto-open succeeds when files were not open (mocked VFS)
+  ✓ B-G2 Apply after auto-open writes the remote buffer
+  ✓ B-G2 Apply uses captured bytes when GitHub Repositories is missing
+  ✓ Create PR files come from captured bytes when the Apply buffer has no repo path
+  ✓ B-G3 reject leaves buffers unchanged and restages via undo
+  ✓ B-G3 undo restores buffers after Apply
+  ✓ B-G4 citation fences are not Apply-able
+  ✓ B-G6 apply and reject telemetry still fire
+  ✓ B-G7 reserved Create PR is coop-text-btn, not a new primary row
+  ✓ parseAgentToolPlan accepts propose_patch
+  ✓ mixed apply/reject hunks stay independent (card helper)
+
+phaseB.gates: 14/14 tests passed
+  ✓ B-P1 malformed SEARCH/REPLACE errors with no silent write
+  ✓ B-P2 GitLab/Bitbucket honest degrade — no fake VFS
+  ✓ B-P3 Apply then Undo then Apply again
+  ✓ B-P4 one file Apply, one Reject in the same session
+  ✓ B-P5 5-file cap with a clear error
+  ✓ B-P6 cite fence beside a patch — only the patch is Apply-able
+  ✓ reject does not invent an apply when nothing was written
+
+phaseB.pressure: 7/7 tests passed
+  ✓ selectedLinesFromEditorSelection maps 0-based L56–61 inclusive
+  ✓ selectedLinesFromEditorSelection treats col-0 end as exclusive next line
+  ✓ selectedLinesFromEditorSelection ignores empty caret
+  ✓ sticky keeps L56–61 when Chat click sends empty selection on same file
+  ✓ sticky keeps L56–61 when incoming file is omitted (webview focus loss)
+  ✓ sticky replaces the range when the user highlights a new block
+  ✓ sticky clears when the user unhighlights in the editor
+  ✓ isUserClearedEditorSelection is mouse/keyboard empty only
+  ✓ sticky clears when the open file changes
+  ✓ selectedLineRangesEqual compares tuples
+
+stickyEditorSelection: 10/10 tests passed
+  ✓ click inside get_queryset selects that method, not DEFAULT_STATES / the class
+  ✓ click on the def line still covers the method body
+  ✓ click on the class header covers the whole class
+  ✓ click inside requireAuth selects that function, not extractBearerToken
+  ✓ caret outside any function returns nothing
+  ✓ click inside In Progress dict is not a function
+  ✓ click inside get_queryset is not L38–43 / DEFAULT_STATES
+  ✓ anchor names StateManager.get_queryset, not TriageStateManager
+  ✓ Send expands caret in get_queryset over sticky DEFAULT_STATES L38–43
+  ✓ drag-select still wins over enclosing function
+  ✓ precise drag inside get_queryset survives Chat focus loss
+  ✓ click in DEFAULT_STATES clears leftover highlight
+  ✓ Chat click with no caret keeps sticky range
+
+enclosingDefinitionRange: 13/13 tests passed

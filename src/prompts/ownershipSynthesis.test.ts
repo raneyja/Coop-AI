@@ -177,6 +177,12 @@ test("ownership synthesis cites Slack presence when discussions are empty", () =
   );
 });
 
+test("a sole scored author is contribution evidence, not proof of exclusive knowledge", () => {
+  const formatted = formatOwnershipReportForPrompt({...report, risk: {...report.risk, singlePointOfFailure: true}});
+  assert.match(formatted, /one primary contributor.*sampled evidence; knowledge coverage is unverified/);
+  assert.doesNotMatch(formatted, /only one person knows/);
+});
+
 console.log(`\nownershipSynthesis: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);

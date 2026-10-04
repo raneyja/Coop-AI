@@ -10,6 +10,8 @@ export type ActiveEditorIdentity = {
   scope?: "file" | "repo";
   owner?: string;
   repo?: string;
+  provider?: RepoContext["provider"];
+  branch?: string;
   warning?: string;
   languageId?: string;
   selectedLines?: [number, number];
@@ -50,6 +52,8 @@ export function resolveActiveEditorIdentity(
     if (resolved.owner && resolved.repo) {
       identity.owner = resolved.owner;
       identity.repo = resolved.repo;
+      identity.provider = resolved.provider;
+      identity.branch = resolved.branch;
     }
     if (identity.file?.trim()) {
       identity.scope = "file";
@@ -100,6 +104,8 @@ export function activeEditorIdentityToRepoContext(identity: ActiveEditorIdentity
   return {
     owner: identity.owner,
     repo: identity.repo,
+    provider: identity.provider,
+    branch: identity.branch,
     file: identity.file,
     fileSource: identity.fileSource,
     contextWarning: identity.warning,

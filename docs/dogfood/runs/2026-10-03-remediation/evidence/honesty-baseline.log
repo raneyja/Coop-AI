@@ -1,0 +1,293 @@
+npm error code ENOTFOUND
+npm error syscall getaddrinfo
+npm error errno ENOTFOUND
+npm error network request to https://registry.npmjs.org/tsx failed, reason: getaddrinfo ENOTFOUND registry.npmjs.org
+npm error network This is a problem related to network connectivity.
+npm error network In most cases you are behind a proxy or have bad network settings.
+npm error network
+npm error network If you are behind a proxy, please make sure that the 'proxy' config is set properly.  See: 'npm help config'
+npm error Log files were not written due to an error writing to the directory: /Users/jonraney/.npm/_logs
+npm error You can rerun the command with `--loglevel=verbose` to see the logs in your terminal
+put:
+
+'import { shouldFollowEditorAfterThreadRestore } from "./chatThreadRestore";\n' +
+  'import { createSharedInitialization } from "./sessionInitialization";\n' +
+  'import * as fs from "node:fs";\n' +
+  'import * as path from "node:path";\n' +
+  'import * as vscode from "vscode";\n' +
+  'import { handlePatchComplete } from "../edit/handlePatchComplete";\n' +
+  'import { mergeSutFile, sutPathForEditAsk } from "../edit/editSutAttach";\n' +
+  'import {\n' +
+  '  hydratePatchCardsFromHistory,\n' +
+  '  patchCardsForMessages\n' +
+  '} from "../edit/hydratePatchCardsFromHistory";\n' +
+  'import {\n' +
+  '  collectOpenPatchFileBytes,\n' +
+  '  languageIdForPatchPath,\n' +
+  '  rememberRemotePatchBuffer\n' +
+  '} from "../edit/patchTarget";\n' +
+  'import { collectEditorPrFiles, snapshotWorkingCopyIfAbsent } from "../edit/editorWorkingCopy";\n' +
+  'import { indexPatchFileContent, lookupPatchFileContent } from "../edit/patchFileContents";\n' +
+  'import {\n' +
+  '  extractAgentProposedPatchText,\n' +
+  '  mergeAnswerWithAgentPatch\n' +
+  '} from "./agentProposedPatch";\n' +
+  'import {\n' +
+  '  applyChangeHuntFinish,\n' +
+  '  CUSTOMER_EMPTY_HUNT_ANSWER,\n' +
+  '  customerFacingAgentAnswer,\n' +
+  '  rewriteCustomerFacingProse\n' +
+  '} from "./customerFacingAnswer";\n' +
+  'import {\n' +
+  '  applyPendingPatch,\n' +
+  '  applyPendingPatchHunk,\n' +
+  '  rejectPendingPatchHunk,\n' +
+  '  rejectPendingPatchWithState,\n' +
+  '  resolvePatchCardsSnapshot,\n' +
+  '  setPendingPatchMatchLocations,\n' +
+  '  setPendingSharedMatchProposal,\n' +
+  '  undoLastPatchWithState\n' +
+  '} from "../edit/patchActions";\n' +
+  'import { setLastEditUserMessage, getPatchRecord, listPatchCards } from "../edit/patchSession";\n' +
+  'import { summarizePrNotes, type PrNotesCompleteFn } from "../edit/prNotesSummary";\n' +
+  'import { activeThemeMode } from "./themeMode";\n' +
+  'import { coopSessionRegistry } from "./CoopSessionRegistry";\n' +
+  'import { authIdentityKey } from "./authIdentity";\n' +
+  'import { chatRepoListFromWorkspaceRepos } from "./workspaceRepoExplorer";\n' +
+  'import {\n' +
+  '  readDegradationConfiguration,\n' +
+  '  readConflictConfiguration,\n' +
+  '  readPreferences,\n' +
+  '  readIntentConfiguration,\n' +
+  '  SecureApiClient,\n' +
+  '  updateConfiguration\n' +
+  '} from "./SecureApiClient";\n' +
+  'import type { ConflictConfig } from "../config/conflictConfig";\n' +
+  'import { DegradationConfig } from "../config/degradationConfig";\n' +
+  'import type { DegradationCache } from "../cache/degradationCache";\n' +
+  'import {\n' +
+  '  ConflictAuditStore,\n' +
+  '  ConflictDetector,\n' +
+  '  ConflictResolutionStrategy,\n' +
+  '  SourceAuthorityScorer,\n' +
+  '  hasSeverityAtLeast\n' +
+  '} from "../conflicts";\n' +
+  'import type {\n' +
+  '  ConflictDetectionInput,\n' +
+  '  ConflictSeverity,\n' +
+  '  DetectedConflict,\n' +
+  '  MetadataConflictInput\n' +
+  '} from "../conflicts";\n' +
+  'import { codeHostForDegradationRequest, runFeatureFallback } from "../degradation/features";\n' +
+  'import {\n' +
+  '  connectedCodeHostsFromPrefs,\n' +
+  '  indexedUseRepoHosts,\n' +
+  '  isDeepIndexedForQuickActions,\n' +
+  '  promoteIndexedOrConnectedCodeHosts,\n' +
+  '  providersForFeature,\n' +
+  '  repoIdCandidatesForIndexStatus,\n' +
+  '  type QuickActionFeatureId\n' +
+  '} from "../degradation/fallbackMatrix";\n' +
+  'import type { HealthMonitor, IntegrationHealth, IntegrationProvider } from "../integrations/healthMonitor";\n' +
+  'import type { IntentConfig } from "../config/intentConfig";\n' +
+  'import {\n' +
+  '  IntentDetector,\n' +
+  '  IntentEvent,\n' +
+  '  UserIntent,\n' +
+  '  intentContextToRepoContext,\n' +
+  '  repoContextToIntentContext,\n' +
+  '  requestTypesForIntent,\n' +
+  '  repoContextFromEditor\n' +
+  '} from "../context/intentDetector";\n' +
+  'import { toRepositoryRelativePath } from "../context/repoFilePath";\n' +
+  'import { openRemoteFileInEditor, openRepoInEditor } from "../workspace/repoEditorOpener";\n' +
+  'import { IntentDebouncer } from "../context/intentDebouncer";\n' +
+  'import {\n' +
+  '  ContextFetchRequest,\n' +
+  '  ContextFetchResult,\n' +
+  '  RequestBatcher,\n' +
+  '  buildContextRequests\n' +
+  '} from "../context/requestBatcher";\n' +
+  'import { RequestPrioritizer } from "../context/requestPrioritizer";\n' +
+  'import {\n' +
+  '  contextGatheringMessagesFor,\n' +
+  '  isPlainChatIntent,\n' +
+  '  type ContextGatheringMessageOptions\n' +
+  '} from "../context/contextGatheringMessages";\n' +
+  'import {\n' +
+  '  agentOwnsIndexedGather,\n' +
+  '  readActivityLabel,\n' +
+  '  searchingRepoActivityLabel,\n' +
+  '  willEnrichChatWithSemanticSearch,\n' +
+  '  willRunIndexedCodeSearch\n' +
+  '} from "../context/committedActivity";\n' +
+  'import { readSemanticRetrievalEnabled } from "../config/semanticRetrievalConfig";\n' +
+  'import { CacheEntry, RateLimitAwareExecutor } from "../context/rateLimitAwareExecution";\n' +
+  'import { createChatOutputGate, delayUntilMinResponseVisible } from "./chatResponseTiming";\n' +
+  'import { createStreamDeltaBatcher } from "./streamDeltaBatcher";\n' +
+  'import { resolveChatOutputMaxTokens } from "../config/chatOutputBudget";\n' +
+  'import { summarizeAgentToolResultForHistory } from "./agentAnswerHistory";\n' +
+  'import {\n' +
+  '  LENGTH_CONTINUE_PROMPT,\n' +
+  '  hasTrailingEmptyHeadings,\n' +
+  '  shouldContinueForLengthStop,\n' +
+  '  withLengthCutoffNotice\n' +
+  '} from "./lengthContinue";\n' +
+  'import { ThreadRunManager, SESSION_RUN_THREAD_ID, type ChatTurn } from "./chatTurn";\n' +
+  'import {\n' +
+  '  appendTurnThinkingChunk,\n' +
+  '  attachChatTurnActivity,\n' +
+  '  isTerminalPreparingMessage,\n' +
+  '  recordTurnActivityLine,\n' +
+  '  recordTurnAgentSteps,\n' +
+  '  repoFactActivityLabel\n' +
+  '} from "./chatTurnActivity";\n' +
+  'import {\n' +
+  '  abortablePromise,\n' +
+  '  clearResponseDeadlineForSynthesis,\n' +
+  '  isSoftGatherLatencyMessage,\n' +
+  '  locateSearchBudgetMs,\n' +
+  '  remainingContextGatherBudgetMs\n' +
+  '} from "../config/responseDeadline";\n' +
+  'import { renderWebviewHtml } from "./renderWebviewHtml";\n' +
+  'import { replaceExclusiveDisposable } from "./exclusiveDisposable";\n' +
+  'import { ensureSidebarMinWidth } from "../ui/ensureSidebarMinWidth";\n' +
+  'import type {\n' +
+  '  CachedValue,\n' +
+  '  ChatFileMention,\n' +
+  '  ChatImageAttachment,\n' +
+  '  ChatMessage,\n' +
+  '  ChatPersistedArtifact,\n' +
+  '  ConflictResolutionState,\n' +
+  '  ConflictSummary,\n' +
+  '  ComposerMode,\n' +
+  '  DegradationNotificationPayload,\n' +
+  '  IntentFeedbackState,\n' +
+  '  MentionSearchResult,\n' +
+  '  PatchCardState,\n' +
+  '  PatchCardsUpdatePayload,\n' +
+  '  RepoContext,\n' +
+  '  ThemeMode,\n' +
+  '  ThemePayload,\n' +
+  '  SettingsStatePayload,\n' +
+  '  UserPreferences,\n' +
+  '  WebviewInbound,\n' +
+  '  WebviewOutbound\n' +
+  '} from "./types";\n' +
+  'import { clearPresenceCaches } from "../api/slack/presenceCheck";\n' +
+  'import { EMPTY_IDENTITY_DIRECTORY, type IdentityDirectory } from "../identity/types";\n' +
+  'import { isAutocompleteOnlySettingsUpdate } from "../autocomplete/autocompletePreferenceSync";\n' +
+  'import { CACHE_TTL_MS } from "./types";\n' +
+  'import {\n' +
+  '  deliverableForQuickAction,\n' +
+  '  displayStatusForChatDeliverable\n' +
+  '} from "../jobs/jobActivityPolicy";\n' +
+  'import { JobApiClient, jobTypeForQuickAction, shouldUseAsyncJob } from "../jobs/JobApiClient";\n' +
+  'import { formatWaitTime } from "../jobs/types";\n' +
+  'import type { JobProgressPayload } from "./types";\n' +
+  'import { resolveCoopBaseUrl } from "../api/resolveBaseUrl";\n' +
+  'import { syncAllThreadsToBackend, syncThreadToBackend } from "./threadSync";\n' +
+  'import { resolveGitUserEmail } from "./resolveGitUserEmail";\n' +
+  'import { formatUserFacingNetworkError } from "../api/userFacingErrors";\n' +
+  'import { ChatQuotaExceededError } from "../api/CoopBackendClient";\n' +
+  'import { CHAT_STOPPED_MESSAGE } from "./chatStopped";\n' +
+  'import {\n' +
+  '  buildQuotaExceededUpgradeUrl,\n' +
+  '  isFreeQuotaExhausted,\n' +
+  '  isPaidQuotaPool,\n' +
+  '  isPaidUsageExhausted,\n' +
+  '  resolveQuotaUpgradeAction\n' +
+  '} from "./quotaNotice";\n' +
+  'import { pollUntilPaidPlan } from "./planUpgradePoll";\n' +
+  'import { buildPaidCapMessage } from "../server/planQuota";\n' +
+  'import type { DecisionTimeline } from "../types/decisionTimeline";\n' +
+  'import type { OwnershipReport } from "../types/ownership";\n' +
+  'import { buildDecisionSynthesisUserPrompt } from "../prompts/decisionSynthesis";\n' +
+  'import { buildOwnershipSynthesisUserPrompt } from "../prompts/ownershipSynthesis";\n' +
+  'import { buildRepoSummarySynthesisUserPrompt } from "../prompts/repoSummarySynthesis";\n' +
+  'import { buildBlastRadiusSynthesisUserPrompt } from "../prompts/blastRadiusSynthesis";\n' +
+  'import { buildKnowledgeGapsSynthesisUserPrompt } from "../prompts/knowledgeGapsSynthesis";\n' +
+  'import { buildIntegrationSynthesisUserPrompt, countIntegrationResults, emptyIntegrationSlashResponse } from "../prompts/integrationSynthesis";\n' +
+  'import {\n' +
+  '  blastRadiusFromBundle,\n' +
+  '  confluenceSearchFromBundle,\n' +
+  '  contextBundleHasRepoFactEvidence,\n' +
+  '  googleDocsSearchFromBundle,\n' +
+  '  integrationSearchFromBundle,\n' +
+  '  jiraSearchFromBundle,\n' +
+  '  knowledgeGapsFromBundle,\n' +
+  '  notionSearchFromBundle,\n' +
+  '  repoSummaryFromBundle,\n' +
+  '  slackSearchFromBundle,\n' +
+  '  teamsSearchFromBundle,\n' +
+  '  type RepoSummaryEvidence\n' +
+  '} from "../context/contextBundleEvidence";\n' +
+  'import { shouldIncludeIntegrationInSourcesChecklist } from "../context/integrationEvidenceVisibility";\n' +
+  'import {\n' +
+  '  extractDefinedNamesFromSource,\n' +
+  '  extractExportNamesFromSource,\n' +
+  '  filterJobDependentsForFile,\n' +
+  '  isTrustedBlastGraphSource,\n' +
+  '  mergeDurableDependentsIntoContextData,\n' +
+  '  mergeDurableWithNamedSymbolSearch,\n' +
+  '  mergeSearchDependentsFallbackIntoDependenciesData,\n' +
+  '  resolveNamedBlastSymbols,\n' +
+  '  resolveTrustedRemoteDependents,\n' +
+  '  searchDependentsFallback,\n' +
+  '  sortDependentsProductionFirst,\n' +
+  '  verifyRemoteFilesMentionNamedSymbol\n' +
+  '} from "../engines/blastRadiusDependentsFallback";\n' +
+  'import { isFileCallerQuery } from "../context/fileCallerIntent";\n' +
+  'import { isFileHistoryQuery } from "../context/fileHistoryIntent";\n' +
+  'import { isOpenFileReviewAsk } from "./plainChatExplain";\n' +
+  'import { evidenceCodeHostDisplayName } from "../api/codeHosts/codeHostLabels";\n' +
+  'import {\n' +
+  '  coordinatesFromRepoId,\n' +
+  '  repoIdFromCoordinates,\n' +
+  '  resolveCodeHostProvider,\n' +
+  '  type CodeHostProvider,\n' +
+  '  type RepoCoordinates\n' +
+  '} from "../api/codeHosts/types";\n' +
+  'import { enrichChatResponseForAction } from "./chatResponseEnrichment";\n' +
+  'import { resolveEffectiveQuickAction } from "./effectiveQuickAction";\n' +
+  'import {\n' +
+  '  buildMissingIntentClarificationResponse,\n' +
+  '  buildMissingRepoSelectionResponse,\n' +
+  '  messageNeedsSelectedRepo,\n' +
+  '  shouldClarifyFirstChatTurn\n' +
+  '} from "./chatMessageIntent";\n' +
+  'import {\n' +
+  '  shouldOfferQuickActionSuggest,\n' +
+  '  suggestRunChipLabel\n' +
+  '} from "./quickActionSuggestIntent";\n' +
+  'import {\n' +
+  '  INTENT_SUGGEST_TIMEOUT_MS,\n' +
+  '  type IntentSuggestCompleteFn\n' +
+  '} from "./quickActionIntentModel";\n' +
+  'import { isIntentSuggestModelEnabled } from "../config/intentSuggestConfig";\n' +
+  'import {\n' +
+  '  FRONT_DOOR_INTERPRETER_USE_CASE,\n' +
+  '  frontDoorInterpretText,\n' +
+  '  planChatFrontDoor,\n' +
+  '  planChatFrontDoorFromRules,\n' +
+  '  resolveChatCommandConstraint,\n' +
+  '  shouldInterpretChatAsk,\n' +
+  '  resolveChatIntentExecution,\n' +
+  '  buildIntentPlanTrustPreamble,\n' +
+  '  emptyChatIntentPlan,\n' +
+  '  integrationFillQueries,\n' +
+  '  locateJobTerms,\n' +
+  '  plannedCodeSearchQueries,\n' +
+  '  formatIntentBriefForAgent,\n' +
+  '  shouldOverlapIntegrationPrefetch,\n' +
+  '  type ChatCommandConstraint,\n' +
+  '  type ChatIntentPlan\n' +
+  '} from "'... 463518 more characters
+
+  ✓ H-G10 docs do not tell the user to enable AgentMode
+  ✓ H-G11 retrieval is one rule for every ask — no repo names, no layer special cases
+  ✓ H-G12 hot path merges agent patch before Apply card (not orphan helpers)
+  ✓ H-G14 hunt+named integration is not stolen; slash still constrains
+  ✓ H-G13 agent-owned answer still bridges propose_patch to Apply
+
+honesty.gates: 13/14 tests passed

@@ -73,8 +73,27 @@ test("buildModelHistory strips persisted activity from model replay", () => {
   assert.equal(prior[1].activity, undefined);
 });
 
+test("stopped broad edits and partial proposals remain visible but cannot instruct the next rename", () => {
+  const stoppedAsk = { ...user("change return type and every caller"), cancelled: true };
+  const stoppedReply = { ...assistant("partial structured-token proposal"), cancelled: true };
+  const history = [user("explain parser"), assistant("returns string"), stoppedAsk, stoppedReply, user("rename header only")];
+  assert.deepEqual(buildModelHistory(history).map((entry) => entry.content), ["explain parser", "returns string"]);
+  assert.equal(history[2].content, "change return type and every caller", "display evidence is retained");
+});
+
 test("buildModelHistory handles empty history", () => {
   assert.deepEqual(buildModelHistory([]), []);
+});
+
+test("rejected proposals cannot supply stale source to a later edit", () => {
+  const proposal = {...assistant("structured return type patch"), patchCard: {
+    status: "rejected" as const, fileCount: 1, hunkCount: 1, files: []
+  }};
+  const history = [user("rewrite return type"), proposal, user("rename header only")];
+  const prior = buildModelHistory(history);
+  assert.equal(prior[1].content, "The preceding edit proposal was rejected and was not applied.");
+  assert.equal(prior[1].patchCard, undefined);
+  assert.equal(proposal.content, "structured return type patch", "visible rejection evidence is retained");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

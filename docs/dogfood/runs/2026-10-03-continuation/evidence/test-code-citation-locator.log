@@ -1,0 +1,21 @@
+
+> coop-ai@0.1.10 test:code-citation-locator
+> npx tsx src/webview/lib/codeCitationLocator.test.ts
+
+  ✓ numeric locator parses path and lines
+  ✓ path:range locator parses Cursor form
+  ✓ backtick-wrapped numeric locator parses
+  ✓ language-prefixed info-string locator parses
+  ✓ prose See `path` is not a locator
+  ✓ bold-wrapped path parses as locator
+  ✓ placeholder locator recovers path without lines
+  ✓ language tags are not citations
+  ✓ path-only locator works
+  ✓ languageFromFilePath maps py to python
+  ✓ javascript tag matches typescript path (family)
+  ✓ resolveCitePath upgrades javascript fence for open .ts file
+  ✓ lightHighlight colors javascript keywords
+  ✓ lightHighlight colors go-like unknown langs instead of monochrome
+  ✓ comment-prefixed path:range locators still parse
+
+codeCitationLocator: 15/15 tests passed

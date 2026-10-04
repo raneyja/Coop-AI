@@ -37,7 +37,7 @@ export async function handleReadFile(
     return JSON.stringify({
       path: remote.path,
       startLine: start,
-      files: [{ path: remote.path, content: numberReadLines(sliceLines(remote.content, lines), start) }]
+      files: [{ path: remote.path, content: numberReadLines(sliceLines(remote.content, lines), start), evidenceSource: "remote-read" }]
     });
   }
   return JSON.stringify({ error: `Could not read file: ${path}` });

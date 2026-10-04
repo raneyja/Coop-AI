@@ -224,6 +224,53 @@ export function jobsHintWriteReject(jobs: ChatIntentJob[] | undefined): boolean 
   );
 }
 
+/** True when a locate job asks for evidence of the server-side write path. */
+export function jobsHintWriteSite(jobs: ChatIntentJob[] | undefined): boolean {
+  return (jobs ?? []).some(
+    (job) => job.capability === "locate" && job.evidenceClass === "write-site"
+  );
+}
+
+/**
+ * Compact quarterback brief for the agent conversation. Fail-open empty when
+ * the plan has nothing useful. Never sets silent workflows.
+ */
+export function formatIntentBriefForAgent(plan: {
+  purpose?: string;
+  jobs?: ChatIntentJob[];
+}): string | undefined {
+  const jobs = plan.jobs ?? [];
+  if (!plan.purpose?.trim() && jobs.length === 0) {
+    return undefined;
+  }
+  const lines: string[] = ["Intent quarterback brief (hints only — you choose tools from results):"];
+  if (plan.purpose?.trim()) {
+    lines.push(`Done-looks-like: ${plan.purpose.trim()}`);
+  }
+  for (const job of jobs.slice(0, 4)) {
+    const parts = [`- ${job.capability}`];
+    if (job.evidenceClass) {
+      parts.push(`evidence=${job.evidenceClass}`);
+    }
+    if (job.searchCriteria && job.searchCriteria.length > 0) {
+      parts.push(`seed=[${job.searchCriteria.slice(0, 4).join("; ")}]`);
+    } else if (job.terms.length > 0) {
+      parts.push(`terms=[${job.terms.slice(0, 4).join("; ")}]`);
+    }
+    lines.push(parts.join(" "));
+  }
+  if (jobsHintWriteReject(jobs)) {
+    lines.push(
+      "Write-reject: attach a server ValidationError/raise for the asked field. Prefer serializers/views; do not stop on UI/types/bgtasks.",
+      "If ask job words (create/update/…) are unmatched on the first raise site, search/read another sibling under budget — do not freeze on the first twin."
+    );
+  }
+  if (jobsHintWriteSite(jobs)) {
+    lines.push("Write-site: identify where the asked field is assigned or updated on the server.");
+  }
+  return lines.join("\n");
+}
+
 function matchingIntegrationJobs(
   jobs: ChatIntentJob[] | undefined,
   provider: IntegrationChatProvider

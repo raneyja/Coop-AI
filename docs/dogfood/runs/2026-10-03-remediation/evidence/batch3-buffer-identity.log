@@ -1,0 +1,4 @@
+  ✓ API untitled viewing buffer is the remote file, not L Untitled-1
+  ✓ same path in another provider or ref cannot overwrite open-tab identity
+
+remoteViewBuffer: 2/2 tests passed

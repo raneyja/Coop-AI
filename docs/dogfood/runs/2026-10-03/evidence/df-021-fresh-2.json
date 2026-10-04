@@ -1,0 +1,29 @@
+{
+  "scenario": {
+    "id": "DF-021",
+    "area": "Editing and code generation",
+    "fixture": "Disposable branch/worktree; seeded bug and independent assertions; never production branch",
+    "action": "/fix Fix the seeded off-by-one bug in sumPositive; preserve its public signature.",
+    "passCriteria": "Fixture assertions for empty, negative, mixed and positive inputs pass after Apply.",
+    "modes": [
+      "fresh"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T18:05:51.684498+00:00",
+    "status": "FAIL",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "see notes@see notes",
+    "action": "/fix Fix the seeded off-by-one bug in sumPositive; preserve its public signature.",
+    "actualResult": "Retry after explicitly attaching local fixture and selecting Coop-AI succeeded at generation in 5s; proposal replaced actual absolute filename with literal [INTERNAL_PATH]. Apply displayed Patch failed Could not resolve file [INTERNAL_PATH], despite actual fixture open. No repair landed; independent assertions still fail.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-021-fresh-2.json",
+    "criteriaReview": "NOT_ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": null,
+    "durationMs": null,
+    "threadId": null
+  },
+  "diagnosticEvents": []
+}

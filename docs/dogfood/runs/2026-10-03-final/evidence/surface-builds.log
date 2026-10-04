@@ -1,0 +1,6 @@
+Root `npm run build`: exit 0 — extension, webview, backend, workers, admin.
+`website` `npm run build`: exit 0 — Next.js production build, 87 static routes generated.
+`admin` `npm run build`: exit 0 — Next.js production build, 38 static routes generated.
+`ops` `npm run build`: exit 0 — Next.js production build, 13 static routes generated.
+
+These commands ran locally on 2026-10-03. No deployment was performed.

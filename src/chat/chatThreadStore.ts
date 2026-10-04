@@ -18,6 +18,7 @@ export type ChatThreadRecord = ChatThreadSummary & {
   sessionCostUsd: number;
   /** Repo/file scope last used in this thread (restored on switch). */
   repoContext?: RepoContext;
+  draftInput?: string;
 };
 
 type ThreadStoreSnapshot = {
@@ -38,10 +39,11 @@ export function isDraftChatThread(thread: {
   messages: unknown[];
   artifacts?: unknown[];
   messageCount?: number;
+  draftInput?: string;
 }): boolean {
   const messageCount = thread.messageCount ?? thread.messages.length;
   const artifactCount = thread.artifacts?.length ?? 0;
-  return messageCount === 0 && artifactCount === 0;
+  return messageCount === 0 && artifactCount === 0 && !thread.draftInput?.trim();
 }
 
 function emptyThread(id = createThreadId()): ChatThreadRecord {
@@ -73,7 +75,9 @@ function snapshotThreadRepoContext(ctx: RepoContext): RepoContext | undefined {
     scope: ctx.scope,
     file,
     fileSource: ctx.fileSource,
-    languageId: ctx.languageId
+    languageId: ctx.languageId,
+    selectedLines: ctx.selectedLines ? [...ctx.selectedLines] : undefined,
+    selectedSymbol: ctx.selectedSymbol
   };
 }
 
@@ -93,8 +97,9 @@ export function resolveThreadWorkspaceKey(): string {
 }
 
 /** Workspace folder plus signed-in account. Never share one bucket across users. */
-export function resolveThreadScopeKey(identity?: string): string {
-  return threadStorageScopeKey(resolveThreadWorkspaceKey(), identity);
+export function resolveThreadScopeKey(identity?: string, panelSessionId?: string): string {
+  const scope = threadStorageScopeKey(resolveThreadWorkspaceKey(), identity);
+  return panelSessionId ? `${scope}::panel:${panelSessionId}` : scope;
 }
 
 export class ChatThreadStore {
@@ -165,11 +170,21 @@ export class ChatThreadStore {
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .map((thread) => ({
         id: thread.id,
-        title: thread.title,
+        title: thread.messageCount === 0 && thread.draftInput?.trim()
+          ? thread.draftInput.trim().slice(0, 64)
+          : thread.title,
         updatedAt: thread.updatedAt,
         createdAt: thread.createdAt,
         messageCount: thread.messageCount
       }));
+  }
+
+  public setDraft(threadId: string, text: string): void {
+    const thread = this.getThread(threadId);
+    if (!thread) return;
+    thread.draftInput = text;
+    thread.updatedAt = Date.now();
+    this.writeSnapshot();
   }
 
   public listAllThreads(): ChatThreadRecord[] {

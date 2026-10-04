@@ -1,0 +1,8 @@
+{
+  "dist/extension.js": "5c9e57a1c820e994450ae630d5b7e53d05b12cc18c387c041292c49ed7228d06",
+  "dist/webview.js": "f4b581c38087fe272ec5fe2dc0fc2f69bab87475307c4ad166c2559abdb79f0e",
+  "dist/webview.css": "7fe0c091395e717db3a9ebcdf557ab516423a365cfaa94ed86451f3cd4a7d2bc",
+  "dist/webhookServer.js": "f1e7ec8942ce10a08836ef07c2068ff8c4bc45c2c13620d6eac1f5f5ae0fa85a",
+  "coop-ai.vsix": "d255f8007808b1ddb3c721a35e9847a02fe8bd1f2a3c65ae31289e7a75679d1a",
+  "head": "c7796ed10c8bcc5cd2848d44b0bab6eb283684fc"
+}

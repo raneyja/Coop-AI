@@ -50,7 +50,7 @@ type OwnershipCardProps = {
 };
 
 const RISK_LABELS: Record<keyof OwnershipRisk, string> = {
-  singlePointOfFailure: "Single point of failure",
+  singlePointOfFailure: "Contribution concentration",
   expertUnavailable: "All experts unavailable",
   orphaned: "Orphaned (no recent commits)",
   highTurnover: "High turnover",

@@ -1,0 +1,9 @@
+
+> coop-ai@0.1.10 build:backend
+> esbuild src/webhooks/webhookServer.ts --bundle --platform=node --format=cjs --sourcemap --external:@sentry/node --outfile=dist/webhookServer.js
+
+
+  dist/webhookServer.js      3.1mb ⚠️
+  dist/webhookServer.js.map  6.1mb
+
+⚡ Done in 103ms

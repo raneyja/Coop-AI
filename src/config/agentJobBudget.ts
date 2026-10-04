@@ -2,8 +2,8 @@
  * Agent-job budgets on the interactive chat path.
  *
  * Soft start-answering (~15s gather via `remainingContextGatherBudgetMs`) is for
- * non-agent chat / quick actions. Agent-owned locate / understand / change turns
- * use `AGENT_JOB_WALL_MS` (not the 15s gather). AbortSignal remains user Stop only
+ * all chat / quick actions, including agent-owned repository hunts.
+ * `AGENT_JOB_WALL_MS` is an additional loop ceiling. AbortSignal remains user Stop only
  * (never a latency abort).
  */
 

@@ -1,0 +1,28 @@
+
+> coop-ai@0.1.10 test:response-deadline
+> npx tsx src/config/responseDeadline.test.ts && npx tsx src/chat/chatTurn.test.ts && npx tsx src/chat/lengthContinue.test.ts && npx tsx src/chat/agentAnswerHistory.test.ts
+
+  ✓ remainingResponseBudgetMs clamps at zero
+  ✓ remainingContextGatherBudgetMs reserves synthesis time
+  ✓ locateSearchBudgetMs does not skip locate when gather leftover is zero
+  ✓ scheduleResponseDeadline never aborts the turn signal
+  ✓ soft gather hitting zero does not abort a stream AbortSignal
+  ✓ abortablePromise rejects when signal aborts (user Stop)
+  ✓ abortablePromise resolves when work finishes first
+  ✓ isResponseDeadlineAbort detects legacy reason only
+  ✓ isSoftGatherLatencyMessage detects internal latency copy
+
+responseDeadline: 9 passed, 0 failed
+chatTurn.test.ts: ok
+  ✓ detects trailing heading-only sections
+  ✓ filled last heading is not a length stop
+  ✓ finishReason length continues once
+  ✓ cutoff notice is visible and not duplicated
+
+lengthContinue: 4 passed, 0 failed
+  ✓ summarizes read_file bodies instead of dumping the full JSON
+  ✓ plain text is clipped
+  ✓ read_file with a late writeJson 401 unauthorized keeps that excerpt
+  ✓ verified remote evidence survives synthesis without a header-only clip
+
+agentAnswerHistory: 4 passed, 0 failed

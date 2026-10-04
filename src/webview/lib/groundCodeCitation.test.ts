@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { applyGroundedCitations, groundCodeCitation } from "./groundCodeCitation";
+import { applyGroundedCitations, citationPathsInMarkdown, groundCodeCitation } from "./groundCodeCitation";
 
 let passed = 0;
 let failed = 0;
@@ -15,6 +15,29 @@ function test(name: string, fn: () => void): void {
     failed++;
   }
 }
+
+test("numbered source citations recover actual lines only after body verification", () => {
+  const file = "// header\nif (item.status !== Status.PENDING) {\n  throw new Error('Must be pending');\n}";
+  const snippet = "2 | if (item.status !== Status.PENDING) {\n3 |   throw new Error('Must be pending');\n4 | }";
+  assert.deepEqual(groundCodeCitation(file, snippet), {
+    startLine: 2, endLine: 4,
+    code: file.split("\n").slice(1).join("\n"), grounded: true
+  });
+  const wrong = snippet.replace("Status.PENDING", "Status.READY");
+  assert.equal(groundCodeCitation(file, wrong).grounded, false);
+  assert.equal(groundCodeCitation(file, wrong).code, wrong);
+  const markdown = "The guard lives in `server/sign.ts`:\n  ```typescript\n2 |if (item.status !== Status.PENDING) {\n3 |throw new Error('Must be pending');\n4 |}\n5 | ```";
+  assert.deepEqual(citationPathsInMarkdown(markdown), ["server/sign.ts"]);
+  const recovered = applyGroundedCitations(markdown, new Map([["server/sign.ts", file]]));
+  assert.equal(recovered.includes("2:4:server/sign.ts"), true);
+  assert.equal(recovered.includes("3 |"), false);
+  const malformedTail = `${markdown}\n127:126:server/sign.ts\`\n\`\``;
+  assert.equal(applyGroundedCitations(malformedTail, new Map([["server/sign.ts", file]])).includes("2:4:server/sign.ts"), true);
+  assert.equal(applyGroundedCitations(markdown.replace("Status.PENDING", "Status.READY"), new Map([["server/sign.ts", file]])).includes("2:4:server/sign.ts"), false);
+  const patch = markdown.replace("typescript", "patch").replace("5 | ```", "```");
+  assert.deepEqual(citationPathsInMarkdown(patch), []);
+  assert.equal(applyGroundedCitations(patch, new Map([["server/sign.ts", file]])), patch);
+});
 
 const FILE = `import type { AuthContext } from "./orgStore";
 
@@ -148,6 +171,20 @@ test("applyGroundedCitations restores stripped comments inside a citation fence"
   );
   assert.match(rewritten, /Soft gather is silent to the user/);
   assert.match(rewritten, /of this gather budget/);
+});
+
+test("explicit elision restores verified intervening source instead of assigning false lines", () => {
+  const lines = ["def update(self, instance, validated_data):", '    assignees = validated_data.pop("assignees", None)',
+    ...Array.from({ length: 40 }, (_, index) => `    apply_relation_${index}(instance)`),
+    "    instance.updated_at = timezone.now()", "    return super().update(instance, validated_data)"];
+  const snippet = [...lines.slice(0, 2), "    ...", ...lines.slice(-2)].join("\n");
+  const file = [...Array(233).fill(""), ...lines].join("\n");
+  const grounded = groundCodeCitation(file, snippet, 234, 233 + lines.length);
+  assert.equal(grounded.grounded, true);
+  assert.equal(grounded.code, lines.join("\n"));
+  assert.equal(grounded.endLine, 233 + lines.length);
+  assert.equal(groundCodeCitation(file, snippet.replace("timezone.now()", "wrong_clock()"), 234, 233 + lines.length).grounded, false);
+  assert.equal(groundCodeCitation(file, snippet, 233, 233 + lines.length).grounded, false);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

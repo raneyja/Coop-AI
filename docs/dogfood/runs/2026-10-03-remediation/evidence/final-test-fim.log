@@ -1,0 +1,6 @@
+
+> coop-ai@0.1.10 test:fim
+> npx tsx src/api/fimRouter.test.ts && npx tsx src/api/providers/deepseekClient.test.ts
+
+fimRouter: 6/6 tests passed
+deepseekClient.test.ts: ok

@@ -203,7 +203,7 @@ export function repoContextFromEditor(
   const identity = resolveActiveEditorIdentity(editor, preferences, previous);
   const next: RepoContext = {
     ...activeEditorIdentityToRepoContext(identity),
-    branch: branchForEditorContext(previous, preferences)
+    branch: identity.branch ?? branchForEditorContext(previous, preferences)
   };
   return enrichRepoContextWithEditorState(next, editor);
 }

@@ -3,7 +3,8 @@ import type { Uri } from "vscode";
 import {
   clearRemotePatchBuffersForTests,
   rememberRemotePatchBuffer,
-  remoteIdentityForUntitledUri
+  remoteIdentityForUntitledUri,
+  rememberedRemoteEntry
 } from "./remoteViewBuffer";
 
 function fakeUri(uriString: string): Uri {
@@ -41,6 +42,22 @@ async function run(): Promise<void> {
     assert.equal(identity?.owner, "makeplane");
     assert.equal(identity?.repo, "plane");
     assert.equal(remoteIdentityForUntitledUri("untitled:Untitled-2"), undefined);
+    clearRemotePatchBuffersForTests();
+  });
+
+  await test("same path in another provider or ref cannot overwrite open-tab identity", () => {
+    clearRemotePatchBuffersForTests();
+    rememberRemotePatchBuffer("src/auth.ts", fakeUri("untitled:first"), "main body", {
+      owner: "org", repo: "repo", provider: "gitlab", branch: "main"
+    });
+    rememberRemotePatchBuffer("src/auth.ts", fakeUri("untitled:second"), "preview body", {
+      owner: "org", repo: "repo", provider: "bitbucket", branch: "preview"
+    });
+    assert.equal(remoteIdentityForUntitledUri("untitled:first")?.provider, "gitlab");
+    assert.equal(remoteIdentityForUntitledUri("untitled:first")?.branch, "main");
+    assert.equal(remoteIdentityForUntitledUri("untitled:second")?.provider, "bitbucket");
+    assert.equal(remoteIdentityForUntitledUri("untitled:second")?.branch, "preview");
+    assert.equal(rememberedRemoteEntry("src/auth.ts"), undefined, "path alone cannot choose a different repository/ref");
     clearRemotePatchBuffersForTests();
   });
 

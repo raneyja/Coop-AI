@@ -51,6 +51,8 @@ export type RepositoryGraph = {
     framework?: string;
     lastIndexedAt: Date;
     indexVersion: number;
+    indexedBranch?: string;
+    indexedCommit?: string;
   };
 };
 
@@ -329,9 +331,13 @@ export class GraphCache {
     return cloneGraph(graph);
   }
 
-  public getFileTree(orgId: string, repoId: string): GraphQueryResult<FileNode[]> | undefined {
+  public getFileTree(orgId: string, repoId: string): (GraphQueryResult<FileNode[]> & { indexedBranch?: string; indexedCommit?: string }) | undefined {
     const entry = this.getEntry(orgId, repoId);
-    return entry ? this.result(entry, entry.graph.fileTree.map(cloneFile)) : undefined;
+    return entry ? {
+      ...this.result(entry, entry.graph.fileTree.map(cloneFile)),
+      indexedBranch: entry.graph.metadata.indexedBranch,
+      indexedCommit: entry.graph.metadata.indexedCommit
+    } : undefined;
   }
 
   public getOwnership(

@@ -1,0 +1,10 @@
+{
+  "recordedAt": "2026-10-03T20:07:11.854538+00:00",
+  "head": "c7796ed10c8bcc5cd2848d44b0bab6eb283684fc",
+  "extensionHash": "3f369e90c9d0de80fecaeb704acac4abbe91de40e2dac9676168ab9793fa3308",
+  "webviewHash": "c7b4756b3ac9894f8a690fb57c2e2d9bbea9c14a1fb1e8d859daac75cad7fa70",
+  "trackedDiffHash": "4da7ca2a1375df3f2afb1484e30dbda3d82ccaf1211c106f31544abd8f5212ad",
+  "backendDeployment": null,
+  "vsixHash": null,
+  "loadedInHost": false
+}

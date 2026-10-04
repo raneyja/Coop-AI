@@ -1,3 +1,5 @@
+import type { IndexedRepoFileMap } from "../api/CoopBackendClient";
+import { rankExplorerFilePaths } from "../api/codeHosts/explorerFileTreeSearch";
 import type { ContextFetchResult } from "../context/requestBatcher";
 import type {
   RepoFileEvidence,
@@ -26,7 +28,46 @@ import {
  * total is always measured, never estimated from a retrieval sample.
  */
 export class IndexedRepoWorkspace {
+  // A workspace instance belongs to one frozen gather. Do not retain it across turns.
+  private readonly fileMaps = new Map<string, Promise<IndexedRepoFileMap | undefined>>();
+
   public constructor(private readonly deps: RepoInventoryDeps) {}
+
+  /** Complete durable path map; undefined means unavailable, [] means no filename matches. */
+  public async findFiles(
+    target: RepoTarget,
+    query: string,
+    options?: { limit?: number; acceptPath?: (path: string) => boolean; rankPaths?: (paths: string[]) => string[]; onDiagnostic?: (event: Record<string, unknown>) => void }
+  ): Promise<Array<{ path: string; name: string }> | undefined> {
+    const identity = this.getIdentity(target);
+    if (!identity || !identity.branch?.trim() || !query.trim()) {
+      return undefined;
+    }
+    try {
+      const key = JSON.stringify([this.deps.apiBaseUrl, identity.repoId, identity.branch]);
+      let pending = this.fileMaps.get(key);
+      if (!pending) {
+        pending = this.deps.api.fetchIndexedRepoFileMap(
+          this.deps.apiBaseUrl, identity.repoId, identity.branch, options?.onDiagnostic
+        ).catch(() => undefined);
+        this.fileMaps.set(key, pending);
+      }
+      const map = await pending;
+      if (!map || map.repoId !== identity.repoId || !map.indexedBranch ||
+          (identity.branch && map.indexedBranch !== identity.branch) || map.stale) {
+        return undefined;
+      }
+      const paths = [...new Set(map.data.map((file) => file.path)
+        .filter((path) => typeof path === "string" && Boolean(path.trim())))]
+        .filter((path) => !options?.acceptPath || options.acceptPath(path));
+      const limit = Math.max(1, Math.min(100, options?.limit ?? 20));
+      const matches = rankExplorerFilePaths(paths, query, paths.length);
+      return (options?.rankPaths ? options.rankPaths(matches) : matches).slice(0, limit)
+        .map((path) => ({ path, name: path.split("/").pop() ?? path }));
+    } catch {
+      return undefined;
+    }
+  }
 
   public getIdentity(target: RepoTarget): RepoIdentity | undefined {
     const repoId = target.repoId?.trim();

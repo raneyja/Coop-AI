@@ -1,0 +1,573 @@
+{
+  "scenario": {
+    "id": "DF-005",
+    "area": "Repository questions",
+    "fixture": "Coop-AI; pinned remote ref; no chip",
+    "action": "Where is DefinitelyMissingCoopSymbol_20261003 defined?",
+    "passCriteria": "States no verified definition; no fabricated path, code, or definitive whole-repo absence claim from partial search.",
+    "modes": [
+      "cold",
+      "warm",
+      "after-repo-switch"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T17:20:48.358257+00:00",
+    "status": "PASS",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "gitlab:coopai-group/Coop-AI@main",
+    "action": "Where is DefinitelyMissingCoopSymbol_20261003 defined?",
+    "actualResult": "Fresh no-chip repo main. Final response: I could not find that in this repo. Try a more specific name, or open the file. No invented symbol/path or exhaustive absence claim. Negative search honest.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-005-warm-1.json",
+    "criteriaReview": "ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": 9003,
+    "durationMs": 9003,
+    "threadId": "thread-1791048002432-6q3yz7"
+  },
+  "diagnosticEvents": [
+    {
+      "at": "2026-10-03T17:20:09.203Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "95fe2e95-e513-4f61-b94c-1335428ca1aa",
+      "turnElapsedMs": 164,
+      "stage": "target",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "requestedBranch": "main",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:20:09.203Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "95fe2e95-e513-4f61-b94c-1335428ca1aa",
+      "turnElapsedMs": 164,
+      "stage": "turn",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "action": "locate",
+      "hunt": "definition-locate",
+      "taskQuery": "Where is DefinitelyMissingCoopSymbol_20261003 defined?",
+      "plannedSearchQueries": [
+        "DefinitelyMissingCoopSymbol_20261003"
+      ],
+      "requiredEvidence": []
+    },
+    {
+      "at": "2026-10-03T17:20:09.862Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "95fe2e95-e513-4f61-b94c-1335428ca1aa",
+      "turnElapsedMs": 823,
+      "stage": "plan",
+      "round": 0,
+      "result": "call",
+      "tool": "search_code",
+      "query": "DefinitelyMissingCoopSymbol_20261003",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T17:20:10.156Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "95fe2e95-e513-4f61-b94c-1335428ca1aa",
+      "turnElapsedMs": 1117,
+      "stage": "index-search-start",
+      "query": "DefinitelyMissingCoopSymbol_20261003",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:20:11.056Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "95fe2e95-e513-4f61-b94c-1335428ca1aa",
+      "turnElapsedMs": 2017,
+      "stage": "index-search",
+      "query": "DefinitelyMissingCoopSymbol_20261003",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 900,
+      "hitCount": 8,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "src/webview/globals.css",
+          "line": 31,
+          "score": 0.44355748158162234
+        },
+        {
+          "path": "website/src/components/ProductInquiryMock.tsx",
+          "line": 5,
+          "score": 0.422903992966672
+        },
+        {
+          "path": "admin/src/app/api/validate-key/route.ts",
+          "line": 2,
+          "score": 0.42273500251212526
+        },
+        {
+          "path": "ops/src/lib/serverCoopApi.ts",
+          "line": 4,
+          "score": 0.4217243090607491
+        },
+        {
+          "path": "src/workspace/repoEditorOpener.ts",
+          "line": 33,
+          "score": 0.41920382884548335
+        },
+        {
+          "path": "admin/src/lib/serverCoopApi.ts",
+          "line": 3,
+          "score": 0.4171564914028363
+        },
+        {
+          "path": "src/webview/slackPresenceDisplay.test.ts",
+          "line": 3,
+          "score": 0.41642367292529703
+        },
+        {
+          "path": "website/content/manual/index.md",
+          "line": 22,
+          "score": 0.4149841794401361
+        }
+      ],
+      "symbols": [],
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:20:11.060Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "stage": "activity-step",
+      "tool": "search_code",
+      "summary": "search_code: DefinitelyMissingCoopSymbol_20261003"
+    },
+    {
+      "at": "2026-10-03T17:20:11.248Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "95fe2e95-e513-4f61-b94c-1335428ca1aa",
+      "turnElapsedMs": 2209,
+      "stage": "index-search-start",
+      "query": "definitelymissingcoopsymbol20261003",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:20:11.901Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "95fe2e95-e513-4f61-b94c-1335428ca1aa",
+      "turnElapsedMs": 2862,
+      "stage": "index-search",
+      "query": "definitelymissingcoopsymbol20261003",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 653,
+      "hitCount": 17,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "admin/src/app/api/validate-key/route.ts",
+          "line": 2,
+          "score": 0.4495219635330765
+        },
+        {
+          "path": "ops/src/lib/serverCoopApi.ts",
+          "line": 4,
+          "score": 0.4421326527628471
+        },
+        {
+          "path": "admin/src/lib/serverCoopApi.ts",
+          "line": 3,
+          "score": 0.43513302321014447
+        },
+        {
+          "path": "website/content/manual/index.md",
+          "line": 22,
+          "score": 0.41925419694317423
+        },
+        {
+          "path": "src/workspace/repoEditorOpener.ts",
+          "line": 33,
+          "score": 0.4113111011675268
+        },
+        {
+          "path": "website/content/docs/troubleshooting.md",
+          "line": 4,
+          "score": 0.4054027169986867
+        },
+        {
+          "path": "src/webview/globals.css",
+          "line": 31,
+          "score": 0.39972560741709584
+        },
+        {
+          "path": "ops/src/lib/coopApi.ts",
+          "line": 27,
+          "score": 0.3910384871035516
+        },
+        {
+          "path": "admin/src/lib/integrationErrors.ts",
+          "line": 3,
+          "score": 0.3907037043349446
+        },
+        {
+          "path": "website/content/docs/teams.md",
+          "line": 2,
+          "score": 0.3886385330595754
+        },
+        {
+          "path": "src/autocomplete/autocompleteConfig.ts",
+          "line": 1,
+          "score": 0.3870575857869478
+        },
+        {
+          "path": "website/content/docs/saml-sso-troubleshooting.md",
+          "line": 2,
+          "score": 0.38519190161998496
+        },
+        {
+          "path": "src/webview/slackPresenceDisplay.test.ts",
+          "line": 3,
+          "score": 0.3846806686472539
+        },
+        {
+          "path": "admin/src/lib/coopApi.ts",
+          "line": 18,
+          "score": 0.3835591615224384
+        },
+        {
+          "path": "admin/src/app/globals.css",
+          "line": 4,
+          "score": 0.3813830298093921
+        },
+        {
+          "path": "src/api/userFacingErrors.ts",
+          "line": 7,
+          "score": 0.38128494890323894
+        },
+        {
+          "path": "src/autocomplete/suggestWidgetCoexistence.test.ts",
+          "line": 3,
+          "score": 0.3806327772361011
+        }
+      ],
+      "symbols": [],
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:20:11.906Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "stage": "activity-step",
+      "tool": "search_code",
+      "summary": "search_code: definitelymissingcoopsymbol20261003"
+    },
+    {
+      "at": "2026-10-03T17:20:12.916Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "95fe2e95-e513-4f61-b94c-1335428ca1aa",
+      "turnElapsedMs": 3877,
+      "stage": "plan",
+      "round": 1,
+      "result": "call",
+      "tool": "search_code",
+      "query": "DefinitelyMissingCoopSymbol_20261003",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T17:20:13.945Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "95fe2e95-e513-4f61-b94c-1335428ca1aa",
+      "turnElapsedMs": 4906,
+      "stage": "plan",
+      "round": 2,
+      "result": "done"
+    },
+    {
+      "at": "2026-10-03T17:20:15.145Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "95fe2e95-e513-4f61-b94c-1335428ca1aa",
+      "turnElapsedMs": 6106,
+      "stage": "plan",
+      "round": 3,
+      "result": "call",
+      "tool": "search_code",
+      "query": "DefinitelyMissingCoopSymbol_20261003",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T17:20:16.296Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "95fe2e95-e513-4f61-b94c-1335428ca1aa",
+      "turnElapsedMs": 7257,
+      "stage": "plan",
+      "round": 4,
+      "result": "call",
+      "tool": "search_code",
+      "query": "DefinitelyMissingCoopSymbol",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T17:20:16.474Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "95fe2e95-e513-4f61-b94c-1335428ca1aa",
+      "turnElapsedMs": 7435,
+      "stage": "index-search-start",
+      "query": "DefinitelyMissingCoopSymbol",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:20:17.149Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "95fe2e95-e513-4f61-b94c-1335428ca1aa",
+      "turnElapsedMs": 8110,
+      "stage": "index-search",
+      "query": "DefinitelyMissingCoopSymbol",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 675,
+      "hitCount": 8,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "src/webview/globals.css",
+          "line": 31,
+          "score": 0.44759163805151136
+        },
+        {
+          "path": "website/src/components/ProductInquiryMock.tsx",
+          "line": 5,
+          "score": 0.44147117704476213
+        },
+        {
+          "path": "admin/src/app/api/validate-key/route.ts",
+          "line": 2,
+          "score": 0.44018932342987327
+        },
+        {
+          "path": "ops/src/lib/serverCoopApi.ts",
+          "line": 4,
+          "score": 0.43729611336408536
+        },
+        {
+          "path": "admin/src/lib/serverCoopApi.ts",
+          "line": 3,
+          "score": 0.4325062991055324
+        },
+        {
+          "path": "demo/launch-typewriter/index.html",
+          "line": 7,
+          "score": 0.4306069470416253
+        },
+        {
+          "path": "src/webview/slackPresenceDisplay.test.ts",
+          "line": 3,
+          "score": 0.4253205468317869
+        },
+        {
+          "path": "src/workspace/repoEditorOpener.ts",
+          "line": 33,
+          "score": 0.41736668842753444
+        }
+      ],
+      "symbols": [],
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:20:17.156Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "stage": "activity-step",
+      "tool": "search_code",
+      "summary": "search_code: DefinitelyMissingCoopSymbol"
+    },
+    {
+      "at": "2026-10-03T17:20:17.756Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "95fe2e95-e513-4f61-b94c-1335428ca1aa",
+      "turnElapsedMs": 8717,
+      "stage": "gather-handoff",
+      "waitingStage": "tool-plan",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:20:17.756Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "95fe2e95-e513-4f61-b94c-1335428ca1aa",
+      "turnElapsedMs": 8717,
+      "stage": "plan",
+      "round": 5,
+      "result": "invalid"
+    },
+    {
+      "at": "2026-10-03T17:20:17.757Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "95fe2e95-e513-4f61-b94c-1335428ca1aa",
+      "turnElapsedMs": 8718,
+      "stage": "outcome",
+      "candidateLedger": [
+        {
+          "path": "src/webview/globals.css",
+          "criterion": "where is definitely_missing_coop_symbol_20261003 defined?",
+          "status": "untested"
+        },
+        {
+          "path": "website/src/components/ProductInquiryMock.tsx",
+          "criterion": "where is definitely_missing_coop_symbol_20261003 defined?",
+          "status": "untested"
+        },
+        {
+          "path": "admin/src/app/api/validate-key/route.ts",
+          "criterion": "where is definitely_missing_coop_symbol_20261003 defined?",
+          "status": "untested"
+        },
+        {
+          "path": "ops/src/lib/serverCoopApi.ts",
+          "criterion": "where is definitely_missing_coop_symbol_20261003 defined?",
+          "status": "untested"
+        },
+        {
+          "path": "src/workspace/repoEditorOpener.ts",
+          "criterion": "where is definitely_missing_coop_symbol_20261003 defined?",
+          "status": "untested"
+        },
+        {
+          "path": "admin/src/lib/serverCoopApi.ts",
+          "criterion": "where is definitely_missing_coop_symbol_20261003 defined?",
+          "status": "untested"
+        },
+        {
+          "path": "src/webview/slackPresenceDisplay.test.ts",
+          "criterion": "where is definitely_missing_coop_symbol_20261003 defined?",
+          "status": "untested"
+        },
+        {
+          "path": "website/content/manual/index.md",
+          "criterion": "where is definitely_missing_coop_symbol_20261003 defined?",
+          "status": "untested"
+        },
+        {
+          "path": "website/content/docs/troubleshooting.md",
+          "criterion": "where is definitely_missing_coop_symbol_20261003 defined?",
+          "status": "untested"
+        },
+        {
+          "path": "ops/src/lib/coopApi.ts",
+          "criterion": "where is definitely_missing_coop_symbol_20261003 defined?",
+          "status": "untested"
+        },
+        {
+          "path": "admin/src/lib/integrationErrors.ts",
+          "criterion": "where is definitely_missing_coop_symbol_20261003 defined?",
+          "status": "untested"
+        },
+        {
+          "path": "website/content/docs/teams.md",
+          "criterion": "where is definitely_missing_coop_symbol_20261003 defined?",
+          "status": "untested"
+        },
+        {
+          "path": "src/autocomplete/autocompleteConfig.ts",
+          "criterion": "where is definitely_missing_coop_symbol_20261003 defined?",
+          "status": "untested"
+        },
+        {
+          "path": "website/content/docs/saml-sso-troubleshooting.md",
+          "criterion": "where is definitely_missing_coop_symbol_20261003 defined?",
+          "status": "untested"
+        },
+        {
+          "path": "admin/src/lib/coopApi.ts",
+          "criterion": "where is definitely_missing_coop_symbol_20261003 defined?",
+          "status": "untested"
+        },
+        {
+          "path": "admin/src/app/globals.css",
+          "criterion": "where is definitely_missing_coop_symbol_20261003 defined?",
+          "status": "untested"
+        },
+        {
+          "path": "src/api/userFacingErrors.ts",
+          "criterion": "where is definitely_missing_coop_symbol_20261003 defined?",
+          "status": "untested"
+        },
+        {
+          "path": "src/autocomplete/suggestWidgetCoexistence.test.ts",
+          "criterion": "where is definitely_missing_coop_symbol_20261003 defined?",
+          "status": "untested"
+        },
+        {
+          "path": "demo/launch-typewriter/index.html",
+          "criterion": "where is definitely_missing_coop_symbol_20261003 defined?",
+          "status": "untested"
+        }
+      ],
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main",
+      "elapsedMs": 8718,
+      "stopped": false,
+      "stepCount": 3,
+      "hasAnswer": true,
+      "evidencePaths": []
+    },
+    {
+      "at": "2026-10-03T17:20:17.758Z",
+      "threadId": "thread-1791048002432-6q3yz7",
+      "stage": "answer-start",
+      "elapsedMs": 9003,
+      "selectedBranch": "main",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "delivery": "complete",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016"
+    }
+  ]
+}

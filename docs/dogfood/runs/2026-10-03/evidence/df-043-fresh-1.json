@@ -1,0 +1,180 @@
+{
+  "scenario": {
+    "id": "DF-043",
+    "area": "Integrations",
+    "fixture": "Coop-AI + sandbox COOP-101 + seeded decision",
+    "action": "What code covers COOP-101, and what decision explains it?",
+    "passCriteria": "Ticket, decision and actual code joined with distinct citations; missing link called out, not invented.",
+    "modes": [
+      "fresh"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T18:08:30.020588+00:00",
+    "status": "FAIL",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "gitlab:coopai-group/Coop-AI@main",
+    "action": "What code covers COOP-101, and what decision explains it?",
+    "actualResult": "Actual COOP-101 question retrieved Jira epic body including explicit demo-seed disclaimer; no actual code read or mapped, asks for repo files despite selected GitLab Coop-AI main. Worked17s. Jira source link presented; independent browser verification pending. Seeded decision fixture not available, so no full join pass.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-043-fresh-1.json",
+    "criteriaReview": "NOT_ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": 14994,
+    "durationMs": 16835,
+    "threadId": "thread-1791050785767-yrp6lt"
+  },
+  "diagnosticEvents": [
+    {
+      "at": "2026-10-03T18:06:30.599Z",
+      "threadId": "thread-1791050785767-yrp6lt",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "2eb184de-ae92-4100-8f99-90b1c0eb8114",
+      "turnElapsedMs": 164,
+      "stage": "target",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "requestedBranch": "main",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T18:06:30.600Z",
+      "threadId": "thread-1791050785767-yrp6lt",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "2eb184de-ae92-4100-8f99-90b1c0eb8114",
+      "turnElapsedMs": 165,
+      "stage": "turn",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "action": "understand",
+      "hunt": "other",
+      "taskQuery": "What code covers COOP-101, and what decision explains it?",
+      "plannedSearchQueries": [],
+      "requiredEvidence": []
+    },
+    {
+      "at": "2026-10-03T18:06:31.734Z",
+      "threadId": "thread-1791050785767-yrp6lt",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "2eb184de-ae92-4100-8f99-90b1c0eb8114",
+      "turnElapsedMs": 1299,
+      "stage": "plan",
+      "round": 0,
+      "result": "call",
+      "tool": "search_jira",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T18:06:34.457Z",
+      "threadId": "thread-1791050785767-yrp6lt",
+      "stage": "activity-step",
+      "tool": "search_jira",
+      "summary": "search_jira: COOP-101 explains it"
+    },
+    {
+      "at": "2026-10-03T18:06:35.553Z",
+      "threadId": "thread-1791050785767-yrp6lt",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "2eb184de-ae92-4100-8f99-90b1c0eb8114",
+      "turnElapsedMs": 5118,
+      "stage": "plan",
+      "round": 1,
+      "result": "call",
+      "tool": "search_jira",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T18:06:37.602Z",
+      "threadId": "thread-1791050785767-yrp6lt",
+      "stage": "activity-step",
+      "tool": "search_jira",
+      "summary": "search_jira: Open COOP-101"
+    },
+    {
+      "at": "2026-10-03T18:06:38.363Z",
+      "threadId": "thread-1791050785767-yrp6lt",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "2eb184de-ae92-4100-8f99-90b1c0eb8114",
+      "turnElapsedMs": 7928,
+      "stage": "plan",
+      "round": 2,
+      "result": "call",
+      "tool": "search_jira",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T18:06:39.266Z",
+      "threadId": "thread-1791050785767-yrp6lt",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "2eb184de-ae92-4100-8f99-90b1c0eb8114",
+      "turnElapsedMs": 8830,
+      "stage": "gather-handoff",
+      "waitingStage": "integration-search",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T18:06:39.266Z",
+      "threadId": "thread-1791050785767-yrp6lt",
+      "stage": "activity-step",
+      "tool": "search_jira",
+      "summary": "search_jira: decision explains it"
+    },
+    {
+      "at": "2026-10-03T18:06:39.268Z",
+      "threadId": "thread-1791050785767-yrp6lt",
+      "stage": "activity-step",
+      "tool": "search_slack",
+      "summary": "search_slack: explains it"
+    },
+    {
+      "at": "2026-10-03T18:06:39.269Z",
+      "threadId": "thread-1791050785767-yrp6lt",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "2eb184de-ae92-4100-8f99-90b1c0eb8114",
+      "turnElapsedMs": 8834,
+      "stage": "synthesis-start"
+    },
+    {
+      "at": "2026-10-03T18:06:45.259Z",
+      "threadId": "thread-1791050785767-yrp6lt",
+      "stage": "answer-start",
+      "elapsedMs": 14994,
+      "selectedBranch": "main",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016"
+    },
+    {
+      "at": "2026-10-03T18:06:47.270Z",
+      "threadId": "thread-1791050785767-yrp6lt",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "2eb184de-ae92-4100-8f99-90b1c0eb8114",
+      "turnElapsedMs": 16835,
+      "stage": "outcome",
+      "candidateLedger": [],
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main",
+      "elapsedMs": 16835,
+      "stopped": false,
+      "stepCount": 4,
+      "hasAnswer": true,
+      "evidencePaths": []
+    }
+  ]
+}

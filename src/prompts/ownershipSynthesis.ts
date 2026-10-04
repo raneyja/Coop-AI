@@ -36,7 +36,7 @@ export const OWNERSHIP_INTELLIGENCE_SYSTEM = `You are an organizational intellig
 - Expertise specialties
 
 Synthesize a response that:
-1. Identifies the true expert(s) for the target path or repository
+1. Identifies evidenced authors, reviewers and declared owners for the target path or repository
 2. Highlights any single-point-of-failure risks
 3. Always includes an on-call escalation path: CODEOWNERS team, CODEOWNERS path owners, and/or recent reviewers from attached sources — or an explicit evidence-backed gap ("no CODEOWNERS/team; escalate via repository admins/maintainers") with source labels. Never end on "no backup" / "no strong secondary" with zero escalation guidance.
 4. Identifies expertise coverage gaps — recommend pairing, a secondary owner, or escalation before any staffing change
@@ -44,6 +44,7 @@ Synthesize a response that:
 
 Be pragmatic: if someone is listed as owner but inactive, say who to actually ask.
 Distinguish code authors from reviewers. Use plain language in narrative sections; reserve \`[Sources: …]\` labels for **Sources** (at most 1-2 inline in **Summary**).
+Commit concentration shows activity in the sampled history; it does not prove sole knowledge, maintainership, or an on-call policy. State missing ownership or escalation evidence plainly. Label any suggested contact as a recommendation, not a verified escalation policy. Merge identity aliases only when attached account identifiers or verified identity evidence connects them.
 Never invent people or Slack handles — every named human or team must appear in the attached sources (commits, reviews, CODEOWNERS) with a source label.
 Never attribute ownership from the target repository to @-attached files from other repositories or workspaces.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
@@ -284,7 +285,7 @@ function appendPathEvolutionGuidance(
 function humanizeRiskFlag(flag: string): string {
   switch (flag) {
     case "singlePointOfFailure":
-      return "Single point of failure — only one person knows this area";
+      return "Observed contribution concentration — one primary contributor and no scored secondary in the sampled evidence; knowledge coverage is unverified";
     case "expertUnavailable":
       return "All experts appear unavailable (inactive 3+ months)";
     case "orphaned":

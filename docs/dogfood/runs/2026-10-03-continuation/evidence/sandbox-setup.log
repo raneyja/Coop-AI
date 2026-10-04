@@ -1,0 +1,129 @@
+ Container coop-dogfood-20261003-postgres-1 Running 
+ Container coop-dogfood-20261003-api-1 Running 
+ Container coop-dogfood-20261003-postgres-1 Waiting 
+ Container coop-dogfood-20261003-postgres-1 Healthy 
+ Container coop-dogfood-20261003-postgres-1 Waiting 
+ Container coop-dogfood-20261003-api-1 Waiting 
+ Container coop-dogfood-20261003-postgres-1 Healthy 
+ Container coop-dogfood-20261003-api-1 Healthy 
+Using DATABASE_URL (host redacted)
+Migrations directory: /app/migrations
+skip  001_jobs.sql (already applied)
+skip  002_orgs.sql (already applied)
+skip  003_graph_cache.sql (already applied)
+skip  004_repo_manifests.sql (already applied)
+skip  005_org_plan_team_to_pro.sql (already applied)
+skip  006_code_host_installations.sql (already applied)
+skip  007_repo_symbol_index.sql (already applied)
+skip  008_repo_embeddings.sql (already applied)
+skip  009_org_collections.sql (already applied)
+skip  010_users_identity_audit.sql (already applied)
+skip  011_org_identity_directory.sql (already applied)
+skip  012_org_integration_connections.sql (already applied)
+skip  013_org_billing.sql (already applied)
+skip  014_usage_events.sql (already applied)
+skip  015_stripe_webhook_events.sql (already applied)
+skip  016_user_workspace_repos.sql (already applied)
+skip  017_org_repos_embedding_status.sql (already applied)
+skip  018_org_integration_policies.sql (already applied)
+skip  019_chat_threads.sql (already applied)
+skip  020_auth_identities.sql (already applied)
+skip  021_org_repo_access.sql (already applied)
+skip  022_user_profile.sql (already applied)
+skip  023_operator_platform.sql (already applied)
+skip  024_repo_stats.sql (already applied)
+skip  025_org_repos_browse_status.sql (already applied)
+skip  026_repo_dependency_edges.sql (already applied)
+skip  027_org_usage_tier.sql (already applied)
+skip  028_mixed_seats.sql (already applied)
+skip  029_org_operator_cancelled.sql (already applied)
+skip  030_stripe_webhook_event_status.sql (already applied)
+skip  031_graph_snapshots_org_pk.sql (already applied)
+Migrations complete.
+{
+  "password": "DemoPassword12!",
+  "adminPortalUrl": "http://localhost:3001/login",
+  "extensionApiBase": "http://localhost:8787",
+  "orgs": {
+    "free": {
+      "orgId": "481df7ae-e21f-46ef-978c-356636715ec8",
+      "orgName": "Demo Free",
+      "plan": "free",
+      "accounts": [
+        {
+          "email": "free-admin@demo.local",
+          "role": "admin",
+          "userId": "ec4529c1-7e0a-4440-9bcd-b48a42a1e947"
+        }
+      ]
+    },
+    "pro": {
+      "orgId": "9bfcfa5a-0b74-4711-bd9c-eca68868225b",
+      "orgName": "Demo Pro",
+      "plan": "pro",
+      "accounts": [
+        {
+          "email": "pro-admin@demo.local",
+          "role": "admin",
+          "userId": "43ab9fb1-4273-4577-b974-a6400e1bc686"
+        },
+        {
+          "email": "pro-member@demo.local",
+          "role": "member",
+          "userId": "6d7bdb4e-a7a7-4869-9bac-4bff7c753df8"
+        }
+      ]
+    },
+    "enterprise": {
+      "orgId": "a603c239-0bc6-4805-add8-04d29722344a",
+      "orgName": "Demo Enterprise",
+      "plan": "enterprise",
+      "accounts": [
+        {
+          "email": "enterprise-admin@demo.local",
+          "role": "admin",
+          "userId": "d6cfbd0c-49a2-4e7a-a0de-0da479e0f0f0"
+        }
+      ]
+    }
+  },
+  "testingNotes": [
+    "Pro admin: pro-admin@demo.local — Connect + Manage access in admin portal",
+    "Pro member: pro-member@demo.local — read-only Tools in extension; no Connect buttons",
+    "Free has no scope gate; Pro/Enterprise require Manage access before chat uses Slack/Jira/etc."
+  ]
+}
+{
+  "orgId": "2f619a2b-ecdd-4c86-976c-23d1125d8d0b",
+  "orgName": "Repo Access Demo",
+  "plan": "pro",
+  "repoAccessMode": "all_indexed",
+  "admin": {
+    "id": "73b8430f-5f3e-43da-af1d-f62c6fa67ab3",
+    "email": "repo-access-admin@demo.local",
+    "password": "DemoPassword12!"
+  },
+  "developer": {
+    "id": "18f06298-f432-45dc-b045-e770f78c26a8",
+    "email": "repo-access-dev@demo.local",
+    "password": "DemoPassword12!"
+  },
+  "catalogRepos": [
+    "github:acme/api",
+    "github:acme/web",
+    "github:acme/mobile",
+    "github:raneyja/personal-a",
+    "github:raneyja/personal-b"
+  ],
+  "indexedRepos": [
+    "github:acme/api",
+    "github:acme/web",
+    "github:acme/mobile"
+  ],
+  "developerGrantsWhenPerUser": [
+    "github:acme/api",
+    "github:acme/web"
+  ],
+  "adminPortalUrl": "http://localhost:3001/login",
+  "apiBase": "http://localhost:8787"
+}

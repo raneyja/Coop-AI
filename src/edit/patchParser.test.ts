@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { countHunks, parsePatchResponse } from "./patchParser";
+import { sanitizedPatchTargetBindings } from "./patchFileContents";
 
 let passed = 0;
 let failed = 0;
@@ -334,6 +335,19 @@ test("preserves leading and trailing whitespace inside hunks", () => {
   }
   assert.equal(result.patches.files[0]!.hunks[0]!.search, "  const x = 1;  ");
   assert.equal(result.patches.files[0]!.hunks[0]!.replace, "  const x = 2;  ");
+});
+
+test("privacy-redacted target resolves only through unambiguous captured binding", () => {
+  const target = "/private/tmp/dogfood/fixture.ts";
+  const content = "File: [INTERNAL_PATH]\n```patch\n<<<<<<< SEARCH\nconst x = 1;\n=======\nconst x = 2;\n>>>>>>> REPLACE\n```";
+  const bindings = sanitizedPatchTargetBindings([target, "private/tmp/dogfood/fixture.ts"]);
+  const parsed = parsePatchResponse(content, { targetAliases: bindings });
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) assert.equal(parsed.patches.files[0]!.relativePath, target);
+  assert.equal(parsePatchResponse(content, {preferredFile: target}).ok, false, "preferred file alone cannot guess a redacted target");
+  const ambiguous = sanitizedPatchTargetBindings([target, "/private/tmp/dogfood/other.ts"]);
+  assert.equal(parsePatchResponse(content, {targetAliases: ambiguous}).ok, false);
+  assert.equal(parsePatchResponse(content).ok, false);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

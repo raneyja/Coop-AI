@@ -47,6 +47,13 @@ test("read_file with a late writeJson 401 unauthorized keeps that excerpt", () =
   assert.ok(!summarized.includes("const pad0 = 0;"));
 });
 
+test("verified remote evidence survives synthesis without a header-only clip", () => {
+  const body = `${"# header\n".repeat(70)}180|raise ValidationError("Parent is invalid")`;
+  const raw = JSON.stringify({ files: [{ path: "api/serializer.py", content: body, evidenceSource: "remote-read" }] });
+  const summarized = JSON.parse(summarizeAgentToolResultForHistory(raw));
+  assert.equal(summarized.files[0].content, body);
+});
+
 console.log(`\nagentAnswerHistory: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);

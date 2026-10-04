@@ -325,10 +325,18 @@ export function enrichIntentJobResponse(
 export function intentJobCodePathsFromBundle(bundle: unknown): string[] {
   const paths: string[] = [];
   for (const entry of Array.isArray(bundle) ? bundle : []) {
-    const semantic = (entry as {
-      data?: { repoSemanticSearch?: { files?: unknown[] } };
-    })?.data?.repoSemanticSearch;
-    for (const item of semantic?.files ?? []) {
+    const data = (entry as {
+      data?: {
+        repoSemanticSearch?: { files?: unknown[] };
+        dualRepoCompare?: { left?: { files?: unknown[] }; right?: { files?: unknown[] } };
+      };
+    })?.data;
+    const files = [
+      ...(data?.repoSemanticSearch?.files ?? []),
+      ...(data?.dualRepoCompare?.left?.files ?? []),
+      ...(data?.dualRepoCompare?.right?.files ?? [])
+    ];
+    for (const item of files) {
       if (!item || typeof item !== "object") {
         continue;
       }

@@ -1,4 +1,19 @@
 import { pathsReferToSameFile } from "../context/githubVfsUri";
+import { sanitizePlainText } from "../api/dataSanitization";
+
+/** Bind privacy aliases to captured targets; a collision is deliberately unbound. */
+export function sanitizedPatchTargetBindings(paths: readonly string[]): Record<string, string> {
+  const targets = new Map<string, Set<string>>();
+  for (const path of paths) {
+    const alias = sanitizePlainText(path);
+    if (alias === path) continue;
+    const values = targets.get(alias) ?? new Set<string>();
+    values.add(path);
+    targets.set(alias, values);
+  }
+  return Object.fromEntries([...targets].filter(([, values]) => values.size === 1)
+    .map(([alias, values]) => [alias, [...values][0]!]));
+}
 
 /** Resolve a patch path against captured file bodies (suffix / alias tolerant). */
 export function lookupPatchFileContent(

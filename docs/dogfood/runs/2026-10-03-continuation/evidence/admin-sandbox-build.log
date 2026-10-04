@@ -1,0 +1,66 @@
+
+> coop-ai-admin@0.1.0 build
+> next build
+
+   ▲ Next.js 15.5.19
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 1894ms
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/38) ...
+   Generating static pages (9/38) 
+   Generating static pages (18/38) 
+   Generating static pages (28/38) 
+ ✓ Generating static pages (38/38)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                 Size  First Load JS
+┌ ○ /                                    6.22 kB         123 kB
+├ ○ /_not-found                            168 B         103 kB
+├ ○ /accept-invite                       3.48 kB         125 kB
+├ ○ /analytics                           4.46 kB         130 kB
+├ ○ /analytics/my                          170 B         126 kB
+├ ○ /api-keys                             2.3 kB         119 kB
+├ ƒ /api/auth/accept-invite                168 B         103 kB
+├ ƒ /api/auth/google/callback              168 B         103 kB
+├ ƒ /api/auth/google/start                 168 B         103 kB
+├ ƒ /api/auth/login                        168 B         103 kB
+├ ƒ /api/auth/logout                       168 B         103 kB
+├ ƒ /api/auth/register                     168 B         103 kB
+├ ƒ /api/auth/saml/start                   168 B         103 kB
+├ ƒ /api/auth/session                      168 B         103 kB
+├ ƒ /api/install-url/[provider]            168 B         103 kB
+├ ƒ /api/integrations                      168 B         103 kB
+├ ƒ /api/validate-key                      168 B         103 kB
+├ ○ /audit                                 954 B         114 kB
+├ ○ /auth/callback                        1.6 kB         115 kB
+├ ○ /billing                              5.4 kB         122 kB
+├ ○ /collections                         2.45 kB         119 kB
+├ ○ /feed                                6.22 kB         119 kB
+├ ○ /forgot-password                     1.21 kB         123 kB
+├ ○ /icon.png                                0 B            0 B
+├ ○ /indexing                            9.63 kB         126 kB
+├ ○ /integrations                          992 B         125 kB
+├ ○ /login                               2.98 kB         125 kB
+├ ○ /my-activity                           910 B         114 kB
+├ ○ /my-usage                              168 B         103 kB
+├ ○ /requests                            1.94 kB         115 kB
+├ ƒ /reset-password                        168 B         103 kB
+├ ○ /settings                            1.27 kB         118 kB
+├ ○ /settings/account                    2.64 kB         119 kB
+├ ○ /settings/repository-access          1.36 kB         118 kB
+├ ○ /settings/single-sign-on             6.51 kB         123 kB
+├ ○ /signup                              1.88 kB         124 kB
+└ ○ /users                               8.52 kB         125 kB
++ First Load JS shared by all             102 kB
+  ├ chunks/1255-5c680abb9db89955.js      46.2 kB
+  ├ chunks/4bd1b696-f785427dddbba9fb.js  54.2 kB
+  └ other shared chunks (total)          1.92 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

@@ -31,6 +31,8 @@ const MARKDOWN_FILE_HEADER =
 export type ParsePatchOptions = {
   /** Open /edit file chip — used when the model omits File: headers. */
   preferredFile?: string;
+  /** Trusted aliases captured before sending; never derived from model prose. */
+  targetAliases?: Readonly<Record<string, string>>;
 };
 
 const CITATION_FENCE_INFO =
@@ -139,7 +141,14 @@ export function canonicalizePatchFileHeaders(content: string): string {
   return next;
 }
 
-function finishParsed(files: FilePatch[]): ParsePatchResult {
+function finishParsed(files: FilePatch[], options?: ParsePatchOptions): ParsePatchResult {
+  for (const file of files) {
+    if (file.relativePath === "[INTERNAL_PATH]") {
+      const target = options?.targetAliases?.[file.relativePath];
+      if (!target) return { ok: false, error: "The redacted patch target is missing or ambiguous. Select one target and retry." };
+      file.relativePath = target;
+    }
+  }
   const merged = mergeFilePatchesByPath(files);
   if (merged.length === 0) {
     return { ok: false, error: "No patch blocks found" };
@@ -163,7 +172,7 @@ export function parsePatchResponse(content: string, options?: ParsePatchOptions)
     const hunks = extractHunks(trimmed);
     if (hunks.length > 0) {
       if (preferredFile) {
-        return finishParsed([{ relativePath: preferredFile, hunks }]);
+        return finishParsed([{ relativePath: preferredFile, hunks }], options);
       }
       return { ok: false, error: "Patch blocks found but no File: header" };
     }
@@ -208,11 +217,11 @@ export function parsePatchResponse(content: string, options?: ParsePatchOptions)
     const allHunks = extractHunks(trimmed);
     const path = preferredFile || fileHeaderPath(fileMatches[0]!);
     if (allHunks.length > 0 && path) {
-      return finishParsed([{ relativePath: path, hunks: allHunks }]);
+      return finishParsed([{ relativePath: path, hunks: allHunks }], options);
     }
     const named = path || "file";
     return { ok: false, error: `No patch hunks for ${named}` };
   }
 
-  return finishParsed(files);
+  return finishParsed(files, options);
 }

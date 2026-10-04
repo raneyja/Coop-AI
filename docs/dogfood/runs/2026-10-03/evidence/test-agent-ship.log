@@ -1,0 +1,606 @@
+
+> coop-ai@0.1.10 test:agent-ship
+> npm run test:agent-ship:a && npm run test:agent-ship:b && npm run test:agent-ship:c && npm run test:agent-ship:d && npm run test:agent-ship:e
+
+
+> coop-ai@0.1.10 test:agent-ship:a
+> npx tsx src/api/agent/phaseA.gates.test.ts && npx tsx src/api/agent/phaseA.pressure.test.ts && npx tsx src/api/agent/AgentOrchestrator.test.ts && npx tsx src/api/dataSanitization.test.ts && npx tsx src/api/agent/searchQuery.test.ts && npx tsx src/indexing/graphSearchHit.test.ts && npx tsx src/webview/agentActivity.test.ts && npx tsx src/webview/thinkingMessageRotation.test.ts && npx tsx src/chat/buildChatTurnActivity.test.ts && npx tsx src/chat/buildModelHistory.test.ts && npx tsx src/api/agent/honesty.gates.test.ts && npx tsx src/api/agent/noRepoSpecificRules.test.ts && npx tsx src/chat/repoCodeIntent.test.ts && npx tsx src/chat/customerFacingAnswer.test.ts && npx tsx src/chat/agentProposedPatch.test.ts && npx tsx src/api/agent/tools/proposePatch.test.ts && npx tsx src/api/agent/tools/readFile.test.ts && npx tsx src/api/agent/tools/searchCode.test.ts && npx tsx src/api/agent/eval/huntEval.test.ts && npx tsx src/api/agent/eval/agentScopeEval.test.ts && npx tsx src/api/agent/join.gates.test.ts && npx tsx src/api/agent/integrationMidLoop.test.ts && npx tsx src/api/agent/openedIntegrationEvidence.test.ts && npx tsx src/api/agent/enterprise.scorecard.test.ts && npx tsx src/api/agent/vendorLoop.test.ts && npx tsx src/api/integrations/openHitsByIds.test.ts
+
+  ✓ A-G0 agent job budget is not the 15s Q&A gather
+  ✓ A-G4 / A-G7 Trace/workflow does not enter the loop
+  ✓ A-G7 Slack-named ask loops but does not run search_code
+  ✓ A-G1 repo hunt is allowed (always on)
+  ✓ A-G6 / UX-G1 plain explain never loops; hunts always do
+  ✓ parseAgentToolPlan rejects Slack as a repo tool (UX-G2)
+  ✓ A-G7 Slack-only loops without hunt; hunt + Slack loops
+  ✓ parseAgentToolPlan accepts search_jira when Jira is allowlisted
+  ✓ parseAgentToolPlan accepts search_code JSON
+
+phaseA.gates: 9/9 tests passed
+  ✓ A-P1 garbage tool JSON is invalid (fail open)
+  ✓ A-P5 plain explain never loops (no user off switch)
+  ✓ A-P6 agent wall is not the Q&A 15s gather
+  ✓ A-P8 local explain does not loop
+  ✓ A-P10 empty-bundle hunt still loops (always on for hunts)
+  ✓ A-P12 thanks follow-up does not loop (UX-G7)
+  ✓ A-P13 edit turn does not loop (UX-G8)
+  ✓ A-P9 named Slack loops without a repo hunt
+
+phaseA.pressure: 8/8 tests passed
+  ✓ pickTopSearchHit prefers highest score
+  ✓ run executes search_code then read_file on top hit
+  ✓ run stops after search when index returns no hits
+  ✓ run returns empty when repoId is missing
+  ✓ run respects maxSteps=1 (search only)
+  ✓ LLM planTurn chooses search then read (A-G1)
+  ✓ locate with planTurn uses the LLM loop (same conversation)
+  ✓ calm state locate requires the opened State declaration
+  ✓ sanitizes full-question search queries to a short identifier
+  ✓ change hunt skips auth UI that never mentions requireAuth
+  ✓ reads the declaration line, not the top of the file
+  ✓ reads a bounded window when the index gave no position
+  ✓ retries with a broader term when the first search returns only barrels
+  ✓ LLM full-sentence query is rewritten before search
+  ✓ invalid first plan fails open to deterministic fallback (A-G3)
+  ✓ aborted signal returns no hang (A-P3)
+  ✓ forced repoId ignores model-supplied repo (A-P14 / UX-G10)
+  ✓ caps at 8 model-chosen rounds (A-P2)
+  ✓ wrong first hit forces a second read before done (dogfood)
+  ✓ empty hunt does not stream a Your question restatement
+  ✓ role-noun hunt rejects a collab auth read that never says middleware
+  ✓ feature-add with open file seeds read_file and does not post INDEX_HUNT_MISS
+  ✓ named filename seeds read_file even when the body uses a different export
+  ✓ named path seeds the same read as a follow-up Read prompt
+  ✓ planTurn startLine:1 still reads the class, not only the copyright line
+  ✓ C1 Authorization-Bearer ask streams when the index has a Bearer hit
+  ✓ C2 work-item ask streams when the index has a transition hit
+  ✓ C2 auto-reads the hit when the model only searches
+  ✓ C2 auto-read prefers API writer over locale and client grouping hits
+  ✓ C2 jumps from a read-only serializer class to validate() in the same file
+  ✓ C2 model read of a serializer class still jumps to validate()
+  ✓ C2 synthesis conversation excludes OpenAPI and read-only serializer windows
+  ✓ C2 cannot answer from reject evidence alone even without planner evidence labels
+  ✓ C2 accepts verified state update delegation alongside its rejection
+  ✓ compound hunt preserves the model's later write window after attaching a reject
+  ✓ C2 hunt skips filter converters and attaches serializer validate()
+  ✓ C1 empty index still posts INDEX_HUNT_MISS
+  ✓ T2 hunt attaches parent ValidationError, not converters
+  ✓ T2 wrong-floor serializer window jumps to parent ValidationError
+  ✓ reject hunt: planTurn owns gather — planned criteria are hints, not pre-loop parade
+  ✓ C2 ignores locate-only planned criteria and attaches state ValidationError
+  ✓ C2 continues past bgtask noise to attach state ValidationError
+  ✓ UI-only reject evidence yields short miss, not speculative backend essay
+  ✓ API-reject hunt does not answer from a different field's validate()
+  ✓ API-reject hunt jumps in-file from a wrong-field validate() to the asked field
+  ✓ API-reject hunt finds a field raise whose message is not “is not valid”
+  ✓ API-reject hunt attaches invite email, not a signup email 400
+  ✓ API-reject hunt skips invite callers that rethrow and attaches the email check
+  ✓ API-reject hunt jumps in-file from an invite caller to the email 400
+  ✓ API-reject ask uses planTurn (script brain bypass removed)
+  ✓ API-reject miss goes through planTurn then short miss (no scavenger parade)
+  ✓ leftover unmatched chip still hunts auth middleware and does not search Jira
+  ✓ extractBearerToken what-calls-it still reads a caller after the definition window
+  ✓ requireAuth OR authentication middleware reads plane APIKeyAuthentication (zero model reads)
+  ✓ first search story mention then authMiddleware query reads the server
+  ✓ story-only hunt posts INDEX_HUNT_MISS and does not answer from the mention
+  ✓ role-only what-calls-it reads the server then a handler that uses the export
+  ✓ role-only what-calls-it without a caller still cites the implementation
+  ✓ story mention must not become callerRead
+  ✓ H1 requireAuth defined does not require a caller read
+  ✓ role-only what-calls-it uses requireAuth from the full file, not the top window
+  ✓ role-only Card 1 attach jumps to the gate export, not page 1
+  ✓ ship-check search hits do not answer until a sibling 401 body is read
+  ✓ ship-check reads sibling 401 writers and tests, not path-only hits
+  ✓ search snippet without a remote body cannot pass the Parent reject evidence gate
+  ✓ search-hit ValidationError does not pass without a remote body read
+  ✓ search-hit message-only snippet does not pass Parent reject without a remote read
+  ✓ reject attaches from raw hits when preferredHits emptied by noise
+  ✓ finish cannot miss while unused asked-field hit sits in search context
+  ✓ wrong-branch body without Parent still attaches from message-only hit
+  ✓ planTurn present does not resurrect huntWriteReject on invalid first plan
+  ✓ reject adaptation: round-2 tool depends on round-1 preferredHits
+  ✓ live Plane issue.py wrong-floor hit jumps to Parent ValidationError
+  ✓ Gate A fidelity: planned Parent hunt leads with the exact quote and adds no finish search parade
+  ✓ live Parent Fail: invent draft twin must follow to issue create serializer
+  ✓ live Parent Fail: wrong __init__/urls opens must not skip invent → attach
+  ✓ live Parent Fail shape: planner refines quote misses to IssueCreateSerializer
+  ✓ live Parent shape: agent invents symbol search after empty quote (no body-scan rail)
+  ✓ multi-hit: weak twin attach does not freeze when ask job unmatched and budget left
+  ✓ Parent paraphrase consumes the serializer candidate and jumps to the reject
+  ✓ planned reject hunt caps at one seed plus four empty refinements
+  ✓ repeated reject searches require a new criterion without another network call
+  ✓ domain-status reject preserves the model's handler search
+  ✓ reject first search uses exact quote before the planner's generic query
+  ✓ reject first search uses ask-derived transition criteria before generic intent terms
+  ✓ agent readRemoteFile wiring keeps resolveActiveRepoTarget (branch parity)
+  ✓ remote filtering method corrects a reject premise and survives synthesis compaction
+  ✓ target resolution hands off without an unverified ref and respects user Stop
+  ✓ compound filtering evidence never claims an actual rejection was found
+  ✓ slow tool planning hands verified source to synthesis without cancelling the answer
+  ✓ locate synthesis excludes unopened search excerpts and planning guesses
+  ✓ compound handoff reuses the complete same-class remote update, never a neighboring class
+
+AgentOrchestrator: 92/92 tests passed
+  ✓ sanitizeCode preserves token variable assignments used in SEARCH blocks
+  ✓ sanitizeCode preserves object property token: hashedToken
+  ✓ sanitizeCode still redacts quoted token secrets with real backrefs
+  ✓ sanitizeLlmRequestPayload keeps auth middleware identifiers intact
+  ✓ sanitizeLlmRequestPayload preserves token: hashedToken inside file_content for /edit
+  ✓ sanitizeLlmRequestPayload still redacts sk_ tokens inside file_content
+  ✓ sanitizeLlmRequestPayload keeps APIKeyAuthentication in agent read_file JSON (S1)
+  ✓ sanitizeLlmRequestPayload keeps APIKeyAuthentication in search_code JSON snippets
+  ✓ sanitizeLlmRequestPayload still redacts sk_live inside agent read_file JSON
+  ✓ sanitizeCode does not wipe APIKeyAuthentication comments; still redacts assigned secrets
+
+dataSanitization: 10 passed, 0 failed
+  ✓ prefers the symbol the user named over a prose phrase
+  ✓ extracts camelCase without grabbing Where
+  ✓ falls back to a role noun phrase when no symbol is named
+  ✓ sanitize replaces the whole question
+  ✓ sanitize keeps a short model-chosen identifier
+  ✓ fallback queries broaden from symbol to plain words
+  ✓ identifier aliases bridge camelCase and snake_case
+  ✓ index retrieval OR-covers both casings
+  ✓ fallback queries never repeat the whole question
+  ✓ ranks a path that matches the question's words above one that does not
+  ✓ pickSearchHitsToRead skips barrels
+  ✓ pickSearchHitsToRead skips build output and vendored code
+  ✓ does not drop a UI path just because the question sounds backend
+  ✓ exact symbol path beats a weak auth UI path for requireAuth asks
+  ✓ drops auth UI hits that never mention requireAuth
+  ✓ role-noun hunts keep middleware hits and drop collab auth
+  ✓ role-noun hunts drop leftover latency hits that never say middleware
+  ✓ pickSearchHitsToRead keeps the server and drops a language-mismatch story
+  ✓ pickSearchHitsToRead returns empty when every hit is a mention
+  ✓ locate skips docs and fixtures but not a story path
+  ✓ does not treat require_authentication filenames as requireAuth
+  ✓ symbol index rejects require_authentication as a requireAuth match
+  ✓ skips test paths for named-symbol hunts unless the user asked about tests
+  ✓ ship-check ask does not skip handler tests
+  ✓ keeps a barrel when the user named that exact file
+  ✓ picks the declaration whose name matches the symbol the user asked about
+  ✓ ignores declarations unrelated to the question
+  ✓ ignores declarations inside vendored code
+  ✓ isBarrelPath
+  ✓ isGeneratedOrVendorPath
+  ✓ queryRoleHints extracts middleware from a locate ask
+  ✓ textMentionsQueryRoles requires the role in the file or path
+  ✓ C1 prose locate does not require Authorization as a named symbol
+  ✓ prose parsing ranks a parser declaration ahead of token storage filename overlap
+  ✓ C2 prose locate does not require Users as a named symbol
+  ✓ C2 skips locale catalogs and prefers API write paths over client grouping
+  ✓ C2 skips state catalogs and client posts; prefers the write/reject handler
+  ✓ C2 skips seed JSON and read-only serializers; prefers the reject snippet
+  ✓ filterWriteRejectFiles drops OpenAPI and read-only serializer windows
+  ✓ C2 skips OpenAPI specs and does not treat partial_update as a reject
+  ✓ C2 skips query-filter converters and does not stop on generic ValidationError
+  ✓ C2 does not pick a permission-only view when a reject snippet exists
+  ✓ lineNumberOfWriteReject prefers ValidationError near state
+  ✓ lineNumberOfWriteReject ignores filter ValidationError that is not a state transition
+  ✓ Where is requireAuth defined still requires that symbol
+  ✓ Where is the Button component still searches Button
+  ✓ edit tests-for-X prefers the callee over the test-file stem
+  ✓ filename asks are file hunts, not required in-body symbols
+  ✓ named files are path-shaped, not a language allowlist
+  ✓ API-reject hunt is a class: C2, parent, and assignee fields all match
+  ✓ calm locate with API + work-item is not the ValidationError scavenger hunt
+  ✓ client UI path class covers hooks/stores, not API trees
+  ✓ C2 skips product-UI hooks/stores and never reads them over a server reject
+  ✓ API key / request-auth locate prefers enforcement over config and secret gates
+  ✓ backend work-item state locate prefers server state paths over UI hooks
+  ✓ calm state locate requires the opened State declaration and caps duplicate fallbacks
+  ✓ compound auth + states locate keeps enforcement and a state definition
+  ✓ T2 hunt searches parent field access, not bare issue_id
+  ✓ planned quarterback criteria run before slogan backup
+  ✓ invent and merge never lead with reject-a-bad slogans
+  ✓ codehost fail-open only for reject / quoted error strings
+  ✓ lightningHitsSatisfySearchQuery requires phrase evidence for long queries
+  ✓ utils/error_codes is reject noise — not a write-reject site
+  ✓ reject hunt ignores locate-only planned criteria like work item state
+  ✓ novel T2 paraphrase invents ask-derived criteria without a new slogan
+  ✓ C2 skips shared types packages, utils filters, and non-actionable symbols
+  ✓ empty planned criteria fail open into invent + fallback
+  ✓ API-reject hunts do not latch *_id as a named symbol
+  ✓ asked-field tokens use the qualifier, not a type suffix like issue_id
+  ✓ wrong-field validate() is not an asked-field reject
+  ✓ asked-field reject matches Zoekt string-only error line (no raise keyword)
+  ✓ asked-field reject matches Zoekt Match span that omits the field word
+  ✓ askedRejectErrorQuotes extracts Exact Parent message and is empty for COPILOT_T2_ASK
+  ✓ sanitize keeps Exact Parent error string instead of rewriting to get(parent)
+  ✓ Gate A: Exact Parent quote-first — not ValidationError / bare issue_id / get(parent)
+  ✓ Gate A: exact-string locate must not latch bare issue_id
+  ✓ asked-field reject keeps the matching ValidationError and drops converters
+  ✓ API-reject pick prefers asked-field reject over a different field's validate()
+  ✓ API-reject pick keeps a serializer with a wrong-field snippet so hunt can jump in-file
+  ✓ filterWriteRejectFiles keeps the asked field reject, not OpenAPI
+  ✓ asked-field reject matches a raise whose message does not repeat the field
+  ✓ API-reject job: invite email is not a signup email reject
+  ✓ API-reject hunt ignores invite callers that rethrow and pass email through
+  ✓ readBodyHasCallerUse uses the grounded export when the ask has no named symbol
+  ✓ readBodyHasCallerUse still counts same-file extractBearerToken( for a named-symbol ask
+  ✓ lineNumberOfCallerUse returns the use line, not the declaration
+  ✓ L3: defined-on-server compound is auth+state locate, not reject
+  ✓ L3: comment_html issue serializer is not state definition evidence
+  ✓ L3: auth alone without state definition must not satisfy compound pick padding
+  ✓ C2: reject hunt skips migrations, icons, empty-state, seeds, OpenAPI, HTML
+  ✓ Create locate prefers ViewSet/create serializer and jumps to create line
+  ✓ Create finish honesty strips please-open for an already-read path
+  ✓ reject jump prefers the named field over an overlapping adjacent reject
+  ✓ state catalog validation is not a work-item transition rejection
+  ✓ server status rejection uses field evidence rather than imports
+  ✓ calm status definition stays a locate question
+  ✓ signing operation does not freeze on a PDF download status guard
+  ✓ named definition misses do not expand into generic question prose
+
+searchQuery: 98/98 tests passed
+  ✓ uses the line the server sent
+  ✓ accepts the legacy sha carrier from older servers
+  ✓ prefers an explicit line over the legacy carrier
+  ✓ reports unknown rather than inventing a position
+  ✓ unknown is not a valid 1-based line
+  ✓ never derives a position from a hit's place in the result list
+  ✓ keeps the index's own scores instead of flattening them
+  ✓ carries real match positions and snippets through
+  ✓ keeps symbol names and declaration lines
+  ✓ drops records with no path or file
+
+graphSearchHit: 10/10 tests passed
+✔ classifyActivityTodoKind splits plan from finished research (0.568667ms)
+✔ partitionActivityTodos keeps the plan and drops Searching once Searched exists (0.626583ms)
+✔ agentStepsToActivity humanizes search/read tools (0.398917ms)
+✔ toolRowsFromTodos skips pending (0.41025ms)
+✔ extractFileChipsFromLabels picks backtick paths (0.144959ms)
+✔ absolute Read path is one chip, not a second Explored row (0.084333ms)
+✔ gather theater does not become file chips or an explored count (0.196208ms)
+✔ agentStepsToActivity keeps every tool row (no leftover-steps count) (0.114167ms)
+✔ summarizeAgentExploration uses Explored / Exploring, not remaining steps (0.086041ms)
+✔ summarizeAgentExploration is null without real tools (0.078708ms)
+✔ live thinking auto-opens until the user collapses it (0.058416ms)
+✔ synthesis wait does not invent Distilling/Aggregating todos (0.270334ms)
+✔ real gather lines stay visible after synthesis starts (0.996375ms)
+✔ awaitingResponse shows gather todos immediately (no blank start delay) (0.222833ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 14.799916
+ok - buildProcessingTermMessages shuffles terms per seed
+ok - appendThinkingProcessingTerms does not add Distilling filler
+ok - buildThinkingMessageSequence keeps only concrete gather/job lines
+ok - buildThinkingMessageSequence drops gather theater
+ok - buildThinkingMessageSequence stays empty while awaiting a model with no gather work
+ok - pickRotatingThinkingMessage cycles without repeating order immediately
+ok - buildThinkingMessageSequence returns empty when idle
+ok - shouldShowThinkingIndicator hides once assistant text is visible
+ok - hasVisibleAssistantResponse ignores empty assistant placeholders
+ok - shouldResetThinkingRotationStep keeps step across prefix growth
+ok - buildConcreteActivityMessages strips spinner filler verbs
+ok - resolvePacedActivityIndex waits for start delay then advances one-by-one
+ok - isSynthesisActivityPhase does not start immediately for a single prep step
+ok - isSynthesisActivityPhase starts when keep-alive title is Thinking
+ok - buildConcreteActivityMessages drops terminal preparing lines
+
+15 passed
+✔ buildChatTurnActivity persists thinking and hunt steps (1.368375ms)
+✔ buildChatTurnActivity strips rotating processing terms and synthesis filler (1.231334ms)
+✔ isConcreteActivityLine rejects filler and keeps real tool lines (0.189ms)
+✔ naming a file in the ask does not invent a Read trail (0.200625ms)
+✔ inventory asks persist a Looked up indexed inventory trail (0.162667ms)
+✔ inventory ask text alone does not invent a Looked up trail (0.046583ms)
+✔ generic integration theater does not count as Explored searches (0.161458ms)
+✔ empty turns omit activity (0.092959ms)
+✔ completed view is collapsed Worked for with thought and files (0.150666ms)
+✔ formatWorkedForLabel and Thought labels match Cursor-style clocks (0.089375ms)
+✔ looksLikeRepoPath distinguishes files from search tokens (0.112625ms)
+✔ buildModelHistory strips activity so it is not sent back to the model (0.089208ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 15.683666
+  ✓ buildModelHistory returns empty array for single current user turn
+  ✓ buildModelHistory excludes current turn and maps prior user modelContent
+  ✓ buildModelHistory falls back to bubble content when modelContent is absent
+  ✓ buildModelHistory preserves assistant content unchanged
+  ✓ buildModelHistory strips persisted activity from model replay
+  ✓ buildModelHistory handles empty history
+
+6 passed, 0 failed
+  ✓ H-G1 Settings has no AgentMode on/off control
+  ✓ H-G2 send does not read a user agentMode setting
+  ✓ H-G3 no coopAI.chat.agentMode contribution; hunts are always on
+  ✓ H-G4 dogfood hunt always loops (real planner, not empty plan)
+  ✓ H-G5 dogfood hunt searches a short symbol, never the whole question
+  ✓ H-G6 ranking prefers a path matching the question and drops structural noise
+  ✓ H-G7 loop posts activity from the agent-owned answer path
+  ✓ H-G8 no Agent toggle in Workflows header or composer (UX-G9)
+  ✗ H-G9 leftover Blast/Owner chips must not steal the dogfood hunt
+    The input did not match the regular expression /shouldSuppressSuggestChipsForAgentHunt/. Input:
+
+'import { shouldFollowEditorAfterThreadRestore } from "./chatThreadRestore";\n' +
+  'import { createSharedInitialization } from "./sessionInitialization";\n' +
+  'import * as fs from "node:fs";\n' +
+  'import * as path from "node:path";\n' +
+  'import * as vscode from "vscode";\n' +
+  'import { handlePatchComplete } from "../edit/handlePatchComplete";\n' +
+  'import { mergeSutFile, sutPathForEditAsk } from "../edit/editSutAttach";\n' +
+  'import {\n' +
+  '  hydratePatchCardsFromHistory,\n' +
+  '  patchCardsForMessages\n' +
+  '} from "../edit/hydratePatchCardsFromHistory";\n' +
+  'import {\n' +
+  '  collectOpenPatchFileBytes,\n' +
+  '  languageIdForPatchPath,\n' +
+  '  rememberRemotePatchBuffer\n' +
+  '} from "../edit/patchTarget";\n' +
+  'import { collectEditorPrFiles, snapshotWorkingCopyIfAbsent } from "../edit/editorWorkingCopy";\n' +
+  'import { indexPatchFileContent, lookupPatchFileContent } from "../edit/patchFileContents";\n' +
+  'import {\n' +
+  '  extractAgentProposedPatchText,\n' +
+  '  mergeAnswerWithAgentPatch\n' +
+  '} from "./agentProposedPatch";\n' +
+  'import {\n' +
+  '  applyChangeHuntFinish,\n' +
+  '  CUSTOMER_EMPTY_HUNT_ANSWER,\n' +
+  '  customerFacingAgentAnswer,\n' +
+  '  rewriteCustomerFacingProse\n' +
+  '} from "./customerFacingAnswer";\n' +
+  'import {\n' +
+  '  applyPendingPatch,\n' +
+  '  applyPendingPatchHunk,\n' +
+  '  rejectPendingPatchHunk,\n' +
+  '  rejectPendingPatchWithState,\n' +
+  '  resolvePatchCardsSnapshot,\n' +
+  '  setPendingPatchMatchLocations,\n' +
+  '  setPendingSharedMatchProposal,\n' +
+  '  undoLastPatchWithState\n' +
+  '} from "../edit/patchActions";\n' +
+  'import { setLastEditUserMessage, getPatchRecord, listPatchCards } from "../edit/patchSession";\n' +
+  'import { summarizePrNotes, type PrNotesCompleteFn } from "../edit/prNotesSummary";\n' +
+  'import { activeThemeMode } from "./themeMode";\n' +
+  'import { coopSessionRegistry } from "./CoopSessionRegistry";\n' +
+  'import { authIdentityKey } from "./authIdentity";\n' +
+  'import { chatRepoListFromWorkspaceRepos } from "./workspaceRepoExplorer";\n' +
+  'import {\n' +
+  '  readDegradationConfiguration,\n' +
+  '  readConflictConfiguration,\n' +
+  '  readPreferences,\n' +
+  '  readIntentConfiguration,\n' +
+  '  SecureApiClient,\n' +
+  '  updateConfiguration\n' +
+  '} from "./SecureApiClient";\n' +
+  'import type { ConflictConfig } from "../config/conflictConfig";\n' +
+  'import { DegradationConfig } from "../config/degradationConfig";\n' +
+  'import type { DegradationCache } from "../cache/degradationCache";\n' +
+  'import {\n' +
+  '  ConflictAuditStore,\n' +
+  '  ConflictDetector,\n' +
+  '  ConflictResolutionStrategy,\n' +
+  '  SourceAuthorityScorer,\n' +
+  '  hasSeverityAtLeast\n' +
+  '} from "../conflicts";\n' +
+  'import type {\n' +
+  '  ConflictDetectionInput,\n' +
+  '  ConflictSeverity,\n' +
+  '  DetectedConflict,\n' +
+  '  MetadataConflictInput\n' +
+  '} from "../conflicts";\n' +
+  'import { codeHostForDegradationRequest, runFeatureFallback } from "../degradation/features";\n' +
+  'import {\n' +
+  '  connectedCodeHostsFromPrefs,\n' +
+  '  indexedUseRepoHosts,\n' +
+  '  isDeepIndexedForQuickActions,\n' +
+  '  promoteIndexedOrConnectedCodeHosts,\n' +
+  '  providersForFeature,\n' +
+  '  repoIdCandidatesForIndexStatus,\n' +
+  '  type QuickActionFeatureId\n' +
+  '} from "../degradation/fallbackMatrix";\n' +
+  'import type { HealthMonitor, IntegrationHealth, IntegrationProvider } from "../integrations/healthMonitor";\n' +
+  'import type { IntentConfig } from "../config/intentConfig";\n' +
+  'import {\n' +
+  '  IntentDetector,\n' +
+  '  IntentEvent,\n' +
+  '  UserIntent,\n' +
+  '  intentContextToRepoContext,\n' +
+  '  repoContextToIntentContext,\n' +
+  '  requestTypesForIntent,\n' +
+  '  repoContextFromEditor\n' +
+  '} from "../context/intentDetector";\n' +
+  'import { toRepositoryRelativePath } from "../context/repoFilePath";\n' +
+  'import { openRemoteFileInEditor, openRepoInEditor } from "../workspace/repoEditorOpener";\n' +
+  'import { IntentDebouncer } from "../context/intentDebouncer";\n' +
+  'import {\n' +
+  '  ContextFetchRequest,\n' +
+  '  ContextFetchResult,\n' +
+  '  RequestBatcher,\n' +
+  '  buildContextRequests\n' +
+  '} from "../context/requestBatcher";\n' +
+  'import { RequestPrioritizer } from "../context/requestPrioritizer";\n' +
+  'import {\n' +
+  '  contextGatheringMessagesFor,\n' +
+  '  isPlainChatIntent,\n' +
+  '  type ContextGatheringMessageOptions\n' +
+  '} from "../context/contextGatheringMessages";\n' +
+  'import {\n' +
+  '  agentOwnsIndexedGather,\n' +
+  '  readActivityLabel,\n' +
+  '  searchingRepoActivityLabel,\n' +
+  '  willEnrichChatWithSemanticSearch,\n' +
+  '  willRunIndexedCodeSearch\n' +
+  '} from "../context/committedActivity";\n' +
+  'import { readSemanticRetrievalEnabled } from "../config/semanticRetrievalConfig";\n' +
+  'import { CacheEntry, RateLimitAwareExecutor } from "../context/rateLimitAwareExecution";\n' +
+  'import { createChatOutputGate, delayUntilMinResponseVisible } from "./chatResponseTiming";\n' +
+  'import { createStreamDeltaBatcher } from "./streamDeltaBatcher";\n' +
+  'import { resolveChatOutputMaxTokens } from "../config/chatOutputBudget";\n' +
+  'import { summarizeAgentToolResultForHistory } from "./agentAnswerHistory";\n' +
+  'import {\n' +
+  '  LENGTH_CONTINUE_PROMPT,\n' +
+  '  hasTrailingEmptyHeadings,\n' +
+  '  shouldContinueForLengthStop,\n' +
+  '  withLengthCutoffNotice\n' +
+  '} from "./lengthContinue";\n' +
+  'import { ThreadRunManager, SESSION_RUN_THREAD_ID, type ChatTurn } from "./chatTurn";\n' +
+  'import {\n' +
+  '  appendTurnThinkingChunk,\n' +
+  '  attachChatTurnActivity,\n' +
+  '  isTerminalPreparingMessage,\n' +
+  '  recordTurnActivityLine,\n' +
+  '  recordTurnAgentSteps,\n' +
+  '  repoFactActivityLabel\n' +
+  '} from "./chatTurnActivity";\n' +
+  'import {\n' +
+  '  abortablePromise,\n' +
+  '  clearResponseDeadlineForSynthesis,\n' +
+  '  isSoftGatherLatencyMessage,\n' +
+  '  locateSearchBudgetMs,\n' +
+  '  remainingContextGatherBudgetMs\n' +
+  '} from "../config/responseDeadline";\n' +
+  'import { renderWebviewHtml } from "./renderWebviewHtml";\n' +
+  'import { replaceExclusiveDisposable } from "./exclusiveDisposable";\n' +
+  'import { ensureSidebarMinWidth } from "../ui/ensureSidebarMinWidth";\n' +
+  'import type {\n' +
+  '  CachedValue,\n' +
+  '  ChatFileMention,\n' +
+  '  ChatImageAttachment,\n' +
+  '  ChatMessage,\n' +
+  '  ChatPersistedArtifact,\n' +
+  '  ConflictResolutionState,\n' +
+  '  ConflictSummary,\n' +
+  '  ComposerMode,\n' +
+  '  DegradationNotificationPayload,\n' +
+  '  IntentFeedbackState,\n' +
+  '  MentionSearchResult,\n' +
+  '  PatchCardState,\n' +
+  '  PatchCardsUpdatePayload,\n' +
+  '  RepoContext,\n' +
+  '  ThemeMode,\n' +
+  '  ThemePayload,\n' +
+  '  SettingsStatePayload,\n' +
+  '  UserPreferences,\n' +
+  '  WebviewInbound,\n' +
+  '  WebviewOutbound\n' +
+  '} from "./types";\n' +
+  'import { clearPresenceCaches } from "../api/slack/presenceCheck";\n' +
+  'import { EMPTY_IDENTITY_DIRECTORY, type IdentityDirectory } from "../identity/types";\n' +
+  'import { isAutocompleteOnlySettingsUpdate } from "../autocomplete/autocompletePreferenceSync";\n' +
+  'import { CACHE_TTL_MS } from "./types";\n' +
+  'import {\n' +
+  '  deliverableForQuickAction,\n' +
+  '  displayStatusForChatDeliverable\n' +
+  '} from "../jobs/jobActivityPolicy";\n' +
+  'import { JobApiClient, jobTypeForQuickAction, shouldUseAsyncJob } from "../jobs/JobApiClient";\n' +
+  'import { formatWaitTime } from "../jobs/types";\n' +
+  'import type { JobProgressPayload } from "./types";\n' +
+  'import { resolveCoopBaseUrl } from "../api/resolveBaseUrl";\n' +
+  'import { syncAllThreadsToBackend, syncThreadToBackend } from "./threadSync";\n' +
+  'import { resolveGitUserEmail } from "./resolveGitUserEmail";\n' +
+  'import { formatUserFacingNetworkError } from "../api/userFacingErrors";\n' +
+  'import { ChatQuotaExceededError } from "../api/CoopBackendClient";\n' +
+  'import { CHAT_STOPPED_MESSAGE } from "./chatStopped";\n' +
+  'import {\n' +
+  '  buildQuotaExceededUpgradeUrl,\n' +
+  '  isFreeQuotaExhausted,\n' +
+  '  isPaidQuotaPool,\n' +
+  '  isPaidUsageExhausted,\n' +
+  '  resolveQuotaUpgradeAction\n' +
+  '} from "./quotaNotice";\n' +
+  'import { pollUntilPaidPlan } from "./planUpgradePoll";\n' +
+  'import { buildPaidCapMessage } from "../server/planQuota";\n' +
+  'import type { DecisionTimeline } from "../types/decisionTimeline";\n' +
+  'import type { OwnershipReport } from "../types/ownership";\n' +
+  'import { buildDecisionSynthesisUserPrompt } from "../prompts/decisionSynthesis";\n' +
+  'import { buildOwnershipSynthesisUserPrompt } from "../prompts/ownershipSynthesis";\n' +
+  'import { buildRepoSummarySynthesisUserPrompt } from "../prompts/repoSummarySynthesis";\n' +
+  'import { buildBlastRadiusSynthesisUserPrompt } from "../prompts/blastRadiusSynthesis";\n' +
+  'import { buildKnowledgeGapsSynthesisUserPrompt } from "../prompts/knowledgeGapsSynthesis";\n' +
+  'import { buildIntegrationSynthesisUserPrompt, countIntegrationResults, emptyIntegrationSlashResponse } from "../prompts/integrationSynthesis";\n' +
+  'import {\n' +
+  '  blastRadiusFromBundle,\n' +
+  '  confluenceSearchFromBundle,\n' +
+  '  contextBundleHasRepoFactEvidence,\n' +
+  '  googleDocsSearchFromBundle,\n' +
+  '  integrationSearchFromBundle,\n' +
+  '  jiraSearchFromBundle,\n' +
+  '  knowledgeGapsFromBundle,\n' +
+  '  notionSearchFromBundle,\n' +
+  '  repoSummaryFromBundle,\n' +
+  '  slackSearchFromBundle,\n' +
+  '  teamsSearchFromBundle,\n' +
+  '  type RepoSummaryEvidence\n' +
+  '} from "../context/contextBundleEvidence";\n' +
+  'import { shouldIncludeIntegrationInSourcesChecklist } from "../context/integrationEvidenceVisibility";\n' +
+  'import {\n' +
+  '  extractDefinedNamesFromSource,\n' +
+  '  extractExportNamesFromSource,\n' +
+  '  filterJobDependentsForFile,\n' +
+  '  isTrustedBlastGraphSource,\n' +
+  '  mergeDurableDependentsIntoContextData,\n' +
+  '  mergeDurableWithNamedSymbolSearch,\n' +
+  '  mergeSearchDependentsFallbackIntoDependenciesData,\n' +
+  '  resolveNamedBlastSymbols,\n' +
+  '  resolveTrustedRemoteDependents,\n' +
+  '  searchDependentsFallback,\n' +
+  '  sortDependentsProductionFirst,\n' +
+  '  verifyRemoteFilesMentionNamedSymbol\n' +
+  '} from "../engines/blastRadiusDependentsFallback";\n' +
+  'import { isFileCallerQuery } from "../context/fileCallerIntent";\n' +
+  'import { isFileHistoryQuery } from "../context/fileHistoryIntent";\n' +
+  'import { isOpenFileReviewAsk } from "./plainChatExplain";\n' +
+  'import { evidenceCodeHostDisplayName } from "../api/codeHosts/codeHostLabels";\n' +
+  'import {\n' +
+  '  coordinatesFromRepoId,\n' +
+  '  repoIdFromCoordinates,\n' +
+  '  resolveCodeHostProvider,\n' +
+  '  type CodeHostProvider,\n' +
+  '  type RepoCoordinates\n' +
+  '} from "../api/codeHosts/types";\n' +
+  'import { enrichChatResponseForAction } from "./chatResponseEnrichment";\n' +
+  'import { resolveEffectiveQuickAction } from "./effectiveQuickAction";\n' +
+  'import {\n' +
+  '  buildMissingIntentClarificationResponse,\n' +
+  '  buildMissingRepoSelectionResponse,\n' +
+  '  messageNeedsSelectedRepo,\n' +
+  '  shouldClarifyFirstChatTurn\n' +
+  '} from "./chatMessageIntent";\n' +
+  'import {\n' +
+  '  shouldOfferQuickActionSuggest,\n' +
+  '  suggestRunChipLabel\n' +
+  '} from "./quickActionSuggestIntent";\n' +
+  'import {\n' +
+  '  INTENT_SUGGEST_TIMEOUT_MS,\n' +
+  '  type IntentSuggestCompleteFn\n' +
+  '} from "./quickActionIntentModel";\n' +
+  'import { isIntentSuggestModelEnabled } from "../config/intentSuggestConfig";\n' +
+  'import {\n' +
+  '  FRONT_DOOR_INTERPRETER_USE_CASE,\n' +
+  '  frontDoorInterpretText,\n' +
+  '  planChatFrontDoor,\n' +
+  '  planChatFrontDoorFromRules,\n' +
+  '  resolveChatCommandConstraint,\n' +
+  '  shouldInterpretChatAsk,\n' +
+  '  resolveChatIntentExecution,\n' +
+  '  buildIntentPlanTrustPreamble,\n' +
+  '  emptyChatIntentPlan,\n' +
+  '  integrationFillQueries,\n' +
+  '  locateJobTerms,\n' +
+  '  plannedCodeSearchQueries,\n' +
+  '  formatIntentBriefForAgent,\n' +
+  '  shouldOverlapIntegrationPrefetch,\n' +
+  '  type ChatCommandConstraint,\n' +
+  '  type ChatIntentPlan\n' +
+  '} from "'... 463518 more characters
+
+  ✓ H-G10 docs do not tell the user to enable AgentMode
+  ✓ H-G11 retrieval is one rule for every ask — no repo names, no layer special cases
+  ✓ H-G12 hot path merges agent patch before Apply card (not orphan helpers)
+  ✓ H-G14 hunt+named integration is not stolen; slash still constrains
+  ✓ H-G13 agent-owned answer still bridges propose_patch to Apply
+
+honesty.gates: 13/14 tests passed

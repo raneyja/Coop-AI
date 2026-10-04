@@ -51,6 +51,9 @@ export type ChatTurn = {
   lastTraceTimeline?: DecisionTimeline;
   pendingMentions?: import("./types").ChatFileMention[];
   codeEditIntent: boolean;
+  agentAction?: import("./repoCodeIntent").RepoCodeAction;
+  allowsRepoTools?: boolean;
+  dualRepoCompare?: import("../context/dualRepoCompare").DualRepoComparePlan;
   /**
    * Highlight + full file bytes captured at send. Preview/Apply must not depend
    * on the live editor after Chat steals focus.
@@ -64,6 +67,7 @@ export type ChatTurnEditAnchor = {
   selectedLines?: [number, number];
   selectionText?: string;
   fileContents?: Record<string, string>;
+  targetAliases?: Readonly<Record<string, string>>;
 };
 
 export type BeginChatTurnInput = {
@@ -77,6 +81,7 @@ export type BeginChatTurnInput = {
   intentPlan: ChatIntentPlan;
   pendingMentions?: import("./types").ChatFileMention[];
   codeEditIntent?: boolean;
+  dualRepoCompare?: import("../context/dualRepoCompare").DualRepoComparePlan;
 };
 
 function createTurnId(): string {
@@ -91,7 +96,8 @@ function captureIntentPlan(plan: ChatIntentPlan): ChatIntentPlan {
       (plan.jobs ?? []).map((job) =>
         Object.freeze({
           ...job,
-          terms: Object.freeze([...job.terms]) as unknown as string[]
+          terms: Object.freeze([...job.terms]) as unknown as string[],
+          ...(job.searchCriteria ? {searchCriteria: Object.freeze([...job.searchCriteria]) as unknown as string[]} : {})
         })
       )
     ) as unknown as ChatIntentPlan["jobs"]
@@ -124,6 +130,11 @@ export class ThreadRunManager {
       modelMessage: input.modelMessage,
       quickAction: input.quickAction,
       intentPlan: captureIntentPlan(input.intentPlan),
+      dualRepoCompare: input.dualRepoCompare ? Object.freeze({
+        ...input.dualRepoCompare,
+        left: Object.freeze({...input.dualRepoCompare.left}),
+        right: Object.freeze({...input.dualRepoCompare.right})
+      }) : undefined,
       contextBundle: [],
       jobGeneration: ++this.jobGenerationSeq,
       streamAbort,

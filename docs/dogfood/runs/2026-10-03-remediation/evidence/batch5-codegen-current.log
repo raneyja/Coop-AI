@@ -1,0 +1,702 @@
+
+> coop-ai@0.1.10 test:codegen
+> npm run test:patch && npm run test:agent-routing && npx tsx src/context/repoSemanticRetrieval.test.ts && npx tsx src/api/agent/AgentOrchestrator.test.ts && npx tsx src/api/agent/tools/registry.test.ts && npm run test:autocomplete && npm run build:extension
+
+
+> coop-ai@0.1.10 test:patch
+> npx tsx src/edit/patchParser.test.ts && npx tsx src/edit/patchApplier.test.ts && npx tsx src/edit/patchDiffPreview.test.ts && npx tsx src/edit/patchTarget.test.ts && npx tsx src/edit/editorWorkingCopy.test.ts && npx tsx src/edit/patchFileContents.test.ts && npx tsx src/edit/handlePatchComplete.test.ts && npx tsx src/edit/hydratePatchCardsFromHistory.test.ts && npx tsx src/edit/snapPatchToSelection.test.ts && npx tsx src/webview/components/ChatProse.test.ts && npx tsx src/webview/PatchCard.test.ts && npx tsx src/webview/lib/patchStreamDisplay.test.ts
+
+  ✓ parses single-file patch with backticks
+  ✓ parses File header without backticks
+  ✓ parses multiple hunks in one file
+  ✓ parses multiple files
+  ✓ parses ask-mode narrative plus applyable patches
+  ✓ merges repeated File headers for the same path
+  ✓ fails when hunks exist without File header
+  ✓ parses lowercase file: headers
+  ✓ infers File from preferredFile when the model omits the header
+  ✓ parses **File:** markdown wrappers
+  ✓ parses File: as the first line inside the patch fence
+  ✓ attaches hunks that appear before a trailing File: header
+  ✓ fails when File header has no hunks
+  ✓ preserves leading and trailing whitespace inside hunks
+  ✓ privacy-redacted target resolves only through unambiguous captured binding
+
+15 passed, 0 failed
+  ✓ applies a single hunk
+  ✓ applies multiple hunks sequentially
+  ✓ fails when search text is missing
+  ✓ fails when search text is ambiguous without selection
+  ✓ applies ambiguous search to selected match indices
+  ✓ applies ambiguous search to multiple selected match indices
+  ✓ multi-hunk apply uses original offsets so index 0 stays the first match
+  ✓ preserves whitespace in search blocks
+  ✓ fuzzy match tolerates trimmed line differences
+  ✓ fuzzy match normalizes indentation in replace block
+  ✓ fuzzy match trims trailing whitespace on lines
+  ✓ fuzzy match fails when trimmed lines are ambiguous without selection
+  ✓ fuzzy match fails when no trimmed line block matches
+  ✓ fuzzy match tolerates self-kwargs like request=request
+
+14 passed, 0 failed
+  ✓ buildPatchCardState returns pending metadata
+  ✓ buildPatchCardState includes add/remove diff lines
+  ✓ buildPatchCardState lists all locations when SEARCH is ambiguous
+  ✓ buildPatchCardState preserves prior location selection
+  ✓ pairs equal ambiguous hunks to unique lines (no duplicate options)
+  ✓ shared group lists each line once when hunk/match counts differ
+  ✓ pairs ambiguous hunks that hit the same spans even when SEARCH text differs
+  ✓ buildPatchCardState matches SEARCH using an aliased fileContents key
+  ✓ buildPatchCardState matches SEARCH in an untitled Zero-Clone tab without fileContents
+  ✓ buildPatchCardState prefers the live untitled tab over stale captured bytes
+  ✓ preview names StateManager.get_queryset and includes the class line
+  ✓ insert-above preview line numbers include the blank line Apply will write
+
+patchDiffPreview: 12 passed, 0 failed
+  ✓ documentMatchesPatchPath matches github vfs URIs
+  ✓ documentMatchesPatchPath matches github vfs URIs with ref query
+  ✓ undo snapshot round-trips remote URIs
+  ✓ undo snapshot keeps local fs paths
+  ✓ undo snapshot round-trips untitled API buffers
+  ✓ findOpenDocumentForPatchFile matches untitled API buffers by captured bytes
+  ✓ ensureEditablePatchTarget applies from captured bytes when GitHub VFS is unavailable
+  ✓ collectOpenPatchFileBytes reads a remembered untitled API buffer
+  ✓ collectOpenPatchFileBytes finds an untitled tab by unique SEARCH
+
+patchTarget: 9 passed, 0 failed
+  ✓ GitHub VFS typed change is included
+  ✓ unchanged GitHub VFS tab is excluded
+  ✓ GitLab untitled remembered tab is included
+  ✓ Bitbucket untitled remembered tab is included
+  ✓ foreign file:// workspace is excluded even when dirty
+  ✓ Use-repo file:// dirty buffer is included when the clone matches
+  ✓ GitHub VFS for a different repo is excluded
+  ✓ dirty buffer without snapshot is included; clean needs remote
+  ✓ remote baseline skip when current matches fetched file
+  ✓ compactWorkingCopyDiff shows editor lines
+
+editorWorkingCopy: 10 passed, 0 failed
+  ✓ lookupPatchFileContent matches a repo-relative alias of the same file
+  ✓ lookupPatchFileContent ignores empty bodies
+
+patchFileContents: 2 passed, 0 failed
+  ✓ captured private target reaches applicable preview without disabling sanitization
+  ✓ ignoreParseFailure leaves session untouched when no patches
+  ✓ ignoreParseFailure still elevates valid ask-mode patches
+  ✓ edit-mode parse failure still publishes failed suppression path
+  ✓ omitted File: header still builds an Apply card from the open file
+  ✓ snaps paraphrased SEARCH onto highlighted lines using attached file bytes
+  ✓ preview matches when highlight IS the SEARCH block and file bytes use a path alias
+  ✓ expanding Backlog REPLACE does not duplicate the selected dict
+  ✓ duplicate requireAuth signature snaps to one JSDoc above the function
+  ✓ comment-only ask rejects a constructor rewrite with no comment
+  ✓ preview matches highlighted StateGroup in an untitled Bitbucket tab
+  ✓ comment-only In Progress duplicate snaps onto get_queryset, not DEFAULT_STATES
+  ✓ /edit tests rewrite gather>0 to the attached SUT
+  ✓ /edit tests rewrite MAX-RESERVED asserts when the SUT nests a helper
+  ✓ /edit tests rewrite a wrong constant equality from attached SUT
+  ✓ older /edit fences stay suppressed when a newer card lands
+  ✓ 5-file cap publishes a failed card and keeps fences hidden
+  ✓ malformed SEARCH publishes a failed card instead of writing
+
+18 passed, 0 failed
+  ✓ hydrates a Patch card from a persisted /edit assistant message
+  ✓ skips ordinary chat that is not a patch
+  ✓ does not overwrite an applied card when the thread is reopened
+  ✓ patchCardsForMessages only returns cards for the open thread
+  ✓ filePathFromEditHistoryContent reads the /edit file chip
+  ✓ hydrates a Patch card when the model omitted File: but the user chip has the path
+  ✓ unparseable patch markdown still stays suppressed after history echo
+  ✓ hydrates from a composer edit chip without a /edit prefix
+  ✓ retries a failed empty record once File: can be inferred from the user chip
+  ✓ does not revive a comment-only rewrite rejection as a pending Apply card
+
+hydratePatchCardsFromHistory: 10 passed, 0 failed
+  ✓ extractInsertedPrefix keeps the comment above SEARCH
+  ✓ selectionTextFromFile returns L38–43 style 1-based slice
+  ✓ snapHunkToSelection retargets a paraphrased SEARCH onto the highlight
+  ✓ unsnapped paraphrased SEARCH is not found in the file
+  ✓ snapHunkToSelection keeps SEARCH that already matches inside the highlight
+  ✓ expanding comment+full-block over a short SEARCH retargets onto the highlight once
+  ✓ REPLACE that pastes SEARCH twice becomes one JSDoc above the selection
+  ✓ snapHunkToSelection retargets from selectionText when the file cannot be read
+  ✓ snapPatchSetToSelection retargets with selectionText when readContent is empty
+  ✓ snapPatchSetToSelection only retargets the highlighted file
+  ✓ comment-only coerce keeps a comment and the original selection
+  ✓ comment-only coerce drops a signature rewrite with no comment
+  ✓ comment-only snap rejects a constructor rewrite onto the highlight
+  ✓ comment-only DEFAULT_STATES duplicate retargets onto get_queryset once
+
+snapPatchToSelection: 14/14 tests passed
+  ✓ hides the File: header paragraph that precedes a patch block
+  ✓ hides File: headers for multiple files in the same patch response
+  ✓ hides patch cite recovered from **/*.md SEARCH line when patch card owns the turn
+  ✓ hides patch fences even when they are not recovered as citations
+  ✓ does not hide ordinary paragraphs mentioning a file
+  ✓ hides unfenced SEARCH/REPLACE paragraphs when patch card suppresses markdown
+  ✓ anonymous header keeps bash and drops TEXT
+
+ChatProse: 7 passed, 0 failed
+  ✓ pending card renders and hides markdown for matching message
+  ✓ rejected card stays in thread and keeps markdown hidden
+  ✓ a newer /edit patch keeps older card visible and markdown suppressed
+  ✓ failed empty card still renders so /edit never falls back to an anonymous fence
+  ✓ B-G7 / UX-G4 Create PR is hidden until Apply sets canCreatePr
+  ✓ local-file Apply keeps Create PR visible and disabled
+  ✓ landing copy names the class.method and file
+
+PatchCard helpers: 7 passed, 0 failed
+  ✓ looksLikePatchStreamingContent detects SEARCH markers
+  ✓ looksLikePatchStreamingContent detects File header mid-stream
+  ✓ looksLikePatchStreamingContent ignores normal chat
+  ✓ isEditHistoryContent matches /edit bubbles
+  ✓ isAssistantReplyToEdit is true only for the assistant turn after /edit
+  ✓ isAssistantReplyToEdit is false for a later explain turn after /edit
+  ✓ shouldUseSuggestClarifyingBody stays off for patch bodies so the card can attach
+
+patchStreamDisplay: 7 passed, 0 failed
+
+> coop-ai@0.1.10 test:agent-routing
+> npx tsx src/chat/agentRouting.test.ts && npx tsx src/chat/editSendRouting.test.ts && npx tsx src/chat/createPrChatRouting.test.ts && npx tsx src/chat/editAskKind.test.ts && npx tsx src/chat/quickActionSuggestIntent.test.ts && npx tsx src/chat/quickActionIntentModel.test.ts && npx tsx src/chat/integrationProviderRouting.test.ts && npx tsx src/chat/plainChatMustNotPromote.test.ts && npx tsx src/prompts/mentionScope.test.ts && npx tsx src/context/fileCallerIntent.test.ts
+
+  ✓ shouldRunAgentToolLoop is false for quick actions
+  ✓ shouldRunAgentToolLoop is false for local explain even on a hunt-shaped leftover (A-P8)
+  ✓ shouldRunAgentToolLoop is true for hunt + Slack compound ask without jobs (fail-open)
+  ✓ shouldRunAgentToolLoop is true when locate+decision jobs are planned
+  ✓ I3 compound locate+decision enters the agent loop; slash still loops without a hunt
+  ✓ shouldRunAgentToolLoop is true for Slack-named ask without a repo hunt (A-P9)
+  ✓ named Notion docs ask starts the vendor loop and does not unlock Jira
+  ✓ L file drops the agent hunt even when the question would hunt on R
+  ✓ shouldRunAgentToolLoop is true for a repo hunt (always on)
+  ✓ ship-check blast-shaped English still runs the agent loop
+  ✓ shouldRunAgentToolLoop is true for /docs slash — vendor loop, not a hunt
+  ✓ shouldRunAgentToolLoop is false for a file-count inventory ask
+  ✓ shouldRunAgentToolLoop is false for how-to and product How/Why asks
+  ✓ shouldRunAgentToolLoop is false for thanks follow-up (UX-G7)
+  ✓ shouldRunAgentToolLoop is false for /edit (UX-G8)
+  ✓ plannerAllowsAgentRepoLoop allows named-file follow-ups even when the plan is plain
+  ✓ plannerAllowsAgentRepoLoop allows rely-on / who-created file asks even when the plan is plain
+  ✓ plannerAllowsAgentRepoLoop blocks workflows
+  ✓ shouldSuppressSuggestChipsForAgentHunt is true for a location hunt
+  ✓ shouldSuppressSuggestChipsForAgentHunt is false for thanks
+  ✓ suggest-chips leftover plan blocks the loop; none plan after Just answer allows it
+  ✓ isRepoInvestigationQuery requires length and hunt language
+  ✓ open-file feature-add skips the agent hunt so A10 can read the chip file
+  ✓ ticket pickup with requireAuth and Jira still runs the hunt (3b)
+  ✓ code-only locate does not unlock connected vendors (FAIL 2)
+  ✓ I3 compound locate+jira stays on jira, not the full connected list
+
+agentRouting: 26/26 tests passed
+  ✓ isConcreteFileEditAsk detects applyable identifier validation asks
+  ✓ isConcreteFileEditAsk does not treat bare fix this as a patch spec
+  ✓ isConcreteFileEditAsk rejects advisory where/which questions
+  ✓ isConcreteFileEditAsk rejects ownership / archaeology asks
+  ✓ isConcreteFileEditAsk rejects blast-shaped what-breaks asks with change/rename + backticks
+  ✓ isConcreteFileEditAsk accepts a named symbol as the target (Copilot /fix shape)
+  ✓ isConcreteFileEditAsk leaves repo-wide changes to the agent hunt
+  ✓ isConcreteFileEditAsk still rejects a named symbol inside an advisory ask
+  ✓ named symbol without an edit verb is not an edit ask
+  ✓ J4: prose fix + open file stays agent-change, not auto /edit
+  ✓ shouldTrackEditRequest is true for edit composer without quick action
+  ✓ shouldTrackEditRequest is false for ask composer or quick actions
+  ✓ resolveEditTrackingMessage prefers historyContent over raw message
+  ✓ resolveEditTrackingMessage appends mention scope to bubble text
+  ✓ hasEditTargetInScope requires active remote/local file or @mention for composerMode edit
+  ✓ shouldBypassAdvisoryGroundingForEdit blocks PENDING/OPEN status hijacks on /edit
+  ✓ resolveEditEditorSnapPreference prefers remote tabs for /edit (Zero-Clone)
+  ✓ resolveChangeSendRouting: no file + Agent can hunt → agent-change (not hard error)
+  ✓ resolveChangeSendRouting: no file + cannot hunt → still not /edit (plain/agent)
+  ✓ resolveChangeSendRouting: file in scope without /edit → agent-change
+  ✓ resolveChangeSendRouting: explicit /edit with file → anchored-edit
+  ✓ resolveChangeSendRouting: explicit /edit without file still rejects
+  ✓ resolveChangeSendRouting: live highlight change is not agent-change or /edit
+  ✓ resolveChangeSendRouting: explicit /edit still anchors when a highlight is present
+  ✓ edit error copy stays actionable (no silent ask demotion)
+
+editSendRouting: 25/25 tests passed
+  ✓ isCreatePullRequestAsk matches ship commands
+  ✓ isCreatePullRequestAsk rejects questions and new-work asks
+  ✓ latestEligibleCreatePrCard is the newest applied card with files
+  ✓ mergeAppliedPrFiles keeps later Apply for the same path
+  ✓ mergeAppliedPrFiles unions different files from every Apply
+  ✓ mergeAppliedPrPreviewFiles stacks hunks from every Apply
+  ✓ resolveCreatePrChatRouting opens confirm for last applied work
+  ✓ resolveCreatePrChatRouting bundles every Apply in the thread
+  ✓ resolveCreatePrChatRouting asks to Apply when a patch is still pending
+  ✓ resolveCreatePrChatRouting asks for changes when this thread has no applied work
+  ✓ resolveCreatePrChatRouting opens confirm for editor files without an Apply
+  ✓ resolveCreatePrChatRouting prefers live editor body over Applied prFiles
+  ✓ resolveCreatePrChatRouting opens confirm when pending /edit and editor files exist
+  ✓ mergeCreatePrFiles lets editor files win
+  ✓ resolveCreatePrChatRouting requires Use-repo before opening confirm
+  ✓ local Apply is not eligible and does not open confirm even with leftover Use-repo
+  ✓ stampAppliedCreatePr blocks preferLocalDisk and absolute paths, keeps remote Apply
+  ✓ mixed thread ships remote files only
+  ✓ absolute disk path is rejected before a host write
+  ✓ resolveCreatePrChatRouting is none when the phrase did not match
+
+createPrChatRouting: 20 passed, 0 failed
+  ✓ /edit leave a comment above the highlight is comment-only
+  ✓ one-sentence follow-up after a comment /edit stays comment-only
+  ✓ rewrite / shorten the highlight is not comment-only
+  ✓ rewrite the comment still counts as comment-only
+  ✓ /edit by itself is not a rewrite
+  ✓ C3 one-line JSDoc /edit stays comment-only
+  ✓ ordinary change asks stay default (do exactly the words)
+
+editAskKind: 7/7 tests passed
+  ✓ owner: signing-request email delivery example → find-owner high
+  ✓ owner: who maintains / CODEOWNERS / who to ask
+  ✓ trace: why was this written / decision history
+  ✓ blast: what breaks / callers / if I change
+  ✓ understand: repo architecture / overview
+  ✓ gaps: missing docs / knowledge gaps
+  ✓ negatives: normal chat does not suggest
+  ✓ negatives: explicit slash / tag never suggest
+  ✓ negatives: explain this file is not Understand Repo
+  ✓ disabled option returns empty
+  ✓ collision: who owns this decision prefers Trace (or Trace+Owner)
+  ✓ collision: max two suggestions
+  ✓ warnings: business impact and test coverage stay quiet
+  ✓ filter: blast/trace blocked without file
+  ✓ filter: blast available with file
+  ✓ filter: owner available repo-wide with explicit scope
+  ✓ filter: owner blocked with empty context
+  ✓ filter: understand offered even with sticky file (repo-wide chip)
+  ✓ filter: understand still blocked with empty context
+  ✓ shouldOffer: owner example with file context
+  ✓ shouldOffer: undefined when all actions blocked
+  ✓ shouldOffer: undefined for normal chat
+  ✓ suggestRunChipLabel uses slash tokens
+  ✓ golden corpus: primary + secondary paraphrases
+  ✓ regression: responseDeadline blast ask offers chip when file in scope
+  ✓ regression: estimate impact of changing offers blast chip
+  ✓ negatives: more normal chat stays quiet
+  ✓ shouldOfferQuickActionSuggest skips inventory and where-defined facts
+
+quickActionSuggestIntent: 28/28 tests passed
+  ✓ assignment: intentSuggest is gpt-4o-mini / openai
+  ✓ parse: clean JSON
+  ✓ parse: fenced JSON + prose noise
+  ✓ parse: invalid → none/low (fail-open)
+  ✓ shouldOffer: none/low rejected; medium/high accepted
+  ✓ regex: estimate impact of changing → blast (not soft-dialed)
+  ✓ user message includes optional active file
+  ✓ classify: golden mocked responses
+  ✓ classify: complete throws → undefined (fail-open)
+  ✓ classify: timeout → undefined (fail-open)
+quickActionIntentModel: 10/10 tests passed
+  ✓ incident ask with Jira/Slack wording does not single-route to jira
+  ✓ named jira in plain chat does not enter the /jira single-route
+  ✓ named disconnected jira still does not single-route
+  ✓ slack and notion named does not single-route
+  ✓ named slack in plain chat does not enter the /slack pipeline
+
+integrationProviderRouting: 5/5 tests passed
+  ✓ blast-shaped stays plain: If I change that missing-key response, what else in this repo should I check before I ship?
+  ✓ blast-shaped stays plain: If I modify this function, what else is affected?
+  ✓ blast-shaped stays plain: What breaks if I change this handler?
+  ✓ blast-shaped stays plain: What's the blast radius of renaming validate_identifier?
+  ✓ blast-shaped stays plain: Who calls sendSigningEmail?
+  ✓ blast-shaped stays plain: Is it safe to change these enum values?
+  ✓ QA-shaped stays plain: Who owns auth?
+  ✓ QA-shaped stays plain: Why was this designed this way?
+  ✓ QA-shaped stays plain: How is this repository structured?
+  ✓ QA-shaped stays plain: What are the knowledge gaps in auth?
+  ✓ edit-shaped English does not set anchored /edit
+  ✓ explicit /edit still anchors
+  ✓ named Slack prefetches tools but does not set /slack constraint
+  ✓ explicit /blast still pins the blast engine
+  ✓ explicit /slack still pins Slack
+  ✓ plain follow-up after /blast does not inherit Blast
+
+plainChatMustNotPromote: 16/16 tests passed
+  ✓ pathLikelyInTargetRepo accepts paths under known top-level dirs
+  ✓ pathLikelyInTargetRepo rejects foreign workspace paths
+  ✓ partitionMentionsForRepoSummary splits in-repo vs out-of-repo attachments
+  ✓ pathLikelyInTargetRepo rejects paths when tree overview is missing
+  ✓ partitionMentionsForOwnership treats local workspace as out of repo
+  ✓ partitionMentionsForOwnership splits by repo id
+  ✓ partitionMentionsForTraceDecision treats local workspace as out of repo
+  ✓ mentionDisplayPath keeps parent directory for clarity
+  ✓ appendMentionScopePromptSection forbids out-of-scope section when all mentions in-repo
+  ✓ partitionMentionsForQuickAction routes blast-radius through file-scoped rules
+  ✓ partitionMentionsForQuickAction routes understand-repo through tree rules
+  ✓ mentionAttachmentLabel marks local workspace files
+  ✓ allMentionsOutOfScopeForActiveRepo is true when every attachment is foreign
+  ✓ plainChatRefersToAttachedFile detects deictic file questions
+  ✓ plainChatHistoryContent preserves @ attachments in bubble text
+  ✓ plainChatHistoryContent adds file/repo/branch chips when includeContextChips is set
+  ✓ plainChatHistoryContent stamps selection lines next to the file
+  ✓ withContextChipLine upgrades a bare /edit history line with selection
+  ✓ withContextChipLine stamps /edit comment ask with L56–61 on state.py
+  ✓ plainChatHistoryContent can omit chips when includeContextChips is false
+  ✓ plainChatHistoryContent stamps repo/branch chips on follow-up messages
+  ✓ plainChatHistoryContent omits prefs-only owner/repo chips
+  ✓ withContextChipLine stamps scope onto bare slash history lines
+  ✓ historyContentHasScopeChips detects repo/file footers and ignores attached-only
+  ✓ plainChatContextChips keeps repo scope for explicit Use-repo
+  ✓ plainChatContextChips omits prefs-only owner/repo without Use-repo or file
+  ✓ plainChatContextChips keeps repo when a remote file is bound
+  ✓ plainChatContextChips omits leftover Use-repo on an L file
+
+mentionScope: 28/28 tests passed
+  ✓ smoke ask: what does this file do, and who calls it
+  ✓ caller / import phrasings
+  ✓ rejects ownership and unrelated asks
+  ✓ ship-check / blast-shaped English uses the caller-read pipe
+
+fileCallerIntent: 4 passed, 0 failed
+  ✓ shouldRunRepoSemanticRetrieval allows plain chat with long query
+  ✓ locate focus search ranks implementation ahead of onboarding docs
+  ✓ shouldRunRepoSemanticRetrieval allows open-file PR review so callers can attach
+  ✓ shouldRunRepoSemanticRetrieval skips inventory / file-count questions
+  ✓ shouldRunRepoSemanticRetrieval skips structure / monorepo questions
+  ✓ shouldRunRepoSemanticRetrieval skips package-boundary questions
+  ✓ shouldRunRepoSemanticRetrieval skips integration slash turns
+  ✓ shouldRunRepoSemanticRetrieval rejects short query
+  ✓ shouldRunRepoSemanticRetrieval allows edit intent with 8-char slash args
+  ✓ shouldRunRepoSemanticRetrieval rejects edit intent below min without selection
+  ✓ shouldRunRepoSemanticRetrieval allows edit intent when selection supplements short args
+  ✓ shouldRunRepoSemanticRetrieval keeps 12-char min for plain chat
+  ✓ semanticRetrievalQueryText combines slash args and selection for edit
+  ✓ gateOptionsFromRequest passes codeEditIntent and selectionText extras
+  ✓ shouldRunRepoSemanticRetrieval rejects quick actions
+  ✓ shouldRunRepoSemanticRetrieval rejects two or more in-scope mentions
+  ✓ shouldRunRepoSemanticRetrieval allows one in-scope mention
+  ✓ shouldRunRepoSemanticRetrieval respects feature flag
+  ✓ isPlainChatIntentEvent matches manual chat and hotkey
+  ✓ gateOptionsFromRequest reads query and quick action from request
+  ✓ rankSearchPaths deduplicates and prefers higher scores
+  ✓ applySemanticByteBudget caps file count and total bytes
+  ✓ filterSemanticFilesToRepoId rejects documenso and Coop bleed for plane
+  ✓ mergeFocusSearchResults round-robins unique paths from topic searches
+  ✓ named locate files stay attached even when hunt cap is 1
+  ✓ mergeFocusSearchResults pins named files ahead of the attach cap
+  ✓ mergeFocusSearchResults honors hunt ranking over onboarding docs
+  ✓ mergeFocusSearchResults drops OpenAPI/seed/i18n when domain files exist
+  ✓ mergeFocusSearchResults does not let auth files crowd out issue/state models
+  ✓ mergeFocusSearchResults keeps issue/state pathHits when attach cap is auth-only
+  ✓ mergeRepoSemanticContext attaches repoSemanticSearch to chat context
+  ✓ mergeRepoSemanticContext keeps pathHits when no extra bodies
+
+repoSemanticRetrieval: 32/32 tests passed
+  ✓ pickTopSearchHit prefers highest score
+  ✓ run executes search_code then read_file on top hit
+  ✓ run stops after search when index returns no hits
+  ✓ run returns empty when repoId is missing
+  ✓ run respects maxSteps=1 (search only)
+  ✓ LLM planTurn chooses search then read (A-G1)
+  ✓ locate with planTurn uses the LLM loop (same conversation)
+  ✓ calm state locate requires the opened State declaration
+  ✓ sanitizes full-question search queries to a short identifier
+  ✓ change hunt skips auth UI that never mentions requireAuth
+  ✓ reads the declaration line, not the top of the file
+  ✓ reads a bounded window when the index gave no position
+  ✓ retries with a broader term when the first search returns only barrels
+  ✓ LLM full-sentence query is rewritten before search
+  ✓ invalid first plan fails open to deterministic fallback (A-G3)
+  ✓ aborted signal returns no hang (A-P3)
+  ✓ forced repoId ignores model-supplied repo (A-P14 / UX-G10)
+  ✓ caps at 8 model-chosen rounds (A-P2)
+  ✓ wrong first hit forces a second read before done (dogfood)
+  ✓ empty hunt does not stream a Your question restatement
+  ✓ role-noun hunt rejects a collab auth read that never says middleware
+  ✓ feature-add with open file seeds read_file and does not post INDEX_HUNT_MISS
+  ✓ named filename seeds read_file even when the body uses a different export
+  ✓ named path seeds the same read as a follow-up Read prompt
+  ✓ planTurn startLine:1 still reads the class, not only the copyright line
+  ✓ C1 Authorization-Bearer ask streams when the index has a Bearer hit
+  ✓ C2 work-item ask streams when the index has a transition hit
+  ✓ C2 auto-reads the hit when the model only searches
+  ✓ C2 auto-read prefers API writer over locale and client grouping hits
+  ✓ C2 jumps from a read-only serializer class to validate() in the same file
+  ✓ C2 model read of a serializer class still jumps to validate()
+  ✓ C2 synthesis conversation excludes OpenAPI and read-only serializer windows
+  ✓ C2 cannot answer from reject evidence alone even without planner evidence labels
+  ✓ C2 accepts verified state update delegation alongside its rejection
+  ✓ compound hunt preserves the model's later write window after attaching a reject
+  ✓ C2 hunt skips filter converters and attaches serializer validate()
+  ✓ C1 empty index still posts INDEX_HUNT_MISS
+  ✓ T2 hunt attaches parent ValidationError, not converters
+  ✓ T2 wrong-floor serializer window jumps to parent ValidationError
+  ✓ reject hunt: planTurn owns gather — planned criteria are hints, not pre-loop parade
+  ✓ C2 ignores locate-only planned criteria and attaches state ValidationError
+  ✓ C2 continues past bgtask noise to attach state ValidationError
+  ✓ UI-only reject evidence yields short miss, not speculative backend essay
+  ✓ API-reject hunt does not answer from a different field's validate()
+  ✓ API-reject hunt jumps in-file from a wrong-field validate() to the asked field
+  ✓ API-reject hunt finds a field raise whose message is not “is not valid”
+  ✓ API-reject hunt attaches invite email, not a signup email 400
+  ✓ API-reject hunt skips invite callers that rethrow and attaches the email check
+  ✓ API-reject hunt jumps in-file from an invite caller to the email 400
+  ✓ API-reject ask uses planTurn (script brain bypass removed)
+  ✓ API-reject miss goes through planTurn then short miss (no scavenger parade)
+  ✓ leftover unmatched chip still hunts auth middleware and does not search Jira
+  ✓ extractBearerToken what-calls-it still reads a caller after the definition window
+  ✓ requireAuth OR authentication middleware reads plane APIKeyAuthentication (zero model reads)
+  ✓ first search story mention then authMiddleware query reads the server
+  ✓ story-only hunt posts INDEX_HUNT_MISS and does not answer from the mention
+  ✓ role-only what-calls-it reads the server then a handler that uses the export
+  ✓ role-only what-calls-it without a caller still cites the implementation
+  ✓ story mention must not become callerRead
+  ✓ H1 requireAuth defined does not require a caller read
+  ✓ role-only what-calls-it uses requireAuth from the full file, not the top window
+  ✓ role-only Card 1 attach jumps to the gate export, not page 1
+  ✓ ship-check search hits do not answer until a sibling 401 body is read
+  ✓ ship-check reads sibling 401 writers and tests, not path-only hits
+  ✓ search snippet without a remote body cannot pass the Parent reject evidence gate
+  ✓ search-hit ValidationError does not pass without a remote body read
+  ✓ search-hit message-only snippet does not pass Parent reject without a remote read
+  ✓ reject attaches from raw hits when preferredHits emptied by noise
+  ✓ finish cannot miss while unused asked-field hit sits in search context
+  ✓ wrong-branch body without Parent still attaches from message-only hit
+  ✓ planTurn present does not resurrect huntWriteReject on invalid first plan
+  ✓ reject adaptation: round-2 tool depends on round-1 preferredHits
+  ✓ live Plane issue.py wrong-floor hit jumps to Parent ValidationError
+  ✓ Gate A fidelity: planned Parent hunt leads with the exact quote and adds no finish search parade
+  ✓ live Parent Fail: invent draft twin must follow to issue create serializer
+  ✓ live Parent Fail: wrong __init__/urls opens must not skip invent → attach
+  ✓ live Parent Fail shape: planner refines quote misses to IssueCreateSerializer
+  ✓ live Parent shape: agent invents symbol search after empty quote (no body-scan rail)
+  ✓ multi-hit: weak twin attach does not freeze when ask job unmatched and budget left
+  ✓ Parent paraphrase consumes the serializer candidate and jumps to the reject
+  ✓ planned reject hunt caps at one seed plus four empty refinements
+  ✓ repeated reject searches require a new criterion without another network call
+  ✓ domain-status reject preserves the model's handler search
+  ✓ reject first search uses exact quote before the planner's generic query
+  ✓ reject first search uses ask-derived transition criteria before generic intent terms
+  ✓ agent readRemoteFile wiring keeps resolveActiveRepoTarget (branch parity)
+  ✓ remote filtering method corrects a reject premise and survives synthesis compaction
+  ✓ target resolution hands off without an unverified ref and respects user Stop
+  ✓ compound filtering evidence never claims an actual rejection was found
+  ✓ slow tool planning hands verified source to synthesis without cancelling the answer
+  ✓ locate synthesis excludes unopened search excerpts and planning guesses
+  ✓ compound handoff reuses the complete same-class remote update, never a neighboring class
+
+AgentOrchestrator: 92/92 tests passed
+  ✓ search_code returns indexed hits with repoId:path:line citations
+  ✓ search_code follows camelCase aliases to snake_case hits
+  ✓ search_code reports when index is disabled for repo
+  ✓ read_file does not use local workspace absolute paths (Zero-Clone)
+  ✓ read_file requires a remote reader for line windows
+  ✓ read_file falls back to the remote workspace when there is no local clone
+  ✓ remote read_file honors the requested line window
+  ✓ read_file errors plainly when neither local nor remote can serve the file
+  ✓ AgentOrchestrator passes repoId so remote reads can resolve
+  ✓ AgentOrchestrator.executeTool dispatches to registry
+
+agent tool registry: 10/10 tests passed
+
+> coop-ai@0.1.10 test:autocomplete
+> npx tsx src/config/featureModelAssignments.test.ts && npx tsx src/config/inlineModelPresets.test.ts && npx tsx src/chat/buildRepoId.test.ts && npx tsx src/autocomplete/autocompleteConfig.test.ts && npx tsx src/autocomplete/autocompletePersistence.test.ts && npx tsx src/autocomplete/autocompletePreferenceSync.test.ts && npx tsx src/webview/components/settings/autocompleteDraft.test.ts && npx tsx src/autocomplete/coopAutocompleteProvider.test.ts && npx tsx src/autocomplete/copilotCoexistence.test.ts && npx tsx src/autocomplete/suggestWidgetCoexistence.test.ts && npx tsx src/autocomplete/triggerDetector.test.ts && npx tsx src/autocomplete/completionFilter.test.ts && npx tsx src/autocomplete/contextAnalyzer.test.ts && npx tsx src/autocomplete/hotStreak.test.ts && npx tsx src/autocomplete/smartThrottle.test.ts && npx tsx src/autocomplete/completionRouter.test.ts && npx tsx src/autocomplete/memberCompletionProvider.test.ts
+
+featureModelAssignments: 1/1 tests passed
+  ✓ chat preset uses preferences provider and model
+  ✓ chat preset falls back to provider default when model empty
+  ✓ resolveInlineModelPreset chat delegates to chat model preset
+  ✓ haiku preset targets anthropic haiku with openai fallback
+  ✓ gpt35 preset targets openai mini with anthropic fallback
+  ✓ custom preset uses trimmed model id and haiku fallback
+  ✓ custom preset without model id falls back to haiku
+  ✓ defaultInlineModelForProvider aligns extension and server defaults
+  ✓ INLINE_DEFAULT_MODEL_BY_PROVIDER covers all supported providers
+
+inlineModelPresets: 9 passed, 0 failed
+  ✓ buildRepoId uses preferences owner and repo
+  ✓ buildRepoId prefers context owner and repo when provided
+  ✓ buildRepoId returns unknown placeholder when owner or repo missing
+
+buildRepoId: 3 passed, 0 failed
+  ✓ readAutocompleteSettings returns package defaults when unset
+  ✓ readAutocompleteSettings reads coopAI.autocomplete overrides
+  ✓ isAutocompleteGloballyEnabled reflects enabled flag
+  ✓ isRepoIndexHealthy requires ready status with zoekt or scip
+  ✓ resolveEffectiveUseGraphContext auto-enables when index is healthy
+  ✓ resolveAutocompleteActiveRepoId uses coopAI default owner and repo
+  ✓ findActiveRepoBecameHealthy matches active repo transition to ready
+  ✓ isAutocompleteUserDisabled and discovery shown persist in globalState
+  ✓ clearAutocompleteWorkspaceOverrides removes workspace true and false
+  ✓ shouldAutoEnableAutocompleteOnIndexReady respects userDisabled and shown flags
+  ✓ shouldOfferAutocompleteDiscovery respects enabled, userDisabled, and shown flags
+
+autocompleteConfig: 11 passed, 0 failed
+  ✓ package.json defaults autocomplete to disabled
+  ✓ readConfiguration falls back to autocomplete disabled when unset
+  ✓ registerAutocomplete persists enabled at Global scope
+  ✓ index notifier does not toggle autocomplete from Deep-Index readiness
+  ✓ extension does not force-enable autocomplete on startup
+  ✓ setAutocompleteEnabled does not wait on Copilot or suggest-widget coexistence
+  ✓ autocomplete-only settings save skips the full preference reload
+  ✓ model settings checkbox keeps a pending save instead of snapping to stale prefs
+  ✓ package.json does not steal Jump to Bracket for autocomplete trigger
+
+autocompletePersistence: 9 passed, 0 failed
+  ✓ isAutocompleteOnlySettingsUpdate accepts a lone boolean toggle
+  ✓ isAutocompleteOnlySettingsUpdate rejects mixed or empty payloads
+  ✓ shouldRefreshSessionsOnCoopConfigChange skips autocomplete-only toggles
+  ✓ shouldRefreshSessionsOnCoopConfigChange still refreshes other Coop settings
+
+autocompletePreferenceSync: 4 passed, 0 failed
+  ✓ nextAutocompleteDraft keeps in-progress edits
+  ✓ nextAutocompleteDraft keeps the saved value while prefs are stale
+  ✓ nextAutocompleteDraft follows prefs once they catch up
+  ✓ reconcileAutocompletePref ignores stale incoming values while a save is pending
+
+autocompleteDraft: 4 passed, 0 failed
+  ✓ index notifier does not auto-enable autocomplete when index becomes healthy
+  ✓ index notifier skips when user previously disabled autocomplete
+  ✓ index notifier no-ops when discovery already shown
+  ✓ index notifier leaves enabled setting unchanged when already on
+
+coopAutocompleteProvider: 4 passed, 0 failed
+  ✓ isCopilotInlineDisabled detects global false
+  ✓ isCopilotInlineDisabled detects wildcard false
+  ✓ detectCopilotExtensions reports installed and active extensions
+  ✓ syncCopilotInlineWithCoopAutocomplete snapshots and disables Copilot inline
+  ✓ syncCopilotInlineWithCoopAutocomplete restores snapshot when Coop autocomplete turns off
+  ✓ syncCopilotInlineWithCoopAutocomplete is a no-op when Copilot is not installed
+
+copilotCoexistence: 6 passed, 0 failed
+  ✓ syncSuggestWidgetCoexistenceWithCoopAutocomplete enables suppressSuggestions when Coop autocomplete is on
+  ✓ syncSuggestWidgetCoexistenceWithCoopAutocomplete is a no-op when already suppressing
+  ✓ syncSuggestWidgetCoexistenceWithCoopAutocomplete restores prior value when Coop autocomplete turns off
+  ✓ syncSuggestWidgetCoexistenceWithCoopAutocomplete does nothing on disable when never managed
+
+suggestWidgetCoexistence: 4 passed, 0 failed
+  ✓ returns disabled when autocomplete is off
+  ✓ skips a cursor inside JSDoc before any completion request
+  ✓ skips comments and strings
+  ✓ manual mode requires manual trigger
+  ✓ debounces automatic triggers
+  ✓ immediate trigger after dot uses zero debounce
+  ✓ skips unchanged context hash
+  ✓ retries unchanged context after cooldown
+  ✓ failed request clears dedup for immediate retry
+  ✓ backoff after rejection suppresses requests
+  ✓ isImmediateTriggerLine detects property access and assignment
+  ✓ hot streak active uses reduced debounce
+  ✓ hot streak bypasses rapid typing suppression after accept
+  ✓ immediate trigger after equals bypasses rapid typing
+  ✓ afterDot bypasses rejection backoff
+  ✓ rapid typing schedules debounced request instead of blocking
+
+triggerDetector: 16 passed, 0 failed
+  ✓ normalizeCompletionText strips markdown fences
+  ✓ filterAndRankCompletions drops trivial completions
+  ✓ filterAndRankCompletions drops mismatched string quotes
+  ✓ filterAndRankCompletions keeps valid completion
+  ✓ filterAndRankCompletions strips redundant const from mid-assignment
+  ✓ filterAndRankCompletions keeps rhs after stripping duplicate declaration
+  ✓ filterAndRankCompletions trims invented trailing statements after assignment rhs
+  ✓ filterAndRankCompletions drops multi-line block after dot
+  ✓ filterAndRankCompletions keeps member after dot
+  ✓ filterAndRankCompletions rejects property chains after dot
+  ✓ filterAndRankCompletions keeps single member and call after dot
+  ✓ filterAndRankCompletions rejects completion copied from suffix below cursor
+  ✓ isValidAfterDotInsertText accepts member-only inserts
+  ✓ filterAndRankCompletions rejects block copy after vscode.window dot
+  ✓ filterAndRankCompletions boosts sibling receiver usage after dot
+  ✓ filterAndRankCompletions drops function restart mid-assignment
+  ✓ filterAndRankCompletions allows const on fresh indented line
+  ✓ sanitizeCompletionForContext extracts rhs only
+  ✓ stripOverlapWithPrefix removes shared suffix
+  ✓ toInlineInsertText adds space after assignment when cursor is right of equals
+  ✓ ensureInsertSpacing is no-op when prefix already has trailing space
+  ✓ toInlineInsertText applies indent on blank line
+  ✓ buildKnownSymbolsFromContext includes imports and builtins
+  ✓ filterAndRankCompletions prefers manifest-known symbols
+  ✓ filterAndRankCompletions ranks known symbols above unknown when both kept
+  ✓ symbolPlausibilityAdjustment penalizes unknown identifiers
+  ✓ symbolPlausibilityAdjustment rewards known identifiers
+  ✓ type-body assignment drops statement ghosts and invented getBearerToken
+  ✓ function-body assignment can still complete and prefers extractBearerToken
+  ✓ empty-block hole keeps a ~194 char Bearer body when maxSuggestionLength is 200
+  ✓ empty-block hole ranks Bearer reconstruction over generic header case-fold
+  ✓ empty-block hole collapses || vs ?? header lookups to one suggestion
+  ✓ sole invented member still shows so the editor is not blank
+  ✓ assignment hole filters invented this.deps.identity behind known getIdentity
+  ✓ typed t joins his.deps.identity and still drops the invented member
+  ✓ partial this. and this.deps. drop members the buffer does not show
+  ✓ multiline this.deps.api.getBackendClient stays, invented identity does not
+  ✓ legal this.deps.api stays when identity is invented
+  ✓ invented this.foo.bar on another class is dropped in favor of a known method
+  ✓ clampCompletionToMaxLength truncates on a line boundary instead of dropping
+  ✓ normalizeCompletionText keeps a 7-line empty-block body
+
+completionFilter: 41 passed, 0 failed
+  ✓ analyzeDocumentContext treats a cursor inside JSDoc as a comment
+  ✓ analyzeDocumentContext extracts prefix and suffix
+  ✓ suffixWindow caps at 500 characters
+  ✓ languageSpecificHints mentions property access after dot
+  ✓ autocompleteGroundingRules forbids invented strings and assumptions
+  ✓ isFileEligible rejects markdown
+  ✓ isFileEligible rejects node_modules paths
+  ✓ isFileEligible accepts typescript source files
+  ✓ isFileEligible accepts github VFS remote buffers
+  ✓ wantsMultiLineCompletion after opening brace
+  ✓ wantsMultiLineCompletion after arrow
+  ✓ wantsMultiLineCompletion after trailing open paren
+  ✓ wantsMultiLineCompletion on empty line inside block
+  ✓ wantsMultiLineCompletion on unindented empty line in function body
+  ✓ type-like body is not an empty-block hole
+  ✓ isEmptyBlockHole detects extractBearerToken deleted-body fixture
+  ✓ empty-block hole keeps imports beyond the 10-line prefix window
+
+contextAnalyzer: 17 passed, 0 failed
+  ✓ activate increments streak and enables hot debounce
+  ✓ keystrokes consume hot streak window
+  ✓ debounce returns base when inactive
+
+hotStreak: 3 passed, 0 failed
+  ✓ slow typing keeps base debounce
+  ✓ fast typing reduces debounce
+  ✓ high p95 latency increases debounce
+
+smartThrottle: 3 passed, 0 failed
+  ✓ buildFimSegments returns prefix and suffix when useFim enabled
+  ✓ buildFimSegments is undefined when useFim disabled
+  ✓ synthesizeMessageFromSegments builds chat-fallback prompt from FIM segments
+  ✓ synthesizeMessageFromSegments asks for a full body on empty-block holes
+  ✓ reuses in-flight promise for prefix-compatible extension
+  ✓ uses higher maxTokens for multi-line brace context
+  ✓ keeps a 7-line empty-block body instead of the 4-line stream cap
+  ✓ starts new request when prefix is not compatible
+  ✓ includes graph context fields when useGraphContext is enabled
+  ✓ omits graph context fields when useGraphContext is disabled
+  ✓ auto-includes graph context when index is healthy
+  ✓ L session omits graph even when the index is healthy
+  ✓ falls back to secondary provider when primary request fails
+  ✓ re-filters a cached assignment hole against the typed prefix
+  ✓ filters a typed-t FIM remainder before caching it
+  ✓ skips .env files, including vscode-vfs paths, without a network request
+  ✓ returns cached completions without a network request
+  ✓ uses assigned autocomplete model in production
+  ✓ uses chat preferences model when dev mode is on
+[CoopAI autocomplete] Autocomplete request timed out.
+  ✓ returns empty completions with timeout error when request times out
+
+completionRouter: 20 passed, 0 failed
+  ✓ isAfterDotMemberCompletionEligible requires afterDot and TS/JS language
+  ✓ resolveLspTriggerCharacter returns dot for afterDot contexts
+  ✓ rankAfterDotLspMembers prioritizes createWebviewPanel on vscode.window
+  ✓ stripSnippetPlaceholders removes VS Code snippet syntax
+  ✓ normalizeMemberInsertText keeps property names without parens
+  ✓ normalizeMemberInsertText adds parens for methods with snippet insert
+  ✓ filterMemberCompletionItems drops classes and keywords
+  ✓ lspItemsToRankedCompletions dedupes and tags source lsp
+  ✓ fetchAfterDotMemberCompletions calls VS Code completion provider
+  ✓ fetchAfterDotMemberCompletions skips non-eligible contexts
+  ✓ fetchAfterDotMemberCompletions fails open on command errors
+  ✓ fetchAfterDotMemberCompletions fails open on timeout
+
+memberCompletionProvider: 12 passed, 0 failed
+
+> coop-ai@0.1.10 build:extension
+> esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --sourcemap --outfile=dist/extension.js
+
+
+  dist/extension.js      3.0mb ⚠️
+  dist/extension.js.map  6.1mb
+
+⚡ Done in 74ms

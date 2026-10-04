@@ -26,8 +26,13 @@ export function resolvePlainChatSynthesisRoute(input: {
   fetchIntegrations?: IntegrationChatProvider[];
   intentPlan?: ChatIntentPlan;
   sessionMode?: SessionMode;
+  /** Explicit two-repository evidence owns its synthesis; stale single-repo jobs cannot replace it. */
+  dualRepoCompare?: boolean;
 }): PlainChatSynthesisRoute {
   const fileAssistant = input.sessionMode === "file-assistant";
+  if (input.dualRepoCompare) {
+    return { kind: "plain", useCase: "chat" };
+  }
   // Ticket pickup (Jira key + named symbol) is locate+decision, never incident.
   // L turns stay with the open file — do not infer incident from the question.
   if (

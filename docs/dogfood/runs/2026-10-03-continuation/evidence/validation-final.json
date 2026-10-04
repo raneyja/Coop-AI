@@ -1,0 +1,99 @@
+{
+  "gates": [
+    {
+      "name": "lint",
+      "exitCode": 0
+    },
+    {
+      "name": "build:extension-dev",
+      "exitCode": 0
+    },
+    {
+      "name": "test:ci",
+      "exitCode": 0,
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-ci-capability.log"
+    },
+    {
+      "name": "test:agent-ship",
+      "exitCode": 0,
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-agent-ship-capability.log"
+    },
+    {
+      "name": "package",
+      "exitCode": 0,
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/package-capability.log"
+    },
+    {
+      "name": "website build",
+      "exitCode": 0
+    },
+    {
+      "name": "admin build",
+      "exitCode": 0
+    },
+    {
+      "name": "ops build",
+      "exitCode": 0
+    }
+  ],
+  "focusedGates": [
+    {
+      "name": "test:code-citation-locator",
+      "exitCode": 0,
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-code-citation-locator-final.log"
+    },
+    {
+      "name": "test:prompt-library",
+      "exitCode": 0,
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-prompt-library-final.log"
+    },
+    {
+      "name": "test:project-instructions",
+      "exitCode": 0,
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-project-instructions-final.log"
+    },
+    {
+      "name": "test:chat-response-timing",
+      "exitCode": 0,
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-chat-response-timing-final.log"
+    },
+    {
+      "name": "test:request-batcher",
+      "exitCode": 0,
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-request-batcher-final.log"
+    },
+    {
+      "name": "test:status-transition",
+      "exitCode": 0,
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-status-transition-final.log"
+    },
+    {
+      "name": "test:email-template-grounding",
+      "exitCode": 0,
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-email-template-grounding-final.log"
+    },
+    {
+      "name": "test:existing-capability",
+      "exitCode": 0,
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-existing-capability-final.log"
+    },
+    {
+      "name": "test:fim",
+      "exitCode": 0,
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-fim-final.log"
+    },
+    {
+      "name": "test:repo-grants-ui",
+      "exitCode": 0,
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-repo-grants-ui-final.log"
+    }
+  ],
+  "candidateAssets": {
+    "dist/extension.js": "0c6902524079c62b26f447514ceb9b30bfcbe27529a985f1d066b1ec9a9bfd89",
+    "dist/webview.js": "b90947ec2d81f4078c867b89dec6bf6429a27700cb4cc737b608f64c82520d7d",
+    "dist/webview.css": "7fe0c091395e717db3a9ebcdf557ab516423a365cfaa94ed86451f3cd4a7d2bc",
+    "dist/webhookServer.js": "ee02747ba7532a8f2164f6629d246c92c23a117609d99794aa491fd6359f0389",
+    "coop-ai.vsix": "06f564f8d2e18fc01d931b5352b9e8893f11cf31588b9c740a08fc26e5f7fda5"
+  },
+  "note": "Surface builds and lint exit codes verified from process completion; final focused gates predate only the later repository-only snap and unsupported-capability fixes, which are covered by the final CI and agent suites."
+}

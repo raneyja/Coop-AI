@@ -1,0 +1,29 @@
+{
+  "scenario": {
+    "id": "DF-076",
+    "area": "Integrations",
+    "fixture": "Existing seeded Google Doc Coop AI \u2014 Architecture Overview; original independently opened in browser",
+    "action": "/docs Read Coop AI \u2014 Architecture Overview and summarize its actual contents with a source link. If only a title or excerpt is available, say so.",
+    "passCriteria": "Summary matches independently inspected document body, identifies demo disclaimer, and links correct document.",
+    "modes": [
+      "connected"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T18:19:35.320835+00:00",
+    "status": "PASS",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "see notes@see notes",
+    "action": "/docs Read Coop AI \u2014 Architecture Overview and summarize its actual contents with a source link. If only a title or excerpt is available, say so.",
+    "actualResult": "Live /docs response14s accurately summarizes full Architecture Overview, covered repos, four components, COOP-101/COOP-55, and demo/nonproduction disclaimer. Independently opened exact original Google Doc in Chrome; screenshot shows full single-page body matching each claim. Document ID1JtCvYk9U7MGOrjQ_rlBjiLS2VsmW4bNN22H19iuqvJs verified. Does not certify access isolation or unique-marker fixture.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-076-connected-1.json",
+    "criteriaReview": "ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": null,
+    "durationMs": null,
+    "threadId": null
+  },
+  "diagnosticEvents": []
+}

@@ -72,7 +72,11 @@ function compactFile(value: unknown): Record<string, unknown> {
   const file = value as Record<string, unknown>;
   const path = typeof file.path === "string" ? file.path : undefined;
   const content =
-    typeof file.content === "string" ? clipFileBody(file.content, MAX_FILE_BODY_CHARS) : undefined;
+    typeof file.content === "string"
+      ? file.evidenceSource === "remote-read"
+        ? file.content
+        : clipFileBody(file.content, MAX_FILE_BODY_CHARS)
+      : undefined;
   return {
     ...(path ? { path } : {}),
     ...(content ? { content } : {}),

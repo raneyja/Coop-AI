@@ -1,0 +1,15 @@
+
+> coop-ai@0.1.10 test:effective-quick-action
+> npx tsx src/chat/effectiveQuickAction.test.ts
+
+  ✓ resolveEffectiveQuickAction prefers explicit quickAction param
+  ✓ plain follow-up after /understand does not inherit the action
+  ✓ plain follow-up after a [knowledge-gaps] tag does not inherit
+  ✓ plain follow-up after /gaps does not inherit
+  ✓ plain follow-up after /blast does not inherit Blast
+  ✓ plain follow-up after /owner aliases does not inherit Find Owner
+  ✓ explicit /blast on this send still returns blast-radius
+  ✓ plain follow-up after find-owner tag does not inherit
+  ✓ plain follow-up after /trace aliases does not inherit Trace
+
+9 passed, 0 failed

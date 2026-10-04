@@ -9,6 +9,8 @@ import {
 } from "../indexing/lightningSearch";
 import { orgOwnsRepo, type RepoAccessCaller } from "../indexing/orgRepoMembership";
 import { RepoDependencyEdgesStore } from "../indexing/repoDependencyEdgesStore";
+import { RepoStatsStore } from "../workspace/repoStatsStore";
+import { legacyIndexedMapProvenance } from "../workspace/indexedMapProvenance";
 
 export type GraphHttpResult = {
   statusCode: number;
@@ -126,6 +128,25 @@ export async function handleGraphHttp(input: {
       query,
       filters
     });
+  }
+
+  if (result && query === "getFileTree") {
+    const map = result as { indexedBranch?: string; data: Array<{ path: string; sha: string }>; stale?: boolean };
+    const branch = input.searchParams.get("branch")?.trim();
+    if (repoScoped && branch && !map.indexedBranch && !map.stale) {
+      try {
+        const stats = await new RepoStatsStore(input.pool).loadStats(input.orgId, repoId);
+        const provenance = legacyIndexedMapProvenance(map.data, stats, branch);
+        if (provenance) {
+          Object.assign(map, provenance);
+        }
+      } catch {
+        // Missing inventory cannot certify a legacy map's indexed branch.
+      }
+    }
+    if (branch && (!map.indexedBranch || branch !== map.indexedBranch)) {
+      return { statusCode: 404, body: { error: "indexed file map unavailable for requested branch" } };
+    }
   }
 
   if (!result && !repoScoped && query !== "searchFiles") {

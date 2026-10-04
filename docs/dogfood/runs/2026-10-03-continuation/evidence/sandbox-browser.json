@@ -1,0 +1,10 @@
+{
+  "url": "http://127.0.0.1:13002/",
+  "account": "repo-access-admin@demo.local",
+  "visibleOrg": "Repo Access Demo",
+  "plan": "Pro",
+  "users": 2,
+  "connectedIntegrations": 0,
+  "usage": "0%",
+  "verifiedBy": "Browser DOM and screenshot; login succeeded after reproducible reseed."
+}

@@ -1,3 +1,5 @@
+import type { RepoContext } from "./types";
+
 export function isChatSessionIdle(lastActiveAt: number, idleMs: number, now = Date.now()): boolean {
   if (idleMs <= 0) {
     return false;
@@ -28,4 +30,9 @@ export function resolveLastActiveAt(stored: number | undefined, threads: Array<{
     return Date.now();
   }
   return Math.max(...threads.map((thread) => thread.updatedAt));
+}
+
+/** Restored Use-repo scope remains selected until the user explicitly picks a file. */
+export function shouldFollowEditorAfterThreadRestore(context: RepoContext): boolean {
+  return !(context.scope === "repo" && context.owner?.trim() && context.repo?.trim() && !context.file?.trim());
 }

@@ -6,6 +6,7 @@ import { planChatIntentFromRules } from "./planChatIntent";
 import {
   buildMultiToolPlainChatUserPrompt,
   enrichIntentJobResponse,
+  intentJobCodePathsFromBundle,
   shouldApplyIntentJobRemoteMiss
 } from "../../prompts/multiToolPlainChatSynthesis";
 import {
@@ -20,6 +21,34 @@ import { systemPromptForUseCase } from "../../prompts/systemPrompts";
 
 const N5_COMPOUND_ASK =
   "Pager: Where is date math implemented — DateTimeUtils, reports.jsp — and did we already decide not to mix this into the SQL-injection PR?";
+
+test("Compare completion retains source-backed output and refuses path-only evidence", () => {
+  const bundle = [{data: {dualRepoCompare: {
+    left: {files: [{path: "src/auth.ts", content: "export function requireAuth() {}"}]},
+    right: {files: [{path: "api/auth.py", content: "class APIKeyAuthentication: pass"}]}
+  }}}];
+  const input = {tools: [], integrations: {}, jobs: [{capability: "locate", terms: ["authentication"]}]};
+  const answer = "The TypeScript guard and Python authentication class enforce different request contracts.";
+  const codePaths = intentJobCodePathsFromBundle(bundle);
+  assert.deepEqual(codePaths, ["src/auth.ts", "api/auth.py"]);
+  assert.equal(enrichIntentJobResponse(answer, {...input, codePaths}), answer);
+  const pathsOnly = [{data: {dualRepoCompare: {left: {files: [{path: "src/auth.ts"}]}}}}];
+  assert.equal(shouldApplyIntentJobRemoteMiss({...input, codePaths: intentJobCodePathsFromBundle(pathsOnly)}), true);
+});
+
+test("explicit dual-repo compare keeps its synthesis when a stale locate job is present", () => {
+  const stalePlan = {
+    ...planChatIntentFromRules({ message: "where is authentication implemented?", connectedTools: [] }),
+    jobs: [{ capability: "locate" as const, terms: ["authentication"] }]
+  };
+  const route = resolvePlainChatSynthesisRoute({
+    userQuestion: "Compare authentication in org/one and org/two",
+    intentPlan: stalePlan,
+    dualRepoCompare: true,
+    sessionMode: "indexed-repo"
+  });
+  assert.deepEqual(route, { kind: "plain", useCase: "chat" });
+});
 const A9_ASK =
   "Last week’s webhook delivery failures — what Jira tickets and Slack threads are related, which code paths handle retries/monitoring, and what’s still open?";
 const I4_TICKET_PICKUP_ASK =

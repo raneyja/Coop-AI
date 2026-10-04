@@ -347,7 +347,7 @@ function commitsReviewsSource(provider?: CodeHostProvider): string {
 }
 const ESCALATION_SOURCE_CODEOWNERS = "[Sources: CODEOWNERS]";
 const ESCALATION_ADMIN_GAP =
-  "No CODEOWNERS team or path owners matched; no strong secondary from commits/reviews. Escalate via repository admins/maintainers";
+  "No CODEOWNERS team or path owners matched; no strong secondary from commits/reviews. No on-call policy was verified. Recommendation: Escalate via repository admins/maintainers";
 
 export function buildTeamDomainGraph(
   scores: OwnershipScore[],
@@ -376,7 +376,7 @@ export function buildTeamDomainGraph(
     };
   });
 
-  const escalationPath = buildEscalationPath({
+  const escalationPath = "Suggested contact order from contribution and declared-owner evidence; not a verified on-call policy. " + buildEscalationPath({
     primary,
     secondaryLead: secondary[0],
     scoreBackup: secondary[0] ?? backup[0],

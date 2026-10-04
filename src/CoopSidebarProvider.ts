@@ -65,7 +65,7 @@ export class CoopSidebarProvider implements vscode.WebviewViewProvider {
     webviewView.onDidChangeVisibility(() => {
       if (webviewView.visible) {
         // After Extension Host reload the iframe can stay blank until HTML is re-injected.
-        this.session.reloadChatWebviewHtml();
+        this.ensureSidebarWebviewLoaded();
         this.session.touch();
         this.session.refreshEditorContext(vscode.window.activeTextEditor);
       }
@@ -74,7 +74,7 @@ export class CoopSidebarProvider implements vscode.WebviewViewProvider {
 
   /** Re-attach HTML when activate runs before resolveWebviewView (EH reload race). */
   public ensureSidebarWebviewLoaded(): void {
-    if (!this.view?.visible) {
+    if (!this.view?.visible || this.view.webview.html) {
       return;
     }
     this.view.webview.options = getWebviewOptions(this.extensionUri);

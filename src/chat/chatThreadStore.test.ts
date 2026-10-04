@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import type * as vscode from "vscode";
-import { ChatThreadStore, isDraftChatThread, threadStorageScopeKey } from "./chatThreadStore";
+import { ChatThreadStore, isDraftChatThread, threadStorageScopeKey, resolveThreadScopeKey } from "./chatThreadStore";
+import { repoContextForActivatedThread } from "../context/quickActionScope";
+import { shouldFollowEditorAfterThreadRestore } from "./chatThreadRestore";
 import type { ChatMessage } from "./types";
 
 function userMessage(content: string): ChatMessage {
@@ -57,6 +59,25 @@ async function run(): Promise<void> {
     assert.equal(isDraftChatThread({ messages: [], artifacts: [{}], messageCount: 0 }), false);
   });
 
+  await test("completed remote repo selection survives reload without a submitted turn or local-editor takeover", () => {
+    const context = createMemoryContext();
+    const store = new ChatThreadStore(context, "test-scope");
+    const active = store.getActiveThread();
+    store.setThread(active.id, [], 0, active.title, [], {
+      provider: "github", owner: "makeplane", repo: "plane", branch: "preview", scope: "repo"
+    });
+    const reloaded = new ChatThreadStore(context, "test-scope");
+    const restoredThread = reloaded.resolveStartupThread(1);
+    assert.equal(restoredThread.id, active.id, "an empty scoped draft is restored even with an idle threshold");
+    const restored = repoContextForActivatedThread(restoredThread.repoContext);
+    assert.deepEqual(restored, {
+      provider: "github", owner: "makeplane", repo: "plane", branch: "preview", scope: "repo"
+    });
+    assert.equal(shouldFollowEditorAfterThreadRestore(restored), false, "Untitled/local editors cannot overwrite restored repo scope");
+    assert.equal(shouldFollowEditorAfterThreadRestore({}), true, "ordinary blank startup can still follow an editor");
+    assert.equal(shouldFollowEditorAfterThreadRestore({ file: "src/main.ts", scope: "file" }), true);
+  });
+
   await test("empty composer is not listed in thread history", () => {
     const store = createStore();
     assert.equal(store.listSummaries().length, 0);
@@ -88,6 +109,20 @@ async function run(): Promise<void> {
     assert.equal(summaries[0].id, conversationId);
     assert.equal(store.getActiveThread().messageCount, 0);
     assert.equal(store.listAllThreads().length, 2);
+  });
+
+  await test("unsent draft and exact remote selection survive switching and storage reload", () => {
+    const store = createStore();
+    store.setActiveThread([userMessage("prior")], 0, "prior");
+    const previous = store.getActiveThreadId();
+    const draft = store.startNewThread({ provider: "gitlab", owner: "org", repo: "repo", branch: "preview", file: "src/parser.ts", fileSource: "remote", selectedLines: [10, 17] });
+    store.setDraft(draft.id, "explain this selected function");
+    store.switchTo(previous);
+    assert.ok(store.listSummaries().some((row) => row.id === draft.id));
+    const restored = store.switchTo(draft.id);
+    assert.equal(restored?.draftInput, "explain this selected function");
+    assert.deepEqual(restored?.repoContext?.selectedLines, [10, 17]);
+    assert.equal(restored?.repoContext?.branch, "preview");
   });
 
   await test("switching away from an unused New Chat discards it", () => {
@@ -295,6 +330,26 @@ async function run(): Promise<void> {
     );
     assert.equal(store.listSummaries().length, 0);
     assert.equal(store.getActiveThread().messages.length, 0);
+  });
+
+  await test("editor panels persist independently across reload and account changes", () => {
+    const data = new Map<string, unknown>();
+    const context = memoryContext(data);
+    const scope = resolveThreadScopeKey("alice", "panel-one");
+    const panel = new ChatThreadStore(context, scope);
+    panel.setActiveThread([userMessage("explain authUserId")], 0, "Auth", [], {
+      provider: "gitlab", owner: "org", repo: "coop", branch: "preview", scope: "repo"
+    });
+    panel.setDraft(panel.getActiveThreadId(), "which function did you mean?");
+    const reloaded = new ChatThreadStore(context, scope);
+    assert.equal(reloaded.getActiveThread().messages[0].content, "explain authUserId");
+    assert.equal(reloaded.getActiveThread().repoContext?.branch, "preview");
+    assert.equal(reloaded.getActiveThread().draftInput, "which function did you mean?");
+    assert.equal(new ChatThreadStore(context, resolveThreadScopeKey("alice", "panel-two")).getActiveThread().messages.length, 0);
+    reloaded.rebindScope(resolveThreadScopeKey("bob", "panel-one"));
+    assert.equal(reloaded.getActiveThread().messages.length, 0);
+    reloaded.rebindScope(scope);
+    assert.equal(reloaded.getActiveThread().repoContext?.repo, "coop");
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

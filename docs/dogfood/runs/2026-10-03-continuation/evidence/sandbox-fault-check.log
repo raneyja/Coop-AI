@@ -1,0 +1,5 @@
+Disposable API fault proxy on http://127.0.0.1:28788; modes: pass, 429, 503, offline
+PASS controlled 429 fault
+PASS controlled 503 fault
+PASS controlled offline fault
+PASS controlled pass fault

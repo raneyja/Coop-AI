@@ -1,0 +1,233 @@
+
+> coop-ai@0.1.10 test:indexed-repo-workspace
+> npx tsx src/workspace/repoFactIntent.test.ts && npx tsx src/workspace/collectRepoStats.test.ts && npx tsx src/workspace/IndexedRepoWorkspace.test.ts && npx tsx src/workspace/indexedRepoFileDiscovery.test.ts && npx tsx src/workspace/repoEvidenceIsolation.test.ts && npx tsx src/workspace/repoPackageBoundaryEvidence.test.ts && npx tsx src/workspace/indexedRepoPipelineContract.test.ts && npx tsx src/context/branchForEditorContext.test.ts && npx tsx src/context/resolveRepoBranch.test.ts && npx tsx src/context/indexedRepoContextEnrichment.test.ts && npx tsx src/context/understandRepoBranchContract.test.ts && npx tsx src/context/onboardingSearchQueries.test.ts && npx tsx src/context/understandRepoDomainAttach.test.ts && npx tsx src/context/userFocusQuery.test.ts && npx tsx src/context/buildRepoSummaryContext.test.ts && npx tsx src/context/repoSemanticRetrieval.test.ts && npx tsx src/prompts/repoSummarySynthesis.test.ts && npx tsx src/workspace/indexedMapProvenance.test.ts
+
+  ✓ isRepoFileCountQuery matches how-many-files questions
+  ✓ isRepoFileCountQuery rejects implementation / which-files questions
+  ✓ isRepoLineCountQuery covers every LOC phrasing that used to be invented
+  ✓ isRepoLineCountQuery leaves scoped line questions to search
+  ✓ differently worded LOC questions produce the same needs
+  ✓ LOC questions are inventory + structure questions, so they never route to a sample
+  ✓ isRepoStructureQuery covers monorepo / top-level structure questions
+  ✓ isRepoPackageBoundaryQuery covers Next.js / API package boundary smoke ask
+  ✓ needsRepoTreeOverview skips pure count questions
+  ✓ isSymbolLocationQuery matches where-is-defined asks
+  ✓ shouldSkipQuickActionSuggest covers inventory and location facts
+
+repoFactIntent: 11 passed, 0 failed
+  ✓ countLines handles trailing newlines and empty files
+  ✓ collectRepoStats totals files, lines, and bytes from the clone
+  ✓ oversized files count toward size but not lines
+  ✓ unreadable files are skipped instead of failing the index job
+
+collectRepoStats: 4 passed, 0 failed
+  ✓ index stats win and carry a real line count
+  ✓ two phrasings of the same LOC question return the identical number
+  ✓ falls back through manifest to tree in a fixed order
+  ✓ chat hot path skips expensive live tree walk
+  ✓ file-count-only sources refuse to supply a line count
+  ✓ no sources yields unavailable with a refusal instruction
+  ✓ no selected repo never guesses
+  ✓ getIdentity normalizes bare owner/repo ids
+  ✓ getIdentity does not invent GitHub when the host is unknown
+  ✓ mergeRepoInventoryContext attaches inventory and tree overview
+  ✓ readFile falls back to codeHostRouter when cloud fetch fails
+  ✓ readFile never returns local Coop disk when Use-repo is plane
+  ✓ listDirectory falls back to org tree API when code-host listing is empty
+
+IndexedRepoWorkspace: 13 passed, 0 failed
+indexed file discovery: branch, identity, stale, missing and pre-cap filtering checks passed
+  ✓ parseRepoIdCoords handles github:owner/repo
+  ✓ sameRepoCoords matches plane Use-repo against github:…/plane
+  ✓ snippetBelongsToActiveRepo rejects wrong-repo and local Coop bleed
+  ✓ filterCodeEvidenceToActiveRepo drops documenso + Coop paths for plane Use-repo
+  ✓ isForeignActiveFileForUseRepo drops Coop workspace file while Use-repo is plane
+  ✓ isForeignActiveFileForUseRepo drops remote tab from documenso while Use-repo is plane
+  ✓ dropForeignActiveFileEvidence clears chip and restores repo scope
+  ✓ dropForeignActiveFileEvidence keeps in-repo remote file
+  ✓ shouldSkipLocalEditorAttachForRepoScope honors sticky Use-repo
+  ✓ shouldIsolateActiveFileForQuickAction covers Gaps and Understand
+  ✓ org docs guardrail names active Use-repo and refuses Coop-AI ADRs as architecture
+
+repoEvidenceIsolation: 11 passed, 0 failed
+  ✓ plane package-boundary ask is structure intent and skips semantic retrieval
+  ✓ documenso top-level package structure ask is package-boundary intent
+  ✓ selectRootManifestPaths prefers workspace manifests from tree
+  ✓ selectChildPackageManifestPaths builds apps/web and apps/api paths
+  ✓ collectPackageManifestCandidatePaths for plane-like tree prefers in-repo manifests
+  ✓ buildTopLevelPackageStructure lists concrete documenso-shaped names from tree
+  ✓ buildTopLevelPackageStructure does not invent names when listings missing
+  ✓ extractWorkspaceGlobs reads npm and pnpm-style workspaces
+  ✓ filterManifestPathsToActiveRepoEvidence drops Coop-AI and wrong-repo bodies
+  ✓ isForeignStructureEvidencePath flags Coop chat bleed paths
+  ✓ mergeRepoInventoryContext attaches plane tree + manifests, not inventory estimates
+  ✓ mergeRepoInventoryContext records unavailable note without inventing layout
+  ✓ mergePackagesFromLoadedManifests fills packages when listings were empty
+  ✓ enrichPackageStructureResponse injects concrete names over glob-only answers
+  ✓ empty listings still probe common child package.json paths
+  ✓ enrichPackageStructureResponse blocks vague invention when packages unresolved
+  ✓ enrichPackageStructureResponse flags root-tree dump without child packages
+  ✓ empty listing probes prefer remix/signing ahead of filler names
+
+repoPackageBoundaryEvidence: 18 passed, 0 failed
+✔ INDEX_REPOSITORY persists branch on repo_stats (0.837166ms)
+✔ inventory client preserves indexed branch from API (0.188583ms)
+✔ index-stats inventory is not filtered by stale UI branch (0.131833ms)
+✔ branch resolution prefers indexed branch over workspace and UI (0.286542ms)
+✔ indexed-repo consumers use resolveActiveRepoTarget (0.656708ms)
+✔ understand-repo uses buildRepoSummaryEvidence as the single evidence path (1.288ms)
+✔ repo summary builders do not hardcode main as branch fallback (0.1505ms)
+✔ repoSummaryFromBundle treats inventory and tree as evidence (2.934416ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10.951167
+  ✓ sticky Use-repo branch wins over prefs main
+  ✓ prefs branch fills only when session has none
+  ✓ empty prefs does not invent a branch
+
+branchForEditorContext: 3/3 tests passed
+✔ resolveRepoBranchForTarget prefers indexed branch over code-host default (0.411416ms)
+✔ resolveRepoBranchForTarget uses workspace branch when index is unavailable (0.106458ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4.023375
+  ✓ enrichContextWithIndexedRepo attaches remote file without inventory for blast-radius
+  ✓ ping / greeting does not want inventory or tree
+  ✓ file-count question wants inventory not tree
+  ✓ plain chat ping does not attach inventory or tree
+  ✓ budget timeout keeps inventory instead of discarding to empty shell
+  ✓ understand-repo attaches inventory + tree + entry file bodies
+  ✓ understandRepoEmptyEvidenceMessage refuses architecture invention
+  ✓ understandRepoMissingEntryBodiesMessage refuses identity-only architecture
+
+indexedRepoContextEnrichment: 8/8 tests passed
+  ✓ prefs main loses to sticky Use-repo preview
+  ✓ indexed preview wins over prefs/session main for file fetches
+  ✓ identity-only is not Understand Repo success
+  ✓ inventory+tree without file bodies is not synthesis-ready
+  ✓ full evidence surfaces inventory, tree, and anchor Sources labels
+  ✓ Sources checklist uses concrete facts instead of filler
+
+understandRepoBranchContract: 6/6 tests passed
+  ✓ E1 ask is not a lone this-service hunt query
+  ✓ isWeakIndexQuery catches hunt-shortening noise
+  ✓ hunt locate still shortens requireAuth — onboarding helper is separate
+  ✓ onboarding ranking prefers auth middleware and issue/state models over OpenAPI/seed/i18n
+  ✓ onboarding ranking fails open when every path is noise
+  ✓ J7: tests never beat implementation files when ranking fail-opens
+  ✓ onboarding ranking spreads first files across auth/issue/state and drops tests/migrations
+  ✓ onboardingTopicsCovered fails when issue/state hits exist but only auth is attached
+  ✓ onboardingTopicsCovered passes when each topic with hits is attached
+  ✓ onboardingTopicsCovered fails open when a topic has zero non-noise hits
+  ✓ filename identity: empty-state and issue/archive do not beat state.py / issue.py
+  ✓ on-call API create is not an on-call-for index query
+  ✓ API-layer paths beat issue-modal when the user asked the API
+  ✓ API ask with only frontend attached stays uncovered when API hits exist
+  ✓ API reject-token onboard is the same job as create-issue
+  ✓ J7: onboard ask drops newcomer framing and indexes the action stem
+  ✓ J7: types.ts does not lead a behavioural ask, but stays as context
+  ✓ J7: an explicit types ask is never demoted
+  ✓ J7: demotion only applies to declaration files on behavioural asks
+  ✓ J7: types-only attach is uncovered when send-path hits exist
+  ✓ J7: behavioural attach skips types.ts when the hit list has an implementation file
+  ✓ treeSeededOnboardingQueries prefers domain terms over apps/packages folder names
+  ✓ treeSeededOnboardingQueries uses Python markers not Coop extension paths
+  ✓ understandRepoIndexQueries seeds Zoekt on bare understand from the tree
+
+onboardingSearchQueries: 24/24 tests passed
+  ✓ pickUnderstandParentDirs prefers apps over random folders
+  ✓ compose and entrypoint scripts are architecture noise
+  ✓ domain source paths are under apps/packages/src
+  ✓ listings pick issue/auth over compose
+  ✓ filterComposeArchitectureFiles drops compose when apps exist
+  ✓ isolateUnderstandRepoSummary drops leftover Notion/Docs and compose
+  ✓ treeHasAppsLayout
+  ✓ collectUnderstandDomainPaths walks Plane apps/ to models and auth
+
+understandRepoDomainAttach: 8/8 tests passed
+  ✓ combineSlashFocus joins prefix and args
+  ✓ combineSlashFocus keeps after-only and before-only focus
+  ✓ combineSlashFocus strips polite filler from prefix only
+  ✓ focusQueryForRetrieval rejects short and canned prompts
+  ✓ looksLikeCannedQuickActionPrompt detects directive blobs but not real ownership asks
+  ✓ mergeFocusEntryPaths keeps anchors then injects focus paths
+  ✓ focusGatherSatisfied passes when a focus hit is attached
+  ✓ focusGatherSatisfied fails when hits exist but none attached and paths lack tokens
+  ✓ focusGatherSatisfied fail-opens when index returned no hits
+  ✓ mergeFocusFilesIntoEntryFiles appends new focus bodies
+  ✓ mergeFocusFilesIntoEntryFiles displaces README/compose when domain hits exist
+  ✓ tokenizeFocusTerms drops stop words
+
+userFocusQuery: 12/12 tests passed
+  ✓ resolveRepoSummaryCoords parses owner/repo repoId
+  ✓ hasRepoSummaryEvidence detects entry files and manifest
+  ✓ pickEntryPaths prefers canonical entry points
+  ✓ pickEntryPaths tries blind entry candidates when tree and manifest are empty
+  ✓ pickEntryPaths injects focus-ranked manifest paths
+  ✓ pickEntryPaths with onboarding focus prefers domain files over compose/package.json
+  ✓ pickEntryPaths ranks auth/issue/state models over OpenAPI, seed JSON, and i18n
+  ✓ pickEntryPaths without focus still prefers Plane apps/ over compose
+  ✓ summarizeManifest counts extensions and symbols
+
+buildRepoSummaryContext: 9/9 tests passed
+  ✓ shouldRunRepoSemanticRetrieval allows plain chat with long query
+  ✓ locate focus search ranks implementation ahead of onboarding docs
+  ✓ shouldRunRepoSemanticRetrieval allows open-file PR review so callers can attach
+  ✓ shouldRunRepoSemanticRetrieval skips inventory / file-count questions
+  ✓ shouldRunRepoSemanticRetrieval skips structure / monorepo questions
+  ✓ shouldRunRepoSemanticRetrieval skips package-boundary questions
+  ✓ shouldRunRepoSemanticRetrieval skips integration slash turns
+  ✓ shouldRunRepoSemanticRetrieval rejects short query
+  ✓ shouldRunRepoSemanticRetrieval allows edit intent with 8-char slash args
+  ✓ shouldRunRepoSemanticRetrieval rejects edit intent below min without selection
+  ✓ shouldRunRepoSemanticRetrieval allows edit intent when selection supplements short args
+  ✓ shouldRunRepoSemanticRetrieval keeps 12-char min for plain chat
+  ✓ semanticRetrievalQueryText combines slash args and selection for edit
+  ✓ gateOptionsFromRequest passes codeEditIntent and selectionText extras
+  ✓ shouldRunRepoSemanticRetrieval rejects quick actions
+  ✓ shouldRunRepoSemanticRetrieval rejects two or more in-scope mentions
+  ✓ shouldRunRepoSemanticRetrieval allows one in-scope mention
+  ✓ shouldRunRepoSemanticRetrieval respects feature flag
+  ✓ isPlainChatIntentEvent matches manual chat and hotkey
+  ✓ gateOptionsFromRequest reads query and quick action from request
+  ✓ rankSearchPaths deduplicates and prefers higher scores
+  ✓ applySemanticByteBudget caps file count and total bytes
+  ✓ filterSemanticFilesToRepoId rejects documenso and Coop bleed for plane
+  ✓ mergeFocusSearchResults round-robins unique paths from topic searches
+  ✓ named locate files stay attached even when hunt cap is 1
+  ✓ mergeFocusSearchResults pins named files ahead of the attach cap
+  ✓ mergeFocusSearchResults honors hunt ranking over onboarding docs
+  ✓ mergeFocusSearchResults drops OpenAPI/seed/i18n when domain files exist
+  ✓ mergeFocusSearchResults does not let auth files crowd out issue/state models
+  ✓ mergeFocusSearchResults keeps issue/state pathHits when attach cap is auth-only
+  ✓ mergeRepoSemanticContext attaches repoSemanticSearch to chat context
+  ✓ mergeRepoSemanticContext keeps pathHits when no extra bodies
+
+repoSemanticRetrieval: 32/32 tests passed
+  ✓ formatRepoSummaryForPrompt includes tree and entry files
+  ✓ buildRepoSummarySynthesisUserPrompt includes active file section when file is open
+  ✓ buildRepoSummarySynthesisUserPrompt omits active file section when repo-wide
+  ✓ formatActiveFileContextForPrompt warns when dependency graph targets another file
+  ✓ buildRepoSummarySynthesisUserPrompt requires user callout for out-of-scope @ files
+  ✓ buildRepoSummarySynthesisUserPrompt forbids out-of-scope section when all @ files are in-repo
+  ✓ buildRepoSummarySynthesisUserPrompt forbids compose-as-architecture on bare overview
+  ✓ buildRepoSummarySynthesisUserPrompt steers concrete Sources, honest risks, and GitHub-only confidence
+  ✓ buildRepoSummarySynthesisUserPrompt marks narrow anchors as partial confidence
+  ✓ buildRepoSummarySynthesisUserPrompt requires attached doc titles and guards supplementary citations
+  ✓ buildRepoSummarySynthesisUserPrompt requires opening-prose focus when userFocus is set
+  ✓ buildRepoSummarySynthesisUserPrompt omits User focus when no custom ask
+  ✓ locate-shaped Understand Repo skips architecture syllabus
+
+repoSummarySynthesis: 13/13 tests passed
+legacy map provenance: exact branch, complete count, unique paths and every commit verified
+legacy map HTTP route: org-scoped inventory, matching generation and branch required

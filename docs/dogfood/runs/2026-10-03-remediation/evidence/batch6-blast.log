@@ -1,0 +1,70 @@
+
+> coop-ai@0.1.10 test:blast
+> npx tsx src/engines/blastRadiusDependentsFallback.test.ts && npx tsx src/prompts/blastRadiusSynthesis.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/engines/blastRadiusAnalysis.test.ts
+
+  ✓ isDocsReferencePath detects markdown, docs trees, and d.ts
+  ✓ splitBlastRadiusDependents separates code from docs references
+  ✓ groupDependentsByTopLevelFolder buckets by top-level folder
+  ✓ rankCodeDependentsByRisk prioritizes production and integration over tests
+  ✓ rankCodeDependentsByRisk prefers prod module over story and e2e
+  ✓ smoke-shaped StateGroup blast is not story-dominated when prod edges exist
+  ✓ smoke-shaped DocumentStatus blast surfaces non-test refs when present
+  ✓ sortDependentsProductionFirst orders mixed dependents for list display
+  ✓ scoreDependentRisk labels stories and e2e as test surfaces
+  ✓ extractBlastSearchSymbols prefers StateGroup from smoke ask
+  ✓ isGenericBlastImpactAsk ignores default chip copy
+  ✓ isGenericBlastImpactAsk treats canned model prompt and history chips as generic
+  ✓ bare blast canned prompt does not name authMiddleware
+  ✓ display Estimate ask stays generic even with file chip boilerplate
+  ✓ file-stem named symbol is stripped unless it is a definition
+  ✓ file-level merge keeps durable importers when named symbols sanitize empty
+  ✓ enrichBlastRadiusResponse keeps file-level callers instead of none-confirmed template
+  ✓ extractBlastSearchSymbols skips default blast ask (no Estimate noise)
+  ✓ extractBlastSearchSymbols takes camelCase and snake_case from the ask
+  ✓ extractBlastSearchSymbols ignores English TitleCase from a list-callers ask
+  ✓ named-symbol blast drops file importers that only use a sibling export
+  ✓ named-symbol hits require the identifier, not a path-only file import
+  ✓ isVerifiedCallerSearchSource rejects embedding and fallback
+  ✓ hitLooksLikeReferenceToTarget requires stem when content is a code line
+  ✓ buildImportSearchPatterns includes path suffixes for relative imports
+  ✓ extractExportNamesFromSource includes Python class names
+  ✓ extractExportNamesFromSource prefers distinctive exports
+  ✓ buildLocalCallerNeedles includes path suffixes and exports
+  ✓ searchDependentsInLocalRoots finds real responseDeadline importers
+  ✓ buildImportSearchPatterns includes symbol and alias forms
+  ✓ mergeSearchDependentsFallbackIntoDependenciesData fills callers when job sample empty
+  ✓ mergeSearchDependentsFallbackIntoDependenciesData replaces junk job callers with search hits
+  ✓ mergeSearchDependentsFallbackIntoDependenciesData clears junk when search empty
+  ✓ mergeSearchDependentsFallbackIntoDependenciesData can keep filtered job edges when search empty
+  ✓ named-function blast does not fail-open to file importers when search is empty
+  ✓ named /blast requireAuth stays named-mode and honest
+  ✓ contentUsesNamedSymbol requires the named export, not a sibling import
+  ✓ resolveNamedBlastSymbols unions the editor chip with the ask
+  ✓ mergeDurableDependentsIntoContextData sets directDependents + import-parse source
+  ✓ resolveTrustedRemoteDependents uses durable import-parse without localRoots
+  ✓ searchDependentsFallback ignores localRoots by default (Zero-Clone)
+  ✓ named requireAuth blast keeps jobsApi when Zoekt snippet contains requireAuth(
+  ✓ path-only named-function hits are not callers without a remote body
+  ✓ verifyRemoteFilesMentionNamedSymbol keeps requireAuth callers only
+  ✓ searchDependentsFallback stops after the first pattern when shouldAbort
+  ✓ path-only Zoekt requireAuth hits are confirmed via remote file bodies
+  ✓ durable importers that call requireAuth survive when Zoekt snippets are path-only
+
+blastRadiusDependentsFallback: 47/47 tests passed
+  ✓ blast-radius synthesis includes primary target and out-of-scope @ attachments
+  ✓ blast-radius synthesis forbids zero-impact language in guardrails
+  ✓ blast-radius synthesis includes dependent details when present
+  ✓ blast-radius synthesis includes docs references section when present
+  ✓ blast-radius synthesis includes top risk surfaces ranking
+  ✓ blast-radius synthesis includes CI rollout guidance when workflows present
+  ✓ blast-radius synthesis skips partial caveat when remote graph has verified callers
+  ✓ blast-radius synthesis uses thin-evidence stop when graph is empty
+  ✓ blast-radius synthesis requires attached documentation titles
+  ✓ named-function blast prompt does not treat every file importer as breakage
+  ✓ named-function blast with no callers locks Direct impact empty
+  ✓ enrichBlastRadiusResponse replaces guessed callers when named-function callers are unconfirmed
+  ✓ enrichBlastRadiusResponse replaces file-level essay when graph is empty
+  ✓ enrichBlastRadiusResponse does not replace requireAuth callers from stub search
+
+blastRadiusSynthesis: 14/14 tests passed
+blastRadiusAnalysis: ok

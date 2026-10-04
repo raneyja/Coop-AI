@@ -16,7 +16,7 @@ type ChatProseProps = {
   hidePatchFences?: boolean;
   /** Open editor path — upgrades mistaken ```lang repo dumps to cite chrome. */
   activeFilePath?: string;
-  onOpenFile?: (path: string, line?: number) => void;
+  onOpenFile?: (path: string, line?: number, options?: { endLine?: number }) => void;
   onOpenLink?: (url: string) => void;
   className?: string;
 };
@@ -130,7 +130,7 @@ function inlineNodeToPlainText(node: ChatInlineNode): string {
 function renderBlock(
   block: ChatProseBlock,
   index: number,
-  onOpenFile: ((path: string, line?: number) => void) | undefined,
+  onOpenFile: ((path: string, line?: number, options?: { endLine?: number }) => void) | undefined,
   onOpenLink: ((url: string) => void) | undefined,
   options: RenderOptions
 ): React.ReactElement {
@@ -155,7 +155,7 @@ function renderBlock(
             <ChatActionLink
               kind="file"
               label={block.path}
-              onClick={() => onOpenFile?.(block.path, block.startLine)}
+              onClick={() => onOpenFile?.(block.path, block.startLine, { endLine: block.endLine })}
             />
           </p>
         );
@@ -208,7 +208,7 @@ function renderBlock(
 
 function renderInlineNodes(
   nodes: ChatInlineNode[],
-  onOpenFile: ((path: string, line?: number) => void) | undefined,
+  onOpenFile: ((path: string, line?: number, options?: { endLine?: number }) => void) | undefined,
   onOpenLink: ((url: string) => void) | undefined,
   options: RenderOptions
 ): React.ReactNode[] {

@@ -1,7 +1,7 @@
 import React, { createContext, useContext } from "react";
 
 export type ChatLinkHandlers = {
-  onOpenFile?: (path: string, line?: number) => void;
+  onOpenFile?: (path: string, line?: number, options?: { endLine?: number; preserveContext?: boolean }) => void;
   onOpenLink?: (url: string) => void;
 };
 

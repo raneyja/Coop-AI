@@ -1,0 +1,29 @@
+{
+  "scenario": {
+    "id": "DF-060",
+    "area": "Session, settings and resilience",
+    "fixture": "Sandbox account(s); recorded repo/ref; deterministic fault fixtures",
+    "action": "Set Auto then a paid catalog model; reload.",
+    "passCriteria": "Composer choice persists and applies to chat; assigned background features unaffected.",
+    "modes": [
+      "fresh"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T17:47:14.139347+00:00",
+    "status": "BLOCKED",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "see notes@see notes",
+    "action": "Set Auto then a paid catalog model; reload.",
+    "actualResult": "UI subset passed: chose GPT-5 mini from paid composer catalog, confirmed checkmark, Reload Window, checkmark persisted. Restored Auto and confirmed checkmark. No request sent while paid model selected; actual provider use and assigned background-model invariance not verified. Full case remains blocked on those observations.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-060-fresh-1.json",
+    "criteriaReview": "NOT_ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": null,
+    "durationMs": null,
+    "threadId": null
+  },
+  "diagnosticEvents": []
+}

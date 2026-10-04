@@ -66,6 +66,12 @@ export function splitCompareArgTokens(args: string): {
   rightToken?: string;
   topic: string;
 } {
+  // Accept the same natural instruction users type after the slash token.
+  // Repository identifiers remain single tokens; only the topic is free text.
+  const natural = args.trim().match(/^(?:compare\s+)?(.+?)\s+(?:in|between|across)\s+(\S+)\s+(?:and|with|vs\.?|versus)\s+(\S+)$/i);
+  if (natural) {
+    return { leftToken: natural[2], rightToken: natural[3], topic: natural[1]!.trim() };
+  }
   const tokens = args
     .trim()
     .split(/\s+/)
@@ -76,8 +82,8 @@ export function splitCompareArgTokens(args: string): {
   }
   return {
     leftToken: tokens[0],
-    rightToken: tokens[1],
-    topic: tokens.slice(2).join(" ").trim()
+    rightToken: /^(?:and|with|vs\.?|versus)$/i.test(tokens[1]!) ? tokens[2] : tokens[1],
+    topic: tokens.slice(/^(?:and|with|vs\.?|versus)$/i.test(tokens[1]!) ? 3 : 2).join(" ").trim()
   };
 }
 

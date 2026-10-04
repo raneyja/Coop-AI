@@ -42,6 +42,7 @@ import { buildTimelineEntries, groupTimelineSourceCards } from "./chatTimelineEn
 import { shouldUseSuggestClarifyingBody } from "../lib/patchStreamDisplay";
 
 export type ChatMessage = {
+  clientSubmissionId?: string;
   role: "user" | "assistant" | "system";
   content: string;
   timestamp: number;

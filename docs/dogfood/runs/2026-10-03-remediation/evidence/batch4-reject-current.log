@@ -1,0 +1,241 @@
+
+> coop-ai@0.1.10 test:reject-hunt-fidelity
+> npx tsx src/api/agent/AgentOrchestrator.test.ts && npx tsx src/api/agent/searchQuery.test.ts && npx tsx src/api/agent/fieldHandlingEvidence.test.ts && npx tsx src/api/agent/candidateLedger.test.ts && npx tsx src/api/agent/gatherRequest.test.ts && npx tsx src/api/agent/runToolContext.test.ts && npx tsx src/api/agent/tools/searchCode.test.ts && npx tsx src/api/agent/noRepoSpecificRules.test.ts && node --test scripts/repository-hunt-trace.test.mjs
+
+  ✓ pickTopSearchHit prefers highest score
+  ✓ run executes search_code then read_file on top hit
+  ✓ run stops after search when index returns no hits
+  ✓ run returns empty when repoId is missing
+  ✓ run respects maxSteps=1 (search only)
+  ✓ LLM planTurn chooses search then read (A-G1)
+  ✓ locate with planTurn uses the LLM loop (same conversation)
+  ✓ calm state locate requires the opened State declaration
+  ✓ sanitizes full-question search queries to a short identifier
+  ✓ change hunt skips auth UI that never mentions requireAuth
+  ✓ reads the declaration line, not the top of the file
+  ✓ reads a bounded window when the index gave no position
+  ✓ retries with a broader term when the first search returns only barrels
+  ✓ LLM full-sentence query is rewritten before search
+  ✓ invalid first plan fails open to deterministic fallback (A-G3)
+  ✓ aborted signal returns no hang (A-P3)
+  ✓ forced repoId ignores model-supplied repo (A-P14 / UX-G10)
+  ✓ caps at 8 model-chosen rounds (A-P2)
+  ✓ wrong first hit forces a second read before done (dogfood)
+  ✓ empty hunt does not stream a Your question restatement
+  ✓ role-noun hunt rejects a collab auth read that never says middleware
+  ✓ feature-add with open file seeds read_file and does not post INDEX_HUNT_MISS
+  ✓ named filename seeds read_file even when the body uses a different export
+  ✓ named path seeds the same read as a follow-up Read prompt
+  ✓ planTurn startLine:1 still reads the class, not only the copyright line
+  ✓ C1 Authorization-Bearer ask streams when the index has a Bearer hit
+  ✓ C2 work-item ask streams when the index has a transition hit
+  ✓ C2 auto-reads the hit when the model only searches
+  ✓ C2 auto-read prefers API writer over locale and client grouping hits
+  ✓ C2 jumps from a read-only serializer class to validate() in the same file
+  ✓ C2 model read of a serializer class still jumps to validate()
+  ✓ C2 synthesis conversation excludes OpenAPI and read-only serializer windows
+  ✓ C2 cannot answer from reject evidence alone even without planner evidence labels
+  ✓ C2 accepts verified state update delegation alongside its rejection
+  ✓ compound hunt preserves the model's later write window after attaching a reject
+  ✓ C2 hunt skips filter converters and attaches serializer validate()
+  ✓ C1 empty index still posts INDEX_HUNT_MISS
+  ✓ T2 hunt attaches parent ValidationError, not converters
+  ✓ T2 wrong-floor serializer window jumps to parent ValidationError
+  ✓ reject hunt: planTurn owns gather — planned criteria are hints, not pre-loop parade
+  ✓ C2 ignores locate-only planned criteria and attaches state ValidationError
+  ✓ C2 continues past bgtask noise to attach state ValidationError
+  ✓ UI-only reject evidence yields short miss, not speculative backend essay
+  ✓ API-reject hunt does not answer from a different field's validate()
+  ✓ API-reject hunt jumps in-file from a wrong-field validate() to the asked field
+  ✓ API-reject hunt finds a field raise whose message is not “is not valid”
+  ✓ API-reject hunt attaches invite email, not a signup email 400
+  ✓ API-reject hunt skips invite callers that rethrow and attaches the email check
+  ✓ API-reject hunt jumps in-file from an invite caller to the email 400
+  ✓ API-reject ask uses planTurn (script brain bypass removed)
+  ✓ API-reject miss goes through planTurn then short miss (no scavenger parade)
+  ✓ leftover unmatched chip still hunts auth middleware and does not search Jira
+  ✓ extractBearerToken what-calls-it still reads a caller after the definition window
+  ✓ requireAuth OR authentication middleware reads plane APIKeyAuthentication (zero model reads)
+  ✓ first search story mention then authMiddleware query reads the server
+  ✓ story-only hunt posts INDEX_HUNT_MISS and does not answer from the mention
+  ✓ role-only what-calls-it reads the server then a handler that uses the export
+  ✓ role-only what-calls-it without a caller still cites the implementation
+  ✓ story mention must not become callerRead
+  ✓ H1 requireAuth defined does not require a caller read
+  ✓ role-only what-calls-it uses requireAuth from the full file, not the top window
+  ✓ role-only Card 1 attach jumps to the gate export, not page 1
+  ✓ ship-check search hits do not answer until a sibling 401 body is read
+  ✓ ship-check reads sibling 401 writers and tests, not path-only hits
+  ✓ search snippet without a remote body cannot pass the Parent reject evidence gate
+  ✓ search-hit ValidationError does not pass without a remote body read
+  ✓ search-hit message-only snippet does not pass Parent reject without a remote read
+  ✓ reject attaches from raw hits when preferredHits emptied by noise
+  ✓ finish cannot miss while unused asked-field hit sits in search context
+  ✓ wrong-branch body without Parent still attaches from message-only hit
+  ✓ planTurn present does not resurrect huntWriteReject on invalid first plan
+  ✓ reject adaptation: round-2 tool depends on round-1 preferredHits
+  ✓ live Plane issue.py wrong-floor hit jumps to Parent ValidationError
+  ✓ Gate A fidelity: planned Parent hunt leads with the exact quote and adds no finish search parade
+  ✓ live Parent Fail: invent draft twin must follow to issue create serializer
+  ✓ live Parent Fail: wrong __init__/urls opens must not skip invent → attach
+  ✓ live Parent Fail shape: planner refines quote misses to IssueCreateSerializer
+  ✓ live Parent shape: agent invents symbol search after empty quote (no body-scan rail)
+  ✓ multi-hit: weak twin attach does not freeze when ask job unmatched and budget left
+  ✓ Parent paraphrase consumes the serializer candidate and jumps to the reject
+  ✓ planned reject hunt caps at one seed plus four empty refinements
+  ✓ repeated reject searches require a new criterion without another network call
+  ✓ domain-status reject preserves the model's handler search
+  ✓ reject first search uses exact quote before the planner's generic query
+  ✓ reject first search uses ask-derived transition criteria before generic intent terms
+  ✓ agent readRemoteFile wiring keeps resolveActiveRepoTarget (branch parity)
+  ✓ remote filtering method corrects a reject premise and survives synthesis compaction
+  ✓ target resolution hands off without an unverified ref and respects user Stop
+  ✓ compound filtering evidence never claims an actual rejection was found
+  ✓ slow tool planning hands verified source to synthesis without cancelling the answer
+  ✓ locate synthesis excludes unopened search excerpts and planning guesses
+  ✓ compound handoff reuses the complete same-class remote update, never a neighboring class
+
+AgentOrchestrator: 92/92 tests passed
+  ✓ prefers the symbol the user named over a prose phrase
+  ✓ extracts camelCase without grabbing Where
+  ✓ falls back to a role noun phrase when no symbol is named
+  ✓ sanitize replaces the whole question
+  ✓ sanitize keeps a short model-chosen identifier
+  ✓ fallback queries broaden from symbol to plain words
+  ✓ identifier aliases bridge camelCase and snake_case
+  ✓ index retrieval OR-covers both casings
+  ✓ fallback queries never repeat the whole question
+  ✓ ranks a path that matches the question's words above one that does not
+  ✓ pickSearchHitsToRead skips barrels
+  ✓ pickSearchHitsToRead skips build output and vendored code
+  ✓ does not drop a UI path just because the question sounds backend
+  ✓ exact symbol path beats a weak auth UI path for requireAuth asks
+  ✓ drops auth UI hits that never mention requireAuth
+  ✓ role-noun hunts keep middleware hits and drop collab auth
+  ✓ role-noun hunts drop leftover latency hits that never say middleware
+  ✓ pickSearchHitsToRead keeps the server and drops a language-mismatch story
+  ✓ pickSearchHitsToRead returns empty when every hit is a mention
+  ✓ locate skips docs and fixtures but not a story path
+  ✓ does not treat require_authentication filenames as requireAuth
+  ✓ symbol index rejects require_authentication as a requireAuth match
+  ✓ skips test paths for named-symbol hunts unless the user asked about tests
+  ✓ ship-check ask does not skip handler tests
+  ✓ keeps a barrel when the user named that exact file
+  ✓ picks the declaration whose name matches the symbol the user asked about
+  ✓ ignores declarations unrelated to the question
+  ✓ ignores declarations inside vendored code
+  ✓ isBarrelPath
+  ✓ isGeneratedOrVendorPath
+  ✓ queryRoleHints extracts middleware from a locate ask
+  ✓ textMentionsQueryRoles requires the role in the file or path
+  ✓ C1 prose locate does not require Authorization as a named symbol
+  ✓ prose parsing ranks a parser declaration ahead of token storage filename overlap
+  ✓ C2 prose locate does not require Users as a named symbol
+  ✓ C2 skips locale catalogs and prefers API write paths over client grouping
+  ✓ C2 skips state catalogs and client posts; prefers the write/reject handler
+  ✓ C2 skips seed JSON and read-only serializers; prefers the reject snippet
+  ✓ filterWriteRejectFiles drops OpenAPI and read-only serializer windows
+  ✓ C2 skips OpenAPI specs and does not treat partial_update as a reject
+  ✓ C2 skips query-filter converters and does not stop on generic ValidationError
+  ✓ C2 does not pick a permission-only view when a reject snippet exists
+  ✓ lineNumberOfWriteReject prefers ValidationError near state
+  ✓ lineNumberOfWriteReject ignores filter ValidationError that is not a state transition
+  ✓ Where is requireAuth defined still requires that symbol
+  ✓ Where is the Button component still searches Button
+  ✓ edit tests-for-X prefers the callee over the test-file stem
+  ✓ filename asks are file hunts, not required in-body symbols
+  ✓ named files are path-shaped, not a language allowlist
+  ✓ API-reject hunt is a class: C2, parent, and assignee fields all match
+  ✓ calm locate with API + work-item is not the ValidationError scavenger hunt
+  ✓ client UI path class covers hooks/stores, not API trees
+  ✓ C2 skips product-UI hooks/stores and never reads them over a server reject
+  ✓ API key / request-auth locate prefers enforcement over config and secret gates
+  ✓ backend work-item state locate prefers server state paths over UI hooks
+  ✓ calm state locate requires the opened State declaration and caps duplicate fallbacks
+  ✓ compound auth + states locate keeps enforcement and a state definition
+  ✓ T2 hunt searches parent field access, not bare issue_id
+  ✓ planned quarterback criteria run before slogan backup
+  ✓ invent and merge never lead with reject-a-bad slogans
+  ✓ codehost fail-open only for reject / quoted error strings
+  ✓ lightningHitsSatisfySearchQuery requires phrase evidence for long queries
+  ✓ utils/error_codes is reject noise — not a write-reject site
+  ✓ reject hunt ignores locate-only planned criteria like work item state
+  ✓ novel T2 paraphrase invents ask-derived criteria without a new slogan
+  ✓ C2 skips shared types packages, utils filters, and non-actionable symbols
+  ✓ empty planned criteria fail open into invent + fallback
+  ✓ API-reject hunts do not latch *_id as a named symbol
+  ✓ asked-field tokens use the qualifier, not a type suffix like issue_id
+  ✓ wrong-field validate() is not an asked-field reject
+  ✓ asked-field reject matches Zoekt string-only error line (no raise keyword)
+  ✓ asked-field reject matches Zoekt Match span that omits the field word
+  ✓ askedRejectErrorQuotes extracts Exact Parent message and is empty for COPILOT_T2_ASK
+  ✓ sanitize keeps Exact Parent error string instead of rewriting to get(parent)
+  ✓ Gate A: Exact Parent quote-first — not ValidationError / bare issue_id / get(parent)
+  ✓ Gate A: exact-string locate must not latch bare issue_id
+  ✓ asked-field reject keeps the matching ValidationError and drops converters
+  ✓ API-reject pick prefers asked-field reject over a different field's validate()
+  ✓ API-reject pick keeps a serializer with a wrong-field snippet so hunt can jump in-file
+  ✓ filterWriteRejectFiles keeps the asked field reject, not OpenAPI
+  ✓ asked-field reject matches a raise whose message does not repeat the field
+  ✓ API-reject job: invite email is not a signup email reject
+  ✓ API-reject hunt ignores invite callers that rethrow and pass email through
+  ✓ readBodyHasCallerUse uses the grounded export when the ask has no named symbol
+  ✓ readBodyHasCallerUse still counts same-file extractBearerToken( for a named-symbol ask
+  ✓ lineNumberOfCallerUse returns the use line, not the declaration
+  ✓ L3: defined-on-server compound is auth+state locate, not reject
+  ✓ L3: comment_html issue serializer is not state definition evidence
+  ✓ L3: auth alone without state definition must not satisfy compound pick padding
+  ✓ C2: reject hunt skips migrations, icons, empty-state, seeds, OpenAPI, HTML
+  ✓ Create locate prefers ViewSet/create serializer and jumps to create line
+  ✓ Create finish honesty strips please-open for an already-read path
+  ✓ reject jump prefers the named field over an overlapping adjacent reject
+  ✓ state catalog validation is not a work-item transition rejection
+  ✓ server status rejection uses field evidence rather than imports
+  ✓ calm status definition stays a locate question
+  ✓ signing operation does not freeze on a PDF download status guard
+  ✓ named definition misses do not expand into generic question prose
+
+searchQuery: 98/98 tests passed
+verified field-handling evidence checks passed
+candidateLedger: passed
+gather handoff: bounded waiting, no latency abort, user Stop passed
+runToolContext target isolation and diagnostics passed
+ok - normalizeCodeHostSearchQuery strips outer quotes
+ok - findQueryMatchLine finds Parent ValidationError line
+ok - Lightning empty + codehost path + body enrich attaches reject line
+ok - Lightning empty + codehost path + failed body still returns path for auto-read
+ok - symbol locate with empty Lightning does not call codehost
+ok - Lightning hits skip codehost even for reject query
+ok - UI text matching a reject query does not suppress codehost fallback
+ok - a different field's server reject does not suppress codehost fallback
+ok - literal codehost query follows an empty phrase query
+ok - reject fallback uses a field token after phrase and literal misses
+ok - Lightning wrong hits for phrase query still trigger codehost fail-open
+ok - cloud content search unsupported recovers through filename discovery and verifies remote body
+ok - a validate-prefixed definition lookup does not become a reject hunt
+ok - operation filenames recover signing after a neighboring PDF guard
+ok - backend State lookup remotely opens declaration after UI-only index hits
+ok - indexed entity filename hints recover a transition when the user vocabulary differs
+ok - semantic reject retrieval refines with the task instead of repeating a casing alias
+ok - remotely disproven filename candidates do not get queued for another read
+ok - retrieval diagnostics record criteria and candidate rejection without source bodies
+ok - equivalent hunts reuse results while both lexical identifier forms remain searchable
+ok - ruled-out remote candidates retain status without duplicate body work across refinements
+ok - filename discovery preserves a complete remotely verified filtering method
+ok - indexed entity hints retain a domain directory and omit the shared namespace
+  ✓ no ranking module encodes a specific repository's layout
+  ✓ the noise module's whole vocabulary is universal infrastructure
+  ✓ no product, framework, or vendor name in ranking code
+  ✓ noise classification lives in one module, not copied per caller
+
+noRepoSpecificRules: 4/4 tests passed
+repository-hunt trace comparison passed
+✔ scripts/repository-hunt-trace.test.mjs (33.6365ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 38.081792

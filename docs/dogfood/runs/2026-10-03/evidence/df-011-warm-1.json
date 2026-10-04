@@ -1,0 +1,1644 @@
+{
+  "scenario": {
+    "id": "DF-011",
+    "area": "Repository questions",
+    "fixture": "Connected Documenso fork; main pinned SHA; no chip",
+    "action": "A signer gets an error that the document must be pending for signing. Where does the server reject this request, and what status check enforces it?",
+    "passCriteria": "Reads selected fork signing guard and actual PENDING condition; no Plane/Coop paths.",
+    "modes": [
+      "cold",
+      "warm",
+      "after-repo-switch"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T17:25:48.631240+00:00",
+    "status": "FAIL",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "bitbucket:coop-ai/documenso@main",
+    "action": "A signer gets an error that the document must be pending for signing. Where does the server reject this request, and what status check enforces it?",
+    "actualResult": "Documenso Bitbucket main no chip. Canned reject miss, no signing guard or PENDING evidence. No cross-repo paths in answer; task failed on second provider too.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-011-warm-1.json",
+    "criteriaReview": "NOT_ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": 9014,
+    "durationMs": 9014,
+    "threadId": "thread-1791048307042-8oilmx"
+  },
+  "diagnosticEvents": [
+    {
+      "at": "2026-10-03T17:25:16.193Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 1139,
+      "stage": "target",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "requestedBranch": "main",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:16.193Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 1139,
+      "stage": "turn",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "action": "locate",
+      "hunt": "api-reject",
+      "taskQuery": "A signer gets an error that the document must be pending for signing. Where does the server reject this request, and what status check enforces it?",
+      "plannedSearchQueries": [
+        "status check"
+      ],
+      "requiredEvidence": []
+    },
+    {
+      "at": "2026-10-03T17:25:17.133Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 2079,
+      "stage": "plan",
+      "round": 0,
+      "result": "call",
+      "tool": "search_code",
+      "query": "status check",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T17:25:17.485Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 2431,
+      "stage": "index-search-start",
+      "query": "status check",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:18.705Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 3651,
+      "stage": "index-search",
+      "query": "status check",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 1220,
+      "hitCount": 15,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "packages/lib/jobs/definitions/internal/sync-email-domains.handler.ts",
+          "line": 2,
+          "score": 0.4188200360716554
+        },
+        {
+          "path": "apps/remix/app/components/general/organisations/organisation-quota-banner.tsx",
+          "line": 3,
+          "score": 0.4024413281871281
+        },
+        {
+          "path": "packages/prisma/seed/medium-account-seed.ts",
+          "line": 1,
+          "score": 0.40050509344355323
+        },
+        {
+          "path": "apps/remix/app/routes/api+/health.ts",
+          "line": 1,
+          "score": 0.3826371794975062
+        },
+        {
+          "path": "packages/app-tests/e2e/user/delete-account.spec.ts",
+          "line": 23,
+          "score": 0.37871483702069586
+        },
+        {
+          "path": "packages/app-tests/e2e/envelope-editor-v2/envelope-settings.spec.ts",
+          "line": 11,
+          "score": 0.3785212147161021
+        },
+        {
+          "path": "packages/lib/server-only/cert/cert-status.ts",
+          "line": 1,
+          "score": 0.37391675275351965
+        },
+        {
+          "path": "apps/remix/app/components/general/organisations/organisation-billing-banner.tsx",
+          "line": 2,
+          "score": 0.37061861837495913
+        },
+        {
+          "path": "packages/app-tests/e2e/fixtures/authentication.ts",
+          "line": 4,
+          "score": 0.37043741163310306
+        },
+        {
+          "path": "packages/app-tests/e2e/document-flow/autosave-subject-step.spec.ts",
+          "line": 10,
+          "score": 0.3672590358446721
+        },
+        {
+          "path": "apps/remix/server/api/ai/detect-recipients.ts",
+          "line": 2,
+          "score": 0.36440930027337537
+        },
+        {
+          "path": "apps/remix/app/components/dialogs/ai-recipient-detection-dialog.tsx",
+          "line": 4,
+          "score": 0.362135825864625
+        },
+        {
+          "path": "apps/remix/server/api/ai/detect-fields.ts",
+          "line": 2,
+          "score": 0.3590195762843502
+        },
+        {
+          "path": "apps/remix/app/components/general/admin-license-card.tsx",
+          "line": 2,
+          "score": 0.3588462261747136
+        },
+        {
+          "path": "packages/auth/server/routes/email-password.ts",
+          "line": 4,
+          "score": 0.3580332427966848
+        }
+      ],
+      "symbols": [],
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:18.706Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 3652,
+      "stage": "index-search-start",
+      "query": "A signer gets an error that the document must be pending for signing. Where does the server reject this request, and what status check enforces it?",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:19.383Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 4329,
+      "stage": "index-search",
+      "query": "A signer gets an error that the document must be pending for signing. Where does the server reject this request, and what status check enforces it?",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 677,
+      "hitCount": 14,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "packages/app-tests/e2e/user/delete-account.spec.ts",
+          "line": 7,
+          "score": 0.5268639737594997
+        },
+        {
+          "path": "apps/remix/server/api/files/files.helpers.ts",
+          "line": 4,
+          "score": 0.5247463249932971
+        },
+        {
+          "path": "packages/lib/server-only/webhooks/trigger/generate-sample-data.ts",
+          "line": 5,
+          "score": 0.5178969297761254
+        },
+        {
+          "path": "packages/app-tests/e2e/envelopes/envelope-v2-field-insertion.spec.ts",
+          "line": 1,
+          "score": 0.4953359867377245
+        },
+        {
+          "path": "packages/lib/jobs/definitions/internal/seal-document-sweep.handler.ts",
+          "line": 2,
+          "score": 0.49211029300869047
+        },
+        {
+          "path": "packages/app-tests/e2e/document-auth/next-recipient-dictation.spec.ts",
+          "line": 3,
+          "score": 0.4788519115154424
+        },
+        {
+          "path": "packages/app-tests/e2e/api/v2/partial-signed-pdf-download.spec.ts",
+          "line": 4,
+          "score": 0.4780899074753183
+        },
+        {
+          "path": "packages/lib/jobs/definitions/internal/seal-document.handler.ts",
+          "line": 2,
+          "score": 0.4762400941729712
+        },
+        {
+          "path": "packages/api/v1/implementation.ts",
+          "line": 3,
+          "score": 0.4758996671499862
+        },
+        {
+          "path": "apps/remix/app/components/general/envelope-editor/envelope-editor-recipient-form.tsx",
+          "line": 8,
+          "score": 0.4740758800209426
+        },
+        {
+          "path": "packages/app-tests/e2e/documents/bulk-document-actions.spec.ts",
+          "line": 5,
+          "score": 0.47352039103449006
+        },
+        {
+          "path": "packages/app-tests/e2e/envelope-editor-v2/envelope-items.spec.ts",
+          "line": 18,
+          "score": 0.4687151663510316
+        },
+        {
+          "path": ".agents/plans/smooth-ivory-sky-partial-signed-pdf-download.md",
+          "line": 1,
+          "score": 0.4683397881082205
+        },
+        {
+          "path": "packages/app-tests/e2e/admin/organisations/delete-organisation.spec.ts",
+          "line": 15,
+          "score": 0.46774733249889355
+        }
+      ],
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:19.387Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 4333,
+      "stage": "filename-criteria",
+      "query": "status check",
+      "criteria": [
+        "sign",
+        "authentication.",
+        "status.",
+        "check."
+      ],
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:19.387Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 4333,
+      "query": "sign",
+      "stage": "filename-search-start",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:20.106Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 5052,
+      "stage": "indexed-map-response",
+      "requestedRepoId": "bitbucket:coop-ai/documenso",
+      "requestedBranch": "main",
+      "status": 200,
+      "responseRepoId": "bitbucket:coop-ai/documenso",
+      "stale": false,
+      "hasDataArray": true,
+      "fileCount": 2381,
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:20.106Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 5052,
+      "query": "sign",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 719,
+      "stage": "filename-search",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:20.106Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 5052,
+      "query": "authentication.",
+      "stage": "filename-search-start",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:20.107Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 5053,
+      "query": "authentication.",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 1,
+      "stage": "filename-search",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:20.107Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 5053,
+      "query": "status.",
+      "stage": "filename-search-start",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:20.107Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 5053,
+      "query": "status.",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 0,
+      "stage": "filename-search",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:20.107Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 5053,
+      "query": "check.",
+      "stage": "filename-search-start",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:20.107Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 5053,
+      "query": "check.",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 0,
+      "stage": "filename-search",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:20.123Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 5069,
+      "stage": "search",
+      "round": 0,
+      "repoId": "bitbucket:coop-ai/documenso",
+      "query": "status check",
+      "source": "embedding",
+      "stale": false,
+      "codeHostFallbackAttempted": false,
+      "codeHostFallbackStatus": "not_attempted",
+      "filenameFallbackStatus": "error",
+      "rawHitCount": 29,
+      "rawSymbolCount": 0,
+      "rawHits": [
+        {
+          "path": "packages/lib/jobs/definitions/internal/sync-email-domains.handler.ts",
+          "line": 2,
+          "score": 0.4188200360716554
+        },
+        {
+          "path": "apps/remix/app/components/general/organisations/organisation-quota-banner.tsx",
+          "line": 3,
+          "score": 0.4024413281871281
+        },
+        {
+          "path": "packages/prisma/seed/medium-account-seed.ts",
+          "line": 1,
+          "score": 0.40050509344355323
+        },
+        {
+          "path": "apps/remix/app/routes/api+/health.ts",
+          "line": 1,
+          "score": 0.3826371794975062
+        },
+        {
+          "path": "packages/app-tests/e2e/user/delete-account.spec.ts",
+          "line": 23,
+          "score": 0.37871483702069586
+        },
+        {
+          "path": "packages/app-tests/e2e/envelope-editor-v2/envelope-settings.spec.ts",
+          "line": 11,
+          "score": 0.3785212147161021
+        },
+        {
+          "path": "packages/lib/server-only/cert/cert-status.ts",
+          "line": 1,
+          "score": 0.37391675275351965
+        },
+        {
+          "path": "apps/remix/app/components/general/organisations/organisation-billing-banner.tsx",
+          "line": 2,
+          "score": 0.37061861837495913
+        },
+        {
+          "path": "packages/app-tests/e2e/fixtures/authentication.ts",
+          "line": 4,
+          "score": 0.37043741163310306
+        },
+        {
+          "path": "packages/app-tests/e2e/document-flow/autosave-subject-step.spec.ts",
+          "line": 10,
+          "score": 0.3672590358446721
+        },
+        {
+          "path": "apps/remix/server/api/ai/detect-recipients.ts",
+          "line": 2,
+          "score": 0.36440930027337537
+        },
+        {
+          "path": "apps/remix/app/components/dialogs/ai-recipient-detection-dialog.tsx",
+          "line": 4,
+          "score": 0.362135825864625
+        }
+      ],
+      "preferredHits": [
+        {
+          "path": "apps/remix/server/api/files/files.helpers.ts",
+          "line": 4,
+          "score": 0.5247463249932971
+        },
+        {
+          "path": "packages/auth/server/routes/email-password.ts",
+          "line": 4,
+          "score": 0.3580332427966848
+        },
+        {
+          "path": "packages/api/v1/implementation.ts",
+          "line": 3,
+          "score": 0.4758996671499862
+        },
+        {
+          "path": "packages/lib/jobs/definitions/internal/seal-document.handler.ts",
+          "line": 2,
+          "score": 0.4762400941729712
+        },
+        {
+          "path": "packages/lib/server-only/cert/cert-status.ts",
+          "line": 1,
+          "score": 0.37391675275351965
+        }
+      ],
+      "modelVisibleHits": [
+        {
+          "path": "apps/remix/server/api/files/files.helpers.ts",
+          "line": 4,
+          "score": 0.5247463249932971
+        },
+        {
+          "path": "packages/auth/server/routes/email-password.ts",
+          "line": 4,
+          "score": 0.3580332427966848
+        },
+        {
+          "path": "packages/api/v1/implementation.ts",
+          "line": 3,
+          "score": 0.4758996671499862
+        },
+        {
+          "path": "packages/lib/jobs/definitions/internal/seal-document.handler.ts",
+          "line": 2,
+          "score": 0.4762400941729712
+        },
+        {
+          "path": "packages/lib/server-only/cert/cert-status.ts",
+          "line": 1,
+          "score": 0.37391675275351965
+        },
+        {
+          "path": "packages/lib/server-only/webhooks/trigger/generate-sample-data.ts",
+          "line": 5,
+          "score": 0.5178969297761254
+        },
+        {
+          "path": "apps/remix/server/api/ai/detect-recipients.ts",
+          "line": 2,
+          "score": 0.36440930027337537
+        },
+        {
+          "path": "apps/remix/server/api/ai/detect-fields.ts",
+          "line": 2,
+          "score": 0.3590195762843502
+        }
+      ]
+    },
+    {
+      "at": "2026-10-03T17:25:20.123Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "stage": "activity-step",
+      "tool": "search_code",
+      "summary": "search_code: status check"
+    },
+    {
+      "at": "2026-10-03T17:25:20.561Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 5507,
+      "path": "apps/remix/server/api/files/files.helpers.ts",
+      "returnedPath": "apps/remix/server/api/files/files.helpers.ts",
+      "outcome": "body",
+      "bodyChars": 8835,
+      "cacheHit": false,
+      "elapsedMs": 437,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:21.021Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 5967,
+      "path": "packages/auth/server/routes/email-password.ts",
+      "returnedPath": "packages/auth/server/routes/email-password.ts",
+      "outcome": "body",
+      "bodyChars": 16757,
+      "cacheHit": false,
+      "elapsedMs": 458,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:21.505Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 6450,
+      "path": "packages/api/v1/implementation.ts",
+      "returnedPath": "packages/api/v1/implementation.ts",
+      "outcome": "body",
+      "bodyChars": 46402,
+      "cacheHit": false,
+      "elapsedMs": 481,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:21.993Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 6939,
+      "path": "packages/lib/jobs/definitions/internal/seal-document.handler.ts",
+      "returnedPath": "packages/lib/jobs/definitions/internal/seal-document.handler.ts",
+      "outcome": "body",
+      "bodyChars": 16316,
+      "cacheHit": false,
+      "elapsedMs": 484,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:22.580Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 7526,
+      "path": "packages/lib/server-only/cert/cert-status.ts",
+      "returnedPath": "packages/lib/server-only/cert/cert-status.ts",
+      "outcome": "body",
+      "bodyChars": 724,
+      "cacheHit": false,
+      "elapsedMs": 582,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.076Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8022,
+      "path": "packages/lib/server-only/webhooks/trigger/generate-sample-data.ts",
+      "returnedPath": "packages/lib/server-only/webhooks/trigger/generate-sample-data.ts",
+      "outcome": "body",
+      "bodyChars": 18780,
+      "cacheHit": false,
+      "elapsedMs": 494,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.077Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8023,
+      "path": "apps/remix/server/api/files/files.helpers.ts",
+      "returnedPath": "apps/remix/server/api/files/files.helpers.ts",
+      "outcome": "body",
+      "bodyChars": 8835,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.078Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8024,
+      "path": "apps/remix/server/api/files/files.helpers.ts",
+      "returnedPath": "apps/remix/server/api/files/files.helpers.ts",
+      "outcome": "body",
+      "bodyChars": 8835,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.079Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8025,
+      "stage": "candidate-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "path": "apps/remix/server/api/files/files.helpers.ts",
+      "line": 4,
+      "result": "implementation",
+      "bodyLines": 51,
+      "bodyChars": 1808,
+      "rejectMatch": false,
+      "windowStart": 1,
+      "windowEnd": 29
+    },
+    {
+      "at": "2026-10-03T17:25:23.079Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (no write/reject): apps/remix/server/api/files/files.helpers.ts"
+    },
+    {
+      "at": "2026-10-03T17:25:23.079Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8025,
+      "path": "packages/auth/server/routes/email-password.ts",
+      "returnedPath": "packages/auth/server/routes/email-password.ts",
+      "outcome": "body",
+      "bodyChars": 16757,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.079Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8025,
+      "path": "packages/auth/server/routes/email-password.ts",
+      "returnedPath": "packages/auth/server/routes/email-password.ts",
+      "outcome": "body",
+      "bodyChars": 16757,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.080Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8026,
+      "stage": "candidate-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "path": "packages/auth/server/routes/email-password.ts",
+      "line": 4,
+      "result": "implementation",
+      "bodyLines": 51,
+      "bodyChars": 3011,
+      "rejectMatch": false,
+      "windowStart": 1,
+      "windowEnd": 29
+    },
+    {
+      "at": "2026-10-03T17:25:23.080Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (no write/reject): packages/auth/server/routes/email-password.ts"
+    },
+    {
+      "at": "2026-10-03T17:25:23.080Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8026,
+      "path": "packages/api/v1/implementation.ts",
+      "returnedPath": "packages/api/v1/implementation.ts",
+      "outcome": "body",
+      "bodyChars": 46402,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.081Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8027,
+      "path": "packages/api/v1/implementation.ts",
+      "returnedPath": "packages/api/v1/implementation.ts",
+      "outcome": "body",
+      "bodyChars": 46402,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.082Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8028,
+      "stage": "candidate-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "path": "packages/api/v1/implementation.ts",
+      "line": 3,
+      "result": "implementation",
+      "bodyLines": 51,
+      "bodyChars": 3603,
+      "rejectMatch": false,
+      "windowStart": 1,
+      "windowEnd": 28
+    },
+    {
+      "at": "2026-10-03T17:25:23.082Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (no write/reject): packages/api/v1/implementation.ts"
+    },
+    {
+      "at": "2026-10-03T17:25:23.082Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8028,
+      "path": "packages/lib/jobs/definitions/internal/seal-document.handler.ts",
+      "returnedPath": "packages/lib/jobs/definitions/internal/seal-document.handler.ts",
+      "outcome": "body",
+      "bodyChars": 16316,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.082Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8028,
+      "path": "packages/lib/jobs/definitions/internal/seal-document.handler.ts",
+      "returnedPath": "packages/lib/jobs/definitions/internal/seal-document.handler.ts",
+      "outcome": "body",
+      "bodyChars": 16316,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.083Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8029,
+      "stage": "candidate-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "path": "packages/lib/jobs/definitions/internal/seal-document.handler.ts",
+      "line": 2,
+      "result": "implementation",
+      "bodyLines": 51,
+      "bodyChars": 3262,
+      "rejectMatch": false,
+      "windowStart": 1,
+      "windowEnd": 27
+    },
+    {
+      "at": "2026-10-03T17:25:23.083Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (no write/reject): packages/lib/jobs/definitions/internal/seal-document.handler.ts"
+    },
+    {
+      "at": "2026-10-03T17:25:23.084Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8030,
+      "path": "packages/lib/server-only/cert/cert-status.ts",
+      "returnedPath": "packages/lib/server-only/cert/cert-status.ts",
+      "outcome": "body",
+      "bodyChars": 724,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.084Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8030,
+      "path": "packages/lib/server-only/cert/cert-status.ts",
+      "returnedPath": "packages/lib/server-only/cert/cert-status.ts",
+      "outcome": "body",
+      "bodyChars": 724,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.084Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8030,
+      "stage": "candidate-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "path": "packages/lib/server-only/cert/cert-status.ts",
+      "line": 1,
+      "result": "implementation",
+      "bodyLines": 29,
+      "bodyChars": 769,
+      "rejectMatch": false,
+      "windowStart": 1,
+      "windowEnd": 26
+    },
+    {
+      "at": "2026-10-03T17:25:23.084Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (no write/reject): packages/lib/server-only/cert/cert-status.ts"
+    },
+    {
+      "at": "2026-10-03T17:25:23.814Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8760,
+      "stage": "gather-handoff",
+      "waitingStage": "tool-plan",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.815Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8761,
+      "stage": "plan",
+      "round": 1,
+      "result": "invalid"
+    },
+    {
+      "at": "2026-10-03T17:25:23.815Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8761,
+      "path": "apps/remix/server/api/files/files.helpers.ts",
+      "returnedPath": "apps/remix/server/api/files/files.helpers.ts",
+      "outcome": "body",
+      "bodyChars": 8835,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.815Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8761,
+      "path": "apps/remix/server/api/files/files.helpers.ts",
+      "returnedPath": "apps/remix/server/api/files/files.helpers.ts",
+      "outcome": "body",
+      "bodyChars": 8835,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.816Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (no write/reject): apps/remix/server/api/files/files.helpers.ts"
+    },
+    {
+      "at": "2026-10-03T17:25:23.816Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8762,
+      "path": "packages/auth/server/routes/email-password.ts",
+      "returnedPath": "packages/auth/server/routes/email-password.ts",
+      "outcome": "body",
+      "bodyChars": 16757,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.816Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8762,
+      "path": "packages/auth/server/routes/email-password.ts",
+      "returnedPath": "packages/auth/server/routes/email-password.ts",
+      "outcome": "body",
+      "bodyChars": 16757,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.817Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (no write/reject): packages/auth/server/routes/email-password.ts"
+    },
+    {
+      "at": "2026-10-03T17:25:23.817Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8763,
+      "path": "packages/api/v1/implementation.ts",
+      "returnedPath": "packages/api/v1/implementation.ts",
+      "outcome": "body",
+      "bodyChars": 46402,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.817Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8763,
+      "path": "packages/api/v1/implementation.ts",
+      "returnedPath": "packages/api/v1/implementation.ts",
+      "outcome": "body",
+      "bodyChars": 46402,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.818Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (no write/reject): packages/api/v1/implementation.ts"
+    },
+    {
+      "at": "2026-10-03T17:25:23.819Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8765,
+      "path": "packages/lib/jobs/definitions/internal/seal-document.handler.ts",
+      "returnedPath": "packages/lib/jobs/definitions/internal/seal-document.handler.ts",
+      "outcome": "body",
+      "bodyChars": 16316,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.819Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8765,
+      "path": "packages/lib/jobs/definitions/internal/seal-document.handler.ts",
+      "returnedPath": "packages/lib/jobs/definitions/internal/seal-document.handler.ts",
+      "outcome": "body",
+      "bodyChars": 16316,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.820Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (no write/reject): packages/lib/jobs/definitions/internal/seal-document.handler.ts"
+    },
+    {
+      "at": "2026-10-03T17:25:23.820Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8766,
+      "path": "packages/lib/server-only/cert/cert-status.ts",
+      "returnedPath": "packages/lib/server-only/cert/cert-status.ts",
+      "outcome": "body",
+      "bodyChars": 724,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.820Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8766,
+      "path": "packages/lib/server-only/cert/cert-status.ts",
+      "returnedPath": "packages/lib/server-only/cert/cert-status.ts",
+      "outcome": "body",
+      "bodyChars": 724,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.820Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (no write/reject): packages/lib/server-only/cert/cert-status.ts"
+    },
+    {
+      "at": "2026-10-03T17:25:23.821Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8767,
+      "path": "apps/remix/server/api/ai/detect-recipients.ts",
+      "outcome": "empty",
+      "bodyChars": 0,
+      "cacheHit": false,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.821Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8767,
+      "path": "apps/remix/server/api/ai/detect-fields.ts",
+      "outcome": "empty",
+      "bodyChars": 0,
+      "cacheHit": false,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.821Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8767,
+      "path": "apps/remix/server/api/files/files.helpers.ts",
+      "returnedPath": "apps/remix/server/api/files/files.helpers.ts",
+      "outcome": "body",
+      "bodyChars": 8835,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.822Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8768,
+      "path": "apps/remix/server/api/files/files.helpers.ts",
+      "returnedPath": "apps/remix/server/api/files/files.helpers.ts",
+      "outcome": "body",
+      "bodyChars": 8835,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.822Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8768,
+      "path": "apps/remix/server/api/files/files.helpers.ts",
+      "returnedPath": "apps/remix/server/api/files/files.helpers.ts",
+      "outcome": "body",
+      "bodyChars": 8835,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.823Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8769,
+      "path": "apps/remix/server/api/files/files.helpers.ts",
+      "returnedPath": "apps/remix/server/api/files/files.helpers.ts",
+      "outcome": "body",
+      "bodyChars": 8835,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.824Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8770,
+      "path": "apps/remix/server/api/files/files.helpers.ts",
+      "returnedPath": "apps/remix/server/api/files/files.helpers.ts",
+      "outcome": "body",
+      "bodyChars": 8835,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.824Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8770,
+      "path": "apps/remix/server/api/files/files.helpers.ts",
+      "returnedPath": "apps/remix/server/api/files/files.helpers.ts",
+      "outcome": "body",
+      "bodyChars": 8835,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.825Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8771,
+      "path": "apps/remix/server/api/files/files.helpers.ts",
+      "returnedPath": "apps/remix/server/api/files/files.helpers.ts",
+      "outcome": "body",
+      "bodyChars": 8835,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.825Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8771,
+      "path": "apps/remix/server/api/files/files.helpers.ts",
+      "returnedPath": "apps/remix/server/api/files/files.helpers.ts",
+      "outcome": "body",
+      "bodyChars": 8835,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.826Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8772,
+      "path": "apps/remix/server/api/files/files.helpers.ts",
+      "returnedPath": "apps/remix/server/api/files/files.helpers.ts",
+      "outcome": "body",
+      "bodyChars": 8835,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.826Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8772,
+      "path": "apps/remix/server/api/files/files.helpers.ts",
+      "returnedPath": "apps/remix/server/api/files/files.helpers.ts",
+      "outcome": "body",
+      "bodyChars": 8835,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:25:23.826Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "1b0b3024-23c6-448e-8ea2-ab4c9469b92a",
+      "turnElapsedMs": 8772,
+      "stage": "outcome",
+      "candidateLedger": [
+        {
+          "path": "packages/lib/jobs/definitions/internal/sync-email-domains.handler.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/remix/app/components/general/organisations/organisation-quota-banner.tsx",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/prisma/seed/medium-account-seed.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/remix/app/routes/api+/health.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/app-tests/e2e/user/delete-account.spec.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/app-tests/e2e/envelope-editor-v2/envelope-settings.spec.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/lib/server-only/cert/cert-status.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/remix/app/components/general/organisations/organisation-billing-banner.tsx",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/app-tests/e2e/fixtures/authentication.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/app-tests/e2e/document-flow/autosave-subject-step.spec.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/remix/server/api/ai/detect-recipients.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "unavailable"
+        },
+        {
+          "path": "apps/remix/app/components/dialogs/ai-recipient-detection-dialog.tsx",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/remix/server/api/ai/detect-fields.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "unavailable"
+        },
+        {
+          "path": "apps/remix/app/components/general/admin-license-card.tsx",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/auth/server/routes/email-password.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/remix/server/api/files/files.helpers.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/lib/server-only/webhooks/trigger/generate-sample-data.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/app-tests/e2e/envelopes/envelope-v2-field-insertion.spec.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/lib/jobs/definitions/internal/seal-document-sweep.handler.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/app-tests/e2e/document-auth/next-recipient-dictation.spec.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/app-tests/e2e/api/v2/partial-signed-pdf-download.spec.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/lib/jobs/definitions/internal/seal-document.handler.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/api/v1/implementation.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "apps/remix/app/components/general/envelope-editor/envelope-editor-recipient-form.tsx",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/app-tests/e2e/documents/bulk-document-actions.spec.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/app-tests/e2e/envelope-editor-v2/envelope-items.spec.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": ".agents/plans/smooth-ivory-sky-partial-signed-pdf-download.md",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        },
+        {
+          "path": "packages/app-tests/e2e/admin/organisations/delete-organisation.spec.ts",
+          "criterion": "a signer gets an error that the document must be pending for signing. where does the server reject this request, and what status check enforces it?",
+          "status": "untested"
+        }
+      ],
+      "repoId": "bitbucket:coop-ai/documenso",
+      "resolvedBranch": "main",
+      "elapsedMs": 8772,
+      "stopped": false,
+      "stepCount": 11,
+      "hasAnswer": true,
+      "evidencePaths": []
+    },
+    {
+      "at": "2026-10-03T17:25:23.827Z",
+      "threadId": "thread-1791048307042-8oilmx",
+      "stage": "answer-start",
+      "elapsedMs": 9014,
+      "selectedBranch": "main",
+      "repoId": "bitbucket:coop-ai/documenso",
+      "delivery": "complete",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016"
+    }
+  ]
+}

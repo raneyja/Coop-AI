@@ -1,0 +1,8 @@
+
+> coop-ai@0.1.10 test:format-chat-copy
+> npx tsx src/webview/lib/formatChatMessageForCopy.test.ts
+
+  ✓ formatChatMessageForCopy preserves markdown links and file paths
+  ✓ formatChatMessageForCopy keeps Sources citation labels
+
+2 passed, 0 failed

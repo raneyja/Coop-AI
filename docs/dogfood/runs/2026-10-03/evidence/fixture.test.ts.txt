@@ -1,0 +1,8 @@
+import assert from 'node:assert/strict';
+import { sumPositive } from './fixture.ts';
+assert.equal(sumPositive([]), 0);
+assert.equal(sumPositive([-2, -1]), 0);
+assert.equal(sumPositive([1]), 1);
+assert.equal(sumPositive([1, -2, 3]), 4);
+assert.equal(sumPositive([2, 5]), 7);
+console.log('Independent sumPositive assertions passed');

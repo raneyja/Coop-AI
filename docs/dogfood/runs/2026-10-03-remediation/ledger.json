@@ -1,0 +1,908 @@
+{
+  "schemaVersion": 1,
+  "sourceThread": "01a0fe7a-9d58-7bb3-a9d7-c6aaf7b8ad2f",
+  "metadata": {
+    "candidateHead": "",
+    "dirtyDiffHash": "",
+    "extensionHash": "",
+    "webviewHash": "",
+    "vsixHash": "",
+    "backendDeployment": "",
+    "editorVersion": "",
+    "platform": "",
+    "fixtureEvidence": ""
+  },
+  "automated": [
+    {
+      "name": "lint",
+      "status": "NOT_RUN",
+      "evidence": ""
+    },
+    {
+      "name": "test:ci",
+      "status": "NOT_RUN",
+      "evidence": ""
+    },
+    {
+      "name": "test:agent-ship",
+      "status": "NOT_RUN",
+      "evidence": ""
+    },
+    {
+      "name": "test:code-citation-locator",
+      "status": "NOT_RUN",
+      "evidence": ""
+    },
+    {
+      "name": "test:prompt-library",
+      "status": "NOT_RUN",
+      "evidence": ""
+    },
+    {
+      "name": "test:project-instructions",
+      "status": "NOT_RUN",
+      "evidence": ""
+    },
+    {
+      "name": "test:chat-response-timing",
+      "status": "NOT_RUN",
+      "evidence": ""
+    },
+    {
+      "name": "test:request-batcher",
+      "status": "NOT_RUN",
+      "evidence": ""
+    },
+    {
+      "name": "test:status-transition",
+      "status": "NOT_RUN",
+      "evidence": ""
+    },
+    {
+      "name": "test:email-template-grounding",
+      "status": "NOT_RUN",
+      "evidence": ""
+    },
+    {
+      "name": "test:existing-capability",
+      "status": "NOT_RUN",
+      "evidence": ""
+    },
+    {
+      "name": "test:fim",
+      "status": "NOT_RUN",
+      "evidence": ""
+    },
+    {
+      "name": "test:repo-grants-ui",
+      "status": "NOT_RUN",
+      "evidence": ""
+    },
+    {
+      "name": "build:extension-dev",
+      "status": "NOT_RUN",
+      "evidence": ""
+    },
+    {
+      "name": "surface-builds",
+      "status": "NOT_RUN",
+      "evidence": ""
+    }
+  ],
+  "results": [
+    {
+      "id": "DF-001",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-001",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-001",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-002",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-002",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-002",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-003",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-003",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-003",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-004",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-004",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-004",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-005",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-005",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-005",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-006",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-006",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-006",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-007",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-007",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-007",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-008",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-008",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-008",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-009",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-009",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-009",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-010",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-010",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-010",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-011",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-011",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-011",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-012",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-013",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-014",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-015",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-016",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-017",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-018",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-019",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-020",
+      "mode": "fresh",
+      "status": "PASS",
+      "attempts": [
+        {
+          "timestamp": "2026-10-03T20:28:50.260194+00:00",
+          "status": "PASS",
+          "candidateExtensionHash": "2adfe63f6b22165a33fb48d7c1d267917ba934771ce06dd9fc41ce285efbbf7a",
+          "candidateWebviewHash": "db520cae3766823dd58d038f1d59b442fbe69b8e0529a984c1126e747d8af0fe",
+          "candidateVsixHash": null,
+          "backendDeployment": null,
+          "accountTierOrg": "Pro / existing dogfood org",
+          "repoRef": "disposable local /private/tmp/coop-app-dogfood/fixture.ts",
+          "actualAction": "/edit Rename only header to authorizationHeader in extractBearerToken. Preserve its string return type and change no other function or file.",
+          "actualResult": "Applied exactly three variable references in one selected function; independent parser assertions passed. Undo restored original SHA256.",
+          "evidence": "docs/dogfood/runs/2026-10-03-remediation/evidence/df-020-remediation-live.json",
+          "criteriaReview": "FUNCTIONAL_MET_RELEASE_EVIDENCE_INCOMPLETE",
+          "reviewer": "Codex live UI plus independent disk/runtime assertions",
+          "threadId": "thread-1791058821325-t82ib6",
+          "turnId": "turn-1791058837617-f7fugo",
+          "runId": "synthesis-turn-1791058837617-f7fugo",
+          "firstAnswerMs": 5992,
+          "durationMs": null,
+          "timingKind": "answer"
+        }
+      ]
+    },
+    {
+      "id": "DF-021",
+      "mode": "fresh",
+      "status": "PASS",
+      "attempts": [
+        {
+          "timestamp": "2026-10-03T20:28:50.260775+00:00",
+          "status": "PASS",
+          "candidateExtensionHash": "2adfe63f6b22165a33fb48d7c1d267917ba934771ce06dd9fc41ce285efbbf7a",
+          "candidateWebviewHash": "db520cae3766823dd58d038f1d59b442fbe69b8e0529a984c1126e747d8af0fe",
+          "candidateVsixHash": null,
+          "backendDeployment": null,
+          "accountTierOrg": "Pro / existing dogfood org",
+          "repoRef": "disposable local /private/tmp/coop-app-dogfood/fixture.ts",
+          "actualAction": "/fix Fix the seeded off-by-one bug in sumPositive; preserve its public signature.",
+          "actualResult": "Applied to the correct private target; independent empty, negative, mixed, positive and single-element assertions passed. Parser unchanged.",
+          "evidence": "docs/dogfood/runs/2026-10-03-remediation/evidence/df-021-remediation-live.json",
+          "criteriaReview": "FUNCTIONAL_MET_RELEASE_EVIDENCE_INCOMPLETE",
+          "reviewer": "Codex live UI plus independent disk/runtime assertions",
+          "threadId": "thread-1791059002492-xfuofi",
+          "turnId": "turn-1791059016207-9cvtp2",
+          "runId": "synthesis-turn-1791059016207-9cvtp2",
+          "firstAnswerMs": 4933,
+          "durationMs": null,
+          "timingKind": "answer"
+        }
+      ]
+    },
+    {
+      "id": "DF-022",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-023",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-024",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-025",
+      "mode": "fresh",
+      "status": "PASS",
+      "attempts": [
+        {
+          "timestamp": "2026-10-03T20:28:50.260904+00:00",
+          "status": "PASS",
+          "candidateExtensionHash": "2adfe63f6b22165a33fb48d7c1d267917ba934771ce06dd9fc41ce285efbbf7a",
+          "candidateWebviewHash": "db520cae3766823dd58d038f1d59b442fbe69b8e0529a984c1126e747d8af0fe",
+          "candidateVsixHash": null,
+          "backendDeployment": null,
+          "accountTierOrg": "Pro / existing dogfood org",
+          "repoRef": "disposable local /private/tmp/coop-app-dogfood/fixture.ts",
+          "actualAction": "After Undo, changed loop bound to values.length - 2; then applied the existing proposal.",
+          "actualResult": "Apply refused SEARCH block not found; saved intervening edit remained byte-identical. User edit undone; fixture restored.",
+          "evidence": "docs/dogfood/runs/2026-10-03-remediation/evidence/df-025-remediation-live.json",
+          "criteriaReview": "FUNCTIONAL_MET_RELEASE_EVIDENCE_INCOMPLETE",
+          "reviewer": "Codex live UI plus independent disk/runtime assertions",
+          "threadId": "thread-1791059002492-xfuofi",
+          "turnId": "turn-1791059016207-9cvtp2",
+          "runId": "synthesis-turn-1791059016207-9cvtp2",
+          "firstAnswerMs": null,
+          "durationMs": null,
+          "timingKind": "ui-operation"
+        }
+      ]
+    },
+    {
+      "id": "DF-026",
+      "mode": "fresh",
+      "status": "PASS",
+      "attempts": [
+        {
+          "timestamp": "2026-10-03T20:28:50.261018+00:00",
+          "status": "PASS",
+          "candidateExtensionHash": "2adfe63f6b22165a33fb48d7c1d267917ba934771ce06dd9fc41ce285efbbf7a",
+          "candidateWebviewHash": "db520cae3766823dd58d038f1d59b442fbe69b8e0529a984c1126e747d8af0fe",
+          "candidateVsixHash": null,
+          "backendDeployment": null,
+          "accountTierOrg": "Pro / existing dogfood org",
+          "repoRef": "disposable local /private/tmp/coop-app-dogfood/fixture.ts",
+          "actualAction": "After Undo, double-clicked Apply on the same proposal.",
+          "actualResult": "Exactly single-application bytes; no duplicated function or code.",
+          "evidence": "docs/dogfood/runs/2026-10-03-remediation/evidence/df-026-remediation-live.json",
+          "criteriaReview": "FUNCTIONAL_MET_RELEASE_EVIDENCE_INCOMPLETE",
+          "reviewer": "Codex live UI plus independent disk/runtime assertions",
+          "threadId": "thread-1791059002492-xfuofi",
+          "turnId": "turn-1791059016207-9cvtp2",
+          "runId": "synthesis-turn-1791059016207-9cvtp2",
+          "firstAnswerMs": null,
+          "durationMs": null,
+          "timingKind": "ui-operation"
+        }
+      ]
+    },
+    {
+      "id": "DF-027",
+      "mode": "fresh",
+      "status": "FAIL",
+      "attempts": [
+        {
+          "status": "FAIL",
+          "evidence": "docs/dogfood/runs/2026-10-03-remediation/evidence/df-027-remediation-1.json",
+          "actualResult": "Narrow intent isolated; old candidate patch target unresolved. New candidate full Stop+Apply retest still pending."
+        }
+      ]
+    },
+    {
+      "id": "DF-028",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-029",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-030",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-031",
+      "mode": "slash",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-031",
+      "mode": "workflow",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-031",
+      "mode": "editor-context-menu",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-032",
+      "mode": "slash",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-032",
+      "mode": "workflow",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-032",
+      "mode": "editor-context-menu",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-033",
+      "mode": "slash",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-033",
+      "mode": "workflow",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-033",
+      "mode": "editor-context-menu",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-034",
+      "mode": "slash",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-034",
+      "mode": "workflow",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-034",
+      "mode": "editor-context-menu",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-035",
+      "mode": "slash",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-035",
+      "mode": "workflow",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-035",
+      "mode": "editor-context-menu",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-036",
+      "mode": "slash",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-037",
+      "mode": "connected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-037",
+      "mode": "disconnected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-037",
+      "mode": "scope-denied",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-038",
+      "mode": "connected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-038",
+      "mode": "disconnected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-038",
+      "mode": "scope-denied",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-039",
+      "mode": "connected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-039",
+      "mode": "disconnected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-039",
+      "mode": "scope-denied",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-040",
+      "mode": "connected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-040",
+      "mode": "disconnected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-040",
+      "mode": "scope-denied",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-041",
+      "mode": "connected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-041",
+      "mode": "disconnected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-041",
+      "mode": "scope-denied",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-042",
+      "mode": "connected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-042",
+      "mode": "disconnected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-042",
+      "mode": "scope-denied",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-043",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-044",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-045",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-046",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-047",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-048",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-049",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-050",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-051",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-052",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-053",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-054",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-055",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-056",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-057",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-058",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-059",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-060",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-061",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-062",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-063",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-064",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-065",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-066",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-067",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-068",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-069",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-070",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-071",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-072",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-073",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-074",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-075",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-076",
+      "mode": "connected",
+      "status": "NOT_RUN",
+      "attempts": []
+    }
+  ]
+}

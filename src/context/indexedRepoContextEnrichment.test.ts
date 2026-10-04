@@ -1,3 +1,4 @@
+import { COOP_EXTENSION_BUILD_ID } from "../config/coopBuildId";
 import assert from "node:assert/strict";
 import {
   enrichContextWithIndexedRepo,
@@ -479,7 +480,7 @@ async function run(): Promise<void> {
       branch: "preview"
     });
     assert.match(message, /Attach check failed/i);
-    assert.match(message, /0\.1\.0/);
+    assert.ok(message.includes(COOP_EXTENSION_BUILD_ID));
     assert.match(message, /could not attach repository evidence/i);
     assert.match(message, /can.t summarize architecture from the repo name alone/i);
     assert.match(message, /preview/);

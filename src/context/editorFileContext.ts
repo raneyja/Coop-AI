@@ -21,6 +21,8 @@ export type ResolvedEditorFile = {
   gitRoot?: string;
   owner?: string;
   repo?: string;
+  provider?: import("../chat/types").CodeHostProviderPreference;
+  branch?: string;
   warning?: string;
 };
 

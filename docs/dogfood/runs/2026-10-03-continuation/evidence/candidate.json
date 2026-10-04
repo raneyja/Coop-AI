@@ -1,0 +1,11 @@
+{
+  "candidateHead": "c7796ed10c8bcc5cd2848d44b0bab6eb283684fc",
+  "dirtyDiffHash": "c25bd46c7d7a09d29dee2a02c64ed70bc42801ad69f767c4cd777ce7e86c5d0c",
+  "extensionHash": "fbd567eb7f4739ca37ea7648f1413fde3f284684143561e36980469b4e55b28d",
+  "webviewHash": "b90947ec2d81f4078c867b89dec6bf6429a27700cb4cc737b608f64c82520d7d",
+  "vsixHash": "ed35bbe3cc9670b268d21d2cbf0cf1a7f0ee34c8fed4d7d12f2bfe189700f9ae",
+  "backendDeployment": "UNVERIFIED production producer; local backend f1e7ec8942ce10a08836ef07c2068ff8c4bc45c2c13620d6eac1f5f5ae0fa85a",
+  "editorVersion": "VS Code 1.139.1 arm64",
+  "platform": "macOS arm64",
+  "fixtureEvidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/sandbox-setup.log"
+}

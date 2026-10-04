@@ -8,8 +8,8 @@
  * Soft gather is silent to the user: synthesize with partial evidence, do not
  * post degradation banners or engineer jargon about “budget exhausted.”
  *
- * Agent-owned locate / understand / change turns use `AGENT_JOB_WALL_MS` instead
- * of this gather budget — see agentJobBudget.ts.
+ * Agent-owned repository hunts share this gather budget; their separate wall
+ * ceiling limits the overall tool loop without cancelling synthesis.
  */
 export const MAX_USER_FACING_RESPONSE_MS = 15_000;
 

@@ -1,3 +1,4 @@
+import { shouldAcceptHistory, historyAcknowledgesPendingUser, shouldResetComposerDraft, persistedChatPanelState } from "./lib/chatHydration";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SettingsScreen } from "../chat/settingsScreens";
 import { ContextScopeLabel } from "./components/ContextScopeLabel";
@@ -296,7 +297,7 @@ type InboundMessage =
       type: "threads:list";
       payload: { activeId: string; activeTitle: string; threads: ThreadListItem[] };
     }
-  | { type: "chat:thread-changed"; payload: { threadId: string; title: string } }
+  | { type: "chat:thread-changed"; payload: { threadId: string; title: string; preserveDraft?: boolean; draftInput?: string } }
   | { type: "lightning:open" }
   | { type: "lightning:state"; payload: LightningModeState }
   | {
@@ -325,7 +326,12 @@ type ChatPanelProps = {
 
 type PersistedWebviewState = {
   draftInput: string;
+  sessionId?: string;
 };
+
+declare global {
+  interface Window { __COOP_CHAT_SESSION_ID__?: string | null }
+}
 
 const INPUT_MAX = 12_000;
 
@@ -408,6 +414,14 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const cached = (vscode.getState() as PersistedWebviewState | null) || null;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [context, setContext] = useState<RepoContext>({});
+  const contextReadyRef = useRef(false);
+  const [contextReady, setContextReady] = useState(false);
+  const activeThreadIdRef = useRef<string | undefined>(undefined);
+  const lastHistoryRevisionRef = useRef(0);
+  const pendingUserRef = useRef<string | undefined>(undefined);
+  const historyReadyRef = useRef(false);
+  const submissionSequenceRef = useRef(0);
+  const pendingRepoRef = useRef<{ provider: string; owner: string; repo: string } | undefined>(undefined);
   const [input, setInput] = useState(cached?.draftInput || "");
   const [composerFocusNonce, setComposerFocusNonce] = useState(0);
   const [attachments, setAttachments] = useState<ChatImageAttachment[]>([]);
@@ -790,13 +804,44 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const launchIntro = useLaunchTypewriter(showLaunchIntro, handleLaunchIntroComplete);
   const launchIntroDone = !chatHistorySynced || launchIntro.phase === "done";
 
-  const post = useCallback((payload: unknown) => vscode.postMessage(payload), [vscode]);
+  const post = useCallback((payload: unknown) => {
+    const outgoing = payload as { type: string; payload?: { clientSubmissionId?: string; message?: string; historyContent?: string; quickAction?: string; attachments?: ChatImageAttachment[] } };
+    if (outgoing.type === "threads:new" || outgoing.type === "threads:switch") {
+      activeThreadIdRef.current = "pending-thread-change";
+      historyReadyRef.current = false;
+      setChatHistorySynced(false);
+      contextReadyRef.current = false;
+      setContextReady(false);
+      pendingUserRef.current = undefined;
+      pendingRepoRef.current = undefined;
+      resetEphemeralChatState();
+      setMessages([]);
+    }
+    if (outgoing.type === "chat:send" && outgoing.payload) {
+      if (!contextReadyRef.current || !historyReadyRef.current) {
+        return;
+      }
+      const clientSubmissionId = `${Date.now()}-${++submissionSequenceRef.current}`;
+      outgoing.payload = { ...outgoing.payload, clientSubmissionId };
+      payload = outgoing;
+      const optimistic: ChatMessage = {
+        clientSubmissionId,
+        role: "user",
+        content: outgoing.payload.historyContent ?? (outgoing.payload.message || (outgoing.payload.quickAction ? `/${outgoing.payload.quickAction}` : "")),
+        timestamp: Date.now(),
+        attachments: outgoing.payload.attachments
+      };
+      pendingUserRef.current = clientSubmissionId;
+      setMessages((current) => [...current, optimistic]);
+    }
+    vscode.postMessage(payload);
+  }, [vscode, resetEphemeralChatState]);
 
   const handleOpenFile = useCallback(
-    (path: string, line?: number, options?: { preserveContext?: boolean }) => {
+    (path: string, line?: number, options?: { preserveContext?: boolean; endLine?: number }) => {
       post({
         type: "repo:open-file",
-        payload: { path, line, preserveContext: options?.preserveContext ?? true }
+        payload: { path, line, endLine: options?.endLine, preserveContext: options?.preserveContext ?? true }
       });
     },
     [post]
@@ -1091,7 +1136,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   const handleEvidenceComposerFollowup = useCallback(
     (text: string) => {
       const prompt = text.trim();
-      if (!prompt) {
+      if (!prompt || (!contextReadyRef.current || !historyReadyRef.current)) {
         return;
       }
       setError("");
@@ -1116,6 +1161,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
 
   const handleEvidenceQuickAction = useCallback(
     (actionId: QuickActionId, targetPath?: string) => {
+      if (!contextReadyRef.current || !historyReadyRef.current) {
+        return;
+      }
       const scopedPath = targetPath?.trim();
       const slashDef = SLASH_COMMANDS.find(
         (entry) => entry.target.kind === "action" && entry.target.actionId === actionId
@@ -1153,6 +1201,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
 
   const handleSuggestResolve = useCallback(
     (choice: { choice: "plain" } | { choice: "action"; actionId: string }) => {
+      if (!contextReadyRef.current || !historyReadyRef.current) {
+        return;
+      }
       setError("");
       userStoppedRef.current = false;
       liveStreamRef.current = true;
@@ -1257,11 +1308,33 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             llmProvider: message.payload.llmProvider
           });
           break;
-        case "context:update":
+        case "context:update": {
+          const pendingRepo = pendingRepoRef.current;
+          if (pendingRepo && (pendingRepo.provider !== message.payload.provider || pendingRepo.owner !== message.payload.owner || pendingRepo.repo !== message.payload.repo)) {
+            break;
+          }
+          contextReadyRef.current = !message.payload.repoSelectionPending;
+          setContextReady(contextReadyRef.current);
+          if (contextReadyRef.current) {
+            pendingRepoRef.current = undefined;
+          }
           setContext(message.payload);
           break;
+        }
         case "chat:history": {
           const payload = message.payload;
+          if (!shouldAcceptHistory(payload, activeThreadIdRef.current, lastHistoryRevisionRef.current)) {
+            break;
+          }
+          if (!Array.isArray(payload) && payload.revision !== undefined) {
+            lastHistoryRevisionRef.current = payload.revision;
+          }
+          if (!Array.isArray(payload) && payload.threadId) {
+            if (activeThreadIdRef.current && activeThreadIdRef.current !== payload.threadId) {
+              break;
+            }
+            activeThreadIdRef.current = payload.threadId;
+          }
           const historyMessages = Array.isArray(payload) ? payload : (payload.messages ?? []);
           const historyArtifacts = Array.isArray(payload)
             ? []
@@ -1269,6 +1342,15 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           const historyPatches = Array.isArray(payload)
             ? undefined
             : patchCardsFromHistoryPayload(payload);
+          const pendingUser = pendingUserRef.current;
+          if (pendingUser && !historyAcknowledgesPendingUser(historyMessages, pendingUser)) {
+            // Hydration may arrive after Send. Keep its immediate user bubble until
+            // the host publishes the accepted turn, including scope chips.
+            setChatHistorySynced(true);
+            break;
+          }
+          pendingUserRef.current = undefined;
+          historyReadyRef.current = true;
           setMessages(historyMessages);
           setInlineArtifacts(historyArtifacts);
           if (historyPatches) {
@@ -1287,10 +1369,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           if (historyMessages.length === 0) {
             setStreamingBuffer("");
             setIsStreaming(false);
-            setInput("");
-            setAttachments([]);
             resetEphemeralChatState();
-            vscode.setState({ draftInput: "" } satisfies PersistedWebviewState);
           }
           break;
         }
@@ -1298,6 +1377,14 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setThreadsState(message.payload);
           break;
         case "chat:thread-changed":
+          contextReadyRef.current = false;
+          setContextReady(false);
+          activeThreadIdRef.current = message.payload.threadId;
+          lastHistoryRevisionRef.current = 0;
+          historyReadyRef.current = false;
+          pendingRepoRef.current = undefined;
+          pendingUserRef.current = undefined;
+          setMessages([]);
           setThreadsState((prev) => {
             const next = prev
               ? {
@@ -1314,9 +1401,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setCreatePrDiffByTimestamp({});
           setStandaloneCreatePr(undefined);
           setScrollEpoch((epoch) => epoch + 1);
-          setInput("");
-          setAttachments([]);
-          setPendingPromptActionId(undefined);
+          if (shouldResetComposerDraft(message.payload.preserveDraft)) {
+            setInput(message.payload.draftInput ?? "");
+            setAttachments([]);
+            setMentions([]);
+            setPendingPromptActionId(undefined);
+            vscode.setState(persistedChatPanelState(message.payload.draftInput ?? "", window.__COOP_CHAT_SESSION_ID__ ?? undefined));
+          }
           setIsStreaming(false);
           setStreamingBuffer("");
           setThinkingBuffer("");
@@ -1324,13 +1415,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setIntentFeedback(undefined);
           setJobProgress(undefined);
           setError("");
-          vscode.setState({ draftInput: "" } satisfies PersistedWebviewState);
           break;
         case "lightning:state":
           setLightningState(message.payload);
           break;
         case "chat:stream-resume": {
-          const activeId = threadsStateRef.current?.activeId;
+          const activeId = activeThreadIdRef.current;
           if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
             break;
           }
@@ -1347,7 +1437,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           if (userStoppedRef.current || !liveStreamRef.current) {
             break;
           }
-          const activeId = threadsStateRef.current?.activeId;
+          const activeId = activeThreadIdRef.current;
           if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
             break;
           }
@@ -1359,7 +1449,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           if (userStoppedRef.current || !liveStreamRef.current) {
             break;
           }
-          const activeId = threadsStateRef.current?.activeId;
+          const activeId = activeThreadIdRef.current;
           if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
             break;
           }
@@ -1371,7 +1461,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           if (userStoppedRef.current || !liveStreamRef.current) {
             break;
           }
-          const activeId = threadsStateRef.current?.activeId;
+          const activeId = activeThreadIdRef.current;
           if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
             break;
           }
@@ -1381,7 +1471,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         }
         case "chat:complete": {
-          const activeId = threadsStateRef.current?.activeId;
+          const activeId = activeThreadIdRef.current;
           if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
             break;
           }
@@ -1403,7 +1493,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         }
         case "chat:cancelled": {
-          const activeId = threadsStateRef.current?.activeId;
+          const activeId = activeThreadIdRef.current;
           if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
             break;
           }
@@ -1438,7 +1528,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           break;
         }
         case "chat:error": {
-          const activeId = threadsStateRef.current?.activeId;
+          const activeId = activeThreadIdRef.current;
           if (message.payload.threadId && activeId && message.payload.threadId !== activeId) {
             break;
           }
@@ -1772,7 +1862,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setPendingPromptActionId(message.payload.actionId as QuickActionId | undefined);
           setPromptMenuOpen(false);
           setPromptModalOpen(false);
-          vscode.setState({ draftInput: message.payload.text } satisfies PersistedWebviewState);
+          vscode.setState(persistedChatPanelState(message.payload.text, window.__COOP_CHAT_SESSION_ID__ ?? undefined));
           break;
         default:
           break;
@@ -1785,8 +1875,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   }, [post]);
 
   useEffect(() => {
-    vscode.setState({ draftInput: input } satisfies PersistedWebviewState);
-  }, [input, vscode]);
+    vscode.setState(persistedChatPanelState(input, window.__COOP_CHAT_SESSION_ID__ ?? undefined));
+    const threadId = activeThreadIdRef.current;
+    if (threadId && threadId !== "pending-thread-change") {
+      post({ type: "threads:draft", payload: { threadId, text: input } });
+    }
+  }, [input, vscode, post]);
 
   useEffect(() => {
     if (!isStreaming) {
@@ -1815,7 +1909,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       options?: { slashUserArgs?: string }
     ) => {
       const message = prompt.trim();
-      if (chatRequiresSignIn(signedIn) || inFlightSendRef.current) {
+      if ((!contextReadyRef.current || !historyReadyRef.current) || chatRequiresSignIn(signedIn) || inFlightSendRef.current) {
         return;
       }
       if (!message && pendingAttachments.length === 0 && pendingMentions.length === 0 && !quickAction) {
@@ -1878,7 +1972,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   );
 
   const flushNextFollowUp = useCallback(() => {
-    if (chatRequiresSignIn(signedIn) || quotaNotice) {
+    if ((!contextReadyRef.current || !historyReadyRef.current) || chatRequiresSignIn(signedIn) || quotaNotice) {
       return;
     }
     const { next, rest } = dequeueFollowUp(followUpQueueRef.current);
@@ -1962,6 +2056,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   );
 
   const handleSend = useCallback(() => {
+    if (!contextReadyRef.current || !historyReadyRef.current) {
+      return;
+    }
     if (isStreaming) {
       enqueueComposerFollowUp();
       return;
@@ -2048,6 +2145,9 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   );
 
   const handleRunCommand = useCallback(() => {
+    if (!contextReadyRef.current || !historyReadyRef.current) {
+      return;
+    }
     setCommandConfirm((pending) => {
       if (!pending) {
         return undefined;
@@ -2162,6 +2262,10 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       if (!parsed) {
         return false;
       }
+      contextReadyRef.current = false;
+      setContextReady(false);
+      pendingRepoRef.current = parsed;
+      setContext((current) => ({ ...current, repoSelectionPending: true }));
       post({
         type: "repo:select",
         payload: {
@@ -2276,7 +2380,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         focusNonce={composerFocusNonce}
         maxLength={INPUT_MAX}
         isStreaming={isStreaming}
-        submitDisabled={Boolean(quotaNotice)}
+        submitDisabled={Boolean(quotaNotice) || !chatHistorySynced || !contextReady}
         variant={isActiveChat ? "chat" : "landing"}
         usageLabel={usageLabel}
         attachments={attachments}

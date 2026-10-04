@@ -1,0 +1,26 @@
+[
+  {
+    "repo": "CoopAI-Corp/plane",
+    "commit": "a8e53b6ac7b87bd8e3e931d21188f7679c7ab6c4",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "blobSha": "5a771f2ad5c39b0a8a6a8a5eed63db4e65e63d08",
+    "matches": [
+      {
+        "line": 137,
+        "text": "            raise serializers.ValidationError(\"Parent is not valid issue_id please pass a valid issue_id\")"
+      }
+    ]
+  },
+  {
+    "repo": "CoopAI-Corp/plane",
+    "commit": "a8e53b6ac7b87bd8e3e931d21188f7679c7ab6c4",
+    "path": "apps/api/plane/app/serializers/issue.py",
+    "blobSha": "2e116cd661360d1dc93530dd19115102b4df14f4",
+    "matches": [
+      {
+        "line": 186,
+        "text": "            raise serializers.ValidationError(\"Parent is not valid issue_id please pass a valid issue_id\")"
+      }
+    ]
+  }
+]

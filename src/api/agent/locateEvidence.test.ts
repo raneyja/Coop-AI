@@ -25,6 +25,14 @@ function test(name: string, fn: () => void): void {
 const CARD1_ASK = "Where is auth middleware enforced and what calls it?";
 const REQUIRE_AUTH_ASK = "Where is requireAuth defined in this repo?";
 
+test("prose parser locate rejects token storage and callers, accepts the parsing declaration", () => {
+  const query = "Where do we parse the Authorization Bearer token? Don’t write a new helper — point me at the existing function.";
+  for (const body of ["export class AuthTokenStore { createToken() {} }", "const token = extractBearerToken(headers);", "// function extractBearerToken(headers) {}"]) {
+    assert.equal(locateReadCountsAsGrounding({ path: "server/auth/token.ts", body, query }), false);
+  }
+  assert.equal(locateReadCountsAsGrounding({ path: "server/auth/middleware.ts", body: "export function extractBearerToken(headers) { return headers.authorization.slice(7).trim(); }", query }), true);
+});
+
 const STORY_PATH = "web/stories/authMiddlewareDemo.ts";
 const STORY_BODY = [
   "const AUTH_MIDDLEWARE_STORY = `",

@@ -1,0 +1,9 @@
+
+> coop-ai@0.1.10 test:request-batcher
+> NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/context/requestBatcher.test.ts
+
+  ok - quick-action click bypasses the batching window even when cost is cheap (find-owner/trace-decision hot path)
+  ok - manual chat submit bypasses the batching window
+  ok - ambient selection-change requests still coalesce within the batching window
+
+3 passed, 0 failed

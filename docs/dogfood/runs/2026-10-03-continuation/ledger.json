@@ -1,0 +1,3519 @@
+{
+  "schemaVersion": 1,
+  "sourceThread": "01a0fe7a-9d58-7bb3-a9d7-c6aaf7b8ad2f",
+  "metadata": {
+    "candidateHead": "c7796ed10c8bcc5cd2848d44b0bab6eb283684fc",
+    "dirtyDiffHash": "af6c86525482657e4f4a6a87bb022a2fe25920540da224179aae9d6bee4d5d74",
+    "extensionHash": "0c6902524079c62b26f447514ceb9b30bfcbe27529a985f1d066b1ec9a9bfd89",
+    "webviewHash": "b90947ec2d81f4078c867b89dec6bf6429a27700cb4cc737b608f64c82520d7d",
+    "vsixHash": "06f564f8d2e18fc01d931b5352b9e8893f11cf31588b9c740a08fc26e5f7fda5",
+    "backendDeployment": "Production a9fd94df-f99c-4be5-adaf-f6cd269c6322, approved CLI upload, manifest SHA256 67dbf52bb0b835880bdd125392f3fec253c69581c95c4fa6e7c89896dab70835; Railway SUCCESS and health ok; health commit unknown; rollback 5eb49c1f-a891-46d6-ad7d-3c3df4360c0c",
+    "editorVersion": "VS Code 1.139.1 arm64",
+    "platform": "macOS arm64",
+    "fixtureEvidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/sandbox-smoke-final.log"
+  },
+  "automated": [
+    {
+      "name": "lint",
+      "status": "PASS",
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/validation-final.json"
+    },
+    {
+      "name": "test:ci",
+      "status": "PASS",
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-ci-capability.log"
+    },
+    {
+      "name": "test:agent-ship",
+      "status": "PASS",
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-agent-ship-capability.log"
+    },
+    {
+      "name": "test:code-citation-locator",
+      "status": "PASS",
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-code-citation-locator-final.log"
+    },
+    {
+      "name": "test:prompt-library",
+      "status": "PASS",
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-prompt-library-final.log"
+    },
+    {
+      "name": "test:project-instructions",
+      "status": "PASS",
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-project-instructions-final.log"
+    },
+    {
+      "name": "test:chat-response-timing",
+      "status": "PASS",
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-chat-response-timing-final.log"
+    },
+    {
+      "name": "test:request-batcher",
+      "status": "PASS",
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-request-batcher-final.log"
+    },
+    {
+      "name": "test:status-transition",
+      "status": "PASS",
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-status-transition-final.log"
+    },
+    {
+      "name": "test:email-template-grounding",
+      "status": "PASS",
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-email-template-grounding-final.log"
+    },
+    {
+      "name": "test:existing-capability",
+      "status": "PASS",
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-existing-capability-final.log"
+    },
+    {
+      "name": "test:fim",
+      "status": "PASS",
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-fim-final.log"
+    },
+    {
+      "name": "test:repo-grants-ui",
+      "status": "PASS",
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-repo-grants-ui-final.log"
+    },
+    {
+      "name": "build:extension-dev",
+      "status": "PASS",
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/validation-final.json"
+    },
+    {
+      "name": "surface-builds",
+      "status": "PASS",
+      "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/validation-final.json"
+    }
+  ],
+  "results": [
+    {
+      "id": "DF-001",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-001",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-001",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-002",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-002",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-002",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-003",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-003",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-003",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-004",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-004",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-004",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-005",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-005",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-005",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-006",
+      "mode": "cold",
+      "status": "FAIL",
+      "attempts": [
+        {
+          "status": "FAIL",
+          "timestamp": "2026-10-04T00:00:09.150Z",
+          "candidateExtensionHash": "0c6902524079c62b26f447514ceb9b30bfcbe27529a985f1d066b1ec9a9bfd89",
+          "candidateWebviewHash": "b90947ec2d81f4078c867b89dec6bf6429a27700cb4cc737b608f64c82520d7d",
+          "candidateVsixHash": "06f564f8d2e18fc01d931b5352b9e8893f11cf31588b9c740a08fc26e5f7fda5",
+          "backendDeployment": "Production 5eb49c1f-a891-46d6-ad7d-3c3df4360c0c, commit c7796ed10c8bcc5cd2848d44b0bab6eb283684fc; current candidate backend is local only, SHA256 ee02747ba7532a8f2164f6629d246c92c23a117609d99794aa491fd6359f0389",
+          "threadId": "thread-1791071981278-vkw2hv",
+          "turnId": "turn-1791072002237-dbnquq",
+          "runId": "7b0ea2a0-8936-4f6e-a846-c2d2769c80ea",
+          "repoRef": "github:CoopAI-Corp/plane preview; independent oracle a8e53b6ac7b87bd8e3e931d21188f7679c7ab6c4",
+          "actualAction": "In Plane issue create/update, the API raises ValidationError \"Parent is not valid issue_id please pass a valid issue_id\" when the parent isn't in the project. Where is that raised?",
+          "actualResult": "Honest miss; known source was not retrieved. Production map lacks indexedBranch; content capability fallback works.",
+          "timingKind": "answer",
+          "firstAnswerMs": 9014,
+          "durationMs": 9014,
+          "firstMeaningfulAnswer": "I could not find where the API rejects that field",
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/plane-capability-retest.jsonl",
+          "criteriaReview": "NOT_ALL_MET",
+          "reviewer": "Codex"
+        },
+        {
+          "status": "FAIL",
+          "timestamp": "2026-10-04T00:33:00Z",
+          "candidateExtensionHash": "0c6902524079c62b26f447514ceb9b30bfcbe27529a985f1d066b1ec9a9bfd89",
+          "candidateWebviewHash": "b90947ec2d81f4078c867b89dec6bf6429a27700cb4cc737b608f64c82520d7d",
+          "candidateVsixHash": "06f564f8d2e18fc01d931b5352b9e8893f11cf31588b9c740a08fc26e5f7fda5",
+          "backendDeployment": "Production a9fd94df-f99c-4be5-adaf-f6cd269c6322, approved CLI upload, manifest SHA256 67dbf52bb0b835880bdd125392f3fec253c69581c95c4fa6e7c89896dab70835; Railway SUCCESS and health ok; health commit unknown; rollback 5eb49c1f-a891-46d6-ad7d-3c3df4360c0c",
+          "threadId": "thread-1791073581429-knypc7",
+          "turnId": "turn-1791073608375-hty57m",
+          "runId": "1659d5ad-e7c1-4c95-a0cf-20d9c11c5581",
+          "repoRef": "github:CoopAI-Corp/plane preview",
+          "actualAction": "Locate Parent ValidationError in issue create/update on preview",
+          "actualResult": "Honest miss; known validation source not retrieved before shared gather handoff.",
+          "timingKind": "answer",
+          "firstAnswerMs": 9027,
+          "durationMs": 9027,
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/post-deployment-live-retests.jsonl",
+          "criteriaReview": "NOT_ALL_MET",
+          "reviewer": "Codex"
+        }
+      ]
+    },
+    {
+      "id": "DF-006",
+      "mode": "warm",
+      "status": "FAIL",
+      "attempts": [
+        {
+          "status": "FAIL",
+          "timestamp": "2026-10-04T00:33:00Z",
+          "candidateExtensionHash": "0c6902524079c62b26f447514ceb9b30bfcbe27529a985f1d066b1ec9a9bfd89",
+          "candidateWebviewHash": "b90947ec2d81f4078c867b89dec6bf6429a27700cb4cc737b608f64c82520d7d",
+          "candidateVsixHash": "06f564f8d2e18fc01d931b5352b9e8893f11cf31588b9c740a08fc26e5f7fda5",
+          "backendDeployment": "Production a9fd94df-f99c-4be5-adaf-f6cd269c6322, approved CLI upload, manifest SHA256 67dbf52bb0b835880bdd125392f3fec253c69581c95c4fa6e7c89896dab70835; Railway SUCCESS and health ok; health commit unknown; rollback 5eb49c1f-a891-46d6-ad7d-3c3df4360c0c",
+          "threadId": "thread-1791073581429-knypc7",
+          "turnId": "turn-1791073898134-8a8dyp",
+          "runId": "614a21ba-a69f-4125-8fac-cad1dc5f7fbd",
+          "repoRef": "github:CoopAI-Corp/plane preview",
+          "actualAction": "Locate Parent ValidationError in issue create/update on preview",
+          "actualResult": "Honest miss; known validation source not retrieved before shared gather handoff.",
+          "timingKind": "answer",
+          "firstAnswerMs": 9020,
+          "durationMs": 9020,
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/post-deployment-live-retests.jsonl",
+          "criteriaReview": "NOT_ALL_MET",
+          "reviewer": "Codex"
+        }
+      ]
+    },
+    {
+      "id": "DF-006",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-007",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-007",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-007",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-008",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-008",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-008",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-009",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-009",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-009",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-010",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-010",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-010",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-011",
+      "mode": "cold",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-011",
+      "mode": "warm",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-011",
+      "mode": "after-repo-switch",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-012",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-013",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-014",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-015",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-016",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-017",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-018",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-019",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-020",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-021",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-022",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-023",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-024",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-025",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-026",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-027",
+      "mode": "fresh",
+      "status": "BLOCKED",
+      "attempts": [
+        {
+          "status": "BLOCKED",
+          "actualAction": "Supplemental remote preview Stop then narrow rename; no seeded disposable-branch Apply fixture.",
+          "actualResult": "First rename proposed only JSDoc; exact retry renamed all three uses. Both rejected, no writes. First output 31499ms and 30146ms. Required branch fixture and Apply verification remain open.",
+          "threadId": "thread-1791065998571-xgl6nc",
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/live-selection-and-cancel.json"
+        },
+        {
+          "status": "BLOCKED",
+          "timestamp": "2026-10-04T00:04:30.078Z",
+          "candidateExtensionHash": "0c6902524079c62b26f447514ceb9b30bfcbe27529a985f1d066b1ec9a9bfd89",
+          "actualAction": "Stop structured local rewrite; rename total to result; Apply and Save.",
+          "actualResult": "Behavior passed: exact rename, no partial or late canceled mutation. Full scenario fixture/account qualification remains incomplete.",
+          "threadId": "thread-1791068274134-vjdcrp",
+          "turnId": "turn-1791072266091-javpxt",
+          "runId": "synthesis-turn-1791072266091-javpxt",
+          "firstAnswerMs": 6503,
+          "durationMs": 7333,
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/local-cancel-package-messages.json",
+          "supportingEvidence": [
+            "docs/dogfood/runs/2026-10-03-continuation/evidence/local-cancel-package-diagnostics.jsonl",
+            "docs/dogfood/runs/2026-10-03-continuation/evidence/local-cancel-package-assertions.log"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "DF-028",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-029",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-030",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-031",
+      "mode": "slash",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-031",
+      "mode": "workflow",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-031",
+      "mode": "editor-context-menu",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-032",
+      "mode": "slash",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-032",
+      "mode": "workflow",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-032",
+      "mode": "editor-context-menu",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-033",
+      "mode": "slash",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-033",
+      "mode": "workflow",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-033",
+      "mode": "editor-context-menu",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-034",
+      "mode": "slash",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-034",
+      "mode": "workflow",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-034",
+      "mode": "editor-context-menu",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-035",
+      "mode": "slash",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-035",
+      "mode": "workflow",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-035",
+      "mode": "editor-context-menu",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-036",
+      "mode": "slash",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-037",
+      "mode": "connected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-037",
+      "mode": "disconnected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-037",
+      "mode": "scope-denied",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-038",
+      "mode": "connected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-038",
+      "mode": "disconnected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-038",
+      "mode": "scope-denied",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-039",
+      "mode": "connected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-039",
+      "mode": "disconnected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-039",
+      "mode": "scope-denied",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-040",
+      "mode": "connected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-040",
+      "mode": "disconnected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-040",
+      "mode": "scope-denied",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-041",
+      "mode": "connected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-041",
+      "mode": "disconnected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-041",
+      "mode": "scope-denied",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-042",
+      "mode": "connected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-042",
+      "mode": "disconnected",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-042",
+      "mode": "scope-denied",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-043",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-044",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-045",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-046",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-047",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-048",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-049",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-050",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-051",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-052",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-053",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-054",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-055",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-056",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-057",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-058",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-059",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-060",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-061",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-062",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-063",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-064",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-065",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-066",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-067",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-068",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-069",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-070",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-071",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-072",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-073",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": []
+    },
+    {
+      "id": "DF-074",
+      "mode": "fresh",
+      "status": "BLOCKED",
+      "attempts": [
+        {
+          "status": "BLOCKED",
+          "actualAction": "Installed exact packaged candidate into isolated profile; compared installed extension, webview and CSS against VSIX bytes.",
+          "actualResult": "Installation and byte identity pass. Required sign-in, hunt, citation, Apply, Stop, switch and autocomplete on clean profile remain unexecuted; sandbox lacks real repositories and model credentials.",
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/clean-vsix-install.json"
+        }
+      ]
+    },
+    {
+      "id": "DF-075",
+      "mode": "fresh",
+      "status": "NOT_RUN",
+      "attempts": [
+        {
+          "status": "FAIL",
+          "timestamp": "2026-10-03T22:20:48.484Z",
+          "threadId": "thread-1791065998571-xgl6nc",
+          "turnId": "turn-1791066031730-8hggmv",
+          "runId": "synthesis-turn-1791066031730-8hggmv",
+          "candidateExtensionHash": "fbd567eb7f4739ca37ea7648f1413fde3f284684143561e36980469b4e55b28d",
+          "candidateWebviewHash": "b90947ec2d81f4078c867b89dec6bf6429a27700cb4cc737b608f64c82520d7d",
+          "candidateVsixHash": "ed35bbe3cc9670b268d21d2cbf0cf1a7f0ee34c8fed4d7d12f2bfe189700f9ae",
+          "actualAction": "Exact L10-17 selection; toolbar New Chat; Explain this function and its edge cases.",
+          "actualResult": "Selection retained; correct parser explanation. Raw output started at 17278ms; meaningful answer not measured precisely. Exceeds 15s guideline.",
+          "criteriaReview": "NOT_ALL_MET",
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/live-selection-and-cancel.json",
+          "timingKind": "answer",
+          "firstAnswerMs": 17278,
+          "durationMs": 21000,
+          "timingQualification": "Raw token lower bound; duration observed approximately."
+        }
+      ],
+      "priorCandidateHistory": [
+        {
+          "status": "FAIL",
+          "attempts": [
+            {
+              "status": "FAIL",
+              "timestamp": "2026-10-03T22:20:48.484Z",
+              "threadId": "thread-1791065998571-xgl6nc",
+              "turnId": "turn-1791066031730-8hggmv",
+              "runId": "synthesis-turn-1791066031730-8hggmv",
+              "candidateExtensionHash": "fbd567eb7f4739ca37ea7648f1413fde3f284684143561e36980469b4e55b28d",
+              "candidateWebviewHash": "b90947ec2d81f4078c867b89dec6bf6429a27700cb4cc737b608f64c82520d7d",
+              "candidateVsixHash": "ed35bbe3cc9670b268d21d2cbf0cf1a7f0ee34c8fed4d7d12f2bfe189700f9ae",
+              "actualAction": "Exact L10-17 selection; toolbar New Chat; Explain this function and its edge cases.",
+              "actualResult": "Selection retained; correct parser explanation. Raw output started at 17278ms; meaningful answer not measured precisely. Exceeds 15s guideline.",
+              "criteriaReview": "NOT_ALL_MET",
+              "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/live-selection-and-cancel.json",
+              "timingKind": "answer",
+              "firstAnswerMs": 17278,
+              "durationMs": 21000,
+              "timingQualification": "Raw token lower bound; duration observed approximately."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "DF-076",
+      "mode": "connected",
+      "status": "NOT_RUN",
+      "attempts": []
+    }
+  ],
+  "priorCandidateHistory": [
+    {
+      "schemaVersion": 1,
+      "sourceThread": "01a0fe7a-9d58-7bb3-a9d7-c6aaf7b8ad2f",
+      "metadata": {
+        "candidateHead": "c7796ed10c8bcc5cd2848d44b0bab6eb283684fc",
+        "dirtyDiffHash": "e3bb8080f24ad744821dfa42d54898ad36db8002a4a518625545f6309ddab41d",
+        "extensionHash": "5c9e57a1c820e994450ae630d5b7e53d05b12cc18c387c041292c49ed7228d06",
+        "webviewHash": "f4b581c38087fe272ec5fe2dc0fc2f69bab87475307c4ad166c2559abdb79f0e",
+        "vsixHash": "d255f8007808b1ddb3c721a35e9847a02fe8bd1f2a3c65ae31289e7a75679d1a",
+        "backendDeployment": "https://api.coop-ai.dev/health reported commit c7796ed10c8b (read-only, 2026-10-03)",
+        "editorVersion": "VS Code 1.139.1 (04c0d99f4fb0d8afe6ce4f0c58e31e183ac3e4b1, arm64)",
+        "platform": "macOS 26.6.2 build 25G83 arm64",
+        "fixtureEvidence": "docs/dogfood/runs/2026-10-03-final/evidence/live-host-observations.json"
+      },
+      "automated": [
+        {
+          "name": "lint",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-final/evidence/lint.log"
+        },
+        {
+          "name": "test:ci",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-final/evidence/test-ci.log"
+        },
+        {
+          "name": "test:agent-ship",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-final/evidence/test-agent-ship.log"
+        },
+        {
+          "name": "test:code-citation-locator",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-final/evidence/test-code-citation-locator.log"
+        },
+        {
+          "name": "test:prompt-library",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-final/evidence/test-prompt-library.log"
+        },
+        {
+          "name": "test:project-instructions",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-final/evidence/test-project-instructions.log"
+        },
+        {
+          "name": "test:chat-response-timing",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-final/evidence/test-chat-response-timing.log"
+        },
+        {
+          "name": "test:request-batcher",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-final/evidence/test-request-batcher.log"
+        },
+        {
+          "name": "test:status-transition",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-final/evidence/test-status-transition.log"
+        },
+        {
+          "name": "test:email-template-grounding",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-final/evidence/test-email-template-grounding.log"
+        },
+        {
+          "name": "test:existing-capability",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-final/evidence/test-existing-capability.log"
+        },
+        {
+          "name": "test:fim",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-final/evidence/test-fim.log"
+        },
+        {
+          "name": "test:repo-grants-ui",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-final/evidence/test-repo-grants-ui.log"
+        },
+        {
+          "name": "build:extension-dev",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-final/evidence/build-extension-dev.log"
+        },
+        {
+          "name": "surface-builds",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-final/evidence/surface-builds.log"
+        }
+      ],
+      "results": [
+        {
+          "id": "DF-001",
+          "mode": "cold",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:13:12.845919+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "gitlab:coopai-group/Coop-AI@main",
+                "action": "Where do we parse the Authorization Bearer token? Don't write a new helper \u2014 point me at the existing function.",
+                "actualResult": "Fresh reload; selected gitlab Coop-AI main; remote-read 7293 chars. Answer extractBearerToken at src/server/authMiddleware.ts:10-17. Citation opened remote returned body in Untitled-21; source lines 10-17 matched. Answer-start 10144ms. Loaded bundle hash verified in diagnostics. Commit SHA not exposed; ref-level check only.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-001-cold-1.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": 10144,
+                "durationMs": 10420,
+                "threadId": "thread-1791047332044-k40i3j"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-001",
+          "mode": "warm",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:17:06.953987+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "gitlab:coopai-group/Coop-AI@main",
+                "action": "Where do we parse the Authorization Bearer token? Don't write a new helper \u2014 point me at the existing function.",
+                "actualResult": "Reran with neutral Untitled-2 editor and no file chip. Correct extractBearerToken source at 10-17, reads headers.authorization and trims token. Citation opened remote body in Untitled-22. Ref-level pass only; pinned SHA unavailable.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-001-warm-1.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": 6135,
+                "durationMs": 6480,
+                "threadId": "thread-1791047767415-t5drws"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-001",
+          "mode": "after-repo-switch",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:27:05.333797+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "gitlab:coopai-group/Coop-AI@main",
+                "action": "Where do we parse the Authorization Bearer token? Don't write a new helper \u2014 point me at the existing function.",
+                "actualResult": "Returned to Coop-AI main after asking questions on Plane preview and Documenso main. No file chip. Correct parser source 10-17 and link opened remote body in Untitled-23. No other-repo paths in answer.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-001-after-repo-switch-1.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": 6521,
+                "durationMs": 6989,
+                "threadId": "thread-1791048357253-sjt4b3"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-002",
+          "mode": "cold",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-002",
+          "mode": "warm",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:18:15.560593+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "gitlab:coopai-group/Coop-AI@main",
+                "action": "Where is requireAuth or authentication middleware defined in this repo?",
+                "actualResult": "Fresh no-chip chat. Answer identifies src/server/authMiddleware.ts and actual exported authentication helpers. Read source and rendered source card. Quality finding: includes full 241-line file rather than bounded requireAuth definition; requested symbol not explicitly named in prose. Correct file, but concise-answer quality needs review.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-002-warm-1.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": 7471,
+                "durationMs": 9518,
+                "threadId": "thread-1791047843958-0n9mxj"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-002",
+          "mode": "after-repo-switch",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-003",
+          "mode": "cold",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-003",
+          "mode": "warm",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:19:00.496719+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "gitlab:coopai-group/Coop-AI@main",
+                "action": "Explain the request path from authentication to a protected API endpoint.",
+                "actualResult": "Fresh no-chip remote Coop-AI main. Final answer says no auth/API handler code shared, requests open or paste files, and gives generic API flow. Fails real middleware plus endpoint evidence despite remote indexed repo selected and successful preceding lookup. UI full answer observed at 10:18 AM.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-003-warm-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": 10963,
+                "durationMs": 12307,
+                "threadId": "thread-1791047903675-m3he9h"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-003",
+          "mode": "after-repo-switch",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-004",
+          "mode": "cold",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-004",
+          "mode": "warm",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:19:57.516692+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "gitlab:coopai-group/Coop-AI@main",
+                "action": "How many files and lines of code are in this repository?",
+                "actualResult": "Inventory question misrouted to code-location/gaps response: remote code search did not return usable implementation; asks specific symbol. Does not provide authoritative totals or clearly report unavailable totals. No estimates invented, but user task not answered. Diagnostic timing unavailable for this non-agent UI check; no prior turn timing is attributed.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-004-warm-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-004",
+          "mode": "after-repo-switch",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-005",
+          "mode": "cold",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-005",
+          "mode": "warm",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:20:48.358257+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "gitlab:coopai-group/Coop-AI@main",
+                "action": "Where is DefinitelyMissingCoopSymbol_20261003 defined?",
+                "actualResult": "Fresh no-chip repo main. Final response: I could not find that in this repo. Try a more specific name, or open the file. No invented symbol/path or exhaustive absence claim. Negative search honest.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-005-warm-1.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": 9003,
+                "durationMs": 9003,
+                "threadId": "thread-1791048002432-6q3yz7"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-005",
+          "mode": "after-repo-switch",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-006",
+          "mode": "cold",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-006",
+          "mode": "warm",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:21:39.830423+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "github:CoopAI-Corp/plane@preview",
+                "action": "In Plane issue create/update, the API raises ValidationError \"Parent is not valid issue_id please pass a valid issue_id\" when the parent isn't in the project. Where is that raised?",
+                "actualResult": "Exact Parent ship-gate ask, no chip, selected Plane preview after switching from Coop-AI. Final canned miss: indexed searches yielded no attachable reject snippet, and no opened file confirmed it. Same loaded bundle as yesterday; no Parent raise citation.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-006-warm-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": 9003,
+                "durationMs": 9003,
+                "threadId": "thread-1791048056614-2m0b6d"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-006",
+          "mode": "after-repo-switch",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-007",
+          "mode": "cold",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-007",
+          "mode": "warm",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:22:13.961029+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "github:CoopAI-Corp/plane@preview",
+                "action": "Users can't move a work item out of backlog \u2014 the API returns an error. I don't have this repo cloned. Where is work-item state written, and what rejects a bad transition?",
+                "actualResult": "Plane preview no chip; compound write+reject asks returns same canned reject miss, neither actual writer nor validation shown. indexed_map_unavailable seen in current run. No unsupported transition policy asserted, but task incomplete.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-007-warm-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": 9005,
+                "durationMs": 9005,
+                "threadId": "thread-1791048108245-7g86dr"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-007",
+          "mode": "after-repo-switch",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-008",
+          "mode": "cold",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-008",
+          "mode": "warm",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:23:23.929556+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "github:CoopAI-Corp/plane@preview",
+                "action": "A client sent an assignee that isn\u2019t on the team \u2014 the API returns an error. Where does the API reject a bad assignee_id?",
+                "actualResult": "Assignee false-premise ask returns canned unverified-reject miss instead of locating and explaining actual filtering. No fabricated exception, but no positive behavior evidence or premise correction.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-008-warm-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": 9073,
+                "durationMs": 9073,
+                "threadId": "thread-1791048163339-2wnkom"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-008",
+          "mode": "after-repo-switch",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-009",
+          "mode": "cold",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-009",
+          "mode": "warm",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:24:12.564810+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "github:CoopAI-Corp/plane@preview",
+                "action": "Where do work-item states live in the backend?",
+                "actualResult": "Calm State-model locate returns could not find that in this repo, no model evidence. Plane preview no chip; indexed map response lacks provenance fields and is rejected.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-009-warm-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": 6871,
+                "durationMs": 6871,
+                "threadId": "thread-1791048209216-ojvyxy"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-009",
+          "mode": "after-repo-switch",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-010",
+          "mode": "cold",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-010",
+          "mode": "warm",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:25:01.621226+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "github:CoopAI-Corp/plane@preview",
+                "action": "Where does the API authenticate requests with an API key, and where are issue/work-item states defined on the server?",
+                "actualResult": "Compound API-key auth and State model question returns generic could not find it; neither half supported. Plane preview no chip.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-010-warm-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": 9008,
+                "durationMs": 9008,
+                "threadId": "thread-1791048262527-z6cam4"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-010",
+          "mode": "after-repo-switch",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-011",
+          "mode": "cold",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-011",
+          "mode": "warm",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:25:48.631240+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "bitbucket:coop-ai/documenso@main",
+                "action": "A signer gets an error that the document must be pending for signing. Where does the server reject this request, and what status check enforces it?",
+                "actualResult": "Documenso Bitbucket main no chip. Canned reject miss, no signing guard or PENDING evidence. No cross-repo paths in answer; task failed on second provider too.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-011-warm-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": 9014,
+                "durationMs": 9014,
+                "threadId": "thread-1791048307042-8oilmx"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-011",
+          "mode": "after-repo-switch",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-012",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No isolated index-stats fault fixture or sandbox API endpoint; current host is production API. Cannot safely remove inventory source for a controlled test.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-013",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No denied-access test identity/repository; current Pro account can access all four ready repos. Awaiting sandbox account details.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-014",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No remotely indexed two-branch fixture with independently seeded different function; current source refs are live main/preview.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-015",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No disposable remotely indexed rename fixture or controlled index generation; not mutating production repository/index for this check.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-016",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:38:42.730930+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "github:CoopAI-Corp/plane@preview",
+                "action": "Select repo A while editor is open on repo B; ask about A.",
+                "actualResult": "Plane preview selected while Coop remote authMiddleware scratch open, then activated and selected its header statement. Both questions stayed tagged Plane preview; diagnostic repo github:CoopAI-Corp/plane and candidates all Plane paths; no Coop body presented as Plane. Foreign selection was not attached as a Plane chip. Final State lookup missed (existing separate search failure); isolation criterion passed. Activity misleadingly said Looking at authMiddleware while final provenance remained Plane. Exact disposable branch oracle unavailable; this is current connected-repo isolation observation.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-016-fresh-1.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": 9005,
+                "durationMs": 9005,
+                "threadId": "thread-1791052626221-im822g"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-017",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:39:48.687763+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "Ask to read a file whose first relevant method is beyond the initial read window.",
+                "actualResult": "Explicit remote read authMiddleware main authUserId near end completed 5s; source card entire method 203\u2013208. Citation opens Untitled-27; after editor refresh full 241-line fetched body and visible 203\u2013208 match all six lines, no truncation. Method beyond first 200 lines. Current connected remote fixture substituted for disposable fixture; exact commit unverified.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-017-fresh-1.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-018",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:30:22.762588+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "Select extractBearerToken and ask: Explain this function and its edge cases.",
+                "actualResult": "Select exact remote L10-17 after chat exists; user bubble confirms parser selection and Coop-AI main provenance. Explains case-sensitive Bearer prefix, trimming, missing/empty header and extra characters with exact source card. Worked for21s total, first-answer timing not instrumented; cannot certify latency. Separate DF-075 records selection loss when creating New chat.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-018-fresh-1.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-019",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:39:36.309927+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "gitlab:coopai-group/Coop-AI@main",
+                "action": "Add two tests to src/server/authMiddleware.test.ts for extractBearerToken: (1) missing Authorization header returns undefined, (2) \"Bearer abc\" returns abc. Match this file's node:test style. Do not rewrite the existing suite.",
+                "actualResult": "Exact code-generation ask reads authMiddleware.test.ts and executes propose_patch twice, but final answer is I could not find that in this repo; no Apply card or tests. First answer18330ms exceeds soft15s target. Cannot run requested new tests because no patch delivered.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-019-fresh-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": 18330,
+                "durationMs": 19128,
+                "threadId": "thread-1791049115884-zqcyub"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-020",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:37:30.794405+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "/edit Rename a local variable in the selected function to improve clarity; preserve behavior.",
+                "actualResult": "Remote parser L10-17 selected. Correct minimal rename patch proposed; Apply reported applied1file. Selected Untitled-23 still contained const header, earlier Untitled-22 unchanged, on-disk authMiddleware unchanged. Patch Open file created new Untitled-24 with original content. Landed target not visibly established; cannot certify actual applied result or behavioral preservation. Undo returned card to ready; Reject then marked rejected. No application disk changes.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-020-fresh-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              },
+              {
+                "timestamp": "2026-10-03T18:10:26.324842+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "/edit Rename a local variable in the selected function to improve clarity; preserve behavior.",
+                "actualResult": "Recheck actual remote Untitled25 L10-17; exact minimal three-reference rename proposed; Apply succeeds. Immediately blank/stale editor refresh required: switch Untitled22 then back displays authorizationHeader in all three intended locations, rest file unchanged. Six independent displayed-function behavior assertions pass (missing/Bearer/trim/empty/Basic/lowercase). Earlier ambiguous attempt does not establish failed application; withdraw missing-target claim. No source saved or committed.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-020-fresh-2.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-021",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "Prepared local seeded fixture fails independently, but it is not an indexed remote fixture. Outside-repo /fix attempt returned no repository selected. Need supported explicit upload or sandbox remote fixture before this criterion can be graded.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              },
+              {
+                "timestamp": "2026-10-03T18:05:51.684498+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "/fix Fix the seeded off-by-one bug in sumPositive; preserve its public signature.",
+                "actualResult": "Retry after explicitly attaching local fixture and selecting Coop-AI succeeded at generation in 5s; proposal replaced actual absolute filename with literal [INTERNAL_PATH]. Apply displayed Patch failed Could not resolve file [INTERNAL_PATH], despite actual fixture open. No repair landed; independent assertions still fail.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-021-fresh-2.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              },
+              {
+                "timestamp": "2026-10-03T18:09:11.359032+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "/fix Fix the seeded off-by-one bug in sumPositive; preserve its public signature.",
+                "actualResult": "Confirmed again with actual visible editor-group2 native L1-7 selection; exact minimal repair still has literal [INTERNAL_PATH]; Apply fails Could not resolve file. Prior duplicate editor in group1 appeared blank while AX contained source; this harness issue is excluded from second verified attempt.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-021-fresh-3.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-022",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No sandbox remote seeded caller/helper convention fixture; requires disposable remotely indexed edit repository.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-023",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No supported remotely indexed boundary-bug fixture. Local scratch independent assertions exist but remote codegen prerequisite is unmet.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-024",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:37:30.851862+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "Reject a proposed patch.",
+                "actualResult": "Rejected the reviewed rename patch after Undo. Card shows Patch rejected, Not applied \u2014 Undo to review again. Application authMiddleware disk byte-identical to saved before; visible parser source unchanged; composer available.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-024-fresh-1.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-025",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:11:30.281309+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "Modify the target file after proposal, then Apply.",
+                "actualResult": "After proposal, replaced selected remote parser with explicit disposable comment marker; stale Apply refused SEARCH block not found, disabled Apply and preserved intervening buffer. Editor Undo restored original parser. No saved remote or local source mutation.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-025-fresh-1.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-026",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:34:57.014523+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "Apply the same proposal twice.",
+                "actualResult": "Disposable remote scratch Untitled-25: generated rename header\u2192authorizationHeader, Apply succeeded; refreshed editor showed exact three references changed and one function. Applied card replaced Apply with Undo, preventing duplicate submission via normal UI. Undo restored original proposal availability. No save to tracked source. Covers safe refusal by removing repeated-Apply control, not forged backend replay.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-026-fresh-1.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-027",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:36:17.848699+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "Stop during patch generation, then submit another edit.",
+                "actualResult": "Stopped broad edit after 5s; UI displayed Stopped. Immediately asked only Rename header to authorizationHeader in extractBearerToken. New turn completed 39s with 2 files/4 edits: BearerToken object return-type change, resolveAuthContext replacement and test changes from cancelled broad request. Narrow next edit failed intent isolation. No patches applied; Reject all confirmed Patch rejected. Buffer remained original string-return parser. Not claiming delayed write, but cancelled request contaminated next proposal.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-027-fresh-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-028",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:37:01.533636+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "Request an edit with missing target file.",
+                "actualResult": "Requested nonexistent DefinitelyMissingDogfood_20261003.ts edit, explicitly no creation. Completed 14s: says target/function not present in attached workspace context; failed card No patch blocks found; no Apply control or write. Note fresh-chat hydration reattached prior authMiddleware L10\u201316 despite neutral editor; response still correctly refused unrelated mutation.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-028-fresh-1.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-029",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No disposable remote multi-file export+consumer fixture. Not applying arbitrary multi-file changes to application production source.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-030",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No sandbox code-host repository/base branch for draft PR; current selected repositories are production-connected forks. Awaiting sandbox destination.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-031",
+          "mode": "slash",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:44:03.713223+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "/understand",
+                "actualResult": "Understand returned a 51s overview grounded in directory inventory and two webhook handlers only. Explicitly labels other bodies not attached, but five verified files criterion not met; lists extensionless imported paths and migrations directory as entry files. Treats truncated attached source as potential repository-file risk and makes only-interface claim without full evidence. Broader app architecture remains largely unverified.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-031-slash-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-031",
+          "mode": "workflow",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-031",
+          "mode": "editor-context-menu",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-032",
+          "mode": "slash",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:47:56.668875+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "/owner",
+                "actualResult": "Owner question reports no file-specific data and review fetch path error, but recommends primary Jon Raney and backup Jonathan Raney from repo-wide commits as separate engineers and calls backup documented escalation without evidence. Specific auth ownership not verified. Cannot certify source-backed owner/escalation criterion. Total UI Worked37s; first-answer metric unavailable.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-032-slash-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-032",
+          "mode": "workflow",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:29:08.260726+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "/owner",
+                "actualResult": "Workflow Owner on actual remote authMiddleware selection46s uses file-specific9commits and Slack presence (better than repo-only prior slash), but calls author sole owner/only person with full context despite no CODEOWNERS rule or review records. Medium-evidence source panel contains GitLab Commits and reviews label and Slack presence only; no inspectable commit links/body. Ownership confidence and knowledge-transfer claims not supported.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-032-workflow-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-032",
+          "mode": "editor-context-menu",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-033",
+          "mode": "slash",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:56:00.180418+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "/blast",
+                "actualResult": "With actual remote authMiddleware L10-17 selection, Blast lists real module importers via import-parse, including jobs and SAML. It then claims 23 production callers of extractBearerToken, every route breaks, and all23 assume never throws without opened function-call evidence. Module import relationship is overstated as verified function usage/behavior. Fails verified-impact versus guesses criterion. UI Worked56s; first-answer not instrumented.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-033-slash-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-033",
+          "mode": "workflow",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-033",
+          "mode": "editor-context-menu",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-034",
+          "mode": "slash",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:02:41.832363+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "/trace",
+                "actualResult": "Trace cited commit rationale for soft start deadline but did not reconcile selected current remote source declaring Hard ceiling and controller.abort; claims active design without reconciling source. Worked 30s. Commit evidence still needs independent inspection.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-034-slash-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-034",
+          "mode": "workflow",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-034",
+          "mode": "editor-context-menu",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:33:32.193100+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "/trace",
+                "actualResult": "Actual editor context menu Trace Decision for Selection, authMiddleware.ts L10\u201316 main: completed 44s; explicitly says rationale, alternatives and trade-offs undocumented; labels pure/stateless inference as code interpretation. No fabricated decision rationale. Commit/authorship metadata was displayed but independent provenance inspection remains open; this pass covers honest rationale criterion only.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-034-editor-context-menu-1.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-035",
+          "mode": "slash",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:06:16.273105+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "/gaps",
+                "actualResult": "Named parser gap request took Worked 2m55s; returns eight repetitive What documentation should cover X / No nearby docs under X subsections unrelated to auth focus. Focus scan miss honestly called out but generic filler violates concrete-supported-gaps criterion. Activity exposed lengthy internal instruction conflict discussion.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-035-slash-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-035",
+          "mode": "workflow",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-035",
+          "mode": "editor-context-menu",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-036",
+          "mode": "slash",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:26:13.971635+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "/compare",
+                "actualResult": "Natural /compare instruction misparsed Compare/authentication as repo names. Retried explicit /compare coopai-group/Coop-AI CoopAI-Corp/plane authentication: activity/stream obtained body-based comparison (userAuthApi.ts and Plane APIKeyAuthentication), displayed code citation, then final38s replaced it with canned could not verify either part locate-miss. No durable separated comparison answer.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-036-slash-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-037",
+          "mode": "connected",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:15:32.753054+00:00",
+                "status": "BLOCKED",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "/slack Find the dogfood decision containing COOP_DOGFOOD_DECISION_20261003 and summarize it with a source link.",
+                "actualResult": "Supplemental live /slack Find discussions about COOP-101 returned no Slack results, honest no decision/source. No independently seeded marker or accessible known Slack thread provided, so recall/citation criterion cannot be verified; unrelated Jira/docs unavailable statement also misleading for tool-specific scope.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-037-connected-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-037",
+          "mode": "disconnected",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-037",
+          "mode": "scope-denied",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-038",
+          "mode": "connected",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:15:32.854715+00:00",
+                "status": "BLOCKED",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "/jira Find the dogfood decision containing COOP_DOGFOOD_DECISION_20261003 and summarize it with a source link.",
+                "actualResult": "Supplemental /jira Summarize COOP-101 retrieves epic and acceptance criteria in12s; citation opens correct coop-ai.atlassian.net/browse/COOP-101 but independent source view requires Atlassian login in both VSCode browser and Chrome. Seeded unique marker/denied-control fixtures unavailable. No full scenario pass.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-038-connected-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-038",
+          "mode": "disconnected",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-038",
+          "mode": "scope-denied",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-039",
+          "mode": "connected",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:12:10.159283+00:00",
+                "status": "BLOCKED",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "/teams Find the dogfood decision containing COOP_DOGFOOD_DECISION_20261003 and summarize it with a source link.",
+                "actualResult": "Executed exact /teams prompt. Inline Teams is not available yet, no fabricated answer. Settings also Coming soon; no connected Teams path exists on this candidate, so positive scenario cannot run.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-039-connected-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-039",
+          "mode": "disconnected",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-039",
+          "mode": "scope-denied",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-040",
+          "mode": "connected",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:23:56.002701+00:00",
+                "status": "BLOCKED",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "/confluence Find the dogfood decision containing COOP_DOGFOOD_DECISION_20261003 and summarize it with a source link.",
+                "actualResult": "Supplemental /confluence Read Coop AI Demo Home honestly limits answer to truncated default welcome excerpt,14s. Source rendered literal [Coop AI Demo Home](/spaces/COOP/overview) rather than clickable absolute Confluence link. Unique-marker/denied control fixture and independent Confluence authenticated body unavailable.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-040-connected-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-040",
+          "mode": "disconnected",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-040",
+          "mode": "scope-denied",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-041",
+          "mode": "connected",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:24:55.030618+00:00",
+                "status": "BLOCKED",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "/notion Find the dogfood decision containing COOP_DOGFOOD_DECISION_20261003 and summarize it with a source link.",
+                "actualResult": "Executed exact /notion unique-marker prompt: honest no accessible document/decision containing marker, no invented source, Worked9s. Marker never seeded and denied-control workspace unavailable; cannot verify positive retrieval or scope isolation.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-041-connected-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-041",
+          "mode": "disconnected",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-041",
+          "mode": "scope-denied",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-042",
+          "mode": "connected",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:23:56.090438+00:00",
+                "status": "BLOCKED",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "/docs Find the dogfood decision containing COOP_DOGFOOD_DECISION_20261003 and summarize it with a source link.",
+                "actualResult": "Unique marker and denied-control fixture absent. Existing Architecture Overview positive body/citation independently verified separately in DF-076; cannot use that narrower pass for marker/access isolation.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-042-connected-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-042",
+          "mode": "disconnected",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-042",
+          "mode": "scope-denied",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-043",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:08:30.020588+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "gitlab:coopai-group/Coop-AI@main",
+                "action": "What code covers COOP-101, and what decision explains it?",
+                "actualResult": "Actual COOP-101 question retrieved Jira epic body including explicit demo-seed disclaimer; no actual code read or mapped, asks for repo files despite selected GitLab Coop-AI main. Worked17s. Jira source link presented; independent browser verification pending. Seeded decision fixture not available, so no full join pass.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-043-fresh-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": 14994,
+                "durationMs": 16835,
+                "threadId": "thread-1791050785767-yrp6lt"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-044",
+          "mode": "fresh",
+          "status": "BLOCKED",
+          "attempts": [
+            {
+              "status": "BLOCKED",
+              "timestamp": "2026-10-03T14:10:00-07:00",
+              "candidateExtensionHash": "5c9e57a1c820e994450ae630d5b7e53d05b12cc18c387c041292c49ed7228d06",
+              "candidateWebviewHash": "f4b581c38087fe272ec5fe2dc0fc2f69bab87475307c4ad166c2559abdb79f0e",
+              "candidateVsixHash": "d255f8007808b1ddb3c721a35e9847a02fe8bd1f2a3c65ae31289e7a75679d1a",
+              "backendDeployment": "https://api.coop-ai.dev/health reported commit c7796ed10c8b (read-only, 2026-10-03)",
+              "accountTierOrg": "Unavailable in the Extension Host UI",
+              "repoRef": "Unavailable; remote picker reported no repositories",
+              "actualAction": "With workspace-only Copilot isolation active, opened /private/tmp/coop-app-dogfood/fixture.ts and ran CoopAI: Trigger Inline Autocomplete with the cursor after return total; repo picker was empty.",
+              "actualResult": "No inline suggestion appeared and fixture content was unchanged. Indexed remote fixture prerequisite was unavailable, so no provider provenance claim is made.",
+              "evidence": "docs/dogfood/runs/2026-10-03-final/evidence/live-host-observations.json",
+              "criteriaReview": "BLOCKED_PREREQUISITE",
+              "reviewer": "Codex",
+              "threadId": "Where is extractBearerToken defined? (host UI title; id unavailable)",
+              "turnId": "No answer turn was created",
+              "runId": "No run id exposed",
+              "timingKind": "ui-operation",
+              "durationMs": 0
+            }
+          ],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:13:44.984586+00:00",
+                "status": "BLOCKED",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "Type a seeded helper call with an indexed repo selected; accept ghost text.",
+                "actualResult": "Actual command-triggered inline completion accepted and independent assertions pass, but Copilot concurrently generated completions and no Coop provider provenance/remote graph retrieval observed. Cannot attribute suggestion to Coop or certify indexed-context signature criterion. Need isolated provider run with logged request provenance.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-044-fresh-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-045",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-046",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-047",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-048",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "NOT_RUN",
+            "attempts": []
+          }
+        },
+        {
+          "id": "DF-049",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:13:44.890557+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "Run with another inline provider enabled.",
+                "actualResult": "With GitHub Copilot active (extension logs confirm inline completions), triggered CoopAI inline command at seeded return. One visible suggestion extractBearerToken(headers) || undefined; accepted once with Tab; saved disposable file, three independent behavior assertions pass. No duplicate insertion/corruption. Provider identity of suggestion unverified; this passes coexistence behavior only.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-049-fresh-1.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-050",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "Current profile is existing signed-in Pro host, not fresh install; clean profile/packaged candidate not prepared.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-051",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No sandbox expiring-session identity/fault control; not invalidating current production credentials.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-052",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No second sandbox account/org; current identity Pro jraney2008. Awaiting test identity details.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-053",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:13:12.890770+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "gitlab:coopai-group/Coop-AI@main",
+                "action": "Reload with a typed unsent draft.",
+                "actualResult": "Unsent exact Bearer-token prompt survived Developer Reload Window with Coop-AI main context. Send was available only after selected branch main restored. Submitted preserved draft successfully. Lifecycle pass; timings belong to subsequent DF-001 submission. Diagnostic timing unavailable for this non-agent UI check; no prior turn timing is attributed.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-053-fresh-1.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-054",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:40:59.439398+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "Start long answer \u2192 Stop \u2192 immediately send a different question.",
+                "actualResult": "Started full architecture answer, clicked Stop while Thinking, UI showed Stopped. Immediately sent extractBearerToken locate; answered actual function with code at10-17. Prior stopped request remained stopped with no late answer. Composer recovered. Recovery timing not attached because scenario comprises multiple prompts.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-054-fresh-1.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-055",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:42:39.122174+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "Switch repo and thread during streaming.",
+                "actualResult": "While old follow-up was still streaming, created fresh Documenso main thread and entered DOGFOOD unsent Documenso draft 20261003. New view showed no old response. Returning old thread retained final answer there, with Plane preview restored. Unsent new thread absent in thread picker; New chat returns empty composer and no repo chip, losing draft. Streaming answer containment passes subcheck; draft persistence fails.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-055-fresh-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-056",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:42:11.561458+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "Open prior thread, follow up: Which function did you mean?",
+                "actualResult": "Opened prior Coop authUserId read thread after selecting Plane in another thread. Restored messages cite Coop main but composer retained Plane preview. Which function did you mean? sent tagged Plane; searched unrelated Plane function-declaration/debounce/editor/test-db paths and final 19s asks user for a function name in Plane rather than referring to authUserId. History follow-up/ref restoration fails.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-056-fresh-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-057",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:48:49.060373+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "Open chat in sidebar, editor and separate window.",
+                "actualResult": "Sidebar already exercised. Native Coop toolbar New Chat opened separate editor chat; selected Coop main, actual parser question streamed/finalized correct 6s source answer. Move Chat to New Window moved same thread and preserved messages/ref; separate window send via Return and Stop reachable by Tab/Return. Source citation opened another editor in that window. Surface/control checks pass; follow-up grounding failure and edit failure recorded separately, not evidence of healthy answer quality.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-057-fresh-1.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-058",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:40:52.035078+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "Copy answer and code; reopen a citation.",
+                "actualResult": "Copy message pasted exact complete prose+Markdown into disposable Untitled-2; Copy code pasted usable plain authUserId function without line numbers/fences. Both pastes undone. Citation 203\u2013208 reopened correct remote main authMiddleware body in Untitled-28. However composer attached source chip says authMiddleware.ts L1\u2013519, inconsistent with clicked 203\u2013208 and 241-line source; exact range provenance criterion failed. Copy controls pass subchecks; no tracked source saved.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-058-fresh-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              },
+              {
+                "timestamp": "2026-10-03T18:53:05.259179+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "Copy answer and code; reopen a citation.",
+                "actualResult": "Correction to earlier observation: actual remote scratch source measured from focused editor value is 264 lines / 7292 characters, authUserId starts203; earlier 241-line description was inaccurate. Copied answer and code verified exact and clean; clicked203\u2013208 reopens correct body, but source chip L1\u2013519 and later L1\u2013531 is inflated. No tracked source changed. Exact range provenance still fails.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-058-fresh-2.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-059",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:17:57.998591+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "Save, rerun and remove a personal prompt.",
+                "actualResult": "Created named personal prompt Where is extractBearerToken defined?, pinned then explicit library Save. Closed/reopened pinned picker: exact text inserted into composer; sent with Coop-AI main, got correct remote parser citation in7s. Deleted own test prompt via Actions/Delete and library Save; reopened picker No pinned prompts. Draft new-prompt Save alone is not persistence; global library Save required. No reload persistence tested.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-059-fresh-1.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-060",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:47:14.139347+00:00",
+                "status": "BLOCKED",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "Set Auto then a paid catalog model; reload.",
+                "actualResult": "UI subset passed: chose GPT-5 mini from paid composer catalog, confirmed checkmark, Reload Window, checkmark persisted. Restored Auto and confirmed checkmark. No request sent while paid model selected; actual provider use and assigned background-model invariance not verified. Full case remains blocked on those observations.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-060-fresh-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-061",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No free sandbox test account with controlled allowance. Current host is Pro.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-062",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No paid billing sandbox/cap fault fixture; current endpoint is production. UI usage alone cannot certify authoritative cap or duplicate charging.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-063",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No per-host network-fault proxy configured. Not disconnecting user-wide network to simulate a fault during unrelated work.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-064",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No sandbox 429/5xx fault-injection API configured; host points at production API.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-065",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No controlled graph/index-disabled sandbox with source still available. Current map provenance failure observed on Plane is a separate unplanned live failure, not a controlled graph fallback test.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-066",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No remotely indexed large Unicode-path fixture and independent range oracle. Multi-line selection subset tested in DF-018.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-067",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No remotely indexed injection fixture or scoped test integration document. Creating external integration messages was not authorized.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-068",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:48:49.158993+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "Keyboard-only send, Stop, citation, patch preview and settings.",
+                "actualResult": "Keyboard subchecks: composer Return sends; Tab three controls reaches Stop and Return cancels partial response; reverse Tab reaches Copy code and source citation; Return opens remote source. Palette keyboard CoopAI Extension Settings opens @ext:coop-ai.coop-ai settings and focus usable. Keyboard edit request had no preview: final canned Code location/Gaps miss and No patch blocks found despite existing source. Full keyboard preview workflow unmet; no accessibility focus trap demonstrated. Settings unchanged.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-068-fresh-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-069",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No named sandbox organization and test invite/grant identity; current admin portal is production.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-070",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No disposable remote sandbox index/refresh repository. Current ready indexed repos inspected read-only in host; no index mutations performed.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-071",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No isolated sandbox integration connection; disconnecting current organization connections would affect other users.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-072",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No sandbox Ops portal/job fixture. Current open Ops portal is production; no retry performed.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-073",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No sandbox signup/Stripe test-mode checkout; production sign-in/signup/charging not performed.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-074",
+          "mode": "fresh",
+          "status": "BLOCKED",
+          "attempts": [
+            {
+              "status": "BLOCKED",
+              "timestamp": "2026-10-03T14:20:00-07:00",
+              "candidateExtensionHash": "5c9e57a1c820e994450ae630d5b7e53d05b12cc18c387c041292c49ed7228d06",
+              "candidateWebviewHash": "f4b581c38087fe272ec5fe2dc0fc2f69bab87475307c4ad166c2559abdb79f0e",
+              "candidateVsixHash": "d255f8007808b1ddb3c721a35e9847a02fe8bd1f2a3c65ae31289e7a75679d1a",
+              "backendDeployment": "https://api.coop-ai.dev/health reported commit c7796ed10c8b (read-only, 2026-10-03)",
+              "accountTierOrg": "Unavailable in isolated profile",
+              "repoRef": "Unavailable; no repository configured in the clean profile",
+              "actualAction": "Installed the exact candidate VSIX into /private/tmp/coop-clean-extensions using /private/tmp/coop-clean-profile, then invoked the workspace with --new-window.",
+              "actualResult": "CLI confirmed installation. No separate clean-profile window appeared in the VS Code Window menu; packaged activation and scenario behavior were not observed.",
+              "evidence": "docs/dogfood/runs/2026-10-03-final/evidence/live-host-observations.json",
+              "criteriaReview": "BLOCKED_CLEAN_HOST_NOT_VISIBLE",
+              "reviewer": "Codex",
+              "threadId": "No clean-profile UI thread",
+              "turnId": "No answer turn",
+              "runId": "No extension run id",
+              "timingKind": "ui-operation",
+              "durationMs": 0
+            }
+          ],
+          "priorCandidateHistory": {
+            "status": "BLOCKED",
+            "attempts": [
+              {
+                "status": "BLOCKED",
+                "actualResult": "No exact candidate VSIX installed in clean profile. Current host is development bundle, not customer package.",
+                "evidence": "docs/dogfood/runs/2026-10-03/README.md",
+                "criteriaReview": "PREREQUISITE_UNAVAILABLE"
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-075",
+          "mode": "fresh",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "FAIL",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T17:29:59.320520+00:00",
+                "status": "FAIL",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "Select extractBearerToken L10-17, create New chat, then ask: Explain this function and its edge cases.",
+                "actualResult": "Exact remote parser selected using AX selectText; UI showed L10-17. New chat reset chip to Remote (whole file), final answer asked which of 16 exported functions to explain. Reproduced twice. Existing-thread selection is being tested separately.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-075-fresh-1.json",
+                "criteriaReview": "NOT_ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "DF-076",
+          "mode": "connected",
+          "status": "NOT_RUN",
+          "attempts": [],
+          "priorCandidateHistory": {
+            "status": "PASS",
+            "attempts": [
+              {
+                "timestamp": "2026-10-03T18:19:35.320835+00:00",
+                "status": "PASS",
+                "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+                "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+                "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+                "repoRef": "see notes@see notes",
+                "action": "/docs Read Coop AI \u2014 Architecture Overview and summarize its actual contents with a source link. If only a title or excerpt is available, say so.",
+                "actualResult": "Live /docs response14s accurately summarizes full Architecture Overview, covered repos, four components, COOP-101/COOP-55, and demo/nonproduction disclaimer. Independently opened exact original Google Doc in Chrome; screenshot shows full single-page body matching each claim. Document ID1JtCvYk9U7MGOrjQ_rlBjiLS2VsmW4bNN22H19iuqvJs verified. Does not certify access isolation or unique-marker fixture.",
+                "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-076-connected-1.json",
+                "criteriaReview": "ALL_MET",
+                "reviewer": "Codex; live accessibility/screenshot observation",
+                "firstAnswerMs": null,
+                "durationMs": null,
+                "threadId": null
+              }
+            ]
+          }
+        }
+      ],
+      "priorCandidateHistory": {
+        "sourceLedger": "docs/dogfood/runs/2026-10-03/ledger.json",
+        "candidateHead": "d7aeb7f36f15e8ce119e9ccd3dbd35c44536960f",
+        "extensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+        "webviewHash": "7d6dc75d48895b48069ad96d87953ed1ec623e5bd3433fbc6e4ae318982e7ab1",
+        "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+        "note": "Historical attempts are retained per scenario below for audit only; their candidate identities are stale and they do not count toward current results."
+      }
+    }
+  ],
+  "candidateHistory": [
+    {
+      "metadata": {
+        "candidateHead": "c7796ed10c8bcc5cd2848d44b0bab6eb283684fc",
+        "dirtyDiffHash": "75b4841e4fe7f3b8c17709f9999679f07f8541c633104363df46a8add7adb993",
+        "extensionHash": "0c6902524079c62b26f447514ceb9b30bfcbe27529a985f1d066b1ec9a9bfd89",
+        "webviewHash": "b90947ec2d81f4078c867b89dec6bf6429a27700cb4cc737b608f64c82520d7d",
+        "vsixHash": "06f564f8d2e18fc01d931b5352b9e8893f11cf31588b9c740a08fc26e5f7fda5",
+        "backendDeployment": "Production 5eb49c1f-a891-46d6-ad7d-3c3df4360c0c, commit c7796ed10c8bcc5cd2848d44b0bab6eb283684fc; current candidate backend is local only, SHA256 ee02747ba7532a8f2164f6629d246c92c23a117609d99794aa491fd6359f0389",
+        "editorVersion": "VS Code 1.139.1 arm64",
+        "platform": "macOS arm64",
+        "fixtureEvidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/sandbox-smoke-final.log"
+      },
+      "automated": [
+        {
+          "name": "lint",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/validation-final.json"
+        },
+        {
+          "name": "test:ci",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-ci-capability.log"
+        },
+        {
+          "name": "test:agent-ship",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-agent-ship-capability.log"
+        },
+        {
+          "name": "test:code-citation-locator",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-code-citation-locator-final.log"
+        },
+        {
+          "name": "test:prompt-library",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-prompt-library-final.log"
+        },
+        {
+          "name": "test:project-instructions",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-project-instructions-final.log"
+        },
+        {
+          "name": "test:chat-response-timing",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-chat-response-timing-final.log"
+        },
+        {
+          "name": "test:request-batcher",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-request-batcher-final.log"
+        },
+        {
+          "name": "test:status-transition",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-status-transition-final.log"
+        },
+        {
+          "name": "test:email-template-grounding",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-email-template-grounding-final.log"
+        },
+        {
+          "name": "test:existing-capability",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-existing-capability-final.log"
+        },
+        {
+          "name": "test:fim",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-fim-final.log"
+        },
+        {
+          "name": "test:repo-grants-ui",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/test-repo-grants-ui-final.log"
+        },
+        {
+          "name": "build:extension-dev",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/validation-final.json"
+        },
+        {
+          "name": "surface-builds",
+          "status": "PASS",
+          "evidence": "docs/dogfood/runs/2026-10-03-continuation/evidence/validation-final.json"
+        }
+      ]
+    }
+  ],
+  "continuationSourceThread": "01a1032d-6440-7e11-96e1-42cf1a33141b",
+  "supplementalEvidence": [
+    "docs/dogfood/runs/2026-10-03-continuation/evidence/validation-final.json",
+    "docs/dogfood/runs/2026-10-03-continuation/evidence/packaged-activation.json",
+    "docs/dogfood/runs/2026-10-03-continuation/evidence/clean-vsix-install-final.json",
+    "docs/dogfood/runs/2026-10-03-continuation/evidence/sandbox-model-final.log",
+    "docs/dogfood/runs/2026-10-03-continuation/evidence/sandbox-quota-final.log",
+    "docs/dogfood/runs/2026-10-03-continuation/evidence/sandbox-fault-final.log",
+    {
+      "type": "approved-backend-deployment",
+      "path": "evidence/deployment-approved-verification.json",
+      "status": "PASS",
+      "scope": "Deployment/startup/health only; Plane retrieval remains FAIL"
+    },
+    {
+      "type": "post-deployment-repository-switch",
+      "status": "PASS",
+      "scope": "Plane preview to gitlab:coopai-group/Coop-AI main; cited extractBearerToken src/server/authMiddleware.ts lines 10\u201316; answer started 10041 ms. Not full org isolation certification.",
+      "runId": "a8f500e8-a0dd-46d2-9aaf-8b0053e59d8c",
+      "path": "evidence/post-deployment-live-retests.jsonl"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+✔ shouldInterpretChatAsk is true for slash/integration unless skip is set (0.431917ms)
+✔ /slack SQL-injection ask searches SQL injection, not the repo slug or whole sentence (11.7335ms)
+✔ not mixing still plans a decision job even though MIX_PHRASES miss the gerund (1.31625ms)
+✔ model may name the mixing topic the regex list missed (0.960791ms)
+✔ plain compound ask still splits locate vs decision with distinct terms (6.074542ms)
+✔ rules-only front door preserves both evidence needs for compound reject hunts (2.834292ms)
+✔ I3 compound ask splits requireAuth locate from peel-auth decision, slack+jira only (0.33875ms)
+✔ bare /slack may use the repo (no topic) (0.361875ms)
+✔ /blast still runs blast; focus text is interpreted (0.185166ms)
+✔ unconstrained blast-shaped English is not a workflow constraint (0.247958ms)
+✔ Teams is omitted while TEAMS_COMING_SOON (0.336042ms)
+✔ fail-open does not search the repo slug when a topic exists (0.143375ms)
+✔ model JSON can write job terms; whole-sentence terms are rejected later by merge (0.199208ms)
+✔ N5 locate+decision plans call quarterback refine without a command constraint (0.286958ms)
+✔ handleChatSend interprets before routeSlashCommand (slash bypass is impossible) (426.392084ms)
+✔ recency-only slashes assign latest with no repo-slug query (0.627416ms)
+✔ topic still wins over recency words (0.421416ms)
+✔ bare integration slashes still allow repo fallback (0.070875ms)
+✔ Use-repo set with no Settings still plans latest and search (0.143208ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 464.665042

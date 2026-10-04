@@ -737,6 +737,7 @@ export class GitLabClient implements CodeHostClient {
   public async searchCode(coords: RepoCoordinates, query: string, limit = 20): Promise<Array<{ path: string }>> {
     const projectId = await this.projectId(coords);
     const params = new URLSearchParams({ scope: "blobs", search: query, per_page: String(limit) });
+    if (coords.branch?.trim()) params.set("ref", coords.branch.trim());
     const result = await codeHostRequestJson<Array<{ path: string }>>(
       `${this.apiBase}/projects/${projectId}/search?${params.toString()}`,
       {

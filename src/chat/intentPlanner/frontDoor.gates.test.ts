@@ -6,12 +6,18 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { extraTermsForIntegration, jobVerbForIntegration } from "./planChatJobs";
+import { createRequire } from "node:module";
+import {
+  extraTermsForIntegration,
+  formatIntentBriefForAgent,
+  jobVerbForIntegration
+} from "./planChatJobs";
 import { parseChatIntentPlanResponse, shouldCallChatIntentModel } from "./planChatIntentModel";
 import { TEAMS_COMING_SOON } from "../../integrations/teamsAvailability";
 import {
   SLACK_SQL_INJECTION_SLASH_ASK,
   hasAskTopic,
+  mergeInterpreterJobs,
   jobScopedActivityQuery,
   planChatFrontDoor,
   planChatFrontDoorFromRules,
@@ -23,6 +29,21 @@ const USE_REPO = "coopai-group/training-java-monolith-refactor";
 const CONNECTED = ["slack", "jira", "confluence", "teams"] as const;
 const N5_COMPOUND_ASK =
   "Pager: Where is date math implemented — DateTimeUtils, reports.jsp — and did we already decide not to mix this into the SQL-injection PR?";
+
+test("interpreter handoff retains independent write and rejection criteria", () => {
+  const jobs = mergeInterpreterJobs(
+    [{ capability: "locate", verb: "search", terms: ["state"] }],
+    [
+      { capability: "locate", verb: "search", terms: ["state"], evidenceClass: "write-site", searchCriteria: ["state_id ="] },
+      { capability: "locate", verb: "search", terms: [], evidenceClass: "write-reject", searchCriteria: ["ValidationError state"] }
+    ],
+    { message: "Where does state get updated and rejected?" }
+  );
+  assert.equal(jobs.length, 2);
+  assert.deepEqual(jobs.map(job => [job.evidenceClass, job.searchCriteria]), [
+    ["write-site", ["state_id ="]], ["write-reject", ["ValidationError state"]]
+  ]);
+});
 
 function slackQueries(plan: ReturnType<typeof planChatFrontDoorFromRules>): string[] {
   return extraTermsForIntegration(plan.jobs, "slack") ?? [];
@@ -137,6 +158,34 @@ test("plain compound ask still splits locate vs decision with distinct terms", (
   assert.equal(
     JSON.stringify(turn.plan).toLowerCase().includes("pager"),
     false
+  );
+});
+
+test("rules-only front door preserves both evidence needs for compound reject hunts", () => {
+  const ask =
+    "Users can't move a work item out of backlog — the API returns an error. I don't have this repo cloned. Where is work-item state written, and what rejects a bad transition?";
+  const plan = planChatFrontDoorFromRules({ message: ask, connectedTools: [] });
+  const locate = (plan.jobs ?? []).filter((job) => job.capability === "locate");
+
+  assert.ok(locate.some((job) => job.evidenceClass === "write-site"));
+  assert.ok(locate.some((job) => job.evidenceClass === "write-reject"));
+  const writeSite = locate.find((job) => job.evidenceClass === "write-site");
+  const writeReject = locate.find((job) => job.evidenceClass === "write-reject");
+  assert.ok(writeSite?.searchCriteria?.includes("state assignment"));
+  assert.ok(writeReject?.searchCriteria?.includes("state validation"));
+  assert.ok(writeReject?.searchCriteria?.includes("invalid state transition"));
+  const brief = formatIntentBriefForAgent({ jobs: locate });
+  assert.match(brief ?? "", /evidence=write-site/);
+  assert.match(brief ?? "", /evidence=write-reject/);
+
+  const calm = planChatFrontDoorFromRules({
+    message: "Where do work-item states live in the backend?",
+    connectedTools: []
+  });
+  assert.equal(
+    (calm.jobs ?? []).some((job) => job.evidenceClass === "write-site" || job.evidenceClass === "write-reject"),
+    false,
+    "calm model-location asks must not be promoted to reject hunts"
   );
 });
 
@@ -273,7 +322,27 @@ test("N5 locate+decision plans call quarterback refine without a command constra
   );
 });
 
-test("handleChatSend interprets before routeSlashCommand (slash bypass is impossible)", () => {
+test("handleChatSend interprets before routeSlashCommand (slash bypass is impossible)", async () => {
+  createRequire(__filename)("../../../scripts/vscode-test-stub.cjs");
+  const { CoopChatSession } = await import("../CoopChatSession");
+  for (const ask of ["/slack SQL injection", "/blast auth", "/edit Rename header", "/compare org/one org/two auth"]) {
+    const events: string[] = [];
+    const plan = planRawChatAskFromRules(ask).plan;
+    const session = Object.assign(Object.create(CoopChatSession.prototype), {
+      currentContext: { provider: "gitlab", owner: "org", repo: "one", branch: "main", scope: "repo" },
+      options: { api: { beginQuotaTurn() {} } },
+      dismissPendingQuickActionSuggest() { events.push("dismiss"); },
+      async resolveChatIntentPlan() { events.push("interpret"); return plan; },
+      async routeSlashCommand(_parsed: unknown, _attachments: unknown, _mentions: unknown, routedPlan: unknown, submissionId: unknown, requestStartedAt: unknown) {
+        events.push("route");
+        assert.equal(routedPlan, plan, ask);
+        assert.equal(submissionId, "submission", ask);
+        assert.equal(requestStartedAt, 12345, "the interpreter must not reset the submission budget");
+      }
+    });
+    await session.handleChatSend(ask, undefined, undefined, { clientSubmissionId: "submission", requestStartedAt: 12345 });
+    assert.deepEqual(events, ["dismiss", "interpret", "route"], ask);
+  }
   const sessionPath = path.join(__dirname, "../CoopChatSession.ts");
   const src = fs.readFileSync(sessionPath, "utf8");
   assert.equal(
@@ -284,7 +353,6 @@ test("handleChatSend interprets before routeSlashCommand (slash bypass is imposs
   assert.match(src, /shouldInterpretChatAsk/);
   assert.match(src, /resolveChatCommandConstraint/);
   assert.match(src, /frontDoorInterpretText/);
-  assert.match(src, /routeSlashCommand\(parsedSlash,[\s\S]{0,80}plan\)/);
   assert.match(src, /useCase:\s*FRONT_DOOR_INTERPRETER_USE_CASE/);
   assert.doesNotMatch(
     src,

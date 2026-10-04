@@ -1,0 +1,81 @@
+diff --git a/src/cache/graphCache.ts b/src/cache/graphCache.ts
+index 9d17c31..6e72583 100644
+--- a/src/cache/graphCache.ts
++++ b/src/cache/graphCache.ts
+@@ -51,6 +51,8 @@ export type RepositoryGraph = {
+     framework?: string;
+     lastIndexedAt: Date;
+     indexVersion: number;
++    indexedBranch?: string;
++    indexedCommit?: string;
+   };
+ };
+ 
+@@ -329,9 +331,13 @@ export class GraphCache {
+     return cloneGraph(graph);
+   }
+ 
+-  public getFileTree(orgId: string, repoId: string): GraphQueryResult<FileNode[]> | undefined {
++  public getFileTree(orgId: string, repoId: string): (GraphQueryResult<FileNode[]> & { indexedBranch?: string; indexedCommit?: string }) | undefined {
+     const entry = this.getEntry(orgId, repoId);
+-    return entry ? this.result(entry, entry.graph.fileTree.map(cloneFile)) : undefined;
++    return entry ? {
++      ...this.result(entry, entry.graph.fileTree.map(cloneFile)),
++      indexedBranch: entry.graph.metadata.indexedBranch,
++      indexedCommit: entry.graph.metadata.indexedCommit
++    } : undefined;
+   }
+ 
+   public getOwnership(
+diff --git a/src/jobs/executors.ts b/src/jobs/executors.ts
+index 4551d43..fe5e08a 100644
+--- a/src/jobs/executors.ts
++++ b/src/jobs/executors.ts
+@@ -322,6 +322,8 @@ async function indexRepository(
+       lastAuthor: "cloud-index",
+       sha: clone.headCommit ?? "local"
+     }));
++    graph.metadata.indexedBranch = clone.branch ?? target.branch;
++    graph.metadata.indexedCommit = clone.headCommit;
+     graph.metadata.lastIndexedAt = now;
+     graph.metadata.indexVersion += 1;
+     graph.lastUpdated = now;
+diff --git a/src/webhooks/graphHttp.ts b/src/webhooks/graphHttp.ts
+index 3e22327..1b6b2a6 100644
+--- a/src/webhooks/graphHttp.ts
++++ b/src/webhooks/graphHttp.ts
+@@ -9,6 +9,8 @@ import {
+ } from "../indexing/lightningSearch";
+ import { orgOwnsRepo, type RepoAccessCaller } from "../indexing/orgRepoMembership";
+ import { RepoDependencyEdgesStore } from "../indexing/repoDependencyEdgesStore";
++import { RepoStatsStore } from "../workspace/repoStatsStore";
++import { legacyIndexedMapProvenance } from "../workspace/indexedMapProvenance";
+ 
+ export type GraphHttpResult = {
+   statusCode: number;
+@@ -128,6 +130,25 @@ export async function handleGraphHttp(input: {
+     });
+   }
+ 
++  if (result && query === "getFileTree") {
++    const map = result as { indexedBranch?: string; data: Array<{ path: string; sha: string }>; stale?: boolean };
++    const branch = input.searchParams.get("branch")?.trim();
++    if (repoScoped && branch && !map.indexedBranch && !map.stale) {
++      try {
++        const stats = await new RepoStatsStore(input.pool).loadStats(input.orgId, repoId);
++        const provenance = legacyIndexedMapProvenance(map.data, stats, branch);
++        if (provenance) {
++          Object.assign(map, provenance);
++        }
++      } catch {
++        // Missing inventory cannot certify a legacy map's indexed branch.
++      }
++    }
++    if (branch && (!map.indexedBranch || branch !== map.indexedBranch)) {
++      return { statusCode: 404, body: { error: "indexed file map unavailable for requested branch" } };
++    }
++  }
++
+   if (!result && !repoScoped && query !== "searchFiles") {
+     return { statusCode: 404, body: { error: "graph not found" } };
+   }

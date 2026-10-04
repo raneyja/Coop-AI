@@ -1,0 +1,13 @@
+
+> coop-ai@0.1.10 test:existing-capability
+> npx tsx src/context/existingCapabilityGrounding.test.ts
+
+  ✓ detects ticket-style blocked-by feature add ask
+  ✓ parses blocked by → blocked_by
+  ✓ open mapper with blocked_by → already-exists + extend synthesis
+  ✓ mapper without blocked_by → add-new still allowed
+  ✓ does not recommend duplicate when symbol present in open file
+  ✓ response enricher prepends already-exists when model goes greenfield
+  ✓ response enricher leaves add-new answers alone
+
+existingCapabilityGrounding: 7/7 tests passed

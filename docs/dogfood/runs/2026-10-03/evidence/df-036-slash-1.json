@@ -1,0 +1,29 @@
+{
+  "scenario": {
+    "id": "DF-036",
+    "area": "Quick actions",
+    "fixture": "Coop-AI pinned ref; authMiddleware.ts selected where relevant",
+    "action": "/compare",
+    "passCriteria": "Correctly separates evidence and scope for both selected repos.",
+    "modes": [
+      "slash"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T18:26:13.971635+00:00",
+    "status": "FAIL",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "see notes@see notes",
+    "action": "/compare",
+    "actualResult": "Natural /compare instruction misparsed Compare/authentication as repo names. Retried explicit /compare coopai-group/Coop-AI CoopAI-Corp/plane authentication: activity/stream obtained body-based comparison (userAuthApi.ts and Plane APIKeyAuthentication), displayed code citation, then final38s replaced it with canned could not verify either part locate-miss. No durable separated comparison answer.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-036-slash-1.json",
+    "criteriaReview": "NOT_ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": null,
+    "durationMs": null,
+    "threadId": null
+  },
+  "diagnosticEvents": []
+}

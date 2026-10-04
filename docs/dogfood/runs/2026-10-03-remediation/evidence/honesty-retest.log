@@ -1,0 +1,16 @@
+  ✓ H-G1 Settings has no AgentMode on/off control
+  ✓ H-G2 send does not read a user agentMode setting
+  ✓ H-G3 no coopAI.chat.agentMode contribution; hunts are always on
+  ✓ H-G4 dogfood hunt always loops (real planner, not empty plan)
+  ✓ H-G5 dogfood hunt searches a short symbol, never the whole question
+  ✓ H-G6 ranking prefers a path matching the question and drops structural noise
+  ✓ H-G7 loop posts activity from the agent-owned answer path
+  ✓ H-G8 no Agent toggle in Workflows header or composer (UX-G9)
+  ✓ H-G9 leftover Blast/Owner chips must not steal the dogfood hunt
+  ✓ H-G10 docs do not tell the user to enable AgentMode
+  ✓ H-G11 retrieval is one rule for every ask — no repo names, no layer special cases
+  ✓ H-G12 hot path merges agent patch before Apply card (not orphan helpers)
+  ✓ H-G14 hunt+named integration is not stolen; slash still constrains
+  ✓ H-G13 agent-owned answer still bridges propose_patch to Apply
+
+honesty.gates: 14/14 tests passed

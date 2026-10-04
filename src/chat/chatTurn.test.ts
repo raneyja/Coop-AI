@@ -72,7 +72,7 @@ function testSequentialTurnsKeepIntentPlansIsolated(): void {
   const sourcePlan: ChatIntentPlan = {
     mode: "tools-only",
     tools: ["jira", "slack"],
-    jobs: [{ capability: "decision", terms: ["auth rollback"] }],
+    jobs: [{ capability: "decision", terms: ["auth rollback"], searchCriteria: ["authUserId"] }],
     confidence: "high",
     focus: "auth rollback",
     execution: "none"
@@ -82,8 +82,10 @@ function testSequentialTurnsKeepIntentPlansIsolated(): void {
   const otherThread = beginTurn(manager, "thread-b", "where is auth implemented?");
 
   sourcePlan.jobs?.[0]?.terms.push("late mutation");
+  sourcePlan.jobs?.[0]?.searchCriteria?.push("foreignFunction");
 
   assert.deepEqual(compound.intentPlan.jobs?.[0]?.terms, ["auth rollback"]);
+  assert.deepEqual(compound.intentPlan.jobs?.[0]?.searchCriteria, ["authUserId"]);
   assert.deepEqual(slash.intentPlan.jobs, []);
   assert.deepEqual(otherThread.intentPlan.jobs, []);
   assert.notEqual(slash.intentPlan, compound.intentPlan);
@@ -109,6 +111,22 @@ testPartialBufferSurvivesForResume();
 testCompleteRemovesRun();
 testAppendIgnoredAfterAbort();
 testSequentialTurnsKeepIntentPlansIsolated();
+{
+  const manager = new ThreadRunManager();
+  const plan = {
+    left: {provider: "gitlab" as const, owner: "org", repo: "one", repoId: "gitlab:org/one"},
+    right: {provider: "github" as const, owner: "other", repo: "two", repoId: "github:other/two"},
+    topic: "authentication"
+  };
+  const turn = manager.begin({threadId: "compare", context: {}, history: [], artifacts: [], sessionCostUsd: 0,
+    modelMessage: "compare", intentPlan: emptyChatIntentPlan("compare"), dualRepoCompare: plan});
+  plan.right.repoId = "github:unrelated/three";
+  plan.topic = "billing";
+  assert.equal(turn.dualRepoCompare?.right.repoId, "github:other/two");
+  assert.equal(turn.dualRepoCompare?.topic, "authentication");
+  assert.equal(beginTurn(manager, "another").dualRepoCompare, undefined);
+  manager.abortAll();
+}
 void testBeginDoesNotHardAbortOnLatencyGuideline()
   .then(() => {
     console.log("chatTurn.test.ts: ok");

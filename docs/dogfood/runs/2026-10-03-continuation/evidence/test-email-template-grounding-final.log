@@ -1,0 +1,15 @@
+
+> coop-ai@0.1.10 test:email-template-grounding
+> npx tsx src/context/emailTemplateGrounding.test.ts
+
+  ✓ isEmailTemplateTicketAsk detects jobs + email templates
+  ✓ isEmailTemplateTicketAsk does not steal A10 existing-capability tickets
+  ✓ extractHandlerFollowCandidates resolves dynamic handler import
+  ✓ extractTriggeredJobNames + handlerPathsForTriggeredJob
+  ✓ extractEmailTemplateRefsFromSource maps package import to packages/email path
+  ✓ resolveEmailTemplateCandidates returns concrete template from followed handler
+  ✓ resolveEmailTemplateCandidates with tree-only still names reminder templates
+  ✓ fixture with no templates → explicit not-found, not go-search
+  ✓ matchEmailTemplatesInTree ranks reminder over invite for reminder asks
+
+emailTemplateGrounding: 9/9 tests passed

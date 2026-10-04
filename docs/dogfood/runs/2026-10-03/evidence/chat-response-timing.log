@@ -1,0 +1,35 @@
+
+> coop-ai@0.1.10 test:chat-response-timing
+> npx tsx src/chat/chatResponseTiming.test.ts && npx tsx src/chat/streamDeltaBatcher.test.ts && npx tsx src/config/chatOutputBudget.test.ts && npx tsx src/api/dataSanitization.test.ts && npx tsx src/api/requestFormatter.test.ts
+
+ok - production default has no artificial delay
+ok - remainingMinResponseDelayMs still supports an explicit minimum window
+ok - createChatOutputGate streams immediately with the default (no artificial delay)
+ok - createChatOutputGate still honors an explicit minVisibleMs when a caller opts in
+
+4 passed
+ok - first chunk publishes immediately so TTFB stays low
+ok - follow-up chunks coalesce until flush
+ok - flush publishes leftover buffer without waiting
+ok - end flushes leftover then ignores later push/flush
+
+streamDeltaBatcher: 4 passed
+ok - missing or non-finite maxTokens uses the chat default
+ok - legacy 2000 default is treated as unset so long answers are not cut off
+ok - explicit small budgets (planner) and larger user budgets are preserved
+ok - GPT-5 chat completions reserve tokens for hidden reasoning
+
+chatOutputBudget: 4 passed
+  ✓ sanitizeCode preserves token variable assignments used in SEARCH blocks
+  ✓ sanitizeCode preserves object property token: hashedToken
+  ✓ sanitizeCode still redacts quoted token secrets with real backrefs
+  ✓ sanitizeLlmRequestPayload keeps auth middleware identifiers intact
+  ✓ sanitizeLlmRequestPayload preserves token: hashedToken inside file_content for /edit
+  ✓ sanitizeLlmRequestPayload still redacts sk_ tokens inside file_content
+  ✓ sanitizeLlmRequestPayload keeps APIKeyAuthentication in agent read_file JSON (S1)
+  ✓ sanitizeLlmRequestPayload keeps APIKeyAuthentication in search_code JSON snippets
+  ✓ sanitizeLlmRequestPayload still redacts sk_live inside agent read_file JSON
+  ✓ sanitizeCode does not wipe APIKeyAuthentication comments; still redacts assigned secrets
+
+dataSanitization: 10 passed, 0 failed
+requestFormatter.test.ts: ok

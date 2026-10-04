@@ -1,0 +1,29 @@
+{
+  "scenario": {
+    "id": "DF-075",
+    "area": "Session, settings and resilience",
+    "fixture": "Remote authMiddleware.ts; exact extractBearerToken L10-17 selection; existing neutral chat",
+    "action": "Select extractBearerToken L10-17, create New chat, then ask: Explain this function and its edge cases.",
+    "passCriteria": "Selection survives new-thread creation; answers the selected parser without asking which function.",
+    "modes": [
+      "fresh"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T17:29:59.320520+00:00",
+    "status": "FAIL",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "see notes@see notes",
+    "action": "Select extractBearerToken L10-17, create New chat, then ask: Explain this function and its edge cases.",
+    "actualResult": "Exact remote parser selected using AX selectText; UI showed L10-17. New chat reset chip to Remote (whole file), final answer asked which of 16 exported functions to explain. Reproduced twice. Existing-thread selection is being tested separately.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-075-fresh-1.json",
+    "criteriaReview": "NOT_ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": null,
+    "durationMs": null,
+    "threadId": null
+  },
+  "diagnosticEvents": []
+}

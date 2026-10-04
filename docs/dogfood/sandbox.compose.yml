@@ -1,0 +1,43 @@
+name: coop-dogfood-20261003
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: dogfood
+      POSTGRES_PASSWORD: disposable-local-dogfood
+      POSTGRES_DB: dogfood
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - dogfood_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dogfood -d dogfood"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  api:
+    image: coop-ai-api
+    ports:
+      - "127.0.0.1:28787:8787"
+    environment:
+      DATABASE_URL: postgres://dogfood:disposable-local-dogfood@postgres:5432/dogfood
+      NODE_ENV: development
+      COOP_REQUIRE_API_AUTH: "true"
+      JOBS_WORKERS: "0"
+      JOBS_BACKEND: postgres
+      GRAPH_CACHE_BACKEND: memory
+      CREDENTIALS_ENCRYPTION_KEY: disposable-dogfood-key-20261003-local-only
+      COOP_OAUTH_STATE_SECRET: disposable-dogfood-state-20261003-local-only
+      COOP_PUBLIC_BASE_URL: http://localhost:28787
+      COOP_ADMIN_PORTAL_URL: http://localhost:13002
+      COOP_CORS_ORIGINS: http://127.0.0.1:13002,http://localhost:13002
+      COOP_MARKETING_BASE_URL: http://localhost:13001
+    volumes:
+      - ../../dist:/app/dist:ro
+      - ../../migrations:/app/migrations:ro
+      - ../../scripts/run-migrations.mjs:/app/scripts/run-migrations.mjs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+volumes:
+  dogfood_db:

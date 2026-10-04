@@ -1,0 +1,29 @@
+{
+  "scenario": {
+    "id": "DF-028",
+    "area": "Editing and code generation",
+    "fixture": "Disposable branch/worktree; seeded bug and independent assertions; never production branch",
+    "action": "Request an edit with missing target file.",
+    "passCriteria": "Asks for necessary target or reports unavailable; no unrelated file mutation.",
+    "modes": [
+      "fresh"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T18:37:01.533636+00:00",
+    "status": "PASS",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "see notes@see notes",
+    "action": "Request an edit with missing target file.",
+    "actualResult": "Requested nonexistent DefinitelyMissingDogfood_20261003.ts edit, explicitly no creation. Completed 14s: says target/function not present in attached workspace context; failed card No patch blocks found; no Apply control or write. Note fresh-chat hydration reattached prior authMiddleware L10\u201316 despite neutral editor; response still correctly refused unrelated mutation.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-028-fresh-1.json",
+    "criteriaReview": "ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": null,
+    "durationMs": null,
+    "threadId": null
+  },
+  "diagnosticEvents": []
+}

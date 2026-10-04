@@ -35,6 +35,7 @@ export function createChatOutputGate(options: {
 }): {
   push: (chunk: string) => void;
   waitUntilOpen: () => Promise<void>;
+  complete: (finalContent: string) => Promise<void>;
 } {
   const remaining = remainingMinResponseDelayMs(
     options.startedAt,
@@ -43,6 +44,7 @@ export function createChatOutputGate(options: {
   );
   let open = remaining <= 0;
   const queue: string[] = [];
+  let receivedAnswer = false;
   const gate =
     remaining <= 0
       ? Promise.resolve()
@@ -62,11 +64,19 @@ export function createChatOutputGate(options: {
       if (options.isCancelled()) {
         return;
       }
+      receivedAnswer ||= Boolean(chunk.trim());
       if (open) {
         options.onChunk(chunk);
         return;
       }
       queue.push(chunk);
+    },
+    async complete(finalContent: string) {
+      await gate;
+      if (!receivedAnswer && finalContent.trim() && !options.isCancelled()) {
+        receivedAnswer = true;
+        options.onChunk(finalContent);
+      }
     },
     async waitUntilOpen() {
       await gate;

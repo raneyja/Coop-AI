@@ -1,0 +1,29 @@
+{
+  "scenario": {
+    "id": "DF-025",
+    "area": "Editing and code generation",
+    "fixture": "Disposable branch/worktree; seeded bug and independent assertions; never production branch",
+    "action": "Modify the target file after proposal, then Apply.",
+    "passCriteria": "Detects stale conflict or safely revalidates; preserves intervening user edit.",
+    "modes": [
+      "fresh"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T18:11:30.281309+00:00",
+    "status": "PASS",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "see notes@see notes",
+    "action": "Modify the target file after proposal, then Apply.",
+    "actualResult": "After proposal, replaced selected remote parser with explicit disposable comment marker; stale Apply refused SEARCH block not found, disabled Apply and preserved intervening buffer. Editor Undo restored original parser. No saved remote or local source mutation.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-025-fresh-1.json",
+    "criteriaReview": "ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": null,
+    "durationMs": null,
+    "threadId": null
+  },
+  "diagnosticEvents": []
+}

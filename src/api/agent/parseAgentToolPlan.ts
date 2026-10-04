@@ -99,7 +99,14 @@ export function buildAgentToolPlanPrompt(input: {
   lastToolResult?: string;
   allowedIntegrations?: IntegrationChatProvider[];
   /** Planner job terms — hints, not a limit on which tools may run. */
-  suggestedJobs?: Array<{ capability: string; terms: string[] }>;
+  suggestedJobs?: Array<{
+    capability: string;
+    terms: string[];
+    searchCriteria?: string[];
+    evidenceClass?: string;
+  }>;
+  /** Quarterback purpose / done-looks-like — never a silent workflow. */
+  intentPurpose?: string;
   /** False on named-product / slash turns unless locate is also in the ask. */
   allowedRepoTools?: boolean;
 }): string {
@@ -116,12 +123,42 @@ export function buildAgentToolPlanPrompt(input: {
       ? []
       : ["search_code", "read_file", "list_directory", "git_blame", "propose_patch"];
   const allowedList = [...repoTools, ...integrationTools].join(", ");
+  const writeRejectJob = (input.suggestedJobs ?? []).some(
+    (job) => job.evidenceClass === "write-reject"
+  );
+  const writeSiteJob = (input.suggestedJobs ?? []).some(
+    (job) => job.evidenceClass === "write-site"
+  );
+  const compoundWriteRejectJob = writeRejectJob && writeSiteJob;
   const jobHint =
     input.suggestedJobs && input.suggestedJobs.length > 0
       ? `Suggested queries, not a limit: ${input.suggestedJobs
-          .map((job) => `${job.capability} [${job.terms.join(", ")}]`)
+          .map((job) => {
+            const criteria =
+              job.searchCriteria && job.searchCriteria.length > 0
+                ? ` criteria=[${job.searchCriteria.join(", ")}]`
+                : "";
+            const evidence = job.evidenceClass ? ` evidence=${job.evidenceClass}` : "";
+            return `${job.capability} [${job.terms.join(", ")}]${criteria}${evidence}`;
+          })
           .join("; ")}.`
       : undefined;
+  const purposeHint = input.intentPurpose?.trim()
+    ? `Done-looks-like: ${input.intentPurpose.trim()}`
+    : undefined;
+  const rejectRules = writeRejectJob
+    ? [
+        "This is a write-reject job: find the server write/reject for the asked field.",
+        compoundWriteRejectJob
+          ? "This compound ask requires BOTH evidence floors: a remotely opened server write/update site and a remotely opened server-side ValidationError / raise / reject for the asked field. A reject alone is incomplete."
+          : "Done = a remotely opened read_file body with ValidationError / raise / reject for that field attached — not a named-symbol locate.",
+        "When preferredHits list a serializer or server-write path, read_file that path before another search_code.",
+        "Prefer API serializers/views. Do not stop on web components, types, or bgtasks.",
+        "Seed searchCriteria are optional hints — invent further queries from results.",
+        "If the ask names create/update/assign/… and the first attached raise site does not mention those job words, search_code or read_file another sibling while budget remains — do not freeze on the first twin. Cap a shortlist (~2–4), then done.",
+        "When the ask quotes an error string, search that Exact quote early (not bare ValidationError or field_id alone)."
+      ]
+    : [];
   const vendorLoopRules =
     integrationTools.length > 0
       ? [
@@ -149,12 +186,22 @@ export function buildAgentToolPlanPrompt(input: {
           "Discussion/ticket/docs query must be the suggested decision or docs terms (peel-auth, coop-backend, ticket key). Never search those tools for the locate symbol (requireAuth).",
           'Do not {"done":true} after a discussion, ticket, or docs tool alone when the user also asked where code lives.',
           'If the user asked two things, do not {"done":true} after a matching code read either — call the connected discussion, ticket, or docs tool the question still needs, then finish.',
-          'Or finish: {"done":true} — only after you have read a file whose body mentions the named symbol (or an alias), or the role the user named (middleware, handler).',
+          writeRejectJob
+            ? compoundWriteRejectJob
+              ? 'Or finish: {"done":true} — only after both the server write/update site and the server reject for the asked field are remotely opened and attached.'
+              : 'Or finish: {"done":true} — only after a remotely opened write-reject for the asked field is attached.'
+            : 'Or finish: {"done":true} — only after you have read a file whose body mentions the named symbol (or an alias), or the role the user named (middleware, handler).',
           "Search for identifiers; do not guess file paths.",
-          "search_code query must be a short identifier or 2–4 word phrase. Never paste the whole question.",
+          writeRejectJob
+            ? "For ordinary search_code queries use a short identifier or 2–4 word phrase; for an API reject ask, an exact quoted error string is an explicit exception and should be searched intact early. Never paste the whole question around it."
+            : "search_code query must be a short identifier or 2–4 word phrase. Never paste the whole question.",
           "search_code: prefer an exact symbol name the user wrote (requireAuth, parse_token) over a prose phrase.",
           "If camelCase misses, retry snake_case (requireAuth → require_auth) or a nearby synonym — never stop after one empty search.",
-          'Never reply {"done":true} after an empty search_code, a skipNote, or a read whose body does not mention the named symbol. Search or read a different path instead.',
+          writeRejectJob
+            ? compoundWriteRejectJob
+              ? 'Never reply {"done":true} after an empty search_code, a skipNote, or a read until BOTH required evidence floors are attached; a read that satisfies one floor is progress, so gather only the missing floor. Read preferredHits before searching again.'
+              : 'Never reply {"done":true} after an empty search_code, a skipNote, or a read that is not a write-reject for the asked field. Read preferredHits before searching again.'
+            : 'Never reply {"done":true} after an empty search_code, a skipNote, or a read whose body does not mention the named symbol. Search or read a different path instead.',
           "Never read barrel index.ts, build output, or vendored code — they re-export, they do not define.",
           "If the first hit is a related UI, test, or form that does not define the symbol, do not treat it as the answer — search/read again.",
           "propose_patch emits File: + SEARCH/REPLACE only — it does not apply. Use it only when the user asked to change code, and only on a file you already read that mentions the symbol. Hunt/explain questions must not propose patches."
@@ -175,6 +222,8 @@ export function buildAgentToolPlanPrompt(input: {
       : undefined,
     ...vendorLoopRules,
     ...huntRules,
+    ...rejectRules,
+    purposeHint,
     jobHint,
     "Prior steps:",
     prior,
@@ -211,7 +260,8 @@ export function buildAgentAnswerPrompt(input: {
     "If Slack/Jira/docs results include permalink or htmlUrl, include that URL as a markdown link so the user can open the native app.",
     "If you never read a file that mentions a named symbol, say in 1–2 sentences that you couldn’t find that symbol in this repo, then suggest a more specific name or opening the file. Answer only from files you read. Do not use a **Your question** heading. Do not restate the user's ask.",
     "Never tell the user to clone, inspect a local copy, or search on disk. If only a state catalog, default rows, or a client post of state_id were read, say the API write/reject path was not in those bodies.",
-    "If a read_file body contains validate() or ValidationError for the field the user asked about, that is the write/reject. Cite that. Never cite OpenAPI/swagger, a read_only serializer class, seed JSON, or a view that only checks permissions and fetches a row.",
+    "Identify a rejection only when the attached body shows the requested field's failing guard and raise/error. A validate() method or another field's ValidationError alone does not establish that rejection. If the complete method filters the submitted IDs and returns the filtered data, explain that observed behavior and correct the assumed rejection. If the reported error is not shown, say its source is unverified; do not assert that another layer throws it. Never cite OpenAPI/swagger, a read_only serializer class, seed JSON, or a view that only checks permissions and fetches a row as the requested write/reject.",
+    ...(input.action === "locate" ? ["Lead with the verified location and behavior in one short paragraph. Include only the relevant verbatim code lines in a citation fence; avoid restating the same explanation after the code."] : []),
     "Empty vendor Search after retry: “No mention in {vendor} of {topic}.” If a page/ticket was named but the body could not be opened, say that — quote Body when present.",
     "When Slack/Jira/docs findings sit next to a code hunt, put them after the code answer (or after the honest miss). Name disagreements once.",
     "Never mention gather budget, timed out searching, tool names like search_notion, HTTP 401, stack traces, evidence bundles, or indexed search. Teammate English only.",

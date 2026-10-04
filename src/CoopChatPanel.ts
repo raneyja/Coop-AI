@@ -3,8 +3,9 @@ import { CoopChatSession } from "./chat/CoopChatSession";
 import { getWebviewOptions } from "./chat/renderWebviewHtml";
 import type { SecureApiClient } from "./chat/SecureApiClient";
 import { coopSessionRegistry } from "./chat/CoopSessionRegistry";
-import { CHAT_PANEL_VIEW_TYPE } from "./chat/types";
+import { CHAT_PANEL_VIEW_TYPE, type RepoContext } from "./chat/types";
 import type { CoopRuntimeServices } from "./CoopSidebarProvider";
+import { resolveThreadScopeKey } from "./chat/chatThreadStore";
 
 type PanelState = {
   sessionId?: string;
@@ -24,7 +25,7 @@ export class CoopChatPanel {
     extensionContext: vscode.ExtensionContext,
     api: SecureApiClient,
     services: CoopRuntimeServices,
-    options?: { sessionId?: string; moveToNewWindow?: boolean }
+    options?: { sessionId?: string; moveToNewWindow?: boolean; initialSelection?: RepoContext }
   ): CoopChatPanel {
     const sessionId = options?.sessionId ?? createSessionId();
     const existing = CoopChatPanel.panels.get(sessionId);
@@ -51,7 +52,7 @@ export class CoopChatPanel {
       api,
       services,
       sessionId,
-      { startBlank: true }
+      { startBlank: true, initialSelection: options?.initialSelection }
     );
     CoopChatPanel.panels.set(sessionId, instance);
     panel.reveal(vscode.ViewColumn.Active, true);
@@ -114,7 +115,7 @@ export class CoopChatPanel {
     api: SecureApiClient,
     services: CoopRuntimeServices,
     sessionId: string,
-    sessionOptions?: { startBlank?: boolean }
+    sessionOptions?: { startBlank?: boolean; initialSelection?: RepoContext }
   ) {
     this.sessionId = sessionId;
     this.startBlank = sessionOptions?.startBlank === true;
@@ -124,6 +125,9 @@ export class CoopChatPanel {
       api,
       ...services,
       startBlank: this.startBlank,
+      initialSelection: sessionOptions?.initialSelection,
+      panelSessionId: sessionId,
+      threadScopeKey: resolveThreadScopeKey(undefined, sessionId),
       onTitleChange: (title) => {
         this.panel.title = title;
       }

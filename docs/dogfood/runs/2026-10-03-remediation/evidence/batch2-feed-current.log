@@ -1,0 +1,6 @@
+
+> coop-ai@0.1.10 test:chat-feed
+> npx tsx src/server/chatThreadsStore.test.ts && npx tsx src/server/chatThreadsApi.test.ts
+
+chatThreadsStore.test.ts: ok
+chatThreadsApi.test.ts: ok

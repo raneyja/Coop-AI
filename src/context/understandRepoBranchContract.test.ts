@@ -1,3 +1,4 @@
+import { COOP_EXTENSION_BUILD_ID } from "../config/coopBuildId";
 /**
  * Regression contract (Step 5): prefs/defaultBranch `main` must not beat the
  * indexed / Use-repo branch (`preview`). Identity-only must not count as
@@ -73,14 +74,9 @@ async function run(): Promise<void> {
     };
     assert.equal(hasRepoSummaryEvidence(identityOnly), false);
     assert.equal(hasUnderstandRepoEntryBodies(identityOnly), false);
-    assert.match(
-      understandRepoEmptyEvidenceMessage({
-        owner: "CoopAI-Corp",
-        repo: "plane",
-        branch: "preview"
-      }),
-      /0\.1\.0/
-    );
+    assert.ok(understandRepoEmptyEvidenceMessage({
+      owner: "CoopAI-Corp", repo: "plane", branch: "preview"
+    }).includes(COOP_EXTENSION_BUILD_ID));
   });
 
   await test("inventory+tree without file bodies is not synthesis-ready", () => {

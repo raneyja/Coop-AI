@@ -166,6 +166,12 @@ export class SecureApiClient {
     return this.backend;
   }
 
+  public async fetchIndexedRepoFileMap(baseUrl: string, repoId: string, branch?: string, diagnostic?: (event: Record<string, unknown>) => void) {
+    assertCoopEndpoint(baseUrl);
+    await this.ensureToken();
+    return this.backend.fetchIndexedRepoFileMap(baseUrl, repoId, branch, diagnostic);
+  }
+
   public async graphSearch(
     baseUrl: string,
     repoId: string,
@@ -473,9 +479,10 @@ export class SecureApiClient {
     repoId: string,
     query: string,
     branch?: string,
-    limit = 30
+    limit = 30,
+    searchKind?: "content"
   ): Promise<Array<{ path: string; name: string }>> {
-    const result = await this.backend.fetchRepoSearch(baseUrl, repoId, query, branch, limit);
+    const result = await this.backend.fetchRepoSearch(baseUrl, repoId, query, branch, limit, searchKind);
     return result.hits ?? [];
   }
 
@@ -738,7 +745,7 @@ export class SecureApiClient {
 
     const history = body.history
       .filter((entry): entry is ChatMessage & { role: "user" | "assistant" } =>
-        entry.role === "user" || entry.role === "assistant"
+        !entry.cancelled && (entry.role === "user" || entry.role === "assistant")
       )
       .map((entry) => ({
         role: entry.role,

@@ -1,0 +1,22 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
++ actual - expected
+
++ ''
+- 'DOGFOOD_MODEL_ALIVE_20261003'
+
+    at modelSmoke (file:///Users/jonraney/Coop-AI/scripts/dogfood-sandbox.mjs:74:10)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async file:///Users/jonraney/Coop-AI/scripts/dogfood-sandbox.mjs:187:45 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: '',
+  expected: 'DOGFOOD_MODEL_ALIVE_20261003',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.16.0

@@ -141,6 +141,37 @@ async function main(): Promise<void> {
     assert.match(prompt, /args.ids/);
   });
 
+  await test("API reject prompt makes exact quoted errors an exception to short-query guidance", () => {
+    const prompt = buildAgentToolPlanPrompt({
+      message: 'Parent validation fails with "Parent is not valid issue_id please pass a valid issue_id".',
+      repoId: "CoopAI-Corp/plane",
+      round: 0,
+      priorSummaries: [],
+      suggestedJobs: [{ capability: "locate", terms: ["parent"], evidenceClass: "write-reject" }]
+    });
+    assert.match(prompt, /exact quoted error string is an explicit exception/i);
+    assert.match(prompt, /searched intact early/i);
+    assert.doesNotMatch(prompt, /short identifier or 2–4 word phrase\. Never paste the whole question\./);
+  });
+
+  await test("compound API reject prompt requires both remote evidence floors", () => {
+    const prompt = buildAgentToolPlanPrompt({
+      message: "Where is work-item state written, and what rejects a bad transition?",
+      repoId: "CoopAI-Corp/plane",
+      round: 0,
+      priorSummaries: [],
+      suggestedJobs: [
+        { capability: "locate", terms: ["work item state"], evidenceClass: "write-site" },
+        { capability: "locate", terms: ["state transition"], evidenceClass: "write-reject" }
+      ]
+    });
+    assert.match(prompt, /requires BOTH evidence floors/i);
+    assert.match(prompt, /A reject alone is incomplete/i);
+    assert.match(prompt, /both the server write\/update site and the server reject/i);
+    assert.match(prompt, /a read that satisfies one floor is progress, so gather only the missing floor/i);
+    assert.doesNotMatch(prompt, /a read that is not a write-reject for the asked field/i);
+  });
+
   await test("A-P9 / A-G7 named Slack loops without a repo hunt", () => {
     const query = "What's in Slack about this?";
     const plan = planChatIntentFromRules({ message: query, connectedTools: ["slack", "jira"] });

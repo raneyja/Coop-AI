@@ -1,4 +1,6 @@
 import * as vscode from "vscode";
+import { isClientUiPath } from "./indexing/evidencePathNoise";
+import { rankSearchHits } from "./api/agent/searchQuery";
 import { CoopChatPanel } from "./CoopChatPanel";
 import { CoopSettingsPanel } from "./CoopSettingsPanel";
 import { CoopSidebarProvider } from "./CoopSidebarProvider";
@@ -6,7 +8,6 @@ import { CoopChatSession } from "./chat/CoopChatSession";
 import { coopSessionRegistry } from "./chat/CoopSessionRegistry";
 import { getWebviewOptions } from "./chat/renderWebviewHtml";
 import { readConfiguration, readDegradationConfiguration, SecureApiClient } from "./chat/SecureApiClient";
-import { resolveSearchScopeForPlan } from "./license/planSearchScope";
 import { classifyCoopUriPath } from "./extension/coopUriRoutes";
 import { resolveUserAuthApiBase } from "./config/authApiBase";
 import { registerQuickActionCommands } from "./extension/quickActionCommands";
@@ -39,6 +40,7 @@ import { createOwnershipGraphEngine } from "./engines/ownershipGraph";
 import { registerOwnershipGraphEngine } from "./engines/ownershipGraphRegistry";
 import { createAgentOrchestrator } from "./api/agent/AgentOrchestrator";
 import { IndexedRepoWorkspace } from "./workspace/IndexedRepoWorkspace";
+import { resolveActiveRepoTarget } from "./workspace/repoTargetResolver";
 import { resolveLocalAbsolutePath } from "./context/localFileResolver";
 import { createBlastRadiusAnalysisEngine } from "./engines/blastRadiusAnalysis";
 import { registerBlastRadiusAnalysisEngine } from "./engines/blastRadiusAnalysisRegistry";
@@ -121,33 +123,35 @@ export function activate(context: vscode.ExtensionContext): void {
     repoId,
     query,
     coords,
-    limit
+    limit,
+    excludeClientUi,
+    searchKind
   }) => {
     const baseUrl = getApiBaseUrl();
+    if (searchKind === "content") {
+      return api.fetchRepoSearchViaCloud(baseUrl, repoId, query, coords.branch, limit, searchKind);
+    }
     const runTreeFallback = async (): Promise<Array<{ path: string; name: string }>> => {
+      let graphHits: Array<{ path: string; name: string }> = [];
       try {
-        const config = readConfiguration();
-        const searchScope = resolveSearchScopeForPlan({
-          searchScopeMode: config.searchScopeMode,
-          searchCollectionId: config.searchCollectionId
-        });
+        // Filename discovery belongs to this frozen repository target. User
+        // estate/collection search preferences must not widen a file lookup.
         const remote = (await api.graphSearch(baseUrl, repoId, query, {
-          mention: true,
-          scope: searchScope.scope ?? "indexed",
-          collectionId: searchScope.collectionId
+          mention: true
         })) as { data?: Array<{ path?: string }> };
-        const graphHits = (remote.data ?? [])
+        graphHits = (remote.data ?? [])
           .map((hit) => hit.path?.trim())
           .filter((path): path is string => Boolean(path))
+          .filter((path) => !excludeClientUi || !isClientUiPath(path))
           .map((path) => ({ path, name: path.split("/").pop() ?? path }));
-        if (graphHits.length > 0) {
+        if (graphHits.length > 0 && !excludeClientUi) {
           return graphHits.slice(0, limit);
         }
       } catch {
         // Fall through to directory walk.
       }
 
-      return searchFilesViaCloudTree(
+      const treeHits = await searchFilesViaCloudTree(
         async (path) => {
           const tree = await api.fetchRepoTreeViaCloud(baseUrl, repoId, path, coords.branch);
           return {
@@ -159,14 +163,18 @@ export function activate(context: vscode.ExtensionContext): void {
           };
         },
         query,
-        limit
+        limit,
+        (path) => !excludeClientUi || !isClientUiPath(path)
       );
+      return [...new Map([...treeHits, ...graphHits].map((hit) => [hit.path, hit])).values()].slice(0, limit);
     };
 
     try {
-      const hits = await api.fetchRepoSearchViaCloud(baseUrl, repoId, query, coords.branch, limit);
-      // Bitbucket/GitLab code search often returns empty for path-style queries; tree walk finds them.
-      if (hits.length === 0 && (query.includes("/") || query.includes("."))) {
+      const hits = (await api.fetchRepoSearchViaCloud(baseUrl, repoId, query, coords.branch, limit))
+        .filter((hit) => !excludeClientUi || !isClientUiPath(hit.path));
+      // Native filename search can return empty for ordinary name prefixes as
+      // well as paths. Indexed filename discovery stays scoped to this repo.
+      if (hits.length === 0 || excludeClientUi) {
         const treeHits = await runTreeFallback();
         if (treeHits.length > 0) {
           return treeHits;
@@ -457,11 +465,14 @@ export function activate(context: vscode.ExtensionContext): void {
   const lightningStatusBar = new LightningStatusBar(indexBackend, getApiBaseUrl, context.secrets);
   const identityDirectoryStore = new IdentityDirectoryStore(context, api.getBackendClient());
   registerIdentityDirectoryProvider(() => identityDirectoryStore.load(readConfiguration().apiBaseUrl));
+  // Each frozen turn target owns its indexed map cache.
+  const huntWorkspaces = new WeakMap<object, IndexedRepoWorkspace>();
   const agentOrchestrator = createAgentOrchestrator({
     indexBackend,
+    resolveRepoTarget: (target) => resolveActiveRepoTarget(target, { api, apiBaseUrl: getApiBaseUrl(), codeHostRouter }),
     resolveAbsolutePath: resolveLocalAbsolutePath,
-    listDirectory: async ({ path: dirPath, repoId }) => {
-      const coords = repoId ? coordinatesFromRepoId(repoId) : undefined;
+    listDirectory: async ({ path: dirPath, repoId, target }) => {
+      const coords = repoId ? coordinatesFromRepoId(repoId, target?.branch) : undefined;
       const tree = await codeHostRouter.getRepositoryTree(dirPath ?? "", coords ?? undefined);
       return {
         path: tree.path,
@@ -473,24 +484,75 @@ export function activate(context: vscode.ExtensionContext): void {
         }))
       };
     },
-    getBlame: async ({ path: filePath, repoId }) => {
-      const coords = repoId ? coordinatesFromRepoId(repoId) : undefined;
+    getBlame: async ({ path: filePath, repoId, target }) => {
+      const coords = repoId ? coordinatesFromRepoId(repoId, target?.branch) : undefined;
       const blame = await codeHostRouter.getBlameData(filePath, coords ?? undefined);
       return { ...blame, path: filePath };
     },
-    readRemoteFile: async ({ path: filePath, repoId }) =>
-      new IndexedRepoWorkspace({
+    readRemoteFile: async ({ path: filePath, repoId, target: runTarget }) => {
+      // Same branch resolution as chat / Remote browse — never omit Use-repo branch
+      // (search is indexed on preview; a branch-less read can open the wrong floor).
+      const preferences = readConfiguration();
+      const coords = repoId ? coordinatesFromRepoId(repoId) : undefined;
+      const workspace = new IndexedRepoWorkspace({
         api,
         apiBaseUrl: getApiBaseUrl(),
         codeHostRouter
-      }).readFile({ repoId }, filePath),
-    findFiles: async ({ query: fileQuery, repoId }) => {
-      const coords = repoId ? coordinatesFromRepoId(repoId) : undefined;
+      });
+      const target = runTarget ?? await resolveActiveRepoTarget(
+        {
+          repoId,
+          owner: coords?.owner ?? preferences.owner,
+          repo: coords?.repo ?? preferences.repo,
+          branch: preferences.branch || undefined,
+          provider: coords?.provider ?? preferences.defaultCodeHost
+        },
+        {
+          api,
+          apiBaseUrl: getApiBaseUrl(),
+          codeHostRouter
+        }
+      );
+      const evidence = await workspace.readFile(target, filePath);
+      if (!evidence?.content?.trim()) {
+        return undefined;
+      }
+      return { path: evidence.path || filePath, content: evidence.content };
+    },
+    findFiles: async ({ query: fileQuery, taskQuery, repoId, target, excludeClientUi, onDiagnostic }) => {
+      if (!target?.repoId || target.repoId !== repoId || !target.branch) {
+        throw new Error("Indexed filename discovery needs the selected repository and branch.");
+      }
+      let workspace = huntWorkspaces.get(target);
+      if (!workspace) {
+        workspace = new IndexedRepoWorkspace({ api, apiBaseUrl: getApiBaseUrl(), codeHostRouter });
+        huntWorkspaces.set(target, workspace);
+      }
+      const hits = await workspace.findFiles(target, fileQuery, {
+        limit: 20,
+        onDiagnostic,
+        rankPaths: taskQuery ? (paths) => rankSearchHits(paths.map((fileName) => ({ fileName, lineNumber: 1, score: 0.4 })), taskQuery).map((hit) => hit.fileName) : undefined,
+        acceptPath: (filePath) => !excludeClientUi || !isClientUiPath(filePath)
+      });
+      if (hits === undefined) {
+        throw Object.assign(new Error("The indexed file map is unavailable for the selected branch."), {
+          code: "indexed_map_unavailable"
+        });
+      }
+      return hits.map((hit) => hit.path);
+    },
+    // Native host full-text — not explorer path: wrap, not Lightning. Fail-open when index empty.
+    searchCodeHost: async ({ query: codeQuery, repoId, limit, target }) => {
+      const coords = repoId ? coordinatesFromRepoId(repoId, target?.branch) : undefined;
       if (!coords) {
         return [];
       }
-      const hits = await codeHostRouter.searchRepositoryFiles(fileQuery, coords, 20);
-      return hits.map((hit) => hit.path);
+      const hits = await codeHostRouter.searchRepositoryCodeContent(
+        codeQuery,
+        coords,
+        limit ?? 8
+      );
+      return hits.map((hit) => ({ path: hit.path }));
     }
   });
   const services = {
@@ -615,7 +677,8 @@ export function activate(context: vscode.ExtensionContext): void {
       session.insertPromptLibraryEntry(pick.entry);
     }),
     vscode.commands.registerCommand("coopAI.newChat", () => {
-      CoopChatPanel.create(context.extensionUri, context, api, services);
+      const initialSelection = resolveSession(provider.session).captureNewChatSelection();
+      CoopChatPanel.create(context.extensionUri, context, api, services, { initialSelection });
     }),
     vscode.commands.registerCommand("coopAI.clearChat", (args?: { target?: ClearChatTarget }) => {
       resolveClearChatSession(provider.session, args?.target).clearChat();
@@ -786,15 +849,12 @@ export function activate(context: vscode.ExtensionContext): void {
     );
   }
 
-  const reloadAllChatWebviews = (): void => {
+  const ensureSidebarLoaded = (): void => {
     provider.ensureSidebarWebviewLoaded();
-    for (const session of coopSessionRegistry.getAll()) {
-      session.reloadChatWebviewHtml();
-    }
   };
   // One delayed pass covers activate-before-resolve. Immediate extra html
   // assignments cancel the first iframe load and leave a black sidebar.
-  setTimeout(reloadAllChatWebviews, 400);
+  setTimeout(ensureSidebarLoaded, 400);
 }
 
 export function deactivate(): void {}
@@ -855,6 +915,3 @@ function createHealthAdapters(
   }
   return adapters;
 }
-
-
-

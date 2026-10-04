@@ -1,0 +1,31 @@
+{
+  "scenario": {
+    "id": "DF-033",
+    "area": "Quick actions",
+    "fixture": "Coop-AI pinned ref; authMiddleware.ts selected where relevant",
+    "action": "/blast",
+    "passCriteria": "Actual caller/dependent evidence; distinguishes verified impact from possible impact.",
+    "modes": [
+      "slash",
+      "workflow",
+      "editor-context-menu"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T17:56:00.180418+00:00",
+    "status": "FAIL",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "see notes@see notes",
+    "action": "/blast",
+    "actualResult": "With actual remote authMiddleware L10-17 selection, Blast lists real module importers via import-parse, including jobs and SAML. It then claims 23 production callers of extractBearerToken, every route breaks, and all23 assume never throws without opened function-call evidence. Module import relationship is overstated as verified function usage/behavior. Fails verified-impact versus guesses criterion. UI Worked56s; first-answer not instrumented.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-033-slash-1.json",
+    "criteriaReview": "NOT_ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": null,
+    "durationMs": null,
+    "threadId": null
+  },
+  "diagnosticEvents": []
+}

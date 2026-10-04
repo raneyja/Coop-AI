@@ -1,0 +1,1 @@
+PASS: exact total-to-result rename only; signature, buggy bound, and intervening marker unchanged. No late canceled rewrite after the subsequent completed turn.

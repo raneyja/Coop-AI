@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import {
   filePathFromEditHistoryContent,
   hydratePatchCardsFromHistory,
-  patchCardsForMessages
+  patchCardsForMessages,
+  retainPatchCardsOnMessages
 } from "./hydratePatchCardsFromHistory";
 import { getPatchRecord, getSuppressedMessageTimestamps, listPatchCards, resetPatchSessionForTests, upsertPatchRecord } from "./patchSession";
 import { buildPatchCardState, withSuppressionRegistry } from "./patchDiffPreview";
@@ -64,6 +65,42 @@ test("hydrates a Patch card from a persisted /edit assistant message", () => {
   assert.equal(card?.status, "pending");
   assert.equal(card?.suppressMarkdown, true);
   assert.equal(card?.files[0]?.relativePath, "src/foo.ts");
+});
+
+test("rejected decisions survive a serialized window reload", () => {
+  const messages = [{role: "assistant" as const, content: SAMPLE_PATCH, timestamp: 2}];
+  hydratePatchCardsFromHistory(messages);
+  const rejected = {...listPatchCards()[0]!, status: "rejected" as const, canUndo: true};
+  const saved = JSON.parse(JSON.stringify(retainPatchCardsOnMessages(messages, [rejected])));
+  resetPatchSessionForTests();
+  hydratePatchCardsFromHistory(saved);
+  assert.equal(listPatchCards()[0]?.status, "rejected");
+  assert.equal(listPatchCards()[0]?.canUndo, true, "rejected Undo only returns to review");
+});
+
+test("applied cards remain applied after reload without advertising unavailable undo snapshots", () => {
+  const messages = [{role: "assistant" as const, content: SAMPLE_PATCH, timestamp: 2}];
+  hydratePatchCardsFromHistory(messages);
+  const applied = {...listPatchCards()[0]!, status: "applied" as const, canUndo: true, canCreatePr: true};
+  const saved = JSON.parse(JSON.stringify(retainPatchCardsOnMessages(messages, [applied])));
+  resetPatchSessionForTests();
+  hydratePatchCardsFromHistory(saved);
+  const restored = listPatchCards()[0]!;
+  assert.equal(restored.status, "applied");
+  assert.equal(restored.canUndo, false);
+  assert.equal(restored.canCreatePr, false);
+});
+
+test("a persisted authorized local target restores its redacted patch alias", () => {
+  const path = "/private/tmp/coop-dogfood-disposable-edit/positiveSum.ts";
+  const content = SAMPLE_PATCH.replace("src/foo.ts", "[INTERNAL_PATH]");
+  const savedCard = buildPatchCardState({files: [{relativePath: path, hunks: [{search: "const x = 1;", replace: "const x = 2;"}]}]}, {
+    status: "rejected", messageTimestamp: 2
+  });
+  const count = hydratePatchCardsFromHistory([{role: "assistant", content, timestamp: 2, patchCard: savedCard}]);
+  assert.equal(count, 1);
+  assert.equal(listPatchCards()[0]?.status, "rejected");
+  assert.equal(getPatchRecord(2)?.patches.files[0].relativePath, path);
 });
 
 test("skips ordinary chat that is not a patch", () => {

@@ -1,0 +1,1884 @@
+{
+  "scenario": {
+    "id": "DF-006",
+    "area": "Repository questions",
+    "fixture": "CoopAI-Corp/plane; preview pinned SHA; no chip",
+    "action": "In Plane issue create/update, the API raises ValidationError \"Parent is not valid issue_id please pass a valid issue_id\" when the parent isn't in the project. Where is that raised?",
+    "passCriteria": "Reads and cites actual Parent raise in server serializer.",
+    "modes": [
+      "cold",
+      "warm",
+      "after-repo-switch"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T17:21:39.830423+00:00",
+    "status": "FAIL",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "github:CoopAI-Corp/plane@preview",
+    "action": "In Plane issue create/update, the API raises ValidationError \"Parent is not valid issue_id please pass a valid issue_id\" when the parent isn't in the project. Where is that raised?",
+    "actualResult": "Exact Parent ship-gate ask, no chip, selected Plane preview after switching from Coop-AI. Final canned miss: indexed searches yielded no attachable reject snippet, and no opened file confirmed it. Same loaded bundle as yesterday; no Parent raise citation.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-006-warm-1.json",
+    "criteriaReview": "NOT_ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": 9003,
+    "durationMs": 9003,
+    "threadId": "thread-1791048056614-2m0b6d"
+  },
+  "diagnosticEvents": [
+    {
+      "at": "2026-10-03T17:21:04.539Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 919,
+      "stage": "target",
+      "repoId": "github:CoopAI-Corp/plane",
+      "requestedBranch": "preview",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:04.539Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 919,
+      "stage": "turn",
+      "repoId": "github:CoopAI-Corp/plane",
+      "action": "locate",
+      "hunt": "api-reject",
+      "taskQuery": "In Plane issue create/update, the API raises ValidationError \"Parent is not valid issue_id please pass a valid issue_id\" when the parent isn't in the project. Where is that raised?",
+      "plannedSearchQueries": [
+        "ValidationError"
+      ],
+      "requiredEvidence": []
+    },
+    {
+      "at": "2026-10-03T17:21:05.387Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 1767,
+      "stage": "plan",
+      "round": 0,
+      "result": "call",
+      "tool": "search_code",
+      "query": "Parent is not valid issue_id please pass a valid issue_id",
+      "forcedFirstRejectSearch": true
+    },
+    {
+      "at": "2026-10-03T17:21:05.589Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 1969,
+      "stage": "index-search-start",
+      "query": "Parent is not valid issue_id please pass a valid issue_id",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:06.348Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 2728,
+      "stage": "index-search",
+      "query": "Parent is not valid issue_id please pass a valid issue_id",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 759,
+      "hitCount": 18,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "apps/web/core/components/issues/issue-detail/parent-select.tsx",
+          "line": 2,
+          "score": 0.5162778624425
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-modal/components/parent-tag.tsx",
+          "line": 1,
+          "score": 0.4888022677567927
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/issues-list/list-item.tsx",
+          "line": 5,
+          "score": 0.4795329490392266
+        },
+        {
+          "path": "apps/web/core/components/issues/parent-select-root.tsx",
+          "line": 1,
+          "score": 0.47213833649357406
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail/issue-activity/activity/actions/parent.tsx",
+          "line": 1,
+          "score": 0.4602852445676383
+        },
+        {
+          "path": "apps/web/core/components/inbox/content/issue-root.tsx",
+          "line": 4,
+          "score": 0.44717415530132487
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/issues-list/properties.tsx",
+          "line": 4,
+          "score": 0.44691873883287636
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/content.tsx",
+          "line": 2,
+          "score": 0.4436794976196581
+        },
+        {
+          "path": "apps/web/core/components/inbox/modals/create-modal/issue-properties.tsx",
+          "line": 4,
+          "score": 0.4416881053992281
+        },
+        {
+          "path": "apps/web/core/components/issues/workspace-draft/draft-issue-block.tsx",
+          "line": 2,
+          "score": 0.43315081076837425
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-modal/components/default-properties.tsx",
+          "line": 5,
+          "score": 0.425209883509692
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-modal/base.tsx",
+          "line": 2,
+          "score": 0.42375128841944454
+        },
+        {
+          "path": "apps/web/core/store/issue/helpers/base-issues-utils.ts",
+          "line": 7,
+          "score": 0.4232061677755301
+        },
+        {
+          "path": "apps/api/plane/utils/openapi/parameters.py",
+          "line": 2,
+          "score": 0.4188198192709305
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/issue-detail-widget-collapsibles.tsx",
+          "line": 2,
+          "score": 0.41872103020385376
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/helper.ts",
+          "line": 3,
+          "score": 0.41603147826376163
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/title-actions.tsx",
+          "line": 2,
+          "score": 0.41518385487353204
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-layouts/spreadsheet/issue-row.tsx",
+          "line": 4,
+          "score": 0.40796442701805846
+        }
+      ],
+      "symbols": [],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:06.348Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 2728,
+      "stage": "index-search-start",
+      "query": "In Plane issue create/update, the API raises ValidationError \"Parent is not valid issue_id please pass a valid issue_id\" when the parent isn't in the project. Where is that raised?",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:07.218Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 3597,
+      "stage": "index-search",
+      "query": "In Plane issue create/update, the API raises ValidationError \"Parent is not valid issue_id please pass a valid issue_id\" when the parent isn't in the project. Where is that raised?",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 869,
+      "hitCount": 18,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "apps/web/core/components/issues/issue-detail/parent-select.tsx",
+          "line": 2,
+          "score": 0.526847924413209
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/issues-list/list-item.tsx",
+          "line": 5,
+          "score": 0.4735770025493087
+        },
+        {
+          "path": "apps/api/plane/utils/openapi/parameters.py",
+          "line": 2,
+          "score": 0.46134817534215644
+        },
+        {
+          "path": "apps/api/plane/app/urls/issue.py",
+          "line": 1,
+          "score": 0.45678151946112955
+        },
+        {
+          "path": "apps/web/core/components/inbox/content/issue-root.tsx",
+          "line": 2,
+          "score": 0.4554039725364558
+        },
+        {
+          "path": "apps/web/core/components/issues/workspace-draft/draft-issue-block.tsx",
+          "line": 2,
+          "score": 0.45022320603012345
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-modal/base.tsx",
+          "line": 2,
+          "score": 0.44725757177118797
+        },
+        {
+          "path": "packages/utils/src/work-item/base.ts",
+          "line": 3,
+          "score": 0.4461100501468487
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item.json",
+          "line": 1,
+          "score": 0.433309513319423
+        },
+        {
+          "path": "packages/i18n/src/locales/en/integration.json",
+          "line": 2,
+          "score": 0.428847634599962
+        },
+        {
+          "path": "apps/api/plane/utils/error_codes.py",
+          "line": 1,
+          "score": 0.4258495710970013
+        },
+        {
+          "path": "CONTRIBUTING.md",
+          "line": 1,
+          "score": 0.42502088317844056
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/title-actions.tsx",
+          "line": 2,
+          "score": 0.4205033705494775
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/helper.ts",
+          "line": 3,
+          "score": 0.41991985109117524
+        },
+        {
+          "path": "apps/api/plane/api/urls/intake.py",
+          "line": 1,
+          "score": 0.4193131922079758
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/issues-list/properties.tsx",
+          "line": 4,
+          "score": 0.4183203180127988
+        },
+        {
+          "path": "apps/web/core/components/issues/parent-select-root.tsx",
+          "line": 1,
+          "score": 0.4152106490084242
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail/main-content.tsx",
+          "line": 2,
+          "score": 0.41437358080976794
+        }
+      ],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:07.219Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 3599,
+      "query": "\"Parent is not valid issue_id please pass a valid issue_id\"",
+      "outcome": "error",
+      "code": "unsupported",
+      "status": 400,
+      "stage": "host-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:07.220Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 3600,
+      "stage": "filename-criteria",
+      "query": "Parent is not valid issue_id please pass a valid issue_id",
+      "criteria": [
+        "create",
+        "update",
+        "issue.",
+        "parent."
+      ],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:07.220Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 3600,
+      "query": "create",
+      "stage": "filename-search-start",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:07.910Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4290,
+      "stage": "indexed-map-response",
+      "requestedRepoId": "github:CoopAI-Corp/plane",
+      "requestedBranch": "preview",
+      "status": 200,
+      "responseRepoId": "github:CoopAI-Corp/plane",
+      "stale": false,
+      "hasDataArray": true,
+      "fileCount": 4616,
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:07.911Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4291,
+      "query": "create",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 691,
+      "stage": "filename-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:07.911Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4291,
+      "query": "update",
+      "stage": "filename-search-start",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:07.911Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4291,
+      "query": "update",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 0,
+      "stage": "filename-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:07.911Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4291,
+      "query": "issue.",
+      "stage": "filename-search-start",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:07.911Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4291,
+      "query": "issue.",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 0,
+      "stage": "filename-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:07.911Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4291,
+      "query": "parent.",
+      "stage": "filename-search-start",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:07.911Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4291,
+      "query": "parent.",
+      "outcome": "error",
+      "code": "indexed_map_unavailable",
+      "elapsedMs": 0,
+      "stage": "filename-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:07.930Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4310,
+      "stage": "search",
+      "round": 0,
+      "repoId": "github:CoopAI-Corp/plane",
+      "query": "Parent is not valid issue_id please pass a valid issue_id",
+      "source": "embedding",
+      "stale": false,
+      "codeHostFallbackAttempted": true,
+      "codeHostFallbackStatus": "error",
+      "filenameFallbackStatus": "error",
+      "rawHitCount": 27,
+      "rawSymbolCount": 0,
+      "rawHits": [
+        {
+          "path": "apps/web/core/components/issues/issue-detail/parent-select.tsx",
+          "line": 2,
+          "score": 0.5162778624425
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-modal/components/parent-tag.tsx",
+          "line": 1,
+          "score": 0.4888022677567927
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/issues-list/list-item.tsx",
+          "line": 5,
+          "score": 0.4795329490392266
+        },
+        {
+          "path": "apps/web/core/components/issues/parent-select-root.tsx",
+          "line": 1,
+          "score": 0.47213833649357406
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail/issue-activity/activity/actions/parent.tsx",
+          "line": 1,
+          "score": 0.4602852445676383
+        },
+        {
+          "path": "apps/web/core/components/inbox/content/issue-root.tsx",
+          "line": 4,
+          "score": 0.44717415530132487
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/issues-list/properties.tsx",
+          "line": 4,
+          "score": 0.44691873883287636
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/content.tsx",
+          "line": 2,
+          "score": 0.4436794976196581
+        },
+        {
+          "path": "apps/web/core/components/inbox/modals/create-modal/issue-properties.tsx",
+          "line": 4,
+          "score": 0.4416881053992281
+        },
+        {
+          "path": "apps/web/core/components/issues/workspace-draft/draft-issue-block.tsx",
+          "line": 2,
+          "score": 0.43315081076837425
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-modal/components/default-properties.tsx",
+          "line": 5,
+          "score": 0.425209883509692
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-modal/base.tsx",
+          "line": 2,
+          "score": 0.42375128841944454
+        }
+      ],
+      "preferredHits": [
+        {
+          "path": "apps/api/plane/app/urls/issue.py",
+          "line": 1,
+          "score": 0.45678151946112955
+        },
+        {
+          "path": "apps/api/plane/api/urls/intake.py",
+          "line": 1,
+          "score": 0.4193131922079758
+        }
+      ],
+      "modelVisibleHits": [
+        {
+          "path": "apps/api/plane/app/urls/issue.py",
+          "line": 1,
+          "score": 0.45678151946112955
+        },
+        {
+          "path": "apps/api/plane/api/urls/intake.py",
+          "line": 1,
+          "score": 0.4193131922079758
+        }
+      ]
+    },
+    {
+      "at": "2026-10-03T17:21:07.930Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "stage": "activity-step",
+      "tool": "search_code",
+      "summary": "search_code: Parent is not valid issue_id please pass a valid issue_id"
+    },
+    {
+      "at": "2026-10-03T17:21:08.271Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4651,
+      "path": "apps/api/plane/app/urls/issue.py",
+      "returnedPath": "apps/api/plane/app/urls/issue.py",
+      "outcome": "body",
+      "bodyChars": 10284,
+      "cacheHit": false,
+      "elapsedMs": 339,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:08.598Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4978,
+      "path": "apps/api/plane/api/urls/intake.py",
+      "returnedPath": "apps/api/plane/api/urls/intake.py",
+      "outcome": "body",
+      "bodyChars": 734,
+      "cacheHit": false,
+      "elapsedMs": 323,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:08.599Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4979,
+      "path": "apps/api/plane/app/urls/issue.py",
+      "returnedPath": "apps/api/plane/app/urls/issue.py",
+      "outcome": "body",
+      "bodyChars": 10284,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:08.602Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4982,
+      "path": "apps/api/plane/app/urls/issue.py",
+      "returnedPath": "apps/api/plane/app/urls/issue.py",
+      "outcome": "body",
+      "bodyChars": 10284,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:08.603Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4983,
+      "path": "apps/api/plane/app/urls/issue.py",
+      "returnedPath": "apps/api/plane/app/urls/issue.py",
+      "outcome": "body",
+      "bodyChars": 10284,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:08.604Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4984,
+      "path": "apps/api/plane/app/urls/issue.py",
+      "returnedPath": "apps/api/plane/app/urls/issue.py",
+      "outcome": "body",
+      "bodyChars": 10284,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:08.605Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4985,
+      "path": "apps/api/plane/app/urls/issue.py",
+      "returnedPath": "apps/api/plane/app/urls/issue.py",
+      "outcome": "body",
+      "bodyChars": 10284,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:08.605Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4985,
+      "path": "apps/api/plane/app/urls/issue.py",
+      "returnedPath": "apps/api/plane/app/urls/issue.py",
+      "outcome": "body",
+      "bodyChars": 10284,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:08.606Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4986,
+      "stage": "candidate-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "path": "apps/api/plane/app/urls/issue.py",
+      "line": 1,
+      "result": "implementation",
+      "bodyLines": 51,
+      "bodyChars": 1478,
+      "rejectMatch": false,
+      "windowStart": 1,
+      "windowEnd": 26
+    },
+    {
+      "at": "2026-10-03T17:21:08.606Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (no write/reject): apps/api/plane/app/urls/issue.py"
+    },
+    {
+      "at": "2026-10-03T17:21:08.606Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4986,
+      "path": "apps/api/plane/api/urls/intake.py",
+      "returnedPath": "apps/api/plane/api/urls/intake.py",
+      "outcome": "body",
+      "bodyChars": 734,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:08.606Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4986,
+      "path": "apps/api/plane/api/urls/intake.py",
+      "returnedPath": "apps/api/plane/api/urls/intake.py",
+      "outcome": "body",
+      "bodyChars": 734,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:08.606Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 4986,
+      "stage": "candidate-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "path": "apps/api/plane/api/urls/intake.py",
+      "line": 1,
+      "result": "implementation",
+      "bodyLines": 26,
+      "bodyChars": 768,
+      "rejectMatch": false,
+      "windowStart": 1,
+      "windowEnd": 26
+    },
+    {
+      "at": "2026-10-03T17:21:08.606Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (no write/reject): apps/api/plane/api/urls/intake.py"
+    },
+    {
+      "at": "2026-10-03T17:21:09.779Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 6158,
+      "stage": "plan",
+      "round": 1,
+      "result": "call",
+      "tool": "search_code",
+      "query": "\"Parent is not valid issue_id\"",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T17:21:09.779Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 6159,
+      "path": "apps/api/plane/app/urls/issue.py",
+      "returnedPath": "apps/api/plane/app/urls/issue.py",
+      "outcome": "body",
+      "bodyChars": 10284,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:09.779Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 6159,
+      "path": "apps/api/plane/app/urls/issue.py",
+      "returnedPath": "apps/api/plane/app/urls/issue.py",
+      "outcome": "body",
+      "bodyChars": 10284,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:09.780Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (no write/reject): apps/api/plane/app/urls/issue.py"
+    },
+    {
+      "at": "2026-10-03T17:21:09.780Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 6160,
+      "path": "apps/api/plane/api/urls/intake.py",
+      "returnedPath": "apps/api/plane/api/urls/intake.py",
+      "outcome": "body",
+      "bodyChars": 734,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:09.780Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 6160,
+      "path": "apps/api/plane/api/urls/intake.py",
+      "returnedPath": "apps/api/plane/api/urls/intake.py",
+      "outcome": "body",
+      "bodyChars": 734,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:09.780Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (no write/reject): apps/api/plane/api/urls/intake.py"
+    },
+    {
+      "at": "2026-10-03T17:21:10.007Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 6387,
+      "stage": "index-search-start",
+      "query": "\"Parent is not valid issue_id\"",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:10.885Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 7265,
+      "stage": "index-search",
+      "query": "\"Parent is not valid issue_id\"",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 878,
+      "hitCount": 16,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "apps/web/core/components/issues/issue-detail/parent-select.tsx",
+          "line": 2,
+          "score": 0.481083696518813
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-modal/components/parent-tag.tsx",
+          "line": 1,
+          "score": 0.4608206193475801
+        },
+        {
+          "path": "apps/web/core/components/inbox/modals/create-modal/issue-properties.tsx",
+          "line": 4,
+          "score": 0.43073350280676326
+        },
+        {
+          "path": "apps/web/core/components/issues/parent-select-root.tsx",
+          "line": 1,
+          "score": 0.4302056606617001
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/issues-list/list-item.tsx",
+          "line": 5,
+          "score": 0.4268891111517277
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail/issue-activity/activity/actions/parent.tsx",
+          "line": 1,
+          "score": 0.42106885177842546
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-modal/components/default-properties.tsx",
+          "line": 5,
+          "score": 0.4144434583308776
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/content.tsx",
+          "line": 2,
+          "score": 0.3953080985020716
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/issues-list/properties.tsx",
+          "line": 4,
+          "score": 0.3912731984893195
+        },
+        {
+          "path": "apps/web/core/components/issues/workspace-draft/draft-issue-block.tsx",
+          "line": 2,
+          "score": 0.38761593759253765
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/title-actions.tsx",
+          "line": 2,
+          "score": 0.38219811078419785
+        },
+        {
+          "path": "apps/web/core/components/inbox/content/issue-root.tsx",
+          "line": 2,
+          "score": 0.381698505269334
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/issue-detail-widget-collapsibles.tsx",
+          "line": 2,
+          "score": 0.3721461443683365
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-layouts/spreadsheet/issue-row.tsx",
+          "line": 4,
+          "score": 0.36710344628983427
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/helper.ts",
+          "line": 3,
+          "score": 0.3655752132157608
+        },
+        {
+          "path": "packages/utils/src/common.ts",
+          "line": 8,
+          "score": 0.36479146248221916
+        }
+      ],
+      "symbols": [],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:10.885Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 7265,
+      "stage": "index-search-start",
+      "query": "In Plane issue create/update, the API raises ValidationError \"Parent is not valid issue_id please pass a valid issue_id\" when the parent isn't in the project. Where is that raised?",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:10.885Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 7265,
+      "stage": "index-search",
+      "query": "In Plane issue create/update, the API raises ValidationError \"Parent is not valid issue_id please pass a valid issue_id\" when the parent isn't in the project. Where is that raised?",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 0,
+      "hitCount": 18,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "apps/web/core/components/issues/issue-detail/parent-select.tsx",
+          "line": 2,
+          "score": 0.526847924413209
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/issues-list/list-item.tsx",
+          "line": 5,
+          "score": 0.4735770025493087
+        },
+        {
+          "path": "apps/api/plane/utils/openapi/parameters.py",
+          "line": 2,
+          "score": 0.46134817534215644
+        },
+        {
+          "path": "apps/api/plane/app/urls/issue.py",
+          "line": 1,
+          "score": 0.45678151946112955
+        },
+        {
+          "path": "apps/web/core/components/inbox/content/issue-root.tsx",
+          "line": 2,
+          "score": 0.4554039725364558
+        },
+        {
+          "path": "apps/web/core/components/issues/workspace-draft/draft-issue-block.tsx",
+          "line": 2,
+          "score": 0.45022320603012345
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-modal/base.tsx",
+          "line": 2,
+          "score": 0.44725757177118797
+        },
+        {
+          "path": "packages/utils/src/work-item/base.ts",
+          "line": 3,
+          "score": 0.4461100501468487
+        },
+        {
+          "path": "packages/i18n/src/locales/en/work-item.json",
+          "line": 1,
+          "score": 0.433309513319423
+        },
+        {
+          "path": "packages/i18n/src/locales/en/integration.json",
+          "line": 2,
+          "score": 0.428847634599962
+        },
+        {
+          "path": "apps/api/plane/utils/error_codes.py",
+          "line": 1,
+          "score": 0.4258495710970013
+        },
+        {
+          "path": "CONTRIBUTING.md",
+          "line": 1,
+          "score": 0.42502088317844056
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/title-actions.tsx",
+          "line": 2,
+          "score": 0.4205033705494775
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/helper.ts",
+          "line": 3,
+          "score": 0.41991985109117524
+        },
+        {
+          "path": "apps/api/plane/api/urls/intake.py",
+          "line": 1,
+          "score": 0.4193131922079758
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/issues-list/properties.tsx",
+          "line": 4,
+          "score": 0.4183203180127988
+        },
+        {
+          "path": "apps/web/core/components/issues/parent-select-root.tsx",
+          "line": 1,
+          "score": 0.4152106490084242
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail/main-content.tsx",
+          "line": 2,
+          "score": 0.41437358080976794
+        }
+      ],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:10.886Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 7266,
+      "query": "\"Parent is not valid issue_id\"",
+      "outcome": "error",
+      "code": "unsupported",
+      "status": 400,
+      "stage": "host-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:10.886Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 7266,
+      "stage": "filename-criteria",
+      "query": "\"Parent is not valid issue_id\"",
+      "criteria": [
+        "create",
+        "update",
+        "issue.",
+        "parent."
+      ],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:10.903Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 7283,
+      "stage": "search",
+      "round": 1,
+      "repoId": "github:CoopAI-Corp/plane",
+      "query": "\"Parent is not valid issue_id\"",
+      "source": "embedding",
+      "stale": false,
+      "codeHostFallbackAttempted": true,
+      "codeHostFallbackStatus": "error",
+      "filenameFallbackStatus": "error",
+      "rawHitCount": 26,
+      "rawSymbolCount": 0,
+      "rawHits": [
+        {
+          "path": "apps/web/core/components/issues/issue-detail/parent-select.tsx",
+          "line": 2,
+          "score": 0.481083696518813
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-modal/components/parent-tag.tsx",
+          "line": 1,
+          "score": 0.4608206193475801
+        },
+        {
+          "path": "apps/web/core/components/inbox/modals/create-modal/issue-properties.tsx",
+          "line": 4,
+          "score": 0.43073350280676326
+        },
+        {
+          "path": "apps/web/core/components/issues/parent-select-root.tsx",
+          "line": 1,
+          "score": 0.4302056606617001
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/issues-list/list-item.tsx",
+          "line": 5,
+          "score": 0.4268891111517277
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail/issue-activity/activity/actions/parent.tsx",
+          "line": 1,
+          "score": 0.42106885177842546
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-modal/components/default-properties.tsx",
+          "line": 5,
+          "score": 0.4144434583308776
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/content.tsx",
+          "line": 2,
+          "score": 0.3953080985020716
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/issues-list/properties.tsx",
+          "line": 4,
+          "score": 0.3912731984893195
+        },
+        {
+          "path": "apps/web/core/components/issues/workspace-draft/draft-issue-block.tsx",
+          "line": 2,
+          "score": 0.38761593759253765
+        },
+        {
+          "path": "apps/web/core/components/issues/issue-detail-widgets/sub-issues/title-actions.tsx",
+          "line": 2,
+          "score": 0.38219811078419785
+        },
+        {
+          "path": "apps/web/core/components/inbox/content/issue-root.tsx",
+          "line": 2,
+          "score": 0.381698505269334
+        }
+      ],
+      "preferredHits": [
+        {
+          "path": "apps/api/plane/app/urls/issue.py",
+          "line": 1,
+          "score": 0.45678151946112955
+        },
+        {
+          "path": "apps/api/plane/api/urls/intake.py",
+          "line": 1,
+          "score": 0.4193131922079758
+        }
+      ],
+      "modelVisibleHits": [
+        {
+          "path": "apps/api/plane/app/urls/issue.py",
+          "line": 1,
+          "score": 0.45678151946112955
+        },
+        {
+          "path": "apps/api/plane/api/urls/intake.py",
+          "line": 1,
+          "score": 0.4193131922079758
+        }
+      ]
+    },
+    {
+      "at": "2026-10-03T17:21:10.903Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "stage": "activity-step",
+      "tool": "search_code",
+      "summary": "search_code: \"Parent is not valid issue_id\""
+    },
+    {
+      "at": "2026-10-03T17:21:10.904Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 7284,
+      "path": "apps/api/plane/app/urls/issue.py",
+      "returnedPath": "apps/api/plane/app/urls/issue.py",
+      "outcome": "body",
+      "bodyChars": 10284,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:10.905Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 7285,
+      "path": "apps/api/plane/api/urls/intake.py",
+      "returnedPath": "apps/api/plane/api/urls/intake.py",
+      "outcome": "body",
+      "bodyChars": 734,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:10.905Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 7285,
+      "path": "apps/api/plane/app/urls/issue.py",
+      "returnedPath": "apps/api/plane/app/urls/issue.py",
+      "outcome": "body",
+      "bodyChars": 10284,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:10.906Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 7286,
+      "path": "apps/api/plane/app/urls/issue.py",
+      "returnedPath": "apps/api/plane/app/urls/issue.py",
+      "outcome": "body",
+      "bodyChars": 10284,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:10.908Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 7288,
+      "path": "apps/api/plane/app/urls/issue.py",
+      "returnedPath": "apps/api/plane/app/urls/issue.py",
+      "outcome": "body",
+      "bodyChars": 10284,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:10.909Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 7289,
+      "path": "apps/api/plane/app/urls/issue.py",
+      "returnedPath": "apps/api/plane/app/urls/issue.py",
+      "outcome": "body",
+      "bodyChars": 10284,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:10.910Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 7290,
+      "path": "apps/api/plane/app/urls/issue.py",
+      "returnedPath": "apps/api/plane/app/urls/issue.py",
+      "outcome": "body",
+      "bodyChars": 10284,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:10.910Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 7290,
+      "path": "apps/api/plane/app/urls/issue.py",
+      "returnedPath": "apps/api/plane/app/urls/issue.py",
+      "outcome": "body",
+      "bodyChars": 10284,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:10.910Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 7290,
+      "stage": "candidate-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "path": "apps/api/plane/app/urls/issue.py",
+      "line": 1,
+      "result": "implementation",
+      "bodyLines": 51,
+      "bodyChars": 1478,
+      "rejectMatch": false,
+      "windowStart": 1,
+      "windowEnd": 26
+    },
+    {
+      "at": "2026-10-03T17:21:10.911Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (no write/reject): apps/api/plane/app/urls/issue.py"
+    },
+    {
+      "at": "2026-10-03T17:21:10.911Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 7291,
+      "path": "apps/api/plane/api/urls/intake.py",
+      "returnedPath": "apps/api/plane/api/urls/intake.py",
+      "outcome": "body",
+      "bodyChars": 734,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:10.911Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 7291,
+      "path": "apps/api/plane/api/urls/intake.py",
+      "returnedPath": "apps/api/plane/api/urls/intake.py",
+      "outcome": "body",
+      "bodyChars": 734,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:10.911Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 7291,
+      "stage": "candidate-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "path": "apps/api/plane/api/urls/intake.py",
+      "line": 1,
+      "result": "implementation",
+      "bodyLines": 26,
+      "bodyChars": 768,
+      "rejectMatch": false,
+      "windowStart": 1,
+      "windowEnd": 26
+    },
+    {
+      "at": "2026-10-03T17:21:10.911Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (no write/reject): apps/api/plane/api/urls/intake.py"
+    },
+    {
+      "at": "2026-10-03T17:21:11.966Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 8346,
+      "stage": "plan",
+      "round": 2,
+      "result": "call",
+      "tool": "search_code",
+      "query": "ValidationError parent",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T17:21:11.967Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 8347,
+      "path": "apps/api/plane/app/urls/issue.py",
+      "returnedPath": "apps/api/plane/app/urls/issue.py",
+      "outcome": "body",
+      "bodyChars": 10284,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:11.967Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 8347,
+      "path": "apps/api/plane/app/urls/issue.py",
+      "returnedPath": "apps/api/plane/app/urls/issue.py",
+      "outcome": "body",
+      "bodyChars": 10284,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:11.968Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (no write/reject): apps/api/plane/app/urls/issue.py"
+    },
+    {
+      "at": "2026-10-03T17:21:11.968Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 8348,
+      "path": "apps/api/plane/api/urls/intake.py",
+      "returnedPath": "apps/api/plane/api/urls/intake.py",
+      "outcome": "body",
+      "bodyChars": 734,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:11.968Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 8348,
+      "path": "apps/api/plane/api/urls/intake.py",
+      "returnedPath": "apps/api/plane/api/urls/intake.py",
+      "outcome": "body",
+      "bodyChars": 734,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:11.968Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file skipped (no write/reject): apps/api/plane/api/urls/intake.py"
+    },
+    {
+      "at": "2026-10-03T17:21:12.152Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 8532,
+      "stage": "index-search-start",
+      "query": "ValidationError parent",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:12.197Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 8577,
+      "stage": "gather-handoff",
+      "waitingStage": "index-search"
+    },
+    {
+      "at": "2026-10-03T17:21:12.197Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 8577,
+      "stage": "index-search",
+      "query": "ValidationError parent",
+      "source": "fallback",
+      "stale": true,
+      "elapsedMs": 45,
+      "hitCount": 0,
+      "symbolCount": 0,
+      "hits": [],
+      "symbols": [],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:12.197Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 8577,
+      "stage": "index-search-start",
+      "query": "validation_error parent",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:12.197Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 8577,
+      "stage": "index-search",
+      "query": "validation_error parent",
+      "source": "fallback",
+      "stale": true,
+      "elapsedMs": 0,
+      "hitCount": 0,
+      "symbolCount": 0,
+      "hits": [],
+      "symbols": [],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:12.197Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 8577,
+      "query": "\"ValidationError parent\"",
+      "outcome": "empty",
+      "paths": [],
+      "stage": "host-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:12.197Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 8577,
+      "query": "ValidationError parent",
+      "outcome": "empty",
+      "paths": [],
+      "stage": "host-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:12.198Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 8578,
+      "stage": "filename-criteria",
+      "query": "ValidationError parent",
+      "criteria": [
+        "create",
+        "update",
+        "validation.",
+        "error."
+      ],
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:12.198Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 8578,
+      "query": "validation.",
+      "stage": "filename-search-start",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:12.198Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 8578,
+      "query": "validation.",
+      "outcome": "empty",
+      "paths": [],
+      "elapsedMs": 0,
+      "stage": "filename-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:12.198Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 8578,
+      "query": "error.",
+      "stage": "filename-search-start",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:12.198Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 8578,
+      "query": "error.",
+      "outcome": "empty",
+      "paths": [],
+      "elapsedMs": 0,
+      "stage": "filename-search",
+      "repoId": "github:CoopAI-Corp/plane",
+      "resolvedBranch": "preview"
+    },
+    {
+      "at": "2026-10-03T17:21:12.198Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "preview",
+      "runId": "a1281be8-f5cb-4799-94c6-1babaf42669d",
+      "turnElapsedMs": 8578,
+      "stage": "search",
+      "round": 2,
+      "repoId": "github:CoopAI-Corp/plane",
+      "query": "ValidationError parent",
+      "source": "fallback",
+      "stale": true,
+      "codeHostFallbackAttempted": true,
+      "codeHostFallbackStatus": "no_paths",
+      "filenameFallbackStatus": "error",
+      "rawHitCount": 0,
+      "rawSymbolCount": 0,
+      "rawHits": [],
+      "preferredHits": [],
+      "modelVisibleHits": []
+    },
+    {
+      "at": "2026-10-03T17:21:12.198Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "stage": "activity-step",
+      "tool": "search_code",
+      "summary": "search_code: ValidationError parent"
+    },
+    {
+      "at": "2026-10-03T17:21:12.199Z",
+      "threadId": "thread-1791048056614-2m0b6d",
+      "stage": "answer-start",
+      "elapsedMs": 9003,
+      "selectedBranch": "preview",
+      "repoId": "github:CoopAI-Corp/plane",
+      "delivery": "complete",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016"
+    }
+  ]
+}

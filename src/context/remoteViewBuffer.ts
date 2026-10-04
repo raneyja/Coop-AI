@@ -8,10 +8,13 @@ import { toRepositoryRelativePath } from "./repoFilePath";
  * must consult it so "Untitled-1" is never treated as a local file the user picked.
  */
 export type RememberedRemoteBuffer = {
+  path: string;
   uriString: string;
   content: string;
   owner?: string;
   repo?: string;
+  provider?: import("../chat/types").CodeHostProviderPreference;
+  branch?: string;
 };
 
 const rememberedRemoteBuffers = new Map<string, RememberedRemoteBuffer>();
@@ -22,16 +25,9 @@ function normalizeBufferKey(relativePath: string): string {
 
 export function rememberedRemoteEntry(relativePath: string): RememberedRemoteBuffer | undefined {
   const key = normalizeBufferKey(relativePath);
-  const direct = rememberedRemoteBuffers.get(key);
-  if (direct) {
-    return direct;
-  }
-  for (const [stored, value] of rememberedRemoteBuffers) {
-    if (pathsReferToSameFile(stored, key)) {
-      return value;
-    }
-  }
-  return undefined;
+  const matches = [...rememberedRemoteBuffers.values()].filter(value => pathsReferToSameFile(value.path, key));
+  const identities = new Set(matches.map(value => JSON.stringify([value.provider, value.owner, value.repo, value.branch])));
+  return identities.size === 1 ? matches.at(-1) : undefined;
 }
 
 /** Bitbucket/GitLab Zero-Clone tabs are untitled — remember path → buffer at open. */
@@ -39,22 +35,25 @@ export function rememberRemotePatchBuffer(
   relativePath: string,
   uri: Uri,
   content: string,
-  identity?: { owner?: string; repo?: string }
+  identity?: { owner?: string; repo?: string; provider?: import("../chat/types").CodeHostProviderPreference; branch?: string }
 ): void {
   const key = normalizeBufferKey(relativePath);
   if (!key || !content.trim()) {
     return;
   }
-  rememberedRemoteBuffers.set(key, {
+  rememberedRemoteBuffers.set(uri.toString(), {
+    path: key,
     uriString: uri.toString(),
     content,
     owner: identity?.owner?.trim() || undefined,
-    repo: identity?.repo?.trim() || undefined
+    repo: identity?.repo?.trim() || undefined,
+    provider: identity?.provider,
+    branch: identity?.branch?.trim() || undefined
   });
 }
 
 export function listRememberedRemoteBuffers(): Array<{ path: string } & RememberedRemoteBuffer> {
-  return [...rememberedRemoteBuffers.entries()].map(([path, value]) => ({ path, ...value }));
+  return [...rememberedRemoteBuffers.values()];
 }
 
 export function rememberedRemoteBufferForUri(
@@ -64,9 +63,9 @@ export function rememberedRemoteBufferForUri(
   if (!wanted) {
     return undefined;
   }
-  for (const [path, value] of rememberedRemoteBuffers) {
+  for (const value of rememberedRemoteBuffers.values()) {
     if (value.uriString === wanted) {
-      return { path, ...value };
+      return value;
     }
   }
   return undefined;
@@ -74,7 +73,7 @@ export function rememberedRemoteBufferForUri(
 
 /** Chip identity for an untitled tab that is actually a remote viewing buffer. */
 export function remoteIdentityForUntitledUri(uriString: string):
-  | { file: string; fileSource: "remote"; owner?: string; repo?: string }
+  | { file: string; fileSource: "remote"; owner?: string; repo?: string; provider?: import("../chat/types").CodeHostProviderPreference; branch?: string }
   | undefined {
   const remembered = rememberedRemoteBufferForUri(uriString);
   if (!remembered) {
@@ -88,7 +87,9 @@ export function remoteIdentityForUntitledUri(uriString: string):
     file,
     fileSource: "remote",
     owner: remembered.owner,
-    repo: remembered.repo
+    repo: remembered.repo,
+    provider: remembered.provider,
+    branch: remembered.branch
   };
 }
 

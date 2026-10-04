@@ -1,0 +1,428 @@
+{
+  "scenario": {
+    "id": "DF-001",
+    "area": "Repository questions",
+    "fixture": "Coop-AI; pinned remote ref; no chip",
+    "action": "Where do we parse the Authorization Bearer token? Don't write a new helper \u2014 point me at the existing function.",
+    "passCriteria": "Remote source identifies the existing parser; clicking its citation opens the selected ref and exact function.",
+    "modes": [
+      "cold",
+      "warm",
+      "after-repo-switch"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T17:17:06.953987+00:00",
+    "status": "PASS",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "gitlab:coopai-group/Coop-AI@main",
+    "action": "Where do we parse the Authorization Bearer token? Don't write a new helper \u2014 point me at the existing function.",
+    "actualResult": "Reran with neutral Untitled-2 editor and no file chip. Correct extractBearerToken source at 10-17, reads headers.authorization and trims token. Citation opened remote body in Untitled-22. Ref-level pass only; pinned SHA unavailable.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-001-warm-1.json",
+    "criteriaReview": "ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": 6135,
+    "durationMs": 6480,
+    "threadId": "thread-1791047767415-t5drws"
+  },
+  "diagnosticEvents": [
+    {
+      "at": "2026-10-03T17:16:14.297Z",
+      "threadId": "thread-1791047767415-t5drws",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "4fb16aa4-4865-4d8a-a67f-816b9d191221",
+      "turnElapsedMs": 223,
+      "stage": "target",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "requestedBranch": "main",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:16:14.298Z",
+      "threadId": "thread-1791047767415-t5drws",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "4fb16aa4-4865-4d8a-a67f-816b9d191221",
+      "turnElapsedMs": 224,
+      "stage": "turn",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "action": "locate",
+      "hunt": "definition-locate",
+      "taskQuery": "Where do we parse the Authorization Bearer token? Don't write a new helper \u2014 point me at the existing function.",
+      "plannedSearchQueries": [
+        "Authorization Bearer token"
+      ],
+      "requiredEvidence": []
+    },
+    {
+      "at": "2026-10-03T17:16:15.170Z",
+      "threadId": "thread-1791047767415-t5drws",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "4fb16aa4-4865-4d8a-a67f-816b9d191221",
+      "turnElapsedMs": 1096,
+      "stage": "plan",
+      "round": 0,
+      "result": "call",
+      "tool": "search_code",
+      "query": "Authorization Bearer",
+      "forcedFirstRejectSearch": false
+    },
+    {
+      "at": "2026-10-03T17:16:15.370Z",
+      "threadId": "thread-1791047767415-t5drws",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "4fb16aa4-4865-4d8a-a67f-816b9d191221",
+      "turnElapsedMs": 1296,
+      "stage": "index-search-start",
+      "query": "Authorization Bearer",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:16:16.555Z",
+      "threadId": "thread-1791047767415-t5drws",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "4fb16aa4-4865-4d8a-a67f-816b9d191221",
+      "turnElapsedMs": 2481,
+      "stage": "index-search",
+      "query": "Authorization Bearer",
+      "source": "embedding",
+      "stale": false,
+      "elapsedMs": 1185,
+      "hitCount": 17,
+      "symbolCount": 0,
+      "hits": [
+        {
+          "path": "src/api/byokHandler.ts",
+          "line": 15,
+          "score": 0.5356982731791105
+        },
+        {
+          "path": "src/jobs/jobsApi.ts",
+          "line": 8,
+          "score": 0.487692936864459
+        },
+        {
+          "path": "src/server/authMiddleware.ts",
+          "line": 1,
+          "score": 0.44272252309107274
+        },
+        {
+          "path": "src/server/atlassianAppService.ts",
+          "line": 1,
+          "score": 0.4404805698758225
+        },
+        {
+          "path": "src/server/sso/samlApi.ts",
+          "line": 10,
+          "score": 0.4376313988859597
+        },
+        {
+          "path": "src/server/bitbucketAppService.ts",
+          "line": 9,
+          "score": 0.43662225844081204
+        },
+        {
+          "path": "admin/src/lib/serverCoopApi.ts",
+          "line": 8,
+          "score": 0.4236238815649793
+        },
+        {
+          "path": "ops/src/lib/serverCoopApi.ts",
+          "line": 9,
+          "score": 0.4235828383569169
+        },
+        {
+          "path": "src/server/teamsAppService.ts",
+          "line": 1,
+          "score": 0.42070335642570256
+        },
+        {
+          "path": "src/server/authMiddleware.test.ts",
+          "line": 10,
+          "score": 0.4110888812904028
+        },
+        {
+          "path": "src/server/slackAppService.test.ts",
+          "line": 4,
+          "score": 0.4108723519462891
+        },
+        {
+          "path": "website/content/docs/api-reference.md",
+          "line": 6,
+          "score": 0.4017524902653251
+        },
+        {
+          "path": "src/server/githubOAuthService.test.ts",
+          "line": 2,
+          "score": 0.3989914811739472
+        },
+        {
+          "path": "src/server/notionAppApi.ts",
+          "line": 4,
+          "score": 0.3947092296183645
+        },
+        {
+          "path": "src/server/auth/authTokenStore.ts",
+          "line": 1,
+          "score": 0.3923543611569571
+        },
+        {
+          "path": "src/server/billing/billingApi.test.ts",
+          "line": 2,
+          "score": 0.39225259297409576
+        },
+        {
+          "path": "src/server/sso/samlTestFixtures.ts",
+          "line": 5,
+          "score": 0.3862820502807329
+        }
+      ],
+      "symbols": [],
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:16:16.563Z",
+      "threadId": "thread-1791047767415-t5drws",
+      "stage": "activity-step",
+      "tool": "search_code",
+      "summary": "search_code: Authorization Bearer"
+    },
+    {
+      "at": "2026-10-03T17:16:17.525Z",
+      "threadId": "thread-1791047767415-t5drws",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "4fb16aa4-4865-4d8a-a67f-816b9d191221",
+      "turnElapsedMs": 3451,
+      "path": "src/server/authMiddleware.ts",
+      "returnedPath": "src/server/authMiddleware.ts",
+      "outcome": "body",
+      "bodyChars": 7293,
+      "cacheHit": false,
+      "elapsedMs": 962,
+      "stage": "remote-read",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:16:17.527Z",
+      "threadId": "thread-1791047767415-t5drws",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "4fb16aa4-4865-4d8a-a67f-816b9d191221",
+      "turnElapsedMs": 3452,
+      "stage": "candidate-read",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "path": "src/server/authMiddleware.ts",
+      "line": 1,
+      "result": "implementation",
+      "bodyLines": 51,
+      "bodyChars": 1463,
+      "windowStart": 1,
+      "windowEnd": 26
+    },
+    {
+      "at": "2026-10-03T17:16:17.527Z",
+      "threadId": "thread-1791047767415-t5drws",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file: src/server/authMiddleware.ts"
+    },
+    {
+      "at": "2026-10-03T17:16:17.527Z",
+      "threadId": "thread-1791047767415-t5drws",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "4fb16aa4-4865-4d8a-a67f-816b9d191221",
+      "turnElapsedMs": 3453,
+      "path": "src/server/authMiddleware.ts",
+      "returnedPath": "src/server/authMiddleware.ts",
+      "outcome": "body",
+      "bodyChars": 7293,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:16:17.528Z",
+      "threadId": "thread-1791047767415-t5drws",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "4fb16aa4-4865-4d8a-a67f-816b9d191221",
+      "turnElapsedMs": 3454,
+      "path": "src/server/authMiddleware.ts",
+      "returnedPath": "src/server/authMiddleware.ts",
+      "outcome": "body",
+      "bodyChars": 7293,
+      "cacheHit": true,
+      "elapsedMs": 0,
+      "stage": "remote-read",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main"
+    },
+    {
+      "at": "2026-10-03T17:16:17.529Z",
+      "threadId": "thread-1791047767415-t5drws",
+      "stage": "activity-step",
+      "tool": "read_file",
+      "summary": "read_file: src/server/authMiddleware.ts"
+    },
+    {
+      "at": "2026-10-03T17:16:18.460Z",
+      "threadId": "thread-1791047767415-t5drws",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "4fb16aa4-4865-4d8a-a67f-816b9d191221",
+      "turnElapsedMs": 4386,
+      "stage": "plan",
+      "round": 1,
+      "result": "done"
+    },
+    {
+      "at": "2026-10-03T17:16:18.462Z",
+      "threadId": "thread-1791047767415-t5drws",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "4fb16aa4-4865-4d8a-a67f-816b9d191221",
+      "turnElapsedMs": 4388,
+      "stage": "synthesis-start"
+    },
+    {
+      "at": "2026-10-03T17:16:19.887Z",
+      "threadId": "thread-1791047767415-t5drws",
+      "stage": "answer-start",
+      "elapsedMs": 6135,
+      "selectedBranch": "main",
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016"
+    },
+    {
+      "at": "2026-10-03T17:16:20.554Z",
+      "threadId": "thread-1791047767415-t5drws",
+      "buildId": "0.1.10",
+      "bundleId": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+      "selectedBranch": "main",
+      "runId": "4fb16aa4-4865-4d8a-a67f-816b9d191221",
+      "turnElapsedMs": 6480,
+      "stage": "outcome",
+      "candidateLedger": [
+        {
+          "path": "src/api/byokHandler.ts",
+          "criterion": "where do we parse the authorization bearer token? don't write a new helper \u2014 point me at the existing function.",
+          "status": "untested"
+        },
+        {
+          "path": "src/jobs/jobsApi.ts",
+          "criterion": "where do we parse the authorization bearer token? don't write a new helper \u2014 point me at the existing function.",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/authMiddleware.ts",
+          "criterion": "where do we parse the authorization bearer token? don't write a new helper \u2014 point me at the existing function.",
+          "status": "verified"
+        },
+        {
+          "path": "src/server/atlassianAppService.ts",
+          "criterion": "where do we parse the authorization bearer token? don't write a new helper \u2014 point me at the existing function.",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/sso/samlApi.ts",
+          "criterion": "where do we parse the authorization bearer token? don't write a new helper \u2014 point me at the existing function.",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/bitbucketAppService.ts",
+          "criterion": "where do we parse the authorization bearer token? don't write a new helper \u2014 point me at the existing function.",
+          "status": "untested"
+        },
+        {
+          "path": "admin/src/lib/serverCoopApi.ts",
+          "criterion": "where do we parse the authorization bearer token? don't write a new helper \u2014 point me at the existing function.",
+          "status": "untested"
+        },
+        {
+          "path": "ops/src/lib/serverCoopApi.ts",
+          "criterion": "where do we parse the authorization bearer token? don't write a new helper \u2014 point me at the existing function.",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/teamsAppService.ts",
+          "criterion": "where do we parse the authorization bearer token? don't write a new helper \u2014 point me at the existing function.",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/authMiddleware.test.ts",
+          "criterion": "where do we parse the authorization bearer token? don't write a new helper \u2014 point me at the existing function.",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/slackAppService.test.ts",
+          "criterion": "where do we parse the authorization bearer token? don't write a new helper \u2014 point me at the existing function.",
+          "status": "untested"
+        },
+        {
+          "path": "website/content/docs/api-reference.md",
+          "criterion": "where do we parse the authorization bearer token? don't write a new helper \u2014 point me at the existing function.",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/githubOAuthService.test.ts",
+          "criterion": "where do we parse the authorization bearer token? don't write a new helper \u2014 point me at the existing function.",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/notionAppApi.ts",
+          "criterion": "where do we parse the authorization bearer token? don't write a new helper \u2014 point me at the existing function.",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/auth/authTokenStore.ts",
+          "criterion": "where do we parse the authorization bearer token? don't write a new helper \u2014 point me at the existing function.",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/billing/billingApi.test.ts",
+          "criterion": "where do we parse the authorization bearer token? don't write a new helper \u2014 point me at the existing function.",
+          "status": "untested"
+        },
+        {
+          "path": "src/server/sso/samlTestFixtures.ts",
+          "criterion": "where do we parse the authorization bearer token? don't write a new helper \u2014 point me at the existing function.",
+          "status": "untested"
+        }
+      ],
+      "repoId": "gitlab:coopai-group/Coop-AI",
+      "resolvedBranch": "main",
+      "elapsedMs": 6480,
+      "stopped": false,
+      "stepCount": 3,
+      "hasAnswer": true,
+      "evidencePaths": [
+        "src/server/authMiddleware.ts"
+      ]
+    }
+  ]
+}

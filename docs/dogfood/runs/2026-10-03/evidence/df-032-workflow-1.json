@@ -1,0 +1,31 @@
+{
+  "scenario": {
+    "id": "DF-032",
+    "area": "Quick actions",
+    "fixture": "Coop-AI pinned ref; authMiddleware.ts selected where relevant",
+    "action": "/owner",
+    "passCriteria": "Verified ownership evidence or explicit unavailable; no guessed person.",
+    "modes": [
+      "slash",
+      "workflow",
+      "editor-context-menu"
+    ]
+  },
+  "observation": {
+    "timestamp": "2026-10-03T18:29:08.260726+00:00",
+    "status": "FAIL",
+    "candidateExtensionHash": "52e748e47f92bc479faa71d2076f0b4da16c3ade1f09e37a79c75038b7f7d016",
+    "backendDeployment": "UNVERIFIED: production https://api.coop-ai.dev",
+    "accountTierOrg": "Pro / jraney2008 / current dogfood org",
+    "repoRef": "see notes@see notes",
+    "action": "/owner",
+    "actualResult": "Workflow Owner on actual remote authMiddleware selection46s uses file-specific9commits and Slack presence (better than repo-only prior slash), but calls author sole owner/only person with full context despite no CODEOWNERS rule or review records. Medium-evidence source panel contains GitLab Commits and reviews label and Slack presence only; no inspectable commit links/body. Ownership confidence and knowledge-transfer claims not supported.",
+    "evidence": "docs/dogfood/runs/2026-10-03/evidence/df-032-workflow-1.json",
+    "criteriaReview": "NOT_ALL_MET",
+    "reviewer": "Codex; live accessibility/screenshot observation",
+    "firstAnswerMs": null,
+    "durationMs": null,
+    "threadId": null
+  },
+  "diagnosticEvents": []
+}

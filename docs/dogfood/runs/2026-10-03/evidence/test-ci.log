@@ -1,0 +1,529 @@
+
+> coop-ai@0.1.10 test:ci
+> npm run test:marketplace-listing && npm run test:chat-prose && npm run test:blast && npm run test:slash-commands && npm run test:chat-intent && npm run test:response-deadline && npm run test:agent-routing && npm run test:chat-message-intent && npm run test:context-gathering-messages && npm run test:indexed-repo-workspace && npm run test:system-prompts && npm run test:quick-action-prompts && npm run test:knowledge-gaps-enrichment && npm run test:format-chat-copy && npm run test:effective-quick-action && npm run test:chat-threads && npm run test:chat-feed && npm run test:autocomplete && npm run test:inline-completion && npm run test:autocomplete-smoke && npm run test:sso && npm run test:user-facing-errors && npm run test:observability && npm run test:usage-telemetry && npm run test:billing && npm run test:jobs && npm run test:operator && npm run test:reject-hunt-fidelity && npm run test:agent-ship:b && npm run test:agent-ship:c && npm run test:agent-ship:d && npm run test:agent-ship:e && npm run test:estate-indexing && npm run test:integration-scope && npm run test:auth && npm run test:patch
+
+
+> coop-ai@0.1.10 test:marketplace-listing
+> npx tsx scripts/marketplace-listing.gates.test.ts
+
+  ✓ publisher and extension id stay coop-ai.coop-ai
+  ✓ categories are exactly AI then Chat (no Machine Learning)
+  ✓ short description leads with AI Code intelligence + zero-clone framing
+  ✓ README opener matches Marketplace overview copy
+  ✓ README first image is the Stack banner (not the old sidebar screenshot)
+  ✓ Stack banner asset exists for website deploy
+
+marketplace-listing gates: 6 passed, 0 failed
+
+> coop-ai@0.1.10 test:chat-prose
+> npx tsx src/webview/lib/chatProseParser.test.ts && npx tsx src/webview/lib/lightHighlight.test.ts
+
+  ✓ simple paragraph
+  ✓ multiple paragraphs separated by blank line
+  ✓ **What changed** on its own line is a section-heading
+  ✓ **Sentence ending with period.** is a paragraph, not section-heading
+  ✓ title with period stays a heading when a list follows
+  ✓ **Open question:** alone is a paragraph, not section-heading
+  ✓ flat knowledge-gap list promotes categories to subheadings with renamed field labels
+  ✓ plain category lines normalize to headings with open question bullets
+  ✓ answer lead remaps to summary with documentation gaps wrapper
+  ✓ open questions layout promotes categories to subheadings with field bullets
+  ✓ grouped knowledge-gap prose uses subsection headings
+  ✓ unordered list with dash marker
+  ✓ ordered list items
+  ✓ inline code renders as inline-code node
+  ✓ backtick file path becomes a file-link node
+  ✓ backtick file path with :line becomes a file-link with line
+  ✓ *term* inline renders as em node
+  ✓ **term** inline renders as strong node
+  ✓ [label](url) renders as external-link with label and url
+  ✓ bare URL becomes external-link with hostname as label
+  ✓ code fence with language tag yields code-fence block
+  ✓ code fence without language tag has undefined language
+  ✓ citation fence with startLine:endLine:path yields code-citation
+  ✓ citation fence info-string startLine:endLine:path yields code-citation
+  ✓ placeholder startLine:endLine:path recovers as citation (no TEXT fence)
+  ✓ path-only first line recovers as citation
+  ✓ path-only fence with no code body becomes an inline file link
+  ✓ bare absolute local path line becomes a file link
+  ✓ language-tagged fence is still a code-fence (not a citation)
+  ✓ language-tagged fence recovers to citation when active file matches
+  ✓ language-tagged fence recovers to citation from nearby path prose
+  ✓ javascript fence upgrades to cite for open .ts file (js/ts family)
+  ✓ language fence upgrades when open-file basename appears in prose
+  ✓ bash fences stay anonymous even with active file
+  ✓ locator above a language fence becomes a citation with line range
+  ✓ locator above an unlabeled fence becomes a citation
+  ✓ indented fence inside a list recovers as a citation
+  ✓ fence body with list preamble then locator recovers as citation
+  ✓ unfenced numeric locator plus following code becomes a citation
+  ✓ tsx fence after backtick path in a list item upgrades to citation
+  ✓ unclosed fence does not swallow following lists into a Copy box
+  ✓ stray fence opener before a list is ignored
+  ✓ unclosed in-progress code fence stays a fence
+  ✓ locator after a language fence becomes a citation
+  ✓ bold path above a fence becomes a citation
+  ✓ File: path above a tsx fence becomes a citation
+  ✓ File: path above a patch fence stays a File header, not a citation
+  ✓ patch fence with **/*.md SEARCH line stays a patch fence, not a **/*.md cite
+  ✓ plain language tag typescript is not treated as a path citation
+  ✓ mixed: section-heading + paragraph + list + code fence
+  ✓ ### markdown header becomes section-heading with hash stripped
+  ✓ ### numbered section heading strips hash prefix
+  ✓ empty string produces empty blocks array
+  ✓ whitespace-only string produces empty blocks
+  ✓ CRLF line endings normalize correctly
+  ✓ * list marker yields items with marker '*'
+  ✓ list item content parses inline nodes
+  ✓ jira ticket stack parses linked tickets with metadata
+  ✓ parses bare and backtick-wrapped source citations
+  ✓ parses coop-evidence card jump links
+  ✓ long walkthrough with citations keeps the closing sentence
+  ✓ mixed path:range Copy dump and numeric locator still parse as citations
+  ✓ unclosed language fence does not swallow a later numeric locator
+
+chatProseParser: 63/63 tests passed
+  ✓ typescript keywords, types, and functions are classified
+  ✓ strings and comments are classified
+  ✓ property access after a dot is classified
+  ✓ bash fences color strings and hash comments, not monochrome
+  ✓ splitTokensByLine keeps kind across wrapped lines
+  ✓ huge code blocks highlight without hanging the webview
+
+6 passed, 0 failed
+
+> coop-ai@0.1.10 test:blast
+> npx tsx src/engines/blastRadiusDependentsFallback.test.ts && npx tsx src/prompts/blastRadiusSynthesis.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/engines/blastRadiusAnalysis.test.ts
+
+  ✓ isDocsReferencePath detects markdown, docs trees, and d.ts
+  ✓ splitBlastRadiusDependents separates code from docs references
+  ✓ groupDependentsByTopLevelFolder buckets by top-level folder
+  ✓ rankCodeDependentsByRisk prioritizes production and integration over tests
+  ✓ rankCodeDependentsByRisk prefers prod module over story and e2e
+  ✓ smoke-shaped StateGroup blast is not story-dominated when prod edges exist
+  ✓ smoke-shaped DocumentStatus blast surfaces non-test refs when present
+  ✓ sortDependentsProductionFirst orders mixed dependents for list display
+  ✓ scoreDependentRisk labels stories and e2e as test surfaces
+  ✓ extractBlastSearchSymbols prefers StateGroup from smoke ask
+  ✓ isGenericBlastImpactAsk ignores default chip copy
+  ✓ isGenericBlastImpactAsk treats canned model prompt and history chips as generic
+  ✓ bare blast canned prompt does not name authMiddleware
+  ✓ display Estimate ask stays generic even with file chip boilerplate
+  ✓ file-stem named symbol is stripped unless it is a definition
+  ✓ file-level merge keeps durable importers when named symbols sanitize empty
+  ✓ enrichBlastRadiusResponse keeps file-level callers instead of none-confirmed template
+  ✓ extractBlastSearchSymbols skips default blast ask (no Estimate noise)
+  ✓ extractBlastSearchSymbols takes camelCase and snake_case from the ask
+  ✓ extractBlastSearchSymbols ignores English TitleCase from a list-callers ask
+  ✓ named-symbol blast drops file importers that only use a sibling export
+  ✓ named-symbol hits require the identifier, not a path-only file import
+  ✓ isVerifiedCallerSearchSource rejects embedding and fallback
+  ✓ hitLooksLikeReferenceToTarget requires stem when content is a code line
+  ✓ buildImportSearchPatterns includes path suffixes for relative imports
+  ✓ extractExportNamesFromSource includes Python class names
+  ✓ extractExportNamesFromSource prefers distinctive exports
+  ✓ buildLocalCallerNeedles includes path suffixes and exports
+  ✓ searchDependentsInLocalRoots finds real responseDeadline importers
+  ✓ buildImportSearchPatterns includes symbol and alias forms
+  ✓ mergeSearchDependentsFallbackIntoDependenciesData fills callers when job sample empty
+  ✓ mergeSearchDependentsFallbackIntoDependenciesData replaces junk job callers with search hits
+  ✓ mergeSearchDependentsFallbackIntoDependenciesData clears junk when search empty
+  ✓ mergeSearchDependentsFallbackIntoDependenciesData can keep filtered job edges when search empty
+  ✓ named-function blast does not fail-open to file importers when search is empty
+  ✓ named /blast requireAuth stays named-mode and honest
+  ✓ contentUsesNamedSymbol requires the named export, not a sibling import
+  ✓ resolveNamedBlastSymbols unions the editor chip with the ask
+  ✓ mergeDurableDependentsIntoContextData sets directDependents + import-parse source
+  ✓ resolveTrustedRemoteDependents uses durable import-parse without localRoots
+  ✓ searchDependentsFallback ignores localRoots by default (Zero-Clone)
+  ✓ named requireAuth blast keeps jobsApi when Zoekt snippet contains requireAuth(
+  ✓ path-only named-function hits are not callers without a remote body
+  ✓ verifyRemoteFilesMentionNamedSymbol keeps requireAuth callers only
+  ✓ searchDependentsFallback stops after the first pattern when shouldAbort
+  ✓ path-only Zoekt requireAuth hits are confirmed via remote file bodies
+  ✓ durable importers that call requireAuth survive when Zoekt snippets are path-only
+
+blastRadiusDependentsFallback: 47/47 tests passed
+  ✓ blast-radius synthesis includes primary target and out-of-scope @ attachments
+  ✓ blast-radius synthesis forbids zero-impact language in guardrails
+  ✓ blast-radius synthesis includes dependent details when present
+  ✓ blast-radius synthesis includes docs references section when present
+  ✓ blast-radius synthesis includes top risk surfaces ranking
+  ✓ blast-radius synthesis includes CI rollout guidance when workflows present
+  ✓ blast-radius synthesis skips partial caveat when remote graph has verified callers
+  ✓ blast-radius synthesis uses thin-evidence stop when graph is empty
+  ✓ blast-radius synthesis requires attached documentation titles
+  ✓ named-function blast prompt does not treat every file importer as breakage
+  ✓ named-function blast with no callers locks Direct impact empty
+  ✓ enrichBlastRadiusResponse replaces guessed callers when named-function callers are unconfirmed
+  ✓ enrichBlastRadiusResponse replaces file-level essay when graph is empty
+  ✓ enrichBlastRadiusResponse does not replace requireAuth callers from stub search
+
+blastRadiusSynthesis: 14/14 tests passed
+blastRadiusAnalysis: ok
+
+> coop-ai@0.1.10 test:slash-commands
+> npx tsx src/context/slashCommands.test.ts && npx tsx src/chat/intentPlanner/frontDoor.gates.test.ts && npx tsx src/chat/intentPlanner/frontDoorBilling.gates.test.ts
+
+  ✓ parses a bare canonical command with no args
+  ✓ captures args after the command token
+  ✓ combines text before and after the command into focus
+  ✓ prefix-only focus when command has no trailing args
+  ✓ bare command has empty focus
+  ✓ resolves understand canonical token to understand-repo action
+  ✓ resolves understandrepo alias to understand-repo action
+  ✓ resolves aliases to the same action
+  ✓ resolves blast-radius aliases
+  ✓ resolves trace-decision aliases
+  ✓ is case-insensitive on the command token
+  ✓ trims leading whitespace before the slash
+  ✓ parses integration commands
+  ✓ /docs is Google Docs, not a repo explain
+  ✓ parses edit composer-mode command with args
+  ✓ parses edit alias patch
+  ✓ /fix is its own command on the patch path (Copilot muscle memory)
+  ✓ /fix is discoverable in the typeahead with its own label
+  ✓ parses compare command with two repos and topic
+  ✓ compare appears in slash typeahead
+  ✓ returns null for unknown commands (sent as normal chat)
+  ✓ does not treat file paths or bare slashes as commands
+  ✓ parses a slash command anywhere in the message
+  ✓ skips unknown slash tokens and uses the first recognized command
+  ✓ slashMenuQuery returns the partial token while typing
+  ✓ slashMenuQuery detects a partial token at the cursor
+  ✓ slashMenuQuery returns null once a space is typed or not slash-prefixed
+  ✓ matchSlashCommands returns all commands for an empty query
+  ✓ matchSlashCommands includes integration commands like slack
+  ✓ slashCommandHistoryContent preserves slash token and args for chat history
+  ✓ matchSlashCommands filters by token or alias prefix
+  ✓ segmentComposerSlashHighlights colors a completed slash command
+  ✓ segmentComposerSlashHighlights finds commands anywhere in the message
+  ✓ segmentComposerSlashHighlights ignores unknown slash tokens
+  ✓ slashInsertTextForQuickAction adds a trailing space for typing
+  ✓ insertWorkflowSlashIntoComposer populates an empty composer
+  ✓ insertWorkflowSlashIntoComposer keeps existing prompt text after the command
+  ✓ insertWorkflowSlashIntoComposer swaps an existing slash token and keeps focus
+
+slashCommands: 38/38 tests passed
+✔ shouldInterpretChatAsk is true for slash/integration unless skip is set (0.457375ms)
+✔ /slack SQL-injection ask searches SQL injection, not the repo slug or whole sentence (13.032166ms)
+✔ not mixing still plans a decision job even though MIX_PHRASES miss the gerund (1.607375ms)
+✔ model may name the mixing topic the regex list missed (1.122792ms)
+✔ plain compound ask still splits locate vs decision with distinct terms (5.956ms)
+✔ rules-only front door preserves both evidence needs for compound reject hunts (2.558208ms)
+✔ I3 compound ask splits requireAuth locate from peel-auth decision, slack+jira only (0.437167ms)
+✔ bare /slack may use the repo (no topic) (0.468833ms)
+✔ /blast still runs blast; focus text is interpreted (0.21975ms)
+✔ unconstrained blast-shaped English is not a workflow constraint (0.249458ms)
+✔ Teams is omitted while TEAMS_COMING_SOON (0.326167ms)
+✔ fail-open does not search the repo slug when a topic exists (0.134083ms)
+✔ model JSON can write job terms; whole-sentence terms are rejected later by merge (0.200042ms)
+✔ N5 locate+decision plans call quarterback refine without a command constraint (0.310917ms)
+✖ handleChatSend interprets before routeSlashCommand (slash bypass is impossible) (3.217084ms)
+✔ recency-only slashes assign latest with no repo-slug query (1.219917ms)
+✔ topic still wins over recency words (0.5705ms)
+✔ bare integration slashes still allow repo fallback (0.091875ms)
+✔ Use-repo set with no Settings still plans latest and search (0.246958ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 18
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 43.484625
+
+✖ failing tests:
+
+test at src/chat/intentPlanner/frontDoor.gates.test.ts:2:13828
+✖ handleChatSend interprets before routeSlashCommand (slash bypass is impossible) (3.217084ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /routeSlashCommand\(parsedSlash,[\s\S]{0,80}plan\)/. Input:
+  
+  'import { shouldFollowEditorAfterThreadRestore } from "./chatThreadRestore";\n' +
+    'import { createSharedInitialization } from "./sessionInitialization";\n' +
+    'import * as fs from "node:fs";\n' +
+    'import * as path from "node:path";\n' +
+    'import * as vscode from "vscode";\n' +
+    'import { handlePatchComplete } from "../edit/handlePatchComplete";\n' +
+    'import { mergeSutFile, sutPathForEditAsk } from "../edit/editSutAttach";\n' +
+    'import {\n' +
+    '  hydratePatchCardsFromHistory,\n' +
+    '  patchCardsForMessages\n' +
+    '} from "../edit/hydratePatchCardsFromHistory";\n' +
+    'import {\n' +
+    '  collectOpenPatchFileBytes,\n' +
+    '  languageIdForPatchPath,\n' +
+    '  rememberRemotePatchBuffer\n' +
+    '} from "../edit/patchTarget";\n' +
+    'import { collectEditorPrFiles, snapshotWorkingCopyIfAbsent } from "../edit/editorWorkingCopy";\n' +
+    'import { indexPatchFileContent, lookupPatchFileContent } from "../edit/patchFileContents";\n' +
+    'import {\n' +
+    '  extractAgentProposedPatchText,\n' +
+    '  mergeAnswerWithAgentPatch\n' +
+    '} from "./agentProposedPatch";\n' +
+    'import {\n' +
+    '  applyChangeHuntFinish,\n' +
+    '  CUSTOMER_EMPTY_HUNT_ANSWER,\n' +
+    '  customerFacingAgentAnswer,\n' +
+    '  rewriteCustomerFacingProse\n' +
+    '} from "./customerFacingAnswer";\n' +
+    'import {\n' +
+    '  applyPendingPatch,\n' +
+    '  applyPendingPatchHunk,\n' +
+    '  rejectPendingPatchHunk,\n' +
+    '  rejectPendingPatchWithState,\n' +
+    '  resolvePatchCardsSnapshot,\n' +
+    '  setPendingPatchMatchLocations,\n' +
+    '  setPendingSharedMatchProposal,\n' +
+    '  undoLastPatchWithState\n' +
+    '} from "../edit/patchActions";\n' +
+    'import { setLastEditUserMessage, getPatchRecord, listPatchCards } from "../edit/patchSession";\n' +
+    'import { summarizePrNotes, type PrNotesCompleteFn } from "../edit/prNotesSummary";\n' +
+    'import { activeThemeMode } from "./themeMode";\n' +
+    'import { coopSessionRegistry } from "./CoopSessionRegistry";\n' +
+    'import { authIdentityKey } from "./authIdentity";\n' +
+    'import { chatRepoListFromWorkspaceRepos } from "./workspaceRepoExplorer";\n' +
+    'import {\n' +
+    '  readDegradationConfiguration,\n' +
+    '  readConflictConfiguration,\n' +
+    '  readPreferences,\n' +
+    '  readIntentConfiguration,\n' +
+    '  SecureApiClient,\n' +
+    '  updateConfiguration\n' +
+    '} from "./SecureApiClient";\n' +
+    'import type { ConflictConfig } from "../config/conflictConfig";\n' +
+    'import { DegradationConfig } from "../config/degradationConfig";\n' +
+    'import type { DegradationCache } from "../cache/degradationCache";\n' +
+    'import {\n' +
+    '  ConflictAuditStore,\n' +
+    '  ConflictDetector,\n' +
+    '  ConflictResolutionStrategy,\n' +
+    '  SourceAuthorityScorer,\n' +
+    '  hasSeverityAtLeast\n' +
+    '} from "../conflicts";\n' +
+    'import type {\n' +
+    '  ConflictDetectionInput,\n' +
+    '  ConflictSeverity,\n' +
+    '  DetectedConflict,\n' +
+    '  MetadataConflictInput\n' +
+    '} from "../conflicts";\n' +
+    'import { codeHostForDegradationRequest, runFeatureFallback } from "../degradation/features";\n' +
+    'import {\n' +
+    '  connectedCodeHostsFromPrefs,\n' +
+    '  indexedUseRepoHosts,\n' +
+    '  isDeepIndexedForQuickActions,\n' +
+    '  promoteIndexedOrConnectedCodeHosts,\n' +
+    '  providersForFeature,\n' +
+    '  repoIdCandidatesForIndexStatus,\n' +
+    '  type QuickActionFeatureId\n' +
+    '} from "../degradation/fallbackMatrix";\n' +
+    'import type { HealthMonitor, IntegrationHealth, IntegrationProvider } from "../integrations/healthMonitor";\n' +
+    'import type { IntentConfig } from "../config/intentConfig";\n' +
+    'import {\n' +
+    '  IntentDetector,\n' +
+    '  IntentEvent,\n' +
+    '  UserIntent,\n' +
+    '  intentContextToRepoContext,\n' +
+    '  repoContextToIntentContext,\n' +
+    '  requestTypesForIntent,\n' +
+    '  repoContextFromEditor\n' +
+    '} from "../context/intentDetector";\n' +
+    'import { toRepositoryRelativePath } from "../context/repoFilePath";\n' +
+    'import { openRemoteFileInEditor, openRepoInEditor } from "../workspace/repoEditorOpener";\n' +
+    'import { IntentDebouncer } from "../context/intentDebouncer";\n' +
+    'import {\n' +
+    '  ContextFetchRequest,\n' +
+    '  ContextFetchResult,\n' +
+    '  RequestBatcher,\n' +
+    '  buildContextRequests\n' +
+    '} from "../context/requestBatcher";\n' +
+    'import { RequestPrioritizer } from "../context/requestPrioritizer";\n' +
+    'import {\n' +
+    '  contextGatheringMessagesFor,\n' +
+    '  isPlainChatIntent,\n' +
+    '  type ContextGatheringMessageOptions\n' +
+    '} from "../context/contextGatheringMessages";\n' +
+    'import {\n' +
+    '  agentOwnsIndexedGather,\n' +
+    '  readActivityLabel,\n' +
+    '  searchingRepoActivityLabel,\n' +
+    '  willEnrichChatWithSemanticSearch,\n' +
+    '  willRunIndexedCodeSearch\n' +
+    '} from "../context/committedActivity";\n' +
+    'import { readSemanticRetrievalEnabled } from "../config/semanticRetrievalConfig";\n' +
+    'import { CacheEntry, RateLimitAwareExecutor } from "../context/rateLimitAwareExecution";\n' +
+    'import { createChatOutputGate, delayUntilMinResponseVisible } from "./chatResponseTiming";\n' +
+    'import { createStreamDeltaBatcher } from "./streamDeltaBatcher";\n' +
+    'import { resolveChatOutputMaxTokens } from "../config/chatOutputBudget";\n' +
+    'import { summarizeAgentToolResultForHistory } from "./agentAnswerHistory";\n' +
+    'import {\n' +
+    '  LENGTH_CONTINUE_PROMPT,\n' +
+    '  hasTrailingEmptyHeadings,\n' +
+    '  shouldContinueForLengthStop,\n' +
+    '  withLengthCutoffNotice\n' +
+    '} from "./lengthContinue";\n' +
+    'import { ThreadRunManager, SESSION_RUN_THREAD_ID, type ChatTurn } from "./chatTurn";\n' +
+    'import {\n' +
+    '  appendTurnThinkingChunk,\n' +
+    '  attachChatTurnActivity,\n' +
+    '  isTerminalPreparingMessage,\n' +
+    '  recordTurnActivityLine,\n' +
+    '  recordTurnAgentSteps,\n' +
+    '  repoFactActivityLabel\n' +
+    '} from "./chatTurnActivity";\n' +
+    'import {\n' +
+    '  abortablePromise,\n' +
+    '  clearResponseDeadlineForSynthesis,\n' +
+    '  isSoftGatherLatencyMessage,\n' +
+    '  locateSearchBudgetMs,\n' +
+    '  remainingContextGatherBudgetMs\n' +
+    '} from "../config/responseDeadline";\n' +
+    'import { renderWebviewHtml } from "./renderWebviewHtml";\n' +
+    'import { replaceExclusiveDisposable } from "./exclusiveDisposable";\n' +
+    'import { ensureSidebarMinWidth } from "../ui/ensureSidebarMinWidth";\n' +
+    'import type {\n' +
+    '  CachedValue,\n' +
+    '  ChatFileMention,\n' +
+    '  ChatImageAttachment,\n' +
+    '  ChatMessage,\n' +
+    '  ChatPersistedArtifact,\n' +
+    '  ConflictResolutionState,\n' +
+    '  ConflictSummary,\n' +
+    '  ComposerMode,\n' +
+    '  DegradationNotificationPayload,\n' +
+    '  IntentFeedbackState,\n' +
+    '  MentionSearchResult,\n' +
+    '  PatchCardState,\n' +
+    '  PatchCardsUpdatePayload,\n' +
+    '  RepoContext,\n' +
+    '  ThemeMode,\n' +
+    '  ThemePayload,\n' +
+    '  SettingsStatePayload,\n' +
+    '  UserPreferences,\n' +
+    '  WebviewInbound,\n' +
+    '  WebviewOutbound\n' +
+    '} from "./types";\n' +
+    'import { clearPresenceCaches } from "../api/slack/presenceCheck";\n' +
+    'import { EMPTY_IDENTITY_DIRECTORY, type IdentityDirectory } from "../identity/types";\n' +
+    'import { isAutocompleteOnlySettingsUpdate } from "../autocomplete/autocompletePreferenceSync";\n' +
+    'import { CACHE_TTL_MS } from "./types";\n' +
+    'import {\n' +
+    '  deliverableForQuickAction,\n' +
+    '  displayStatusForChatDeliverable\n' +
+    '} from "../jobs/jobActivityPolicy";\n' +
+    'import { JobApiClient, jobTypeForQuickAction, shouldUseAsyncJob } from "../jobs/JobApiClient";\n' +
+    'import { formatWaitTime } from "../jobs/types";\n' +
+    'import type { JobProgressPayload } from "./types";\n' +
+    'import { resolveCoopBaseUrl } from "../api/resolveBaseUrl";\n' +
+    'import { syncAllThreadsToBackend, syncThreadToBackend } from "./threadSync";\n' +
+    'import { resolveGitUserEmail } from "./resolveGitUserEmail";\n' +
+    'import { formatUserFacingNetworkError } from "../api/userFacingErrors";\n' +
+    'import { ChatQuotaExceededError } from "../api/CoopBackendClient";\n' +
+    'import { CHAT_STOPPED_MESSAGE } from "./chatStopped";\n' +
+    'import {\n' +
+    '  buildQuotaExceededUpgradeUrl,\n' +
+    '  isFreeQuotaExhausted,\n' +
+    '  isPaidQuotaPool,\n' +
+    '  isPaidUsageExhausted,\n' +
+    '  resolveQuotaUpgradeAction\n' +
+    '} from "./quotaNotice";\n' +
+    'import { pollUntilPaidPlan } from "./planUpgradePoll";\n' +
+    'import { buildPaidCapMessage } from "../server/planQuota";\n' +
+    'import type { DecisionTimeline } from "../types/decisionTimeline";\n' +
+    'import type { OwnershipReport } from "../types/ownership";\n' +
+    'import { buildDecisionSynthesisUserPrompt } from "../prompts/decisionSynthesis";\n' +
+    'import { buildOwnershipSynthesisUserPrompt } from "../prompts/ownershipSynthesis";\n' +
+    'import { buildRepoSummarySynthesisUserPrompt } from "../prompts/repoSummarySynthesis";\n' +
+    'import { buildBlastRadiusSynthesisUserPrompt } from "../prompts/blastRadiusSynthesis";\n' +
+    'import { buildKnowledgeGapsSynthesisUserPrompt } from "../prompts/knowledgeGapsSynthesis";\n' +
+    'import { buildIntegrationSynthesisUserPrompt, countIntegrationResults, emptyIntegrationSlashResponse } from "../prompts/integrationSynthesis";\n' +
+    'import {\n' +
+    '  blastRadiusFromBundle,\n' +
+    '  confluenceSearchFromBundle,\n' +
+    '  contextBundleHasRepoFactEvidence,\n' +
+    '  googleDocsSearchFromBundle,\n' +
+    '  integrationSearchFromBundle,\n' +
+    '  jiraSearchFromBundle,\n' +
+    '  knowledgeGapsFromBundle,\n' +
+    '  notionSearchFromBundle,\n' +
+    '  repoSummaryFromBundle,\n' +
+    '  slackSearchFromBundle,\n' +
+    '  teamsSearchFromBundle,\n' +
+    '  type RepoSummaryEvidence\n' +
+    '} from "../context/contextBundleEvidence";\n' +
+    'import { shouldIncludeIntegrationInSourcesChecklist } from "../context/integrationEvidenceVisibility";\n' +
+    'import {\n' +
+    '  extractDefinedNamesFromSource,\n' +
+    '  extractExportNamesFromSource,\n' +
+    '  filterJobDependentsForFile,\n' +
+    '  isTrustedBlastGraphSource,\n' +
+    '  mergeDurableDependentsIntoContextData,\n' +
+    '  mergeDurableWithNamedSymbolSearch,\n' +
+    '  mergeSearchDependentsFallbackIntoDependenciesData,\n' +
+    '  resolveNamedBlastSymbols,\n' +
+    '  resolveTrustedRemoteDependents,\n' +
+    '  searchDependentsFallback,\n' +
+    '  sortDependentsProductionFirst,\n' +
+    '  verifyRemoteFilesMentionNamedSymbol\n' +
+    '} from "../engines/blastRadiusDependentsFallback";\n' +
+    'import { isFileCallerQuery } from "../context/fileCallerIntent";\n' +
+    'import { isFileHistoryQuery } from "../context/fileHistoryIntent";\n' +
+    'import { isOpenFileReviewAsk } from "./plainChatExplain";\n' +
+    'import { evidenceCodeHostDisplayName } from "../api/codeHosts/codeHostLabels";\n' +
+    'import {\n' +
+    '  coordinatesFromRepoId,\n' +
+    '  repoIdFromCoordinates,\n' +
+    '  resolveCodeHostProvider,\n' +
+    '  type CodeHostProvider,\n' +
+    '  type RepoCoordinates\n' +
+    '} from "../api/codeHosts/types";\n' +
+    'import { enrichChatResponseForAction } from "./chatResponseEnrichment";\n' +
+    'import { resolveEffectiveQuickAction } from "./effectiveQuickAction";\n' +
+    'import {\n' +
+    '  buildMissingIntentClarificationResponse,\n' +
+    '  buildMissingRepoSelectionResponse,\n' +
+    '  messageNeedsSelectedRepo,\n' +
+    '  shouldClarifyFirstChatTurn\n' +
+    '} from "./chatMessageIntent";\n' +
+    'import {\n' +
+    '  shouldOfferQuickActionSuggest,\n' +
+    '  suggestRunChipLabel\n' +
+    '} from "./quickActionSuggestIntent";\n' +
+    'import {\n' +
+    '  INTENT_SUGGEST_TIMEOUT_MS,\n' +
+    '  type IntentSuggestCompleteFn\n' +
+    '} from "./quickActionIntentModel";\n' +
+    'import { isIntentSuggestModelEnabled } from "../config/intentSuggestConfig";\n' +
+    'import {\n' +
+    '  FRONT_DOOR_INTERPRETER_USE_CASE,\n' +
+    '  frontDoorInterpretText,\n' +
+    '  planChatFrontDoor,\n' +
+    '  planChatFrontDoorFromRules,\n' +
+    '  resolveChatCommandConstraint,\n' +
+    '  shouldInterpretChatAsk,\n' +
+    '  resolveChatIntentExecution,\n' +
+    '  buildIntentPlanTrustPreamble,\n' +
+    '  emptyChatIntentPlan,\n' +
+    '  integrationFillQueries,\n' +
+    '  locateJobTerms,\n' +
+    '  plannedCodeSearchQueries,\n' +
+    '  formatIntentBriefForAgent,\n' +
+    '  shouldOverlapIntegrationPrefetch,\n' +
+    '  type ChatCommandConstraint,\n' +
+    '  type ChatIntentPlan\n' +
+    '} from "'... 463518 more characters
+  
+      at TestContext.<anonymous> (/Users/jonraney/Coop-AI/src/chat/intentPlanner/frontDoor.gates.test.ts:319:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'import { shouldFollowEditorAfterThreadRestore } from "./chatThreadRestore";\nimport { createSharedInitialization } from "./sessionInitialization";\nimport * as fs from "node:fs";\nimport * as path from "node:path";\nimport * as vscode from "vscode";\nimport { handlePatchComplete } from "../edit/handlePatchComplete";\nimport { mergeSutFile, sutPathForEditAsk } from "../edit/editSutAttach";\nimport {\n  hydratePatchCardsFromHistory,\n  patchCardsForMessages\n...',
+    expected: /routeSlashCommand\(parsedSlash,[\s\S]{0,80}plan\)/,
+    operator: 'match',
+    diff: 'simple'
+  }

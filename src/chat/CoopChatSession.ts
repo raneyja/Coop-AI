@@ -1,3 +1,6 @@
+import { shouldFollowEditorAfterThreadRestore } from "./chatThreadRestore";
+import { createSharedInitialization } from "./sessionInitialization";
+import { buildModelHistory } from "./buildModelHistory";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
@@ -5,15 +8,17 @@ import { handlePatchComplete } from "../edit/handlePatchComplete";
 import { mergeSutFile, sutPathForEditAsk } from "../edit/editSutAttach";
 import {
   hydratePatchCardsFromHistory,
-  patchCardsForMessages
+  patchCardsForMessages,
+  retainPatchCardsOnMessages
 } from "../edit/hydratePatchCardsFromHistory";
 import {
   collectOpenPatchFileBytes,
   languageIdForPatchPath,
+  listRememberedRemoteBuffers,
   rememberRemotePatchBuffer
 } from "../edit/patchTarget";
 import { collectEditorPrFiles, snapshotWorkingCopyIfAbsent } from "../edit/editorWorkingCopy";
-import { indexPatchFileContent, lookupPatchFileContent } from "../edit/patchFileContents";
+import { indexPatchFileContent, lookupPatchFileContent, sanitizedPatchTargetBindings } from "../edit/patchFileContents";
 import {
   extractAgentProposedPatchText,
   mergeAnswerWithAgentPatch
@@ -264,6 +269,7 @@ import {
   integrationFillQueries,
   locateJobTerms,
   plannedCodeSearchQueries,
+  formatIntentBriefForAgent,
   shouldOverlapIntegrationPrefetch,
   type ChatCommandConstraint,
   type ChatIntentPlan
@@ -413,7 +419,7 @@ import {
   searchRepoForChat,
   searchRepoForFocusQuery
 } from "../context/repoSemanticRetrieval";
-import { locateJobIndexQueries } from "../api/agent/searchQuery";
+import { isApiRejectAsk, locateJobIndexQueries } from "../api/agent/searchQuery";
 import {
   FOCUS_MAX_INJECTED_PATHS,
   focusQueryForRetrieval,
@@ -562,7 +568,7 @@ import { resolveInventoryRepoIds } from "../workspace/repoInventorySources";
 import { detectRepoKnowledgeGaps } from "../jobs/knowledgeGapDetector";
 import { hydrateKnowledgeGapGraphSlice } from "../jobs/hydrateKnowledgeGapGraph";
 import { collectKnowledgeGapTreePaths } from "../context/knowledgeGapTreePaths";
-import { coopBuildBanner, COOP_EXTENSION_BUILD_ID } from "../config/coopBuildId";
+import { coopBuildBanner, COOP_EXTENSION_BUILD_ID, COOP_EXTENSION_BUNDLE_ID } from "../config/coopBuildId";
 import { fetchIndexedBranch } from "../context/resolveRepoBranch";
 import { resolveActiveRepoTarget } from "../workspace/repoTargetResolver";
 import type { RepoTarget } from "../workspace/indexedRepoWorkspaceTypes";
@@ -629,11 +635,14 @@ export type CoopChatSessionOptions = {
   enforceSidebarMinWidth?: boolean;
   /** When set, enables persisted multi-thread history for this session (sidebar). */
   threadScopeKey?: string;
+  panelSessionId?: string;
   /**
    * Start with empty chips (no global last-repo restore, no editor harvest).
    * Used for chat panels moved into a new window so Window A's file/repo does not stick.
    */
   startBlank?: boolean;
+  /** Explicit selection captured before creating a new chat panel. */
+  initialSelection?: RepoContext;
 };
 
 /**
@@ -649,7 +658,7 @@ export class CoopChatSession {
   private chatMessageDisposable?: vscode.Disposable;
   private settingsMessageDisposable?: vscode.Disposable;
   /** Sidebar/session hydrate runs once; later resolveWebviewView only re-attaches the iframe. */
-  private sessionHydrated = false;
+  private readonly initializeOnce = createSharedInitialization(() => this.hydrateSession());
   /** Last non-empty auth identity — used to start a fresh thread when a different account signs in. */
   private lastSignedInIdentity = "";
   private closeSettingsHandler?: () => void;
@@ -704,6 +713,8 @@ export class CoopChatSession {
   private readonly threadRuns = new ThreadRunManager();
   private workspacePromptWatcher?: vscode.Disposable;
   private contextDebugChannel?: vscode.OutputChannel;
+  private agentDiagnosticChannel?: vscode.OutputChannel;
+  private readonly agentDiagnosticEventCounts = new Map<string, number>();
   private pendingChatLocalFiles?: LocalFileContextPayload;
   /** Plain chat and /edit attach the whole chip file, not the caret window. */
   private pendingChatAttachFullFile = false;
@@ -717,6 +728,7 @@ export class CoopChatSession {
   private allowPassiveEditorSnap = true;
   /** Bumped on New Chat / clear so in-flight explorer fetches cannot re-stamp Use-repo. */
   private contextEpoch = 0;
+  private historyRevision = 0;
   /** Thread this session is viewing — restore must not apply after New Chat switched away. */
   private boundThreadId?: string;
   /** openChatForRepo set Use-repo before the panel finished moving. */
@@ -821,11 +833,11 @@ export class CoopChatSession {
     // EH reload + visibility re-attach call this repeatedly. Settings already
     // replaces its listener; chat must too or one Send is handled twice.
     this.webview = webview;
-    this.reloadChatWebviewHtml();
     this.chatMessageDisposable = replaceExclusiveDisposable(
       this.chatMessageDisposable,
       this.wireWebview(webview, "chat")
     );
+    this.reloadChatWebviewHtml();
     coopSessionRegistry.setActive(this);
   }
 
@@ -835,7 +847,8 @@ export class CoopChatSession {
     }
     this.webview.html = renderWebviewHtml(this.webview, this.options.extensionUri, {
       view: "chat",
-      enforceMinWidth: this.options.enforceSidebarMinWidth
+      enforceMinWidth: this.options.enforceSidebarMinWidth,
+      panelSessionId: this.options.panelSessionId
     });
   }
 
@@ -861,11 +874,11 @@ export class CoopChatSession {
     this.threadStore?.recordActivity();
   }
 
-  public async initialize(): Promise<void> {
-    if (this.sessionHydrated) {
-      return;
-    }
-    this.sessionHydrated = true;
+  public initialize(): Promise<void> {
+    return this.initializeOnce();
+  }
+
+  private async hydrateSession(): Promise<void> {
     this.refreshIntentConfiguration();
     this.conflictConfig = readConflictConfiguration();
     this.degradationConfig = readDegradationConfiguration();
@@ -875,7 +888,7 @@ export class CoopChatSession {
       this.options.integrationSecrets
     );
     this.lastSignedInIdentity = authIdentityKey(this.preferences);
-    this.threadStore?.rebindScope(resolveThreadScopeKey(this.lastSignedInIdentity));
+    this.threadStore?.rebindScope(resolveThreadScopeKey(this.lastSignedInIdentity, this.options.panelSessionId));
     // Drop legacy cross-window global chip seed (owner/repo leaked across VS Code windows).
     void this.options.extensionContext.globalState.update("coopAI.lastRepoContext", undefined);
     const startBlank = this.options.startBlank === true;
@@ -883,7 +896,7 @@ export class CoopChatSession {
       this.applyDefaultRepoToContext();
     }
     this.postTheme();
-    await this.pushSettingsState();
+    this.pushSettingsStateCached();
     if (this.threadStore && !startBlank) {
       const active = this.threadStore.resolveStartupThread(readChatSessionIdleMs());
       this.boundThreadId = active.id;
@@ -901,7 +914,13 @@ export class CoopChatSession {
         );
       }
     }
+    if (!shouldFollowEditorAfterThreadRestore(this.currentContext)) {
+      this.allowPassiveEditorSnap = false;
+    }
     this.dropFileChipUnlessOpenInEditor();
+    if (this.options.initialSelection) {
+      this.currentContext = this.withRemoteProvenance({ ...this.options.initialSelection });
+    }
     // New windows stay blank until Use-repo / file pick / editor focus in this window.
     if (!startBlank) {
       this.snapContextFromOpenEditors();
@@ -910,6 +929,9 @@ export class CoopChatSession {
     this.postChatHistory();
     this.pushThreadsList();
     this.syncAllLocalThreadsToBackend();
+    void this.pushSettingsState().catch((error: unknown) => {
+      console.error("[CoopAI] startup settings refresh failed", error);
+    });
   }
 
   /**
@@ -983,6 +1005,7 @@ export class CoopChatSession {
   }
 
   public async refreshPreferences(): Promise<void> {
+    await this.initialize();
     this.refreshIntentConfiguration();
     this.conflictConfig = readConflictConfiguration();
     this.degradationConfig = readDegradationConfiguration();
@@ -1015,14 +1038,14 @@ export class CoopChatSession {
       return;
     }
     this.persistActiveThreadLocally();
-    this.threadStore.rebindScope(resolveThreadScopeKey(identity));
+    this.threadStore.rebindScope(resolveThreadScopeKey(identity, this.options.panelSessionId));
   }
 
   private syncSurfacesAfterAuthChange(previousIdentity: string, nextIdentity: string): void {
     if (this.threadStore) {
       this.rebindThreadStoreForIdentity(nextIdentity);
       const thread = this.threadStore.getActiveThread();
-      this.activateThread(thread);
+      this.activateThread(thread, { preserveDraft: true });
       this.syncAllLocalThreadsToBackend();
     } else if (previousIdentity && previousIdentity !== nextIdentity) {
       this.resetChatState();
@@ -1292,17 +1315,35 @@ export class CoopChatSession {
     this.postTheme();
   }
 
+  public captureNewChatSelection(): RepoContext | undefined {
+    // A toolbar click focuses the webview. A single visible nonempty selection
+    // is still explicit; an unselected open editor must never seed a new chat.
+    const selectedEditors = vscode.window.visibleTextEditors?.filter(editor => !editor.selection.isEmpty) ?? [];
+    const editor = vscode.window.activeTextEditor ??
+      (this.currentContext.file && this.currentContext.selectedLines
+        ? pickEditorForContext(this.currentContext.file) : undefined) ??
+      (selectedEditors.length === 1 ? selectedEditors[0] : undefined);
+    if (!editor || editor.selection.isEmpty) return undefined;
+    const selection = this.withRemoteProvenance(mergeRepoContext(
+        this.currentContext,
+        repoContextFromEditor(editor, { ...this.preferences, includeActiveFile: true, includeSelection: true }, this.currentContext)
+    ));
+    return selection.file && selection.selectedLines ? { ...selection } : undefined;
+  }
+
   public newChat(): void {
+    const selection = this.captureNewChatSelection();
     if (this.threadStore) {
       this.persistActiveThread();
       this.blankAttachedContext();
-      const thread = this.threadStore.startNewThread();
+      const thread = this.threadStore.startNewThread(selection);
       this.activateThread(thread);
       this.persistActiveThread();
       return;
     }
     this.blankAttachedContext();
     this.resetChatState();
+    if (selection) this.currentContext = selection;
     this.post({
       type: "chat:history",
       payload: { messages: [], artifacts: [], patchCards: [], suppressedMessageTimestamps: [] }
@@ -1362,7 +1403,7 @@ export class CoopChatSession {
     const partialText = turn?.partialAssistant?.trim() ?? "";
     const jobId = turn?.jobId;
     const quickAction = turn?.quickAction;
-    const history = turn ? [...turn.history] : undefined;
+    const history = turn ? turn.history.map((entry, index) => index === turn.history.length - 1 && entry.role === "user" ? { ...entry, cancelled: true } : entry) : undefined;
     const artifacts = turn ? [...turn.artifacts] : undefined;
     const sessionCostUsd = turn?.sessionCostUsd;
     const turnContext = turn?.context;
@@ -1389,6 +1430,7 @@ export class CoopChatSession {
     const stoppedMessage: ChatMessage = attachChatTurnActivity(
       {
         role: "assistant",
+        cancelled: true,
         content: partialText || CHAT_STOPPED_MESSAGE,
         timestamp: Date.now(),
         links: []
@@ -1467,11 +1509,11 @@ export class CoopChatSession {
     const threadId = this.boundThreadId ?? active.id;
     this.threadStore.setThread(
       threadId,
-      this.chatHistory,
+      retainPatchCardsOnMessages(this.chatHistory),
       this.sessionCostUsd,
       threadId === active.id ? active.title : (this.threadStore.getThreadById(threadId)?.title ?? active.title),
       this.threadArtifacts,
-      this.currentContext
+      { ...this.currentContext, repoSelectionPending: undefined }
     );
     if (options?.syncBackend !== false) {
       void this.syncActiveThreadToBackend();
@@ -1486,7 +1528,7 @@ export class CoopChatSession {
     const title = stored?.title ?? "New Chat";
     this.threadStore.setThread(
       turn.threadId,
-      turn.history,
+      retainPatchCardsOnMessages(turn.history),
       turn.sessionCostUsd,
       title,
       turn.artifacts,
@@ -1499,15 +1541,17 @@ export class CoopChatSession {
   }
 
   private async finishTurnAssistantMessage(turn: ChatTurn, finalMessage: ChatMessage): Promise<void> {
+    if (!this.threadRuns.isStreamActive(turn)) return;
     let message = finalMessage;
     try {
-      const groundedContent = await this.groundAssistantCitationFences(finalMessage.content);
+      const groundedContent = await this.groundAssistantCitationFences(finalMessage.content, turn.context);
       if (groundedContent !== finalMessage.content) {
         message = { ...finalMessage, content: groundedContent };
       }
     } catch {
       // Fail open — never drop the turn if cite grounding cannot read the file.
     }
+    if (!this.threadRuns.isStreamActive(turn)) return;
     message = attachChatTurnActivity(message, turn);
     turn.history.push(message);
     if (this.isViewingThread(turn.threadId)) {
@@ -1523,15 +1567,15 @@ export class CoopChatSession {
     this.pushThreadsList();
   }
 
-  private async groundAssistantCitationFences(content: string): Promise<string> {
+  private async groundAssistantCitationFences(content: string, context: RepoContext = this.currentContext): Promise<string> {
     const paths = citationPathsInMarkdown(content);
     if (paths.length === 0) {
       return content;
     }
-    const owner = this.currentContext.owner ?? this.preferences.owner;
-    const repo = this.currentContext.repo ?? this.preferences.repo;
+    const owner = context.owner ?? this.preferences.owner;
+    const repo = context.repo ?? this.preferences.repo;
     const provider =
-      this.currentContext.provider ?? this.preferences.defaultCodeHost ?? "github";
+      context.provider ?? this.preferences.defaultCodeHost ?? "github";
     if (!owner || !repo) {
       return content;
     }
@@ -1544,7 +1588,7 @@ export class CoopChatSession {
       owner,
       repo,
       provider,
-      branch: this.currentContext.branch ?? this.preferences.branch
+      branch: context.branch ?? this.preferences.branch
     };
     const workspace = this.indexedRepoWorkspace();
     const files = new Map<string, string>();
@@ -1589,7 +1633,11 @@ export class CoopChatSession {
     });
   }
 
-  private activateThread(thread: ReturnType<ChatThreadStore["getActiveThread"]>): void {
+  private activateThread(
+    thread: ReturnType<ChatThreadStore["getActiveThread"]>,
+    options?: { preserveDraft?: boolean }
+  ): void {
+    this.contextEpoch += 1;
     // Do not abort background turns — other threads keep generating.
     this.boundThreadId = thread.id;
     this.pinnedContextFile = undefined;
@@ -1600,9 +1648,11 @@ export class CoopChatSession {
     this.threadArtifacts = [...(thread.artifacts ?? [])];
     this.sessionCostUsd = thread.sessionCostUsd;
     this.setThreadTitle(thread.title);
+    // Restore identity synchronously before enabling sends in the new view.
+    const contextRestored = this.restoreContextForActivatedThread(thread);
     this.post({
       type: "chat:thread-changed",
-      payload: { threadId: thread.id, title: thread.title }
+      payload: { threadId: thread.id, title: thread.title, preserveDraft: options?.preserveDraft, draftInput: thread.draftInput }
     });
     this.postChatHistory();
     const running = this.threadRuns.get(thread.id);
@@ -1628,19 +1678,25 @@ export class CoopChatSession {
     }
     this.pushThreadsList();
     // Thread-scoped file: chip + open in editor. Not a global "last session" ghost.
-    void this.restoreContextForActivatedThread(thread);
+    void contextRestored.then(() => {
+      if (this.boundThreadId === thread.id) this.postContext();
+    });
   }
 
   private async restoreContextForActivatedThread(
     thread: ReturnType<ChatThreadStore["getActiveThread"]>
   ): Promise<void> {
     const threadId = thread.id;
+    this.currentContext.repoSelectionPending = undefined;
     if (thread.repoContext?.file?.trim()) {
-      await this.applyThreadRepoContext(thread.repoContext, threadId);
+      await this.applyThreadRepoContext({ ...thread.repoContext, repoSelectionPending: undefined }, threadId);
     } else {
       this.remoteProvenanceFile = undefined;
-      const restored = repoContextForActivatedThread(thread.repoContext);
+      const restored = repoContextForActivatedThread(thread.repoContext ? { ...thread.repoContext, repoSelectionPending: undefined } : undefined);
       this.currentContext = stripStaleContextWarning(normalizeRepoContext(restored));
+      if (!shouldFollowEditorAfterThreadRestore(this.currentContext)) {
+        this.allowPassiveEditorSnap = false;
+      }
       // Do not snap the open editor onto a new/empty thread — that recreated the
       // leftover L chip after New Chat while CoopSettingsPanel.ts stayed open.
     }
@@ -1657,7 +1713,7 @@ export class CoopChatSession {
    */
   private async applyThreadRepoContext(repoContext: RepoContext, threadId?: string): Promise<void> {
     this.currentContext = stripStaleContextWarning(
-      normalizeRepoContext(mergeRepoContext(this.currentContext, repoContext))
+      normalizeRepoContext(repoContext)
     );
     const file = this.currentContext.file?.trim();
     if (!file) {
@@ -1911,6 +1967,9 @@ export class CoopChatSession {
     }
     this.syncPreferencesFromRepoSelection(context);
     this.postContext();
+    if (this.currentContext.branch?.trim() && !this.currentContext.repoSelectionPending) {
+      this.persistActiveThread();
+    }
   }
 
   /** Keep Settings owner/repo aligned with explorer Use repo so editor identity can't revert. */
@@ -2107,6 +2166,7 @@ export class CoopChatSession {
   private async handleMessage(message: WebviewInbound, source: "chat" | "settings"): Promise<void> {
     switch (message.type) {
       case "webview-ready":
+        await this.initialize();
         this.postTheme();
         if (source === "chat") {
           // Snap open tabs only when passive editor following is armed.
@@ -2115,15 +2175,18 @@ export class CoopChatSession {
             this.snapContextFromOpenEditors();
           }
           this.postContext();
-          try {
-            await this.pushSettingsState();
-          } catch (error) {
-            console.error("[CoopAI] pushSettingsState failed on webview-ready", error);
-          }
-          void this.pushLightningState();
           this.postChatHistory();
           this.pushThreadsList();
           this.pushPatchState();
+          const running = this.threadRuns.get(this.activeThreadId());
+          if (running?.status === "running") {
+            this.post({ type: "chat:stream-resume", payload: { threadId: running.threadId, partialText: running.partialAssistant } });
+          }
+          this.pushSettingsStateCached();
+          void this.pushSettingsState().catch((error: unknown) => {
+            console.error("[CoopAI] pushSettingsState failed on webview-ready", error);
+          });
+          void this.pushLightningState();
           void this.pushWorkspacePrompts();
           this.workspacePromptWatcher?.dispose();
           this.workspacePromptWatcher = undefined;
@@ -2199,6 +2262,7 @@ export class CoopChatSession {
           message.payload.quickAction,
           message.payload.attachments,
           {
+            clientSubmissionId: message.payload.clientSubmissionId,
             historyContent: message.payload.historyContent,
             mentions: message.payload.mentions,
             slashUserArgs: message.payload.slashUserArgs,
@@ -2303,6 +2367,10 @@ export class CoopChatSession {
         void vscode.window.showInformationMessage("Prompt library saved.");
         return;
       }
+      case "threads:draft":
+        this.threadStore?.setDraft(message.payload.threadId, message.payload.text);
+        this.pushThreadsList();
+        return;
       case "chat:new":
       case "threads:new":
         this.newChat();
@@ -2891,12 +2959,13 @@ export class CoopChatSession {
   private async handleRemoteFileIntent(intent: {
     path: string;
     line?: number;
+    endLine?: number;
     preserveContext?: boolean;
   }): Promise<void> {
     const { path, line, preserveContext } = intent;
 
     if (preserveContext) {
-      await this.openRepoFileForReview(path, line);
+      await this.openRepoFileForReview(path, line, intent.endLine);
       this.postContext();
       return;
     }
@@ -2982,7 +3051,7 @@ export class CoopChatSession {
   }
 
   /** Open a repo file for manual review without changing chat context. */
-  private async openRepoFileForReview(path: string, line?: number): Promise<void> {
+  private async openRepoFileForReview(path: string, line?: number, endLine?: number): Promise<void> {
     if (isFileAssistantSession(this.currentContext)) {
       await focusRepoFileInEditor(path, line);
       return;
@@ -2990,7 +3059,8 @@ export class CoopChatSession {
     this.editorContextSuppressedUntil = Date.now() + 15_000;
     this.intentDebouncer.cancelAll();
 
-    const remoteOnly = this.isWorkingOnRemoteProvenance();
+    const remoteOnly = this.isWorkingOnRemoteProvenance() ||
+      hasExplicitRepoSelection(this.currentContext);
     if (!remoteOnly) {
       const absolute = resolveLocalAbsolutePath(path);
       if (absolute) {
@@ -3000,12 +3070,21 @@ export class CoopChatSession {
           preview: true,
           preserveFocus: true
         });
-        this.revealLineInEditor(editor, line);
+        this.revealLineInEditor(editor, line, endLine);
         return;
       }
     }
 
     if (this.currentContext.owner && this.currentContext.repo) {
+      // The GitHub VFS URI has no selected-ref component. Review the same remote
+      // branch used by the answer instead of accepting an editor's default ref.
+      if (remoteOnly) {
+        const opened = await this.openRemoteFileFromApi(path, line, { preserveFocus: true, reviewOpen: true, endLine });
+        if (!opened) {
+          void vscode.window.showWarningMessage(`Could not open ${path.replace(/^\/+/, "")} at the selected repository ref.`);
+        }
+        return;
+      }
       let opened = await openRemoteFileInEditor({
         owner: this.currentContext.owner,
         repo: this.currentContext.repo,
@@ -3018,7 +3097,7 @@ export class CoopChatSession {
         allowLocalClone: !remoteOnly
       });
       if (!opened) {
-        opened = await this.openRemoteFileFromApi(path, line, { preserveFocus: true, reviewOpen: true });
+        opened = await this.openRemoteFileFromApi(path, line, { preserveFocus: true, reviewOpen: true, endLine });
       }
       if (!opened) {
         const relative = path.replace(/^\/+/, "");
@@ -3029,19 +3108,23 @@ export class CoopChatSession {
     }
   }
 
-  private revealLineInEditor(editor: vscode.TextEditor, line?: number): void {
+  private revealLineInEditor(editor: vscode.TextEditor, line?: number, endLine?: number): void {
     if (!line) {
       return;
     }
-    const position = new vscode.Position(Math.max(0, line - 1), 0);
-    editor.selection = new vscode.Selection(position, position);
-    editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+    const startLine = Math.min(editor.document.lineCount - 1, Math.max(0, line - 1));
+    const position = new vscode.Position(startLine, 0);
+    const end = endLine && endLine >= line
+      ? editor.document.lineAt(Math.min(editor.document.lineCount - 1, endLine - 1)).range.end
+      : position;
+    editor.selection = new vscode.Selection(position, end);
+    editor.revealRange(new vscode.Range(position, end), vscode.TextEditorRevealType.InCenter);
   }
 
   private async openRemoteFileFromApi(
     filePath: string,
     line?: number,
-    options?: { preserveFocus?: boolean; reviewOpen?: boolean }
+    options?: { preserveFocus?: boolean; reviewOpen?: boolean; endLine?: number }
   ): Promise<boolean> {
     const { owner, repo, provider, branch } = this.currentContext;
     if (!owner || !repo) {
@@ -3056,12 +3139,19 @@ export class CoopChatSession {
       });
       const text = remote.content ?? remote.lines.map((entry) => entry.text).join("\n");
       const language = languageIdForPatchPath(filePath);
-      const doc = await vscode.workspace.openTextDocument({ content: text, language });
-      rememberRemotePatchBuffer(filePath, doc.uri, text, { owner, repo });
+      const remembered = branch ? listRememberedRemoteBuffers().find(entry =>
+        entry.path === normalizeRelativePath(filePath) && entry.owner === owner && entry.repo === repo &&
+        entry.provider === (provider ?? this.preferences.defaultCodeHost) && entry.branch === branch) : undefined;
+      const existing = remembered ? vscode.workspace.textDocuments.find(doc =>
+        !doc.isClosed && doc.uri.toString() === remembered.uriString && doc.getText() === text) : undefined;
+      const existingEditor = existing ? vscode.window.visibleTextEditors.find(editor =>
+        editor.document.uri.toString() === existing.uri.toString()) : undefined;
+      const doc = existing ?? await vscode.workspace.openTextDocument({ content: text, language });
+      rememberRemotePatchBuffer(filePath, doc.uri, text, { owner, repo, provider: provider ?? this.preferences.defaultCodeHost, branch });
       snapshotWorkingCopyIfAbsent(filePath, doc.uri.toString(), text, { owner, repo });
       const editor = await vscode.window.showTextDocument(doc, options?.reviewOpen
         ? {
-            viewColumn: vscode.ViewColumn.Beside,
+            viewColumn: existingEditor?.viewColumn ?? vscode.ViewColumn.Beside,
             preview: true,
             preserveFocus: true
           }
@@ -3070,7 +3160,7 @@ export class CoopChatSession {
             preview: options?.preserveFocus ?? false,
             preserveFocus: options?.preserveFocus ?? false
           });
-      this.revealLineInEditor(editor, line);
+      this.revealLineInEditor(editor, line, options?.endLine);
       return true;
     } catch {
       return false;
@@ -3124,7 +3214,7 @@ export class CoopChatSession {
         params: {
           ...request.params,
           ...(request.params.quickAction === "blast-radius" ? { gatherStartedAt } : {}),
-          ...(turn ? { intentPlan: turn.intentPlan, gatherStartedAt } : {})
+          ...(turn ? { intentPlan: turn.intentPlan, gatherStartedAt, dualRepoCompare: turn.dualRepoCompare } : {})
         }
       };
     });
@@ -3290,14 +3380,14 @@ export class CoopChatSession {
       // Single path: same loader Remote browse / /understand use. No dual enrich race.
       result = await this.fetchUnderstandRepoEvidence(request);
     } else if (request.type === "chat_context") {
-      const localPayload = this.pendingDualRepoCompare
+      const localPayload = request.params.dualRepoCompare
         ? undefined
         : await this.tryFetchLocalFileContext(request);
       result = await this.buildBaseContextResult(request, localPayload);
       // L file: the open tab is the evidence. Do not search the leftover Use-repo index.
       const fileAssistant = this.requestIsFileAssistant(request);
       const queryText = request.intent.context?.queryText;
-      const dualRepoCompare = Boolean(this.pendingDualRepoCompare);
+      const dualRepoCompare = Boolean(request.params.dualRepoCompare);
       const repoFact = hasRepoFactNeed(repoFactNeeds(queryText));
       if (!fileAssistant) {
         if (dualRepoCompare) {
@@ -4284,7 +4374,7 @@ export class CoopChatSession {
     request: ContextFetchRequest,
     result: ContextFetchResult
   ): Promise<ContextFetchResult> {
-    const plan = this.pendingDualRepoCompare;
+    const plan = request.params.dualRepoCompare as DualRepoComparePlan | undefined;
     const baseData =
       typeof result.data === "object" && result.data !== null
         ? (result.data as Record<string, unknown>)
@@ -4293,8 +4383,8 @@ export class CoopChatSession {
       return result;
     }
 
-    const budgetMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
-    const stickyRepoId = buildRepoId(this.preferences, this.currentContext);
+    const budgetMs = remainingContextGatherBudgetMs(request.params.gatherStartedAt || Date.now());
+    const stickyRepoId = request.params.repoId;
     const provider =
       this.preferences.defaultCodeHost === "gitlab" ||
       this.preferences.defaultCodeHost === "bitbucket" ||
@@ -4308,18 +4398,29 @@ export class CoopChatSession {
       }
       try {
         return await Promise.race([
-          searchRepoForFocusQuery({
+          (async () => {
+            const selectedSide = sameRepoCoords({repoId: request.params.repoId}, {repoId: side.repoId});
+            const target = selectedSide && request.params.branch
+              ? {...side, branch: request.params.branch}
+              : await resolveActiveRepoTarget(side, {
+                  api: this.options.api,
+                  apiBaseUrl: this.preferences.apiBaseUrl,
+                  codeHostRouter: this.options.codeHostRouter
+                });
+            if (!target.branch || remainingContextGatherBudgetMs(request.params.gatherStartedAt || Date.now()) <= 0) return undefined;
+            return searchRepoForFocusQuery({
             repoId: side.repoId,
             query: plan.topic,
             indexBackend: this.options.indexBackend,
             api: this.options.api,
             apiBaseUrl: this.preferences.apiBaseUrl,
-            branch: this.currentContext.branch ?? this.preferences.branch,
+            branch: target.branch,
             owner: side.owner,
             repo: side.repo,
             provider: side.provider || provider,
             maxFiles: DUAL_REPO_COMPARE_MAX_FILES_PER_SIDE
-          }),
+            });
+          })(),
           new Promise<undefined>((resolve) => {
             setTimeout(() => resolve(undefined), budgetMs);
           })
@@ -4365,7 +4466,7 @@ export class CoopChatSession {
         }
       };
     } finally {
-      this.pendingDualRepoCompare = undefined;
+      if (this.pendingDualRepoCompare === plan) this.pendingDualRepoCompare = undefined;
     }
   }
 
@@ -4483,8 +4584,14 @@ export class CoopChatSession {
   private async planAgentToolTurn(
     input: AgentPlanTurnInput,
     runtime: { model: string; provider: import("./types").LlmProviderPreference },
-    suggestedJobs?: Array<{ capability: string; terms: string[] }>,
-    allowedRepoTools = true
+    suggestedJobs?: Array<{
+      capability: string;
+      terms: string[];
+      searchCriteria?: string[];
+      evidenceClass?: string;
+    }>,
+    allowedRepoTools = true,
+    intentPurpose?: string
   ): Promise<string> {
     if (this.turnStreamAbort?.aborted) {
       return JSON.stringify({ done: true });
@@ -4497,15 +4604,17 @@ export class CoopChatSession {
       lastToolResult: input.lastToolResult,
       allowedIntegrations: input.allowedIntegrations,
       suggestedJobs,
+      intentPurpose,
       allowedRepoTools
     });
+    const history = this.conversationToHistory(input.conversation);
     let full = "";
     try {
       await this.options.api.streamChat(
         {
           message: prompt,
           context: {},
-          history: this.conversationToHistory(input.conversation),
+          history,
           model: runtime.model,
           provider: runtime.provider,
           useCase: "chat",
@@ -4744,7 +4853,9 @@ export class CoopChatSession {
         useCase,
         temperature: this.preferences.temperature,
         maxTokens: resolveChatOutputMaxTokens(this.preferences.maxTokens),
-        enableThinking: true
+        // Locate synthesis reports already verified source; avoid another
+        // reasoning phase after discovery has used the interactive budget.
+        enableThinking: input.action !== "locate"
       },
       (chunk) => {
         if (signal?.aborted) {
@@ -4847,7 +4958,7 @@ export class CoopChatSession {
     const signal = turn.streamAbort.signal;
     const isCancelled = () => !this.threadRuns.isStreamActive(turn);
     const repoId = buildRepoId(this.preferences, turn.context);
-    const action = this.turnAgentAction;
+    const action = turn.agentAction ?? "none";
     const chatUseCase = action === "change" ? "code_edit" : "chat";
     const modelPrefs = {
       devMode: this.preferences.devMode,
@@ -4877,6 +4988,7 @@ export class CoopChatSession {
 
     let full = "";
     let clearedIntentForOutput = false;
+    let agentRunId: string | undefined;
     const deltaBatcher = this.createChatDeltaBatcher(turn.threadId);
     const outputGate = createChatOutputGate({
       startedAt: turn.startedAt,
@@ -4888,6 +5000,12 @@ export class CoopChatSession {
         }
         if (!clearedIntentForOutput) {
           clearedIntentForOutput = true;
+          this.logAgentDiagnostic(turn.threadId, {
+            turnId: turn.id, runId: agentRunId,
+            stage: "answer-start", elapsedMs: Date.now() - turn.startedAt,
+            selectedBranch: turn.context.branch, repoId,
+            buildId: COOP_EXTENSION_BUILD_ID, bundleId: COOP_EXTENSION_BUNDLE_ID
+          });
           clearResponseDeadlineForSynthesis(turn.clearResponseDeadline);
           turn.clearResponseDeadline = () => undefined;
           this.clearIntentFeedback(turn.threadId);
@@ -4910,8 +5028,9 @@ export class CoopChatSession {
         connected: this.listConnectedIntegrationTools(),
         plan: turn.intentPlan
       });
-      const allowedRepoTools = this.turnAllowsRepoTools;
+      const allowedRepoTools = turn.allowsRepoTools ?? false;
       const plannedSearchQueries = plannedCodeSearchQueries(turn.intentPlan.jobs);
+      const intentBrief = formatIntentBriefForAgent(turn.intentPlan);
       const agentResult = await this.options.agentOrchestrator.run(
         {
           message: query,
@@ -4924,10 +5043,12 @@ export class CoopChatSession {
           signal,
           wallMs: AGENT_JOB_WALL_MS,
           startedAt: turn.startedAt,
+          repoTarget: { repoId, owner: turn.context.owner, repo: turn.context.repo, provider: turn.context.provider, branch: turn.context.branch },
           allowedIntegrations,
           allowedRepoTools,
           plannedSearchQueries:
-            plannedSearchQueries.length > 0 ? plannedSearchQueries : undefined,
+            plannedSearchQueries.length > 0 ? plannedSearchQueries.slice(0, 4) : undefined,
+          intentBrief,
           fillIntegrations: turn.intentPlan.tools.filter(
             (tool): tool is IntegrationChatProvider => Boolean(tool)
           ),
@@ -4939,6 +5060,16 @@ export class CoopChatSession {
               signal: input.signal ?? signal
             }),
           interpretOpens: (artifacts) => this.interpretOpenedVendorHits(artifacts, query, signal),
+          onDiagnostic: (event) => {
+            if (typeof event.runId === "string") agentRunId = event.runId;
+            this.logAgentDiagnostic(turn.threadId, {
+              buildId: COOP_EXTENSION_BUILD_ID,
+              bundleId: COOP_EXTENSION_BUNDLE_ID,
+              selectedBranch: turn.context.branch || undefined,
+              ...event,
+              turnId: turn.id
+            });
+          },
           planTurn: (input) => {
             const editAssignment = getFeatureModelAssignment("edit");
             return this.planAgentToolTurn(
@@ -4947,8 +5078,14 @@ export class CoopChatSession {
                 provider: editAssignment.provider,
                 model: editAssignment.model
               },
-              turn.intentPlan.jobs,
-              allowedRepoTools
+              (turn.intentPlan.jobs ?? []).map((job) => ({
+                capability: job.capability,
+                terms: job.terms,
+                searchCriteria: job.searchCriteria,
+                evidenceClass: job.evidenceClass
+              })),
+              allowedRepoTools,
+              turn.intentPlan.purpose
             );
           },
           streamAnswer: (input) =>
@@ -4956,6 +5093,12 @@ export class CoopChatSession {
               outputGate.push(chunk);
             }, signal, turn.threadId),
           onStep: (_step, steps) => {
+            this.logAgentDiagnostic(turn.threadId, {
+              turnId: turn.id, runId: agentRunId,
+              stage: "activity-step",
+              tool: _step.tool,
+              summary: _step.summary
+            });
             recordTurnAgentSteps(turn, steps);
             this.postForThread(turn.threadId, {
               type: "agent:activity",
@@ -5053,6 +5196,14 @@ export class CoopChatSession {
       // Flush leftover batched tokens BEFORE complete. A post-complete flush
       // paints a second CoopAI bubble that never finishes.
       deltaBatcher.end();
+      if (!clearedIntentForOutput) {
+        this.logAgentDiagnostic(turn.threadId, {
+          turnId: turn.id, runId: agentRunId,
+          stage: "answer-start", elapsedMs: Date.now() - turn.startedAt,
+          selectedBranch: turn.context.branch, repoId, delivery: "complete",
+          buildId: COOP_EXTENSION_BUILD_ID, bundleId: COOP_EXTENSION_BUNDLE_ID
+        });
+      }
       await this.finishTurnAssistantMessage(turn, finalMessage);
     } catch (error) {
       if (isCancelled()) {
@@ -5409,6 +5560,17 @@ export class CoopChatSession {
 
   public postPatchUpdate(payload: PatchCardsUpdatePayload): void {
     this.post({ type: "patch:update", payload });
+    this.chatHistory.splice(0, this.chatHistory.length, ...retainPatchCardsOnMessages(this.chatHistory, payload.cards));
+    if (this.threadStore) {
+      const timestamps = new Set(payload.cards?.map(card => card.messageTimestamp));
+      for (const thread of this.threadStore.listAllThreads()) {
+        if (!thread.messages.some(message => timestamps.has(message.timestamp))) continue;
+        this.threadStore.setThread(
+          thread.id, retainPatchCardsOnMessages(thread.messages, payload.cards),
+          thread.sessionCostUsd, thread.title, thread.artifacts, thread.repoContext
+        );
+      }
+    }
   }
 
   private attachEditAnchor(turn: ChatTurn): void {
@@ -5417,8 +5579,8 @@ export class CoopChatSession {
   }
 
   private captureEditAnchor(turn: ChatTurn): NonNullable<ChatTurn["editAnchor"]> {
-    const file = turn.context.file ?? this.currentContext.file;
-    const selectedLines = turn.context.selectedLines ?? this.currentContext.selectedLines;
+    const file = turn.context.file;
+    const selectedLines = turn.context.selectedLines;
     const fileContents: Record<string, string> = {};
     for (const snippet of this.pendingChatLocalFiles?.files ?? []) {
       if (snippet.path?.trim() && snippet.content) {
@@ -5426,7 +5588,7 @@ export class CoopChatSession {
       }
     }
     const wanted = file?.trim();
-    if (wanted) {
+    if (wanted && !lookupPatchFileContent(wanted, fileContents)) {
       const fromDocs = collectOpenPatchFileBytes(wanted);
       if (fromDocs?.trim()) {
         indexPatchFileContent(wanted, fromDocs, fileContents);
@@ -5439,6 +5601,7 @@ export class CoopChatSession {
       file,
       selectedLines,
       selectionText: fromFile || this.selectedCodeSnippet(8000) || undefined,
+      targetAliases: sanitizedPatchTargetBindings(Object.keys(fileContents)),
       fileContents: Object.keys(fileContents).length > 0 ? fileContents : undefined
     };
   }
@@ -5452,6 +5615,7 @@ export class CoopChatSession {
     turn.editAnchor = {
       ...turn.editAnchor,
       file: turn.editAnchor?.file ?? file,
+      targetAliases: sanitizedPatchTargetBindings(Object.keys(fileContents)),
       selectedLines,
       selectionText: fromFile || turn.editAnchor?.selectionText,
       fileContents
@@ -5536,7 +5700,7 @@ export class CoopChatSession {
       this.stampEditAnchorFile(turn, sutPath, fromDocs);
       return;
     }
-    const text = await this.fetchRemotePathContent(sutPath);
+    const text = await this.fetchRemotePathContent(sutPath, turn.context);
     if (text?.trim()) {
       this.stampEditAnchorFile(turn, sutPath, text);
     }
@@ -5548,20 +5712,16 @@ export class CoopChatSession {
     file?: string;
     selectionText?: string;
     fileContents?: Record<string, string>;
+    targetAliases?: Readonly<Record<string, string>>;
     commentOnly?: boolean;
     ask?: string;
   } {
-    const file = turn.editAnchor?.file ?? turn.context.file ?? this.currentContext.file;
+    const file = turn.editAnchor?.file ?? turn.context.file;
     const selectedLines =
-      turn.editAnchor?.selectedLines ?? turn.context.selectedLines ?? this.currentContext.selectedLines;
+      turn.editAnchor?.selectedLines ?? turn.context.selectedLines;
     const fileContents: Record<string, string> = { ...(turn.editAnchor?.fileContents ?? {}) };
-    for (const snippet of this.pendingChatLocalFiles?.files ?? []) {
-      if (snippet.path?.trim() && snippet.content) {
-        indexPatchFileContent(snippet.path, snippet.content, fileContents);
-      }
-    }
     const wanted = file?.trim();
-    if (wanted) {
+    if (wanted && !lookupPatchFileContent(wanted, fileContents)) {
       const fromDocs = collectOpenPatchFileBytes(wanted);
       if (fromDocs?.trim()) {
         indexPatchFileContent(wanted, fromDocs, fileContents);
@@ -5573,15 +5733,16 @@ export class CoopChatSession {
         ? selectionTextFromContent(attachedBody, selectedLines, 8000)
         : undefined;
     const selectionText =
-      fromFile || turn.editAnchor?.selectionText || this.selectedCodeSnippet(8000);
+      fromFile || turn.editAnchor?.selectionText;
     const userMessages = turn.history
-      .filter((entry) => entry.role === "user")
+      .filter((entry) => entry.role === "user" && !entry.cancelled)
       .map((entry) => entry.content);
     return {
       selectedLines,
       file,
       selectionText: selectionText || undefined,
       fileContents: Object.keys(fileContents).length > 0 ? fileContents : undefined,
+      targetAliases: turn.editAnchor?.targetAliases,
       commentOnly: isCommentOnlyEditAsk(turn.modelMessage, {
         priorUserMessages: userMessages.slice(0, -1)
       }),
@@ -6201,6 +6362,10 @@ export class CoopChatSession {
     quickAction?: string,
     attachments?: ChatImageAttachment[],
     options?: {
+      clientSubmissionId?: string;
+      /** Original submission clock, preserved through slash-command re-entry. */
+      requestStartedAt?: number;
+      dualRepoCompare?: DualRepoComparePlan;
       sourceHint?: string;
       integrationProvider?: IntegrationChatProvider;
       /** Planner allowlist — fetch these connected tools even without naming them in heuristics. */
@@ -6223,6 +6388,11 @@ export class CoopChatSession {
       skipChatIntentPlanner?: boolean;
     }
   ): Promise<void> {
+    const requestStartedAt = options?.requestStartedAt ?? Date.now();
+    if (this.currentContext.repoSelectionPending) {
+      this.post({ type: "chat:error", payload: { message: "The selected repository branch is still loading. Try again once it is ready." } });
+      return;
+    }
     this.options.api.beginQuotaTurn();
     // A new send abandons any unanswered suggest chips.
     if (!options?.skipQuickActionSuggest && !options?.skipUserHistoryPush) {
@@ -6242,7 +6412,8 @@ export class CoopChatSession {
         await this.handleCreatePrChatAsk(
           parsedSlash.args || parsedSlash.focus || message,
           attachments,
-          options?.mentions
+          options?.mentions,
+          options?.clientSubmissionId
         );
         return;
       }
@@ -6256,7 +6427,7 @@ export class CoopChatSession {
       !options?.integrationProvider &&
       isCreatePullRequestAsk(message)
     ) {
-      await this.handleCreatePrChatAsk(message, attachments, options?.mentions);
+      await this.handleCreatePrChatAsk(message, attachments, options?.mentions, options?.clientSubmissionId);
       return;
     }
 
@@ -6289,7 +6460,8 @@ export class CoopChatSession {
         message,
         options?.mentions,
         attachments,
-        buildMissingRepoSelectionResponse()
+        buildMissingRepoSelectionResponse(),
+        options?.clientSubmissionId
       );
       return;
     }
@@ -6312,7 +6484,7 @@ export class CoopChatSession {
       options = { ...options, intentPlan: plan };
 
       if (parsedSlash) {
-        await this.routeSlashCommand(parsedSlash, attachments, options?.mentions, plan);
+        await this.routeSlashCommand(parsedSlash, attachments, options?.mentions, plan, options?.clientSubmissionId, requestStartedAt);
         return;
       }
 
@@ -6474,7 +6646,7 @@ export class CoopChatSession {
         hasIntegrationProvider: Boolean(integrationProviderForGuard)
       })
     ) {
-      await this.completeMissingIntentClarification(message, options?.mentions, attachments);
+      await this.completeMissingIntentClarification(message, options?.mentions, attachments, undefined, options?.clientSubmissionId);
       return;
     }
 
@@ -6591,6 +6763,7 @@ export class CoopChatSession {
       void this.emitUsageEvent("edit.requested");
     }
     const userMessage: ChatMessage = {
+      clientSubmissionId: options?.clientSubmissionId,
       role: "user",
       content: historyWithScope,
       timestamp: Date.now(),
@@ -6610,7 +6783,7 @@ export class CoopChatSession {
       this.postChatHistory();
       this.persistActiveThread();
     }
-    this.chatTurnStartedAt = Date.now();
+    this.chatTurnStartedAt = requestStartedAt;
 
     const turn = this.threadRuns.begin({
       threadId: this.activeThreadId(),
@@ -6621,6 +6794,7 @@ export class CoopChatSession {
       modelMessage,
       quickAction,
       intentPlan: turnIntentPlan,
+      dualRepoCompare: options?.dualRepoCompare,
       pendingMentions: options?.mentions,
       codeEditIntent: options?.composerMode === "edit"
     });
@@ -6809,6 +6983,8 @@ export class CoopChatSession {
       intentPlan: turn.intentPlan,
       integrationSlash: Boolean(options?.integrationProvider && options?.sourceHint)
     });
+    turn.agentAction = this.turnAgentAction;
+    turn.allowsRepoTools = this.turnAllowsRepoTools;
     if (this.shouldRunAgentOwnedTurn(quickAction, options, message)) {
       await this.runAgentOwnedTurn(turn, message);
       return;
@@ -6870,7 +7046,8 @@ export class CoopChatSession {
   private async handleCreatePrChatAsk(
     message: string,
     attachments?: ChatImageAttachment[],
-    mentions?: ChatFileMention[]
+    mentions?: ChatFileMention[],
+    clientSubmissionId?: string
   ): Promise<void> {
     const mentionRefs = this.quickActionMentionRefs(mentions);
     const historyContent = plainChatHistoryContent(message, mentionRefs, {
@@ -6878,6 +7055,7 @@ export class CoopChatSession {
       includeContextChips: true
     });
     const userMessage: ChatMessage = {
+      clientSubmissionId,
       role: "user",
       content: historyContent,
       timestamp: Date.now(),
@@ -6977,7 +7155,8 @@ export class CoopChatSession {
     message: string,
     mentions?: ChatFileMention[],
     attachments?: ChatImageAttachment[],
-    cannedResponse?: string
+    cannedResponse?: string,
+    clientSubmissionId?: string
   ): Promise<void> {
     const mentionRefs = this.quickActionMentionRefs(mentions);
     const historyContent = plainChatHistoryContent(message, mentionRefs, {
@@ -6985,6 +7164,7 @@ export class CoopChatSession {
       includeContextChips: true
     });
     const userMessage: ChatMessage = {
+      clientSubmissionId,
       role: "user",
       content: historyContent,
       timestamp: Date.now(),
@@ -7194,7 +7374,9 @@ export class CoopChatSession {
     focus: string,
     attachments?: ChatImageAttachment[],
     mentions?: ChatFileMention[],
-    intentPlan?: ChatIntentPlan
+    intentPlan?: ChatIntentPlan,
+    clientSubmissionId?: string,
+    requestStartedAt?: number
   ): Promise<void> {
     let catalogRepoIds: string[] = [];
     try {
@@ -7222,6 +7404,9 @@ export class CoopChatSession {
     const userText = dualRepoCompareUserMessage(parsed.plan);
     try {
       await this.handleChatSend(userText, undefined, attachments, {
+        clientSubmissionId,
+        requestStartedAt,
+        dualRepoCompare: parsed.plan,
         historyContent,
         mentions,
         slashUserArgs: parsed.plan.topic,
@@ -7241,7 +7426,9 @@ export class CoopChatSession {
     parsed: ParsedSlashCommand,
     attachments?: ChatImageAttachment[],
     mentions?: ChatFileMention[],
-    intentPlan?: ChatIntentPlan
+    intentPlan?: ChatIntentPlan,
+    clientSubmissionId?: string,
+    requestStartedAt?: number
   ): Promise<void> {
     const { def, focus } = parsed;
     const mentionRefs = this.quickActionMentionRefs(mentions);
@@ -7249,12 +7436,14 @@ export class CoopChatSession {
     const slashUserArgs = focus.trim() || undefined;
     const planned = {
       intentPlan,
+      clientSubmissionId,
+      requestStartedAt,
       skipChatIntentPlanner: true,
       skipQuickActionSuggest: true
     } as const;
 
     if (def.target.kind === "compare") {
-      await this.routeCompareSlashCommand(focus, attachments, mentions, intentPlan);
+      await this.routeCompareSlashCommand(focus, attachments, mentions, intentPlan, clientSubmissionId, requestStartedAt);
       return;
     }
 
@@ -7359,6 +7548,7 @@ export class CoopChatSession {
       slashUserArgs,
       fetchIntegrations: intentPlan?.tools.length ? intentPlan.tools : [provider],
       intentPlan,
+      clientSubmissionId,
       skipChatIntentPlanner: true,
       skipQuickActionSuggest: true
     });
@@ -7402,6 +7592,8 @@ export class CoopChatSession {
     const fileAssistant = isFileAssistantSession(this.currentContext);
     const input = {
       message,
+      conversation: this.chatHistory.filter((entry) => !entry.cancelled).slice(-4)
+        .map((entry) => `${entry.role}: ${entry.content.slice(0, 2000)}`).join("\n"),
       activeFile: this.currentContext.file,
       connectedTools,
       constraint: options?.constraint,
@@ -7511,6 +7703,8 @@ export class CoopChatSession {
     this.post({
       type: "chat:history",
       payload: {
+        threadId: this.activeThreadId(),
+        revision: ++this.historyRevision,
         messages: this.chatHistory,
         artifacts: this.threadArtifacts,
         patchCards: patchSnapshot.cards,
@@ -8035,7 +8229,8 @@ export class CoopChatSession {
           integrationProvider,
           fetchIntegrations: options?.fetchIntegrations,
           intentPlan: routePlan,
-          sessionMode: fileAssistantTurn ? "file-assistant" : "indexed-repo"
+          sessionMode: fileAssistantTurn ? "file-assistant" : "indexed-repo",
+          dualRepoCompare: Boolean(turn.dualRepoCompare)
         })
       : undefined;
     let chatUseCase = resolveChatUseCase(
@@ -8061,7 +8256,7 @@ export class CoopChatSession {
       !integrationProvider &&
       !this.preferences.devMode
     ) {
-      if (this.turnAgentAction === "change") {
+      if (turn.agentAction === "change") {
         chatUseCase = "code_edit";
         runtimeModel = resolveRuntimeModelForUseCase("code_edit", {
           devMode: this.preferences.devMode,
@@ -8071,8 +8266,8 @@ export class CoopChatSession {
           usageTier: this.preferences.usageTier
         });
       } else if (
-        this.turnAgentAction === "locate" ||
-        this.turnAgentAction === "understand"
+        turn.agentAction === "locate" ||
+        turn.agentAction === "understand"
       ) {
         const pickerOpen = canUserSelectModels({
           devMode: this.preferences.devMode,
@@ -8166,14 +8361,15 @@ export class CoopChatSession {
       });
       let localPayload = skipLocalAttach
         ? undefined
-        : await abortablePromise(this.resolveChatLocalFiles(), signal);
+        : await abortablePromise(this.resolveChatLocalFiles(turn), signal);
       if (
         localPayload?.files.length &&
         (options?.composerMode === "edit" || this.pendingCodeEditIntent)
       ) {
         localPayload = await this.attachEditSutIfNeeded(
           localPayload,
-          options?.taskContent ?? content
+          options?.taskContent ?? content,
+          turnContext
         );
       }
       this.recordAttachedFileReads(localPayload);
@@ -8641,7 +8837,7 @@ export class CoopChatSession {
                 files: localPayload.files,
                 file: turnContext.file,
                 selectedLines: turnContext.selectedLines,
-                selectionText: this.selectedCodeSnippet(4000),
+                selectionText: turn.editAnchor?.selectionText ?? this.selectedCodeSnippet(4000),
                 owner: turnContext.owner,
                 repo: turnContext.repo,
                 branch: turnContext.branch,
@@ -8661,7 +8857,7 @@ export class CoopChatSession {
                       ? undefined
                       : turnContext.file,
                 selectedLines: turnContext.selectedLines,
-                selectionText: this.selectedCodeSnippet(4000),
+                selectionText: turn.editAnchor?.selectionText ?? this.selectedCodeSnippet(4000),
                 languageId: turnContext.languageId,
                 contextBundle
               })
@@ -8670,7 +8866,7 @@ export class CoopChatSession {
                 files: localPayload.files,
                 file: turnContext.file,
                 selectedLines: turnContext.selectedLines,
-                selectionText: this.selectedCodeSnippet(4000),
+                selectionText: turn.editAnchor?.selectionText ?? this.selectedCodeSnippet(4000),
                 owner: fileAssistantMessage ? undefined : turnContext.owner,
                 repo: fileAssistantMessage ? undefined : turnContext.repo,
                 branch: fileAssistantMessage ? undefined : turnContext.branch,
@@ -8678,7 +8874,7 @@ export class CoopChatSession {
                 remoteSelectionChange
               });
       const projectInstructionsBlock =
-        effectiveQuickAction === "understand-repo" ? undefined : await this.buildProjectInstructionsBlock();
+        effectiveQuickAction === "understand-repo" ? undefined : await this.buildProjectInstructionsBlock(turnContext, turn.startedAt);
       if (projectInstructionsBlock) {
         apiMessage = `${projectInstructionsBlock}\n\n${apiMessage}`;
       }
@@ -8753,7 +8949,7 @@ export class CoopChatSession {
         }
       }
 
-      const priorHistory = turn.history.slice(0, -1);
+      const priorHistory = buildModelHistory(turn.history);
       let clearedIntentForOutput = false;
       const outputGate = createChatOutputGate({
         startedAt: turn.startedAt,
@@ -8761,8 +8957,13 @@ export class CoopChatSession {
         isCancelled,
         onChunk: (chunk) => {
           // First token = answer started — clear any leftover disposer and loading state.
-          if (!clearedIntentForOutput) {
+          if (!clearedIntentForOutput && chunk.trim()) {
             clearedIntentForOutput = true;
+            this.logAgentDiagnostic(turn.threadId, {
+              stage: "answer-start", turnId: turn.id, runId: `synthesis-${turn.id}`,
+              elapsedMs: Date.now() - turn.startedAt, selectedBranch: turn.context.branch,
+              buildId: COOP_EXTENSION_BUILD_ID, bundleId: COOP_EXTENSION_BUNDLE_ID
+            });
             clearResponseDeadlineForSynthesis(turn.clearResponseDeadline);
             turn.clearResponseDeadline = () => undefined;
             this.clearIntentFeedback(turn.threadId);
@@ -8781,6 +8982,17 @@ export class CoopChatSession {
       // Synthesis handoff: soft gather guideline is done — start the model and finish the answer.
       clearResponseDeadlineForSynthesis(turn.clearResponseDeadline);
       turn.clearResponseDeadline = () => undefined;
+
+      this.logAgentDiagnostic(turn.threadId, {
+        stage: "synthesis-request", turnId: turn.id, runId: `synthesis-${turn.id}`,
+        elapsedMs: Date.now() - turn.startedAt,
+        useCase: chatUseCase, provider: runtimeModel.provider, model: runtimeModel.model,
+        requestChars: apiMessage.length, historyCount: priorHistory.length,
+        selectedLines: turnContext.selectedLines,
+        commentOnly: this.patchCompleteContext(turn).commentOnly,
+        hasAgentPatch: Boolean(extractAgentProposedPatchText(contextBundle)),
+        buildId: COOP_EXTENSION_BUILD_ID, bundleId: COOP_EXTENSION_BUNDLE_ID
+      });
 
       const result = await this.options.api.streamChat(
         {
@@ -8814,6 +9026,8 @@ export class CoopChatSession {
           this.postThinkingDelta(turn.threadId, thinkingChunk);
         }
       );
+
+      await outputGate.complete(result.message.content);
 
       if (
         !isCancelled() &&
@@ -8862,6 +9076,10 @@ export class CoopChatSession {
 
       if (isCancelled()) {
         return;
+      }
+
+      if (!full.trim()) {
+        throw new Error("Coop received an empty answer. Retry this request.");
       }
 
       await delayUntilMinResponseVisible(turn.startedAt, Date.now(), minResponseVisibleMs);
@@ -8917,7 +9135,7 @@ export class CoopChatSession {
       // on a random UI file.
       const agentPatch = extractAgentProposedPatchText(contextBundle);
       const contentForPatchCard = applyChangeHuntFinish({
-        agentAction: this.turnAgentAction,
+        agentAction: turn.agentAction ?? "none",
         hasAgentPatch: Boolean(agentPatch),
         content: mergeAnswerWithAgentPatch(enrichedContent, agentPatch),
         preserveAnswer: fileAssistantTurn || localWorkspaceAttached
@@ -10559,7 +10777,9 @@ export class CoopChatSession {
     const repoId = `${payload.provider ?? this.preferences.defaultCodeHost}:${payload.owner}/${payload.repo}`;
     // Stamp context before any await so a concurrent repo:list (browse) sees the
     // newly selected repo instead of loading the previous one's tree.
+    this.currentContext.repoSelectionPending = true;
     this.setRepoContext(payload);
+    const selectionEpoch = this.contextEpoch;
     let branch = payload.branch?.trim() || undefined;
     if (await this.options.api.hasToken()) {
       try {
@@ -10569,6 +10789,10 @@ export class CoopChatSession {
             entry.repoId === repoId || entry.repoId.toLowerCase() === repoId.toLowerCase()
         );
         if (!inWorkspace) {
+          if (this.contextEpoch === selectionEpoch) {
+            this.currentContext.repoSelectionPending = false;
+            this.postContext();
+          }
           await this.handleRepoListRepos("chat");
           return;
         }
@@ -10603,8 +10827,20 @@ export class CoopChatSession {
         /* leave undefined */
       }
     }
+    if (this.contextEpoch !== selectionEpoch) {
+      return;
+    }
+    this.currentContext.repoSelectionPending = !branch;
+    if (!branch) {
+      this.currentContext.contextWarning = "Could not resolve the selected repository branch. Select the repository again to retry.";
+    }
     if (branch && branch !== this.currentContext.branch) {
       this.setRepoContext({ ...payload, branch });
+    } else {
+      this.postContext();
+      if (branch) {
+        this.persistActiveThread();
+      }
     }
   }
 
@@ -10973,6 +11209,11 @@ export class CoopChatSession {
     preferRemoteForEdit?: boolean;
   }): void {
     const allowLocalFileForEdit = options?.allowLocalFileForEdit === true;
+    // Use-repo is an explicit target. A leftover visible editor must not turn
+    // a repository question (or untargeted edit) into a local-file request.
+    if (hasExplicitRepoSelection(this.currentContext) && !this.currentContext.file?.trim()) {
+      return;
+    }
     // New Chat turns snap off so an already-open tab does not attach on Send.
     // An explicit focus already chipped; do not harvest the leftover tab here.
     if (!this.allowPassiveEditorSnap && !this.currentContext.file?.trim() && !allowLocalFileForEdit) {
@@ -11185,7 +11426,21 @@ export class CoopChatSession {
     return pathsReferToSameFile(this.pendingChatLocalFiles.activeFile, wanted);
   }
 
-  private async resolveChatLocalFiles(): Promise<LocalFileContextPayload | undefined> {
+  private async resolveChatLocalFiles(turn?: ChatTurn): Promise<LocalFileContextPayload | undefined> {
+    // /edit captures authorized target bytes when the turn starts. Reuse that
+    // snapshot rather than a later tab/thread's mutable pending attachment.
+    const anchoredFile = turn?.editAnchor?.file;
+    const anchoredContent = anchoredFile
+      ? lookupPatchFileContent(anchoredFile, turn?.editAnchor?.fileContents)
+      : undefined;
+    if (turn && anchoredFile && anchoredContent !== undefined) {
+      return {
+        source: isFileAssistantSession(turn.context) ? "local-workspace" : "remote-codehost",
+        activeFile: anchoredFile,
+        files: [{ path: anchoredFile, content: anchoredContent, encoding: "utf8" }],
+        fallbackLevel: "partial"
+      };
+    }
     if (isFileAssistantSession(this.currentContext)) {
       if (this.pendingChatLocalFilesMatchesContext()) {
         return this.pendingChatLocalFiles;
@@ -11270,9 +11525,10 @@ export class CoopChatSession {
    */
   private async attachEditSutIfNeeded(
     local: LocalFileContextPayload,
-    _ask: string
+    _ask: string,
+    context: RepoContext = this.currentContext
   ): Promise<LocalFileContextPayload> {
-    const openFile = local.activeFile || this.currentContext.file;
+    const openFile = local.activeFile || context.file;
     const sutPath = sutPathForEditAsk(openFile);
     if (!sutPath) {
       return local;
@@ -11280,40 +11536,36 @@ export class CoopChatSession {
     if (local.files.some((file) => normalizeRelativePath(file.path) === sutPath)) {
       return local;
     }
-    const text = await this.fetchRemotePathContent(sutPath);
+    const text = await this.fetchRemotePathContent(sutPath, context);
     if (!text?.trim()) {
       return local;
     }
     return mergeSutFile(local, { path: sutPath, content: text, encoding: "utf8" });
   }
 
-  private async fetchRemotePathContent(filePath: string): Promise<string | undefined> {
-    const owner = this.currentContext.owner?.trim();
-    const repo = this.currentContext.repo?.trim();
+  private async fetchRemotePathContent(filePath: string, context: RepoContext = this.currentContext): Promise<string | undefined> {
+    const owner = context.owner?.trim();
+    const repo = context.repo?.trim();
     if (!filePath.trim() || !owner || !repo || isOsAbsoluteDiskPath(filePath)) {
       return undefined;
     }
     const relativePath = normalizeRelativePath(filePath);
-    const provider = this.currentContext.provider ?? this.preferences.defaultCodeHost;
+    const provider = context.provider ?? this.preferences.defaultCodeHost;
     const repoId = buildRepoId(this.preferences, { owner, repo, provider });
     if (!repoId) {
       return undefined;
     }
-    return readRepoFileForContext(
-      {
-        api: this.options.api,
-        apiBaseUrl: this.preferences.apiBaseUrl,
-        codeHostRouter: this.options.codeHostRouter
-      },
+    const evidence = await this.indexedRepoWorkspace().readFile(
       {
         repoId,
         owner,
         repo,
-        branch: this.currentContext.branch,
+        branch: context.branch,
         provider,
-        path: relativePath
-      }
+      },
+      relativePath
     );
+    return evidence?.content;
   }
 
   /** Fetch active remote file content — same stack as Understand Repo / Remote browse. */
@@ -11383,6 +11635,30 @@ export class CoopChatSession {
     }
     // Append only — never reveal the Output panel (that steals focus on every chat turn).
     this.contextDebugChannel.appendLine(`[${new Date().toISOString()}] ${message}`);
+  }
+
+  private logAgentDiagnostic(threadId: string, event: Record<string, unknown>): void {
+    if (!vscode.workspace.getConfiguration("coopAI").get<boolean>("agentDiagnostics", false)) {
+      return;
+    }
+    const key = typeof event.turnId === "string" ? event.turnId : threadId;
+    const count = this.agentDiagnosticEventCounts.get(key) ?? 0;
+    if (count >= 120) {
+      return;
+    }
+    this.agentDiagnosticEventCounts.set(key, count + 1);
+    const redact = (value: string) =>
+      value
+        .replace(/\b(authorization|token|secret|password|api[_-]?key)(\s*[:=]\s*)[^\s,;]+/gi, "$1$2[redacted]")
+        .slice(0, 500);
+    const payload = JSON.stringify(
+      { at: new Date().toISOString(), threadId, ...event },
+      (_key, value: unknown) => (typeof value === "string" ? redact(value) : value)
+    );
+    if (!this.agentDiagnosticChannel) {
+      this.agentDiagnosticChannel = vscode.window.createOutputChannel("CoopAI Agent Diagnostics");
+    }
+    this.agentDiagnosticChannel.appendLine(payload.slice(0, 8_000));
   }
 
   private injectLocalFilesIntoBundle(local: LocalFileContextPayload): void {
@@ -11968,31 +12244,31 @@ export class CoopChatSession {
    * Remote Use-repo loads AGENTS.md via IndexedRepoWorkspace.readFile (Zero-Clone).
    * Do not add Sources/activity chrome here (UX-G6).
    */
-  private async buildProjectInstructionsBlock(): Promise<string | undefined> {
+  private async buildProjectInstructionsBlock(context: RepoContext = this.currentContext, startedAt = this.chatTurnStartedAt): Promise<string | undefined> {
     const sources = projectInstructionsSourcesForTurn({
-      fileAssistant: isFileAssistantSession(this.currentContext),
-      useRepoId: this.currentUseRepoId(),
+      fileAssistant: isFileAssistantSession(context),
+      useRepoId: context.owner && context.repo ? buildRepoId(this.preferences, context) : undefined,
       attachedAgentsMdPath: getAttachedAgentsMdPath(
         this.options.extensionContext,
         this.agentsMdAccountKey()
       )
     });
     const repoId = sources.useRepoId;
-    const owner = this.currentContext.owner?.trim();
-    const repo = this.currentContext.repo?.trim();
+    const owner = context.owner?.trim();
+    const repo = context.repo?.trim();
     return buildProjectInstructionsPromptBlock({
       enabled: readProjectInstructionsEnabled(),
       useRepo: repoId
         ? {
             repoId,
-            branch: this.currentContext.branch,
-            version: this.currentContext.branch
+            branch: context.branch,
+            version: context.branch
           }
         : undefined,
       localGitRoot: undefined,
-      activeFile: this.currentContext.file,
+      activeFile: context.file,
       attachedAgentsMdPath: sources.attachedAgentsMdPath,
-      remainingGatherMs: remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now()),
+      remainingGatherMs: remainingContextGatherBudgetMs(startedAt || Date.now()),
       readRemoteFile: repoId
         ? async (filePath) => {
             const evidence = await this.indexedRepoWorkspace().readFile(
@@ -12000,8 +12276,8 @@ export class CoopChatSession {
                 repoId,
                 owner,
                 repo,
-                branch: this.currentContext.branch,
-                provider: this.currentContext.provider ?? this.preferences.defaultCodeHost
+                branch: context.branch,
+                provider: context.provider ?? this.preferences.defaultCodeHost
               },
               filePath
             );
@@ -12908,4 +13184,3 @@ function providerFromDegradationMessage(message?: string): IntegrationProvider |
 function delayMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-

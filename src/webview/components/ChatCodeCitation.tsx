@@ -7,7 +7,7 @@ type ChatCodeCitationProps = {
   endLine?: number;
   path: string;
   code: string;
-  onOpenFile?: (path: string, line?: number) => void;
+  onOpenFile?: (path: string, line?: number, options?: { endLine?: number }) => void;
 };
 
 function citationLabel(path: string, startLine?: number, endLine?: number): string {
@@ -56,7 +56,7 @@ export function ChatCodeCitation({
           <button
             type="button"
             className="coop-patch-file-path"
-            onClick={() => onOpenFile(path, startLine)}
+            onClick={() => onOpenFile(path, startLine, { endLine })}
             title={`Open ${label}`}
           >
             {label}

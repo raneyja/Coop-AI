@@ -4,6 +4,7 @@ import {
   COPILOT_C2_ASK,
   COPILOT_C5_ASK,
   COPILOT_T2_ASK,
+  LIVE_PARENT_PASS_ASK,
   COPILOT_ASSIGNEE_REJECT_ASK,
   DOGFOOD_HUNT_QUESTION,
   DOGFOOD_HUNT_SEARCH_QUERY,
@@ -30,8 +31,15 @@ import {
   mergePlannedAgentSearchQueries,
   isGenericRejectSlogan,
   isRejectShapedSearchCriterion,
+  shouldFailOpenCodeHostSearch,
+  lightningHitsSatisfySearchQuery,
+  isRejectErrorCatalogPath,
   contentLooksLikeAskedFieldReject,
   contentLooksLikeWrongFieldReject,
+  askedRejectErrorQuotes,
+  rejectQuoteFirstSearchQueries,
+  extractPastedExactStringNeedle,
+  contentIncludesAskedRejectQuote,
   filterWriteRejectFiles,
   isApiRejectAsk,
   isApiRejectNoisePath,
@@ -39,6 +47,7 @@ import {
   isRequestAuthLocateAsk,
   isBackendStateLocateAsk,
   isBackendStateDefinitionHit,
+  contentLooksLikeStateModelDeclaration,
   isCompoundAuthAndStateLocateAsk,
   isCreateLocateAsk,
   isCreateDefinitionHit,
@@ -46,6 +55,9 @@ import {
   isUnrelatedSerializerForStateLocate,
   askedRejectFieldTokens,
   askedRejectJobTokens,
+  askRejectJobTokens,
+  rejectEvidenceMatchesAskJob,
+  inventRejectSymbolSearchCriteria,
   lineNumberOfWriteReject,
   lineNumberOfCreateHandler,
   pickSearchHitsToRead,
@@ -517,6 +529,14 @@ test("C1 prose locate does not require Authorization as a named symbol", () => {
     false,
     `must not burn retries on junk, got ${fallbacks.join(", ")}`
   );
+});
+
+test("prose parsing ranks a parser declaration ahead of token storage filename overlap", () => {
+  const hits = [
+    { fileName: "server/auth/authTokenStore.ts", lineNumber: 1, content: "export class AuthTokenStore { createToken() {} }", score: 0.9 },
+    { fileName: "server/auth/middleware.ts", lineNumber: 1, content: "export function extractBearerToken(headers) {", score: 0.4 }
+  ];
+  assert.equal(pickSearchHitsToRead(hits, 1, COPILOT_C1_ASK)[0]?.fileName, "server/auth/middleware.ts");
 });
 
 test("C2 prose locate does not require Users as a named symbol", () => {
@@ -1143,6 +1163,46 @@ test("backend work-item state locate prefers server state paths over UI hooks", 
   );
 });
 
+test("calm state locate requires the opened State declaration and caps duplicate fallbacks", () => {
+  const ask = WORK_ITEM_STATE_LOCATE_ASK;
+  const serializer = [
+    "from plane.db.models import State",
+    "class StateSerializer(BaseSerializer):",
+    "    class Meta:",
+    "        model = State"
+  ].join("\n");
+  const model = "class State(BaseModel):\n    name = models.CharField()";
+  assert.equal(contentLooksLikeStateModelDeclaration(serializer), false);
+  assert.equal(contentLooksLikeStateModelDeclaration(model), true);
+  assert.equal(
+    locateReadCountsAsGrounding({
+      path: "apps/api/plane/space/serializer/state.py",
+      body: serializer,
+      query: ask
+    }),
+    false,
+    "serializer import is indirect evidence, not the model declaration"
+  );
+  assert.equal(
+    classifyLocateRead({
+      path: "apps/api/plane/space/serializer/state.py",
+      body: serializer,
+      query: ask
+    }),
+    "mention"
+  );
+  assert.equal(
+    locateReadCountsAsGrounding({
+      path: "packages/models/state.py",
+      body: model,
+      query: ask
+    }),
+    true
+  );
+  assert.deepEqual(fallbackAgentSearchQueries(ask), ["class State", "State model"]);
+  assert.equal(isApiRejectAsk(ask), false, "calm locate must stay out of reject hunt");
+});
+
 test("compound auth + states locate keeps enforcement and a state definition", () => {
   const ask = API_AUTH_AND_STATE_SERVER_LOCATE_ASK;
   assert.equal(isRequestAuthLocateAsk(ask), true);
@@ -1264,9 +1324,47 @@ test("invent and merge never lead with reject-a-bad slogans", () => {
   );
 });
 
+test("codehost fail-open only for reject / quoted error strings", () => {
+  assert.equal(shouldFailOpenCodeHostSearch("IssueCreateSerializer"), false);
+  assert.equal(shouldFailOpenCodeHostSearch("auth"), false);
+  assert.equal(shouldFailOpenCodeHostSearch("Parent is not valid issue_id"), true);
+  assert.equal(shouldFailOpenCodeHostSearch('raise ValidationError("Parent is not valid")'), true);
+  assert.equal(shouldFailOpenCodeHostSearch('"Parent is not valid issue_id"'), true);
+});
+
+test("lightningHitsSatisfySearchQuery requires phrase evidence for long queries", () => {
+  assert.equal(
+    lightningHitsSatisfySearchQuery(
+      [{ content: "class ErrorCode: VALIDATION_ERROR" }],
+      "ValidationError"
+    ),
+    true
+  );
+  assert.equal(
+    lightningHitsSatisfySearchQuery(
+      [{ content: "class ErrorCode: VALIDATION_ERROR" }],
+      "Parent is not valid issue_id"
+    ),
+    false
+  );
+  assert.equal(
+    lightningHitsSatisfySearchQuery(
+      [{ content: 'raise ValidationError("Parent is not valid issue_id")' }],
+      "Parent is not valid issue_id"
+    ),
+    true
+  );
+});
+
+test("utils/error_codes is reject noise — not a write-reject site", () => {
+  assert.equal(isRejectErrorCatalogPath("apps/api/plane/utils/error_codes.py"), true);
+  assert.equal(isApiRejectNoisePath("apps/api/plane/utils/error_codes.py"), true);
+});
+
 test("reject hunt ignores locate-only planned criteria like work item state", () => {
   assert.equal(isRejectShapedSearchCriterion("work item state"), false);
   assert.equal(isRejectShapedSearchCriterion("rejects a bad transition"), false);
+  assert.equal(isRejectShapedSearchCriterion("validate_state"), true);
   assert.equal(isRejectShapedSearchCriterion("ValidationError state"), true);
   assert.equal(isRejectShapedSearchCriterion('get("state_id")'), true);
   const merged = mergePlannedAgentSearchQueries({
@@ -1431,6 +1529,143 @@ test("wrong-field validate() is not an asked-field reject", () => {
   );
   assert.equal(kept.length, 1);
   assert.equal(kept[0]?.path, "app/serializers/item.py");
+});
+
+test("asked-field reject matches Zoekt string-only error line (no raise keyword)", () => {
+  const serializer = "apps/api/plane/app/serializers/issue.py";
+  const zoektOnly = '"Parent is not valid issue_id please pass a valid issue_id"';
+  const bare = "Parent is not valid issue_id please pass a valid issue_id";
+  const stateOnly = '"State is not valid please pass a valid state_id"';
+  // A1 — Exact quoted ask × message-only / bare
+  assert.equal(contentLooksLikeAskedFieldReject(zoektOnly, LIVE_PARENT_PASS_ASK, serializer), true);
+  assert.equal(contentLooksLikeAskedFieldReject(bare, LIVE_PARENT_PASS_ASK, serializer), true);
+  // A2 — COPILOT_T2_ASK paraphrase × message-only (was false — live Fail class)
+  assert.equal(contentLooksLikeAskedFieldReject(zoektOnly, COPILOT_T2_ASK, serializer), true);
+  assert.equal(contentLooksLikeAskedFieldReject(bare, COPILOT_T2_ASK, serializer), true);
+  assert.equal(
+    contentLooksLikeAskedFieldReject(
+      'raise serializers.ValidationError("Parent is not valid issue_id please pass a valid issue_id")',
+      COPILOT_T2_ASK,
+      serializer
+    ),
+    true
+  );
+  // A5 — wrong-field State message-only stays false for Parent asks
+  assert.equal(contentLooksLikeAskedFieldReject(stateOnly, LIVE_PARENT_PASS_ASK, serializer), false);
+  assert.equal(contentLooksLikeAskedFieldReject(stateOnly, COPILOT_T2_ASK, serializer), false);
+});
+
+test("asked-field reject matches Zoekt Match span that omits the field word", () => {
+  const serializer = "apps/api/plane/app/serializers/issue.py";
+  // Live Zoekt Fragments[].Match often returns only the matched query span.
+  const matchOnly = "is not valid issue_id please pass a valid issue_id";
+  assert.equal(contentLooksLikeAskedFieldReject(matchOnly, LIVE_PARENT_PASS_ASK, serializer), true);
+  assert.equal(
+    contentLooksLikeAskedFieldReject('"Parent is not valid issue_id"', LIVE_PARENT_PASS_ASK, serializer),
+    true
+  );
+  // Wrong-field span must stay false
+  assert.equal(
+    contentLooksLikeAskedFieldReject(
+      "is not valid please pass a valid state_id",
+      LIVE_PARENT_PASS_ASK,
+      serializer
+    ),
+    false
+  );
+});
+
+test("askedRejectErrorQuotes extracts Exact Parent message and is empty for COPILOT_T2_ASK", () => {
+  const exactQuotes = askedRejectErrorQuotes(LIVE_PARENT_PASS_ASK);
+  assert.ok(
+    exactQuotes.some((q) => /Parent is not valid issue_id please pass a valid issue_id/i.test(q))
+  );
+  assert.deepEqual(askedRejectErrorQuotes(COPILOT_T2_ASK), []);
+  assert.equal(
+    contentIncludesAskedRejectQuote(
+      '"Parent is not valid issue_id please pass a valid issue_id"',
+      LIVE_PARENT_PASS_ASK
+    ),
+    true
+  );
+  assert.equal(
+    contentIncludesAskedRejectQuote(
+      '"Parent is not valid issue_id please pass a valid issue_id"',
+      COPILOT_T2_ASK
+    ),
+    false
+  );
+});
+
+test("sanitize keeps Exact Parent error string instead of rewriting to get(parent)", () => {
+  const full =
+    "Parent is not valid issue_id please pass a valid issue_id";
+  const quoted = `"${full}"`;
+  assert.ok(full.length > 48, "fixture must exceed old MAX_SEARCH_CHARS");
+  const kept = sanitizeAgentSearchQuery(full, LIVE_PARENT_PASS_ASK);
+  assert.match(kept, /Parent is not valid issue_id/);
+  assert.doesNotMatch(kept, /^get\("parent"\)$/);
+  const keptQuoted = sanitizeAgentSearchQuery(quoted, LIVE_PARENT_PASS_ASK);
+  assert.match(keptQuoted, /Parent is not valid issue_id/);
+  assert.doesNotMatch(keptQuoted, /^get\("parent"\)$/);
+  // invent must also keep the quote (not clip to 48 then lose Zoekt match)
+  assert.ok(
+    inventAskDerivedSearchCriteria(LIVE_PARENT_PASS_ASK).some((q) =>
+      /Parent is not valid issue_id please pass a valid issue_id/i.test(q)
+    ),
+    `invent must keep full Parent message, got ${inventAskDerivedSearchCriteria(LIVE_PARENT_PASS_ASK).join(" | ")}`
+  );
+});
+
+test("Gate A: Exact Parent quote-first — not ValidationError / bare issue_id / get(parent)", () => {
+  const quote = "Parent is not valid issue_id please pass a valid issue_id";
+  assert.deepEqual(rejectQuoteFirstSearchQueries(LIVE_PARENT_PASS_ASK), [quote]);
+  const inventSymbols = inventRejectSymbolSearchCriteria(LIVE_PARENT_PASS_ASK);
+  assert.ok(
+    inventSymbols.some((q) => /IssueCreateSerializer/i.test(q)),
+    `invent symbols must include IssueCreateSerializer from issue+create, got ${inventSymbols.join(" | ")}`
+  );
+  assert.ok(
+    /class IssueCreateSerializer/i.test(inventSymbols[0] ?? ""),
+    `first invent seed should prefer class IssueCreateSerializer (not __init__ re-export), got ${inventSymbols[0]}`
+  );
+  const primary = extractAgentSearchQuery(LIVE_PARENT_PASS_ASK);
+  assert.equal(primary, quote);
+  assert.notEqual(primary.toLowerCase(), "issue_id");
+  assert.notEqual(primary.toLowerCase(), "validationerror");
+  assert.doesNotMatch(primary, /^get\("parent"\)$/);
+  const rejectQueries = apiRejectSearchQueries(LIVE_PARENT_PASS_ASK);
+  assert.equal(rejectQueries[0], quote);
+  assert.equal(
+    rejectQueries.some((q) => q.toLowerCase() === "issue_id" || q.toLowerCase() === "validationerror"),
+    false,
+    `must not pad bare issue_id / ValidationError when Exact quote exists, got ${rejectQueries.join(" | ")}`
+  );
+  const fallbacks = fallbackAgentSearchQueries(LIVE_PARENT_PASS_ASK);
+  assert.equal(fallbacks[0], quote);
+  assert.notEqual(fallbacks[0]?.toLowerCase(), "issue_id");
+  const merged = mergePlannedAgentSearchQueries({
+    userMessage: LIVE_PARENT_PASS_ASK,
+    planned: ["ValidationError", 'get("parent")', "issue_id"],
+    max: 8
+  });
+  assert.equal(merged[0], quote);
+  assert.equal(
+    merged.some((q) => q === "ValidationError" || /^get\("parent"\)$/i.test(q) || q === "issue_id"),
+    false,
+    "planned slogan / bare issue_id must not appear when Exact quote leads"
+  );
+});
+
+test("Gate A: exact-string locate must not latch bare issue_id", () => {
+  const exact =
+    "Where does this exact string appear in the repo: Parent is not valid issue_id please pass a valid issue_id";
+  assert.equal(isApiRejectAsk(exact), false);
+  const needle = extractPastedExactStringNeedle(exact);
+  assert.ok(needle && /Parent is not valid issue_id/i.test(needle), `got ${needle}`);
+  const primary = extractAgentSearchQuery(exact);
+  assert.match(primary, /Parent is not valid issue_id/i);
+  assert.notEqual(primary.toLowerCase(), "issue_id");
 });
 
 test("asked-field reject keeps the matching ValidationError and drops converters", () => {
@@ -1994,6 +2229,53 @@ test("Create finish honesty strips please-open for an already-read path", () => 
   assert.match(cleaned, /IssueViewSet/);
   assert.doesNotMatch(cleaned, /please open/i);
   assert.doesNotMatch(cleaned, /for me/i);
+});
+
+test("reject jump prefers the named field over an overlapping adjacent reject", () => {
+  const body = [
+    'raise serializers.ValidationError("Description is invalid")',
+    'if attrs.get("parent"):',
+    '    if not Issue.objects.filter(pk=attrs["parent"].id).exists():',
+    '        raise serializers.ValidationError("Parent is not valid issue_id")'
+  ].join("\n");
+  assert.equal(lineNumberOfWriteReject(body, "Where does the API reject a bad parent issue_id?", "api/serializers/issue.py"), 4);
+});
+
+test("state catalog validation is not a work-item transition rejection", () => {
+  const body = 'def validate(data):\n if data.get("group"):\n  raise ValidationError("Invalid state group")';
+  assert.equal(contentLooksLikeAskedFieldReject(body, "What rejects a bad state transition?", "server/serializers/state.py"), false);
+});
+
+test("server status rejection uses field evidence rather than imports", () => {
+  const ask = "A signer gets an error that the document must be pending for signing. Where does the server reject this request, and what status check enforces it?";
+  assert.equal(isApiRejectAsk(ask), true);
+  const body = "if (envelope.status !== DocumentStatus.PENDING) {\n throw new AppError('Document must be pending for signing');\n}";
+  assert.equal(contentLooksLikeAskedFieldReject(body, ask, "server/sign.ts"), true);
+  assert.equal(lineNumberOfWriteReject(body, ask, "server/sign.ts"), 2);
+  assert.equal(contentLooksLikeAskedFieldReject("import { AppError, DocumentStatus } from 'types';", ask, "server/sign.ts"), false);
+  assert.equal(contentLooksLikeAskedFieldReject("if (status !== 200) { throw new Error('Failed to get document'); }", ask, "packages/api/v1/examples/get-document.ts"), false);
+  assert.equal(contentLooksLikeAskedFieldReject("if (!envelope) { throw new AppError('Envelope not found'); }\nif (envelope.status === DocumentStatus.REJECTED) return { status: 'REJECTED' };\nif (envelope.status === DocumentStatus.COMPLETED) return { status: 'COMPLETED' };", ask, "server/signing-status-envelope.ts"), false, "a nearby status response cannot establish the requested pending rejection");
+});
+
+test("calm status definition stays a locate question", () => {
+  assert.equal(isApiRejectAsk("Where are document status values defined on the server?"), false);
+});
+
+test("signing operation does not freeze on a PDF download status guard", () => {
+  const ask = "A signer gets an error that the document must be pending for signing";
+  assert.deepEqual(askRejectJobTokens(ask), ["sign"]);
+  assert.equal(rejectEvidenceMatchesAskJob([{ path: "server/files/helpers.ts", content: "const handlePendingFileRequest = async () => { throw new Error('Download a partially signed PDF'); }" }], ask), false);
+  assert.equal(rejectEvidenceMatchesAskJob([{ path: "server/handlers.ts", content: "export const signField = async () => { throw new Error('Must be pending'); }" }], ask), true);
+  assert.equal(rejectEvidenceMatchesAskJob([{ path: "server/files/helpers.ts", content: "const signature = field.signature;" }], ask), false);
+  const statusAsk = `${ask}. Where does the server reject this request and what status check enforces it?`;
+  assert.equal(contentLooksLikeAskedFieldReject("const handlePendingFileRequest = async () => { if (envelope.status !== Status.PENDING) throw new Error('Download a partially signed PDF'); }", statusAsk, "server/files/helpers.ts"), false);
+});
+
+test("named definition misses do not expand into generic question prose", () => {
+  const ask = "Where is validateQuantumPlatypusSessionNonce defined in this repository? Show its actual implementation if it exists.";
+  const expected = ["validateQuantumPlatypusSessionNonce", "validate_quantum_platypus_session_nonce"];
+  assert.deepEqual(fallbackAgentSearchQueries(ask), expected);
+  assert.deepEqual(inventAskDerivedSearchCriteria(ask), expected);
 });
 
 console.log(`\nsearchQuery: ${passed}/${passed + failed} tests passed`);

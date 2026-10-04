@@ -1,0 +1,9 @@
+{
+  "profile": "/private/tmp/coop-dogfood-clean-20261003-continuation",
+  "installedPath": "/private/tmp/coop-dogfood-clean-20261003-continuation/extensions/coop-ai.coop-ai-0.1.10",
+  "vsixHash": "06f564f8d2e18fc01d931b5352b9e8893f11cf31588b9c740a08fc26e5f7fda5",
+  "verification": "Exact final VSIX installed; three bundled assets match installed and archive bytes; clean-profile activation still unverified",
+  "dist/extension.js": "0c6902524079c62b26f447514ceb9b30bfcbe27529a985f1d066b1ec9a9bfd89",
+  "dist/webview.js": "b90947ec2d81f4078c867b89dec6bf6429a27700cb4cc737b608f64c82520d7d",
+  "dist/webview.css": "7fe0c091395e717db3a9ebcdf557ab516423a365cfaa94ed86451f3cd4a7d2bc"
+}
