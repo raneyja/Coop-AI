@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "candidateBundle": "559ff6df341215c1608a2c5c73f23e5ee107189e37fa50bf2da62471a2f1d0d9",
+  "vsixSha256": "d32d406132839f03a02c90985d74cbd3026b5bec0bd997698b7533e404df9a15",
+  "productionBackendDeployment": "a9fd94df-f99c-4be5-adaf-f6cd269c6322",
+  "automated": {
+    "test-ci": "PASS",
+    "package": "PASS",
+    "searchCode": "PASS (26 tests)",
+    "AgentOrchestrator": "PASS (92 tests)"
+  },
+  "liveObservations": [
+    {
+      "ask": "Plane Parent validation",
+      "mode": "new conversation; first body uncached",
+      "status": "PASS for lookup and citation evidence",
+      "runId": "c5416b00-00d1-4524-9fd3-064085587905",
+      "answerStartMs": 9021,
+      "qualityIssue": "Fallback wording incorrectly names state and transition policy"
+    },
+    {
+      "ask": "Plane Parent validation",
+      "mode": "warm",
+      "status": "PASS for lookup and citation evidence",
+      "runId": "98f46411-abb3-4755-acf2-db8560c88afb",
+      "answerStartMs": 9862
+    },
+    {
+      "ask": "GitLab extractBearerToken",
+      "mode": "after repository switch",
+      "status": "PASS for lookup and citation evidence",
+      "runId": "ce206e55-0016-49af-9000-d3eebda519e4",
+      "answerStartMs": 10298
+    },
+    {
+      "ask": "Plane Parent validation",
+      "mode": "after repository switch back",
+      "status": "PASS for lookup and citation evidence",
+      "runId": "8933f764-11f9-41a6-a333-9982c0fca729",
+      "answerStartMs": 9633
+    },
+    {
+      "ask": "Plane Parent validation",
+      "mode": "clean packaged profile, final Stop-fix bundle",
+      "status": "PASS for lookup and citation opening",
+      "runId": "3022d52c-6453-4270-b9df-44acb143be89",
+      "answerStartMs": 9861
+    }
+  ],
+  "qualification": "Branch selected; immutable pinned-SHA qualification remains open. Do not replace historical matrix statuses with these narrower observations.",
+  "cleanProfile": {
+    "installation": "PASS; asset bytes verified",
+    "interactive": "Normal production account sign-in PASS. Lookup and citation PASS on final bundle. Apply/Reject/Undo and five behavior cases PASS on preceding retrieval bundle. Early Stop plus follow-up rename Apply PASS on final bundle; full core journey remains incomplete."
+  },
+  "sandboxSmoke": "PASS; API scope only",
+  "remaining": [
+    "Fallback wording quality",
+    "Thread-context restoration qualification",
+    "Mid-generation Stop",
+    "Autocomplete",
+    "Pinned fixture qualification",
+    "Bitbucket fixture",
+    "Denied integration fixture access",
+    "Stripe test-mode credentials and fixtures",
+    "Remaining scenario matrix"
+  ],
+  "retrievalCandidateBundle": "a39dabe7c09edbf0f628f2a4341c085f90f20b732c9195236a61398d19331dc2",
+  "stopFix": {
+    "automated": "chatTurn and 21 front-door gates PASS; final lint, test:ci and package PASS",
+    "live": "Early planning Stop produces no late rewrite; next rename applies only requested change",
+    "remaining": "Stop during model patch generation remains unqualified"
+  },
+  "contextRestoration": "Saved Parent thread displayed local fixture chip after local edit activity. Correct remote context was explicitly reselected for final lookup. Reproduction and saved-context diagnosis remain open; no thread-context PASS claimed."
+}

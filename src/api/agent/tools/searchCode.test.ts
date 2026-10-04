@@ -556,3 +556,64 @@ async function main() {
 }
 
 void main();
+
+test("filename verification proceeds while content search is pending", async () => {
+  let releaseHost!: (hits: Array<{ path: string }>) => void;
+  const hostPending = new Promise<Array<{ path: string }>>((resolve) => { releaseHost = resolve; });
+  let verifiedRead = false;
+  const ctx: AgentToolContext = {
+    indexBackend: stubIndex(async () => emptySearch()),
+    resolveAbsolutePath: () => undefined,
+    researchQuery: "Where does the API reject an invalid parent_id?",
+    searchCodeHost: async () => hostPending,
+    findFiles: async () => {
+      // Discovery can begin before either index or content search completes.
+      return ["server/serializers/issue.py"];
+    },
+    readRemoteFile: async ({ path }) => {
+      verifiedRead = true;
+      releaseHost([]);
+      return { path, content: SERIALIZER_BODY };
+    }
+  };
+  const result = JSON.parse(await handleSearchCode(ctx, { repoId: REPO, query: "validate_parent" }));
+  assert.ok(verifiedRead);
+  assert.equal(result.filenameFallbackStatus, "verified");
+  assert.equal(result.hits[0].fileName, "server/serializers/issue.py");
+  assert.ok(result.hits[0].content.includes("ValidationError"));
+});
+
+
+test("slow index search cannot starve verified remote filename evidence", async () => {
+  let releaseIndex!: (value: LocalSearchResult) => void;
+  const indexPending = new Promise<LocalSearchResult>((resolve) => { releaseIndex = resolve; });
+  let bodyOpened = false;
+  const ctx: AgentToolContext = {
+    indexBackend: stubIndex(async () => indexPending),
+    resolveAbsolutePath: () => undefined,
+    researchQuery: "Where does the API reject an invalid parent_id?",
+    findFiles: async () => ["server/serializers/issue.py"],
+    readRemoteFile: async ({ path }) => {
+      bodyOpened = true;
+      releaseIndex(emptySearch());
+      return { path, content: SERIALIZER_BODY };
+    }
+  };
+  const result = JSON.parse(await handleSearchCode(ctx, { repoId: REPO, query: "validate_parent" }));
+  assert.ok(bodyOpened);
+  assert.equal(result.filenameFallbackStatus, "verified");
+  assert.equal(result.hits[0].fileName, "server/serializers/issue.py");
+});
+
+
+test("entity discovery precedes broad CRUD names for quoted API rejection", async () => {
+  const queries: string[] = [];
+  const ctx: AgentToolContext = {
+    indexBackend: stubIndex(async () => emptySearch()),
+    resolveAbsolutePath: () => undefined,
+    researchQuery: 'In issue create/update, the API raises ValidationError "Parent is not valid issue_id please pass a valid issue_id" when the parent is not in the project. Where is that raised?',
+    findFiles: async ({ query }) => { queries.push(query); return []; }
+  };
+  await handleSearchCode(ctx, { repoId: REPO, query: "Parent is not valid issue_id" });
+  assert.deepEqual(queries.slice(0, 2), ["issue.", "parent."]);
+});

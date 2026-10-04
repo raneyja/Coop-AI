@@ -1,0 +1,8 @@
+{
+  "profile": "/private/tmp/coop-dogfood-clean-20261004",
+  "vsixHash": "c4574333b5c6f7f84decf5e26f13c87144892db4f48bcbd7c9a92bcc4053f318",
+  "interactiveStatus": "NOT_RUN",
+  "dist/extension.js": "a39dabe7c09edbf0f628f2a4341c085f90f20b732c9195236a61398d19331dc2",
+  "dist/webview.js": "b90947ec2d81f4078c867b89dec6bf6429a27700cb4cc737b608f64c82520d7d",
+  "dist/webview.css": "7fe0c091395e717db3a9ebcdf557ab516423a365cfaa94ed86451f3cd4a7d2bc"
+}

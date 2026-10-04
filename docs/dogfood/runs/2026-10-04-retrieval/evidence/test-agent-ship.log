@@ -1,0 +1,743 @@
+
+> coop-ai@0.1.10 test:agent-ship
+> npm run test:agent-ship:a && npm run test:agent-ship:b && npm run test:agent-ship:c && npm run test:agent-ship:d && npm run test:agent-ship:e
+
+
+> coop-ai@0.1.10 test:agent-ship:a
+> npx tsx src/api/agent/phaseA.gates.test.ts && npx tsx src/api/agent/phaseA.pressure.test.ts && npx tsx src/api/agent/AgentOrchestrator.test.ts && npx tsx src/api/dataSanitization.test.ts && npx tsx src/api/agent/searchQuery.test.ts && npx tsx src/indexing/graphSearchHit.test.ts && npx tsx src/webview/agentActivity.test.ts && npx tsx src/webview/thinkingMessageRotation.test.ts && npx tsx src/chat/buildChatTurnActivity.test.ts && npx tsx src/chat/buildModelHistory.test.ts && npx tsx src/api/agent/honesty.gates.test.ts && npx tsx src/api/agent/noRepoSpecificRules.test.ts && npx tsx src/chat/repoCodeIntent.test.ts && npx tsx src/chat/customerFacingAnswer.test.ts && npx tsx src/chat/agentProposedPatch.test.ts && npx tsx src/api/agent/tools/proposePatch.test.ts && npx tsx src/api/agent/tools/readFile.test.ts && npx tsx src/api/agent/tools/searchCode.test.ts && npx tsx src/api/agent/eval/huntEval.test.ts && npx tsx src/api/agent/eval/agentScopeEval.test.ts && npx tsx src/api/agent/join.gates.test.ts && npx tsx src/api/agent/integrationMidLoop.test.ts && npx tsx src/api/agent/openedIntegrationEvidence.test.ts && npx tsx src/api/agent/enterprise.scorecard.test.ts && npx tsx src/api/agent/vendorLoop.test.ts && npx tsx src/api/integrations/openHitsByIds.test.ts
+
+  ✓ A-G0 agent job budget is not the 15s Q&A gather
+  ✓ A-G4 / A-G7 Trace/workflow does not enter the loop
+  ✓ A-G7 Slack-named ask loops but does not run search_code
+  ✓ A-G1 repo hunt is allowed (always on)
+  ✓ A-G6 / UX-G1 plain explain never loops; hunts always do
+  ✓ parseAgentToolPlan rejects Slack as a repo tool (UX-G2)
+  ✓ A-G7 Slack-only loops without hunt; hunt + Slack loops
+  ✓ parseAgentToolPlan accepts search_jira when Jira is allowlisted
+  ✓ parseAgentToolPlan accepts search_code JSON
+
+phaseA.gates: 9/9 tests passed
+  ✓ A-P1 garbage tool JSON is invalid (fail open)
+  ✓ A-P5 plain explain never loops (no user off switch)
+  ✓ A-P6 agent wall is not the Q&A 15s gather
+  ✓ A-P8 local explain does not loop
+  ✓ A-P10 empty-bundle hunt still loops (always on for hunts)
+  ✓ A-P12 thanks follow-up does not loop (UX-G7)
+  ✓ A-P13 edit turn does not loop (UX-G8)
+  ✓ A-P9 named Slack loops without a repo hunt
+
+phaseA.pressure: 8/8 tests passed
+  ✓ pickTopSearchHit prefers highest score
+  ✓ run executes search_code then read_file on top hit
+  ✓ run stops after search when index returns no hits
+  ✓ run returns empty when repoId is missing
+  ✓ run respects maxSteps=1 (search only)
+  ✓ LLM planTurn chooses search then read (A-G1)
+  ✓ locate with planTurn uses the LLM loop (same conversation)
+  ✓ calm state locate requires the opened State declaration
+  ✓ sanitizes full-question search queries to a short identifier
+  ✓ change hunt skips auth UI that never mentions requireAuth
+  ✓ reads the declaration line, not the top of the file
+  ✓ reads a bounded window when the index gave no position
+  ✓ retries with a broader term when the first search returns only barrels
+  ✓ LLM full-sentence query is rewritten before search
+  ✓ invalid first plan fails open to deterministic fallback (A-G3)
+  ✓ aborted signal returns no hang (A-P3)
+  ✓ forced repoId ignores model-supplied repo (A-P14 / UX-G10)
+  ✓ caps at 8 model-chosen rounds (A-P2)
+  ✓ wrong first hit forces a second read before done (dogfood)
+  ✓ empty hunt does not stream a Your question restatement
+  ✓ role-noun hunt rejects a collab auth read that never says middleware
+  ✓ feature-add with open file seeds read_file and does not post INDEX_HUNT_MISS
+  ✓ named filename seeds read_file even when the body uses a different export
+  ✓ named path seeds the same read as a follow-up Read prompt
+  ✓ planTurn startLine:1 still reads the class, not only the copyright line
+  ✓ C1 Authorization-Bearer ask streams when the index has a Bearer hit
+  ✓ C2 work-item ask streams when the index has a transition hit
+  ✓ C2 auto-reads the hit when the model only searches
+  ✓ C2 auto-read prefers API writer over locale and client grouping hits
+  ✓ C2 jumps from a read-only serializer class to validate() in the same file
+  ✓ C2 model read of a serializer class still jumps to validate()
+  ✓ C2 synthesis conversation excludes OpenAPI and read-only serializer windows
+  ✓ C2 cannot answer from reject evidence alone even without planner evidence labels
+  ✓ C2 accepts verified state update delegation alongside its rejection
+  ✓ compound hunt preserves the model's later write window after attaching a reject
+  ✓ C2 hunt skips filter converters and attaches serializer validate()
+  ✓ C1 empty index still posts INDEX_HUNT_MISS
+  ✓ T2 hunt attaches parent ValidationError, not converters
+  ✓ T2 wrong-floor serializer window jumps to parent ValidationError
+  ✓ reject hunt: planTurn owns gather — planned criteria are hints, not pre-loop parade
+  ✓ C2 ignores locate-only planned criteria and attaches state ValidationError
+  ✓ C2 continues past bgtask noise to attach state ValidationError
+  ✓ UI-only reject evidence yields short miss, not speculative backend essay
+  ✓ API-reject hunt does not answer from a different field's validate()
+  ✓ API-reject hunt jumps in-file from a wrong-field validate() to the asked field
+  ✓ API-reject hunt finds a field raise whose message is not “is not valid”
+  ✓ API-reject hunt attaches invite email, not a signup email 400
+  ✓ API-reject hunt skips invite callers that rethrow and attaches the email check
+  ✓ API-reject hunt jumps in-file from an invite caller to the email 400
+  ✓ API-reject ask uses planTurn (script brain bypass removed)
+  ✓ API-reject miss goes through planTurn then short miss (no scavenger parade)
+  ✓ leftover unmatched chip still hunts auth middleware and does not search Jira
+  ✓ extractBearerToken what-calls-it still reads a caller after the definition window
+  ✓ requireAuth OR authentication middleware reads plane APIKeyAuthentication (zero model reads)
+  ✓ first search story mention then authMiddleware query reads the server
+  ✓ story-only hunt posts INDEX_HUNT_MISS and does not answer from the mention
+  ✓ role-only what-calls-it reads the server then a handler that uses the export
+  ✓ role-only what-calls-it without a caller still cites the implementation
+  ✓ story mention must not become callerRead
+  ✓ H1 requireAuth defined does not require a caller read
+  ✓ role-only what-calls-it uses requireAuth from the full file, not the top window
+  ✓ role-only Card 1 attach jumps to the gate export, not page 1
+  ✓ ship-check search hits do not answer until a sibling 401 body is read
+  ✓ ship-check reads sibling 401 writers and tests, not path-only hits
+  ✓ search snippet without a remote body cannot pass the Parent reject evidence gate
+  ✓ search-hit ValidationError does not pass without a remote body read
+  ✓ search-hit message-only snippet does not pass Parent reject without a remote read
+  ✓ reject attaches from raw hits when preferredHits emptied by noise
+  ✓ finish cannot miss while unused asked-field hit sits in search context
+  ✓ wrong-branch body without Parent still attaches from message-only hit
+  ✓ planTurn present does not resurrect huntWriteReject on invalid first plan
+  ✓ reject adaptation: round-2 tool depends on round-1 preferredHits
+  ✓ live Plane issue.py wrong-floor hit jumps to Parent ValidationError
+  ✓ Gate A fidelity: planned Parent hunt leads with the exact quote and adds no finish search parade
+  ✓ live Parent Fail: invent draft twin must follow to issue create serializer
+  ✓ live Parent Fail: wrong __init__/urls opens must not skip invent → attach
+  ✓ live Parent Fail shape: planner refines quote misses to IssueCreateSerializer
+  ✓ live Parent shape: agent invents symbol search after empty quote (no body-scan rail)
+  ✓ multi-hit: weak twin attach does not freeze when ask job unmatched and budget left
+  ✓ Parent paraphrase consumes the serializer candidate and jumps to the reject
+  ✓ planned reject hunt caps at one seed plus four empty refinements
+  ✓ repeated reject searches require a new criterion without another network call
+  ✓ domain-status reject preserves the model's handler search
+  ✓ reject first search uses exact quote before the planner's generic query
+  ✓ reject first search uses ask-derived transition criteria before generic intent terms
+  ✓ agent readRemoteFile wiring keeps resolveActiveRepoTarget (branch parity)
+  ✓ remote filtering method corrects a reject premise and survives synthesis compaction
+  ✓ target resolution hands off without an unverified ref and respects user Stop
+  ✓ compound filtering evidence never claims an actual rejection was found
+  ✓ slow tool planning hands verified source to synthesis without cancelling the answer
+  ✓ locate synthesis excludes unopened search excerpts and planning guesses
+  ✓ compound handoff reuses the complete same-class remote update, never a neighboring class
+
+AgentOrchestrator: 92/92 tests passed
+  ✓ sanitizeCode preserves token variable assignments used in SEARCH blocks
+  ✓ sanitizeCode preserves object property token: hashedToken
+  ✓ sanitizeCode still redacts quoted token secrets with real backrefs
+  ✓ sanitizeLlmRequestPayload keeps auth middleware identifiers intact
+  ✓ sanitizeLlmRequestPayload preserves token: hashedToken inside file_content for /edit
+  ✓ sanitizeLlmRequestPayload still redacts sk_ tokens inside file_content
+  ✓ sanitizeLlmRequestPayload keeps APIKeyAuthentication in agent read_file JSON (S1)
+  ✓ sanitizeLlmRequestPayload keeps APIKeyAuthentication in search_code JSON snippets
+  ✓ sanitizeLlmRequestPayload still redacts sk_live inside agent read_file JSON
+  ✓ sanitizeCode does not wipe APIKeyAuthentication comments; still redacts assigned secrets
+
+dataSanitization: 10 passed, 0 failed
+  ✓ prefers the symbol the user named over a prose phrase
+  ✓ extracts camelCase without grabbing Where
+  ✓ falls back to a role noun phrase when no symbol is named
+  ✓ sanitize replaces the whole question
+  ✓ sanitize keeps a short model-chosen identifier
+  ✓ fallback queries broaden from symbol to plain words
+  ✓ identifier aliases bridge camelCase and snake_case
+  ✓ index retrieval OR-covers both casings
+  ✓ fallback queries never repeat the whole question
+  ✓ ranks a path that matches the question's words above one that does not
+  ✓ pickSearchHitsToRead skips barrels
+  ✓ pickSearchHitsToRead skips build output and vendored code
+  ✓ does not drop a UI path just because the question sounds backend
+  ✓ exact symbol path beats a weak auth UI path for requireAuth asks
+  ✓ drops auth UI hits that never mention requireAuth
+  ✓ role-noun hunts keep middleware hits and drop collab auth
+  ✓ role-noun hunts drop leftover latency hits that never say middleware
+  ✓ pickSearchHitsToRead keeps the server and drops a language-mismatch story
+  ✓ pickSearchHitsToRead returns empty when every hit is a mention
+  ✓ locate skips docs and fixtures but not a story path
+  ✓ does not treat require_authentication filenames as requireAuth
+  ✓ symbol index rejects require_authentication as a requireAuth match
+  ✓ skips test paths for named-symbol hunts unless the user asked about tests
+  ✓ ship-check ask does not skip handler tests
+  ✓ keeps a barrel when the user named that exact file
+  ✓ picks the declaration whose name matches the symbol the user asked about
+  ✓ ignores declarations unrelated to the question
+  ✓ ignores declarations inside vendored code
+  ✓ isBarrelPath
+  ✓ isGeneratedOrVendorPath
+  ✓ queryRoleHints extracts middleware from a locate ask
+  ✓ textMentionsQueryRoles requires the role in the file or path
+  ✓ C1 prose locate does not require Authorization as a named symbol
+  ✓ prose parsing ranks a parser declaration ahead of token storage filename overlap
+  ✓ C2 prose locate does not require Users as a named symbol
+  ✓ C2 skips locale catalogs and prefers API write paths over client grouping
+  ✓ C2 skips state catalogs and client posts; prefers the write/reject handler
+  ✓ C2 skips seed JSON and read-only serializers; prefers the reject snippet
+  ✓ filterWriteRejectFiles drops OpenAPI and read-only serializer windows
+  ✓ C2 skips OpenAPI specs and does not treat partial_update as a reject
+  ✓ C2 skips query-filter converters and does not stop on generic ValidationError
+  ✓ C2 does not pick a permission-only view when a reject snippet exists
+  ✓ lineNumberOfWriteReject prefers ValidationError near state
+  ✓ lineNumberOfWriteReject ignores filter ValidationError that is not a state transition
+  ✓ Where is requireAuth defined still requires that symbol
+  ✓ Where is the Button component still searches Button
+  ✓ edit tests-for-X prefers the callee over the test-file stem
+  ✓ filename asks are file hunts, not required in-body symbols
+  ✓ named files are path-shaped, not a language allowlist
+  ✓ API-reject hunt is a class: C2, parent, and assignee fields all match
+  ✓ calm locate with API + work-item is not the ValidationError scavenger hunt
+  ✓ client UI path class covers hooks/stores, not API trees
+  ✓ C2 skips product-UI hooks/stores and never reads them over a server reject
+  ✓ API key / request-auth locate prefers enforcement over config and secret gates
+  ✓ backend work-item state locate prefers server state paths over UI hooks
+  ✓ calm state locate requires the opened State declaration and caps duplicate fallbacks
+  ✓ compound auth + states locate keeps enforcement and a state definition
+  ✓ T2 hunt searches parent field access, not bare issue_id
+  ✓ planned quarterback criteria run before slogan backup
+  ✓ invent and merge never lead with reject-a-bad slogans
+  ✓ codehost fail-open only for reject / quoted error strings
+  ✓ lightningHitsSatisfySearchQuery requires phrase evidence for long queries
+  ✓ utils/error_codes is reject noise — not a write-reject site
+  ✓ reject hunt ignores locate-only planned criteria like work item state
+  ✓ novel T2 paraphrase invents ask-derived criteria without a new slogan
+  ✓ C2 skips shared types packages, utils filters, and non-actionable symbols
+  ✓ empty planned criteria fail open into invent + fallback
+  ✓ API-reject hunts do not latch *_id as a named symbol
+  ✓ asked-field tokens use the qualifier, not a type suffix like issue_id
+  ✓ wrong-field validate() is not an asked-field reject
+  ✓ asked-field reject matches Zoekt string-only error line (no raise keyword)
+  ✓ asked-field reject matches Zoekt Match span that omits the field word
+  ✓ askedRejectErrorQuotes extracts Exact Parent message and is empty for COPILOT_T2_ASK
+  ✓ sanitize keeps Exact Parent error string instead of rewriting to get(parent)
+  ✓ Gate A: Exact Parent quote-first — not ValidationError / bare issue_id / get(parent)
+  ✓ Gate A: exact-string locate must not latch bare issue_id
+  ✓ asked-field reject keeps the matching ValidationError and drops converters
+  ✓ API-reject pick prefers asked-field reject over a different field's validate()
+  ✓ API-reject pick keeps a serializer with a wrong-field snippet so hunt can jump in-file
+  ✓ filterWriteRejectFiles keeps the asked field reject, not OpenAPI
+  ✓ asked-field reject matches a raise whose message does not repeat the field
+  ✓ API-reject job: invite email is not a signup email reject
+  ✓ API-reject hunt ignores invite callers that rethrow and pass email through
+  ✓ readBodyHasCallerUse uses the grounded export when the ask has no named symbol
+  ✓ readBodyHasCallerUse still counts same-file extractBearerToken( for a named-symbol ask
+  ✓ lineNumberOfCallerUse returns the use line, not the declaration
+  ✓ L3: defined-on-server compound is auth+state locate, not reject
+  ✓ L3: comment_html issue serializer is not state definition evidence
+  ✓ L3: auth alone without state definition must not satisfy compound pick padding
+  ✓ C2: reject hunt skips migrations, icons, empty-state, seeds, OpenAPI, HTML
+  ✓ Create locate prefers ViewSet/create serializer and jumps to create line
+  ✓ Create finish honesty strips please-open for an already-read path
+  ✓ reject jump prefers the named field over an overlapping adjacent reject
+  ✓ state catalog validation is not a work-item transition rejection
+  ✓ server status rejection uses field evidence rather than imports
+  ✓ calm status definition stays a locate question
+  ✓ signing operation does not freeze on a PDF download status guard
+  ✓ named definition misses do not expand into generic question prose
+
+searchQuery: 98/98 tests passed
+  ✓ uses the line the server sent
+  ✓ accepts the legacy sha carrier from older servers
+  ✓ prefers an explicit line over the legacy carrier
+  ✓ reports unknown rather than inventing a position
+  ✓ unknown is not a valid 1-based line
+  ✓ never derives a position from a hit's place in the result list
+  ✓ keeps the index's own scores instead of flattening them
+  ✓ carries real match positions and snippets through
+  ✓ keeps symbol names and declaration lines
+  ✓ drops records with no path or file
+
+graphSearchHit: 10/10 tests passed
+✔ classifyActivityTodoKind splits plan from finished research (0.57425ms)
+✔ partitionActivityTodos keeps the plan and drops Searching once Searched exists (0.56825ms)
+✔ agentStepsToActivity humanizes search/read tools (0.38775ms)
+✔ toolRowsFromTodos skips pending (0.407042ms)
+✔ extractFileChipsFromLabels picks backtick paths (0.144334ms)
+✔ absolute Read path is one chip, not a second Explored row (0.087417ms)
+✔ gather theater does not become file chips or an explored count (0.196625ms)
+✔ agentStepsToActivity keeps every tool row (no leftover-steps count) (0.118792ms)
+✔ summarizeAgentExploration uses Explored / Exploring, not remaining steps (0.092666ms)
+✔ summarizeAgentExploration is null without real tools (0.085166ms)
+✔ live thinking auto-opens until the user collapses it (0.064458ms)
+✔ synthesis wait does not invent Distilling/Aggregating todos (0.261292ms)
+✔ real gather lines stay visible after synthesis starts (0.887916ms)
+✔ awaitingResponse shows gather todos immediately (no blank start delay) (0.17625ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8.36725
+ok - buildProcessingTermMessages shuffles terms per seed
+ok - appendThinkingProcessingTerms does not add Distilling filler
+ok - buildThinkingMessageSequence keeps only concrete gather/job lines
+ok - buildThinkingMessageSequence drops gather theater
+ok - buildThinkingMessageSequence stays empty while awaiting a model with no gather work
+ok - pickRotatingThinkingMessage cycles without repeating order immediately
+ok - buildThinkingMessageSequence returns empty when idle
+ok - shouldShowThinkingIndicator hides once assistant text is visible
+ok - hasVisibleAssistantResponse ignores empty assistant placeholders
+ok - shouldResetThinkingRotationStep keeps step across prefix growth
+ok - buildConcreteActivityMessages strips spinner filler verbs
+ok - resolvePacedActivityIndex waits for start delay then advances one-by-one
+ok - isSynthesisActivityPhase does not start immediately for a single prep step
+ok - isSynthesisActivityPhase starts when keep-alive title is Thinking
+ok - buildConcreteActivityMessages drops terminal preparing lines
+
+15 passed
+✔ buildChatTurnActivity persists thinking and hunt steps (0.985375ms)
+✔ buildChatTurnActivity strips rotating processing terms and synthesis filler (1.413209ms)
+✔ isConcreteActivityLine rejects filler and keeps real tool lines (0.198417ms)
+✔ naming a file in the ask does not invent a Read trail (0.204125ms)
+✔ inventory asks persist a Looked up indexed inventory trail (0.170958ms)
+✔ inventory ask text alone does not invent a Looked up trail (0.056542ms)
+✔ generic integration theater does not count as Explored searches (0.170292ms)
+✔ empty turns omit activity (0.082958ms)
+✔ completed view is collapsed Worked for with thought and files (0.14725ms)
+✔ formatWorkedForLabel and Thought labels match Cursor-style clocks (0.09125ms)
+✔ looksLikeRepoPath distinguishes files from search tokens (0.103833ms)
+✔ buildModelHistory strips activity so it is not sent back to the model (0.089ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8.367
+  ✓ buildModelHistory returns empty array for single current user turn
+  ✓ buildModelHistory excludes current turn and maps prior user modelContent
+  ✓ buildModelHistory falls back to bubble content when modelContent is absent
+  ✓ buildModelHistory preserves assistant content unchanged
+  ✓ buildModelHistory strips persisted activity from model replay
+  ✓ stopped broad edits and partial proposals remain visible but cannot instruct the next rename
+  ✓ buildModelHistory handles empty history
+  ✓ rejected proposals cannot supply stale source to a later edit
+
+8 passed, 0 failed
+  ✓ H-G1 Settings has no AgentMode on/off control
+  ✓ H-G2 send does not read a user agentMode setting
+  ✓ H-G3 no coopAI.chat.agentMode contribution; hunts are always on
+  ✓ H-G4 dogfood hunt always loops (real planner, not empty plan)
+  ✓ H-G5 dogfood hunt searches a short symbol, never the whole question
+  ✓ H-G6 ranking prefers a path matching the question and drops structural noise
+  ✓ H-G7 loop posts activity from the agent-owned answer path
+  ✓ H-G8 no Agent toggle in Workflows header or composer (UX-G9)
+  ✓ H-G9 leftover Blast/Owner chips must not steal the dogfood hunt
+  ✓ H-G10 docs do not tell the user to enable AgentMode
+  ✓ H-G11 retrieval is one rule for every ask — no repo names, no layer special cases
+  ✓ H-G12 hot path merges agent patch before Apply card (not orphan helpers)
+  ✓ H-G14 hunt+named integration is not stolen; slash still constrains
+  ✓ H-G13 agent-owned answer still bridges propose_patch to Apply
+
+honesty.gates: 14/14 tests passed
+  ✓ no ranking module encodes a specific repository's layout
+  ✓ the noise module's whole vocabulary is universal infrastructure
+  ✓ no product, framework, or vendor name in ranking code
+  ✓ noise classification lives in one module, not copied per caller
+
+noRepoSpecificRules: 4/4 tests passed
+
+repoCodeIntent: 79/79 routed correctly
+  ✓ keeps a reading-list answer and does not append patch internals
+  ✓ locked-pass answers with no intern-speak stay byte-identical
+  ✓ rewrites I3/I4 intern-speak into teammate English without blanking the bubble
+  ✓ rewrites intern-speak in a mixed sentence instead of deleting the line
+  ✓ does not invent a patch-failure footer when the hunt already answered
+  ✓ rewrites timed-out vendor search into teammate English
+  ✓ leaves Apply-patch answers unchanged
+  ✓ intern-speak only inside a citation fence leaves the bubble byte-identical
+  ✓ keeps locate prose and citation-fence comments about the soft gather budget
+  ✓ citation fences stay byte-identical even when surrounding intern-speak is rewritten
+  ✓ drops latency-banner intern copy without blanking a real answer
+  ✓ highlight change keeps a synthesis patch and does not use the empty-hunt miss
+  ✓ empty agent change hunt still uses the canned miss
+
+customerFacingAnswer: 13/13 tests passed
+  ✓ extracts patchText from agentTools in the context bundle
+  ✓ ignores a propose_patch result with no SEARCH markers
+  ✓ ignores propose_patch when ok is false
+  ✓ merge appends the agent patch when the answer forgot it
+  ✓ merge prefers tool-validated agent patch over a model-invented SEARCH block
+  ✓ merge is a no-op without an agent patch
+  ✓ synthesis prompt includes the agent patch so the model can echo it
+
+agentProposedPatch: 7/7 tests passed
+  ✓ a change request reaches the agent loop and asks for a patch
+  ✓ a patch anchored to real lines is emitted
+  ✓ a SEARCH block that is not in the file is rejected before the user can Apply
+  ✓ REPLACE that duplicates SEARCH is rejected
+  ✓ line-number prefixes from read_file are stripped before matching
+  ✓ indentation drift is accepted because Apply matches it fuzzily
+  ✓ an unreadable file does not block the patch
+
+proposePatch: 7/7 tests passed
+  ✓ ordinary remote guard read survives final answer compaction
+  ✓ startLine-only does not return just the copyright line
+  ✓ read_file prefixes the real file line numbers
+  ✓ numberReadLines / stripReadLinePrefixes round-trip
+
+readFile: 4 passed, 0 failed
+ok - normalizeCodeHostSearchQuery strips outer quotes
+ok - findQueryMatchLine finds Parent ValidationError line
+ok - Lightning empty + codehost path + body enrich attaches reject line
+ok - Lightning empty + codehost path + failed body still returns path for auto-read
+ok - symbol locate with empty Lightning does not call codehost
+ok - Lightning hits skip codehost even for reject query
+ok - UI text matching a reject query does not suppress codehost fallback
+ok - a different field's server reject does not suppress codehost fallback
+ok - literal codehost query follows an empty phrase query
+ok - reject fallback uses a field token after phrase and literal misses
+ok - Lightning wrong hits for phrase query still trigger codehost fail-open
+ok - cloud content search unsupported recovers through filename discovery and verifies remote body
+ok - a validate-prefixed definition lookup does not become a reject hunt
+ok - operation filenames recover signing after a neighboring PDF guard
+ok - backend State lookup remotely opens declaration after UI-only index hits
+ok - indexed entity filename hints recover a transition when the user vocabulary differs
+ok - semantic reject retrieval refines with the task instead of repeating a casing alias
+ok - remotely disproven filename candidates do not get queued for another read
+ok - retrieval diagnostics record criteria and candidate rejection without source bodies
+ok - equivalent hunts reuse results while both lexical identifier forms remain searchable
+ok - ruled-out remote candidates retain status without duplicate body work across refinements
+ok - filename discovery preserves a complete remotely verified filtering method
+ok - indexed entity hints retain a domain directory and omit the shared namespace
+ok - filename verification proceeds while content search is pending
+ok - slow index search cannot starve verified remote filename evidence
+
+index returns match lines (positioned):
+  ✓ Where is auth middleware enforced and what calls it?
+  ✓ Where is requireAuth or authentication middleware defined in this repo?
+  ✓ Where is verify_token defined in this repo?
+  ✓ Where is the InvoiceService class defined?
+  ✓ Where is the LoginForm component defined in this repo?
+  ✓ Where is useSession defined in this repo?
+  ✓ Where is the ApiClient class defined?
+  ✓ Where is the Button component defined in this repo?
+  ✓ Where is NewRouter defined in this repo?
+  ✓ Where is HealthCheck defined in this repo?
+  ✓ Where is PaymentProcessor defined in this repo?
+  ✓ Where is issue_token defined in this repo?
+  ✓ Where is the AuthenticationMiddleware class defined?
+  ✓ Where do we parse the Authorization Bearer token? Don't write a new helper — point me at the existing function.
+  ✓ Users can't move a work item out of backlog — the API returns an error. I don't have this repo cloned. Where is work-item state written, and what rejects a bad transition?
+  R-G1/R-G2 (positioned): right file 15/15 · definition in view 15/15
+  PASS R-G1 R-G2 R-G3 R-G4 (positioned)
+
+index returns files only (paths-only):
+  ✓ Where is auth middleware enforced and what calls it?
+  ✓ Where is requireAuth or authentication middleware defined in this repo?
+  ✓ Where is verify_token defined in this repo?
+  ✓ Where is the InvoiceService class defined?
+  ✓ Where is the LoginForm component defined in this repo?
+  ✓ Where is useSession defined in this repo?
+  ✓ Where is the ApiClient class defined?
+  ✓ Where is the Button component defined in this repo?
+  ✓ Where is NewRouter defined in this repo?
+  ✓ Where is HealthCheck defined in this repo?
+  ✓ Where is PaymentProcessor defined in this repo?
+  ✓ Where is issue_token defined in this repo?
+  ✓ Where is the AuthenticationMiddleware class defined?
+  ✓ Where do we parse the Authorization Bearer token? Don't write a new helper — point me at the existing function.
+  ✓ Users can't move a work item out of backlog — the API returns an error. I don't have this repo cloned. Where is work-item state written, and what rejects a bad transition?
+  R-G1/R-G2 (paths-only): right file 15/15 · definition in view 15/15
+  PASS R-G1 R-G2 R-G3 R-G4 (paths-only)
+  ✓ planner + routing matrix matches product scope
+  ✓ hunts always loop — there is no agent off switch
+  ✓ locate hunt reads the definition line in the golden repo
+  ✓ understand hunt reads auth middleware source
+  ✓ change request: search → read → propose_patch → Apply-ready text
+  ✓ propose_patch rejects SEARCH that is not in the golden file
+  ✓ locate hunt does not call propose_patch
+
+agentScopeEval: 7/7 tests passed
+PASS S-G1 S-G2 S-G3 PB-G1 PB-G2 PB-G3 PB-G4 PB-G5 (scope + patch bridge eval)
+  ✓ J-G1 Apply session wires Create PR (canCreatePr + patch:create-pr handler)
+  ✓ J-G3 test:agent-ship and test:agent-ship:pressure scripts exist
+  ✓ J-G4 quick actions never enter the agent tool loop
+  ✓ J-G6 Agent hunts always on (no user toggle); NES stays off
+  ✓ J-G7 chat-intent script exists for UX freeze regression
+
+join.gates: 5/5 tests passed
+  ✓ S-G8b search_jira invalid without allowlist
+  ✓ S-G8b search_jira valid on allowlist
+  ✓ S-G8b search_slack rejected when only jira allowlisted
+  ✓ mid-loop jira tool calls searchIntegration with focused query
+  ✓ mid-loop blocks off-allowlist provider
+  ✓ orchestrator can call allowlisted jira mid-loop
+  ✓ promoteAgentIntegrationSearches writes jiraSearch for synthesis
+  ✓ prompt lists connected integration tools
+  ✓ connected vendor is callable even when planner tools would be empty
+  ✓ does not backfill every connected vendor when fill hints are empty
+  ✓ after a matching hunt, Jira fill uses decision terms not the locate symbol
+  ✓ I3 writer prompt receives opened Jira body, not title-only JSON
+
+integrationMidLoop: 12/12 tests passed
+  ✓ Jira title-only hits are labeled body not attached
+  ✓ Jira description is the Body line the writer must use
+  ✓ empty context yields nothing
+  ✓ Notion excerpt is the Body line the writer must use
+  ✓ Google Docs excerpt is the Body line the writer must use
+  ✓ Notion title-only hits are labeled body not attached
+  ✓ Slack thread body is the Body line the writer must use
+  ✓ Slack snippet-only hits are not treated as Opened
+  ✓ I3 Slack empty plus ADR title is still a documented decision
+  ✓ unopened Search ranks are not dumped into the Talk track
+  ✓ Teams thread body is the Body line the writer must use
+
+openedIntegrationEvidence: 11/11 tests passed
+
+=== ENTERPRISE SCORECARD ===
+
+  PASS  S-G1     locate/understand/change all loop
+  PASS  S-G2     buffer / thanks stay out; Owner/Blast English may loop as chat
+  PASS  S-G3     no AgentMode setting; hunts always on
+  PASS  S-G4     classifier sample 100% (full matrix in repoCodeIntent.test)
+  PASS  S-G5     planner codeIntent + classifier; keyword regex gone
+  PASS  S-G6     Settings has no AgentMode control
+  PASS  S-G7     noRepoSpecificRules covers ranking + scope
+  PASS  S-G8     hunt + Slack: jobs locate+decision, agent loop, connected tools unlocked
+  PASS  R-G1     dogfood hunt → right file
+  PASS  R-G2     definition line in read window
+  PASS  R-G3     paths-only still finds definition (full 12/12 in huntEval)
+  PASS  R-G4     no barrel/vendor/build reads
+  PASS  PB-G1    change request reaches the loop
+  PASS  PB-G2    search→read→propose_patch yields patchText
+  PASS  PB-G3    unanchored SEARCH rejected
+  PASS  PB-G4    forgotten echo still Apply-ready
+  PASS  PB-G5    locate hunt does not propose patches
+  PASS  H-G12    hot path merges agent patch
+  PASS  H-G13    synthesis includes agent_proposed_patch
+  PASS  H-G14    hunt is not skipped when Slack/Jira is named; slash still runs the vendor loop
+  PASS  ENT-G4   read_file is remote-only
+  PASS  ENT-G5   scorecard executed
+
+--- Summary by family ---
+  PASS  Scope        8/8
+  PASS  Retrieval    4/4
+  PASS  PatchBridge  5/5
+  PASS  Honesty      3/3
+  PASS  Enterprise   2/2
+
+OVERALL: PASS (22/22 gates)
+  ✓ Choose Open: Search returns the full list; Open only chosen ids including hit 4
+  ✓ empty Search retries once then honest empty; no Open of junk
+  ✓ named Notion-only rejects search_code; compound locate+Notion allows it
+  ✓ API reject prompt makes exact quoted errors an exception to short-query guidance
+  ✓ compound API reject prompt requires both remote evidence floors
+  ✓ A-P9 / A-G7 named Slack loops without a repo hunt
+  ✓ slash runs the vendor loop without repo tools
+  ✓ Talk track rewriter strips timeout jargon
+  ✓ Talk track prompt has no intern-speak decision essays
+  ✓ parseOpenIds caps at 3
+  ✓ empty Search needs retry
+  ✓ 2–3 chosen Opens run together; Interpret sees opened bodies
+  ✓ compound locate + Notion allows search_code; Sources only the called vendor
+  ✓ not-connected / 401 / allowlist are not empty-Search copy
+
+vendorLoop: 14/14 tests passed
+  ✓ opens chosen ids including hit 4, skips rank 1–3
+  ✓ caps Opens at 3 and keeps the row if Open fails
+
+openHitsByIds: 2/2 tests passed
+
+> coop-ai@0.1.10 test:agent-ship:b
+> npx tsx src/edit/phaseB.gates.test.ts && npx tsx src/edit/phaseB.pressure.test.ts && npx tsx src/context/stickyEditorSelection.test.ts && npx tsx src/context/enclosingDefinitionRange.test.ts
+
+  ✓ B-G1 /edit two-file patch yields a Patch card
+  ✓ B-G1 agent propose_patch yields parseable 2-file SEARCH/REPLACE
+  ✓ B-G1 registry expose propose_patch without applying
+  ✓ B-G2 remote auto-open succeeds when files were not open (mocked VFS)
+  ✓ B-G2 Apply after auto-open writes the remote buffer
+  ✓ B-G2 Apply uses captured bytes when GitHub Repositories is missing
+  ✓ Create PR files come from captured bytes when the Apply buffer has no repo path
+  ✓ B-G3 reject leaves buffers unchanged and restages via undo
+  ✓ B-G3 undo restores buffers after Apply
+  ✓ B-G4 citation fences are not Apply-able
+  ✓ B-G6 apply and reject telemetry still fire
+  ✓ B-G7 reserved Create PR is coop-text-btn, not a new primary row
+  ✓ parseAgentToolPlan accepts propose_patch
+  ✓ mixed apply/reject hunks stay independent (card helper)
+
+phaseB.gates: 14/14 tests passed
+  ✓ B-P1 malformed SEARCH/REPLACE errors with no silent write
+  ✓ B-P2 GitLab/Bitbucket honest degrade — no fake VFS
+  ✓ B-P3 Apply then Undo then Apply again
+  ✓ B-P4 one file Apply, one Reject in the same session
+  ✓ B-P5 5-file cap with a clear error
+  ✓ B-P6 cite fence beside a patch — only the patch is Apply-able
+  ✓ reject does not invent an apply when nothing was written
+
+phaseB.pressure: 7/7 tests passed
+  ✓ selectedLinesFromEditorSelection maps 0-based L56–61 inclusive
+  ✓ selectedLinesFromEditorSelection treats col-0 end as exclusive next line
+  ✓ selectedLinesFromEditorSelection ignores empty caret
+  ✓ sticky keeps L56–61 when Chat click sends empty selection on same file
+  ✓ sticky keeps L56–61 when incoming file is omitted (webview focus loss)
+  ✓ sticky replaces the range when the user highlights a new block
+  ✓ sticky clears when the user unhighlights in the editor
+  ✓ isUserClearedEditorSelection is mouse/keyboard empty only
+  ✓ sticky clears when the open file changes
+  ✓ selectedLineRangesEqual compares tuples
+
+stickyEditorSelection: 10/10 tests passed
+  ✓ click inside get_queryset selects that method, not DEFAULT_STATES / the class
+  ✓ click on the def line still covers the method body
+  ✓ click on the class header covers the whole class
+  ✓ click inside requireAuth selects that function, not extractBearerToken
+  ✓ caret outside any function returns nothing
+  ✓ click inside In Progress dict is not a function
+  ✓ click inside get_queryset is not L38–43 / DEFAULT_STATES
+  ✓ anchor names StateManager.get_queryset, not TriageStateManager
+  ✓ Send expands caret in get_queryset over sticky DEFAULT_STATES L38–43
+  ✓ drag-select still wins over enclosing function
+  ✓ precise drag inside get_queryset survives Chat focus loss
+  ✓ click in DEFAULT_STATES clears leftover highlight
+  ✓ Chat click with no caret keeps sticky range
+
+enclosingDefinitionRange: 13/13 tests passed
+
+> coop-ai@0.1.10 test:agent-ship:c
+> npx tsx src/api/codeHosts/phaseC.gates.test.ts && npx tsx src/server/phaseC.gates.test.ts && npx tsx src/api/codeHosts/phaseC.pressure.test.ts && npx tsx src/webview/createPullRequestConfirm.test.ts && npx tsx src/edit/prNotesSummary.test.ts && npx tsx src/server/githubAppService.accessToken.test.ts && npx tsx src/server/githubPullWriteReadiness.test.ts
+
+  ✓ C-G1 confirmed fixture files create branch + commit + PR URL
+  ✓ C-G2 cancel / dismiss creates nothing on the host
+  ✓ C-G3 audit event name for PR handoff
+  ✓ C-G4 GitLab and Bitbucket create a PR/MR on their own APIs — never GitHub
+  ✓ C-G6 confirm dialog is coop-prompt-modal family; trigger is quiet text button
+
+phaseC.gates (codeHosts): 5 passed, 0 failed
+phaseC.gates (server): ok
+  ✓ C-P1 missing contents/pull_requests → permission error, nothing created
+  ✓ GitHub App tokens are not blocked by collaborator push=false
+  ✓ GitHub Contents 403 explains App cannot write this repo
+  ✓ GitLab and Bitbucket grant checks match write scopes
+  ✓ Bitbucket GET accepted-scopes (read) must not block a write token
+  ✓ Bitbucket src 201 with empty JSON uses the Location commit id
+  ✓ Bitbucket src no-changes still opens a PR on the existing branch
+  ✓ Bitbucket 400 surfaces the host's reason, not a bare rejection
+  ✓ Bitbucket token with only repository read still blocks before writes
+  ✓ GitLab token/info without api blocks before commits
+  ✓ GitLab token/info with api only does not require write_repository
+  ✓ GitLab commits onto an existing coop/patch instead of recreating it
+  ✓ GitLab no-changes on an existing branch still opens a merge request
+  ✓ GitLab existing merge request is returned instead of a generic rejection
+  ✓ GitLab 400 surfaces the host's reason, not a bare rejection
+  ✓ GitHub creates coop/patch from the base branch before writing files
+  ✓ GitHub missing base branch is not a generic Resource not found
+  ✓ C-P2 double-click confirm → one PR
+  ✓ C-P3 API 422 → error, no half-branch claimed as success
+  ✓ C-P4 GitLab confirm is allowed
+  ✓ C-P5b absolute disk path is rejected before a host write
+  ✓ C-P5 empty file list blocked
+
+phaseC.pressure: 22 passed, 0 failed
+  ✓ default title uses filenames a reviewer can scan
+  ✓ Notes field is labeled AI Generated
+  ✓ UX-G3 / C-G6 confirm uses Prompt Library modal family
+  ✓ UX-G4 trigger is a quiet coop-text-btn
+  ✓ C-G2 Escape/backdrop dismiss and Cancel create nothing
+  ✓ absolute disk path does not confirm a pull request
+  ✓ C-P4 GitLab and Bitbucket can confirm Create PR
+  ✓ confirm keeps optional notes on the pull request body
+  ✓ C-P5 files without content are dropped
+  ✓ C-P2 confirm guard skips a second in-flight submit
+  ✓ success copy and link label match the code host
+  ✓ created result is only a host URL, never an error payload
+
+createPullRequestConfirm: 12 passed, 0 failed
+  ✓ sanitizePrNotes keeps a short summary and drops junk
+  ✓ sanitizePrTitle keeps a change summary and drops Update filename
+  ✓ buildPrNotesUserMessage asks for per-file JSON
+  ✓ filePathsFromPrDiff reads compact section headers
+  ✓ formatPrNotesBody uses a heading per file
+  ✓ parsePrNotesResponse formats JSON into per-file sections
+  ✓ parsePrNotesResponse wraps a blob when there are two files
+  ✓ summarizePrNotes returns model text and fails open
+  ✓ comment-only # test test above DEFAULT_STATES skips the model
+  ✓ comment-only // test test above DEFAULT_STATES skips the model
+  ✓ post-filter replaces a fake refactor when the diff is only test test
+  ✓ empty diff preview does not invent a refactor
+
+prNotesSummary: 12 passed, 0 failed
+✔ tryCreatePullWriteAccessToken asks GitHub for Contents and Pull requests write (59.339959ms)
+✔ tryCreatePullWriteAccessToken 422 returns GitHub's refusal instead of throwing (63.728375ms)
+✔ a token minted with less than write is reported as not ok (28.253333ms)
+✔ unscoped installation token mint still works for indexing paths (23.353375ms)
+✔ GitHub lists App installations as a raw array (0.499ms)
+✔ wrapped { installations } payloads still parse (0.071583ms)
+✔ the old parser shape (missing installations key) is not treated as zero installs (0.053458ms)
+✔ getRepositoryInstallation asks GitHub which install covers the repo (10.280916ms)
+✔ getRepositoryInstallation 404 means the App is not on that repo (46.460167ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 236.251834
+✔ App installation that never accepted write names the account and approval page (0.992375ms)
+✔ approval landed on a different installation of the same App — Coop switches to it (0.221208ms)
+✔ company install cannot see a personal repo — use the owner's install instead (0.13125ms)
+✔ a public personal repo is not treated as writable by the company GitHub App (0.128458ms)
+✔ a public personal repo with no App install on the owner is not treated as ready (0.149333ms)
+✔ when the stored install is the company, a missing owner approval names raneyja not the company (0.0945ms)
+✔ a second installation that cannot see the repo is not used as a fix (0.098875ms)
+✔ accept message degrades to the installation id when GitHub gives no html_url (0.05275ms)
+✔ App installation with write access is ready and persists the minted token (0.429125ms)
+✔ App with write access but repo outside Repository access reports repo_not_in_installation (0.13475ms)
+✔ mint that silently downgrades to contents=read is still an Accept problem (0.097834ms)
+✔ OAuth connection without repo scope reports the reconnect reason, not the App Accept reason (9.996708ms)
+✔ no GitHub connection reports not_connected (0.065083ms)
+✔ every block reason has its own sentence (0.030667ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 16.935375
+
+> coop-ai@0.1.10 test:agent-ship:d
+> npx tsx src/context/phaseD.gates.test.ts && npx tsx src/context/phaseD.pressure.test.ts
+
+  ✓ D-G1 remote Use-repo without clone injects root AGENTS.md
+  ✓ D-G2 token cap truncates in the prompt, not a banner
+  ✓ D-G3 memory facts are sourced and never chat chrome
+  ✓ D-G4 cache or remaining gather budget — no extra 15s fetch
+  ✓ D-G6 UX-G6 prompt is silent — no AGENTS.md chip/banner/activity
+
+phaseD.gates: 5/5 tests passed
+  ✓ D-P1 missing AGENTS.md — chat still works, no fake instructions
+  ✓ D-P2 huge AGENTS.md is truncated with an internal note
+  ✓ D-P3 switching Use-repo drops the previous repo instructions
+  ✓ D-P4 Coop-AI local AGENTS.md is not injected when Use-repo is other
+  ✓ D-P5 unsourced memory is not injected
+  ✓ D-P6 ordinary plain chat with AGENTS.md has no new banner/chip/activity row
+  ✓ D-P gather miss with no budget does not invent instructions
+  ✓ D-P7 no Use-repo does not inject open-folder AGENTS.md
+  ✓ D-P8 no Use-repo injects only a user-attached AGENTS.md
+  ✓ D-P9 Use-repo does not fall back to another account's attached AGENTS.md
+
+phaseD.pressure: 10/10 tests passed
+
+> coop-ai@0.1.10 test:agent-ship:e
+> npx tsx src/autocomplete/phaseE.gates.test.ts && npx tsx src/autocomplete/phaseE.pressure.test.ts
+
+  ✓ E-G3 / UX-G5 NES setting defaults off in package.json and readAutocompleteSettings
+  ✓ E-G1 after Tab-accept + NES on, plan a ghost at a predicted location
+  ✓ E-G1 provider Tab-accept with NES on arms and retriggers inline suggest
+  ✓ E-G2 NES never rides the base typing → ghost path (p50/p95 unchanged)
+  ✓ E-G4 NES context sources are buffer + graph API, not disk walk
+  ✓ E-G6 NES off: Tab-accept does not arm NES or add a second ghost trigger
+  ✓ E-G1 predictNextEditLocation finds the next incomplete line
+  ✓ E-G5 gate IDs are covered by this file
+  ✓ E-G1 controller issues one NES request after accept when enabled
+
+phaseE.gates: 9 passed, 0 failed
+  ✓ E-P1 setting off → zero NES requests after Tab-accept
+  ✓ E-P2 rapid typing / throttle does not storm NES requests
+  ✓ E-P3 remote Use-repo: NES context is graph/API + buffer, never a clone walk
+  ✓ E-P4 Escape / reject NES is counted and does not brick Tab
+
+phaseE.pressure: 4 passed, 0 failed

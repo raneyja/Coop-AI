@@ -6389,6 +6389,11 @@ export class CoopChatSession {
     }
   ): Promise<void> {
     const requestStartedAt = options?.requestStartedAt ?? Date.now();
+    const submissionThreadId = this.activeThreadId();
+    const cancellationGeneration = this.threadRuns.cancellationGeneration(submissionThreadId);
+    const submissionCancelled = () =>
+      this.threadRuns.cancellationGeneration(submissionThreadId) !== cancellationGeneration ||
+      this.activeThreadId() !== submissionThreadId;
     if (this.currentContext.repoSelectionPending) {
       this.post({ type: "chat:error", payload: { message: "The selected repository branch is still loading. Try again once it is ready." } });
       return;
@@ -6481,6 +6486,7 @@ export class CoopChatSession {
         slashUserArgs: options?.slashUserArgs
       });
       const plan = await this.resolveChatIntentPlan(interpretMessage, { constraint });
+      if (submissionCancelled()) return;
       options = { ...options, intentPlan: plan };
 
       if (parsedSlash) {
@@ -6762,6 +6768,7 @@ export class CoopChatSession {
       setLastEditUserMessage(historyWithScope);
       void this.emitUsageEvent("edit.requested");
     }
+    if (submissionCancelled()) return;
     const userMessage: ChatMessage = {
       clientSubmissionId: options?.clientSubmissionId,
       role: "user",

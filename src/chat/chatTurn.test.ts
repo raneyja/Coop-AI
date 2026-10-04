@@ -67,6 +67,22 @@ function testAppendIgnoredAfterAbort(): void {
   assert.equal(turn.partialAssistant, "");
 }
 
+function testStopBeforeTurnRegistration(): void {
+  const manager = new ThreadRunManager();
+  const pendingGeneration = manager.cancellationGeneration("pending");
+  manager.abort("unrelated");
+  assert.equal(manager.cancellationGeneration("pending"), pendingGeneration);
+  manager.abort("pending");
+  assert.notEqual(manager.cancellationGeneration("pending"), pendingGeneration,
+    "Stop must invalidate planning even before a turn exists");
+  assert.equal(manager.get("pending"), undefined);
+  const followUp = beginTurn(manager, "pending", "new edit after Stop");
+  assert.equal(manager.isStreamActive(followUp), true);
+  manager.abortAll();
+}
+
+testStopBeforeTurnRegistration();
+
 function testSequentialTurnsKeepIntentPlansIsolated(): void {
   const manager = new ThreadRunManager();
   const sourcePlan: ChatIntentPlan = {

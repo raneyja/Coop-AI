@@ -1,0 +1,7 @@
+{
+  "status": "PASS",
+  "cases": 5,
+  "path": "/private/tmp/coop-dogfood-package-edit-20261004/positiveSum.ts",
+  "appliedSource": "export function positiveSum(values: number[]): number {\n  let total = 0;\n  for (let i = 0; i < values.length; i++) {\n    if (values[i] > 0) total += values[i];\n  }\n  return total;\n}\n",
+  "scope": "Packaged local Apply; independent function assertions"
+}

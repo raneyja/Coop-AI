@@ -1,0 +1,7 @@
+{
+  "status": "PASS",
+  "scope": "Early Stop followed by local rename Apply; no late cancelled rewrite in saved source",
+  "source": "export function positiveSum(values: number[]): number {\n  let accumulator = 0;\n  for (let i = 0; i < values.length - 1; i++) {\n    if (values[i] > 0) accumulator += values[i];\n  }\n  return accumulator;\n}\n",
+  "bundleId": "559ff6df341215c1608a2c5c73f23e5ee107189e37fa50bf2da62471a2f1d0d9",
+  "qualification": "Early intent-planning cancellation; mid-stream generation cancellation remains open"
+}

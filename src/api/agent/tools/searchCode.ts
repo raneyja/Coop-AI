@@ -198,6 +198,120 @@ async function runSearchCode(
   );
   const parts: LocalSearchResult[] = [];
   const taskQuery = ctx.researchQuery ?? query;
+  const verifyBody = (path: string, body: string) => ledger.once("verify", repoId, JSON.stringify([path, taskQuery]), async () =>
+    isApiRejectAsk(taskQuery) || isRejectShapedSearchCriterion(query)
+      ? contentLooksLikeAskedFieldReject(body, taskQuery, path) || Boolean(verifiedFieldHandlingEvidence({ path, content: body, evidenceSource: "remote-read" }, taskQuery))
+      : isBackendStateDefinitionHit({ fileName: path, content: body }) && contentLooksLikeStateModelDeclaration(body));
+
+  const rejectShapedQuery = isRejectShapedSearchCriterion(query) &&
+    (!ctx.researchQuery || isApiRejectAsk(taskQuery));
+  // Native content search is unavailable in cloud-authenticated sessions. Use
+  // the same filename service as Remote Workspace and verify selected-ref bodies.
+  const needsReject = isApiRejectAsk(taskQuery) || rejectShapedQuery;
+  const needsStateDefinition = isBackendStateLocateAsk(taskQuery) && !needsReject;
+  const satisfiesTask = (hit: ZoektSearchHit) => needsReject
+    ? isActionableApiRejectHit(hit) && contentLooksLikeAskedFieldReject(hit.content ?? "", taskQuery, hit.fileName)
+    : isBackendStateDefinitionHit(hit) && contentLooksLikeStateModelDeclaration(hit.content ?? "");
+  const discoverFilenames = async (result: LocalSearchResult) => {
+    let filenameFallbackStatus: "not_attempted" | "empty" | "paths" | "verified" | "error" = "not_attempted";
+    const verifiedFileOutlines: Array<{ path: string; declarations: Array<{ name: string; line: number }> }> = [];
+    if (ctx.findFiles && (needsReject || needsStateDefinition) && !result.hits.some(satisfiesTask)) {
+      const discovered: string[] = [];
+      filenameFallbackStatus = "empty";
+      const basenameHints = (hits: ZoektSearchHit[]) => hits.flatMap((hit) => {
+        const base = hit.fileName.split("/").pop()?.split(".")[0] ?? "";
+        if (!/^[a-z][a-z0-9_]{2,}$/i.test(base) || base === "index") return [];
+        return [base.endsWith("s") ? `${base.slice(0, -1)}.` : `${base}.`];
+      });
+      const indexedNames = basenameHints(result.hits.slice(0, 5));
+      // A backend model/data hit can identify the entity when the user's noun
+      // differs from its source name. Locale/UI frequency must not bury it.
+      const entityNames = needsReject ? basenameHints(result.hits.filter((hit) =>
+        !isClientUiPath(hit.fileName) && !isLocaleCatalogPath(hit.fileName) && !isDocOrSpecPath(hit.fileName) && !isTestPath(hit.fileName) &&
+        (isSchemaCatalogPath(hit.fileName) || isSeedOrFixturePath(hit.fileName)))).slice(0, 2) : [];
+      const discoveryQuery = needsStateDefinition ? extractAgentSearchQuery(taskQuery) : query;
+      const operationNames = needsReject ? askRejectJobTokens(taskQuery) : [];
+      // Generic CRUD verbs match unrelated setup commands across a repository.
+      // Prefer the asked entity and specific operation before those broad names.
+      const specificOperations = operationNames.filter((name) => !/^(?:create|update|delete|read)$/i.test(name));
+      const broadOperations = operationNames.filter((name) => /^(?:create|update|delete|read)$/i.test(name));
+      const filenameQueries = [...new Set([...specificOperations, ...entityNames, ...filenameDiscoveryQueries(discoveryQuery), ...indexedEntityFilenameQueries(result.hits), ...indexedNames, ...broadOperations])].slice(0, 4);
+      ctx.onDiagnostic?.({ stage: "filename-criteria", query, criteria: filenameQueries });
+      let verifiedOperationPath: string | undefined;
+      for (const filenameQuery of filenameQueries) {
+        try {
+          const paths = await ctx.findFiles({ query: filenameQuery, taskQuery, repoId, excludeClientUi: true });
+          for (const path of paths) ledger.record(repoId, path, taskQuery, "untested");
+          discovered.push(...paths.filter((path) => !discovered.includes(path)));
+          // Verify operation candidates before spending another remote tree walk.
+          // A filename alone never establishes a match.
+          if (paths.length) {
+            const operationCandidates = rankSearchHits(paths.filter((fileName) => !isClientUiPath(fileName)).map((fileName) => ({ fileName, lineNumber: 1, content: "", score: 0.4 })), taskQuery);
+            for (const candidate of operationCandidates.slice(0, CODE_HOST_BODY_ENRICH_CAP)) {
+              const file = await ctx.readRemoteFile?.({ path: candidate.fileName, repoId }).catch(() => undefined);
+              const accepted = file?.content ? await verifyBody(candidate.fileName, file.content) : false;
+              ledger.record(repoId, candidate.fileName, taskQuery, !file?.content ? "unavailable" : accepted ? "verified" : "ruled_out");
+              ctx.onDiagnostic?.({ stage: "candidate", path: candidate.fileName, status: !file?.content ? "unavailable" : accepted ? "verified" : "ruled-out", reason: "remote body verification" });
+              if (accepted) {
+                verifiedOperationPath = candidate.fileName;
+                break;
+              }
+            }
+            if (verifiedOperationPath) break;
+          }
+        } catch {
+          filenameFallbackStatus = "error";
+        }
+      }
+      if (discovered.length) {
+        filenameFallbackStatus = "paths";
+        const candidates = rankSearchHits((verifiedOperationPath ? [verifiedOperationPath] : discovered).filter((fileName) => !isClientUiPath(fileName)).map((fileName) => ({ fileName, lineNumber: 1, content: "", score: 0.4 })), taskQuery);
+        const verified: ZoektSearchHit[] = [];
+        const unavailable: ZoektSearchHit[] = [];
+        for (const candidate of candidates.slice(0, CODE_HOST_BODY_ENRICH_CAP)) {
+          try {
+            const file = await ctx.readRemoteFile?.({ path: candidate.fileName, repoId });
+            if (!file?.content?.trim()) {
+              ctx.onDiagnostic?.({ stage: "candidate", path: candidate.fileName, status: "unavailable", reason: "no remote body" });
+              ledger.record(repoId, candidate.fileName, taskQuery, "unavailable");
+              unavailable.push(candidate);
+              continue;
+            }
+            const body = file.content;
+            const accepted = await verifyBody(candidate.fileName, body);
+            ctx.onDiagnostic?.({ stage: "candidate", path: candidate.fileName, status: accepted ? "verified" : "ruled-out", reason: accepted ? "requested behavior found in remote body" : "remote body does not establish requested behavior" });
+            ledger.record(repoId, candidate.fileName, taskQuery, accepted ? "verified" : "ruled_out");
+            if (!accepted) continue;
+            const rows = body.split(/\r?\n/);
+            verifiedFileOutlines.push({
+              path: candidate.fileName,
+              declarations: rows.flatMap((row, index) => {
+                const match = row.match(/^\s*(?:async\s+)?(?:def|class|func|function)\s+([A-Za-z_]\w*)/);
+                return match ? [{ name: match[1], line: index + 1 }] : [];
+              }).slice(0, 60)
+            });
+            const line = needsReject ? lineNumberOfWriteReject(body, taskQuery, candidate.fileName) ?? 1
+              : rows.findIndex((row) => /\b(?:class|struct|type)\s+State\b/.test(row)) + 1;
+            verified.push({ fileName: candidate.fileName, lineNumber: Math.max(1, line), content: verifiedFieldHandlingEvidence({ path: candidate.fileName, content: body, evidenceSource: "remote-read" }, taskQuery) ? body : rows.slice(Math.max(0, line - 8), line + 20).join("\n"), score: 1, source: "fallback" });
+            break;
+          } catch {
+            // A discovered filename is still only a candidate when its body is unavailable.
+            ledger.record(repoId, candidate.fileName, taskQuery, "unavailable");
+            unavailable.push(candidate);
+          }
+        }
+        if (verified.length) {
+          filenameFallbackStatus = "verified";
+          result = { ...result, source: "fallback", hits: [...verified, ...result.hits] };
+        } else {
+          result = { ...result, hits: [...result.hits, ...unavailable] };
+        }
+      }
+    }
+    return { result, filenameFallbackStatus, verifiedFileOutlines };
+  };
+  // Remote filename/body verification gets a chance even when index search is slow.
+  const filenameSearch = discoverFilenames({ source: "fallback", stale: false, hits: [], symbols: [] });
   for (const pattern of queries) {
     // Casing aliases add lexical coverage, but duplicate a vector query.
     if (parts[0]?.source === "embedding" && pattern !== query) continue;
@@ -227,13 +341,6 @@ async function runSearchCode(
   let codeHostFallback = false;
   for (const hit of result.hits) ledger.record(repoId, hit.fileName, taskQuery, "untested");
   for (const symbol of result.symbols) ledger.record(repoId, symbol.file, taskQuery, "untested");
-  const verifyBody = (path: string, body: string) => ledger.once("verify", repoId, JSON.stringify([path, taskQuery]), async () =>
-    isApiRejectAsk(taskQuery) || isRejectShapedSearchCriterion(query)
-      ? contentLooksLikeAskedFieldReject(body, taskQuery, path) || Boolean(verifiedFieldHandlingEvidence({ path, content: body, evidenceSource: "remote-read" }, taskQuery))
-      : isBackendStateDefinitionHit({ fileName: path, content: body }) && contentLooksLikeStateModelDeclaration(body));
-
-  const rejectShapedQuery = isRejectShapedSearchCriterion(query) &&
-    (!ctx.researchQuery || isApiRejectAsk(taskQuery));
   const hasActionableRejectBody = result.hits.some(
     (hit) =>
       isActionableApiRejectHit(hit) &&
@@ -245,7 +352,10 @@ async function runSearchCode(
   const codeHostFallbackAttempted = Boolean(ctx.searchCodeHost && shouldUseCodeHostFallback);
   let codeHostFallbackStatus: "not_attempted" | "no_paths" | "paths_no_match" | "results" | "error" =
     codeHostFallbackAttempted ? "no_paths" : "not_attempted";
-  if (codeHostFallbackAttempted && ctx.searchCodeHost) {
+  // Filename discovery must not wait behind a slow or unavailable content search.
+  // Both paths use the same run-scoped target and shared gather budget.
+  const hostSearch = (async (): Promise<LocalSearchResult | undefined> => {
+    if (!codeHostFallbackAttempted || !ctx.searchCodeHost) return undefined;
     const matchNeedle = normalizeCodeHostSearchQuery(query);
     const fieldTokens = matchNeedle.match(/\b[a-z][a-z0-9]*_[a-z0-9_]+\b/gi) ?? [];
     const hostQueries = [formatCodeHostSearchQuery(query), matchNeedle, ...fieldTokens].filter(
@@ -268,15 +378,9 @@ async function runSearchCode(
         const enriched = await enrichCodeHostPaths(ctx, repoId, matchNeedle, paths);
         if (enriched.length > 0) {
           // Prefer host hits that carry the phrase; keep Lightning only as leftovers if host empty.
-          result = {
-            source: "fallback",
-            stale: false,
-            hits: enriched,
-            symbols: result.symbols
-          };
           codeHostFallback = true;
           codeHostFallbackStatus = "results";
-          break;
+          return { source: "fallback", stale: false, hits: enriched, symbols: result.symbols };
         }
       } catch (error) {
         codeHostFallbackStatus = "error";
@@ -284,105 +388,21 @@ async function runSearchCode(
         // A phrase-query miss/error must not prevent the simpler literal query.
       }
     }
-  }
+    return undefined;
+  })();
 
-  // Native content search is unavailable in cloud-authenticated sessions. Use
-  // the same filename service as Remote Workspace and verify selected-ref bodies.
-  const needsReject = isApiRejectAsk(taskQuery) || rejectShapedQuery;
-  const needsStateDefinition = isBackendStateLocateAsk(taskQuery) && !needsReject;
-  const satisfiesTask = (hit: ZoektSearchHit) => needsReject
-    ? isActionableApiRejectHit(hit) && contentLooksLikeAskedFieldReject(hit.content ?? "", taskQuery, hit.fileName)
-    : isBackendStateDefinitionHit(hit) && contentLooksLikeStateModelDeclaration(hit.content ?? "");
-  let filenameFallbackStatus: "not_attempted" | "empty" | "paths" | "verified" | "error" = "not_attempted";
-  const verifiedFileOutlines: Array<{ path: string; declarations: Array<{ name: string; line: number }> }> = [];
-  if (ctx.findFiles && (needsReject || needsStateDefinition) && !result.hits.some(satisfiesTask)) {
-    const discovered: string[] = [];
-    filenameFallbackStatus = "empty";
-    const basenameHints = (hits: ZoektSearchHit[]) => hits.flatMap((hit) => {
-      const base = hit.fileName.split("/").pop()?.split(".")[0] ?? "";
-      if (!/^[a-z][a-z0-9_]{2,}$/i.test(base) || base === "index") return [];
-      return [base.endsWith("s") ? `${base.slice(0, -1)}.` : `${base}.`];
-    });
-    const indexedNames = basenameHints(result.hits.slice(0, 5));
-    // A backend model/data hit can identify the entity when the user's noun
-    // differs from its source name. Locale/UI frequency must not bury it.
-    const entityNames = needsReject ? basenameHints(result.hits.filter((hit) =>
-      !isClientUiPath(hit.fileName) && !isLocaleCatalogPath(hit.fileName) && !isDocOrSpecPath(hit.fileName) && !isTestPath(hit.fileName) &&
-      (isSchemaCatalogPath(hit.fileName) || isSeedOrFixturePath(hit.fileName)))).slice(0, 2) : [];
-    const discoveryQuery = needsStateDefinition ? extractAgentSearchQuery(taskQuery) : query;
-    const operationNames = needsReject ? askRejectJobTokens(taskQuery) : [];
-    const filenameQueries = [...new Set([...operationNames, ...entityNames, ...filenameDiscoveryQueries(discoveryQuery), ...indexedEntityFilenameQueries(result.hits), ...indexedNames])].slice(0, 4);
-    ctx.onDiagnostic?.({ stage: "filename-criteria", query, criteria: filenameQueries });
-    let verifiedOperationPath: string | undefined;
-    for (const filenameQuery of filenameQueries) {
-      try {
-        const paths = await ctx.findFiles({ query: filenameQuery, taskQuery, repoId, excludeClientUi: true });
-        for (const path of paths) ledger.record(repoId, path, taskQuery, "untested");
-        discovered.push(...paths.filter((path) => !discovered.includes(path)));
-        // Verify operation candidates before spending another remote tree walk.
-        // A filename alone never establishes a match.
-        if (paths.length) {
-          const operationCandidates = rankSearchHits(paths.filter((fileName) => !isClientUiPath(fileName)).map((fileName) => ({ fileName, lineNumber: 1, content: "", score: 0.4 })), taskQuery);
-          for (const candidate of operationCandidates.slice(0, CODE_HOST_BODY_ENRICH_CAP)) {
-            const file = await ctx.readRemoteFile?.({ path: candidate.fileName, repoId }).catch(() => undefined);
-            const accepted = file?.content ? await verifyBody(candidate.fileName, file.content) : false;
-            ledger.record(repoId, candidate.fileName, taskQuery, !file?.content ? "unavailable" : accepted ? "verified" : "ruled_out");
-            ctx.onDiagnostic?.({ stage: "candidate", path: candidate.fileName, status: !file?.content ? "unavailable" : accepted ? "verified" : "ruled-out", reason: "remote body verification" });
-            if (accepted) {
-              verifiedOperationPath = candidate.fileName;
-              break;
-            }
-          }
-          if (verifiedOperationPath) break;
-        }
-      } catch {
-        filenameFallbackStatus = "error";
-      }
-    }
-    if (discovered.length) {
-      filenameFallbackStatus = "paths";
-      const candidates = rankSearchHits((verifiedOperationPath ? [verifiedOperationPath] : discovered).filter((fileName) => !isClientUiPath(fileName)).map((fileName) => ({ fileName, lineNumber: 1, content: "", score: 0.4 })), taskQuery);
-      const verified: ZoektSearchHit[] = [];
-      const unavailable: ZoektSearchHit[] = [];
-      for (const candidate of candidates.slice(0, CODE_HOST_BODY_ENRICH_CAP)) {
-        try {
-          const file = await ctx.readRemoteFile?.({ path: candidate.fileName, repoId });
-          if (!file?.content?.trim()) {
-            ctx.onDiagnostic?.({ stage: "candidate", path: candidate.fileName, status: "unavailable", reason: "no remote body" });
-            ledger.record(repoId, candidate.fileName, taskQuery, "unavailable");
-            unavailable.push(candidate);
-            continue;
-          }
-          const body = file.content;
-          const accepted = await verifyBody(candidate.fileName, body);
-          ctx.onDiagnostic?.({ stage: "candidate", path: candidate.fileName, status: accepted ? "verified" : "ruled-out", reason: accepted ? "requested behavior found in remote body" : "remote body does not establish requested behavior" });
-          ledger.record(repoId, candidate.fileName, taskQuery, accepted ? "verified" : "ruled_out");
-          if (!accepted) continue;
-          const rows = body.split(/\r?\n/);
-          verifiedFileOutlines.push({
-            path: candidate.fileName,
-            declarations: rows.flatMap((row, index) => {
-              const match = row.match(/^\s*(?:async\s+)?(?:def|class|func|function)\s+([A-Za-z_]\w*)/);
-              return match ? [{ name: match[1], line: index + 1 }] : [];
-            }).slice(0, 60)
-          });
-          const line = needsReject ? lineNumberOfWriteReject(body, taskQuery, candidate.fileName) ?? 1
-            : rows.findIndex((row) => /\b(?:class|struct|type)\s+State\b/.test(row)) + 1;
-          verified.push({ fileName: candidate.fileName, lineNumber: Math.max(1, line), content: verifiedFieldHandlingEvidence({ path: candidate.fileName, content: body, evidenceSource: "remote-read" }, taskQuery) ? body : rows.slice(Math.max(0, line - 8), line + 20).join("\n"), score: 1, source: "fallback" });
-          break;
-        } catch {
-          // A discovered filename is still only a candidate when its body is unavailable.
-          ledger.record(repoId, candidate.fileName, taskQuery, "unavailable");
-          unavailable.push(candidate);
-        }
-      }
-      if (verified.length) {
-        filenameFallbackStatus = "verified";
-        result = { ...result, source: "fallback", hits: [...verified, ...result.hits] };
-      } else {
-        result = { ...result, hits: [...result.hits, ...unavailable] };
-      }
-    }
+  const filenameResult = await filenameSearch;
+  const discovery = filenameResult.filenameFallbackStatus === "verified"
+    ? { ...filenameResult, result: mergeSearchResults([filenameResult.result, result]) }
+    : await discoverFilenames(result);
+  result = discovery.result;
+  const { filenameFallbackStatus, verifiedFileOutlines } = discovery;
+
+  const hostResult = await hostSearch;
+  if (hostResult) {
+    result = filenameFallbackStatus === "verified"
+      ? mergeSearchResults([result, hostResult])
+      : hostResult;
   }
 
   return JSON.stringify({

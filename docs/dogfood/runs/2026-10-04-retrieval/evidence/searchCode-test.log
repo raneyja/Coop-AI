@@ -1,0 +1,26 @@
+ok - normalizeCodeHostSearchQuery strips outer quotes
+ok - findQueryMatchLine finds Parent ValidationError line
+ok - Lightning empty + codehost path + body enrich attaches reject line
+ok - Lightning empty + codehost path + failed body still returns path for auto-read
+ok - symbol locate with empty Lightning does not call codehost
+ok - Lightning hits skip codehost even for reject query
+ok - UI text matching a reject query does not suppress codehost fallback
+ok - a different field's server reject does not suppress codehost fallback
+ok - literal codehost query follows an empty phrase query
+ok - reject fallback uses a field token after phrase and literal misses
+ok - Lightning wrong hits for phrase query still trigger codehost fail-open
+ok - cloud content search unsupported recovers through filename discovery and verifies remote body
+ok - a validate-prefixed definition lookup does not become a reject hunt
+ok - operation filenames recover signing after a neighboring PDF guard
+ok - backend State lookup remotely opens declaration after UI-only index hits
+ok - indexed entity filename hints recover a transition when the user vocabulary differs
+ok - semantic reject retrieval refines with the task instead of repeating a casing alias
+ok - remotely disproven filename candidates do not get queued for another read
+ok - retrieval diagnostics record criteria and candidate rejection without source bodies
+ok - equivalent hunts reuse results while both lexical identifier forms remain searchable
+ok - ruled-out remote candidates retain status without duplicate body work across refinements
+ok - filename discovery preserves a complete remotely verified filtering method
+ok - indexed entity hints retain a domain directory and omit the shared namespace
+ok - filename verification proceeds while content search is pending
+ok - slow index search cannot starve verified remote filename evidence
+ok - entity discovery precedes broad CRUD names for quoted API rejection

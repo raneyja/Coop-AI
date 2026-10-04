@@ -110,6 +110,7 @@ function captureIntentPlan(plan: ChatIntentPlan): ChatIntentPlan {
  */
 export class ThreadRunManager {
   private readonly runs = new Map<string, ChatTurn>();
+  private readonly cancellationGenerations = new Map<string, number>();
   private streamGenerationSeq = 0;
   private jobGenerationSeq = 0;
 
@@ -209,7 +210,13 @@ export class ThreadRunManager {
     this.runs.delete(turn.threadId);
   }
 
+  public cancellationGeneration(threadId: string): number {
+    return this.cancellationGenerations.get(threadId) ?? 0;
+  }
+
   public abort(threadId: string): void {
+    // Stop also invalidates submissions still awaiting intent/context planning.
+    this.cancellationGenerations.set(threadId, this.cancellationGeneration(threadId) + 1);
     const turn = this.runs.get(threadId);
     if (!turn) {
       return;

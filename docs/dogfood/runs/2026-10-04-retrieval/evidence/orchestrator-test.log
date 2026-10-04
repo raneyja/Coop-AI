@@ -1,0 +1,94 @@
+  ✓ pickTopSearchHit prefers highest score
+  ✓ run executes search_code then read_file on top hit
+  ✓ run stops after search when index returns no hits
+  ✓ run returns empty when repoId is missing
+  ✓ run respects maxSteps=1 (search only)
+  ✓ LLM planTurn chooses search then read (A-G1)
+  ✓ locate with planTurn uses the LLM loop (same conversation)
+  ✓ calm state locate requires the opened State declaration
+  ✓ sanitizes full-question search queries to a short identifier
+  ✓ change hunt skips auth UI that never mentions requireAuth
+  ✓ reads the declaration line, not the top of the file
+  ✓ reads a bounded window when the index gave no position
+  ✓ retries with a broader term when the first search returns only barrels
+  ✓ LLM full-sentence query is rewritten before search
+  ✓ invalid first plan fails open to deterministic fallback (A-G3)
+  ✓ aborted signal returns no hang (A-P3)
+  ✓ forced repoId ignores model-supplied repo (A-P14 / UX-G10)
+  ✓ caps at 8 model-chosen rounds (A-P2)
+  ✓ wrong first hit forces a second read before done (dogfood)
+  ✓ empty hunt does not stream a Your question restatement
+  ✓ role-noun hunt rejects a collab auth read that never says middleware
+  ✓ feature-add with open file seeds read_file and does not post INDEX_HUNT_MISS
+  ✓ named filename seeds read_file even when the body uses a different export
+  ✓ named path seeds the same read as a follow-up Read prompt
+  ✓ planTurn startLine:1 still reads the class, not only the copyright line
+  ✓ C1 Authorization-Bearer ask streams when the index has a Bearer hit
+  ✓ C2 work-item ask streams when the index has a transition hit
+  ✓ C2 auto-reads the hit when the model only searches
+  ✓ C2 auto-read prefers API writer over locale and client grouping hits
+  ✓ C2 jumps from a read-only serializer class to validate() in the same file
+  ✓ C2 model read of a serializer class still jumps to validate()
+  ✓ C2 synthesis conversation excludes OpenAPI and read-only serializer windows
+  ✓ C2 cannot answer from reject evidence alone even without planner evidence labels
+  ✓ C2 accepts verified state update delegation alongside its rejection
+  ✓ compound hunt preserves the model's later write window after attaching a reject
+  ✓ C2 hunt skips filter converters and attaches serializer validate()
+  ✓ C1 empty index still posts INDEX_HUNT_MISS
+  ✓ T2 hunt attaches parent ValidationError, not converters
+  ✓ T2 wrong-floor serializer window jumps to parent ValidationError
+  ✓ reject hunt: planTurn owns gather — planned criteria are hints, not pre-loop parade
+  ✓ C2 ignores locate-only planned criteria and attaches state ValidationError
+  ✓ C2 continues past bgtask noise to attach state ValidationError
+  ✓ UI-only reject evidence yields short miss, not speculative backend essay
+  ✓ API-reject hunt does not answer from a different field's validate()
+  ✓ API-reject hunt jumps in-file from a wrong-field validate() to the asked field
+  ✓ API-reject hunt finds a field raise whose message is not “is not valid”
+  ✓ API-reject hunt attaches invite email, not a signup email 400
+  ✓ API-reject hunt skips invite callers that rethrow and attaches the email check
+  ✓ API-reject hunt jumps in-file from an invite caller to the email 400
+  ✓ API-reject ask uses planTurn (script brain bypass removed)
+  ✓ API-reject miss goes through planTurn then short miss (no scavenger parade)
+  ✓ leftover unmatched chip still hunts auth middleware and does not search Jira
+  ✓ extractBearerToken what-calls-it still reads a caller after the definition window
+  ✓ requireAuth OR authentication middleware reads plane APIKeyAuthentication (zero model reads)
+  ✓ first search story mention then authMiddleware query reads the server
+  ✓ story-only hunt posts INDEX_HUNT_MISS and does not answer from the mention
+  ✓ role-only what-calls-it reads the server then a handler that uses the export
+  ✓ role-only what-calls-it without a caller still cites the implementation
+  ✓ story mention must not become callerRead
+  ✓ H1 requireAuth defined does not require a caller read
+  ✓ role-only what-calls-it uses requireAuth from the full file, not the top window
+  ✓ role-only Card 1 attach jumps to the gate export, not page 1
+  ✓ ship-check search hits do not answer until a sibling 401 body is read
+  ✓ ship-check reads sibling 401 writers and tests, not path-only hits
+  ✓ search snippet without a remote body cannot pass the Parent reject evidence gate
+  ✓ search-hit ValidationError does not pass without a remote body read
+  ✓ search-hit message-only snippet does not pass Parent reject without a remote read
+  ✓ reject attaches from raw hits when preferredHits emptied by noise
+  ✓ finish cannot miss while unused asked-field hit sits in search context
+  ✓ wrong-branch body without Parent still attaches from message-only hit
+  ✓ planTurn present does not resurrect huntWriteReject on invalid first plan
+  ✓ reject adaptation: round-2 tool depends on round-1 preferredHits
+  ✓ live Plane issue.py wrong-floor hit jumps to Parent ValidationError
+  ✓ Gate A fidelity: planned Parent hunt leads with the exact quote and adds no finish search parade
+  ✓ live Parent Fail: invent draft twin must follow to issue create serializer
+  ✓ live Parent Fail: wrong __init__/urls opens must not skip invent → attach
+  ✓ live Parent Fail shape: planner refines quote misses to IssueCreateSerializer
+  ✓ live Parent shape: agent invents symbol search after empty quote (no body-scan rail)
+  ✓ multi-hit: weak twin attach does not freeze when ask job unmatched and budget left
+  ✓ Parent paraphrase consumes the serializer candidate and jumps to the reject
+  ✓ planned reject hunt caps at one seed plus four empty refinements
+  ✓ repeated reject searches require a new criterion without another network call
+  ✓ domain-status reject preserves the model's handler search
+  ✓ reject first search uses exact quote before the planner's generic query
+  ✓ reject first search uses ask-derived transition criteria before generic intent terms
+  ✓ agent readRemoteFile wiring keeps resolveActiveRepoTarget (branch parity)
+  ✓ remote filtering method corrects a reject premise and survives synthesis compaction
+  ✓ target resolution hands off without an unverified ref and respects user Stop
+  ✓ compound filtering evidence never claims an actual rejection was found
+  ✓ slow tool planning hands verified source to synthesis without cancelling the answer
+  ✓ locate synthesis excludes unopened search excerpts and planning guesses
+  ✓ compound handoff reuses the complete same-class remote update, never a neighboring class
+
+AgentOrchestrator: 92/92 tests passed

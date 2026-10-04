@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { createRequire } from "node:module";
+import { ThreadRunManager, SESSION_RUN_THREAD_ID } from "../chatTurn";
 import {
   extraTermsForIntegration,
   formatIntentBriefForAgent,
@@ -331,6 +332,7 @@ test("handleChatSend interprets before routeSlashCommand (slash bypass is imposs
     const session = Object.assign(Object.create(CoopChatSession.prototype), {
       currentContext: { provider: "gitlab", owner: "org", repo: "one", branch: "main", scope: "repo" },
       options: { api: { beginQuotaTurn() {} } },
+      threadRuns: new ThreadRunManager(),
       dismissPendingQuickActionSuggest() { events.push("dismiss"); },
       async resolveChatIntentPlan() { events.push("interpret"); return plan; },
       async routeSlashCommand(_parsed: unknown, _attachments: unknown, _mentions: unknown, routedPlan: unknown, submissionId: unknown, requestStartedAt: unknown) {
@@ -373,6 +375,35 @@ test("handleChatSend interprets before routeSlashCommand (slash bypass is imposs
     /await this\.completeQuickActionSuggestClarification\(/,
     "plain chat must not interrupt with Want Blast chips"
   );
+});
+
+test("Stop during intent planning prevents late slash execution and permits the next send", async () => {
+  createRequire(__filename)("../../../scripts/vscode-test-stub.cjs");
+  const { CoopChatSession } = await import("../CoopChatSession");
+  const ask = "/edit Rename the accumulator";
+  const plan = planRawChatAskFromRules(ask).plan;
+  let resolvePlan!: (value: typeof plan) => void;
+  const pendingPlan = new Promise<typeof plan>((resolve) => { resolvePlan = resolve; });
+  const routes: string[] = [];
+  let first = true;
+  const session = Object.assign(Object.create(CoopChatSession.prototype), {
+    currentContext: { provider: "gitlab", owner: "org", repo: "one", branch: "main", scope: "repo" },
+    options: { api: { beginQuotaTurn() {} } },
+    threadRuns: new ThreadRunManager(),
+    dismissPendingQuickActionSuggest() {},
+    resolveChatIntentPlan() { if (first) { first = false; return pendingPlan; } return Promise.resolve(plan); },
+    async routeSlashCommand() { routes.push("route"); },
+    clearIntentFeedback() {},
+    postForThread() {},
+    pushThreadsList() {}
+  });
+  const pending = session.handleChatSend(ask);
+  session.handleStreamCancel(SESSION_RUN_THREAD_ID);
+  resolvePlan(plan);
+  await pending;
+  assert.deepEqual(routes, [], "a stopped planner must never start the edit afterward");
+  await session.handleChatSend(ask);
+  assert.deepEqual(routes, ["route"], "Stop must not suppress the next submission");
 });
 
 const RECENCY_SLASHES: Array<{ ask: string; provider: "slack" | "jira" | "google-docs" | "confluence" | "notion" }> = [
