@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { requestedRepoBranch } from "../../workspace/repoTargetResolver";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -1540,6 +1541,70 @@ async function run(): Promise<void> {
     assert.equal(streamed, false, "one evidence class must not satisfy the compound completion gate");
     assert.match(result.answer ?? "", /not the state write\/update site/i);
   });
+
+  for (const [label, message] of [
+    ["exact", 'In Plane issue create/update on branch preview, the API raises ValidationError "Parent is not valid issue_id please pass a valid issue_id" when the parent is not in the project. Where is that raised?'],
+    ["paraphrase", 'In Plane issue create/update, where is ValidationError "Parent is not valid issue_id please pass a valid issue_id" raised when the parent is not in the project?']
+  ]) {
+    await test(`Parent ${label} lookup does not inherit a state-write gate from the planner brief`, async () => {
+      const writerPath = "apps/api/plane/app/serializers/issue.py";
+      const body = [
+        "class IssueSerializer:",
+        "    def validate(self, data):",
+        '        if data.get("parent"):',
+        '            raise serializers.ValidationError("Parent is not valid issue_id please pass a valid issue_id")',
+        "    def update(self, instance, validated_data):",
+        "        return super().update(instance, validated_data)"
+      ].join("\n");
+      const orchestrator = createAgentOrchestrator({
+        indexBackend: mockIndexBackend({
+          search: async () => ({
+            source: "zoekt",
+            stale: false,
+            hits: [{
+              fileName: writerPath,
+              lineNumber: 3,
+                content: 'raise serializers.ValidationError("Parent is not valid issue_id please pass a valid issue_id")',
+              score: 0.99
+            }],
+            symbols: []
+          })
+        }),
+        resolveAbsolutePath: () => undefined,
+        readRemoteFile: async ({ path: rel }) =>
+          rel === writerPath ? { path: rel, content: body } : undefined
+      });
+      let planTurns = 0;
+      let streamed = false;
+      const result = await orchestrator.run(
+        {
+          message,
+          repoId: "github:CoopAI-Corp/plane",
+          action: "locate",
+          maxSteps: 4
+        },
+        {
+          repoTarget: { repoId: "github:CoopAI-Corp/plane", branch: "preview" },
+          intentBrief: "- locate evidence=write-site\n- locate evidence=write-reject",
+          planTurn: async () => {
+            planTurns += 1;
+            return planTurns === 1
+              ? JSON.stringify({ tool: "search_code", args: { query: "parent is not valid" } })
+              : JSON.stringify({ done: true });
+          },
+          streamAnswer: async ({ conversation }) => {
+            streamed = true;
+            const evidence = conversation.map((message) => message.content).join("\n");
+            assert.match(evidence, /Parent is not valid/);
+            return "The serializer rejects an invalid parent in the cited validation guard.";
+          }
+        }
+      );
+      assert.equal(streamed, true, `Parent lookup must reach grounded synthesis without requiring state persistence: ${result.answer}`);
+      assert.match(result.answer ?? "", /invalid parent/);
+      assert.doesNotMatch(result.answer ?? "", /submitted state|transition|update delegation/);
+    });
+  }
 
   await test("C2 accepts verified state update delegation alongside its rejection", async () => {
     const writerPath = "apps/api/plane/app/serializers/issue.py";
@@ -5588,6 +5653,36 @@ async function run(): Promise<void> {
     assert.doesNotMatch(result.answer ?? "", /must come from|coming from another|108\|/);
     assert.match(JSON.stringify(result.context?.read_file), /75\|.*def validate/);
     assert.match(JSON.stringify(result.context?.read_file), /149\|.*return data/);
+  });
+
+  await test("explicit branch scope keeps ref spelling without treating code branches as refs", () => {
+    assert.equal(requestedRepoBranch("On indexed branch `feature/parent-guard` of fixture, locate validate."), "feature/parent-guard");
+    assert.equal(requestedRepoBranch("From the branch release/v2.1, show the implementation."), "release/v2.1");
+    assert.equal(requestedRepoBranch("What does this branch condition return?"), undefined);
+    assert.equal(requestedRepoBranch("Where is fixtureBranchLabel defined?"), undefined);
+  });
+
+  await test("explicit branch questions never read a different refreshed indexed branch", async () => {
+    let searches = 0;
+    let reads = 0;
+    let planned = false;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({ search: async () => { searches++; throw new Error("Wrong-branch search"); } }),
+      resolveAbsolutePath: () => undefined,
+      resolveRepoTarget: async (target) => ({ ...target, branch: "alternate" }),
+      readRemoteFile: async () => { reads++; throw new Error("Wrong-branch read"); }
+    });
+    const result = await orchestrator.run({ repoId: "github:org/fixture", action: "locate",
+      message: "On indexed branch main of fixture, what exact string does fixtureBranchLabel return?" }, {
+      repoTarget: { repoId: "github:org/fixture", branch: "main" },
+      planTurn: async () => { planned = true; return JSON.stringify({ done: true }); }
+    });
+    assert.equal(searches, 0);
+    assert.equal(reads, 0);
+    assert.equal(planned, false);
+    assert.equal(result.context, undefined);
+    assert.match(result.answer ?? "", /asked about branch `main`/);
+    assert.match(result.answer ?? "", /indexed workspace is on `alternate`/);
   });
 
   await test("target resolution hands off without an unverified ref and respects user Stop", async () => {

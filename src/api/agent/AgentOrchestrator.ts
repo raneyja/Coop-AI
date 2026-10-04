@@ -1,4 +1,5 @@
 import { gatherRequest } from "./gatherRequest";
+import { requestedRepoBranch } from "../../workspace/repoTargetResolver";
 import { formatVerifiedFieldHandlingAnswer } from "./fieldHandlingEvidence";
 import { remainingContextGatherBudgetMs } from "../../config/responseDeadline";
 import { randomUUID } from "node:crypto";
@@ -392,6 +393,12 @@ export class AgentOrchestrator {
     }
     const run = new AgentOrchestrator(createRunToolContext(gatherContext, target, options.onDiagnostic));
     options?.onDiagnostic?.({ stage: "target", repoId: target.repoId, requestedBranch: requested.branch, resolvedBranch: target.branch });
+    const explicitBranch = requestedRepoBranch(request.message);
+    if (explicitBranch && explicitBranch !== target.branch) {
+      options.onDiagnostic?.({ stage: "outcome", repoId: target.repoId, requestedBranch: explicitBranch,
+        resolvedBranch: target.branch, outcome: "branch-mismatch", stepCount: 0, hasAnswer: true });
+      return { steps: [], answer: `You asked about branch \`${explicitBranch}\`, but this repository’s indexed workspace is on ${target.branch ? `\`${target.branch}\`` : "an unverified branch"}. I can’t verify the requested implementation on \`${explicitBranch}\` from that workspace. Index the requested branch before retrying, or ask about the currently indexed branch.` };
+    }
     try {
       const result = await run.runInternal(request, options);
       for (const file of (result.context?.read_file as ReadFilePayload | undefined)?.files ?? []) {
@@ -4090,8 +4097,12 @@ function contextHasWriteReject(
 }
 
 function requiresStateWriteAndReject(query: string, intentBrief?: string): boolean {
-  return (intentBrief?.includes("evidence=write-site") === true && intentBrief.includes("evidence=write-reject")) ||
-    (isApiRejectAsk(query) && /\bstate\b/i.test(query) && /\b(written|persisted|saved|write|writes|updates?)\b/i.test(query));
+  // This completion gate and its fallback specifically prove state persistence.
+  // A planner brief cannot turn a Parent validation lookup into a state-transition ask.
+  return /\bstate(?:_id)?\b/i.test(query) && (
+    (intentBrief?.includes("evidence=write-site") === true && intentBrief.includes("evidence=write-reject")) ||
+    (isApiRejectAsk(query) && /\b(written|persisted|saved|write|writes|updates?)\b/i.test(query))
+  );
 }
 
 function contextHasStateWriteSite(context: AgentSessionContext | undefined): boolean {

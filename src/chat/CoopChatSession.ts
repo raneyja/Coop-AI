@@ -1401,6 +1401,12 @@ export class CoopChatSession {
 
     const turn = this.threadRuns.get(threadId);
     const partialText = turn?.partialAssistant?.trim() ?? "";
+    this.logAgentDiagnostic(threadId, {
+      stage: "user-stop", turnId: turn?.id,
+      elapsedMs: turn ? Date.now() - turn.startedAt : undefined,
+      registeredTurn: Boolean(turn), hadPartial: Boolean(partialText),
+      buildId: COOP_EXTENSION_BUILD_ID, bundleId: COOP_EXTENSION_BUNDLE_ID
+    });
     const jobId = turn?.jobId;
     const quickAction = turn?.quickAction;
     const history = turn ? turn.history.map((entry, index) => index === turn.history.length - 1 && entry.role === "user" ? { ...entry, cancelled: true } : entry) : undefined;

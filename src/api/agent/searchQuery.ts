@@ -1786,7 +1786,7 @@ export function isApiRejectAsk(userMessage: string): boolean {
   if (isLocateWithoutRejectComplaint(text)) {
     return false;
   }
-  const apiOrError = /\b(api|4xx|rejects?|rejecting|illegal|invalid)\b/.test(text);
+  const apiOrError = /\b(api|4xx|rejects?|rejecting|illegal|invalid|validationerror)\b/.test(text);
   const writeOrTransition = /\b(written|writes?|transition|backlog|work[-\s]?item)\b/.test(
     text
   );

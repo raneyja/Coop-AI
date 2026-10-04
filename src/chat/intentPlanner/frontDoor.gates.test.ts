@@ -385,6 +385,7 @@ test("Stop during intent planning prevents late slash execution and permits the 
   let resolvePlan!: (value: typeof plan) => void;
   const pendingPlan = new Promise<typeof plan>((resolve) => { resolvePlan = resolve; });
   const routes: string[] = [];
+  const diagnostics: Array<Record<string, unknown>> = [];
   let first = true;
   const session = Object.assign(Object.create(CoopChatSession.prototype), {
     currentContext: { provider: "gitlab", owner: "org", repo: "one", branch: "main", scope: "repo" },
@@ -393,12 +394,17 @@ test("Stop during intent planning prevents late slash execution and permits the 
     dismissPendingQuickActionSuggest() {},
     resolveChatIntentPlan() { if (first) { first = false; return pendingPlan; } return Promise.resolve(plan); },
     async routeSlashCommand() { routes.push("route"); },
+    logAgentDiagnostic(_threadId: string, event: Record<string, unknown>) { diagnostics.push(event); },
     clearIntentFeedback() {},
     postForThread() {},
     pushThreadsList() {}
   });
   const pending = session.handleChatSend(ask);
   session.handleStreamCancel(SESSION_RUN_THREAD_ID);
+  assert.equal(diagnostics[0]?.stage, "user-stop");
+  assert.equal(diagnostics[0]?.registeredTurn, false);
+  assert.equal(diagnostics[0]?.hadPartial, false);
+  assert.equal(diagnostics[0]?.content, undefined, "Stop diagnostics must not include source or answer text");
   resolvePlan(plan);
   await pending;
   assert.deepEqual(routes, [], "a stopped planner must never start the edit afterward");

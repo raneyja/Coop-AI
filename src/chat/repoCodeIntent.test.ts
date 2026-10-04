@@ -42,6 +42,10 @@ const CASES: Case[] = [
     expect: "locate"
   },
 
+  { q: "On indexed branch main of coop-dogfood-launch, what exact string does fixtureBranchLabel return? Cite the remote implementation.", expect: "locate" },
+  { q: "What value does calculate_total return?", expect: "locate" },
+  { q: "What exact string does the sign on the door return?", expect: "none" },
+
   // Understand — the user wants an explanation grounded in repo code.
   { q: "What happens when a user signs in?", expect: "understand" },
   { q: "Why do we have two auth systems in this project?", expect: "understand" },

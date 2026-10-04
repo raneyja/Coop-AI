@@ -10,6 +10,7 @@ import {
   integrationsForAgentLoop
 } from "./agentRouting";
 import { emptyChatIntentPlan, type ChatIntentPlan } from "./intentPlanner/types";
+import { planRawChatAskFromRules } from "./intentPlanner/frontDoor";
 import { DOGFOOD_HUNT_QUESTION } from "../api/agent/dogfoodContract";
 
 let passed = 0;
@@ -529,6 +530,15 @@ test("I3 compound locate+jira stays on jira, not the full connected list", () =>
     }),
     ["jira"]
   );
+});
+
+test("named return-value question runs remote search and read through the front door", () => {
+  const query = "On indexed branch main of coop-dogfood-launch, what exact string does fixtureBranchLabel return? Cite the remote implementation.";
+  const { plan } = planRawChatAskFromRules(query, {useRepo: "CoopAI-Corp/coop-dogfood-launch", connectedTools: []});
+  assert.equal(plan.codeIntent?.action, "locate");
+  assert.equal(shouldRunAgentToolLoop({query, intentPlan: plan, hasQuickAction: false}), true);
+  assert.equal(agentTurnAllowsRepoTools({intentPlan: plan}), true);
+  assert.ok(plan.jobs?.some(job => job.capability === "locate" && job.terms.includes("fixtureBranchLabel")));
 });
 
 console.log(`\nagentRouting: ${passed}/${passed + failed} tests passed`);

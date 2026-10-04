@@ -2278,6 +2278,15 @@ test("named definition misses do not expand into generic question prose", () => 
   assert.deepEqual(inventAskDerivedSearchCriteria(ask), expected);
 });
 
+
+test("Parent ValidationError lookup without the word API remains a rejection hunt", () => {
+  const ask = 'In Plane issue create/update, where is ValidationError "Parent is not valid issue_id please pass a valid issue_id" raised when the parent is not in the project?';
+  assert.equal(isApiRejectAsk(ask), true);
+  assert.equal(isCreateLocateAsk(ask), false);
+  assert.equal(isApiRejectAsk("Where is the ValidationError class defined?"), false);
+});
+
+
 console.log(`\nsearchQuery: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);

@@ -4,6 +4,12 @@ import { fetchIndexedBranch, resolveRepoBranchForTarget } from "../context/resol
 import type { RepoTarget } from "./indexedRepoWorkspaceTypes";
 import { resolveInventoryRepoIds } from "./repoInventorySources";
 
+/** Explicit branch scope in a source question must not silently follow a refreshed index. */
+export function requestedRepoBranch(query: string): string | undefined {
+  const match = /\b(?:on|in|from)\s+(?:the\s+)?(?:indexed\s+)?branch\s+[`"']?([\w][\w./-]*)/i.exec(query);
+  return match?.[1]?.replace(/[.,]+$/, "");
+}
+
 export type ResolveActiveRepoTargetOptions = {
   api: SecureApiClient;
   apiBaseUrl: string;

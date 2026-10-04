@@ -270,6 +270,9 @@ export function classifyRepoCodeIntent(message: string): RepoCodeIntent {
   if (/\bhow many files\b/i.test(trimmed)) {
     return { action: "locate", confidence, reason: `asks how many files match a condition and ${subject}` };
   }
+  if (hasEntity && /\bwhat\s+(?:(?:exact|literal|specific)\s+)?(?:value|string|number|result|output|data)\s+(?:does|do)\b[\s\S]{0,180}\breturn\b/i.test(trimmed)) {
+    return { action: "locate", confidence: "high", reason: "asks for a named implementation's return value" };
+  }
   if (LOCATE.test(trimmed)) {
     return { action: "locate", confidence, reason: `asks where something is and ${subject}` };
   }
