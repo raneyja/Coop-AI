@@ -142,11 +142,15 @@ function evidenceBlock(
     for (const page of records(evidence.pages).slice(0, 8)) {
       const url = textField(page, "htmlUrl");
       lines.push(`- ${textField(page, "title", "page")}${url ? ` (${url})` : ""}`);
+      const body = textField(page, "excerpt");
+      if (body) lines.push(`  Opened content: ${body.slice(0, 4000)}`);
     }
   } else {
     for (const doc of records(evidence.documents).slice(0, 8)) {
       const url = textField(doc, "htmlUrl");
       lines.push(`- ${textField(doc, "title", "doc")}${url ? ` (${url})` : ""}`);
+      const body = textField(doc, "excerpt");
+      if (body) lines.push(`  Opened content: ${body.slice(0, 4000)}`);
     }
   }
   return lines.length > 0 ? lines.join("\n") : `(empty ${TOOL_TITLE[provider]} payload)`;
@@ -296,6 +300,21 @@ export function enrichIntentJobResponse(
   const allowedPaths = new Set(
     (input.codePaths ?? []).map((path) => path.replace(/\\/g, "/").replace(/^\.?\//, "").toLowerCase())
   );
+  // A docs-only summary may name paths described in the opened document. They
+  // remain documentary evidence, never proof for a locate/implementation job.
+  if (!input.jobs?.some((job) => job.capability === "locate" || job.capability === "code-host")) {
+    for (const provider of ["google-docs", "notion", "confluence"] as const) {
+      const evidence = input.integrations[provider];
+      for (const hit of records(evidence?.documents ?? evidence?.pages)) {
+        const url = textField(hit, "htmlUrl");
+        if (url) allowedPaths.add(url.replace(/^https?:\/\//, "").toLowerCase());
+        const body = textField(hit, "excerpt");
+        for (const path of body.match(/(?:[\w.-]+\/){2,}[\w.*-]*(?:\.[A-Za-z][A-Za-z0-9]{0,9})?\/?/g) ?? []) {
+          allowedPaths.add(path.toLowerCase().replace(/\/$/, ""));
+        }
+      }
+    }
+  }
   const withoutLocalActionSections = stripLocalActionSections(content);
 
   return rewriteCustomerFacingProse(

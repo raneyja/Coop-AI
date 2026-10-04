@@ -310,6 +310,34 @@ test("enrichIntegrationDocsResponse linkifies attached page titles", () => {
   );
 });
 
+test("empty documentation evidence cannot preserve model absence claims", () => {
+  const enriched = enrichKnowledgeGapsResponse([
+    "**Summary**", "Two concrete scan-backed gaps: no inline or nearby documentation and no CODEOWNERS declaration.",
+    "**Documentation gaps**", "No nearby docs under src/mathRenamed.ts.",
+    "**Ownership & maintenance**", "No clear codeowner.",
+    "**Recommended next steps**", "1. Check documentation and ownership."
+  ].join("\n\n"), { activeFile: "src/mathRenamed.ts", jobScanGaps: [] });
+  assert.equal(enriched.includes("Two concrete scan-backed gaps"), false);
+  assert.equal(enriched.includes("No nearby docs under"), false);
+  assert.equal(enriched.includes("No clear codeowner"), false);
+  assert.ok(enriched.includes("Documentation coverage is unknown"));
+  assert.ok(enriched.includes("do not prove"));
+});
+
+test("missing-docs and owner scan flags are coverage limits rather than absence proof", () => {
+  const enriched = enrichKnowledgeGapsResponse("**Summary**\n\nNo docs or owner exist.", {
+    jobScanGaps: [
+      { type: "missing_docs", message: "No nearby docs", file: "src/mathRenamed.ts" },
+      { type: "missing_owner", message: "No CODEOWNERS declaration", file: "src/mathRenamed.ts" }
+    ]
+  });
+  assert.equal(enriched.includes("No docs or owner exist"), false);
+  assert.ok(enriched.includes("Documentation coverage unknown"));
+  assert.ok(enriched.includes("Ownership coverage unknown"));
+  assert.ok(enriched.includes("Scan reported: No nearby docs"));
+  assert.ok(enriched.includes("not proof of absence"));
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);

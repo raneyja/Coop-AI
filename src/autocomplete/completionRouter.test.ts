@@ -147,6 +147,22 @@ async function runAsyncTests(): Promise<void> {
     assert.equal(requestCount, 1);
   });
 
+  await asyncTest("does not reuse an in-flight completion after the suffix changes", async () => {
+    let requestCount = 0;
+    const api = {
+      streamInlineCompletion: async () => {
+        requestCount += 1;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return { text: "value;", alternatives: [], model: "test", provider: "anthropic" };
+      }
+    };
+    const router = new CompletionRouter({ api: api as never, performance: new AutocompletePerformanceMonitor() });
+    const first = router.fetchCompletions({ ...sampleContext, contextHash: "before-suffix", currentLinePrefix: "const " }, autocompleteSettings);
+    const second = router.fetchCompletions({ ...sampleContext, contextHash: "after-suffix", currentLinePrefix: "const v", currentLineSuffix: "other();", suffixWindow: "other();" }, autocompleteSettings);
+    await Promise.all([first, second]);
+    assert.equal(requestCount, 2);
+  });
+
   await asyncTest("uses higher maxTokens for multi-line brace context", async () => {
     let capturedMaxTokens = 0;
     const api = {

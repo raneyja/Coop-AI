@@ -1,0 +1,14 @@
+
+> coop-ai@0.1.10 test:autocomplete
+> npx tsx src/config/featureModelAssignments.test.ts && npx tsx src/config/inlineModelPresets.test.ts && npx tsx src/chat/buildRepoId.test.ts && npx tsx src/autocomplete/autocompleteConfig.test.ts && npx tsx src/autocomplete/autocompletePersistence.test.ts && npx tsx src/autocomplete/autocompletePreferenceSync.test.ts && npx tsx src/webview/components/settings/autocompleteDraft.test.ts && npx tsx src/autocomplete/coopAutocompleteProvider.test.ts && npx tsx src/autocomplete/copilotCoexistence.test.ts && npx tsx src/autocomplete/suggestWidgetCoexistence.test.ts && npx tsx src/autocomplete/triggerDetector.test.ts && npx tsx src/autocomplete/completionFilter.test.ts && npx tsx src/autocomplete/contextAnalyzer.test.ts && npx tsx src/autocomplete/hotStreak.test.ts && npx tsx src/autocomplete/smartThrottle.test.ts && npx tsx src/autocomplete/completionRouter.test.ts && npx tsx src/autocomplete/memberCompletionProvider.test.ts
+
+npm error code ENOTFOUND
+npm error syscall getaddrinfo
+npm error errno ENOTFOUND
+npm error network request to https://registry.npmjs.org/tsx failed, reason: getaddrinfo ENOTFOUND registry.npmjs.org
+npm error network This is a problem related to network connectivity.
+npm error network In most cases you are behind a proxy or have bad network settings.
+npm error network
+npm error network If you are behind a proxy, please make sure that the 'proxy' config is set properly.  See: 'npm help config'
+npm error Log files were not written due to an error writing to the directory: /Users/jonraney/.npm/_logs
+npm error You can rerun the command with `--loglevel=verbose` to see the logs in your terminal

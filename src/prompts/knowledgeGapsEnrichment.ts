@@ -233,7 +233,10 @@ function scanGapSubsectionTitle(gap: KnowledgeGapScanGap): string {
 }
 
 export function buildScanGapSubsection(gap: KnowledgeGapScanGap, activeFile?: string): string {
-  const title = scanGapSubsectionTitle(gap);
+  const limitedCoverage = gap.type === "missing_docs" || gap.type === "missing_owner";
+  const title = limitedCoverage
+    ? gap.type === "missing_docs" ? "Documentation coverage unknown" : "Ownership coverage unknown"
+    : scanGapSubsectionTitle(gap);
   const target = scanGapAudienceTarget(gap, activeFile);
   const openQuestion =
     gap.type === "missing_docs"
@@ -243,7 +246,10 @@ export function buildScanGapSubsection(gap: KnowledgeGapScanGap, activeFile?: st
         : gap.type === "missing_owner"
           ? `Who owns maintenance and review for ${target}?`
           : `What risk does this scan gap create for ${target}?`;
-  const whatToCheck = gap.message?.trim() || "Review the attached Sources card evidence.";
+  const scanMessage = gap.message?.trim() || "Review the attached Sources card evidence.";
+  const whatToCheck = limitedCoverage
+    ? `Scan reported: ${scanMessage}. This establishes a coverage limit, not proof of absence. Verify the repository and connected sources before concluding that documentation or ownership is missing.`
+    : scanMessage;
   return `**${title}**\n\n- **Open question:** ${openQuestion}\n- **What to check:** ${whatToCheck}`;
 }
 
@@ -344,7 +350,7 @@ function integrationBlocksFromContext(context?: KnowledgeGapsEnrichmentContext):
 
 function rebuildDocumentationGapsSection(content: string, blocks: string[]): string {
   if (blocks.length === 0) {
-    return content;
+    blocks = ["Documentation coverage is unknown in this pass. No reviewed documentation or supported documentation gap is attached; this does not establish that documentation is absent."];
   }
   const lines = content.replace(/\r\n/g, "\n").split("\n");
   const docIdx = lines.findIndex((line) => stripBoldHeading(line) === "documentation gaps");
@@ -495,6 +501,10 @@ export function enrichKnowledgeGapsResponse(
 
   let result = normalizeFieldLines(content);
   result = stripStrayReviewSubsectionHeadings(result);
+  if (attachedDocPageCount(context) === 0) {
+    result = stripMainSection(result, "summary");
+    result = "**Summary**\n\nDocumentation and ownership coverage are limited to the evidence attached in this pass. Missing scan matches do not prove that documentation, CODEOWNERS, or maintainers are absent.\n\n" + result;
+  }
   result = rebuildSummaryForZeroScanGaps(result, context);
   result = stripMainSection(result, "ownership & maintenance");
   result = stripMainSection(result, "integration & operations");

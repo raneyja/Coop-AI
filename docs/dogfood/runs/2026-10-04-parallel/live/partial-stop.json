@@ -1,0 +1,6 @@
+{
+  "partialUnchanged": true,
+  "partialText": "CoopAI 01:29 PM\nThe authentication code in \n was introduced to provide a framework for \nEnterprise Single Sign-On (SSO)\n, enabling per-user identity management and audit logging. This decision was made on June 3, 2026, as part of a broader initiative to enhance security and\n01:29 PM ",
+  "followup": "extractBearerToken missing Authorization header",
+  "result": "Correct undefined answer; no late prior text"
+}

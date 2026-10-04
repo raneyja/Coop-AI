@@ -377,6 +377,25 @@ test("handleChatSend interprets before routeSlashCommand (slash bypass is imposs
   );
 });
 
+test("integration document slash commands reach interpretation without a selected repo", async () => {
+  createRequire(__filename)("../../../scripts/vscode-test-stub.cjs");
+  const { CoopChatSession } = await import("../CoopChatSession");
+  for (const ask of ["/docs Read Coop AI — Architecture Overview", "/notion Read Architecture Overview", "/confluence Read Architecture Overview"]) {
+    const events: string[] = [];
+    const plan = planRawChatAskFromRules(ask).plan;
+    const session = Object.assign(Object.create(CoopChatSession.prototype), {
+      currentContext: {}, options: { api: { beginQuotaTurn() {} } },
+      threadRuns: new ThreadRunManager(),
+      dismissPendingQuickActionSuggest() {},
+      async completeMissingIntentClarification() { events.push("blocked"); },
+      async resolveChatIntentPlan() { events.push("interpret"); return plan; },
+      async routeSlashCommand() { events.push("route"); }
+    });
+    await session.handleChatSend(ask);
+    assert.deepEqual(events, ["interpret", "route"], ask);
+  }
+});
+
 test("Stop during intent planning prevents late slash execution and permits the next send", async () => {
   createRequire(__filename)("../../../scripts/vscode-test-stub.cjs");
   const { CoopChatSession } = await import("../CoopChatSession");

@@ -43,7 +43,7 @@ import { setLastEditUserMessage, getPatchRecord, listPatchCards } from "../edit/
 import { summarizePrNotes, type PrNotesCompleteFn } from "../edit/prNotesSummary";
 import { activeThemeMode } from "./themeMode";
 import { coopSessionRegistry } from "./CoopSessionRegistry";
-import { authIdentityKey } from "./authIdentity";
+import { authIdentityKey, shouldRebindAccountThreads } from "./authIdentity";
 import { chatRepoListFromWorkspaceRepos } from "./workspaceRepoExplorer";
 import {
   readDegradationConfiguration,
@@ -661,6 +661,8 @@ export class CoopChatSession {
   private readonly initializeOnce = createSharedInitialization(() => this.hydrateSession());
   /** Last non-empty auth identity — used to start a fresh thread when a different account signs in. */
   private lastSignedInIdentity = "";
+  /** Private in-memory verification association; never persisted or logged. */
+  private lastVerifiedSessionToken?: string;
   private closeSettingsHandler?: () => void;
   private pendingSettingsScreen?: SettingsScreen;
   private readonly chatHistory: ChatMessage[] = [];
@@ -882,12 +884,16 @@ export class CoopChatSession {
     this.refreshIntentConfiguration();
     this.conflictConfig = readConflictConfiguration();
     this.degradationConfig = readDegradationConfiguration();
+    const tokenBeforeVerification = await this.options.api.getToken();
     this.preferences = await readPreferences(
       this.options.api,
       this.options.codeHostSecrets,
       this.options.integrationSecrets
     );
-    this.lastSignedInIdentity = authIdentityKey(this.preferences);
+    const tokenAfterVerification = await this.options.api.getToken();
+    this.lastSignedInIdentity = tokenBeforeVerification === tokenAfterVerification
+      ? authIdentityKey(this.preferences) : "";
+    this.lastVerifiedSessionToken = this.lastSignedInIdentity ? tokenAfterVerification : undefined;
     this.threadStore?.rebindScope(resolveThreadScopeKey(this.lastSignedInIdentity, this.options.panelSessionId));
     // Drop legacy cross-window global chip seed (owner/repo leaked across VS Code windows).
     void this.options.extensionContext.globalState.update("coopAI.lastRepoContext", undefined);
@@ -1009,13 +1015,14 @@ export class CoopChatSession {
     this.refreshIntentConfiguration();
     this.conflictConfig = readConflictConfiguration();
     this.degradationConfig = readDegradationConfiguration();
-    const previousIdentity = authIdentityKey(this.preferences);
-    this.preferences = await readPreferences(
+    const tokenBeforeVerification = await this.options.api.getToken();
+    const refreshedPreferences = await readPreferences(
       this.options.api,
       this.options.codeHostSecrets,
       this.options.integrationSecrets
     );
-    const nextIdentity = authIdentityKey(this.preferences);
+    const tokenAfterVerification = await this.options.api.getToken();
+    this.preferences = refreshedPreferences;
     this.applyDefaultRepoToContext();
     if (this.preferences.plan === "free" && !isFreeQuotaExhausted(this.preferences.quotaCredits)) {
       this.post({ type: "chat:quota-cleared" });
@@ -1023,10 +1030,18 @@ export class CoopChatSession {
       this.post({ type: "chat:quota-cleared" });
     }
     await this.pushSettingsState();
-    if (previousIdentity !== nextIdentity) {
+    // Only a stable token may associate verification with an account. An outage
+    // preserves storage only for the exact last-verified session credential.
+    const currentToken = await this.options.api.getToken();
+    const nextIdentity = tokenBeforeVerification === tokenAfterVerification &&
+      tokenAfterVerification === currentToken ? authIdentityKey(refreshedPreferences) : "";
+    const previousIdentity = this.lastSignedInIdentity;
+    if (shouldRebindAccountThreads(previousIdentity, nextIdentity, currentToken, this.lastVerifiedSessionToken)) {
       this.syncSurfacesAfterAuthChange(previousIdentity, nextIdentity);
+      this.lastVerifiedSessionToken = undefined;
       void this.pushWorkspacePrompts();
     }
+    if (nextIdentity) this.lastVerifiedSessionToken = currentToken;
   }
 
   private persistActiveThreadLocally(): void {
@@ -5274,6 +5289,14 @@ export class CoopChatSession {
         (request.params.fileSource as RepoContext["fileSource"] | undefined) ??
         this.currentContext.fileSource
     });
+    this.logAgentDiagnostic(this.activityFeedbackThreadId ?? this.activeThreadId(), {
+      stage: "integration-prefetch-start", requestType: request.type,
+      integrationProvider: request.params.integrationProvider,
+      fetchIntegrations: request.params.fetchIntegrations,
+      jobs: request.params.intentPlan?.jobs,
+      query: request.intent.context.queryText,
+      connected: gathering.integrations, fileAssistant: fileAssistantTurn
+    });
     const enriched = await mergeIntegrationChatContext({
       result,
       request,
@@ -5296,6 +5319,7 @@ export class CoopChatSession {
       // Focus phrases first so Gaps subsystem asks reach doc/discussion search.
       extraSearchTerms: focusTerms.length ? focusTerms : undefined,
       jobs: request.params.intentPlan?.jobs,
+      onDiagnostic: (event) => this.logAgentDiagnostic(this.activityFeedbackThreadId ?? this.activeThreadId(), event),
       // Live tool lines when a fetch actually starts; durable Searched rows on done.
       onToolActivity: (toolEvent) => {
         this.applyIntegrationToolActivity(
@@ -5317,6 +5341,15 @@ export class CoopChatSession {
                 (request.params.gatherStartedAt ?? this.chatTurnStartedAt) || Date.now()
               )
             : undefined
+    });
+    const googleDocs = (enriched.data as Record<string, unknown>)?.googleDocsSearch as
+      { documents?: Array<{ excerpt?: string; opened?: boolean }>; query?: string; error?: string } | undefined;
+    this.logAgentDiagnostic(this.activityFeedbackThreadId ?? this.activeThreadId(), {
+      stage: "integration-prefetch-result", requestType: request.type,
+      provider: "google-docs", present: Boolean(googleDocs), query: googleDocs?.query,
+      hitCount: googleDocs?.documents?.length ?? 0,
+      bodyCount: googleDocs?.documents?.filter((doc) => Boolean(doc.excerpt?.trim())).length ?? 0,
+      error: googleDocs?.error
     });
     // Mid-loop agent searches land in agentTools; re-promote after prefetch so
     // focused ticket/thread hits win over (or fill) the first-pass bundle keys.
@@ -6469,6 +6502,7 @@ export class CoopChatSession {
       !options?.composerMode &&
       !options?.sourceHint &&
       !options?.integrationProvider &&
+      resolveChatCommandConstraint({ parsed: parsedSlash }).kind !== "integration" &&
       !options?.mentions?.length &&
       !attachments?.length &&
       !isHonestRepoIntelligenceScope(this.currentContext) &&
@@ -8431,7 +8465,7 @@ export class CoopChatSession {
               repo: turnContext.repo,
               provider: turnContext.provider,
               file: turnContext.file,
-              namedIntegration: options?.integrationProvider
+              namedIntegration: integrationProvider
             }
       );
       if (localPayload?.files.length && !contextBundle.some((entry) => contextResultHasLocalFiles(entry))) {
@@ -8762,8 +8796,8 @@ export class CoopChatSession {
                     : synthesisRoute?.kind === "intent-job"
                       ? buildMultiToolPlainChatUserPrompt({
                           userQuestion: taskContent,
-                          owner: turnContext.owner ?? this.preferences.owner,
-                          repo: turnContext.repo ?? this.preferences.repo,
+                          owner: turnContext.owner,
+                          repo: turnContext.repo,
                           file: turnContext.file,
                           tools: synthesisRoute.tools,
                           jobs: synthesisJobs,
@@ -9129,8 +9163,8 @@ export class CoopChatSession {
         activeFile: turnContext.file,
         mentions: mentionRefs,
         activeRepoId,
-        owner: turnContext.owner ?? this.preferences.owner,
-        repo: turnContext.repo ?? this.preferences.repo,
+        owner: turnContext.owner,
+        repo: turnContext.repo,
         userQuestion: lastUserBubble,
         fallbackTimeline: resolveTraceFallbackTimeline(
           turn.lastTraceTimeline ?? this.lastTraceDecisionTimeline,

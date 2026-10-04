@@ -51,9 +51,10 @@ function turnScenario(options: { owner?: string; repo?: string }): TurnIsolation
 }
 
 function focusTermMatches(haystack: string, focusTerms: string[] | undefined): boolean {
+  const normalizedHaystack = haystack.replace(/[-–—]/g, " ").replace(/\s+/g, " ");
   return (focusTerms ?? []).some((term) => {
-    const normalized = term.trim().toLowerCase().replace(/[-–—]/g, " ");
-    return normalized.length >= 4 && haystack.includes(normalized);
+    const normalized = term.trim().toLowerCase().replace(/[-–—]/g, " ").replace(/\s+/g, " ");
+    return normalized.length >= 4 && normalizedHaystack.includes(normalized);
   });
 }
 

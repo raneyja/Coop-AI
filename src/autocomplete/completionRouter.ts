@@ -48,6 +48,7 @@ type ManifestSymbolCacheEntry = {
 
 type InFlightEntry = {
   prefix: string;
+  surroundingContext: string;
   contextHash: string;
   promise: Promise<CompletionRouterResult>;
   controller: AbortController;
@@ -96,9 +97,18 @@ export class CompletionRouter {
 
     const docKey = context.filePath;
     const prefixKey = buildFimPrefix(context) || context.currentLinePrefix;
+    const surroundingContext = JSON.stringify([
+      context.languageId,
+      context.currentLineSuffix,
+      context.suffixWindow,
+      context.previousLines,
+      context.importsBlock,
+      context.parentSignature
+    ]);
     const existing = this.inFlightByDoc.get(docKey);
     if (existing && !existing.controller.signal.aborted) {
       const prefixCompatible =
+        surroundingContext === existing.surroundingContext &&
         prefixKey.startsWith(existing.prefix) && prefixKey.length > existing.prefix.length;
       const sameHash = existing.contextHash === context.contextHash;
       if (prefixCompatible || sameHash) {
@@ -129,6 +139,7 @@ export class CompletionRouter {
     );
     this.inFlightByDoc.set(docKey, {
       prefix: prefixKey,
+      surroundingContext,
       contextHash: context.contextHash,
       promise,
       controller

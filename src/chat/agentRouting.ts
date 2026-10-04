@@ -126,7 +126,7 @@ export function agentTurnAllowsRepoTools(options: {
     return true;
   }
   const action = options.intentPlan?.codeIntent?.action;
-  return action === "locate" || action === "change";
+  return action === "locate" || action === "understand" || action === "change";
 }
 
 /**

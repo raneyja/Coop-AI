@@ -14,6 +14,10 @@ import {
 type Case = { q: string; expect: RepoCodeAction };
 
 const CASES: Case[] = [
+  { q: "Explain how JavaScript promises and async/await work. Give a detailed tutorial with ten numbered examples and explain each example.", expect: "none" },
+  { q: "Describe Python generators and their edge cases.", expect: "none" },
+  { q: "Explain how JavaScript promises work in this repository.", expect: "understand" },
+  { q: "Explain how JavaScript promises work in src/server/authMiddleware.ts.", expect: "locate" },
   // Locate — the user wants to be taken to code.
   { q: "Where is requireAuth or authentication middleware defined in this repo?", expect: "locate" },
   { q: "Where is the login form defined?", expect: "locate" },

@@ -459,10 +459,12 @@ function filterIntegrationValue(
   field: (typeof INTEGRATION_FIELDS)[number],
   scenario: TurnIsolationScenario
 ): unknown | undefined {
-  if (scenario.dropRemoteIntegrations) {
-    return undefined;
+  // An explicit integration command selects its own org-scoped evidence, not
+  // the active repository's documentation. Other providers remain excluded.
+  if (scenario.namedIntegration) {
+    return scenario.namedIntegration === field.kind ? value : undefined;
   }
-  if (scenario.namedIntegration && scenario.namedIntegration !== field.kind) {
+  if (scenario.dropRemoteIntegrations) {
     return undefined;
   }
   const record = asDataRecord(value);

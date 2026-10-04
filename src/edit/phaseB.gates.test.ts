@@ -229,6 +229,29 @@ async function main(): Promise<void> {
     }
   });
 
+  await test("Apply preserves a cleared live buffer instead of restoring stale captured bytes", async () => {
+    const restore = installApplyEditMutation();
+    try {
+      const parsed = parsePatchResponse(TWO_FILE_PATCH);
+      assert.equal(parsed.ok, true);
+      if (!parsed.ok) return;
+      for (const cleared of ["", " \n\t"]) {
+        (vscode.workspace.textDocuments as unknown[]).length = 0;
+        const first = installRemoteDoc("src/a.ts", cleared);
+        const second = installRemoteDoc("src/b.ts", "beta\n");
+        const result = await applyPatchesToWorkspace(parsed.patches, {
+          repo: GITHUB_REPO,
+          fileContents: { "src/a.ts": "alpha\n", "src/b.ts": "beta\n" }
+        });
+        assert.equal(result.ok, false);
+        assert.equal(first.getText(), cleared);
+        assert.equal(second.getText(), "beta\n");
+      }
+    } finally {
+      restore();
+    }
+  });
+
   await test("Create PR files come from captured bytes when the Apply buffer has no repo path", async () => {
     (vscode.workspace.textDocuments as unknown[]).length = 0;
     const parsed = parsePatchResponse(TWO_FILE_PATCH);

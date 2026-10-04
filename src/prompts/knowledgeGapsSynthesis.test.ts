@@ -68,6 +68,8 @@ test("knowledge-gaps synthesis uses response contract instead of invented enrich
     file: "fastify.js"
   });
   assert.ok(prompt.includes("## Response contract (required)"));
+  assert.ok(prompt.includes("Missing search hits or unattached source bodies establish a coverage limit"));
+  assert.ok(prompt.includes("never turn unavailable evidence into a confirmed gap"));
   assert.ok(prompt.includes("Omit Ownership & maintenance entirely"));
   assert.ok(prompt.includes("Omit Integration & operations entirely"));
   assert.ok(!prompt.includes("missing runbooks"));
@@ -313,6 +315,13 @@ test("hunt/locate risk prompt names evidence-class gaps not runbook-only", () =>
   assert.ok(prompt.includes("wrong-file ranking"));
   assert.ok(prompt.includes("canned miss"));
   assert.ok(prompt.includes("docs/runbook may be thin"));
+});
+
+test("gap recommendations cannot assume earlier proposed edits were applied", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({ evidence: {}, file: "src/mathRenamed.ts" });
+  assert.ok(prompt.includes("Recommendations are prospective"));
+  assert.ok(prompt.includes("Never assume a proposed patch was applied"));
+  assert.ok(prompt.includes("actual attached source body is authoritative"));
 });
 
 console.log(`\nknowledgeGapsSynthesis: ${passed}/${passed + failed} tests passed`);

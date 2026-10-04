@@ -9,6 +9,7 @@ import {
   intentJobCodePathsFromBundle,
   shouldApplyIntentJobRemoteMiss
 } from "../../prompts/multiToolPlainChatSynthesis";
+
 import {
   buildIncidentReconstructionUserPrompt,
   enrichIncidentReconstructionResponse,
@@ -18,6 +19,37 @@ import { extraTermsForIntegration } from "./planChatJobs";
 import { emptyChatIntentPlan } from "./types";
 import { shouldRunAgentToolLoop } from "../agentRouting";
 import { systemPromptForUseCase } from "../../prompts/systemPrompts";
+
+test("document synthesis includes opened body rather than only a matching title", () => {
+  const prompt = buildMultiToolPlainChatUserPrompt({
+    userQuestion: "Read Architecture Overview and summarize its actual body.",
+    tools: ["google-docs"], jobs: [{ capability: "docs", terms: ["Architecture Overview"] }],
+    integrations: { "google-docs": { documents: [{
+      title: "Architecture Overview", htmlUrl: "https://docs.google.com/document/d/fixture/edit",
+      excerpt: "This is synthetic demo documentation. Backend: src/server/githubAppApi.ts. " + "x".repeat(5000)
+    }] } }
+  });
+  assert.match(prompt, /Opened content: This is synthetic demo documentation/);
+  assert.match(prompt, /src\/server\/githubAppApi\.ts/);
+  assert.doesNotMatch(prompt, /x{4001}/);
+});
+
+test("no-repo document summary survives intent-job and final response enrichment", () => {
+  const integrations = { "google-docs": { documents: [{ title: "Coop AI — Architecture Overview",
+    excerpt: "Synthetic demo document: TypeScript extension host, React sidebar, backend src/server/githubAppApi.ts.",
+    htmlUrl: "https://docs.google.com/document/d/fixture/edit" }] } };
+  const jobs = [{ capability: "docs" as const, terms: ["Architecture Overview"] }];
+  const summary = "The document describes a TypeScript extension host, React sidebar and backend src/server/githubAppApi.ts. [Document](https://docs.google.com/document/d/fixture/edit)";
+  const final = enrichChatResponseForAction({
+    integrationProvider: "google-docs",
+    content: enrichIntentJobResponse(summary, { tools: ["google-docs"], integrations, jobs }),
+    contextBundle: [{ data: { googleDocsSearch: integrations["google-docs"] } }]
+  });
+  assert.match(final, /TypeScript extension host/);
+  assert.match(final, /src\/server\/githubAppApi\.ts/);
+  assert.match(final, /https:\/\/docs.google.com\/document\/d\/fixture\/edit/);
+  assert.doesNotMatch(final, /no document titles|do not describe that/);
+});
 
 const N5_COMPOUND_ASK =
   "Pager: Where is date math implemented — DateTimeUtils, reports.jsp — and did we already decide not to mix this into the SQL-injection PR?";

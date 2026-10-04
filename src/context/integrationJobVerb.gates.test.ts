@@ -9,6 +9,7 @@ import { planRawChatAskFromRules } from "../chat/intentPlanner/frontDoor";
 import type { IntegrationChatProvider } from "../chat/types";
 import { fetchConfluenceSearchContext } from "./confluenceContext";
 import { fetchGoogleDocsSearchContext } from "./googleDocsContext";
+import { googleDocumentIdFromText } from "../api/googleDocs/documentUrl";
 import { fetchJiraSearchContext } from "./jiraContext";
 import { fetchNotionSearchContext } from "./notionContext";
 import { fetchSlackSearchContext, planJobSlackSearchQueries } from "./slackContext";
@@ -31,6 +32,47 @@ const CONNECTED: IntegrationChatProvider[] = [
   "notion",
   "google-docs"
 ];
+
+test("Google Docs URL identity rejects foreign hosts and ambiguous documents", () => {
+  assert.equal(googleDocumentIdFromText("Read https://docs.google.com/document/d/doc-123/edit"), "doc-123");
+  assert.equal(googleDocumentIdFromText("https://docs.google.com.evil.test/document/d/doc-123/edit"), undefined);
+  assert.equal(googleDocumentIdFromText("https://docs.google.com/document/d/first/edit https://docs.google.com/document/d/second/edit"), undefined);
+});
+
+test("Google Docs named title with an em dash is retained and opened without a repo", async () => {
+  const result = await fetchGoogleDocsSearchContext({
+    secrets, extraTerms: ["Coop AI — Architecture Overview"], jobScoped: true,
+    client: {
+      searchDocumentsForTerms: async () => [{ id: "overview", title: "Coop AI — Architecture Overview", updated: "", htmlUrl: "https://docs.google.com/document/d/overview/edit" }],
+      listRecentDocuments: async () => [],
+      getDocumentPlainText: async () => "TypeScript extension host and React sidebar."
+    }
+  });
+  assert.equal(result.documents.length, 1);
+  assert.match(result.documents[0]?.excerpt ?? "", /TypeScript extension host/);
+});
+
+test("Google Docs direct URL opens body only after checking allowed folder metadata", async () => {
+  for (const allowed of [true, false]) {
+    let exports = 0;
+    const result = await fetchGoogleDocsSearchContext({
+      secrets,
+      queryText: "Read https://docs.google.com/document/d/doc-123/edit",
+      extraTerms: ["doc-123"], jobScoped: true,
+      integrationScope: { provider: "google-docs", enforced: true, allowed: true, scopeStatus: "active",
+        googleDocs: { folderIds: ["allowed"], folderNames: ["Fixture"], folderKinds: ["folder"], expandedFolderIds: ["allowed"] } },
+      client: {
+        searchDocumentsForTerms: async () => { throw new Error("Direct URL must not search by ID"); },
+        listRecentDocuments: async () => [],
+        getDocument: async () => ({ id: "doc-123", title: "Architecture Overview", updated: "", htmlUrl: "https://docs.google.com/document/d/doc-123/edit", parents: [allowed ? "allowed" : "denied"] }),
+        getDocumentPlainText: async () => { exports++; return "A TypeScript extension host with a React sidebar."; }
+      }
+    });
+    assert.equal(exports, allowed ? 1 : 0);
+    if (allowed) assert.match(result.documents[0]?.excerpt ?? "", /TypeScript extension host/);
+    else { assert.equal(result.documents.length, 0); assert.match(result.error ?? "", /outside the allowed folder scope/); }
+  }
+});
 
 const RECENCY: Array<{ ask: string; provider: IntegrationChatProvider }> = [
   { ask: "/slack search for the most recent post", provider: "slack" },

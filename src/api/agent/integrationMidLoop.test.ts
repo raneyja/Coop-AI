@@ -21,6 +21,79 @@ async function test(name: string, fn: () => void | Promise<void>): Promise<void>
 }
 
 async function main(): Promise<void> {
+  await test("named document read opens its unique matching title in the search call", async () => {
+    const calls: Array<{ query: string; openIds?: string[] }> = [];
+    const payload = { documents: [
+      { id: "unrelated", title: "Unrelated runbook" },
+      { id: "overview", title: "Coop AI — Architecture Overview" }
+    ] };
+    const raw = await handleIntegrationSearch({
+      indexBackend: {} as IndexBackend,
+      resolveAbsolutePath: () => undefined,
+      allowedIntegrations: ["google-docs"],
+      researchQuery: "Read Coop AI — Architecture Overview and summarize its actual contents.",
+      searchIntegration: async ({ query, openIds, priorHits }) => {
+        calls.push({ query, openIds });
+        if (!openIds) return payload;
+        assert.equal(priorHits, payload);
+        return { documents: [{ id: "overview", title: "Coop AI — Architecture Overview", excerpt: "A TypeScript extension host and React sidebar.", opened: true }] };
+      }
+    }, "search_google_docs", { query: "Coop AI — Architecture Overview" });
+    assert.deepEqual(calls, [
+      { query: "Coop AI — Architecture Overview", openIds: undefined },
+      { query: "", openIds: ["overview"] }
+    ]);
+    assert.match(raw, /TypeScript extension host/);
+  });
+
+  await test("document opening does not guess an ambiguous title or turn a list ask into a read", async () => {
+    for (const [ask, titles] of [
+      ["Read Architecture Overview", ["Architecture Overview", "Architecture Overview"]],
+      ["List Architecture Overview documents", ["Architecture Overview"]],
+      ["Read Architecture Overview", ["Unrelated runbook"]]
+    ] as Array<[string, string[]]>) {
+      let calls = 0;
+      await handleIntegrationSearch({
+        indexBackend: {} as IndexBackend,
+        resolveAbsolutePath: () => undefined,
+        allowedIntegrations: ["google-docs"],
+        researchQuery: ask,
+        searchIntegration: async () => {
+          calls++;
+          return { documents: titles.map((title, index) => ({ id: String(index), title })) };
+        }
+      }, "search_google_docs", { query: "Architecture Overview" });
+      assert.equal(calls, 1);
+    }
+  });
+
+  await test("broad document search does not open a title the user never named", async () => {
+    let calls = 0;
+    await handleIntegrationSearch({
+      indexBackend: {} as IndexBackend, resolveAbsolutePath: () => undefined,
+      allowedIntegrations: ["google-docs"], researchQuery: "Read architecture documents",
+      searchIntegration: async () => {
+        calls++;
+        return { documents: [{ id: "other", title: "Other Product Architecture Overview" }] };
+      }
+    }, "search_google_docs", { query: "architecture" });
+    assert.equal(calls, 1);
+  });
+
+  await test("explicit Google document URL survives a model search by ID", async () => {
+    let actualQuery = "";
+    await handleIntegrationSearch({
+      indexBackend: {} as IndexBackend, resolveAbsolutePath: () => undefined,
+      allowedIntegrations: ["google-docs"],
+      researchQuery: "Read https://docs.google.com/document/d/known_doc-123/edit and summarize its body.",
+      searchIntegration: async ({ query }) => {
+        actualQuery = query;
+        return { documents: [] };
+      }
+    }, "search_google_docs", { query: "known_doc-123" });
+    assert.equal(actualQuery, "https://docs.google.com/document/d/known_doc-123/edit");
+  });
+
   await test("S-G8b search_jira invalid without allowlist", () => {
     assert.equal(
       parseAgentToolPlan(JSON.stringify({ tool: "search_jira", args: { query: "PROJ-1" } })).kind,

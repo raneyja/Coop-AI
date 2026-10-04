@@ -1,0 +1,14 @@
+
+> coop-ai@0.1.10 test:chat-threads
+> npx tsx src/chat/chatThreadRestore.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/chat/chatThreadStore.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/chat/remoteCitationReview.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/context/remoteViewBuffer.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/chat/threadActivation.test.ts && npx tsx src/chat/exclusiveDisposable.test.ts && npx tsx src/chat/sessionInitialization.test.ts && npx tsx src/webview/lib/chatHydration.test.ts
+
+npm error code ENOTFOUND
+npm error syscall getaddrinfo
+npm error errno ENOTFOUND
+npm error network request to https://registry.npmjs.org/tsx failed, reason: getaddrinfo ENOTFOUND registry.npmjs.org
+npm error network This is a problem related to network connectivity.
+npm error network In most cases you are behind a proxy or have bad network settings.
+npm error network
+npm error network If you are behind a proxy, please make sure that the 'proxy' config is set properly.  See: 'npm help config'
+npm error Log files were not written due to an error writing to the directory: /Users/jonraney/.npm/_logs
+npm error You can rerun the command with `--loglevel=verbose` to see the logs in your terminal

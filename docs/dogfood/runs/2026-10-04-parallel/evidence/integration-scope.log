@@ -1,0 +1,185 @@
+
+> coop-ai@0.1.10 test:integration-scope
+> npx tsx src/server/resolveIntegrationScope.test.ts && npx tsx src/integrationScope/slackQuery.test.ts && npx tsx src/integrationScope/atlassianQuery.test.ts && npx tsx src/integrationScope/notionQuery.test.ts && npx tsx src/integrationScope/googleDocsQuery.test.ts && npx tsx src/context/jiraContext.test.ts && npx tsx src/context/integrationScopeContext.test.ts && npx tsx src/server/slackAppService.test.ts && npx tsx src/api/slack/slackClient.scopePicker.test.ts && npx tsx src/server/codeHostCredentialResolver.test.ts && npx tsx src/server/codeHostConnectors/routingGithubConnector.test.ts && npx tsx src/server/adminIntegrationsHealth.test.ts
+
+✔ resolveIntegrationScope allows free slack without policy (0.474542ms)
+✔ resolveIntegrationScope blocks pro slack without allowlist (0.080208ms)
+✔ resolveIntegrationScope blocks enterprise slack without allowlist (0.069667ms)
+✔ resolveIntegrationScope returns active pro slack channels when allowlisted (0.365083ms)
+✔ resolveIntegrationScope returns active enterprise slack channels when allowlisted (0.079667ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5.4655
+✔ isSlackScopeBlocked is false when scope is not enforced (0.399083ms)
+✔ applySlackChannelScope fans out one in:<#id> query per channel (0.4485ms)
+✔ stripSlackSearchOperators removes channel redirects but keeps the meaning (0.1475ms)
+✔ scopeJobSlackSearchQueries never sends an unscoped job query (0.131667ms)
+✔ filterSlackHitsByChannel keeps only allowlisted channels (0.077583ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5.194375
+✔ isJiraScopeBlocked is false when scope is not enforced (0.511083ms)
+✔ isJiraScopeBlocked is true when enforced with no projects (0.070958ms)
+✔ applyJiraProjectScope appends project in filters (0.147292ms)
+✔ applyConfluenceSpaceScope appends space in filters (0.121416ms)
+✔ scope keeps ORDER BY last so JQL and CQL stay legal (0.066333ms)
+✔ filterJiraIssuesByProject keeps only allowlisted project keys (0.073125ms)
+✔ isConfluenceScopeBlocked is true when enforced with no spaces (0.058167ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5.808875
+✔ isNotionScopeBlocked is false when scope is not enforced (0.440542ms)
+✔ isNotionScopeBlocked is true when enforced and not allowed (0.087583ms)
+✔ notionScopeBlockMessage prefers scope reason (0.060792ms)
+✔ filterNotionPagesByScope keeps pages in allowlist or with allowed parent (0.442542ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6.17725
+✔ isGoogleDocsScopeBlocked is false when scope is not enforced (0.38725ms)
+✔ buildDriveParentsClause handles single and multiple folders (0.121833ms)
+✔ applyGoogleDocsFolderScope appends parent filters (0.069709ms)
+✔ filterGoogleDocsHitsByFolder keeps hits under allowlisted parents (0.080083ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4.423042
+  ✓ wantsJiraContext matches explicit jira questions
+  ✓ wantsJiraContext matches ticket + repo phrasing
+  ✓ wantsJiraContext matches issue keys in the query
+  ✓ buildRepoJql searches owner/repo and every code-host prefix
+  ✓ buildRepoJql phrase-quotes prefixed ids and puts GitLab first when preferred
+  ✓ buildRepoJql includes repo slug case variants
+  ✓ buildIssueKeysJql searches by issue key
+  ✓ buildRepoJql returns undefined without repo
+  ✓ buildJiraFocusTerms includes path stem and basename
+  ✓ buildJiraFocusTerms splits camelCase basename tokens
+  ✓ buildFocusAwareJiraJql ANDs repo with file focus
+  ✓ buildFocusAwareJiraJql sanitizes hyphenated extras
+  ✓ fallbackDecisionJiraJql is one sanitized phrase
+  ✓ buildDecisionJiraJql searches words, never a hyphen
+  ✓ buildFocusAwareJiraJql extrasOnly skips hyphenated repo AND
+  ✓ buildFocusAwareJiraJql undefined without focus
+  ✓ rankJiraIssuesForFocus puts path-matching tickets first
+  ✓ wantsOpenTickets matches open tickets phrasing
+  ✓ wantsRepoLinkedJiraDiscovery matches repo-wide ticket questions
+  ✓ collectJiraKeysFromText deduplicates keys from commit messages
+  ✓ collectJiraKeysFromText reads keys from confluence-style excerpts
+  ✓ buildIssueKeysJql deduplicates mixed-case keys
+  ✓ shouldFetchJiraContext includes knowledge-gaps quick action
+  ✓ shouldFetchJiraContext includes incident-shaped chat without jira keyword
+  ✓ shouldFetchJiraContext respects jira-only allowlist on blast-radius
+  ✓ focused Jira asks do not fail-open to a repo-wide dump
+  ✓ named issue keys skip the 20-ticket focus text search
+  ✓ named keys skip fuzzy JQL unless the user asked for repo-wide tickets
+  ✓ job searches do not scan git when phrase and word JQL miss
+  ✓ non-job empty text search still scans git when the code host is connected
+  ✓ git key scan stays off when text search already hit or the host cannot walk
+
+jiraContext: 31/31 tests passed
+✔ fetchJiraSearchContext blocks before Jira credentials when scope has no projects (0.748625ms)
+✔ named Jira keys open by ID and skip keyword JQL even if an alias key 404s (1.731375ms)
+✔ agent Jira search still opens keys named in the user message (0.416458ms)
+✔ missing named keys are returned as errors instead of a silent empty search (0.164541ms)
+✔ named keys plus repo-wide discovery still run keyword search (0.241917ms)
+✔ project scope does not silently drop named tickets (0.223917ms)
+✔ fetchConfluenceSearchContext blocks before Confluence credentials when scope has no spaces (0.233583ms)
+✔ fetchNotionSearchContext blocks when notion scope is not allowed (0.202709ms)
+✔ fetchGoogleDocsSearchContext blocks when google docs scope is not allowed (0.203916ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10.467667
+✔ buildAuthorizeUrl includes client, scopes, and signed state (0.819916ms)
+✔ verifyAndParseState rejects tampered state (0.135792ms)
+✔ token type helpers distinguish user vs bot prefixes (0.0845ms)
+✔ exchangeCode requires authed_user token and stores user refresh not bot (13.827167ms)
+✔ exchangeCode fails when Slack omits user token (no bot fallback) (0.400542ms)
+✔ refreshAccessToken rejects bot tokens (0.208333ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 19.648542
+✔ listChannelsForScopePicker merges public and private channels (7.055ms)
+✔ listChannelsForScopePicker falls back to public channels when private scope is missing (0.131792ms)
+✔ listChannelsForScopePicker deduplicates overlapping channel ids (0.066084ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 11.630875
+✔ isGithubOAuthInstallation detects synthetic OAuth installation IDs (0.396541ms)
+✔ assessGithubConnection marks OAuth as needsReconnect when token expired and no refresh token (0.144458ms)
+✔ assessGithubConnection treats OAuth as valid when refresh token exists (0.068292ms)
+✔ assessGithubConnection treats GitHub App install as always valid (0.075458ms)
+✔ assessGithubConnection returns disconnected when no installation (0.391625ms)
+✔ resolveCodeHostTokenForOrg forceRefresh mints a new GitHub App token (0.148375ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4.735958
+✔ RoutingGitHubConnector prefers GitHub App install URL when both connectors exist (0.780958ms)
+✔ RoutingGitHubConnector delegates OAuth refresh for synthetic installation IDs (0.139042ms)
+✔ RoutingGitHubConnector delegates GitHub App refresh for real installation IDs (0.100542ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5.056833
+✔ integrations health returns gates for disconnected org (1.643042ms)
+✔ integrations health marks slack scope required on enterprise (0.534083ms)
+✔ integrations health marks slack scope required on pro (0.291417ms)
+✔ integrations list includes github connectionKind metadata (0.983833ms)
+✔ integrations list refresh marks github needsReconnect when live test fails (0.392875ms)
+✔ integrations health refresh marks github degraded and blocks onboarding (0.238292ms)
+✔ integrations list marks google-docs needsReconnect when access expired and refresh is missing (0.203291ms)
+✔ integrations list keeps google-docs connected when token is still valid (0.172125ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 12.071791

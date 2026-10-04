@@ -89,7 +89,7 @@ export async function applyPatchesToWorkspace(
 
     const live = target.readText();
     const captured = lookupPatchFileContent(filePatch.relativePath, options?.fileContents);
-    const originalContent = live?.trim() ? live : captured;
+    const originalContent = live ?? captured;
     if (originalContent === undefined) {
       return { ok: false, error: `Could not read file: ${filePatch.relativePath}`, file: filePatch.relativePath };
     }

@@ -1,4 +1,5 @@
 import { GoogleDocsClient } from "../api/googleDocs/googleDocsClient";
+import { googleDocumentIdFromText } from "../api/googleDocs/documentUrl";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
 import type { ResolvedIntegrationScope } from "../integrationScope/types";
@@ -43,6 +44,9 @@ export type GoogleDocsSearchContext = {
 
 /** Injectable Google Docs client for tests — production uses credentials. */
 export type GoogleDocsSearchClient = {
+  getDocument?(documentId: string): Promise<{
+    id: string; title: string; updated: string; htmlUrl: string; parents?: string[];
+  } | undefined>;
   searchDocumentsForTerms(
     terms: string[],
     limit?: number,
@@ -102,6 +106,7 @@ export async function fetchGoogleDocsSearchContext(options: {
   openIds?: string[];
   existingHits?: Record<string, unknown>;
   signal?: AbortSignal;
+  onDiagnostic?: (event: Record<string, unknown>) => void;
   /** Test seam — production leaves this unset and builds a client from secrets. */
   client?: GoogleDocsSearchClient;
 }): Promise<GoogleDocsSearchContext> {
@@ -125,6 +130,7 @@ export async function fetchGoogleDocsSearchContext(options: {
   }
 
   const latest = Boolean(options.jobScoped && options.jobVerb === "latest");
+  const directId = googleDocumentIdFromText([options.queryText ?? "", ...(options.extraTerms ?? [])].join(" "));
   if (latest && !googleDocsLatestAllowlisted(options.integrationScope)) {
     return {
       source: "google-docs-search",
@@ -148,7 +154,7 @@ export async function fetchGoogleDocsSearchContext(options: {
           contextText: [...(options.contextText ?? []), ...(options.crossToolText ?? [])],
           extraTerms: options.extraTerms
         });
-  if (!latest && terms.length === 0 && !(options.openIds?.length && Array.isArray(options.existingHits?.documents))) {
+  if (!latest && !directId && terms.length === 0 && !(options.openIds?.length && Array.isArray(options.existingHits?.documents))) {
     return {
       source: "google-docs-search",
       query: "",
@@ -177,6 +183,17 @@ export async function fetchGoogleDocsSearchContext(options: {
       : undefined;
   const allowedFolderIds = new Set(options.integrationScope?.googleDocs?.expandedFolderIds ?? []);
   try {
+    if (directId && client.getDocument) {
+      const doc = await client.getDocument(directId);
+      const permitted = doc && (!options.integrationScope?.enforced ||
+        (allowedFolderIds.size > 0 && filterGoogleDocsHitsByFolder([doc], allowedFolderIds).length > 0));
+      if (!permitted) return { source: "google-docs-search", query, documents: [],
+        error: "That Google document is unavailable or outside the allowed folder scope." };
+      const documents = await attachGoogleDocBodies(client, [stripGoogleDocParents(doc)], {
+        jobScoped: true, openIds: [doc.id]
+      });
+      return { source: "google-docs-search", query, documents };
+    }
     const searchLimit = options.limit ?? 20;
     let rawDocuments = latest
       ? await client.listRecentDocuments(searchLimit, driveScope)
@@ -197,6 +214,10 @@ export async function fetchGoogleDocsSearchContext(options: {
           focusTerms: options.extraTerms,
           limit: options.limit ?? 20
         });
+    options.onDiagnostic?.({ stage: "google-docs-search-filter", owner: options.owner, repo: options.repo,
+      rawCount: rawDocuments.length, scopedCount: scoped.length, rankedCount: ranked.length,
+      scopeEnforced: options.integrationScope?.enforced, scopeAllowed: options.integrationScope?.allowed,
+      allowedFolderCount: allowedFolderIds.size, terms, focusTerms: options.extraTerms });
     const documents = options.searchOnly
       ? ranked
       : await attachGoogleDocBodies(client, ranked, {

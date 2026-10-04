@@ -1,0 +1,206 @@
+
+> coop-ai@0.1.10 test:autocomplete
+> npx tsx src/config/featureModelAssignments.test.ts && npx tsx src/config/inlineModelPresets.test.ts && npx tsx src/chat/buildRepoId.test.ts && npx tsx src/autocomplete/autocompleteConfig.test.ts && npx tsx src/autocomplete/autocompletePersistence.test.ts && npx tsx src/autocomplete/autocompletePreferenceSync.test.ts && npx tsx src/webview/components/settings/autocompleteDraft.test.ts && npx tsx src/autocomplete/coopAutocompleteProvider.test.ts && npx tsx src/autocomplete/copilotCoexistence.test.ts && npx tsx src/autocomplete/suggestWidgetCoexistence.test.ts && npx tsx src/autocomplete/triggerDetector.test.ts && npx tsx src/autocomplete/completionFilter.test.ts && npx tsx src/autocomplete/contextAnalyzer.test.ts && npx tsx src/autocomplete/hotStreak.test.ts && npx tsx src/autocomplete/smartThrottle.test.ts && npx tsx src/autocomplete/completionRouter.test.ts && npx tsx src/autocomplete/memberCompletionProvider.test.ts
+
+featureModelAssignments: 1/1 tests passed
+  ✓ chat preset uses preferences provider and model
+  ✓ chat preset falls back to provider default when model empty
+  ✓ resolveInlineModelPreset chat delegates to chat model preset
+  ✓ haiku preset targets anthropic haiku with openai fallback
+  ✓ gpt35 preset targets openai mini with anthropic fallback
+  ✓ custom preset uses trimmed model id and haiku fallback
+  ✓ custom preset without model id falls back to haiku
+  ✓ defaultInlineModelForProvider aligns extension and server defaults
+  ✓ INLINE_DEFAULT_MODEL_BY_PROVIDER covers all supported providers
+
+inlineModelPresets: 9 passed, 0 failed
+  ✓ buildRepoId uses preferences owner and repo
+  ✓ buildRepoId prefers context owner and repo when provided
+  ✓ buildRepoId returns unknown placeholder when owner or repo missing
+
+buildRepoId: 3 passed, 0 failed
+  ✓ readAutocompleteSettings returns package defaults when unset
+  ✓ readAutocompleteSettings reads coopAI.autocomplete overrides
+  ✓ isAutocompleteGloballyEnabled reflects enabled flag
+  ✓ isRepoIndexHealthy requires ready status with zoekt or scip
+  ✓ resolveEffectiveUseGraphContext auto-enables when index is healthy
+  ✓ resolveAutocompleteActiveRepoId uses coopAI default owner and repo
+  ✓ findActiveRepoBecameHealthy matches active repo transition to ready
+  ✓ isAutocompleteUserDisabled and discovery shown persist in globalState
+  ✓ clearAutocompleteWorkspaceOverrides removes workspace true and false
+  ✓ shouldAutoEnableAutocompleteOnIndexReady respects userDisabled and shown flags
+  ✓ shouldOfferAutocompleteDiscovery respects enabled, userDisabled, and shown flags
+
+autocompleteConfig: 11 passed, 0 failed
+  ✓ package.json defaults autocomplete to disabled
+  ✓ readConfiguration falls back to autocomplete disabled when unset
+  ✓ registerAutocomplete persists enabled at Global scope
+  ✓ index notifier does not toggle autocomplete from Deep-Index readiness
+  ✓ extension does not force-enable autocomplete on startup
+  ✓ setAutocompleteEnabled does not wait on Copilot or suggest-widget coexistence
+  ✓ autocomplete-only settings save skips the full preference reload
+  ✓ model settings checkbox keeps a pending save instead of snapping to stale prefs
+  ✓ package.json does not steal Jump to Bracket for autocomplete trigger
+
+autocompletePersistence: 9 passed, 0 failed
+  ✓ isAutocompleteOnlySettingsUpdate accepts a lone boolean toggle
+  ✓ isAutocompleteOnlySettingsUpdate rejects mixed or empty payloads
+  ✓ shouldRefreshSessionsOnCoopConfigChange skips autocomplete-only toggles
+  ✓ shouldRefreshSessionsOnCoopConfigChange still refreshes other Coop settings
+
+autocompletePreferenceSync: 4 passed, 0 failed
+  ✓ nextAutocompleteDraft keeps in-progress edits
+  ✓ nextAutocompleteDraft keeps the saved value while prefs are stale
+  ✓ nextAutocompleteDraft follows prefs once they catch up
+  ✓ reconcileAutocompletePref ignores stale incoming values while a save is pending
+
+autocompleteDraft: 4 passed, 0 failed
+  ✓ late completions preserve typing reuse but reject changed surrounding code
+  ✓ index notifier does not auto-enable autocomplete when index becomes healthy
+  ✓ index notifier skips when user previously disabled autocomplete
+  ✓ index notifier no-ops when discovery already shown
+  ✓ index notifier leaves enabled setting unchanged when already on
+
+coopAutocompleteProvider: 5 passed, 0 failed
+  ✓ isCopilotInlineDisabled detects global false
+  ✓ isCopilotInlineDisabled detects wildcard false
+  ✓ detectCopilotExtensions reports installed and active extensions
+  ✓ syncCopilotInlineWithCoopAutocomplete snapshots and disables Copilot inline
+  ✓ syncCopilotInlineWithCoopAutocomplete restores snapshot when Coop autocomplete turns off
+  ✓ syncCopilotInlineWithCoopAutocomplete is a no-op when Copilot is not installed
+
+copilotCoexistence: 6 passed, 0 failed
+  ✓ syncSuggestWidgetCoexistenceWithCoopAutocomplete enables suppressSuggestions when Coop autocomplete is on
+  ✓ syncSuggestWidgetCoexistenceWithCoopAutocomplete is a no-op when already suppressing
+  ✓ syncSuggestWidgetCoexistenceWithCoopAutocomplete restores prior value when Coop autocomplete turns off
+  ✓ syncSuggestWidgetCoexistenceWithCoopAutocomplete does nothing on disable when never managed
+
+suggestWidgetCoexistence: 4 passed, 0 failed
+  ✓ returns disabled when autocomplete is off
+  ✓ skips a cursor inside JSDoc before any completion request
+  ✓ skips comments and strings
+  ✓ manual mode requires manual trigger
+  ✓ debounces automatic triggers
+  ✓ immediate trigger after dot uses zero debounce
+  ✓ skips unchanged context hash
+  ✓ retries unchanged context after cooldown
+  ✓ failed request clears dedup for immediate retry
+  ✓ backoff after rejection suppresses requests
+  ✓ isImmediateTriggerLine detects property access and assignment
+  ✓ hot streak active uses reduced debounce
+  ✓ hot streak bypasses rapid typing suppression after accept
+  ✓ immediate trigger after equals bypasses rapid typing
+  ✓ afterDot bypasses rejection backoff
+  ✓ rapid typing schedules debounced request instead of blocking
+
+triggerDetector: 16 passed, 0 failed
+  ✓ normalizeCompletionText strips markdown fences
+  ✓ filterAndRankCompletions drops trivial completions
+  ✓ filterAndRankCompletions drops mismatched string quotes
+  ✓ filterAndRankCompletions keeps valid completion
+  ✓ filterAndRankCompletions strips redundant const from mid-assignment
+  ✓ filterAndRankCompletions keeps rhs after stripping duplicate declaration
+  ✓ filterAndRankCompletions trims invented trailing statements after assignment rhs
+  ✓ filterAndRankCompletions drops multi-line block after dot
+  ✓ filterAndRankCompletions keeps member after dot
+  ✓ filterAndRankCompletions rejects property chains after dot
+  ✓ filterAndRankCompletions keeps single member and call after dot
+  ✓ filterAndRankCompletions rejects completion copied from suffix below cursor
+  ✓ isValidAfterDotInsertText accepts member-only inserts
+  ✓ filterAndRankCompletions rejects block copy after vscode.window dot
+  ✓ filterAndRankCompletions boosts sibling receiver usage after dot
+  ✓ filterAndRankCompletions drops function restart mid-assignment
+  ✓ filterAndRankCompletions allows const on fresh indented line
+  ✓ sanitizeCompletionForContext extracts rhs only
+  ✓ stripOverlapWithPrefix removes shared suffix
+  ✓ toInlineInsertText adds space after assignment when cursor is right of equals
+  ✓ ensureInsertSpacing is no-op when prefix already has trailing space
+  ✓ toInlineInsertText applies indent on blank line
+  ✓ buildKnownSymbolsFromContext includes imports and builtins
+  ✓ filterAndRankCompletions prefers manifest-known symbols
+  ✓ filterAndRankCompletions ranks known symbols above unknown when both kept
+  ✓ symbolPlausibilityAdjustment penalizes unknown identifiers
+  ✓ symbolPlausibilityAdjustment rewards known identifiers
+  ✓ type-body assignment drops statement ghosts and invented getBearerToken
+  ✓ function-body assignment can still complete and prefers extractBearerToken
+  ✓ empty-block hole keeps a ~194 char Bearer body when maxSuggestionLength is 200
+  ✓ empty-block hole ranks Bearer reconstruction over generic header case-fold
+  ✓ empty-block hole collapses || vs ?? header lookups to one suggestion
+  ✓ sole invented member still shows so the editor is not blank
+  ✓ assignment hole filters invented this.deps.identity behind known getIdentity
+  ✓ typed t joins his.deps.identity and still drops the invented member
+  ✓ partial this. and this.deps. drop members the buffer does not show
+  ✓ multiline this.deps.api.getBackendClient stays, invented identity does not
+  ✓ legal this.deps.api stays when identity is invented
+  ✓ invented this.foo.bar on another class is dropped in favor of a known method
+  ✓ clampCompletionToMaxLength truncates on a line boundary instead of dropping
+  ✓ normalizeCompletionText keeps a 7-line empty-block body
+
+completionFilter: 41 passed, 0 failed
+  ✓ analyzeDocumentContext treats a cursor inside JSDoc as a comment
+  ✓ analyzeDocumentContext extracts prefix and suffix
+  ✓ suffixWindow caps at 500 characters
+  ✓ languageSpecificHints mentions property access after dot
+  ✓ autocompleteGroundingRules forbids invented strings and assumptions
+  ✓ isFileEligible rejects markdown
+  ✓ isFileEligible rejects node_modules paths
+  ✓ isFileEligible accepts typescript source files
+  ✓ isFileEligible accepts github VFS remote buffers
+  ✓ wantsMultiLineCompletion after opening brace
+  ✓ wantsMultiLineCompletion after arrow
+  ✓ wantsMultiLineCompletion after trailing open paren
+  ✓ wantsMultiLineCompletion on empty line inside block
+  ✓ wantsMultiLineCompletion on unindented empty line in function body
+  ✓ type-like body is not an empty-block hole
+  ✓ isEmptyBlockHole detects extractBearerToken deleted-body fixture
+  ✓ empty-block hole keeps imports beyond the 10-line prefix window
+
+contextAnalyzer: 17 passed, 0 failed
+  ✓ activate increments streak and enables hot debounce
+  ✓ keystrokes consume hot streak window
+  ✓ debounce returns base when inactive
+
+hotStreak: 3 passed, 0 failed
+  ✓ slow typing keeps base debounce
+  ✓ fast typing reduces debounce
+  ✓ high p95 latency increases debounce
+
+smartThrottle: 3 passed, 0 failed
+  ✓ buildFimSegments returns prefix and suffix when useFim enabled
+  ✓ buildFimSegments is undefined when useFim disabled
+  ✓ synthesizeMessageFromSegments builds chat-fallback prompt from FIM segments
+  ✓ synthesizeMessageFromSegments asks for a full body on empty-block holes
+  ✓ reuses in-flight promise for prefix-compatible extension
+  ✓ does not reuse an in-flight completion after the suffix changes
+  ✓ uses higher maxTokens for multi-line brace context
+  ✓ keeps a 7-line empty-block body instead of the 4-line stream cap
+  ✓ starts new request when prefix is not compatible
+  ✓ includes graph context fields when useGraphContext is enabled
+  ✓ omits graph context fields when useGraphContext is disabled
+  ✓ auto-includes graph context when index is healthy
+  ✓ L session omits graph even when the index is healthy
+  ✓ falls back to secondary provider when primary request fails
+  ✓ re-filters a cached assignment hole against the typed prefix
+  ✓ filters a typed-t FIM remainder before caching it
+  ✓ skips .env files, including vscode-vfs paths, without a network request
+  ✓ returns cached completions without a network request
+  ✓ uses assigned autocomplete model in production
+  ✓ uses chat preferences model when dev mode is on
+[CoopAI autocomplete] Autocomplete request timed out.
+  ✓ returns empty completions with timeout error when request times out
+
+completionRouter: 21 passed, 0 failed
+  ✓ isAfterDotMemberCompletionEligible requires afterDot and TS/JS language
+  ✓ resolveLspTriggerCharacter returns dot for afterDot contexts
+  ✓ rankAfterDotLspMembers prioritizes createWebviewPanel on vscode.window
+  ✓ stripSnippetPlaceholders removes VS Code snippet syntax
+  ✓ normalizeMemberInsertText keeps property names without parens
+  ✓ normalizeMemberInsertText adds parens for methods with snippet insert
+  ✓ filterMemberCompletionItems drops classes and keywords
+  ✓ lspItemsToRankedCompletions dedupes and tags source lsp
+  ✓ fetchAfterDotMemberCompletions calls VS Code completion provider
+  ✓ fetchAfterDotMemberCompletions skips non-eligible contexts
+  ✓ fetchAfterDotMemberCompletions fails open on command errors
+  ✓ fetchAfterDotMemberCompletions fails open on timeout
+
+memberCompletionProvider: 12 passed, 0 failed

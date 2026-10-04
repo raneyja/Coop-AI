@@ -3,7 +3,8 @@ import {
   buildRepoSummarySynthesisUserPrompt,
   formatActiveFileContextForPrompt,
   formatRepoSummaryForPrompt,
-  REPO_SUMMARY_LOCATE_ONLY_MARKER
+  REPO_SUMMARY_LOCATE_ONLY_MARKER,
+  REPO_SUMMARY_EVIDENCE_SYSTEM
 } from "./repoSummarySynthesis";
 
 async function run(): Promise<void> {
@@ -21,6 +22,12 @@ async function run(): Promise<void> {
       failed++;
     }
   };
+
+  test("comprehension distinguishes unavailable bodies from absent implementations", () => {
+    assert.ok(REPO_SUMMARY_EVIDENCE_SYSTEM.includes("unknown implementation"));
+    assert.ok(REPO_SUMMARY_EVIDENCE_SYSTEM.includes("Never call it unimplemented or absent"));
+    assert.ok(REPO_SUMMARY_EVIDENCE_SYSTEM.includes("actual control flow"));
+  });
 
   test("formatRepoSummaryForPrompt includes tree and entry files", () => {
     const text = formatRepoSummaryForPrompt({

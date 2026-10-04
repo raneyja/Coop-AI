@@ -140,6 +140,19 @@ export class GoogleDocsClient {
     return this.searchDocuments(terms.join(" OR "), limit, scope);
   }
 
+  /** Resolve URL identity and parent scope before exporting a document body. */
+  public async getDocument(documentId: string): Promise<GoogleDoc | undefined> {
+    const file = await this.request<{
+      id: string; name?: string; modifiedTime?: string; webViewLink?: string;
+      parents?: string[]; mimeType?: string; trashed?: boolean;
+    }>(`/files/${encodeURIComponent(documentId)}`, {
+      query: { fields: "id,name,modifiedTime,webViewLink,parents,mimeType,trashed", supportsAllDrives: "true" }
+    });
+    if (file.trashed || file.mimeType !== "application/vnd.google-apps.document") return undefined;
+    return { id: file.id, title: file.name ?? "Untitled document", updated: file.modifiedTime ?? "",
+      htmlUrl: file.webViewLink ?? `https://docs.google.com/document/d/${encodeURIComponent(file.id)}/edit`, parents: file.parents };
+  }
+
   public async listRecentDocuments(
     limit = 20,
     scope?: GoogleDocsSearchScope

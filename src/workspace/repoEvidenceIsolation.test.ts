@@ -3,6 +3,7 @@ import {
   dropForeignActiveFileEvidence,
   filterCodeEvidenceToActiveRepo,
   isForeignActiveFileForUseRepo,
+  isolateContextBundleForTurn,
   orgDocsSynthesisGuardrail,
   ORG_DOCS_EVIDENCE_LABEL,
   parseRepoIdCoords,
@@ -14,6 +15,16 @@ import {
 
 let passed = 0;
 let failed = 0;
+
+test("explicit Docs command retains scoped document evidence across an unrelated repo pin", () => {
+  const docs = { documents: [{ title: "Coop AI — Architecture Overview", excerpt: "Coop-AI demo architecture." }] };
+  const bundle = [{ data: { googleDocsSearch: docs, notionSearch: { pages: [{ title: "Other integration" }] } } }];
+  const named = isolateContextBundleForTurn(bundle, { owner: "CoopAI-Corp", repo: "plane", namedIntegration: "google-docs" });
+  assert.deepEqual(named[0].data.googleDocsSearch, docs);
+  assert.equal("notionSearch" in named[0].data, false);
+  const repoWorkflow = isolateContextBundleForTurn(bundle, { owner: "CoopAI-Corp", repo: "plane" });
+  assert.equal("googleDocsSearch" in repoWorkflow[0].data, false);
+});
 
 function test(name: string, fn: () => void): void {
   try {

@@ -5,6 +5,18 @@ import { extractExistingCapabilityEvidence } from "../context/existingCapability
 let passed = 0;
 let failed = 0;
 
+test("knowledge gaps final response rejects absence inferred from empty review evidence", () => {
+  const enriched = enrichChatResponseForAction({
+    content: "**Summary**\n\nTwo concrete gaps: no README or CODEOWNERS.\n\n**Documentation gaps**\n\nNo nearby docs under src/mathRenamed.ts.",
+    quickAction: "knowledge-gaps",
+    activeFile: "src/mathRenamed.ts",
+    contextBundle: [{ data: { jobScan: { gaps: [] } } }]
+  });
+  assert.equal(enriched.includes("Two concrete gaps"), false);
+  assert.equal(enriched.includes("No nearby docs under"), false);
+  assert.ok(enriched.includes("Documentation coverage is unknown"));
+});
+
 function test(name: string, fn: () => void): void {
   try {
     fn();
@@ -278,6 +290,40 @@ test("/docs answers that invent repo files are rewritten to titles only", () => 
   assert.ok(!enriched.includes("src/middleware/auth.js"));
   assert.match(enriched, /\/docs searches Google Docs only/);
   assert.ok(enriched.includes("Coop AI — Architecture Overview"));
+});
+
+test("/docs preserves code paths actually described by the opened document body", () => {
+  const content = "The document describes src/server/githubAppApi.ts as the backend API.";
+  const enriched = enrichChatResponseForAction({
+    integrationProvider: "google-docs", content,
+    contextBundle: [{ data: { googleDocsSearch: { documents: [{
+      title: "Coop AI — Architecture Overview", htmlUrl: "https://docs.google.com/document/d/fixture/edit",
+      excerpt: "Backend: src/server/githubAppApi.ts. This is synthetic demo documentation."
+    }] } } }]
+  });
+  assert.match(enriched, /document describes src\/server\/githubAppApi\.ts/);
+  assert.doesNotMatch(enriched, /no document titles|do not describe that/);
+  const unsupported = enrichChatResponseForAction({
+    integrationProvider: "google-docs", content: "The document describes src/invented/auth.js.",
+    contextBundle: [{ data: { googleDocsSearch: { documents: [{
+      title: "Coop AI — Architecture Overview", excerpt: "Backend: src/server/githubAppApi.ts."
+    }] } } }]
+  });
+  assert.doesNotMatch(unsupported, /src\/invented\/auth\.js/);
+  assert.match(unsupported, /Coop AI — Architecture Overview/);
+});
+
+test("/docs final response supplies the opened document source link once", () => {
+  const url = "https://docs.google.com/document/d/fixture/edit";
+  const bundle = [{ data: { googleDocsSearch: { documents: [{
+    title: "Coop AI — Architecture Overview", htmlUrl: url, excerpt: "Synthetic demo documentation describes a React sidebar."
+  }] } } }];
+  const summary = "The document describes a React sidebar and identifies itself as synthetic demo documentation.";
+  const enriched = enrichChatResponseForAction({ integrationProvider: "google-docs", content: summary, contextBundle: bundle });
+  assert.match(enriched, /\[Coop AI — Architecture Overview\]\(https:\/\/docs.google.com\/document\/d\/fixture\/edit\)/);
+  const alreadyLinked = `${summary} [Architecture Overview](${url})`;
+  const preserved = enrichChatResponseForAction({ integrationProvider: "google-docs", content: alreadyLinked, contextBundle: bundle });
+  assert.equal(preserved.split(url).length - 1, 1);
 });
 
 const total = passed + failed;

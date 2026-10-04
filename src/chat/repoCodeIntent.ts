@@ -154,7 +154,7 @@ function stripGroundingInstructions(message: string): string {
  */
 export function isGeneralLanguageQuestion(message: string): boolean {
   const scoped = stripGroundingInstructions(message);
-  if (!scoped || !SYNTAX_QUESTION.test(scoped)) {
+  if (!scoped || (!SYNTAX_QUESTION.test(scoped) && !EXPLAIN_VERB.test(scoped))) {
     return false;
   }
   if (!LANGUAGE_NAME.test(scoped) && !SCOPED_GO_LANGUAGE.test(scoped)) {

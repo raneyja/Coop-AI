@@ -541,6 +541,18 @@ test("named return-value question runs remote search and read through the front 
   assert.ok(plan.jobs?.some(job => job.capability === "locate" && job.terms.includes("fixtureBranchLabel")));
 });
 
+test("named repository explanation keeps remote source tools available", () => {
+  const query = "On indexed branch renamed of coop-dogfood-launch, explain positiveSum and fixtureBranchLabel step by step, including all edge cases, with source citations.";
+  const { plan } = planRawChatAskFromRules(query, {
+    useRepo: "CoopAI-Corp/coop-dogfood-launch",
+    connectedTools: []
+  });
+  assert.equal(plan.codeIntent?.action, "understand");
+  assert.equal(shouldRunAgentToolLoop({ query, intentPlan: plan, hasQuickAction: false }), true);
+  assert.equal(agentTurnAllowsRepoTools({ intentPlan: plan }), true);
+  assert.equal(agentTurnAllowsRepoTools({ intentPlan: plan, integrationSlash: true }), false);
+});
+
 console.log(`\nagentRouting: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);

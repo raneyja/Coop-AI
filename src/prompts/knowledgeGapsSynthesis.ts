@@ -278,6 +278,10 @@ function appendKnowledgeGapsResponseContract(
   );
 
   lines.push("## Response contract (required)");
+  lines.push(
+    "Missing search hits or unattached source bodies establish a coverage limit, not that documentation, ownership, or an implementation does not exist. Describe such results as unknown or not found in this pass. Only assert absence when attached evidence actually proves it; never turn unavailable evidence into a confirmed gap.",
+    "Recommendations are prospective: describe what should be checked or changed. Never assume a proposed patch was applied or repeat a prior chat claim of a fix as fact. The actual attached source body is authoritative for current behavior; an unapplied suggestion does not change it."
+  );
   if (focusPrimary) {
     lines.push(
       "The opening must lead with the ## Primary topic focus subsystems (docs/ownership gaps or explicit no-evidence). Do not make ownership of an unrelated open editor the headline."

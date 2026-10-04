@@ -70,6 +70,7 @@ type IntegrationEnrichmentOptions = {
   jobs?: ChatIntentJob[];
   /** Fired when a real integration fetch starts/finishes — drives thinking UI. */
   onToolActivity?: (event: IntegrationToolActivityEvent) => void;
+  onDiagnostic?: (event: Record<string, unknown>) => void;
   deps?: Partial<IntegrationChatEnrichmentDeps>;
   budgetMs?: number;
 };
@@ -371,6 +372,11 @@ async function enrichIntegrationStages(
           deps.fetchGoogleDocsSearchContext({
             secrets: options.secrets,
             ...base,
+            // Keep canonical document URL identity even when jobs narrow search terms.
+            queryText: options.request.intent.context.queryText,
+            onDiagnostic: options.onDiagnostic,
+            owner: options.request.params.integrationProvider === "google-docs" ? undefined : base.owner,
+            repo: options.request.params.integrationProvider === "google-docs" ? undefined : base.repo,
             extraTerms: termsFor("google-docs"),
             jobScoped: true,
             jobVerb: verbFor("google-docs"),

@@ -1,0 +1,9 @@
+2026-10-04 13:19:32.144 [error] CodeWindow: detected unresponsive
+2026-10-04 13:19:47.148 [error] [uncaught exception in main]: UnresponsiveSampleError: UnresponsiveSampleError: from window with ID 1 belonging to process with pid 27973
+2026-10-04 13:19:47.149 [error]
+    at vscode-file://vscode-app/Applications/Visual%20Studio%20Code.app/Contents/Resources/app/out/vs/workbench/workbench.desktop.main.js:765:10738
+2026-10-04 13:19:47.149 [error] CodeWindow unresponsive samples:
+    at vscode-file://vscode-app/Applications/Visual%20Studio%20Code.app/Contents/Resources/app/out/vs/workbench/workbench.desktop.main.js:765:10738
+    at vscode-file://vscode-app/Applications/Visual%20Studio%20Code.app/Contents/Resources/app/out/vs/workbench/workbench.desktop.main.js:31:80620
+Total Samples: 9
+2026-10-04 13:20:18.240 [info] Extension host with pid 2990 exited with code: 0, signal: unknown.

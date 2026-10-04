@@ -9,3 +9,16 @@ export function authIdentityKey(prefs: {
   }
   return (prefs.userEmail ?? "").trim().toLowerCase() || "signed-in";
 }
+
+/** Unavailable verification must not masquerade as a confirmed account change. */
+export function shouldRebindAccountThreads(
+  boundIdentity: string,
+  verifiedIdentity: string,
+  storedToken: string | undefined,
+  lastVerifiedToken: string | undefined
+): boolean {
+  if (!verifiedIdentity && storedToken && storedToken === lastVerifiedToken) {
+    return false;
+  }
+  return boundIdentity !== verifiedIdentity;
+}

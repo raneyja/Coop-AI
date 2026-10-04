@@ -1,0 +1,69 @@
+{
+  "scope": "Nonbilling integration and operations follow-up",
+  "integration_scope": {
+    "tier": "Automated Pass",
+    "command": "npm run test:integration-scope",
+    "exitCode": 0,
+    "evidence": "integration-scope.log",
+    "live_status": "Content access, revocation and cross-org extension isolation remain separate live checks."
+  },
+  "docs_failure": {
+    "runId": "16794f90-f6cd-4244-b8ab-e44752124472",
+    "cause": "Detail Open was scheduled after a second model round, then shared gather handoff returned unavailable before its body arrived.",
+    "repairs": [
+      "Explicit named document read opens an unambiguous matching hit inside the search call.",
+      "Canonical Google Docs URL resolves file metadata, checks allowed parent folders, then exports text without name search by ID.",
+      "Integration slash constraints are recognized before missing-repository gate."
+    ],
+    "tier": "Awaiting parent validation and packaged live retest"
+  },
+  "remaining_fixtures": [
+    "Two distinct extension-sign-in accounts with separate organizations and known private repositories for cross-org denial and revocation.",
+    "Integration allowlisted and excluded resources in disposable accounts; approved specific destination/content before posting test messages.",
+    "Known failed sandbox index job and authorized operator account for observable retry; current ops UI exposes estate reindex rather than per-job retry.",
+    "Teams launch-scope decision; currently unavailable and excluded."
+  ],
+  "no_production_mutations": true,
+  "stripe": "Deferred until tomorrow by user",
+  "docs_worker_followup": {
+    "liveRun": "synthesis-turn-1791147242862-qm4euu",
+    "finding": "No-repository integration worker discarded an em-dash named title because title/focus normalization differed; worker also cleared raw URL identity in job-scoped mode.",
+    "repairs": [
+      "Normalize title and focus dash punctuation and whitespace symmetrically.",
+      "Pass original Google Docs queryText to the job-scoped worker for canonical URL reads."
+    ],
+    "regressions": [
+      "No-repo em-dash title retained and body opened",
+      "Canonical URL preserved through integration enrichment"
+    ],
+    "tier": "Awaiting parent validation and packaged live retest"
+  },
+  "docs_downstream_followup": {
+    "diagnosticCandidate": "de1eeadfd",
+    "finding": "Live prefetch returned one opened document body, but final response enrichment restored unrelated Settings repo coordinates; document paths from actual body were also rejected by title-only leak guard, and multi-tool prompt omitted excerpts.",
+    "repairs": [
+      "Use frozen turn scope for multi-tool synthesis and final response enrichment.",
+      "Include bounded opened document text in multi-tool synthesis.",
+      "Allow documentary paths and document source URLs evidenced by opened docs for docs-only summaries; implementation jobs still require code evidence.",
+      "Retain invented-path rejection."
+    ],
+    "regression": "Two-stage intent-job and response enrichment preserves actual documentary backend path and source URL, with separate unsupported-path rejection.",
+    "tier": "Awaiting parent validation and packaged live retest"
+  },
+  "docs_sidebar_scope_followup": {
+    "evidence": "14:18 title worker returned zero hits; canonical URL worker returned an opened body but UI still showed no documents.",
+    "repair": "An explicit integration command now retains that providers org-scope-checked evidence independently of an unrelated repository pin. Plain repository workflows retain foreign-document isolation. Explicit Docs worker ranking clears unrelated repo coordinates.",
+    "regressions": [
+      "Named Docs survives Plane pin while Notion excluded",
+      "Ordinary Plane workflow still drops foreign Coop docs",
+      "Explicit Docs worker receives no unrelated repo coordinates"
+    ],
+    "tier": "Awaiting parent automated validation and sidebar live retest"
+  },
+  "docs_source_link_followup": {
+    "parent_live_result": "Canonical URL read passed with actual body, source link and demo caveat; named-title read returned actual body but omitted requested source link.",
+    "repair": "Explicit Docs final response deterministically includes fetched document source links when absent, capped at three, without duplicating existing URLs or Sources headings.",
+    "regression": "Actual document title/URL appended to source-less summary; already-linked response retains one URL.",
+    "tier": "Awaiting parent regression and live named-title retest"
+  }
+}

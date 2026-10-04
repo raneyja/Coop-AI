@@ -37,6 +37,7 @@ Never attribute @-attached files from other repositories or local workspaces to 
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
 If <repo_entry_files> is missing or empty, do not invent architecture — say evidence is missing.
+An imported symbol whose body is not attached has an unknown implementation. Never call it unimplemented or absent just because retrieval did not attach it. Explain only attached bodies, and trace concrete examples through their actual control flow before stating a result.
 
 ${EVIDENCE_CITATION_RULES}`;
 

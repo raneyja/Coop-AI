@@ -1,6 +1,9 @@
 import "./test/vscodeMockSetup";
 import assert from "node:assert/strict";
-import { registerAutocompleteIndexNotifier } from "./coopAutocompleteProvider";
+import { CoopAutocompleteProvider, registerAutocompleteIndexNotifier } from "./coopAutocompleteProvider";
+import { analyzeDocumentContext } from "./contextAnalyzer";
+import type { ExtractedCodeContext } from "./types";
+import type * as vscode from "vscode";
 import {
   createMockExtensionContext,
   getMockExecutedCommands,
@@ -67,6 +70,24 @@ const readyStatus: IndexRepoStatus = {
 };
 
 void (async () => {
+  test("late completions preserve typing reuse but reject changed surrounding code", () => {
+    const provider = new CoopAutocompleteProvider({ api: {} as never });
+    const document = {
+      uri: { fsPath: "/fixture/service.ts" }, languageId: "typescript",
+      getText: () => "const value = ;", offsetAt: () => 14
+    } as unknown as vscode.TextDocument;
+    const requested = analyzeDocumentContext(document, { line: 0, character: 14 } as vscode.Position);
+    const compatible = (provider as unknown as {
+      isCompatibleCompletionContext: (a: ExtractedCodeContext, b: ExtractedCodeContext) => boolean
+    }).isCompatibleCompletionContext.bind(provider);
+    const extended = { ...requested, contextHash: "typed", currentLinePrefix: "const value = v" };
+    assert.equal(compatible(requested, extended), true);
+    for (const field of ["currentLineSuffix", "suffixWindow", "previousLines", "importsBlock", "parentSignature"] as const) {
+      assert.equal(compatible(requested, { ...extended, [field]: "changed code" }), false, field);
+    }
+    provider.dispose();
+  });
+
   await asyncTest("index notifier does not auto-enable autocomplete when index becomes healthy", async () => {
     setMockConfiguration("coopAI.autocomplete", "enabled", false);
     setMockConfiguration("coopAI", "defaultOwner", "acme");

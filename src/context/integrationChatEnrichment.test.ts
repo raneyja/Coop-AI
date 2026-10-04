@@ -2,6 +2,44 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ContextFetchRequest, ContextFetchResult } from "./requestBatcher";
 
+test("job-scoped Google Docs enrichment preserves the raw canonical document URL", async () => {
+  const { enrichChatContextWithIntegrations } = require("./integrationChatEnrichment") as typeof import("./integrationChatEnrichment");
+  const ask = "Read https://docs.google.com/document/d/known-doc/edit and summarize its body.";
+  let received: Record<string, unknown> | undefined;
+  await enrichChatContextWithIntegrations({
+    result: { requestId: "direct-url", type: "chat_context", data: {}, fetchedAt: new Date() },
+    request: { id: "direct-url", type: "chat_context", params: { fetchIntegrations: ["google-docs"] },
+      intent: { context: { queryText: ask } } } as ContextFetchRequest,
+    secrets: { getCredentials: async () => ({}) } as never, codeHostRouter: {} as never,
+    integrations: { googleDocs: true }, jobs: [{ capability: "docs", terms: ["known-doc"] }],
+    deps: { fetchGoogleDocsSearchContext: async (options) => {
+      received = options;
+      return { source: "google-docs-search", query: "", documents: [] };
+    } }
+  });
+  assert.equal(received?.queryText, ask);
+  assert.equal(received?.jobScoped, true);
+});
+
+test("explicit Docs command ignores an unrelated selected repo when ranking named documents", async () => {
+  const { enrichChatContextWithIntegrations } = require("./integrationChatEnrichment") as typeof import("./integrationChatEnrichment");
+  let received: Record<string, unknown> | undefined;
+  await enrichChatContextWithIntegrations({
+    result: { requestId: "named-doc", type: "chat_context", data: {}, fetchedAt: new Date() },
+    request: { id: "named-doc", type: "chat_context", params: { integrationProvider: "google-docs" },
+      intent: { context: { queryText: "Read Coop AI Architecture Overview" } } } as ContextFetchRequest,
+    owner: "CoopAI-Corp", repo: "plane",
+    secrets: { getCredentials: async () => ({}) } as never, codeHostRouter: {} as never,
+    integrations: { googleDocs: true }, jobs: [{ capability: "docs", terms: ["Architecture Overview"] }],
+    deps: { fetchGoogleDocsSearchContext: async (options) => {
+      received = options;
+      return { source: "google-docs-search", query: "", documents: [] };
+    } }
+  });
+  assert.equal(received?.owner, undefined);
+  assert.equal(received?.repo, undefined);
+});
+
 type Deferred<T> = {
   promise: Promise<T>;
   resolve: (value: T) => void;

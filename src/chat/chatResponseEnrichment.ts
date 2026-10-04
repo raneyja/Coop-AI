@@ -220,8 +220,19 @@ export function enrichChatResponseForAction(options: {
     const docs = extractGoogleDocsFromBundle(contextBundle) ?? [];
     enriched = rewriteGoogleDocsSlashIfRepoLeak(
       enriched,
-      docs.map((doc) => doc.title)
+      docs.map((doc) => doc.title),
+      docs.map((doc) => doc.excerpt ?? "")
     );
+    const missingLinks = docs.filter((doc) => doc.htmlUrl && !enriched.includes(doc.htmlUrl)).slice(0, 3);
+    if (missingLinks.length) {
+      const links = missingLinks.map((doc) => {
+        const title = doc.title.replace(/[\\[\]]/g, "\\$&");
+        return `- [${title}](${doc.htmlUrl!.replace(/\)/g, "%29")})`;
+      });
+      enriched = hasSourcesFooterSection(enriched)
+        ? enriched.replace(/(\*\*Sources\*\*\s*\n)/i, (heading) => `${heading}${links.join("\n")}\n`)
+        : `${enriched.trim()}\n\n**Sources**\n${links.join("\n")}`;
+    }
   }
 
   if (shouldEnrichSourcesFooter(options.quickAction, options.integrationProvider, enriched)) {

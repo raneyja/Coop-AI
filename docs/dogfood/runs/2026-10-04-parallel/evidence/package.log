@@ -1,0 +1,51 @@
+
+> coop-ai@0.1.10 package
+> npm run build:extension && npm run build:webview && npx --yes @vscode/vsce package --allow-missing-repository --no-dependencies --out coop-ai.vsix
+
+
+> coop-ai@0.1.10 build:extension
+> esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --sourcemap --outfile=dist/extension.js
+
+
+  dist/extension.js      3.1mb ⚠️
+  dist/extension.js.map  6.2mb
+
+⚡ Done in 100ms
+
+> coop-ai@0.1.10 build:webview
+> esbuild src/webview/index.tsx --bundle --platform=browser --format=iife --sourcemap --outfile=dist/webview.js --external:node:fs --external:node:path && npm run build:webview:css
+
+
+  dist/webview.js      1.9mb ⚠️
+  dist/webview.js.map  3.3mb
+
+⚡ Done in 55ms
+
+> coop-ai@0.1.10 build:webview:css
+> tailwindcss -i ./src/webview/globals.css -o ./dist/webview.css --minify
+
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+
+Rebuilding...
+
+Done in 682ms.
+ INFO  Files included in the VSIX:
+coop-ai.vsix
+├─ [Content_Types].xml
+├─ extension.vsixmanifest
+└─ extension/
+   ├─ LICENSE.txt [1.04 KB]
+   ├─ changelog.md [1.1 KB]
+   ├─ package.json [49.91 KB]
+   ├─ readme.md [2.48 KB]
+   ├─ dist/
+   │  ├─ extension.js [3.06 MB]
+   │  ├─ webview.css [116.71 KB]
+   │  └─ webview.js [1.91 MB]
+   └─ media/
+      ├─ coop-icon.png [15.59 KB]
+      └─ coop-icon.svg [0.73 KB]
+
+ DONE  Packaged: coop-ai.vsix (11 files, 1.04 MB)

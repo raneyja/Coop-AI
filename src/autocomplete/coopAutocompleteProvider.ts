@@ -537,7 +537,15 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     if (requested.contextHash === live.contextHash) {
       return true;
     }
-    if (requested.filePath !== live.filePath) {
+    if (
+      requested.filePath !== live.filePath ||
+      requested.languageId !== live.languageId ||
+      requested.currentLineSuffix !== live.currentLineSuffix ||
+      requested.suffixWindow !== live.suffixWindow ||
+      requested.previousLines !== live.previousLines ||
+      requested.importsBlock !== live.importsBlock ||
+      requested.parentSignature !== live.parentSignature
+    ) {
       return false;
     }
     const reqPrefix = requested.currentLinePrefix.trimEnd();

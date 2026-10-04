@@ -1,0 +1,35 @@
+{
+  "status": "automated repair candidate; live retests pending",
+  "stripe": "deferred by user; no Stripe operations",
+  "repairs": [
+    {
+      "case": "DF-025 cleared editor before Apply",
+      "defect": "Empty or whitespace-only live bytes selected stale captured content, restoring deleted source during Apply.",
+      "change": "Use live ?? captured so available live bytes remain authoritative.",
+      "regression": "Actual multi-file apply preserves cleared first document and leaves second untouched when its SEARCH no longer exists.",
+      "validation": "phaseB.gates 15/15; before-fix failure confirmed by parent",
+      "evidence": "cleared-buffer-after.log",
+      "live": "pending"
+    },
+    {
+      "case": "general language explanation",
+      "defect": "General-language detection recognized only syntax questions, so JavaScript explanation/tutorial asks became repository hunts.",
+      "change": "Recognize explanation verbs alongside syntax forms while preserving repository, local selection, and named source overrides.",
+      "validation": "exact observed tutorial and positive repository/source override cases added; parent running tests",
+      "live": "pending"
+    },
+    {
+      "case": "named repository explanation",
+      "defect": "agentTurnAllowsRepoTools excluded classified understand actions, stripping remote search/read tools from source explanation turns.",
+      "change": "Allow classified understand alongside locate/change; integration slash remains excluded.",
+      "trace": "run 6be69c98-9429-4953-b0ea-a6d32dc8ab4b classified understand, emitted done/invalid plans, handed off at 8162 ms with zero tool steps",
+      "validation": "exact front-door ask regression added; parent running tests",
+      "live": "pending"
+    }
+  ],
+  "remaining": [
+    "Live cleared-buffer conflict, double Apply, missing target, multi-file generation and draft PR scenarios",
+    "Full cold/warm/repo-switch retrieval matrix across providers and denied-access fixtures",
+    "Parent-observed /understand broad coverage and 30.7 second answer-start gap are separate unresolved qualification issues"
+  ]
+}

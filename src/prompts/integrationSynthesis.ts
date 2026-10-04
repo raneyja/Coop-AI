@@ -171,8 +171,8 @@ const INVENTED_REPO_FILE =
   /(?:^|[\s`'(])((?:[\w.-]+\/)+[\w.-]+\.(?:ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|rb))\b/gi;
 
 /** True when a /docs answer named a repo path that is not in an attached Doc title. */
-export function googleDocsSlashLeaksRepoCode(content: string, documentTitles: string[]): boolean {
-  const allowed = documentTitles.join("\n").toLowerCase();
+export function googleDocsSlashLeaksRepoCode(content: string, documentTitles: string[], documentExcerpts: string[] = []): boolean {
+  const allowed = [...documentTitles, ...documentExcerpts].join("\n").toLowerCase();
   for (const match of content.matchAll(INVENTED_REPO_FILE)) {
     const path = (match[1] ?? "").toLowerCase();
     if (path && !allowed.includes(path)) {
@@ -183,8 +183,8 @@ export function googleDocsSlashLeaksRepoCode(content: string, documentTitles: st
 }
 
 /** Replace a /docs answer that invented repo files with titles-only honesty. */
-export function rewriteGoogleDocsSlashIfRepoLeak(content: string, documentTitles: string[]): string {
-  if (!googleDocsSlashLeaksRepoCode(content, documentTitles)) {
+export function rewriteGoogleDocsSlashIfRepoLeak(content: string, documentTitles: string[], documentExcerpts: string[] = []): string {
+  if (!googleDocsSlashLeaksRepoCode(content, documentTitles, documentExcerpts)) {
     return content;
   }
   const titles = documentTitles.map((title) => title.trim()).filter(Boolean).slice(0, 10);
