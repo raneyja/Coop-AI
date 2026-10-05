@@ -89,7 +89,10 @@ export async function handleUsageEventsApiRequest(
       userId: actor.userId,
       principal: actor.principal,
       eventType,
-      metadata
+      metadata: {
+        ...metadata,
+        ...(eventType === "completion.accepted" ? { countsAsMessage: true } : {})
+      }
     });
     recorded += 1;
   }
@@ -168,7 +171,8 @@ async function billAcceptedCompletion(
       selection: "auto",
       usageTier,
       forceAutoBucket: true,
-      useCase: "inline_completion"
+      useCase: "inline_completion",
+      countsAsMessage: true
     });
     return "recorded";
   } catch (error) {

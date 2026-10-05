@@ -24,7 +24,7 @@ function ContextModePlanSummary(): React.ReactElement {
       <p>
         <span className="coop-context-mode-plan-label">Developer (free)</span>
         {
-          ": Deep-Index up to 3 repos — same cloud search (symbols, full-text, embeddings) as Pro. AI usage capped at 80,000 tokens per 5-hour window."
+          ": Deep-Index up to 3 repos — same cloud search (symbols, full-text, embeddings) as Pro. Free AI usage allows 15 messages per rolling 6-hour window, with $1.75 per window and $7 per week caps."
         }
       </p>
       <p>
@@ -280,7 +280,7 @@ function FreeTierBody({ onViewPlans }: { onViewPlans?: () => void }): React.Reac
               <li>Connect GitHub, GitLab, and Bitbucket via the admin portal — same flow as Pro.</li>
               <li>Deep-Index up to 3 repos org-wide; same cloud Coop-Search as Pro.</li>
               <li>All collaboration integrations when connected: Slack, Jira, Teams, Notion, Google Docs.</li>
-              <li>Chat and quick actions with AI credits (80,000 tokens per 5-hour window).</li>
+              <li>Chat and quick actions: 15 messages per rolling 6-hour window, with $1.75 per-window and $7 weekly caps.</li>
               <li>Individual account only — no team seats on the free plan.</li>
             </ul>
           </section>

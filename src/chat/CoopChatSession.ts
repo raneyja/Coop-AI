@@ -9059,7 +9059,7 @@ export class CoopChatSession {
       ? buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl, { forPaid: true })
       : buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl);
     const payload = {
-      resetsAt: error.resetsAt ?? new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
+      resetsAt: error.resetsAt ?? new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
       upgradeUrl,
       timezone: this.preferences.timezone,
       retryAfterMs: error.retryAfterMs,
@@ -9100,7 +9100,7 @@ export class CoopChatSession {
       }
       this.clearIntentFeedback();
       this.postQuotaExceeded({
-        resetsAt: quota?.resetsAt ?? new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
+        resetsAt: quota?.resetsAt ?? new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
         retryAfterMs: quota?.retryAfterMs,
         pool: "free"
       });
@@ -12908,4 +12908,3 @@ function providerFromDegradationMessage(message?: string): IntegrationProvider |
 function delayMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-

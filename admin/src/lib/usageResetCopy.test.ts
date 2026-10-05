@@ -39,23 +39,23 @@ assert.equal(formatPaidUsageResetParts("not-a-date"), null);
 assert.equal(
   formatQuotaUsageSummary({
     usedCredits: 12,
-    limitCredits: 80,
-    remainingCredits: 68,
-    windowHours: 5
+    limitCredits: 15,
+    remainingCredits: 3,
+    windowHours: 6
   }),
-  "12K of 80K AI credits used - 5-hour rolling window"
+  "12K of 15K AI credits used - 6-hour rolling window"
 );
 assert.equal(
   formatQuotaUsageSummary(
     {
       usedCredits: 130,
-      limitCredits: 80,
+      limitCredits: 15,
       remainingCredits: 0,
-      windowHours: 5
+      windowHours: 6
     },
     { exhausted: true }
   ),
-  "130K of 80K AI credits used"
+  "130K of 15K AI credits used"
 );
 
 assert.equal(formatFreeQuotaCountdown(0), "available now");

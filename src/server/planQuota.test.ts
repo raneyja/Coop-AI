@@ -18,7 +18,7 @@ import { UsageTracker } from "./usageTracker";
 void (async () => {
   const config = loadPlanQuotaConfig({
     COOP_FREE_TOKEN_LIMIT: "10000",
-    COOP_FREE_ROLLING_WINDOW_MS: String(5 * 60 * 60 * 1000),
+    COOP_FREE_ROLLING_WINDOW_MS: String(6 * 60 * 60 * 1000),
     COOP_PRICING_URL: "https://coop-ai.dev/pricing"
   });
   assert.equal(config.freeTokenLimit, 10_000);
@@ -135,32 +135,33 @@ void (async () => {
     };
   }
 
-  const nineteenMessages: AllowanceRow[] = Array.from({ length: 19 }, (_, index) =>
+  const fourteenMessages: AllowanceRow[] = Array.from({ length: 14 }, (_, index) =>
     messageRow(index, `turn-${index}`)
   );
-  nineteenMessages.forEach((row, index) => {
-    row.created_at = new Date(now.getTime() - (19 - index) * 60_000).toISOString();
+  fourteenMessages.forEach((row, index) => {
+    row.created_at = new Date(now.getTime() - (14 - index) * 60_000).toISOString();
   });
 
-  const nineteenQuota = new PlanQuotaService(new UsageTracker(allowancePool(nineteenMessages) as never), config);
-  await nineteenQuota.check("org-free", "free", 0, now);
-  const nineteenSnapshot = await nineteenQuota.getSnapshot("org-free", "free", now);
-  assert.ok(nineteenSnapshot);
-  assert.equal(nineteenSnapshot?.exhausted, false);
+  const fourteenQuota = new PlanQuotaService(new UsageTracker(allowancePool(fourteenMessages) as never), config);
+  await fourteenQuota.check("org-free", "free", 0, now);
+  const fourteenSnapshot = await fourteenQuota.getSnapshot("org-free", "free", now);
+  assert.ok(fourteenSnapshot);
+  assert.equal(fourteenSnapshot?.exhausted, false);
 
-  const twentyMessages = [
-    ...nineteenMessages,
-    { ...messageRow(20, "turn-20"), created_at: new Date(now.getTime() - 1_000).toISOString() }
+  const sixteenMessages = [
+    ...fourteenMessages,
+    messageRow(14, "turn-14"),
+    { ...messageRow(15, "turn-15"), created_at: new Date(now.getTime() - 1_000).toISOString() }
   ];
-  const twentyOneQuota = new PlanQuotaService(new UsageTracker(allowancePool(twentyMessages) as never), config);
+  const sixteenQuota = new PlanQuotaService(new UsageTracker(allowancePool(sixteenMessages) as never), config);
   try {
-    await twentyOneQuota.check("org-free", "free", 0, now);
-    assert.fail("expected the 21st message to be refused after 20 were recorded");
+    await sixteenQuota.check("org-free", "free", 0, now);
+    assert.fail("expected the 16th message to be refused after 15 were recorded");
   } catch (error) {
     assert.ok(error instanceof PlanQuotaExceededError);
     assert.equal(error.blockedWindow, "cycle");
     assert.doesNotMatch(error.message, /token/i);
-    assert.doesNotMatch(error.message, /20/);
+    assert.doesNotMatch(error.message, /15/);
     assert.match(error.message, /You can continue at/);
     assert.match(error.message, /Upgrade to Pro for a monthly allowance/);
   }
@@ -174,13 +175,13 @@ void (async () => {
       use_case: "chat",
       quota_turn_id: "cost-1",
       counts_as_message: "true",
-      flash_cost_usd: 2
+      flash_cost_usd: 1.75
     }
   ];
   const dollarQuota = new PlanQuotaService(new UsageTracker(allowancePool(dollarBlocked) as never), config);
   try {
     await dollarQuota.check("org-free", "free", 0, now);
-    assert.fail("expected $2 cycle cap to refuse");
+    assert.fail("expected $1.75 cycle cap to refuse");
   } catch (error) {
     assert.ok(error instanceof PlanQuotaExceededError);
     assert.equal(error.blockedWindow, "cycle");
@@ -196,13 +197,13 @@ void (async () => {
       use_case: "chat",
       quota_turn_id: "week-1",
       counts_as_message: "true",
-      flash_cost_usd: 8
+      flash_cost_usd: 7
     }
   ];
   const weekQuota = new PlanQuotaService(new UsageTracker(allowancePool(weekBlocked) as never), config);
   try {
     await weekQuota.check("org-free", "free", 0, now);
-    assert.fail("expected weekly $8 cap to refuse");
+    assert.fail("expected weekly $7 cap to refuse");
   } catch (error) {
     assert.ok(error instanceof PlanQuotaExceededError);
     assert.equal(error.blockedWindow, "week");

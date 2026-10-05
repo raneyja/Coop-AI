@@ -41,7 +41,7 @@ const selfServeTiers: PricingTier[] = [
       "GitHub, GitLab, Bitbucket, and collaboration tools",
       "Deep-Index up to 3 repos",
       "Chat, complete, and edit",
-      "Auto models on a rolling 5-hour window"
+      "Auto models: 15 messages per rolling 6-hour window"
     ],
     cta: "Get started free",
     href: "/signup/free",

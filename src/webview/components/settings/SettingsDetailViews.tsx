@@ -956,7 +956,7 @@ function ToolsListDetail({
     <>
       <p className="coop-settings-card-desc px-0.5">
         {freePlan
-          ? "Connect code hosts and collaboration tools through browser sign-in. Free plan includes the same indexing and search as Pro — AI usage is capped at 80,000 tokens per 5-hour window."
+          ? "Connect code hosts and collaboration tools through browser sign-in. Free plan includes the same indexing and search as Pro — AI usage is limited to 15 messages per rolling 6-hour window, with $1.75 per-window and $7 weekly caps."
           : "Connect source code and collaboration tools through browser sign-in. Credentials are stored on the Coop server for production use — not pasted into VS Code."}
       </p>
 
@@ -1566,8 +1566,8 @@ function WorkspaceReposSettings({ prefs }: SettingsDetailProps): React.ReactElem
       </p>
       {isFreeDeveloperPlan(prefs) ? (
         <p className="coop-settings-card-desc mt-2">
-          Free plan includes the same indexing and search as Pro. AI usage is capped at 80,000 tokens per
-          5-hour window.
+          Free plan includes the same indexing and search as Pro. AI usage is limited to 15 messages per
+          rolling 6-hour window, with $1.75 per-window and $7 weekly caps.
         </p>
       ) : null}
       <div className="coop-settings-card space-y-3">

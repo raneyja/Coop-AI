@@ -24,7 +24,7 @@ const QUOTA_LIMIT_PATTERNS = [
   "quota_limit_reached",
   "free daily ai limit",
   "free ai credits",
-  "5-hour window"
+  "6-hour window"
 ];
 
 /**
