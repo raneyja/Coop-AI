@@ -3286,7 +3286,7 @@ function locateObjectPhrase(text: string): string | undefined {
     return undefined;
   }
   const cleaned = match[1]
-    .replace(/\b(defined|written|enforced|in this repo|in the codebase)\b.*$/i, "")
+    .replace(/\b(defined|written|enforced|documented|in this repo|in the codebase)\b.*$/i, "")
     .trim();
   const tokens = significantTokens(cleaned).filter((token) => !isJunkSearchToken(token));
   if (tokens.length === 0) {

@@ -2241,6 +2241,13 @@ test("reject jump prefers the named field over an overlapping adjacent reject", 
   assert.equal(lineNumberOfWriteReject(body, "Where does the API reject a bad parent issue_id?", "api/serializers/issue.py"), 4);
 });
 
+test("compound target questions keep the documentation subject searchable", () => {
+  const ask =
+    "What are the two main targets in this repository, and where is the test infrastructure documented?";
+  assert.equal(extractAgentSearchQuery(ask), "test infrastructure");
+  assert.equal(indexQueryForRetrieval(ask), "test infrastructure");
+});
+
 test("state catalog validation is not a work-item transition rejection", () => {
   const body = 'def validate(data):\n if data.get("group"):\n  raise ValidationError("Invalid state group")';
   assert.equal(contentLooksLikeAskedFieldReject(body, "What rejects a bad state transition?", "server/serializers/state.py"), false);
