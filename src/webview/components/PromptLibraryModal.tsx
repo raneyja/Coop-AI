@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { containModalFocus } from "../lib/modalFocus";
 import { CoopPanelHeader } from "./CoopPanelHeader";
 import { PromptDetailOverlay } from "./PromptDetailOverlay";
 import { PromptLibraryRow } from "./PromptLibraryRow";
@@ -50,6 +51,7 @@ export function PromptLibraryModal({
   onRun,
   onCommit
 }: PromptLibraryModalProps): React.ReactElement | null {
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState("");
   const [draftPrompts, setDraftPrompts] = useState<PromptLibraryItem[]>(() => clonePrompts(prompts));
   const [draftPinnedIds, setDraftPinnedIds] = useState<string[]>(() => [...pinnedIds]);
@@ -97,6 +99,12 @@ export function PromptLibraryModal({
       }),
     [savedSnapshot, draftPrompts, draftPinnedIds]
   );
+
+  useEffect(() => {
+    if (open && editor.mode === "closed" && dialogRef.current) {
+      return containModalFocus(dialogRef.current);
+    }
+  }, [open, editor.mode]);
 
   const { pinned, unpinned } = useMemo(
     () => partitionPrompts(draftPrompts, draftPinnedIds, search),
@@ -202,6 +210,9 @@ export function PromptLibraryModal({
       onClick={editorOpen ? undefined : onClose}
     >
       <div
+        ref={dialogRef}
+        id="coop-prompt-library-dialog"
+        tabIndex={-1}
         className="coop-prompt-modal"
         role="dialog"
         aria-modal="true"

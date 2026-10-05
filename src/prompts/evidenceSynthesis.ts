@@ -219,12 +219,12 @@ export function appendEvidenceEnrichmentInstructions(lines: string[], hasEnrichm
   }
   lines.push("## Evidence enrichment");
   lines.push("- When the bundle includes a precise `targetLabel`, cite that label in the opening.");
-  lines.push("- When `introducingDiffSummary` is present, use its summary to describe what the introducing commit changed.");
+  lines.push("- When `introducingDiffSummary` is present, use its summary to describe what the sampled commit changed; it does not prove original introduction.");
   lines.push(
-    "- When `evolution.commitCountSinceIntroduction` is present, mention file activity since introduction in the opening."
+    "- When `evolution.commitCountSinceIntroduction` is present, mention retrieved file activity since the sampled anchor in the opening."
   );
   lines.push(
-    "- When `evolution.recentCommits` or `focusCommit` is present for a full-file trace, lead the opening / **Technical decision** with that recent decision story; treat `originalCommit` as birth/background unless this is a line selection."
+    "- When `evolution.recentCommits` or `focusCommit` is present for a full-file trace, lead the opening / **Technical decision** with that recent decision story; treat `originalCommit` as sampled provenance, not proof of original introduction."
   );
   lines.push(
     "- When `rationaleRanking` is present, name the primary rationale source in the opening and weight sections by rationale vs provenance roles."

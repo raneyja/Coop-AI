@@ -54,9 +54,9 @@ State confidence when evidence is thin. Keep answers concise — limited evidenc
 Historical commits and discussions describe the decision at that time. Declare it active only when the selected current source independently supports the same behavior. If current source is absent or conflicts with the historical account, say current status is unverified or changed; do not infer continuity from a commit title.
 Follow-up questions use the same required section structure; omit sections the user did not ask about when they have no evidence.
 For **Alternatives considered** and **Trade-offs**, ground every claim in a PR review comment, Slack/Jira/Teams message, or extracted alternative — quote or paraphrase with plain provenance (e.g. "PR #1506 review by @alice"). If no discussion source documents options, write unknown — never invent them.
-When only an introducing commit is attached (no PR, Slack, Jira, or design doc), say alternatives and trade-offs are unknown — never invent them.
+When only a sampled commit is attached (no PR, Slack, Jira, or design doc), say alternatives and trade-offs are unknown — never invent them.
 When enriched fields are attached (targetLabel, introducingDiffSummary, evolution, rationaleRanking, focusCommit), use them per the Evidence enrichment section in the user prompt.
-When a user focus ask is present, prefer commits/PRs that match that ask and the open file over a generic recent multi-file change. Otherwise, for full-file traces without a specific ask, lead Summary / Technical decision with recent evolution and focusCommit; treat originalCommit as birth/background unless the user selected specific lines.`;
+When a user focus ask is present, prefer commits/PRs that match that ask and the open file over a generic recent multi-file change. Otherwise, for full-file traces without a specific ask, lead Summary / Technical decision with recent evolution and focusCommit; treat originalCommit as a sampled provenance anchor. Bounded path history and selected-line blame do not prove when a file or requested function was introduced. A rename is not an introduction; use fileChange and the patch to describe only the observed change.`;
 
 export type DecisionSynthesisInput = {
   timeline: DecisionTimeline;
@@ -196,7 +196,7 @@ function appendAlternativesTradeOffGuidance(lines: string[], timeline: DecisionT
     lines.push(
       "- Bundle has no PR, Slack, Teams, Jira, or extracted alternatives — **Alternatives considered** and **Trade-offs** must say unknown or not documented (one line each)."
     );
-    lines.push("- Do not infer generic trade-offs from software best practices or the introducing commit alone.");
+    lines.push("- Do not infer generic trade-offs from software best practices or the sampled commit alone.");
   }
   if (timeline.warnings.length) {
     lines.push(`- Warnings in bundle: ${timeline.warnings.join("; ")}`);
@@ -243,8 +243,8 @@ export function formatTimelineForPrompt(timeline: DecisionTimeline): string {
         )
         .join("\n") ?? "";
     sections.push(
-      "### Evolution since introduction (lead with this for full-file traces)\n" +
-        `- Commits since introduction: ${evolution.commitCountSinceIntroduction}` +
+      "### Sampled file evolution (lead with this for full-file traces)\n" +
+        `- Sampled later commits: ${evolution.commitCountSinceIntroduction}` +
         (evolution.lastModifiedAt ? `\n- Last modified: ${evolution.lastModifiedAt}` : "") +
         (evolution.lastModifiedAuthor ? `\n- Last modifier: ${evolution.lastModifiedAuthor}` : "") +
         (recentLines ? `\n- Recent commits:\n${recentLines}` : "")
@@ -270,7 +270,7 @@ export function formatTimelineForPrompt(timeline: DecisionTimeline): string {
   ) {
     const c = timeline.originalCommit;
     sections.push(
-      `### Originally introduced (background)\n- SHA: ${c.sha.slice(0, 12)}\n- Author: ${c.author}\n- Date: ${c.date}\n- Message:\n${c.message}`
+      `### Sampled provenance (background)\n- SHA: ${c.sha.slice(0, 12)}\n- Author: ${c.author}\n- Date: ${c.date}\n- Message:\n${c.message}`
     );
   } else if (timeline.originalCommit && !timeline.focusCommit) {
     const c = timeline.originalCommit;
@@ -290,8 +290,9 @@ export function formatTimelineForPrompt(timeline: DecisionTimeline): string {
       .filter(Boolean)
       .join(", ");
     sections.push(
-      `### Introducing diff summary\n- ${diff.summary}` +
+      `### Sampled commit diff summary\n- ${diff.summary}` +
         (stats ? `\n- Change stats: ${stats}` : "") +
+        (diff.fileChange ? `\n- Target file change: ${diff.fileChange.type}${diff.fileChange.previousPath ? ` from ${diff.fileChange.previousPath}` : ""}` : "") +
         (diff.patchExcerpt ? `\n- Patch excerpt: ${truncate(diff.patchExcerpt, 300)}` : "")
     );
   }
@@ -505,12 +506,12 @@ export function decisionTimelineSummary(timeline: DecisionTimeline): string {
   const focus = timeline.focusCommit ?? timeline.originalCommit;
   if (focus && timeline.originalCommit && focus.sha !== timeline.originalCommit.sha) {
     parts.push(`recent ${focus.sha.slice(0, 7)}`);
-    parts.push(`introduced ${timeline.originalCommit.sha.slice(0, 7)}`);
+    parts.push(`provenance ${timeline.originalCommit.sha.slice(0, 7)}`);
   } else if (timeline.originalCommit) {
-    parts.push(`introduced in ${timeline.originalCommit.sha.slice(0, 7)}`);
+    parts.push(`sampled commit ${timeline.originalCommit.sha.slice(0, 7)}`);
   }
   if (timeline.evolution?.commitCountSinceIntroduction) {
-    parts.push(`${timeline.evolution.commitCountSinceIntroduction} commits since intro`);
+    parts.push(`${timeline.evolution.commitCountSinceIntroduction} sampled later commits`);
   }
   if (timeline.linkedPR) {
     parts.push(`PR #${timeline.linkedPR.number}`);

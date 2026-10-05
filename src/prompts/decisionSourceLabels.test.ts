@@ -81,7 +81,7 @@ const checklist = listDecisionSourcesChecklist(timeline);
 assert.equal(checklist.length, labels.length);
 assert.ok(checklist.some((line) => line.includes("PR description, review comments")));
 assert.ok(checklist.some((line) => line.includes("ticket requirements, acceptance criteria")));
-assert.ok(checklist.some((line) => line.includes("introducing commit and message — provenance")));
+assert.ok(checklist.some((line) => line.includes("sampled commit and message — provenance")));
 assert.ok(checklist.every((line) => line.includes(" — ")));
 assert.ok(!checklist.some((line) => line.includes("No Slack thread")));
 

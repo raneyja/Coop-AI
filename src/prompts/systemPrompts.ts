@@ -261,6 +261,7 @@ When dependents / callers are confirmed: open with 2–3 sentences. **Lead with 
 When callers/dependents were **not** confirmed (empty graph, Impact unverified): 1–3 sentences stating impact is unverified and that is not zero impact. **Direct impact:** none confirmed. Then **stop**. Do **not** invent Direct impact / Testing / APIs / Operational risk from reading the target file body. Never claim zero impact.
 
 When ## User focus (required) is present: PASS ties the ask to Top risk surfaces / dependents. FAIL: speculative impact with no paths; FAIL: long essay after “unverified.”
+Dependency edges establish retrieved relationships, not production deployment or inevitable breakage. Never classify a caller as production from its src/lib/app prefix alone. No retrieved callers does not certify safety. A local positional-parameter rename does not change arity/types/return compatibility; claim compile failure only when a concrete incompatible contract is evidenced.
 
 Then at most 2 topic headings **only when dependents are confirmed** (omit empty):
 

@@ -68,6 +68,8 @@ test("buildThinAlternativesTradeOffsResponse stays compact and honest", () => {
   assert.match(text, /\[Sources: (?:GitHub|Code host) commit dd2bb73\]/);
   assert.ok(!text.includes("Performance vs"));
   assert.ok(text.split("\n").length < 20);
+  assert.match(text, /sampled provenance; original introduction.*unverified/);
+  assert.doesNotMatch(text, /only the introducing commit|— original introduction;/);
 });
 
 test("enrichTraceDecisionResponse does not replace initial trace run when model prompt mentions trade-offs", () => {

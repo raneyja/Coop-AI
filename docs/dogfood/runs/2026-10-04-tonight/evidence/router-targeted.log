@@ -1,0 +1,27 @@
+Command: npx --yes tsx src/autocomplete/completionRouter.test.ts
+Exit code: 0
+  ✓ buildFimSegments returns prefix and suffix when useFim enabled
+  ✓ buildFimSegments is undefined when useFim disabled
+  ✓ synthesizeMessageFromSegments builds chat-fallback prompt from FIM segments
+  ✓ synthesizeMessageFromSegments asks for a full body on empty-block holes
+  ✓ reuses in-flight promise for prefix-compatible extension
+  ✓ does not reuse an in-flight completion after the suffix changes
+  ✓ uses higher maxTokens for multi-line brace context
+  ✓ keeps a 7-line empty-block body instead of the 4-line stream cap
+  ✓ starts new request when prefix is not compatible
+  ✓ includes graph context fields when useGraphContext is enabled
+  ✓ active repo overrides defaults and same-buffer repo switch does not reuse completion
+  ✓ omits graph context fields when useGraphContext is disabled
+  ✓ auto-includes graph context when index is healthy
+  ✓ L session omits graph even when the index is healthy
+  ✓ falls back to secondary provider when primary request fails
+  ✓ re-filters a cached assignment hole against the typed prefix
+  ✓ filters a typed-t FIM remainder before caching it
+  ✓ skips .env files, including vscode-vfs paths, without a network request
+  ✓ returns cached completions without a network request
+  ✓ uses assigned autocomplete model in production
+  ✓ uses chat preferences model when dev mode is on
+[CoopAI autocomplete] Autocomplete request timed out.
+  ✓ returns empty completions with timeout error when request times out
+
+completionRouter: 22 passed, 0 failed

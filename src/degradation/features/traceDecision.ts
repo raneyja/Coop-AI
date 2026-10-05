@@ -162,7 +162,7 @@ function placeholderDecisionData(
 function timelineSummaryMessage(timeline: DecisionTimeline): string {
   const parts: string[] = [];
   if (timeline.originalCommit) {
-    parts.push(`introduced in ${timeline.originalCommit.sha.slice(0, 7)}`);
+    parts.push(`sampled commit ${timeline.originalCommit.sha.slice(0, 7)}`);
   }
   if (timeline.linkedPR) {
     parts.push(`PR #${timeline.linkedPR.number}`);

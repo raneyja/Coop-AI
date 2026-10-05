@@ -1,0 +1,24 @@
+Prompt-library component commands executed with npx --yes tsx (escalated approved runtime); npm aggregate command stalled awaiting its runner in ordinary sandbox.
+
+src/webview/lib/inferPromptActionId.test.ts: exit 0, 3 passed, 0 failed.
+
+  ✓ resolvePromptLibraryRun routes bare slash templates without actionId
+  ✓ resolvePromptLibraryRun uses custom template as slashUserArgs when actionId is set
+  ✓ resolvePromptLibraryRun strips matching slash token when actionId is set
+  ✓ resolvePromptLibraryRun combines text before and after slash into slashUserArgs
+  ✓ resolvePromptLibraryRun uses default quick action when actionId set and template empty
+  ✓ mergeComposerWithPromptTemplate prepends composer text
+  ✓ applyPromptTemplate substitutes context variables
+  ✓ resolvePromptLibraryRun ignores unknown actionId (no blind cast)
+  ✓ sanitizeWorkspacePromptEntries drops malformed entries and caps count
+  ✓ sanitizeWorkspacePromptEntries truncates oversized templates
+  ✓ sanitizeWorkspacePromptEntries drops invalid actionIds
+
+promptLibraryRun: 11/11 tests passed
+
+  ✓ storage keys isolate accounts
+  ✓ prompts saved by one user are invisible to another
+  ✓ pins do not leak across accounts
+  ✓ signed-out save is refused
+
+userPromptLibrary: 4/4 tests passed

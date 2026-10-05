@@ -277,6 +277,23 @@ async function runAsyncTests(): Promise<void> {
     assert.equal(capturedBody?.file, "src/app.ts");
   });
 
+  await asyncTest("active repo overrides defaults and same-buffer repo switch does not reuse completion", async () => {
+    setMockConfiguration("coopAI", "defaultOwner", "stale");
+    setMockConfiguration("coopAI", "defaultRepo", "defaults");
+    const bodies: Array<Record<string, unknown>> = [];
+    const router = new CompletionRouter({
+      api: { streamInlineCompletion: async (_base: string, body: Record<string, unknown>) => {
+        bodies.push(body);
+        return { text: "value;", alternatives: [], model: "test", provider: "anthropic" };
+      } } as never,
+      performance: new AutocompletePerformanceMonitor()
+    });
+    const settings = { ...autocompleteSettings, useGraphContext: true };
+    await router.fetchCompletions(sampleContext, settings, undefined, undefined, { repoId: "gitlab:fixture/first" });
+    await router.fetchCompletions(sampleContext, settings, undefined, undefined, { repoId: "github:fixture/second" });
+    assert.deepEqual(bodies.map((body) => body.repoId), ["gitlab:fixture/first", "github:fixture/second"]);
+  });
+
   await asyncTest("omits graph context fields when useGraphContext is disabled", async () => {
     setMockConfiguration("coopAI", "defaultOwner", "acme");
     setMockConfiguration("coopAI", "defaultRepo", "app");
@@ -408,7 +425,7 @@ async function runAsyncTests(): Promise<void> {
       }
     };
     const cache = new CompletionCache();
-    cache.set("overlap-hash", "his.deps.identity;", ["this.getIdentity(target);"]);
+    cache.set(JSON.stringify(["github:fixture/client", null, "overlap-hash"]), "his.deps.identity;", ["this.getIdentity(target);"]);
     const performance = new AutocompletePerformanceMonitor();
     const router = new CompletionRouter({ api: api as never, performance, cache });
     const fileSample = `
@@ -434,7 +451,8 @@ export class ClientHolder {
       context,
       { ...autocompleteSettings, showMultipleSuggestions: true },
       undefined,
-      fileSample
+      fileSample,
+      { repoId: "github:fixture/client" }
     );
 
     assert.equal(requestCount, 0);

@@ -110,6 +110,7 @@ type PullRequestDetail = {
 type GitHubPullDetail = PullRequestDetail;
 
 type IntroducingDiffStats = {
+  fileChange?: { type: string; previousPath?: string };
   filesChanged: number;
   insertions?: number;
   deletions?: number;
@@ -191,7 +192,7 @@ export class DecisionArchaeologyEngine {
         timeline,
         introduction.date,
         introduction.author,
-        "Code originally introduced",
+        "Sampled provenance commit",
         introduction.message
       );
     }
@@ -351,7 +352,7 @@ export class DecisionArchaeologyEngine {
       const focusIsIntroduction = commit.sha === timeline.originalCommit?.sha;
       timeline.warnings.push(
         focusIsIntroduction
-          ? "No linked pull request found for the introducing commit."
+          ? "No linked pull request found for the sampled provenance commit."
           : "No linked pull request found for the recent decision commit."
       );
     }
@@ -464,16 +465,20 @@ export class DecisionArchaeologyEngine {
         deletions,
         patchExcerpt
       }),
-      patchExcerpt
+      patchExcerpt,
+      fileChange: providerStats?.fileChange
     };
+    if (providerStats?.fileChange?.type === "renamed") {
+      timeline.warnings.push(`The sampled commit renamed ${providerStats.fileChange.previousPath ?? "an earlier path"} to ${file}; it does not establish when the file or a function was originally introduced.`);
+    }
 
     if (isBulkRenameOrMoveCommit(introducingCommit.message, resolvedFilesChanged)) {
       timeline.warnings.push(
-        `History for ${file} may be truncated by a bulk rename/move (${resolvedFilesChanged} files in the introducing commit). Say so honestly for this path — do not substitute another file's migration or feature story.`
+        `History for ${file} may be truncated by a bulk rename/move (${resolvedFilesChanged} files in the sampled commit). Say so honestly for this path — do not substitute another file's migration or feature story.`
       );
     } else if (resolvedFilesChanged >= 40 && !patchExcerpt) {
       timeline.warnings.push(
-        `Introducing commit touched ${resolvedFilesChanged} files and no patch for ${file} was available. Keep the narrative on ${file}; other paths in that commit are secondary only.`
+        `Sampled commit touched ${resolvedFilesChanged} files and no patch for ${file} was available. Keep the narrative on ${file}; other paths in that commit are secondary only.`
       );
     }
   }
@@ -622,7 +627,7 @@ export class DecisionArchaeologyEngine {
     const url = `https://api.github.com/repos/${encodeURIComponent(coords.owner)}/${encodeURIComponent(coords.repo)}/commits/${encodeURIComponent(sha)}`;
     const commit = await codeHostRequestJson<{
       stats?: { additions?: number; deletions?: number };
-      files?: Array<{ filename: string; patch?: string }>;
+      files?: Array<{ filename: string; patch?: string; status?: string; previous_filename?: string }>;
     }>(url, {
       headers: githubHeaders(creds.githubToken),
       provider: "github"
@@ -634,6 +639,7 @@ export class DecisionArchaeologyEngine {
       filesChanged: files.length,
       insertions: commit.stats?.additions,
       deletions: commit.stats?.deletions,
+      fileChange: targetFile?.status ? { type: targetFile.status, previousPath: targetFile.previous_filename } : undefined,
       patchExcerpt: targetFile?.patch ? extractPatchExcerpt(targetFile.patch) : undefined
     };
   }
@@ -672,6 +678,9 @@ export class DecisionArchaeologyEngine {
         Array<{
           old_path?: string;
           new_path?: string;
+          renamed_file?: boolean;
+          new_file?: boolean;
+          deleted_file?: boolean;
           diff?: string;
         }>
       >(`${apiBase}/projects/${project.id}/repository/commits/${encodeURIComponent(sha)}/diff`, {
@@ -688,6 +697,7 @@ export class DecisionArchaeologyEngine {
       filesChanged: files.length,
       insertions: commitDetail.stats?.additions,
       deletions: commitDetail.stats?.deletions,
+      fileChange: targetFile ? { type: targetFile.renamed_file ? "renamed" : targetFile.new_file ? "added" : targetFile.deleted_file ? "removed" : "modified", previousPath: targetFile.renamed_file ? targetFile.old_path : undefined } : undefined,
       patchExcerpt: targetFile?.diff ? extractPatchExcerpt(targetFile.diff) : undefined
     };
   }
@@ -1263,9 +1273,9 @@ function summarizeIntroducingDiff(stats: IntroducingDiffStats): string {
     typeof stats.deletions === "number" ? `-${stats.deletions}` : undefined
   ].filter(Boolean);
   const deltaPart = changeParts.length ? ` (${changeParts.join(" / ")})` : "";
-  const headline = `Introducing commit changed ${filesPart}${deltaPart}.`;
+  const headline = `Sampled commit changed ${filesPart}${deltaPart}.`;
   if (stats.patchExcerpt) {
-    return `${headline} Added code includes "${truncate(stats.patchExcerpt, 120)}".`;
+    return `${headline} Patch excerpt includes "${truncate(stats.patchExcerpt, 120)}".`;
   }
   return headline;
 }

@@ -70,6 +70,31 @@ const readyStatus: IndexRepoStatus = {
 };
 
 void (async () => {
+  await asyncTest("switching repository while a completion is pending rejects the old result", async () => {
+    let repoId = "gitlab:fixture/first";
+    let finish!: (value: unknown) => void;
+    const pending = new Promise((resolve) => { finish = resolve; });
+    const provider = new CoopAutocompleteProvider({ api: {} as never, sessionProbe: () => ({ repoId }) });
+    const document = {
+      uri: { fsPath: "/fixture/service.ts", scheme: "file", toString: () => "file:///fixture/service.ts" },
+      languageId: "typescript", getText: () => "const value = ;", offsetAt: () => 14
+    } as unknown as vscode.TextDocument;
+    const position = { line: 0, character: 14 } as vscode.Position;
+    const extracted = analyzeDocumentContext(document, position);
+    const harness = Object.assign(provider, {
+      router: { fetchCompletions: (_context: unknown, _settings: unknown, _signal: unknown, _sample: unknown, options: { repoId?: string }) => {
+        assert.equal(options.repoId, "gitlab:fixture/first");
+        return pending;
+      } },
+      returnRankedInlineItems: () => [{ insertText: "old repository completion" }]
+    }) as unknown as { executeRequest: (doc: vscode.TextDocument, pos: vscode.Position, context: ExtractedCodeContext) => Promise<unknown> };
+    const result = harness.executeRequest(document, position, extracted);
+    repoId = "github:fixture/second";
+    finish({ completions: [{ text: "value;" }], latencyMs: 0, fromCache: false });
+    assert.equal(await result, null);
+    provider.dispose();
+  });
+
   test("late completions preserve typing reuse but reject changed surrounding code", () => {
     const provider = new CoopAutocompleteProvider({ api: {} as never });
     const document = {

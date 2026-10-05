@@ -1,0 +1,30 @@
+{
+  "scope": "Repeated Apply host action and remaining live qualification",
+  "beforeRepair": {
+    "probe": "/private/tmp/coop-double-apply-probe.ts",
+    "execution": "Parent executed cached targeted runner after child tool approval stalled",
+    "firstApply": true,
+    "secondApply": true,
+    "writes": 2,
+    "preservedUserEdit": false,
+    "classification": "Confirmed automated concurrent-Apply data preservation failure"
+  },
+  "repair": {
+    "source": "src/edit/patchActions.ts",
+    "behavior": "Per-record Apply in-flight guard released in finally; already applied/nonpending hunk requests refused",
+    "liveStatus": "Ready for packaged retest; no live pass claimed"
+  },
+  "validation": {
+    "phaseBGates": "Parent reported 16/16 passed after concurrent guard regression",
+    "phaseBPressure": "Parent reported 7/7 passed",
+    "followupRegression": "Failed-Apply then explicit retry case added afterward; pending parent rerun",
+    "logs": "No child command output is fabricated; parent owns successful command logs"
+  },
+  "remaining": [
+    "Live rapid repeated Apply on one disposable editor patch; exactly one application, no late overwrite, stable applied card and Undo",
+    "Apply then repo/thread switch follow-up and independently verify only the original editor target changed",
+    "Concurrent Reject or Undo while Apply is already running is not serialized by this Apply-only guard and needs a separate regression before a claim",
+    "The guard does not claim protection from arbitrary user edits during an already-dispatched VS Code workspace transaction",
+    "Patch records are already keyed globally by message timestamp; equal timestamp collisions are an existing session identity limitation, not solved here"
+  ]
+}

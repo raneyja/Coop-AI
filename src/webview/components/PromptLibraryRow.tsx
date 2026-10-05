@@ -114,6 +114,7 @@ function RowMenu({ anchorRef, prompt, onEdit, onDelete, onClose }: RowMenuProps)
   }, [anchorRef]);
 
   useEffect(() => {
+    menuRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
       if (menuRef.current?.contains(target) || anchorRef.current?.contains(target)) {
@@ -121,16 +122,9 @@ function RowMenu({ anchorRef, prompt, onEdit, onDelete, onClose }: RowMenuProps)
       }
       onClose();
     };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
     document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [anchorRef, onClose]);
 
@@ -140,6 +134,20 @@ function RowMenu({ anchorRef, prompt, onEdit, onDelete, onClose }: RowMenuProps)
       className="coop-prompt-row-menu coop-prompt-row-menu--floating"
       style={menuStyle}
       role="menu"
+      data-modal-owner={anchorRef.current?.closest('[role="dialog"]')?.id || undefined}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          onClose();
+          anchorRef.current?.focus();
+        } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          event.preventDefault();
+          const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+          const current = items.indexOf(document.activeElement as HTMLButtonElement);
+          const next = (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+          items[next]?.focus();
+        }
+      }}
     >
       {onEdit ? (
         <button

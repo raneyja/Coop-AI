@@ -32,7 +32,7 @@ import type {
   RankedCompletion
 } from "./types";
 
-export type AutocompleteSessionProbe = () => { remotePinFile?: string } | undefined;
+export type AutocompleteSessionProbe = () => { remotePinFile?: string; repoId?: string } | undefined;
 
 export type CoopAutocompleteProviderOptions = {
   api: SecureApiClient;
@@ -128,6 +128,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
   private lastAlternatives: RankedCompletion[] = [];
   private alternativeIndex = 0;
   private lastScopeHash = "";
+  private lastRepoId?: string;
   private manualInvoke = false;
   private lastShownContextHash = "";
   private lastShownAt = 0;
@@ -265,18 +266,19 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
   }
 
   private completionFetchOptions(document: vscode.TextDocument): FetchCompletionsOptions {
+    const session = this.sessionProbe?.();
     const resolved = resolveDocumentUri(document.uri);
     const allowGraph = autocompleteAllowsGraph({
       file: resolved.file,
       fileSource: resolved.fileSource,
-      remotePinFile: this.sessionProbe?.()?.remotePinFile
+      remotePinFile: session?.remotePinFile
     });
     const usage = {
       sessionMode: allowGraph ? ("indexed-repo" as const) : ("file-assistant" as const),
       fileSource: resolved.file ? resolved.fileSource : undefined
     };
     this.lastUsage = usage;
-    return { allowGraphContext: allowGraph, ...usage };
+    return { allowGraphContext: allowGraph, repoId: session?.repoId, ...usage };
   }
 
   public async provideInlineCompletionItems(
@@ -286,6 +288,14 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     token: vscode.CancellationToken
   ): Promise<vscode.InlineCompletionItem[] | vscode.InlineCompletionList | null> {
     this.settings = readAutocompleteSettings();
+    const repoId = this.sessionProbe?.()?.repoId;
+    if (repoId !== this.lastRepoId) {
+      this.lastRepoId = repoId;
+      this.lastAlternatives = [];
+      this.lastScopeHash = "";
+      this.inFlightByHash.clear();
+      this.triggerDetector.noteRequestFailed();
+    }
     if (!this.settings.enabled) {
       return null;
     }
@@ -558,6 +568,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     position: vscode.Position,
     token: vscode.CancellationToken
   ): Promise<vscode.InlineCompletionItem[] | null> {
+    const requestedRepoId = this.sessionProbe?.()?.repoId;
     const lines = document.getText().split(/\r?\n/);
     const plan = planNesAfterAccept({
       nesEnabled: true,
@@ -585,6 +596,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
         document.getText().slice(0, 32_768),
         { recordPerformance: false, ...this.completionFetchOptions(document) }
       );
+      if (requestedRepoId !== this.sessionProbe?.()?.repoId) return null;
       const ranked = withoutUnknownReceiverMembers(
         result.completions,
         extracted,
@@ -629,6 +641,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     position: vscode.Position,
     extracted: ExtractedCodeContext
   ): Promise<vscode.InlineCompletionItem[] | null> {
+    const requestedRepoId = this.sessionProbe?.()?.repoId;
     let live = this.resolveLiveCompletionContext(document, position);
     position = live.position;
     extracted = live.extracted;
@@ -638,6 +651,11 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     try {
       if (extracted.afterDot) {
         const lspItems = await this.tryLspMemberCompletions(document, position, extracted, abort.signal);
+        if (requestedRepoId !== this.sessionProbe?.()?.repoId) {
+          this.lastAlternatives = [];
+          this.lastScopeHash = "";
+          return null;
+        }
         live = this.resolveLiveCompletionContext(document, position);
         if (
           lspItems &&
@@ -663,6 +681,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
           document.getText().slice(0, 32_768),
           this.completionFetchOptions(document)
         );
+        if (requestedRepoId !== this.sessionProbe?.()?.repoId) return null;
         live = this.resolveLiveCompletionContext(document, position);
         if (!this.isCompatibleCompletionContext(extracted, live.extracted)) {
           this.triggerDetector.noteRequestFailed();
@@ -692,6 +711,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
         this.completionFetchOptions(document)
       );
       live = this.resolveLiveCompletionContext(document, position);
+      if (requestedRepoId !== this.sessionProbe?.()?.repoId) return null;
       if (!this.isCompatibleCompletionContext(extracted, live.extracted)) {
         this.triggerDetector.noteRequestFailed();
         return null;

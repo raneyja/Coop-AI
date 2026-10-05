@@ -1,0 +1,15 @@
+# Autocomplete and prompt-library job
+
+Status: source repairs prepared; targeted automated checks passed. Parent owns combined lint/build/package and the new candidate's live retests. Prior `ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d` results do not qualify these later edits.
+
+Prompt library's three existing targeted components passed: action inference 3/3, workspace template/run behavior 11/11, account-scoped personal storage 4/4. See [prompt-library evidence](evidence/prompt-library.log). The ordinary aggregate npm command failed sandbox DNS; the same constituent commands ran successfully with the approved escalated tsx runtime.
+
+Parent qualified real ghost-text acceptance, disable/Reload/re-enable controls, and disposable prompt creation/pinning/template insertion/run/edit/unpin/delete cleanup on the prior candidate. Those are narrow live passes, not indexed graph grounding or full keyboard accessibility.
+
+Parent reproduced focus leaving the prompt library after Tab from its last enabled control. The modal declares aria-modal but had no containment. Both the library and nested prompt editor now contain Tab/ShiftTab, skip disabled/hidden controls, and restore the opener on close. Owned Edit/Delete portals explicitly link to their triggering dialog; Tab follows the combined allowed controls instead of background DOM order. Menus focus their first action, support arrow navigation, and consume Escape to close only the menu and restore its anchor. The registered-handler regression passed eleven assertion groups: [focus evidence](evidence/modalFocus-targeted.log). Parent should rerun forward/backward cycling in empty and populated dialogs, keyboard Edit/Delete and menu Escape, nested editor Save/Cancel/Escape, and close-to-opener focus on the new package.
+
+Autocomplete routing was reproduced through the actual router: stale global defaults supplied the graph repo target, and changing the explicit active target with the same buffer hash reused the old completion. Use-repo does asynchronously update global defaults, so persistent global drift was not established; asynchronous updates and per-session selection must still not control frozen request identity.
+
+The repair propagates the active session repo ID through the extension provider probe. Requests and symbol hints use that frozen identity; global defaults are a frozen fallback. Cache and in-flight router entries are isolated by repo/graph mode. Provider cached alternatives are cleared on repo change; pending old-repo results, including next-edit results, are discarded. Regression evidence: [router 22/22](evidence/router-targeted.log), [provider 6/6](evidence/provider-targeted.log). No operator model assignments or server prompts changed.
+
+Still required: parent combined gates, installed candidate repo-switch pending/cached suggestion tests, and evidence that indexed completions consumed the intended graph target. Valid ghost text alone does not establish graph grounding. Branch-generation and installed other-provider coexistence remain separate qualification. No deployment, commits, external messages, or Stripe work performed by this job.

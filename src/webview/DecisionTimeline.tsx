@@ -279,8 +279,8 @@ export function DecisionTimeline({
             <IntegrationResultCollapsible
               title={
                 timeline.focusCommit && timeline.focusCommit.sha !== timeline.originalCommit.sha
-                  ? "Originally introduced"
-                  : "Original commit"
+                  ? "Sampled provenance"
+                  : "Sampled commit"
               }
               provider={host}
               destination={timeline.originalCommit.sha.slice(0, 7)}

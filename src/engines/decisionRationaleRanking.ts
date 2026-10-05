@@ -104,7 +104,7 @@ export function buildRationaleRanking(
     ranking.push({
       source: `commit:${introduction.sha}`,
       role: "background",
-      label: `Introduced in ${introduction.sha.slice(0, 7)}`
+      label: `Sampled provenance ${introduction.sha.slice(0, 7)}`
     });
   }
 

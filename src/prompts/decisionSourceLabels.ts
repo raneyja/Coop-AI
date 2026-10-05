@@ -117,7 +117,7 @@ export function listDecisionSourcesChecklist(
 
 function decisionSourceChecklistSuffix(label: string): string {
   if (/\[Sources: (?:GitHub|GitLab|Bitbucket) commit/.test(label)) {
-    return "introducing commit and message — provenance; alternatives unknown unless stated";
+    return "sampled commit and message — provenance; original introduction and alternatives unknown unless verified";
   }
   if (label.startsWith("[Sources: PR #") || label.startsWith("[Sources: MR #")) {
     return "PR description, review comments, and approvals — decision rationale and rejected options";

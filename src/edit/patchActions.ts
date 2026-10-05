@@ -43,6 +43,8 @@ import type { PatchCardState, PatchCardsUpdatePayload, PatchPreviewHunk } from "
 
 export type PatchSnapshotPublisher = (payload: PatchCardsUpdatePayload) => void;
 
+const updatingPatchRecords = new Set<number>();
+
 function snapshotPayload(activeMessageTimestamp?: number): PatchCardsUpdatePayload {
   return withCardsSuppression({
     cards: listPatchCards(),
@@ -470,10 +472,33 @@ async function applyPendingPatchHunks(
   hunkIds: string[],
   applyOptions?: { preferLocalDisk?: boolean }
 ): Promise<boolean> {
+  if (updatingPatchRecords.has(timestamp)) {
+    return false;
+  }
+  updatingPatchRecords.add(timestamp);
+  try {
+    return await applyPendingPatchHunksUnlocked(publish, timestamp, hunkIds, applyOptions);
+  } finally {
+    updatingPatchRecords.delete(timestamp);
+  }
+}
+
+async function applyPendingPatchHunksUnlocked(
+  publish: PatchSnapshotPublisher | undefined,
+  timestamp: number,
+  hunkIds: string[],
+  applyOptions?: { preferLocalDisk?: boolean }
+): Promise<boolean> {
   const record = getPatchRecord(timestamp);
   if (!record) {
     void vscode.window.showWarningMessage("No patch is pending. Use /edit in chat to generate one.");
     publishSnapshot(publish);
+    return false;
+  }
+
+  const pending = new Set(pendingHunkIds(record.card));
+  if (hunkIds.some((id) => !pending.has(id))) {
+    publishSnapshot(publish, timestamp);
     return false;
   }
 
@@ -606,6 +631,11 @@ function rejectPendingPatchHunks(
   hunkIds: string[],
   reason: "dismissed" | "explicit"
 ): void {
+  if (updatingPatchRecords.has(timestamp)) {
+    void vscode.window.showWarningMessage("A patch update is still running. Wait for it to finish before rejecting this patch.");
+    publishSnapshot(publish, timestamp);
+    return;
+  }
   const record = getPatchRecord(timestamp);
   if (!record) {
     publishSnapshot(publish);
@@ -638,8 +668,29 @@ export async function undoLastPatchWithState(
   messageTimestamp?: number
 ): Promise<boolean> {
   const timestamp = resolveActivePatchTimestamp(messageTimestamp);
+  if (timestamp !== undefined && updatingPatchRecords.has(timestamp)) {
+    void vscode.window.showWarningMessage("A patch update is still running. Wait for it to finish before undoing this patch.");
+    publishSnapshot(publish, timestamp);
+    return false;
+  }
+  if (timestamp === undefined) {
+    void vscode.window.showWarningMessage("Nothing to undo.");
+    return false;
+  }
+  updatingPatchRecords.add(timestamp);
+  try {
+    return await undoLastPatchWithStateUnlocked(publish, timestamp);
+  } finally {
+    updatingPatchRecords.delete(timestamp);
+  }
+}
+
+async function undoLastPatchWithStateUnlocked(
+  publish: PatchSnapshotPublisher | undefined,
+  timestamp: number
+): Promise<boolean> {
   const record = getPatchRecord(timestamp);
-  if (!record || timestamp === undefined) {
+  if (!record) {
     void vscode.window.showWarningMessage("Nothing to undo.");
     return false;
   }

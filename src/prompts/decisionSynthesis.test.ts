@@ -196,16 +196,16 @@ test("decision synthesis includes enriched evidence fields and enrichment instru
   assert.ok(prompt.includes("## Evidence enrichment"));
   assert.ok(prompt.includes("lead with this for full-file traces"));
   assert.ok(prompt.includes("Recent decision commit"));
-  assert.ok(prompt.includes("Originally introduced (background)"));
+  assert.ok(prompt.includes("Sampled provenance (background)"));
   assert.ok(prompt.includes("primary rationale source"));
   assert.ok(prompt.includes("Target: fastify.js:10-20"));
-  assert.ok(prompt.includes("Introducing diff summary"));
-  assert.ok(prompt.includes("Evolution since introduction"));
+  assert.ok(prompt.includes("Sampled commit diff summary"));
+  assert.ok(prompt.includes("Sampled file evolution"));
   assert.ok(prompt.includes("Rationale ranking"));
   const formatted = formatTimelineForPrompt(enrichedTimeline);
   assert.ok(formatted.includes("targetLabel: fastify.js:10-20"));
   assert.ok(formatted.includes("primary rationale source"));
-  assert.ok(formatted.includes("Commits since introduction: 7"));
+  assert.ok(formatted.includes("Sampled later commits: 7"));
 });
 
 test("decision synthesis includes trace completeness and decision status guidance", () => {

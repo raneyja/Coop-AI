@@ -1910,6 +1910,11 @@ export class CoopChatSession {
     return this.remoteProvenanceFile;
   }
 
+  public autocompleteRepoId(): string | undefined {
+    if (!this.currentContext.owner || !this.currentContext.repo) return undefined;
+    return buildRepoId(this.preferences, this.currentContext);
+  }
+
   /** User chose remote explorer / codehost — never fall through to local disk. */
   private isWorkingOnRemoteProvenance(): boolean {
     return isRemoteProvenanceContext(this.currentContext, this.remoteProvenanceFile);

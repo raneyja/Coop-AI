@@ -33,6 +33,8 @@ export type FetchCompletionsOptions = {
   allowGraphContext?: boolean;
   sessionMode?: "file-assistant" | "indexed-repo";
   fileSource?: "workspace" | "git" | "remote" | "external";
+  /** Frozen active session target; global defaults may still be updating. */
+  repoId?: string;
 };
 
 const MAX_FIM_PREFIX_CHARS = 4_000;
@@ -70,13 +72,15 @@ export class CompletionRouter {
     rankingFileSample?: string,
     options?: FetchCompletionsOptions
   ): Promise<CompletionRouterResult> {
+    options = { ...options, repoId: options?.repoId ?? buildRepoId(readConfiguration()) };
+    const scopeKey = JSON.stringify([options.repoId, options.allowGraphContext, context.contextHash]);
     const timer = createLatencyTimer();
 
     if (shouldSkipForPrivacy(context)) {
       return { completions: [], latencyMs: 0, fromCache: false };
     }
 
-    const cached = this.cache.get(context.contextHash);
+    const cached = this.cache.get(scopeKey);
     if (cached) {
       const fileSample =
         rankingFileSample?.slice(0, 32_000) ?? context.previousLines.slice(0, 2000);
@@ -92,10 +96,10 @@ export class CompletionRouter {
       if (completions.length > 0) {
         return { completions, latencyMs: 0, fromCache: true };
       }
-      this.cache.delete(context.contextHash);
+      this.cache.delete(scopeKey);
     }
 
-    const docKey = context.filePath;
+    const docKey = JSON.stringify([options.repoId, options.allowGraphContext, context.filePath]);
     const prefixKey = buildFimPrefix(context) || context.currentLinePrefix;
     const surroundingContext = JSON.stringify([
       context.languageId,
@@ -231,7 +235,7 @@ export class CompletionRouter {
 
       if (ranked.length > 0) {
         this.cache.set(
-          context.contextHash,
+          JSON.stringify([options?.repoId, options?.allowGraphContext, context.contextHash]),
           ranked[0].text,
           ranked.slice(1).map((r) => r.text)
         );
@@ -281,7 +285,7 @@ export class CompletionRouter {
       return undefined;
     }
 
-    const repoId = buildRepoId(prefs);
+    const repoId = options?.repoId ?? buildRepoId(prefs);
     if (repoId.includes("unknown/unknown")) {
       return undefined;
     }
@@ -355,7 +359,7 @@ export class CompletionRouter {
     const chatMessage = segments
       ? synthesizeMessageFromSegments(segments, context, prompt)
       : prompt;
-    const repoId = buildRepoId(prefs);
+    const repoId = options?.repoId ?? buildRepoId(prefs);
     const repoStatus = this.deps.indexBackend
       ? await this.deps.indexBackend.getRepoStatus(repoId)
       : undefined;

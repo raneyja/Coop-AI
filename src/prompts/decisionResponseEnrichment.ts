@@ -203,7 +203,7 @@ function shouldReplaceWithGroundedAlternatives(
   return alternativesSectionsLackGrounding(content, timeline);
 }
 
-/** Compact, evidence-honest answer when only an introducing commit is available. */
+/** Compact, evidence-honest answer when only a sampled provenance commit is available. */
 export function buildThinAlternativesTradeOffsResponse(
   timeline: DecisionTimeline,
   file: string
@@ -214,7 +214,7 @@ export function buildThinAlternativesTradeOffsResponse(
     : undefined;
 
   const lines = [
-    `Evidence is **limited** — only the introducing commit for \`${file}\` is attached.`,
+    `Evidence is **limited** — only a sampled commit for \`${file}\` is attached.`,
     "",
     "**Alternatives considered**",
     warningNote
@@ -230,7 +230,7 @@ export function buildThinAlternativesTradeOffsResponse(
     lines.push("", "**Sources**");
     for (const item of checklist) {
       if (commitLabel && item.startsWith(commitLabel)) {
-        lines.push(`- ${commitLabel} — original introduction; does not record rejected alternatives or trade-offs.`);
+        lines.push(`- ${commitLabel} — sampled provenance; original introduction, rejected alternatives and trade-offs are unverified.`);
       } else {
         lines.push(`- ${item}`);
       }

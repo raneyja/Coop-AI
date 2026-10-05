@@ -49,6 +49,7 @@ import { appendIntegrationDocsResponseContract } from "./integrationDocsResponse
 export const BLAST_RADIUS_EVIDENCE_SYSTEM = `You analyze change impact: dependents, APIs, integrations, and operational risk.
 Be concise: the Sources card already shows full file lists — summarize and prioritize; do not repeat every path in the narrative.
 Prefer production / app / lib callers in Top risk surfaces and Direct impact. Stories, e2e, and unit tests are secondary — label them as test surfaces under Testing surfaces, not as primary blast.
+Path prefixes are ranking heuristics, not proof a caller is deployed in production. Describe retrieved dependency relations without inventing deployment classification. No confirmed callers means coverage is unverified, never safe to change. Distinguish a positional parameter's local name from its type/arity/return contract: renaming that local parameter alone does not require caller changes or prove a compile failure. A listed caller is affected evidence, not proof it breaks under every change; require a concrete incompatible contract change for breakage claims.
 Be explicit about transitive effects when dependency data is available.
 The primary blast-radius target is the open file in ## Task — do not rewrite impact analysis around out-of-scope @ attachments.
 When Jira issues are attached: cite only tickets that mention the target file/symbol or are clearly about this change. Do not invent a link from "same repository" alone — say when a ticket is only loosely repo-related.
@@ -150,7 +151,7 @@ function appendBlastRadiusSummaryGuidance(lines: string[], evidence: BlastRadius
     );
     if (named.length > 0) {
       lines.push(
-        `- Callers of ${named.join(", ")} were not confirmed. Changing them would break actual callers — this graph slice did not list those files. Next: search for \`${named[0]}(\` — do not list guessed paths.`
+        `- Callers of ${named.join(", ")} were not confirmed. Compatibility depends on the actual change; this graph slice did not list call sites and cannot certify safety. Next: search for \`${named[0]}(\` — do not list guessed paths.`
       );
     }
     lines.push("");
@@ -160,7 +161,7 @@ function appendBlastRadiusSummaryGuidance(lines: string[], evidence: BlastRadius
   if (named.length > 0 && !(evidence.directDependents?.length)) {
     lines.push("## When callers are unconfirmed");
     lines.push(
-      `- Callers of ${named.join(", ")} were not confirmed this turn. Write like a teammate: what the function does, that changing it would break actual callers (not every importer of the file), and that this graph slice didn’t confirm them — not “nothing breaks.” **Direct impact:** none confirmed. Do not list file paths. Next: search for \`${named[0]}(\`.`
+      `- Callers of ${named.join(", ")} were not confirmed this turn. Compatibility depends on the actual change; absence from this graph slice does not certify safety. **Direct impact:** none confirmed. Do not list file paths. Next: search for \`${named[0]}(\`.`
     );
     lines.push("");
     return;
@@ -228,7 +229,7 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
   if (topRisk.length > 0) {
     sections.push(
       `### Top risk surfaces (use these first in Summary and Direct impact)\n${topRisk
-        .map((entry, index) => `${index + 1}. ${entry.path} — ${entry.riskReason} (${entry.source})`)
+        .map((entry, index) => `${index + 1}. ${entry.path} — dependency relation; deployment classification unverified (${entry.source})`)
         .join("\n")}`
     );
   }
@@ -500,7 +501,7 @@ export function honestNamedFunctionBlastAnswer(symbols: string[], file?: string)
   const named = names[0] ?? "this function";
   const where = file?.trim() ? ` in \`${file.trim()}\`` : "";
   return [
-    `\`${named}\` is defined${where}. Changing it would break whatever actually calls it — not every file that imports a different helper from the same module.`,
+    `\`${named}\` is defined${where}. Compatibility depends on the actual change and its callers; a local positional-parameter rename alone does not change the call contract.`,
     "",
     "This turn’s graph did not confirm those call sites, so I can’t list will-break files with confidence. That is not the same as nothing breaks.",
     "",
@@ -549,7 +550,7 @@ export function enrichBlastRadiusResponse(
     const lines = ranked.slice(0, 5).map((entry) => {
       const surface = entry.riskReason.toLowerCase().includes("test")
         ? "test surface"
-        : "production / code caller";
+        : "code dependent; deployment classification unverified";
       return `- \`${entry.path}\` (${surface})`;
     });
     const lead = [

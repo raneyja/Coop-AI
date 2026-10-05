@@ -164,11 +164,11 @@ export function summarizeDecisionTimeline(timeline: DecisionTimeline, codeHost?:
   } else if (integrationDocHits || linkedJiraSearchHits > 0) {
     quality = "medium";
     qualityReason =
-      "Cross-tool search surfaced supporting documentation or issue context beyond the introducing commit.";
+      "Cross-tool search surfaced supporting documentation or issue context beyond the sampled commit.";
   } else if (isWeakCommitOnly) {
     quality = "weak";
     qualityReason =
-      "This trace is mostly a single introducing commit with limited surrounding decision context.";
+      "This trace is mostly a single sampled commit with limited surrounding decision context.";
   } else if (!!linkedPr || (commit && timeline.chronology.length > 1)) {
     quality = "medium";
     qualityReason =
@@ -1332,7 +1332,7 @@ function hasCommitOnlyRationale(
 function describeDecisionEvolution(
   evolution: NonNullable<DecisionTimeline["evolution"]>
 ): string {
-  const base = `${evolution.commitCountSinceIntroduction} commit(s) touched this file since introduction`;
+  const base = `${evolution.commitCountSinceIntroduction} commit(s) touched this file since the sampled provenance anchor`;
   const actor = evolution.lastModifiedAuthor ? ` by ${evolution.lastModifiedAuthor}` : "";
   const date = evolution.lastModifiedAt ? ` on ${formatShortDate(evolution.lastModifiedAt)}` : "";
   return `${base}; last modified${actor}${date}.`;

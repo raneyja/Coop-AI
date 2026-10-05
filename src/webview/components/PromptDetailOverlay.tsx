@@ -1,4 +1,5 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
+import { containModalFocus } from "../lib/modalFocus";
 import { CoopPanelHeader } from "./CoopPanelHeader";
 
 export type PromptDetailDraft = {
@@ -21,7 +22,12 @@ export function PromptDetailOverlay({
   onDiscard,
   onSave
 }: PromptDetailOverlayProps): React.ReactElement {
+  const dialogRef = useRef<HTMLDivElement>(null);
   const canSave = draft.title.trim().length > 0 && draft.template.trim().length > 0;
+
+  useEffect(() => {
+    if (dialogRef.current) return containModalFocus(dialogRef.current);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -40,6 +46,9 @@ export function PromptDetailOverlay({
       onClick={onDiscard}
     >
       <div
+        ref={dialogRef}
+        id="coop-prompt-editor-dialog"
+        tabIndex={-1}
         className="coop-prompt-modal coop-prompt-editor-modal"
         role="dialog"
         aria-modal="true"

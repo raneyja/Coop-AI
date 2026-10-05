@@ -77,6 +77,7 @@ export type DecisionIntroducingDiffSummary = {
   summary: string;
   /** Short excerpt of what was added in the introducing patch. */
   patchExcerpt?: string;
+  fileChange?: { type: string; previousPath?: string };
 };
 
 export type DecisionEvolution = {
@@ -136,7 +137,7 @@ export type DecisionTimeline = {
   targetLabel?: string;
   lineRange?: LineRange;
   codeSnippet?: string;
-  /** First commit that introduced the file/selection (provenance / birth). */
+  /** Retrieved provenance anchor; bounded history or blame does not prove original introduction. */
   originalCommit?: DecisionCommit;
   /**
    * Commit used for PR/discussion enrichment and primary rationale.

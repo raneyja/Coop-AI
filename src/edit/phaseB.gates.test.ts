@@ -12,7 +12,7 @@ import { applyPatchesToWorkspace, undoPatchApplication } from "./patchApplier";
 import { handlePatchComplete } from "./handlePatchComplete";
 import { parsePatchResponse } from "./patchParser";
 import { emitPatchEvent, setPatchEventHandler } from "./patchEvents";
-import { collectAppliedPrFiles, rejectPendingPatchWithState, undoLastPatchWithState } from "./patchActions";
+import { applyPendingPatch, applyPendingPatchHunk, collectAppliedPrFiles, rejectPendingPatchWithState, undoLastPatchWithState } from "./patchActions";
 import { buildPatchCardState, setHunkStatusOnCard, deriveCardStatusFromHunks } from "./patchDiffPreview";
 import { getPatchRecord, listPatchCards, resetPatchSessionForTests, upsertPatchRecord } from "./patchSession";
 import { ensureEditablePatchTarget } from "./patchTarget";
@@ -251,6 +251,119 @@ async function main(): Promise<void> {
       restore();
     }
   });
+
+  await test("concurrent Apply dispatches one edit and cannot overwrite later user text", async () => {
+    const doc = installRemoteDoc("src/a.ts", "alpha\n");
+    const parsed = parsePatchResponse(TWO_FILE_PATCH);
+    assert.ok(parsed.ok);
+    const patches = { files: [parsed.patches.files[0]] };
+    upsertPatchRecord(910, patches, buildPatchCardState(patches, { status: "pending", messageTimestamp: 910 }));
+    const workspace = vscode.workspace as unknown as { applyEdit: (edit: { replacements?: Array<{ newText: string }> }) => Promise<boolean> };
+    const previous = workspace.applyEdit;
+    let writes = 0;
+    let release: () => void = () => undefined;
+    let started: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const dispatched = new Promise<void>((resolve) => { started = resolve; });
+    workspace.applyEdit = async (edit) => {
+      writes++;
+      started();
+      await gate;
+      doc.setText(edit.replacements?.[0]?.newText ?? doc.getText());
+      return true;
+    };
+    try {
+      const first = applyPendingPatch(undefined, 910);
+      await dispatched;
+      const second = applyPendingPatch(undefined, 910);
+      release();
+      assert.equal(await first, true);
+      assert.equal(await second, false);
+      doc.setText(`${doc.getText()}// user edit after completed workspace transaction\n`);
+      assert.equal(writes, 1);
+      assert.equal(getPatchRecord(910)?.card.status, "applied");
+      assert.ok(doc.getText().includes("user edit"));
+      assert.equal(await applyPendingPatchHunk(undefined, 910, "hunk-0"), false);
+      assert.equal(writes, 1);
+    } finally {
+      release();
+      workspace.applyEdit = previous;
+    }
+  });
+
+  await test("failed Apply releases the per-record guard so an explicit retry can succeed", async () => {
+    const doc = installRemoteDoc("src/a.ts", "alpha\n");
+    const parsed = parsePatchResponse(TWO_FILE_PATCH);
+    assert.ok(parsed.ok);
+    const patches = { files: [parsed.patches.files[0]] };
+    upsertPatchRecord(911, patches, buildPatchCardState(patches, { status: "pending", messageTimestamp: 911 }));
+    const workspace = vscode.workspace as unknown as { applyEdit: (edit: { replacements?: Array<{ newText: string }> }) => Promise<boolean> };
+    const previous = workspace.applyEdit;
+    let calls = 0;
+    workspace.applyEdit = async (edit) => {
+      if (++calls === 1) return false;
+      doc.setText(edit.replacements?.[0]?.newText ?? doc.getText());
+      return true;
+    };
+    try {
+      assert.equal(await applyPendingPatch(undefined, 911), false);
+      assert.equal(await applyPendingPatch(undefined, 911), true);
+      assert.equal(calls, 2);
+      assert.equal(doc.getText(), "ALPHA\n");
+    } finally {
+      workspace.applyEdit = previous;
+    }
+  });
+
+  for (const operation of ["Apply", "Undo"] as const) {
+    await test(`in-flight ${operation} serializes Reject and Undo/Apply for a partially applied record`, async () => {
+      const firstDoc = installRemoteDoc("src/a.ts", "alpha\n");
+      const secondDoc = installRemoteDoc("src/b.ts", "beta\n");
+      const parsed = parsePatchResponse(TWO_FILE_PATCH);
+      assert.ok(parsed.ok);
+      upsertPatchRecord(912, parsed.patches, buildPatchCardState(parsed.patches, { status: "pending", messageTimestamp: 912 }));
+      const restoreInitial = installApplyEditMutation();
+      assert.equal(await applyPendingPatchHunk(undefined, 912, "hunk-0"), true);
+      restoreInitial();
+      const workspace = vscode.workspace as unknown as { applyEdit: (edit: { replacements?: Array<{ uri: { toString(): string }; newText: string }> }) => Promise<boolean> };
+      const previous = workspace.applyEdit;
+      let release: () => void = () => undefined;
+      let started: () => void = () => undefined;
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      const dispatched = new Promise<void>((resolve) => { started = resolve; });
+      let writes = 0;
+      workspace.applyEdit = async (edit) => {
+        writes++;
+        started();
+        await gate;
+        for (const replacement of edit.replacements ?? []) {
+          const doc = [firstDoc, secondDoc].find((entry) => entry.uri.toString() === replacement.uri.toString());
+          doc?.setText(replacement.newText);
+        }
+        return true;
+      };
+      let inFlight: Promise<boolean> | undefined;
+      try {
+        inFlight = operation === "Apply" ? applyPendingPatchHunk(undefined, 912, "hunk-1") : undoLastPatchWithState(undefined, 912);
+        await dispatched;
+        const before = getPatchRecord(912)?.card;
+        rejectPendingPatchWithState(undefined, "explicit", 912);
+        assert.deepEqual(getPatchRecord(912)?.card, before);
+        assert.equal(await undoLastPatchWithState(undefined, 912), false);
+        assert.equal(await applyPendingPatchHunk(undefined, 912, "hunk-1"), false);
+        assert.equal(writes, 1);
+        release();
+        assert.equal(await inFlight, true);
+        assert.equal(firstDoc.getText(), operation === "Apply" ? "ALPHA\n" : "alpha\n");
+        assert.equal(secondDoc.getText(), operation === "Apply" ? "BETA\n" : "beta\n");
+        assert.equal(getPatchRecord(912)?.card.status, operation === "Apply" ? "applied" : "pending");
+      } finally {
+        release();
+        await inFlight?.catch(() => undefined);
+        workspace.applyEdit = previous;
+      }
+    });
+  }
 
   await test("Create PR files come from captured bytes when the Apply buffer has no repo path", async () => {
     (vscode.workspace.textDocuments as unknown[]).length = 0;

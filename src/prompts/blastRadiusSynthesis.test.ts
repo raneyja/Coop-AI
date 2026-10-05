@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { buildBlastRadiusSynthesisUserPrompt, enrichBlastRadiusResponse } from "./blastRadiusSynthesis";
+import { buildBlastRadiusSynthesisUserPrompt, enrichBlastRadiusResponse, BLAST_RADIUS_EVIDENCE_SYSTEM } from "./blastRadiusSynthesis";
+import { buildUserMessageWithContext, systemPromptForUseCase } from "./systemPrompts";
 
 const evidence = {
   file: "fastify.js",
@@ -95,7 +96,9 @@ test("blast-radius synthesis includes top risk surfaces ranking", () => {
   assert.ok(prompt.includes("### Top risk surfaces"));
   assert.ok(prompt.includes("src/plugin.js"));
   assert.ok(/1\. src\/plugin\.js/.test(prompt));
-  assert.ok(/Test surface/i.test(prompt));
+  assert.match(prompt, /1\. src\/plugin\.js — dependency relation; deployment classification unverified \(scip\)/);
+  assert.match(prompt, /test\/a\.test\.js — dependency relation; deployment classification unverified \(heuristic\)/);
+  assert.doesNotMatch(prompt, /src\/plugin\.js — Production/);
 });
 
 test("blast-radius synthesis includes CI rollout guidance when workflows present", () => {
@@ -280,6 +283,28 @@ test("enrichBlastRadiusResponse does not replace requireAuth callers from stub s
   assert.doesNotMatch(out, /None confirmed in the index this turn/);
   assert.match(out, /jobsApi\.ts/);
   assert.match(out, /samlApi\.ts/);
+});
+
+test("synthetic src caller stays a dependency without invented production classification", () => {
+  const fixture = {file: "src/mathRenamed.ts", directDependents: ["src/caller.ts"], dependentDetails: [{path: "src/caller.ts", depth: 1, source: "scip" as const, strength: "strong" as const}]};
+  const prompt = buildBlastRadiusSynthesisUserPrompt({evidence: fixture, file: fixture.file, userFocus: "Rename the positional parameter values to items"});
+  assert.match(prompt, /src\/caller.ts — dependency relation; deployment classification unverified/);
+  assert.doesNotMatch(prompt, /src\/caller.ts — Production/);
+  const rendered = enrichBlastRadiusResponse("A retrieved dependency needs review.", fixture);
+  assert.match(rendered, /code dependent; deployment classification unverified/);
+  assert.doesNotMatch(rendered, /production \/ code caller/);
+  const assembled = buildUserMessageWithContext(prompt, {owner: "CoopAI-Corp", repo: "coop-dogfood-launch"});
+  assert.match(assembled, /deployment classification unverified/);
+  const system = systemPromptForUseCase("blast_radius");
+  assert.match(system, /local positional-parameter rename does not change arity\/types\/return compatibility/);
+  assert.match(BLAST_RADIUS_EVIDENCE_SYSTEM, /renaming that local parameter alone does not require caller changes/);
+});
+
+test("unconfirmed function callers never imply safety or inevitable breakage", () => {
+  const out = enrichBlastRadiusResponse("Safe to modify: no callers exist.", {file: "src/mathRenamed.ts", namedAskSymbols: ["fixtureBranchLabel"], directDependents: []});
+  assert.match(out, /Compatibility depends on the actual change/);
+  assert.doesNotMatch(out, /Safe to modify|Changing it would break/);
+  assert.match(out, /not the same as nothing breaks/);
 });
 
 console.log(`\nblastRadiusSynthesis: ${passed}/${passed + failed} tests passed`);
