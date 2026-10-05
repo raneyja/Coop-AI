@@ -1,0 +1,13 @@
+{
+  "commit": "0d0f6782aecc61edd81105e98b3a588c1df028db",
+  "manifestSha256": "15659ea0a59ff63fb6fb5c07205acc92c68a179b21781a651a884bf53a107e6b",
+  "deploymentId": "b26a1f53-c7ea-4ccf-ba31-16b5e3c2c969",
+  "status": "FAILED",
+  "configErrors": [
+    "Failed to snapshot repository. Please try again in a few minutes."
+  ],
+  "buildStarted": false,
+  "retry": "same immutable snapshot after brief interval",
+  "previousHealthyCheckpoint": "c1f886e",
+  "stripe": "deferred; no variables changed"
+}

@@ -1,0 +1,15 @@
+{
+  "checkpoint": "c1f886edb7fc7cbc73b6eb5588995ec9e9a31541",
+  "deploymentId": "9fdd4b6b-b97c-4559-985e-cdbb764890d9",
+  "status": "SUCCESS",
+  "manifestSha256": "d8bbaee75064f49d9a9e608b79f5e533386b7987abd0522290d148d3297b82ce",
+  "imageDigest": "sha256:7ec969c5d9869eb0b6f8a6f25f0dd514ab088c665cc595b2c4ee539a8ada3bda",
+  "publicHealth": {
+    "ok": true,
+    "commit": "unknown"
+  },
+  "extensionBundle": "470d0c004761ebcfafe63f5021193c9e9f1644e3965f88e1fad3037655c82b7f",
+  "vsixSha256": "20ef1609496fc6d5ec47b966e077bd4498d2df2142406f22fb2d9f8e77c0cd6e",
+  "migrationsChanged": false,
+  "stripe": "deferred; no variables changed"
+}

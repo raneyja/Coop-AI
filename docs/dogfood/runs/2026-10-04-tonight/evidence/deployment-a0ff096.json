@@ -1,0 +1,10 @@
+{
+  "checkpoint": "a0ff096f5ed0b52818c043b08b0afba96553de9b",
+  "deploymentId": "1fd6a3a4-5565-483b-89b7-79864713de44",
+  "status": "SUCCESS",
+  "manifestSha256": "1021a2eae3817fa935647a43a51a59d064550e5e382b3ab8e7c7542112c6d265",
+  "imageDigest": "sha256:eb02c2bda28066a9bb0fac8a7659f560fa11536afa53d648ee486f007b904a14",
+  "railwayHealthcheck": "succeeded",
+  "extensionBundle": "f7ac87753ffb32a4e05908ba10ca7cfbc96854572c05d18942ca15f6cf24c109",
+  "result": "Source-body/numeric-citation and presence-availability repairs passed narrowly. Trace origin and Blast contradictory impact still failed; final follow-up serialization/contract corrections require new live tests."
+}

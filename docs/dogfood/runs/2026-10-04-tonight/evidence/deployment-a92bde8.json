@@ -1,0 +1,16 @@
+{
+  "checkpoint": "a92bde8a50e0c9aba10318d2c20922e9f6a94520",
+  "deploymentId": "919e7096-19ee-4c72-8e2e-5c77d7736b40",
+  "status": "SUCCESS",
+  "manifestSha256": "8e184d0c924362b1b82b18676c545ae619d78eb174b5d17b2fae1f052bd6ea2b",
+  "imageDigest": "sha256:d770a859840151fad37ae56f21c8ba40cf60328fa34167163cb13bf875ba3873",
+  "railwayHealthcheck": "succeeded",
+  "publicHealth": {
+    "ok": true,
+    "commit": "unknown"
+  },
+  "extensionBundle": "cc474e466ad78216fa86ba713e9e29b943dc0ea7206dc0c016d5a7606e9348e4",
+  "vsixSha256": "0cfd6ab98499b7b628c0413dff0676392b98f4771f29ab81094ff4bab0e63a62",
+  "migrationsChanged": false,
+  "stripe": "deferred; no variables changed"
+}

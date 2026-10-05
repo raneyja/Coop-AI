@@ -1,0 +1,69 @@
+{
+  "fixture": "CoopAI-Corp/coop-dogfood-launch renamed src/mathRenamed.ts L1-7",
+  "launchReady": false,
+  "trace": {
+    "candidate": "a92bde8",
+    "status": "narrow provenance pass",
+    "totalSeconds": 33,
+    "oracle": "seed-commit-oracle.json",
+    "screenshot": "trace-final.jpg",
+    "limit": "broader historical rationale/coverage unverified"
+  },
+  "blast": {
+    "candidate": "aa5fff9",
+    "status": "completed-answer import-only honesty pass",
+    "totalSeconds": 25,
+    "screenshot": "blast-aa5-final.jpg",
+    "limit": "streamed prose before final enrichment unqualified; caller body not retrieved"
+  },
+  "gaps": {
+    "candidate": "2e738b4",
+    "status": "conditional finding/citation/absence guard pass; recommendation wiring guard not applied",
+    "totalSeconds": 34,
+    "screenshot": "gaps-2e-final.jpg",
+    "cause": "hydrated normalized dependencyGraph dropped during bundle extraction; correction pending final retest"
+  },
+  "ownership": {
+    "candidate": "2e738b4",
+    "status": "sampled authorship/availability guard pass; ownership absence wording failed",
+    "totalSeconds": 35,
+    "screenshot": "owner-2e-availability.jpg",
+    "cause": "contradictory missing CODEOWNERS prompt instruction; correction pending final retest"
+  },
+  "accounts": "production Free/paid/denied-org sign-ins pending",
+  "stripe": "open; no Stripe env changes",
+  "latency": "total durations do not qualify first-answer latency",
+  "planeAndDocumenso": "forked test repositories, not Coop application source",
+  "sourceCheckpoint": "c4a83a70e677181a74a8094b9a84e902a5314ab6",
+  "blastFinal": {
+    "candidate": "345029b",
+    "backend": "c1f886e",
+    "status": "narrow live pass: import-only early answer without model stream",
+    "totalSeconds": 12,
+    "screenshot": "blast-345-early.jpg"
+  },
+  "gapsFinal": {
+    "candidate": "c4a83a7",
+    "backend": "c1f886e",
+    "status": "narrow final-answer live pass: exact citation, conditional expected contract, file edge distinct from unverified symbol use",
+    "totalSeconds": 40,
+    "screenshot": "gaps-c4-final.jpg",
+    "limit": "does not independently prove deterministic guard execution; first-answer latency and broader matrix remain unqualified"
+  },
+  "ownershipFinal": {
+    "candidate": "c4a83a7",
+    "backend": "c4a83a7",
+    "status": "narrow live pass: sampled authorship, policy coverage, Slack presence, and response availability kept separate",
+    "totalSeconds": 31,
+    "screenshot": "owner-c4-final.jpg",
+    "limit": "broader ownership/team mapping and availability integrations remain unqualified"
+  },
+  "gapsDeployedFinal": {
+    "candidate": "c4a83a7",
+    "backend": "c4a83a7",
+    "status": "narrow final-answer live pass: exact citation, conditional expected contract, unverified symbol impact, absence coverage guards",
+    "totalSeconds": 32,
+    "screenshot": "gaps-c4-deployed-final.jpg",
+    "limit": "deterministic recommendation-guard execution not independently observed; first-answer latency and broader matrix remain unqualified"
+  }
+}

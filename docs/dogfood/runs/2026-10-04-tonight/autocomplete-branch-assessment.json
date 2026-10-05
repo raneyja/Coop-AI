@@ -1,0 +1,26 @@
+{
+  "status": "automated-pass-live-pending",
+  "sourceFrozen": true,
+  "candidateQualificationInherited": false,
+  "tests": [
+    { "command": "npx --yes tsx src/autocomplete/completionRouter.test.ts", "exitCode": 0, "passed": 24, "failed": 0 },
+    { "command": "npx --yes tsx src/autocomplete/coopAutocompleteProvider.test.ts", "exitCode": 0, "passed": 7, "failed": 0 },
+    { "command": "npx --yes tsx src/api/inlineGraphContext.test.ts", "exitCode": 0, "passed": 9, "failed": 0 }
+  ],
+  "verified": [
+    "Same repository and unchanged buffer branch switches partition router in-flight requests and cached responses.",
+    "Provider rejects pending completions after selected branch changes.",
+    "Missing or mismatched manifest branch omits symbol hints.",
+    "GraphCache.getFileTree returns metadata.indexedBranch; selected branch mismatch degrades before graph snippets are fetched.",
+    "Matching graph context passes the selected branch to the snippet fetcher and codehost coordinates.",
+    "Optional branch is carried through both backend client inline payloads and server API types."
+  ],
+  "limits": [
+    "Current orgApi.handleGetRepoManifest response emits no branch. Optional client type allows verified provenance if supplied later; selected-ref manifest symbols are currently omitted deliberately. Matching-ref fixture coverage is conditional behavior, not production branch availability.",
+    "Combined lint, full CI, backend build and package are parent-owned gates.",
+    "No current candidate live branch-switch pass.",
+    "Production FIM intentionally still skips graph context; no graph-grounded FIM claim.",
+    "Missing branch index provenance degrades rather than mixing default-branch facts."
+  ],
+  "nextLiveCheck": "Same repo, unchanged completion buffer: request on main, switch Use repo to renamed while pending, verify old result never appears, request again and accept only new-branch output."
+}
