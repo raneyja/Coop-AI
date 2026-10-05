@@ -63,6 +63,8 @@ export type ChatTurn = {
 };
 
 export type ChatTurnEditAnchor = {
+  /** Line origin of captured target body; absent means full file from line1. */
+  bodyLineRange?: [number, number];
   file?: string;
   selectedLines?: [number, number];
   selectionText?: string;

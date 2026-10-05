@@ -2,8 +2,89 @@ import assert from "node:assert/strict";
 import { CoopChatSession } from "./CoopChatSession";
 import * as vscode from "vscode";
 import { rememberRemotePatchBuffer } from "../context/remoteViewBuffer";
+import { emptyChatIntentPlan } from "./intentPlanner/types";
 
 async function run(): Promise<void> {
+  let answerCalls = 0;
+  const answerTurn = { id: "answer-turn", threadId: "answer-thread", startedAt: Date.now(),
+    context: { owner: "fixture", repo: "remote", branch: "preview" } };
+  const answerSession = Object.assign(Object.create(CoopChatSession.prototype), {
+    currentContext: { owner: "wrong", repo: "other", branch: "other" }, preferences: { maxTokens: 1000 },
+    buildProjectInstructionsBlock: async (context: unknown) => { assert.deepEqual(context, answerTurn.context); return undefined; },
+    options: { api: { streamChat: async (request: { message: string; context: unknown; history?: Array<{content: string}> }) => {
+      assert.deepEqual(request.context, answerTurn.context);
+      if (answerCalls++ === 0) {
+        assert.ok(request.message.includes("captured-source"));
+        return { message: {content: "First part"}, finishReason: "length" };
+      }
+      assert.ok(request.history?.some((entry) => entry.content.includes("captured-source")), "continuation retains captured body outside summarized tool history");
+      return { message: {content: " completed"}, finishReason: "stop" };
+    } } }
+  });
+  assert.equal(await answerSession.streamAgentAnswer({ message: "Explain source", repoId: "github:fixture/remote", conversation: [],
+    attachedFiles: [{path: "src/oracle.ts", content: "captured-source", lineRange: [10,10]}]
+  }, {model: "fixture", provider: "openai"}, "chat", () => {}, undefined, answerTurn.threadId, answerTurn), "First part completed");
+  assert.equal(answerCalls, 2);
+  const originalDocumentsDescriptor = Object.getOwnPropertyDescriptor(vscode.workspace, "textDocuments");
+  let workspaceConsulted = false;
+  Object.defineProperty(vscode.workspace, "textDocuments", { configurable: true, get() { workspaceConsulted = true; throw new Error("remote anchor must not consult same-path workspace buffers"); } });
+  try {
+    const remoteTurn = { context: { file: "src/isolated.ts", fileSource: "remote", owner: "fixture", repo: "remote", provider: "github", branch: "preview" }, editAnchor: undefined as unknown };
+    const snapshotSession = Object.assign(Object.create(CoopChatSession.prototype), {
+      preferences: { branch: "other" },
+      pendingChatLocalFiles: { source: "local-workspace", activeFile: "src/isolated.ts", files: [{ path: "src/isolated.ts", content: "wrong-local" }] },
+      selectedCodeSnippet: () => undefined,
+      indexedRepoWorkspace: () => ({ readFile: async (target: { branch?: string }) => {
+        assert.equal(target.branch, "preview"); return { content: "correct-remote" };
+      } })
+    });
+    remoteTurn.editAnchor = snapshotSession.captureEditAnchor(remoteTurn);
+    assert.equal((remoteTurn.editAnchor as {fileContents?: unknown}).fileContents, undefined);
+    await snapshotSession.loadEditAnchorFile(remoteTurn);
+    assert.equal((remoteTurn.editAnchor as {fileContents: Record<string,string>}).fileContents["src/isolated.ts"], "correct-remote");
+    assert.equal(workspaceConsulted, false);
+  } finally {
+    if (originalDocumentsDescriptor) Object.defineProperty(vscode.workspace, "textDocuments", originalDocumentsDescriptor);
+    else delete (vscode.workspace as unknown as {textDocuments?: unknown}).textDocuments;
+  }
+  for (const mode of ["missing", "open", "stop"] as const) {
+    let active = true;
+    let calls = 0;
+    let finishLoad!: () => void;
+    const controller = new AbortController();
+    const turn = { id: "captured-turn", threadId: "captured-thread", streamGeneration: 1,
+      startedAt: Date.now(), streamAbort: controller, clearResponseDeadline() {},
+      context: { provider: "github", owner: "fixture", repo: "remote", branch: "preview", file: "src/oracle.ts", fileSource: "remote" },
+      editAnchor: { file: "src/oracle.ts", fileContents: mode === "open" ? { "src/oracle.ts": "captured-old" } : {} },
+      editAnchorLoad: undefined as Promise<void> | undefined, intentPlan: emptyChatIntentPlan("Explain this source"), allowsRepoTools: false
+    };
+    turn.editAnchorLoad = new Promise<void>((resolve) => { finishLoad = () => { turn.editAnchor.fileContents["src/oracle.ts"] = "captured-old"; resolve(); }; });
+    const agentSession = Object.assign(Object.create(CoopChatSession.prototype), {
+      currentContext: { owner: "other", repo: "latest", branch: "other" },
+      pendingChatLocalFiles: { files: [{ path: "src/oracle.ts", content: "mutable-new" }] },
+      preferences: { defaultCodeHost: "github", model: "Auto" },
+      threadRuns: { isStreamActive: () => active, markError() { throw new Error("unexpected agent error"); } },
+      synthesisActivityMessages: () => [], postKeepAliveActivity() {},
+      createChatDeltaBatcher: () => ({ dispose() {}, push() {} }),
+      blockIfFreeQuotaExhausted: async () => false, listConnectedIntegrationTools: () => [],
+      isViewingThread: () => false,
+      options: { agentOrchestrator: { run: async (_request: unknown, options: { capturedAttachment?: { repoId: string; branch?: string; files: Array<{content: string}> } }) => {
+        calls++;
+        assert.equal(options.capturedAttachment?.files[0].content, "captured-old");
+        assert.equal(options.capturedAttachment?.repoId, "github:fixture/remote");
+        assert.equal(options.capturedAttachment?.branch, "preview");
+        active = false;
+        return { steps: [] };
+      } } }
+    });
+    const execution = agentSession.runAgentOwnedTurn(turn, "Explain this source");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (mode !== "open") assert.equal(calls, 0, "agent must wait for its existing snapshot load");
+    if (mode === "stop") { active = false; controller.abort(); }
+    if (mode !== "open") finishLoad();
+    await execution;
+    assert.equal(calls, mode === "stop" ? 0 : 1);
+  }
   const uri = { scheme: "untitled", path: "/selection-fixture", toString: () => "untitled:selection-fixture" };
   rememberRemotePatchBuffer("src/auth.ts", uri as vscode.Uri, "export function parser() {}", {
     provider: "gitlab", owner: "org", repo: "coop", branch: "preview"

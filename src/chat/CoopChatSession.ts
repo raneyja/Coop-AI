@@ -4930,24 +4930,33 @@ export class CoopChatSession {
     useCase: "chat" | "code_edit",
     onChunk: (chunk: string) => void,
     signal?: AbortSignal,
-    threadId?: string
+    threadId?: string,
+    requestTurn?: ChatTurn,
+    requestRunId?: string
   ): Promise<string> {
-    const prompt = buildAgentAnswerPrompt({
+    const answerPrompt = buildAgentAnswerPrompt({
       message: input.message,
       action: input.action,
       openedEvidence: input.openedEvidence,
       interpretNotes: input.interpretNotes
     });
-    const projectInstructionsBlock = await this.buildProjectInstructionsBlock();
+    const prompt = input.attachedFiles?.length
+      ? formatChatMessageWithLocalFiles({ message: answerPrompt, files: input.attachedFiles }) : answerPrompt;
+    const projectInstructionsBlock = await this.buildProjectInstructionsBlock(requestTurn?.context, requestTurn?.startedAt);
     const message = projectInstructionsBlock ? `${projectInstructionsBlock}\n\n${prompt}` : prompt;
+    if (requestTurn && vscode.workspace.getConfiguration("coopAI").get<boolean>("agentDiagnostics", false)) {
+      this.logAttachmentDiagnostic(requestTurn, "attachment-agent-final-request", {
+        ...attachmentSerializedMetadata(message), runId: requestRunId, provider: runtime.provider, model: runtime.model
+      });
+    }
     let full = "";
     const result = await this.options.api.streamChat(
       {
         message,
         context: {
-          owner: this.currentContext.owner,
-          repo: this.currentContext.repo,
-          branch: this.currentContext.branch
+          owner: requestTurn ? requestTurn.context.owner : this.currentContext.owner,
+          repo: requestTurn ? requestTurn.context.repo : this.currentContext.repo,
+          branch: requestTurn ? requestTurn.context.branch : this.currentContext.branch
         },
         history: this.conversationToHistory(input.conversation, { summarizeTools: true }),
         model: runtime.model,
@@ -4987,12 +4996,13 @@ export class CoopChatSession {
         {
           message: LENGTH_CONTINUE_PROMPT,
           context: {
-            owner: this.currentContext.owner,
-            repo: this.currentContext.repo,
-            branch: this.currentContext.branch
+            owner: requestTurn ? requestTurn.context.owner : this.currentContext.owner,
+            repo: requestTurn ? requestTurn.context.repo : this.currentContext.repo,
+            branch: requestTurn ? requestTurn.context.branch : this.currentContext.branch
           },
           history: [
             ...this.conversationToHistory(input.conversation, { summarizeTools: true }),
+            { role: "user" as const, content: message, timestamp: Date.now() },
             { role: "assistant" as const, content, timestamp: Date.now() }
           ],
           model: runtime.model,
@@ -5133,6 +5143,15 @@ export class CoopChatSession {
       const allowedRepoTools = turn.allowsRepoTools ?? false;
       const plannedSearchQueries = plannedCodeSearchQueries(turn.intentPlan.jobs);
       const intentBrief = formatIntentBriefForAgent(turn.intentPlan);
+      if (turn.context.fileSource === "remote" && turn.editAnchorLoad &&
+          !lookupPatchFileContent(turn.editAnchor?.file ?? turn.context.file ?? "", turn.editAnchor?.fileContents)?.trim()) {
+        await abortablePromise(turn.editAnchorLoad, signal);
+        if (isCancelled()) return;
+      }
+      const anchoredFile = turn.editAnchor?.file;
+      const anchoredBody = anchoredFile ? lookupPatchFileContent(anchoredFile, turn.editAnchor?.fileContents) : undefined;
+      const capturedAttachment = turn.context.fileSource === "remote" && anchoredFile && anchoredBody !== undefined
+        ? { repoId, branch: turn.context.branch, files: [{ path: anchoredFile, content: anchoredBody, lineRange: turn.editAnchor?.bodyLineRange }] } : undefined;
       const agentResult = await this.options.agentOrchestrator.run(
         {
           message: query,
@@ -5146,6 +5165,7 @@ export class CoopChatSession {
           wallMs: AGENT_JOB_WALL_MS,
           startedAt: turn.startedAt,
           repoTarget: { repoId, owner: turn.context.owner, repo: turn.context.repo, provider: turn.context.provider, branch: turn.context.branch },
+          capturedAttachment,
           allowedIntegrations,
           allowedRepoTools,
           plannedSearchQueries:
@@ -5193,7 +5213,7 @@ export class CoopChatSession {
           streamAnswer: (input) =>
             this.streamAgentAnswer(input, runtimeModel, chatUseCase, (chunk) => {
               outputGate.push(chunk);
-            }, signal, turn.threadId),
+            }, signal, turn.threadId, turn, agentRunId),
           onStep: (_step, steps) => {
             this.logAgentDiagnostic(turn.threadId, {
               turnId: turn.id, runId: agentRunId,
@@ -5702,13 +5722,15 @@ export class CoopChatSession {
     const file = turn.context.file;
     const selectedLines = turn.context.selectedLines;
     const fileContents: Record<string, string> = {};
-    for (const snippet of this.pendingChatLocalFiles?.files ?? []) {
+    const capturedPayload = isFileAssistantSession(turn.context) || this.pendingChatLocalFiles?.source === "remote-codehost"
+      ? this.pendingChatLocalFiles : undefined;
+    for (const snippet of capturedPayload?.files ?? []) {
       if (snippet.path?.trim() && snippet.content) {
         indexPatchFileContent(snippet.path, snippet.content, fileContents);
       }
     }
     const wanted = file?.trim();
-    if (wanted && !lookupPatchFileContent(wanted, fileContents)) {
+    if (wanted && !lookupPatchFileContent(wanted, fileContents) && isFileAssistantSession(turn.context)) {
       const fromDocs = collectOpenPatchFileBytes(wanted);
       if (fromDocs?.trim()) {
         indexPatchFileContent(wanted, fromDocs, fileContents);
@@ -5719,6 +5741,7 @@ export class CoopChatSession {
       body && selectedLines ? selectionTextFromContent(body, selectedLines, 8000) : undefined;
     return {
       file,
+      bodyLineRange: capturedPayload?.files.find((snippet) => wanted && pathsReferToSameFile(snippet.path, wanted))?.lineRange,
       selectedLines,
       selectionText: fromFile || this.selectedCodeSnippet(8000) || undefined,
       targetAliases: sanitizedPatchTargetBindings(Object.keys(fileContents)),
@@ -5735,6 +5758,7 @@ export class CoopChatSession {
     turn.editAnchor = {
       ...turn.editAnchor,
       file: turn.editAnchor?.file ?? file,
+      bodyLineRange: pathsReferToSameFile(file, turn.editAnchor?.file ?? file) ? undefined : turn.editAnchor?.bodyLineRange,
       targetAliases: sanitizedPatchTargetBindings(Object.keys(fileContents)),
       selectedLines,
       selectionText: fromFile || turn.editAnchor?.selectionText,
@@ -5764,7 +5788,7 @@ export class CoopChatSession {
     if (existing?.trim()) {
       return;
     }
-    const fromDocs = collectOpenPatchFileBytes(file);
+    const fromDocs = isFileAssistantSession(turn.context) ? collectOpenPatchFileBytes(file) : undefined;
     if (fromDocs?.trim()) {
       this.stampEditAnchorFile(turn, file, fromDocs);
       return;
@@ -5789,7 +5813,7 @@ export class CoopChatSession {
             owner,
             repo,
             provider,
-            branch: turn.context.branch ?? this.preferences.branch
+            branch: turn.context.branch
           },
           file
         ),

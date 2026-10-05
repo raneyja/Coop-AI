@@ -174,7 +174,7 @@ type ReadFilePayload = {
   files?: Array<{
     path: string;
     content: string;
-    evidenceSource?: "remote-read" | "search-snippet";
+    evidenceSource?: "remote-read" | "search-snippet" | "turn-attachment";
   }>;
   error?: string;
   skipNote?: string;
@@ -265,6 +265,7 @@ function preferredLineForPath(
 }
 
 export type AgentRunOptions = {
+  capturedAttachment?: { repoId: string; branch?: string; files: Array<{ path: string; content: string; lineRange?: [number, number] }> };
   repoTarget?: import("../../workspace/indexedRepoWorkspaceTypes").RepoTarget;
   onStep?: (step: AgentStep, steps: AgentStep[]) => void;
   /** Opt-in, content-minimized trace for diagnosing indexed-repo hunts. */
@@ -392,6 +393,11 @@ export class AgentOrchestrator {
       return { steps: [], answer: "I couldn’t verify the selected repository and branch for this turn, so I can’t identify its source safely." };
     }
     const run = new AgentOrchestrator(createRunToolContext(gatherContext, target, options.onDiagnostic));
+    if (options.capturedAttachment && (options.capturedAttachment.repoId !== target.repoId ||
+        options.capturedAttachment.branch !== target.branch)) {
+      options = { ...options, capturedAttachment: undefined };
+      options.onDiagnostic?.({ stage: "attachment-agent-rejected", reason: "target-mismatch" });
+    }
     options?.onDiagnostic?.({ stage: "target", repoId: target.repoId, requestedBranch: requested.branch, resolvedBranch: target.branch });
     const explicitBranch = requestedRepoBranch(request.message);
     if (explicitBranch && explicitBranch !== target.branch) {
@@ -521,6 +527,16 @@ export class AgentOrchestrator {
     this.loopContext = context;
     const vendorState = new Map<AgentToolName, VendorToolState>();
     const allowedRepoTools = options.allowedRepoTools !== false;
+    const capturedFiles = options.capturedAttachment?.files.filter((file) => file.path && file.content.trim()) ?? [];
+    if (capturedFiles.length > 0) {
+      context.read_file = { files: capturedFiles.map((file) => ({ ...file,
+        content: numberReadLines(file.content, file.lineRange?.[0] ?? 1), evidenceSource: "turn-attachment" })) };
+      lastToolResult = JSON.stringify(context.read_file);
+      conversation.push({ role: "user", content: `Authoritative source captured for this turn:\n${lastToolResult}` });
+      emit({ index: steps.length + 1, tool: "read_file", summary: "Read attached source", completed: true });
+      matchingRead = capturedFiles.some((file) => locateReadCountsAsGrounding({ path: file.path, body: file.content, query }));
+      filesRead = capturedFiles.length;
+    }
     const diagnostic = options.onDiagnostic;
     diagnostic?.({
       stage: "turn",
@@ -1802,7 +1818,8 @@ export class AgentOrchestrator {
         conversation: historyForAnswer,
         action,
         openedEvidence: formatOpenedIntegrationEvidence(result.context),
-        interpretNotes
+        interpretNotes,
+        attachedFiles: options.capturedAttachment?.files
       });
       const cleaned =
         isCreateLocateAsk(query) || isCompoundAuthAndStateLocateAsk(query)

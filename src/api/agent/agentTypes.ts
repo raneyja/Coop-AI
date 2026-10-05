@@ -52,6 +52,8 @@ export type AgentStreamAnswerInput = {
   openedEvidence?: string;
   /** Parallel Interpret notes — one talk track folds these in. */
   interpretNotes?: string;
+  /** Turn-captured authoritative bodies, kept in the final prompt outside summarized tool history. */
+  attachedFiles?: Array<{ path: string; content: string; lineRange?: [number, number] }>;
 };
 
 /** Same conversation, next turn: stream the user-visible answer. */

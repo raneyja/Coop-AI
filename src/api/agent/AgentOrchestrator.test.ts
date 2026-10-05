@@ -111,6 +111,43 @@ function latestContextFile(
 }
 
 async function run(): Promise<void> {
+  await test("turn attachment reaches planning and synthesis with repository tools disabled", async () => {
+    const body = "export function capturedOracle() { return 'turn-owned'; }";
+    const files = [{ path: "src/oracle.ts", content: body, lineRange: [10, 10] as [number, number] }];
+    let planned = false;
+    let synthesized = false;
+    const orchestrator = createAgentOrchestrator({ indexBackend: mockIndexBackend(), resolveAbsolutePath: () => undefined,
+      readRemoteFile: async () => { throw new Error("must not fetch another body"); } });
+    const result = await orchestrator.run({ message: "Explain capturedOracle in src/oracle.ts", repoId: "acme/demo", action: "understand" }, {
+      repoTarget: { repoId: "acme/demo", branch: "preview" }, allowedRepoTools: false,
+      capturedAttachment: { repoId: "acme/demo", branch: "preview", files },
+      planTurn: async (input) => { planned = input.conversation.some((entry) => entry.content.includes(body)); return '{"done":true}'; },
+      streamAnswer: async (input) => { synthesized = input.attachedFiles?.[0]?.content === body; return "Captured source verified"; }
+    });
+    assert.equal(planned, true);
+    assert.equal(synthesized, true);
+    assert.equal(result.answer, "Captured source verified");
+    assert.match(JSON.stringify(result.context?.read_file), /turn-owned/);
+    assert.match(JSON.stringify(result.context?.read_file), /turn-attachment/);
+    assert.match(JSON.stringify(result.context?.read_file), /10\|/);
+    assert.equal(result.steps[0]?.tool, "read_file");
+    let leaked = false;
+    await orchestrator.run({ message: "Explain source", repoId: "acme/demo", action: "understand" }, {
+      repoTarget: { repoId: "acme/demo", branch: "other" }, allowedRepoTools: false,
+      capturedAttachment: { repoId: "acme/demo", branch: "preview", files },
+      planTurn: async (input) => { leaked ||= input.conversation.some((entry) => entry.content.includes(body)); return '{"done":true}'; },
+      streamAnswer: async (input) => { leaked ||= Boolean(input.attachedFiles?.length); return "No source"; }
+    });
+    assert.equal(leaked, false);
+    let doneAttempts = 0;
+    await orchestrator.run({ message: "Where is missingTarget defined?", repoId: "acme/demo", action: "locate" }, {
+      repoTarget: { repoId: "acme/demo", branch: "preview" }, allowedRepoTools: true,
+      capturedAttachment: { repoId: "acme/demo", branch: "preview", files },
+      planTurn: async () => { doneAttempts++; return '{"done":true}'; },
+      streamAnswer: async () => "No matching definition verified"
+    });
+    assert.ok(doneAttempts > 1, "unrelated captured source must not permit immediate discovery completion");
+  });
   await test("pickTopSearchHit prefers highest score", () => {
     const top = pickTopSearchHit([
       { fileName: "a.ts", lineNumber: 1, score: 0.2 },
