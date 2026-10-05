@@ -338,6 +338,22 @@ test("missing-docs and owner scan flags are coverage limits rather than absence 
   assert.ok(enriched.includes("not proof of absence"));
 });
 
+test("source-grounded function review survives empty-doc coverage replacement and retains verified citation", () => {
+  const body = "export function positiveSum(values: number[]): number {\n  let total = 0;\n  for (let i = 0; i < values.length - 1; i++) {\n    if (values[i] > 0) total += values[i];\n  }\n  return total;\n}";
+  const enriched = enrichKnowledgeGapsResponse(
+    "**Summary**\n\nSource review follows.\n\n**Source-grounded review**\n\nThe loop excludes the final element; whether this is a defect depends on the intended contract.\n\n**Ownership & maintenance**\n\nNo owner exists.",
+    {
+      focusFiles: [{ path: "src/mathRenamed.ts", content: body, startLine: 1 }],
+      jobScanGaps: [{ type: "missing_owner", message: "No owner declared", file: "src/mathRenamed.ts" }]
+    }
+  );
+  assert.ok(enriched.includes("**Source-grounded review**"));
+  assert.ok(enriched.includes("The loop excludes the final element"));
+  assert.ok(enriched.includes("```1:7:src/mathRenamed.ts\n" + body));
+  assert.ok(enriched.includes("Ownership coverage unknown"));
+  assert.equal(enriched.includes("No owner exists"), false);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);

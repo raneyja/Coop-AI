@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import type { DecisionTimeline } from "../types/decisionTimeline";
-import { buildDecisionSynthesisUserPrompt, formatTimelineForPrompt } from "./decisionSynthesis";
+import { buildDecisionSynthesisUserPrompt, DECISION_HISTORIAN_SYSTEM, formatTimelineForPrompt } from "./decisionSynthesis";
 
 const timeline: DecisionTimeline = {
   file: "fastify.js",
@@ -220,6 +220,26 @@ test("decision synthesis includes trace completeness and decision status guidanc
   assert.ok(prompt.includes("**Decision status**"));
   assert.ok(prompt.includes("**Who to engage**"));
   assert.ok(prompt.includes("### [Sources:") && prompt.includes("dd2bb739fe3b"));
+});
+
+test("same author on both sampled commits is a possible contact, not an exclusive current owner", () => {
+  const prompt = buildDecisionSynthesisUserPrompt({
+    timeline: {
+      ...timeline,
+      file: "src/mathRenamed.ts",
+      originalCommit: { sha: "3d1507d0e999", author: "@raneyja", date: "2026-10-04", message: "Seed fixture" },
+      focusCommit: { sha: "bf1490e7a3ae", author: "@raneyja", date: "2026-10-04", message: "Seed renamed fixture oracle" }
+    },
+    file: "src/mathRenamed.ts",
+    userFocus: "Who should I engage about this implementation?"
+  });
+  assert.equal((prompt.match(/- Author: @raneyja/g) ?? []).length, 2);
+  assert.ok(prompt.includes("possible contacts with their observed roles"));
+  assert.ok(prompt.includes("A single author across sampled commits does not establish an exclusive contact"));
+  assert.ok(prompt.includes("current responsibility and other contacts remain unknown"));
+  assert.ok(DECISION_HISTORIAN_SYSTEM.includes("Even when one person authored every attached commit"));
+  assert.ok(DECISION_HISTORIAN_SYSTEM.includes("do not call them the only person to engage"));
+  assert.ok(DECISION_HISTORIAN_SYSTEM.includes("attached current ownership policy explicitly establishes"));
 });
 
 test("formatTimelineForPrompt surfaces technical debt on jira tickets", () => {

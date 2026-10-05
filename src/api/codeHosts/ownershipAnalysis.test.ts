@@ -136,6 +136,14 @@ test("score-tier secondary still preferred over CODEOWNERS for backup contact", 
   assert.match(graph.escalationPath, /\[Sources: Code host commits & reviews\]/);
 });
 
+test("missing or recent contribution activity cannot prove contact availability", () => {
+  const contributors = [score({ owner: "alice", score: 90, tier: "primary" })];
+  assert.equal(buildTeamDomainGraph(contributors).members[0].available, false);
+  assert.equal(buildTeamDomainGraph(contributors, [{ author: "alice", weight: 1, inactive: false }]).members[0].available, false);
+  const present = [{ ...contributors[0], presence: { state: "active" as const, label: "Active · inferred" } }];
+  assert.equal(buildTeamDomainGraph(present).members[0].available, false, "active presence does not prove response availability");
+});
+
 test("collectEscalationAvenues never invents handles outside evidence", () => {
   const avenues = collectEscalationAvenues("dguyen", {
     orgContext: {

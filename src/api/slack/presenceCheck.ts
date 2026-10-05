@@ -11,8 +11,8 @@ const USER_RESOLVE_CACHE_TTL_MS = 10 * 60 * 1000;
 
 type CacheEntry<T> = { data: T; expiresAt: number };
 
-const presenceCache = new Map<string, CacheEntry<SlackPresenceStatus>>();
-const githubToSlackCache = new Map<string, CacheEntry<SlackResolveResult>>();
+let presenceCaches = new WeakMap<SlackClient, Map<string, CacheEntry<SlackPresenceStatus>>>();
+let identityCaches = new WeakMap<SlackClient, Map<string, CacheEntry<SlackResolveResult>>>();
 
 export type PresenceCheckOptions = {
   now?: () => number;
@@ -69,6 +69,11 @@ export async function checkSlackPresence(
   options?: PresenceCheckOptions
 ): Promise<SlackPresenceStatus> {
   const now = options?.now ?? (() => Date.now());
+  let presenceCache = presenceCaches.get(client);
+  if (!presenceCache) {
+    presenceCache = new Map();
+    presenceCaches.set(client, presenceCache);
+  }
   const cached = presenceCache.get(slackUserId);
   if (cached && cached.expiresAt > now()) {
     return { ...cached.data };
@@ -149,12 +154,16 @@ export async function resolveSlackUserForGithubIdentity(
   options?: PresenceCheckOptions
 ): Promise<SlackResolveResult> {
   const now = options?.now ?? (() => Date.now());
+  let githubToSlackCache = identityCaches.get(client);
+  if (!githubToSlackCache) {
+    githubToSlackCache = new Map();
+    identityCaches.set(client, githubToSlackCache);
+  }
   const cacheKey = [
-    buildSlackLookupCandidates(identity).join("|"),
-    options?.identityDirectory?.people.length ?? 0
+    buildSlackLookupCandidates(identity).join("|").toLowerCase(),
+    JSON.stringify(options?.identityDirectory && findPersonInDirectory(options.identityDirectory, identity))
   ]
-    .join("::")
-    .toLowerCase();
+    .join("::");
   const cached = githubToSlackCache.get(cacheKey);
   if (cached && cached.expiresAt > now()) {
     return cached.data;
@@ -239,7 +248,7 @@ export function buildPresenceDisplayLabel(
   now = Date.now()
 ): string {
   const baseLabel = formatPresenceLabel(presence, now);
-  if (resolved.linkedPerson) {
+  if (resolved.source === "explicit") {
     return `${baseLabel} · linked`;
   }
   if (resolved.source === "inferred") {
@@ -295,6 +304,6 @@ function localTimeInTimezone(now: number, timezone?: string): string | undefined
 }
 
 export function clearPresenceCaches(): void {
-  presenceCache.clear();
-  githubToSlackCache.clear();
+  presenceCaches = new WeakMap();
+  identityCaches = new WeakMap();
 }

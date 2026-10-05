@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { buildPresenceDisplayLabel, buildSlackLookupCandidates } from "./presenceCheck";
+import { buildPresenceDisplayLabel, buildSlackLookupCandidates, checkSlackPresence, clearPresenceCaches, resolveSlackUserForGithubIdentity } from "./presenceCheck";
+import type { SlackClient } from "./slackClient";
+import type { IdentityDirectory } from "../../identity/types";
 
 let passed = 0;
 let failed = 0;
@@ -63,8 +65,59 @@ test("buildPresenceDisplayLabel appends inferred for unlinked resolution", () =>
   assert.equal(label.split("· inferred").length, 2);
 });
 
-const total = passed + failed;
-console.log(`\npresenceCheck: ${passed}/${total} tests passed`);
-if (failed > 0) {
-  process.exit(1);
+test("a known person with failed explicit Slack lookup keeps inferred fallback qualification", () => {
+  const label = buildPresenceDisplayLabel(
+    { state: "active", label: "Active" },
+    { linkedPerson: true, source: "inferred" }
+  );
+  assert.ok(label.endsWith("· inferred"));
+  assert.doesNotMatch(label, /· linked/);
+});
+
+async function verifyCacheIsolation(): Promise<void> {
+  const first = {
+    findUserByName: async () => "UFIRST",
+    getUserPresence: async () => ({ presence: "active" }),
+    getUserInfo: async () => undefined
+  } as unknown as SlackClient;
+  const second = {
+    findUserByName: async () => "USECOND",
+    getUserPresence: async () => ({ presence: "away" }),
+    getUserInfo: async () => undefined
+  } as unknown as SlackClient;
+  const options = { now: () => 1000 };
+  assert.equal((await resolveSlackUserForGithubIdentity(first, { githubLogin: "cache-fixture" }, options)).userId, "UFIRST");
+  assert.equal((await resolveSlackUserForGithubIdentity(second, { githubLogin: "cache-fixture" }, options)).userId, "USECOND", "identity cache cannot reuse another connection's user");
+  passed++;
+  assert.equal((await checkSlackPresence(first, "USHARED", options)).state, "active");
+  assert.equal((await checkSlackPresence(second, "USHARED", options)).state, "away", "presence cache cannot reuse another connection's state");
+  passed++;
+  const directory = (userId: string): IdentityDirectory => ({ version: 1, people: [{
+    id: "person", displayName: "Fixture", links: [
+      { provider: "github", externalId: "linked-fixture" }, { provider: "slack", externalId: userId }
+    ]
+  }] });
+  assert.equal((await resolveSlackUserForGithubIdentity(first, { githubLogin: "linked-fixture" }, { ...options, identityDirectory: directory("UOLD") })).userId, "UOLD");
+  assert.equal((await resolveSlackUserForGithubIdentity(first, { githubLogin: "linked-fixture" }, { ...options, identityDirectory: directory("UNEW") })).userId, "UNEW", "same-count directory edits invalidate old identity linkage");
+  passed++;
+  let userId = "UBEFORE";
+  let state = "active";
+  const resetClient = {
+    findUserByName: async () => userId,
+    getUserPresence: async () => ({ presence: state }),
+    getUserInfo: async () => undefined
+  } as unknown as SlackClient;
+  assert.equal((await resolveSlackUserForGithubIdentity(resetClient, { githubLogin: "reset-fixture" }, options)).userId, "UBEFORE");
+  assert.equal((await checkSlackPresence(resetClient, "URESET", options)).state, "active");
+  userId = "UAFTER";
+  state = "away";
+  assert.equal((await resolveSlackUserForGithubIdentity(resetClient, { githubLogin: "reset-fixture" }, options)).userId, "UBEFORE", "same client cache is active before reset");
+  clearPresenceCaches();
+  assert.equal((await resolveSlackUserForGithubIdentity(resetClient, { githubLogin: "reset-fixture" }, options)).userId, "UAFTER");
+  assert.equal((await checkSlackPresence(resetClient, "URESET", options)).state, "away");
+  passed++;
 }
+void verifyCacheIsolation().catch((error: unknown) => { failed++; console.error(error); }).finally(() => {
+  console.log(`\npresenceCheck: ${passed}/${passed + failed} tests passed`);
+  if (failed > 0) process.exitCode = 1;
+});

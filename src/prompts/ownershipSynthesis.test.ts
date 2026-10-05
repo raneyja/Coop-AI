@@ -16,6 +16,7 @@ const report: OwnershipReport = {
   warnings: []
 };
 
+
 let passed = 0;
 let failed = 0;
 
@@ -30,6 +31,17 @@ function test(name: string, fn: () => void): void {
     failed++;
   }
 }
+
+test("presence and legacy team availability cannot prove reachability", () => {
+  assert.match(OWNERSHIP_INTELLIGENCE_SYSTEM, /not proof someone is reachable/);
+  assert.match(OWNERSHIP_INTELLIGENCE_SYSTEM, /inferred name matches are not verified person links/);
+  const formatted = formatOwnershipReportForPrompt({
+    ...report,
+    teamGraph: { escalationPath: "Suggested contact", members: [{ owner: "alice", role: "primary", score: 85, available: true }] }
+  });
+  assert.match(formatted, /response availability unverified/);
+  assert.doesNotMatch(formatted, /sampled primary contributor, available/);
+});
 
 test("ownership synthesis includes citation keys and sources checklist", () => {
   const prompt = buildOwnershipSynthesisUserPrompt({ report, file: report.path });

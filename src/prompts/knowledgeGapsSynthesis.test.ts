@@ -357,6 +357,23 @@ test("gaps full remote bodies retain real line offsets for source citations", ()
   assert.ok(prompt.includes("L1: \nL2: export function positiveSum()"));
   assert.ok(prompt.includes("Verified source lines 1–4"));
   assert.ok(prompt.includes("numeric start:end:path citation fences"));
+  assert.ok(prompt.includes("**Source-grounded review** section before scan coverage sections"));
+  assert.ok(prompt.includes("Generic missing_docs/missing_owner flags do not substitute for reading the attached function"));
+});
+
+test("incomplete ownership scans require policy verification before recommending CODEOWNERS changes", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({
+    file: "src/mathRenamed.ts",
+    userFocus: "Identify concrete supported gaps for positiveSum with source citations",
+    evidence: {
+      focusFiles: [{ path: "src/mathRenamed.ts", startLine: 1, content: "export function positiveSum(values: number[]) { return values[0]; }" }],
+      jobScan: { gaps: [{ type: "missing_owner", message: "No declared owner", file: "src/mathRenamed.ts" }] }
+    }
+  });
+  assert.ok(prompt.includes("recommend checking the current ownership policy first"));
+  assert.ok(prompt.includes("Do not recommend adding a CODEOWNERS entry"));
+  assert.ok(prompt.includes("solely from missing_owner/orphaned scan flags"));
+  assert.ok(prompt.includes("A policy change requires verified policy evidence"));
 });
 
 test("gaps arbitrary focus snippets cannot invent source line offsets", () => {

@@ -1,0 +1,28 @@
+{
+  "checkpoint": "b5db50c",
+  "deployment": "e0585d3d-d074-4774-841c-2b8df8ba0c43",
+  "extensionBundle": "4c959da030da2adaae5a89e6adea000d16d1b54c8f63569b628b02441f7d5d27",
+  "fixture": "CoopAI-Corp/coop-dogfood-launch renamed src/mathRenamed.ts L1-7",
+  "tests": {
+    "trace": {
+      "durationSeconds": 30,
+      "originGuard": "passed narrowly",
+      "remaining": "Exclusive current contact inferred from sampled author; correction in progress"
+    },
+    "blast": {
+      "durationSeconds": 23,
+      "remaining": "Claims listed depth-1 graph complete and any behavior change affects dependent despite missing caller body"
+    },
+    "owner": {
+      "durationSeconds": 24,
+      "contributorVsDeclaredOwner": "passed narrowly",
+      "remaining": "Slack active described as reachable; activity-derived availability and presence mapping cache under audit"
+    },
+    "gaps": {
+      "durationSeconds": 27,
+      "absenceGuard": "passed narrowly",
+      "remaining": "Premature CODEOWNERS addition recommendation with unknown coverage; source grounding and numeric citations incomplete"
+    }
+  },
+  "scope": "Selected-file synthetic fixture checks; same conversation contains preceding workflow turns. Fresh conversation final retests required. No launch qualification."
+}

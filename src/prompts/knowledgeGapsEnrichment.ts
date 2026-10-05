@@ -74,6 +74,7 @@ function isMainSectionLine(line: string): boolean {
   const title = match[1].trim().toLowerCase();
   return (
     title === "summary" ||
+    title === "source-grounded review" ||
     title === "documentation gaps" ||
     title === "ownership & maintenance" ||
     title === "integration & operations" ||

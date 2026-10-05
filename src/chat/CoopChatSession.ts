@@ -3408,6 +3408,20 @@ export class CoopChatSession {
 
   private async fetchContextRequest(request: ContextFetchRequest): Promise<ContextFetchResult> {
     let result: ContextFetchResult;
+    // Start explicit remote source reads alongside the scan, before it spends the gather budget.
+    const gapsReadBudgetMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
+    const namedGapsFocusRead = request.params.quickAction === "knowledge-gaps" &&
+      request.type === "knowledge_gaps" && gapsReadBudgetMs > 0
+      ? Promise.race([
+          readKnowledgeGapsNamedFocus({
+            query: request.intent.context.queryText,
+            jobs: request.params.intentPlan?.jobs,
+            target: this.repoTargetForRequest(request),
+            workspace: this.indexedRepoWorkspace()
+          }),
+          delayMs(gapsReadBudgetMs).then(() => undefined)
+        ]).catch(() => undefined)
+      : undefined;
     const isUnderstandRepo =
       request.params.quickAction === "understand-repo" && request.type === "file_metadata";
 
@@ -3452,7 +3466,7 @@ export class CoopChatSession {
     }
 
     if (request.params.quickAction === "knowledge-gaps" && request.type === "knowledge_gaps") {
-      result = await this.enrichKnowledgeGapsWithFocusSearch(request, result);
+      result = await this.enrichKnowledgeGapsWithFocusSearch(request, result, namedGapsFocusRead);
     }
 
     // Plain chat "who calls / who imports" and open-file PR review —
@@ -3658,7 +3672,8 @@ export class CoopChatSession {
    */
   private async enrichKnowledgeGapsWithFocusSearch(
     request: ContextFetchRequest,
-    result: ContextFetchResult
+    result: ContextFetchResult,
+    namedFocusRead?: Promise<Awaited<ReturnType<typeof readKnowledgeGapsNamedFocus>> | undefined>
   ): Promise<ContextFetchResult> {
     const gatherQuery = knowledgeGapsGatherQuery(request.intent.context.queryText) ??
       locateJobTerms(request.params.intentPlan?.jobs).join(" ");
@@ -3677,7 +3692,7 @@ export class CoopChatSession {
     const owner = target.owner?.trim();
     const repo = target.repo?.trim();
     const remainingMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
-    if (!repoId || remainingMs <= 0) {
+    if (!repoId) {
       return { ...result, data };
     }
 
@@ -3687,7 +3702,7 @@ export class CoopChatSession {
         : this.preferences.defaultCodeHost;
 
     try {
-      const namedFocus = await Promise.race([
+      const namedFocus = namedFocusRead ? await namedFocusRead : remainingMs > 0 ? await Promise.race([
         readKnowledgeGapsNamedFocus({
           query: request.intent.context.queryText,
           jobs: request.params.intentPlan?.jobs,
@@ -3695,7 +3710,7 @@ export class CoopChatSession {
           workspace: this.indexedRepoWorkspace()
         }),
         delayMs(remainingMs).then(() => undefined)
-      ]);
+      ]) : undefined;
       if (namedFocus?.namedPaths.length) {
         return {
           ...result,

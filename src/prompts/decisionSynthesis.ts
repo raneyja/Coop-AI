@@ -39,9 +39,11 @@ Synthesize a clear narrative explaining:
 2. What alternatives were considered and why were they rejected?
 3. What trade-offs were made?
 4. Are there known limitations or future improvements noted?
-5. Who are the domain experts?
+5. Which people participated in the attached historical evidence?
 6. What is the current **Decision status** (active, superseded, or unclear from evidence)?
-7. **Who to engage** for questions or changes today — name people with evidence (authors, approvers, thread participants), not generic role titles.
+7. **Who to engage** — name possible contacts with their observed evidence role (authors, approvers, thread participants), not generic role titles.
+
+Contact evidence is sampled historical participation, not verified current ownership, expertise, availability, or an exhaustive contact roster. Even when one person authored every attached commit, do not call them the only person to engage, the sole expert, or the required approver. Suggest that observed participant as a possible starting point; current responsibility and other contacts remain unknown unless an attached current ownership policy explicitly establishes them.
 
 The primary trace target is the file in ## Task and the decision timeline in ## What we found — not @-attached paths unless listed as in-scope in ## @ attachments.
 Never attribute timeline commits, PRs, or tickets to code from out-of-scope @ attachments.
@@ -145,7 +147,7 @@ export function buildDecisionSynthesisUserPrompt(input: DecisionSynthesisInput):
     "If the attached sources warn that history for this file is thin/truncated/missing, say that plainly for this file — never substitute a different migration or model file as the main subject."
   );
   lines.push(
-    "Include **Decision status** (active / superseded / unclear) and **Who to engage** when evidence supports it — cite approvers, authors, or thread participants; say unknown when attached sources are thin."
+    "Include **Decision status** (active / superseded / unclear) and **Who to engage** when evidence supports it — cite approvers, authors, or thread participants as possible contacts with their observed roles. A single author across sampled commits does not establish an exclusive contact, sole expert, required approver, or current owner; current responsibility and other contacts remain unknown without an attached current ownership policy."
   );
   lines.push("Follow the required response structure in your system instructions.");
 

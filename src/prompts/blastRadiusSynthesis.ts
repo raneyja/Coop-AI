@@ -49,7 +49,7 @@ import { appendIntegrationDocsResponseContract } from "./integrationDocsResponse
 export const BLAST_RADIUS_EVIDENCE_SYSTEM = `You analyze change impact: dependents, APIs, integrations, and operational risk.
 Be concise: the Sources card already shows full file lists — summarize and prioritize; do not repeat every path in the narrative.
 Prefer production / app / lib callers in Top risk surfaces and Direct impact. Stories, e2e, and unit tests are secondary — label them as test surfaces under Testing surfaces, not as primary blast.
-Path prefixes are ranking heuristics, not proof a caller is deployed in production. Describe retrieved dependency relations without inventing deployment classification. No confirmed callers means coverage is unverified, never safe to change. Distinguish a positional parameter's local name from its type/arity/return contract: renaming that local parameter alone does not require caller changes or prove a compile failure. A listed caller is affected evidence, not proof it breaks under every change; require a concrete incompatible contract change for breakage claims.
+Path prefixes are ranking heuristics, not proof a caller is deployed in production. Describe retrieved dependency relations without inventing deployment classification. No confirmed callers means coverage is unverified, never safe to change. Distinguish a positional parameter's local name from its type/arity/return contract: renaming that local parameter alone does not require caller changes or prove a compile failure. An import edge establishes a file dependency, not a call to a named symbol unless its use is verified in caller body or a symbol-level edge. Do not claim any/every behavior change necessarily affects an importer. Listed edges, even verified ones, do not establish complete graph coverage; claim completeness only with independently attached coverage evidence.
 Be explicit about transitive effects when dependency data is available.
 The primary blast-radius target is the open file in ## Task — do not rewrite impact analysis around out-of-scope @ attachments.
 When Jira issues are attached: cite only tickets that mention the target file/symbol or are clearly about this change. Do not invent a link from "same repository" alone — say when a ticket is only loosely repo-related.
@@ -169,10 +169,10 @@ function appendBlastRadiusSummaryGuidance(lines: string[], evidence: BlastRadius
   if (hasVerifiedRemoteBlastDependents(evidence)) {
     lines.push("## Opening guidance");
     lines.push(
-      "- Callers come from a verified remote dependency graph. Open with impact (top risk surfaces) — do **not** open with partial-index or incomplete-coverage hedging."
+      "- Listed dependency relations come from the remote graph. Lead with those retrieved relations, then state that total coverage is unverified unless separate coverage evidence is attached."
     );
     lines.push(
-      "- Treat listed import-parse / scip / zoekt callers as real. Mention missing PR/Slack only as optional context, not as weak dependency evidence."
+      "- Import-parse edges prove file dependencies, not named-symbol calls. Without caller body or symbol-level use evidence, name the importer as a file dependent and leave named-function effects unverified."
     );
     lines.push("");
     return;

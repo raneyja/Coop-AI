@@ -116,7 +116,7 @@ test("blast-radius synthesis includes CI rollout guidance when workflows present
   assert.ok(prompt.includes("CODEOWNERS"));
 });
 
-test("blast-radius synthesis skips partial caveat when remote graph has verified callers", () => {
+test("verified import relations retain unknown coverage and symbol-use qualification", () => {
   const prompt = buildBlastRadiusSynthesisUserPrompt({
     evidence: {
       file: "src/config/responseDeadline.ts",
@@ -129,7 +129,9 @@ test("blast-radius synthesis skips partial caveat when remote graph has verified
     repo: "Coop-AI"
   });
   assert.ok(prompt.includes("## Opening guidance"));
-  assert.ok(prompt.includes("verified remote dependency graph"));
+  assert.ok(prompt.includes("total coverage is unverified unless separate coverage evidence is attached"));
+  assert.ok(prompt.includes("Import-parse edges prove file dependencies, not named-symbol calls"));
+  assert.ok(!prompt.includes("do **not** open with partial-index or incomplete-coverage hedging"));
   assert.ok(!prompt.includes("partial index coverage caveat"));
   assert.ok(!prompt.includes("Index coverage is partial"));
   assert.ok(prompt.includes("Verified import-parse"));
@@ -305,6 +307,17 @@ test("unconfirmed function callers never imply safety or inevitable breakage", (
   assert.match(out, /Compatibility depends on the actual change/);
   assert.doesNotMatch(out, /Safe to modify|Changing it would break/);
   assert.match(out, /not the same as nothing breaks/);
+});
+
+test("import-only evidence cannot establish named behavior impact or complete depth-one coverage", () => {
+  const prompt = buildBlastRadiusSynthesisUserPrompt({file: "src/mathRenamed.ts", evidence: {file: "src/mathRenamed.ts", namedAskSymbols: ["positiveSum"], directDependents: ["src/caller.ts"], graphMeta: {source: "import-parse", edgeCount: 1}, completeness: "partial"}});
+  assert.match(prompt, /Without caller body or symbol-level use evidence/);
+  const assembled = buildUserMessageWithContext(prompt, {owner: "CoopAI-Corp", repo: "coop-dogfood-launch"});
+  assert.match(assembled, /total coverage is unverified/);
+  const system = systemPromptForUseCase("blast_radius");
+  assert.match(system, /Never say any\/every behavior change affects an importer/);
+  assert.match(system, /Retrieved edges do not prove complete coverage, including depth 1/);
+  assert.match(BLAST_RADIUS_EVIDENCE_SYSTEM, /not a call to a named symbol unless its use is verified/);
 });
 
 console.log(`\nblastRadiusSynthesis: ${passed}/${passed + failed} tests passed`);

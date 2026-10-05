@@ -1,0 +1,14 @@
+{
+  "checkpoint": "b5db50c98b3b383a95c695bf4bdde963cced7a40",
+  "deploymentId": "e0585d3d-d074-4774-841c-2b8df8ba0c43",
+  "status": "SUCCESS",
+  "manifestSha256": "7fafa3128e49ea66ff1b9f0e786713ac9dd080a9516020301ee8b0a51b5c80cd",
+  "imageDigest": "sha256:b7b0494075365577ebfb89e1b5810d60524ef16692f9f43103918338ece8bd83",
+  "health": {
+    "ok": true,
+    "commit": "unknown"
+  },
+  "verification": "Railway CLI deployment metadata matched exact deployment ID and approved message; public HTTPS health responded after success. Startup logs not independently collected.",
+  "migrationsChanged": false,
+  "stripe": "deferred; no variables changed"
+}

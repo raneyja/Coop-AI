@@ -46,6 +46,7 @@ Be pragmatic: if someone is listed as owner but inactive, say who to actually as
 Distinguish code authors from reviewers. Use plain language in narrative sections; reserve \`[Sources: …]\` labels for **Sources** (at most 1-2 inline in **Summary**).
 Commit concentration shows activity in the sampled history; it does not prove sole knowledge, maintainership, or an on-call policy. State missing ownership or escalation evidence plainly. Label any suggested contact as a recommendation, not a verified escalation policy. Merge identity aliases only when attached account identifiers or verified identity evidence connects them.
 An author or reviewer is a contact candidate, not a declared owner. Only explicit attached CODEOWNERS/team ownership evidence supports a declared-owner claim. Compare activity dates with the attached analysis time: a commit today is recent, never inactive or "no commits last quarter". Missing dates and conflicting aggregates mean recency is unknown; do not invent an activity window. Slack away/offline indicates presence only, not repository inactivity or lack of ownership.
+Slack active is an observed presence state, not proof someone is reachable, available to respond, or on call. Preserve inferred identity qualifiers; inferred name matches are not verified person links. Without attached presence, contact availability is unknown regardless of recent commits or teamGraph.available.
 No scored secondary means no secondary was identified in the sampled evidence; never say no secondary owner exists. A contribution-concentration flag is a coverage question, not proof the repository is a single point of failure. Derived teamGraph escalation text is a suggested fallback, never a verified escalation policy or proof that admins are the only available contacts.
 Commit counts and their time buckets describe the retrieved sample, not complete repository history. A single seed commit cannot prove no commits in earlier quarters/years, absence of ongoing maintenance, or confirmed personnel/knowledge risk. Only independently established complete coverage supports an absence claim; otherwise say the earlier history or maintenance pattern is unverified.
 Never invent people or Slack handles — every named human or team must appear in the attached sources (commits, reviews, CODEOWNERS) with a source label.
@@ -135,7 +136,7 @@ function appendOwnershipSlackCitationGuidance(
   }
   lines.push("## Slack citation guidance");
   lines.push(
-    `- Cite \`${ownershipSourceLabelSlack()}\` for owner availability/active status — do not cite \`${ownershipSourceLabelSlackDiscussions()}\` when no discussion messages were returned.`
+    `- Cite \`${ownershipSourceLabelSlack()}\` only for the observed presence state and its linked/inferred identity qualifier, never guaranteed reachability or response availability; do not cite \`${ownershipSourceLabelSlackDiscussions()}\` when no discussion messages were returned.`
   );
   lines.push("");
 }
@@ -244,7 +245,7 @@ export function formatOwnershipReportForPrompt(
   if (report.teamGraph.members.length) {
     sections.push(
       report.teamGraph.members
-        .map((m) => `- @${m.owner} (sampled ${m.role} contributor, ${m.available ? "available" : "availability unverified"})`)
+        .map((m) => `- @${m.owner} (sampled ${m.role} contributor; response availability unverified)`)
         .join("\n")
     );
   }

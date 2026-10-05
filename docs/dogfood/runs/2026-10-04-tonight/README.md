@@ -16,7 +16,7 @@ Final full `test:ci`, lint, extension packaging, and backend build passed. Logs 
 
 ## Remaining non-Stripe work
 
-Production API deployment requires approval. Active Railway deployment `a9fd94df-f99c-4be5-adaf-f6cd269c6322` predates the new backend prompt changes; see evidence/backend-revision-proof.json. Deploy an immutable reviewed commit snapshot, then repeat ownership, Trace, Blast, and knowledge-gap workflow checks against that deployed backend. No deployment was performed tonight.
+The first production API deployment was approved and completed at checkpoint b5db50c. See evidence/deployment-b5db50c.json. The resulting retests found narrower remaining defects; follow-up validation is in progress. Historical deployment state follows: Active Railway deployment `a9fd94df-f99c-4be5-adaf-f6cd269c6322` predates the new backend prompt changes; see evidence/backend-revision-proof.json. Deploy an immutable reviewed commit snapshot, then repeat ownership, Trace, Blast, and knowledge-gap workflow checks against that deployed backend. This was the pre-deployment state; b5db50c has since been deployed.
 
 Live account isolation, free/paid quota boundaries, and denied-access/integration checks still require distinct authenticated production accounts and appropriate fixtures. Existing disposable API checks do not qualify those Extension Host scenarios. Do not weaken authentication or silently expand production grants to manufacture fixtures.
 
@@ -27,3 +27,7 @@ Stripe test mode and billing end-to-end verification remain deferred until tomor
 Trace claimed positiveSum was introduced in bf1490e; the independent remote diff shows a rename and branch-label change with positiveSum unchanged. See evidence/trace-commit-oracle.json and live/trace-origin-failure.jpg. Blast found the direct caller but overstated absent-callers safety, production usage, and parameter-renaming breakage; see live/blast-coverage-failure.jpg. The source regressions passed; live backend retests remain open.
 
 Earlier ec3f candidate autocomplete disable/Reload/re-enable and prompt CRUD/template execution checks are historical only. Later candidates do not inherit those live passes. Plane and Documenso are forked test repositories; these changes are in Coop AI.
+
+## Post-deployment follow-up
+
+The initial deployed retests are recorded in evidence/postdeploy-assessment.json and live/*-postdeploy.jpg. Trace origin and gaps absence guards improved, but exclusive contact, graph completeness, availability, and premature ownership-policy recommendations still failed. Corrections include client-scoped Slack caches and reset handling, inferred identity labels, availability honesty, Trace/Blast synthesis constraints, a preserved source-grounded gaps section, and starting named remote reads alongside the scan. These changes require a new exact candidate live retest; prior passes do not qualify them.

@@ -30,7 +30,36 @@ async function run(): Promise<void> {
       assert.equal(evidence?.focusFiles?.length, available ? 1 : 0);
     }
   }
-  console.log("knowledgeGapsNamedFocus: 4/4 cold named-target enrichment cases passed");
+  let reads = 0;
+  const earlySession = Object.assign(Object.create(CoopChatSession.prototype), {
+    chatTurnStartedAt: Date.now(),
+    currentContext: { file: "src/unrelated.ts", branch: "main" },
+    preferences: { defaultCodeHost: "github" },
+    repoTargetForRequest: () => target,
+    requestIsFileAssistant: () => false,
+    indexedRepoWorkspace: () => ({ readFile: async (actualTarget: unknown, path: string) => {
+      reads++;
+      assert.deepEqual(actualTarget, target);
+      assert.equal(path, "src/mathRenamed.ts");
+      return { path, repoId: target.repoId, origin: "remote", content: "export const positiveSum = () => 0;" };
+    } }),
+    buildBaseContextResult: async () => {
+      assert.equal(reads, 1, "named remote read must start before the scan");
+      earlySession.chatTurnStartedAt = Date.now() - 60_000;
+      return { requestId: "early", type: "knowledge_gaps", data: {}, fetchedAt: new Date() };
+    },
+    enrichWithIndexedWorkspace: async (_request: unknown, result: unknown) => result
+  });
+  const earlyResult = await earlySession.fetchContextRequest({
+    type: "knowledge_gaps",
+    params: { quickAction: "knowledge-gaps", intentPlan: { jobs: [] } },
+    intent: { context: { queryText: "Identify supported gaps for positiveSum in src/mathRenamed.ts" } }
+  });
+  assert.equal(reads, 1, "completed early read must not be repeated after the scan");
+  assert.equal(earlyResult.data.focusFiles[0].path, "src/mathRenamed.ts");
+  assert.equal(earlyResult.data.focusFiles[0].startLine, 1);
+  assert.equal(knowledgeGapsFromBundle([earlyResult])?.focusFiles?.length, 1);
+  console.log("knowledgeGapsNamedFocus: 5/5 cold named-target and scan-budget cases passed");
 }
 
 void run().catch((error) => { console.error(error); process.exit(1); });

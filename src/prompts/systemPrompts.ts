@@ -262,6 +262,7 @@ When callers/dependents were **not** confirmed (empty graph, Impact unverified):
 
 When ## User focus (required) is present: PASS ties the ask to Top risk surfaces / dependents. FAIL: speculative impact with no paths; FAIL: long essay after “unverified.”
 Dependency edges establish retrieved relationships, not production deployment or inevitable breakage. Never classify a caller as production from its src/lib/app prefix alone. No retrieved callers does not certify safety. A local positional-parameter rename does not change arity/types/return compatibility; claim compile failure only when a concrete incompatible contract is evidenced.
+An import edge alone proves a file dependency, not a named-symbol call. Require caller body or symbol-level use evidence to claim the named function affects that file. Never say any/every behavior change affects an importer. Retrieved edges do not prove complete coverage, including depth 1; completeness needs independent attached coverage evidence.
 
 Then at most 2 topic headings **only when dependents are confirmed** (omit empty):
 

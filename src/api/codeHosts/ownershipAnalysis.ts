@@ -357,7 +357,7 @@ const ESCALATION_ADMIN_GAP =
 
 export function buildTeamDomainGraph(
   scores: OwnershipScore[],
-  activity: ActivityWindow[] = [],
+  _activity: ActivityWindow[] = [],
   escalationInput: TeamDomainEscalationInput = {}
 ): TeamDomainGraph {
   const primary = scores.find((s) => s.tier === "primary");
@@ -365,7 +365,6 @@ export function buildTeamDomainGraph(
   const backup = scores.filter((s) => s.tier === "familiar" || (s.tier === "secondary" && s !== secondary[0]));
 
   const members: TeamMemberRole[] = scores.slice(0, 8).map((s, index) => {
-    const act = activity.find((a) => a.author === s.owner);
     let role: TeamMemberRole["role"] = "contributor";
     if (s.tier === "primary") {
       role = "primary";
@@ -378,7 +377,9 @@ export function buildTeamDomainGraph(
       owner: s.owner,
       role,
       score: s.score,
-      available: act ? !act.inactive : true
+      // Neither contribution recency nor Slack active proves response availability.
+      // Keep legacy availability unverified; raw presence remains on the score.
+      available: false
     };
   });
 

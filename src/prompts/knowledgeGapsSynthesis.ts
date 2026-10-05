@@ -287,6 +287,9 @@ function appendKnowledgeGapsResponseContract(
   lines.push(
     "Ownership coverage flags (missing_owner, orphaned, absent scores) are retrieval or scan limits, not proof that no declared owner or CODEOWNERS entry exists. Apply this distinction to every section, including reviewer checks, recommendations, and suggested contacts. Authors/reviewers are contact candidates, not declared owners. Aggregate commit counts do not establish last-quarter inactivity; use dated activity and the attached analysis time. Missing or contradictory dates mean recency is unknown. Slack presence does not establish repository activity."
   );
+  lines.push(
+    "When ownership coverage is incomplete, recommend checking the current ownership policy first. Do not recommend adding a CODEOWNERS entry, assigning an owner, or resolving a high-priority ownership gap solely from missing_owner/orphaned scan flags. A policy change requires verified policy evidence establishing the missing or incorrect entry; otherwise responsibility remains an open verification question."
+  );
   if (focusPrimary) {
     lines.push(
       "The opening must lead with the ## Primary topic focus subsystems (docs/ownership gaps or explicit no-evidence). Do not make ownership of an unrelated open editor the headline."
@@ -294,7 +297,7 @@ function appendKnowledgeGapsResponseContract(
   }
   if (hasFocusExcerpts) {
     lines.push(
-      "Opening — PASS: the subsystems exist if focus paths/excerpts are attached; then name docs/ownership/default-on risks visible in those excerpts. FAIL: claiming no indexed code; empty “looks good”; a 40-bullet dump."
+      "Opening — PASS: acknowledge the attached source. Include a separate **Source-grounded review** section before scan coverage sections: answer the user's function or implementation question from the attached bodies, trace relevant behavior and boundary conditions, distinguish observed behavior from an unverified intended contract, and cite verified numeric source ranges when supplied. Keep these findings outside Summary so coverage summarization cannot replace them. Generic missing_docs/missing_owner flags do not substitute for reading the attached function. If no concrete source-backed issue is established, state that narrowly with the reviewed evidence. FAIL: claiming no indexed code; generic scan flags as the only answer; empty “looks good”; a 40-bullet dump."
     );
   }
   if (isHuntLocateGapsAsk(`${input.userFocus ?? ""} ${input.userQuestion ?? ""} ${input.evidence.userFocus ?? ""}`)) {
