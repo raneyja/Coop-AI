@@ -374,9 +374,17 @@ test("rehydrated production gaps artifact retains import graph scope into final 
   assert.deepEqual(knowledgeGapsFromBundle(bundle)?.dependencyGraph?.directDependents, ["src/caller.ts"]);
   const result = enrichChatResponseForAction({content: "**Source findings**\n\nObserved source behavior; expected contract remains unknown.\n\n**Recommended next steps**\n\n1. The only known caller would be affected.", quickAction: "knowledge-gaps", contextBundle: bundle, activeFile: "src/mathRenamed.ts"});
   assert.ok(result.includes("Observed source behavior; expected contract remains unknown"));
-  assert.ok(result.includes("Import edges alone do not verify symbol use"));
+  assert.ok(result.includes("File dependency edges alone do not verify symbol use"));
   assert.ok(result.includes("```1:1:src/mathRenamed.ts"));
   assert.equal(result.includes("only known caller would be affected"), false);
+});
+
+test("normalized production file dependencies require symbol verification even with unknown graph provenance", () => {
+  const bundle = hydrateContextBundleFromArtifacts([{id: "gaps-unknown-source", kind: "knowledge-gaps", payload: {file: "src/mathRenamed.ts", evidence: {file: "src/mathRenamed.ts", dependencyGraph: {directDependents: ["src/caller.ts"]}, focusFiles: [{path: "src/mathRenamed.ts", content: "export const positiveSum = 3;", startLine: 1}]}}}]);
+  const result = enrichChatResponseForAction({content: "**Source findings**\n\nExpected contract unknown.\n\n**Recommended next steps**\n\n1. The only caller would be affected.", quickAction: "knowledge-gaps", contextBundle: bundle});
+  assert.ok(result.includes("Expected contract unknown"));
+  assert.ok(result.includes("File dependency edges alone do not verify symbol use"));
+  assert.equal(result.includes("only caller would be affected"), false);
 });
 
 const total = passed + failed;

@@ -410,6 +410,13 @@ test("named fixture audit does not convert observed loop bounds and a caller edg
   assert.ok(prompt.includes("do not claim inevitable wrong caller results without the relevant inputs and expected contract"));
 });
 
+test("normalized gaps file graph never labels importers as verified symbol callers", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({file: "src/mathRenamed.ts", userFocus: "Inspect positiveSum", evidence: {file: "src/mathRenamed.ts", dependencyGraph: {directDependents: ["src/caller.ts"]}}});
+  assert.ok(prompt.includes("Retrieved file dependencies (1; sample, not complete caller coverage)"));
+  assert.ok(prompt.includes("Graph provenance: unknown. Symbol use is unverified"));
+  assert.ok(prompt.includes("do not call these named-function callers or claim behavior propagates"));
+});
+
 console.log(`\nknowledgeGapsSynthesis: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);

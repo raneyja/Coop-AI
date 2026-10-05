@@ -585,9 +585,10 @@ function formatKnowledgeGapsForPrompt(
     sections.push(
       `### ${knowledgeGapsSourceLabelDependencies()}\n` +
         (deps.length
-          ? `- Direct dependents (${deps.length}):\n${deps.slice(0, 15).map((dep) => `  - ${dep}`).join("\n")}` +
+          ? `- Retrieved file dependencies (${deps.length}; sample, not complete caller coverage):\n${deps.slice(0, 15).map((dep) => `  - ${dep}`).join("\n")}` +
             truncationNote(deps.length, 15)
-          : `- Indexed edges: ${evidence.dependencyGraph.edgeCount ?? 0} (no direct dependents listed)`)
+          : `- Indexed edges: ${evidence.dependencyGraph.edgeCount ?? 0} (no file dependencies listed)`) +
+        `\n- Graph provenance: ${evidence.dependencyGraph.source ?? "unknown"}. Symbol use is unverified in this file-level evidence; do not call these named-function callers or claim behavior propagates without traced symbol use, relevant inputs and expected contract.`
     );
   }
   if (evidence.warnings?.length) {

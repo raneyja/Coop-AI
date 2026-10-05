@@ -517,15 +517,15 @@ export function enrichKnowledgeGapsResponse(
   result = rebuildMainSection(result, "**Integration & operations**", integrationBlocks);
 
   result = normalizeRecommendedNextSteps(result);
-  if (context?.dependencyGraph?.source === "import-parse" && context.dependencyGraph.directDependents?.length) {
-    // Gaps' import graph has no symbol-use verification field. Even an attached
+  if (context?.dependencyGraph?.directDependents?.length && context.focusFiles?.some((file) => file.content?.trim())) {
+    // Gaps' file graph has no symbol-use verification field, regardless of source. Even an attached
     // importer body alone does not prove it calls the requested function.
     const importers = [...new Set(context.dependencyGraph.directDependents)].slice(0, 3);
     result = stripMainSection(result, "recommended next steps");
     result += [
       "", "", "**Recommended next steps**", "",
       "1. Confirm the expected behavior from tests, documentation, or an explicit requirement before treating the observed implementation as a defect.",
-      `2. Inspect retrieved file dependents (${importers.map((path) => `\`${path}\``).join(", ")}) for actual use of the requested symbol. Import edges alone do not verify symbol use or complete caller coverage.`,
+      `2. Inspect retrieved file dependents (${importers.map((path) => `\`${path}\``).join(", ")}) for actual use of the requested symbol. File dependency edges alone do not verify symbol use or complete caller coverage.`,
       "3. For verified symbol uses, check relevant inputs and tests before deciding whether a behavior change affects them. Runtime impact remains unverified until then."
     ].join("\n");
   }
