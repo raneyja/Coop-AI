@@ -868,7 +868,7 @@
     "test:email-template-grounding": "npx tsx src/context/emailTemplateGrounding.test.ts",
     "test:existing-capability": "npx tsx src/context/existingCapabilityGrounding.test.ts",
     "test:marketplace-listing": "npx tsx scripts/marketplace-listing.gates.test.ts",
-    "test:system-prompts": "npx tsx src/prompts/systemPrompts.test.ts",
+    "test:system-prompts": "npx tsx src/prompts/systemPrompts.test.ts && npx tsx src/chat/attachmentDiagnostics.test.ts",
     "test:quick-action-prompts": "npx tsx src/prompts/quickActionPrompts.test.ts && npx tsx src/prompts/ownershipSynthesis.test.ts && npx tsx src/api/codeHosts/ownershipAnalysis.test.ts",
     "test:knowledge-gaps-enrichment": "npx tsx src/prompts/knowledgeGapsEnrichment.test.ts && npx tsx src/chat/chatResponseEnrichment.test.ts && npx tsx src/context/knowledgeGapsFocus.test.ts && npx tsx src/prompts/knowledgeGapsSynthesis.test.ts && npx tsx src/context/docSearchQuery.test.ts && npx tsx src/context/integrationDocRelevance.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/chat/knowledgeGapsNamedFocus.test.ts",
     "test:format-chat-copy": "npx tsx src/webview/lib/formatChatMessageForCopy.test.ts",

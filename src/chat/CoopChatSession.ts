@@ -1,5 +1,6 @@
 import { shouldFollowEditorAfterThreadRestore } from "./chatThreadRestore";
 import { createSharedInitialization } from "./sessionInitialization";
+import { attachmentBodyMetadata, attachmentBundleMetadata, attachmentSerializedMetadata } from "./attachmentDiagnostics";
 import { buildModelHistory } from "./buildModelHistory";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -6800,6 +6801,11 @@ export class CoopChatSession {
             fullFile: options?.composerMode === "edit" || !quickAction
           });
     this.pendingChatAttachFullFile = options?.composerMode === "edit" || !quickAction;
+    const capturedAttachmentMetadata = vscode.workspace.getConfiguration("coopAI").get<boolean>("agentDiagnostics", false)
+      ? { capturedAt: new Date().toISOString(), capturedFile: this.currentContext.file,
+          capturedFileSource: this.currentContext.fileSource, capturedOwner: this.currentContext.owner,
+          capturedRepo: this.currentContext.repo, capturedBranch: this.currentContext.branch,
+          ...attachmentBodyMetadata(this.pendingChatLocalFiles) } : undefined;
     // Attach paths mutate currentContext directly (skip merge) — re-stamp remote + push chip.
     this.currentContext = this.withRemoteProvenance(this.currentContext);
     this.postContext();
@@ -6927,6 +6933,7 @@ export class CoopChatSession {
     });
     this.attachEditAnchor(turn);
     // Align turn clock with chat timing helper (soft gather budgets use startedAt).
+    if (capturedAttachmentMetadata) this.logAttachmentDiagnostic(turn, "attachment-capture", capturedAttachmentMetadata);
     turn.startedAt = this.chatTurnStartedAt;
     this.turnStreamAbort = turn.streamAbort.signal;
     this.pushThreadsList();
@@ -8500,6 +8507,8 @@ export class CoopChatSession {
         );
       }
       this.recordAttachedFileReads(localPayload);
+      this.logAttachmentDiagnostic(turn, "attachment-resolved", { skipped: skipLocalAttach,
+        ...this.attachmentMetadataWhenEnabled(localPayload) });
       if (
         options?.composerMode === "edit" &&
         !allMentionsOutOfScope &&
@@ -8554,6 +8563,9 @@ export class CoopChatSession {
         turn.contextBundle = contextBundle;
       }
 
+      if (vscode.workspace.getConfiguration("coopAI").get<boolean>("agentDiagnostics", false)) {
+        this.logAttachmentDiagnostic(turn, "attachment-post-isolation", attachmentBundleMetadata(contextBundle));
+      }
       const { decisionTimeline, ownershipReport } = this.withTurnSessionMirrors(turn, () => ({
         decisionTimeline: this.enrichedDecisionTimelineFromBundle(),
         ownershipReport: this.ownershipReportFromBundle()
@@ -9131,6 +9143,13 @@ export class CoopChatSession {
         buildId: COOP_EXTENSION_BUILD_ID, bundleId: COOP_EXTENSION_BUNDLE_ID
       });
 
+      if (vscode.workspace.getConfiguration("coopAI").get<boolean>("agentDiagnostics", false)) {
+        this.logAttachmentDiagnostic(turn, "attachment-final-request", {
+          ...attachmentSerializedMetadata(apiMessage), useCase: chatUseCase,
+          provider: runtimeModel.provider, model: runtimeModel.model,
+          route: fileAssistantTurn ? "file-assistant" : "indexed-repo"
+        });
+      }
       const result = await this.options.api.streamChat(
         {
           message: apiMessage,
@@ -11569,6 +11588,15 @@ export class CoopChatSession {
   }
 
   private async resolveChatLocalFiles(turn?: ChatTurn): Promise<LocalFileContextPayload | undefined> {
+    const resolved = (payload: LocalFileContextPayload | undefined, resolution: string, fetchAttempted = false) => {
+      if (turn) this.logAttachmentDiagnostic(turn, "attachment-resolution-outcome", {
+        resolution, fetchAttempted, outcome: payload?.files.some((file) => file.content?.trim()) ? "body-present" : "body-absent",
+        ...this.attachmentMetadataWhenEnabled(payload),
+        resolvedFile: this.currentContext.file, resolvedFileSource: this.currentContext.fileSource,
+        resolvedOwner: this.currentContext.owner, resolvedRepo: this.currentContext.repo, resolvedBranch: this.currentContext.branch
+      });
+      return payload;
+    };
     // /edit captures authorized target bytes when the turn starts. Reuse that
     // snapshot rather than a later tab/thread's mutable pending attachment.
     const anchoredFile = turn?.editAnchor?.file;
@@ -11576,42 +11604,42 @@ export class CoopChatSession {
       ? lookupPatchFileContent(anchoredFile, turn?.editAnchor?.fileContents)
       : undefined;
     if (turn && anchoredFile && anchoredContent !== undefined) {
-      return {
+      return resolved({
         source: isFileAssistantSession(turn.context) ? "local-workspace" : "remote-codehost",
         activeFile: anchoredFile,
         files: [{ path: anchoredFile, content: anchoredContent, encoding: "utf8" }],
         fallbackLevel: "partial"
-      };
+      }, "edit-anchor");
     }
     if (isFileAssistantSession(this.currentContext)) {
       if (this.pendingChatLocalFilesMatchesContext()) {
-        return this.pendingChatLocalFiles;
+        return resolved(this.pendingChatLocalFiles, "pending-file-assistant");
       }
-      return readFileAssistantEditorForChat({
+      return resolved(readFileAssistantEditorForChat({
         file: this.currentContext.file,
         fileSource: this.currentContext.fileSource,
         selectedLines:
           this.pendingCodeEditIntent || this.pendingChatAttachFullFile
             ? undefined
             : this.currentContext.selectedLines
-      });
+      }), "file-assistant-editor");
     }
 
     if (
       !this.pendingCodeEditIntent &&
       shouldSkipLocalEditorAttachForRepoScope(this.currentContext)
     ) {
-      return undefined;
+      return resolved(undefined, "repo-scope-skipped");
     }
 
     if (this.pendingChatLocalFilesMatchesContext()) {
-      return this.pendingChatLocalFiles;
+      return resolved(this.pendingChatLocalFiles, "pending-repo-file");
     }
 
     // Outside-workspace buffer already captured at send time, or still open.
     if (this.currentContext.fileSource === "external" || looksLikeAbsoluteDiskPath(this.currentContext.file)) {
       if (this.pendingChatLocalFiles?.files.length) {
-        return this.pendingChatLocalFiles;
+        return resolved(this.pendingChatLocalFiles, "pending-external-file");
       }
       const fromExternal = readExternalOpenFileForChat({
         selectedLines: this.pendingCodeEditIntent || this.pendingChatAttachFullFile
@@ -11627,9 +11655,9 @@ export class CoopChatSession {
           fileSource: "external",
           scope: "file"
         };
-        return fromExternal;
+        return resolved(fromExternal, "external-editor");
       }
-      return undefined;
+      return resolved(undefined, "external-editor");
     }
 
     // Zero-Clone: remote URI tabs or codehost / indexed fetch only — never local clone/disk.
@@ -11652,13 +11680,21 @@ export class CoopChatSession {
         scope: "file",
         contextWarning: undefined
       };
-      return { ...fromRemoteTabs, source: "remote-codehost" };
+      return resolved({ ...fromRemoteTabs, source: "remote-codehost" }, "remote-tab");
     }
     const syncRemote = this.loadRemoteFilesSyncForChat(lines);
     if (syncRemote?.files.length) {
-      return syncRemote;
+      return resolved(syncRemote, "sync-remote-tab");
     }
-    return this.fetchRemoteFileForChatAttach(lines);
+    const fetchAttempted = Boolean(this.currentContext.file?.trim() && this.currentContext.owner?.trim() &&
+      this.currentContext.repo?.trim() && !isOsAbsoluteDiskPath(this.currentContext.file));
+    if (turn) this.logAttachmentDiagnostic(turn, "attachment-fetch-start", { fetchAttempted });
+    try {
+      return resolved(await this.fetchRemoteFileForChatAttach(lines), "remote-fetch", fetchAttempted);
+    } catch (error) {
+      if (turn) this.logAttachmentDiagnostic(turn, "attachment-resolution-outcome", { resolution: "remote-fetch", fetchAttempted, outcome: "error" });
+      throw error;
+    }
   }
 
   /**
@@ -11777,6 +11813,21 @@ export class CoopChatSession {
     }
     // Append only — never reveal the Output panel (that steals focus on every chat turn).
     this.contextDebugChannel.appendLine(`[${new Date().toISOString()}] ${message}`);
+  }
+
+  private attachmentMetadataWhenEnabled(payload?: LocalFileContextPayload): Record<string, unknown> {
+    return vscode.workspace.getConfiguration("coopAI").get<boolean>("agentDiagnostics", false)
+      ? attachmentBodyMetadata(payload) : {};
+  }
+
+  private logAttachmentDiagnostic(turn: ChatTurn, stage: string, metadata: Record<string, unknown>): void {
+    this.logAgentDiagnostic(turn.threadId, {
+      stage, turnId: turn.id, runId: `synthesis-${turn.id}`, elapsedMs: Date.now() - turn.startedAt,
+      file: turn.context.file, fileSource: turn.context.fileSource,
+      owner: turn.context.owner, repo: turn.context.repo, selectedBranch: turn.context.branch,
+      route: isFileAssistantSession(turn.context) ? "file-assistant" : "indexed-repo",
+      buildId: COOP_EXTENSION_BUILD_ID, bundleId: COOP_EXTENSION_BUNDLE_ID, ...metadata
+    });
   }
 
   private logAgentDiagnostic(threadId: string, event: Record<string, unknown>): void {
