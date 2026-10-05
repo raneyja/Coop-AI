@@ -1,0 +1,168 @@
+{
+  "source": "57a1070",
+  "bundle": "b2a9b6b2f2fb420d4c0f96cfcb9564a5ea4fff4dd78c4aa2063f7e88b160c744",
+  "repo": "github:CoopAI-Corp/coop-dogfood-launch",
+  "branch": "renamed",
+  "file": "src/mathRenamed.ts",
+  "selection": [
+    1,
+    7
+  ],
+  "result": "FAIL: denies source contents despite captured263charbody",
+  "events": [
+    {
+      "at": "2026-10-05T17:27:27.678Z",
+      "threadId": "thread-1791221196163-6ip5ig",
+      "stage": "attachment-capture",
+      "turnId": "turn-1791221247677-n6n4j6",
+      "runId": "synthesis-turn-1791221247677-n6n4j6",
+      "elapsedMs": 1,
+      "file": "src/mathRenamed.ts",
+      "fileSource": "remote",
+      "owner": "CoopAI-Corp",
+      "repo": "coop-dogfood-launch",
+      "selectedBranch": "renamed",
+      "route": "indexed-repo",
+      "buildId": "0.1.10",
+      "bundleId": "b2a9b6b2f2fb420d4c0f96cfcb9564a5ea4fff4dd78c4aa2063f7e88b160c744",
+      "capturedAt": "2026-10-05T17:27:27.338Z",
+      "capturedFile": "src/mathRenamed.ts",
+      "capturedFileSource": "remote",
+      "capturedOwner": "CoopAI-Corp",
+      "capturedRepo": "coop-dogfood-launch",
+      "capturedBranch": "renamed",
+      "fileCount": 1,
+      "bodyChars": 263,
+      "files": [
+        {
+          "path": "src/mathRenamed.ts",
+          "bodyChars": 263,
+          "bodyHash": "ba2dd245856f8a6c8c850beed867fee0ed1897f981fef05d848a9a7dd842f81a"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-05T17:27:28.800Z",
+      "threadId": "thread-1791221196163-6ip5ig",
+      "buildId": "0.1.10",
+      "bundleId": "b2a9b6b2f2fb420d4c0f96cfcb9564a5ea4fff4dd78c4aa2063f7e88b160c744",
+      "selectedBranch": "renamed",
+      "runId": "0d758f8e-16ed-4920-aeb0-942bb497c639",
+      "turnElapsedMs": 764,
+      "stage": "target",
+      "repoId": "github:CoopAI-Corp/coop-dogfood-launch",
+      "requestedBranch": "renamed",
+      "resolvedBranch": "renamed",
+      "turnId": "turn-1791221247677-n6n4j6"
+    },
+    {
+      "at": "2026-10-05T17:27:28.800Z",
+      "threadId": "thread-1791221196163-6ip5ig",
+      "buildId": "0.1.10",
+      "bundleId": "b2a9b6b2f2fb420d4c0f96cfcb9564a5ea4fff4dd78c4aa2063f7e88b160c744",
+      "selectedBranch": "renamed",
+      "runId": "0d758f8e-16ed-4920-aeb0-942bb497c639",
+      "turnElapsedMs": 764,
+      "stage": "turn",
+      "repoId": "github:CoopAI-Corp/coop-dogfood-launch",
+      "turnId": "turn-1791221247677-n6n4j6"
+    },
+    {
+      "at": "2026-10-05T17:27:29.868Z",
+      "threadId": "thread-1791221196163-6ip5ig",
+      "buildId": "0.1.10",
+      "bundleId": "b2a9b6b2f2fb420d4c0f96cfcb9564a5ea4fff4dd78c4aa2063f7e88b160c744",
+      "selectedBranch": "renamed",
+      "runId": "0d758f8e-16ed-4920-aeb0-942bb497c639",
+      "turnElapsedMs": 1832,
+      "stage": "plan",
+      "tool": "search_confluence",
+      "turnId": "turn-1791221247677-n6n4j6"
+    },
+    {
+      "at": "2026-10-05T17:27:33.697Z",
+      "threadId": "thread-1791221196163-6ip5ig",
+      "turnId": "turn-1791221247677-n6n4j6",
+      "runId": "0d758f8e-16ed-4920-aeb0-942bb497c639",
+      "stage": "activity-step",
+      "tool": "search_confluence"
+    },
+    {
+      "at": "2026-10-05T17:27:33.911Z",
+      "threadId": "thread-1791221196163-6ip5ig",
+      "buildId": "0.1.10",
+      "bundleId": "b2a9b6b2f2fb420d4c0f96cfcb9564a5ea4fff4dd78c4aa2063f7e88b160c744",
+      "selectedBranch": "renamed",
+      "runId": "0d758f8e-16ed-4920-aeb0-942bb497c639",
+      "turnElapsedMs": 5875,
+      "stage": "gather-handoff",
+      "repoId": "github:CoopAI-Corp/coop-dogfood-launch",
+      "resolvedBranch": "renamed",
+      "turnId": "turn-1791221247677-n6n4j6"
+    },
+    {
+      "at": "2026-10-05T17:27:33.912Z",
+      "threadId": "thread-1791221196163-6ip5ig",
+      "buildId": "0.1.10",
+      "bundleId": "b2a9b6b2f2fb420d4c0f96cfcb9564a5ea4fff4dd78c4aa2063f7e88b160c744",
+      "selectedBranch": "renamed",
+      "runId": "0d758f8e-16ed-4920-aeb0-942bb497c639",
+      "turnElapsedMs": 5876,
+      "stage": "plan",
+      "turnId": "turn-1791221247677-n6n4j6"
+    },
+    {
+      "at": "2026-10-05T17:27:33.912Z",
+      "threadId": "thread-1791221196163-6ip5ig",
+      "turnId": "turn-1791221247677-n6n4j6",
+      "runId": "0d758f8e-16ed-4920-aeb0-942bb497c639",
+      "stage": "activity-step",
+      "tool": "search_notion"
+    },
+    {
+      "at": "2026-10-05T17:27:33.913Z",
+      "threadId": "thread-1791221196163-6ip5ig",
+      "turnId": "turn-1791221247677-n6n4j6",
+      "runId": "0d758f8e-16ed-4920-aeb0-942bb497c639",
+      "stage": "activity-step",
+      "tool": "search_google_docs"
+    },
+    {
+      "at": "2026-10-05T17:27:33.913Z",
+      "threadId": "thread-1791221196163-6ip5ig",
+      "buildId": "0.1.10",
+      "bundleId": "b2a9b6b2f2fb420d4c0f96cfcb9564a5ea4fff4dd78c4aa2063f7e88b160c744",
+      "selectedBranch": "renamed",
+      "runId": "0d758f8e-16ed-4920-aeb0-942bb497c639",
+      "turnElapsedMs": 5877,
+      "stage": "synthesis-start",
+      "turnId": "turn-1791221247677-n6n4j6"
+    },
+    {
+      "at": "2026-10-05T17:27:37.511Z",
+      "threadId": "thread-1791221196163-6ip5ig",
+      "turnId": "turn-1791221247677-n6n4j6",
+      "runId": "0d758f8e-16ed-4920-aeb0-942bb497c639",
+      "stage": "answer-start",
+      "elapsedMs": 12600,
+      "selectedBranch": "renamed",
+      "repoId": "github:CoopAI-Corp/coop-dogfood-launch",
+      "buildId": "0.1.10",
+      "bundleId": "b2a9b6b2f2fb420d4c0f96cfcb9564a5ea4fff4dd78c4aa2063f7e88b160c744"
+    },
+    {
+      "at": "2026-10-05T17:27:38.685Z",
+      "threadId": "thread-1791221196163-6ip5ig",
+      "buildId": "0.1.10",
+      "bundleId": "b2a9b6b2f2fb420d4c0f96cfcb9564a5ea4fff4dd78c4aa2063f7e88b160c744",
+      "selectedBranch": "renamed",
+      "runId": "0d758f8e-16ed-4920-aeb0-942bb497c639",
+      "turnElapsedMs": 10649,
+      "stage": "outcome",
+      "repoId": "github:CoopAI-Corp/coop-dogfood-launch",
+      "resolvedBranch": "renamed",
+      "elapsedMs": 10649,
+      "turnId": "turn-1791221247677-n6n4j6"
+    }
+  ]
+}

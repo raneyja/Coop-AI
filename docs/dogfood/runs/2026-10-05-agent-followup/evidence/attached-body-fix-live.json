@@ -1,0 +1,436 @@
+{
+  "sourceCommit": "314db4c6cdc112b5b8822d4eb9b6ae8bebaa7439",
+  "bundleSha256": "2573ac8d4d87bae3d2811eb1ddd14237d22436d3dd5fbe07f2c4a093513a6c2a",
+  "vsixSha256": "6ee91ffe9307f1a5dbfee90864859881411791b2355fa4a37ce1346825122b77",
+  "profile": "/private/tmp/coop-dogfood-clean-20261004/user",
+  "window": 5,
+  "liveScope": {
+    "strataPurpose": "PASS: body-backed explanation of HostTextMonitor with source citations",
+    "strataFollowup": "PASS for retained attached body: acknowledges file and explains implementation; unnecessary re-sending phrasing observed",
+    "citation": "PASS: StrataKeyboard/HostTextMonitor.swift:94-124 selects expected onDictationSettled source",
+    "typeScriptControl": "PASS: src/mathRenamed.ts on renamed, both real exports and actual loop bound; bug conditional on expected intent; no Strata context"
+  },
+  "responseStart": [
+    {
+      "turnId": "turn-1791222435620-co3ys7",
+      "elapsedMs": 20825
+    },
+    {
+      "turnId": "turn-1791222515313-xm718i",
+      "elapsedMs": 24729
+    },
+    {
+      "turnId": "turn-1791222654621-vnain5",
+      "elapsedMs": 31237
+    }
+  ],
+  "latencyGate": "OPEN: Strata20.825s/24.729s starts exceed15s soft target; not aborting or claiming timing pass",
+  "automated": {
+    "ciExit": 0,
+    "lintExit": 0,
+    "packageExit": 0,
+    "orchestrator": "97/97",
+    "session": "open/missing/cancel/zero-clone/final-request/continuation regressions pass"
+  },
+  "backend": {
+    "source": "c4a83a7",
+    "deployment": "fa74a66c-80d9-447f-9ff1-d4b94053dd2d",
+    "changed": false
+  },
+  "release": "UNQUALIFIED: full product matrix remains incomplete; original development host not reloaded",
+  "events": [
+    {
+      "at": "2026-10-05T17:47:00.229Z",
+      "threadId": "thread-1791222398599-07d90x",
+      "stage": "citation-open",
+      "path": "StrataKeyboard/HostTextMonitor.swift",
+      "preserveContext": false,
+      "branch": "main",
+      "scope": "repo",
+      "fileAssistant": false,
+      "explicitRepo": true
+    },
+    {
+      "at": "2026-10-05T17:47:15.622Z",
+      "threadId": "thread-1791222398599-07d90x",
+      "stage": "attachment-capture",
+      "turnId": "turn-1791222435620-co3ys7",
+      "runId": "synthesis-turn-1791222435620-co3ys7",
+      "elapsedMs": 2,
+      "file": "StrataKeyboard/HostTextMonitor.swift",
+      "fileSource": "remote",
+      "owner": "coopai-group",
+      "repo": "Strata",
+      "selectedBranch": "main",
+      "route": "indexed-repo",
+      "buildId": "0.1.10",
+      "bundleId": "2573ac8d4d87bae3d2811eb1ddd14237d22436d3dd5fbe07f2c4a093513a6c2a",
+      "capturedAt": "2026-10-05T17:47:15.344Z",
+      "capturedFile": "StrataKeyboard/HostTextMonitor.swift",
+      "capturedFileSource": "remote",
+      "capturedOwner": "coopai-group",
+      "capturedRepo": "Strata",
+      "capturedBranch": "main",
+      "fileCount": 1,
+      "bodyChars": 5305,
+      "files": [
+        {
+          "path": "StrataKeyboard/HostTextMonitor.swift",
+          "bodyChars": 5305,
+          "bodyHash": "b56ae7fcf269e6a89d3f5af42c976ae6b1e20b5174507aef753cd9e1a5ff51f7"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-05T17:47:16.235Z",
+      "threadId": "thread-1791222398599-07d90x",
+      "buildId": "0.1.10",
+      "bundleId": "2573ac8d4d87bae3d2811eb1ddd14237d22436d3dd5fbe07f2c4a093513a6c2a",
+      "selectedBranch": "main",
+      "runId": "f8ae995d-b1b6-4291-8f98-806494b1a593",
+      "turnElapsedMs": 305,
+      "stage": "target",
+      "repoId": "gitlab:coopai-group/Strata",
+      "requestedBranch": "main",
+      "resolvedBranch": "main",
+      "turnId": "turn-1791222435620-co3ys7"
+    },
+    {
+      "at": "2026-10-05T17:47:21.991Z",
+      "threadId": "thread-1791222398599-07d90x",
+      "stage": "attachment-agent-final-request",
+      "turnId": "turn-1791222435620-co3ys7",
+      "runId": "f8ae995d-b1b6-4291-8f98-806494b1a593",
+      "elapsedMs": 9009,
+      "file": "StrataKeyboard/HostTextMonitor.swift",
+      "fileSource": "remote",
+      "owner": "coopai-group",
+      "repo": "Strata",
+      "selectedBranch": "main",
+      "route": "indexed-repo",
+      "buildId": "0.1.10",
+      "bundleId": "2573ac8d4d87bae3d2811eb1ddd14237d22436d3dd5fbe07f2c4a093513a6c2a",
+      "messageChars": 8515,
+      "messageHash": "8f49082f312049d307293e171093d0b17fd06f3fea195b9f45e69707adc02c58",
+      "localFilesBlockCount": 1,
+      "fileContentBlockCount": 1,
+      "serializedBodyChars": 5307,
+      "serializedBodyHashes": [
+        "df53510008f547308c8e9c08c13236a5d92f9a1605ca8edcd28d0d119b78ba06"
+      ],
+      "provider": "openai",
+      "model": "gpt-5.1"
+    },
+    {
+      "at": "2026-10-05T17:47:33.807Z",
+      "threadId": "thread-1791222398599-07d90x",
+      "turnId": "turn-1791222435620-co3ys7",
+      "runId": "f8ae995d-b1b6-4291-8f98-806494b1a593",
+      "stage": "answer-start",
+      "elapsedMs": 20825,
+      "selectedBranch": "main",
+      "repoId": "gitlab:coopai-group/Strata",
+      "buildId": "0.1.10",
+      "bundleId": "2573ac8d4d87bae3d2811eb1ddd14237d22436d3dd5fbe07f2c4a093513a6c2a"
+    },
+    {
+      "at": "2026-10-05T17:47:41.400Z",
+      "threadId": "thread-1791222398599-07d90x",
+      "buildId": "0.1.10",
+      "bundleId": "2573ac8d4d87bae3d2811eb1ddd14237d22436d3dd5fbe07f2c4a093513a6c2a",
+      "selectedBranch": "main",
+      "runId": "f8ae995d-b1b6-4291-8f98-806494b1a593",
+      "turnElapsedMs": 25469,
+      "stage": "outcome",
+      "repoId": "gitlab:coopai-group/Strata",
+      "resolvedBranch": "main",
+      "elapsedMs": 25469,
+      "stopped": false,
+      "stepCount": 4,
+      "hasAnswer": true,
+      "evidencePaths": [
+        "StrataKeyboard/HostTextMonitor.swift"
+      ],
+      "turnId": "turn-1791222435620-co3ys7"
+    },
+    {
+      "at": "2026-10-05T17:48:35.314Z",
+      "threadId": "thread-1791222398599-07d90x",
+      "stage": "attachment-capture",
+      "turnId": "turn-1791222515313-xm718i",
+      "runId": "synthesis-turn-1791222515313-xm718i",
+      "elapsedMs": 1,
+      "file": "StrataKeyboard/HostTextMonitor.swift",
+      "fileSource": "remote",
+      "owner": "coopai-group",
+      "repo": "Strata",
+      "selectedBranch": "main",
+      "route": "indexed-repo",
+      "buildId": "0.1.10",
+      "bundleId": "2573ac8d4d87bae3d2811eb1ddd14237d22436d3dd5fbe07f2c4a093513a6c2a",
+      "capturedAt": "2026-10-05T17:48:35.095Z",
+      "capturedFile": "StrataKeyboard/HostTextMonitor.swift",
+      "capturedFileSource": "remote",
+      "capturedOwner": "coopai-group",
+      "capturedRepo": "Strata",
+      "capturedBranch": "main",
+      "fileCount": 1,
+      "bodyChars": 5305,
+      "files": [
+        {
+          "path": "StrataKeyboard/HostTextMonitor.swift",
+          "bodyChars": 5305,
+          "bodyHash": "b56ae7fcf269e6a89d3f5af42c976ae6b1e20b5174507aef753cd9e1a5ff51f7"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-05T17:48:35.767Z",
+      "threadId": "thread-1791222398599-07d90x",
+      "buildId": "0.1.10",
+      "bundleId": "2573ac8d4d87bae3d2811eb1ddd14237d22436d3dd5fbe07f2c4a093513a6c2a",
+      "selectedBranch": "main",
+      "runId": "b687c91c-65ff-45b8-9904-4ae91acf0314",
+      "turnElapsedMs": 149,
+      "stage": "target",
+      "repoId": "gitlab:coopai-group/Strata",
+      "requestedBranch": "main",
+      "resolvedBranch": "main",
+      "turnId": "turn-1791222515313-xm718i"
+    },
+    {
+      "at": "2026-10-05T17:48:42.045Z",
+      "threadId": "thread-1791222398599-07d90x",
+      "stage": "attachment-agent-final-request",
+      "turnId": "turn-1791222515313-xm718i",
+      "runId": "b687c91c-65ff-45b8-9904-4ae91acf0314",
+      "elapsedMs": 9003,
+      "file": "StrataKeyboard/HostTextMonitor.swift",
+      "fileSource": "remote",
+      "owner": "coopai-group",
+      "repo": "Strata",
+      "selectedBranch": "main",
+      "route": "indexed-repo",
+      "buildId": "0.1.10",
+      "bundleId": "2573ac8d4d87bae3d2811eb1ddd14237d22436d3dd5fbe07f2c4a093513a6c2a",
+      "messageChars": 8500,
+      "messageHash": "9ebf04319162f186c468da2e090c27015aea8dfe3b99484572bb367987ad8d5f",
+      "localFilesBlockCount": 1,
+      "fileContentBlockCount": 1,
+      "serializedBodyChars": 5307,
+      "serializedBodyHashes": [
+        "df53510008f547308c8e9c08c13236a5d92f9a1605ca8edcd28d0d119b78ba06"
+      ],
+      "provider": "openai",
+      "model": "gpt-5.1"
+    },
+    {
+      "at": "2026-10-05T17:48:57.771Z",
+      "threadId": "thread-1791222398599-07d90x",
+      "turnId": "turn-1791222515313-xm718i",
+      "runId": "b687c91c-65ff-45b8-9904-4ae91acf0314",
+      "stage": "answer-start",
+      "elapsedMs": 24729,
+      "selectedBranch": "main",
+      "repoId": "gitlab:coopai-group/Strata",
+      "buildId": "0.1.10",
+      "bundleId": "2573ac8d4d87bae3d2811eb1ddd14237d22436d3dd5fbe07f2c4a093513a6c2a"
+    },
+    {
+      "at": "2026-10-05T17:49:09.906Z",
+      "threadId": "thread-1791222398599-07d90x",
+      "buildId": "0.1.10",
+      "bundleId": "2573ac8d4d87bae3d2811eb1ddd14237d22436d3dd5fbe07f2c4a093513a6c2a",
+      "selectedBranch": "main",
+      "runId": "b687c91c-65ff-45b8-9904-4ae91acf0314",
+      "turnElapsedMs": 34289,
+      "stage": "outcome",
+      "repoId": "gitlab:coopai-group/Strata",
+      "resolvedBranch": "main",
+      "elapsedMs": 34289,
+      "stopped": false,
+      "stepCount": 5,
+      "hasAnswer": true,
+      "evidencePaths": [
+        "StrataKeyboard/HostTextMonitor.swift"
+      ],
+      "turnId": "turn-1791222515313-xm718i"
+    },
+    {
+      "at": "2026-10-05T17:49:39.765Z",
+      "threadId": "thread-1791222398599-07d90x",
+      "stage": "citation-open",
+      "path": "StrataKeyboard/HostTextMonitor.swift",
+      "line": 94,
+      "preserveContext": true,
+      "branch": "main",
+      "scope": "file",
+      "fileAssistant": false,
+      "explicitRepo": false
+    },
+    {
+      "at": "2026-10-05T17:50:38.609Z",
+      "threadId": "thread-1791222605364-y96ucu",
+      "stage": "citation-open",
+      "path": "src/mathRenamed.ts",
+      "preserveContext": false,
+      "branch": "renamed",
+      "scope": "repo",
+      "fileAssistant": false,
+      "explicitRepo": true
+    },
+    {
+      "at": "2026-10-05T17:50:54.622Z",
+      "threadId": "thread-1791222605364-y96ucu",
+      "stage": "attachment-capture",
+      "turnId": "turn-1791222654621-vnain5",
+      "runId": "synthesis-turn-1791222654621-vnain5",
+      "elapsedMs": 1,
+      "file": "src/mathRenamed.ts",
+      "fileSource": "remote",
+      "owner": "CoopAI-Corp",
+      "repo": "coop-dogfood-launch",
+      "selectedBranch": "renamed",
+      "route": "indexed-repo",
+      "buildId": "0.1.10",
+      "bundleId": "2573ac8d4d87bae3d2811eb1ddd14237d22436d3dd5fbe07f2c4a093513a6c2a",
+      "capturedAt": "2026-10-05T17:50:54.347Z",
+      "capturedFile": "src/mathRenamed.ts",
+      "capturedFileSource": "remote",
+      "capturedOwner": "CoopAI-Corp",
+      "capturedRepo": "coop-dogfood-launch",
+      "capturedBranch": "renamed",
+      "fileCount": 1,
+      "bodyChars": 263,
+      "files": [
+        {
+          "path": "src/mathRenamed.ts",
+          "bodyChars": 263,
+          "bodyHash": "ba2dd245856f8a6c8c850beed867fee0ed1897f981fef05d848a9a7dd842f81a"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-05T17:51:12.168Z",
+      "threadId": "thread-1791222605364-y96ucu",
+      "stage": "attachment-resolution-outcome",
+      "turnId": "turn-1791222654621-vnain5",
+      "runId": "synthesis-turn-1791222654621-vnain5",
+      "elapsedMs": 20582,
+      "file": "src/mathRenamed.ts",
+      "fileSource": "remote",
+      "owner": "CoopAI-Corp",
+      "repo": "coop-dogfood-launch",
+      "selectedBranch": "renamed",
+      "route": "indexed-repo",
+      "buildId": "0.1.10",
+      "bundleId": "2573ac8d4d87bae3d2811eb1ddd14237d22436d3dd5fbe07f2c4a093513a6c2a",
+      "resolution": "edit-anchor",
+      "fetchAttempted": false,
+      "outcome": "body-present",
+      "fileCount": 1,
+      "bodyChars": 263,
+      "files": [
+        {
+          "path": "src/mathRenamed.ts",
+          "bodyChars": 263,
+          "bodyHash": "ba2dd245856f8a6c8c850beed867fee0ed1897f981fef05d848a9a7dd842f81a"
+        }
+      ],
+      "resolvedFile": "src/mathRenamed.ts",
+      "resolvedFileSource": "remote",
+      "resolvedOwner": "CoopAI-Corp",
+      "resolvedRepo": "coop-dogfood-launch",
+      "resolvedBranch": "renamed"
+    },
+    {
+      "at": "2026-10-05T17:51:12.169Z",
+      "threadId": "thread-1791222605364-y96ucu",
+      "stage": "attachment-resolved",
+      "turnId": "turn-1791222654621-vnain5",
+      "runId": "synthesis-turn-1791222654621-vnain5",
+      "elapsedMs": 20583,
+      "file": "src/mathRenamed.ts",
+      "fileSource": "remote",
+      "owner": "CoopAI-Corp",
+      "repo": "coop-dogfood-launch",
+      "selectedBranch": "renamed",
+      "route": "indexed-repo",
+      "buildId": "0.1.10",
+      "bundleId": "2573ac8d4d87bae3d2811eb1ddd14237d22436d3dd5fbe07f2c4a093513a6c2a",
+      "skipped": false,
+      "fileCount": 1,
+      "bodyChars": 263,
+      "files": [
+        {
+          "path": "src/mathRenamed.ts",
+          "bodyChars": 263,
+          "bodyHash": "ba2dd245856f8a6c8c850beed867fee0ed1897f981fef05d848a9a7dd842f81a"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-05T17:51:12.170Z",
+      "threadId": "thread-1791222605364-y96ucu",
+      "stage": "attachment-post-isolation",
+      "turnId": "turn-1791222654621-vnain5",
+      "runId": "synthesis-turn-1791222654621-vnain5",
+      "elapsedMs": 20584,
+      "file": "src/mathRenamed.ts",
+      "fileSource": "remote",
+      "owner": "CoopAI-Corp",
+      "repo": "coop-dogfood-launch",
+      "selectedBranch": "renamed",
+      "route": "indexed-repo",
+      "buildId": "0.1.10",
+      "bundleId": "2573ac8d4d87bae3d2811eb1ddd14237d22436d3dd5fbe07f2c4a093513a6c2a",
+      "fileCount": 1,
+      "bodyChars": 263,
+      "files": [
+        {
+          "path": "src/mathRenamed.ts",
+          "bodyChars": 263,
+          "bodyHash": "ba2dd245856f8a6c8c850beed867fee0ed1897f981fef05d848a9a7dd842f81a"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-05T17:51:12.373Z",
+      "threadId": "thread-1791222605364-y96ucu",
+      "stage": "attachment-final-request",
+      "turnId": "turn-1791222654621-vnain5",
+      "runId": "synthesis-turn-1791222654621-vnain5",
+      "elapsedMs": 20787,
+      "file": "src/mathRenamed.ts",
+      "fileSource": "remote",
+      "owner": "CoopAI-Corp",
+      "repo": "coop-dogfood-launch",
+      "selectedBranch": "renamed",
+      "route": "indexed-repo",
+      "buildId": "0.1.10",
+      "bundleId": "2573ac8d4d87bae3d2811eb1ddd14237d22436d3dd5fbe07f2c4a093513a6c2a",
+      "messageChars": 1455,
+      "messageHash": "6dfe08eb07c65e15d70819e9cd9f90a2c73ab144a4ae4b760453a94e102af01f",
+      "localFilesBlockCount": 1,
+      "fileContentBlockCount": 1,
+      "serializedBodyChars": 265,
+      "serializedBodyHashes": [
+        "d489571783faa9b37cc9c1dd426e7fcfba82871713c3edbe4ce97f64ea691f15"
+      ],
+      "useCase": "chat",
+      "provider": "openai",
+      "model": "gpt-5-mini"
+    },
+    {
+      "at": "2026-10-05T17:51:22.823Z",
+      "threadId": "thread-1791222605364-y96ucu",
+      "stage": "answer-start",
+      "turnId": "turn-1791222654621-vnain5",
+      "runId": "synthesis-turn-1791222654621-vnain5",
+      "elapsedMs": 31237,
+      "selectedBranch": "renamed",
+      "buildId": "0.1.10",
+      "bundleId": "2573ac8d4d87bae3d2811eb1ddd14237d22436d3dd5fbe07f2c4a093513a6c2a"
+    }
+  ]
+}
