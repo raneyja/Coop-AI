@@ -949,6 +949,18 @@ testAsync(
   }
 );
 
+test("same-path named-symbol verification preserves strong evidence and durable provenance", () => {
+  const merged = mergeDurableWithNamedSymbolSearch(
+    [{ path: "src/caller.ts", depth: 1, source: "import-parse" }],
+    [{ path: "src/caller.ts", depth: 1, source: "zoekt", strength: "strong" }],
+    ["positiveSum"]
+  );
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].strength, "strong");
+  assert.equal(merged[0].source, "import-parse");
+  assert.equal(merged[0].path, "src/caller.ts");
+});
+
 void Promise.all(asyncTests).then(() => {
   const total = passed + failed;
   console.log(`\nblastRadiusDependentsFallback: ${passed}/${total} tests passed`);

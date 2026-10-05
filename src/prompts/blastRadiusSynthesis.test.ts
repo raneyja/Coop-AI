@@ -309,6 +309,18 @@ test("unconfirmed function callers never imply safety or inevitable breakage", (
   assert.match(out, /not the same as nothing breaks/);
 });
 
+test("import-only named-symbol answer replaces unsupported defect prose but retains dependency evidence", () => {
+  const out = enrichBlastRadiusResponse("src/caller.ts imports the file. positiveSum has an off-by-one bug and will silently give this caller wrong results.", {
+    file: "src/mathRenamed.ts", namedAskSymbols: ["positiveSum"],
+    directDependents: ["src/caller.ts"],
+    dependentDetails: [{ path: "src/caller.ts", depth: 1, source: "import-parse" }]
+  });
+  assert.ok(out.includes("src/caller.ts"));
+  assert.ok(out.includes("file dependency; named-symbol use unverified"));
+  assert.ok(out.includes("do not establish an implementation defect or the intended contract"));
+  assert.doesNotMatch(out, /off-by-one bug|silently give this caller wrong results/);
+});
+
 test("import-only evidence cannot establish named behavior impact or complete depth-one coverage", () => {
   const prompt = buildBlastRadiusSynthesisUserPrompt({file: "src/mathRenamed.ts", evidence: {file: "src/mathRenamed.ts", namedAskSymbols: ["positiveSum"], directDependents: ["src/caller.ts"], graphMeta: {source: "import-parse", edgeCount: 1}, completeness: "partial"}});
   assert.match(prompt, /Without caller body or symbol-level use evidence/);

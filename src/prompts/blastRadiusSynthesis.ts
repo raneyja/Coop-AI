@@ -534,6 +534,22 @@ export function enrichBlastRadiusResponse(
   const claimsZero = blastResponseClaimsZeroImpact(trimmed);
   const hasDependents = ranked.length > 0;
 
+  if (named.length > 0 && hasDependents && !details.some((entry) => entry.strength === "strong")) {
+    return [
+      `Named-symbol impact for \`${named.join(", ")}\` is **unverified** in this turn.`,
+      "",
+      "**Verified file dependencies**",
+      "",
+      ...ranked.map((entry) => `- \`${entry.path}\` — file dependency; named-symbol use unverified.`),
+      "",
+      "These edges do not establish calls to the requested symbol, complete dependency coverage, or inevitable behavioral impact. They also do not establish an implementation defect or the intended contract.",
+      "",
+      "**What to check next**",
+      "",
+      "Verify the requested symbol's use in these remote caller bodies, then assess the proposed change against the actual inputs and expected contract. Missing call evidence does not mean the change is safe."
+    ].join("\n");
+  }
+
   if (!hasDependents) {
     return named.length > 0
       ? honestNamedFunctionBlastAnswer(named, evidence.file)

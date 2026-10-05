@@ -599,7 +599,10 @@ export function mergeDurableWithNamedSymbolSearch(
     return [];
   }
   const named = new Set(namedHits.map((entry) => entry.path));
-  const filtered = durable.filter((entry) => named.has(entry.path));
+  const filtered = durable.filter((entry) => named.has(entry.path)).map((entry) => {
+    const verifiedHit = namedHits.find((hit) => hit.path === entry.path && hit.strength === "strong");
+    return verifiedHit ? { ...entry, strength: verifiedHit.strength } : entry;
+  });
   const seen = new Set(filtered.map((entry) => entry.path));
   const out = [...filtered];
   for (const entry of namedHits) {
