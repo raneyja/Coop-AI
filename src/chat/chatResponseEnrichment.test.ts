@@ -347,6 +347,23 @@ test("/docs final response supplies the opened document source link once", () =>
   assert.equal(preserved.split(url).length - 1, 1);
 });
 
+test("gaps import-only next steps verify symbol use while preserving conditional finding and source", () => {
+  const body = "export function positiveSum(values: number[]) {\n  return values[0];\n}";
+  const finding = "**Source findings**\n\nObserved: only the first element is returned. If the intended contract is a total, confirm that expectation before changing it.";
+  const bundle = [
+    {type: "knowledge_gaps", data: {focusFiles: [{path: "src/mathRenamed.ts", content: body, startLine: 1}, {path: "src/caller.ts", content: "import { fixtureBranchLabel } from './mathRenamed';", startLine: 1}]}},
+    {type: "dependencies", data: {directDependents: ["src/caller.ts"], graphMeta: {source: "import-parse", edgeCount: 1}}}
+  ];
+  const result = enrichChatResponseForAction({content: finding + "\n\n**Recommended next steps**\n\n1. The only known caller is src/caller.ts, which would be affected.", quickAction: "knowledge-gaps", contextBundle: bundle, activeFile: "src/mathRenamed.ts"});
+  assert.ok(result.includes("Observed: only the first element is returned"));
+  assert.ok(result.includes("If the intended contract is a total"));
+  assert.ok(result.includes("```1:3:src/mathRenamed.ts"));
+  assert.ok(result.includes("Inspect retrieved file dependents (`src/caller.ts`) for actual use"));
+  assert.ok(result.includes("Runtime impact remains unverified"));
+  assert.equal(result.includes("only known caller"), false);
+  assert.equal(result.includes("which would be affected"), false);
+});
+
 const total = passed + failed;
 console.log(`\nchatResponseEnrichment: ${passed}/${total} tests passed`);
 if (failed > 0) {

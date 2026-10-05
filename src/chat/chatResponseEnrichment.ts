@@ -181,12 +181,14 @@ export function enrichChatResponseForAction(options: {
       });
       break;
     case "knowledge-gaps": {
+      const gapsEvidence = Array.isArray(contextBundle) ? knowledgeGapsFromBundle(contextBundle) : undefined;
       enriched = enrichKnowledgeGapsResponse(enriched, {
         confluencePages: extractConfluencePagesFromBundle(contextBundle),
         notionPages: extractNotionPagesFromBundle(contextBundle),
         googleDocs: extractGoogleDocsFromBundle(contextBundle),
         jobScanGaps: extractJobScanGapsFromBundle(contextBundle),
-        focusFiles: Array.isArray(contextBundle) ? knowledgeGapsFromBundle(contextBundle)?.focusFiles : undefined,
+        focusFiles: gapsEvidence?.focusFiles,
+        dependencyGraph: gapsEvidence?.dependencyGraph,
         activeFile
       });
       break;
