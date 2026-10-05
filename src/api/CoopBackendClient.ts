@@ -52,6 +52,7 @@ export type InlineCompletionBody = {
   segments?: { prefix: string; suffix: string };
   stream?: boolean;
   repoId?: string;
+  branch?: string;
   useGraphContext?: boolean;
   sessionMode?: "file-assistant" | "indexed-repo";
   fileSource?: "workspace" | "git" | "remote" | "external";
@@ -1665,6 +1666,8 @@ export class CoopBackendClient {
     files: Array<{ path: string; symbols: Array<{ name: string; kind: string }> }>;
     fileCount: number;
     lastCrawledAt?: string;
+    /** Optional verified ref; current manifest endpoint omits it, so ref-scoped hints fail closed. */
+    branch?: string;
   }> {
     assertCoopEndpoint(baseUrl);
     const encoded = encodeURIComponent(repoId);
@@ -1868,6 +1871,7 @@ export class CoopBackendClient {
         segments: body.segments,
         stream: true,
         repoId: body.repoId,
+        branch: body.branch,
         useGraphContext: body.useGraphContext,
         sessionMode: body.sessionMode,
         fileSource: body.fileSource,
@@ -1985,6 +1989,7 @@ export class CoopBackendClient {
         segments: body.segments,
         stream: body.stream,
         repoId: body.repoId,
+        branch: body.branch,
         useGraphContext: body.useGraphContext,
         sessionMode: body.sessionMode,
         fileSource: body.fileSource,

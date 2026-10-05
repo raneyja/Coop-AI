@@ -17,12 +17,12 @@ export function createOrgInlineGraphFileSnippetFetcher(deps: {
   orgStore: OrgStore;
   serverConfig: ServerConfig;
 }): InlineGraphFileSnippetFetcher {
-  return async ({ orgId, repoId, path }) => {
+  return async ({ orgId, repoId, path, branch }) => {
     if (!orgId?.trim()) {
       return undefined;
     }
     try {
-      const target = parseRepoId(repoId);
+      const target = { ...parseRepoId(repoId), ...(branch ? { branch } : {}) };
       const token = await resolveCodeHostTokenForOrg(orgId, target.provider, {
         orgStore: deps.orgStore,
         connector: getConnector(target.provider),

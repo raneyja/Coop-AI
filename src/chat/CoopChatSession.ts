@@ -197,7 +197,7 @@ import type { OwnershipReport } from "../types/ownership";
 import { buildDecisionSynthesisUserPrompt } from "../prompts/decisionSynthesis";
 import { buildOwnershipSynthesisUserPrompt } from "../prompts/ownershipSynthesis";
 import { buildRepoSummarySynthesisUserPrompt } from "../prompts/repoSummarySynthesis";
-import { buildBlastRadiusSynthesisUserPrompt } from "../prompts/blastRadiusSynthesis";
+import { buildBlastRadiusSynthesisUserPrompt, importOnlyNamedBlastAnswer } from "../prompts/blastRadiusSynthesis";
 import { buildKnowledgeGapsSynthesisUserPrompt } from "../prompts/knowledgeGapsSynthesis";
 import { buildIntegrationSynthesisUserPrompt, countIntegrationResults, emptyIntegrationSlashResponse } from "../prompts/integrationSynthesis";
 import {
@@ -1915,6 +1915,10 @@ export class CoopChatSession {
     return buildRepoId(this.preferences, this.currentContext);
   }
 
+  public autocompleteRepoBranch(): string | undefined {
+    return this.currentContext.branch?.trim() || undefined;
+  }
+
   /** User chose remote explorer / codehost — never fall through to local disk. */
   private isWorkingOnRemoteProvenance(): boolean {
     return isRemoteProvenanceContext(this.currentContext, this.remoteProvenanceFile);
@@ -3404,6 +3408,27 @@ export class CoopChatSession {
       hasQuickAction: Boolean(request.params.quickAction),
       integrationSlash: Boolean(request.params.integrationProvider)
     });
+  }
+
+  private async finishImportOnlyBlastTurn(
+    turn: ChatTurn,
+    evidence: Parameters<typeof importOnlyNamedBlastAnswer>[0],
+    isCancelled: () => boolean
+  ): Promise<boolean> {
+    const content = importOnlyNamedBlastAnswer(evidence);
+    if (!content) return false;
+    await delayUntilMinResponseVisible(turn.startedAt);
+    if (!isCancelled()) {
+      this.clearIntentFeedback(turn.threadId);
+      const relatedArtifactId = turn.pendingEvidenceArtifactId;
+      turn.pendingEvidenceArtifactId = undefined;
+      if (this.isViewingThread(turn.threadId)) this.pendingEvidenceArtifactId = undefined;
+      await this.finishTurnAssistantMessage(turn, {
+        role: "assistant", content, timestamp: Date.now(),
+        ...(relatedArtifactId ? { relatedArtifactId } : {})
+      });
+    }
+    return true;
   }
 
   private async fetchContextRequest(request: ContextFetchRequest): Promise<ContextFetchResult> {
@@ -8545,6 +8570,10 @@ export class CoopChatSession {
           ? isolateUnderstandRepoSummary(repoSummaryRaw)
           : repoSummaryRaw;
       const blastRadiusEvidence = blastRadiusFromBundle(contextBundle);
+      if (effectiveQuickAction === "blast-radius" &&
+          await this.finishImportOnlyBlastTurn(turn, blastRadiusEvidence, isCancelled)) {
+        return;
+      }
       const knowledgeGapsEvidence = knowledgeGapsFromBundle(contextBundle);
       const confluenceEvidence = confluenceSearchFromBundle(contextBundle);
       const jiraEvidence = jiraSearchFromBundle(contextBundle);

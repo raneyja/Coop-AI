@@ -798,7 +798,7 @@ export function activate(context: vscode.ExtensionContext): void {
     indexBackend,
     () => {
       const session = coopSessionRegistry.getActive();
-      return { remotePinFile: session?.autocompleteRemotePin(), repoId: session?.autocompleteRepoId() };
+      return { remotePinFile: session?.autocompleteRemotePin(), repoId: session?.autocompleteRepoId(), branch: session?.autocompleteRepoBranch() };
     }
   );
   registerAutocompleteCommands(context, api, autocompleteProvider);

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { enrichChatResponseForAction } from "./chatResponseEnrichment";
 import { extractExistingCapabilityEvidence } from "../context/existingCapabilityGrounding";
 import { parseChatProse } from "../webview/lib/chatProseParser";
+import { hydrateContextBundleFromArtifacts } from "./hydrateContextBundleFromArtifacts";
+import { knowledgeGapsFromBundle } from "../context/contextBundleEvidence";
 
 let passed = 0;
 let failed = 0;
@@ -362,6 +364,19 @@ test("gaps import-only next steps verify symbol use while preserving conditional
   assert.ok(result.includes("Runtime impact remains unverified"));
   assert.equal(result.includes("only known caller"), false);
   assert.equal(result.includes("which would be affected"), false);
+});
+
+test("rehydrated production gaps artifact retains import graph scope into final recommendations", () => {
+  const bundle = hydrateContextBundleFromArtifacts([{id: "gaps-production", kind: "knowledge-gaps", payload: {
+    file: "src/mathRenamed.ts", evidence: {file: "src/mathRenamed.ts", dependencyGraph: {directDependents: ["src/caller.ts"], source: "import-parse", edgeCount: 1}, focusFiles: [{path: "src/mathRenamed.ts", content: "export const positiveSum = 3;", startLine: 1}]}
+  }}]);
+  assert.equal(knowledgeGapsFromBundle(bundle)?.dependencyGraph?.source, "import-parse");
+  assert.deepEqual(knowledgeGapsFromBundle(bundle)?.dependencyGraph?.directDependents, ["src/caller.ts"]);
+  const result = enrichChatResponseForAction({content: "**Source findings**\n\nObserved source behavior; expected contract remains unknown.\n\n**Recommended next steps**\n\n1. The only known caller would be affected.", quickAction: "knowledge-gaps", contextBundle: bundle, activeFile: "src/mathRenamed.ts"});
+  assert.ok(result.includes("Observed source behavior; expected contract remains unknown"));
+  assert.ok(result.includes("Import edges alone do not verify symbol use"));
+  assert.ok(result.includes("```1:1:src/mathRenamed.ts"));
+  assert.equal(result.includes("only known caller would be affected"), false);
 });
 
 const total = passed + failed;

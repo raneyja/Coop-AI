@@ -117,6 +117,37 @@ test("synthesizeMessageFromSegments asks for a full body on empty-block holes", 
 });
 
 async function runAsyncTests(): Promise<void> {
+  await asyncTest("selected branch cannot use default or unverified manifest symbols", async () => {
+    let indexedBranch: string | undefined = "main";
+    const router = new CompletionRouter({
+      api: { fetchRepoManifest: async () => ({ branch: indexedBranch, files: [{ symbols: [{ name: "mainOnly" }] }] }) } as never,
+      performance: new AutocompletePerformanceMonitor()
+    });
+    const load = (router as unknown as { loadManifestSymbols: (repo: string, base: string, branch?: string) => Promise<Set<string> | undefined> }).loadManifestSymbols.bind(router);
+    assert.deepEqual(await load("github:fixture/client", "https://example.invalid", "main"), new Set(["mainOnly"]));
+    assert.equal(await load("github:fixture/client", "https://example.invalid", "renamed"), undefined);
+    indexedBranch = undefined;
+    assert.equal(await load("github:fixture/client", "https://example.invalid", "renamed"), undefined);
+    indexedBranch = "renamed";
+    assert.deepEqual(await load("github:fixture/client", "https://example.invalid", "renamed"), new Set(["mainOnly"]));
+  });
+  await asyncTest("same-buffer branch switches isolate in-flight requests and cached completions", async () => {
+    const branches: unknown[] = [];
+    const api = { streamInlineCompletion: async (_base: string, body: { branch?: string }) => {
+      branches.push(body.branch);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return { text: "value;", alternatives: [], model: "test", provider: "anthropic" };
+    } };
+    const router = new CompletionRouter({ api: api as never, performance: new AutocompletePerformanceMonitor() });
+    const main = { repoId: "github:fixture/client", branch: "main", allowGraphContext: false };
+    const renamed = { ...main, branch: "renamed" };
+    await Promise.all([
+      router.fetchCompletions(sampleContext, autocompleteSettings, undefined, undefined, main),
+      router.fetchCompletions(sampleContext, autocompleteSettings, undefined, undefined, renamed)
+    ]);
+    await router.fetchCompletions(sampleContext, autocompleteSettings, undefined, undefined, renamed);
+    assert.deepEqual(branches, ["main", "renamed"]);
+  });
   await asyncTest("reuses in-flight promise for prefix-compatible extension", async () => {
     let requestCount = 0;
     const api = {
@@ -425,7 +456,7 @@ async function runAsyncTests(): Promise<void> {
       }
     };
     const cache = new CompletionCache();
-    cache.set(JSON.stringify(["github:fixture/client", null, "overlap-hash"]), "his.deps.identity;", ["this.getIdentity(target);"]);
+    cache.set(JSON.stringify(["github:fixture/client", null, null, "overlap-hash"]), "his.deps.identity;", ["this.getIdentity(target);"]);
     const performance = new AutocompletePerformanceMonitor();
     const router = new CompletionRouter({ api: api as never, performance, cache });
     const fileSample = `

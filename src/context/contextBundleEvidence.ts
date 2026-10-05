@@ -643,6 +643,18 @@ export function knowledgeGapsFromBundle(bundle: unknown[]): KnowledgeGapsEvidenc
         merged.documentationCoverage = data.documentationCoverage as Record<string, unknown> | null;
       }
       if (data.fileStructure) merged.fileStructure = data.fileStructure as Record<string, unknown>;
+      // Persisted knowledge-gaps artifacts contain already-normalized evidence.
+      // Preserve its graph when rehydrating rather than requiring a separate
+      // dependencies entry with the original graphMeta envelope.
+      const normalizedGraph = asRecord(data.dependencyGraph);
+      if (Array.isArray(normalizedGraph.directDependents) || typeof normalizedGraph.source === "string") {
+        merged.dependencyGraph = {
+          ...merged.dependencyGraph,
+          ...(Array.isArray(normalizedGraph.directDependents) ? {directDependents: normalizedGraph.directDependents.filter((path): path is string => typeof path === "string")} : {}),
+          ...(typeof normalizedGraph.source === "string" ? {source: normalizedGraph.source} : {}),
+          ...(typeof normalizedGraph.edgeCount === "number" ? {edgeCount: normalizedGraph.edgeCount} : {})
+        };
+      }
     }
     if (type === "ownership" && data.report) {
       merged.ownershipReport = data.report as OwnershipReport;

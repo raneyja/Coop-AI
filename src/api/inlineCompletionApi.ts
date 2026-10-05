@@ -29,6 +29,7 @@ export type V1InlineCompletionBody = {
   segments?: { prefix: string; suffix: string };
   stream?: boolean;
   repoId?: string;
+  branch?: string;
   useGraphContext?: boolean;
   languageId?: string;
   file?: string;
@@ -96,6 +97,7 @@ export async function handleInlineCompletionRequest(
   ) {
     const slice = await fetchInlineGraphSlice(graphDeps, {
       repoId: record.repoId,
+      branch: typeof record.branch === "string" ? record.branch : undefined,
       file: record.file,
       plan: org.plan,
       orgId: org.orgId

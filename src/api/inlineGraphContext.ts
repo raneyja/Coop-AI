@@ -18,6 +18,7 @@ export type InlineGraphFileSnippetFetcher = (input: {
   orgId?: string;
   repoId: string;
   path: string;
+  branch?: string;
 }) => Promise<string | undefined>;
 
 export type InlineGraphContextDeps = {
@@ -35,7 +36,7 @@ type GraphSliceData = {
 
 export async function fetchInlineGraphSlice(
   deps: InlineGraphContextDeps,
-  options: { repoId: string; file: string; plan: ChatOrgPlan; orgId?: string }
+  options: { repoId: string; file: string; plan: ChatOrgPlan; orgId?: string; branch?: string }
 ): Promise<InlineGraphSliceResult> {
   if (!deps.graphQuery) {
     return { status: "degraded" };
@@ -44,7 +45,7 @@ export async function fetchInlineGraphSlice(
   const deadline = Date.now() + INLINE_GRAPH_TIMEOUT_MS;
   try {
     const slice = await withDeadline(
-      fetchSliceData(deps, options.repoId, options.file, options.orgId, deadline),
+      fetchSliceData(deps, options.repoId, options.file, options.orgId, deadline, options.branch),
       deadline
     );
     if (!slice) {
@@ -61,9 +62,16 @@ async function fetchSliceData(
   repoId: string,
   file: string,
   orgId: string | undefined,
-  deadline: number
+  deadline: number,
+  branch?: string
 ): Promise<GraphSliceData | undefined> {
   const graphQuery = deps.graphQuery!;
+  if (branch) {
+    const inventory = await graphQuery.queryGraph({ orgId, repoId, query: "getFileTree" }) as { indexedBranch?: string } | undefined;
+    if (inventory?.indexedBranch !== branch) {
+      return undefined;
+    }
+  }
   const [dependentsResult, importsResult, ownershipResult] = await Promise.all([
     graphQuery.queryGraph({
       orgId,
@@ -97,7 +105,7 @@ async function fetchSliceData(
   };
 
   if (deps.fetchFileSnippet && remainingMs(deadline) > 15) {
-    const snippets = await fetchDependencySnippets(deps.fetchFileSnippet, slice, repoId, orgId, deadline);
+    const snippets = await fetchDependencySnippets(deps.fetchFileSnippet, slice, repoId, orgId, deadline, branch);
     if (Object.keys(snippets).length > 0) {
       slice.snippets = snippets;
     }
@@ -111,7 +119,8 @@ async function fetchDependencySnippets(
   slice: Pick<GraphSliceData, "dependents" | "imports">,
   repoId: string,
   orgId: string | undefined,
-  deadline: number
+  deadline: number,
+  branch?: string
 ): Promise<Record<string, string>> {
   const paths = pickSnippetPaths(slice);
   if (paths.length === 0) {
@@ -124,7 +133,7 @@ async function fetchDependencySnippets(
       if (remainingMs(deadline) <= 5) {
         return;
       }
-      const content = await fetchFileSnippet({ orgId, repoId, path });
+      const content = await fetchFileSnippet({ orgId, repoId, path, branch });
       const snippet = formatSnippetLines(content);
       if (snippet) {
         snippets[path] = snippet;

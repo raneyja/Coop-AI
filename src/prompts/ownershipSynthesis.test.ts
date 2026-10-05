@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { buildUserMessageWithContext } from "./systemPrompts";
 import type { OwnershipReport } from "../types/ownership";
 import { buildOwnershipSynthesisUserPrompt, formatOwnershipReportForPrompt, OWNERSHIP_INTELLIGENCE_SYSTEM } from "./ownershipSynthesis";
 
@@ -247,6 +248,20 @@ test("derived history and cross-team prose cannot reintroduce unproven ownership
   });
   assert.match(formatted, /highest-ranked contributor alice; other ranked contributors none retrieved/);
   assert.doesNotMatch(formatted, /Confirmed single-point|no backup exists|Team dispersion confirmed|only Alice knows/);
+});
+
+test("missing policy matches stay unverified in actual assembled ownership prompt even with a full report", () => {
+  const prompt = buildOwnershipSynthesisUserPrompt({ report: {
+    ...report, owner: "CoopAI-Corp", repo: "coop-dogfood-launch", path: "src/mathRenamed.ts",
+    orgContext: undefined, warnings: ["No CODEOWNERS file/team matched"],
+    completeness: "full"
+  } });
+  const assembled = buildUserMessageWithContext(prompt, { owner: "CoopAI-Corp", repo: "coop-dogfood-launch" });
+  assert.ok(assembled.includes("declared ownership is unverified in this pass, not absent"));
+  assert.ok(assembled.includes("An absence claim requires independently attached policy coverage proving it"));
+  assert.ok(assembled.includes("Report completeness and contributor scores do not establish exhaustive policy coverage"));
+  assert.ok(OWNERSHIP_INTELLIGENCE_SYSTEM.includes("Missing CODEOWNERS/team matches do not prove that no declared owner exists"));
+  assert.equal(OWNERSHIP_INTELLIGENCE_SYSTEM.includes('"no CODEOWNERS/team; escalate via repository admins/maintainers"'), false);
 });
 
 console.log(`\nownershipSynthesis: ${passed}/${passed + failed} tests passed`);

@@ -321,6 +321,16 @@ test("import-only named-symbol answer replaces unsupported defect prose but reta
   assert.doesNotMatch(out, /off-by-one bug|silently give this caller wrong results/);
 });
 
+test("weak heuristic candidates do not become verified file dependencies in the import-only guard", () => {
+  const original = "Retrieved candidate src/caller.ts needs verification.";
+  const out = enrichBlastRadiusResponse(original, {
+    file: "src/mathRenamed.ts", namedAskSymbols: ["positiveSum"],
+    dependentDetails: [{ path: "src/caller.ts", depth: 1, source: "heuristic", strength: "weak" }]
+  });
+  assert.equal(out, original);
+  assert.equal(out.includes("**Verified file dependencies**"), false);
+});
+
 test("import-only evidence cannot establish named behavior impact or complete depth-one coverage", () => {
   const prompt = buildBlastRadiusSynthesisUserPrompt({file: "src/mathRenamed.ts", evidence: {file: "src/mathRenamed.ts", namedAskSymbols: ["positiveSum"], directDependents: ["src/caller.ts"], graphMeta: {source: "import-parse", edgeCount: 1}, completeness: "partial"}});
   assert.match(prompt, /Without caller body or symbol-level use evidence/);

@@ -117,6 +117,25 @@ void (async () => {
   assert.equal(missingResult.status, "degraded");
   passed++;
 
+  const selectedBranches: (string | undefined)[] = [];
+  const selectedGraph = cache.getGraph("org-1", "github:acme/app")!;
+  cache.upsertRepository("org-1", { repoId: "github:acme/app", provider: "github", owner: "acme", repo: "app" }, {
+    metadata: { ...selectedGraph.metadata, indexedBranch: "renamed" }
+  });
+  const selectedDeps = { graphQuery, fetchFileSnippet: async ({ branch }: { branch?: string }) => {
+    selectedBranches.push(branch);
+    return "export const branchOracle = 'renamed';";
+  } };
+  assert.equal((await fetchInlineGraphSlice(selectedDeps, {
+    repoId: "github:acme/app", file: "src/foo.ts", orgId: "org-1", plan: "pro", branch: "main"
+  })).status, "degraded");
+  assert.deepEqual(selectedBranches, []);
+  assert.equal((await fetchInlineGraphSlice(selectedDeps, {
+    repoId: "github:acme/app", file: "src/foo.ts", orgId: "org-1", plan: "pro", branch: "renamed"
+  })).status, "ok");
+  assert.deepEqual(selectedBranches, ["renamed", "renamed"]);
+  passed++;
+
   const slowQuery = {
     queryGraph: async () => {
       await new Promise((resolve) => setTimeout(resolve, INLINE_GRAPH_TIMEOUT_MS + 50));

@@ -35,6 +35,7 @@ export type FetchCompletionsOptions = {
   fileSource?: "workspace" | "git" | "remote" | "external";
   /** Frozen active session target; global defaults may still be updating. */
   repoId?: string;
+  branch?: string;
 };
 
 const MAX_FIM_PREFIX_CHARS = 4_000;
@@ -59,7 +60,7 @@ type InFlightEntry = {
 export class CompletionRouter {
   private readonly cache: CompletionCache;
   private readonly inFlightByDoc = new Map<string, InFlightEntry>();
-  private manifestSymbolCache: { repoId: string; entry: ManifestSymbolCacheEntry } | undefined;
+  private manifestSymbolCache: { repoId: string; branch?: string; entry: ManifestSymbolCacheEntry } | undefined;
 
   public constructor(private readonly deps: CompletionRouterDeps) {
     this.cache = deps.cache ?? new CompletionCache();
@@ -73,7 +74,7 @@ export class CompletionRouter {
     options?: FetchCompletionsOptions
   ): Promise<CompletionRouterResult> {
     options = { ...options, repoId: options?.repoId ?? buildRepoId(readConfiguration()) };
-    const scopeKey = JSON.stringify([options.repoId, options.allowGraphContext, context.contextHash]);
+    const scopeKey = JSON.stringify([options.repoId, options.branch, options.allowGraphContext, context.contextHash]);
     const timer = createLatencyTimer();
 
     if (shouldSkipForPrivacy(context)) {
@@ -99,7 +100,7 @@ export class CompletionRouter {
       this.cache.delete(scopeKey);
     }
 
-    const docKey = JSON.stringify([options.repoId, options.allowGraphContext, context.filePath]);
+    const docKey = JSON.stringify([options.repoId, options.branch, options.allowGraphContext, context.filePath]);
     const prefixKey = buildFimPrefix(context) || context.currentLinePrefix;
     const surroundingContext = JSON.stringify([
       context.languageId,
@@ -235,7 +236,7 @@ export class CompletionRouter {
 
       if (ranked.length > 0) {
         this.cache.set(
-          JSON.stringify([options?.repoId, options?.allowGraphContext, context.contextHash]),
+          JSON.stringify([options?.repoId, options?.branch, options?.allowGraphContext, context.contextHash]),
           ranked[0].text,
           ranked.slice(1).map((r) => r.text)
         );
@@ -290,7 +291,7 @@ export class CompletionRouter {
       return undefined;
     }
 
-    const manifestSymbols = await this.loadManifestSymbols(repoId, prefs.apiBaseUrl);
+    const manifestSymbols = await this.loadManifestSymbols(repoId, prefs.apiBaseUrl, options?.branch);
     if (!manifestSymbols?.size) {
       return undefined;
     }
@@ -299,10 +300,11 @@ export class CompletionRouter {
 
   private async loadManifestSymbols(
     repoId: string,
-    baseUrl: string
+    baseUrl: string,
+    branch?: string
   ): Promise<Set<string> | undefined> {
     const cached = this.manifestSymbolCache;
-    if (cached?.repoId === repoId && Date.now() < cached.entry.expiresAt) {
+    if (cached?.repoId === repoId && cached.branch === branch && Date.now() < cached.entry.expiresAt) {
       return cached.entry.symbols;
     }
 
@@ -312,6 +314,9 @@ export class CompletionRouter {
         MANIFEST_SYMBOL_FETCH_TIMEOUT_MS,
         new AbortController().signal
       );
+      if (branch && manifest.branch !== branch) {
+        return undefined;
+      }
       const symbols = new Set<string>();
       for (const file of manifest.files ?? []) {
         for (const symbol of file.symbols ?? []) {
@@ -323,6 +328,7 @@ export class CompletionRouter {
       if (symbols.size > 0) {
         this.manifestSymbolCache = {
           repoId,
+          branch,
           entry: {
             symbols,
             expiresAt: Date.now() + MANIFEST_SYMBOL_CACHE_TTL_MS
@@ -334,7 +340,7 @@ export class CompletionRouter {
       // fail-open — local context penalties still apply
     }
 
-    return cached?.repoId === repoId ? cached.entry.symbols : undefined;
+    return cached?.repoId === repoId && cached.branch === branch ? cached.entry.symbols : undefined;
   }
 
   private async requestWithFallback(
@@ -376,6 +382,7 @@ export class CompletionRouter {
       model: preset.model,
       maxTokens,
       temperature: 0.15,
+      ...(options?.branch ? { branch: options.branch } : {}),
       ...(options?.sessionMode ? { sessionMode: options.sessionMode } : {}),
       ...(options?.fileSource ? { fileSource: options.fileSource } : {}),
       ...(useGraphContext
@@ -414,6 +421,7 @@ export class CompletionRouter {
       file: string;
       useGraphContext?: boolean;
       repoId?: string;
+      branch?: string;
       sessionMode?: "file-assistant" | "indexed-repo";
       fileSource?: "workspace" | "git" | "remote" | "external";
       provider: LlmProvider;

@@ -38,7 +38,7 @@ export const OWNERSHIP_INTELLIGENCE_SYSTEM = `You are an organizational intellig
 Synthesize a response that:
 1. Identifies evidenced authors, reviewers and declared owners for the target path or repository
 2. Describes retrieved contributor counts and identifies what ownership coverage remains unverified
-3. Always includes an on-call escalation path: CODEOWNERS team, CODEOWNERS path owners, and/or recent reviewers from attached sources — or an explicit evidence-backed gap ("no CODEOWNERS/team; escalate via repository admins/maintainers") with source labels. Never end on "no backup" / "no strong secondary" with zero escalation guidance.
+3. Includes an evidenced CODEOWNERS contact or recent reviewer as a contact candidate — otherwise state that declared ownership and escalation policy are unverified in this pass, and recommend checking repository admins/maintainers. Missing CODEOWNERS/team matches do not prove that no declared owner exists. Never end on "no backup" / "no strong secondary" with zero escalation guidance.
 4. Identifies expertise coverage gaps — recommend pairing, a secondary owner, or escalation before any staffing change
 5. Recommends knowledge transfer targets (who should learn this)
 
@@ -119,6 +119,9 @@ export function buildOwnershipSynthesisUserPrompt(input: OwnershipSynthesisInput
   lines.push(
     "Required on-call shape: name an evidenced contact candidate with a source label, then give a declared CODEOWNERS contact or a recommended avenue from derived teamGraph / recent reviewers. Label missing policy evidence and admin fallback as recommendations. Do not invent contacts or claim a fallback is the only verified route."
   );
+  lines.push(
+    "Missing or unmatched CODEOWNERS/team evidence means declared ownership is unverified in this pass, not absent. Do not conclude that there is no declared owner from an empty match, missing orgContext, report completeness, or contributor scores. An absence claim requires independently attached policy coverage proving it; otherwise verify the current ownership policy before recommending an ownership change."
+  );
   lines.push("Follow the required response structure in your system instructions.");
 
   return lines.join("\n");
@@ -179,6 +182,7 @@ export function formatOwnershipReportForPrompt(
     );
   }
 
+  sections.push("### Ownership policy coverage\n- A missing CODEOWNERS/team match does not prove no declared owner exists. Unless independently attached policy coverage establishes absence, declared ownership is unverified in this pass. Report completeness and contributor scores do not establish exhaustive policy coverage.");
   sections.push(`### Activity interpretation\n- Analysis time (UTC): ${now.toISOString()}\n- Score tiers rank sampled contributors; they do not declare ownership. Missing or contradictory recency evidence is unknown. Slack presence is not repository activity.\n- Retrieved counts are sampled evidence, not complete history. Do not infer empty earlier quarters/years, absent ongoing maintenance, or confirmed knowledge risk from a seed commit or missing secondary.`);
 
   if (report.scores.length > 0) {

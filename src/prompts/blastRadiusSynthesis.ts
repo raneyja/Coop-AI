@@ -520,6 +520,23 @@ export function honestNamedFunctionBlastAnswer(symbols: string[], file?: string)
  * and prepend production-ranked callers when the model omitted them.
  * Empty graph: **replace** the essay — never prepend a caveat and keep fluff.
  */
+export function importOnlyNamedBlastAnswer(evidence: BlastRadiusEvidence | undefined): string | undefined {
+  if (!evidence) return undefined;
+  const named = (evidence.namedAskSymbols ?? []).filter((symbol) => symbol.trim());
+  const details = codeDependentDetailsFromEvidence(evidence);
+  const ranked = rankCodeDependentsByRisk(details, 8);
+  if (!named.length || !ranked.length || details.some((entry) => entry.source !== "import-parse" || entry.strength === "strong")) return undefined;
+  return [
+    `Named-symbol impact for \`${named.join(", ")}\` is **unverified** in this turn.`,
+    "", "**Verified file dependencies**", "",
+    ...ranked.map((entry) => `- \`${entry.path}\` — file dependency; named-symbol use unverified.`),
+    "",
+    "These edges do not establish calls to the requested symbol, complete dependency coverage, or inevitable behavioral impact. They also do not establish an implementation defect or the intended contract.",
+    "", "**What to check next**", "",
+    "Verify the requested symbol's use in these remote caller bodies, then assess the proposed change against the actual inputs and expected contract. Missing call evidence does not mean the change is safe."
+  ].join("\n");
+}
+
 export function enrichBlastRadiusResponse(
   content: string,
   evidence: BlastRadiusEvidence | undefined
@@ -534,21 +551,8 @@ export function enrichBlastRadiusResponse(
   const claimsZero = blastResponseClaimsZeroImpact(trimmed);
   const hasDependents = ranked.length > 0;
 
-  if (named.length > 0 && hasDependents && !details.some((entry) => entry.strength === "strong")) {
-    return [
-      `Named-symbol impact for \`${named.join(", ")}\` is **unverified** in this turn.`,
-      "",
-      "**Verified file dependencies**",
-      "",
-      ...ranked.map((entry) => `- \`${entry.path}\` — file dependency; named-symbol use unverified.`),
-      "",
-      "These edges do not establish calls to the requested symbol, complete dependency coverage, or inevitable behavioral impact. They also do not establish an implementation defect or the intended contract.",
-      "",
-      "**What to check next**",
-      "",
-      "Verify the requested symbol's use in these remote caller bodies, then assess the proposed change against the actual inputs and expected contract. Missing call evidence does not mean the change is safe."
-    ].join("\n");
-  }
+  const importOnlyAnswer = importOnlyNamedBlastAnswer(evidence);
+  if (importOnlyAnswer) return importOnlyAnswer;
 
   if (!hasDependents) {
     return named.length > 0
