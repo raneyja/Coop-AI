@@ -55,6 +55,7 @@ import { ORG_DOCS_EVIDENCE_LABEL, orgDocsSynthesisGuardrail } from "../workspace
 export const KNOWLEDGE_GAPS_EVIDENCE_SYSTEM = `You audit engineering health using only attached evidence from the Sources card and synthesis bundle.
 Universal behavior claims require tracing the relevant input conditions in attached source. Do not infer "every nonempty input fails" from one example: identify the condition that causes failure and check relevant counterexamples. Describe a defect with the narrowest condition the implementation supports.
 Separate observed implementation behavior from the expected contract. A function name alone is not a formal specification. Without attached tests, documentation, or an explicit user requirement establishing intent, describe a potential defect conditional on the expected behavior and ask for that intent to be confirmed.
+When intent is unverified, do not label behavior a confirmed error, blocker, or wrong result and then qualify that claim later. Put the condition in the finding itself: observed behavior first, potential defect only if the expected contract requires different behavior. Naming conventions do not establish that contract. An import or call edge proves a dependency, not that callers inevitably receive wrong results; caller impact requires a verified contract and relevant inputs.
 When ### Focus file excerpts are attached, you MAY name documentation, ownership, or default-on risks that are visible in those excerpts (allowlists, call caps, missing confirmation). Cite the path. Still fail: inventing files not attached, foreign-repo paths, or a 40-bullet dump.
 When focus excerpts are absent, list scan-backed gaps and integration hits only — never invent gap subsections from code inspection or generic framework knowledge.
 Documentation gap subsections must come from knowledge gap scan entries, opened Confluence/Notion/Google Docs Body lines, Jira Body lines, opened Slack/Teams Body lines, explicit integration errors in the bundle, or attached focus file excerpts.
@@ -280,6 +281,9 @@ function appendKnowledgeGapsResponseContract(
   );
 
   lines.push("## Response contract (required)");
+  lines.push(
+    "Source findings must distinguish observed behavior from a verified expected contract in the finding itself, not a later disclaimer. Without attached tests, documentation, or an explicit user requirement proving intent, do not label behavior a confirmed error, blocker, or wrong result. A function name is not contract evidence. State potential defects conditionally and confirm intent before prescribing a correction. An import or call edge establishes a dependency only; do not claim inevitable wrong caller results without the relevant inputs and expected contract."
+  );
   lines.push(
     "Missing search hits or unattached source bodies establish a coverage limit, not that documentation, ownership, or an implementation does not exist. Describe such results as unknown or not found in this pass. Only assert absence when attached evidence actually proves it; never turn unavailable evidence into a confirmed gap.",
     "Recommendations are prospective: describe what should be checked or changed. Never assume a proposed patch was applied or repeat a prior chat claim of a fix as fact. The actual attached source body is authoritative for current behavior; an unapplied suggestion does not change it."

@@ -391,6 +391,25 @@ test("gap behavior claims require traced conditions and an evidenced expected co
   assert.ok(KNOWLEDGE_GAPS_EVIDENCE_SYSTEM.includes("potential defect conditional on the expected behavior"));
 });
 
+test("named fixture audit does not convert observed loop bounds and a caller edge into a proven defect", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({
+    file: "src/mathRenamed.ts",
+    userFocus: "Identify concrete supported gaps for positiveSum and caller impact. Cite evidence and label unknowns.",
+    evidence: {
+      focusFiles: [
+        { path: "src/mathRenamed.ts", startLine: 1, content: "export function positiveSum(values: number[]): number {\n  let total = 0;\n  for (let i = 0; i < values.length - 1; i++) {\n    if (values[i] > 0) total += values[i];\n  }\n  return total;\n}" },
+        { path: "src/caller.ts", startLine: 1, content: 'import type { MathInput } from "./contract";\nimport { positiveSum } from "./mathRenamed";\n\nexport function summarize(input: MathInput): number {\n  return positiveSum(input.values);\n}' }
+      ]
+    }
+  });
+  assert.ok(prompt.includes("values.length - 1"));
+  assert.ok(prompt.includes("return positiveSum(input.values)"));
+  assert.ok(prompt.includes("in the finding itself, not a later disclaimer"));
+  assert.ok(prompt.includes("do not label behavior a confirmed error, blocker, or wrong result"));
+  assert.ok(prompt.includes("A function name is not contract evidence"));
+  assert.ok(prompt.includes("do not claim inevitable wrong caller results without the relevant inputs and expected contract"));
+});
+
 console.log(`\nknowledgeGapsSynthesis: ${passed}/${passed + failed} tests passed`);
 if (failed > 0) {
   process.exit(1);
