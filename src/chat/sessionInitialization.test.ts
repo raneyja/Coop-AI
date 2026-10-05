@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createSharedInitialization } from "./sessionInitialization";
 import { shouldAcceptHistory } from "../webview/lib/chatHydration";
 
@@ -40,6 +43,16 @@ async function run(): Promise<void> {
   await identityDirectory;
   assert.equal(await initialize(), undefined);
   assert.equal(calls, 1, "subsequent readiness does not rehydrate or reset thread history");
+
+  const sessionSource = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "CoopChatSession.ts"),
+    "utf8"
+  );
+  const hydrationGuard = sessionSource.indexOf("if (!this.sessionHydrated)");
+  const editorStamp = sessionSource.indexOf("this.stampLiveEditorSelection(editor", hydrationGuard);
+  assert.ok(hydrationGuard >= 0, "editor refresh must have a startup hydration guard");
+  assert.ok(editorStamp > hydrationGuard, "pre-hydration calls must return before stamping editor context");
+
   console.log("startup identity hydration checks passed");
 }
 void run().catch((error: unknown) => { console.error(error); process.exitCode = 1; });

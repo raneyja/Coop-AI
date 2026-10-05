@@ -662,6 +662,8 @@ export class CoopChatSession {
   private settingsMessageDisposable?: vscode.Disposable;
   /** Sidebar/session hydrate runs once; later resolveWebviewView only re-attaches the iframe. */
   private readonly initializeOnce = createSharedInitialization(() => this.hydrateSession());
+  /** Editor events can arrive while startup is restoring the active thread. */
+  private sessionHydrated = false;
   /** Last non-empty auth identity — used to start a fresh thread when a different account signs in. */
   private lastSignedInIdentity = "";
   /** Private in-memory verification association; never persisted or logged. */
@@ -941,6 +943,7 @@ export class CoopChatSession {
     void this.pushSettingsState().catch((error: unknown) => {
       console.error("[CoopAI] startup settings refresh failed", error);
     });
+    this.sessionHydrated = true;
   }
 
   /**
@@ -1081,6 +1084,13 @@ export class CoopChatSession {
       userActivatedEditor?: boolean;
     }
   ): void {
+    // Sidebar/webview reload can report the active Untitled editor before
+    // hydrateSession restores the thread's explicit remote repository. Do not
+    // publish that transient local chip; webview-ready performs the first
+    // post-hydration editor snap once the restored context is authoritative.
+    if (!this.sessionHydrated) {
+      return;
+    }
     // Highlight must stamp even while remote-open suppress is active, and even
     // when Chat has stolen focus (activeTextEditor is undefined).
     const effective = this.resolveEditorForContextRefresh(editor);
