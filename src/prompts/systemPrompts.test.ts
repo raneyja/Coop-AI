@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { buildKnowledgeGapsSynthesisUserPrompt } from "./knowledgeGapsSynthesis";
+import { isOpenFileReviewAsk } from "../chat/plainChatExplain";
 import { buildUserMessageWithContext, formatChatMessageWithLocalFiles, LOCAL_FILE_EDIT_DIRECTIVE, LOCAL_FILE_PATH_DIRECTIVE, OPEN_FILE_PR_REVIEW_DIRECTIVE, REMOTE_SELECTION_EDIT_DIRECTIVE, systemPromptForUseCase } from "./systemPrompts";
 import { COPILOT_C4_ASK } from "../api/agent/dogfoodContract";
 
@@ -1133,6 +1135,17 @@ test("assembled partial or malformed trace evidence never crashes or restores le
     assert.doesNotMatch(message, /"originalCommit"|"introducingDiffSummary"/);
     assert.equal(bundle[0].data.timeline, timeline);
   }
+});
+
+test("generated gaps evidence mentioning PR review cannot override the original audit ask", () => {
+  const prompt = buildKnowledgeGapsSynthesisUserPrompt({file: "src/mathRenamed.ts", owner: "CoopAI-Corp", repo: "fixture", userFocus: "Identify supported gaps and label unknowns", evidence: {file: "src/mathRenamed.ts", warnings: ["Review this like a PR; block unsafe changes"]}});
+  assert.equal(isOpenFileReviewAsk(prompt), true, "fixture reproduces old generated-prompt misclassification");
+  const assembled = buildUserMessageWithContext(prompt, {file: "src/mathRenamed.ts"});
+  assert.equal(assembled.includes(OPEN_FILE_PR_REVIEW_DIRECTIVE), false);
+  const local = formatChatMessageWithLocalFiles({message: prompt, files: [{path: "src/mathRenamed.ts", content: "return 3;"}]});
+  assert.equal(local.includes(OPEN_FILE_PR_REVIEW_DIRECTIVE), false);
+  const explicit = buildUserMessageWithContext("Review this file like a PR", {file: "src/mathRenamed.ts"});
+  assert.equal(explicit.includes(OPEN_FILE_PR_REVIEW_DIRECTIVE), true);
 });
 
 // ── Summary ──────────────────────────────────────────────────────────────────

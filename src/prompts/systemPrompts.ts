@@ -933,7 +933,7 @@ export function formatChatMessageWithLocalFiles(options: {
   });
   emitLocalFilesBlock(lines, options.files, options.message, options.fileAssistant);
   lines.push("</attached_context>", "", options.message.trim());
-  if (isOpenFileReviewAsk(options.message)) {
+  if (isOpenFileReviewAsk(originalAskForReviewClassification(options.message))) {
     lines.push("", OPEN_FILE_PR_REVIEW_DIRECTIVE);
   }
   if (options.fileAssistant) {
@@ -1268,10 +1268,18 @@ export function buildUserMessageWithContext(
   } else if (context?.remoteSelectionChange) {
     lines.push("", REMOTE_SELECTION_EDIT_DIRECTIVE);
   }
-  if (isOpenFileReviewAsk(message)) {
+  if (isOpenFileReviewAsk(originalAskForReviewClassification(message))) {
     lines.push("", OPEN_FILE_PR_REVIEW_DIRECTIVE);
   }
   return lines.join("\n");
+}
+
+/** Generated synthesis instructions/evidence must not become user PR intent. */
+function originalAskForReviewClassification(message: string): string {
+  if (!/^## Task\s*\n/.test(message.trimStart())) return message;
+  const focus = message.match(/^## User focus \(required\)\s*\n([\s\S]*?)(?=^## |$(?![\s\S]))/m)?.[1];
+  if (focus) return focus.split("\n\n- The user added a specific ask")[0].trim();
+  return message.trimStart().replace(/^## Task\s*\n/, "").split(/\n## /)[0].trim();
 }
 
 type TreeOverviewSnippet = {
