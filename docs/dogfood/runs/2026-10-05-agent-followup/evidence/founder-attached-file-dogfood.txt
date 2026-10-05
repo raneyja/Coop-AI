@@ -1,0 +1,176 @@
+01:16 PM
+tell me a story about this file. What is its purpose?
+
+file: StrataKeyboard/HostTextMonitor.swift · repo: coopai-group/Strata · branch: main
+
+
+Worked for 29s
+
+Explored 1 file, 3 searches
+Read
+Read attached source
+Searched Confluence for
+Host Text Monitor StrataKeyboard
+Searched Notion for
+Host Text Monitor
+Searched Google Docs for
+Host Text Monitor
+CoopAI
+01:16 PM
+Copy message
+HostTextMonitor is the keyboard’s lookout tower: it watches the host app’s text around the cursor, figures out what text was just inserted (especially from dictation), and then safely “captures” that text so the keyboard can react to it.
+
+What this thing is doing
+
+It keeps a snapshot of the text before the cursor (lastKnownBefore) and, when it sees an external change that isn’t from its own programmatic edits, it records a pre-dictation snapshot and starts a short settle timer so it can react once dictation finishes instead of on every keystroke or partial recognition result. When the timer fires, it compares the old snapshot and current text to infer exactly what was inserted, and applies length bounds to decide if it’s worth capturing.
+StrataKeyboard/HostTextMonitor.swift:18-24
+Copy
+    private var lastKnownBefore: String = ""
+    private var preDictationSnapshot: String?
+    private var settleTimer: Timer?
+    private var isCapturing: Bool = false
+...
+58:79:StrataKeyboard/HostTextMonitor.swift
+    func textDidChange() {
+        guard !bridge.isProgrammaticEdit else {
+            if preDictationSnapshot == nil {
+                lastKnownBefore = getContextBefore()
+            }
+            return
+        }
+        
+        guard !isCapturing else { return }
+        
+        if preDictationSnapshot == nil {
+            preDictationSnapshot = lastKnownBefore
+            logger.info("External text change detected — snapshotting pre-dictation state (\(self.lastKnownBefore.count) chars)")
+        }
+        
+        settleTimer?.invalidate()
+        settleTimer = Timer.scheduledTimer(withTimeInterval: settleDelay, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                self?.onDictationSettled()
+            }
+        }
+    }
+When dictation is “settled”, it runs computeInsertedText to compute the new text segment between the old and new “before” contexts. It handles simple prefix growth, as well as more complex edits by anchoring to a suffix of the old text; it then trims whitespace and enforces min/max length thresholds before deciding that this looks like a real dictated segment to capture.
+StrataKeyboard/HostTextMonitor.swift:94-123
+Copy
+    private func onDictationSettled() {
+        settleTimer = nil
+        
+        guard let snapshot = preDictationSnapshot else { return }
+        preDictationSnapshot = nil
+        
+        let currentBefore = getContextBefore()
+        
+        guard let insertedText = computeInsertedText(oldBefore: snapshot, newBefore: currentBefore) else {
+            logger.info("No dictated text detected after settle")
+            lastKnownBefore = currentBefore
+            return
+        }
+        
+        let trimmed = insertedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        guard trimmed.count >= minimumCaptureLength else {
+            logger.info("Dictated text too short (\(trimmed.count) chars)")
+            lastKnownBefore = currentBefore
+            return
+        }
+        
+        guard trimmed.count <= maximumCaptureLength else {
+            logger.info("Dictated text too long (\(trimmed.count) chars)")
+            lastKnownBefore = currentBefore
+            return
+        }
+        
+        logger.info("Dictation settled — capturing \(trimmed.count) chars")
+        performCapture(dictatedText: insertedText)
+    }
+Once it decides to capture, it marks itself as capturing, deletes the newly dictated text from the host (calling deleteBackward the appropriate number of times), and publishes that dictated text through the KeyboardBridge so the keyboard can do something smarter with it (e.g., replace, transform, or reinsert). After a short delay, it refreshes lastKnownBefore from the host and clears isCapturing so it can watch for the next dictation.
+StrataKeyboard/HostTextMonitor.swift:156-176
+Copy
+    private func performCapture(dictatedText: String) {
+        isCapturing = true
+        let deleteCount = dictatedText.count
+        
+        bridge.beginProgrammaticEdit()
+        
+        for _ in 0..<deleteCount {
+            deleteBackward()
+        }
+        
+        bridge.endProgrammaticEdit()
+        
+        bridge.capturedHostText.send(dictatedText)
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            Task { @MainActor in
+                self?.lastKnownBefore = self?.getContextBefore() ?? ""
+                self?.isCapturing = false
+            }
+        }
+    }
+In short: this file’s purpose is to non-invasively detect and extract newly inserted host text (primarily from dictation), route it through KeyboardBridge, and keep the keyboard’s internal model of the host text in sync while avoiding feedback loops from its own edits.
+
+01:17 PM
+What does onDictationSettled do, and what conditions cause it to return without capturing text?
+
+file: StrataKeyboard/HostTextMonitor.swift · repo: coopai-group/Strata · branch: main
+
+
+Worked for 40s
+
+Explored 1 file
+Read
+Read attached source
+CoopAI
+01:17 PM
+Copy message
+onDictationSettled runs after the “settle” delay to decide whether there is new dictated text before the cursor and, if so, to capture it and send it through performCapture. It clears the timer, compares the pre-dictation snapshot to the current pre-cursor text to compute the inserted span, enforces min/max length, and only then calls performCapture(dictatedText:) if everything passes.
+
+StrataKeyboard/HostTextMonitor.swift:11-14
+Copy
+    private let minimumCaptureLength: Int = 2
+    private let maximumCaptureLength: Int = 1000
+    private let settleDelay: TimeInterval = 1.5
+    private let anchorLength: Int = 60
+StrataKeyboard/HostTextMonitor.swift:94-124
+Copy
+    private func onDictationSettled() {
+        settleTimer = nil
+        
+        guard let snapshot = preDictationSnapshot else { return }
+        preDictationSnapshot = nil
+        
+        let currentBefore = getContextBefore()
+        
+        guard let insertedText = computeInsertedText(oldBefore: snapshot, newBefore: currentBefore) else {
+            logger.info("No dictated text detected after settle")
+            lastKnownBefore = currentBefore
+            return
+        }
+        
+        let trimmed = insertedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        guard trimmed.count >= minimumCaptureLength else {
+            logger.info("Dictated text too short (\(trimmed.count) chars)")
+            lastKnownBefore = currentBefore
+            return
+        }
+        
+        guard trimmed.count <= maximumCaptureLength else {
+            logger.info("Dictated text too long (\(trimmed.count) chars)")
+            lastKnownBefore = currentBefore
+            return
+        }
+        
+        logger.info("Dictation settled — capturing \(trimmed.count) chars")
+        performCapture(dictatedText: insertedText)
+    }
+Conditions where it returns without capturing text:
+
+No snapshot available: preDictationSnapshot is nil when it fires, so the initial guard let snapshot = preDictationSnapshot else { return } fails (e.g., no external change was ever snapshotted).
+No detectable inserted text: computeInsertedText(oldBefore:newBefore:) returns nil, which happens when it cannot identify any new span between the snapshot and the current text (no change, only deletions/overwrites, or anchor not found). In this case it logs “No dictated text detected after settle”, updates lastKnownBefore, and returns.
+Inserted text is too short: After trimming whitespace/newlines, trimmed.count < minimumCaptureLength (i.e. < 2), so it logs “Dictated text too short …”, updates lastKnownBefore, and returns.
+Inserted text is too long: After trimming, trimmed.count > maximumCaptureLength (i.e. > 1000), so it logs “Dictated text too long …”, updates lastKnownBefore, and returns.
