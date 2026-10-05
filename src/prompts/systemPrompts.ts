@@ -2,7 +2,8 @@ import type { UseCase } from "../api/types";
 import type { IntegrationChatProvider } from "../chat/types";
 import { isLocalFileChangeAsk, resolveEditAskKind, type EditAskKind } from "../chat/editAskKind";
 import { isOpenFileReviewAsk } from "../chat/plainChatExplain";
-import { DECISION_HISTORIAN_SYSTEM } from "./decisionSynthesis";
+import { DECISION_HISTORIAN_SYSTEM, formatTimelineForPrompt } from "./decisionSynthesis";
+import type { DecisionTimeline } from "../types/decisionTimeline";
 import { OWNERSHIP_INTELLIGENCE_SYSTEM, formatOwnershipReportForPrompt } from "./ownershipSynthesis";
 import type { OwnershipReport } from "../types/ownership";
 import { REPO_SUMMARY_EVIDENCE_SYSTEM } from "./repoSummarySynthesis";
@@ -210,6 +211,7 @@ const USE_CASE_STRUCTURE: Partial<Record<Exclude<UseCase, "inline_completion">, 
 Open with 1–2 sentences that state the decision. When evidence is thin, say so in ordinary English and stay compact — do not pad Alternatives / Trade-offs with speculation. No **Answer**, **Summary**, or **Your question** heading.
 
 When ## User focus (required) is present: PASS answers the ask with timeline evidence (commit/PR/discussion). FAIL: restating or truncating the user's question; generic restatement with no evidence.
+Legacy originalCommit/introducingDiffSummary labels and earliest returned history are sampled provenance, not proof of introduction. A renamed target file was not introduced by the rename; unchanged requested functions were not introduced by that commit. Check target fileChange status and actual patch: state only observed changes, and mark original function/file introduction unknown unless independently verified by addition evidence and sufficient history coverage.
 
 Then at most 3 topic headings from this list (omit empty):
 
@@ -263,6 +265,7 @@ When callers/dependents were **not** confirmed (empty graph, Impact unverified):
 When ## User focus (required) is present: PASS ties the ask to Top risk surfaces / dependents. FAIL: speculative impact with no paths; FAIL: long essay after “unverified.”
 Dependency edges establish retrieved relationships, not production deployment or inevitable breakage. Never classify a caller as production from its src/lib/app prefix alone. No retrieved callers does not certify safety. A local positional-parameter rename does not change arity/types/return compatibility; claim compile failure only when a concrete incompatible contract is evidenced.
 An import edge alone proves a file dependency, not a named-symbol call. Require caller body or symbol-level use evidence to claim the named function affects that file. Never say any/every behavior change affects an importer. Retrieved edges do not prove complete coverage, including depth 1; completeness needs independent attached coverage evidence.
+Function names do not prove expected behavior or a defect; separate observed implementation behavior from a conditional bug claim requiring an expected contract. If named-symbol use is unverified, every section including Risks must keep its runtime impact unverified; do not later conclude that a behavioral fix necessarily affects the importer.
 
 Then at most 2 topic headings **only when dependents are confirmed** (omit empty):
 
@@ -2217,11 +2220,11 @@ export function formatFileHistoryForLlm(evidence: FileHistoryEvidence): string[]
   const fileAttr = evidence.file ? ` file="${evidence.file}"` : "";
   const lines = [
     `<file_history${fileAttr}>`,
-    "Remote code-host file history (Zero-Clone). When the user asks who created this file or when, use created (oldest commit) and latest. Do not say author or date are unavailable while this block is present."
+    "Remote code-host sampled file history (Zero-Clone). Earliest returned commit is a provenance anchor, not proof of file/function introduction. Report attached author/date as sampled history; creation remains unverified without an actual addition patch and sufficient history coverage. Rename does not imply introduction."
   ];
   if (evidence.created) {
     lines.push(
-      `created: ${evidence.created.author || "unknown"} ${evidence.created.date} ${evidence.created.sha.slice(0, 8)} ${evidence.created.message}`.trim()
+      `earliest_returned: ${evidence.created.author || "unknown"} ${evidence.created.date} ${evidence.created.sha.slice(0, 8)} ${evidence.created.message}`.trim()
     );
   }
   if (evidence.latest && evidence.latest.sha !== evidence.created?.sha) {
@@ -2239,6 +2242,27 @@ function qualifiedKnowledgeGapObservation(type: unknown, message: string): strin
     : message;
 }
 
+function safeDecisionTimelineSummary(value: DecisionTimeline): string {
+  try {
+    return `Target file: ${typeof value.file === "string" ? value.file : "unknown"}\n` + formatTimelineForPrompt({
+      ...value,
+      completeness: value.completeness ?? "minimal",
+      chronology: Array.isArray(value.chronology) ? value.chronology : [],
+      warnings: Array.isArray(value.warnings) ? value.warnings : [],
+      alternatives: Array.isArray(value.alternatives) ? value.alternatives : []
+    });
+  } catch {
+    // Malformed remote evidence must not crash assembly or restore legacy
+    // introduction labels. Preserve only validated sampled commit metadata.
+    const commit = asHistoryCommit(value.focusCommit) ?? asHistoryCommit(value.originalCommit);
+    return [
+      `Target file: ${typeof value.file === "string" ? value.file : "unknown"}`,
+      "Partial timeline evidence: coverage and original introduction are unverified.",
+      ...(commit ? [`Sampled commit: ${commit.sha} ${commit.author} ${commit.date} ${commit.message}`] : [])
+    ].join("\n");
+  }
+}
+
 function sanitizeContextBundleForLlm(bundle: unknown): unknown {
   if (!Array.isArray(bundle)) {
     return bundle;
@@ -2248,7 +2272,9 @@ function sanitizeContextBundleForLlm(bundle: unknown): unknown {
       return entry;
     }
     const record = entry as {
+      type?: string;
       data?: {
+        timeline?: DecisionTimeline;
         report?: OwnershipReport;
         ownershipReport?: OwnershipReport;
         jobScan?: { gaps?: Array<Record<string, unknown>>; [key: string]: unknown };
@@ -2294,6 +2320,18 @@ function sanitizeContextBundleForLlm(bundle: unknown): unknown {
 
     let mutated = false;
     const data: Record<string, unknown> = { ...source };
+
+    if (record.type === "decision_history" && source.timeline?.file) {
+      mutated = true;
+      data.timeline = { evidenceSummary: safeDecisionTimelineSummary(source.timeline) };
+    }
+    const rawHistory = (source as Record<string, unknown>).fileHistory;
+    if (rawHistory && typeof rawHistory === "object") {
+      const history = rawHistory as Record<string, unknown>;
+      mutated = true;
+      const { created, ...other } = history;
+      data.fileHistory = { ...other, ...(created ? { earliestReturnedCommit: created } : {}), introductionVerified: false };
+    }
 
     for (const key of ["report", "ownershipReport"] as const) {
       const report = source[key];

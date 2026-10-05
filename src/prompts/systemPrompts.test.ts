@@ -1104,6 +1104,37 @@ test("assembled ownership and gaps graph context contains observations without r
   assert.equal(bundle[1].data.jobScan?.gaps[0].message, "No owner declared");
 });
 
+test("assembled trace serializes rename provenance without legacy introduction labels", () => {
+  const commit = {sha: "bf1490e7a3ae", author: "alice", date: "2026-10-04T12:00:00Z", message: "Rename fixture and update branch label"};
+  const timeline = {file: "src/mathRenamed.ts", originalCommit: commit,
+    introducingDiffSummary: {filesChanged: 1, summary: "Rename src/math.ts; branch label literal changed", fileChange: {type: "renamed", previousPath: "src/math.ts"}, patchExcerpt: "- return 'main-oracle';\n+ return 'renamed-oracle';"},
+    alternatives: [], chronology: [], warnings: [], completeness: "partial"};
+  const bundle = [{type: "decision_history", data: {timeline, fileHistory: {file: timeline.file, created: commit, latest: commit}}}];
+  const message = buildUserMessageWithContext("Trace positiveSum and fixtureBranchLabel", {owner: "CoopAI-Corp", repo: "coop-dogfood-launch", contextBundle: bundle});
+  assert.doesNotMatch(message, /"originalCommit"|"introducingDiffSummary"|"created":|created \(oldest commit\)/);
+  assert.match(message, /earliest_returned:/);
+  assert.match(message, /Target file change: renamed from src\/math.ts/);
+  assert.match(message, /renamed-oracle/);
+  assert.match(message, /not proof of file\/function introduction/);
+  assert.match(systemPromptForUseCase("decision_archaeology"), /unchanged requested functions were not introduced by that commit/);
+  assert.equal(bundle[0].data.timeline.originalCommit, commit, "LLM serialization preserves original UI evidence");
+});
+
+test("assembled partial or malformed trace evidence never crashes or restores legacy labels", () => {
+  for (const timeline of [
+    {file: "src/mathRenamed.ts", originalCommit: {sha: "bf1490e", author: "alice", date: "2026-10-04", message: "Rename"}},
+    {file: "src/mathRenamed.ts", originalCommit: {sha: 12, author: "alice", date: "2026-10-04", message: "Rename"}, slackThread: {participants: null}},
+    {file: "src/mathRenamed.ts", originalCommit: {sha: "bf1490e", author: "alice", date: "2026-10-04", message: "Rename"}, chronology: [], warnings: [], alternatives: [], linkedPR: {reviews: null}}
+  ]) {
+    const bundle = [{type: "decision_history", data: {timeline}}];
+    const message = buildUserMessageWithContext("Trace this file", {contextBundle: bundle});
+    assert.match(message, /src\/mathRenamed.ts/);
+    assert.match(message, /2026-10-04/);
+    assert.doesNotMatch(message, /"originalCommit"|"introducingDiffSummary"/);
+    assert.equal(bundle[0].data.timeline, timeline);
+  }
+});
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 const total = passed + failed;
 console.log(`\nsystemPrompts: ${passed}/${total} tests passed`);

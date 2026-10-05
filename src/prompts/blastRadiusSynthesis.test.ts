@@ -317,6 +317,8 @@ test("import-only evidence cannot establish named behavior impact or complete de
   const system = systemPromptForUseCase("blast_radius");
   assert.match(system, /Never say any\/every behavior change affects an importer/);
   assert.match(system, /Retrieved edges do not prove complete coverage, including depth 1/);
+  assert.match(system, /Function names do not prove expected behavior or a defect/);
+  assert.match(system, /every section including Risks must keep its runtime impact unverified/);
   assert.match(BLAST_RADIUS_EVIDENCE_SYSTEM, /not a call to a named symbol unless its use is verified/);
 });
 
