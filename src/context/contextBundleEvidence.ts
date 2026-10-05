@@ -669,12 +669,18 @@ export function knowledgeGapsFromBundle(bundle: unknown[]): KnowledgeGapsEvidenc
       };
       if (Array.isArray(data.directDependents)) {
         graph.directDependents = data.directDependents as string[];
+      } else {
+        const lightning = asRecord(data.lightning);
+        if (Array.isArray(lightning.dependents)) {
+          graph.directDependents = lightning.dependents.filter((path): path is string => typeof path === "string");
+          if (typeof lightning.dependentsSource === "string") graph.source = lightning.dependentsSource;
+        }
       }
       const graphMeta = asRecord(data.graphMeta);
       if (graphMeta.edgeCount !== undefined) {
         graph.edgeCount = Number(graphMeta.edgeCount);
       }
-      if (graphMeta.source) {
+      if (graphMeta.source && (Array.isArray(data.directDependents) || !graph.source)) {
         graph.source = String(graphMeta.source);
       }
       merged.dependencyGraph = graph;

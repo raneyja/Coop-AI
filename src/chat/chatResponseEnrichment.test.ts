@@ -4,6 +4,9 @@ import { extractExistingCapabilityEvidence } from "../context/existingCapability
 import { parseChatProse } from "../webview/lib/chatProseParser";
 import { hydrateContextBundleFromArtifacts } from "./hydrateContextBundleFromArtifacts";
 import { knowledgeGapsFromBundle } from "../context/contextBundleEvidence";
+import { hybridEnrichContext } from "../indexing/hybridQuery";
+import type { IndexBackend } from "../indexing/indexBackend";
+import type { ContextFetchRequest, ContextFetchResult } from "../context/requestBatcher";
 
 let passed = 0;
 let failed = 0;
@@ -387,8 +390,29 @@ test("normalized production file dependencies require symbol verification even w
   assert.equal(result.includes("only caller would be affected"), false);
 });
 
-const total = passed + failed;
-console.log(`\nchatResponseEnrichment: ${passed}/${total} tests passed`);
-if (failed > 0) {
-  process.exit(1);
-}
+void (async () => {
+  const backend = {
+    kind: "cloud",
+    isEnabledForRepo: async () => true,
+    getRepoStatus: async () => ({status: "ready"}),
+    dependents: async () => ({dependents: ["src/caller.ts"], source: "import-parse"})
+  } as unknown as IndexBackend;
+  const request = {type: "dependencies", params: {repoId: "github:CoopAI-Corp/coop-dogfood-launch", file: "src/mathRenamed.ts"}} as ContextFetchRequest;
+  const base = {requestId: "hybrid-production", type: "dependencies", data: {file: "src/mathRenamed.ts"}, fetchedAt: new Date()} as ContextFetchResult;
+  const produced = await hybridEnrichContext(request, base, backend);
+  const bundle = [produced, {type: "knowledge_gaps", data: {focusFiles: [{path: "src/mathRenamed.ts", content: "export const positiveSum = 3;", startLine: 1}]}}];
+  assert.deepEqual(knowledgeGapsFromBundle(bundle)?.dependencyGraph, {directDependents: ["src/caller.ts"], source: "import-parse"});
+  const result = enrichChatResponseForAction({content: "**Source findings**\n\nExpected contract unknown.\n\n**Recommended next steps**\n\n1. The only caller would be affected.", quickAction: "knowledge-gaps", contextBundle: bundle});
+  assert.ok(result.includes("Expected contract unknown"));
+  assert.ok(result.includes("File dependency edges alone do not verify symbol use"));
+  assert.ok(result.includes("```1:1:src/mathRenamed.ts"));
+  assert.equal(result.includes("only caller would be affected"), false);
+  const topLevel = knowledgeGapsFromBundle([{...produced, data: {...produced.data as object, directDependents: ["src/preferred.ts"], graphMeta: {source: "scip"}}}]);
+  assert.deepEqual(topLevel?.dependencyGraph?.directDependents, ["src/preferred.ts"]);
+  assert.equal(topLevel?.dependencyGraph?.source, "scip");
+  passed++;
+  console.log("  ✓ actual hybridEnrichContext producer reaches gaps final guard; explicit dependency envelope wins");
+})().catch((error) => { failed++; console.error(error); }).finally(() => {
+  console.log(`\nchatResponseEnrichment: ${passed}/${passed + failed} tests passed`);
+  if (failed > 0) process.exitCode = 1;
+});
