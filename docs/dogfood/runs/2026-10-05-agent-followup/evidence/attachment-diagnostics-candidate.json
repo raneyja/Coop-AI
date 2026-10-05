@@ -1,0 +1,25 @@
+{
+  "sourceCommit": "57a1070b9774843a1cfc08e1c017aedd40ddd768",
+  "scope": "Attachment metadata diagnostics only; no behavioral repair",
+  "buildId": "0.1.10",
+  "bundleSha256": "b2a9b6b2f2fb420d4c0f96cfcb9564a5ea4fff4dd78c4aa2063f7e88b160c744",
+  "vsixSha256": "710093f958ebb420f2fdb21e14bb8aa23f5b1528eea4fed9a8e4557579148915",
+  "automated": {
+    "ciExit": 0,
+    "lintExit": 0,
+    "packageExit": 0,
+    "targetedHelper": "pass; actual serializers and body fingerprints",
+    "threadActivation": "pass"
+  },
+  "supplementalIsolation": {
+    "exitCode": 1,
+    "passed": 6,
+    "total": 7,
+    "status": "Named integration test/contract disagreement; not attributed to attachment incident"
+  },
+  "live": "NOT_RUN: native UI ownership unassigned; installed candidate unverified",
+  "installed": false,
+  "backendDeployment": "fa74a66c-80d9-447f-9ff1-d4b94053dd2d",
+  "backendSource": "c4a83a7",
+  "backendChanged": false
+}
