@@ -7,6 +7,7 @@ import {
   hasUnderstandRepoEntryBodies
 } from "./indexedRepoContextEnrichment";
 import type { ContextFetchRequest } from "./requestBatcher";
+import { COOP_EXTENSION_BUILD_ID } from "../config/coopBuildId";
 
 async function run(): Promise<void> {
   let passed = 0;
@@ -479,7 +480,7 @@ async function run(): Promise<void> {
       branch: "preview"
     });
     assert.match(message, /Attach check failed/i);
-    assert.match(message, /0\.1\.0/);
+    assert.match(message, new RegExp(COOP_EXTENSION_BUILD_ID.replaceAll(".", "\\.")));
     assert.match(message, /could not attach repository evidence/i);
     assert.match(message, /can.t summarize architecture from the repo name alone/i);
     assert.match(message, /preview/);
