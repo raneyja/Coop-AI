@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { systemPromptForUseCase } from "./systemPrompts";
 import {
   buildRepoSummarySynthesisUserPrompt,
   formatActiveFileContextForPrompt,
@@ -278,6 +279,13 @@ async function run(): Promise<void> {
     assert.ok(!prompt.includes("Cover major subsystems"));
     assert.ok(!prompt.includes("## Attached documentation (required in response)"));
     assert.ok(!prompt.includes("Close with a one-line pointer"));
+  });
+
+  test("understand observed fixture results do not infer a bug from its function name", () => {
+    const system = systemPromptForUseCase("comprehension");
+    assert.match(REPO_SUMMARY_EVIDENCE_SYSTEM, /A function name alone does not establish its contract/);
+    assert.match(system, /do not call a surprising result a correctness bug, latent defect, or blocker/);
+    assert.match(system, /put any potential defect condition in the finding itself and label intent unknown/);
   });
 
   const total = passed + failed;

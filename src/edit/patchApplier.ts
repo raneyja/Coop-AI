@@ -18,6 +18,8 @@ export type FileUndoSnapshot = {
   absolutePath: string;
   relativePath: string;
   originalContent: string;
+  /** Exact post-Apply bytes; missing means whole-file Undo cannot be verified safely. */
+  appliedContent?: string;
 };
 
 export type ApplyPatchesResult =
@@ -146,7 +148,8 @@ export async function applyPatchesToWorkspace(
     undo: planned.map((item) => ({
       absolutePath: undoSnapshotPathForUri(item.uri),
       relativePath: item.relativePath,
-      originalContent: item.originalContent
+      originalContent: item.originalContent,
+      appliedContent: item.nextContent
     }))
   };
 }
@@ -158,9 +161,17 @@ export async function undoPatchApplication(
     return { ok: false, error: "Nothing to undo" };
   }
 
-  const edits = new vscode.WorkspaceEdit();
+  const targets: Array<{ document: vscode.TextDocument; snapshot: FileUndoSnapshot }> = [];
   for (const snapshot of undo) {
     const document = await openDocumentForUndo(snapshot);
+    targets.push({ document, snapshot });
+  }
+  // Validate every target after asynchronous opens and before dispatching any write.
+  const edits = new vscode.WorkspaceEdit();
+  for (const { document, snapshot } of targets) {
+    if (snapshot.appliedContent === undefined || document.getText() !== snapshot.appliedContent) {
+      return { ok: false, error: `${snapshot.relativePath}: buffer changed since Apply or its applied content cannot be verified. Undo was not applied; your current text is preserved.` };
+    }
     edits.replace(document.uri, fullDocumentRange(document), snapshot.originalContent);
   }
 

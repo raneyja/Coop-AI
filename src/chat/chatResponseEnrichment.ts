@@ -85,6 +85,7 @@ export function enrichChatResponseForAction(options: {
    * rewrite the streamed open-file answer. Do not infer this from the question.
    */
   fileAssistant?: boolean;
+  onDiagnostic?: (event: Record<string, unknown>) => void;
 }): string {
   const { quickAction, integrationProvider, content, activeFile } = options;
   const fileAssistant = Boolean(options.fileAssistant);
@@ -98,6 +99,23 @@ export function enrichChatResponseForAction(options: {
       })
     : options.contextBundle;
   const mentions = options.mentions ?? [];
+  if (quickAction === "knowledge-gaps") {
+    const evidence = Array.isArray(contextBundle) ? knowledgeGapsFromBundle(contextBundle) : undefined;
+    options.onDiagnostic?.({stage: "gaps-final-enrichment", actionEnabled: !fileAssistant,
+      dependencyCount: evidence?.dependencyGraph?.directDependents?.length ?? 0,
+      dependencySource: evidence?.dependencyGraph?.source ?? "unknown",
+      focusBodyCount: evidence?.focusFiles?.filter((file) => file.content?.trim()).length ?? 0,
+      bundleEntryCount: Array.isArray(contextBundle) ? contextBundle.length : 0,
+      entryShapes: Array.isArray(contextBundle) ? contextBundle.map((entry) => {
+        const record = entry as {type?: string; data?: Record<string, unknown>};
+        const data = record.data ?? {};
+        const lightning = data.lightning as {dependents?: unknown[]; dependentsSource?: string} | undefined;
+        const graph = data.dependencyGraph as {directDependents?: unknown[]; source?: string} | undefined;
+        return {type: record.type, directCount: Array.isArray(data.directDependents) ? data.directDependents.length : 0,
+          lightningCount: Array.isArray(lightning?.dependents) ? lightning.dependents.length : 0,
+          lightningSource: lightning?.dependentsSource, normalizedCount: Array.isArray(graph?.directDependents) ? graph.directDependents.length : 0};
+      }) : []});
+  }
   const scopeAction: MentionScopeQuickAction | undefined =
     quickAction ??
     (integrationProvider
@@ -189,6 +207,7 @@ export function enrichChatResponseForAction(options: {
         jobScanGaps: extractJobScanGapsFromBundle(contextBundle),
         focusFiles: gapsEvidence?.focusFiles,
         dependencyGraph: gapsEvidence?.dependencyGraph,
+        onRecommendationGuard: (applied) => options.onDiagnostic?.({stage: "gaps-recommendation-guard", applied}),
         activeFile
       });
       break;

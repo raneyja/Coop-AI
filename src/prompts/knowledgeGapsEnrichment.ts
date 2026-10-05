@@ -24,6 +24,7 @@ export type KnowledgeGapsEnrichmentContext = IntegrationDocsEnrichmentContext & 
   jobScanGaps?: KnowledgeGapScanGap[];
   focusFiles?: Array<{ path: string; content?: string; startLine?: number }>;
   dependencyGraph?: { source?: string; directDependents?: string[] };
+  onRecommendationGuard?: (applied: boolean) => void;
 };
 
 const CONFLUENCE_REVIEWED_HEADING = "**Confluence pages reviewed**";
@@ -517,7 +518,9 @@ export function enrichKnowledgeGapsResponse(
   result = rebuildMainSection(result, "**Integration & operations**", integrationBlocks);
 
   result = normalizeRecommendedNextSteps(result);
-  if (context?.dependencyGraph?.directDependents?.length && context.focusFiles?.some((file) => file.content?.trim())) {
+  const applyRecommendationGuard = Boolean(context?.dependencyGraph?.directDependents?.length && context.focusFiles?.some((file) => file.content?.trim()));
+  context?.onRecommendationGuard?.(applyRecommendationGuard);
+  if (applyRecommendationGuard && context?.dependencyGraph?.directDependents) {
     // Gaps' file graph has no symbol-use verification field, regardless of source. Even an attached
     // importer body alone does not prove it calls the requested function.
     const importers = [...new Set(context.dependencyGraph.directDependents)].slice(0, 3);

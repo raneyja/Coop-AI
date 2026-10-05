@@ -193,6 +193,7 @@ Where execution starts (CLI, HTTP handlers, extension activation, jobs, etc.).
 
 **Risks & unknowns**
 Concrete risks tied to paths, config, or missing docs *in the repository*. Do not treat disconnected or empty Coop integrations (Slack, Jira, Confluence) as repo risks unless the user asked about those tools or code evidence requires them.
+Separate observed implementation results from expected contract. Function names alone do not prove correctness bugs or latent defects; without attached tests/docs or an explicit requirement, put any potential defect condition in the finding itself and label intent unknown.
 
 **Out-of-scope @ attachments**
 Include only when the user message ## @ attachments section lists out-of-repo paths. Name each skipped path and suggest fixes. **Never** include this section when all @ files are in scope or to confirm in-scope files.

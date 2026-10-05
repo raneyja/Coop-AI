@@ -365,6 +365,148 @@ async function main(): Promise<void> {
     });
   }
 
+  await test("two-file Apply-all dispatches one atomic edit under concurrent Apply and Undo", async () => {
+    const firstDoc = installRemoteDoc("src/a.ts", "alpha\n");
+    const secondDoc = installRemoteDoc("src/b.ts", "beta\n");
+    const parsed = parsePatchResponse(TWO_FILE_PATCH);
+    assert.ok(parsed.ok);
+    upsertPatchRecord(913, parsed.patches, buildPatchCardState(parsed.patches, { status: "pending", messageTimestamp: 913 }));
+    const workspace = vscode.workspace as unknown as { applyEdit: (edit: { replacements?: Array<{ uri: { toString(): string }; newText: string }> }) => Promise<boolean> };
+    const previous = workspace.applyEdit;
+    let release: () => void = () => undefined;
+    let started: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const dispatched = new Promise<void>((resolve) => { started = resolve; });
+    let writes = 0;
+    workspace.applyEdit = async (edit) => {
+      writes++;
+      assert.equal(edit.replacements?.length, 2);
+      started();
+      await gate;
+      for (const replacement of edit.replacements ?? []) {
+        const doc = [firstDoc, secondDoc].find((entry) => entry.uri.toString() === replacement.uri.toString());
+        doc?.setText(replacement.newText);
+      }
+      return true;
+    };
+    let inFlight: Promise<boolean> | undefined;
+    try {
+      inFlight = applyPendingPatch(undefined, 913);
+      await dispatched;
+      assert.equal(await applyPendingPatch(undefined, 913), false);
+      assert.equal(await undoLastPatchWithState(undefined, 913), false);
+      assert.equal(writes, 1);
+      assert.equal(firstDoc.getText(), "alpha\n");
+      assert.equal(secondDoc.getText(), "beta\n");
+      release();
+      assert.equal(await inFlight, true);
+      assert.equal(firstDoc.getText(), "ALPHA\n");
+      assert.equal(secondDoc.getText(), "BETA\n");
+      assert.equal(getPatchRecord(913)?.undo?.length, 2);
+      assert.equal(getPatchRecord(913)?.card.status, "applied");
+    } finally {
+      release();
+      await inFlight?.catch(() => undefined);
+      workspace.applyEdit = previous;
+    }
+  });
+
+  await test("second-file stale SEARCH refuses the entire two-file Apply without changing either buffer", async () => {
+    const firstDoc = installRemoteDoc("src/a.ts", "alpha\n");
+    const secondDoc = installRemoteDoc("src/b.ts", "beta\n");
+    const parsed = parsePatchResponse(TWO_FILE_PATCH);
+    assert.ok(parsed.ok);
+    upsertPatchRecord(914, parsed.patches, buildPatchCardState(parsed.patches, { status: "pending", messageTimestamp: 914 }));
+    secondDoc.setText("user-revised-content\n");
+    const restore = installApplyEditMutation();
+    try {
+      assert.equal(await applyPendingPatch(undefined, 914), false);
+      assert.equal(firstDoc.getText(), "alpha\n");
+      assert.equal(secondDoc.getText(), "user-revised-content\n");
+      assert.equal(getPatchRecord(914)?.undo?.length ?? 0, 0);
+      assert.equal(getPatchRecord(914)?.card.status, "failed");
+    } finally {
+      restore();
+    }
+  });
+
+  for (const changedBy of ["user", "another patch card"] as const) {
+    await test(`two-file Undo preserves both buffers after intervening ${changedBy} edits`, async () => {
+      const firstDoc = installRemoteDoc("src/a.ts", "alpha\n");
+      const secondDoc = installRemoteDoc("src/b.ts", "beta\n");
+      const parsed = parsePatchResponse(TWO_FILE_PATCH);
+      assert.ok(parsed.ok);
+      upsertPatchRecord(915, parsed.patches, buildPatchCardState(parsed.patches, { status: "pending", messageTimestamp: 915 }));
+      const restore = installApplyEditMutation();
+      try {
+        assert.equal(await applyPendingPatch(undefined, 915), true);
+        if (changedBy === "user") firstDoc.setText("USER_WORK\n");
+        else {
+          const other = parsePatchResponse("File: `src/a.ts`\n```patch\n<<<<<<< SEARCH\nALPHA\n=======\nOTHER_CARD\n>>>>>>> REPLACE\n```");
+          assert.ok(other.ok);
+          upsertPatchRecord(916, other.patches, buildPatchCardState(other.patches, { status: "pending", messageTimestamp: 916 }));
+          assert.equal(await applyPendingPatch(undefined, 916), true);
+        }
+        assert.equal(await undoLastPatchWithState(undefined, 915), false);
+        assert.equal(firstDoc.getText(), changedBy === "user" ? "USER_WORK\n" : "OTHER_CARD\n");
+        assert.equal(secondDoc.getText(), "BETA\n");
+        assert.equal(getPatchRecord(915)?.card.status, "applied");
+        assert.equal(getPatchRecord(915)?.undo?.length, 2);
+      } finally { restore(); }
+    });
+  }
+
+  for (const interveningEdit of [false, true]) {
+    await test(`same-file incremental hunks ${interveningEdit ? "refuse unsafe" : "retain safe"} whole-file Undo`, async () => {
+      const doc = installRemoteDoc("src/a.ts", "alpha\nbeta\n");
+      const parsed = parsePatchResponse("File: `src/a.ts`\n```patch\n<<<<<<< SEARCH\nalpha\n=======\nALPHA\n>>>>>>> REPLACE\n<<<<<<< SEARCH\nbeta\n=======\nBETA\n>>>>>>> REPLACE\n```");
+      assert.ok(parsed.ok);
+      upsertPatchRecord(917, parsed.patches, buildPatchCardState(parsed.patches, { status: "pending", messageTimestamp: 917 }));
+      const restore = installApplyEditMutation();
+      try {
+        assert.equal(await applyPendingPatchHunk(undefined, 917, "hunk-0"), true);
+        if (interveningEdit) doc.setText("ALPHA\nUSER_WORK\nbeta\n");
+        assert.equal(await applyPendingPatchHunk(undefined, 917, "hunk-1"), true);
+        assert.equal(await undoLastPatchWithState(undefined, 917), !interveningEdit);
+        assert.equal(doc.getText(), interveningEdit ? "ALPHA\nUSER_WORK\nBETA\n" : "alpha\nbeta\n");
+      } finally { restore(); }
+    });
+  }
+
+  await test("Undo rechecks earlier buffers after waiting for later targets to open", async () => {
+    const firstDoc = installRemoteDoc("src/a.ts", "alpha\n");
+    const secondDoc = installRemoteDoc("src/b.ts", "beta\n");
+    const parsed = parsePatchResponse(TWO_FILE_PATCH);
+    assert.ok(parsed.ok);
+    const restore = installApplyEditMutation();
+    const workspace = vscode.workspace;
+    const previousOpen = workspace.openTextDocument;
+    let release: () => void = () => undefined;
+    let started: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const dispatched = new Promise<void>((resolve) => { started = resolve; });
+    let inFlight: ReturnType<typeof undoPatchApplication> | undefined;
+    try {
+      const applied = await applyPatchesToWorkspace(parsed.patches);
+      assert.ok(applied.ok);
+      // Force the second target through the asynchronous open path.
+      (vscode.workspace.textDocuments as unknown as MutableDoc[]).splice(1, 1);
+      workspace.openTextDocument = (async () => { started(); await gate; return secondDoc; }) as typeof workspace.openTextDocument;
+      inFlight = undoPatchApplication(applied.undo);
+      await dispatched;
+      firstDoc.setText("USER_WORK_DURING_OPEN\n");
+      release();
+      assert.equal((await inFlight).ok, false);
+      assert.equal(firstDoc.getText(), "USER_WORK_DURING_OPEN\n");
+      assert.equal(secondDoc.getText(), "BETA\n");
+    } finally {
+      release();
+      await inFlight?.catch(() => undefined);
+      workspace.openTextDocument = previousOpen;
+      restore();
+    }
+  });
+
   await test("Create PR files come from captured bytes when the Apply buffer has no repo path", async () => {
     (vscode.workspace.textDocuments as unknown[]).length = 0;
     const parsed = parsePatchResponse(TWO_FILE_PATCH);

@@ -200,6 +200,13 @@ function mergeUndoSnapshots(
     // Keep the earliest original content for a file so Undo restores pre-any-hunk state.
     if (!byPath.has(snap.absolutePath)) {
       byPath.set(snap.absolutePath, snap);
+    } else {
+      const previous = byPath.get(snap.absolutePath)!;
+      byPath.set(snap.absolutePath, {
+        ...previous,
+        appliedContent: previous.appliedContent !== undefined && previous.appliedContent === snap.originalContent
+          ? snap.appliedContent : undefined
+      });
     }
   }
   return [...byPath.values()];

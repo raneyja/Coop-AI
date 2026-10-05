@@ -390,6 +390,20 @@ test("normalized production file dependencies require symbol verification even w
   assert.equal(result.includes("only caller would be affected"), false);
 });
 
+test("gaps runtime diagnostics distinguish absent body and disabled action without content logging", () => {
+  const events: Array<Record<string, unknown>> = [];
+  const bundle = [{type: "dependencies", data: {lightning: {dependents: ["src/caller.ts"], dependentsSource: "import-parse"}}}];
+  enrichChatResponseForAction({content: "Unknown", quickAction: "knowledge-gaps", contextBundle: bundle, onDiagnostic: (event) => events.push(event)});
+  assert.equal(events[0].dependencyCount, 1);
+  assert.equal(events[0].focusBodyCount, 0);
+  assert.deepEqual(events[1], {stage: "gaps-recommendation-guard", applied: false});
+  const disabled: Array<Record<string, unknown>> = [];
+  enrichChatResponseForAction({content: "Unknown", quickAction: "knowledge-gaps", contextBundle: bundle, fileAssistant: true, onDiagnostic: (event) => disabled.push(event)});
+  assert.equal(disabled[0].actionEnabled, false);
+  assert.equal(disabled.length, 1);
+  assert.equal(JSON.stringify(events).includes("src/caller.ts"), false);
+});
+
 void (async () => {
   const backend = {
     kind: "cloud",

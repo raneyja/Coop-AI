@@ -31,6 +31,34 @@ async function test(name: string, fn: () => void | Promise<void>): Promise<void>
 }
 
 async function main(): Promise<void> {
+  await test("complete named source result asks stream without a separate thinking phase", () => {
+    const sourceFacts = {
+      userFocus: "Explain positiveSum in src/mathRenamed.ts. Give the exact results for [], [5], and [1,2,3] from the implementation and cite source lines.",
+      entryFiles: [{ path: "src/mathRenamed.ts", content: "export function positiveSum(xs: number[]) { return xs.slice(1).reduce((a,b)=>a+b,0); }" }]
+    };
+    const options = { quickAction: "understand-repo", startedAt: 1000, now: 7780, sourceFacts };
+    assert.equal(shouldEnableSynthesisThinking(options), false);
+    assert.equal(shouldEnableSynthesisThinking({ ...options, sourceFacts: { ...sourceFacts, entryFiles: [
+      ...sourceFacts.entryFiles,
+      { path: "README.md", content: "Repository documentation", truncated: true },
+      { path: "src/caller.ts", content: "positiveSum(values);" }
+    ] } }), false);
+    const twoFiles = { ...sourceFacts, userFocus: `${sourceFacts.userFocus} Also give return values from src/second.ts.` };
+    assert.equal(shouldEnableSynthesisThinking({ ...options, sourceFacts: twoFiles }), true);
+    assert.equal(shouldEnableSynthesisThinking({ ...options, sourceFacts: { ...twoFiles, entryFiles: [
+      ...sourceFacts.entryFiles, { path: "src/second.ts", content: "export function second() { return 2; }" }
+    ] } }), false);
+    assert.equal(shouldEnableSynthesisThinking({ ...options, sourceFacts: { ...twoFiles,
+      userFocus: `${twoFiles.userFocus} And src/third.ts.`
+    } }), true);
+    for (const entryFiles of [[], [{ ...sourceFacts.entryFiles[0], truncated: true }], [{ ...sourceFacts.entryFiles[0], content: "" }], [{ ...sourceFacts.entryFiles[0], path: "src/unrelated.ts" }]]) {
+      assert.equal(shouldEnableSynthesisThinking({ ...options, sourceFacts: { ...sourceFacts, entryFiles } }), true);
+    }
+    for (const userFocus of ["Explain the architecture and tradeoffs in src/mathRenamed.ts with exact results.", "Explain src/mathRenamed.ts and all its edge cases."]) {
+      assert.equal(shouldEnableSynthesisThinking({ ...options, sourceFacts: { ...sourceFacts, userFocus } }), true);
+    }
+    assert.equal(shouldEnableSynthesisThinking({ ...options, quickAction: "edit" }), true);
+  });
   await test("gathered read-only synthesis skips another thinking phase at the gather boundary", () => {
     const startedAt = 1000;
     const boundary = startedAt + MAX_USER_FACING_RESPONSE_MS - RESERVED_SYNTHESIS_MS;

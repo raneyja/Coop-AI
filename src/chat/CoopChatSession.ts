@@ -9116,7 +9116,8 @@ export class CoopChatSession {
 
       const enableSynthesisThinking = shouldEnableSynthesisThinking({
         quickAction: effectiveQuickAction,
-        startedAt: turn.startedAt
+        startedAt: turn.startedAt,
+        sourceFacts: effectiveQuickAction === "understand-repo" ? repoSummary : undefined
       });
       this.logAgentDiagnostic(turn.threadId, {
         stage: "synthesis-request", turnId: turn.id, runId: `synthesis-${turn.id}`,
@@ -9238,6 +9239,7 @@ export class CoopChatSession {
             })
           : full;
       const enrichedContent = enrichChatResponseForAction({
+        onDiagnostic: (event) => this.logAgentDiagnostic(turn.threadId, {...event, turnId: turn.id}),
         quickAction: effectiveQuickAction,
         integrationProvider,
         content: routeEnrichedContent,
