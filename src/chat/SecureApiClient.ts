@@ -1037,10 +1037,16 @@ export function readConflictConfiguration(): ConflictConfig {
   });
 }
 
+export type ReadPreferencesOptions = {
+  /** Skip non-critical org/workspace probes during chat startup. */
+  probeRemoteIntegrations?: boolean;
+};
+
 export async function readPreferences(
   api: SecureApiClient,
   codeHostSecrets?: CodeHostSecrets,
-  integrationSecrets?: IntegrationSecrets
+  integrationSecrets?: IntegrationSecrets,
+  options: ReadPreferencesOptions = {}
 ): Promise<UserPreferences> {
   const base = readConfiguration();
   const codeHostCreds = codeHostSecrets ? await codeHostSecrets.getCredentials() : {};
@@ -1085,6 +1091,7 @@ export async function readPreferences(
   let pendingSeatUpgrade: UserPreferences["pendingSeatUpgrade"];
   let incomingSeatUpgradeRequests: UserPreferences["incomingSeatUpgradeRequests"];
   const me = await verifyStoredSession(api, base.apiBaseUrl);
+  const signedIn = Boolean(me);
   if (me) {
     orgName = me.orgName;
     userEmail = typeof me.email === "string" && me.email.trim() ? me.email.trim() : undefined;
@@ -1106,6 +1113,8 @@ export async function readPreferences(
     usageTier = me.usageTier;
     pendingSeatUpgrade = me.pendingSeatUpgrade;
     incomingSeatUpgradeRequests = me.incomingSeatUpgradeRequests;
+  }
+  if (me && options.probeRemoteIntegrations !== false) {
     try {
       const integrations = await api.fetchMeIntegrations(base.apiBaseUrl);
       orgIntegrationStatuses = normalizeOrgIntegrationStatuses(integrations.integrations ?? []);
@@ -1194,7 +1203,6 @@ export async function readPreferences(
     ? Boolean(integrationCreds.confluenceEmail && integrationCreds.confluenceToken)
     : hasAtlassianInstalled ||
       Boolean(integrationCreds.confluenceEmail && integrationCreds.confluenceToken);
-  const signedIn = Boolean(me);
   const preferredCodeHost = resolvePreferredCodeHost({
     current: base.defaultCodeHost,
     github: hasGitHubAppInstalled || (devMode && Boolean(codeHostCreds.githubToken)),

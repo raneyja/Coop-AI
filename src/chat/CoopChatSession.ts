@@ -893,7 +893,8 @@ export class CoopChatSession {
     this.preferences = await readPreferences(
       this.options.api,
       this.options.codeHostSecrets,
-      this.options.integrationSecrets
+      this.options.integrationSecrets,
+      { probeRemoteIntegrations: false }
     );
     const tokenAfterVerification = await this.options.api.getToken();
     this.lastSignedInIdentity = tokenBeforeVerification === tokenAfterVerification
@@ -944,6 +945,11 @@ export class CoopChatSession {
       console.error("[CoopAI] startup settings refresh failed", error);
     });
     this.sessionHydrated = true;
+    // Integration/workspace probes are useful for Settings but must not block
+    // restoring the active thread or resolving webview-ready after a reload.
+    void this.refreshPreferences().catch((error: unknown) => {
+      console.error("[CoopAI] background startup preferences refresh failed", error);
+    });
   }
 
   /**

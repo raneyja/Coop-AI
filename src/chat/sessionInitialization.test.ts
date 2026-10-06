@@ -53,6 +53,11 @@ async function run(): Promise<void> {
   assert.ok(hydrationGuard >= 0, "editor refresh must have a startup hydration guard");
   assert.ok(editorStamp > hydrationGuard, "pre-hydration calls must return before stamping editor context");
 
+  const startupProbeSkip = sessionSource.indexOf("probeRemoteIntegrations: false");
+  const backgroundRefresh = sessionSource.indexOf("background startup preferences refresh failed", startupProbeSkip);
+  assert.ok(startupProbeSkip >= 0, "startup hydration must skip non-critical remote probes");
+  assert.ok(backgroundRefresh > startupProbeSkip, "remote preference probes must refresh after startup hydration");
+
   console.log("startup identity hydration checks passed");
 }
 void run().catch((error: unknown) => { console.error(error); process.exitCode = 1; });
