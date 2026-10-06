@@ -12,6 +12,7 @@ import {
 } from "./indexedRepoContextEnrichment";
 import { resolveRepoBranchForTarget } from "./resolveRepoBranch";
 import { listRepoSummarySourceLabels, listRepoSummarySourcesChecklist } from "../prompts/repoSummarySourceLabels";
+import { COOP_EXTENSION_BUILD_ID } from "../config/coopBuildId";
 import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
 import type { RepoSummaryEvidence } from "./contextBundleEvidence";
 
@@ -79,7 +80,7 @@ async function run(): Promise<void> {
         repo: "plane",
         branch: "preview"
       }),
-      /0\.1\.0/
+      new RegExp(COOP_EXTENSION_BUILD_ID.replaceAll(".", "\\."))
     );
   });
 
