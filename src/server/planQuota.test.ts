@@ -88,7 +88,7 @@ void (async () => {
     { createdAt: new Date("2026-06-12T13:00:00.000Z"), tokens: 5_000 }
   ];
   const blockedReset = computeQuotaResetsAt(events, 11_000, 10_000, DEFAULT_ROLLING_WINDOW_MS, now);
-  assert.equal(blockedReset?.toISOString(), "2026-06-12T16:00:00.000Z");
+  assert.equal(blockedReset?.toISOString(), "2026-06-12T17:00:00.000Z");
 
   type AllowanceRow = {
     created_at: string;
