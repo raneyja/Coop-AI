@@ -1,0 +1,28 @@
+{
+  "createdDate": "2026-10-05",
+  "head": "36cf801040cf6666c68f93c7cd579802a4ccec43",
+  "branch": "checkpoint/dogfood-2026-10-03",
+  "pendingSourcePatchSha256": "79ce4c226eac53ce9a9aa3f0d47add7c34990e522dd1f65add05c5cc7ac0b9ff",
+  "sourceFiles": [
+    "src/chat/CoopChatSession.ts",
+    "src/chat/chatResponseEnrichment.test.ts",
+    "src/chat/chatResponseEnrichment.ts",
+    "src/config/chatSynthesisThinking.ts",
+    "src/config/responseDeadline.test.ts",
+    "src/edit/patchActions.ts",
+    "src/edit/patchApplier.ts",
+    "src/edit/phaseB.gates.test.ts",
+    "src/prompts/knowledgeGapsEnrichment.ts",
+    "src/prompts/repoSummarySynthesis.test.ts",
+    "src/prompts/repoSummarySynthesis.ts",
+    "src/prompts/systemPrompts.ts"
+  ],
+  "productionSource": "c4a83a70e677181a74a8094b9a84e902a5314ab6",
+  "productionDeployment": "fa74a66c-80d9-447f-9ff1-d4b94053dd2d",
+  "liveInstalledDiagnosticBundle": "ea786e4a720d1509cf81cc479395e31743c484fc94ec072d6d24e6dc7ff60730",
+  "liveInstalledDiagnosticVsix": "5044f130f72e2be05c1d6e7a7032c9761f20ec90f7502b5352ae14cb649996d4",
+  "userStrataFailureCandidate": "unverified; user-provided transcript, do not equate to disposable profile",
+  "builtExtensionSha256": "e447b15f6519384561540f90c246490f2e2eca20727131527402e4507cad3589",
+  "builtVsixSha256": "b54995cb85562c8c345730ee6cb0d14f6b041f25db914a63c297b272916c68c3",
+  "followupFullCiExitCode": 0
+}

@@ -119,7 +119,7 @@ export default function ChatFeedPage() {
   }, [selectedId, loadMessages]);
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-full flex-col gap-6">
       <div>
         <h1 className="admin-page-title">Chat Feed</h1>
         <p className="mt-1 text-sm text-coop-muted">
@@ -129,8 +129,8 @@ export default function ChatFeedPage() {
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
-      <div className="grid min-h-[32rem] gap-0 overflow-hidden rounded-md border border-coop-border lg:grid-cols-[minmax(240px,320px)_1fr]">
-        <aside className="border-b border-coop-border bg-coop-dark/40 lg:border-b-0 lg:border-r">
+      <div className="grid min-h-[32rem] flex-1 gap-0 overflow-hidden rounded-md border border-coop-border lg:min-h-0 lg:grid-cols-[minmax(240px,320px)_1fr]">
+        <aside className="flex min-h-0 flex-col border-b border-coop-border bg-coop-dark/40 lg:border-b-0 lg:border-r">
           <div className="border-b border-coop-border/60 p-3">
             <label htmlFor="feed-search" className="admin-label">
               Search threads
@@ -143,7 +143,7 @@ export default function ChatFeedPage() {
               placeholder="Title or preview…"
             />
           </div>
-          <div className="max-h-[28rem] overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             {loadingThreads ? (
               <p className="px-4 py-6 text-sm text-coop-muted">Loading threads…</p>
             ) : threads.length === 0 ? (

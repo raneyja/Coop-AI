@@ -5,7 +5,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
-export const COOP_EXTENSION_BUILD_ID = "0.1.10";
+export const COOP_EXTENSION_BUILD_ID = "0.1.11";
 /** Capture once at module load, before a rebuild can replace the running bundle. */
 export const COOP_EXTENSION_BUNDLE_ID = (() => {
   try {

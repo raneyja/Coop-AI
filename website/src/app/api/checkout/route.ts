@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-
-const API_BASE = process.env.COOP_API_BASE?.trim() || "http://localhost:8787";
+import { resolveCoopApiBase } from "../../../lib/publicCoopApiBase";
 
 type CheckoutIntent = "individual" | "team";
 
@@ -45,16 +44,21 @@ export async function POST(request: Request) {
     );
   }
 
-  const response = await fetch(`${API_BASE}/v1/billing/checkout-session`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      email,
-      tier,
-      intent,
-      ...(intent === "team" ? { orgName, seats } : {})
-    })
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${resolveCoopApiBase()}/v1/billing/checkout-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        tier,
+        intent,
+        ...(intent === "team" ? { orgName, seats } : {})
+      })
+    });
+  } catch {
+    return NextResponse.json({ error: "Checkout unavailable" }, { status: 502 });
+  }
 
   const data = (await response.json().catch(() => ({}))) as {
     url?: string;

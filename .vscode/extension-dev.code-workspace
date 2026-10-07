@@ -7,8 +7,9 @@
   ],
   "settings": {
     "coopAI.devMode": false,
+    "coopAI.agentDiagnostics": true,
     "coopAI.apiBaseUrl": "https://api.coop-ai.dev",
     "coopAI.autocomplete.requestTimeoutMs": 3000,
-    "editor.inlineSuggest.enabled": true
+    "editor.inlineSuggest.enabled": true,
   }
 }

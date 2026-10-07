@@ -2,7 +2,7 @@
 
 Status: **research pass**. No product-model change. No code in this spike.
 
-Caps stay: flat Stripe seat price, per-seat monthly included cents (`USAGE_TIER_LIMITS`), hard stop at 100%, upgrade Pro → Pro+ → Max → Enterprise. No overage, no paid 5-hour windows, no team pools. Free allowance behavior stays as it is.
+Paid caps stay: flat Stripe seat price, per-seat monthly included cents (`USAGE_TIER_LIMITS`), hard stop at 100%, upgrade Pro → Pro+ → Max → Enterprise. No overage, no paid rolling windows, no team pools. Free allowance is separately governed by the current message and spend policy documented in Plans & billing.
 
 ---
 
@@ -113,7 +113,7 @@ Two tabs can both pass the same `usedCents` before either hold commits. The hold
 
 `beginQuotaTurn()` runs at the start of every `handleChatSend` and sticks on `SecureApiClient` until the next send. Every later `streamChat` (including PR notes) reuses that id. The server stores `quotaTurnId` on the row and uses it for **free message collapsing only**. Paid `checkPaid` ignores it.
 
-Free rule to preserve: events with the same `quotaTurnId` and `countsAsMessage` count as **one** free message. `intent_suggest`, `evidence_preview`, `pr_summary`, and `inline_completion` do not count as a free message (`countsAsFreeQuotaMessage`).
+Free rule to preserve: events with the same `quotaTurnId` and `countsAsMessage` count as **one** free message. `intent_suggest`, `evidence_preview`, and `pr_summary` do not count as a free message; an accepted `completion.accepted` event counts as one, while inline fetches and unaccepted suggestions do not.
 
 ### Inventory
 
@@ -310,7 +310,7 @@ Request: `{ "completionQuotaId": string, "languageId"?: string, "nes"?: boolean,
 | 404 | Unknown, expired, or not this user | unchanged |
 | 503 | `{ error: quota_metering_unavailable }` after retries | unchanged |
 
-Free org: **200** `{ ok: true, charged: false }` and no `recordTokens`. Inline fetch still uses `skipFreeAllowance`. Accept must not set `countsAsMessage`.
+Free org: **200** `{ ok: true, charged: false }` and no `recordTokens` for inline fetches. Inline fetch still uses `skipFreeAllowance`. Accept records one `completion.accepted` message against the free allowance.
 
 Abuse: no pending row, no charge. Client cents ignored. Public `/v1/usage/events` **strips `usdCents` and `bucket`** so it cannot mint or erase cap. Rate-limit the accept route per user (same order as inline fetch is fine; a tight cap like 60/min is enough).
 

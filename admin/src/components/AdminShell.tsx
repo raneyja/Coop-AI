@@ -93,10 +93,10 @@ export function AdminShell({ children }: AdminShellProps) {
       <MemberOnboardingProvider>
         <div className="flex min-h-screen">
           <Sidebar />
-          <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <TopBar />
             {showGlobalIndexingProgress ? <IndexingProgressBar /> : null}
-            <main id="admin-main-scroll" className="flex-1 overflow-auto p-6">
+            <main id="admin-main-scroll" className="min-h-0 flex-1 overflow-auto p-6">
               {children}
             </main>
           </div>

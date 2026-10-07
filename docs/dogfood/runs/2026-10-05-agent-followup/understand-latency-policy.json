@@ -1,0 +1,14 @@
+{
+  "status": "automated-pass-current-package-live-retest-required",
+  "sourceFrozen": true,
+  "observedCause": "Existing policy allowed a separate thinking phase because gather finished at6780ms before the9s gather boundary. Current candidate first output arrived21745ms,14965ms after model handoff.",
+  "change": "Existing synthesis thinking helper skips the separate thinking phase for explicit source-result comprehension questions when all one or two explicitly named file paths have gathered complete source bodies. Auxiliary README/caller entries do not block the check. Any missing named file, more than two named paths, broad or incomplete source asks retain the existing policy.",
+  "hotPath": "CoopChatSession synthesis passes actual repoSummary userFocus/entryFiles to shouldEnableSynthesisThinking; buildRepoSummaryContext produces userFocus and truncation flags.",
+  "tests": [
+    { "command": "npx --yes tsx src/config/responseDeadline.test.ts", "exitCode": 0, "passed": 12, "failed": 0 },
+    { "command": "npm run lint", "exitCode": 0 }
+  ],
+  "unchanged": ["Operator selected model and feature assignments", "Turn cancellation and soft deadline behavior", "Complex edit/plain chat reasoning", "No fake progress as answer"],
+  "liveExpected": "Repeat exact positiveSum/fixtureBranchLabel results ask on new candidate; synthesis-request enableThinking false, correct0/0/3 and renamed-oracle citations; measure answer-start independently. No15s live pass claimed yet.",
+  "limit": "Provider time to first text is still variable. Omitting a separate thinking phase does not guarantee15s or eliminate gathering/network delays."
+}

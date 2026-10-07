@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "run": "2026-10-05-recovery",
+  "status": "UNQUALIFIED",
+  "metadata": {
+    "candidateHead": "36cf801040cf6666c68f93c7cd579802a4ccec43",
+    "candidateSource": "pending dirty follow-up; immutable package identity pending",
+    "backendDeployment": "fa74a66c-80d9-447f-9ff1-d4b94053dd2d",
+    "liveUi": "BLOCKED: serialized owner/profile/candidate verification pending"
+  },
+  "results": [
+    {
+      "id": "REC-SWIFT-001",
+      "mode": "exact-first-turn",
+      "status": "NOT_RUN",
+      "priority": "P0",
+      "fixture": "CoopAI/Strata main; attached StrataKeyboard/HostTextMonitor.swift",
+      "prompt": "tell me a story about this file. What is it's purpose?",
+      "criteria": "Useful answer grounded in attached source body, with truthful file identity and citations; no documentation-route substitution.",
+      "attempts": []
+    },
+    {
+      "id": "REC-SWIFT-002",
+      "mode": "exact-follow-up",
+      "status": "NOT_RUN",
+      "priority": "P0",
+      "fixture": "Same attachment and conversation as REC-SWIFT-001",
+      "prompt": "what do you mean? the file was attached",
+      "criteria": "Follow-up preserves attachment context or gives an evidence-backed fetch limitation; it must not repeat a false filename-only claim when body evidence exists.",
+      "attempts": []
+    },
+    {
+      "id": "REC-ATTACH-003",
+      "mode": "control-file-typescript",
+      "status": "NOT_RUN",
+      "priority": "P1",
+      "fixture": "Independently verified attached TS file in a connected fixture",
+      "prompt": "tell me a story about this file. What is its purpose?",
+      "criteria": "Body-backed explanation and source identity; no docs search replacing attachment evidence.",
+      "attempts": []
+    },
+    {
+      "id": "REC-ATTACH-004",
+      "mode": "control-file-python",
+      "status": "NOT_RUN",
+      "priority": "P1",
+      "fixture": "Independently verified attached Python file in a connected fixture",
+      "prompt": "what does this file do?",
+      "criteria": "Body-backed explanation and source identity.",
+      "attempts": []
+    },
+    {
+      "id": "REC-ROUTE-005",
+      "mode": "supported-entry-points",
+      "status": "NOT_RUN",
+      "priority": "P1",
+      "fixture": "Supported chat composer, explicit local attachment, selection, and chip routes",
+      "prompt": "Explain the selected/attached file and cite the relevant source.",
+      "criteria": "Every advertised route is mapped to an executable or explicitly blocked check; missing route is visible, not silently omitted.",
+      "attempts": []
+    },
+    {
+      "id": "REC-ROUTE-006",
+      "mode": "remote-chip-no-open-tab",
+      "status": "NOT_RUN",
+      "priority": "P1",
+      "fixture": "Verified remote repo/ref/file chip without an open VFS tab",
+      "prompt": "tell me a story about this file. What is its purpose?",
+      "criteria": "Remote chip remains valid and fetches the body through the indexed/code-host path; no local-clone fallback.",
+      "attempts": []
+    },
+    {
+      "id": "REC-ROUTE-007",
+      "mode": "external-local-file",
+      "status": "NOT_RUN",
+      "priority": "P1",
+      "fixture": "Verified Cmd+O/out-of-workspace local file with body present",
+      "prompt": "what does this file do?",
+      "criteria": "External/file-assistant route sends the body as local evidence and preserves truthful external identity.",
+      "attempts": []
+    },
+    {
+      "id": "REC-ROUTE-008",
+      "mode": "selection-vs-whole-file",
+      "status": "NOT_RUN",
+      "priority": "P1",
+      "fixture": "Same attached file with a selected range, then no selection",
+      "prompt": "Explain this file and the selected code.",
+      "criteria": "Selection semantics are explicit and do not silently drop or substitute the file body.",
+      "attempts": []
+    },
+    {
+      "id": "REC-ROUTE-009",
+      "mode": "reload-thread-restore",
+      "status": "NOT_RUN",
+      "priority": "P1",
+      "fixture": "Attachment across new chat, thread restore, activation, and Reload",
+      "prompt": "what is the purpose of this attached file?",
+      "criteria": "Attachment identity and body provenance survive only where supported; stale local chips clear truthfully and remote chips refetch.",
+      "attempts": []
+    },
+    {
+      "id": "REC-ROUTE-010",
+      "mode": "wrong-ref-or-denied-file",
+      "status": "NOT_RUN",
+      "priority": "P0",
+      "fixture": "Unavailable, denied, deleted, or wrong-branch remote file",
+      "prompt": "explain this file",
+      "criteria": "Failure explains the actual unavailable/access condition without inventing body evidence; this is not a pass for an available file.",
+      "attempts": []
+    },
+    {
+      "id": "REC-BOUNDARY-011",
+      "mode": "body-present-model-input",
+      "status": "NOT_RUN",
+      "priority": "P0",
+      "fixture": "Diagnostic candidate with a known attached source body",
+      "prompt": "tell me a story about this file. What is its purpose?",
+      "criteria": "Safe diagnostics prove body presence through fetch, bundle, and model-input boundaries without logging private source.",
+      "attempts": []
+    },
+    {
+      "id": "REC-BOUNDARY-012",
+      "mode": "body-dropped-by-isolation",
+      "status": "NOT_RUN",
+      "priority": "P0",
+      "fixture": "Remote file with repo/branch/path identity and context-bundle diagnostics",
+      "prompt": "explain this file",
+      "criteria": "A body-bearing result is retained for the active repo/ref; any drop is reported with the observed isolation reason.",
+      "attempts": []
+    },
+    {
+      "id": "REC-BOUNDARY-013",
+      "mode": "code-paperclip-distinction",
+      "status": "NOT_RUN",
+      "priority": "P1",
+      "fixture": "Paperclip code-file upload versus image/PDF upload",
+      "prompt": "explain the attached file",
+      "criteria": "Code text is inlined as authoritative text when accepted; image/PDF provider serialization remains distinct and truthful.",
+      "attempts": []
+    }
+  ]
+}

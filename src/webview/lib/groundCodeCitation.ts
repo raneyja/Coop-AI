@@ -7,6 +7,13 @@ export type GroundedCitation = {
   grounded: boolean;
 };
 
+export type GroundCodeCitationOptions = {
+  /** Do not restore a broad claimed range around a narrower verified snippet. */
+  strictRange?: boolean;
+};
+
+const MAX_STRICT_CITATION_LINES = 20;
+
 function splitFileLines(text: string): string[] {
   return text.replace(/\r\n/g, "\n").split("\n");
 }
@@ -101,7 +108,8 @@ export function groundCodeCitation(
   fileText: string,
   snippet: string,
   claimedStart?: number,
-  claimedEnd?: number
+  claimedEnd?: number,
+  options?: GroundCodeCitationOptions
 ): GroundedCitation {
   const fileLines = splitFileLines(fileText);
   const rawSnippetLines = trimSnippetLines(snippet);
@@ -125,7 +133,10 @@ export function groundCodeCitation(
 
   if (claimedStart != null && claimedEnd != null && claimedEnd >= claimedStart) {
     const claimedSlice = sliceLines(fileLines, claimedStart, claimedEnd);
-    if (linesMatch(claimedSlice, snippetLines) || shouldRestoreStrippedClaimedSlice(claimedSlice, snippetLines) || hasVerifiedElision(claimedSlice, snippetLines)) {
+    if (
+      linesMatch(claimedSlice, snippetLines) ||
+      (!options?.strictRange && (shouldRestoreStrippedClaimedSlice(claimedSlice, snippetLines) || hasVerifiedElision(claimedSlice, snippetLines)))
+    ) {
       return {
         startLine: claimedStart,
         endLine: claimedEnd,
@@ -179,7 +190,11 @@ function nearbyLocator(lines: string[]): ReturnType<typeof tryParseCitationLocat
 /**
  * Rewrite citation fences in assistant markdown so displayed lines match the file.
  */
-export function applyGroundedCitations(markdown: string, filesByPath: Map<string, string>): string {
+export function applyGroundedCitations(
+  markdown: string,
+  filesByPath: Map<string, string>,
+  options?: GroundCodeCitationOptions
+): string {
   if (filesByPath.size === 0 || !markdown.includes("```")) {
     return markdown;
   }
@@ -220,9 +235,19 @@ export function applyGroundedCitations(markdown: string, filesByPath: Map<string
       continue;
     }
 
-    const grounded = groundCodeCitation(file, codeLines.join("\n"), locator.startLine, locator.endLine);
+    const grounded = groundCodeCitation(file, codeLines.join("\n"), locator.startLine, locator.endLine, options);
     if (!grounded.grounded) {
       out.push(open, ...body, close);
+      continue;
+    }
+    if (options?.strictRange && grounded.endLine - grounded.startLine + 1 > MAX_STRICT_CITATION_LINES) {
+      const sourceLines = splitFileLines(file);
+      for (let startLine = grounded.startLine; startLine <= grounded.endLine; startLine += MAX_STRICT_CITATION_LINES) {
+        const endLine = Math.min(grounded.endLine, startLine + MAX_STRICT_CITATION_LINES - 1);
+        out.push(`\`\`\`${startLine}:${endLine}:${locator.path}`);
+        out.push(...sourceLines.slice(startLine - 1, endLine));
+        out.push(close);
+      }
       continue;
     }
     const newLocator = `${grounded.startLine}:${grounded.endLine}:${locator.path}`;

@@ -38,7 +38,7 @@ export const DEFAULT_FREE_TOKEN_LIMIT = 80_000;
 /** @deprecated Use DEFAULT_FREE_TOKEN_LIMIT */
 export const DEFAULT_FREE_DAILY_TOKEN_LIMIT = DEFAULT_FREE_TOKEN_LIMIT;
 
-export const DEFAULT_ROLLING_WINDOW_MS = 5 * 60 * 60 * 1000;
+export const DEFAULT_ROLLING_WINDOW_MS = 6 * 60 * 60 * 1000;
 export const VISION_TOKEN_MULTIPLIER = 2;
 
 /** 1 credit = 1,000 tokens — easier to show in UI than raw token counts. */

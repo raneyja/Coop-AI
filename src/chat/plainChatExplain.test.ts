@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { isOpenFileExplainAsk, isOpenFileReviewAsk, semanticAttachModeForChat } from "./plainChatExplain";
+import { asksForWholeOpenFileBehavior, isOpenFileExplainAsk, isOpenFileReviewAsk, semanticAttachModeForChat } from "./plainChatExplain";
 import { COPILOT_C4_ASK } from "../api/agent/dogfoodContract";
 import { planChatIntentFromRules } from "./intentPlanner/planChatIntent";
 
@@ -41,6 +41,18 @@ test("C4 PR review is an open-file review, not an explain briefing", () => {
 
 test("locate ask is not an explain briefing", () => {
   assert.equal(isOpenFileExplainAsk("Where is APIKeyAuthentication defined?"), false);
+});
+
+test("serializer behavior ask is an ordinary remote-file explanation", () => {
+  assert.equal(
+    isOpenFileExplainAsk("What behavior does this serializer implement? Show the implementation lines that support your answer."),
+    true
+  );
+  assert.equal(asksForWholeOpenFileBehavior("What behavior does this serializer implement?"), false);
+});
+
+test("explicit whole-class requests permit broad explanation scope", () => {
+  assert.equal(asksForWholeOpenFileBehavior("Explain the whole IssueSerializer class and all of its behavior."), true);
 });
 
 test("explain + open file uses path hits only (no extra bodies)", () => {

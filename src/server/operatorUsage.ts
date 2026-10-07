@@ -252,7 +252,7 @@ export async function loadOrgUsageSnapshot(input: {
 
   if (capKind === "free_credits") {
     const snapshot = await quota.getSnapshot(input.org.id, "free", now);
-    const windowMs = snapshot ? snapshot.windowHours * 3_600_000 : 5 * 60 * 60 * 1000;
+    const windowMs = snapshot ? snapshot.windowHours * 3_600_000 : 6 * 60 * 60 * 1000;
     const range = rollingWindowRange(now, windowMs);
     const [cents, byType, costs] = await Promise.all([
       sumLlmCents(input.usageTracker, input.org.id, range),
@@ -372,7 +372,7 @@ export async function loadUserUsageSnapshot(input: {
   let free: OperatorUserUsageSnapshot["free"] = undefined;
   if (capKind === "free_credits") {
     const snapshot = await quota.getSnapshot(input.org.id, "free", now);
-    const windowMs = snapshot ? snapshot.windowHours * 3_600_000 : 5 * 60 * 60 * 1000;
+    const windowMs = snapshot ? snapshot.windowHours * 3_600_000 : 6 * 60 * 60 * 1000;
     range = rollingWindowRange(now, windowMs);
     periodStart = range.from.toISOString();
     periodEnd = snapshot?.resetsAt ?? now.toISOString();

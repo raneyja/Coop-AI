@@ -8,6 +8,7 @@ import { isFeatureAddAsk } from "../context/existingCapabilityGrounding";
 import { extractNamedSourceFiles, isApiRejectAsk } from "../api/agent/searchQuery";
 import { isRepoStructureQuery } from "../workspace/repoFactIntent";
 import { openFileSelectionOwnsChange } from "./openFileSelectionChange";
+import { isOpenFileExplainAsk, isOpenFileReviewAsk } from "./plainChatExplain";
 
 /**
  * Whether answering needs the repository's own code.
@@ -78,6 +79,18 @@ export function agentTurnAction(options: {
   }
   if (options.integrationSlash) {
     return "understand";
+  }
+  // A remote file chip is the user's explicit source for a file explanation.
+  // Keep ordinary explanation asks on the attached-file synthesis path so the
+  // repository agent cannot broaden the answer with unrelated files. Reviews
+  // are excepted because they may need caller/dependent evidence.
+  if (
+    options.file &&
+    !options.selectedLines &&
+    isOpenFileExplainAsk(options.query) &&
+    !isOpenFileReviewAsk(options.query)
+  ) {
+    return "none";
   }
   // The highlight is already the change target. Do not hunt text the user
   // asked to insert. Questions, other symbols, and repo-wide asks still hunt.

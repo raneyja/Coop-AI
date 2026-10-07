@@ -1,0 +1,53 @@
+{
+  "sourceCheckpointUnderAudit": "c4a83a7",
+  "status": "ReadyforReloadDogfood",
+  "liveQualification": "Open; recommendation guard has not independently been observed on current candidate.",
+  "confirmedSourceFacts": [
+    "Final response calls enrichChatResponseForAction with effectiveQuickAction and frozen turn context.",
+    "fileAssistant or local workspace evidence disables quick-action enrichment.",
+    "Guard requires extracted file dependencies plus focusFiles content.",
+    "Actual HybridQuery dependency producer is covered end-to-end by a passing regression."
+  ],
+  "addedOptInEvents": {
+    "gaps-final-enrichment": [
+      "actionEnabled",
+      "dependencyCount",
+      "dependencySource",
+      "focusBodyCount",
+      "bundleEntryCount"
+    ],
+    "gaps-recommendation-guard": [
+      "applied"
+    ]
+  },
+  "diagnosticGate": "Existing coopAI.agentDiagnostics; no response/source/credential content logging.",
+  "targetedValidation": "chatResponseEnrichment 19/19 PASS",
+  "nextCheck": "Parent exact Extension Host Gaps retake and saved count-only events; do not infer a live fix from tests.",
+  "separateCurrentFailure": "Understand math fixture correctly returns 0/0/3 but still labels a defect from function name without expected-contract evidence; root observed, separate from Gaps runtime wiring.",
+  "actualRetake": {
+    "bundle": "ea786e4a diagnostic candidate",
+    "turnId": "turn-1791215311703-g5zzhl",
+    "at": "2026-10-05T15:49:07.878Z",
+    "actionEnabled": true,
+    "dependencyCount": 0,
+    "dependencySource": "unknown",
+    "focusBodyCount": 1,
+    "bundleEntryCount": 5,
+    "guardApplied": false
+  },
+  "persistedArtifactAudit": {
+    "store": "/private/tmp/coop-dogfood-clean-20261004/user/User/workspaceStorage/1791212086794/state.vscdb",
+    "readOnly": true,
+    "threadId": "thread-1791215182697-ot952b",
+    "artifactKind": "knowledge-gaps",
+    "normalizedDirectCount": 0,
+    "normalizedGraphSource": null,
+    "focusBodyCount": 1,
+    "messageCount": 2,
+    "userContainsCallerPath": false,
+    "assistantContainsCallerPath": true,
+    "focusBodyContainsCallerPath": false,
+    "frozenContextBundlePersisted": false
+  },
+  "qualificationConclusion": "Actual guard did not apply because extracted graph is empty. Dependency carrier or unsupported model inference remains unverified; no extractor fix inferred from this artifact alone."
+}

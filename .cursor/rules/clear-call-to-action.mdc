@@ -1,0 +1,22 @@
+---
+description: Lead every response with a clear call to action or status
+alwaysApply: true
+---
+
+# Clear call to action
+
+Every user-facing response must make the next action unmistakable.
+
+- Start with one of: `Do this now:`, `Status:`, `I’ll handle:`, or `Blocked:`.
+- If the user needs to act, put the required action before background or detail.
+- Give one linear happy path first; put alternatives under `Only if blocked:`.
+- For each action, name the surface (`Terminal`, `File`, `Extension UI`, or `Browser`), the exact target or command, and one concrete success signal.
+- If no action is required, say `No action needed.` explicitly.
+- End with the remaining gate, if any, and state whether the work is complete, locally verified, live-verified, or still blocked.
+
+Example:
+
+> **Do this now:**
+> 1. **Extension UI — Extension Development Host:** click Reload Window.
+> 2. **Extension UI — Coop sidebar:** rerun the D1 prompt.
+> Success: the locate result appears and no `indexed_map_unavailable` error is shown.

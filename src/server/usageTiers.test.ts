@@ -72,6 +72,16 @@ const jan31 = anniversaryMonthRange(
 assert.equal(jan31.from.toISOString(), "2026-01-31T00:00:00.000Z");
 assert.equal(jan31.to.toISOString(), "2026-02-28T00:00:00.000Z");
 
+// Month anniversaries are UTC instants. Crossing the US daylight-saving change
+// must not move a reset from 16:00Z to 17:00Z (or vice versa).
+const dstBoundaryAnchor = new Date("2026-10-04T16:00:00.000Z");
+const afterDstChange = anniversaryMonthRange(
+  dstBoundaryAnchor,
+  new Date("2026-11-15T12:00:00.000Z")
+);
+assert.equal(afterDstChange.from.toISOString(), "2026-11-04T16:00:00.000Z");
+assert.equal(afterDstChange.to.toISOString(), "2026-12-04T16:00:00.000Z");
+
 const missingAnchor = paidUsagePeriodRange(undefined, new Date("2026-09-15T12:00:00.000Z"));
 assert.equal(missingAnchor.from.toISOString(), "2026-09-01T00:00:00.000Z");
 

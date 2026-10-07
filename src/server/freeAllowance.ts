@@ -6,9 +6,9 @@ export { FREE_FLASH_MODEL };
 export const RETIRED_FREE_FLASH_MODEL = "gemini-2.0-flash";
 const FREE_FLASH_MODEL_IDS = new Set([FREE_FLASH_MODEL, RETIRED_FREE_FLASH_MODEL]);
 
-export const FREE_CYCLE_MESSAGE_LIMIT = 20;
-export const FREE_CYCLE_USD = 2;
-export const FREE_WEEK_USD = 8;
+export const FREE_CYCLE_MESSAGE_LIMIT = 15;
+export const FREE_CYCLE_USD = 1.75;
+export const FREE_WEEK_USD = 7;
 export const FREE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 export const FREE_NEAR_LIMIT_RATIO = 0.8;
 export const FREE_FLASH_USD_PER_MILLION_IN = 0.3;

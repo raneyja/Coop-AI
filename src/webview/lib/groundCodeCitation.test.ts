@@ -70,6 +70,43 @@ test("keeps claimed lines when the file slice already matches", () => {
   assert.equal(grounded.endLine, 9);
 });
 
+test("strict grounding relocates a narrower verified snippet instead of preserving a broad claim", () => {
+  const snippet = `export function requireAuth(
+  auth: AuthContext | undefined,
+  requireInProduction: boolean
+): auth is AuthContext {
+  if (auth) {
+    return true;
+  }
+  return !requireInProduction;
+}`;
+  const grounded = groundCodeCitation(FILE, snippet, 7, 19, { strictRange: true });
+  assert.equal(grounded.grounded, true);
+  assert.equal(grounded.startLine, 11);
+  assert.equal(grounded.endLine, 19);
+});
+
+test("strict grounding preserves an oversized matching claim for complete rendering", () => {
+  const file = Array.from({ length: 24 }, (_, index) => `line ${index + 1}`).join("\n");
+  const snippet = file.split("\n").slice(0, 21).join("\n");
+  const grounded = groundCodeCitation(file, snippet, 1, 21, { strictRange: true });
+  assert.equal(grounded.grounded, true);
+  assert.equal(grounded.startLine, 1);
+  assert.equal(grounded.endLine, 21);
+  assert.equal(grounded.code.split("\n").length, 21);
+});
+
+test("strict citation rendering splits an oversized range without dropping source lines", () => {
+  const file = Array.from({ length: 24 }, (_, index) => `line ${index + 1}`).join("\n");
+  const markdown = ["```1:21:src/example.ts", ...file.split("\n").slice(0, 21), "```"].join("\n");
+  const rendered = applyGroundedCitations(markdown, new Map([["src/example.ts", file]]), { strictRange: true });
+  assert.equal(rendered.includes("> Citation omitted"), false);
+  assert.equal(rendered.includes("```1:20:src/example.ts"), true);
+  assert.equal(rendered.includes("```21:21:src/example.ts"), true);
+  assert.equal(rendered.includes("line 20"), true);
+  assert.equal(rendered.includes("line 21"), true);
+});
+
 test("relocates a snippet the model attached to the wrong lines", () => {
   const snippet = `export function requireAuth(
   auth: AuthContext | undefined,

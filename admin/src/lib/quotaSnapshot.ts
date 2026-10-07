@@ -96,7 +96,7 @@ export function resolveFreeQuotaCredits(snapshot?: QuotaSnapshotFields | null): 
       usedCredits: Math.round(normalized.usedRatio * 100),
       limitCredits: 100,
       remainingCredits: Math.max(0, 100 - Math.round(normalized.usedRatio * 100)),
-      windowHours: normalized.windowHours ?? 5,
+      windowHours: normalized.windowHours ?? 6,
       resetsAt: normalized.resetsAt
     };
   }
@@ -113,7 +113,7 @@ export function resolveFreeQuotaCredits(snapshot?: QuotaSnapshotFields | null): 
     usedCredits,
     limitCredits,
     remainingCredits,
-    windowHours: normalized.windowHours ?? 5,
+    windowHours: normalized.windowHours ?? 6,
     resetsAt: normalized.resetsAt
   };
 }

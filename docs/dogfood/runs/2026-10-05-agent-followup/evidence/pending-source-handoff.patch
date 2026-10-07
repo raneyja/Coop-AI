@@ -1,0 +1,455 @@
+diff --git a/src/chat/CoopChatSession.ts b/src/chat/CoopChatSession.ts
+index 2ec2b27..f8939c4 100644
+--- a/src/chat/CoopChatSession.ts
++++ b/src/chat/CoopChatSession.ts
+@@ -9116,7 +9116,8 @@ export class CoopChatSession {
+ 
+       const enableSynthesisThinking = shouldEnableSynthesisThinking({
+         quickAction: effectiveQuickAction,
+-        startedAt: turn.startedAt
++        startedAt: turn.startedAt,
++        sourceFacts: effectiveQuickAction === "understand-repo" ? repoSummary : undefined
+       });
+       this.logAgentDiagnostic(turn.threadId, {
+         stage: "synthesis-request", turnId: turn.id, runId: `synthesis-${turn.id}`,
+@@ -9238,6 +9239,7 @@ export class CoopChatSession {
+             })
+           : full;
+       const enrichedContent = enrichChatResponseForAction({
++        onDiagnostic: (event) => this.logAgentDiagnostic(turn.threadId, {...event, turnId: turn.id}),
+         quickAction: effectiveQuickAction,
+         integrationProvider,
+         content: routeEnrichedContent,
+diff --git a/src/chat/chatResponseEnrichment.test.ts b/src/chat/chatResponseEnrichment.test.ts
+index a2cd8a8..8110c42 100644
+--- a/src/chat/chatResponseEnrichment.test.ts
++++ b/src/chat/chatResponseEnrichment.test.ts
+@@ -390,6 +390,20 @@ test("normalized production file dependencies require symbol verification even w
+   assert.equal(result.includes("only caller would be affected"), false);
+ });
+ 
++test("gaps runtime diagnostics distinguish absent body and disabled action without content logging", () => {
++  const events: Array<Record<string, unknown>> = [];
++  const bundle = [{type: "dependencies", data: {lightning: {dependents: ["src/caller.ts"], dependentsSource: "import-parse"}}}];
++  enrichChatResponseForAction({content: "Unknown", quickAction: "knowledge-gaps", contextBundle: bundle, onDiagnostic: (event) => events.push(event)});
++  assert.equal(events[0].dependencyCount, 1);
++  assert.equal(events[0].focusBodyCount, 0);
++  assert.deepEqual(events[1], {stage: "gaps-recommendation-guard", applied: false});
++  const disabled: Array<Record<string, unknown>> = [];
++  enrichChatResponseForAction({content: "Unknown", quickAction: "knowledge-gaps", contextBundle: bundle, fileAssistant: true, onDiagnostic: (event) => disabled.push(event)});
++  assert.equal(disabled[0].actionEnabled, false);
++  assert.equal(disabled.length, 1);
++  assert.equal(JSON.stringify(events).includes("src/caller.ts"), false);
++});
++
+ void (async () => {
+   const backend = {
+     kind: "cloud",
+diff --git a/src/chat/chatResponseEnrichment.ts b/src/chat/chatResponseEnrichment.ts
+index a2f3195..3257053 100644
+--- a/src/chat/chatResponseEnrichment.ts
++++ b/src/chat/chatResponseEnrichment.ts
+@@ -85,6 +85,7 @@ export function enrichChatResponseForAction(options: {
+    * rewrite the streamed open-file answer. Do not infer this from the question.
+    */
+   fileAssistant?: boolean;
++  onDiagnostic?: (event: Record<string, unknown>) => void;
+ }): string {
+   const { quickAction, integrationProvider, content, activeFile } = options;
+   const fileAssistant = Boolean(options.fileAssistant);
+@@ -98,6 +99,23 @@ export function enrichChatResponseForAction(options: {
+       })
+     : options.contextBundle;
+   const mentions = options.mentions ?? [];
++  if (quickAction === "knowledge-gaps") {
++    const evidence = Array.isArray(contextBundle) ? knowledgeGapsFromBundle(contextBundle) : undefined;
++    options.onDiagnostic?.({stage: "gaps-final-enrichment", actionEnabled: !fileAssistant,
++      dependencyCount: evidence?.dependencyGraph?.directDependents?.length ?? 0,
++      dependencySource: evidence?.dependencyGraph?.source ?? "unknown",
++      focusBodyCount: evidence?.focusFiles?.filter((file) => file.content?.trim()).length ?? 0,
++      bundleEntryCount: Array.isArray(contextBundle) ? contextBundle.length : 0,
++      entryShapes: Array.isArray(contextBundle) ? contextBundle.map((entry) => {
++        const record = entry as {type?: string; data?: Record<string, unknown>};
++        const data = record.data ?? {};
++        const lightning = data.lightning as {dependents?: unknown[]; dependentsSource?: string} | undefined;
++        const graph = data.dependencyGraph as {directDependents?: unknown[]; source?: string} | undefined;
++        return {type: record.type, directCount: Array.isArray(data.directDependents) ? data.directDependents.length : 0,
++          lightningCount: Array.isArray(lightning?.dependents) ? lightning.dependents.length : 0,
++          lightningSource: lightning?.dependentsSource, normalizedCount: Array.isArray(graph?.directDependents) ? graph.directDependents.length : 0};
++      }) : []});
++  }
+   const scopeAction: MentionScopeQuickAction | undefined =
+     quickAction ??
+     (integrationProvider
+@@ -189,6 +207,7 @@ export function enrichChatResponseForAction(options: {
+         jobScanGaps: extractJobScanGapsFromBundle(contextBundle),
+         focusFiles: gapsEvidence?.focusFiles,
+         dependencyGraph: gapsEvidence?.dependencyGraph,
++        onRecommendationGuard: (applied) => options.onDiagnostic?.({stage: "gaps-recommendation-guard", applied}),
+         activeFile
+       });
+       break;
+diff --git a/src/config/chatSynthesisThinking.ts b/src/config/chatSynthesisThinking.ts
+index 59bbbda..28b0260 100644
+--- a/src/config/chatSynthesisThinking.ts
++++ b/src/config/chatSynthesisThinking.ts
+@@ -8,9 +8,36 @@ export function shouldEnableSynthesisThinking(options: {
+   quickAction?: string;
+   startedAt: number;
+   now?: number;
++  sourceFacts?: {
++    userFocus?: string;
++    entryFiles?: Array<{ path: string; content?: string; truncated?: boolean }>;
++  };
+ }): boolean {
+   if (options.quickAction !== "knowledge-gaps" && options.quickAction !== "understand-repo") {
+     return true;
+   }
++  if (options.quickAction === "understand-repo" && hasBoundedSourceResultAsk(options.sourceFacts)) {
++    return false;
++  }
+   return remainingContextGatherBudgetMs(options.startedAt, options.now) > 0;
+ }
++
++/** Direct output questions with complete named source already gathered can be
++ * answered in the normal model stream, without a second hidden thinking phase.
++ * Broad comprehension and missing/truncated source retain the existing policy.
++ */
++function hasBoundedSourceResultAsk(facts: {
++  userFocus?: string;
++  entryFiles?: Array<{ path: string; content?: string; truncated?: boolean }>;
++} | undefined): boolean {
++  const ask = facts?.userFocus?.trim();
++  if (!ask || !/\b(?:exact results?|return values?|what (?:does|will) .{0,80}return)\b/i.test(ask)) return false;
++  if (/\b(?:architectur\w*|redesign|refactor|trade[- ]?offs?|prove|security|performance|optimi[sz]\w*)\b/i.test(ask)) return false;
++  const askedPaths = [...new Set(ask.match(/\b(?:[\w.-]+\/)*[\w.-]+\.[a-zA-Z][a-zA-Z0-9]{0,9}\b/g) ?? [])];
++  if (askedPaths.length === 0 || askedPaths.length > 2) return false;
++  // The summary may also contain README or caller evidence. Only the explicitly
++  // asked files establish this bounded source task; none may be absent or partial.
++  return askedPaths.every((path) => facts?.entryFiles?.some((file) =>
++    file.path.replace(/^\.\//, "") === path && !file.truncated && Boolean(file.content?.trim())
++  ));
++}
+diff --git a/src/config/responseDeadline.test.ts b/src/config/responseDeadline.test.ts
+index 9ed3d6a..e3de7b2 100644
+--- a/src/config/responseDeadline.test.ts
++++ b/src/config/responseDeadline.test.ts
+@@ -31,6 +31,34 @@ async function test(name: string, fn: () => void | Promise<void>): Promise<void>
+ }
+ 
+ async function main(): Promise<void> {
++  await test("complete named source result asks stream without a separate thinking phase", () => {
++    const sourceFacts = {
++      userFocus: "Explain positiveSum in src/mathRenamed.ts. Give the exact results for [], [5], and [1,2,3] from the implementation and cite source lines.",
++      entryFiles: [{ path: "src/mathRenamed.ts", content: "export function positiveSum(xs: number[]) { return xs.slice(1).reduce((a,b)=>a+b,0); }" }]
++    };
++    const options = { quickAction: "understand-repo", startedAt: 1000, now: 7780, sourceFacts };
++    assert.equal(shouldEnableSynthesisThinking(options), false);
++    assert.equal(shouldEnableSynthesisThinking({ ...options, sourceFacts: { ...sourceFacts, entryFiles: [
++      ...sourceFacts.entryFiles,
++      { path: "README.md", content: "Repository documentation", truncated: true },
++      { path: "src/caller.ts", content: "positiveSum(values);" }
++    ] } }), false);
++    const twoFiles = { ...sourceFacts, userFocus: `${sourceFacts.userFocus} Also give return values from src/second.ts.` };
++    assert.equal(shouldEnableSynthesisThinking({ ...options, sourceFacts: twoFiles }), true);
++    assert.equal(shouldEnableSynthesisThinking({ ...options, sourceFacts: { ...twoFiles, entryFiles: [
++      ...sourceFacts.entryFiles, { path: "src/second.ts", content: "export function second() { return 2; }" }
++    ] } }), false);
++    assert.equal(shouldEnableSynthesisThinking({ ...options, sourceFacts: { ...twoFiles,
++      userFocus: `${twoFiles.userFocus} And src/third.ts.`
++    } }), true);
++    for (const entryFiles of [[], [{ ...sourceFacts.entryFiles[0], truncated: true }], [{ ...sourceFacts.entryFiles[0], content: "" }], [{ ...sourceFacts.entryFiles[0], path: "src/unrelated.ts" }]]) {
++      assert.equal(shouldEnableSynthesisThinking({ ...options, sourceFacts: { ...sourceFacts, entryFiles } }), true);
++    }
++    for (const userFocus of ["Explain the architecture and tradeoffs in src/mathRenamed.ts with exact results.", "Explain src/mathRenamed.ts and all its edge cases."]) {
++      assert.equal(shouldEnableSynthesisThinking({ ...options, sourceFacts: { ...sourceFacts, userFocus } }), true);
++    }
++    assert.equal(shouldEnableSynthesisThinking({ ...options, quickAction: "edit" }), true);
++  });
+   await test("gathered read-only synthesis skips another thinking phase at the gather boundary", () => {
+     const startedAt = 1000;
+     const boundary = startedAt + MAX_USER_FACING_RESPONSE_MS - RESERVED_SYNTHESIS_MS;
+diff --git a/src/edit/patchActions.ts b/src/edit/patchActions.ts
+index e3c55d8..9c8d9d3 100644
+--- a/src/edit/patchActions.ts
++++ b/src/edit/patchActions.ts
+@@ -200,6 +200,13 @@ function mergeUndoSnapshots(
+     // Keep the earliest original content for a file so Undo restores pre-any-hunk state.
+     if (!byPath.has(snap.absolutePath)) {
+       byPath.set(snap.absolutePath, snap);
++    } else {
++      const previous = byPath.get(snap.absolutePath)!;
++      byPath.set(snap.absolutePath, {
++        ...previous,
++        appliedContent: previous.appliedContent !== undefined && previous.appliedContent === snap.originalContent
++          ? snap.appliedContent : undefined
++      });
+     }
+   }
+   return [...byPath.values()];
+diff --git a/src/edit/patchApplier.ts b/src/edit/patchApplier.ts
+index f285e6c..20fb889 100644
+--- a/src/edit/patchApplier.ts
++++ b/src/edit/patchApplier.ts
+@@ -18,6 +18,8 @@ export type FileUndoSnapshot = {
+   absolutePath: string;
+   relativePath: string;
+   originalContent: string;
++  /** Exact post-Apply bytes; missing means whole-file Undo cannot be verified safely. */
++  appliedContent?: string;
+ };
+ 
+ export type ApplyPatchesResult =
+@@ -146,7 +148,8 @@ export async function applyPatchesToWorkspace(
+     undo: planned.map((item) => ({
+       absolutePath: undoSnapshotPathForUri(item.uri),
+       relativePath: item.relativePath,
+-      originalContent: item.originalContent
++      originalContent: item.originalContent,
++      appliedContent: item.nextContent
+     }))
+   };
+ }
+@@ -158,9 +161,17 @@ export async function undoPatchApplication(
+     return { ok: false, error: "Nothing to undo" };
+   }
+ 
+-  const edits = new vscode.WorkspaceEdit();
++  const targets: Array<{ document: vscode.TextDocument; snapshot: FileUndoSnapshot }> = [];
+   for (const snapshot of undo) {
+     const document = await openDocumentForUndo(snapshot);
++    targets.push({ document, snapshot });
++  }
++  // Validate every target after asynchronous opens and before dispatching any write.
++  const edits = new vscode.WorkspaceEdit();
++  for (const { document, snapshot } of targets) {
++    if (snapshot.appliedContent === undefined || document.getText() !== snapshot.appliedContent) {
++      return { ok: false, error: `${snapshot.relativePath}: buffer changed since Apply or its applied content cannot be verified. Undo was not applied; your current text is preserved.` };
++    }
+     edits.replace(document.uri, fullDocumentRange(document), snapshot.originalContent);
+   }
+ 
+diff --git a/src/edit/phaseB.gates.test.ts b/src/edit/phaseB.gates.test.ts
+index 7bc6464..5f6f0a9 100644
+--- a/src/edit/phaseB.gates.test.ts
++++ b/src/edit/phaseB.gates.test.ts
+@@ -365,6 +365,148 @@ async function main(): Promise<void> {
+     });
+   }
+ 
++  await test("two-file Apply-all dispatches one atomic edit under concurrent Apply and Undo", async () => {
++    const firstDoc = installRemoteDoc("src/a.ts", "alpha\n");
++    const secondDoc = installRemoteDoc("src/b.ts", "beta\n");
++    const parsed = parsePatchResponse(TWO_FILE_PATCH);
++    assert.ok(parsed.ok);
++    upsertPatchRecord(913, parsed.patches, buildPatchCardState(parsed.patches, { status: "pending", messageTimestamp: 913 }));
++    const workspace = vscode.workspace as unknown as { applyEdit: (edit: { replacements?: Array<{ uri: { toString(): string }; newText: string }> }) => Promise<boolean> };
++    const previous = workspace.applyEdit;
++    let release: () => void = () => undefined;
++    let started: () => void = () => undefined;
++    const gate = new Promise<void>((resolve) => { release = resolve; });
++    const dispatched = new Promise<void>((resolve) => { started = resolve; });
++    let writes = 0;
++    workspace.applyEdit = async (edit) => {
++      writes++;
++      assert.equal(edit.replacements?.length, 2);
++      started();
++      await gate;
++      for (const replacement of edit.replacements ?? []) {
++        const doc = [firstDoc, secondDoc].find((entry) => entry.uri.toString() === replacement.uri.toString());
++        doc?.setText(replacement.newText);
++      }
++      return true;
++    };
++    let inFlight: Promise<boolean> | undefined;
++    try {
++      inFlight = applyPendingPatch(undefined, 913);
++      await dispatched;
++      assert.equal(await applyPendingPatch(undefined, 913), false);
++      assert.equal(await undoLastPatchWithState(undefined, 913), false);
++      assert.equal(writes, 1);
++      assert.equal(firstDoc.getText(), "alpha\n");
++      assert.equal(secondDoc.getText(), "beta\n");
++      release();
++      assert.equal(await inFlight, true);
++      assert.equal(firstDoc.getText(), "ALPHA\n");
++      assert.equal(secondDoc.getText(), "BETA\n");
++      assert.equal(getPatchRecord(913)?.undo?.length, 2);
++      assert.equal(getPatchRecord(913)?.card.status, "applied");
++    } finally {
++      release();
++      await inFlight?.catch(() => undefined);
++      workspace.applyEdit = previous;
++    }
++  });
++
++  await test("second-file stale SEARCH refuses the entire two-file Apply without changing either buffer", async () => {
++    const firstDoc = installRemoteDoc("src/a.ts", "alpha\n");
++    const secondDoc = installRemoteDoc("src/b.ts", "beta\n");
++    const parsed = parsePatchResponse(TWO_FILE_PATCH);
++    assert.ok(parsed.ok);
++    upsertPatchRecord(914, parsed.patches, buildPatchCardState(parsed.patches, { status: "pending", messageTimestamp: 914 }));
++    secondDoc.setText("user-revised-content\n");
++    const restore = installApplyEditMutation();
++    try {
++      assert.equal(await applyPendingPatch(undefined, 914), false);
++      assert.equal(firstDoc.getText(), "alpha\n");
++      assert.equal(secondDoc.getText(), "user-revised-content\n");
++      assert.equal(getPatchRecord(914)?.undo?.length ?? 0, 0);
++      assert.equal(getPatchRecord(914)?.card.status, "failed");
++    } finally {
++      restore();
++    }
++  });
++
++  for (const changedBy of ["user", "another patch card"] as const) {
++    await test(`two-file Undo preserves both buffers after intervening ${changedBy} edits`, async () => {
++      const firstDoc = installRemoteDoc("src/a.ts", "alpha\n");
++      const secondDoc = installRemoteDoc("src/b.ts", "beta\n");
++      const parsed = parsePatchResponse(TWO_FILE_PATCH);
++      assert.ok(parsed.ok);
++      upsertPatchRecord(915, parsed.patches, buildPatchCardState(parsed.patches, { status: "pending", messageTimestamp: 915 }));
++      const restore = installApplyEditMutation();
++      try {
++        assert.equal(await applyPendingPatch(undefined, 915), true);
++        if (changedBy === "user") firstDoc.setText("USER_WORK\n");
++        else {
++          const other = parsePatchResponse("File: `src/a.ts`\n```patch\n<<<<<<< SEARCH\nALPHA\n=======\nOTHER_CARD\n>>>>>>> REPLACE\n```");
++          assert.ok(other.ok);
++          upsertPatchRecord(916, other.patches, buildPatchCardState(other.patches, { status: "pending", messageTimestamp: 916 }));
++          assert.equal(await applyPendingPatch(undefined, 916), true);
++        }
++        assert.equal(await undoLastPatchWithState(undefined, 915), false);
++        assert.equal(firstDoc.getText(), changedBy === "user" ? "USER_WORK\n" : "OTHER_CARD\n");
++        assert.equal(secondDoc.getText(), "BETA\n");
++        assert.equal(getPatchRecord(915)?.card.status, "applied");
++        assert.equal(getPatchRecord(915)?.undo?.length, 2);
++      } finally { restore(); }
++    });
++  }
++
++  for (const interveningEdit of [false, true]) {
++    await test(`same-file incremental hunks ${interveningEdit ? "refuse unsafe" : "retain safe"} whole-file Undo`, async () => {
++      const doc = installRemoteDoc("src/a.ts", "alpha\nbeta\n");
++      const parsed = parsePatchResponse("File: `src/a.ts`\n```patch\n<<<<<<< SEARCH\nalpha\n=======\nALPHA\n>>>>>>> REPLACE\n<<<<<<< SEARCH\nbeta\n=======\nBETA\n>>>>>>> REPLACE\n```");
++      assert.ok(parsed.ok);
++      upsertPatchRecord(917, parsed.patches, buildPatchCardState(parsed.patches, { status: "pending", messageTimestamp: 917 }));
++      const restore = installApplyEditMutation();
++      try {
++        assert.equal(await applyPendingPatchHunk(undefined, 917, "hunk-0"), true);
++        if (interveningEdit) doc.setText("ALPHA\nUSER_WORK\nbeta\n");
++        assert.equal(await applyPendingPatchHunk(undefined, 917, "hunk-1"), true);
++        assert.equal(await undoLastPatchWithState(undefined, 917), !interveningEdit);
++        assert.equal(doc.getText(), interveningEdit ? "ALPHA\nUSER_WORK\nBETA\n" : "alpha\nbeta\n");
++      } finally { restore(); }
++    });
++  }
++
++  await test("Undo rechecks earlier buffers after waiting for later targets to open", async () => {
++    const firstDoc = installRemoteDoc("src/a.ts", "alpha\n");
++    const secondDoc = installRemoteDoc("src/b.ts", "beta\n");
++    const parsed = parsePatchResponse(TWO_FILE_PATCH);
++    assert.ok(parsed.ok);
++    const restore = installApplyEditMutation();
++    const workspace = vscode.workspace;
++    const previousOpen = workspace.openTextDocument;
++    let release: () => void = () => undefined;
++    let started: () => void = () => undefined;
++    const gate = new Promise<void>((resolve) => { release = resolve; });
++    const dispatched = new Promise<void>((resolve) => { started = resolve; });
++    let inFlight: ReturnType<typeof undoPatchApplication> | undefined;
++    try {
++      const applied = await applyPatchesToWorkspace(parsed.patches);
++      assert.ok(applied.ok);
++      // Force the second target through the asynchronous open path.
++      (vscode.workspace.textDocuments as unknown as MutableDoc[]).splice(1, 1);
++      workspace.openTextDocument = (async () => { started(); await gate; return secondDoc; }) as typeof workspace.openTextDocument;
++      inFlight = undoPatchApplication(applied.undo);
++      await dispatched;
++      firstDoc.setText("USER_WORK_DURING_OPEN\n");
++      release();
++      assert.equal((await inFlight).ok, false);
++      assert.equal(firstDoc.getText(), "USER_WORK_DURING_OPEN\n");
++      assert.equal(secondDoc.getText(), "BETA\n");
++    } finally {
++      release();
++      await inFlight?.catch(() => undefined);
++      workspace.openTextDocument = previousOpen;
++      restore();
++    }
++  });
++
+   await test("Create PR files come from captured bytes when the Apply buffer has no repo path", async () => {
+     (vscode.workspace.textDocuments as unknown[]).length = 0;
+     const parsed = parsePatchResponse(TWO_FILE_PATCH);
+diff --git a/src/prompts/knowledgeGapsEnrichment.ts b/src/prompts/knowledgeGapsEnrichment.ts
+index 4f2a7ee..0a180ed 100644
+--- a/src/prompts/knowledgeGapsEnrichment.ts
++++ b/src/prompts/knowledgeGapsEnrichment.ts
+@@ -24,6 +24,7 @@ export type KnowledgeGapsEnrichmentContext = IntegrationDocsEnrichmentContext &
+   jobScanGaps?: KnowledgeGapScanGap[];
+   focusFiles?: Array<{ path: string; content?: string; startLine?: number }>;
+   dependencyGraph?: { source?: string; directDependents?: string[] };
++  onRecommendationGuard?: (applied: boolean) => void;
+ };
+ 
+ const CONFLUENCE_REVIEWED_HEADING = "**Confluence pages reviewed**";
+@@ -517,7 +518,9 @@ export function enrichKnowledgeGapsResponse(
+   result = rebuildMainSection(result, "**Integration & operations**", integrationBlocks);
+ 
+   result = normalizeRecommendedNextSteps(result);
+-  if (context?.dependencyGraph?.directDependents?.length && context.focusFiles?.some((file) => file.content?.trim())) {
++  const applyRecommendationGuard = Boolean(context?.dependencyGraph?.directDependents?.length && context.focusFiles?.some((file) => file.content?.trim()));
++  context?.onRecommendationGuard?.(applyRecommendationGuard);
++  if (applyRecommendationGuard && context?.dependencyGraph?.directDependents) {
+     // Gaps' file graph has no symbol-use verification field, regardless of source. Even an attached
+     // importer body alone does not prove it calls the requested function.
+     const importers = [...new Set(context.dependencyGraph.directDependents)].slice(0, 3);
+diff --git a/src/prompts/repoSummarySynthesis.test.ts b/src/prompts/repoSummarySynthesis.test.ts
+index 7a2dd76..b1ec632 100644
+--- a/src/prompts/repoSummarySynthesis.test.ts
++++ b/src/prompts/repoSummarySynthesis.test.ts
+@@ -1,4 +1,5 @@
+ import assert from "node:assert/strict";
++import { systemPromptForUseCase } from "./systemPrompts";
+ import {
+   buildRepoSummarySynthesisUserPrompt,
+   formatActiveFileContextForPrompt,
+@@ -280,6 +281,13 @@ async function run(): Promise<void> {
+     assert.ok(!prompt.includes("Close with a one-line pointer"));
+   });
+ 
++  test("understand observed fixture results do not infer a bug from its function name", () => {
++    const system = systemPromptForUseCase("comprehension");
++    assert.match(REPO_SUMMARY_EVIDENCE_SYSTEM, /A function name alone does not establish its contract/);
++    assert.match(system, /do not call a surprising result a correctness bug, latent defect, or blocker/);
++    assert.match(system, /put any potential defect condition in the finding itself and label intent unknown/);
++  });
++
+   const total = passed + failed;
+   console.log(`\nrepoSummarySynthesis: ${passed}/${total} tests passed`);
+   if (failed > 0) {
+diff --git a/src/prompts/repoSummarySynthesis.ts b/src/prompts/repoSummarySynthesis.ts
+index ff296da..4fe9377 100644
+--- a/src/prompts/repoSummarySynthesis.ts
++++ b/src/prompts/repoSummarySynthesis.ts
+@@ -38,6 +38,7 @@ ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
+ 
+ If <repo_entry_files> is missing or empty, do not invent architecture — say evidence is missing.
+ An imported symbol whose body is not attached has an unknown implementation. Never call it unimplemented or absent just because retrieval did not attach it. Explain only attached bodies, and trace concrete examples through their actual control flow before stating a result.
++Describe observed behavior separately from expected behavior. A function name alone does not establish its contract. Without attached tests, documentation, or an explicit user requirement, do not call a surprising result a correctness bug, latent defect, or blocker. State the potential defect conditionally in the finding itself: if the intended contract requires a different result, this implementation would violate it; otherwise intent remains unknown.
+ 
+ ${EVIDENCE_CITATION_RULES}`;
+ 
+diff --git a/src/prompts/systemPrompts.ts b/src/prompts/systemPrompts.ts
+index 6d66c56..7c22652 100644
+--- a/src/prompts/systemPrompts.ts
++++ b/src/prompts/systemPrompts.ts
+@@ -193,6 +193,7 @@ Where execution starts (CLI, HTTP handlers, extension activation, jobs, etc.).
+ 
+ **Risks & unknowns**
+ Concrete risks tied to paths, config, or missing docs *in the repository*. Do not treat disconnected or empty Coop integrations (Slack, Jira, Confluence) as repo risks unless the user asked about those tools or code evidence requires them.
++Separate observed implementation results from expected contract. Function names alone do not prove correctness bugs or latent defects; without attached tests/docs or an explicit requirement, put any potential defect condition in the finding itself and label intent unknown.
+ 
+ **Out-of-scope @ attachments**
+ Include only when the user message ## @ attachments section lists out-of-repo paths. Name each skipped path and suggest fixes. **Never** include this section when all @ files are in scope or to confirm in-scope files.

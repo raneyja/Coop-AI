@@ -8,7 +8,6 @@
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}",
         "--enable-proposed-api=coop-ai.coop-ai",
-        "--disable-extension=coop-ai.coop-ai",
         "${workspaceFolder}/.vscode/extension-dev.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/dist/**/*.js"],
@@ -22,7 +21,6 @@
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}",
         "--enable-proposed-api=coop-ai.coop-ai",
-        "--disable-extension=coop-ai.coop-ai",
         "${workspaceFolder}/.vscode/extension-dev.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/dist/**/*.js"],
@@ -36,7 +34,6 @@
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}",
         "--enable-proposed-api=coop-ai.coop-ai",
-        "--disable-extension=coop-ai.coop-ai",
         "${workspaceFolder}/.vscode/extension-dev.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/dist/**/*.js"],

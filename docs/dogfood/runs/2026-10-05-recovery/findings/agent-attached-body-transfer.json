@@ -1,0 +1,15 @@
+{
+  "status": "automated-pass-live-retest-required",
+  "causalBoundary": "Captured remote body was retained on turn.editAnchor but omitted from the agent run; agent-owned synthesis bypassed ordinary attachment serialization. Root reproduced on Strata and GitHub control.",
+  "change": "Remote turn-owned anchor body transfers into AgentOrchestrator options bound to exact repo/ref. It seeds planner conversation and read_file context with explicit turn-attachment provenance, independently of repository tool permission. Final synthesis receives the captured source separately from summarized history via the existing attachment serializer.",
+  "identity": "Target mismatch omits attachment. Final model context and project instructions use the captured ChatTurn rather than mutable currentContext or current thread lookup. Final diagnostics include actual agent run ID and turn/build/bundle plus metadata-only serialized body evidence.",
+  "lineOrigin": "Captured snippet lineRange retained in anchor, planner read_file uses its actual starting line and final attachment serializer preserves that range. Full-file snapshot uses line1. Attached buffer is not promoted to network-verified candidate ledger evidence.",
+  "missingBody": "Await existing turn.editAnchorLoad abort-aware only when remote body missing; collector fallback gated to file-assistant context. Remote capture rejects stale local-workspace payloads and loads only IndexedRepoWorkspace body using captured ref. No new fetch wrapper, local clone fallback, or SUT gathering added.",
+  "tests": [
+    { "command": "npx --yes tsx src/api/agent/AgentOrchestrator.test.ts", "exitCode": 0, "passed": 97, "regression": "Body visible in planner and streamAnswer with tools disabled; explicit attachment provenance/line10 origin; mismatched ref omitted; unrelated attached source does not establish named target discovery" },
+    { "command": "npx --yes tsx --require ./scripts/vscode-test-stub.cjs src/chat/threadActivation.test.ts", "exitCode": 0, "regression": "Actual Session hotpath waits missing snapshot, retains open snapshot, respects Stop, rejects stale mutable body; throwing workspace document getter proves remote anchors never consult same-path local bytes. Actual streamAgentAnswer initial/length-continuation requests retain captured context and source prompt." },
+    { "command": "npx --yes tsx src/chat/attachmentDiagnostics.test.ts", "exitCode": 0, "regression": "Both production serializers retain exact body fingerprints and filename-only negative" },
+    { "command": "npm run lint", "exitCode": 0 }
+  ],
+  "limits": ["No new candidate install or live pass", "No Swift-specific routing regex", "No source contents added to diagnostics", "No model assignment changes", "Noncaptured source remains evidence unavailable", "Target ref must match selected captured ref; historical live candidate remains failed"]
+}

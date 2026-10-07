@@ -1,0 +1,32 @@
+{
+  "sourceLog": "/private/tmp/coop-dogfood-clean-20261004/user/logs/20261004T100016/window5/exthost/output_logging_20261005T082116/1-CoopAI Agent Diagnostics.log",
+  "records": [
+    {
+      "at": "2026-10-05T15:40:16.464Z",
+      "stage": "synthesis-request",
+      "turnId": "turn-1791214812560-ua0jtw",
+      "runId": "synthesis-turn-1791214812560-ua0jtw",
+      "elapsedMs": 6780,
+      "useCase": "comprehension",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "enableThinking": true,
+      "buildId": "0.1.10",
+      "bundleId": "a95c0b3aef3ca972b350defa8c254fff66199a0ef814523d8794e0d694c72bf9"
+    },
+    {
+      "at": "2026-10-05T15:40:31.428Z",
+      "stage": "answer-start",
+      "turnId": "turn-1791214812560-ua0jtw",
+      "runId": "synthesis-turn-1791214812560-ua0jtw",
+      "elapsedMs": 21745,
+      "selectedBranch": "renamed",
+      "buildId": "0.1.10",
+      "bundleId": "a95c0b3aef3ca972b350defa8c254fff66199a0ef814523d8794e0d694c72bf9"
+    }
+  ],
+  "softTargetMs": 15000,
+  "metSoftTarget": false,
+  "modelHandoffToFirstChunkMs": 14965,
+  "measurementLimit": "First nonblank outgoing chunk before delta batching/native paint; root owns visible UI confirmation."
+}

@@ -12,7 +12,7 @@ lastUpdated: "2026-09-25"
 | --- | --- | --- | --- | --- | --- |
 | **Price** | Free | $25/seat/month | $60/seat/month | $100/seat/month | Custom |
 | **VS Code extension** | Yes | Yes | Yes | Yes | Yes |
-| **Usage** | Rolling 5-hour Auto window | Monthly included usage | More included usage | Highest self-serve included usage | Custom / no hard cap in v1 |
+| **Usage** | 15 messages per rolling 6-hour Auto window; $1.75 per-window / $7 weekly caps | Monthly included usage | More included usage | Highest self-serve included usage | Custom / no hard cap in v1 |
 | **Model picker** | Auto only | Global picker (default Auto) | Same | Same | Same |
 | **Code hosts (GitHub, GitLab, Bitbucket)** | Yes (admin portal) | Yes | Yes | Yes | Yes |
 | **Collaboration integrations** | Yes (admin portal) | Yes (scope allowlist) | Yes | Yes | Yes |
@@ -41,7 +41,7 @@ Capability gates (team invites, Collections, Deep-Index) stay on the `pro` plan.
 3. Connect code hosts and integrations in the [admin portal](/docs/admin-portal)
 4. Deep-Index up to **3 repos** org-wide; use workspace repos, chat, and quick actions in production mode
 
-Free includes the same tool connectivity and cloud indexing as Pro. Limits are the rolling Auto window, the 3-repo Deep-Index cap, and solo account (no team invites). Free stays Auto-only.
+Free includes the same tool connectivity and cloud indexing as Pro. Limits are 15 messages per rolling 6-hour Auto window, $1.75 per-window and $7 weekly spend caps, the 3-repo Deep-Index cap, and solo account (no team invites). Accepted autocomplete suggestions count as one message; merely shown or dismissed suggestions do not. Free stays Auto-only.
 
 ## Pro, Pro+, and Max
 
@@ -104,7 +104,7 @@ See also [Enterprise deployment](/docs/enterprise-deployment) and [Security arch
 
 | Plan | What you see |
 | --- | --- |
-| **Free** | Rolling 5-hour Auto window in the extension and admin portal |
+| **Free** | 15 messages per rolling 6-hour Auto window; $1.75 per-window and $7 weekly caps in the extension and admin portal |
 | **Pro / Pro+ / Max** | That person's stacked bar — Base model (green) then Frontier model (blue) — resetting monthly on the organization signup anniversary. Not a shared team pool. |
 | **Enterprise** | Custom contract; no hard stop in v1 |
 

@@ -1,0 +1,12 @@
+{
+  "baseHead": "730f5b14bb15e99b948bd0e0f052cf48a6f2c5dc",
+  "scope": "Metadata-only instrumentation; no attachment routing/behavior fix or live reproduction",
+  "files": ["src/chat/CoopChatSession.ts", "src/chat/attachmentDiagnostics.ts", "src/chat/attachmentDiagnostics.test.ts", "package.json (test:system-prompts CI wiring only)"],
+  "stages": ["attachment-capture", "attachment-resolution-outcome", "attachment-fetch-start", "attachment-resolved", "attachment-post-isolation", "attachment-final-request"],
+  "metadata": "Turn/run/build/bundle IDs, capture timestamp and file/repository/ref labels, route, fetch eligibility/outcome, per-file character counts and SHA256, bundle local-file count, serialized local_files/file_content marker counts and hashes. No source contents, prompts, error bodies or credentials added to logs.",
+  "gate": "Existing coopAI.agentDiagnostics; disabled collection does not hash source bodies or messages.",
+  "targetedTest": { "command": "npx --yes tsx src/chat/attachmentDiagnostics.test.ts", "exitCode": 0, "assertions": "Metadata-only body hashing, real localFiles bundle shape, both production serializers with exact newline-adjusted body fingerprints, filename-only negative" },
+  "threadActivation": { "command": "npx --yes tsx --require ./scripts/vscode-test-stub.cjs src/chat/threadActivation.test.ts", "exitCode": 0, "harnessChanges": "None; existing real prototype harness passed" },
+  "lint": "npm run lint exit0 after final capture identity metadata additions",
+  "limits": ["Existing diagnostic event count/line limits apply", "Hashes fingerprint text but do not log content; serialized whitespace changes can change hashes", "Remote fetch attempted means eligible code-host read wrapper invoked, not proof of network request or credential availability", "Early turns exiting before synthesis may have capture/resolution events but no final-request event", "No native UI/install/deploy/commit performed", "Swift cause remains unproven until exact live turn crosses these instrumented boundaries"]
+}

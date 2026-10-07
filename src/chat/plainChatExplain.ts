@@ -3,13 +3,14 @@
  * Used to cap retrieval bodies and lock the response shape.
  */
 const EXPLAIN_ASK_RE =
-  /\b(explain|walk\s+me\s+through|what\s+does\s+(?:this|it)|how\s+does\s+(?:this|it)|when\s+does\s+it)\b/i;
+  /\b(explain|walk\s+me\s+through|what\s+does\s+(?:this|it)|what\s+behavior\s+does\s+(?:this|the)\b|how\s+does\s+(?:this|it)|when\s+does\s+it)\b/i;
 
 const REVIEW_AS_PR_RE =
   /\breview\b/i;
 const PR_TOKEN_RE = /\b(pr|pull\s+request)\b/i;
 const REVIEW_BLOCK_RE = /\bwhat\s+would\s+you\s+block\b/i;
 const REVIEW_AUTHOR_RE = /\bask\s+the\s+author\b/i;
+const WHOLE_FILE_BEHAVIOR_RE = /\b(?:whole|entire|full)\b[^.?!\n]{0,80}\b(?:class|file)\b|\ball\b[^.?!\n]{0,80}\b(?:class|file|behavior)\b|\bevery\s+(?:method|behavior)\b/i;
 
 export function isOpenFileExplainAsk(message: string | undefined): boolean {
   const text = message?.trim() ?? "";
@@ -38,6 +39,10 @@ export function isOpenFileReviewAsk(message: string | undefined): boolean {
     return true;
   }
   return false;
+}
+
+export function asksForWholeOpenFileBehavior(message: string | undefined): boolean {
+  return WHOLE_FILE_BEHAVIOR_RE.test(message?.trim() ?? "");
 }
 
 /**

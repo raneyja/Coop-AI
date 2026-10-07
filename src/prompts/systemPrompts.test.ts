@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { buildKnowledgeGapsSynthesisUserPrompt } from "./knowledgeGapsSynthesis";
 import { isOpenFileReviewAsk } from "../chat/plainChatExplain";
-import { buildUserMessageWithContext, formatChatMessageWithLocalFiles, LOCAL_FILE_EDIT_DIRECTIVE, LOCAL_FILE_PATH_DIRECTIVE, OPEN_FILE_PR_REVIEW_DIRECTIVE, REMOTE_SELECTION_EDIT_DIRECTIVE, systemPromptForUseCase } from "./systemPrompts";
+import { buildUserMessageWithContext, formatChatMessageWithLocalFiles, LOCAL_FILE_EDIT_DIRECTIVE, LOCAL_FILE_PATH_DIRECTIVE, OPEN_FILE_PR_REVIEW_DIRECTIVE, OPERATING_CONTEXT, REMOTE_FILE_EXPLAIN_DIRECTIVE, REMOTE_SELECTION_EDIT_DIRECTIVE, systemPromptForUseCase } from "./systemPrompts";
 import { COPILOT_C4_ASK } from "../api/agent/dogfoodContract";
 
 let passed = 0;
@@ -120,6 +120,70 @@ test("chat open-file explain is a one-screen briefing, not a walkthrough dump", 
   const comprehension = systemPromptForUseCase("comprehension");
   assert.ok(comprehension.includes("**Architecture**"));
   assert.ok(comprehension.includes("**Key subsystems**"));
+});
+
+test("chat contract requires claim-level implementation citations", () => {
+  assert.match(OPERATING_CONTEXT, /support each behavioral claim with the implementation lines/i);
+  assert.match(OPERATING_CONTEXT, /class header or field list/i);
+});
+
+test("remote attached-file explanation contract focuses implementation ranges", () => {
+  const message = buildUserMessageWithContext(
+    "What behavior does this serializer implement? Show the implementation lines that support your answer.",
+    {
+      owner: "CoopAI-Corp",
+      repo: "plane",
+      branch: "preview",
+      file: "apps/api/plane/api/serializers/issue.py",
+      userQuestion: "What behavior does this serializer implement? Show the implementation lines that support your answer.",
+      contextBundle: [{
+        type: "chat_context",
+        data: { agentTools: { read_file: { files: [{ path: "apps/api/plane/api/serializers/issue.py", content: "class IssueSerializer:\n    def validate(self, attrs):\n        return attrs" }] } } }
+      }]
+    }
+  );
+  assert.ok(message.includes(REMOTE_FILE_EXPLAIN_DIRECTIVE));
+  assert.match(message, /at most three high-level behaviors/);
+  assert.match(message, /no more than 20 source lines/);
+  assert.match(message, /smallest contiguous implementation range/);
+  assert.match(message, /Do not cite an entire class or file/);
+});
+
+test("remote method-specific explanation gets the same focused contract", () => {
+  const message = formatChatMessageWithLocalFiles({
+    message: "Explain the validate method and show the lines that support it.",
+    userQuestion: "Explain the validate method and show the lines that support it.",
+    owner: "CoopAI-Corp",
+    repo: "plane",
+    file: "apps/api/plane/api/serializers/issue.py",
+    files: [{ path: "apps/api/plane/api/serializers/issue.py", content: "class IssueSerializer:\n    def validate(self, attrs):\n        return attrs" }]
+  });
+  assert.ok(message.includes(REMOTE_FILE_EXPLAIN_DIRECTIVE));
+});
+
+test("remote whole-class explanation explicitly allows broad coverage", () => {
+  const message = formatChatMessageWithLocalFiles({
+    message: "Explain the whole IssueSerializer class and all of its behavior.",
+    userQuestion: "Explain the whole IssueSerializer class and all of its behavior.",
+    owner: "CoopAI-Corp",
+    repo: "plane",
+    file: "apps/api/plane/api/serializers/issue.py",
+    files: [{ path: "apps/api/plane/api/serializers/issue.py", content: "class IssueSerializer:\n    def validate(self, attrs):\n        return attrs" }]
+  });
+  assert.match(message, /explicitly requested broad coverage/);
+});
+
+test("selected remote explanation does not receive full-file scope directive", () => {
+  const message = formatChatMessageWithLocalFiles({
+    message: "Explain only the selected code.",
+    userQuestion: "Explain only the selected code.",
+    owner: "CoopAI-Corp",
+    repo: "plane",
+    file: "apps/api/plane/api/serializers/issue.py",
+    selectedLines: [46, 52],
+    files: [{ path: "apps/api/plane/api/serializers/issue.py", content: Array.from({ length: 52 }, (_, i) => `line ${i + 1}`).join("\n") }]
+  });
+  assert.equal(message.includes(REMOTE_FILE_EXPLAIN_DIRECTIVE), false);
 });
 
 test("paperclip attachment rule is gated on hasPaperclipAttachments (B6)", () => {
@@ -634,6 +698,56 @@ test("formatChatMessageWithLocalFiles includes editor_selection for highlighted 
   assert.ok(message.includes("explicitly asked to rewrite"));
   assert.ok(message.includes("character-for-character"));
   assert.ok(message.includes("Do not substitute a different function"));
+});
+
+test("plain inspection asks preserve an explicit selected-only answer scope", () => {
+  const message = formatChatMessageWithLocalFiles({
+    message: "Explain only the selected code. Cite its lines.",
+    userQuestion: "Explain only the selected code. Cite its lines.",
+    file: "apps/api/plane/api/serializers/issue.py",
+    selectedLines: [46, 52],
+    files: [{
+      path: "apps/api/plane/api/serializers/issue.py",
+      content: Array.from({ length: 70 }, (_, index) => `line ${index + 1}`).join("\n")
+    }]
+  });
+
+  assert.match(message, /<editor_selection path="apps\/api\/plane\/api\/serializers\/issue\.py" lines="46-52">/);
+  assert.match(message, /Answer scope: explain only the highlighted range/);
+  assert.ok(message.includes('<file_content path="apps/api/plane/api/serializers/issue.py" lines="46-52">'));
+  assert.ok(message.includes("line 46"));
+  assert.ok(message.includes("line 52"));
+  assert.equal(message.includes("line 1"), false, "selection-only evidence must not include the full file");
+});
+
+test("remote agent file evidence is narrowed for selected-only inspection", () => {
+  const message = buildUserMessageWithContext("Explain only the highlighted code.", {
+    owner: "CoopAI-Corp",
+    repo: "plane",
+    branch: "preview",
+    file: "apps/admin/app/compat/next/helper.ts",
+    selectedLines: [36, 41],
+    userQuestion: "Explain only the highlighted code.",
+    contextBundle: [{
+      type: "chat_context",
+      data: {
+        agentTools: {
+          read_file: {
+            files: [{
+              path: "apps/admin/app/compat/next/helper.ts",
+              content: Array.from({ length: 41 }, (_, index) => `line ${index + 1}`).join("\n")
+            }]
+          }
+        }
+      }
+    }]
+  });
+
+  assert.ok(message.includes('<file_content path="apps/admin/app/compat/next/helper.ts" lines="36-41">'));
+  assert.ok(message.includes("line 36"));
+  assert.ok(message.includes("line 41"));
+  assert.equal(message.includes("line 1"), false);
+  assert.equal(message.includes("<graph_context>"), false);
 });
 
 test("formatChatMessageWithLocalFiles keeps L56–61 even when the full file is attached", () => {

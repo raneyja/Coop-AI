@@ -74,7 +74,7 @@ export function formatFreeQuotaResumeParts(
     return null;
   }
   const timezone = resolveTimezone(input.timezone);
-  const windowMs = Math.max(1, (input.windowHours ?? 5) * 3_600_000);
+  const windowMs = Math.max(1, (input.windowHours ?? 6) * 3_600_000);
   const pausedAt = new Date(resetsAt.getTime() - windowMs);
   const resumeNeedsDate = calendarDateKey(resetsAt, timezone) !== calendarDateKey(now, timezone);
   const pauseNeedsDate = calendarDateKey(pausedAt, timezone) !== calendarDateKey(now, timezone);

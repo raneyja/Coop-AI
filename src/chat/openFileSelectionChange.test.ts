@@ -234,6 +234,17 @@ test("question on a highlight is not this choke and keeps today's route", () => 
   assert.equal(shouldRunAgentToolLoop(explainOptions), true);
 });
 
+test("remote attached-file explanation stays out of the repository agent", () => {
+  assert.equal(
+    agentTurnAction({
+      query: "What behavior does this serializer implement? Show the implementation lines that support your answer.",
+      hasQuickAction: false,
+      file: "apps/api/plane/api/serializers/issue.py"
+    }),
+    "none"
+  );
+});
+
 test("L file-assistant still skips the agent loop", () => {
   assert.equal(
     shouldRunAgentToolLoop({

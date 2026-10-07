@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-05",
+  "scope": "Current multi-file editor-buffer Apply/Undo qualification; no codehost writes",
+  "claimTier": "Automated Pass; exact current-candidate live check pending parent UI",
+  "tests": [
+    { "command": "npx --yes tsx src/edit/phaseB.gates.test.ts", "passed": 26, "total": 26, "exitCode": 0 },
+    { "command": "npx --yes tsx src/edit/phaseB.pressure.test.ts", "passed": 7, "total": 7, "exitCode": 0 }
+  ],
+  "addedRegressionCoverage": [
+    "A two-file Apply-all held at workspace.applyEdit dispatch rejects concurrent Apply and Undo, issues one two-target write, and retains two original snapshots.",
+    "A second file modified after Patch-card creation fails stale SEARCH validation before either target is written; the user's intervening second-file text is preserved.",
+    "Undo refuses both targets when either buffer changed after Apply, including another patch card's edits.",
+    "Undo rechecks the earlier file after asynchronous opening of the later target.",
+    "Sequential same-file hunk application retains safe Undo; intervening user edits between hunks invalidate whole-file Undo rather than being discarded."
+  ],
+  "productionCodeChanges": ["src/edit/patchApplier.ts", "src/edit/patchActions.ts"],
+  "testFile": "src/edit/phaseB.gates.test.ts",
+  "liveSetup": {
+    "repository": "CoopAI-Corp/coop-dogfood-launch",
+    "branch": "renamed",
+    "remoteAttachments": ["src/mathRenamed.ts", "src/caller.ts"],
+    "ask": "/edit Make exactly two temporary buffer edits: in src/mathRenamed.ts change fixtureBranchLabel's return string from \"renamed-oracle\" to \"renamed-live-multifile\"; in src/caller.ts rename exported function summarize to summarizeLaunchOracle. Keep positiveSum, its loop, imports, types, and all other bytes unchanged. Produce one two-file Patch card. These are disposable editor-buffer changes; do not create a PR.",
+    "oracle": "Exactly two files and two hunks. Apply math hunk only and verify caller unchanged. Repeated Apply remaining changes caller once. Undo restores both original remote-view buffers including seeded positiveSum loop."
+  },
+  "limitations": [
+    "Live clicking does not guarantee an in-flight collision; deterministic barriers verify serialization separately.",
+    "Tests use mocked VS Code workspace edits and remote-view documents, not actual codehost mutation.",
+    "Undo verifies exact post-Apply bytes across all targets before dispatch and refuses stale or unverifiable whole-file restoration. Arbitrary user typing after the workspace edit has already been dispatched is not version-locked by this API and remains unqualified.",
+    "No Stripe, access fixtures, deployment, environment changes, or native UI actions performed by this agent."
+  ]
+}

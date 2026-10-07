@@ -398,6 +398,23 @@ async function run(): Promise<void> {
   assert.deepEqual(readIdentity, {
     owner: "origin", repo: "repo", provider: "gitlab", branch: "preview", repoId: "gitlab:origin/repo"
   });
+  const visibleEditorsBeforeRestore = Object.getOwnPropertyDescriptor(vscode.window, "visibleTextEditors");
+  Object.defineProperty(vscode.window, "visibleTextEditors", { configurable: true, value: [] });
+  const restoredRemoteSession = Object.assign(Object.create(CoopChatSession.prototype), {
+    currentContext: {},
+    remoteProvenanceFile: undefined,
+    boundThreadId: "restored-thread",
+    openContextFileInEditor: async () => false
+  });
+  await restoredRemoteSession.applyThreadRepoContext({
+    owner: "origin", repo: "repo", provider: "gitlab", branch: "preview",
+    file: "src/parser.ts", fileSource: "remote", scope: "file"
+  }, "restored-thread");
+  assert.equal(restoredRemoteSession.currentContext.file, "src/parser.ts", "closed remote tabs retain file identity after restore");
+  assert.equal(restoredRemoteSession.currentContext.fileSource, "remote");
+  assert.equal(restoredRemoteSession.remoteProvenanceFile, "src/parser.ts");
+  if (visibleEditorsBeforeRestore) Object.defineProperty(vscode.window, "visibleTextEditors", visibleEditorsBeforeRestore);
+  else delete (vscode.window as {visibleTextEditors?: unknown}).visibleTextEditors;
   const updatedThreads: Array<{id: string; messages: Array<{patchCard?: {status: string}}>}> = [];
   const decisionSession = Object.assign(Object.create(CoopChatSession.prototype), {
     post() {},

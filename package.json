@@ -2,7 +2,7 @@
   "name": "coop-ai",
   "displayName": "CoopAI",
   "description": "AI Code intelligence for VS Code. Understand, write, search, and edit code from any codehost \u2014 without downloading to your local machine.",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "publisher": "coop-ai",
   "license": "MIT",
   "icon": "media/coop-icon.png",

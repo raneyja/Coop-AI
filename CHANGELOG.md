@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.11
+
+- Paid usage metering and upgrade-flow hardening across chat, admin, and pricing surfaces
+- Stronger repository-grounded answers, file-context routing, and attachment/thread isolation
+- Updated dogfood evidence, regression coverage, and Extension Host launch diagnostics
+
 ## 0.1.10
 
 - Marketplace listing: AI category (drop Machine Learning), refreshed overview copy, Stack banner as first screenshot

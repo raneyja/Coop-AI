@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-05",
+  "sourceCheckpoint": "36cf801040cf6666c68f93c7cd579802a4ccec43",
+  "installedCandidateSource": "c4a83a70e677181a74a8094b9a84e902a5314ab6",
+  "bundleId": "a95c0b3aef3ca972b350defa8c254fff66199a0ef814523d8794e0d694c72bf9",
+  "scope": "Current-source focused checks; not Extension Host live qualification",
+  "tests": [
+    {
+      "path": "src/autocomplete/completionRouter.test.ts",
+      "chunk_id": "484871",
+      "wall_time_seconds": 1.185672042,
+      "exit_code": 0,
+      "original_token_count": 425,
+      "output": "  ✓ buildFimSegments returns prefix and suffix when useFim enabled\n  ✓ buildFimSegments is undefined when useFim disabled\n  ✓ synthesizeMessageFromSegments builds chat-fallback prompt from FIM segments\n  ✓ synthesizeMessageFromSegments asks for a full body on empty-block holes\n  ✓ selected branch cannot use default or unverified manifest symbols\n  ✓ same-buffer branch switches isolate in-flight requests and cached completions\n  ✓ reuses in-flight promise for prefix-compatible extension\n  ✓ does not reuse an in-flight completion after the suffix changes\n  ✓ uses higher maxTokens for multi-line brace context\n  ✓ keeps a 7-line empty-block body instead of the 4-line stream cap\n  ✓ starts new request when prefix is not compatible\n  ✓ includes graph context fields when useGraphContext is enabled\n  ✓ active repo overrides defaults and same-buffer repo switch does not reuse completion\n  ✓ omits graph context fields when useGraphContext is disabled\n  ✓ auto-includes graph context when index is healthy\n  ✓ L session omits graph even when the index is healthy\n  ✓ falls back to secondary provider when primary request fails\n  ✓ re-filters a cached assignment hole against the typed prefix\n  ✓ filters a typed-t FIM remainder before caching it\n  ✓ skips .env files, including vscode-vfs paths, without a network request\n  ✓ returns cached completions without a network request\n  ✓ uses assigned autocomplete model in production\n  ✓ uses chat preferences model when dev mode is on\n[CoopAI autocomplete] Autocomplete request timed out.\n  ✓ returns empty completions with timeout error when request times out\n\ncompletionRouter: 24 passed, 0 failed\n"
+    },
+    {
+      "path": "src/autocomplete/coopAutocompleteProvider.test.ts",
+      "chunk_id": "e6f3ec",
+      "wall_time_seconds": 0.494403875,
+      "exit_code": 0,
+      "original_token_count": 141,
+      "output": "  ✓ switching repository while a completion is pending rejects the old result\n  ✓ switching branch while a completion is pending rejects the old result\n  ✓ late completions preserve typing reuse but reject changed surrounding code\n  ✓ index notifier does not auto-enable autocomplete when index becomes healthy\n  ✓ index notifier skips when user previously disabled autocomplete\n  ✓ index notifier no-ops when discovery already shown\n  ✓ index notifier leaves enabled setting unchanged when already on\n\ncoopAutocompleteProvider: 7 passed, 0 failed\n"
+    },
+    {
+      "path": "src/api/inlineGraphContext.test.ts",
+      "chunk_id": "0756df",
+      "wall_time_seconds": 0.668173167,
+      "exit_code": 0,
+      "original_token_count": 10,
+      "output": "inlineGraphContext: 9/9 tests passed\n"
+    },
+    {
+      "path": "src/config/responseDeadline.test.ts",
+      "chunk_id": "817017",
+      "wall_time_seconds": 0.366536541,
+      "exit_code": 0,
+      "original_token_count": 192,
+      "output": "  ✓ gathered read-only synthesis skips another thinking phase at the gather boundary\n  ✓ complex chat, edit, and other quick actions retain reasoning after the soft budget\n  ✓ remainingResponseBudgetMs clamps at zero\n  ✓ remainingContextGatherBudgetMs reserves synthesis time\n  ✓ locateSearchBudgetMs does not skip locate when gather leftover is zero\n  ✓ scheduleResponseDeadline never aborts the turn signal\n  ✓ soft gather hitting zero does not abort a stream AbortSignal\n  ✓ abortablePromise rejects when signal aborts (user Stop)\n  ✓ abortablePromise resolves when work finishes first\n  ✓ isResponseDeadlineAbort detects legacy reason only\n  ✓ isSoftGatherLatencyMessage detects internal latency copy\n\nresponseDeadline: 11 passed, 0 failed\n"
+    },
+    {
+      "path": "src/chat/chatResponseTiming.test.ts",
+      "chunk_id": "7a98d2",
+      "wall_time_seconds": 0.412860875,
+      "exit_code": 0,
+      "original_token_count": 97,
+      "output": "ok - production default has no artificial delay\nok - remainingMinResponseDelayMs still supports an explicit minimum window\nok - createChatOutputGate streams immediately with the default (no artificial delay)\nok - createChatOutputGate still honors an explicit minVisibleMs when a caller opts in\nok - completion preserves final-only output without duplication or cancelled writes\n\n5 passed\n"
+    }
+  ],
+  "sourceEdits": false,
+  "limits": [
+    "Production manifest provides no selected-ref provenance; hints omitted.",
+    "Production FIM skips graph; no graph-grounded completion claim.",
+    "First-answer policy tests do not measure provider/network latency.",
+    "answer-start telemetry precedes delta batch/native paint."
+  ],
+  "liveChecks": {
+    "timingAsk": "/understand Explain positiveSum and fixtureBranchLabel in src/mathRenamed.ts on indexed branch renamed. Give the exact results for [], [5], and [1,2,3] from the implementation, cite source lines, and label unavailable evidence.",
+    "branchIsolation": "In unchanged disposable cube buffer invoke completion on main, switch same repo to renamed before ghost appears, verify old pending ghost absent, invoke again and accept new output. If first output predates switch trial is inconclusive."
+  }
+}

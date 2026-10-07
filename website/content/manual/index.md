@@ -19,7 +19,7 @@ Most AI coding tools only see the file you have open. You can use Coop the same 
 
 CoopAI builds a secure cross-repo knowledge graph from webhooks and index jobs, not full monorepo copies on every laptop. Your source stays on your infrastructure.
 
-**Developer (free)** includes full tool connectivity (code hosts and collaboration integrations via the admin portal), Deep-Index on up to 3 repos org-wide, workspace repos, chat, and quick actions in production mode, with AI usage capped at 80,000 tokens per 5-hour window. **Pro** adds unlimited Deep-Indexed repos, team seats, Collections, and higher seat-based limits.
+**Developer (free)** includes full tool connectivity (code hosts and collaboration integrations via the admin portal), Deep-Index on up to 3 repos org-wide, workspace repos, chat, and quick actions in production mode, with AI usage limited to 15 messages per rolling 6-hour window, plus $1.75 per-window and $7 weekly spend caps. Accepted autocomplete suggestions count as one message. **Pro** adds unlimited Deep-Indexed repos, team seats, Collections, and higher seat-based limits.
 
 ### Quick actions at a glance
 
@@ -771,7 +771,7 @@ Ask Coop: "Update AGENTS.md based on what I told you in this thread" to generate
 | Feature | Developer (free) | Pro |
 | --- | --- | --- |
 | Local workspace context | Yes | Yes |
-| AI usage | 80k tokens / 5-hour window | Higher limits (seat-based billing) |
+| AI usage | 15 messages / rolling 6-hour window; $1.75 per-window and $7 weekly caps | Higher limits (seat-based billing) |
 | Model selection | Auto only | Model menu in chat (OpenAI, Anthropic, Gemini). Auto still available. |
 | Code hosts & integrations | Yes (admin portal) | Yes |
 | Deep-Index / Lightning Mode | Yes (3 repos org-wide) | Yes (unlimited) |

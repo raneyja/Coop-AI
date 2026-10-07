@@ -1,0 +1,7 @@
+Timestamp: 2026-10-05 America/Los_Angeles
+Candidate HEAD: 36cf801040cf6666c68f93c7cd579802a4ccec43
+Command: npx tsx src/chat/paperclipAttachments.test.ts
+Result: BLOCKED / exit 1
+Observed: node_modules/.bin/tsx is absent; npm attempted registry access and failed with ENOTFOUND for registry.npmjs.org. No test cases executed.
+Interpretation: test environment limitation only. This is not evidence that paperclip attachment behavior passes or fails.
+Next action: rerun using the repository's available dependency/runtime or approved network access after candidate identity is frozen.

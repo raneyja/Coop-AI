@@ -1,0 +1,15 @@
+{
+  "status": "historically-closed-current-candidate-and-immutable-fixture-qualification-open",
+  "fixture": "github:CoopAI-Corp/plane preview (forked external test repository)",
+  "oracleCommit": "a8e53b6ac7b87bd8e3e931d21188f7679c7ab6c4",
+  "historicalFailure": "October3 continuation cold and warm lookups missed despite independently accessible source.",
+  "closureEvidence": "docs/dogfood/runs/2026-10-04-retrieval/README.md and evidence/packaged-final-retrieval.jsonl",
+  "historicalPass": "Bundle559ff6df341215c1608a2c5c73f23e5ee107189e37fa50bf2da62471a2f1d0d9 returned correct Parent raise with citation navigation; answer-start9861ms. Earlier retrieval package cold/warm/switchback also passed with indexedBranch preview and observed pinned oracle commit.",
+  "currentCandidatePassInherited": false,
+  "remaining": ["Current candidate regression check", "Immutable selected-SHA matrix qualification", "Saved thread context restoration was not qualified by historical lookup"],
+  "boundedRetake": {
+    "setup": "Fresh repository-only thread, Use repo Plane preview, no file chip or local repository source.",
+    "ask": "In Plane issue create/update on branch preview, the API raises ValidationError \"Parent is not valid issue_id please pass a valid issue_id\" when the parent is not in the project. Where is that raised?",
+    "expected": "apps/api/plane/api/serializers/issue.py:137 or apps/api/plane/app/serializers/issue.py:186; exact raise and clickable source guard; index provenance preview and independently checked generation; first-answer measured separately from completion."
+  }
+}

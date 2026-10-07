@@ -232,7 +232,7 @@ import {
 } from "../engines/blastRadiusDependentsFallback";
 import { isFileCallerQuery } from "../context/fileCallerIntent";
 import { isFileHistoryQuery } from "../context/fileHistoryIntent";
-import { isOpenFileReviewAsk } from "./plainChatExplain";
+import { isOpenFileExplainAsk, isOpenFileReviewAsk } from "./plainChatExplain";
 import { evidenceCodeHostDisplayName } from "../api/codeHosts/codeHostLabels";
 import {
   coordinatesFromRepoId,
@@ -294,6 +294,7 @@ import {
 import { openReferencedLink } from "./openReferencedLink";
 import {
   buildUserMessageWithContext,
+  asksForSelectionOnly,
   formatChatMessageWithLocalFiles,
   formatChatMessageWithMentionFiles,
   selectionTextFromContent,
@@ -936,11 +937,14 @@ export class CoopChatSession {
       if (active.repoContext) {
         // Cold start: restore only an explicit Use-repo or a bound file — never
         // prefs-only owner/repo from a previous thread.
-        this.currentContext = stripStaleContextWarning(
-          normalizeRepoContext(
-            mergeRepoContext(this.currentContext, repoContextForActivatedThread(active.repoContext))
-          )
-        );
+        const restoredContext = repoContextForActivatedThread(active.repoContext);
+        if (restoredContext.file?.trim()) {
+          await this.applyThreadRepoContext(restoredContext, active.id);
+        } else {
+          this.currentContext = stripStaleContextWarning(
+            normalizeRepoContext(mergeRepoContext(this.currentContext, restoredContext))
+          );
+        }
       }
     }
     if (!shouldFollowEditorAfterThreadRestore(this.currentContext)) {
@@ -1621,7 +1625,12 @@ export class CoopChatSession {
     if (!this.threadRuns.isStreamActive(turn)) return;
     let message = finalMessage;
     try {
-      const groundedContent = await this.groundAssistantCitationFences(finalMessage.content, turn.context);
+      const groundedContent = await this.groundAssistantCitationFences(finalMessage.content, turn.context, {
+        strictRange:
+          turn.context.fileSource === "remote" &&
+          !turn.context.selectedLines &&
+          !isOpenFileReviewAsk(turn.modelMessage)
+      });
       if (groundedContent !== finalMessage.content) {
         message = { ...finalMessage, content: groundedContent };
       }
@@ -1644,7 +1653,11 @@ export class CoopChatSession {
     this.pushThreadsList();
   }
 
-  private async groundAssistantCitationFences(content: string, context: RepoContext = this.currentContext): Promise<string> {
+  private async groundAssistantCitationFences(
+    content: string,
+    context: RepoContext = this.currentContext,
+    options?: { strictRange?: boolean }
+  ): Promise<string> {
     const paths = citationPathsInMarkdown(content);
     if (paths.length === 0) {
       return content;
@@ -1688,7 +1701,7 @@ export class CoopChatSession {
         }
       })
     );
-    return applyGroundedCitations(content, files);
+    return applyGroundedCitations(content, files, options);
   }
 
   private pushThreadsList(): void {
@@ -1830,8 +1843,14 @@ export class CoopChatSession {
       return;
     }
     if (!opened) {
-      this.remoteProvenanceFile = undefined;
-      this.clearFileFieldsFromContext();
+      if (isRemoteProvenanceContext(this.currentContext, this.remoteProvenanceFile)) {
+        // A closed remote tab is still a valid identity. Keep the chip so the
+        // next turn can fetch the selected repo/ref/path through the API.
+        this.currentContext = this.withRemoteProvenance(this.currentContext);
+      } else {
+        this.remoteProvenanceFile = undefined;
+        this.clearFileFieldsFromContext();
+      }
     } else {
       this.currentContext = this.withRemoteProvenance(this.currentContext);
     }
@@ -5210,8 +5229,21 @@ export class CoopChatSession {
       }
       const anchoredFile = turn.editAnchor?.file;
       const anchoredBody = anchoredFile ? lookupPatchFileContent(anchoredFile, turn.editAnchor?.fileContents) : undefined;
+      const selectionOnly = asksForSelectionOnly(query);
+      const selectedLines = selectionOnly ? turn.context.selectedLines : undefined;
       const capturedAttachment = turn.context.fileSource === "remote" && anchoredFile && anchoredBody !== undefined
-        ? { repoId, branch: turn.context.branch, files: [{ path: anchoredFile, content: anchoredBody, lineRange: turn.editAnchor?.bodyLineRange }] } : undefined;
+        ? {
+            repoId,
+            branch: turn.context.branch,
+            files: [{
+              path: anchoredFile,
+              content: selectedLines
+                ? selectionTextFromContent(anchoredBody, selectedLines, 8000)
+                : anchoredBody,
+              lineRange: selectedLines ?? turn.editAnchor?.bodyLineRange
+            }]
+          }
+        : undefined;
       const agentResult = await this.options.agentOrchestrator.run(
         {
           message: query,
@@ -6702,6 +6734,30 @@ export class CoopChatSession {
       return;
     }
 
+    // An attached remote file is already the user's source for an ordinary
+    // explanation. Do not let the front-door planner reinterpret that ask as a
+    // multi-tool job (for example, a documentation search) before synthesis.
+    // Reviews remain planner-enabled because they may deliberately need callers
+    // or dependent evidence.
+    const isolatedOpenFileExplain =
+      !quickAction &&
+      !options?.composerMode &&
+      !options?.sourceHint &&
+      !options?.integrationProvider &&
+      !options?.mentions?.length &&
+      Boolean(this.currentContext.file) &&
+      !this.currentContext.selectedLines &&
+      isOpenFileExplainAsk(message) &&
+      !isOpenFileReviewAsk(message);
+    if (isolatedOpenFileExplain) {
+      options = {
+        ...options,
+        skipChatIntentPlanner: true,
+        skipQuickActionSuggest: true,
+        intentPlan: emptyChatIntentPlan(message)
+      };
+    }
+
     // One front door: interpret before distribute. A slash/Workflows token is a
     // constraint, not a bypass. Re-entry carries skipChatIntentPlanner + the plan.
     if (shouldInterpretChatAsk(options)) {
@@ -6757,6 +6813,23 @@ export class CoopChatSession {
       allowLocalFileForEdit: mayNeedEditSnap,
       preferRemoteForEdit: mayNeedEditSnap
     });
+
+    // A caret inside a definition is a useful implicit edit target, but it is
+    // not a user highlight. Plain file-explanation asks must not inherit an
+    // inferred/stale range and accidentally enter the repo-agent route.
+    if (
+      !quickAction &&
+      !explicitEdit &&
+      !options?.sourceHint &&
+      !options?.integrationProvider &&
+      isOpenFileExplainAsk(message) &&
+      !isOpenFileReviewAsk(message) &&
+      this.currentContext.selectedLines &&
+      !this.liveSelectedLinesFromOpenEditors(this.currentContext.file)
+    ) {
+      this.currentContext = { ...this.currentContext, selectedLines: undefined };
+      this.postContext();
+    }
 
     if (!quickAction && (explicitEdit || concreteEditAsk)) {
       const hasTarget = hasEditTargetInScope({
@@ -7213,34 +7286,49 @@ export class CoopChatSession {
         });
     this.pendingChatMentions = options?.mentions;
     this.pendingCodeEditIntent = options?.composerMode === "edit";
-    this.turnAgentAction = agentTurnAction({
-      query: message,
-      hasQuickAction: Boolean(quickAction),
-      intentPlan: turn.intentPlan,
-      isEditTurn: options?.composerMode === "edit",
-      integrationSlash: Boolean(options?.integrationProvider && options?.sourceHint),
-      fileAssistant: isFileAssistantSession(this.currentContext),
-      file: this.currentContext.file,
-      selectedLines: this.currentContext.selectedLines
-    });
-    this.turnAllowsRepoTools = agentTurnAllowsRepoTools({
-      query: message,
-      intentPlan: turn.intentPlan,
-      integrationSlash: Boolean(options?.integrationProvider && options?.sourceHint)
-    });
+    const turnIsolatedOpenFileExplain =
+      !quickAction &&
+      !options?.composerMode &&
+      !options?.sourceHint &&
+      !options?.integrationProvider &&
+      Boolean(turn.context.file) &&
+      !turn.context.selectedLines &&
+      isOpenFileExplainAsk(message) &&
+      !isOpenFileReviewAsk(message);
+    this.turnAgentAction = turnIsolatedOpenFileExplain
+      ? "none"
+      : agentTurnAction({
+          query: message,
+          hasQuickAction: Boolean(quickAction),
+          intentPlan: turn.intentPlan,
+          isEditTurn: options?.composerMode === "edit",
+          integrationSlash: Boolean(options?.integrationProvider && options?.sourceHint),
+          fileAssistant: isFileAssistantSession(turn.context),
+          file: turn.context.file,
+          selectedLines: turn.context.selectedLines
+        });
+    this.turnAllowsRepoTools = turnIsolatedOpenFileExplain
+      ? false
+      : agentTurnAllowsRepoTools({
+          query: message,
+          intentPlan: turn.intentPlan,
+          integrationSlash: Boolean(options?.integrationProvider && options?.sourceHint)
+        });
     turn.agentAction = this.turnAgentAction;
     turn.allowsRepoTools = this.turnAllowsRepoTools;
     if (this.shouldRunAgentOwnedTurn(quickAction, options, message)) {
       await this.runAgentOwnedTurn(turn, message);
       return;
     }
-    try {
-      await abortablePromise(this.runIntentFetch(intentEvent, { turn }), turn.streamAbort.signal);
-    } catch (error) {
-      if (!this.threadRuns.isStreamActive(turn)) {
-        return;
+    if (!turnIsolatedOpenFileExplain) {
+      try {
+        await abortablePromise(this.runIntentFetch(intentEvent, { turn }), turn.streamAbort.signal);
+      } catch (error) {
+        if (!this.threadRuns.isStreamActive(turn)) {
+          return;
+        }
+        throw error;
       }
-      throw error;
     }
     // Enrichment may resolve indexed branch after the turn snapshot — keep Scope in sync.
     if (
@@ -9548,7 +9636,7 @@ export class CoopChatSession {
       ? buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl, { forPaid: true })
       : buildQuotaExceededUpgradeUrl(this.preferences.adminPortalUrl);
     const payload = {
-      resetsAt: error.resetsAt ?? new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
+      resetsAt: error.resetsAt ?? new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
       upgradeUrl,
       timezone: this.preferences.timezone,
       retryAfterMs: error.retryAfterMs,
@@ -9589,7 +9677,7 @@ export class CoopChatSession {
       }
       this.clearIntentFeedback();
       this.postQuotaExceeded({
-        resetsAt: quota?.resetsAt ?? new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
+        resetsAt: quota?.resetsAt ?? new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
         retryAfterMs: quota?.retryAfterMs,
         pool: "free"
       });

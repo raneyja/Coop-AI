@@ -1,7 +1,7 @@
 import type { UseCase } from "../api/types";
 import type { IntegrationChatProvider } from "../chat/types";
 import { isLocalFileChangeAsk, resolveEditAskKind, type EditAskKind } from "../chat/editAskKind";
-import { isOpenFileReviewAsk } from "../chat/plainChatExplain";
+import { asksForWholeOpenFileBehavior, isOpenFileExplainAsk, isOpenFileReviewAsk } from "../chat/plainChatExplain";
 import { DECISION_HISTORIAN_SYSTEM, formatTimelineForPrompt } from "./decisionSynthesis";
 import type { DecisionTimeline } from "../types/decisionTimeline";
 import { OWNERSHIP_INTELLIGENCE_SYSTEM, formatOwnershipReportForPrompt } from "./ownershipSynthesis";
@@ -37,6 +37,7 @@ export const OPERATING_CONTEXT = `
 - When evidence is thin, empty, or unverified: short + honest + stop beats a padded “helpful” checklist. Do not invent callers, impact surfaces, architecture, owners, or tickets to fill the template.
 - Match depth to the ask and to the evidence. Cover what they asked; skip adjacent subsystems they did not ask about. If two sections would say the same thing, keep one.
 - Open-file explain / walk-through: a one-screen briefing. One citation of the named symbol, at most three reviewer bullets if they asked, then stop. Related files are backtick paths — not extra code cards.
+- When explaining an attached file, support each behavioral claim with the implementation lines that prove it (for example, validation, create/update, or representation methods), not only a class header or field list. If those lines are not attached, narrow the claim.
 - Finish the answer. Never stop mid-sentence or mid-list. If you must cut, drop repetition and extra citations first — not the concluding point.
 - Do not open with filler ("Great question", "Certainly", or restating the request).
 - Omit sections with no evidence — never pad with generic advice or one speculative line per heading.
@@ -759,6 +760,7 @@ export function emitEditorSelectionBlock(
     userMessage?: string;
     /** Plain highlight change. /edit keeps the anchored-edit wording. */
     openFile?: boolean;
+    selectionOnly?: boolean;
   }
 ): void {
   if (!options.selectedLines || options.selectedLines.length !== 2) {
@@ -779,6 +781,11 @@ export function emitEditorSelectionBlock(
   lines.push(
     `Edit target: only the highlighted lines ${start}-${end}${options.file?.trim() ? ` in ${options.file.trim()}` : ""}. Do not substitute a different function from the same file.`
   );
+  if (options.selectionOnly) {
+    lines.push(
+      "Answer scope: explain only the highlighted range. Do not summarize the surrounding function or other branches unless the user explicitly asks for context."
+    );
+  }
   lines.push(
     selectionEditDirective(
       resolveEditAskKind(options.userMessage ?? ""),
@@ -800,6 +807,32 @@ export function selectionTextFromContent(
     return "";
   }
   return rows.slice(start - 1, end).join("\n").slice(0, maxLength);
+}
+
+function filesForSelectionOnly<T extends ManifestSnippet>(
+  files: T[],
+  file: string | undefined,
+  selectedLines: [number, number] | undefined
+): T[] {
+  if (!file || !selectedLines || selectedLines.length !== 2) {
+    return files;
+  }
+  const selectedFile = files.find((candidate) => candidate.path === file);
+  if (!selectedFile) {
+    return [];
+  }
+  return [{
+    ...selectedFile,
+    content: selectionTextFromContent(selectedFile.content, selectedLines),
+    lineRange: selectedLines
+  } as T];
+}
+
+/** Preserve an explicit answer scope separately from edit/change intent. */
+export function asksForSelectionOnly(message: string | undefined): boolean {
+  const text = message?.trim() ?? "";
+  return /\b(?:only|just)\s+(?:the\s+)?(?:selected|highlighted)\b/i.test(text) ||
+    /\b(?:selected|highlighted)\s+(?:code|block|range)\s+only\b/i.test(text);
 }
 
 function resolveSelectionTextForAttach(options: {
@@ -899,6 +932,42 @@ This turn is a PR review of the **named function** in the attached file (the ide
 - If ownership evidence is present, mention the owner; if not, say owner unknown. Do not invent an owner.
 - Fine because / Ask the author must also be about that function. Sibling helpers (extractBearerToken, resolveAuthContext, 401/403 writers) are out of scope unless the named function calls them.`;
 
+export const REMOTE_FILE_EXPLAIN_DIRECTIVE = `## Turn directive (remote attached-file explanation)
+Answer the user's question directly and concisely from the attached remote file.
+- Identify only the relevant methods, symbols, or implementation blocks that establish the behavior.
+- Unless the user explicitly asks for the whole class, entire file, all behavior, or every method, summarize at most three high-level behaviors. Group related validation or lifecycle branches instead of enumerating every condition.
+- Use at most three citation fences for this focused explanation. Each citation range must cover no more than 20 source lines (never emit a 40+ line method/class range); when a behavior spans multiple branches, cite one representative 5–20-line block and qualify the summary instead of dumping the whole method.
+- Never write or cite a broad "implementation slice" such as a whole method, validation section, or range from a function declaration through later branches. If a question covers several branches, split the answer into grouped claims and cite one separate 5–20-line block per claim, or state that the remaining branches are not shown.
+- For each behavioral claim, cite the smallest contiguous implementation range that supports that claim. The cited line numbers must have an inclusive span of 20 lines or fewer; count the endpoints before emitting the citation.
+- Do not cite an entire class or file merely because its full body is attached; a class header, serializer field list, or unrelated helper is not evidence for the behavior.
+- A broad class/file citation is allowed only when the user explicitly asks for the whole class, entire file, all behavior, or every method.
+- If the attached body does not contain the implementation needed to support a claim, narrow the claim and say what is not shown.
+- Stop after the concise explanation and its focused citation fences.`;
+
+function remoteFileExplainTurnDirective(options: {
+  message: string;
+  file?: string;
+  owner?: string;
+  repo?: string;
+  selectedLines?: [number, number];
+  fileAssistant?: boolean;
+}): string | undefined {
+  if (
+    options.fileAssistant ||
+    !options.file?.trim() ||
+    !options.owner?.trim() ||
+    !options.repo?.trim() ||
+    options.selectedLines ||
+    !isOpenFileExplainAsk(options.message) ||
+    isOpenFileReviewAsk(options.message)
+  ) {
+    return undefined;
+  }
+  return asksForWholeOpenFileBehavior(options.message)
+    ? `${REMOTE_FILE_EXPLAIN_DIRECTIVE}\nThe user explicitly requested broad coverage; cite the relevant class/file ranges needed to cover that request.`
+    : REMOTE_FILE_EXPLAIN_DIRECTIVE;
+}
+
 /** Build the user turn when local file bytes are already loaded (extension-side). */
 export function formatChatMessageWithLocalFiles(options: {
   message: string;
@@ -916,8 +985,10 @@ export function formatChatMessageWithLocalFiles(options: {
   fileAssistant?: boolean;
   /** R highlight + change. Attach the chip and ask for a patch. Not /edit. */
   remoteSelectionChange?: boolean;
+  selectionOnly?: boolean;
 }): string {
   const lines: string[] = ["<attached_context>"];
+  const selectionOnly = options.selectionOnly ?? asksForSelectionOnly(options.userQuestion ?? options.message);
   if (!options.fileAssistant && options.owner && options.repo) {
     lines.push(`repo: ${options.owner}/${options.repo}`);
   }
@@ -935,10 +1006,18 @@ export function formatChatMessageWithLocalFiles(options: {
     selectedLines: options.selectedLines,
     selectionText: resolveSelectionTextForAttach(options),
     file: options.file,
-    userMessage: options.message,
-    openFile: options.remoteSelectionChange
+    userMessage: options.userQuestion ?? options.message,
+    openFile: options.remoteSelectionChange,
+    selectionOnly
   });
-  emitLocalFilesBlock(lines, options.files, options.message, options.fileAssistant);
+  emitLocalFilesBlock(
+    lines,
+    selectionOnly
+      ? filesForSelectionOnly(options.files, options.file, options.selectedLines)
+      : options.files,
+    options.message,
+    options.fileAssistant
+  );
   lines.push("</attached_context>", "", options.message.trim());
   if (isOpenFileReviewAsk(originalAskForReviewClassification(options.message))) {
     lines.push("", OPEN_FILE_PR_REVIEW_DIRECTIVE);
@@ -947,6 +1026,16 @@ export function formatChatMessageWithLocalFiles(options: {
     lines.push("", localFileTurnDirective(options.userQuestion ?? options.message));
   } else if (options.remoteSelectionChange) {
     lines.push("", REMOTE_SELECTION_EDIT_DIRECTIVE);
+  } else {
+    const directive = remoteFileExplainTurnDirective({
+      message: options.userQuestion ?? options.message,
+      file: options.file,
+      owner: options.owner,
+      repo: options.repo,
+      selectedLines: options.selectedLines,
+      fileAssistant: options.fileAssistant
+    });
+    if (directive) lines.push("", directive);
   }
   return lines.join("\n");
 }
@@ -1076,6 +1165,7 @@ export function buildUserMessageWithContext(
   const knowledgeGapScan = extractKnowledgeGapJobScan(context?.contextBundle);
   const fileDependents = extractFileDependentsEvidence(context?.contextBundle);
   const fileHistory = extractFileHistoryEvidence(context?.contextBundle);
+  const selectionOnly = asksForSelectionOnly(context?.userQuestion ?? message);
   if (
     !context?.file &&
     context?.contextBundle === undefined &&
@@ -1130,8 +1220,9 @@ export function buildUserMessageWithContext(
       file: context?.file
     }),
     file: context?.file,
-    userMessage: message,
-    openFile: context?.remoteSelectionChange
+    userMessage: context?.userQuestion ?? message,
+    openFile: context?.remoteSelectionChange,
+    selectionOnly: asksForSelectionOnly(context?.userQuestion ?? message)
   });
   if (projectInstructions.length > 0) {
     lines.push(...formatProjectInstructionsBlock(projectInstructions));
@@ -1157,14 +1248,24 @@ export function buildUserMessageWithContext(
     lines.push(...formatPackageStructureForLlm(packageStructure));
   }
   if (localSnippets.length > 0 && !dualRepoCompare) {
-    emitLocalFilesBlock(lines, localSnippets, message, context?.fileAssistant);
+    emitLocalFilesBlock(
+      lines,
+      selectionOnly
+        ? filesForSelectionOnly(localSnippets, context?.file, context?.selectedLines)
+        : localSnippets,
+      message,
+      context?.fileAssistant
+    );
   }
   if (repoSummarySnippets.length > 0 && !dualRepoCompare) {
     lines.push("<repo_entry_files>");
     lines.push(
       "In-repo package manifests / entry points for architecture and package boundaries (active Use-repo only — not the local Extension Host workspace)."
     );
-    for (const file of repoSummarySnippets) {
+    const files = selectionOnly
+      ? filesForSelectionOnly(repoSummarySnippets, context?.file, context?.selectedLines)
+      : repoSummarySnippets;
+    for (const file of files) {
       lines.push(`<file_content path="${file.path}">`);
       lines.push(file.content);
       lines.push("</file_content>");
@@ -1184,7 +1285,10 @@ export function buildUserMessageWithContext(
         ? `Retrieval sample only: attached ${repoSemanticSnippets.length} of ${matched} matched path(s) (cap ${cap}). This is not a complete inventory of the repository. Use for implementation detail; prefer @-attached files when both cover the same path. Never count these paths as the total number of files in the repo.`
         : `Retrieval sample only (at most ${repoSemanticSnippets.length} file(s) from semantic / full-text search — not a complete inventory of the repository). Use for implementation detail; prefer @-attached files when both cover the same path. Never count these paths as the total number of files in the repo.`
     );
-    for (const file of repoSemanticSnippets) {
+    const files = selectionOnly
+      ? filesForSelectionOnly(repoSemanticSnippets, context?.file, context?.selectedLines)
+      : repoSemanticSnippets;
+    for (const file of files) {
       const truncated = file.truncated ? ' truncated="true"' : "";
       lines.push(`<file_content path="${file.path}" repo="${file.repoId}"${truncated}>`);
       lines.push(file.content);
@@ -1213,7 +1317,10 @@ export function buildUserMessageWithContext(
     lines.push(
       "Source files retrieved by the read-only agent loop (search_code → read_file). Treat as authoritative for implementation detail."
     );
-    for (const file of agentFileSnippets) {
+    const files = selectionOnly
+      ? filesForSelectionOnly(agentFileSnippets, context?.file, context?.selectedLines)
+      : agentFileSnippets;
+    for (const file of files) {
       const range =
         file.lineRange && file.lineRange.length === 2
           ? ` lines="${file.lineRange[0]}-${file.lineRange[1]}"`
@@ -1262,7 +1369,7 @@ export function buildUserMessageWithContext(
   if (fileHistory) {
     lines.push(...formatFileHistoryForLlm(fileHistory));
   }
-  if (context?.contextBundle !== undefined) {
+  if (context?.contextBundle !== undefined && !selectionOnly) {
     const qualityNote = buildIndexQualityNote(context.contextBundle);
     if (qualityNote) {
       lines.push(qualityNote);
@@ -1276,6 +1383,16 @@ export function buildUserMessageWithContext(
     lines.push("", localFileTurnDirective(context.userQuestion ?? message));
   } else if (context?.remoteSelectionChange) {
     lines.push("", REMOTE_SELECTION_EDIT_DIRECTIVE);
+  } else {
+    const directive = remoteFileExplainTurnDirective({
+      message: context?.userQuestion ?? message,
+      file: context?.file,
+      owner: context?.owner,
+      repo: context?.repo,
+      selectedLines: context?.selectedLines,
+      fileAssistant: context?.fileAssistant
+    });
+    if (directive) lines.push("", directive);
   }
   if (isOpenFileReviewAsk(originalAskForReviewClassification(message))) {
     lines.push("", OPEN_FILE_PR_REVIEW_DIRECTIVE);

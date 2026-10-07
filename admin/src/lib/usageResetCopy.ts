@@ -99,7 +99,7 @@ export function formatFreeQuotaResumeParts(
   if (Number.isNaN(resetsAt.getTime())) {
     return null;
   }
-  const windowMs = Math.max(1, (input.windowHours ?? 5) * 3_600_000);
+  const windowMs = Math.max(1, (input.windowHours ?? 6) * 3_600_000);
   const pausedAt = new Date(resetsAt.getTime() - windowMs);
   const resumeNeedsDate = calendarDateKey(resetsAt) !== calendarDateKey(now);
   const pauseNeedsDate = calendarDateKey(pausedAt) !== calendarDateKey(now);
