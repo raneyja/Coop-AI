@@ -98,6 +98,14 @@ function scrubHuntClauses(text: string): string {
  * If nothing remains, fall back to the honest-limit only.
  */
 function stripHuntLeadLanguage(text: string): string {
+  // Citation fences are evidence, not prose. Scrubbing whitespace in them
+  // collapsed the locator and source into a single line, destroying the IDE
+  // citation card even though the correct file body reached the model.
+  const blocks = text.split(/(^[ \t]*```[^\n]*\n[\s\S]*?^[ \t]*```[ \t]*$)/m);
+  if (blocks.length > 1) {
+    return blocks.map((block, index) => index % 2 === 1 ? block :
+      block.trim() ? stripHuntLeadLanguage(block) : "").filter(Boolean).join("\n\n");
+  }
   const paragraphs = text.split(/\n\n+/).filter((part) => part.trim());
   if (paragraphs.length === 0) {
     return text;
@@ -194,18 +202,16 @@ export function enrichFileAssistantResponse(
   }
 
   const kept: string[] = [];
+  let inFence = false;
   for (const line of raw.split("\n")) {
-    if (isTopicHeading(line) || OFFER_TO_CONTINUE.test(line)) {
+    if (/^[ \t]*```/.test(line)) inFence = !inFence;
+    if (!inFence && (isTopicHeading(line) || OFFER_TO_CONTINUE.test(line))) {
       break;
     }
     kept.push(line);
   }
 
   let text = kept.join("\n").trim();
-  const offerAt = text.search(OFFER_TO_CONTINUE);
-  if (offerAt >= 0) {
-    text = text.slice(0, offerAt).trim();
-  }
   if (!text) {
     return raw;
   }

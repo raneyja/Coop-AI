@@ -105,3 +105,18 @@ Before marking work done:
 
 If any answer is no, fix or flag it — don’t oversell.
 
+### Claim tiers (Extension Host Fail classes)
+
+- **Automated Pass** — tests/lint for this Fail class.
+- **Ready for your Reload dogfood** — automated green + exact fixture asks; live still open.
+- **Fixed / live Pass** — only after Extension Host Pass on the named ask.
+
+See `.cursor/rules/ship-claim-discipline.mdc`. Don’t oversell unit green as product fixed.
+
+### Historical testing and active scope
+
+Check existing run reports and the user's scope corrections before claiming an
+area is untested. Completed historical work is not erased by an empty new-build
+ledger. Reopen only observed regressions or explicitly requested requalification.
+See `.cursor/rules/dogfood-history-and-scope.mdc` and the active evidence ledger
+`docs/dogfood/runs/2026-10-07-file-context/README.md`.

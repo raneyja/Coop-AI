@@ -459,8 +459,14 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
 
     return new Promise((resolve) => {
       let vscodeCancelled = false;
+      const abort = new AbortController();
       const cancelListener = token.onCancellationRequested(() => {
         vscodeCancelled = true;
+        abort.abort();
+        if (this.pendingSchedule?.generation === generation) {
+          this.pendingSchedule.resolve(null);
+          this.pendingSchedule = undefined;
+        }
       });
       const pending = { generation, resolve, cancelListener };
       this.pendingSchedule = pending;
@@ -474,7 +480,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       };
 
       const run = () => {
-        if (generation !== this.requestGeneration) {
+        if (generation !== this.requestGeneration || vscodeCancelled || abort.signal.aborted) {
           finish(null);
           return;
         }
@@ -485,7 +491,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
           return;
         }
 
-        const promise = this.executeRequest(document, position, extracted);
+        const promise = this.executeRequest(document, position, extracted, abort.signal);
         this.inFlightByHash.set(extracted.contextHash, promise);
         void promise.finally(() => {
           if (this.inFlightByHash.get(extracted.contextHash) === promise) {
@@ -494,7 +500,11 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
         });
 
         void promise.then((items) => {
-          if (vscodeCancelled && items && items.length > 0) {
+          if (vscodeCancelled || abort.signal.aborted) {
+            finish(null);
+            return;
+          }
+          if (items && items.length > 0) {
             void vscode.commands.executeCommand("editor.action.inlineSuggest.trigger");
           }
           finish(items);
@@ -644,7 +654,8 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
   private async executeRequest(
     document: vscode.TextDocument,
     position: vscode.Position,
-    extracted: ExtractedCodeContext
+    extracted: ExtractedCodeContext,
+    requestSignal?: AbortSignal
   ): Promise<vscode.InlineCompletionItem[] | null> {
     const requestedRepoScope = this.completionRepoScope();
     let live = this.resolveLiveCompletionContext(document, position);
@@ -652,10 +663,11 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     extracted = live.extracted;
     this.noteSupersededIfNeeded(extracted.contextHash);
 
-    const abort = new AbortController();
+    const abort = requestSignal ? undefined : new AbortController();
+    const signal = requestSignal ?? abort!.signal;
     try {
       if (extracted.afterDot) {
-        const lspItems = await this.tryLspMemberCompletions(document, position, extracted, abort.signal);
+        const lspItems = await this.tryLspMemberCompletions(document, position, extracted, signal);
         if (requestedRepoScope !== this.completionRepoScope()) {
           this.lastAlternatives = [];
           this.lastScopeHash = "";
@@ -682,7 +694,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
         const llmFallback = await this.router.fetchCompletions(
           extracted,
           this.settings,
-          abort.signal,
+          signal,
           document.getText().slice(0, 32_768),
           this.completionFetchOptions(document)
         );
@@ -711,7 +723,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       const result = await this.router.fetchCompletions(
         extracted,
         this.settings,
-        abort.signal,
+        signal,
         document.getText().slice(0, 32_768),
         this.completionFetchOptions(document)
       );
@@ -740,7 +752,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
         result.latencyMs
       );
     } catch (error) {
-      if (abort.signal.aborted) {
+      if (signal.aborted) {
         this.triggerDetector.noteRequestFailed();
         return null;
       }

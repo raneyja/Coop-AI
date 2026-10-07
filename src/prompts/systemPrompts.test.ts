@@ -1059,6 +1059,22 @@ test("remote highlight change attaches the chip and selection without local-file
   assert.equal(message.includes('Do not write "in the repo"'), false);
 });
 
+test("wrapped inspection asks cannot acquire a mandatory patch directive", () => {
+  const question = "Does this attached file implement the server's envelope.status PENDING signing check? Show that check only if it is in this file.";
+  const wrapped = `## Task\nFind the implementation and update writer.\n\n## User focus (required)\n${question}\n\n## Evidence\nOnly the attached file was read.`;
+  const message = formatChatMessageWithLocalFiles({message:wrapped,file:"src/answer.ts",fileAssistant:true,
+    files:[{path:"src/answer.ts",content:"export const evidence = true;"}]});
+  assert.ok(message.includes(LOCAL_FILE_PATH_DIRECTIVE));
+  assert.equal(message.includes(LOCAL_FILE_EDIT_DIRECTIVE),false);
+  const prefixed = formatChatMessageWithLocalFiles({message:`Plan: update the implementation in this file.\n\n${wrapped}`,
+    userQuestion:question,file:"src/answer.ts",fileAssistant:true,files:[{path:"src/answer.ts",content:"const a = 1;"}]});
+  assert.ok(prefixed.includes(LOCAL_FILE_PATH_DIRECTIVE));
+  assert.equal(prefixed.includes(LOCAL_FILE_EDIT_DIRECTIVE),false,"planner trust preambles are not user authorization");
+  const bundled = buildUserMessageWithContext(`Plan: implement this method.\n${wrapped}`,{userQuestion:question,file:"src/answer.ts",fileAssistant:true});
+  assert.ok(bundled.includes(LOCAL_FILE_PATH_DIRECTIVE));
+  assert.equal(bundled.includes(LOCAL_FILE_EDIT_DIRECTIVE),false);
+});
+
 test("L highlight change still uses the local-file edit directive", () => {
   const message = formatChatMessageWithLocalFiles({
     message: "add a comment that says hello",

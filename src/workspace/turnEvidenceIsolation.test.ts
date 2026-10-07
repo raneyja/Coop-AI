@@ -85,7 +85,7 @@ test("merge with empty incoming docs does not keep a prior repo's pages", () => 
   assert.doesNotMatch(JSON.stringify(merged), /COOP-101|VS Code extension/);
 });
 
-test("/slack this turn drops leftover Jira and foreign Slack", () => {
+test("/slack this turn keeps provider-scoped Slack and drops other providers", () => {
   const isolated = isolateContextBundleForTurn(
     [
       entry("chat_context", {
@@ -110,8 +110,9 @@ test("/slack this turn drops leftover Jira and foreign Slack", () => {
   };
   assert.equal(data.jiraSearch, undefined);
   assert.equal(data.confluenceSearch, undefined);
-  assert.equal(data.slackSearch?.messages?.length, 1);
-  assert.match(data.slackSearch?.messages?.[0]?.text ?? "", /plane preview/);
+  assert.equal(data.slackSearch?.messages?.length, 2);
+  assert.match(data.slackSearch?.messages?.[0]?.text ?? "", /COOP-101/);
+  assert.match(data.slackSearch?.messages?.[1]?.text ?? "", /plane preview/);
 });
 
 test("/compare keeps only the two named repos", () => {

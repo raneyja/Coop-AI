@@ -55,6 +55,20 @@ test("shouldRunAgentToolLoop is false for local explain even on a hunt-shaped le
   );
 });
 
+test("observed API rejection cannot be downgraded to plain chat", () => {
+  const query =
+    "A signer gets an error that the document must be pending for signing. Where does the server reject this request, and what status check enforces it?";
+  const plan = emptyChatIntentPlan(query);
+  assert.equal(
+    shouldRunAgentToolLoop({ query, hasQuickAction: false, intentPlan: plan }),
+    true
+  );
+  assert.equal(
+    agentTurnAllowsRepoTools({ query, intentPlan: plan }),
+    true
+  );
+});
+
 test("shouldRunAgentToolLoop is true for hunt + Slack compound ask without jobs (fail-open)", () => {
   const query = "Where is requireAuth defined, and what did Slack say about the auth change?";
   const plan: ChatIntentPlan = {

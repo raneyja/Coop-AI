@@ -42,6 +42,12 @@ Follow `.cursor/rules/clear-user-requests.mdc`: lead with **Do this now** or **S
 
 **Do this now:** Extension → Remote workspace → Refresh → open `plane`. Success = file tree loads, no 404.
 
+❌ “Parent reject hunt is fixed — tests pass.”
+
+✅ **Status:** Automated Pass. Live Pass still open.
+
+**Do this now:** Reload → paste `LIVE_PARENT_PASS_ASK` from `dogfoodContract.ts` → Success = cites Parent ValidationError in `serializers/issue.py`.
+
 ❌ Six paragraphs mixing deploy status, root cause, and test steps.
 
 ✅ **Status:** Fix is live. **Do this now:** (3 numbered steps). **Why:** (2–4 bullets, no code).

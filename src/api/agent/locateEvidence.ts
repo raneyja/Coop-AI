@@ -44,6 +44,10 @@ type LocateReadInput = {
   query: string;
 };
 
+type LocateReadOptions = {
+  requireImplementation?: boolean;
+};
+
 type LangFamily = "ts" | "py" | "go" | "java" | "rs" | "rb" | "other";
 
 function locateVerdictApplies(query: string): boolean {
@@ -231,6 +235,30 @@ function roleOnlyInNonCode(path: string, body: string, query: string): boolean {
   return !textSatisfiesLocateQuery(code, query);
 }
 
+function isEnumMemberSearchCandidate(path: string, snippet: string, query: string): boolean {
+  if (!/\benum\b/i.test(query) || isLocatePathNoise(path, query)) {
+    return false;
+  }
+  return [...query.matchAll(/\b[A-Z][A-Z0-9_]{2,}\b/g)].some((match) =>
+    new RegExp(`\\b${(match[0] ?? "").replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\b`).test(`${path}\n${snippet}`)
+  );
+}
+
+/**
+ * A guard is often described in prose but never named `guard` in source.
+ * Treat a native conditional that compares a value and rejects/returns as
+ * implementation evidence for guard locates; requiring the literal word
+ * would discard ordinary status guards such as `if (status !== PENDING)`.
+ */
+function isGuardImplementationCandidate(path: string, body: string, query: string): boolean {
+  if (!queryRoleHints(query).includes("guard") || !hasNativeForExtension(path, stripStringsAndComments(body))) {
+    return false;
+  }
+  const code = stripStringsAndComments(body);
+  return /\bif\s*\([^\n)]*(?:===|!==|==|!=|<=|>=|<|>)|\bif\s+(?:not\s+)?[^\n]*(?:===|!==|==|!=|<=|>=|<|>)/.test(code) &&
+    /\b(?:throw|raise|reject|abort|forbidden|unauthorized|invalid)\b/i.test(code);
+}
+
 /**
  * Snippet ranking is conservative: docs/tests/fixtures and language-mismatch
  * are mentions; path+native is implementation; everything else may be read.
@@ -238,6 +266,12 @@ function roleOnlyInNonCode(path: string, body: string, query: string): boolean {
 function classifyLocateSnippet(path: string, snippet: string, query: string): LocateEvidenceClass | "uncertain" {
   if (queryNamesSourceFile(path, query)) {
     return "implementation";
+  }
+  if (isGuardImplementationCandidate(path, snippet, query)) {
+    return "implementation";
+  }
+  if (isEnumMemberSearchCandidate(path, snippet, query)) {
+    return "uncertain";
   }
   if (!textSatisfiesLocateQuery(`${path}\n${snippet}`, query)) {
     // SCIP declarations have no snippet. Named-symbol hits are still worth a read;
@@ -292,15 +326,21 @@ function classifyLocateSnippet(path: string, snippet: string, query: string): Lo
   return "uncertain";
 }
 
-export function classifyLocateRead(input: LocateReadInput): LocateEvidenceClass {
+export function classifyLocateRead(
+  input: LocateReadInput,
+  options: LocateReadOptions = {}
+): LocateEvidenceClass {
   const { path, body, query } = input;
   if (queryNamesSourceFile(path, query) && body.trim()) {
+    return "implementation";
+  }
+  if (isGuardImplementationCandidate(path, body, query)) {
     return "implementation";
   }
   if (!textSatisfiesLocateQuery(`${path}\n${body}`, query)) {
     return "unrelated";
   }
-  if (!locateVerdictApplies(query)) {
+  if (!locateVerdictApplies(query) && !options.requireImplementation) {
     return "implementation";
   }
   if (isLocatePathNoise(path, query)) {
@@ -308,6 +348,9 @@ export function classifyLocateRead(input: LocateReadInput): LocateEvidenceClass 
   }
   if (hasLanguageMismatch(path, body)) {
     return "mention";
+  }
+  if (options.requireImplementation && hasNativeForExtension(path, stripStringsAndComments(body))) {
+    return "implementation";
   }
   if (isParserLocateAsk(query)) {
     return contentLooksLikeRequestedParser(stripStringsAndComments(body), query)
@@ -362,11 +405,14 @@ export function classifyLocateRead(input: LocateReadInput): LocateEvidenceClass 
   return "mention";
 }
 
-export function locateReadCountsAsGrounding(input: LocateReadInput): boolean {
-  if (!locateVerdictApplies(input.query)) {
+export function locateReadCountsAsGrounding(
+  input: LocateReadInput,
+  options: LocateReadOptions = {}
+): boolean {
+  if (!locateVerdictApplies(input.query) && !options.requireImplementation) {
     return textSatisfiesLocateQuery(`${input.path}\n${input.body}`, input.query);
   }
-  return classifyLocateRead(input) === "implementation";
+  return classifyLocateRead(input, options) === "implementation";
 }
 
 const EXPORT_QUERY_STOP = new Set(

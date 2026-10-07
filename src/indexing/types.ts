@@ -42,11 +42,16 @@ export type ScipReference = {
   kind: string;
 };
 
+export type SearchAvailability = "available" | "timed_out" | "unavailable" | "error" | "partial";
+
 export type LocalSearchResult = {
   source: "zoekt" | "scip" | "embedding" | "fallback";
   hits: ZoektSearchHit[];
   symbols: ScipSymbol[];
+  /** True only when the backend supplied evidence that its index is stale. */
   stale: boolean;
+  /** Explains whether the search completed; never infer this from `stale`. */
+  availability?: SearchAvailability;
 };
 
 export type GraphDependentsSource =

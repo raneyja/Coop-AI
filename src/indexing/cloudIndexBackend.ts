@@ -87,7 +87,7 @@ export class CloudIndexBackend implements IndexBackend {
     options?: import("./indexBackend").IndexSearchOptions
   ): Promise<LocalSearchResult> {
     if (!(await this.isEnabledForRepo(repoId))) {
-      return { source: "fallback", hits: [], symbols: [], stale: false };
+      return { source: "fallback", hits: [], symbols: [], stale: false, availability: "unavailable" };
     }
     try {
       const remote = (await this.client.graphSearch(
@@ -98,7 +98,7 @@ export class CloudIndexBackend implements IndexBackend {
       )) as GraphSearchResponse;
       return mapGraphSearchResponse(remote);
     } catch {
-      return { source: "fallback", hits: [], symbols: [], stale: false };
+      return { source: "fallback", hits: [], symbols: [], stale: false, availability: "error" };
     }
   }
 

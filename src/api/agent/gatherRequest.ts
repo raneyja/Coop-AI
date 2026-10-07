@@ -6,11 +6,17 @@ export async function gatherRequest<T>(
   ctx: AgentToolContext,
   stage: string,
   request: () => Promise<T>,
-  unavailable: T
+  unavailable: T,
+  options?: { reserveMs?: number; deadlineAt?: number }
 ): Promise<T> {
   if (ctx.searchSignal?.aborted) return unavailable;
   if (ctx.gatherStartedAt === undefined) return request();
-  const remainingMs = remainingContextGatherBudgetMs(ctx.gatherStartedAt);
+  const remainingMs = options?.deadlineAt !== undefined
+    ? Math.max(0, options.deadlineAt - Date.now())
+    : Math.max(
+        0,
+        remainingContextGatherBudgetMs(ctx.gatherStartedAt) - (options?.reserveMs ?? 0)
+      );
   if (remainingMs <= 0) return unavailable;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {

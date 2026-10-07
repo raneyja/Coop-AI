@@ -36,6 +36,21 @@ export const RESERVED_SYNTHESIS_MS = 6_000;
  */
 export const LOCATE_PREFETCH_MIN_MS = 4_000;
 
+/**
+ * A reject hunt cannot produce a trustworthy answer from an index miss alone.
+ * Give its remote filename/body verification one bounded grace window after
+ * the ordinary context-gather window is spent. This does not abort the turn
+ * or create an unbounded retry loop.
+ */
+export const REQUIRED_EVIDENCE_GRACE_MS = 4_000;
+
+export function requiredEvidenceDeadlineAt(
+  startedAt: number,
+  graceMs = REQUIRED_EVIDENCE_GRACE_MS
+): number {
+  return startedAt + MAX_USER_FACING_RESPONSE_MS + Math.max(0, graceMs);
+}
+
 /** Locate prefetch budget: leftover gather time, never below the locate floor. */
 export function locateSearchBudgetMs(remainingGatherMs: number): number {
   return Math.max(Math.max(0, remainingGatherMs), LOCATE_PREFETCH_MIN_MS);

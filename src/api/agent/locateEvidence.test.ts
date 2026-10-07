@@ -99,6 +99,26 @@ test("server export / def is an implementation", () => {
   );
 });
 
+test("status comparison guard grounds without a literal guard name", () => {
+  const ask =
+    "Where is the pending-for-signing guard implemented, and what status comparison triggers it?";
+  const body = [
+    "export async function signFieldWithToken(envelope) {",
+    "  if (envelope.status !== DocumentStatus.PENDING) {",
+    "    throw new AppError('Document must be pending for signing');",
+    "  }",
+    "}"
+  ].join("\n");
+  assert.equal(
+    locateReadCountsAsGrounding({
+      path: "packages/server/sign-field-with-token.ts",
+      body,
+      query: ask
+    }),
+    true
+  );
+});
+
 test("leftover latency file is unrelated", () => {
   assert.equal(
     classifyLocateRead({ path: LEFTOVER_PATH, body: LEFTOVER_BODY, query: CARD1_ASK }),

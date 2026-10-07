@@ -5,7 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { IndexBackend } from "../../indexing/indexBackend";
 import type { LocalSearchResult } from "../../indexing/types";
-import { createAgentOrchestrator, pickTopSearchHit } from "./AgentOrchestrator";
+import { createAgentOrchestrator, pickTopSearchHit, sameClassSerializerUpdateWindow, contextHasStateWriteSite } from "./AgentOrchestrator";
 import { COPILOT_C1_ASK, COPILOT_C2_ASK, COPILOT_T2_ASK, LIVE_PARENT_PASS_ASK } from "./dogfoodContract";
 import {
   ZOEKT_PARENT_MESSAGE_ONLY,
@@ -190,6 +190,77 @@ async function run(): Promise<void> {
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  await test("ordinary locate skips a matching docs hit and reads the implementation", async () => {
+    const docsPath = "docs/payments.md";
+    const implementationPath = "src/payments/processPayments.ts";
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            { fileName: docsPath, lineNumber: 3, content: "Payment processing happens in the billing layer.", score: 1 },
+            { fileName: implementationPath, lineNumber: 1, content: "export function processPayments(input) { return input; }", score: 0.9 }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path }) => path === docsPath
+        ? { path, content: "Payment processing happens in the billing layer." }
+        : { path, content: "export function processPayments(input) { return input; }" }
+    });
+    const result = await orchestrator.run({
+      message: "Where is payment processing implemented?",
+      repoId: "github:example/payments",
+      action: "locate",
+      maxSteps: 4
+    }, {
+      planTurn: async ({ round }) => round === 0
+        ? JSON.stringify({ tool: "search_code", args: { query: "payment processing" } })
+        : JSON.stringify({ done: true }),
+      streamAnswer: async () => "Payment processing is implemented in the handler."
+    });
+    const files = (result.context?.read_file as { files?: Array<{ path: string; content: string }> } | undefined)?.files ?? [];
+    assert.equal(files.at(-1)?.path, implementationPath);
+    assert.doesNotMatch(result.steps.at(-1)?.summary ?? "", /docs\/payments/);
+  });
+
+  await test("ordinary locate with an empty index searches filenames and reads the verified implementation", async () => {
+    const implementationPath = "src/payments/processPayments.ts";
+    const readPaths: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({ source: "zoekt", stale: false, hits: [], symbols: [] })
+      }),
+      resolveAbsolutePath: () => undefined,
+      findFiles: async ({ query }) => query === "payment."
+        ? ["docs/payments.md", implementationPath]
+        : [],
+      readRemoteFile: async ({ path }) => {
+        readPaths.push(path);
+        return path === implementationPath
+          ? { path, content: "export function processPayments(input) { return input; }" }
+          : { path, content: "Payment processing is documented here." };
+      }
+    });
+    const result = await orchestrator.run({
+      message: "Where is payment processing implemented?",
+      repoId: "github:example/payments",
+      action: "locate",
+      maxSteps: 4
+    }, {
+      planTurn: async ({ round }) => round === 0
+        ? JSON.stringify({ tool: "search_code", args: { query: "payment processing" } })
+        : JSON.stringify({ done: true }),
+      streamAnswer: async () => "Payment processing is implemented in the handler."
+    });
+    assert.ok(readPaths.includes(implementationPath), `expected filename fallback to read the implementation, got ${readPaths.join(", ")}`);
+    const files = (result.context?.read_file as { files?: Array<{ path: string; content: string; evidenceSource?: string }> } | undefined)?.files ?? [];
+    assert.equal(files.at(-1)?.path, implementationPath, JSON.stringify({ steps: result.steps, readPaths, search: result.context?.search_code }));
+    assert.equal(files.at(-1)?.evidenceSource, "remote-read");
   });
 
   await test("run stops after search when index returns no hits", async () => {
@@ -690,6 +761,29 @@ async function run(): Promise<void> {
     );
     assert.equal(calls, 8);
     assert.ok(result.steps.length >= 8);
+  });
+
+  await test("last-chance search honors the remaining tool-step budget", async () => {
+    let searches = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => {
+          searches += 1;
+          return { source: "zoekt", stale: false, hits: [], symbols: [] };
+        }
+      }),
+      resolveAbsolutePath: () => undefined
+    });
+    const result = await orchestrator.run(
+      { message: "Where is verifyToken defined?", repoId: "acme/demo", action: "locate", maxSteps: 1 },
+      {
+        planTurn: async ({ round }) =>
+          JSON.stringify({ tool: "search_code", args: { query: `missing${round}` } })
+      }
+    );
+    assert.deepEqual(result.steps.map((step) => step.tool), ["search_code"]);
+    assert.ok(searches >= 1, `expected the index to be searched, got ${searches}`);
+    assert.equal(result.context?.read_file, undefined);
   });
 
   await test("wrong first hit forces a second read before done (dogfood)", async () => {
@@ -4390,6 +4484,145 @@ async function run(): Promise<void> {
     assert.match(result.answer ?? "", /couldn.t (?:find|confirm) where the API rejects/i);
   });
 
+  await test("reject hunt keeps search-to-read contract after the normal gather window", async () => {
+    const ask = "A signer gets an error that the document must be pending for signing. Where does the server reject this request, and what status check enforces it?";
+    const path = "packages/lib/server-only/field/sign-field-with-token.ts";
+    const body = [
+      "export async function signFieldWithToken(envelope) {",
+      "  if (envelope.status !== DocumentStatus.PENDING) {",
+      "    throw new AppError(AppErrorCode.INVALID_REQUEST, {",
+      "      message: `Document ${envelope.id} must be pending for signing`,",
+      "    });",
+      "  }",
+      "  return envelope;",
+      "}"
+    ].join("\n");
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({ source: "zoekt", stale: false, hits: [], symbols: [] })
+      }),
+      resolveAbsolutePath: () => undefined,
+      findFiles: async ({ query }) => query === "sign" ? [path] : [],
+      readRemoteFile: async ({ path: filePath }) => ({ path: filePath, content: body })
+    });
+    const result = await orchestrator.run(
+      { message: ask, repoId: "github:CoopAI-Corp/documenso", action: "locate", maxSteps: 8 },
+      {
+        startedAt: Date.now() - 10_000,
+        planTurn: async ({ round }) => round === 0
+          ? JSON.stringify({ tool: "search_code", args: { query: "must be pending for signing" } })
+          : JSON.stringify({ done: true }),
+        streamAnswer: async () => "The signing handler rejects non-pending documents."
+      }
+    );
+    assert.deepEqual(result.steps.map((step) => step.tool), ["search_code", "read_file"]);
+    const readFiles = (result.context?.read_file as { files?: Array<{ content: string; evidenceSource?: string }> } | undefined)?.files ?? [];
+    assert.equal(readFiles.length, 1);
+    assert.equal(readFiles[0]?.evidenceSource, "remote-read");
+    assert.match(readFiles[0]?.content ?? "", /envelope\.status !== DocumentStatus\.PENDING/);
+    assert.match(readFiles[0]?.content ?? "", /must be pending for signing/);
+    assert.match(result.answer ?? "", /signing handler/);
+  });
+
+  await test("D3 normalized pending criterion reads the remote handler through map noise", async () => {
+    const ask = "A signer gets an error that the document must be pending for signing. Where does the server reject this request, and what status check enforces it?";
+    const handlerPath = "packages/lib/server-only/field/sign-field-with-token.ts";
+    const handlerBody = [
+      "export async function signFieldWithToken(envelope) {",
+      "  if (envelope.status !== DocumentStatus.PENDING) {",
+      "    throw new AppError(AppErrorCode.INVALID_REQUEST, {",
+      "      message: `Document ${envelope.id} must be pending for signing`,",
+      "    });",
+      "  }",
+      "  return envelope;",
+      "}"
+    ].join("\n");
+    const readPaths: string[] = [];
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => ({
+          source: "zoekt",
+          stale: false,
+          hits: [
+            { fileName: "packages/lib/server-only/field/sign-field-with-token.ts.map", lineNumber: 1, content: "must be pending for signing", score: 1 },
+            { fileName: "apps/web/components/signing/status.tsx", lineNumber: 4, content: "const label = 'must be pending for signing';", score: 0.95 },
+            { fileName: "packages/lib/server-only/field/sign-field-with-token.ts", lineNumber: 1, content: "export async function signFieldWithToken(envelope) {", score: 0.9 }
+          ],
+          symbols: []
+        })
+      }),
+      resolveAbsolutePath: () => undefined,
+      findFiles: async ({ query }) => query === "sign"
+        ? ["packages/lib/server-only/field/sign-field-with-token.ts.map", "apps/web/components/signing/status.tsx", handlerPath]
+        : [],
+      readRemoteFile: async ({ path }) => {
+        readPaths.push(path);
+        return path === handlerPath ? { path, content: handlerBody } : { path, content: "" };
+      }
+    });
+    const result = await orchestrator.run(
+      { message: ask, repoId: "github:Documenso/documenso", action: "locate", maxSteps: 8 },
+      {
+        planTurn: async ({ round }) => round === 0
+          ? JSON.stringify({ tool: "search_code", args: { query: "document must be pending for signing" } })
+          : JSON.stringify({ done: true }),
+        streamAnswer: async () => "The signing handler rejects non-pending documents."
+      }
+    );
+    assert.deepEqual(result.steps.map((step) => step.tool), ["search_code", "read_file"]);
+    assert.ok(readPaths.includes(handlerPath), `expected the handler body to be read, got ${readPaths.join(", ")}`);
+    const readFiles = (result.context?.read_file as { files?: Array<{ path?: string; content: string; evidenceSource?: string }> } | undefined)?.files ?? [];
+    const handler = readFiles.find((file) => file.path === handlerPath);
+    assert.equal(handler?.evidenceSource, "remote-read");
+    assert.match(handler?.content ?? "", /envelope\.status !== DocumentStatus\.PENDING/);
+    assert.match(handler?.content ?? "", /must be pending for signing/);
+  });
+
+  await test("deterministic D3-style reject fallback reads an unclassified handler candidate", async () => {
+    const ask = "A signer gets an error that the document must be pending for signing. Where does the server reject this request, and what status check enforces it?";
+    const path = "packages/trpc/envelope-router/sign-envelope-field.ts";
+    const body = [
+      "export async function signEnvelopeField(envelope) {",
+      "  if (envelope.status !== DocumentStatus.PENDING) {",
+      "    throw new AppError(AppErrorCode.INVALID_REQUEST, { message: `Document ${envelope.id} must be pending for signing` });",
+      "  }",
+      "  return envelope;",
+      "}"
+    ].join("\n");
+    let searchCount = 0;
+    let readCount = 0;
+    const orchestrator = createAgentOrchestrator({
+      indexBackend: mockIndexBackend({
+        search: async () => {
+          searchCount += 1;
+          return searchCount < 4
+            ? { source: "zoekt", stale: false, hits: [], symbols: [] }
+            : {
+                source: "zoekt",
+                stale: false,
+                // The declaration hit is useful, but not itself a reject snippet.
+                hits: [{ fileName: path, lineNumber: 1, content: "export async function signEnvelopeField(envelope) {", score: 0.9 }],
+                symbols: []
+              };
+        }
+      }),
+      resolveAbsolutePath: () => undefined,
+      readRemoteFile: async ({ path: filePath }) => {
+        readCount += 1;
+        return filePath === path ? { path: filePath, content: body } : undefined;
+      }
+    });
+    const result = await orchestrator.run({ message: ask, repoId: "remote:d3-fallback", action: "locate", maxSteps: 8 });
+    assert.ok(searchCount >= 4, `expected multiple deterministic searches, got ${searchCount}`);
+    assert.ok(
+      readCount > 0,
+      `must consume the readable candidate before exhausting the fallback searches (searches=${searchCount}, steps=${result.steps.map((step) => step.tool + ":" + step.summary).join(" | ")})`
+    );
+    assert.match(JSON.stringify(result.context?.read_file), /must be pending for signing/);
+    assert.equal(result.steps.at(-1)?.tool, "read_file");
+    assert.ok(result.steps.filter((step) => step.tool === "search_code").length >= 2);
+  });
+
   await test("reject attaches from raw hits when preferredHits emptied by noise", async () => {
     const writerPath = PLANE_ISSUE_SERIALIZER_PATH;
     let readCount = 0;
@@ -5526,7 +5759,7 @@ async function run(): Promise<void> {
     assert.match(result.answer ?? "", /indexed searches yielded no attachable reject snippet/i);
   });
 
-  await test("repeated reject searches require a new criterion without another network call", async () => {
+  await test("status reject searches begin deterministically before refinement", async () => {
     const searches: string[] = [];
     const orchestrator = createAgentOrchestrator({
       indexBackend: mockIndexBackend({ search: async (_repo, query) => {
@@ -5541,10 +5774,10 @@ async function run(): Promise<void> {
           : JSON.stringify({ tool: "search_code", args: { query: round < 2 ? "signField" : "validateDocument" } });
       }, streamAnswer: async () => ""
     });
-    assert.deepEqual(searches, ["signField", "sign_field", "validateDocument", "validate_document"]);
+    assert.deepEqual(searches, ["get(\"status\")", "signField", "sign_field", "validateDocument", "validate_document"]);
   });
 
-  await test("domain-status reject preserves the model's handler search", async () => {
+  await test("domain-status reject seeds a status search before the model handler refinement", async () => {
     const searches: string[] = [];
     const orchestrator = createAgentOrchestrator({
       indexBackend: mockIndexBackend({ search: async (_repo, query) => {
@@ -5563,7 +5796,7 @@ async function run(): Promise<void> {
         : JSON.stringify({ done: true }),
       streamAnswer: async () => ""
     });
-    assert.equal(searches[0], "signDocument");
+    assert.equal(searches[0], "must be pending for signing");
   });
 
   await test("reject first search uses exact quote before the planner's generic query", async () => {
@@ -5841,6 +6074,27 @@ async function run(): Promise<void> {
         assert.match(result.answer ?? "", /task\.py:68-70/);
       }
     }
+  });
+
+  await test("fragmented reject windows recover only the exact same-class writer", () => {
+    const guard = '    def validate(self, data):\n        if data.get("state"):\n            raise serializers.ValidationError("State is not valid")\n        return data';
+    const update = '    def update(self, instance, validated_data):\n        return super().update(instance, validated_data)';
+    const body = `class TaskSerializer:\n${guard}\n\n${update}\n`;
+    const fragmented = `${guard}\n${guard}`;
+    assert.equal(sameClassSerializerUpdateWindow(body, fragmented)?.content, update);
+    assert.equal(sameClassSerializerUpdateWindow(`from library import State\n\n${body}`, `from library import State\n\n${body}`, "The API rejects state; where is state written?")?.content, update, "a complete file starts before its serializer class");
+    assert.equal(sameClassSerializerUpdateWindow(body, fragmented, "Users can't move a work item out of backlog — the API returns an error. I don't have this repo cloned. Where is work-item state written, and what rejects a bad transition?")?.content, update, "a transition ask anchors on its exact state rejection row, not a standalone-row guard classifier");
+    assert.equal(sameClassSerializerUpdateWindow(`class TaskSerializer:\n${guard}\nclass OtherSerializer:\n${update}`, fragmented), undefined);
+    assert.equal(sameClassSerializerUpdateWindow(`${body}\nclass OtherSerializer:\n${guard}\n${update}`, fragmented), undefined, "ambiguous repeated rejection must not borrow a writer");
+  });
+
+  await test("state writer proof uses source line order, not tool-call order", () => {
+    const path = "server/serializers/task.py";
+    const guard = {path, content: '121|    def validate(self, data):\n122|        if data.get("state"):\n123|            raise ValidationError("State is not valid")', evidenceSource: "remote-read"};
+    const update = {path, content: '234|    def update(self, instance, validated_data):\n235|        return super().update(instance, validated_data)', evidenceSource: "remote-read"};
+    assert.equal(contextHasStateWriteSite({read_file:{files:[update,guard,update]}}), true);
+    assert.equal(contextHasStateWriteSite({read_file:{files:[update,guard,{path,content:'200|class OtherSerializer:',evidenceSource:"remote-read"}]}}), false);
+    assert.equal(contextHasStateWriteSite({read_file:{files:[update,guard,{...update,content:'234|    def update(self, instance, data):'}]}}), false);
   });
 
   console.log(`\nAgentOrchestrator: ${passed}/${passed + failed} tests passed`);

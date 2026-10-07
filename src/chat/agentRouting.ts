@@ -5,7 +5,7 @@ import { isFileCallerQuery } from "../context/fileCallerIntent";
 import { isFileHistoryQuery } from "../context/fileHistoryIntent";
 import { classifyRepoCodeIntent, isNonCodeHowWhyAsk, needsRepoCode, type RepoCodeAction } from "./repoCodeIntent";
 import { isFeatureAddAsk } from "../context/existingCapabilityGrounding";
-import { extractNamedSourceFiles } from "../api/agent/searchQuery";
+import { extractNamedSourceFiles, isApiRejectAsk } from "../api/agent/searchQuery";
 import { isRepoStructureQuery } from "../workspace/repoFactIntent";
 import { openFileSelectionOwnsChange } from "./openFileSelectionChange";
 
@@ -99,6 +99,12 @@ export function agentTurnAction(options: {
   if (isRepoStructureQuery(options.query) || isNonCodeHowWhyAsk(options.query)) {
     return "none";
   }
+  // An observed server/API rejection is a repository-evidence question even
+  // when the intent model calls it plain prose. Never let that classification
+  // bypass the mandatory search -> open/read contract.
+  if (isApiRejectAsk(options.query)) {
+    return "locate";
+  }
   if (!plannerAllowsAgentRepoLoop(options.intentPlan, options.query)) {
     return "none";
   }
@@ -115,11 +121,15 @@ export function agentTurnAction(options: {
  * Locate / change in the same ask still hunts.
  */
 export function agentTurnAllowsRepoTools(options: {
+  query?: string;
   intentPlan?: ChatIntentPlan;
   integrationSlash?: boolean;
 }): boolean {
   if (options.integrationSlash) {
     return false;
+  }
+  if (options.query && isApiRejectAsk(options.query)) {
+    return true;
   }
   const jobs = options.intentPlan?.jobs ?? [];
   if (jobs.some((job) => job.capability === "locate")) {

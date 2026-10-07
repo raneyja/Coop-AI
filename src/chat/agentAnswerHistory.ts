@@ -73,13 +73,14 @@ function compactFile(value: unknown): Record<string, unknown> {
   const path = typeof file.path === "string" ? file.path : undefined;
   const content =
     typeof file.content === "string"
-      ? file.evidenceSource === "remote-read"
+      ? file.evidenceSource === "remote-read" || file.evidenceSource === "turn-attachment"
         ? file.content
         : clipFileBody(file.content, MAX_FILE_BODY_CHARS)
       : undefined;
   return {
     ...(path ? { path } : {}),
     ...(content ? { content } : {}),
+    ...(typeof file.evidenceSource === "string" ? { evidenceSource: file.evidenceSource } : {}),
     ...(typeof file.startLine === "number" ? { startLine: file.startLine } : {}),
     ...(typeof file.endLine === "number" ? { endLine: file.endLine } : {})
   };

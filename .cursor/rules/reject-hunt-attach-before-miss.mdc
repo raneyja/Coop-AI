@@ -1,0 +1,49 @@
+---
+description: Reject hunts must attach evidence from search hits before canned miss; never 10 searches / 0 reads when the index already has the raise.
+alwaysApply: true
+---
+
+# Reject hunt — attach before miss
+
+**Product law:** On write-reject / API-error locate (`isApiRejectAsk`), if the index already shows the asked ValidationError (or equivalent reject) in a **search hit snippet**, that is evidence. Attach it. Do **not** burn the turn on more searches, and do **not** emit `API_REJECT_HUNT_MISS` / “I couldn't find where the API rejects…” while that snippet sits unused.
+
+## Fail class this blocks (2026-09-29 dogfood)
+
+Exact Parent ValidationError ask on indexed `plane` / `preview`:
+
+| What happened | Why |
+|---------------|-----|
+| 10× `search_code`, **0** `read_file` | Ranking emptied `preferredHits`; auto-read only follows preferred |
+| Index hit already had the raise line | Snippet never treated as attachable evidence |
+| Canned miss | Finish assumed “no body read” = no evidence |
+
+Earlier rules covered **right file, wrong floor** (opened serializer → must jump in-file before miss). They did **not** cover **hit already is the raise, never opened**.
+
+## Required behavior
+
+| Evidence state | Must do |
+|----------------|---------|
+| Search hit content matches asked-field write-reject **or** the exact error string the user quoted (Zoekt often returns only that line — no `raise` / `ValidationError`) | Attach from snippet **immediately** (even if remote body fetch fails) |
+| `preferredHits` would be empty but hits include server write / reject snippet | Keep those hits in `preferredHits` — never discard the whole pool on reject |
+| Preferred / server-write path opened, window lacks reject | In-file jump / fuller read **before** miss |
+| No reject in any hit or body after gather budget | Short honest miss — then stop |
+
+## Hard fails (never ship)
+
+| Reject | Prefer |
+|--------|--------|
+| More `search_code` while a hit already contains the asked ValidationError | Attach snippet → answer |
+| Empty `preferredHits` on reject when original hits had serializers/raise lines | Fail-open keep actionable hits |
+| Canned miss with 0 reads after Zoekt returned the raise | Attach or jump first |
+| Disabling empty-hit recovery on reject **and** requiring a successful remote read to attach | Snippet attach is enough to Pass |
+| Unit tests that only mock happy-path body fetch | Regression: hit has raise + `readRemoteFile` → `undefined` → still attach |
+
+## Implementation choke
+
+- `AgentOrchestrator`: after `search_code` on reject, `attachRejectFromSearchHits` / `attachRejectSnippetPayload` before more searches
+- `decorateToolResult`: reject must not zero out `preferredHits` when actionable hits exist
+- Finish: no `API_REJECT_HUNT_MISS` while unused reject snippets or unjumped preferred serializers remain
+
+## Self-check
+
+Would Exact Parent ask with a Zoekt hit on `raise … Parent is not valid issue_id` still ship 10 searches / 0 reads / canned miss if body fetch returns empty? If yes, fail.

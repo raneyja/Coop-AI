@@ -117,6 +117,47 @@ void (async () => {
     provider.dispose();
   });
 
+  await asyncTest("base autocomplete cancellation aborts the request and drops late items", async () => {
+    const provider = new CoopAutocompleteProvider({ api: {} as never });
+    const document = {
+      uri: { fsPath: "/fixture/service.ts", scheme: "file", toString: () => "file:///fixture/service.ts" },
+      languageId: "typescript", getText: () => "const value = ;", offsetAt: () => 14
+    } as unknown as vscode.TextDocument;
+    const position = { line: 0, character: 14 } as vscode.Position;
+    const extracted = analyzeDocumentContext(document, position);
+    let cancellationHandler: (() => void) | undefined;
+    const token = {
+      onCancellationRequested: (handler: () => void) => {
+        cancellationHandler = handler;
+        return { dispose: () => undefined };
+      }
+    } as unknown as vscode.CancellationToken;
+    let observedSignal!: AbortSignal;
+    let finishRequest!: (value: unknown) => void;
+    const request = new Promise((resolve) => { finishRequest = resolve; });
+    const harness = Object.assign(provider, {
+      executeRequest: (_document: unknown, _position: unknown, _context: unknown, signal: AbortSignal) => {
+        observedSignal = signal;
+        return request.then(() => [{ insertText: "late completion" }]);
+      }
+    }) as unknown as {
+      scheduleRequest: (
+        document: vscode.TextDocument,
+        position: vscode.Position,
+        extracted: ExtractedCodeContext,
+        debounceMs: number,
+        token: vscode.CancellationToken
+      ) => Promise<unknown>;
+    };
+
+    const result = harness.scheduleRequest(document, position, extracted, 0, token);
+    cancellationHandler?.();
+    assert.equal(observedSignal.aborted, true);
+    assert.equal(await result, null);
+    finishRequest(true);
+    provider.dispose();
+  });
+
   await asyncTest("index notifier does not auto-enable autocomplete when index becomes healthy", async () => {
     setMockConfiguration("coopAI.autocomplete", "enabled", false);
     setMockConfiguration("coopAI", "defaultOwner", "acme");

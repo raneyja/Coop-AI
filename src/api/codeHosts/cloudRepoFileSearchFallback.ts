@@ -4,15 +4,51 @@ export type CloudTreeListing = {
   entries: Array<{ path: string; name: string; type: "file" | "dir" }>;
 };
 
+/**
+ * Keep indexed graph hits ahead of a bounded tree walk. The tree is a live
+ * fallback, but its result cap must not hide a path already found by the
+ * repository's indexed filename search.
+ */
+export function mergeRemoteFileSearchHits(
+  preferred: Array<{ path: string; name: string }>,
+  fallback: Array<{ path: string; name: string }>,
+  limit: number
+): Array<{ path: string; name: string }> {
+  return [...new Map([...preferred, ...fallback].map((hit) => [hit.path, hit])).values()]
+    .slice(0, Math.max(1, limit));
+}
+
 export function isRemoteFileSearchFallbackCandidate(error: unknown): boolean {
+  const details = error as {
+    code?: unknown;
+    status?: unknown;
+    response?: { status?: unknown };
+  } | undefined;
+  const status = details?.status ?? details?.response?.status;
+  if (details?.code === "unsupported" || status === 400 || status === 403 || status === 422) {
+    return true;
+  }
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
+    const structured = error as Error & { code?: unknown; status?: unknown; response?: { status?: unknown } };
+    const status = typeof structured.status === "number"
+      ? structured.status
+      : typeof structured.response?.status === "number"
+        ? structured.response.status
+        : undefined;
     return (
+      structured.code === "unsupported" ||
       message.includes("403") ||
       message.includes("400") ||
       message.includes("422") ||
+      message.includes("404") ||
+      status === 400 ||
+      status === 403 ||
+      status === 404 ||
+      status === 422 ||
       message.includes("status code 403") ||
       message.includes("status code 400") ||
+      message.includes("status code 404") ||
       message.includes("status code 422") ||
       message.includes("validation failed") ||
       message.includes("code search") ||
@@ -91,10 +127,10 @@ export async function searchFilesViaCloudTree(
         queue.push(entry.path);
       }
     }
-    const ranked = rankExplorerFilePaths(filePaths, normalizedQuery, limit);
-    if (ranked.length >= limit) {
-      return ranked.map((path) => ({ path, name: path.split("/").pop() ?? path }));
-    }
+    // Do not stop when the first `limit` matches are found. A broad filename
+    // query can fill the cap with shallow UI/tooling paths before the bounded
+    // walk reaches a deeper backend handler. Collect the complete bounded
+    // pool, then rank and cap once at the end.
   }
 
   return rankExplorerFilePaths(filePaths, normalizedQuery, limit).map((path) => ({

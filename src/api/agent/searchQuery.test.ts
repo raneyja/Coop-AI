@@ -42,6 +42,7 @@ import {
   contentIncludesAskedRejectQuote,
   filterWriteRejectFiles,
   isApiRejectAsk,
+  isDefinitionLocateAsk,
   isApiRejectNoisePath,
   isActionableApiRejectHit,
   isRequestAuthLocateAsk,
@@ -687,6 +688,21 @@ test("C2 skips seed JSON and read-only serializers; prefers the reject snippet",
   assert.equal(
     picked.some((hit) => /seeds\//.test(hit.fileName)),
     false
+  );
+});
+
+test("quoted error text after returns stays on the API reject rail", () => {
+  assert.equal(
+    isApiRejectAsk(
+      'The signing API returns “Recipient signing window has expired”. Where is that rejection raised?'
+    ),
+    true
+  );
+  assert.equal(
+    isApiRejectAsk(
+      'The API returns "Document must be pending for signing". Where is the server check?'
+    ),
+    true
   );
 });
 
@@ -2264,8 +2280,83 @@ test("server status rejection uses field evidence rather than imports", () => {
   assert.equal(contentLooksLikeAskedFieldReject("if (!envelope) { throw new AppError('Envelope not found'); }\nif (envelope.status === DocumentStatus.REJECTED) return { status: 'REJECTED' };\nif (envelope.status === DocumentStatus.COMPLETED) return { status: 'COMPLETED' };", ask, "server/signing-status-envelope.ts"), false, "a nearby status response cannot establish the requested pending rejection");
 });
 
+test("signing status rejection seeds the exact unquoted error phrase", () => {
+  const ask =
+    "A signer gets an error that the document must be pending for signing. Where does the server reject this request, and what status check enforces it?";
+  assert.equal(apiRejectSearchQueries(ask)[0], "must be pending for signing");
+  assert.equal(
+    mergePlannedAgentSearchQueries({ userMessage: ask, planned: [], max: 4 })[0],
+    "must be pending for signing"
+  );
+});
+
+test("short error-raised locate wording stays on the reject hunt", () => {
+  assert.equal(
+    isApiRejectAsk('Where is the "must be pending for signing" error raised?'),
+    true
+  );
+});
+
 test("calm status definition stays a locate question", () => {
   assert.equal(isApiRejectAsk("Where are document status values defined on the server?"), false);
+  assert.equal(isDefinitionLocateAsk("Where is DocumentStatus defined?"), true);
+});
+
+test("quoted API response after returns stays an API-reject hunt", () => {
+  const ask =
+    "The signing API returns “Recipient signing window has expired”. Where is that rejection raised?";
+  assert.equal(isApiRejectAsk(ask), true);
+});
+
+test("prose error questions with a negative condition stay reject hunts", () => {
+  const ask =
+    "Where does the signing handler validate that a field belongs to the envelope, and what error does it raise when it does not?";
+  assert.equal(isApiRejectAsk(ask), true);
+});
+
+test("signing rejection variants stay on the reject search rail", () => {
+  const asks = [
+    'The signing API returns “Recipient signing window has expired”. Where is that rejection raised?',
+    'The signing API returns “Document {id} has been deleted”. Where is that server guard implemented?',
+    'The signing API returns “Recipient not found for field”. Where is that rejection raised?',
+    'The signing API returns “Document not found for field”. Where does the handler reject it?',
+    "Where does the signing handler validate that a field belongs to the envelope, and what error does it raise when it does not?"
+  ];
+  for (const ask of asks) {
+    assert.equal(isApiRejectAsk(ask), true, ask);
+  }
+});
+
+test("enum member search hit remains readable when the type name is omitted", () => {
+  const ask =
+    "Where is the DocumentStatus enum declared, and which source file defines its PENDING member?";
+  const picked = pickSearchHitsToRead(
+    [{ fileName: "packages/types/document-status.ts", lineNumber: 4, content: "PENDING = 'PENDING'" }],
+    2,
+    ask
+  );
+  assert.deepEqual(picked.map((hit) => hit.fileName), ["packages/types/document-status.ts"]);
+});
+
+test("definition locates include generic recipient helpers", () => {
+  assert.equal(
+    isDefinitionLocateAsk("Where does the recipient expiration helper live?"),
+    true
+  );
+});
+
+test("deleted-envelope signing guards are reject hunts", () => {
+  const ask = "Where does signing reject a deleted envelope?";
+  assert.equal(isApiRejectAsk(ask), true);
+});
+
+test("attached-file deletion question requires a throwing lifecycle guard", () => {
+  const ask = "In the attached file, what check rejects a deleted document? Quote the exact error and cite its lines.";
+  const path = "packages/lib/server-only/field/sign-field-with-token.ts";
+  assert.equal(contentLooksLikeAskedFieldReject("if (envelope.deletedAt) {\n throw new Error(`Document ${envelope.id} has been deleted`);\n}", ask, path), true);
+  assert.equal(contentLooksLikeAskedFieldReject("if (envelope.status !== Status.PENDING) {\n throw new Error('Not pending');\n}\n// has been deleted", ask, path), false);
+  assert.equal(contentLooksLikeAskedFieldReject("if (envelope.deletedAt) {\n return;\n}\nthrow new Error('Something else');", ask, path), false);
+  assert.equal(contentLooksLikeAskedFieldReject("if (envelope.deletedAt) throw new Error('Deleted');", ask, "apps/web/components/document.tsx"), false);
 });
 
 test("signing operation does not freeze on a PDF download status guard", () => {

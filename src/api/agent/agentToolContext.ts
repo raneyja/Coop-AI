@@ -17,6 +17,8 @@ export type AgentToolContext = {
   resolveRepoTarget?: (target: RepoTarget) => Promise<RepoTarget>;
   /** Full task wording for judging fallback eligibility; never replaces the search query. */
   researchQuery?: string;
+  /** Enables implementation-only filename fallback for ordinary locate runs. */
+  locateMode?: boolean;
   /** Content-minimized, correlated retrieval diagnostics for this turn. */
   onDiagnostic?: (event: Record<string, unknown>) => void;
   resolveAbsolutePath: (relativePath: string) => string | undefined;

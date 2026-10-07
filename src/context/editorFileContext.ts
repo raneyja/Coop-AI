@@ -465,6 +465,27 @@ export function readExternalOpenFileForChat(options?: {
  * L attach: the open editor buffer only (unsaved included).
  * Does not read disk and does not accept a remote VFS tab.
  */
+export function findOpenFileAssistantUri(preferred: string): vscode.Uri | undefined {
+  const matches = (vscode.window.tabGroups?.all ?? []).flatMap(group => group.tabs)
+    .filter(tab => tab.input instanceof vscode.TabInputText)
+    .map(tab => (tab.input as vscode.TabInputText).uri).filter(uri => {
+    if (uri.scheme !== "file" && uri.scheme !== "untitled") return false;
+    const resolved = resolveDocumentUri(uri);
+    return resolved.fileSource !== "remote" && Boolean(resolved.file && pathsMatchPreferred(resolved.file, preferred));
+  });
+  const unique = [...new Map(matches.map(uri => [uri.toString(), uri])).values()];
+  return unique.length === 1 ? unique[0] : undefined;
+}
+
+export function findOpenFileAssistantDocument(preferred: string): vscode.TextDocument | undefined {
+  const uri = findOpenFileAssistantUri(preferred);
+  if (!uri) return undefined;
+  const matches = (vscode.workspace.textDocuments ?? []).filter(document =>
+    !document.isClosed && document.uri.toString() === uri.toString());
+  // Never guess between same-path buffers from different workspace folders.
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
 export function readFileAssistantEditorForChat(
   ctx: Pick<RepoContext, "file" | "fileSource" | "selectedLines">
 ): LocalFileContextPayload | undefined {
@@ -478,19 +499,22 @@ export function readFileAssistantEditorForChat(
     seen.add(editor);
     editors.push(editor);
   }
-  for (const editor of editors) {
-    const scheme = editor.document.uri.scheme;
+  const documents = editors.map(editor => editor.document);
+  const hidden = preferred ? findOpenFileAssistantDocument(preferred) : undefined;
+  if (hidden && !documents.includes(hidden)) documents.push(hidden);
+  for (const document of documents) {
+    const scheme = document.uri.scheme;
     if (scheme !== "file" && scheme !== "untitled") {
       continue;
     }
-    const resolved = resolveEditorFile(editor);
-    if (!resolved.file?.trim()) {
+    const resolved = resolveDocumentUri(document.uri);
+    if (!resolved.file?.trim() || resolved.fileSource === "remote") {
       continue;
     }
     if (preferred && !pathsMatchPreferred(resolved.file, preferred) && resolved.file !== preferred) {
       continue;
     }
-    const raw = editor.document.getText();
+    const raw = document.getText();
     if (!raw.trim()) {
       continue;
     }

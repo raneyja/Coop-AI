@@ -57,7 +57,22 @@ async function main() {
   const partial = await budgetRun.indexBackend.search("github:org/repo", "validation");
   assert.equal(indexCalls, 0, "No new index work after gather handoff");
   assert.deepEqual(partial.hits, []);
-  assert.equal(partial.stale, true, "Unavailable index work cannot be represented as a fresh search");
+  assert.equal(partial.stale, false, "A timeout is not evidence of stale index data");
+  assert.equal(partial.availability, "timed_out", "Timeouts must remain distinguishable from stale data");
+
+  const rejectBudgetCtx = {
+    ...ctx,
+    researchQuery: "A signer gets an error that the document must be pending for signing. Where does the server reject this request, and what status check enforces it?",
+    gatherStartedAt: Date.now() - 14_000,
+  } as AgentToolContext;
+  const rejectBudgetRun = createRunToolContext(
+    rejectBudgetCtx,
+    { repoId: "github:org/repo", branch: "preview" }
+  );
+  const rejectPaths = await rejectBudgetRun.findFiles!({ query: "sign", taskQuery: rejectBudgetCtx.researchQuery });
+  assert.deepEqual(rejectPaths, ["server/validation.py"], "reject filename discovery gets its bounded evidence grace");
+  const rejectBody = await rejectBudgetRun.readRemoteFile!({ path: "server/validation.py" });
+  assert.match(rejectBody?.content ?? "", /preview validation/, "reject body read gets the same grace window");
   console.log("runToolContext target isolation and diagnostics passed");
 }
 void main().catch((error) => { console.error(error); process.exitCode = 1; });

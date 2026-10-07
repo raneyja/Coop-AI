@@ -19,7 +19,8 @@ import type { LlmProvider } from "./zeroRetentionConfig";
 export type IndexedRepoFileMap = {
   repoId: string;
   data: Array<{ path: string }>;
-  indexedBranch: string;
+  /** Present only when the response is certified for a specific index branch. */
+  indexedBranch?: string;
   indexedCommit?: string;
   stale: boolean;
 };
@@ -290,8 +291,11 @@ export class CoopBackendClient {
       throw new Error(formatCoopApiError(response.status, response.data as CoopApiErrorBody));
     }
     const map = response.data;
-    if (map?.repoId !== repoId || !map.indexedBranch ||
-        (branch && map.indexedBranch !== branch) || !Array.isArray(map.data)) {
+    // Legacy tree responses omit branch metadata. Preserve their paths as
+    // discovery leads only; the workspace must verify bodies at the frozen
+    // requested ref. An explicit mismatched branch is still rejected.
+    if (map?.repoId !== repoId ||
+        (branch && map.indexedBranch && map.indexedBranch !== branch) || !Array.isArray(map.data)) {
       return undefined;
     }
     return map;

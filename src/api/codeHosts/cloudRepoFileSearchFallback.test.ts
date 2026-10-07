@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { isRemoteFileSearchFallbackCandidate, searchFilesViaCloudTree } from "./cloudRepoFileSearchFallback";
+import { isRemoteFileSearchFallbackCandidate, mergeRemoteFileSearchHits, searchFilesViaCloudTree } from "./cloudRepoFileSearchFallback";
 
 async function main(): Promise<void> {
 let passed = 0;
@@ -23,6 +23,8 @@ await test("isRemoteFileSearchFallbackCandidate matches axios 403 errors", () =>
 
 await test("isRemoteFileSearchFallbackCandidate matches axios 400 / unsupported search errors", () => {
   assert.equal(isRemoteFileSearchFallbackCandidate(new Error("Request failed with status code 400")), true);
+  assert.equal(isRemoteFileSearchFallbackCandidate(Object.assign(new Error("backend search unavailable"), { code: "unsupported" })), true);
+  assert.equal(isRemoteFileSearchFallbackCandidate(Object.assign(new Error("backend search unavailable"), { status: 404 })), true);
   assert.equal(
     isRemoteFileSearchFallbackCandidate(new Error("File search isn't supported for this code host yet.")),
     true
@@ -31,6 +33,8 @@ await test("isRemoteFileSearchFallbackCandidate matches axios 400 / unsupported 
     isRemoteFileSearchFallbackCandidate(new Error("You must enable Advanced Search to use this feature")),
     true
   );
+  assert.equal(isRemoteFileSearchFallbackCandidate({ code: "unsupported" }), true);
+  assert.equal(isRemoteFileSearchFallbackCandidate({ response: { status: 422 } }), true);
 });
 
 await test("searchFilesViaCloudTree finds files by filename", async () => {
@@ -92,6 +96,39 @@ await test("excluded UI matches cannot fill the limit before backend discovery",
     return { entries: path === "server" ? [{ path: "server/sign-field.ts", name: "sign-field.ts", type: "file" as const }] : [] };
   }, "sign", 20, (path) => !path.endsWith(".tsx"));
   assert.deepEqual(hits.map((hit) => hit.path), ["server/sign-field.ts"]);
+});
+
+await test("deep handlers are not hidden by an early filename cap", async () => {
+  const dir = (path: string) => ({ path, name: path.split("/").pop()!, type: "dir" as const });
+  const hits = await searchFilesViaCloudTree(async (path) => {
+    if (!path) {
+      return {
+        entries: [
+          ...Array.from({ length: 110 }, (_, i) => ({ path: `apps/client/sign-${i}.tsx`, name: `sign-${i}.tsx`, type: "file" as const })),
+          dir("packages")
+        ]
+      };
+    }
+    if (path === "packages") return { entries: [dir("packages/lib")] };
+    if (path === "packages/lib") return { entries: [dir("packages/lib/server-only")] };
+    if (path === "packages/lib/server-only") return { entries: [dir("packages/lib/server-only/field")] };
+    if (path === "packages/lib/server-only/field") {
+      return { entries: [{ path: `${path}/sign-field-with-token.ts`, name: "sign-field-with-token.ts", type: "file" as const }] };
+    }
+    return { entries: [] };
+  }, "sign", 1, (path) => !path.startsWith("apps/client/"));
+  assert.equal(hits[0]?.path, "packages/lib/server-only/field/sign-field-with-token.ts");
+});
+
+await test("indexed graph hits survive a full tree fallback cap", () => {
+  const treeHits = Array.from({ length: 100 }, (_, index) => ({
+    path: `packages/signing/adjacent-${index}.ts`,
+    name: `adjacent-${index}.ts`
+  }));
+  const actual = { path: "packages/lib/server-only/field/sign-field-with-token.ts", name: "sign-field-with-token.ts" };
+  const merged = mergeRemoteFileSearchHits([actual], treeHits, 100);
+  assert.equal(merged[0]?.path, actual.path);
+  assert.equal(merged.length, 100);
 });
 
 console.log(`\ncloudRepoFileSearchFallback: ${passed}/${passed + failed} passed`);

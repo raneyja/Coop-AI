@@ -1,0 +1,26 @@
+---
+description: Check historical evidence before declaring product testing incomplete
+alwaysApply: true
+---
+
+# Dogfood history and scope
+
+- Before proposing test work or reporting what remains, read the relevant
+  existing run reports under `docs/dogfood/runs/`, commit history, and the
+  user's latest scope corrections. Missing evidence in a new ledger is not
+  evidence that historical testing never happened.
+- Preserve completed baseline work and existing in-progress changes. Keep
+  historical passes, current-candidate passes, observed regressions, and
+  genuinely untested cases separate. Reopen a completed area only for a
+  specific observed regression or an explicitly requested new qualification.
+- Jon confirmed on October 7, 2026 that sign-in/account switching, repository
+  switching, integrations, billing, autocomplete, editing, and reload testing
+  were already completed. The active repair is file selection -> body read ->
+  source retention -> grounded answer/citation. See
+  `docs/dogfood/runs/2026-10-07-file-context/README.md` for its evidence ledger.
+- Do not say “we still need to test billing/sign-in” because this file-context
+  candidate has no new billing/sign-in entry. Say “the historical baseline
+  remains completed; this candidate's closed-file read still needs a replay.”
+- Follow `ship-claim-discipline.mdc`: automated green is not a live Pass. A
+  completion report must name actual live results and any remaining gaps in
+  plain language; do not silently stop after tests or a build.

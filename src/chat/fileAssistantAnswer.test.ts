@@ -129,6 +129,15 @@ test("already-short L answer keeps its honest limit and is not rewritten", () =>
   assert.equal(enrichFileAssistantResponse(pass), pass);
 });
 
+test("local answer keeps citation fences and source bytes intact", () => {
+  const citation = '```74:79:src/chat/agentAnswerHistory.ts\nconst content = file.evidenceSource === "turn-attachment"\n  ? file.content\n  : clipFileBody(file.content);\n```';
+  const answer = enrichFileAssistantResponse(`The attached file preserves the body.\n\n${citation}`);
+  assert.ok(answer.includes(citation), "locator, case, newlines, and source must survive prose cleanup");
+  assert.match(answer,/Other files were not read/);
+  const python = '```10:12:src/guard.py\n# status guard\nif status != "pending":\n    raise ValueError("If you want I can")\n```';
+  assert.ok(enrichFileAssistantResponse(`The guard is here.\n\n${python}`).includes(python), "headings and offer-like source strings are not prose");
+});
+
 test("empty content is left alone", () => {
   assert.equal(enrichFileAssistantResponse(""), "");
   assert.equal(enrichFileAssistantResponse("   "), "   ");

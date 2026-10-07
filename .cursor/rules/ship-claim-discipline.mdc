@@ -1,0 +1,43 @@
+---
+description: Claim tiers for Extension Host dogfood — never say fixed from unit tests alone
+alwaysApply: true
+---
+
+# Ship / claim discipline
+
+**Product law:** Automated green ≠ live Pass. For reject-hunt, locate, quarterback,
+canned-miss, and other Extension Host dogfood Fail classes: do not tell the founder
+it is fixed until live Pass (Gate C) or they accept automated-only scope in writing.
+
+## Claim tiers (use these words)
+
+| Tier | Meaning | Founder-facing phrase |
+|------|---------|------------------------|
+| A | Targeted tests + lint for this Fail class | Automated Pass |
+| B | A + exact fixture asks + Reload setup | Ready for your Reload dogfood — live Pass still open |
+| C | Live Extension Host Pass on named ask | Fixed / live Pass |
+
+## Hard fails
+
+| Reject | Prefer |
+|--------|--------|
+| “Fixed” / “Pass” / “done” from unit tests only | Automated Pass + ready for Reload |
+| Invented Plane error strings or paths for dogfood | Exact asks from `src/api/agent/dogfoodContract.ts` |
+| Vague scavenger-bait questions | Full paste + Pass/Fail columns |
+| Handoff implying product closed | Status: live still open |
+| Collapsing lint green into product Pass | Lint is git gate only |
+
+## Handoff minimum
+
+Status line with tier. Reload first. Use-repo / branch / chip constraints.
+Exact ask text. Success vs Fail. “I will not call this fixed until live Pass.”
+
+## Out of scope
+
+CI-only / non-Host changes may complete without Reload. Say so explicitly.
+Do not require live dogfood for unrelated surfaces.
+
+## Self-check
+
+Would Exact Parent / T2 still be called “fixed” after only AgentOrchestrator tests
+while Host canned-misses? If yes, fail this rule.

@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { isClientUiPath } from "./indexing/evidencePathNoise";
-import { rankSearchHits } from "./api/agent/searchQuery";
+import { isApiRejectAsk, isDefinitionLocateAsk, rankSearchHits } from "./api/agent/searchQuery";
 import { CoopChatPanel } from "./CoopChatPanel";
 import { CoopSettingsPanel } from "./CoopSettingsPanel";
 import { CoopSidebarProvider } from "./CoopSidebarProvider";
@@ -26,6 +26,7 @@ import { CacheManager } from "./cache/CacheManager";
 import { CodeHostRouter } from "./api/codeHosts/codeHostRouter";
 import {
   isRemoteFileSearchFallbackCandidate,
+  mergeRemoteFileSearchHits,
   searchFilesViaCloudTree
 } from "./api/codeHosts/cloudRepoFileSearchFallback";
 import { CodeHostSecrets } from "./api/codeHosts/codeHostSecrets";
@@ -166,7 +167,7 @@ export function activate(context: vscode.ExtensionContext): void {
         limit,
         (path) => !excludeClientUi || !isClientUiPath(path)
       );
-      return [...new Map([...treeHits, ...graphHits].map((hit) => [hit.path, hit])).values()].slice(0, limit);
+      return mergeRemoteFileSearchHits(graphHits, treeHits, limit ?? 30);
     };
 
     try {
@@ -531,6 +532,15 @@ export function activate(context: vscode.ExtensionContext): void {
       const hits = await workspace.findFiles(target, fileQuery, {
         limit: 20,
         onDiagnostic,
+        excludeClientUi,
+        // The agent may pass a normalized criterion here instead of the full
+        // research question. Preserve reject-hunt widening for stateful error
+        // criteria (for example `PENDING_FOR_SIGNING`) at the filename boundary.
+        augmentFromCodeHost: Boolean(
+          (taskQuery && isApiRejectAsk(taskQuery)) ||
+          (taskQuery && isDefinitionLocateAsk(taskQuery)) ||
+          /\b(?:error|reject|pending|invalid)\b/i.test(`${taskQuery ?? ""} ${fileQuery}`)
+        ),
         rankPaths: taskQuery ? (paths) => rankSearchHits(paths.map((fileName) => ({ fileName, lineNumber: 1, score: 0.4 })), taskQuery).map((hit) => hit.fileName) : undefined,
         acceptPath: (filePath) => !excludeClientUi || !isClientUiPath(filePath)
       });

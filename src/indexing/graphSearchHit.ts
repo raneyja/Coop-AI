@@ -92,7 +92,8 @@ export function mapGraphSearchResponse(remote: GraphSearchResponse): LocalSearch
     }),
     hits,
     symbols,
-    stale: Boolean(remote.stale)
+    stale: Boolean(remote.stale),
+    availability: "available"
   };
 }
 

@@ -119,6 +119,11 @@ export function isConcreteFileEditAsk(message: string): boolean {
   if (APPLY_LANGUAGE_RE.test(text)) {
     return true;
   }
+  // Asking whether existing code implements a check is inspection, not
+  // permission to implement it. Keep explicit "can you implement" requests.
+  if (/^(?:does|do|did|has|have|is|are|was|were|where|what|which|why)\b/i.test(text)) {
+    return false;
+  }
   // Blast / ownership / “why do we…” archaeology — never auto-edit, even when the
   // sentence also contains change/rename + `backticks` (those are impact targets).
   if (isAdvisoryFileAsk(text)) {

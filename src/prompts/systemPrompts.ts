@@ -833,6 +833,7 @@ function resolveSelectionTextForAttach(options: {
  * “What else should I check?” is contracts in this file — not Blast, not a review template.
  */
 export const LOCAL_FILE_PATH_DIRECTIVE = `## Turn directive (local file)
+This is an inspection question, not permission to edit. Do not propose a patch, add a comment, or claim a change was made. If the requested behavior is absent from this file, say so plainly and stop.
 Evidence is the attached file body only. You may name imports. Do not describe how those types work, get registered, or get called.
 
 Shape, then stop:
@@ -868,7 +869,10 @@ The attached path is a local file on the user's computer. Call it a local file a
 Do not write "in the repo", "this repository", "the codebase", or a GitHub repo name.`;
 
 export function localFileTurnDirective(message: string | undefined): string {
-  return isLocalFileChangeAsk(message) ? LOCAL_FILE_EDIT_DIRECTIVE : LOCAL_FILE_PATH_DIRECTIVE;
+  // Synthesis wrappers contain implementation/write vocabulary. Only the
+  // original user ask can authorize a local edit, never generated task text.
+  const ask = message ? originalAskForReviewClassification(message) : undefined;
+  return isLocalFileChangeAsk(ask) ? LOCAL_FILE_EDIT_DIRECTIVE : LOCAL_FILE_PATH_DIRECTIVE;
 }
 
 /**
@@ -898,6 +902,8 @@ This turn is a PR review of the **named function** in the attached file (the ide
 /** Build the user turn when local file bytes are already loaded (extension-side). */
 export function formatChatMessageWithLocalFiles(options: {
   message: string;
+  /** Original user words, before planner/synthesis instructions. */
+  userQuestion?: string;
   files: ManifestSnippet[];
   file?: string;
   selectedLines?: [number, number];
@@ -938,7 +944,7 @@ export function formatChatMessageWithLocalFiles(options: {
     lines.push("", OPEN_FILE_PR_REVIEW_DIRECTIVE);
   }
   if (options.fileAssistant) {
-    lines.push("", localFileTurnDirective(options.message));
+    lines.push("", localFileTurnDirective(options.userQuestion ?? options.message));
   } else if (options.remoteSelectionChange) {
     lines.push("", REMOTE_SELECTION_EDIT_DIRECTIVE);
   }
@@ -1023,6 +1029,8 @@ function injectProjectInstructions(message: string, instructions: ProjectInstruc
 export function buildUserMessageWithContext(
   message: string,
   context?: {
+    /** Original user words, before planner/synthesis instructions. */
+    userQuestion?: string;
     owner?: string;
     repo?: string;
     branch?: string;
@@ -1265,7 +1273,7 @@ export function buildUserMessageWithContext(
   }
   lines.push("</attached_context>", "", message.trim());
   if (context?.fileAssistant && context.file?.trim()) {
-    lines.push("", localFileTurnDirective(message));
+    lines.push("", localFileTurnDirective(context.userQuestion ?? message));
   } else if (context?.remoteSelectionChange) {
     lines.push("", REMOTE_SELECTION_EDIT_DIRECTIVE);
   }

@@ -1,7 +1,7 @@
 import { gatherRequest } from "./gatherRequest";
 import { requestedRepoBranch } from "../../workspace/repoTargetResolver";
 import { formatVerifiedFieldHandlingAnswer } from "./fieldHandlingEvidence";
-import { remainingContextGatherBudgetMs } from "../../config/responseDeadline";
+import { remainingContextGatherBudgetMs, requiredEvidenceDeadlineAt } from "../../config/responseDeadline";
 import { randomUUID } from "node:crypto";
 import { stripPleaseOpenAttachedPaths } from "../../chat/customerFacingAnswer";
 import {
@@ -167,6 +167,11 @@ type SearchPayload = {
   error?: string;
   hits?: SearchHit[];
   symbols?: SymbolHit[];
+};
+
+type SearchBudget = {
+  maxSearches?: number;
+  canContinue?: () => boolean;
 };
 
 type ReadFilePayload = {
@@ -374,7 +379,7 @@ export class AgentOrchestrator {
     const startedAt = Date.now();
     options = { ...options, onDiagnostic: diagnostic ? (event) => diagnostic({ runId, turnElapsedMs: Date.now() - startedAt, ...event }) : undefined };
     const requested = { ...options?.repoTarget, repoId: request.repoId.trim() };
-    const gatherContext = { ...this.ctx, researchQuery: request.message,
+    const gatherContext = { ...this.ctx, researchQuery: request.message, locateMode: request.action === "locate",
       gatherStartedAt: options.startedAt ?? startedAt, searchSignal: options.signal, onDiagnostic: options.onDiagnostic };
     let target: import("../../workspace/indexedRepoWorkspaceTypes").RepoTarget | undefined;
     try {
@@ -473,6 +478,10 @@ export class AgentOrchestrator {
   ): Promise<AgentSessionResult> {
     const planTurn = options.planTurn as AgentPlanTurnFn;
     const steps: AgentStep[] = [];
+    // maxSteps limits model-planned tool calls. Internal evidence reads used
+    // to discard noise must remain visible, but they cannot starve the model
+    // before it reaches the serializer/handler refinement it needs.
+    let modelToolSteps = 0;
     const context: AgentSessionContext = {};
     const conversation: AgentConversationMessage[] = [{ role: "user", content: query }];
     if (options.intentBrief?.trim()) {
@@ -504,6 +513,8 @@ export class AgentOrchestrator {
     };
     const startedAt = options.startedAt ?? Date.now();
     const wallMs = options.wallMs ?? AGENT_JOB_WALL_MS;
+    const rejectEvidenceDeadline =
+      isApiRejectAsk(query) ? requiredEvidenceDeadlineAt(startedAt) : undefined;
     let filesRead = 0;
     let integrationCalls = 0;
     let lastToolResult: string | undefined;
@@ -550,6 +561,9 @@ export class AgentOrchestrator {
             ? "definition-locate"
             : "other",
       taskQuery: query,
+      gatherStartedAt: startedAt,
+      rejectEvidenceDeadline,
+      gatherRemainingMs: remainingContextGatherBudgetMs(startedAt),
       plannedSearchQueries: this.runPlannedSearchQueries.slice(0, 4),
       requiredEvidence: options.intentBrief?.match(/evidence=[^\s.]+/g) ?? []
     });
@@ -559,6 +573,9 @@ export class AgentOrchestrator {
     const hasRequiredRejectEvidence = (): boolean =>
       contextHasVerifiedFieldBehavior(context, query) &&
       (!requiresWriteSiteAndReject || (contextHasWriteReject(context, query) && contextHasStateWriteSite(context)));
+    const gatherMayProceed = (): boolean =>
+      remainingContextGatherBudgetMs(startedAt) > 0 ||
+      (rejectEvidenceDeadline !== undefined && Date.now() < rejectEvidenceDeadline && !hasRequiredRejectEvidence());
     const rejectGatherNudge = (): string =>
       "Reply with tool JSON: search_code or read_file. Done only after a write-reject for the asked field is attached — not a named-symbol locate.";
     /** Pure: may keep comparing reject siblings under budget (no nudge side effects). */
@@ -576,7 +593,7 @@ export class AgentOrchestrator {
       if (rejectSites >= MAX_REJECT_SHORTLIST) {
         return false;
       }
-      if (remainingContextGatherBudgetMs(startedAt) <= 0 || Date.now() - startedAt > wallMs - 1500) {
+      if (!gatherMayProceed() || Date.now() - startedAt > wallMs - 1500) {
         return false;
       }
       return true;
@@ -721,15 +738,22 @@ export class AgentOrchestrator {
     const askedFields = askedRejectFieldTokens(query).map((field) =>
       field.replace(/_id$/i, "")
     );
-    const firstRejectFieldCriteria = /\b(?:state|transition|backlog)\b/i.test(query)
-      ? ["validate_state"]
-      : askedFields.some((field) => /^parent$/i.test(field))
-        ? [/\bissue_id\b/i.test(query) ? "Parent is not valid issue_id" : "validate_parent"]
-        : askedFields.map((field) => `get("${field}")`);
-    // Domain status can use enum/property checks. Do not replace a model's
-    // signing-handler query with an assumed dictionary accessor.
-    const modelOwnsStatusSearch = askedFields.includes("status") &&
-      askedRejectErrorQuotes(query).length === 0;
+    const signingPendingReject =
+      /\b(?:signing|signer|envelope|recipient)\b/i.test(query) &&
+      /\bmust\s+be\s+pending\s+for\s+signing\b/i.test(query);
+    const firstRejectFieldCriteria = signingPendingReject
+      ? ["must be pending for signing"]
+      : /\b(?:state|transition|backlog)\b/i.test(query)
+        ? ["validate_state"]
+        : askedFields.some((field) => /^parent$/i.test(field))
+          ? [/\bissue_id\b/i.test(query) ? "Parent is not valid issue_id" : "validate_parent"]
+          : askedFields.map((field) => `get("${field}")`);
+    // Status wording is still an observed server rejection. Letting the
+    // planner own the first search made this exact class of ask nondeterministic:
+    // the model could answer or mark done before it ever called search_code.
+    // Seed status rejects deterministically, just like parent/state rejects;
+    // the model remains responsible for refinement after seeing real hits.
+    const modelOwnsStatusSearch = false;
     const firstRejectSearchQuery =
       isApiRejectAsk(query) && action !== "change" && allowedRepoTools && !modelOwnsStatusSearch &&
         (firstRejectFieldCriteria.length > 0 || askedRejectErrorQuotes(query).length > 0)
@@ -739,11 +763,123 @@ export class AgentOrchestrator {
             max: 1
           })[0]
         : undefined;
+    const firstRepoPreflightQuery = firstRejectSearchQuery ?? (
+      action !== "change" && allowedRepoTools &&
+      (isDefinitionLocateAsk(query) && queryHasNamedSymbol(query) &&
+        /\b(?:[a-z][A-Z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+)\b/.test(query) &&
+        !isApiRejectAsk(query) && !isBackendStateLocateAsk(query) && !isFileCallerQuery(query))
+        ? extractAgentSearchQuery(query)
+        : undefined
+    );
+    // Do the mandatory reject hunt before asking the model to plan. A planner
+    // round can consume the entire soft gather window on an index miss, which
+    // previously meant the model never received a candidate file to read.
+    // This is the contract for every API-rejection question: search first,
+    // then let the model choose/refine the read from real repository evidence.
+    let forcedRejectSearchDone = false;
+    let preflightGrounded = false;
+    if (firstRepoPreflightQuery) {
+      try {
+        const searchRaw = await this.executeTool("search_code", {
+          query: firstRepoPreflightQuery,
+          repoId
+        });
+        const decorated = this.decorateToolResult("search_code", searchRaw, query);
+        this.mergeContext(context, "search_code", decorated);
+        emit({
+          index: steps.length,
+          tool: "search_code",
+          summary: `search_code: ${truncateSummary(firstRepoPreflightQuery)} (forced repository preflight)`,
+          completed: true
+        });
+        lastToolResult = decorated;
+        forcedRejectSearchDone = true;
+
+        // A repository question is not grounded by search results alone. The
+    // first search must be followed by a verified implementation read
+    // before the model gets to decide that it has enough evidence. Read
+    // the ranked candidates through the same strict gate as the normal
+    // loop so a caller/type/test hit cannot satisfy a calm locate ask.
+        if (isDefinitionLocateAsk(query) && queryHasNamedSymbol(query) &&
+          /\b(?:[a-z][A-Z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+)\b/.test(query) &&
+          !isApiRejectAsk(query) && !isBackendStateLocateAsk(query)) {
+          try {
+            const parsed = JSON.parse(decorated) as SearchPayload & { preferredHits?: SearchHit[] };
+            const candidates = [...(parsed.preferredHits ?? []), ...(parsed.hits ?? [])]
+              .filter((hit, index, all) => all.findIndex((seen) => seen.fileName === hit.fileName) === index);
+            const opened = await this.readFirstMatchingHit(
+              repoId,
+              query,
+              candidates,
+              emit,
+              context,
+              conversation,
+              undefined,
+              false,
+              groundedExport,
+              implementationPath,
+              diagnostic,
+              true
+            );
+            if (opened.ok) {
+              matchingRead = true;
+              filesRead += 1;
+              lastToolResult = opened.raw;
+              implementationPath = implementationPath ?? opened.path;
+              preflightGrounded = true;
+            }
+          } catch {
+            // Keep the search result and let the model refine or retry. A
+            // failed candidate read must not turn into an invented answer.
+          }
+        }
+
+        // Signing-status rejects contain a distinctive natural-language error,
+        // but do not always name the field as `status`. Open the exact phrase's
+        // candidate immediately so the model cannot finish after a generic
+        // `get("status")` search without reading the handler body.
+        if (signingPendingReject && isApiRejectAsk(query)) {
+          try {
+            const parsed = JSON.parse(decorated) as SearchPayload & { preferredHits?: SearchHit[] };
+            const candidates = [...(parsed.preferredHits ?? []), ...(parsed.hits ?? [])]
+              .filter((hit, index, all) => all.findIndex((seen) => seen.fileName === hit.fileName) === index);
+            const opened = await this.readFirstMatchingHit(
+              repoId,
+              query,
+              candidates,
+              emit,
+              context,
+              conversation,
+              undefined,
+              false,
+              groundedExport,
+              implementationPath,
+              diagnostic
+            );
+            if (opened.ok) {
+              matchingRead = true;
+              filesRead += 1;
+              lastToolResult = opened.raw;
+              implementationPath = implementationPath ?? opened.path;
+              preflightGrounded = true;
+            }
+          } catch {
+            // Preserve the search result and let the normal reject rail retry.
+          }
+        }
+      } catch {
+        // The model still gets a chance to retry/refine below; the preflight
+        // must never turn a repository question into a synthetic answer.
+      }
+    }
     for (let round = 0; round < maxSteps; round++) {
       if (options.signal?.aborted) {
         break;
       }
-      if (remainingContextGatherBudgetMs(startedAt) <= 0 || Date.now() - startedAt > wallMs) {
+      if (preflightGrounded || modelToolSteps >= maxSteps || (firstRepoPreflightQuery && maxSteps <= 1 && modelToolSteps === 0)) {
+        break;
+      }
+      if (!gatherMayProceed() || Date.now() - startedAt > wallMs) {
         break;
       }
 
@@ -757,7 +893,9 @@ export class AgentOrchestrator {
           lastToolResult,
           conversation: [...conversation],
           allowedIntegrations
-        }), "");
+        }), "", rejectEvidenceDeadline === undefined
+          ? undefined
+          : { deadlineAt: rejectEvidenceDeadline });
       } catch {
         if (steps.length === 0 && !skipDeterministicFallback) {
           const fallback = await this.runDeterministic(repoId, query, maxSteps, options, openFile);
@@ -788,8 +926,8 @@ export class AgentOrchestrator {
       const modelPlan = parseAgentToolPlan(raw, { allowedIntegrations, allowedRepoTools });
       // Make the first reject search deterministic and ask-derived. The model
       // still owns every later refinement after it sees the actual results.
-      const plan = round === 0 && firstRejectSearchQuery
-        ? { kind: "call" as const, tool: "search_code" as const, args: { query: firstRejectSearchQuery } }
+      const plan = round === 0 && firstRepoPreflightQuery && !forcedRejectSearchDone
+        ? { kind: "call" as const, tool: "search_code" as const, args: { query: firstRepoPreflightQuery } }
         : modelPlan;
       diagnostic?.({
         stage: "plan",
@@ -985,6 +1123,7 @@ export class AgentOrchestrator {
       const args = this.prepareToolArgs(plan.tool, plan.args, repoId, query, {
         callerSearch: matchingRead && wantsCallerRead() && !callerRead ? groundedExport : undefined
       });
+      modelToolSteps += 1;
       if (plan.tool === "search_code" && typeof args.query === "string" &&
           [...triedSearchQueries].some((used) => used.toLowerCase() === (args.query as string).toLowerCase())) {
         lastToolResult = JSON.stringify({
@@ -1189,6 +1328,7 @@ export class AgentOrchestrator {
               query: typeof args.query === "string" ? args.query.slice(0, 180) : "",
               source: rawSearch.source,
               stale: rawSearch.stale,
+              availability: rawSearch.availability,
               codeHostFallbackAttempted: rawSearch.codeHostFallbackAttempted,
               codeHostFallback: rawSearch.codeHostFallback,
               codeHostFallbackStatus: rawSearch.codeHostFallbackStatus,
@@ -1289,13 +1429,18 @@ export class AgentOrchestrator {
             continue;
           }
         }
-        if (!hits.length && !isApiRejectAsk(query)) {
+        if (!hits.length && !isApiRejectAsk(query) && !isDefinitionLocateAsk(query)) {
           const found = await this.searchUntilReadableHits(
             repoId,
             query,
             emit,
             context,
-            triedSearchQueries
+            triedSearchQueries,
+            undefined,
+            {
+              maxSearches: Math.max(0, maxSteps - steps.length),
+              canContinue: () => gatherMayProceed() && steps.length < maxSteps
+            }
           );
           if (found) {
             hits = found.toRead;
@@ -1344,7 +1489,8 @@ export class AgentOrchestrator {
             huntingCallers,
             groundedExport,
             implementationPath,
-            diagnostic
+            diagnostic,
+            action === "locate"
           );
           if (seeded.ok) {
             filesRead += 1;
@@ -1399,7 +1545,10 @@ export class AgentOrchestrator {
             }
           }
         }
-        if (isApiRejectAsk(query) && rejectSearchStreak >= MAX_REJECT_SEARCH_STREAK) {
+        // A read is progress even when earlier searches were noisy. Keep the
+        // planner alive for the next refinement/read; only a new search should
+        // be stopped by the consecutive-search guard.
+        if (isApiRejectAsk(query) && rejectSearchStreak >= MAX_REJECT_SEARCH_STREAK && plan.tool === "search_code") {
           break;
         }
       }
@@ -1430,7 +1579,13 @@ export class AgentOrchestrator {
               context,
               conversation,
               false,
-              triedSearchQueries
+              triedSearchQueries,
+              undefined,
+              undefined,
+              {
+                maxSearches: Math.max(0, maxSteps - steps.length),
+                canContinue: () => gatherMayProceed() && steps.length < maxSteps
+              }
             );
         if (grounded.ok) {
           matchingRead = true;
@@ -1484,7 +1639,11 @@ export class AgentOrchestrator {
           true,
           triedSearchQueries,
           groundedExport,
-          implementationPath
+          implementationPath,
+          {
+            maxSearches: Math.max(0, maxSteps - steps.length),
+            canContinue: () => gatherMayProceed() && steps.length < maxSteps
+          }
         );
         if (caller.ok) {
           filesRead += 1;
@@ -1640,7 +1799,7 @@ export class AgentOrchestrator {
         // turn cache. Retain its same-class update implementation without
         // spending another planning round on a truncated window.
         const remote = await this.ctx.readRemoteFile?.({ path: file.path, repoId });
-        const window = remote?.content && sameClassSerializerUpdateWindow(remote.content, stripReadLinePrefixes(file.content ?? ""));
+        const window = remote?.content && sameClassSerializerUpdateWindow(remote.content, stripReadLinePrefixes(file.content ?? ""), query);
         if (!window) continue;
         const raw = JSON.stringify({ path: file.path, files: [{ path: file.path,
           content: numberReadLines(window.content, window.startLine), evidenceSource: "remote-read" }] });
@@ -1699,7 +1858,7 @@ export class AgentOrchestrator {
             const remote = await this.ctx.readRemoteFile?.({ path: file.path, repoId });
             if (!remote?.content) continue;
             const guard = completePythonRejectWindow(remote.content, query, file.path);
-            const update = guard && sameClassSerializerUpdateWindow(remote.content, guard.content);
+            const update = guard && sameClassSerializerUpdateWindow(remote.content, guard.content, query);
             if (!guard || !update) continue;
             const cite = (window: { content: string; startLine: number; endLine: number }): string =>
               `\`\`\`python ${file.path}:${window.startLine}-${window.endLine}\n${window.content}\n\`\`\``;
@@ -2141,12 +2300,15 @@ export class AgentOrchestrator {
       return { steps, context };
     }
 
-    const found = await this.searchUntilReadableHits(repoId, query, emit, context);
+    const found = await this.searchUntilReadableHits(repoId, query, emit, context, new Set(), undefined, {
+      maxSearches: Math.max(0, maxSteps - steps.length),
+      canContinue: () => steps.length < maxSteps
+    });
     if (!found || steps.length >= maxSteps) {
       return { steps, context };
     }
 
-    const opened = await this.readFirstMatchingHit(repoId, query, found.toRead, emit, context);
+    const opened = await this.readFirstMatchingHit(repoId, query, found.toRead, emit, context, undefined, undefined, false, undefined, undefined, undefined, true);
     if (opened.ok) {
       return { steps, context };
     }
@@ -2176,7 +2338,8 @@ export class AgentOrchestrator {
     preferCallerHits = false,
     groundedExport?: string,
     implementationPath?: string,
-    diagnostic?: AgentRunOptions["onDiagnostic"]
+    diagnostic?: AgentRunOptions["onDiagnostic"],
+    strictLocate = false
   ): Promise<{ ok: boolean; raw?: string; path?: string }> {
     const implementationKey = implementationPath ? normalizeHuntPath(implementationPath) : "";
     for (const hit of hits) {
@@ -2221,7 +2384,7 @@ export class AgentOrchestrator {
       } catch {
         body = "";
       }
-      const groundingOk = locateReadCountsAsGrounding({ path: hit.fileName, body, query });
+      const groundingOk = locateReadCountsAsGrounding({ path: hit.fileName, body, query }, { requireImplementation: strictLocate });
       const callerOk =
         preferCallerHits && shipCheckRippleBody(body, query, groundedExport);
       if (!readFilePayloadHasBody(readRaw) || (!preferCallerHits && !groundingOk) || (preferCallerHits && !callerOk)) {
@@ -2280,7 +2443,7 @@ export class AgentOrchestrator {
         const verifiedField = await this.readWriteRejectInSameFile(repoId, hit.fileName, query, emit, context, conversation);
         if (verifiedField.ok) return verifiedField;
       }
-      const verdict = classifyLocateRead({ path: hit.fileName, body, query });
+      const verdict = classifyLocateRead({ path: hit.fileName, body, query }, { requireImplementation: strictLocate });
       if (isDefinitionLocateAsk(query) || isApiRejectAsk(query)) {
         diagnostic?.({
           stage: "candidate-read",
@@ -2320,7 +2483,7 @@ export class AgentOrchestrator {
         });
         continue;
       }
-      if (!preferCallerHits && !locateReadCountsAsGrounding({ path: hit.fileName, body, query })) {
+      if (!preferCallerHits && !locateReadCountsAsGrounding({ path: hit.fileName, body, query }, { requireImplementation: strictLocate })) {
         skippedPaths?.add(pathKey);
         emit({
           index: 0,
@@ -2433,6 +2596,7 @@ export class AgentOrchestrator {
   private parseSearchDiagnostic(raw: string): {
     source?: string;
     stale?: boolean;
+    availability?: string;
     codeHostFallbackAttempted?: boolean;
     codeHostFallback?: boolean;
     codeHostFallbackStatus?: string;
@@ -2471,6 +2635,7 @@ export class AgentOrchestrator {
       return {
         source: typeof parsed.source === "string" ? parsed.source : undefined,
         stale: typeof parsed.stale === "boolean" ? parsed.stale : undefined,
+        availability: typeof parsed.availability === "string" ? parsed.availability : undefined,
         codeHostFallbackAttempted:
           typeof parsed.codeHostFallbackAttempted === "boolean"
             ? parsed.codeHostFallbackAttempted
@@ -2575,7 +2740,8 @@ export class AgentOrchestrator {
     preferCallerHits = false,
     skipQueries: Set<string> = new Set(),
     groundedExport?: string,
-    implementationPath?: string
+    implementationPath?: string,
+    searchBudget?: SearchBudget
   ): Promise<{ ok: boolean; raw?: string; path?: string }> {
     const parsed = context.search_code as (SearchPayload & { preferredHits?: SearchHit[] }) | undefined;
     let hits = parsed?.preferredHits ?? [];
@@ -2613,7 +2779,8 @@ export class AgentOrchestrator {
       emit,
       context,
       skipQueries,
-      callerQueries
+      callerQueries,
+      searchBudget
     );
     if (!found?.toRead.length) {
       return { ok: false };
@@ -3720,6 +3887,20 @@ export class AgentOrchestrator {
               isFailOpenRejectHit(hit, query)
           );
         }
+        // A reject search result can identify the handler without carrying a
+        // reject-shaped snippet (for example, a path-only or declaration hit
+        // from the signing handler). Once preferred/fail-open candidates are
+        // empty, consume the first non-noise path before spending another
+        // search. The remote body remains the evidence gate in
+        // readFirstMatchingHit; this only prevents a zero-read search parade.
+        if (!toRead.length) {
+          toRead = allHits.filter(
+            (hit) =>
+              hit.fileName &&
+              !shouldSkipEvidencePath(hit.fileName, query) &&
+              !skippedPaths.has(normalizeHuntPath(hit.fileName))
+          );
+        }
         if (!toRead.length) {
           continue;
         }
@@ -3748,8 +3929,13 @@ export class AgentOrchestrator {
     emit: (step: AgentStep) => void,
     context: AgentSessionContext,
     skipQueries: Set<string> = new Set(),
-    searchQueries?: string[]
+    searchQueries?: string[],
+    searchBudget: SearchBudget = {}
   ): Promise<{ toRead: SearchHit[] } | undefined> {
+    const searchLimit = Math.min(
+      MAX_SEARCH_ATTEMPTS,
+      Math.max(0, searchBudget.maxSearches ?? MAX_SEARCH_ATTEMPTS)
+    );
     const queries = (
       searchQueries ??
       mergePlannedAgentSearchQueries({
@@ -3759,11 +3945,14 @@ export class AgentOrchestrator {
       })
     )
       .filter((candidate) => !skipQueries.has(candidate))
-      .slice(0, MAX_SEARCH_ATTEMPTS);
+      .slice(0, searchLimit);
     let stepIndex = 0;
     const tried: string[] = [];
     let lastError: string | undefined;
     for (const searchQuery of queries) {
+      if (searchBudget.canContinue && !searchBudget.canContinue()) {
+        break;
+      }
       tried.push(searchQuery);
       skipQueries.add(searchQuery);
       const searchRaw = await this.executeTool("search_code", { query: searchQuery, repoId });
@@ -3887,7 +4076,11 @@ export class AgentOrchestrator {
             if (!hit.fileName || preferred.some((seen) => seen.fileName === hit.fileName)) {
               continue;
             }
-            if (!isFailOpenRejectHit(hit, userMessage)) {
+            // If ranking produced no preferred reject candidate at all, keep
+            // the first non-noise path as a read candidate. A signing handler
+            // may be returned as a declaration/path hit whose snippet does
+            // not contain the guard; the remote body is the evidence gate.
+            if (!isFailOpenRejectHit(hit, userMessage) && preferred.length > 0) {
               continue;
             }
             // Prefer inject when asked-field / quote-overlap; else only if preferred empty.
@@ -4122,18 +4315,34 @@ function requiresStateWriteAndReject(query: string, intentBrief?: string): boole
   );
 }
 
-function contextHasStateWriteSite(context: AgentSessionContext | undefined): boolean {
+export function contextHasStateWriteSite(context: AgentSessionContext | undefined): boolean {
   const files = remoteReadEvidenceFiles(
     (context?.read_file as ReadFilePayload | undefined)?.files
   );
   const stateMutation =
     /(?:\.\s*state(?:_id)?\s*=|\[\s*["']state(?:_id)?["']\s*\]\s*=|\bstate(?:_id)?\s*=\s*(?:validated_data|data)\b|\b(?:update|setattr)\s*\([^)]*state(?:_id)?)/i;
-  const bodies = new Map<string, string>();
+  const bodies = new Map<string, string[]>();
   for (const file of files) {
     const path = file.path ?? "";
-    bodies.set(path, `${bodies.get(path) ?? ""}\n${stripReadLinePrefixes(file.content ?? "")}`);
+    bodies.set(path, [...(bodies.get(path) ?? []), file.content ?? ""]);
   }
-  return [...bodies].some(([path, body]) => {
+  return [...bodies].some(([path, windows]) => {
+    // Tool-call order is not source order. A model may read update before
+    // validate, or repeat overlapping windows. Reassemble real numbered rows
+    // before judging class scope; never turn an out-of-order proof into a miss.
+    const numbered = new Map<number, string>();
+    let allNumbered = true;
+    for (const row of windows.flatMap(window => window.split("\n"))) {
+      const match = /^(\d+)\|(.*)$/.exec(row);
+      if (!match) { if (row.trim()) allNumbered = false; continue; }
+      const line = Number(match[1]);
+      const previous = numbered.get(line);
+      if (previous !== undefined && previous !== match[2]) return false;
+      numbered.set(line, match[2]!);
+    }
+    const body = allNumbered && numbered.size
+      ? [...numbered].sort(([a], [b]) => a - b).map(([, row]) => row).join("\n")
+      : windows.map(stripReadLinePrefixes).join("\n");
     const stateInput = /(?:\.get\(\s*["']state["']|\[\s*["']state["']\s*\])/.exec(body);
     const updateStart = body.search(/\bdef\s+update\([^)]*validated_data/);
     const sameClassStateInput = stateInput && updateStart > stateInput.index &&
@@ -4164,8 +4373,20 @@ function completePythonRejectWindow(body: string, query: string, path: string): 
   return undefined;
 }
 
-function sameClassSerializerUpdateWindow(body: string, guard: string): { content: string; startLine: number; endLine: number } | undefined {
-  const anchor = body.indexOf(guard.trimEnd());
+export function sameClassSerializerUpdateWindow(body: string, guard: string, query = ""): { content: string; startLine: number; endLine: number } | undefined {
+  let anchor = -1;
+  // Evidence may contain multiple numbered windows for the same file. Their
+  // concatenation is not a contiguous substring of the complete remote body.
+  // Recover only an exact, unique rejection row; never anchor by class name
+  // or a guessed path, which could borrow a neighboring serializer's writer.
+    for (const row of guard.split(/\r?\n/)) {
+      const exact = row.trimEnd();
+      if (!exact.trim() || !contentLooksLikeWriteReject(exact)) continue;
+      const fields = askedRejectFieldTokens(query);
+      if (query && !fields.some(field => new RegExp(`\\b${field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(exact))) continue;
+      const found = body.indexOf(exact);
+      if (found >= 0 && body.indexOf(exact, found + exact.length) < 0) { anchor = found; break; }
+    }
   if (anchor < 0 || !guard.trim()) return undefined;
   const rows = body.split(/\r?\n/);
   const anchorLine = body.slice(0, anchor).split(/\r?\n/).length - 1;

@@ -36,6 +36,13 @@ test("isConcreteFileEditAsk detects applyable identifier validation asks", () =>
   );
 });
 
+test("existing implementation questions are not edit requests", () => {
+  assert.equal(isConcreteFileEditAsk("Does this attached file implement the server's envelope.status PENDING signing check? Show that check only if it is in this file."),false);
+  assert.equal(isConcreteFileEditAsk("Where does this method update envelope.status?"),false);
+  assert.equal(isConcreteFileEditAsk("Can you implement the check in this file?"),true);
+  assert.equal(isConcreteFileEditAsk("What exact change to apply fixes this method?"),true);
+});
+
 test("isConcreteFileEditAsk does not treat bare fix this as a patch spec", () => {
   assert.equal(isConcreteFileEditAsk("fix this"), false);
 });

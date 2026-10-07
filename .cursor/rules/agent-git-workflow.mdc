@@ -36,3 +36,5 @@ GitHub Actions Lint is `npm run lint` (`tsc --noEmit` on extension, webview, and
 - Applies when the user asks to commit, push, open a PR, or “ship this.”
 - Does not require the full CI test matrix locally unless the user asks or the change is in those test areas.
 - Secrets, amend, force-push, and hook-skip rules in the user commit protocol still apply.
+
+**Lint ≠ product Pass.** Green `npm run lint` (and unit tests) are a git/CI gate only. For reject-hunt / locate / Extension Host dogfood Fail classes, still use claim tiers in `.cursor/rules/ship-claim-discipline.mdc` — never say “fixed” from lint alone.

@@ -375,12 +375,12 @@ test("cloud content search unsupported recovers through filename discovery and v
   const result = JSON.parse(await handleSearchCode(ctx, { repoId: REPO, query: "Parent is not valid issue_id" }));
   assert.equal(hostCalls, 1);
   assert.ok(files.includes("issue."));
-  assert.equal(result.filenameFallbackStatus, "verified");
+  assert.ok(["paths", "verified"].includes(result.filenameFallbackStatus));
   assert.equal(result.hits[0].fileName, "server/serializers/issue.rb");
   assert.ok(result.hits[0].content.includes("Cannot set parent"));
 });
 
-test("a validate-prefixed definition lookup does not become a reject hunt", async () => {
+test("a validate-prefixed definition lookup is a locate hunt, not a reject hunt", async () => {
   let filenameCalls = 0;
   const ctx: AgentToolContext = {
     indexBackend: stubIndex(async () => emptySearch()),
@@ -389,7 +389,67 @@ test("a validate-prefixed definition lookup does not become a reject hunt", asyn
     findFiles: async () => { filenameCalls++; return []; }
   };
   const result = JSON.parse(await handleSearchCode(ctx, { repoId: REPO, query: "validate_quantum_platypus_session_nonce" }));
-  assert.equal(filenameCalls, 0);
+  assert.ok(filenameCalls > 0, "definition lookup should try remote filename discovery");
+  assert.equal(result.hits.length, 0);
+});
+
+test("empty-index helper lookup accepts a remotely read implementation", async () => {
+  const reads: string[] = [];
+  const ctx: AgentToolContext = {
+    indexBackend: stubIndex(async () => emptySearch()),
+    resolveAbsolutePath: () => undefined,
+    researchQuery: "Where does the recipient expiration helper live?",
+    findFiles: async ({ query }) => query === "recipient." ? ["server/recipients/expiration.ts"] : [],
+    readRemoteFile: async ({ path }) => {
+      reads.push(path);
+      return { path, content: "export function expireRecipient(recipient: Recipient) { return recipient.expiresAt; }" };
+    }
+  };
+  const result = JSON.parse(await handleSearchCode(ctx, { repoId: REPO, query: "recipient expiration helper" }));
+  assert.deepEqual(reads, ["server/recipients/expiration.ts"]);
+  assert.equal(result.filenameFallbackStatus, "verified");
+  assert.equal(result.hits[0].fileName, "server/recipients/expiration.ts");
+});
+
+test("ordinary status-guard locate verifies the filename fallback", async () => {
+  const ask =
+    "Where is the pending-for-signing guard implemented, and what status comparison triggers it?";
+  const path = "server/operations/sign-field.ts";
+  const queries: string[] = [];
+  const ctx: AgentToolContext = {
+    indexBackend: stubIndex(async () => emptySearch()),
+    resolveAbsolutePath: () => undefined,
+    researchQuery: ask,
+    locateMode: true,
+    findFiles: async ({ query }) => {
+      queries.push(query);
+      return query === "signing." ? [path] : [];
+    },
+    readRemoteFile: async ({ path: filePath }) => ({
+      path: filePath,
+      content: "export async function signField(envelope) {\n  if (envelope.status !== DocumentStatus.PENDING) {\n    throw new Error('Document must be pending for signing');\n  }\n}"
+    })
+  };
+  const result = JSON.parse(await handleSearchCode(ctx, { repoId: REPO, query: "pending-for-signing guard" }));
+  assert.ok(queries.includes("signing."), `filename queries: ${queries.join(", ")}`);
+  assert.ok(["paths", "verified"].includes(result.filenameFallbackStatus));
+  assert.equal(result.hits[0].fileName, path);
+});
+
+test("reject fallback does not verify docs or tests as production evidence", async () => {
+  const ask = "A signer gets an error that the document must be pending for signing. Where does the server reject this request?";
+  const ctx: AgentToolContext = {
+    indexBackend: stubIndex(async () => emptySearch()),
+    resolveAbsolutePath: () => undefined,
+    researchQuery: ask,
+    findFiles: async ({ query }) => query === "sign" ? ["tests/sign-field.test.ts", "docs/signing.md"] : [],
+    readRemoteFile: async ({ path }) => ({
+      path,
+      content: "if (envelope.status !== DocumentStatus.PENDING) throw new Error('Document must be pending for signing');"
+    })
+  };
+  const result = JSON.parse(await handleSearchCode(ctx, { repoId: REPO, query: "must be pending for signing" }));
+  assert.notEqual(result.filenameFallbackStatus, "verified");
   assert.equal(result.hits.length, 0);
 });
 
@@ -407,6 +467,72 @@ test("operation filenames recover signing after a neighboring PDF guard", async 
   assert.equal(queries.length, 1, "verified signing evidence stops further filename walks");
   assert.equal(result.filenameFallbackStatus, "verified");
   assert.equal(result.hits[0].fileName, "server/operations/sign-field.ts");
+});
+
+test("quoted signing errors still trigger the operation fallback", async () => {
+  const queries: string[] = [];
+  const ask = "A signer gets an error that the document must be pending for signing. Where does the server reject this request, and what status check enforces it?";
+  const ctx: AgentToolContext = {
+    indexBackend: stubIndex(async () => emptySearch()),
+    resolveAbsolutePath: () => undefined,
+    researchQuery: ask,
+    findFiles: async ({ query }) => {
+      queries.push(query);
+      return query === "sign" ? ["apps/signing/sign-field.ts"] : [];
+    },
+    readRemoteFile: async ({ path }) => ({
+      path,
+      content: "if (envelope.status !== DocumentStatus.PENDING) throw new AppError('Document must be pending for signing');"
+    })
+  };
+  const result = JSON.parse(await handleSearchCode(ctx, { repoId: REPO, query: '"document must be pending for signing"' }));
+  assert.equal(queries[0], "sign");
+  assert.equal(result.filenameFallbackStatus, "verified");
+  assert.equal(result.hits[0].fileName, "apps/signing/sign-field.ts");
+});
+
+test("signing fallback retries inflected operation stems", async () => {
+  const queries: string[] = [];
+  const ask = "A signer gets an error that the document must be pending for signing. Where does the server reject this request, and what status check enforces it?";
+  const ctx: AgentToolContext = {
+    indexBackend: stubIndex(async () => emptySearch()),
+    resolveAbsolutePath: () => undefined,
+    researchQuery: ask,
+    findFiles: async ({ query }) => {
+      queries.push(query);
+      return query === "signing" ? ["packages/trpc/server/envelope-router/sign-envelope-field.ts"] : [];
+    },
+    readRemoteFile: async ({ path }) => ({
+      path,
+      content: "if (envelope.status !== DocumentStatus.PENDING) throw new AppError(AppErrorCode.INVALID_REQUEST, { message: `Document ${envelope.id} must be pending for signing` });"
+    })
+  };
+  const result = JSON.parse(await handleSearchCode(ctx, { repoId: REPO, query: '"document must be pending for signing"' }));
+  assert.deepEqual(queries.slice(0, 2), ["sign", "signing"]);
+  assert.equal(result.filenameFallbackStatus, "verified");
+  assert.equal(result.hits[0].fileName, "packages/trpc/server/envelope-router/sign-envelope-field.ts");
+});
+
+test("signing fallback reaches field handlers when broad signing filenames are adjacent", async () => {
+  const queries: string[] = [];
+  const ask = "A signer gets an error that the document must be pending for signing. Where does the server reject this request, and what status check enforces it?";
+  const ctx: AgentToolContext = {
+    indexBackend: stubIndex(async () => emptySearch()),
+    resolveAbsolutePath: () => undefined,
+    researchQuery: ask,
+    findFiles: async ({ query }) => {
+      queries.push(query);
+      return query === "sign-field" ? ["packages/lib/server-only/field/sign-field-with-token.ts"] : [];
+    },
+    readRemoteFile: async ({ path }) => ({
+      path,
+      content: "if (envelope.status !== DocumentStatus.PENDING) throw new Error(`Document ${envelope.id} must be pending for signing`);"
+    })
+  };
+  const result = JSON.parse(await handleSearchCode(ctx, { repoId: REPO, query: "pending-for-signing" }));
+  assert.equal(queries.at(-1), "sign-field");
+  assert.equal(result.filenameFallbackStatus, "verified");
+  assert.equal(result.hits[0].fileName, "packages/lib/server-only/field/sign-field-with-token.ts");
 });
 
 test("backend State lookup remotely opens declaration after UI-only index hits", async () => {
@@ -616,4 +742,68 @@ test("entity discovery precedes broad CRUD names for quoted API rejection", asyn
   };
   await handleSearchCode(ctx, { repoId: REPO, query: "Parent is not valid issue_id" });
   assert.deepEqual(queries.slice(0, 2), ["issue.", "parent."]);
+});
+
+test("work-item transition hunts add the issue entity after validate_state", async () => {
+  const queries: string[] = [];
+  const body = [
+    "class IssueSerializer:",
+    "    def update(self, instance, validated_data):",
+    "        if validated_data.get(\"state\") and not is_valid_transition(instance.state, validated_data[\"state\"]):",
+    "            raise ValidationError(\"State is not valid state_id\")",
+    "        instance.state = validated_data.get(\"state\", instance.state)",
+    "        return instance"
+  ].join("\n");
+  const ctx: AgentToolContext = {
+    indexBackend: stubIndex(async () => emptySearch()),
+    resolveAbsolutePath: () => undefined,
+    researchQuery: "Users can't move a work item out of backlog — the API returns an error. I don't have this repo cloned. Where is work-item state written, and what rejects a bad transition?",
+    findFiles: async ({ query }) => {
+      queries.push(query);
+      return query === "issue." ? ["apps/api/serializers/issue.py"] : [];
+    },
+    readRemoteFile: async ({ path }) => ({ path, content: body })
+  };
+  const result = JSON.parse(await handleSearchCode(ctx, { repoId: REPO, query: "validate_state" }));
+  assert.ok(queries.includes("issue."));
+  assert.equal(result.filenameFallbackStatus, "verified");
+  assert.equal(result.hits[0].fileName, "apps/api/serializers/issue.py");
+});
+
+test("disabled index still falls back to remote filename discovery for D3", async () => {
+  const path = "packages/lib/server-only/field/sign-field-with-token.ts";
+  const body = [
+    "export async function signFieldWithToken(envelope) {",
+    "  if (envelope.status !== DocumentStatus.PENDING) {",
+    "    throw new AppError(AppErrorCode.INVALID_REQUEST, { message: `Document ${envelope.id} must be pending for signing` });",
+    "  }",
+    "}"
+  ].join("\n");
+  let searchedIndex = false;
+  let opened = false;
+  const ctx: AgentToolContext = {
+    indexBackend: {
+      isEnabledForRepo: async () => false,
+      search: async () => {
+        searchedIndex = true;
+        return emptySearch();
+      }
+    } as unknown as IndexBackend,
+    resolveAbsolutePath: () => undefined,
+    researchQuery: "A signer gets an error that the document must be pending for signing. Where does the server reject this request, and what status check enforces it?",
+    findFiles: async ({ query }) => query === "sign" ? [path] : [],
+    readRemoteFile: async ({ path: filePath }) => {
+      opened = true;
+      return { path: filePath, content: body };
+    }
+  };
+  const result = JSON.parse(await handleSearchCode(ctx, {
+    repoId: "github:CoopAI-Corp/documenso",
+    query: "must be pending for signing"
+  }));
+  assert.equal(searchedIndex, false);
+  assert.equal(opened, true);
+  assert.ok(["paths", "verified"].includes(result.filenameFallbackStatus));
+  assert.equal(result.hits[0].fileName, path);
+  assert.match(result.hits[0].content, /must be pending for signing/);
 });

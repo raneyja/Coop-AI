@@ -10,9 +10,12 @@ class Range {
 class Selection extends Range {
   constructor(start, end) { super(start, end); this.anchor = start; this.active = end; }
 }
+class TabInputText {
+  constructor(uri) { this.uri = uri; }
+}
 
 const stub = {
-  Position, Range, Selection,
+  Position, Range, Selection, TabInputText,
   TextEditorRevealType: { InCenter: 1 },
   env: {
     isTelemetryEnabled: true,

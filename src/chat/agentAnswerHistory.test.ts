@@ -54,6 +54,16 @@ test("verified remote evidence survives synthesis without a header-only clip", (
   assert.equal(summarized.files[0].content, body);
 });
 
+test("turn-owned attachment retains its late implementation and provenance", () => {
+  const body = `${"1|// header\n".repeat(70)}180|return verifyToken(token);`;
+  const raw = JSON.stringify({ files: [{ path: "src/auth.ts", content: body,
+    evidenceSource: "turn-attachment", startLine: 1, endLine: 180 }] });
+  const summarized = JSON.parse(summarizeAgentToolResultForHistory(raw));
+  assert.equal(summarized.files[0].content, body);
+  assert.equal(summarized.files[0].evidenceSource, "turn-attachment");
+  assert.equal(summarized.files[0].endLine, 180);
+});
+
 console.log(`\nagentAnswerHistory: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);

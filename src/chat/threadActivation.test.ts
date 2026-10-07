@@ -3,6 +3,7 @@ import { CoopChatSession } from "./CoopChatSession";
 import * as vscode from "vscode";
 import { rememberRemotePatchBuffer } from "../context/remoteViewBuffer";
 import { emptyChatIntentPlan } from "./intentPlanner/types";
+import { readFileAssistantEditorForChat, findOpenFileAssistantDocument } from "../context/editorFileContext";
 
 async function run(): Promise<void> {
   let answerCalls = 0;
@@ -123,6 +124,97 @@ async function run(): Promise<void> {
     (vscode.window as {activeTextEditor: vscode.TextEditor | undefined}).activeTextEditor = originalEditor;
   }
   const events: string[] = [];
+  const originalFolderResolver = vscode.workspace.getWorkspaceFolder;
+  try {
+    (vscode.workspace as {getWorkspaceFolder: unknown}).getWorkspaceFolder = () => ({uri:{fsPath:"/fixture"}});
+    (vscode.window as {activeTextEditor: vscode.TextEditor | undefined}).activeTextEditor = {
+      document:{uri:{scheme:"file",fsPath:"/fixture/src/selected.ts",path:"/fixture/src/selected.ts"},languageId:"typescript",getWordRangeAtPosition:()=>undefined},
+      selection:{isEmpty:false,start:{line:1,character:0},end:{line:3,character:0}}
+    } as vscode.TextEditor;
+    (vscode.window as {tabGroups: unknown}).tabGroups = {all:[]};
+    (vscode.window as {visibleTextEditors: vscode.TextEditor[]}).visibleTextEditors = [];
+    const localSelectionSession = Object.assign(Object.create(CoopChatSession.prototype), {
+      currentContext:{owner:"remote",repo:"previous",scope:"repo"}, preferences:{}
+    });
+    const chosen = localSelectionSession.captureNewChatSelection();
+    assert.equal(chosen?.file,"src/selected.ts");
+    assert.equal(chosen?.fileSource,"workspace");
+    assert.deepEqual(chosen?.selectedLines,[2,3]);
+    assert.equal(localSelectionSession.currentContext.scope,"repo","explicit new-chat capture does not mutate the prior chat");
+  } finally {
+    (vscode.workspace as {getWorkspaceFolder: unknown}).getWorkspaceFolder = originalFolderResolver;
+    (vscode.window as {activeTextEditor: vscode.TextEditor | undefined}).activeTextEditor = originalEditor;
+    (vscode.window as {tabGroups: unknown}).tabGroups = originalTabGroups;
+    (vscode.window as {visibleTextEditors: readonly vscode.TextEditor[]}).visibleTextEditors = originalVisible;
+  }
+  let explicitPicks = 0;
+  const originalDocuments = Object.getOwnPropertyDescriptor(vscode.workspace, "textDocuments");
+  try {
+    (vscode.workspace as {getWorkspaceFolder: unknown}).getWorkspaceFolder = () => ({uri:{fsPath:"/fixture"}});
+    const hiddenUri = {scheme:"file",fsPath:"/fixture/src/selected.ts",path:"/fixture/src/selected.ts",toString:()=>"file:///fixture/src/selected.ts"} as vscode.Uri;
+    const hiddenDoc = {uri:hiddenUri,isClosed:false,getText:()=>"unsaved selected buffer\nsecond line"} as vscode.TextDocument;
+    Object.defineProperty(vscode.workspace,"textDocuments",{configurable:true,value:[hiddenDoc]});
+    (vscode.window as {activeTextEditor: unknown}).activeTextEditor = undefined;
+    (vscode.window as {visibleTextEditors: unknown}).visibleTextEditors = [];
+    (vscode.window as {tabGroups: unknown}).tabGroups = {all:[{tabs:[{input:new vscode.TabInputText(hiddenUri)}]}]};
+    const hiddenSession = Object.assign(Object.create(CoopChatSession.prototype), {
+      currentContext:{file:"src/selected.ts",fileSource:"workspace",scope:"file",selectedLines:[1,2]},
+      allowPassiveEditorSnap:false,editorContextSuppressedUntil:0,preferences:{},
+      postContext(){},refreshEditorContext(){}
+    });
+    hiddenSession.reconcileEditorFileChips();
+    assert.equal(hiddenSession.currentContext.file,"src/selected.ts","a hidden but open tab retains the explicit file chip");
+    assert.equal(readFileAssistantEditorForChat(hiddenSession.currentContext)?.files[0].content,"unsaved selected buffer\nsecond line","hidden open tab reads live unsaved body, not disk");
+    assert.equal(findOpenFileAssistantDocument("src/unrelated.ts"),undefined);
+    const openDocumentBefore = vscode.workspace.openTextDocument;
+    try {
+      Object.defineProperty(vscode.workspace,"textDocuments",{configurable:true,value:[]});
+      hiddenSession.reconcileEditorFileChips();
+      assert.equal(hiddenSession.currentContext.file,"src/selected.ts","cold restored tab need not be loaded yet");
+      (vscode.workspace as {openTextDocument:unknown}).openTextDocument = async (requested:vscode.Uri) => {
+        assert.equal(requested.toString(),hiddenUri.toString()); return hiddenDoc;
+      };
+      const restoredTurn = {context:{file:"src/selected.ts",fileSource:"workspace"},editAnchor:{file:"src/selected.ts",fileContents:{}}};
+      await hiddenSession.loadEditAnchorFile(restoredTurn);
+      assert.equal(restoredTurn.editAnchor.fileContents["src/selected.ts"],hiddenDoc.getText(),"reload reads only the attached open tab");
+    } finally {
+      (vscode.workspace as {openTextDocument:unknown}).openTextDocument = openDocumentBefore;
+    }
+    Object.defineProperty(vscode.workspace,"textDocuments",{configurable:true,value:[hiddenDoc,{...hiddenDoc}]});
+    assert.equal(findOpenFileAssistantDocument("src/selected.ts"),undefined,"ambiguous same-path documents cannot be guessed");
+    Object.defineProperty(vscode.workspace,"textDocuments",{configurable:true,value:[hiddenDoc]});
+    (vscode.window as {tabGroups: unknown}).tabGroups = {all:[]};
+    assert.equal(readFileAssistantEditorForChat(hiddenSession.currentContext),undefined,"loaded document with a closed tab is not an attachment");
+    hiddenSession.reconcileEditorFileChips();
+    assert.equal(hiddenSession.currentContext.file,undefined,"a truly closed local tab clears its chip");
+  } finally {
+    if(originalDocuments) Object.defineProperty(vscode.workspace,"textDocuments",originalDocuments);
+    else delete (vscode.workspace as {textDocuments?:unknown}).textDocuments;
+    (vscode.workspace as {getWorkspaceFolder: unknown}).getWorkspaceFolder = originalFolderResolver;
+    (vscode.window as {activeTextEditor: unknown}).activeTextEditor = originalEditor;
+    (vscode.window as {visibleTextEditors: unknown}).visibleTextEditors = originalVisible;
+    (vscode.window as {tabGroups: unknown}).tabGroups = originalTabGroups;
+  }
+  const remotePickSession = Object.assign(Object.create(CoopChatSession.prototype), {
+    sessionHydrated: true, allowPassiveEditorSnap: false, editorContextSuppressedUntil: Date.now() + 10_000,
+    currentContext: {owner: "org", repo: "coop", provider: "gitlab", branch: "preview", scope: "repo"}, preferences: {},
+    resolveEditorForContextRefresh: () => editor, stampLiveEditorSelection() {},
+    isWorkingOnRemoteProvenance: () => false,
+    intentDetector: {detectEditorIntent: () => "selection", create: (_intent: unknown, context: {file:string;fileSource:string}) => {
+      assert.equal(context.file, "src/auth.ts"); assert.equal(context.fileSource, "remote"); explicitPicks++; return {context};
+    }}, intentDebouncer: {debounce: async () => {}}
+  });
+  try {
+    (vscode.window as {tabGroups: unknown}).tabGroups = {all: []};
+    (vscode.window as {visibleTextEditors: vscode.TextEditor[]}).visibleTextEditors = [];
+    remotePickSession.refreshEditorContext(editor);
+    assert.equal(explicitPicks, 0, "a passive remote tab cannot steal a fresh repo-only chat");
+    remotePickSession.refreshEditorContext(editor, {userActivatedEditor: true});
+    assert.equal(explicitPicks, 1, "explicit remote selection must chip even with passive snapping off");
+  } finally {
+    (vscode.window as {tabGroups: unknown}).tabGroups = originalTabGroups;
+    (vscode.window as {visibleTextEditors: readonly vscode.TextEditor[]}).visibleTextEditors = originalVisible;
+  }
   const context = { provider: "gitlab", owner: "org", repo: "coop", branch: "main", scope: "repo" };
   const repoSendSession = Object.assign(Object.create(CoopChatSession.prototype), {
     currentContext: { ...context }, allowPassiveEditorSnap: true,
@@ -182,6 +274,111 @@ async function run(): Promise<void> {
   assert.equal(attached.activeFile, "origin.ts");
   assert.equal(attached.files[0].content, "const x = 1;\nreturn x;");
   assert.equal(attached.source, "remote-codehost");
+  const ranged = await patchSession.resolveChatLocalFiles({
+    context: { file: "origin.ts", fileSource: "remote", selectedLines: [80, 82] },
+    editAnchor: { file: "origin.ts", bodyLineRange: [75, 87], fileContents: {"origin.ts": "selected remote source"} }
+  });
+  assert.deepEqual(ranged.files[0].lineRange, [75, 87], "captured range must survive normal synthesis, not become line 1");
+  let releaseBody!: () => void;
+  const restoringTurn = {
+    context: { file: "src/origin.ts", fileSource: "remote", owner: "origin", repo: "repo", provider: "gitlab", branch: "preview" },
+    editAnchor: { file: "src/origin.ts", fileContents: {} as Record<string, string> },
+    editAnchorLoad: undefined as Promise<void> | undefined,
+    streamAbort: new AbortController()
+  };
+  restoringTurn.editAnchorLoad = new Promise<void>(resolve => { releaseBody = () => {
+    restoringTurn.editAnchor.fileContents["src/origin.ts"] = "origin source after async remote read";
+    resolve();
+  }; });
+  const restoringSession = Object.assign(Object.create(CoopChatSession.prototype), {
+    currentContext: { file: "src/other.ts", fileSource: "remote", owner: "other", repo: "other", branch: "main" },
+    pendingChatLocalFiles: { source: "remote-codehost", activeFile: "src/other.ts", files: [{path: "src/other.ts", content: "wrong current thread"}] }
+  });
+  const restoring = restoringSession.resolveChatLocalFiles(restoringTurn);
+  releaseBody();
+  const restoredBody = await restoring;
+  assert.equal(restoredBody?.activeFile, "src/origin.ts", "restore must await the original turn's read instead of taking a later pending file");
+  assert.equal(restoredBody?.files[0].content, "origin source after async remote read");
+  assert.equal(restoringSession.currentContext.file, "src/other.ts", "resolving an older turn must not mutate the active thread");
+  const unavailable = await restoringSession.resolveChatLocalFiles({
+    context: restoringTurn.context,
+    editAnchor: { file: "src/origin.ts", fileContents: {} }
+  });
+  assert.equal(unavailable, undefined, "a failed original read must not borrow another thread's file");
+  const cancelled = new AbortController();
+  cancelled.abort();
+  await assert.rejects(restoringSession.resolveChatLocalFiles({
+    ...restoringTurn, streamAbort: cancelled, editAnchorLoad: new Promise<void>(() => {})
+  }), "Stop must release a waiting file read");
+  const remoteRangeSession = Object.assign(Object.create(CoopChatSession.prototype), {
+    currentContext: { file: "src/long.ts", fileSource: "remote", owner: "origin", repo: "repo", provider: "github", branch: "preview" },
+    preferences: {},
+    indexedRepoWorkspace: () => ({ readFile: async () => ({
+      content: Array.from({length: 250}, (_, index) => `source line ${index + 1}`).join("\n")
+    }) })
+  });
+  const selectionBody = await remoteRangeSession.fetchRemoteFileForChatAttach({ start: 200, end: 202 });
+  assert.equal(selectionBody.files[0].content, Array.from({length: 13}, (_, index) => `source line ${195 + index}`).join("\n"), "remote selection must be sliced exactly once, with its five surrounding lines");
+  assert.deepEqual(selectionBody.files[0].lineRange, [195, 207]);
+  let releaseRemote!: (value: {content: string}) => void;
+  const remoteController = new AbortController();
+  const slowTurn = {
+    context: { file: "src/slow.ts", fileSource: "remote", owner: "origin", repo: "repo", provider: "github", branch: "preview" },
+    editAnchor: { file: "src/slow.ts", fileContents: {} as Record<string, string> },
+    streamAbort: remoteController
+  };
+  const slowSession = Object.assign(Object.create(CoopChatSession.prototype), {
+    preferences: {},
+    indexedRepoWorkspace: () => ({ readFile: (target: {branch: string}, path: string) => {
+      assert.equal(target.branch, "preview");
+      assert.equal(path, "src/slow.ts");
+      return new Promise<{content: string}>(resolve => { releaseRemote = resolve; });
+    } })
+  });
+  const originalTimer = globalThis.setTimeout;
+  let discardedReadTimer: (() => void) | undefined;
+  globalThis.setTimeout = ((callback: () => void, ms?: number) => {
+    if (ms === 4000) discardedReadTimer = callback;
+    return originalTimer(callback, ms === 4000 ? 0 : ms);
+  }) as typeof setTimeout;
+  try {
+    const read = slowSession.loadEditAnchorFile(slowTurn);
+    assert.equal(discardedReadTimer, undefined, "explicit reads cannot be discarded by a separate four-second race");
+    releaseRemote({ content: "late but correct remote body" });
+    await read;
+    assert.equal(slowTurn.editAnchor.fileContents["src/slow.ts"], "late but correct remote body");
+    slowTurn.editAnchor.fileContents = {};
+    const stoppedRead = slowSession.loadEditAnchorFile(slowTurn);
+    remoteController.abort();
+    await stoppedRead;
+    releaseRemote({ content: "must not stamp after Stop" });
+    await Promise.resolve();
+    assert.equal(slowTurn.editAnchor.fileContents["src/slow.ts"], undefined);
+  } finally {
+    globalThis.setTimeout = originalTimer;
+  }
+  const documentsBeforeUnavailable = Object.getOwnPropertyDescriptor(vscode.workspace, "textDocuments");
+  const editorsBeforeUnavailable = Object.getOwnPropertyDescriptor(vscode.window, "visibleTextEditors");
+  const tabsBeforeUnavailable = Object.getOwnPropertyDescriptor(vscode.window, "tabGroups");
+  Object.defineProperty(vscode.workspace, "textDocuments", { configurable: true, value: [] });
+  Object.defineProperty(vscode.window, "visibleTextEditors", { configurable: true, value: [] });
+  Object.defineProperty(vscode.window, "tabGroups", { configurable: true, value: { all: [] } });
+  try {
+    const localTurn = { context: { file: "src/closed.ts", fileSource: "local-workspace", owner: "stale", repo: "remote" },
+      editAnchor: { file: "src/closed.ts", fileContents: {} as Record<string, string> } };
+    const closedSession = Object.assign(Object.create(CoopChatSession.prototype), {
+      preferences: {}, indexedRepoWorkspace: () => { throw new Error("closed local file must not consult remote repository"); }
+    });
+    await closedSession.loadEditAnchorFile(localTurn);
+    assert.deepEqual(localTurn.editAnchor.fileContents, {});
+  } finally {
+    if (documentsBeforeUnavailable) Object.defineProperty(vscode.workspace, "textDocuments", documentsBeforeUnavailable);
+    else delete (vscode.workspace as unknown as {textDocuments?: unknown}).textDocuments;
+    if (editorsBeforeUnavailable) Object.defineProperty(vscode.window, "visibleTextEditors", editorsBeforeUnavailable);
+    else delete (vscode.window as unknown as {visibleTextEditors?: unknown}).visibleTextEditors;
+    if (tabsBeforeUnavailable) Object.defineProperty(vscode.window, "tabGroups", tabsBeforeUnavailable);
+    else delete (vscode.window as unknown as {tabGroups?: unknown}).tabGroups;
+  }
   let readIdentity: unknown;
   const remoteSession = Object.assign(Object.create(CoopChatSession.prototype), {
     currentContext: { owner: "other", repo: "later", provider: "github", branch: "wrong" },

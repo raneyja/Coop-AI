@@ -128,6 +128,18 @@ const ROLE_HINTS = [
   "validator"
 ] as const;
 
+/** Generic implementation nouns still need a source-backed definition hunt. */
+function isHelperLocateAsk(userMessage: string): boolean {
+  if (isApiRejectAsk(userMessage)) {
+    return false;
+  }
+  const text = userMessage.toLowerCase();
+  return (
+    /\b(?:helper|utility|method|function)\b/.test(text) &&
+    /\b(?:where|which|what|find|locate|defined|lives?|live)\b/.test(text)
+  );
+}
+
 /** Question words — never a component/symbol name. */
 const DENIED_PASCAL =
   /^(Where|What|Which|How|Why|Show|Find|Please|Define|Explain|This|That|When|After|Before)$/i;
@@ -657,6 +669,7 @@ export function isRejectShapedSearchCriterion(query: string): boolean {
     /validationerror|get\s*\(|\["|raise\b|is not valid|not valid|must belong|does not (?:exist|belong)|isn'?t in|\b400\b|invalid\s+\w+|^validate_[a-z][a-z0-9_]*$|_id\b/.test(
       q
     ) ||
+    /^must\s+be\s+[a-z_]+(?:\s+[a-z_]+){0,5}$/.test(q) ||
     (/\b(parent|assignee|state|transition|estimate)\b/.test(q) &&
       /(valid|error|reject|validation|project|belong)/.test(q))
   );
@@ -978,6 +991,12 @@ export function mergePlannedAgentSearchQueries(options: {
     }
   }
   const hasExactQuote = rejectAsk && rejectQuoteFirstSearchQueries(options.userMessage).length > 0;
+  if (
+    rejectAsk &&
+    /\bmust\s+be\s+pending\s+for\s+signing\b/i.test(options.userMessage)
+  ) {
+    push("must be pending for signing");
+  }
   for (const planned of options.planned ?? []) {
     if (rejectAsk && !isRejectShapedSearchCriterion(planned)) {
       continue;
@@ -1110,6 +1129,15 @@ export function pickSearchHitsToRead<T extends RankedSearchHit & { content?: str
             Boolean(userMessage && queryNamesSourceFile(hit.fileName, userMessage))
         )
       : ranked;
+  if (keys.length > 0 && pool.length === 0 && userMessage) {
+    const members = enumMemberHints(userMessage);
+    if (members.length > 0) {
+      pool = ranked.filter((hit) => {
+        const hay = `${hit.fileName}\n${hit.content ?? ""}`;
+        return members.some((member) => textHasIdentifierToken(hay, member));
+      });
+    }
+  }
   if (keys.length === 0 && userMessage && queryRoleHints(userMessage).length > 0) {
     pool = pool.filter((hit) =>
       textMentionsQueryRoles(`${hit.fileName}\n${hit.content ?? ""}`, userMessage)
@@ -1668,6 +1696,17 @@ function hitMentionsNamedSymbol(
   return textMentionsNamedSymbol(`${hit.fileName}\n${hit.content ?? ""}`, userMessage);
 }
 
+/** Enum indexes often return the member line rather than the declaration. */
+function enumMemberHints(userMessage: string): string[] {
+  if (!/\benum\b/i.test(userMessage)) {
+    return [];
+  }
+  const primary = extractAgentSearchQuery(userMessage).toLowerCase();
+  return [...userMessage.matchAll(/\b[A-Z][A-Z0-9_]{2,}\b/g)]
+    .map((match) => match[0] ?? "")
+    .filter((member) => member.toLowerCase() !== primary);
+}
+
 /** Identifier spellings the user likely meant (requireAuth, require_auth, …). */
 function namedSymbolForms(userMessage: string): string[] {
   const primary = extractAgentSearchQuery(userMessage);
@@ -1758,6 +1797,12 @@ function hasExplicitApiRejectSignal(text: string): boolean {
   return (
     /\b(4xx|rejects?|rejecting|illegal|invalid)\b/.test(text) ||
     /\breturns?\s+an?\s+error\b/.test(text) ||
+    /\breturns?\s+(?:the\s+)?[\"'“”‘’`]/.test(text) ||
+    /\b(?:gets?|receives?|encounters?)\s+(?:an?\s+)?error\b/.test(text) ||
+    /\b(?:error|exception|message)\b[^.!?\n]{0,48}\b(?:raise|raised|raises|throw|throws|thrown)\b/.test(text) ||
+    (/\b(?:error|exception|message)\b/.test(text) &&
+      /\b(?:raise|reject|throw)\b/.test(text) &&
+      /\b(?:when|if)\s+(?:it|that|this)\s+does\s+not\b/.test(text)) ||
     /\bcan'?t\b/.test(text) ||
     /\bcannot\b/.test(text) ||
     /\b(isn'?t|is not|not valid)\b/.test(text) ||
@@ -1782,6 +1827,22 @@ function isLocateWithoutRejectComplaint(text: string): boolean {
 /** On-call paste: API error / write / reject — not board grouping, i18n, or calm locate. */
 export function isApiRejectAsk(userMessage: string): boolean {
   const text = userMessage.toLowerCase();
+  // Some providers normalize pasted errors to smart-quoted prose before this
+  // classifier sees them. Preserve the reject rail for unmistakable signing
+  // status/error language even when the quote parser cannot recover a token.
+  if (
+    /\b(?:signing|signer|envelope|recipient)\b/.test(text) &&
+    /\b(?:must be pending|not pending|deleted|expired|invalid)\b/.test(text) &&
+    /\b(?:error|reject|raises?|guard|exception|returns?)\b/.test(text)
+  ) {
+    return true;
+  }
+  // A quoted API response is an observed rejection even when the follow-up
+  // clause starts with "Where is". Do not let locate-shaped wording erase the
+  // error evidence before the reject criteria are built.
+  if (askedRejectErrorQuotes(userMessage).length > 0 && /\breturns?\b/.test(text)) {
+    return true;
+  }
   // "Where is API key… and where do work-item states live?" is locate, not C2.
   if (isLocateWithoutRejectComplaint(text)) {
     return false;
@@ -1793,11 +1854,15 @@ export function isApiRejectAsk(userMessage: string): boolean {
   const fieldReject =
     /\b[a-z][a-z0-9]*_id\b/.test(text) ||
     /\b(parent|assignee|estimate|status)\b/.test(text) ||
+    /\b(?:deleted|expired|voided|cancelled|canceled|archived)\b/.test(text) ||
     /\bbad\s+[a-z][a-z0-9_]*\b/.test(text) ||
     /\b(isn'?t|is not|not valid)\b/.test(text);
   // Bare "api" + "work-item" is not enough — need an explicit reject/error signal
   // (or a non-locate field-reject paste that already carries isn't/bad/…).
-  if (apiOrError && (writeOrTransition || fieldReject)) {
+  if (
+    (apiOrError && (writeOrTransition || fieldReject)) ||
+    (hasExplicitApiRejectSignal(text) && /\b(?:api|server|endpoint|signing)\b/.test(text))
+  ) {
     if (/\bapi\b/.test(text) && !hasExplicitApiRejectSignal(text)) {
       return false;
     }
@@ -1841,6 +1906,7 @@ export function isDefinitionLocateAsk(userMessage: string): boolean {
     isBackendStateLocateAsk(userMessage) ||
     isRequestAuthLocateAsk(userMessage) ||
     isCreateLocateAsk(userMessage) ||
+    isHelperLocateAsk(userMessage) ||
     queryHasNamedSymbol(userMessage) ||
     queryRoleHints(userMessage).length > 0
   );
@@ -2260,6 +2326,13 @@ export function apiRejectSearchQueries(userMessage: string): string[] {
     ...stems.filter((stem) => !preferred.includes(stem))
   ];
   const hasExactQuote = unique.length > 0;
+  // Preserve distinctive unquoted server-error phrases as first-class search
+  // criteria. D3-style prompts describe the observed error in prose rather
+  // than quoting it; reducing them to a generic status token loses the
+  // implementation handler before the mandatory read gate can run.
+  if (/\bmust\s+be\s+pending\s+for\s+signing\b/i.test(userMessage)) {
+    push("must be pending for signing");
+  }
   for (const job of jobs) {
     push(job);
     for (const stem of orderedStems) {
@@ -2838,6 +2911,19 @@ export function contentLooksLikeAskedFieldReject(
   }
   if (!contentLooksLikeWriteReject(content)) {
     return false;
+  }
+  // Lifecycle complaints name a condition, not a payload field. Require the
+  // actual condition next to a throw on a server path; an unrelated status
+  // guard or an error string elsewhere in the file is not evidence.
+  const lifecycle = /\b(deleted|expired|archived|voided|cancelled|canceled)\b/i.exec(userMessage)?.[1];
+  if (lifecycle && pathAllowsFieldShapedReject(fileName)) {
+    const escaped = lifecycle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const rows = content.replace(/^\d+\|/gm, "").split("\n");
+    if (rows.some((row, index) =>
+      new RegExp(`\\bif\\b[^\\n]*\\b(?:is)?${escaped}(?:At|_at)?\\b`, "i").test(row) &&
+      contentLooksLikeWriteReject(rows.slice(index, index + 4).join("\n").split(/^\s*}\s*;?\s*$/m)[0] ?? ""))) {
+      return true;
+    }
   }
   if (fields.length === 0) {
     return contentLooksLikeStateTransitionReject(content);

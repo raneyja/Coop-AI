@@ -37,7 +37,16 @@ export class IndexedRepoWorkspace {
   public async findFiles(
     target: RepoTarget,
     query: string,
-    options?: { limit?: number; acceptPath?: (path: string) => boolean; rankPaths?: (paths: string[]) => string[]; onDiagnostic?: (event: Record<string, unknown>) => void }
+    options?: {
+      limit?: number;
+      acceptPath?: (path: string) => boolean;
+      /** Tell the cloud filename search to exclude UI paths and widen via the tree fallback. */
+      excludeClientUi?: boolean;
+      rankPaths?: (paths: string[]) => string[];
+      /** Augment non-empty indexed matches when task evidence needs a wider host filename pool. */
+      augmentFromCodeHost?: boolean;
+      onDiagnostic?: (event: Record<string, unknown>) => void;
+    }
   ): Promise<Array<{ path: string; name: string }> | undefined> {
     const identity = this.getIdentity(target);
     if (!identity || !identity.branch?.trim() || !query.trim()) {
@@ -53,18 +62,135 @@ export class IndexedRepoWorkspace {
         this.fileMaps.set(key, pending);
       }
       const map = await pending;
+      const fallbackToCodeHost = async (reason: string): Promise<Array<{ path: string; name: string }> | undefined> => {
+        options?.onDiagnostic?.({
+          stage: "indexed-map-fallback",
+          requestedRepoId: identity.repoId,
+          requestedBranch: identity.branch,
+          responseRepoId: map?.repoId,
+          responseIndexedBranch: map?.indexedBranch,
+          responseIndexedCommit: map?.indexedCommit,
+          responseStale: map?.stale,
+          responseHasDataArray: Array.isArray(map?.data),
+          responseFileCount: Array.isArray(map?.data) ? map.data.length : undefined,
+          status: undefined,
+          fallbackReason: reason
+        });
+        // The index map is the preferred filename source, but a stale map must
+        // not turn a server-side locate into a one-search miss. The same
+        // branch-bound fallback is also required when the map response has
+        // usable file data but omits branch metadata.
+        const coordinates = resolveInventoryRepoIds(identity.repoId, identity).coords;
+        if (!coordinates) {
+          return undefined;
+        }
+        try {
+          // Task-specific ranking happens after filename discovery. Request a
+          // wider host pool first so unrelated sign-in/sign-out or infrastructure
+          // files cannot hide the actual operation before that ranking runs.
+          const fallbackLimit = Math.max(options?.limit ?? 20, 100);
+          const normalizedFilenameQuery = query.replace(/[.]+$/g, "").trim();
+          const augmentationQueries = options?.augmentFromCodeHost
+            ? [...new Set([
+                normalizedFilenameQuery,
+                ...(normalizedFilenameQuery.toLowerCase().match(/[a-z][a-z0-9]*/g) ?? [])
+                  .filter((word) => word.length >= 4 && !new Set(["must", "with", "that", "where", "does", "this", "from", "signer", "document", "pending"]).has(word))
+                  .flatMap((word) => [word, word.replace(/(?:ing|ed|er)$/, "")])
+              ])].slice(0, 5)
+            : [normalizedFilenameQuery];
+          const fallbackHits = (await Promise.all(augmentationQueries.map((candidate) =>
+            this.deps.codeHostRouter.searchRepositoryFiles(candidate, coordinates, fallbackLimit, {
+              excludeClientUi: options?.excludeClientUi
+            })
+          ))).flat();
+          const paths = [...new Set(fallbackHits.map((file) => file.path))]
+            .filter((path) => typeof path === "string" && Boolean(path.trim()))
+            .filter((path) => !options?.acceptPath || options.acceptPath(path));
+          const matches = rankExplorerFilePaths(paths, query, paths.length);
+          return (options?.rankPaths ? options.rankPaths(matches) : matches)
+            .slice(0, Math.max(1, Math.min(100, options?.limit ?? 20)))
+            .map((path) => ({ path, name: path.split("/").pop() ?? path }));
+        } catch (error) {
+          const details = error as Error & { code?: unknown; status?: unknown; response?: { status?: unknown } };
+          options?.onDiagnostic?.({
+            stage: "code-host-filename-fallback",
+            outcome: "error",
+            errorName: error instanceof Error ? error.name : undefined,
+            errorMessage: error instanceof Error ? error.message : String(error),
+            errorCode: typeof details.code === "string" ? details.code : undefined,
+            errorStatus: typeof details.status === "number"
+              ? details.status
+              : typeof details.response?.status === "number" ? details.response.status : undefined
+          });
+          return undefined;
+        }
+      };
+      // A same-repo legacy map without ref metadata is a filename lead, never
+      // source evidence or inventory for the selected branch. Read every lead
+      // through readFile(target, path) before answering. Do not spend the entire
+      // interactive budget walking folders when useful paths already exist.
+      if (map?.repoId === identity.repoId && !map.indexedBranch && !map.stale && Array.isArray(map.data)) {
+        const paths = [...new Set(map.data.map(file => file.path))]
+          .filter(path => typeof path === "string" && Boolean(path.trim()))
+          .filter(path => !options?.acceptPath || options.acceptPath(path));
+        const matches = rankExplorerFilePaths(paths, query, paths.length);
+        const ranked = options?.rankPaths ? options.rankPaths(matches) : matches;
+        if (ranked.length) {
+          options?.onDiagnostic?.({ stage: "indexed-map-leads", requestedRepoId: identity.repoId,
+            requestedBranch: identity.branch, provenance: "unverified-ref-paths", pathCount: ranked.length });
+          return ranked.slice(0, Math.max(1, Math.min(100, options?.limit ?? 20)))
+            .map(path => ({path, name: path.split("/").pop() ?? path}));
+        }
+      }
       if (!map || map.repoId !== identity.repoId || !map.indexedBranch ||
-          (identity.branch && map.indexedBranch !== identity.branch) || map.stale) {
-        return undefined;
+          (identity.branch && map.indexedBranch !== identity.branch)) {
+        const fallbackReason = !map
+          ? "map_unavailable"
+          : map.repoId !== identity.repoId
+            ? "response_repo_mismatch"
+            : !map.indexedBranch
+              ? "response_branch_metadata_missing"
+              : "response_branch_mismatch";
+        return fallbackToCodeHost(fallbackReason);
+      }
+      if (map.stale) {
+        return fallbackToCodeHost("response_stale");
       }
       const paths = [...new Set(map.data.map((file) => file.path)
         .filter((path) => typeof path === "string" && Boolean(path.trim())))]
         .filter((path) => !options?.acceptPath || options.acceptPath(path));
       const limit = Math.max(1, Math.min(100, options?.limit ?? 20));
       const matches = rankExplorerFilePaths(paths, query, paths.length);
+      if (matches.length === 0) {
+        // A map can be valid for the requested branch and still be partial or
+        // older than the source tree. An empty map match is not proof that the
+        // file does not exist; give the live branch-bound host/tree search a
+        // chance before returning no candidate to the agent.
+        return (await fallbackToCodeHost("no_filename_matches")) ?? [];
+      }
+      if (options?.augmentFromCodeHost) {
+        const liveMatches = await fallbackToCodeHost("augment_nonempty_map");
+        if (liveMatches?.length) {
+          const merged = [...new Set([...matches, ...liveMatches.map((file) => file.path)])];
+          const ranked = options.rankPaths ? options.rankPaths(merged) : rankExplorerFilePaths(merged, query, merged.length);
+          return ranked.slice(0, limit)
+            .map((path) => ({ path, name: path.split("/").pop() ?? path }));
+        }
+      }
       return (options?.rankPaths ? options.rankPaths(matches) : matches).slice(0, limit)
         .map((path) => ({ path, name: path.split("/").pop() ?? path }));
-    } catch {
+    } catch (error) {
+      const details = error as Error & { code?: unknown; status?: unknown; response?: { status?: unknown } };
+      options?.onDiagnostic?.({
+        stage: "indexed-workspace",
+        outcome: "error",
+        errorName: error instanceof Error ? error.name : undefined,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorCode: typeof details.code === "string" ? details.code : undefined,
+        errorStatus: typeof details.status === "number"
+          ? details.status
+          : typeof details.response?.status === "number" ? details.response.status : undefined
+      });
       return undefined;
     }
   }
