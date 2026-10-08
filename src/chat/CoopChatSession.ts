@@ -1464,6 +1464,37 @@ export class CoopChatSession {
   }
 
   /**
+   * A user Stop is a routing boundary. Clear state that belongs only to the
+   * interrupted turn so the next plain send cannot reuse its integrations,
+   * attachments, mentions, or planner mode.
+   */
+  private clearCancelledTurnState(threadId: string): void {
+    if (threadId !== this.activeThreadId()) {
+      return;
+    }
+    this.lastContextBundle = [];
+    this.lastTraceDecisionTimeline = undefined;
+    this.pendingChatLocalFiles = undefined;
+    this.pendingChatAttachFullFile = false;
+    this.pendingChatMentions = undefined;
+    this.pendingQuickActionSuggest = undefined;
+    this.pendingCodeEditIntent = false;
+    this.pendingDualRepoCompare = undefined;
+    this.pendingEvidenceArtifactId = undefined;
+    this.lastJobResult = undefined;
+    this.turnStreamAbort = undefined;
+    this.turnAgentAction = "none";
+    this.turnAllowsRepoTools = true;
+    this.activityFeedbackThreadId = undefined;
+    this.lastActivityMessagesByThread?.delete(threadId);
+    for (const key of [...(this.chatDeliverableNarrative?.keys() ?? [])]) {
+      if (key.startsWith(`${threadId}:`)) {
+        this.chatDeliverableNarrative?.delete(key);
+      }
+    }
+  }
+
+  /**
    * User Stop: abort the turn, clear thinking/job activity, and land a Cursor-style
    * "Stopped." message (or keep any partial assistant text).
    */
@@ -1488,6 +1519,7 @@ export class CoopChatSession {
 
     this.abortActiveJob(threadId);
     this.threadRuns.abort(threadId);
+    this.clearCancelledTurnState(threadId);
     this.clearIntentFeedback(threadId);
 
     if (jobId) {
@@ -1505,16 +1537,15 @@ export class CoopChatSession {
       );
     }
 
-    const stoppedMessage: ChatMessage = attachChatTurnActivity(
-      {
-        role: "assistant",
-        cancelled: true,
-        content: partialText || CHAT_STOPPED_MESSAGE,
-        timestamp: Date.now(),
-        links: []
-      },
-      turn
-    );
+    // Canceled integration/search activity is not evidence for the stopped
+    // placeholder and must not appear beneath the next plain exchange.
+    const stoppedMessage: ChatMessage = {
+      role: "assistant",
+      cancelled: true,
+      content: partialText || CHAT_STOPPED_MESSAGE,
+      timestamp: Date.now(),
+      links: []
+    };
 
     if (history) {
       history.push(stoppedMessage);
