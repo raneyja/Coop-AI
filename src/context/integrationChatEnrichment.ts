@@ -71,6 +71,8 @@ type IntegrationEnrichmentOptions = {
   /** Fired when a real integration fetch starts/finishes — drives thinking UI. */
   onToolActivity?: (event: IntegrationToolActivityEvent) => void;
   onDiagnostic?: (event: Record<string, unknown>) => void;
+  /** Owning chat turn signal; integration clients must stop on user Stop. */
+  signal?: AbortSignal;
   deps?: Partial<IntegrationChatEnrichmentDeps>;
   budgetMs?: number;
 };
@@ -229,6 +231,10 @@ async function enrichIntegrationStages(
     if (!enabled) {
       return undefined;
     }
+    if (options.signal?.aborted) {
+      notify(tool, "skipped", { query });
+      return undefined;
+    }
     const remainingMs = deadlineAt === undefined ? undefined : Math.max(0, deadlineAt - Date.now());
     if (remainingMs !== undefined && remainingMs <= 0) {
       notify(tool, "skipped", { query });
@@ -254,6 +260,11 @@ async function enrichIntegrationStages(
     }
     if (outcome.kind === "timeout") {
       notify(tool, "timed-out", { query });
+      return undefined;
+    }
+    // A user Stop is a hard evidence boundary. Do not publish a late provider
+    // result or its completion activity into the next turn.
+    if (options.signal?.aborted) {
       return undefined;
     }
     if (outcome.kind === "error") {
@@ -328,7 +339,8 @@ async function enrichIntegrationStages(
             extraTerms: termsFor("confluence"),
             jobScoped: true,
             jobVerb: verbFor("confluence"),
-            integrationScope: options.integrationScopes?.atlassian
+            integrationScope: options.integrationScopes?.atlassian,
+            signal: options.signal
           }),
         activityQueryForTerms(termsFor("confluence"), "confluence")
       ),
@@ -344,7 +356,8 @@ async function enrichIntegrationStages(
             jobScoped: true,
             jobVerb: verbFor("notion"),
             integrationScope: options.integrationScopes?.notion,
-            deadlineAt
+            deadlineAt,
+            signal: options.signal
           }),
         activityQueryForTerms(termsFor("notion"), "notion")
       ),
@@ -361,7 +374,8 @@ async function enrichIntegrationStages(
             preferHost: options.codeHostProvider,
             codeHostRouter: options.codeHostRouter,
             codeHostConnected: options.codeHostConnected,
-            integrationScope: options.integrationScopes?.atlassian
+            integrationScope: options.integrationScopes?.atlassian,
+            signal: options.signal
           }),
         activityQueryForTerms(termsFor("jira"), "jira")
       ),
@@ -380,7 +394,8 @@ async function enrichIntegrationStages(
             extraTerms: termsFor("google-docs"),
             jobScoped: true,
             jobVerb: verbFor("google-docs"),
-            integrationScope: options.integrationScopes?.["google-docs"]
+            integrationScope: options.integrationScopes?.["google-docs"],
+            signal: options.signal
           }),
         activityQueryForTerms(termsFor("google-docs"), "google-docs")
       ),
@@ -395,7 +410,8 @@ async function enrichIntegrationStages(
             jobScoped: true,
             jobVerb: verbFor("slack"),
             preferHost: options.codeHostProvider,
-            integrationScope: options.integrationScopes?.slack
+            integrationScope: options.integrationScopes?.slack,
+            signal: options.signal
           }),
         activityQueryForTerms(termsFor("slack"), "slack")
       ),
@@ -410,7 +426,8 @@ async function enrichIntegrationStages(
             jobScoped: true,
             jobVerb: verbFor("teams"),
             preferHost: options.codeHostProvider,
-            integrationScope: options.integrationScopes?.teams
+            integrationScope: options.integrationScopes?.teams,
+            signal: options.signal
           }),
         activityQueryForTerms(termsFor("teams"), "teams")
       ),
@@ -463,7 +480,8 @@ async function enrichIntegrationStages(
         repo: options.repo,
         extraTerms: termsFor("confluence"),
         openAfterHit,
-        integrationScope: options.integrationScopes?.atlassian
+        integrationScope: options.integrationScopes?.atlassian,
+        signal: options.signal
       })
     ),
     runTool("notion", shouldFetchNotion, () =>
@@ -474,7 +492,8 @@ async function enrichIntegrationStages(
         extraTerms: termsFor("notion"),
         openAfterHit,
         integrationScope: options.integrationScopes?.notion,
-        deadlineAt
+        deadlineAt,
+        signal: options.signal
       })
     )
   ]);
@@ -502,7 +521,8 @@ async function enrichIntegrationStages(
         preferHost: options.codeHostProvider,
         codeHostRouter: options.codeHostRouter,
         codeHostConnected: options.codeHostConnected,
-        integrationScope: options.integrationScopes?.atlassian
+        integrationScope: options.integrationScopes?.atlassian,
+        signal: options.signal
       })
     ),
     runTool("google-docs", shouldFetchGoogleDocs, () =>
@@ -512,7 +532,8 @@ async function enrichIntegrationStages(
         crossToolText: crossToolKeys,
         extraTerms: docExtraTerms,
         openAfterHit,
-        integrationScope: options.integrationScopes?.["google-docs"]
+        integrationScope: options.integrationScopes?.["google-docs"],
+        signal: options.signal
       })
     )
   ]);
@@ -538,7 +559,8 @@ async function enrichIntegrationStages(
         crossToolText: crossToolKeys,
         preferHost: options.codeHostProvider,
         jiraIssueKeys,
-        integrationScope: options.integrationScopes?.slack
+        integrationScope: options.integrationScopes?.slack,
+        signal: options.signal
       })
     ),
     runTool("teams", shouldFetchTeams, () =>
@@ -551,7 +573,8 @@ async function enrichIntegrationStages(
         crossToolText: crossToolKeys,
         preferHost: options.codeHostProvider,
         jiraIssueKeys,
-        integrationScope: options.integrationScopes?.teams
+        integrationScope: options.integrationScopes?.teams,
+        signal: options.signal
       })
     )
   ]);

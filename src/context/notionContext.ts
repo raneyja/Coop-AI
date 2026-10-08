@@ -29,6 +29,8 @@ export type NotionSearchPage = {
   excerpt?: string;
   updated: string;
   htmlUrl: string;
+  /** Retained so Choose Open can re-check resource scope before reading blocks. */
+  parentId?: string;
   /** Hint for Choose Open — not a rank picker. */
   titleMatchHint?: boolean;
   /** True after an Open attempt (body may still be missing). */
@@ -121,10 +123,14 @@ export async function fetchNotionSearchContext(options: {
     new NotionClient({ token: creds.notionToken!, signal: options.signal });
   const existingPages = pagesFromExistingHits(options.existingHits);
   if (options.openIds?.length && existingPages.length > 0) {
-    const pages = await attachNotionPageBodies(client, existingPages, {
+    const pages = await attachNotionPageBodies(
+      client,
+      filterScopedNotionPages(existingPages, options.integrationScope),
+      {
       jobScoped: false,
       openIds: options.openIds
-    });
+      }
+    );
     return { source: "notion-search", query: "", pages };
   }
 
@@ -411,7 +417,13 @@ function filterScopedNotionPages(
     integrationScope?.enforced && resourceIds.length > 0
       ? filterNotionPagesByScope(pages, new Set(resourceIds))
       : pages;
-  return scoped.map(({ id, title, updated, htmlUrl }) => ({ id, title, updated, htmlUrl }));
+  return scoped.map(({ id, title, updated, htmlUrl, parentId }) => ({
+    id,
+    title,
+    updated,
+    htmlUrl,
+    parentId
+  }));
 }
 
 function notionLatestAllowlisted(scope: ResolvedIntegrationScope | undefined): boolean {

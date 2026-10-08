@@ -18,6 +18,16 @@ test("isGoogleDocsScopeBlocked is false when scope is not enforced", () => {
   assert.equal(isGoogleDocsScopeBlocked(scope), false);
 });
 
+test("isGoogleDocsScopeBlocked fails closed when enforced scope has no folders", () => {
+  assert.equal(isGoogleDocsScopeBlocked({
+    provider: "google-docs",
+    enforced: true,
+    allowed: true,
+    scopeStatus: "active",
+    googleDocs: { folderIds: [], folderNames: [], folderKinds: [], expandedFolderIds: [] }
+  }), true);
+});
+
 test("buildDriveParentsClause handles single and multiple folders", () => {
   assert.equal(buildDriveParentsClause(["folder-a"]), "'folder-a' in parents");
   assert.equal(

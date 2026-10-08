@@ -28,6 +28,16 @@ test("isNotionScopeBlocked is true when enforced and not allowed", () => {
   assert.equal(isNotionScopeBlocked(scope), true);
 });
 
+test("isNotionScopeBlocked fails closed when enforced scope has no resources", () => {
+  assert.equal(isNotionScopeBlocked({
+    provider: "notion",
+    enforced: true,
+    allowed: true,
+    scopeStatus: "active",
+    notion: { resourceIds: [], resourceNames: [] }
+  }), true);
+});
+
 test("notionScopeBlockMessage prefers scope reason", () => {
   const scope: ResolvedIntegrationScope = {
     provider: "notion",

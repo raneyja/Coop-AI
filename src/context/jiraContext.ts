@@ -539,10 +539,14 @@ export async function fetchJiraSearchContext(options: {
 
   const existingIssues = (options.existingHits?.issues ?? []) as JiraSearchTicket[];
   if (options.openIds?.length && existingIssues.length > 0) {
+    const scopedExistingIssues = filterScopedIssues(existingIssues, options.integrationScope);
     return {
       source: "jira-search",
       jql: "",
-      issues: await openJiraSearchHitBodies(client, existingIssues, options.openIds)
+      issues: await openJiraSearchHitBodies(client, scopedExistingIssues, options.openIds),
+      ...(scopedExistingIssues.length === 0 && options.integrationScope?.enforced
+        ? { error: "The selected Jira ticket is outside the allowed project scope." }
+        : {})
     };
   }
 

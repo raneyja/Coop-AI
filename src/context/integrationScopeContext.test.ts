@@ -7,6 +7,8 @@ import { fetchConfluenceSearchContext } from "./confluenceContext";
 import { fetchGoogleDocsSearchContext } from "./googleDocsContext";
 import { fetchJiraSearchContext } from "./jiraContext";
 import { fetchNotionSearchContext } from "./notionContext";
+import { fetchSlackSearchContext } from "./slackContext";
+import { fetchTeamsSearchContext } from "./teamsContext";
 
 const emptySecrets = {
   getCredentials: async () => ({})
@@ -239,4 +241,133 @@ test("fetchGoogleDocsSearchContext blocks when google docs scope is not allowed"
   });
   assert.equal(result.documents.length, 0);
   assert.equal(result.error, "Google Docs scope required");
+});
+
+test("Choose Open re-applies provider scope to prior integration hits", async () => {
+  const slack = await fetchSlackSearchContext({
+    secrets: emptySecrets,
+    queryText: "decision",
+    openIds: ["C-allowed:1"],
+    existingHits: {
+      messages: [
+        { id: "C-allowed:1", channelId: "C-allowed", ts: "1", text: "allowed" },
+        { id: "C-denied:2", channelId: "C-denied", ts: "2", text: "denied" }
+      ]
+    },
+    integrationScope: {
+      provider: "slack", enforced: true, allowed: true, scopeStatus: "active",
+      slack: { channelIds: ["C-allowed"], channelNames: ["eng"] }
+    },
+    client: {
+      searchMessages: async () => [],
+      getThread: async () => ({ channelId: "C-allowed", threadTs: "1", messages: [], participants: [] })
+    }
+  });
+  assert.deepEqual(slack.messages.map((message) => message.channelId), ["C-allowed"]);
+
+  const teams = await fetchTeamsSearchContext({
+    secrets: emptySecrets,
+    queryText: "decision",
+    openIds: ["allowed"],
+    existingHits: {
+      messages: [
+        { messageId: "allowed", teamId: "T1", channelId: "CH-allowed", body: "allowed", createdAt: "" },
+        { messageId: "denied", teamId: "T1", channelId: "CH-denied", body: "denied", createdAt: "" }
+      ]
+    },
+    integrationScope: {
+      provider: "teams", enforced: true, allowed: true, scopeStatus: "active",
+      teams: { channelIds: ["CH-allowed"], channelNames: ["eng"], teamIds: ["T1"] }
+    },
+    client: { searchMessages: async () => [] }
+  });
+  assert.deepEqual(teams.messages.map((message) => message.channelId), ["CH-allowed"]);
+
+  const jira = await fetchJiraSearchContext({
+    secrets: emptySecrets,
+    queryText: "COOP-1",
+    openIds: ["COOP-1"],
+    existingHits: {
+      issues: [
+        { key: "COOP-1", summary: "allowed", status: "Done", issueType: "Task", updated: "", htmlUrl: "" },
+        { key: "OPS-1", summary: "denied", status: "Done", issueType: "Task", updated: "", htmlUrl: "" }
+      ]
+    },
+    integrationScope: {
+      provider: "atlassian", enforced: true, allowed: true, scopeStatus: "active",
+      atlassian: {
+        jiraProjectIds: ["1"], jiraProjectKeys: ["COOP"], jiraProjectNames: ["Coop"],
+        confluenceSpaceIds: [], confluenceSpaceKeys: [], confluenceSpaceNames: []
+      }
+    },
+    client: {
+      getIssue: async (key) => fakeJiraIssue(key, key),
+      searchIssues: async () => []
+    }
+  });
+  assert.deepEqual(jira.issues.map((issue) => issue.key), ["COOP-1"]);
+
+  const docs = await fetchGoogleDocsSearchContext({
+    secrets: emptySecrets,
+    queryText: "Architecture",
+    openIds: ["doc-allowed"],
+    existingHits: {
+      documents: [
+        { id: "doc-allowed", title: "allowed", updated: "", htmlUrl: "", parents: ["folder-allowed"] },
+        { id: "doc-denied", title: "denied", updated: "", htmlUrl: "", parents: ["folder-denied"] }
+      ]
+    },
+    integrationScope: {
+      provider: "google-docs", enforced: true, allowed: true, scopeStatus: "active",
+      googleDocs: { folderIds: ["folder-allowed"], folderNames: ["Fixture"], folderKinds: ["folder"], expandedFolderIds: ["folder-allowed"] }
+    },
+    client: {
+      searchDocumentsForTerms: async () => [],
+      listRecentDocuments: async () => [],
+      getDocumentPlainText: async () => "COOP_DOGFOOD_DECISION_20261003 body"
+    }
+  });
+  assert.deepEqual(docs.documents.map((document) => document.id), ["doc-allowed"]);
+  assert.match(docs.documents[0]?.excerpt ?? "", /COOP_DOGFOOD_DECISION/);
+
+  const notion = await fetchNotionSearchContext({
+    secrets: emptySecrets,
+    queryText: "decision",
+    openIds: ["page-allowed"],
+    existingHits: {
+      pages: [
+        { id: "page-allowed", title: "allowed", updated: "", htmlUrl: "", parentId: "resource-allowed" },
+        { id: "page-denied", title: "denied", updated: "", htmlUrl: "", parentId: "resource-denied" }
+      ]
+    },
+    integrationScope: {
+      provider: "notion", enforced: true, allowed: true, scopeStatus: "active",
+      notion: { resourceIds: ["resource-allowed"], resourceNames: ["Fixture"] }
+    },
+    client: {
+      searchPages: async () => [],
+      getPagePlainText: async () => "COOP_DOGFOOD_DECISION_20261003 body"
+    }
+  });
+  assert.deepEqual(notion.pages.map((page) => page.id), ["page-allowed"]);
+  assert.match(notion.pages[0]?.excerpt ?? "", /COOP_DOGFOOD_DECISION/);
+
+  const confluence = await fetchConfluenceSearchContext({
+    secrets: emptySecrets,
+    queryText: "decision",
+    openIds: ["page-allowed"],
+    existingHits: {
+      pages: [
+        { id: "page-allowed", title: "allowed", updated: "", htmlUrl: "", spaceKey: "ENG" },
+        { id: "page-denied", title: "denied", updated: "", htmlUrl: "", spaceKey: "OPS" }
+      ]
+    },
+    integrationScope: atlassianScopeNoJiraProjects,
+    client: {
+      searchPages: async () => [],
+      getPageBody: async () => "COOP_DOGFOOD_DECISION_20261003 body"
+    }
+  });
+  assert.deepEqual(confluence.pages.map((page) => page.id), ["page-allowed"]);
+  assert.match(confluence.pages[0]?.excerpt ?? "", /COOP_DOGFOOD_DECISION/);
 });

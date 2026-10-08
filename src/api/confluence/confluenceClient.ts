@@ -17,6 +17,8 @@ export type ConfluencePage = {
   excerpt?: string;
   updated: string;
   htmlUrl: string;
+  spaceId?: string;
+  spaceKey?: string;
 };
 
 export type ConfluenceSpace = {
@@ -179,6 +181,7 @@ export class ConfluenceClient {
         content?: {
           id: string;
           title?: string;
+          space?: { id?: string; key?: string };
           history?: { lastUpdated?: { when?: string } };
           _links?: { webui?: string; base?: string; self?: string };
         };
@@ -207,7 +210,9 @@ export class ConfluenceClient {
             item.lastModified ??
             content?.history?.lastUpdated?.when ??
             new Date(0).toISOString(),
-          htmlUrl: item.url ?? this.buildPageHtmlUrl(id, content?._links)
+          htmlUrl: item.url ?? this.buildPageHtmlUrl(id, content?._links),
+          spaceId: content?.space?.id,
+          spaceKey: content?.space?.key
         };
       })
       .filter((page) => page.id);

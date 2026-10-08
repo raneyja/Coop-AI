@@ -170,11 +170,24 @@ export async function fetchTeamsSearchContext(options: {
     options.client ??
     new TeamsClient({ accessToken: creds.teamsToken!, signal: options.signal });
   if (options.openIds?.length && existingMessages.length > 0) {
-    const messages = await attachTeamsThreadBodies(client, existingMessages, {
+    const scopedExistingMessages = options.integrationScope?.enforced
+      ? filterTeamsHitsByChannel(
+          existingMessages,
+          new Set(options.integrationScope.teams?.channelIds ?? [])
+        )
+      : existingMessages;
+    const messages = await attachTeamsThreadBodies(client, scopedExistingMessages, {
       jobScoped: true,
       openIds: options.openIds
     });
-    return { source: "teams-search", query, messages };
+    return {
+      source: "teams-search",
+      query,
+      messages,
+      ...(existingMessages.length > 0 && messages.length === 0 && options.integrationScope?.enforced
+        ? { error: "The selected Teams message is outside the allowed channel scope." }
+        : {})
+    };
   }
   if (!query) {
     return {

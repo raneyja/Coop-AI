@@ -4,7 +4,7 @@ export function isNotionScopeBlocked(scope: ResolvedIntegrationScope | undefined
   if (!scope?.enforced) {
     return false;
   }
-  return !scope.allowed;
+  return !scope.allowed || (scope.notion?.resourceIds.length ?? 0) === 0;
 }
 
 export function notionScopeBlockMessage(scope: ResolvedIntegrationScope | undefined): string {

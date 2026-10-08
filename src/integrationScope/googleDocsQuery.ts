@@ -4,7 +4,7 @@ export function isGoogleDocsScopeBlocked(scope: ResolvedIntegrationScope | undef
   if (!scope?.enforced) {
     return false;
   }
-  return !scope.allowed;
+  return !scope.allowed || (scope.googleDocs?.expandedFolderIds.length ?? 0) === 0;
 }
 
 export function googleDocsScopeBlockMessage(scope: ResolvedIntegrationScope | undefined): string {

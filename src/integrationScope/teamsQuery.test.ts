@@ -32,7 +32,8 @@ test("isTeamsScopeBlocked is true when enforced with no channels", () => {
 test("filterTeamsHitsByChannel keeps only allowlisted channels", () => {
   const hits = [
     { channelId: "19:one", body: "a" },
-    { channelId: "19:two", body: "b" }
+    { channelId: "19:two", body: "b" },
+    { body: "missing channel identity" }
   ];
   const filtered = filterTeamsHitsByChannel(hits, new Set(["19:one"]));
   assert.equal(filtered.length, 1);

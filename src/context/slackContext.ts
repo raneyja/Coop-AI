@@ -274,11 +274,24 @@ export async function fetchSlackSearchContext(options: {
     new SlackClient({ token: creds.slackToken!, signal: options.signal });
   const existingMessages = slackMessagesFromHits(options.existingHits);
   if (options.openIds?.length && existingMessages.length > 0) {
-    const messages = await attachSlackThreadBodies(client, existingMessages, {
+    const scopedExistingMessages = options.integrationScope?.enforced
+      ? filterSlackHitsByChannel(
+          existingMessages,
+          new Set(options.integrationScope.slack?.channelIds ?? [])
+        )
+      : existingMessages;
+    const messages = await attachSlackThreadBodies(client, scopedExistingMessages, {
       jobScoped: true,
       openIds: options.openIds
     });
-    return { source: "slack-search", query, messages };
+    return {
+      source: "slack-search",
+      query,
+      messages,
+      ...(existingMessages.length > 0 && messages.length === 0 && options.integrationScope?.enforced
+        ? { error: "The selected Slack message is outside the allowed channel scope." }
+        : {})
+    };
   }
 
   const limit = options.limit ?? 20;

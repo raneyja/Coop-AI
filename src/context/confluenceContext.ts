@@ -40,6 +40,9 @@ export type ConfluenceSearchPage = {
   excerpt?: string;
   updated: string;
   htmlUrl: string;
+  /** Retained so Choose Open can re-check Confluence space scope. */
+  spaceId?: string;
+  spaceKey?: string;
   opened?: boolean;
 };
 
@@ -76,6 +79,8 @@ export type ConfluenceSearchClient = {
     excerpt?: string;
     updated: string;
     htmlUrl: string;
+    spaceId?: string;
+    spaceKey?: string;
   }>>;
   getPageBody?(pageId: string): Promise<string | undefined>;
 };
@@ -191,11 +196,19 @@ export async function fetchConfluenceSearchContext(options: {
 
   const existingPages = (options.existingHits?.pages ?? []) as ConfluenceSearchPage[];
   if (options.openIds?.length && existingPages.length > 0) {
-    const pages = await attachConfluencePageBodies(client, existingPages, {
+    const scopedExistingPages = filterConfluencePagesByScope(existingPages, options.integrationScope);
+    const pages = await attachConfluencePageBodies(client, scopedExistingPages, {
       jobScoped: false,
       openIds: options.openIds
     });
-    return { source: "confluence-search", cql: resolvedCql, pages };
+    return {
+      source: "confluence-search",
+      cql: resolvedCql,
+      pages,
+      ...(existingPages.length > 0 && pages.length === 0 && options.integrationScope?.enforced
+        ? { error: "The selected Confluence page is outside the allowed space scope." }
+        : {})
+    };
   }
 
   try {
@@ -245,7 +258,9 @@ export async function fetchConfluenceSearchContext(options: {
         title,
         excerpt,
         updated: page.updated,
-        htmlUrl: page.htmlUrl
+        htmlUrl: page.htmlUrl,
+        spaceId: page.spaceId,
+        spaceKey: page.spaceKey
       };
     });
 
@@ -409,4 +424,22 @@ function confluenceLatestAllowlisted(scope: ResolvedIntegrationScope | undefined
       scope.allowed &&
       (scope.atlassian?.confluenceSpaceKeys.length ?? 0) > 0
   );
+}
+
+function filterConfluencePagesByScope(
+  pages: ConfluenceSearchPage[],
+  integrationScope: ResolvedIntegrationScope | undefined
+): ConfluenceSearchPage[] {
+  if (!integrationScope?.enforced) {
+    return pages;
+  }
+  const allowedIds = new Set(integrationScope.atlassian?.confluenceSpaceIds ?? []);
+  const allowedKeys = new Set(
+    (integrationScope.atlassian?.confluenceSpaceKeys ?? []).map((key) => key.toUpperCase())
+  );
+  return pages.filter((page) => {
+    const id = page.spaceId?.trim();
+    const key = page.spaceKey?.trim().toUpperCase();
+    return Boolean((id && allowedIds.has(id)) || (key && allowedKeys.has(key)));
+  });
 }

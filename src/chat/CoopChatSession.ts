@@ -5537,6 +5537,7 @@ export class CoopChatSession {
       extraSearchTerms: focusTerms.length ? focusTerms : undefined,
       jobs: request.params.intentPlan?.jobs,
       onDiagnostic: (event) => this.logAgentDiagnostic(this.activityFeedbackThreadId ?? this.activeThreadId(), event),
+      signal: ownerTurn?.streamAbort.signal,
       // Live tool lines when a fetch actually starts; durable Searched rows on done.
       onToolActivity: (toolEvent) => {
         this.applyIntegrationToolActivity(

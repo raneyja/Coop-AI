@@ -26,6 +26,6 @@ export function filterTeamsHitsByChannel<T extends { channelId?: string }>(
   }
   return hits.filter((hit) => {
     const id = hit.channelId?.trim();
-    return !id || allowedChannelIds.has(id);
+    return Boolean(id && allowedChannelIds.has(id));
   });
 }

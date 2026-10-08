@@ -569,6 +569,55 @@ test("job-scoped timeout never reports late completion", async () => {
   assert.equal(events.some((event) => /^Searched Jira/.test(event.label)), false);
 });
 
+test("an aborted turn passes its signal to integrations and drops late evidence", async () => {
+  const { enrichChatContextWithIntegrations } = require("./integrationChatEnrichment") as typeof import("./integrationChatEnrichment");
+  const controller = new AbortController();
+  let observedSignal: AbortSignal | undefined;
+  let resolveFetch: ((value: unknown) => void) | undefined;
+  const fetchPromise = new Promise<unknown>((resolve) => {
+    resolveFetch = resolve;
+  });
+  const promise = enrichChatContextWithIntegrations({
+    result: {
+      requestId: "cancelled",
+      type: "chat_context",
+      data: {},
+      fetchedAt: new Date()
+    } as ContextFetchResult,
+    request: {
+      id: "cancelled",
+      type: "chat_context",
+      params: { fetchIntegrations: ["jira"] },
+      intent: { context: { queryText: "compound ask" } }
+    } as ContextFetchRequest,
+    secrets: { getCredentials: async () => ({}) } as never,
+    codeHostRouter: {} as never,
+    integrations: { jira: true },
+    jobs: [{ capability: "decision", terms: ["auth rollback"] }],
+    signal: controller.signal,
+    deps: {
+      shouldFetchConfluenceContext: () => false,
+      shouldFetchNotionContext: () => false,
+      shouldFetchJiraContext: () => true,
+      fetchJiraSearchContext: async (options) => {
+        observedSignal = options.signal;
+        return fetchPromise as never;
+      },
+      shouldFetchSlackContext: () => false,
+      shouldFetchTeamsContext: () => false,
+      shouldFetchGoogleDocsContext: () => false,
+      shouldFetchCodeHostContext: () => false
+    }
+  });
+
+  await flushUntil(() => observedSignal !== undefined);
+  assert.equal(observedSignal, controller.signal);
+  controller.abort();
+  resolveFetch?.({ issues: [{ key: "STALE-1" }] });
+  const enriched = await promise;
+  assert.equal((enriched.data as Record<string, unknown>).jiraSearch, undefined);
+});
+
 test("job-scoped provider without a matching job does not fall back to repo terms", async () => {
   const { enrichChatContextWithIntegrations } = require("./integrationChatEnrichment") as typeof import("./integrationChatEnrichment");
   let jiraCalls = 0;

@@ -31,6 +31,8 @@ export type GoogleDocsSearchPage = {
   excerpt?: string;
   updated: string;
   htmlUrl: string;
+  /** Retained so Choose Open can re-check folder scope before exporting a body. */
+  parents?: string[];
   opened?: boolean;
 };
 
@@ -171,11 +173,24 @@ export async function fetchGoogleDocsSearchContext(options: {
     new GoogleDocsClient({ accessToken: creds.googleDocsToken!, signal: options.signal });
   const existingDocs = (options.existingHits?.documents ?? []) as GoogleDocsSearchPage[];
   if (options.openIds?.length && existingDocs.length > 0) {
-    const documents = await attachGoogleDocBodies(client, existingDocs, {
+    const scopedExistingDocs = options.integrationScope?.enforced
+      ? filterGoogleDocsHitsByFolder(
+          existingDocs,
+          new Set(options.integrationScope.googleDocs?.expandedFolderIds ?? [])
+        )
+      : existingDocs;
+    const documents = await attachGoogleDocBodies(client, scopedExistingDocs, {
       jobScoped: false,
       openIds: options.openIds
     });
-    return { source: "google-docs-search", query: "", documents };
+    return {
+      source: "google-docs-search",
+      query: "",
+      documents,
+      ...(existingDocs.length > 0 && documents.length === 0 && options.integrationScope?.enforced
+        ? { error: "The selected Google document is outside the allowed folder scope." }
+        : {})
+    };
   }
   const driveScope =
     options.integrationScope?.enforced && options.integrationScope.googleDocs
@@ -379,6 +394,7 @@ function stripGoogleDocParents(doc: {
     id: doc.id,
     title: doc.title,
     updated: doc.updated,
-    htmlUrl: doc.htmlUrl
+    htmlUrl: doc.htmlUrl,
+    parents: doc.parents
   };
 }
