@@ -112,7 +112,13 @@ export async function loadUserPinnedPromptIds(
   if (!Array.isArray(raw)) {
     return [];
   }
-  return raw.filter((id): id is string => typeof id === "string");
+  // Treat persisted state as untrusted: older versions and manual state edits
+  // can contain duplicates or more than the UI's top-five limit. Normalizing on
+  // read keeps every caller (including reload/broadcast) within the same bound.
+  return [...new Set(raw.filter((id): id is string => {
+    return typeof id === "string" && id.trim().length > 0;
+  }))]
+    .slice(0, MAX_PINNED_PROMPTS);
 }
 
 export async function saveUserPinnedPromptIds(

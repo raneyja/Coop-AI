@@ -82,6 +82,18 @@ await test("pins do not leak across accounts", async () => {
   assert.deepEqual(await loadUserPinnedPromptIds(store, ""), []);
 });
 
+await test("persisted pins are deduplicated and capped on reload", async () => {
+  const store = new MemoryMemento({
+    [promptLibraryPinnedStorageKey("alice@coop-ai.dev") as string]: [
+      "p1", "p1", "p2", "p3", "p4", "p5", "p6"
+    ]
+  });
+  assert.deepEqual(
+    await loadUserPinnedPromptIds(store, "alice@coop-ai.dev"),
+    ["p1", "p2", "p3", "p4", "p5"]
+  );
+});
+
 await test("signed-out save is refused", async () => {
   const store = new MemoryMemento();
   await assert.rejects(
