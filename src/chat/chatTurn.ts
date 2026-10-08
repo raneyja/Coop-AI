@@ -3,6 +3,7 @@ import type { ContextFetchResult } from "../context/requestBatcher";
 import type { DecisionTimeline } from "../types/decisionTimeline";
 import { scheduleResponseDeadline } from "../config/responseDeadline";
 import type { ChatIntentPlan } from "./intentPlanner/types";
+import type { LocalFileContextPayload } from "../context/localFileContext";
 
 /** Synthetic id for editor panels that do not use ChatThreadStore. */
 export const SESSION_RUN_THREAD_ID = "session";
@@ -50,6 +51,9 @@ export type ChatTurn = {
   pendingEvidenceArtifactId?: string;
   lastTraceTimeline?: DecisionTimeline;
   pendingMentions?: import("./types").ChatFileMention[];
+  /** Send-time attachment snapshot; never read another turn's mutable mirror. */
+  pendingLocalFiles?: LocalFileContextPayload;
+  attachFullFile: boolean;
   codeEditIntent: boolean;
   agentAction?: import("./repoCodeIntent").RepoCodeAction;
   allowsRepoTools?: boolean;
@@ -82,6 +86,8 @@ export type BeginChatTurnInput = {
   quickAction?: string;
   intentPlan: ChatIntentPlan;
   pendingMentions?: import("./types").ChatFileMention[];
+  pendingLocalFiles?: LocalFileContextPayload;
+  attachFullFile?: boolean;
   codeEditIntent?: boolean;
   dualRepoCompare?: import("../context/dualRepoCompare").DualRepoComparePlan;
 };
@@ -145,6 +151,8 @@ export class ThreadRunManager {
       streamGeneration,
       partialAssistant: "",
       pendingMentions: input.pendingMentions,
+      pendingLocalFiles: input.pendingLocalFiles,
+      attachFullFile: Boolean(input.attachFullFile),
       codeEditIntent: Boolean(input.codeEditIntent)
     };
     this.runs.set(input.threadId, turn);

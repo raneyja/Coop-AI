@@ -703,7 +703,11 @@ export class CoopChatSession {
   private readonly lastActivityMessagesByThread = new Map<string, string[]>();
   /** Thread receiving live tool activity during enrich (including quiet /gaps gather). */
   private activityFeedbackThreadId?: string;
+  /** Exact turn receiving live tool activity; thread ID alone is not a fence. */
+  private activityFeedbackTurnId?: string;
   private lastContextBundle: ContextFetchResult[] = [];
+  /** Turn currently borrowing the legacy session-level evidence mirrors. */
+  private sessionMirrorTurnId?: string;
   private lastTraceDecisionTimeline?: DecisionTimeline;
   private pendingEvidenceArtifactId?: string;
   /**
@@ -1431,6 +1435,23 @@ export class CoopChatSession {
     return this.activeThreadId() === threadId;
   }
 
+  /** Resolve the exact turn that owns a context request, if it is still live. */
+  private turnForContextRequest(request: ContextFetchRequest): ChatTurn | undefined {
+    const threadId = typeof request.params.threadId === "string" ? request.params.threadId : undefined;
+    const turnId = typeof request.params.turnId === "string" ? request.params.turnId : undefined;
+    if (!threadId || !turnId) {
+      return undefined;
+    }
+    const turn = this.threadRuns.get(threadId);
+    return turn?.id === turnId && this.threadRuns.isStreamActive(turn) ? turn : undefined;
+  }
+
+  private activityTurnForRequest(request: ContextFetchRequest): ChatTurn | null | undefined {
+    const owned = Boolean(request.params.threadId && request.params.turnId);
+    const turn = this.turnForContextRequest(request);
+    return owned && !turn ? null : turn;
+  }
+
   /** Post to the webview only when the user is viewing that thread. */
   private postForThread(threadId: string, message: WebviewOutbound): void {
     if (!this.isViewingThread(threadId)) {
@@ -1473,6 +1494,7 @@ export class CoopChatSession {
       return;
     }
     this.lastContextBundle = [];
+    this.sessionMirrorTurnId = undefined;
     this.lastTraceDecisionTimeline = undefined;
     this.pendingChatLocalFiles = undefined;
     this.pendingChatAttachFullFile = false;
@@ -1486,6 +1508,7 @@ export class CoopChatSession {
     this.turnAgentAction = "none";
     this.turnAllowsRepoTools = true;
     this.activityFeedbackThreadId = undefined;
+    this.activityFeedbackTurnId = undefined;
     this.lastActivityMessagesByThread?.delete(threadId);
     for (const key of [...(this.chatDeliverableNarrative?.keys() ?? [])]) {
       if (key.startsWith(`${threadId}:`)) {
@@ -3323,7 +3346,9 @@ export class CoopChatSession {
     const turn = options.turn;
     const feedbackThreadId = turn?.threadId;
     const previousActivityThread = this.activityFeedbackThreadId;
+    const previousActivityTurn = this.activityFeedbackTurnId;
     this.activityFeedbackThreadId = feedbackThreadId ?? this.activeThreadId();
+    this.activityFeedbackTurnId = turn?.id;
 
     if (!options.quiet) {
       if (feedbackThreadId) {
@@ -3357,7 +3382,15 @@ export class CoopChatSession {
         params: {
           ...request.params,
           ...(request.params.quickAction === "blast-radius" ? { gatherStartedAt } : {}),
-          ...(turn ? { intentPlan: turn.intentPlan, gatherStartedAt, dualRepoCompare: turn.dualRepoCompare } : {})
+          ...(turn ? {
+            intentPlan: turn.intentPlan,
+            gatherStartedAt,
+            dualRepoCompare: turn.dualRepoCompare,
+            threadId: turn.threadId,
+            turnId: turn.id,
+            codeEditIntent: turn.codeEditIntent,
+            mentions: turn.pendingMentions
+          } : {})
         }
       };
     });
@@ -3382,7 +3415,8 @@ export class CoopChatSession {
                 data: {},
                 fetchedAt: new Date()
               },
-              primaryRequest
+              primaryRequest,
+              this.activityTurnForRequest(primaryRequest)
             )
           ]).then(([baseResults, integrationResult]) =>
             enrichIntentFetchResultsOnce({
@@ -3394,8 +3428,16 @@ export class CoopChatSession {
         : await enrichIntentFetchResultsOnce({
             requests,
             results: await basePromise,
-            enrich: (result, request) => this.enrichChatContextWithIntegrations(result, request)
+            enrich: (result, request) =>
+              this.enrichChatContextWithIntegrations(
+                result,
+                request,
+                this.activityTurnForRequest(request)
+              )
           });
+      if (turn && !this.threadRuns.isStreamActive(turn)) {
+        return turn.contextBundle;
+      }
       this.processConflicts(event, results);
 
       if (!options.quiet) {
@@ -3477,6 +3519,9 @@ export class CoopChatSession {
       );
       return this.lastContextBundle;
     } catch (error) {
+      if (turn && !this.threadRuns.isStreamActive(turn)) {
+        return turn.contextBundle;
+      }
       if (!options.quiet) {
         const message = error instanceof Error ? error.message : "Context fetch failed";
         const payload: IntentFeedbackState = {
@@ -3494,7 +3539,12 @@ export class CoopChatSession {
       }
       return turn?.contextBundle ?? this.lastContextBundle;
     } finally {
-      this.activityFeedbackThreadId = previousActivityThread;
+      // A same-thread follow-up may have claimed the activity lane while this
+      // canceled request was settling. Do not restore the old owner over it.
+      if (this.activityFeedbackTurnId === turn?.id) {
+        this.activityFeedbackThreadId = previousActivityThread;
+        this.activityFeedbackTurnId = previousActivityTurn;
+      }
     }
   }
 
@@ -3508,7 +3558,7 @@ export class CoopChatSession {
       file: request.params.file,
       selectedLines: lines ? [lines.start, lines.end] : undefined,
       message: request.intent.context.queryText ?? "",
-      explicitEdit: this.pendingCodeEditIntent,
+      explicitEdit: request.params.codeEditIntent === true,
       hasQuickAction: Boolean(request.params.quickAction),
       integrationSlash: Boolean(request.params.integrationProvider)
     });
@@ -3630,6 +3680,7 @@ export class CoopChatSession {
     request: ContextFetchRequest,
     result: ContextFetchResult
   ): Promise<ContextFetchResult> {
+    const activityTurn = this.activityTurnForRequest(request);
     const file = request.params.file?.trim();
     const repoId = request.params.repoId?.trim();
     if (!file || !repoId) {
@@ -3664,7 +3715,8 @@ export class CoopChatSession {
     this.appendLiveToolActivityLine(
       `Find files that rely on \`${file}\``,
       request.params.quickAction,
-      String(request.intent.intent)
+      String(request.intent.intent),
+      activityTurn
     );
 
     let resolved: Awaited<ReturnType<typeof resolveTrustedRemoteDependents>>;
@@ -3708,6 +3760,7 @@ export class CoopChatSession {
     request: ContextFetchRequest,
     result: ContextFetchResult
   ): Promise<ContextFetchResult> {
+    const activityTurn = this.activityTurnForRequest(request);
     const file = request.params.file?.trim();
     if (!file) {
       return result;
@@ -3736,7 +3789,8 @@ export class CoopChatSession {
     this.appendLiveToolActivityLine(
       `Look up who created \`${file}\``,
       request.params.quickAction,
-      String(request.intent.intent)
+      String(request.intent.intent),
+      activityTurn
     );
 
     try {
@@ -4400,6 +4454,7 @@ export class CoopChatSession {
     request: ContextFetchRequest,
     result: ContextFetchResult
   ): Promise<ContextFetchResult> {
+    const activityTurn = this.activityTurnForRequest(request);
     const queryText = request.intent.context?.queryText;
     const needs = repoFactNeeds(queryText);
     if (!hasRepoFactNeed(needs)) {
@@ -4418,7 +4473,8 @@ export class CoopChatSession {
       this.appendLiveToolActivityLine(
         factLine,
         request.params.quickAction,
-        String(request.intent.intent)
+        String(request.intent.intent),
+        activityTurn
       );
     }
 
@@ -4486,6 +4542,7 @@ export class CoopChatSession {
     request: ContextFetchRequest,
     result: ContextFetchResult
   ): Promise<ContextFetchResult> {
+    const activityTurn = this.activityTurnForRequest(request);
     try {
       const searchScope = resolveSearchScope(this.preferences);
       const locateTerms = locateJobTerms(request.params.intentPlan?.jobs);
@@ -4493,7 +4550,7 @@ export class CoopChatSession {
       if (locateTerms.length > 0 && repoId) {
         const locateLabel = searchingRepoActivityLabel(locateTerms);
         if (locateLabel) {
-          this.appendLiveToolActivityLine(locateLabel, undefined);
+          this.appendLiveToolActivityLine(locateLabel, undefined, undefined, activityTurn);
         }
         const startedAt =
           request.params.gatherStartedAt ?? this.chatTurnStartedAt ?? Date.now();
@@ -4516,7 +4573,7 @@ export class CoopChatSession {
           }),
           delayMs(budgetMs).then(() => undefined)
         ]);
-        return this.recordAttachedSemanticReads(mergeRepoSemanticContext(result, semantic));
+        return this.recordAttachedSemanticReads(mergeRepoSemanticContext(result, semantic), activityTurn);
       }
       const queryText = request.intent.context?.queryText;
       const repoIdForSearch = request.params.repoId?.trim();
@@ -4527,10 +4584,10 @@ export class CoopChatSession {
           dualRepoCompare: false,
           repoFact: false,
           queryText,
-          selectionText: this.pendingCodeEditIntent ? this.selectedCodeSnippet(2000) : undefined,
+          selectionText: request.params.codeEditIntent ? this.selectedCodeSnippet(2000) : undefined,
           quickAction: request.params.quickAction,
           intentIsPlainChat: isPlainChatIntent(request.intent),
-          codeEditIntent: this.pendingCodeEditIntent,
+          codeEditIntent: request.params.codeEditIntent === true,
           inScopeMentionCount: this.countInScopeMentionsForSemanticRetrieval(request),
           integrationProvider:
             typeof request.params.integrationProvider === "string"
@@ -4546,7 +4603,8 @@ export class CoopChatSession {
           this.appendLiveToolActivityLine(
             searchLabel,
             request.params.quickAction,
-            String(request.intent.intent)
+            String(request.intent.intent),
+            activityTurn
           );
         }
       }
@@ -4559,14 +4617,16 @@ export class CoopChatSession {
         collectionId: searchScope.mode === "collection" ? searchScope.collectionId : undefined,
         searchScope: searchScope.scope,
         inScopeMentionCount: this.countInScopeMentionsForSemanticRetrieval(request),
-        codeEditIntent: this.pendingCodeEditIntent,
-        selectionText: this.pendingCodeEditIntent ? this.selectedCodeSnippet(2000) : undefined
+        codeEditIntent: request.params.codeEditIntent === true,
+        selectionText: request.params.codeEditIntent ? this.selectedCodeSnippet(2000) : undefined
       });
-      return this.recordAttachedSemanticReads(mergeRepoSemanticContext(result, semantic));
+      return this.recordAttachedSemanticReads(mergeRepoSemanticContext(result, semantic), activityTurn);
     } catch {
       return result;
     } finally {
-      this.pendingChatMentions = undefined;
+      if (activityTurn !== null && (!activityTurn || this.threadRuns.isStreamActive(activityTurn))) {
+        this.pendingChatMentions = undefined;
+      }
       // Keep pendingCodeEditIntent until local files are resolved for the model prompt.
     }
   }
@@ -4686,7 +4746,7 @@ export class CoopChatSession {
   }
 
   private countInScopeMentionsForSemanticRetrieval(request: ContextFetchRequest): number {
-    const mentions = this.pendingChatMentions;
+    const mentions = request.params.mentions ?? this.pendingChatMentions;
     if (!mentions?.length) {
       return 0;
     }
@@ -4970,11 +5030,12 @@ export class CoopChatSession {
     }
   }
 
-  private postThinkingDelta(threadId: string, chunk: string): void {
-    const turn = this.threadRuns.get(threadId);
-    if (turn && turn.status === "running") {
-      appendTurnThinkingChunk(turn, chunk);
+  private postThinkingDelta(threadId: string, chunk: string, ownerTurn?: ChatTurn): void {
+    const turn = ownerTurn ?? this.threadRuns.get(threadId);
+    if (!turn || !this.threadRuns.isStreamActive(turn)) {
+      return;
     }
+    appendTurnThinkingChunk(turn, chunk);
     this.postForThread(threadId, {
       type: "chat:thinking-delta",
       payload: { chunk, threadId }
@@ -5085,7 +5146,7 @@ export class CoopChatSession {
           return;
         }
         const id = threadId ?? this.activeThreadId();
-        this.postThinkingDelta(id, thinkingChunk);
+        this.postThinkingDelta(id, thinkingChunk, requestTurn);
       }
     );
     let content = result.message.content || full;
@@ -5338,6 +5399,9 @@ export class CoopChatSession {
               outputGate.push(chunk);
             }, signal, turn.threadId, turn, agentRunId),
           onStep: (_step, steps) => {
+            if (isCancelled()) {
+              return;
+            }
             this.logAgentDiagnostic(turn.threadId, {
               turnId: turn.id, runId: agentRunId,
               stage: "activity-step",
@@ -5467,7 +5531,10 @@ export class CoopChatSession {
       });
     } finally {
       deltaBatcher.dispose();
-      if (this.isViewingThread(turn.threadId)) {
+      const currentTurn = (this.threadRuns as unknown as {
+        get?: (threadId: string) => ChatTurn | undefined;
+      }).get?.(turn.threadId);
+      if (this.isViewingThread(turn.threadId) && (!currentTurn || currentTurn.id === turn.id)) {
         this.pendingChatLocalFiles = undefined;
         this.pendingChatAttachFullFile = false;
         this.pendingCodeEditIntent = false;
@@ -5479,8 +5546,12 @@ export class CoopChatSession {
 
   private async enrichChatContextWithIntegrations(
     result: ContextFetchResult,
-    request: ContextFetchRequest
+    request: ContextFetchRequest,
+    ownerTurn?: ChatTurn | null
   ): Promise<ContextFetchResult> {
+    if (ownerTurn === null) {
+      return result;
+    }
     if (request.params.quickAction === "understand-repo") {
       return result;
     }
@@ -5536,14 +5607,18 @@ export class CoopChatSession {
       // Focus phrases first so Gaps subsystem asks reach doc/discussion search.
       extraSearchTerms: focusTerms.length ? focusTerms : undefined,
       jobs: request.params.intentPlan?.jobs,
-      onDiagnostic: (event) => this.logAgentDiagnostic(this.activityFeedbackThreadId ?? this.activeThreadId(), event),
+      onDiagnostic: (event) => {
+        if (ownerTurn && !this.threadRuns.isStreamActive(ownerTurn)) return;
+        this.logAgentDiagnostic(ownerTurn?.threadId ?? this.activityFeedbackThreadId ?? this.activeThreadId(), event);
+      },
       signal: ownerTurn?.streamAbort.signal,
       // Live tool lines when a fetch actually starts; durable Searched rows on done.
       onToolActivity: (toolEvent) => {
         this.applyIntegrationToolActivity(
           toolEvent,
           request.params.quickAction,
-          String(request.intent.intent)
+          String(request.intent.intent),
+          ownerTurn
         );
       },
       // Understand Repo pulls from every connected tool but is time-bounded so a
@@ -5578,11 +5653,15 @@ export class CoopChatSession {
   private applyIntegrationToolActivity(
     event: IntegrationToolActivityEvent,
     actionId: string | undefined,
-    intent?: string
+    intent?: string,
+    ownerTurn?: ChatTurn | null
   ): void {
-    const threadId = this.activityFeedbackThreadId ?? this.activeThreadId();
-    const turn = this.threadRuns.get(threadId);
-    if (turn && turn.status !== "running") {
+    if (ownerTurn === null) {
+      return;
+    }
+    const threadId = ownerTurn?.threadId ?? this.activityFeedbackThreadId ?? this.activeThreadId();
+    const turn = ownerTurn ?? this.threadRuns.get(threadId);
+    if (turn && !this.threadRuns.isStreamActive(turn)) {
       return;
     }
     if (turn && event.phase !== "start") {
@@ -5609,7 +5688,10 @@ export class CoopChatSession {
   }
 
   /** Record Read chips only for file bodies actually attached to the turn. */
-  private recordAttachedSemanticReads(result: ContextFetchResult): ContextFetchResult {
+  private recordAttachedSemanticReads(
+    result: ContextFetchResult,
+    ownerTurn?: ChatTurn | null
+  ): ContextFetchResult {
     const semantic = (result.data as { repoSemanticSearch?: { files?: Array<{ path?: string; content?: string }> } } | undefined)
       ?.repoSemanticSearch;
     for (const file of semantic?.files ?? []) {
@@ -5617,19 +5699,22 @@ export class CoopChatSession {
       if (!path || !file.content?.trim()) {
         continue;
       }
-      this.appendLiveToolActivityLine(readActivityLabel(path), undefined);
+      this.appendLiveToolActivityLine(readActivityLabel(path), undefined, undefined, ownerTurn);
     }
     return result;
   }
 
   /** Read row for a file body already in hand (L buffer, remote tab, or codehost fetch). */
-  private recordAttachedFileReads(payload: { files?: Array<{ path?: string; content?: string }> } | undefined): void {
+  private recordAttachedFileReads(
+    payload: { files?: Array<{ path?: string; content?: string }> } | undefined,
+    ownerTurn?: ChatTurn | null
+  ): void {
     for (const file of payload?.files ?? []) {
       const path = file.path?.trim();
       if (!path || !file.content?.trim()) {
         continue;
       }
-      this.appendLiveToolActivityLine(readActivityLabel(path), undefined);
+      this.appendLiveToolActivityLine(readActivityLabel(path), undefined, undefined, ownerTurn);
     }
   }
 
@@ -5637,11 +5722,15 @@ export class CoopChatSession {
   private appendLiveToolActivityLine(
     line: string,
     actionId: string | undefined,
-    intent?: string
+    intent?: string,
+    ownerTurn?: ChatTurn | null
   ): void {
-    const threadId = this.activityFeedbackThreadId ?? this.activeThreadId();
-    const turn = this.threadRuns.get(threadId);
-    if (turn && turn.status !== "running") {
+    if (ownerTurn === null) {
+      return;
+    }
+    const threadId = ownerTurn?.threadId ?? this.activityFeedbackThreadId ?? this.activeThreadId();
+    const turn = ownerTurn ?? this.threadRuns.get(threadId);
+    if (turn && !this.threadRuns.isStreamActive(turn)) {
       return;
     }
     if (turn) {
@@ -5846,8 +5935,8 @@ export class CoopChatSession {
     const file = turn.context.file;
     const selectedLines = turn.context.selectedLines;
     const fileContents: Record<string, string> = {};
-    const capturedPayload = isFileAssistantSession(turn.context) || this.pendingChatLocalFiles?.source === "remote-codehost"
-      ? this.pendingChatLocalFiles : undefined;
+    const capturedPayload = isFileAssistantSession(turn.context) || turn.pendingLocalFiles?.source === "remote-codehost"
+      ? turn.pendingLocalFiles : undefined;
     for (const snippet of capturedPayload?.files ?? []) {
       if (snippet.path?.trim() && snippet.content) {
         indexPatchFileContent(snippet.path, snippet.content, fileContents);
@@ -7144,6 +7233,8 @@ export class CoopChatSession {
       intentPlan: turnIntentPlan,
       dualRepoCompare: options?.dualRepoCompare,
       pendingMentions: options?.mentions,
+      pendingLocalFiles: this.pendingChatLocalFiles,
+      attachFullFile: this.pendingChatAttachFullFile,
       codeEditIntent: options?.composerMode === "edit"
     });
     this.attachEditAnchor(turn);
@@ -8104,7 +8195,13 @@ export class CoopChatSession {
     turn?: ChatTurn,
     fetchIntegrations?: IntegrationChatProvider[]
   ): Promise<void> {
+    if (turn && !this.threadRuns.isStreamActive(turn)) {
+      return;
+    }
     await this.withTurnSessionMirrors(turn, async () => {
+      if (turn && !this.threadRuns.isStreamActive(turn)) {
+        return;
+      }
       const fileAssistant = isFileAssistantSession(this.currentContext);
       this.lastContextBundle = isolateContextBundleForTurn(
         this.lastContextBundle,
@@ -8132,7 +8229,7 @@ export class CoopChatSession {
         return;
       }
       if (quickAction === "trace-decision") {
-        await this.postDecisionTimelineFromBundle();
+        await this.postDecisionTimelineFromBundle(turn);
         return;
       }
       if (quickAction === "find-owner") {
@@ -8140,7 +8237,7 @@ export class CoopChatSession {
         return;
       }
       if (quickAction === "understand-repo") {
-        await this.postRepoSummaryEvidenceFromBundle();
+        await this.postRepoSummaryEvidenceFromBundle(turn);
         return;
       }
       if (quickAction === "blast-radius") {
@@ -8259,13 +8356,16 @@ export class CoopChatSession {
     );
   }
 
-  private async postRepoSummaryEvidenceFromBundle(): Promise<void> {
+  private async postRepoSummaryEvidenceFromBundle(turn?: ChatTurn): Promise<void> {
     let evidence = repoSummaryFromBundle(this.lastContextBundle);
     if (!evidence) {
       return;
     }
     evidence = isolateUnderstandRepoSummary(evidence);
     evidence = await this.enrichRepoSummaryGraphEvidence(evidence);
+    if (turn && !this.threadRuns.isStreamActive(turn)) {
+      return;
+    }
     const artifactId = this.beginEvidenceArtifact();
     const payload = {
       artifactId,
@@ -8376,7 +8476,7 @@ export class CoopChatSession {
     return undefined;
   }
 
-  private async postDecisionTimelineFromBundle(): Promise<void> {
+  private async postDecisionTimelineFromBundle(turn?: ChatTurn): Promise<void> {
     const timeline = this.enrichedDecisionTimelineFromBundle();
     if (!timeline) {
       const entry = this.lastContextBundle.find((result) => result.type === "decision_history");
@@ -8391,6 +8491,9 @@ export class CoopChatSession {
     }
 
     await this.enrichTimelineSourcePreviewsBestEffort(timeline);
+    if (turn && !this.threadRuns.isStreamActive(turn)) {
+      return;
+    }
 
     const artifactId = this.beginEvidenceArtifact();
     if (!timeline.provider) {
@@ -8554,6 +8657,8 @@ export class CoopChatSession {
         quickAction,
         intentPlan: options?.intentPlan ?? emptyChatIntentPlan(content),
         pendingMentions: options?.mentions,
+        pendingLocalFiles: this.pendingChatLocalFiles,
+        attachFullFile: this.pendingChatAttachFullFile,
         codeEditIntent: options?.composerMode === "edit"
       });
     if (!turn.editAnchor) {
@@ -8561,8 +8666,8 @@ export class CoopChatSession {
     }
     const turnContext = turn.context;
     const pendingLocalWorkspace =
-      this.pendingChatLocalFiles?.source === "local-workspace" &&
-      Boolean(this.pendingChatLocalFiles.files.some((file) => file.content?.trim()));
+      turn.pendingLocalFiles?.source === "local-workspace" &&
+      Boolean(turn.pendingLocalFiles.files.some((file) => file.content?.trim()));
     const fileAssistantTurn = isFileAssistantSession(turnContext) || pendingLocalWorkspace;
     const intentPlan = options?.intentPlan ?? turn.intentPlan;
     const effectiveQuickAction = resolveEffectiveQuickAction(quickAction, turn.history);
@@ -8729,7 +8834,7 @@ export class CoopChatSession {
         : await abortablePromise(this.resolveChatLocalFiles(turn), signal);
       if (
         localPayload?.files.length &&
-        (options?.composerMode === "edit" || this.pendingCodeEditIntent)
+        (options?.composerMode === "edit" || turn.codeEditIntent)
       ) {
         localPayload = await this.attachEditSutIfNeeded(
           localPayload,
@@ -8737,7 +8842,7 @@ export class CoopChatSession {
           turnContext
         );
       }
-      this.recordAttachedFileReads(localPayload);
+      this.recordAttachedFileReads(localPayload, turn);
       this.logAttachmentDiagnostic(turn, "attachment-resolved", { skipped: skipLocalAttach,
         ...this.attachmentMetadataWhenEnabled(localPayload) });
       if (
@@ -9413,7 +9518,7 @@ export class CoopChatSession {
         (thinkingChunk) => {
           // Thinking is not folded into answer text or model replay — persisted on the trail only.
           // Keep gather/todos visible until the first answer token.
-          this.postThinkingDelta(turn.threadId, thinkingChunk);
+          this.postThinkingDelta(turn.threadId, thinkingChunk, turn);
         }
       );
 
@@ -9607,7 +9712,10 @@ export class CoopChatSession {
       });
     } finally {
       deltaBatcher.dispose();
-      if (this.isViewingThread(turn.threadId)) {
+      const currentTurn = (this.threadRuns as unknown as {
+        get?: (threadId: string) => ChatTurn | undefined;
+      }).get?.(turn.threadId);
+      if (this.isViewingThread(turn.threadId) && (!currentTurn || currentTurn.id === turn.id)) {
         this.pendingChatLocalFiles = undefined;
         this.pendingChatAttachFullFile = false;
         this.pendingCodeEditIntent = false;
@@ -9769,12 +9877,28 @@ export class CoopChatSession {
     const previousJob = this.lastJobResult;
     const previousEvidenceId = this.pendingEvidenceArtifactId;
     const previousTrace = this.lastTraceDecisionTimeline;
+    const previousMirrorTurnId = this.sessionMirrorTurnId;
+    this.sessionMirrorTurnId = turn.id;
     this.lastContextBundle = turn.contextBundle;
     this.lastJobResult = turn.jobResult;
     this.pendingEvidenceArtifactId = turn.pendingEvidenceArtifactId;
     this.lastTraceDecisionTimeline = turn.lastTraceTimeline;
 
     const commitAndRestore = () => {
+      // Stop can remove this turn and a plain follow-up can register a new
+      // turn on the same thread before this async callback settles. Never let
+      // the canceled callback copy its mirrors into the follow-up.
+      if (this.sessionMirrorTurnId !== turn.id) {
+        return;
+      }
+      if (!this.threadRuns.isStreamActive(turn)) {
+        this.lastContextBundle = previousBundle;
+        this.lastJobResult = previousJob;
+        this.pendingEvidenceArtifactId = previousEvidenceId;
+        this.lastTraceDecisionTimeline = previousTrace;
+        this.sessionMirrorTurnId = previousMirrorTurnId;
+        return;
+      }
       turn.contextBundle = this.lastContextBundle;
       turn.jobResult = this.lastJobResult;
       turn.pendingEvidenceArtifactId = this.pendingEvidenceArtifactId;
@@ -9784,6 +9908,7 @@ export class CoopChatSession {
         this.lastJobResult = previousJob;
         this.pendingEvidenceArtifactId = previousEvidenceId;
         this.lastTraceDecisionTimeline = previousTrace;
+        this.sessionMirrorTurnId = previousMirrorTurnId;
       }
     };
 
@@ -9836,7 +9961,8 @@ export class CoopChatSession {
         message: activeJobMessageForAction(quickAction),
         progress: 5
       },
-      turn.threadId
+      turn.threadId,
+      turn
     );
 
     try {
@@ -9864,9 +9990,13 @@ export class CoopChatSession {
             message: preparingAnswerMessageForAction(quickAction),
             progress: 80
           },
-          turn.threadId
+          turn.threadId,
+          turn
         );
         const resultPayload = await this.jobClient.getJobResult(submit.jobId);
+        if (!this.threadRuns.isStreamActive(turn)) {
+          return false;
+        }
         const result = (resultPayload.result ?? resultPayload) as Record<string, unknown>;
         turn.jobResult = result;
         if (this.isViewingThread(turn.threadId)) {
@@ -9884,7 +10014,8 @@ export class CoopChatSession {
           progress: 10,
           estimatedWaitTime: submit.estimatedWaitTime
         },
-        turn.threadId
+        turn.threadId,
+        turn
       );
 
       const resultPayload = await this.jobClient.pollUntilComplete(
@@ -9903,7 +10034,8 @@ export class CoopChatSession {
               progress: terminal ? Math.max(event.progress, 90) : event.progress,
               estimatedTimeRemaining: event.etaMs ? formatWaitTime(event.etaMs) : undefined
             },
-            turn.threadId
+            turn.threadId,
+            turn
           );
         },
         {
@@ -9912,6 +10044,9 @@ export class CoopChatSession {
         }
       );
 
+      if (!this.threadRuns.isStreamActive(turn)) {
+        return false;
+      }
       const result = (resultPayload.result ?? resultPayload) as Record<string, unknown>;
       turn.jobResult = result;
       if (this.isViewingThread(turn.threadId)) {
@@ -9930,7 +10065,8 @@ export class CoopChatSession {
           message: preparingAnswerMessageForAction(quickAction),
           progress: 75
         },
-        turn.threadId
+        turn.threadId,
+        turn
       );
       if (quickAction === "knowledge-gaps") {
         turn.jobResult = undefined;
@@ -9979,12 +10115,13 @@ export class CoopChatSession {
   private postQuickActionJobActivity(
     quickAction: string,
     patch: Partial<JobProgressPayload> & Pick<JobProgressPayload, "jobId" | "progress">,
-    threadId?: string
+    threadId?: string,
+    ownerTurn?: ChatTurn
   ): void {
     const targetThreadId = threadId ?? this.activeThreadId();
-    const turn = this.threadRuns.get(targetThreadId);
+    const turn = ownerTurn ?? this.threadRuns.get(targetThreadId);
     // After Stop the turn is gone — never re-seed loading/thinking UI from a late poll tick.
-    if (!turn || turn.status !== "running") {
+    if (!turn || !this.threadRuns.isStreamActive(turn)) {
       return;
     }
 
@@ -11850,9 +11987,20 @@ export class CoopChatSession {
         fallbackLevel: "partial"
       }, "edit-anchor");
     }
-    // Every production send captures an anchor before async work. If it is
-    // unavailable, do not harvest another thread's pending payload/live editor.
-    if (turn) return resolved(undefined, "turn-source-unavailable");
+    // Every production send captures its payload before async work. If the
+    // anchor is unavailable, use only that turn-owned snapshot; never harvest
+    // the mutable pending payload belonging to a later follow-up.
+    if (turn) {
+      const captured = turn.pendingLocalFiles;
+      const wanted = turn.context.file?.trim();
+      if (
+        captured?.files.length &&
+        (!wanted || pathsReferToSameFile(captured.activeFile, wanted))
+      ) {
+        return resolved(captured, "turn-captured-file");
+      }
+      return resolved(undefined, "turn-source-unavailable");
+    }
     if (isFileAssistantSession(this.currentContext)) {
       if (this.pendingChatLocalFilesMatchesContext()) {
         return resolved(this.pendingChatLocalFiles, "pending-file-assistant");

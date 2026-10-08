@@ -35,6 +35,11 @@ export type ContextRequestParams = {
   intentPlan?: import("../chat/intentPlanner/types").ChatIntentPlan;
   /** Per-turn soft gather clock. */
   gatherStartedAt?: number;
+  /** Internal owner fence for user-triggered requests. */
+  threadId?: string;
+  turnId?: string;
+  codeEditIntent?: boolean;
+  mentions?: import("../chat/types").ChatFileMention[];
   [key: string]: unknown;
 };
 
