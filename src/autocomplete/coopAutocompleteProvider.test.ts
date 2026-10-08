@@ -158,6 +158,67 @@ void (async () => {
     provider.dispose();
   });
 
+  await asyncTest("superseding a started request aborts it and ignores its late ghost", async () => {
+    const provider = new CoopAutocompleteProvider({ api: {} as never });
+    const document = {
+      uri: { fsPath: "/fixture/service.ts", scheme: "file", toString: () => "file:///fixture/service.ts" },
+      languageId: "typescript", getText: () => "const value = ;", offsetAt: () => 14
+    } as unknown as vscode.TextDocument;
+    const position = { line: 0, character: 14 } as vscode.Position;
+    const first = analyzeDocumentContext(document, position);
+    const second = { ...first, contextHash: "new-context", currentLinePrefix: "const value = v" };
+    const signals: AbortSignal[] = [];
+    const completions: Array<{ insertText: string }> = [];
+    let finishFirst!: () => void;
+    const firstRequest = new Promise<void>((resolve) => { finishFirst = resolve; });
+    const harness = Object.assign(provider, {
+      executeRequest: async (_document: unknown, _position: unknown, context: ExtractedCodeContext, signal: AbortSignal) => {
+        signals.push(signal);
+        if (context.contextHash === first.contextHash) {
+          await firstRequest;
+          return [{ insertText: "late old ghost" }];
+        }
+        completions.push({ insertText: "new ghost" });
+        return [{ insertText: "new ghost" }];
+      }
+    }) as unknown as {
+      scheduleRequest: (
+        document: vscode.TextDocument,
+        position: vscode.Position,
+        extracted: ExtractedCodeContext,
+        debounceMs: number,
+        token: vscode.CancellationToken
+      ) => Promise<unknown>;
+    };
+    const token = { onCancellationRequested: () => ({ dispose: () => undefined }) } as unknown as vscode.CancellationToken;
+    const firstResult = harness.scheduleRequest(document, position, first, 0, token);
+    const secondResult = harness.scheduleRequest(document, position, second, 0, token);
+    assert.equal(signals[0]?.aborted, true);
+    finishFirst();
+    assert.equal(await firstResult, null);
+    assert.deepEqual(await secondResult, [{ insertText: "new ghost" }]);
+    assert.deepEqual(completions, [{ insertText: "new ghost" }]);
+    provider.dispose();
+  });
+
+  await asyncTest("default repository and branch are part of the invalidation scope", async () => {
+    setMockConfiguration("coopAI", "defaultCodeHost", "github");
+    setMockConfiguration("coopAI", "defaultOwner", "acme");
+    setMockConfiguration("coopAI", "defaultRepo", "first");
+    setMockConfiguration("coopAI", "defaultBranch", "main");
+    const provider = new CoopAutocompleteProvider({ api: {} as never });
+    const options = (provider as unknown as {
+      completionFetchOptions: (document: vscode.TextDocument) => { repoId?: string; branch?: string };
+    }).completionFetchOptions({ uri: { fsPath: "/fixture/service.ts" } } as vscode.TextDocument);
+    assert.equal(options.repoId, "github:acme/first");
+    assert.equal(options.branch, "main");
+    setMockConfiguration("coopAI", "defaultRepo", "second");
+    setMockConfiguration("coopAI", "defaultBranch", "renamed");
+    const changed = (provider as unknown as { completionRepoScope: () => string }).completionRepoScope();
+    assert.equal(changed, JSON.stringify(["github:acme/second", "renamed"]));
+    provider.dispose();
+  });
+
   await asyncTest("index notifier does not auto-enable autocomplete when index becomes healthy", async () => {
     setMockConfiguration("coopAI.autocomplete", "enabled", false);
     setMockConfiguration("coopAI", "defaultOwner", "acme");

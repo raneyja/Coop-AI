@@ -25,6 +25,8 @@ import { TriggerDetector, triggerContextFromVscode } from "./triggerDetector";
 import { readLightningConfiguration } from "../config/lightningConfig";
 import { resolveDocumentUri } from "../context/editorFileContext";
 import { autocompleteAllowsGraph } from "../context/sessionMode";
+import { buildRepoId } from "../chat/buildRepoId";
+import { readConfiguration } from "../chat/SecureApiClient";
 import type { IndexBackend } from "../indexing/indexBackend";
 import type {
   AutocompleteTelemetryEvent,
@@ -140,6 +142,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
         generation: number;
         resolve: (value: vscode.InlineCompletionItem[] | null) => void;
         cancelListener: vscode.Disposable;
+        abort: AbortController;
       }
     | undefined;
   private lastAuthWarningAt = 0;
@@ -267,11 +270,16 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
 
   private completionRepoScope(): string {
     const session = this.sessionProbe?.();
-    return JSON.stringify([session?.repoId, session?.branch]);
+    const preferences = readConfiguration();
+    return JSON.stringify([
+      session?.repoId ?? buildRepoId(preferences),
+      session?.branch ?? preferences.branch
+    ]);
   }
 
   private completionFetchOptions(document: vscode.TextDocument): FetchCompletionsOptions {
     const session = this.sessionProbe?.();
+    const preferences = readConfiguration();
     const resolved = resolveDocumentUri(document.uri);
     const allowGraph = autocompleteAllowsGraph({
       file: resolved.file,
@@ -283,7 +291,12 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       fileSource: resolved.file ? resolved.fileSource : undefined
     };
     this.lastUsage = usage;
-    return { allowGraphContext: allowGraph, repoId: session?.repoId, branch: session?.branch, ...usage };
+    return {
+      allowGraphContext: allowGraph,
+      repoId: session?.repoId ?? buildRepoId(preferences),
+      branch: session?.branch ?? preferences.branch,
+      ...usage
+    };
   }
 
   public async provideInlineCompletionItems(
@@ -296,9 +309,12 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
     const repoScope = this.completionRepoScope();
     if (repoScope !== this.lastRepoScope) {
       this.lastRepoScope = repoScope;
+      this.supersedePendingSchedule();
       this.lastAlternatives = [];
       this.lastScopeHash = "";
       this.inFlightByHash.clear();
+      this.pendingAcceptByHash.clear();
+      this.clearLastShown();
       this.triggerDetector.noteRequestFailed();
     }
     if (!this.settings.enabled) {
@@ -441,6 +457,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
       this.debounceTimer = undefined;
     }
     if (this.pendingSchedule) {
+      this.pendingSchedule.abort.abort();
       this.pendingSchedule.cancelListener.dispose();
       this.pendingSchedule.resolve(null);
       this.pendingSchedule = undefined;
@@ -468,7 +485,7 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
           this.pendingSchedule = undefined;
         }
       });
-      const pending = { generation, resolve, cancelListener };
+      const pending = { generation, resolve, cancelListener, abort };
       this.pendingSchedule = pending;
 
       const finish = (items: vscode.InlineCompletionItem[] | null) => {
@@ -500,7 +517,11 @@ export class CoopAutocompleteProvider implements vscode.InlineCompletionItemProv
         });
 
         void promise.then((items) => {
-          if (vscodeCancelled || abort.signal.aborted) {
+          if (
+            generation !== this.requestGeneration ||
+            vscodeCancelled ||
+            abort.signal.aborted
+          ) {
             finish(null);
             return;
           }
