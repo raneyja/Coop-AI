@@ -116,6 +116,21 @@ export function canUserSelectModels(options: {
   return Boolean(options.usageTier);
 }
 
+/**
+ * Free accounts expose only Auto. Keep the stored picker value aligned with
+ * that contract so a plan transition or reload cannot resurrect a paid pick.
+ * Dev mode remains explicitly unrestricted for local qualification.
+ */
+export function normalizeModelSelectionForPlan(
+  model: string | undefined,
+  options: Pick<RuntimeModelPrefs, "devMode" | "plan">
+): string {
+  if (options.plan === "free" && options.devMode !== true) {
+    return "auto";
+  }
+  return model?.trim() || "auto";
+}
+
 /** Strip user model/provider writes when production routing is locked. */
 export function stripUserModelPreferenceUpdates<T extends { model?: string; llmProvider?: string }>(
   updates: T,

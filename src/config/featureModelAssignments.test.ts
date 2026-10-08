@@ -6,6 +6,7 @@ import {
   canUserSelectModels,
   formatAssignedModelMeta,
   getFeatureModelAssignment,
+  normalizeModelSelectionForPlan,
   pickerAppliesToUseCase,
   resolveAssignedModelForUseCase,
   resolveFeatureFromUseCase,
@@ -20,6 +21,10 @@ assert.equal(canUserSelectModels({ devMode: true }), true);
 assert.equal(canUserSelectModels({ plan: "pro" }), true);
 assert.equal(canUserSelectModels({ plan: "enterprise" }), true);
 assert.equal(canUserSelectModels({ plan: "free", usageTier: "max" }), false);
+assert.equal(normalizeModelSelectionForPlan("claude-opus-4-8", { plan: "free" }), "auto");
+assert.equal(normalizeModelSelectionForPlan("claude-opus-4-8", { plan: "pro" }), "claude-opus-4-8");
+assert.equal(normalizeModelSelectionForPlan(undefined, { plan: "pro" }), "auto");
+assert.equal(normalizeModelSelectionForPlan("claude-opus-4-8", { plan: "free", devMode: true }), "claude-opus-4-8");
 
 assert.equal(resolveFeatureFromUseCase("chat"), "chat");
 assert.equal(resolveFeatureFromUseCase("code_edit"), "edit");

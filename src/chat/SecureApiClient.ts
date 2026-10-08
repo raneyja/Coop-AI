@@ -11,7 +11,10 @@ import { IntentConfig, mergeIntentConfig } from "../config/intentConfig";
 import { CoopBackendClient } from "../api/CoopBackendClient";
 import { clampSearchScopeModeForPlan } from "../license/licenseChecker";
 import { resolveCoopBaseUrl, assertCoopEndpoint } from "../api/resolveBaseUrl";
-import { stripUserModelPreferenceUpdates } from "../config/featureModelAssignments";
+import {
+  normalizeModelSelectionForPlan,
+  stripUserModelPreferenceUpdates
+} from "../config/featureModelAssignments";
 import { isCoopDevMode } from "../config/lightningConfig";
 import { isRetryableError, runResilientRequest, statusFromError } from "../api/networkResilience";
 import { formatUserFacingNetworkError } from "../api/userFacingErrors";
@@ -1218,8 +1221,20 @@ export async function readPreferences(
       // Non-fatal — fallback host stays on the previous value until the next refresh.
     });
   }
+  const effectiveModel = normalizeModelSelectionForPlan(base.model, { devMode, plan });
+  if (signedIn && effectiveModel !== base.model) {
+    // A free plan is Auto-only. Persist the downgrade so a later paid refresh
+    // starts from Auto instead of resurrecting a previously paid pick.
+    const config = vscode.workspace.getConfiguration("coopAI");
+    await config.update(
+      "defaultModel",
+      effectiveModel,
+      resolveConfigurationUpdateTarget(config, "defaultModel")
+    );
+  }
   return {
     ...base,
+    model: effectiveModel,
     defaultCodeHost: preferredCodeHost,
     searchScopeMode: resolveDefaultSearchScope(
       base.searchScopeMode,
