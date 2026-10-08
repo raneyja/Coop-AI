@@ -291,6 +291,34 @@ async function main(): Promise<void> {
     }
   });
 
+  await test("multi-file Apply aborts atomically when a later target changes during resolution", async () => {
+    const restore = installApplyEditMutation();
+    try {
+      const first = installRemoteDoc("src/a.ts", "alpha\n");
+      const second = installRemoteDoc("src/b.ts", "beta\n");
+      const parsed = parsePatchResponse(TWO_FILE_PATCH);
+      assert.ok(parsed.ok);
+      if (!parsed.ok) return;
+      const firstGetText = first.getText;
+      let firstReads = 0;
+      first.getText = () => {
+        const text = firstGetText();
+        if (++firstReads === 2) {
+          second.setText("user changed beta\n");
+        }
+        return text;
+      };
+      const result = await applyPatchesToWorkspace(parsed.patches, {
+        repo: GITHUB_REPO
+      });
+      assert.equal(result.ok, false);
+      assert.equal(first.getText(), "alpha\n");
+      assert.equal(second.getText(), "user changed beta\n");
+    } finally {
+      restore();
+    }
+  });
+
   await test("failed Apply releases the per-record guard so an explicit retry can succeed", async () => {
     const doc = installRemoteDoc("src/a.ts", "alpha\n");
     const parsed = parsePatchResponse(TWO_FILE_PATCH);

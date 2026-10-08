@@ -2309,6 +2309,15 @@ export class CoopChatSession {
     this.post({ type: "trace:autoload", payload: { message } });
   }
 
+  /** Start an explicit /edit turn from the editor's current selection. */
+  public async editFromSelection(editor: vscode.TextEditor | undefined): Promise<void> {
+    if (!editor || editor.selection.isEmpty) {
+      return;
+    }
+    this.refreshEditorContext(editor, { userActivatedEditor: true });
+    await this.sendEditFollowUp("Edit the selected code as requested.");
+  }
+
   private wireWebview(webview: vscode.Webview, source: "chat" | "settings"): vscode.Disposable {
     return webview.onDidReceiveMessage(async (raw: WebviewInbound) => {
       try {

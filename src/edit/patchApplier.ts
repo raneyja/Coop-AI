@@ -64,7 +64,13 @@ export async function applyPatchesToWorkspace(
   patches: ParsedPatchSet,
   options?: ApplyPatchesOptions
 ): Promise<ApplyPatchesResult> {
-  const planned: Array<{ uri: vscode.Uri; relativePath: string; originalContent: string; nextContent: string }> =
+  const planned: Array<{
+    uri: vscode.Uri;
+    relativePath: string;
+    originalContent: string;
+    nextContent: string;
+    readCurrent: () => string | undefined;
+  }> =
     [];
   let usedRemoteEditor = false;
 
@@ -118,7 +124,8 @@ export async function applyPatchesToWorkspace(
       uri: target.uri,
       relativePath: filePatch.relativePath,
       originalContent,
-      nextContent: applied.content
+      nextContent: applied.content,
+      readCurrent: target.readText
     });
   }
 
@@ -128,6 +135,12 @@ export async function applyPatchesToWorkspace(
 
   const edits = new vscode.WorkspaceEdit();
   for (const item of planned) {
+    if (item.readCurrent() !== item.originalContent) {
+      return {
+        ok: false,
+        error: `${item.relativePath}: buffer changed while preparing Apply. No files were changed.`
+      };
+    }
     const document = await vscode.workspace.openTextDocument(item.uri);
     edits.replace(item.uri, fullDocumentRange(document), item.nextContent);
   }

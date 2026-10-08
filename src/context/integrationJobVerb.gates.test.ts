@@ -293,6 +293,7 @@ test("Jira search hits keep the opened ticket body", async () => {
   assert.deepEqual(opened, ["COOP-101"]);
   assert.equal(result.issues[0]?.key, "COOP-101");
   assert.match(result.issues[0]?.description ?? "", /GitHub App/);
+  assert.equal(result.issues[0]?.htmlUrl, "https://example.atlassian.net/browse/COOP-101");
 });
 
 test("Confluence search opens ADR page body after a hit", async () => {
@@ -321,6 +322,7 @@ test("Confluence search opens ADR page body after a hit", async () => {
   });
   assert.deepEqual(opened, ["42"]);
   assert.match(result.pages[0]?.excerpt ?? "", /GitHub App so requireAuth/);
+  assert.equal(result.pages[0]?.htmlUrl, "https://wiki/42");
 });
 
 test("Notion search opens ADR page body after a hit", async () => {
@@ -348,6 +350,7 @@ test("Notion search opens ADR page body after a hit", async () => {
   });
   assert.deepEqual(opened, ["notion-adr-1"]);
   assert.match(result.pages[0]?.excerpt ?? "", /GitHub App so requireAuth/);
+  assert.equal(result.pages[0]?.htmlUrl, "https://notion.so/notion-adr-1");
 });
 
 test("Google Docs search opens ADR document body after a hit", async () => {
@@ -376,6 +379,7 @@ test("Google Docs search opens ADR document body after a hit", async () => {
   });
   assert.deepEqual(opened, ["gdoc-adr-1"]);
   assert.match(result.documents[0]?.excerpt ?? "", /GitHub App so requireAuth/);
+  assert.equal(result.documents[0]?.htmlUrl, "https://docs.google.com/document/d/gdoc-adr-1");
 });
 
 test("Notion named-doc search queries Architecture Overview and opens that page only", async () => {
@@ -520,6 +524,7 @@ test("Slack search opens full thread body after a hit", async () => {
   assert.deepEqual(opened, ["C123:1000.1"]);
   assert.match(result.messages[0]?.text ?? "", /GitHub App over PAT/);
   assert.equal(result.messages[0]?.threadOpened, true);
+  assert.equal(result.messages[0]?.permalink, "https://slack.com/archives/C123/p1000000001000100");
   assert.ok((result.messages[0]?.text.length ?? 0) > "short snippet about auth".length);
 });
 
@@ -607,6 +612,7 @@ test("Teams search opens full thread body after a hit", async () => {
   assert.deepEqual(opened, ["T1:CH1:M1"]);
   assert.match(result.messages[0]?.body ?? "", /GitHub App over PAT/);
   assert.equal(result.messages[0]?.threadOpened, true);
+  assert.equal(result.messages[0]?.webUrl, "https://teams.microsoft.com/l/message/M1");
 });
 
 test("code-host search opens PR description after a hit", async () => {

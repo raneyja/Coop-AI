@@ -84,6 +84,10 @@
         "title": "CoopAI: Knowledge Gaps for Selection"
       },
       {
+        "command": "coopAI.editFromContext",
+        "title": "CoopAI: Edit Selection"
+      },
+      {
         "command": "coopAI.runSavedPrompt",
         "title": "CoopAI: Run Saved Prompt\u2026"
       },
@@ -258,6 +262,11 @@
         }
       ],
       "editor/context": [
+        {
+          "command": "coopAI.editFromContext",
+          "group": "coopAI@0",
+          "when": "editorTextFocus && editorHasSelection"
+        },
         {
           "command": "coopAI.traceDecisionFromContext",
           "group": "coopAI@1"

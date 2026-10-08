@@ -663,6 +663,14 @@ export function activate(context: vscode.ExtensionContext): void {
       await vscode.commands.executeCommand("workbench.view.extension.coopAI");
       await session.submitQuickAction("trace-decision", context);
     }),
+    vscode.commands.registerCommand("coopAI.editFromContext", async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || editor.selection.isEmpty) {
+        return;
+      }
+      await vscode.commands.executeCommand("workbench.view.extension.coopAI");
+      await resolveSession(provider.session).editFromSelection(editor);
+    }),
     vscode.commands.registerCommand("coopAI.runSavedPrompt", async () => {
       const session = resolveSession(provider.session);
       const { loadUserPrompts } = await import("./prompts/userPromptLibrary");
