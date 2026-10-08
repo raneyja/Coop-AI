@@ -108,6 +108,17 @@ test("sanitizeWorkspacePromptEntries drops malformed entries and caps count", ()
   assert.ok(sanitized.every((entry) => entry.id && entry.title && entry.template));
 });
 
+test("sanitizeWorkspacePromptEntries rejects non-string persisted fields", () => {
+  const sanitized = sanitizeWorkspacePromptEntries([
+    { id: "valid", title: "Valid", template: "Keep me" },
+    { id: "bad-id", title: "Bad id", template: 42 },
+    { id: 7, title: "Bad id", template: "Drop me" },
+    { id: "bad-title", title: { label: "Bad title" }, template: "Drop me" },
+    { id: "blank", title: "   ", template: "Drop me" }
+  ] as unknown as Array<{ id: string; title: string; template: string }>);
+  assert.deepEqual(sanitized, [{ id: "valid", title: "Valid", template: "Keep me" }]);
+});
+
 test("sanitizeWorkspacePromptEntries truncates oversized templates", () => {
   const huge = "x".repeat(MAX_WORKSPACE_TEMPLATE_CHARS + 500);
   const sanitized = sanitizeWorkspacePromptEntries([

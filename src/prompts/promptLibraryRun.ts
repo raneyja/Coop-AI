@@ -45,6 +45,21 @@ type SanitizedPromptEntry = {
   scope?: "workspace";
 };
 
+function isPromptEntry(value: unknown): value is SanitizedPromptEntry {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const entry = value as Record<string, unknown>;
+  return (
+    typeof entry.id === "string" &&
+    entry.id.trim().length > 0 &&
+    typeof entry.title === "string" &&
+    entry.title.trim().length > 0 &&
+    typeof entry.template === "string" &&
+    entry.template.trim().length > 0
+  );
+}
+
 /**
  * Defensively bound workspace prompt files: keep only well-formed entries, cap the
  * total count, and truncate oversized templates so a malformed/huge on-disk file
@@ -52,7 +67,7 @@ type SanitizedPromptEntry = {
  */
 export function sanitizeWorkspacePromptEntries<T extends SanitizedPromptEntry>(entries: T[]): T[] {
   return entries
-    .filter((entry) => entry.id && entry.title && entry.template)
+    .filter((entry): entry is T => isPromptEntry(entry))
     .slice(0, MAX_WORKSPACE_PROMPTS)
     .map((entry) => {
       const template =

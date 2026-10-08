@@ -7,6 +7,8 @@ import {
   saveUserPinnedPromptIds,
   saveUserPrompt,
   SIGNED_OUT_PROMPT_LIBRARY_ERROR,
+  deleteUserPrompt,
+  updateUserPrompt,
   writeUserPrompts
 } from "./userPromptLibrary";
 
@@ -80,6 +82,35 @@ await test("pins do not leak across accounts", async () => {
   assert.deepEqual(await loadUserPinnedPromptIds(store, "alice@coop-ai.dev"), ["prompt-1"]);
   assert.deepEqual(await loadUserPinnedPromptIds(store, "bob@doxel.ai"), []);
   assert.deepEqual(await loadUserPinnedPromptIds(store, ""), []);
+});
+
+await test("saved prompts can be edited, deleted, and reloaded", async () => {
+  const store = new MemoryMemento();
+  await saveUserPrompt(store, "alice@coop-ai.dev", {
+    id: "prompt-1",
+    title: "Original title",
+    template: "Original body"
+  });
+  await saveUserPrompt(store, "alice@coop-ai.dev", {
+    id: "prompt-2",
+    title: "Delete me",
+    template: "Temporary body"
+  });
+
+  await updateUserPrompt(store, "alice@coop-ai.dev", {
+    id: "prompt-1",
+    title: "Edited title",
+    template: "Edited body"
+  });
+  assert.deepEqual(await loadUserPrompts(store, "alice@coop-ai.dev"), [
+    { id: "prompt-1", title: "Edited title", template: "Edited body" },
+    { id: "prompt-2", title: "Delete me", template: "Temporary body" }
+  ]);
+
+  await deleteUserPrompt(store, "alice@coop-ai.dev", "prompt-2");
+  assert.deepEqual(await loadUserPrompts(store, "alice@coop-ai.dev"), [
+    { id: "prompt-1", title: "Edited title", template: "Edited body" }
+  ]);
 });
 
 await test("persisted pins are deduplicated and capped on reload", async () => {
