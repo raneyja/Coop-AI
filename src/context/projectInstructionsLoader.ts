@@ -168,6 +168,8 @@ export type LoadProjectInstructionsOptions = {
 export type LoadedProjectInstructions = {
   files: ProjectInstructionFile[];
   sourcePaths: string[];
+  /** A timeout means the remote result is unknown, not that AGENTS.md is absent. */
+  timedOut?: boolean;
 };
 
 export function loadProjectInstructions(options: LoadProjectInstructionsOptions): LoadedProjectInstructions {
@@ -295,18 +297,22 @@ export async function loadRemoteProjectInstructions(options: {
   }
 
   let timedOut = false;
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
   const loaded = await Promise.race([
     readRemoteInstructionFiles(paths, options.readFile),
     new Promise<undefined>((resolve) => {
-      setTimeout(() => {
+      timeoutHandle = setTimeout(() => {
         timedOut = true;
         resolve(undefined);
       }, options.timeoutMs);
     })
   ]);
+  if (timeoutHandle) {
+    clearTimeout(timeoutHandle);
+  }
 
   if (timedOut || !loaded) {
-    return { files: [], sourcePaths: [] };
+    return { files: [], sourcePaths: [], timedOut: true };
   }
   return loaded;
 }

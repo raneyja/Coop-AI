@@ -111,6 +111,11 @@ export async function loadRemoteProjectInstructionsCached(
     readFile: options.readFile,
     timeoutMs: options.timeoutMs
   });
+  // A timeout is an unknown remote state, not a durable "missing" result.
+  // Do not let a transient slow fetch suppress a valid AGENTS.md for the miss TTL.
+  if (loaded.timedOut) {
+    return loaded.files;
+  }
   remoteCache.set(key, {
     cacheKey: key,
     files: loaded.files,

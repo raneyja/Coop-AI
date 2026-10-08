@@ -3,7 +3,12 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
-import { clearProjectInstructionsCache, loadProjectInstructionsCached } from "./projectInstructionsCache";
+import {
+  clearProjectInstructionsCache,
+  loadProjectInstructionsCached,
+  loadRemoteProjectInstructionsCached,
+  peekRemoteProjectInstructionsCache
+} from "./projectInstructionsCache";
 import { loadProjectInstructions } from "./projectInstructionsLoader";
 import { AGENTS_MD_SKELETON } from "./agentsMdSkeleton";
 import { resolveProjectInstructionsState } from "./projectInstructionsStatus";
@@ -125,6 +130,32 @@ test("resolveProjectInstructionsState Use-repo reports remote AGENTS.md", () => 
   assert.equal(state.hasAgentsMd, true);
   assert.equal(state.source, "repo");
   assert.deepEqual(state.sources, ["AGENTS.md"]);
+});
+
+test("remote AGENTS timeout is not cached as a missing file", async () => {
+  clearProjectInstructionsCache();
+  const repoId = "github:timeout-regression/agents";
+
+  const timedOut = await loadRemoteProjectInstructionsCached({
+    repoId,
+    branch: "main",
+    version: "main",
+    timeoutMs: 1,
+    readFile: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return "# Slow guide\n";
+    }
+  });
+  assert.deepEqual(timedOut, []);
+  assert.equal(peekRemoteProjectInstructionsCache(repoId, "main", "main"), undefined);
+  const recovered = await loadRemoteProjectInstructionsCached({
+    repoId,
+    branch: "main",
+    version: "main",
+    timeoutMs: 100,
+    readFile: async () => "# Recovered guide\n"
+  });
+  assert.equal(recovered[0]?.content, "# Recovered guide\n");
 });
 
 test("AGENTS.md create template is a blank starter, not Coop-AI's repo guide", () => {
