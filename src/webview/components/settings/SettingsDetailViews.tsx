@@ -324,7 +324,7 @@ function ModelDetail({
     <>
       <SettingsSection
         title="Auto"
-        description="Coop picks a model for each job — faster for everyday chat, stronger for /edit. On Pro, choose a specific model from the menu in chat."
+        description="Coop picks a model for each job — faster for everyday chat, stronger for /edit. On paid plans, choose a specific model from the menu in chat."
       >
         <ul className="coop-settings-model-list">
           {COOP_FEATURE_MODEL_ASSIGNMENTS.map((assignment) => (
