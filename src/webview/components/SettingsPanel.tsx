@@ -16,6 +16,7 @@ type SettingsPanelProps = {
   onNavigate: (screen: SettingsScreen) => void;
   prefs: Preferences;
   onClose: () => void;
+  onReportIssue: () => void;
   onUpdate: (partial: Partial<Preferences>) => void;
   apiKeyDraft: string;
   onApiKeyDraftChange: (value: string) => void;
@@ -135,6 +136,7 @@ export function SettingsPanel({
   onNavigate,
   prefs,
   onClose,
+  onReportIssue,
   promptLibrary,
   onTestIntegration,
   lightningState,
@@ -173,6 +175,7 @@ export function SettingsPanel({
       </div>
       {screen === "hub" ? (
         <div className="coop-settings-footer !border-t-0 !pt-0 mt-2 px-0.5">
+          <button className="coop-text-btn" onClick={onReportIssue}>Report an issue</button>
           <a
             className="coop-text-btn"
             href="https://coop-ai.dev/manual"

@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from "axios";
+import type { SupportSubmission } from "../support/supportTypes";
 import { shouldRecordUsageEvent } from "../telemetry/usageEventPolicy";
 import * as vscode from "vscode";
 import {
@@ -325,6 +326,10 @@ export class SecureApiClient {
 
   public async completeOrgOnboarding(baseUrl: string): Promise<void> {
     await this.backend.completeOrgOnboarding(baseUrl);
+  }
+
+  public async submitSupportReport(baseUrl: string, report: SupportSubmission) {
+    return this.backend.submitSupportReport(baseUrl, report);
   }
 
   public async requestSeatUpgrade(baseUrl: string, usageTier: "pro_plus" | "max") {

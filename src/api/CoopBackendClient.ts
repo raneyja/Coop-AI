@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from "axios";
+import type { SupportSubmission } from "../support/supportTypes";
 import { assertCoopEndpoint } from "./resolveBaseUrl";
 import { resolveUserAuthApiBase } from "../config/authApiBase";
 import { isRetryableError, runResilientRequest } from "./networkResilience";
@@ -359,6 +360,16 @@ export class CoopBackendClient {
     if (response.status >= 400) {
       throw new Error(formatCoopApiError(response.status, response.data));
     }
+  }
+
+  public async submitSupportReport(baseUrl: string, report: SupportSubmission): Promise<{ id: string }> {
+    assertCoopEndpoint(baseUrl);
+    const response = await this.http.post<{ id?: string } & CoopApiErrorBody>("/v1/support/reports", report, {
+      baseURL: baseUrl.replace(/\/$/, ""), headers: await this.authHeaders(), timeout: 15000, validateStatus: () => true
+    });
+    if (response.status >= 400) throw new Error(formatCoopApiError(response.status, response.data));
+    if (!response.data.id) throw new Error("The server did not confirm your report. Try again.");
+    return { id: response.data.id };
   }
 
   public async requestSeatUpgrade(

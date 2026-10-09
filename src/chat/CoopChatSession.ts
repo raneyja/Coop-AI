@@ -2142,6 +2142,9 @@ export class CoopChatSession {
       case "ui:close-settings":
         this.closeSettingsHandler?.();
         return;
+      case "ui:report-issue":
+        await vscode.commands.executeCommand("coopAI.reportIssue");
+        return;
       case "ui:open-settings": {
         const screen = message.payload?.screen;
         this.openSettings(screen && isSettingsScreen(migrateSettingsScreen(screen)) ? migrateSettingsScreen(screen) : undefined);

@@ -754,6 +754,7 @@ export type WebviewInbound =
   | { type: "ownership:copy-draft"; payload: { text: string } }
   | { type: "evidence:copy-text"; payload: { text: string; toast?: string } }
   | { type: "ui:close-settings" }
+  | { type: "ui:report-issue" }
   | { type: "ui:open-settings"; payload?: { screen?: string } }
   | { type: "ui:ensure-min-width"; payload: { width: number; minWidth: number } }
   | { type: "lightning:ready" }

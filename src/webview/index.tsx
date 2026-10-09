@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { ChatPanel } from "./ChatPanel";
 import { SettingsView } from "./SettingsView";
+import { SupportReportView } from "./SupportReportView";
 import { usePanelWidthMode } from "./hooks/usePanelWidthMode";
 import { startVscodeThemeSync } from "./theme";
 
@@ -40,7 +41,7 @@ declare global {
       setState: (state: unknown) => void;
     };
     __coopVscodeApi?: ReturnType<Window["acquireVsCodeApi"]>;
-    __COOP_VIEW__?: "chat" | "settings";
+    __COOP_VIEW__?: "chat" | "settings" | "support";
   }
 }
 
@@ -72,7 +73,7 @@ try {
   root.render(
     <BootErrorBoundary>
       <AppShell>
-        {view === "settings" ? <SettingsView vscode={vscode} /> : <ChatPanel vscode={vscode} />}
+        {view === "support" ? <SupportReportView vscode={vscode} /> : view === "settings" ? <SettingsView vscode={vscode} /> : <ChatPanel vscode={vscode} />}
       </AppShell>
     </BootErrorBoundary>
   );

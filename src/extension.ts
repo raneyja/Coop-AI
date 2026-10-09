@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { CoopChatPanel } from "./CoopChatPanel";
 import { CoopSettingsPanel } from "./CoopSettingsPanel";
+import { SupportReportPanel } from "./support/SupportReportPanel";
 import { CoopSidebarProvider } from "./CoopSidebarProvider";
 import { CoopChatSession } from "./chat/CoopChatSession";
 import { coopSessionRegistry } from "./chat/CoopSessionRegistry";
@@ -620,6 +621,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("coopAI.clearChat", (args?: { target?: ClearChatTarget }) => {
       resolveClearChatSession(provider.session, args?.target).clearChat();
     }),
+    vscode.commands.registerCommand("coopAI.reportIssue", () => SupportReportPanel.open(context, api)),
     vscode.commands.registerCommand("coopAI.openSettings", () => {
       resolveSession(provider.session).openSettings();
     }),
