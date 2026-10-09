@@ -63,6 +63,7 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
   - Do not add a closing brace to make an excerpt look complete when that closing line is not in the cited source slice.
   - Do **not** abbreviate repo code with \`// ...\`, \`# ...\`, or "summary" comments that replace real lines. If a line is not needed, omit it from the line range instead of ellipsis-substituting.
   - Root files keep their exact path: use \`18:26:AGENTS.md\` or \`1:8:package.json\`; never relabel their excerpt with another file. Line numbers must be positive and ordered; malformed ranges cannot identify a different source.
+  - Evidence rows such as \`3|packages/prisma/generated/types.ts\` are line-numbered source content, never file paths or fence headers. Strip the \`N|\` prefix when citing. Use separate citation fences for noncontiguous lines; never end a fence with \`: .gitignore\` or another trailing file label.
   - PASS example first line: \`120:145:packages/lib/server-only/document/complete-document-with-token.ts\`
   - FAIL: literal placeholders \`startLine:endLine:path\` or \`startLine:endLine:apps/...\` — always substitute concrete line numbers from evidence.
   - FAIL: \`\`\`typescript / \`\`\`javascript / \`\`\`python / other \`\`\`lang blocks that dump existing repo code — those render as anonymous markdown, not IDE citations.

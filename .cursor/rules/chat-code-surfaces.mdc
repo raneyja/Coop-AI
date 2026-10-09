@@ -39,6 +39,7 @@ Coop chat must feel like **Cursor / Cody / Augment** (IDE), not ChatGPT web. Eve
 6. Remaining anonymous fences still use **IDE chrome + token colors** for any language — never uppercase **TEXT** / monochrome markdown. Highlighter must color unknown source langs, not fall back to plain text.
 7. `ChatCodeBlock` must not show a **TEXT** badge. Cite, edit, and anonymous headers are the same product family (`coop-patch-file`): path-first, monospace. Anonymous reuses that chrome — never the old markdown `bash` + Copy language-badge card.
 8. Grounding may omit an unmatched, model-added closing brace/bracket only when the preceding excerpt contains at least two nonblank lines that match a contiguous remote source slice verbatim. Display only that verified slice and its actual range; never invent a closing line or accept changed interior code.
+9. Numbered `read_file` rows (`N|source`) are source content, never file paths. Recover an explicit trailing `: path` inside a closed fence only when every row has a positive, strictly increasing line number and the label is a valid repository path. Split noncontiguous rows into separate citation ranges; final grounding verifies each slice against its own remote file. Keep extension, admin, website, and grounding recovery aligned.
 
 ## Prompt contract
 

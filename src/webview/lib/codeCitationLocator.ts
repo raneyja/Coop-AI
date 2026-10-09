@@ -69,7 +69,7 @@ const NEVER_UPGRADE_LANGS = new Set([
 
 export function looksLikeRepoFilePath(path: string): boolean {
   const trimmed = path.trim();
-  if (!trimmed || /\s/.test(trimmed)) {
+  if (!trimmed || /\s/.test(trimmed) || /^\d+\s*\|/.test(trimmed)) {
     return false;
   }
   // `.dockerignore` globs and ignore patterns are not repo paths.
@@ -231,10 +231,62 @@ export function hasMalformedCitationInFenceBody(body: string[]): boolean {
 
 export function citationLocatorInFenceBody(body: string[]): { locator: CodeCitationLocator; codeStart: number } | null {
   for (let i = 0; i < Math.min(body.length, 6); i++) {
+    // read_file rows contain source, including path literals, not locators.
+    if (/^\s*\d+\s*\|/.test(body[i] ?? "")) break;
     const locator = locatorFromProseLine(body[i] ?? "") ?? tryParseCitationLocator((body[i] ?? "").trim());
     if (locator) return { locator, codeStart: i + 1 };
   }
   return null;
+}
+
+/** Recover numbered read_file rows with an explicit trailing `: path` label.
+ * Split omitted source lines into separate citations so gutters remain truthful.
+ * This only recovers syntax; grounding still verifies each slice against source.
+ */
+export function normalizeNumberedCitationFences(markdown: string): string {
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const opening = lines[i]!.match(/^\s*```(.*)$/);
+    if (!opening) {
+      out.push(lines[i]!);
+      continue;
+    }
+    let end = i + 1;
+    while (end < lines.length && !/^\s*```/.test(lines[end]!)) end++;
+    const original = lines.slice(i, Math.min(end + 1, lines.length));
+    const info = opening[1]!.trim();
+    const body = lines.slice(i + 1, end);
+    while (body.at(-1)?.trim() === "") body.pop();
+    const label = body.at(-1)?.match(/^\s*:\s*(.+?)\s*$/);
+    const rows = body.slice(0, -1).map(line => line.match(/^\s*(\d+)(\s*)\|(.*)$/));
+    const validRows = rows.length > 0 && rows.every((row, index) => row &&
+      Number.isSafeInteger(Number(row[1])) && Number(row[1]) > 0 &&
+      (index === 0 || Number(row[1]) > Number(rows[index - 1]![1])));
+    const locator = label && validRows
+      ? tryParseCitationLocator(`${rows[0]![1]}:${rows.at(-1)![1]}:${unwrapLocatorText(label[1]!)}`)
+      : null;
+    if (end === lines.length || !locator || tryParseFenceInfoLocator(info) ||
+        isMalformedCitationLocator(info) || shouldNeverUpgradeLanguageFence(info) ||
+        (info && !isOrdinaryLanguageTag(info))) {
+      out.push(...original);
+    } else {
+      let start = 0;
+      while (start < rows.length) {
+        let stop = start + 1;
+        while (stop < rows.length && Number(rows[stop]![1]) === Number(rows[stop - 1]![1]) + 1) stop++;
+        out.push(`\`\`\`${rows[start]![1]}:${rows[stop - 1]![1]}:${locator.path}`);
+        for (const row of rows.slice(start, stop)) {
+          // `N|source` is read_file's exact format. `N | source` adds a separator space.
+          out.push(row![2] && row![3]!.startsWith(" ") ? row![3]!.slice(1) : row![3]!);
+        }
+        out.push("```");
+        start = stop;
+      }
+    }
+    i = end;
+  }
+  return out.join("\n");
 }
 
 export function isUnfencedCitationStartLine(line: string): boolean {

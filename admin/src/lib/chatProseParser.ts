@@ -7,6 +7,7 @@ import type {
 } from "./chatProseTypes";
 import {
   findCitationNearFence,
+  normalizeNumberedCitationFences,
   isOrdinaryLanguageTag,
   isUnfencedCitationStartLine,
   locatorFromProseLine,
@@ -35,7 +36,7 @@ export type ParseChatProseOptions = {
 };
 
 export function parseChatProse(content: string, options?: ParseChatProseOptions): ChatProseDocument {
-  const normalized = content.replace(/\r\n/g, "\n");
+  const normalized = normalizeNumberedCitationFences(content);
   const lines = normalized.split("\n");
   const blocks: ChatProseBlock[] = [];
   let i = 0;

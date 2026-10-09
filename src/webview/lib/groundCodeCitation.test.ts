@@ -4,6 +4,18 @@ import { applyGroundedCitations, citationPathsInMarkdown, groundCodeCitation } f
 let passed = 0;
 let failed = 0;
 
+test("numbered dotfile footers use the intended sources during final grounding", () => {
+  const markdown = "```\n3|packages/prisma/generated/types.ts\n6|node_modules\n: .gitignore\n```\n\n```\n4|node_modules\n: .dockerignore\n```";
+  const git = "# header\n\npackages/prisma/generated/types.ts\n\n# dependencies\nnode_modules\n";
+  const docker = "# header\n.git\n.gitignore\nnode_modules\n";
+  const files = new Map([[".gitignore", git], [".dockerignore", docker]]);
+  assert.deepEqual(citationPathsInMarkdown(markdown), [".gitignore", ".dockerignore"]);
+  assert.equal(applyGroundedCitations(markdown, files), "```3:3:.gitignore\npackages/prisma/generated/types.ts\n```\n```6:6:.gitignore\nnode_modules\n```\n\n```4:4:.dockerignore\nnode_modules\n```");
+  const wrongLines = markdown.replace("4|node_modules", "1|node_modules");
+  assert.equal(applyGroundedCitations(wrongLines, files).includes("```4:4:.dockerignore"), true);
+  assert.equal(applyGroundedCitations(markdown, files).includes("3|packages"), false);
+});
+
 function test(name: string, fn: () => void): void {
   try {
     fn();

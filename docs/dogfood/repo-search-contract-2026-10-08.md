@@ -278,3 +278,74 @@ Extension UI — use the Extension Development Host for this checkout. Run Devel
    Pass: shared `node_modules`; gitignore-only `.idea` or `packages/prisma/generated/types.ts`. Both files must be read; no unsupported comparison or external integrations.
 
 For all three: note time to the first answer text (target within 15s), and click any code citation to verify the correct source/range. Capture the prompt, answer, and elapsed time if a test fails.
+
+### User manual confirmation — October 9, 2026
+
+Jon supplied the three exact prompt/answer transcripts at 10:12–10:13 AM.
+Each transcript identifies `CoopAI-Corp/documenso`, branch `main`, with repository
+context only. Runtime build identity and citation-click outcomes were not supplied.
+Reported durations are the UI's `Worked for` values, not instrumented first-token
+measurements; all three reported durations are below 15 seconds.
+
+- Test 1, 10:12 AM: functional live Pass. Worked for 4s; activity shows only
+  `apps/remix/react-router.config.ts`. Answer states `appDirectory` is `app`,
+  with the correct source body and lines 1–7. No AGENTS.md read/citation is
+  shown in the supplied transcript. This transcript does not independently
+  inspect hidden guidance-loader calls; those retain their automated coverage.
+- Test 2, 10:12 AM: functional live Pass. Worked for 7s; activity shows the
+  config read and indexed inventory lookup. Answer supplies all three parts:
+  2,381 files, the 13 expected top-level directories, and `appDirectory: 'app'`
+  with the correct lines 3–6. The answer repeats the inventory/layout facts
+  in a second paragraph; this is a concision issue, not a retrieval failure.
+- Test 3, 10:13 AM: retrieval and prose answer live Pass; citation presentation
+  remains pending clarification. Worked for 6s; activity shows `.gitignore`
+  and `.dockerignore` reads. Prose correctly names shared `node_modules`
+  (.gitignore line 6, .dockerignore line 4) and gitignore-only
+  `packages/prisma/generated/types.ts` (line 3). The pasted rendering includes
+  `3|packages/prisma/generated/types.ts` in both displayed code groups, followed
+  by `: .gitignore` and `: .dockerignore` respectively. If those are the actual
+  source labels, the second preview contains wrong-file content. Raw assistant
+  markdown or a screenshot is needed to distinguish a citation defect from
+  transcript formatting. Do not claim a full citation Pass from this transcript.
+
+### Citation screenshot follow-up — October 9, 2026
+
+Jon's 10:17:54 AM screenshot confirms the reported citation defect. Read-only
+inspection of saved thread `thread-1791566013145-c8gmr1` establishes that the
+assistant's raw response contains a `.gitignore` fence with numbered rows 3 and
+6 and trailing `: .gitignore`, followed by a separate `.dockerignore` fence with
+only numbered row 4 and trailing `: .dockerignore`. The latter source body does
+not contain the gitignore-only pattern. The parser misidentified
+`3|packages/prisma/generated/types.ts` as a path, consumed it as the first
+fence's location, and borrowed it as the second fence's header. This was a
+citation parser failure, not wrong-file retrieval.
+
+Repair: reject numbered source rows as locator paths, recover strictly ordered
+numbered rows with an explicit trailing file label, and split omitted lines into
+separate real ranges. Recovery is shared by final grounding and source extraction
+and mirrored in extension/admin/website parsers. The model output contract now
+explicitly prohibits copying numbered rows into headers or trailing file labels.
+
+Automated Pass: chat prose 67/67, highlighter 6/6, repo search 185/185 (including
+18 locator and 13 grounding checks), system prompts 58/58 and attachment
+diagnostics. Lint, extension development build, and diff whitespace check pass.
+Regression cases cover the exact output, source paths inside numbered rows,
+noncontiguous ranges, indentation, wrong claimed lines, unsafe/invalid labels,
+zero/unsafe/repeated/reversed line numbers, explicit-locator precedence,
+incomplete fences, and patch/shell exclusions.
+
+Live Pass on the rebuilt local Extension Development Host: reloading the original
+saved response displays `.gitignore:3` with `packages/prisma/generated/types.ts`,
+`.gitignore:6` with `node_modules`, and `.dockerignore:4` with `node_modules`.
+Clicks on `.gitignore:3` and `.dockerignore:4` open their correct full remote bodies
+with the requested source lines selected. Temporary unsaved viewers were closed
+without saving. The original saved response was re-rendered; its historical 6s
+duration is not a timing measurement of a new answer after this repair.
+
+Local candidate identity: extension source/package 0.1.13 includes unrelated
+in-progress support-reporting changes. Bundle SHA256:
+`b979f5895f0cdf720354a99c56977b5e599682f7c6ace8ea35f84956716b91fe`;
+webview SHA256:
+`51cb9d5a5dd81d269ef6f45ae1df89b9e9697ac8d742651dbdbf56c959cbd7ca`.
+This live observation closes the screenshot's citation defect on the local
+candidate; it does not qualify or deploy the unrelated support-reporting work.

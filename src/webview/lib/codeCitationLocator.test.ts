@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   languageFromFilePath,
   languageTagMatchesPath,
+  normalizeNumberedCitationFences,
   locatorFromProseLine,
   resolveCitePathForLanguageFence,
   tryParseCitationLocator,
@@ -10,9 +11,42 @@ import {
 import { lightHighlight } from "./lightHighlight";
 import { tryParseCitationLocator as adminLocator } from "../../../admin/src/lib/codeCitationLocator";
 import { tryParseCitationLocator as websiteLocator } from "../../../website/src/lib/codeCitationLocator";
+import { normalizeNumberedCitationFences as adminNormalize } from "../../../admin/src/lib/codeCitationLocator";
+import { normalizeNumberedCitationFences as websiteNormalize } from "../../../website/src/lib/codeCitationLocator";
 
 let passed = 0;
 let failed = 0;
+
+test("numbered source paths cannot become citation locators", () => {
+  for (const parse of [tryParseCitationLocator, adminLocator, websiteLocator]) {
+    for (const row of ["3|packages/prisma/generated/types.ts", "3 | src/config.ts", "3|src/config.ts:4", "1:2:3|src/config.ts"]) {
+      assert.equal(parse(row), null, row);
+    }
+  }
+});
+
+test("numbered footer recovery is bounded to explicit source labels and ordered rows", () => {
+  for (const normalize of [normalizeNumberedCitationFences, adminNormalize, websiteNormalize]) {
+    const raw = "```\n10|export default {\n11|  appDirectory: 'app',\n: apps/remix/react-router.config.ts\n```";
+    assert.equal(normalize(raw), "```10:11:apps/remix/react-router.config.ts\nexport default {\n  appDirectory: 'app',\n```");
+    assert.equal(normalize(normalize(raw)), normalize(raw));
+    assert.equal(normalize("```\n6 | node_modules\n: `.gitignore`\n```"), "```6:6:.gitignore\nnode_modules\n```");
+    const base = "```\n4|node_modules\n: .dockerignore\n```";
+    for (const rejected of [
+      base.replace("4|", "0|"), base.replace("4|", "9007199254740992|"),
+      base.replace("4|node_modules", "4|node_modules\n3|.idea"),
+      base.replace("4|node_modules", "4|node_modules\n4|.idea"),
+      base.replace("4|node_modules", "node_modules"),
+      base.replace(": .dockerignore", ": https://example.com"),
+      base.replace(": .dockerignore", ": *.ts"),
+      base.replace(": .dockerignore", ": unrelated prose"),
+      base.replace("```\n", "```patch\n"), base.replace("```\n", "```bash\n"),
+      base.replace("```\n", "```1:1:AGENTS.md\n"),
+      base.replace("```\n", "```0:1:AGENTS.md\n"),
+      base.slice(0, -3)
+    ]) assert.equal(normalize(rejected), rejected, rejected);
+  }
+});
 
 function test(name: string, fn: () => void): void {
   try {

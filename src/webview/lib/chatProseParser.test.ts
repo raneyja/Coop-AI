@@ -6,6 +6,23 @@ import { parseChatProse as parseWebsiteProse } from "../../../website/src/lib/ch
 let passed = 0;
 let failed = 0;
 
+test("numbered ignore-file output keeps each source and omitted line range separate", () => {
+  const input = [
+    "Shared: `node_modules`; gitignore-only: `packages/prisma/generated/types.ts`.", "",
+    "``` ", "3|packages/prisma/generated/types.ts", "6|node_modules", ": .gitignore", "```", "",
+    "```", "4|node_modules", ": .dockerignore", "```"
+  ].join("\n");
+  for (const parse of [parseChatProse, parseAdminProse, parseWebsiteProse]) {
+    const cites = parse(input).blocks.filter(block => block.type === "code-citation");
+    assert.deepEqual(cites, [
+      {type: "code-citation", path: ".gitignore", startLine: 3, endLine: 3, code: "packages/prisma/generated/types.ts"},
+      {type: "code-citation", path: ".gitignore", startLine: 6, endLine: 6, code: "node_modules"},
+      {type: "code-citation", path: ".dockerignore", startLine: 4, endLine: 4, code: "node_modules"}
+    ]);
+    for (const cite of cites) assert.equal(cite.path.includes("|"), false);
+  }
+});
+
 function test(name: string, fn: () => void): void {
   try {
     fn();

@@ -19,6 +19,7 @@ import {
 } from "../../prompts/sourceCitationRegistry";
 import {
   findCitationNearFence,
+  normalizeNumberedCitationFences,
   hasMalformedCitationInFenceBody,
   isMalformedCitationLocator,
   isOrdinaryLanguageTag,
@@ -60,7 +61,7 @@ export type ParseChatProseOptions = {
 
 export function parseChatProse(content: string, options?: ParseChatProseOptions): ChatProseDocument {
   const normalized = normalizeCoopChatProse(
-    normalizeJiraTicketBreaks(content.replace(/\r\n/g, "\n"))
+    normalizeJiraTicketBreaks(normalizeNumberedCitationFences(content))
   );
   const lines = normalized.split("\n");
   const blocks: ChatProseBlock[] = [];

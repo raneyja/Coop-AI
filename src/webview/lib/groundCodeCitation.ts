@@ -1,4 +1,4 @@
-import { hasMalformedCitationInFenceBody, citationLocatorInFenceBody, isMalformedCitationLocator, shouldNeverUpgradeLanguageFence, tryParseCitationLocator, tryParseFenceInfoLocator } from "./codeCitationLocator";
+import { hasMalformedCitationInFenceBody, citationLocatorInFenceBody, isMalformedCitationLocator, normalizeNumberedCitationFences, shouldNeverUpgradeLanguageFence, tryParseCitationLocator, tryParseFenceInfoLocator } from "./codeCitationLocator";
 
 export type GroundedCitation = {
   startLine: number;
@@ -210,7 +210,7 @@ export function applyGroundedCitations(
     return markdown;
   }
 
-  const lines = splitFileLines(markdown);
+  const lines = splitFileLines(normalizeNumberedCitationFences(markdown));
   const out: string[] = [];
   let i = 0;
 
@@ -282,7 +282,7 @@ export function citationPathsInMarkdown(markdown: string): string[] {
     return [];
   }
   const paths = new Set<string>();
-  const lines = splitFileLines(markdown);
+  const lines = splitFileLines(normalizeNumberedCitationFences(markdown));
   let i = 0;
   while (i < lines.length) {
     if (!lines[i]!.trimStart().startsWith("```")) {
