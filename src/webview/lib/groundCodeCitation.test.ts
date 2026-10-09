@@ -16,6 +16,35 @@ function test(name: string, fn: () => void): void {
   }
 }
 
+test("root and language-prefixed coordinates ground the intended source", () => {
+  const markdown = "Config is `apps/remix/react-router.config.ts`.\n\n```md 1:1:AGENTS.md\n- Never use classes.\n```";
+  assert.deepEqual(citationPathsInMarkdown(markdown), ["AGENTS.md"]);
+  assert.match(applyGroundedCitations(markdown, new Map([["AGENTS.md", "- Never use classes."]])), /```1:1:AGENTS.md/);
+  for (const preamble of ["", "\n", "Rules:\n"]) {
+    const bodyLocator = `Config is \`apps/remix/react-router.config.ts\`.\n\n\`\`\`\n${preamble}1:1:AGENTS.md\n- Never use classes.\n\`\`\``;
+    assert.deepEqual(citationPathsInMarkdown(bodyLocator), ["AGENTS.md"]);
+    assert.match(applyGroundedCitations(bodyLocator, new Map([["AGENTS.md", "- Never use classes."]])), /1:1:AGENTS.md/);
+  }
+  for (const locator of ["26:18:AGENTS.md", "0:26:AGENTS.md", "Rules:\n26:18:AGENTS.md"]) {
+    const invalid = `Config is \`apps/remix/react-router.config.ts\`.\n\n\`\`\`\n${locator}\n- Never use classes.\n\`\`\``;
+    assert.deepEqual(citationPathsInMarkdown(invalid), []);
+    assert.equal(applyGroundedCitations(invalid, new Map([["apps/remix/react-router.config.ts", "- Never use classes."]])), invalid);
+  }
+});
+
+test("an invented excerpt closure is omitted only after its prefix matches source", () => {
+  const source = "import type { Config } from '@react-router/dev/config';\n\nexport default {\n  appDirectory: 'app',\n  ssr: true,\n} satisfies Config;";
+  const snippet = "export default {\n  appDirectory: 'app',\n  ssr: true,\n}";
+  assert.deepEqual(groundCodeCitation(source, snippet, 3, 5), {
+    startLine: 3, endLine: 5, code: source.split("\n").slice(2, 5).join("\n"), grounded: true
+  });
+  assert.equal(groundCodeCitation(source, snippet.replace("'app'", "'src'"), 3, 5).grounded, false);
+  assert.equal(groundCodeCitation(source, "  ssr: true,\n}").grounded, false);
+  assert.equal(groundCodeCitation(source, "\n  ssr: true,\n}").grounded, false);
+  assert.equal(groundCodeCitation(source, `${snippet}\nconsole.log('invented');`).grounded, false);
+  assert.equal(groundCodeCitation(source, source.split("\n").slice(2).join("\n"), 3, 6).endLine, 6);
+});
+
 test("numbered source citations recover actual lines only after body verification", () => {
   const file = "// header\nif (item.status !== Status.PENDING) {\n  throw new Error('Must be pending');\n}";
   const snippet = "2 | if (item.status !== Status.PENDING) {\n3 |   throw new Error('Must be pending');\n4 | }";

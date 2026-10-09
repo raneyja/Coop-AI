@@ -35,6 +35,8 @@ export type AgentPlanTurnInput = {
   conversation: AgentConversationMessage[];
   /** Connected integrations for this turn — mid-loop may only call these. */
   allowedIntegrations?: IntegrationChatProvider[];
+  projectInstructions?: string;
+  requestedFiles?: import("./requestedRepoFiles").RequestedRepoFile[];
 };
 
 /**
@@ -54,6 +56,11 @@ export type AgentStreamAnswerInput = {
   interpretNotes?: string;
   /** Turn-captured authoritative bodies, kept in the final prompt outside summarized tool history. */
   attachedFiles?: Array<{ path: string; content: string; lineRange?: [number, number] }>;
+  projectInstructions?: string;
+  requestedFiles?: import("./requestedRepoFiles").RequestedRepoFile[];
+  /** Canonical workspace facts, formatted outside compacted tool history. */
+  repoFacts?: Record<string, unknown>;
+  directFileAnswer?: boolean;
 };
 
 /** Same conversation, next turn: stream the user-visible answer. */
@@ -75,6 +82,8 @@ export type AgentSessionRequest = {
 
 /** Tool payloads collected during a run — used for the Apply-card bridge. */
 export type AgentSessionContext = {
+  repoFacts?: Record<string, unknown>;
+  requestedFiles?: import("./requestedRepoFiles").RequestedRepoFile[];
   search_code?: Record<string, unknown>;
   read_file?: Record<string, unknown>;
   list_directory?: Record<string, unknown>;

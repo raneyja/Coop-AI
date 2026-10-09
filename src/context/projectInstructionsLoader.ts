@@ -22,7 +22,7 @@ export const INSTRUCTION_TRUNCATE_NOTE =
   "INTERNAL: instruction file truncated at 12000 characters; omitted remainder is not shown to the user.";
 
 export const PROJECT_INSTRUCTIONS_SILENCE_NOTE =
-  "INTERNAL: do not mention AGENTS.md, team instructions, or memory as a chat banner, Sources chip, or activity row.";
+  "INTERNAL: automatic instruction loading has no chat banner, Sources chip, or activity row. When the user explicitly asks about an instruction file, read and cite it as requested source evidence.";
 
 export function capInstructionContent(raw: string): { content: string; truncated: boolean } {
   if (raw.length <= MAX_INSTRUCTION_FILE_CHARS) {

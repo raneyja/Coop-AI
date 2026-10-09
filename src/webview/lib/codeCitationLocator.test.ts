@@ -8,6 +8,8 @@ import {
   tryParseFenceInfoLocator
 } from "./codeCitationLocator";
 import { lightHighlight } from "./lightHighlight";
+import { tryParseCitationLocator as adminLocator } from "../../../admin/src/lib/codeCitationLocator";
+import { tryParseCitationLocator as websiteLocator } from "../../../website/src/lib/codeCitationLocator";
 
 let passed = 0;
 let failed = 0;
@@ -32,6 +34,18 @@ test("numeric locator parses path and lines", () => {
   assert.equal(locator?.startLine, 42);
   assert.equal(locator?.endLine, 68);
   assert.equal(locator?.path, "apps/api/plane/api/middleware/api_authentication.py");
+});
+
+test("root file coordinates work across extension, admin, and website", () => {
+  for (const parse of [tryParseCitationLocator, adminLocator, websiteLocator]) {
+    assert.deepEqual(parse("18:26:AGENTS.md"), { path: "AGENTS.md", startLine: 18, endLine: 26 });
+    assert.deepEqual(parse("package.json:1-8"), { path: "package.json", startLine: 1, endLine: 8 });
+    assert.deepEqual(parse("README.md:42"), { path: "README.md", startLine: 42, endLine: 42 });
+    assert.equal(parse("example.com"), null);
+    assert.equal(parse("2:1:AGENTS.md"), null);
+    assert.equal(parse("1:2:*.md"), null);
+    assert.equal(parse("1:2:https://example.com"), null);
+  }
 });
 
 test("path:range locator parses Cursor form", () => {

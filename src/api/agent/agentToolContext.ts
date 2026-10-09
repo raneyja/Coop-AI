@@ -12,6 +12,8 @@ export type AgentDirectoryListing = {
 
 export type AgentToolContext = {
   indexBackend: IndexBackend;
+  /** Canonical target frozen by createRunToolContext for this turn. */
+  repoTarget?: Readonly<RepoTarget>;
   /** Owned by this frozen turn; never shared between chats or branches. */
   candidateLedger?: CandidateLedger;
   resolveRepoTarget?: (target: RepoTarget) => Promise<RepoTarget>;
@@ -38,7 +40,7 @@ export type AgentToolContext = {
     path: string;
     repoId?: string;
     target?: RepoTarget;
-  }) => Promise<{ path: string; content: string } | undefined>;
+  }) => Promise<{ path: string; content: string; repoId?: string; branch?: string; truncated?: boolean } | undefined>;
   /**
    * Resolve a filename the user typed (`authMiddleware.ts`) to repo paths.
    * Code-host / graph search — not a local workspace walk.

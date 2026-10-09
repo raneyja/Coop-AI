@@ -48,7 +48,15 @@ function compactToolJson(obj: Record<string, unknown>): Record<string, unknown> 
     out.skipNote = clip(obj.skipNote, 240);
   }
   if (Array.isArray(obj.files)) {
-    out.files = obj.files.slice(0, MAX_FILES).map((file) => compactFile(file));
+    let unverifiedFiles = 0;
+    out.files = obj.files.filter((value) => {
+      const file = value as Record<string, unknown> | null;
+      return file?.evidenceSource === "remote-read" || file?.evidenceSource === "turn-attachment" ||
+        unverifiedFiles++ < MAX_FILES;
+    }).map((file) => compactFile(file));
+  }
+  if (Array.isArray(obj.requestedFiles)) {
+    out.requestedFiles = obj.requestedFiles;
   }
   if (Array.isArray(obj.hits)) {
     out.hits = obj.hits.slice(0, MAX_HITS).map((hit) => compactHit(hit));
@@ -82,7 +90,10 @@ function compactFile(value: unknown): Record<string, unknown> {
     ...(content ? { content } : {}),
     ...(typeof file.evidenceSource === "string" ? { evidenceSource: file.evidenceSource } : {}),
     ...(typeof file.startLine === "number" ? { startLine: file.startLine } : {}),
-    ...(typeof file.endLine === "number" ? { endLine: file.endLine } : {})
+    ...(typeof file.endLine === "number" ? { endLine: file.endLine } : {}),
+    ...(typeof file.repoId === "string" ? { repoId: file.repoId } : {}),
+    ...(typeof file.branch === "string" ? { branch: file.branch } : {}),
+    ...(typeof file.truncated === "boolean" ? { truncated: file.truncated } : {})
   };
 }
 

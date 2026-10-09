@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { parseChatProse } from "./chatProseParser";
+import { parseChatProse as parseAdminProse } from "../../../admin/src/lib/chatProseParser";
+import { parseChatProse as parseWebsiteProse } from "../../../website/src/lib/chatProseParser";
 
 let passed = 0;
 let failed = 0;
@@ -396,6 +398,32 @@ test("citation fence with startLine:endLine:path yields code-citation", () => {
     assert.equal(block.path, "src/webview/ChatPanel.tsx");
     assert.equal(block.code, "code here");
   }
+});
+
+test("explicit root locator wins over nearby config path and active file", () => {
+  const doc = parseChatProse("Config is `/apps/remix/react-router.config.ts`.\n\n```\n18:26:AGENTS.md\n- Never use classes.\n```", { activeFilePath: "apps/remix/react-router.config.ts" });
+  const block = doc.blocks.find((value) => value.type === "code-citation");
+  assert.ok(block && block.type === "code-citation");
+  if (block?.type === "code-citation") {
+    assert.equal(block.path, "AGENTS.md");
+    assert.equal(block.startLine, 18);
+    assert.equal(block.endLine, 26);
+    assert.equal(block.code, "- Never use classes.");
+  }
+});
+
+test("malformed root coordinates cannot inherit a nearby or active source", () => {
+  for (const parse of [parseChatProse, parseAdminProse, parseWebsiteProse]) {
+  for (const locator of ["26:18:AGENTS.md", "0:26:AGENTS.md", "Rules:\n26:18:AGENTS.md"]) {
+    const doc = parse(`Config is \`apps/remix/react-router.config.ts\`.\n\n\`\`\`\n${locator}\n- Never use classes.\n\`\`\``, { activeFilePath: "apps/remix/react-router.config.ts" });
+    assert.equal(doc.blocks.some((value) => value.type === "code-citation"), false);
+  }
+  }
+});
+
+test("ordinary integer object properties still recover the actual config source", () => {
+  const doc = parseChatProse("Config is `src/config.ts`.\n\n```ts\nconst config = {\n  port:3000,\n};\n```", { activeFilePath: "src/config.ts" });
+  assert.ok(doc.blocks.some((value) => value.type === "code-citation" && value.path === "src/config.ts"));
 });
 
 test("citation fence info-string startLine:endLine:path yields code-citation", () => {

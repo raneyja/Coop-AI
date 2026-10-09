@@ -1,4 +1,7 @@
 import { gatherRequest } from "./gatherRequest";
+import { resolveRepoSourceScope, scopedIntegrations } from "../../context/repoSourceScope";
+import { requestedRepoFiles, normalizeRequestedPath, formatRequestedFileOutcomes, resolveRepoFileScope, repoFileScopeAllowsPath, type RequestedRepoFile } from "./requestedRepoFiles";
+import { isDirectRepoFileQuestion } from "./directRepoFileQuestion";
 import { requestedRepoBranch } from "../../workspace/repoTargetResolver";
 import { formatVerifiedFieldHandlingAnswer } from "./fieldHandlingEvidence";
 import { remainingContextGatherBudgetMs, requiredEvidenceDeadlineAt } from "../../config/responseDeadline";
@@ -180,6 +183,9 @@ type ReadFilePayload = {
     path: string;
     content: string;
     evidenceSource?: "remote-read" | "search-snippet" | "turn-attachment";
+    repoId?: string;
+    branch?: string;
+    truncated?: boolean;
   }>;
   error?: string;
   skipNote?: string;
@@ -270,6 +276,10 @@ function preferredLineForPath(
 }
 
 export type AgentRunOptions = {
+  loadRepoFacts?: (target: import("../../workspace/indexedRepoWorkspaceTypes").RepoTarget,
+    onProgress?: (facts: Record<string, unknown>) => void) => Promise<Record<string, unknown> | undefined>;
+  /** Started alongside source reads; settled before synthesis. */
+  repoFacts?: Promise<Record<string, unknown> | undefined>;
   capturedAttachment?: { repoId: string; branch?: string; files: Array<{ path: string; content: string; lineRange?: [number, number] }> };
   repoTarget?: import("../../workspace/indexedRepoWorkspaceTypes").RepoTarget;
   onStep?: (step: AgentStep, steps: AgentStep[]) => void;
@@ -314,6 +324,7 @@ export type AgentRunOptions = {
    * done-looks-like). Never sets silent workflows. Fail-open when omitted.
    */
   intentBrief?: string;
+  projectInstructions?: string;
 };
 
 /**
@@ -442,11 +453,33 @@ export class AgentOrchestrator {
       return { steps: [], context: undefined };
     }
 
-    this.runAllowedIntegrations = options?.allowedIntegrations ?? [];
+    const sourceScope = resolveRepoSourceScope(query);
+    options = { ...options,
+      allowedIntegrations: scopedIntegrations(options?.allowedIntegrations ?? [], sourceScope),
+      fillIntegrations: scopedIntegrations(options?.fillIntegrations ?? [], sourceScope) };
+    this.runAllowedIntegrations = options.allowedIntegrations ?? [];
     this.runSearchIntegration = options?.searchIntegration;
     this.runSignal = options?.signal;
     this.allowedRepoTools = options?.allowedRepoTools !== false;
     this.runPlannedSearchQueries = options?.plannedSearchQueries ?? [];
+    const fileScope = resolveRepoFileScope(query);
+    if (!repoFileScopeAllowsPath(fileScope, "AGENTS.md")) options = { ...options, projectInstructions: undefined };
+    if (options.capturedAttachment) options = { ...options, capturedAttachment: {
+      ...options.capturedAttachment, files: options.capturedAttachment.files.filter((file) => repoFileScopeAllowsPath(fileScope, file.path))
+    } };
+    if (options.loadRepoFacts) {
+      const snapshot: Record<string, unknown> = { repoInventory: { source: "unavailable", note: "Repository totals could not be verified. Do not estimate them." } };
+      let accepting = true;
+      const loader = options.loadRepoFacts;
+      const repoFacts = gatherRequest(this.ctx, "repo-facts",
+        () => loader(this.ctx.repoTarget!, facts => {
+          if (accepting && !this.runSignal?.aborted) {
+            for (const key of Object.keys(snapshot)) delete snapshot[key];
+            Object.assign(snapshot, facts);
+          }
+        }), snapshot).catch(() => snapshot).finally(() => { accepting = false; });
+      options = { ...options, repoFacts };
+    }
     try {
       const action = request.action ?? "none";
       const openFile = request.openFile?.trim();
@@ -658,7 +691,8 @@ export class AgentOrchestrator {
         groundedExport = captured.exportName;
         lastToolResult = captured.raw;
       }
-    } else if (allowedRepoTools) {
+    }
+    if (allowedRepoTools) {
       const named = await this.seedNamedFileReads(
         repoId,
         query,
@@ -668,9 +702,16 @@ export class AgentOrchestrator {
       );
       if (named.ok) {
         matchingRead = true;
-        filesRead = 1;
+        filesRead = (context.read_file as ReadFilePayload | undefined)?.files?.length ?? 0;
         lastToolResult = named.raw;
       }
+    }
+
+    // All requested bodies/outcomes are already resolved. Direct source questions
+    // need no model tool planning or last-chance discovery.
+    if (allowedRepoTools && action !== "change" && allowedIntegrations.length === 0 &&
+        isDirectRepoFileQuestion(query) && context.requestedFiles?.length) {
+      return this.finishWithAnswer({ steps, context }, query, repoId, action, options, [], matchingRead);
     }
 
     const vendorBlock = (): string | undefined =>
@@ -689,6 +730,10 @@ export class AgentOrchestrator {
       }
       if (!allowedRepoTools) {
         return steps.length > 0;
+      }
+      if (context.requestedFiles?.length && context.requestedFiles.every((file) => file.status !== "read")) {
+        // Unavailable/ambiguous sources are terminal outcomes, never generic misses.
+        return true;
       }
       if (isApiRejectAsk(query)) {
         return hasRequiredRejectEvidence();
@@ -892,7 +937,9 @@ export class AgentOrchestrator {
           priorSteps: [...steps],
           lastToolResult,
           conversation: [...conversation],
-          allowedIntegrations
+          allowedIntegrations,
+          projectInstructions: options.projectInstructions,
+          requestedFiles: context.requestedFiles
         }), "", rejectEvidenceDeadline === undefined
           ? undefined
           : { deadlineAt: rejectEvidenceDeadline });
@@ -1786,6 +1833,29 @@ export class AgentOrchestrator {
     matchingRead = false,
     openedServerWritePaths: Set<string> = new Set()
   ): Promise<AgentSessionResult> {
+    if (options.signal?.aborted) return { ...result, answer: undefined };
+    if (options.repoFacts) {
+      const facts = await options.repoFacts;
+      if (options.signal?.aborted) return { ...result, answer: undefined };
+      if (facts) result.context = { ...result.context, repoFacts: facts };
+    }
+    const directFileAnswer = options.allowedRepoTools !== false && Boolean(result.context?.requestedFiles?.length) &&
+      action !== "change" && isDirectRepoFileQuestion(query) &&
+      !(options.allowedIntegrations?.length || options.fillIntegrations?.length);
+    const requestedFiles = result.context?.requestedFiles;
+    // Specialized hunt compaction must not drop independent named-file jobs.
+    const requiredReads = ((result.context?.read_file as ReadFilePayload | undefined)?.files ?? [])
+      .filter((file) => file.evidenceSource === "remote-read" && requestedFiles?.some((ref) => ref.path === file.path));
+    const hasRequestedFiles = (requestedFiles?.length ?? 0) > 0;
+    for (const requested of requestedFiles ?? []) {
+      if (requested.status === "ambiguous") continue;
+      const read = ((result.context?.read_file as ReadFilePayload | undefined)?.files ?? [])
+        .find((file) => file.path === requested.path && file.content?.trim() && file.evidenceSource === "remote-read");
+      if (read) {
+        requested.status = "read";
+        requested.reason = read.truncated ? "Partial body; omitted content remains unverified." : undefined;
+      }
+    }
     const requiresWriteSiteAndReject =
       requiresStateWriteAndReject(query, options.intentBrief);
     const hasRequiredRejectEvidence = (): boolean =>
@@ -1838,7 +1908,7 @@ export class AgentOrchestrator {
       const files = (result.context?.read_file as ReadFilePayload | undefined)?.files ?? [];
       if (!hasRequiredRejectEvidence()) {
         matchingRead = false;
-        if (action !== "change") {
+        if (action !== "change" && !hasRequestedFiles) {
           const answer = requiresWriteSiteAndReject && contextHasWriteReject(result.context, query) && !contextHasStateWriteSite(result.context)
             ? "I found the server-side state rejection, but not the state write/update site, so I can’t answer both parts from attached evidence."
             : requiresWriteSiteAndReject && contextHasVerifiedFieldBehavior(result.context, query)
@@ -1852,7 +1922,7 @@ export class AgentOrchestrator {
         }
       } else {
         matchingRead = true;
-        if (action === "locate" && requiresWriteSiteAndReject && !this.contextHasIntegrationHits(result.context)) {
+        if (!hasRequestedFiles && action === "locate" && requiresWriteSiteAndReject && !this.contextHasIntegrationHits(result.context)) {
           for (const file of remoteReadEvidenceFiles(files)) {
             if (!file.path || !contentLooksLikeAskedFieldReject(file.content ?? "", query, file.path)) continue;
             const remote = await this.ctx.readRemoteFile?.({ path: file.path, repoId });
@@ -1865,7 +1935,7 @@ export class AgentOrchestrator {
             return { ...result, answer: `The opened serializer rejects the submitted state in this guard:\n\n${cite(guard)}\n\nAccepted updates delegate to \`super().update(instance, validated_data)\` in the same class:\n\n${cite(update)}\n\nThis establishes the shown validation and update delegation. A policy for the specific transition described remains unverified.`, context: result.context };
           }
         }
-        if (action === "locate" && !requiresWriteSiteAndReject && !contextHasWriteReject(result.context, query) && !this.contextHasIntegrationHits(result.context)) {
+        if (!hasRequestedFiles && action === "locate" && !requiresWriteSiteAndReject && !contextHasWriteReject(result.context, query) && !this.contextHasIntegrationHits(result.context)) {
           for (const file of files) {
             const source = { path: file.path, content: file.content, evidenceSource: file.evidenceSource };
             const handling = verifiedFieldHandlingEvidence(source, query);
@@ -1886,7 +1956,7 @@ export class AgentOrchestrator {
     }
     if (
       (isBackendStateLocateAsk(query) || isParserLocateAsk(query)) &&
-      !contextHasGroundedLocateRead(result.context, query)
+      !contextHasGroundedLocateRead(result.context, query) && !hasRequestedFiles
     ) {
       return {
         ...result,
@@ -1894,7 +1964,7 @@ export class AgentOrchestrator {
         context: result.steps.length ? result.context : undefined
       };
     }
-    const history = action === "locate" && !isShipCheckQuery(query) && !this.contextHasIntegrationHits(result.context)
+    const history = directFileAnswer ? [{ role: "user" as const, content: query }] : action === "locate" && !isShipCheckQuery(query) && !this.contextHasIntegrationHits(result.context)
       ? [...compactApiRejectConversation(query, result.context), { role: "user" as const,
           content: "Answer only from the opened remote source above. Search snippets and planning guesses are discovery leads, not source evidence. Cite only opened paths and copy code verbatim with its attached line numbers." }]
       :
@@ -1917,7 +1987,7 @@ export class AgentOrchestrator {
           "You did not read a file that mentions the named symbol. Summarize Slack/Jira/docs results, and say the index didn’t return a usable definition."
       });
     }
-    if (needsGrounding && !matchingRead && !hasIntegrationHits) {
+    if (needsGrounding && !matchingRead && !hasIntegrationHits && !requestedFiles?.length) {
       const hadSuccessfulRead = readFileContextHasBody(result.context);
       if (!(isFeatureAddAsk(query) && hadSuccessfulRead)) {
         return {
@@ -1933,7 +2003,7 @@ export class AgentOrchestrator {
       action === "locate" &&
       !matchingRead &&
       !hasIntegrationHits &&
-      !readFileContextHasBody(result.context)
+      !readFileContextHasBody(result.context) && !requestedFiles?.length
     ) {
       return {
         ...result,
@@ -1941,8 +2011,15 @@ export class AgentOrchestrator {
         context: result.steps.length ? result.context : undefined
       };
     }
+    if (requiredReads.length) {
+      const payload = result.context?.read_file as ReadFilePayload | undefined;
+      result.context!.read_file = { ...payload, files: [
+        ...(payload?.files ?? []).filter((file) => !requiredReads.some((required) => required.path === file.path)),
+        ...requiredReads
+      ] };
+    }
     if (!options.streamAnswer) {
-      return { ...result, context: result.steps.length ? result.context : undefined };
+      return { ...result, context: result.steps.length || requestedFiles?.length ? result.context : undefined };
     }
     if (options.signal?.aborted) {
       return { ...result, context: result.steps.length ? result.context : undefined };
@@ -1957,6 +2034,18 @@ export class AgentOrchestrator {
         interpretNotes = await gatherRequest(this.ctx, "integration-interpret", () => options.interpretOpens!(artifacts), undefined);
       }
       const historyForAnswer = filledHistory ?? history;
+      if (requestedFiles?.length) {
+        if (isApiRejectAsk(query) && !hasRequiredRejectEvidence()) {
+          historyForAnswer.push({ role: "user", content: "The API-rejection part is unverified. Say that plainly; do not invent a rejection, guard, or transition policy. Still answer the independently supported named-file parts from their bodies below." });
+        }
+        if (requiredReads.length) {
+          historyForAnswer.push({ role: "user", content: JSON.stringify({ files: requiredReads }) });
+        }
+        // Put every independently resolved outcome after summarized history.
+        historyForAnswer.push({ role: "user", content: JSON.stringify({ requestedFiles }) });
+        if (!directFileAnswer) historyForAnswer.push({ role: "user", content: formatRequestedFileOutcomes(requestedFiles) });
+        options.onDiagnostic?.({ stage: "requested-file-synthesis", requestedFiles });
+      }
       if (
         historyForAnswer &&
         ((isCreateLocateAsk(query) && contextHasCreateDefinition(result.context)) ||
@@ -1978,7 +2067,11 @@ export class AgentOrchestrator {
         action,
         openedEvidence: formatOpenedIntegrationEvidence(result.context),
         interpretNotes,
-        attachedFiles: options.capturedAttachment?.files
+        attachedFiles: directFileAnswer ? undefined : options.capturedAttachment?.files.filter((file) => !requestedFiles?.some((ref) => ref.path === file.path)),
+        projectInstructions: options.projectInstructions,
+        requestedFiles,
+        repoFacts: result.context?.repoFacts,
+        directFileAnswer
       });
       const cleaned =
         isCreateLocateAsk(query) || isCompoundAuthAndStateLocateAsk(query)
@@ -1987,10 +2080,10 @@ export class AgentOrchestrator {
       return {
         ...result,
         answer: cleaned,
-        context: result.steps.length ? result.context : undefined
+        context: result.steps.length || requestedFiles?.length ? result.context : undefined
       };
     } catch {
-      return { ...result, context: result.steps.length ? result.context : undefined };
+      return { ...result, context: result.steps.length || requestedFiles?.length ? result.context : undefined };
     }
   }
 
@@ -2095,39 +2188,52 @@ export class AgentOrchestrator {
     context: AgentSessionContext,
     conversation?: AgentConversationMessage[]
   ): Promise<{ ok: boolean; raw?: string }> {
-    const named = extractNamedSourceFiles(query);
+    const named = requestedRepoFiles(query);
     if (!named.length) {
       return { ok: false };
     }
-    const toRead: string[] = [];
-    const seen = new Set<string>();
-    const push = (path: string) => {
-      const trimmed = path.replace(/^\/+/, "").trim();
-      const key = trimmed.toLowerCase();
-      if (!trimmed || seen.has(key)) {
-        return;
-      }
-      seen.add(key);
-      toRead.push(trimmed);
-    };
-    for (const ref of named) {
-      if (ref.includes("/")) {
-        push(ref);
+    const outcomes: RequestedRepoFile[] = [];
+    let lastRaw: string | undefined;
+    for (const [index, ref] of named.entries()) {
+      if (this.runSignal?.aborted) break;
+      const outcome: RequestedRepoFile = { requestedPath: ref.requestedPath,
+        repoId, branch: this.ctx.repoTarget?.branch, status: "unavailable" };
+      outcomes.push(outcome);
+      if (index >= AGENT_MAX_FILES_READ) {
+        outcome.reason = "Read limit reached; body unverified.";
         continue;
       }
-      const found = (await this.ctx.findFiles?.({ query: ref, repoId }).catch(() => [])) ?? [];
-      const base = ref.toLowerCase();
-      const exact = found.filter((path) => (path.split("/").pop() ?? "").toLowerCase() === base);
-      for (const path of (exact.length ? exact : found).slice(0, 2)) {
-        push(path);
-      }
-    }
-    for (const filePath of toRead) {
-      try {
-        const rawResult = await this.executeTool("read_file", { path: filePath, repoId });
-        if (!readFilePayloadHasBody(rawResult)) {
+      let filePath = ref.requestedPath;
+      if (!ref.exact) {
+        const found = (await this.ctx.findFiles?.({ query: ref.requestedPath, repoId }).catch(() => [])) ?? [];
+        if (this.runSignal?.aborted) break;
+        const exact = [...new Set(found.map(normalizeRequestedPath))]
+          .filter((path) => path.split("/").pop() === ref.requestedPath);
+        if (exact.length > 1) {
+          outcome.status = "ambiguous";
+          outcome.candidates = exact;
           continue;
         }
+        // A missing discovery result is not proof of absence: try the root path.
+        filePath = exact[0] ?? filePath;
+      }
+      outcome.path = filePath;
+      try {
+        const captured = ((context.read_file as ReadFilePayload | undefined)?.files ?? [])
+          .find((file) => normalizeRequestedPath(file.path) === filePath && file.content?.trim() &&
+            file.evidenceSource === "remote-read");
+        const rawResult = captured
+          ? JSON.stringify({ path: filePath, files: [captured] })
+          : await this.executeTool("read_file", { path: filePath, repoId });
+        if (this.runSignal?.aborted) break;
+        if (!readFilePayloadHasBody(rawResult)) {
+          outcome.reason = "Remote body unavailable; absence is not established.";
+          continue;
+        }
+        outcome.status = "read";
+        lastRaw = rawResult;
+        const previous = context.read_file as ReadFilePayload | undefined;
+        if (previous?.files) previous.files = previous.files.filter((file) => normalizeRequestedPath(file.path) !== filePath);
         this.mergeContext(context, "read_file", rawResult);
         conversation?.push({
           role: "assistant",
@@ -2140,12 +2246,15 @@ export class AgentOrchestrator {
           summary: `read_file: ${filePath}`,
           completed: true
         });
-        return { ok: true, raw: rawResult };
       } catch {
-        // Try the next named path.
+        outcome.reason = "Remote read failed; body unverified.";
       }
     }
-    return { ok: false };
+    if (this.runSignal?.aborted) return { ok: false };
+    context.requestedFiles = outcomes;
+    conversation?.push({ role: "user", content: JSON.stringify({ requestedFiles: outcomes }) });
+    this.ctx.onDiagnostic?.({ stage: "requested-files-resolved", requestedFiles: outcomes });
+    return { ok: Boolean(lastRaw), raw: lastRaw };
   }
 
   private async captureGroundedExport(
@@ -2270,11 +2379,11 @@ export class AgentOrchestrator {
       emit,
       context
     );
-    if (seeded.ok) {
-      return { steps, context };
-    }
     const named = await this.seedNamedFileReads(repoId, query, emit, context);
-    if (named.ok) {
+    if (named.ok || context.requestedFiles?.length) {
+      return this.finishWithAnswer({ steps, context }, query, repoId, "understand", options ?? {}, undefined, named.ok);
+    }
+    if (seeded.ok) {
       return { steps, context };
     }
 

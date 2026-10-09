@@ -8,7 +8,9 @@ import { isFeatureAddAsk } from "../context/existingCapabilityGrounding";
 import { extractNamedSourceFiles, isApiRejectAsk } from "../api/agent/searchQuery";
 import { isRepoStructureQuery } from "../workspace/repoFactIntent";
 import { openFileSelectionOwnsChange } from "./openFileSelectionChange";
-import { isOpenFileExplainAsk, isOpenFileReviewAsk } from "./plainChatExplain";
+import { openFileOwnsExplainAsk } from "./plainChatExplain";
+import { resolveRepoSourceScope, scopedIntegrations } from "../context/repoSourceScope";
+import { isRequestedFileQuestion } from "../api/agent/requestedRepoFiles";
 
 /**
  * Whether answering needs the repository's own code.
@@ -87,8 +89,7 @@ export function agentTurnAction(options: {
   if (
     options.file &&
     !options.selectedLines &&
-    isOpenFileExplainAsk(options.query) &&
-    !isOpenFileReviewAsk(options.query)
+    openFileOwnsExplainAsk(options.query, options.file)
   ) {
     return "none";
   }
@@ -109,7 +110,7 @@ export function agentTurnAction(options: {
   }
   // Inventory / layout facts use IndexedRepoWorkspace, not list_directory samples.
   // How-to / product How-Why must not hunt even if the planner stamped "understand".
-  if (isRepoStructureQuery(options.query) || isNonCodeHowWhyAsk(options.query)) {
+  if ((isRepoStructureQuery(options.query) && !isRequestedFileQuestion(options.query)) || isNonCodeHowWhyAsk(options.query)) {
     return "none";
   }
   // An observed server/API rejection is a repository-evidence question even
@@ -117,6 +118,9 @@ export function agentTurnAction(options: {
   // bypass the mandatory search -> open/read contract.
   if (isApiRejectAsk(options.query)) {
     return "locate";
+  }
+  if (isRequestedFileQuestion(options.query)) {
+    return classifyRepoCodeIntent(options.query).action === "change" ? "change" : "understand";
   }
   if (!plannerAllowsAgentRepoLoop(options.intentPlan, options.query)) {
     return "none";
@@ -142,6 +146,9 @@ export function agentTurnAllowsRepoTools(options: {
     return false;
   }
   if (options.query && isApiRejectAsk(options.query)) {
+    return true;
+  }
+  if (options.query && isRequestedFileQuestion(options.query) && !isNonCodeHowWhyAsk(options.query)) {
     return true;
   }
   const jobs = options.intentPlan?.jobs ?? [];
@@ -203,8 +210,9 @@ export function plannerAllowsAgentRepoLoop(
 export function integrationsForAgentLoop(options: {
   connected: IntegrationChatProvider[];
   plan?: ChatIntentPlan;
+  query?: string;
 }): IntegrationChatProvider[] {
-  return options.plan?.tools ?? [];
+  return scopedIntegrations(options.plan?.tools ?? [], resolveRepoSourceScope(options.query));
 }
 
 /**

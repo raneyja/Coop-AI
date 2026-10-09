@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.12
+
+- Resolve every requested remote source independently and honor repository-only and per-file exclusions across retrieval and synthesis
+- Answer inventory/layout questions together with verified file bodies without estimating missing totals
+- Reduce direct file-question latency by skipping discovery planning and redundant reasoning while preserving Stop and honest unavailable outcomes
+- Ground root-file citations consistently across the extension, admin, and website clients
+
 ## 0.1.11
 
 - Paid usage metering and upgrade-flow hardening across chat, admin, and pricing surfaces

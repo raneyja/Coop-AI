@@ -78,6 +78,9 @@ const UNIVERSAL_PATH_WORDS = new Set([
   "pnpm",
   "poetry",
   "cargo",
+  // Standard extensionless build filenames, recognized only as user references.
+  "dockerfile",
+  "makefile",
   "go",
   "java",
   "rb",

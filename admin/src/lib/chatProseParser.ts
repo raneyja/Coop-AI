@@ -12,6 +12,9 @@ import {
   locatorFromProseLine,
   resolveCitePathForLanguageFence,
   shouldNeverUpgradeLanguageFence,
+  citationLocatorInFenceBody,
+  hasMalformedCitationInFenceBody,
+  isMalformedCitationLocator,
   tryParseCitationLocator,
   tryParseFenceInfoLocator,
   type CodeCitationLocator
@@ -125,20 +128,6 @@ function stripCommonIndent(body: string[]): string[] {
   return body.map((line) => (line.trim() === "" ? line : line.slice(min)));
 }
 
-function locatorInFenceBody(
-  body: string[]
-): { locator: CodeCitationLocator; codeStart: number } | null {
-  const limit = Math.min(body.length, 6);
-  for (let i = 0; i < limit; i++) {
-    const line = body[i] ?? "";
-    const locator = locatorFromProseLine(line) ?? tryParseCitationLocator(line.trim());
-    if (locator) {
-      return { locator, codeStart: i + 1 };
-    }
-  }
-  return null;
-}
-
 function looksLikeCodeLine(line: string): boolean {
   const trimmed = line.trim();
   if (!trimmed) {
@@ -216,7 +205,7 @@ function findUnclosedFenceResume(
   const first = body[firstIdx]!;
   const firstIsLocator = Boolean(locatorFromProseLine(first) ?? tryParseCitationLocator(first.trim()));
   if (isMarkdownResumeLine(first) && !firstIsLocator && !looksLikeCodeLine(first)) {
-    const loc = locatorInFenceBody(body);
+    const loc = citationLocatorInFenceBody(body);
     if (loc && loc.codeStart > firstIdx) {
       return null;
     }
@@ -380,7 +369,7 @@ function tryParseCodeFence(
     return finish(citationBlockFromLocator(infoCitation, body.join("\n")));
   }
 
-  const bodyCitation = locatorInFenceBody(body);
+  const bodyCitation = citationLocatorInFenceBody(body);
   if (bodyCitation) {
     return finish(
       citationBlockFromLocator(bodyCitation.locator, body.slice(bodyCitation.codeStart).join("\n"))
@@ -388,6 +377,9 @@ function tryParseCodeFence(
   }
 
   const code = body.join("\n");
+  if (isMalformedCitationLocator(infoString ?? "") || hasMalformedCitationInFenceBody(body)) {
+    return { block: { type: "code-fence", language: infoString, code }, nextIndex };
+  }
   if (code.trim() && !shouldNeverUpgradeLanguageFence(infoString)) {
     if (!infoString || isOrdinaryLanguageTag(infoString)) {
       const nearby = findCitationNearFence(lines, startIndex, options?.activeFilePath);

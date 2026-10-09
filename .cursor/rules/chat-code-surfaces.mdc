@@ -28,7 +28,7 @@ Coop chat must feel like **Cursor / Cody / Augment** (IDE), not ChatGPT web. Eve
 
 ## Parser / renderer contract
 
-1. Citation locators are recognized on the fence info-string **or** the first body line.
+1. Citation locators are recognized on the fence info-string **or** the first body line. Explicit numeric coordinates also support root files (`18:26:AGENTS.md`, `package.json:1-8`); an explicit locator wins over any nearby or active-file inference. Malformed explicit coordinates must never borrow a different nearby source. Bare path inference stays slash-only to avoid treating prose domains as source paths.
 2. Placeholder locators (`startLine:endLine:…`) and path-only first lines that look like repo files **must** upgrade to `code-citation`, not `code-fence`.
 3. Locators sitting **above or immediately after** a fence, **indented** fences inside lists, unlabeled fences with a nearby repo path, **bold / File: path wrappers**, and **unclosed fences** that would swallow following lists **must** still render as cite — never anonymous Copy boxes wrapping the rest of the answer.
 4. Mistaken ` ```lang ` dumps of repo code **must** upgrade to cite when:
@@ -38,6 +38,7 @@ Coop chat must feel like **Cursor / Cody / Augment** (IDE), not ChatGPT web. Eve
 5. Never upgrade `patch` / `diff` / shell / doc fences via active file.
 6. Remaining anonymous fences still use **IDE chrome + token colors** for any language — never uppercase **TEXT** / monochrome markdown. Highlighter must color unknown source langs, not fall back to plain text.
 7. `ChatCodeBlock` must not show a **TEXT** badge. Cite, edit, and anonymous headers are the same product family (`coop-patch-file`): path-first, monospace. Anonymous reuses that chrome — never the old markdown `bash` + Copy language-badge card.
+8. Grounding may omit an unmatched, model-added closing brace/bracket only when the preceding excerpt contains at least two nonblank lines that match a contiguous remote source slice verbatim. Display only that verified slice and its actual range; never invent a closing line or accept changed interior code.
 
 ## Prompt contract
 

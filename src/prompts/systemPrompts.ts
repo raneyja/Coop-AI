@@ -60,7 +60,9 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
   - Also accepted: fence info-string \`\`\`42:68:path/to/file.py\` with the snippet as the body (no duplicate location line).
   - Keep slices short (about 5–20 lines). Prefer one tight citation over pasting a whole function. For explain/walkthrough of the open file: at most **two** citation fences; name other files as backtick paths — do not paste their bodies.
   - Citation body must be copied **verbatim** from attached evidence / open-file content: same characters, indentation width, and call style. Do **not** reindent (2-space ↔ 4-space), rewrite, or invent a cleaner version.
+  - Do not add a closing brace to make an excerpt look complete when that closing line is not in the cited source slice.
   - Do **not** abbreviate repo code with \`// ...\`, \`# ...\`, or "summary" comments that replace real lines. If a line is not needed, omit it from the line range instead of ellipsis-substituting.
+  - Root files keep their exact path: use \`18:26:AGENTS.md\` or \`1:8:package.json\`; never relabel their excerpt with another file. Line numbers must be positive and ordered; malformed ranges cannot identify a different source.
   - PASS example first line: \`120:145:packages/lib/server-only/document/complete-document-with-token.ts\`
   - FAIL: literal placeholders \`startLine:endLine:path\` or \`startLine:endLine:apps/...\` — always substitute concrete line numbers from evidence.
   - FAIL: \`\`\`typescript / \`\`\`javascript / \`\`\`python / other \`\`\`lang blocks that dump existing repo code — those render as anonymous markdown, not IDE citations.

@@ -4,8 +4,23 @@ import * as vscode from "vscode";
 import { rememberRemotePatchBuffer } from "../context/remoteViewBuffer";
 import { emptyChatIntentPlan } from "./intentPlanner/types";
 import { readFileAssistantEditorForChat, findOpenFileAssistantDocument } from "../context/editorFileContext";
+import { requestedFilesNeedRepoSelection } from "../api/agent/requestedRepoFiles";
 
 async function run(): Promise<void> {
+  const compound = "Read root AGENTS.md and state appDirectory in /apps/remix/react-router.config.ts.";
+  const targetlessChip = { file: "apps/remix/react-router.config.ts", fileSource: "remote" };
+  assert.equal(requestedFilesNeedRepoSelection(compound, targetlessChip), true);
+  assert.equal(requestedFilesNeedRepoSelection("Read /apps/remix/react-router.config.ts.", targetlessChip), false);
+  assert.equal(requestedFilesNeedRepoSelection(compound, { ...targetlessChip, owner: "fixture", repo: "remote" }), false);
+  assert.equal(requestedFilesNeedRepoSelection(compound, { ...targetlessChip, fileSource: "external" }), false);
+  const repoOnlyResult = { type: "chat_context", data: {} };
+  const repoOnlySession = Object.assign(Object.create(CoopChatSession.prototype), {
+    integrationContextText: () => { throw new Error("repo-only cannot begin integration gathering"); }
+  });
+  assert.equal(await repoOnlySession.enrichChatContextWithIntegrations(repoOnlyResult, {
+    type: "chat_context", params: { sourceScope: { repositoryOnly: true, excludedIntegrations: [] } },
+    intent: { context: { queryText: "rewritten docs query" } }
+  }), repoOnlyResult);
   let answerCalls = 0;
   const answerTurn = { id: "answer-turn", threadId: "answer-thread", startedAt: Date.now(),
     context: { owner: "fixture", repo: "remote", branch: "preview" } };
@@ -69,6 +84,7 @@ async function run(): Promise<void> {
       createChatDeltaBatcher: () => ({ dispose() {}, push() {} }),
       blockIfFreeQuotaExhausted: async () => false, listConnectedIntegrationTools: () => [],
       isViewingThread: () => false,
+      buildProjectInstructionsBlock: async () => undefined,
       options: { agentOrchestrator: { run: async (_request: unknown, options: { capturedAttachment?: { repoId: string; branch?: string; files: Array<{content: string}> } }) => {
         calls++;
         assert.equal(options.capturedAttachment?.files[0].content, "captured-old");

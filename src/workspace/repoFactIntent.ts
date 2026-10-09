@@ -88,9 +88,11 @@ export function isRepoInventoryQuery(queryText: string | undefined): boolean {
 
 /** Broader structure questions that need a live top-level tree, not search snippets. */
 export function isRepoStructureQuery(queryText: string | undefined): boolean {
-  if (isRepoInventoryQuery(queryText)) {
-    return true;
-  }
+  return isRepoInventoryQuery(queryText) || isRepoLayoutQuery(queryText);
+}
+
+/** Layout and totals are independent requirements in a compound question. */
+function isRepoLayoutQuery(queryText: string | undefined): boolean {
   const q = normalize(queryText);
   if (!q) {
     return false;
@@ -150,7 +152,7 @@ export function isRepoPackageBoundaryQuery(queryText: string | undefined): boole
   if (/\b(next\.?js|frontend|backend)\b[^?]*\b(api|packages?|apps?)\b[^?]*\b(boundar|package|layout)\b/.test(q)) {
     return true;
   }
-  if (/\b(apps|packages)\s*\/\s*(web|api|frontend|backend|server|client)\b/.test(q)) {
+  if (/\b(apps|packages)\s*\/\s*(web|api|frontend|backend|server|client)\b(?![\w./-])/.test(q)) {
     return true;
   }
   if (/\bwhich (packages?|apps?)\b[^?]*\b(next\.?js|api|frontend|backend)\b/.test(q)) {
@@ -161,7 +163,7 @@ export function isRepoPackageBoundaryQuery(queryText: string | undefined): boole
 
 /** True when we need a live top-level listing (monorepo / structure), not only totals. */
 export function needsRepoTreeOverview(queryText: string | undefined): boolean {
-  return isRepoStructureQuery(queryText) && !isRepoInventoryQuery(queryText);
+  return isRepoLayoutQuery(queryText);
 }
 
 /** Structure / package-boundary turns should also load in-repo package manifests. */

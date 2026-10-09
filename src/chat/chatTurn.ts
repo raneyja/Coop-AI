@@ -4,6 +4,7 @@ import type { DecisionTimeline } from "../types/decisionTimeline";
 import { scheduleResponseDeadline } from "../config/responseDeadline";
 import type { ChatIntentPlan } from "./intentPlanner/types";
 import type { LocalFileContextPayload } from "../context/localFileContext";
+import type { RepoSourceScope } from "../context/repoSourceScope";
 
 /** Synthetic id for editor panels that do not use ChatThreadStore. */
 export const SESSION_RUN_THREAD_ID = "session";
@@ -29,6 +30,8 @@ export type ChatTurn = {
   quickAction?: string;
   /** Intent plan captured at send time; never shared across turns or threads. */
   intentPlan: ChatIntentPlan;
+  /** Original user source constraints, independent of rewritten search terms. */
+  sourceScope?: RepoSourceScope;
   contextBundle: ContextFetchResult[];
   jobResult?: unknown;
   jobId?: string;
@@ -85,6 +88,7 @@ export type BeginChatTurnInput = {
   modelMessage: string;
   quickAction?: string;
   intentPlan: ChatIntentPlan;
+  sourceScope?: RepoSourceScope;
   pendingMentions?: import("./types").ChatFileMention[];
   pendingLocalFiles?: LocalFileContextPayload;
   attachFullFile?: boolean;
@@ -139,6 +143,8 @@ export class ThreadRunManager {
       modelMessage: input.modelMessage,
       quickAction: input.quickAction,
       intentPlan: captureIntentPlan(input.intentPlan),
+      sourceScope: input.sourceScope ? Object.freeze({ ...input.sourceScope,
+        excludedIntegrations: Object.freeze([...input.sourceScope.excludedIntegrations]) as unknown as RepoSourceScope["excludedIntegrations"] }) : undefined,
       dualRepoCompare: input.dualRepoCompare ? Object.freeze({
         ...input.dualRepoCompare,
         left: Object.freeze({...input.dualRepoCompare.left}),

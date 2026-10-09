@@ -154,6 +154,19 @@ async function main(): Promise<void> {
     assert.doesNotMatch(prompt, /short identifier or 2–4 word phrase\. Never paste the whole question\./);
   });
 
+  await test("agent planner receives selected-repo instructions", () => {
+    const prompt = buildAgentToolPlanPrompt({
+      message: "Using only the selected repository context, list two rules from AGENTS.md.",
+      repoId: "CoopAI-Corp/documenso",
+      round: 0,
+      priorSummaries: [],
+      allowedRepoTools: true,
+      projectInstructions: "Prefer type over interface. Use npx tsc --noEmit."
+    });
+    assert.match(prompt, /Prefer type over interface/);
+    assert.match(prompt, /authoritative for this selected repo/);
+  });
+
   await test("compound API reject prompt requires both remote evidence floors", () => {
     const prompt = buildAgentToolPlanPrompt({
       message: "Where is work-item state written, and what rejects a bad transition?",

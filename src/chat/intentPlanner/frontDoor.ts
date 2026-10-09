@@ -6,6 +6,8 @@
  * fetchers already in the tree do the work.
  */
 import { jobSearchActivityQuery, planJobSearchAttempts } from "../../context/jobSearchPlan";
+import { isDirectRepoFileQuestion } from "../../api/agent/directRepoFileQuestion";
+import { resolveRepoSourceScope, scopedIntegrations } from "../../context/repoSourceScope";
 import { parseSlashCommand, type ParsedSlashCommand } from "../../context/slashCommands";
 import { omitTeamsWhileComingSoon } from "../../integrations/teamsAvailability";
 import { isQuickActionId } from "../../webview/types";
@@ -174,7 +176,9 @@ export async function planChatFrontDoor(
   model?: FrontDoorModelOptions
 ): Promise<ChatIntentPlan> {
   const rulesPlan = planChatFrontDoorFromRules(input);
-  if (!model?.complete || !shouldCallChatIntentModel(rulesPlan, input)) {
+  if (!model?.complete || !shouldCallChatIntentModel(rulesPlan, input) ||
+      (isDirectRepoFileQuestion(input.message) && scopedIntegrations(rulesPlan.tools, resolveRepoSourceScope(input.message)).length === 0 &&
+        rulesPlan.codeIntent?.action !== "change" && (input.constraint?.kind ?? "none") === "none")) {
     return rulesPlan;
   }
   try {

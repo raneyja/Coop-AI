@@ -311,7 +311,8 @@ export function commonChildPackageNames(parentDir: string): string[] {
  */
 export async function gatherPackageBoundaryEvidence(
   workspace: IndexedRepoWorkspace,
-  target: RepoTarget
+  target: RepoTarget,
+  options?: { allowsFile?: (path: string) => boolean; onTreeOverview?: (tree: RepoTreeEvidence) => void }
 ): Promise<PackageBoundaryEvidence> {
   const treeOverview = await workspace.getTreeOverview(target);
   if (!treeOverview) {
@@ -322,6 +323,7 @@ export async function gatherPackageBoundaryEvidence(
         "Say package layout / boundaries are unavailable — do not invent apps/, packages/, or paths from another repository."
     };
   }
+  options?.onTreeOverview?.(treeOverview);
 
   const parentDirs = treeOverview.topLevelDirs
     .map((dir) => dir.replace(/\/$/, ""))
@@ -337,7 +339,8 @@ export async function gatherPackageBoundaryEvidence(
     })
   );
 
-  const paths = collectPackageManifestCandidatePaths(treeOverview, childListings);
+  const paths = collectPackageManifestCandidatePaths(treeOverview, childListings)
+    .filter(path => options?.allowsFile?.(path) !== false);
   const loaded: RepoFileEvidence[] = [];
   await Promise.all(
     paths.map(async (path) => {

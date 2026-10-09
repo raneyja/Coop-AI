@@ -232,7 +232,7 @@ import {
 } from "../engines/blastRadiusDependentsFallback";
 import { isFileCallerQuery } from "../context/fileCallerIntent";
 import { isFileHistoryQuery } from "../context/fileHistoryIntent";
-import { isOpenFileExplainAsk, isOpenFileReviewAsk } from "./plainChatExplain";
+import { isOpenFileExplainAsk, isOpenFileReviewAsk, openFileOwnsExplainAsk } from "./plainChatExplain";
 import { evidenceCodeHostDisplayName } from "../api/codeHosts/codeHostLabels";
 import {
   coordinatesFromRepoId,
@@ -594,6 +594,8 @@ import { fetchGoogleDocsSearchContext } from "../context/googleDocsContext";
 import type { ResolvedIntegrationScope, ScopedIntegrationProvider } from "../integrationScope/types";
 import { AGENT_JOB_WALL_MS, AGENT_MAX_TOOL_ROUNDS } from "../config/agentJobBudget";
 import { shouldRunAgentToolLoop, agentTurnAction, agentTurnAllowsRepoTools, shouldSkipAgentHuntForOpenFileFeatureAdd, integrationsForAgentLoop } from "./agentRouting";
+import { resolveRepoSourceScope } from "../context/repoSourceScope";
+import { formatRequestedFileOutcomes, requestedFilesNeedRepoSelection, resolveRepoFileScope, repoFileScopeAllowsPath } from "../api/agent/requestedRepoFiles";
 import {
   openFileSelectionOwnsChange,
   REMOTE_SELECTION_UNREADABLE_ERROR
@@ -3390,6 +3392,7 @@ export class CoopChatSession {
         ...request,
         params: {
           ...request.params,
+          sourceScope: turn?.sourceScope ?? resolveRepoSourceScope(event.context.queryText),
           ...(request.params.quickAction === "blast-radius" ? { gatherStartedAt } : {}),
           ...(turn ? {
             intentPlan: turn.intentPlan,
@@ -4461,7 +4464,10 @@ export class CoopChatSession {
 
   private async enrichChatContextWithRepoInventory(
     request: ContextFetchRequest,
-    result: ContextFetchResult
+    result: ContextFetchResult,
+    frozenTarget?: RepoTarget,
+    signal?: AbortSignal,
+    onProgress?: (facts: Record<string, unknown>) => void
   ): Promise<ContextFetchResult> {
     const activityTurn = this.activityTurnForRequest(request);
     const queryText = request.intent.context?.queryText;
@@ -4469,12 +4475,13 @@ export class CoopChatSession {
     if (!hasRepoFactNeed(needs)) {
       return result;
     }
-    if (!isHonestRepoIntelligenceScope(this.currentContext, request.params.file)) {
+    if (!frozenTarget?.repoId && !isHonestRepoIntelligenceScope(this.currentContext, request.params.file)) {
       return result;
     }
 
     const workspace = this.indexedRepoWorkspace();
-    const target = this.repoTargetForRequest(request);
+    const target = frozenTarget ?? this.repoTargetForRequest(request);
+    const fileScope = resolveRepoFileScope(queryText ?? "");
     const needCount = needs.fileCount || needs.lineCount;
     const needStructure = needs.treeOverview || needs.packageManifests;
     const factLine = repoFactActivityLabel(queryText);
@@ -4487,64 +4494,48 @@ export class CoopChatSession {
       );
     }
 
-    const load = async (): Promise<ContextFetchResult> => {
-      try {
-        const [inventory, structure] = await Promise.all([
-          needCount
-            ? workspace.getInventory(target, needs, { allowExpensiveTreeWalk: false })
-            : Promise.resolve(undefined),
-          needStructure
-            ? needs.packageManifests
-              ? gatherPackageBoundaryEvidence(workspace, target)
-              : workspace.getTreeOverview(target).then((treeOverview) => ({
-                  treeOverview,
-                  entryFiles: [] as Array<{
-                    path: string;
-                    content: string;
-                    truncated?: boolean;
-                    repoId: string;
-                  }>,
-                  note: undefined as string | undefined
-                }))
-            : Promise.resolve(undefined)
-        ]);
-        const treeOverview = structure?.treeOverview;
-        const entryFiles = structure?.entryFiles;
-        const packageBoundaryNote =
-          structure && "note" in structure ? structure.note : undefined;
-        const packageStructure =
-          structure && "packageStructure" in structure ? structure.packageStructure : undefined;
-        return mergeRepoInventoryContext(result, inventory, treeOverview, {
-          entryFiles,
-          packageBoundaryNote,
-          packageStructure
-        });
-      } catch {
-        return mergeRepoInventoryContext(result, {
-          source: "unavailable",
-          note: "Failed to load repository inventory. Do not estimate repository totals from related-file hits."
-        });
+    let inventory: import("../workspace/indexedRepoWorkspaceTypes").RepoInventoryEvidence | undefined = needCount
+      ? { source: "unavailable", note: "Repository totals could not be verified. Do not estimate them." } : undefined;
+    let structure: import("../workspace/repoPackageBoundaryEvidence").PackageBoundaryEvidence | undefined;
+    const snapshot = (): ContextFetchResult => mergeRepoInventoryContext(result, inventory, structure?.treeOverview, {
+      entryFiles: structure?.entryFiles,
+      packageStructure: structure?.packageStructure,
+      packageBoundaryNote: structure?.note ?? (needStructure && !structure
+        ? "Repository layout could not be verified for the selected branch. Do not invent paths." : undefined)
+    });
+    const publish = (): void => { onProgress?.(snapshot().data as Record<string, unknown>); };
+    const acceptStructure = (value: typeof structure): void => {
+      if (signal?.aborted) return;
+      if (!value?.treeOverview?.branch || !target.branch || value.treeOverview.branch === target.branch) {
+        structure = value;
+        publish();
       }
     };
+    const load = async (): Promise<ContextFetchResult> => {
+      await Promise.allSettled([
+        needCount ? workspace.getInventory(target, needs, { allowExpensiveTreeWalk: false }).then(value => {
+          if (signal?.aborted) return;
+          if (!value?.branch || !target.branch || value.branch === target.branch) inventory = value;
+          publish();
+        }) : Promise.resolve(),
+        needStructure ? (needs.packageManifests
+          ? gatherPackageBoundaryEvidence(workspace, target, {
+              allowsFile: path => !signal?.aborted && repoFileScopeAllowsPath(fileScope, path),
+              onTreeOverview: treeOverview => acceptStructure({ treeOverview, entryFiles: [],
+                note: "Package manifests could not yet be verified; use only the attached tree paths." })
+            })
+          : workspace.getTreeOverview(target).then(treeOverview => ({ treeOverview, entryFiles: [] })))
+          .then(acceptStructure) : Promise.resolve()
+      ]);
+      return snapshot();
+    };
 
-    // Keep inventory inside the gather budget so synthesis can still answer within 15s.
-    const budgetMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
-    if (budgetMs <= 0) {
-      return mergeRepoInventoryContext(result, {
-        source: "unavailable",
-        note: "Timed out loading repository inventory. Say totals are unavailable."
-      });
-    }
-
-    return await Promise.race([
-      load(),
-      delayMs(budgetMs).then(() =>
-        mergeRepoInventoryContext(result, {
-          source: "unavailable",
-          note: "Timed out loading repository inventory. Say totals are unavailable."
-        })
-      )
-    ]);
+    // Components publish independently: a pending sibling cannot discard a
+    // verified total or tree at the shared gather handoff.
+    const budgetMs = remainingContextGatherBudgetMs(request.params.gatherStartedAt ?? (this.chatTurnStartedAt || Date.now()));
+    if (budgetMs <= 0) return snapshot();
+    publish();
+    return await Promise.race([load(), delayMs(budgetMs).then(snapshot)]);
   }
 
   private async enrichChatContextWithSemanticSearch(
@@ -4865,7 +4856,8 @@ export class CoopChatSession {
       evidenceClass?: string;
     }>,
     allowedRepoTools = true,
-    intentPurpose?: string
+    intentPurpose?: string,
+    projectInstructions?: string
   ): Promise<string> {
     if (this.turnStreamAbort?.aborted) {
       return JSON.stringify({ done: true });
@@ -4879,7 +4871,8 @@ export class CoopChatSession {
       allowedIntegrations: input.allowedIntegrations,
       suggestedJobs,
       intentPurpose,
-      allowedRepoTools
+      allowedRepoTools,
+      projectInstructions
     });
     const history = this.conversationToHistory(input.conversation);
     let full = "";
@@ -5107,19 +5100,39 @@ export class CoopChatSession {
     requestTurn?: ChatTurn,
     requestRunId?: string
   ): Promise<string> {
+    const fileScope = resolveRepoFileScope(input.message);
+    const projectInstructionsBlock = repoFileScopeAllowsPath(fileScope, "AGENTS.md")
+      ? input.projectInstructions ?? await this.buildProjectInstructionsBlock(requestTurn?.context, requestTurn?.startedAt, input.message)
+      : undefined;
     const answerPrompt = buildAgentAnswerPrompt({
       message: input.message,
       action: input.action,
       openedEvidence: input.openedEvidence,
-      interpretNotes: input.interpretNotes
+      interpretNotes: input.interpretNotes,
+      projectInstructions: projectInstructionsBlock
     });
-    const prompt = input.attachedFiles?.length
-      ? formatChatMessageWithLocalFiles({ message: answerPrompt, files: input.attachedFiles }) : answerPrompt;
-    const projectInstructionsBlock = await this.buildProjectInstructionsBlock(requestTurn?.context, requestTurn?.startedAt);
-    const message = projectInstructionsBlock ? `${projectInstructionsBlock}\n\n${prompt}` : prompt;
+    const attachedFiles = input.attachedFiles?.filter(file => repoFileScopeAllowsPath(fileScope, file.path));
+    const prompt = attachedFiles?.length
+      ? formatChatMessageWithLocalFiles({ message: answerPrompt, files: attachedFiles }) : answerPrompt;
+    const scopedPrompt = input.repoFacts ? buildUserMessageWithContext(prompt, {
+      userQuestion: input.message,
+      contextBundle: [{ data: input.repoFacts }]
+    }) : prompt;
+    const message = input.requestedFiles?.length
+      ? `${scopedPrompt}\n\n${formatRequestedFileOutcomes(input.requestedFiles)}` : scopedPrompt;
+    const history = this.conversationToHistory(input.conversation, { summarizeTools: true });
     if (requestTurn && vscode.workspace.getConfiguration("coopAI").get<boolean>("agentDiagnostics", false)) {
+      const historyEvidence = history.flatMap((entry) => {
+        try {
+          const payload = JSON.parse(entry.content) as { files?: Array<{ path: string; content?: string; repoId?: string; branch?: string; evidenceSource?: string; truncated?: boolean }> };
+          return Array.isArray(payload.files) ? payload.files.map(({ content, ...source }) => ({ ...source, bodyChars: content?.length ?? 0 })) : [];
+        } catch { return []; }
+      });
       this.logAttachmentDiagnostic(requestTurn, "attachment-agent-final-request", {
-        ...attachmentSerializedMetadata(message), runId: requestRunId, provider: runtime.provider, model: runtime.model
+        ...attachmentSerializedMetadata(message), runId: requestRunId, provider: runtime.provider, model: runtime.model,
+        requestedFiles: input.requestedFiles, historyEvidence,
+        repoInventory: input.repoFacts?.repoInventory, treeOverview: input.repoFacts?.treeOverview,
+        directFileAnswer: input.directFileAnswer
       });
     }
     let full = "";
@@ -5131,7 +5144,7 @@ export class CoopChatSession {
           repo: requestTurn ? requestTurn.context.repo : this.currentContext.repo,
           branch: requestTurn ? requestTurn.context.branch : this.currentContext.branch
         },
-        history: this.conversationToHistory(input.conversation, { summarizeTools: true }),
+        history,
         model: runtime.model,
         provider: runtime.provider,
         useCase,
@@ -5139,7 +5152,7 @@ export class CoopChatSession {
         maxTokens: resolveChatOutputMaxTokens(this.preferences.maxTokens),
         // Locate synthesis reports already verified source; avoid another
         // reasoning phase after discovery has used the interactive budget.
-        enableThinking: input.action !== "locate"
+        enableThinking: input.action !== "locate" && !input.directFileAnswer
       },
       (chunk) => {
         if (signal?.aborted) {
@@ -5318,9 +5331,11 @@ export class CoopChatSession {
 
       const allowedIntegrations = integrationsForAgentLoop({
         connected: this.listConnectedIntegrationTools(),
-        plan: turn.intentPlan
+        plan: turn.intentPlan,
+        query
       });
       const allowedRepoTools = turn.allowsRepoTools ?? false;
+      const projectInstructionsBlock = await this.buildProjectInstructionsBlock(turn.context, turn.startedAt, query);
       const plannedSearchQueries = plannedCodeSearchQueries(turn.intentPlan.jobs);
       const intentBrief = formatIntentBriefForAgent(turn.intentPlan);
       if (turn.context.fileSource === "remote" && turn.editAnchorLoad &&
@@ -5359,14 +5374,24 @@ export class CoopChatSession {
           startedAt: turn.startedAt,
           repoTarget: { repoId, owner: turn.context.owner, repo: turn.context.repo, provider: turn.context.provider, branch: turn.context.branch },
           capturedAttachment,
+          loadRepoFacts: hasRepoFactNeed(repoFactNeeds(query)) ? async (target, onProgress) => {
+            const request: ContextFetchRequest = {
+              id: `agent-facts-${turn.id}`, type: "chat_context", cost: "cheap", createdAt: new Date(),
+              params: { ...turn.context, repoId: target.repoId, gatherStartedAt: turn.startedAt, threadId: turn.threadId, turnId: turn.id },
+              intent: { id: turn.id, intent: UserIntent.MANUAL_CHAT_SUBMIT, timestamp: new Date(), costEstimate: "cheap",
+                context: { ...turn.context, queryText: query } }
+            };
+            const result = await this.enrichChatContextWithRepoInventory(request,
+              { requestId: request.id, type: "chat_context", fetchedAt: new Date(), data: {} }, target, signal, onProgress);
+            return result.data as Record<string, unknown> | undefined;
+          } : undefined,
           allowedIntegrations,
           allowedRepoTools,
           plannedSearchQueries:
             plannedSearchQueries.length > 0 ? plannedSearchQueries.slice(0, 4) : undefined,
           intentBrief,
-          fillIntegrations: turn.intentPlan.tools.filter(
-            (tool): tool is IntegrationChatProvider => Boolean(tool)
-          ),
+          projectInstructions: projectInstructionsBlock,
+          fillIntegrations: allowedIntegrations,
           fillQueries: integrationFillQueries(turn.intentPlan.jobs, turn.intentPlan.tools),
           searchIntegration: (input) =>
             this.searchIntegrationForAgent(input.provider, input.query, turn.context.file, {
@@ -5400,7 +5425,8 @@ export class CoopChatSession {
                 evidenceClass: job.evidenceClass
               })),
               allowedRepoTools,
-              turn.intentPlan.purpose
+              turn.intentPlan.purpose,
+              projectInstructionsBlock
             );
           },
           streamAnswer: (input) =>
@@ -5562,6 +5588,11 @@ export class CoopChatSession {
       return result;
     }
     if (request.params.quickAction === "understand-repo") {
+      return result;
+    }
+    // Reject repo-only vendor gathering before scope lookups or activity start,
+    // including fallback synthesis when a remote chip has no repository target.
+    if ((request.params.sourceScope ?? resolveRepoSourceScope(request.intent.context.queryText)).repositoryOnly) {
       return result;
     }
     const contextText = await this.integrationContextText(result, request);
@@ -6851,8 +6882,8 @@ export class CoopChatSession {
       resolveChatCommandConstraint({ parsed: parsedSlash }).kind !== "integration" &&
       !options?.mentions?.length &&
       !attachments?.length &&
-      !isHonestRepoIntelligenceScope(this.currentContext) &&
-      messageNeedsSelectedRepo(message)
+      ((!isHonestRepoIntelligenceScope(this.currentContext) && messageNeedsSelectedRepo(message)) ||
+        requestedFilesNeedRepoSelection(message, this.currentContext))
     ) {
       await this.completeMissingIntentClarification(
         message,
@@ -6877,8 +6908,7 @@ export class CoopChatSession {
       !options?.mentions?.length &&
       Boolean(this.currentContext.file) &&
       !this.currentContext.selectedLines &&
-      isOpenFileExplainAsk(message) &&
-      !isOpenFileReviewAsk(message);
+      openFileOwnsExplainAsk(message, this.currentContext.file);
     if (isolatedOpenFileExplain) {
       options = {
         ...options,
@@ -7240,6 +7270,7 @@ export class CoopChatSession {
       modelMessage,
       quickAction,
       intentPlan: turnIntentPlan,
+      sourceScope: resolveRepoSourceScope(message),
       dualRepoCompare: options?.dualRepoCompare,
       pendingMentions: options?.mentions,
       pendingLocalFiles: this.pendingChatLocalFiles,
@@ -7425,8 +7456,7 @@ export class CoopChatSession {
       !options?.integrationProvider &&
       Boolean(turn.context.file) &&
       !turn.context.selectedLines &&
-      isOpenFileExplainAsk(message) &&
-      !isOpenFileReviewAsk(message);
+      openFileOwnsExplainAsk(message, turn.context.file);
     this.turnAgentAction = turnIsolatedOpenFileExplain
       ? "none"
       : agentTurnAction({
@@ -9365,7 +9395,7 @@ export class CoopChatSession {
                 remoteSelectionChange
               });
       const projectInstructionsBlock =
-        effectiveQuickAction === "understand-repo" ? undefined : await this.buildProjectInstructionsBlock(turnContext, turn.startedAt);
+        effectiveQuickAction === "understand-repo" ? undefined : await this.buildProjectInstructionsBlock(turnContext, turn.startedAt, turn.modelMessage);
       if (projectInstructionsBlock) {
         apiMessage = `${projectInstructionsBlock}\n\n${apiMessage}`;
       }
@@ -12833,7 +12863,8 @@ export class CoopChatSession {
    * Remote Use-repo loads AGENTS.md via IndexedRepoWorkspace.readFile (Zero-Clone).
    * Do not add Sources/activity chrome here (UX-G6).
    */
-  private async buildProjectInstructionsBlock(context: RepoContext = this.currentContext, startedAt = this.chatTurnStartedAt): Promise<string | undefined> {
+  private async buildProjectInstructionsBlock(context: RepoContext = this.currentContext, startedAt = this.chatTurnStartedAt, query = ""): Promise<string | undefined> {
+    if (!repoFileScopeAllowsPath(resolveRepoFileScope(query), "AGENTS.md")) return undefined;
     const sources = projectInstructionsSourcesForTurn({
       fileAssistant: isFileAssistantSession(context),
       useRepoId: context.owner && context.repo ? buildRepoId(this.preferences, context) : undefined,

@@ -2,6 +2,9 @@
  * Plain-chat "explain this file / walk me through X" — briefing, not a dump.
  * Used to cap retrieval bodies and lock the response shape.
  */
+import { normalizeRequestedPath, requestedRepoFiles } from "../api/agent/requestedRepoFiles";
+import { hasRepoFactNeed, repoFactNeeds } from "../workspace/repoFactIntent";
+
 const EXPLAIN_ASK_RE =
   /\b(explain|walk\s+me\s+through|what\s+does\s+(?:this|it)|what\s+behavior\s+does\s+(?:this|the)\b|how\s+does\s+(?:this|it)|when\s+does\s+it)\b/i;
 
@@ -18,6 +21,14 @@ export function isOpenFileExplainAsk(message: string | undefined): boolean {
     return false;
   }
   return EXPLAIN_ASK_RE.test(text);
+}
+
+/** A chip cannot own an explanation that explicitly requests other files. */
+export function openFileOwnsExplainAsk(message: string, file?: string): boolean {
+  if (!file || !isOpenFileExplainAsk(message) || isOpenFileReviewAsk(message) || hasRepoFactNeed(repoFactNeeds(message))) return false;
+  const path = normalizeRequestedPath(file);
+  return requestedRepoFiles(message).every((ref) => ref.requestedPath === path ||
+    (!ref.exact && ref.requestedPath === path.split("/").pop()));
 }
 
 /**
@@ -57,7 +68,7 @@ export function semanticAttachModeForChat(options: {
   if (!open) {
     return "bodies";
   }
-  if (isOpenFileExplainAsk(options.query) && !isOpenFileReviewAsk(options.query)) {
+  if (openFileOwnsExplainAsk(options.query, options.openFile)) {
     return "paths-only";
   }
   return "bodies";

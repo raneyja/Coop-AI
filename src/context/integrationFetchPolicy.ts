@@ -3,6 +3,7 @@ import type { ContextFetchRequest } from "./requestBatcher";
 import { looksLikeAbsoluteDiskPath } from "./outsideWorkspaceFile";
 import { isFileAssistantSession } from "./sessionMode";
 import { isLocateShapedRepoAsk } from "../chat/repoCodeIntent";
+import { resolveRepoSourceScope } from "./repoSourceScope";
 
 /** Quick actions that auto-fetch all connected doc/discussion integrations. */
 export const REPO_WIDE_INTEGRATION_QUICK_ACTIONS = [
@@ -30,6 +31,9 @@ export function isTraceDecisionIntegrationQuickAction(
 }
 
 function isOutsideWorkspaceTarget(request: ContextFetchRequest): boolean {
+  if ((request.params.sourceScope ?? resolveRepoSourceScope(request.intent?.context?.queryText)).repositoryOnly) {
+    return true;
+  }
   if (
     isFileAssistantSession({
       file: request.params.file,

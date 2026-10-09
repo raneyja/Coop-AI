@@ -518,6 +518,18 @@ test("code-only locate does not unlock connected vendors (FAIL 2)", () => {
   );
 });
 
+test("explicit selected-repository scope blocks inferred integration tools", () => {
+  const query = "Using only the selected repository context, list two rules from AGENTS.md.";
+  assert.deepEqual(
+    integrationsForAgentLoop({
+      connected: ["confluence", "notion", "google-docs"],
+      plan: { ...emptyChatIntentPlan(query), tools: ["confluence", "notion"], mode: "tools-only" },
+      query
+    }),
+    []
+  );
+});
+
 test("I3 compound locate+jira stays on jira, not the full connected list", () => {
   const query =
     "Where is requireAuth defined, and what did we already decide about peeling auth into coop-backend?";

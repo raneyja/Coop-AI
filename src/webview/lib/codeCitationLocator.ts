@@ -108,7 +108,9 @@ function locatorFromPathAndLines(
   startRaw: string,
   endRaw?: string
 ): CodeCitationLocator | null {
-  if (!looksLikeRepoFilePath(path)) {
+  // Explicit line coordinates disambiguate root files from ordinary prose.
+  // Keep bare path inference slash-only so a domain is never a source label.
+  if (!looksLikeRepoFilePath(path) && !/^(?:\.\/)?(?:[\w@+-][\w.@+-]*\.[A-Za-z0-9]{1,12}|\.[\w.-]+|Dockerfile|Makefile)$/.test(path)) {
     return null;
   }
   const startLine = Number(startRaw);
@@ -171,6 +173,15 @@ export function tryParseCitationLocator(value: string): CodeCitationLocator | nu
   return parseLocatorCore(trimmed);
 }
 
+/** A malformed explicit locator must never borrow a nearby source label. */
+export function isMalformedCitationLocator(value: string): boolean {
+  const text = unwrapLocatorText(value).replace(/^([A-Za-z][A-Za-z0-9_+#-]*)\s+/, "");
+  const pathCoordinate = text.match(/^(.+):\d+(?:-\d+)?$/);
+  const path = pathCoordinate?.[1] ?? "";
+  const explicitPath = looksLikeRepoFilePath(path) || /^(?:\.\/)?(?:[\w@+-][\w.@+-]*\.[A-Za-z0-9]{1,12}|\.[\w.-]+|Dockerfile|Makefile)$/.test(path);
+  return (/^\d+:\d+:.+/.test(text) || Boolean(pathCoordinate && explicitPath)) && !tryParseCitationLocator(text);
+}
+
 /**
  * Fence info-string locators, including `tsx 4:14:path` / `typescript path`.
  * Do not use on prose — words like "See" match the language-tag pattern.
@@ -208,6 +219,24 @@ export function locatorFromProseLine(line: string): CodeCitationLocator | null {
 }
 
 /** Numeric / path:range locators are unambiguous even without a wrapping fence. */
+/** Shared bounded body scan for rendering, grounding, and source extraction. */
+/** Inspect the same preamble window without treating numbered source tails as metadata. */
+export function hasMalformedCitationInFenceBody(body: string[]): boolean {
+  for (const line of body.slice(0, 6)) {
+    if (/^\s*\d+\s*\|/.test(line)) return false;
+    if (isMalformedCitationLocator(line)) return true;
+  }
+  return false;
+}
+
+export function citationLocatorInFenceBody(body: string[]): { locator: CodeCitationLocator; codeStart: number } | null {
+  for (let i = 0; i < Math.min(body.length, 6); i++) {
+    const locator = locatorFromProseLine(body[i] ?? "") ?? tryParseCitationLocator((body[i] ?? "").trim());
+    if (locator) return { locator, codeStart: i + 1 };
+  }
+  return null;
+}
+
 export function isUnfencedCitationStartLine(line: string): boolean {
   const locator = locatorFromProseLine(line);
   return locator != null && locator.startLine != null;

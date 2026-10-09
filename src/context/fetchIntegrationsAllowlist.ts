@@ -8,6 +8,7 @@
  */
 import type { IntegrationChatProvider } from "../chat/types";
 import type { ContextFetchRequest } from "./requestBatcher";
+import { resolveRepoSourceScope, scopeAllowsIntegration } from "./repoSourceScope";
 
 export function normalizeFetchIntegrations(
   value: unknown
@@ -59,6 +60,8 @@ export function integrationFetchGate(
   request: ContextFetchRequest,
   provider: IntegrationChatProvider
 ): "allow" | "include" | "exclude" {
+  const scope = request.params.sourceScope ?? resolveRepoSourceScope(request.intent?.context?.queryText);
+  if (!scopeAllowsIntegration(scope, provider)) return "exclude";
   if (request.params.integrationProvider === provider) {
     return "include";
   }

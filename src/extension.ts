@@ -518,7 +518,8 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!evidence?.content?.trim()) {
         return undefined;
       }
-      return { path: evidence.path || filePath, content: evidence.content };
+      return { path: evidence.path || filePath, content: evidence.content,
+        repoId: evidence.repoId, branch: target.branch, truncated: evidence.truncated };
     },
     findFiles: async ({ query: fileQuery, taskQuery, repoId, target, excludeClientUi, onDiagnostic }) => {
       if (!target?.repoId || target.repoId !== repoId || !target.branch) {

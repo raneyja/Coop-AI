@@ -109,6 +109,7 @@ export function buildAgentToolPlanPrompt(input: {
   intentPurpose?: string;
   /** False on named-product / slash turns unless locate is also in the ask. */
   allowedRepoTools?: boolean;
+  projectInstructions?: string;
 }): string {
   const prior =
     input.priorSummaries.length > 0
@@ -212,6 +213,9 @@ export function buildAgentToolPlanPrompt(input: {
     "Reply with JSON only this turn — not the user-facing answer.",
     `Use-repo: ${input.repoId}`,
     `Question: ${input.message}`,
+    input.projectInstructions
+      ? `Repository instructions (authoritative for this selected repo):\n${input.projectInstructions}`
+      : undefined,
     `Round: ${input.round + 1}`,
     `Allowed tools: ${allowedList}.`,
     firstVendor
@@ -240,6 +244,7 @@ export function buildAgentAnswerPrompt(input: {
   action?: "locate" | "understand" | "change" | "none";
   openedEvidence?: string;
   interpretNotes?: string;
+  projectInstructions?: string;
 }): string {
   const change =
     input.action === "change"
@@ -250,6 +255,9 @@ export function buildAgentAnswerPrompt(input: {
   return [
     "Write one talk track now — one user-facing answer, not three essays.",
     `Question: ${input.message}`,
+    input.projectInstructions
+      ? `Repository instructions (authoritative for this selected repo):\n${input.projectInstructions}`
+      : undefined,
     "Cite real paths with citation fences (numeric startLine:endLine:path).",
     "PASS: a plain fence whose first body line is `57:66:src/server/integrationApi.ts` then the verbatim lines.",
     "FAIL: ```typescript / ```javascript dumps of repo code, or `src/server/authMiddleware.ts:70-80` above a Copy fence.",

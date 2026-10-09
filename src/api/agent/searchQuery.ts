@@ -72,7 +72,7 @@ const MAX_API_REJECT_FALLBACK_QUERIES = 12;
  * miss the next repo (`.jsp`, `.sql`, `.gradle`).
  */
 const NAMED_SOURCE_FILE = new RegExp(
-  `(?:^|[\\s\`'"(\\[]|/)((?:[\\w.-]+/)*[\\w.-]+\\.[A-Za-z][A-Za-z0-9]{0,9})(?=$|[\\s\`'")\\],:;!?]|\\.(?:\\s|$))`,
+  `(?:^|[\\s\`'"(\\[]|/)((?:[\\w.-]+/)*(?:[\\w.-]+\\.[A-Za-z][A-Za-z0-9]{0,9}|\\.[\\w](?:[\\w.-]*[\\w-])?|Dockerfile|Makefile))(?=$|[\\s\`'")\\],:;!?]|\\.(?:\\s|$))`,
   "gi"
 );
 /** Host suffixes and prose — never real source exts (`ts`, `js`, `go`, `cc`, `md`). */
@@ -1396,7 +1396,7 @@ export function extractNamedSourceFiles(userMessage: string): string[] {
   let match: RegExpExecArray | null;
   while ((match = NAMED_SOURCE_FILE.exec(userMessage)) !== null) {
     const value = (match[1] ?? "").replace(/^\/+/, "").trim();
-    const key = value.toLowerCase();
+    const key = value;
     if (
       !value ||
       seen.has(key) ||
@@ -1450,6 +1450,7 @@ function shouldIgnoreNamedFileRef(value: string): boolean {
       return true;
     }
   }
+  if (base === "dockerfile" || base === "makefile" || /^\.[\w.-]+$/.test(base)) return false;
   const ext = fileRefExtension(base);
   return !ext || BLOCKED_FILE_EXTS.has(ext);
 }

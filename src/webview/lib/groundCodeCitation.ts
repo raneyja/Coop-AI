@@ -1,4 +1,4 @@
-import { shouldNeverUpgradeLanguageFence, tryParseCitationLocator } from "./codeCitationLocator";
+import { hasMalformedCitationInFenceBody, citationLocatorInFenceBody, isMalformedCitationLocator, shouldNeverUpgradeLanguageFence, tryParseCitationLocator, tryParseFenceInfoLocator } from "./codeCitationLocator";
 
 export type GroundedCitation = {
   startLine: number;
@@ -157,6 +157,17 @@ export function groundCodeCitation(
       grounded: true
     };
   }
+  // A model may close a short excerpt with `}` although the real final line
+  // continues (for example `} satisfies Config;`). Keep only a contiguous,
+  // verbatim verified prefix; never show the invented closing line as source.
+  if (snippetLines.length >= 3 && /^[}\]];?$/.test(snippetLines.at(-1)!.trim())) {
+    const prefix = snippetLines.slice(0, -1);
+    const prefixAt = prefix.filter((line) => line.trim()).length >= 2 ? findSnippetStart(fileLines, prefix) : -1;
+    if (prefixAt >= 0) {
+      return { startLine: prefixAt + 1, endLine: prefixAt + prefix.length,
+        code: fileLines.slice(prefixAt, prefixAt + prefix.length).join("\n"), grounded: true };
+    }
+  }
   if (isSequential) {
     const dedentedAt = findSnippetStart(fileLines.map((line) => line.trimStart()), snippetLines.map((line) => line.trimStart()));
     if (dedentedAt >= 0) {
@@ -224,10 +235,11 @@ export function applyGroundedCitations(
       i += 1;
     }
 
-    const infoLocator = info ? tryParseCitationLocator(info) : null;
-    const bodyLocator = body[0] ? tryParseCitationLocator(body[0]) : null;
-    const locator = infoLocator ?? bodyLocator ?? (shouldNeverUpgradeLanguageFence(info) ? null : nearbyLocator(out));
-    const codeLines = infoLocator ? body : bodyLocator ? body.slice(1) : body;
+    const infoLocator = info ? tryParseFenceInfoLocator(info) : null;
+    const bodyCitation = citationLocatorInFenceBody(body);
+    const bodyLocator = bodyCitation?.locator;
+    const locator = infoLocator ?? bodyLocator ?? (shouldNeverUpgradeLanguageFence(info) || isMalformedCitationLocator(info) || hasMalformedCitationInFenceBody(body) ? null : nearbyLocator(out));
+    const codeLines = infoLocator ? body : bodyCitation ? body.slice(bodyCitation.codeStart) : body;
     const file = locator ? filesByPath.get(normalizePath(locator.path)) : undefined;
 
     if (!locator || !file) {
@@ -289,8 +301,8 @@ export function citationPathsInMarkdown(markdown: string): string[] {
       i += 1;
     }
     const locator =
-      (info ? tryParseCitationLocator(info) : null) ??
-      (body[0] ? tryParseCitationLocator(body[0]) : null) ?? (shouldNeverUpgradeLanguageFence(info) ? null : nearbyLocator(preceding));
+      (info ? tryParseFenceInfoLocator(info) : null) ??
+      citationLocatorInFenceBody(body)?.locator ?? (shouldNeverUpgradeLanguageFence(info) || isMalformedCitationLocator(info) || hasMalformedCitationInFenceBody(body) ? null : nearbyLocator(preceding));
     if (locator?.path) {
       paths.add(locator.path);
     }
