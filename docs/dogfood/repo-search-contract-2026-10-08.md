@@ -373,3 +373,15 @@ cards with separate filename and muted L6/L4/L36 metadata; Copy changes to Copie
 and the Docker ignore header opens the remote source with line 4 selected.
 The temporary source viewer was closed without saving. The final CSS was rebuilt
 and the Host reloaded after the filename font-weight refinement.
+
+Color follow-up: Jon's comparison screenshot shows patch bodies use the lighter
+gray nested surface while source bodies remain transparent over editor black.
+The shared `.coop-patch-diff` now explicitly uses `--coop-settings-field`, the
+same theme token as the patch's `.coop-result-nested` body. Headers retain
+`--coop-settings-card`; editor foreground, theme syntax colors, and diff colors
+are preserved. This CSS-only adjustment covers source citations, anonymous
+examples, and patch previews without adding a separate hardcoded gray palette.
+CSS build and lint pass. Live inspection after Reload confirms the source blocks
+and the user's existing edit preview now have matching lighter-gray bodies and
+darker headers in the same chat. The code body's text and syntax colors remain
+readable, and the existing edit preview remains available for review.

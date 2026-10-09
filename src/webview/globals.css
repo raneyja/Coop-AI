@@ -2094,7 +2094,8 @@
   .coop-patch-diff {
     @apply m-0 overflow-x-auto px-0 py-2 text-xs leading-6;
     color: var(--vscode-editor-foreground);
-    background: transparent;
+    /* Match the surface used by the patch's nested code body. */
+    background: var(--coop-settings-field);
   }
 
   .coop-patch-line {
