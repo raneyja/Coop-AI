@@ -65,15 +65,16 @@ export function ChatCodeSurfaceBody({
   }
 
   return (
-    <div className={`coop-chat-citation-body${showGutters ? "" : " coop-chat-citation-body--plain"}`}>
+    <div className={`coop-patch-diff coop-chat-citation-body${showGutters ? "" : " coop-chat-citation-body--plain"}`}>
       {lines.map((lineTokens, index) => (
-        <div key={`code-line-${index}`} className="coop-chat-citation-line">
+        <div key={`code-line-${index}`} className="coop-patch-line coop-patch-line--context">
           {showGutters ? (
             <span className="coop-patch-gutter" aria-hidden="true">
               {String((startLine as number) + index).padStart(4, " ")}
             </span>
           ) : null}
-          <span className="coop-chat-citation-text">
+          {showGutters ? <span className="coop-patch-marker" aria-hidden="true"> </span> : null}
+          <span className="coop-patch-text">
             {lineTokens.length === 0
               ? " "
               : lineTokens.map((token, tokenIndex) => (

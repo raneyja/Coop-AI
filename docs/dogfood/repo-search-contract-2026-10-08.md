@@ -275,7 +275,7 @@ Extension UI — use the Extension Development Host for this checkout. Run Devel
 
    > Use no integrations. Read /.gitignore and /.dockerignore from the selected repository. List one ignore pattern shared by both and one pattern present only in .gitignore.
 
-   Pass: shared `node_modules`; gitignore-only `.idea` or `packages/prisma/generated/types.ts`. Both files must be read; no unsupported comparison or external integrations.
+   Pass: shared `node_modules`; a verified gitignore-only pattern such as `.idea`, `packages/prisma/generated/types.ts`, or `.turbo-cookie`. Both files must be read; no unsupported comparison or external integrations.
 
 For all three: note time to the first answer text (target within 15s), and click any code citation to verify the correct source/range. Capture the prompt, answer, and elapsed time if a test fails.
 
@@ -349,3 +349,27 @@ webview SHA256:
 `51cb9d5a5dd81d269ef6f45ae1df89b9e9697ac8d742651dbdbf56c959cbd7ca`.
 This live observation closes the screenshot's citation defect on the local
 candidate; it does not qualify or deploy the unrelated support-reporting work.
+
+### User fresh Test 3 and shared code styling — October 9, 2026
+
+Jon supplied a fresh 10:42 AM Test 3 response, with a screenshot taken at
+11:00:39 AM. Live Pass for this named ask: Documenso/main repo-only, both remote
+files read, reported `Worked for 6s`, shared `node_modules` correctly cited at
+`.gitignore:6` and `.dockerignore:4`, and gitignore-only `.turbo-cookie` correctly
+cited at `.gitignore:36`. A different verified exclusive pattern is valid; the
+manual fixture does not require the model to pick a particular example.
+
+Jon then requested source-code blocks match the patch design more closely.
+Source cards now use the patch's filename/line-range header layout, shared
+code-row grid, gutter alignment, typography, spacing, rounded shell, and theme
+surfaces. The shared styles also apply to patch previews. Copy and remote source
+navigation retain their existing behavior. Anonymous examples use the same
+shared spacing and shell. No retrieval, parser, model, or patch-application
+behavior changes are included in this presentation adjustment.
+
+Validation: lint and extension development build pass. In the actual reloaded
+Extension Development Host, the original 10:42 AM response shows the refreshed
+cards with separate filename and muted L6/L4/L36 metadata; Copy changes to Copied,
+and the Docker ignore header opens the remote source with line 4 selected.
+The temporary source viewer was closed without saving. The final CSS was rebuilt
+and the Host reloaded after the filename font-weight refinement.

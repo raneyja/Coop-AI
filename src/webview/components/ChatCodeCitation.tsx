@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { languageFromFilePath } from "../lib/codeCitationLocator";
+import { formatLineRange } from "../patchLocationLabel";
 import { ChatCodeSurfaceBody } from "./ChatCodeSurfaceBody";
 
 type ChatCodeCitationProps = {
@@ -29,6 +30,7 @@ export function ChatCodeCitation({
 }: ChatCodeCitationProps): React.ReactElement {
   const [copied, setCopied] = useState(false);
   const label = citationLabel(path, startLine, endLine);
+  const location = formatLineRange(startLine, endLine);
   const hasPreview = code.trim().length > 0;
   const language = languageFromFilePath(path);
 
@@ -52,18 +54,22 @@ export function ChatCodeCitation({
   return (
     <section className="coop-patch-file coop-chat-citation" data-code-surface="cite">
       <div className="coop-patch-file-header">
-        {onOpenFile ? (
-          <button
-            type="button"
-            className="coop-patch-file-path"
-            onClick={() => onOpenFile(path, startLine, { endLine })}
-            title={`Open ${label}`}
-          >
-            {label}
-          </button>
-        ) : (
-          <span className="coop-patch-file-path">{label}</span>
-        )}
+        <div className="coop-patch-file-heading">
+          {onOpenFile ? (
+            <button
+              type="button"
+              className="coop-patch-file-path"
+              onClick={() => onOpenFile(path, startLine, { endLine })}
+              title={`Open ${label}`}
+              aria-label={`Open ${label}`}
+            >
+              {path}
+            </button>
+          ) : (
+            <span className="coop-patch-file-path" title={path}>{path}</span>
+          )}
+          {location ? <span className="coop-patch-file-anchor">{location}</span> : null}
+        </div>
         {hasPreview ? (
           <button type="button" className="coop-text-btn" onClick={handleCopy}>
             {copied ? "Copied" : "Copy"}

@@ -1959,8 +1959,8 @@
 
   .coop-patch-file,
   .coop-chat-citation {
-    @apply overflow-hidden rounded-md border;
-    border-color: var(--coop-border);
+    @apply overflow-hidden rounded-lg border;
+    border-color: color-mix(in srgb, var(--coop-border) 85%, transparent);
     background: var(--vscode-editor-background, var(--coop-panel-canvas));
     font-family: var(--vscode-editor-font-family, Menlo, Monaco, monospace);
   }
@@ -1970,13 +1970,9 @@
   }
 
   .coop-patch-file-header {
-    @apply flex items-center justify-between gap-2 border-b px-2.5 py-1.5 text-[11px];
-    border-color: color-mix(in srgb, var(--coop-border) 80%, transparent);
-    background: color-mix(
-      in srgb,
-      var(--vscode-editor-background, var(--coop-panel-canvas)) 88%,
-      var(--coop-panel-canvas) 12%
-    );
+    @apply flex items-center justify-between gap-3 border-b px-3 py-2 text-xs;
+    border-color: color-mix(in srgb, var(--coop-border) 65%, transparent);
+    background: var(--coop-settings-card);
   }
 
   .coop-patch-file-heading {
@@ -1985,7 +1981,7 @@
 
   .coop-patch-file-path {
     @apply min-w-0 truncate text-left font-medium;
-    color: var(--vscode-textLink-foreground);
+    color: var(--coop-panel-foreground);
   }
 
   .coop-patch-file-lang {
@@ -1999,7 +1995,7 @@
   }
 
   .coop-patch-file-anchor {
-    @apply truncate font-normal;
+    @apply truncate text-[11px] font-normal;
     color: var(--coop-panel-muted);
   }
 
@@ -2010,16 +2006,25 @@
 
   button.coop-patch-file-path {
     @apply cursor-pointer text-left;
-    font: inherit;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
     background: transparent;
     border: 0;
     padding: 0;
-    white-space: normal;
-    word-break: break-all;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   button.coop-patch-file-path:hover {
     color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground));
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .coop-patch-file-header .coop-text-btn {
+    @apply shrink-0;
   }
 
   .coop-patch-file-body {
@@ -2087,7 +2092,7 @@
   }
 
   .coop-patch-diff {
-    @apply m-0 overflow-x-auto px-0 py-1 text-[11px] leading-5;
+    @apply m-0 overflow-x-auto px-0 py-2 text-xs leading-6;
     color: var(--vscode-editor-foreground);
     background: transparent;
   }
@@ -2132,26 +2137,11 @@
     color: var(--vscode-diffEditor-insertedTextBackground, #73c991);
   }
 
-  .coop-chat-citation-body {
-    @apply m-0 overflow-x-auto px-0 py-1 text-[11px] leading-5;
-    background: transparent;
-    color: var(--vscode-editor-foreground);
-  }
-
   .coop-chat-citation-body--plain {
-    @apply px-2.5;
+    @apply px-3;
   }
 
-  .coop-chat-citation-text {
-    @apply pr-2 min-w-0;
-  }
-
-  .coop-chat-citation-line {
-    @apply grid whitespace-pre;
-    grid-template-columns: 3rem 1fr;
-  }
-
-  .coop-chat-citation-body--plain .coop-chat-citation-line {
+  .coop-chat-citation-body--plain .coop-patch-line {
     grid-template-columns: 1fr;
   }
 

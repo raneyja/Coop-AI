@@ -49,7 +49,9 @@ export function ChatCodeBlock({ language, code, className }: ChatCodeBlockProps)
   return (
     <section className={rootClassName} data-code-surface="anonymous">
       <div className="coop-patch-file-header">
-        {label ? <span className="coop-patch-file-lang">{label}</span> : <span />}
+        <div className="coop-patch-file-heading">
+          {label ? <span className="coop-patch-file-lang">{label}</span> : null}
+        </div>
         {hasPreview ? (
           <button type="button" className="coop-text-btn" onClick={handleCopy}>
             {copied ? "Copied" : "Copy"}
