@@ -40,18 +40,13 @@ export function EvidenceFileSourcePreview({
 
   return (
     <div className="space-y-1.5">
-      {onOpenFile && path ? (
-        <div className="flex justify-end">
-          <button
-            type="button"
-            className="coop-result-collapsible-link coop-text-btn shrink-0 text-[11px]"
-            onClick={() => onOpenFile(path, startLine)}
-          >
-            Open file
-          </button>
-        </div>
-      ) : null}
-      <IntegrationResultCode allowFull>{preview}</IntegrationResultCode>
+      <IntegrationResultCode
+        allowFull
+        path={path}
+        onOpenFile={onOpenFile ? (filePath) => onOpenFile(filePath, startLine) : undefined}
+      >
+        {preview}
+      </IntegrationResultCode>
       {truncated ? (
         <p className="coop-result-text coop-result-text--muted text-[10px]">
           Showing ~{CODE_SNIPPET_PREVIEW_MAX_LINES} lines

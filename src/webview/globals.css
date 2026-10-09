@@ -3423,14 +3423,6 @@
     @apply mt-1.5 space-y-1.5;
   }
 
-  .coop-result-code {
-    @apply whitespace-pre-wrap rounded-md border p-2.5 text-[11px] leading-relaxed;
-    background: var(--coop-settings-field);
-    border-color: var(--coop-settings-field-border);
-    color: var(--coop-panel-foreground);
-    font-family: var(--vscode-editor-font-family, Menlo, Monaco, monospace);
-  }
-
   .coop-result-nested {
     @apply rounded-md border p-2.5;
     background: var(--coop-settings-field);
@@ -3619,8 +3611,7 @@
 
   [data-theme="high-contrast"] .coop-result-card,
   [data-theme="high-contrast"] .coop-result-badge,
-  [data-theme="high-contrast"] .coop-result-nested,
-  [data-theme="high-contrast"] .coop-result-code {
+  [data-theme="high-contrast"] .coop-result-nested {
     border-color: var(--vscode-contrastBorder, var(--vscode-widget-border));
   }
 

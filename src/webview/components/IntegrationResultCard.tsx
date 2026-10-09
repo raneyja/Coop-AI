@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from "react";
 import { buildCodeSnippetPreview } from "../../context/evidenceBodyPreview";
 import { ChatActionLink } from "./ChatActionLink";
+import { ChatCodeBlock } from "./ChatCodeBlock";
+import { ChatCodeCitation } from "./ChatCodeCitation";
 import { ChatProse } from "./ChatProse";
 import { useChatLinks } from "./ChatLinkContext";
 import { useCitationNavigation } from "./CitationNavigationContext";
@@ -310,26 +312,34 @@ IntegrationResultCollapsible.displayName = "IntegrationResultCollapsible";
 
 export function IntegrationResultCode({
   children,
+  path,
+  onOpenFile,
   /** When false (default), string bodies are hard-capped — never dump a full file. */
   allowFull = false
 }: {
-  children: React.ReactNode;
+  children: string;
+  path?: string;
+  onOpenFile?: (path: string) => void;
   allowFull?: boolean;
 }): React.ReactElement {
-  if (!allowFull && typeof children === "string") {
-    const { preview, truncated } = buildCodeSnippetPreview(children);
-    return (
-      <div className="space-y-1">
-        <pre className="coop-result-code">{preview}</pre>
-        {truncated ? (
-          <p className="coop-result-text coop-result-text--muted text-[10px]">
-            Truncated preview — open the file for the full source.
-          </p>
-        ) : null}
-      </div>
-    );
-  }
-  return <pre className="coop-result-code">{children}</pre>;
+  const { preview, truncated } = allowFull
+    ? { preview: children, truncated: false }
+    : buildCodeSnippetPreview(children);
+  return (
+    <div className="space-y-1">
+      {path ? (
+        // Evidence snippets may be excerpts: never invent absolute source line numbers.
+        <ChatCodeCitation path={path} code={preview} onOpenFile={onOpenFile} />
+      ) : (
+        <ChatCodeBlock code={preview} />
+      )}
+      {truncated ? (
+        <p className="coop-result-text coop-result-text--muted text-[10px]">
+          Truncated preview — open the file for the full source.
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 export function IntegrationResultNested({

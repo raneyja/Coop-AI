@@ -385,3 +385,27 @@ CSS build and lint pass. Live inspection after Reload confirms the source blocks
 and the user's existing edit preview now have matching lighter-gray bodies and
 darker headers in the same chat. The code body's text and syntax colors remain
 readable, and the existing edit preview remains available for review.
+
+### Global extension code-block rule — October 9, 2026
+
+Jon asked whether the shared code-block design applies regardless of block size.
+Audit confirmed chat citations, anonymous fences, and patch bodies already share
+the same surface without a length-dependent renderer. The remaining extension
+exception was `IntegrationResultCode`, used by `EvidenceFileSourcePreview` for
+expanded source cards. It now delegates to `ChatCodeCitation` when a path is
+available and `ChatCodeBlock` otherwise. The separate result-code CSS is removed.
+Preview limits and the existing remote file-opening target are preserved; no
+absolute source coordinates are invented for excerpts. Source paths are now the
+navigation control in the shared header, and Copy is available on the preview.
+
+The always-applied chat-code-surfaces rule and webview UI rule explicitly cover
+single-line and large blocks, chat, quick actions, integration results, and
+source previews. Inline code in sentences, activity logs, and error details are
+outside this code-block rule. Admin feeds and website demos use separate
+renderers and are outside this extension implementation claim.
+
+Validation: extension development build and lint pass; existing evidence-preview
+tests pass 5/5, including focus selection and preview limits. The rebuilt Host
+was reloaded. Automated Pass / ready for source-card dogfood: this follow-up did
+not exercise a newly expanded evidence card live. The prior observed source and
+patch styling Live Pass remains valid.

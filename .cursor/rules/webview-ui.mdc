@@ -57,7 +57,7 @@ Do **not** use `vscode-editorWidget-background`, heavy `border-b` stacks, or upp
 
 ## Chat code surfaces (cite / edit / anonymous)
 
-See **`.cursor/rules/chat-code-surfaces.mdc`**. Repo code in chat uses `coop-chat-citation` (path header + token colors). Apply edits use `coop-patch-*`. Invented examples use the same `coop-patch-file` chrome via `ChatCodeBlock` — never a markdown language-badge card or a **TEXT** badge.
+See **`.cursor/rules/chat-code-surfaces.mdc`**. Every extension code block, including a one-line snippet or an expanded source card, uses the shared darker header and lighter body theme tokens. Repo code uses `ChatCodeCitation` (path header + token colors); invented examples use `ChatCodeBlock`; integration previews delegate through `IntegrationResultCode`. Apply edits use `coop-patch-*`. Never add a separate markdown language-badge card or a **TEXT** badge. Inline code in prose stays inline.
 
 ## Reference implementations
 

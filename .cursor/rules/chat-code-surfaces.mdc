@@ -6,7 +6,14 @@ alwaysApply: true
 
 # Chat code surfaces — cite / edit / anonymous
 
-Coop chat must feel like **Cursor / Cody / Augment** (IDE), not ChatGPT web. Every multi-line code presentation belongs to exactly one intent. Do not invent a fourth chrome.
+Coop chat must feel like **Cursor / Cody / Augment** (IDE), not ChatGPT web. Every block of code, from a single line to a large excerpt, belongs to exactly one intent. Do not invent a fourth chrome.
+
+## Global extension code-block design
+
+- All extension code blocks, including chat, quick actions, integration results, and expanded source previews, use the shared `coop-patch-file` header and `coop-patch-diff` body. Block length never selects different chrome.
+- Headers use `--coop-settings-card`; bodies use `--coop-settings-field` (the lighter gray surface in the dark theme). Use theme tokens, syntax colors, and diff colors; never hardcode a separate palette.
+- Source and example renderers reuse `ChatCodeCitation` / `ChatCodeBlock` and `ChatCodeSurfaceBody`; `IntegrationResultCode` delegates to these components. Keep source-preview truncation and navigation. Never invent absolute line numbers for an unlocated excerpt.
+- Inline code in prose stays inline. Activity logs and error details are not source-code blocks. Admin feeds and marketing demos have separate stylesheets; do not claim extension styling changes updated them.
 
 ## Intent triad (required)
 
