@@ -1,12 +1,15 @@
 # Changelog
 
+## 0.1.14
+
+- Ground Understand Repo, Blast Radius, and focused Knowledge Gaps in bounded remote source evidence, with exact quotations preserved through history, display, and copying
+- Bind patch previews, Apply, Undo, and pull-request handoff to the originating repository and branch, and verify editor changes before reporting success
+
 ## 0.1.13
 
 - Package the October 8 updates for Marketplace distribution, including verified remote repository search, source exclusions, and grounded file citations
 - Harden Stop and follow-up routing, autocomplete request invalidation, and integration scope boundaries
 - Improve prompt library persistence, paid model picker availability, and retry behavior for timed-out remote project instructions
-- Ground Understand Repo, Blast Radius, and focused Knowledge Gaps in bounded remote source evidence, with exact quotations preserved through history, display, and copying
-- Bind patch previews, Apply, Undo, and pull-request handoff to the originating repository and branch, and verify editor changes before reporting success
 - Add in-extension issue reporting, durable support triage in ops, retryable email notifications, and customer support documentation
 
 ## 0.1.12
