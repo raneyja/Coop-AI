@@ -45,11 +45,14 @@ import {
   EVIDENCE_CITATION_RULES
 } from "./evidenceSynthesis";
 import { appendIntegrationDocsResponseContract } from "./integrationDocsResponseContract";
+import { groundBlastSourceCitations } from "./blastRadiusSourceGuard";
 
 export const BLAST_RADIUS_EVIDENCE_SYSTEM = `You analyze change impact: dependents, APIs, integrations, and operational risk.
 Be concise: the Sources card already shows full file lists — summarize and prioritize; do not repeat every path in the narrative.
 Prefer production / app / lib callers in Top risk surfaces and Direct impact. Stories, e2e, and unit tests are secondary — label them as test surfaces under Testing surfaces, not as primary blast.
 Path prefixes are ranking heuristics, not proof a caller is deployed in production. Describe retrieved dependency relations without inventing deployment classification. No confirmed callers means coverage is unverified, never safe to change. Distinguish a positional parameter's local name from its type/arity/return contract: renaming that local parameter alone does not require caller changes or prove a compile failure. An import edge establishes a file dependency, not a call to a named symbol unless its use is verified in caller body or a symbol-level edge. Do not claim any/every behavior change necessarily affects an importer. Listed edges, even verified ones, do not establish complete graph coverage; claim completeness only with independently attached coverage evidence.
+Behavior claims require the opened source bodies attached for this turn. A graph edge or symbol match cannot establish earlier checks, access policy, user-facing behavior, or downstream effects. Cite the exact file and source lines for each such claim; leave unread wrappers/helpers unverified. Check the complete path to an operation: earlier throws/returns, conditional branches, and the operation's semantics. Removing one guard does not remove the remaining guards. Never turn a possible conditional effect into an inevitable operation or a defect. If a body is truncated or a helper/middleware is unread, do not claim there are no additional protections. State only what the inspected scope shows.
+An imported procedure, router, or middleware name does not establish its authentication policy. Never infer public access or that any valid-token caller can reach a handler from a procedure's name. Helpers called before the target may reject the request; their checks remain unverified unless their implementations are attached. A full caller body lets you describe its inline checks, not certify the entire upstream chain.
 Be explicit about transitive effects when dependency data is available.
 The primary blast-radius target is the open file in ## Task — do not rewrite impact analysis around out-of-scope @ attachments.
 When Jira issues are attached: cite only tickets that mention the target file/symbol or are clearly about this change. Do not invent a link from "same repository" alone — say when a ticket is only loosely repo-related.
@@ -89,6 +92,20 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
   lines.push("");
   lines.push(ATTACHED_FACTS_HEADING);
   lines.push(formatBlastRadiusForPrompt(evidence, file));
+  if (evidence.sourceFiles?.length) {
+    lines.push("", "## Opened selected-ref source bodies");
+    lines.push("Use these bodies to verify control flow and cite actual line numbers. The target body is expanded beyond any selected range to inspect remaining guards. Unread callers and helpers remain unverified.");
+    for (const source of evidence.sourceFiles) {
+      lines.push(`### ${source.role}: ${source.path} (${source.repoId}, ref ${source.branch ?? "unavailable"}, lines ${source.startLine}–${source.endLine}${source.truncated ? "; TRUNCATED" : "; full body"})`);
+      lines.push(`<file_content path="${source.path}" lines="${source.startLine}-${source.endLine}" origin="remote">`);
+      lines.push(source.content.split("\n").map((line, index) => `${source.startLine + index} | ${line}`).join("\n"));
+      lines.push("</file_content>");
+    }
+    appendCitationKeysSection(lines, listBlastRadiusSourceLabels(evidence));
+    appendBlastRadiusSummaryGuidance(lines, evidence);
+    if ((evidence.directDependents?.length ?? 0) > 0) appendSourceGroundedBlastContract(lines, evidence);
+    return lines.join("\n");
+  }
   lines.push("");
 
   appendCitationKeysSection(lines, listBlastRadiusSourceLabels(evidence));
@@ -126,12 +143,20 @@ export function buildBlastRadiusSynthesisUserPrompt(input: BlastRadiusSynthesisI
   );
   if (extractBlastSearchSymbols(input.userFocus || input.userQuestion, input.file).length > 0) {
     lines.push(
-      "If the task names a function or identifier: **Direct impact** is callers of that identifier. Files that only import the same module for other exports are Weak / not \"will break.\" Do not treat every importer of the file as a breakage of the named function."
+      "If the task names an identifier: restrict impact claims to its actual verified use. Files importing the module for other exports are weak context; an import alone does not establish a resolved call or behavioral impact. Do not treat every importer as a breakage."
     );
   }
   lines.push("Follow the required response structure in your system instructions.");
-
   return lines.join("\n");
+}
+
+function appendSourceGroundedBlastContract(lines: string[], _evidence: BlastRadiusEvidence): void {
+  lines.push("", "## Source-grounded answer policy (required)",
+    "Answer the user's actual request. A selected range is context, not a declaration of the proposed change. Do not replace a question about removal, concurrency, error handling, or explanation with a different change scenario. If the requested change is unclear, state what is missing rather than choosing one from an identifier or status mention.",
+    "A dependency edge establishes a relationship, not behavioral impact or complete coverage. An import's spelling is not proof of module resolution. Describe a call's target only to the extent the opened evidence establishes it; leave unresolved bindings and unopened helpers unknown.",
+    "Ground concrete behavior in the opened source, with exact numeric citations. Preserve full conditions, earlier exits, exception branches, and conditional operations. A shown operation does not prove it is inevitably reached, and a partial body cannot establish that other protections are absent.",
+    "Do not infer stored values, access policy, deployment classification, or implementation intent from names, comments, default values, or graph relationships. State the inspected scope and remaining unknowns plainly.",
+    "Quote contiguous source verbatim, including indentation, comments, blank lines, operators, and literals. Do not rewrite code to make a quote fit. Limit suggestions and verification steps to the actual requested task and supported evidence.");
 }
 
 function appendBlastRadiusSummaryGuidance(lines: string[], evidence: BlastRadiusEvidence): void {
@@ -140,6 +165,12 @@ function appendBlastRadiusSummaryGuidance(lines: string[], evidence: BlastRadius
     (evidence.directDependents?.length ?? 0) > 0 ||
     (evidence.transitiveDependents?.length ?? 0) > 0 ||
     (evidence.dependentDetails?.length ?? 0) > 0;
+  const opened = new Set(evidence.sourceFiles?.filter(source => source.role === "dependent").map(source => source.path));
+  const unread = (evidence.directDependents ?? []).filter(path => !opened.has(path));
+  if (hasCodeDependents && unread.length) {
+    lines.push("## Unread dependent bodies (required)",
+      `- ${unread.join(", ")}: relationship evidence only. Their guards, calling flow, and behavioral effects are unverified. Do not describe their behavior from their filenames.`, "");
+  }
 
   if (!hasCodeDependents) {
     lines.push("## Thin evidence (required)");
@@ -215,7 +246,7 @@ function formatBlastRadiusForPrompt(evidence: BlastRadiusEvidence, file: string)
   const named = (evidence.namedAskSymbols ?? []).filter((symbol) => symbol.trim());
   if (named.length > 0) {
     sections.push(
-      `- Named function(s): ${named.join(", ")}. **Direct impact / will break** is callers of ${named.join(" / ")} only. Files that import this module for other exports are Weak — omit them from Direct impact.`
+      `- Requested identifier(s): ${named.join(", ")}. Identifier occurrences focus the review; file dependencies do not establish resolved calls or behavioral impact. Inspect the actual binding and use before making caller claims.`
     );
     if (!(evidence.directDependents?.length)) {
       sections.push(
@@ -501,9 +532,9 @@ export function honestNamedFunctionBlastAnswer(symbols: string[], file?: string)
   const named = names[0] ?? "this function";
   const where = file?.trim() ? ` in \`${file.trim()}\`` : "";
   return [
-    `\`${named}\` is defined${where}. Compatibility depends on the actual change and its callers; a local positional-parameter rename alone does not change the call contract.`,
+    `Impact for \`${named}\`${where} is **unverified** — no call sites were confirmed this turn.`,
     "",
-    "This turn’s graph did not confirm those call sites, so I can’t list will-break files with confidence. That is not the same as nothing breaks.",
+    "Compatibility depends on the actual change and its callers. This turn’s graph did not confirm those call sites, so I can’t list will-break files with confidence. That is not the same as nothing breaks.",
     "",
     "**Direct impact**",
     "",
@@ -511,7 +542,7 @@ export function honestNamedFunctionBlastAnswer(symbols: string[], file?: string)
     "",
     "**What to do next**",
     "",
-    `Search this repo for \`${named}(\` (the call). An import of a sibling export from the same file is not a \`${named}\` breakage.`
+    `Inspect remote source for uses of \`${named}\` and the requested change. A file import alone does not establish a call, a resolved binding, or behavioral impact.`
   ].join("\n");
 }
 
@@ -525,6 +556,15 @@ export function importOnlyNamedBlastAnswer(evidence: BlastRadiusEvidence | undef
   const named = (evidence.namedAskSymbols ?? []).filter((symbol) => symbol.trim());
   const details = codeDependentDetailsFromEvidence(evidence);
   const ranked = rankCodeDependentsByRisk(details, 8);
+  if (ranked.length && evidence.sourceEvidenceGathered &&
+      !evidence.sourceFiles?.some(source => source.role === "dependent" && source.content.trim())) {
+    return [
+      "The remote graph confirmed these file dependencies:",
+      ...ranked.map(entry => `- \`${entry.path}\` [Sources: Dependency graph]`),
+      "",
+      "Their source bodies were not attached this turn, so caller behavior and cross-file effects remain **unverified**. These edges do not establish complete coverage or zero impact."
+    ].join("\n");
+  }
   if (!named.length || !ranked.length || details.some((entry) => entry.source !== "import-parse" || entry.strength === "strong")) return undefined;
   return [
     `Named-symbol impact for \`${named.join(", ")}\` is **unverified** in this turn.`,
@@ -544,6 +584,7 @@ export function enrichBlastRadiusResponse(
   if (!evidence) {
     return content;
   }
+  content = groundBlastSourceCitations(content, evidence);
   const named = (evidence.namedAskSymbols ?? []).filter((symbol) => symbol.trim());
   const details = codeDependentDetailsFromEvidence(evidence);
   const ranked = rankCodeDependentsByRisk(details, 8);
@@ -558,6 +599,12 @@ export function enrichBlastRadiusResponse(
     return named.length > 0
       ? honestNamedFunctionBlastAnswer(named, evidence.file)
       : honestUnverifiedBlastAnswer(evidence.file);
+  }
+
+  // Opened-source answers follow the actual task and source policy. The legacy
+  // graph-only outline must not prepend a different task's impact sections.
+  if (evidence.sourceFiles?.some(source => source.role === "dependent" && source.content.trim())) {
+    return content;
   }
 
   if (hasDependents) {

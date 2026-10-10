@@ -1,0 +1,9 @@
+{
+  "matchesQualifiedFrontend": true,
+  "all185SourceBodiesMatchCurrentGapsFrontend": true,
+  "files": {
+    "webview.js": "22cc1e65227dc466d90f3c0e667b19f1469bfcb743a17295d2bb82d136e32b5c",
+    "webview.js.map": "e930adc28143ac751086f8405bc1ba6927bd59e098b826af291106db1219710d",
+    "webview.css": "2f1563d780aa9e9a1c578ea61c9b00e3d9ddc210f9dc01f9e2ca4decc5f7ce9a"
+  }
+}

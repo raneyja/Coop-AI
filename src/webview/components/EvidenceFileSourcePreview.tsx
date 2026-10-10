@@ -15,17 +15,19 @@ import { useChatLinks } from "./ChatLinkContext";
 export function EvidenceFileSourcePreview({
   path,
   content,
+  startLine: sourceStartLine = 1,
   focusTerms,
   emptyLabel = "No code preview available."
 }: {
   path?: string;
   content?: string;
+  startLine?: number;
   focusTerms?: string[];
   emptyLabel?: string;
 }): React.ReactElement {
   const { onOpenFile } = useChatLinks();
-  const raw = content?.trim() ?? "";
-  if (!raw) {
+  const raw = content ?? "";
+  if (!raw.trim()) {
     return <p className="coop-result-text coop-result-text--muted">{emptyLabel}</p>;
   }
 
@@ -43,7 +45,7 @@ export function EvidenceFileSourcePreview({
       <IntegrationResultCode
         allowFull
         path={path}
-        onOpenFile={onOpenFile ? (filePath) => onOpenFile(filePath, startLine) : undefined}
+        onOpenFile={onOpenFile ? (filePath) => onOpenFile(filePath, sourceStartLine + startLine - 1) : undefined}
       >
         {preview}
       </IntegrationResultCode>

@@ -283,6 +283,13 @@ async function enrichIntegrationStages(
   };
 
   const termsFor = (provider: IntegrationChatProvider): string[] => {
+    // Gaps asks combine code rules and documentation questions. The planner can
+    // classify only the latter (e.g. "unanswered questions"); preserve the actual
+    // subsystem focus for each permitted documentation search.
+    if (options.request.params.quickAction === "knowledge-gaps" &&
+        ["confluence", "notion", "google-docs"].includes(provider) && options.extraSearchTerms?.length) {
+      return options.extraSearchTerms;
+    }
     const jobTerms = extraTermsForIntegration(jobs, provider);
     if (jobTerms?.length) {
       return jobTerms;

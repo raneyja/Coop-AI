@@ -14,14 +14,19 @@ import { parsePatchResponse } from "./patchParser";
 import { emitPatchEvent, setPatchEventHandler } from "./patchEvents";
 import { applyPendingPatch, applyPendingPatchHunk, collectAppliedPrFiles, rejectPendingPatchWithState, undoLastPatchWithState } from "./patchActions";
 import { buildPatchCardState, setHunkStatusOnCard, deriveCardStatusFromHunks } from "./patchDiffPreview";
-import { getPatchRecord, listPatchCards, resetPatchSessionForTests, upsertPatchRecord } from "./patchSession";
+import { getPatchRecord, listPatchCards, resetPatchSessionForTests, setPatchRecordUndo, upsertPatchRecord } from "./patchSession";
 import { ensureEditablePatchTarget } from "./patchTarget";
+import { clearRemotePatchBuffersForTests, rememberRemotePatchBuffer } from "./patchTarget";
+import { parseSlashCommand } from "../context/slashCommands";
+import { decideCreatePullRequestWrite } from "../chat/createPrChatRouting";
+import { hydratePatchCardsFromHistory, retainPatchCardsOnMessages } from "./hydratePatchCardsFromHistory";
 
 let passed = 0;
 let failed = 0;
 
 async function test(name: string, fn: () => void | Promise<void>): Promise<void> {
   resetPatchSessionForTests();
+  clearRemotePatchBuffersForTests();
   (vscode.workspace.textDocuments as unknown[]).length = 0;
   (vscode.window.visibleTextEditors as unknown[]).length = 0;
   try {
@@ -104,6 +109,182 @@ function installApplyEditMutation(): () => void {
 const GITHUB_REPO = { owner: "acme", repo: "demo", provider: "github" as const };
 
 async function main(): Promise<void> {
+  for (const command of ["fix", "edit"]) {
+    await test(`/${command} Documenso guard: Reject, Undo, Apply and PR handoff retain the originating target`, async () => {
+      const file = "packages/lib/server-only/field/sign-field-with-token.ts";
+      const original = [
+        "if (envelope.status !== DocumentStatus.PENDING) {",
+        "  throw new Error(`Document ${envelope.id} must be pending for signing`);",
+        "}", "assertRecipientNotExpired(recipient);", ""
+      ].join("\n");
+      const updated = original.replace("must be pending for signing`", "must be pending for signing, current status is ${envelope.status}`");
+      const targetRepo = { owner: "CoopAI-Corp", repo: "documenso", provider: "github" as const, branch: "main" };
+      const foreign = installRemoteDoc(file, original, "other", "documenso");
+      const wrongRef = installRemoteDoc(`${file}?ref=preview`, original, targetRepo.owner, targetRepo.repo);
+      const target = installRemoteDoc(file, original, targetRepo.owner, targetRepo.repo);
+      rememberRemotePatchBuffer(file, target.uri, original, targetRepo);
+      const slash = parseSlashCommand(`/${command} Could you improve the “must be pending for signing” error to include the envelope’s actual status, while preserving the PENDING guard and all signing behavior?`);
+      assert.deepEqual(slash?.def.target, { kind: "composer-mode", mode: "edit" });
+      const patch = `File: ${file}\n\x60\x60\x60patch\n<<<<<<< SEARCH\n${original.trimEnd()}\n=======\n${updated.trimEnd()}\n>>>>>>> REPLACE\n\x60\x60\x60`;
+      const initial = await handlePatchComplete(patch, {
+        messageTimestamp: 980, targetRepo, preferLocalDisk: false,
+        file, fileContents: { [file]: original }, selectedLines: [1, 5],
+        ask: slash?.focus, publish: () => undefined
+      });
+      assert.equal(initial?.status, "pending");
+      rejectPendingPatchWithState(undefined, "explicit", 980);
+      assert.equal(getPatchRecord(980)?.card.status, "rejected");
+      assert.equal(target.getText(), original);
+      assert.equal(await undoLastPatchWithState(undefined, 980), true);
+      assert.deepEqual(getPatchRecord(980)?.card.targetRepo, targetRepo);
+      const restore = installApplyEditMutation();
+      try {
+        // Changing the current chat to local scope cannot retarget this remote card.
+        assert.equal(await applyPendingPatch(undefined, 980, undefined, { preferLocalDisk: true }), true);
+        assert.equal(target.getText(), updated);
+        assert.equal(foreign.getText(), original);
+        assert.equal(wrongRef.getText(), original);
+        const applied = getPatchRecord(980)!;
+        assert.equal(applied.card.status, "applied");
+        assert.equal(applied.card.canUndo, true);
+        assert.equal(applied.card.canCreatePr, true);
+        assert.deepEqual(applied.card.prFiles, [{ path: file, content: updated }]);
+        const decision = decideCreatePullRequestWrite({
+          card: applied.card, files: collectAppliedPrFiles(applied.card), fallbackRepoId: "github:other/repo"
+        });
+        assert.deepEqual(decision, { ok: true, repoId: "github:CoopAI-Corp/documenso", files: [{ path: file, content: updated }] });
+        assert.equal(decideCreatePullRequestWrite({ card: applied.card, files: applied.card.prFiles!, payloadRepoId: "github:other/repo" }).ok, false);
+        assert.equal(await applyPendingPatch(undefined, 980), false);
+        assert.equal(await undoLastPatchWithState(undefined, 980), true);
+        assert.equal(target.getText(), original);
+        assert.equal(foreign.getText(), original);
+        assert.equal(wrongRef.getText(), original);
+        assert.equal(getPatchRecord(980)?.card.canCreatePr, false);
+        assert.equal(await applyPendingPatch(undefined, 980), true);
+        const saved = JSON.parse(JSON.stringify(retainPatchCardsOnMessages([
+          { role: "assistant", content: patch, timestamp: 980 }
+        ])));
+        resetPatchSessionForTests();
+        hydratePatchCardsFromHistory(saved);
+        assert.deepEqual(getPatchRecord(980)?.card.targetRepo, targetRepo);
+        assert.equal(getPatchRecord(980)?.card.status, "applied");
+        assert.equal(getPatchRecord(980)?.card.canUndo, false, "reload has no live undo snapshot");
+      } finally { restore(); }
+    });
+  }
+
+  await test("Apply acceptance without changed target bytes reports failure and offers no PR", async () => {
+    const doc = installRemoteDoc("src/a.ts", "alpha\n");
+    await handlePatchComplete(TWO_FILE_PATCH.split("File: `src/b.ts`")[0], {
+      messageTimestamp: 981, publish: () => undefined,
+      targetRepo: GITHUB_REPO, preferLocalDisk: false, fileContents: { "src/a.ts": "alpha\n" }
+    });
+    const workspace = vscode.workspace;
+    const previous = workspace.applyEdit;
+    workspace.applyEdit = async () => true;
+    try {
+      assert.equal(await applyPendingPatch(undefined, 981), false);
+      const failed = getPatchRecord(981)!;
+      assert.equal(doc.getText(), "alpha\n");
+      assert.equal(failed.card.status, "failed");
+      assert.match(failed.card.error!, /does not contain the proposed change/);
+      assert.equal(Boolean(failed.card.canCreatePr), false);
+      assert.equal(failed.undo, undefined);
+      assert.equal(decideCreatePullRequestWrite({ card: failed.card, files: [{path: "src/a.ts", content: "ALPHA\n"}], fallbackRepoId: "github:acme/demo" }).ok, false);
+    } finally { workspace.applyEdit = previous; }
+  });
+
+  await test("a stale card action never falls back to another pending patch", async () => {
+    const doc = installRemoteDoc("src/a.ts", "alpha\n");
+    await handlePatchComplete(TWO_FILE_PATCH.split("File: `src/b.ts`")[0], { messageTimestamp: 982, publish: () => undefined });
+    const restore = installApplyEditMutation();
+    try {
+      assert.equal(await applyPendingPatch(undefined, 999), false);
+      rejectPendingPatchWithState(undefined, "explicit", 999);
+      assert.equal(await undoLastPatchWithState(undefined, 999), false);
+      assert.equal(doc.getText(), "alpha\n");
+      assert.equal(getPatchRecord(982)?.card.status, "pending");
+    } finally { restore(); }
+  });
+
+  await test("partial Apply acknowledgment retains safe Undo for verified files without claiming PR readiness", async () => {
+    const first = installRemoteDoc("src/a.ts", "alpha\n");
+    const second = installRemoteDoc("src/b.ts", "beta\n");
+    await handlePatchComplete(TWO_FILE_PATCH, { messageTimestamp: 983, publish: () => undefined, targetRepo: GITHUB_REPO });
+    const workspace = vscode.workspace;
+    const previous = workspace.applyEdit;
+    workspace.applyEdit = async () => { first.setText("ALPHA\n"); return true; };
+    try {
+      assert.equal(await applyPendingPatch(undefined, 983), false);
+      const record = getPatchRecord(983)!;
+      assert.equal(record.card.status, "failed");
+      assert.equal(record.card.canUndo, true);
+      assert.equal(record.card.canCreatePr, false);
+      assert.equal(record.card.files[0].hunks[0].status, "applied");
+      assert.equal(record.card.files[1].hunks[0].status, "pending");
+      assert.equal(record.undo?.length, 1);
+      const restore = installApplyEditMutation();
+      try {
+        assert.equal(await undoLastPatchWithState(undefined, 983), true);
+        assert.equal(first.getText(), "alpha\n");
+        assert.equal(second.getText(), "beta\n");
+      } finally { restore(); }
+    } finally { workspace.applyEdit = previous; }
+  });
+
+  await test("Apply verifies CRLF editor text and retains actual bytes for Undo and PR", async () => {
+    const doc = installRemoteDoc("src/a.ts", "alpha\r\nbeta\r\n");
+    await handlePatchComplete("File: src/a.ts\n```patch\n<<<<<<< SEARCH\nalpha\n=======\nALPHA\n>>>>>>> REPLACE\n```", {
+      messageTimestamp: 985, publish: () => undefined, targetRepo: GITHUB_REPO
+    });
+    const workspace = vscode.workspace;
+    const previous = workspace.applyEdit;
+    workspace.applyEdit = async (edit) => {
+      const replacement = (edit as unknown as { replacements: Array<{ newText: string }> }).replacements[0];
+      doc.setText(replacement.newText.replace(/\r?\n/g, "\r\n"));
+      return true;
+    };
+    try {
+      assert.equal(await applyPendingPatch(undefined, 985), true);
+      const applied = getPatchRecord(985)!;
+      assert.equal(applied.undo?.[0].appliedContent, "ALPHA\r\nbeta\r\n");
+      assert.equal(applied.card.prFiles?.[0].content, "ALPHA\r\nbeta\r\n");
+      assert.equal(await undoLastPatchWithState(undefined, 985), true);
+      assert.equal(doc.getText(), "alpha\r\nbeta\r\n");
+    } finally { workspace.applyEdit = previous; }
+  });
+
+  await test("closed Apply targets ship verified bytes and exclude rejected hunks", async () => {
+    const doc = installRemoteDoc("src/a.ts", "alpha\nbeta\n");
+    const patch = "File: src/a.ts\n```patch\n<<<<<<< SEARCH\nalpha\n=======\nALPHA\n>>>>>>> REPLACE\n<<<<<<< SEARCH\nbeta\n=======\nBETA\n>>>>>>> REPLACE\n```";
+    await handlePatchComplete(patch, { messageTimestamp: 984, publish: () => undefined, targetRepo: GITHUB_REPO });
+    const restore = installApplyEditMutation();
+    try {
+      assert.equal(await applyPendingPatchHunk(undefined, 984, "hunk-0"), true);
+      rejectPendingPatchWithState(undefined, "explicit", 984);
+      assert.equal(getPatchRecord(984)?.card.status, "applied");
+      assert.equal(doc.getText(), "ALPHA\nbeta\n");
+      (vscode.workspace.textDocuments as unknown[]).length = 0;
+      const foreign = installRemoteDoc("src/a.ts", "FOREIGN\n", "other", "demo");
+      assert.deepEqual(collectAppliedPrFiles(getPatchRecord(984)!.card), [{ path: "src/a.ts", content: "ALPHA\nbeta\n" }]);
+      assert.equal(foreign.getText(), "FOREIGN\n");
+    } finally { restore(); }
+  });
+
+  await test("per-file Apply retains every verified file in the final PR payload", async () => {
+    installRemoteDoc("src/a.ts", "alpha\n");
+    installRemoteDoc("src/b.ts", "beta\n");
+    await handlePatchComplete(TWO_FILE_PATCH, { messageTimestamp: 986, publish: () => undefined, targetRepo: GITHUB_REPO });
+    const restore = installApplyEditMutation();
+    try {
+      assert.equal(await applyPendingPatchHunk(undefined, 986, "hunk-0"), true);
+      assert.equal(await applyPendingPatchHunk(undefined, 986, "hunk-1"), true);
+      assert.deepEqual(getPatchRecord(986)?.card.prFiles, [
+        { path: "src/a.ts", content: "ALPHA\n" }, { path: "src/b.ts", content: "BETA\n" }
+      ]);
+    } finally { restore(); }
+  });
+
   await test("B-G1 /edit two-file patch yields a Patch card", async () => {
     const card = await handlePatchComplete(TWO_FILE_PATCH, { messageTimestamp: 101 });
     assert.ok(PHASE_B_GATE_IDS.includes("B-G1"));
@@ -535,7 +716,7 @@ async function main(): Promise<void> {
     }
   });
 
-  await test("Create PR files come from captured bytes when the Apply buffer has no repo path", async () => {
+  await test("Create PR files retain verified Apply bytes after untitled targets close", async () => {
     (vscode.workspace.textDocuments as unknown[]).length = 0;
     const parsed = parsePatchResponse(TWO_FILE_PATCH);
     assert.equal(parsed.ok, true);
@@ -548,13 +729,23 @@ async function main(): Promise<void> {
       messageTimestamp: 902,
       fileContents
     });
-    card = setHunkStatusOnCard(card, "hunk-0", "applied");
-    card = setHunkStatusOnCard(card, "hunk-1", "applied");
-    upsertPatchRecord(902, parsed.patches, { ...card, status: "applied" }, { fileContents });
-    const files = collectAppliedPrFiles({ ...card, status: "applied", messageTimestamp: 902 });
-    assert.equal(files.length, 2);
-    assert.equal(files.find((file) => file.path === "src/a.ts")?.content, "ALPHA\n");
-    assert.equal(files.find((file) => file.path === "src/b.ts")?.content, "BETA\n");
+    const restore = installApplyEditMutation();
+    try {
+      const applied = await applyPatchesToWorkspace(parsed.patches, {
+        repo: GITHUB_REPO, fileContents, openRemoteFile: async () => false
+      });
+      assert.ok(applied.ok);
+      assert.ok(vscode.workspace.textDocuments.every((doc) => doc.uri.scheme === "untitled"));
+      card = setHunkStatusOnCard(card, "hunk-0", "applied");
+      card = setHunkStatusOnCard(card, "hunk-1", "applied");
+      upsertPatchRecord(902, parsed.patches, { ...card, status: "applied", targetRepo: GITHUB_REPO }, { fileContents });
+      setPatchRecordUndo(902, applied.undo);
+      (vscode.workspace.textDocuments as unknown[]).length = 0;
+      const files = collectAppliedPrFiles(getPatchRecord(902)!.card);
+      assert.equal(files.length, 2);
+      assert.equal(files.find((file) => file.path === "src/a.ts")?.content, "ALPHA\n");
+      assert.equal(files.find((file) => file.path === "src/b.ts")?.content, "BETA\n");
+    } finally { restore(); }
   });
 
   await test("B-G3 reject leaves buffers unchanged and restages via undo", async () => {

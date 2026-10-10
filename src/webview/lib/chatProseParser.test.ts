@@ -1125,6 +1125,28 @@ test("unclosed language fence does not swallow a later numeric locator", () => {
 });
 
 // ── Summary ────────────────────────────────────────────────────────────────
+test("explicit source mode preserves long/tilde fences and original CRLF/code blank lines", () => {
+  for (const fence of ["````", "~~~~"]) {
+    const code = "const sample = `\r\n\r\n\r\n```\r\nbody\r\n```\r\n`;";
+    const doc = parseChatProse("Observed source:\n\n" + fence + "1:7:src/sample.ts\n" + code + "\n" + fence,
+      { sourceCitationMode: "explicit", activeFilePath: "src/other.ts" });
+    const citations = doc.blocks.filter(block => block.type === "code-citation");
+    assert.equal(citations.length, 1);
+    assert.equal(citations[0].path, "src/sample.ts");
+    assert.equal(citations[0].code, code);
+    assert.equal(citations[0].fence, fence);
+  }
+});
+
+test("explicit source mode cannot promote examples using active files or neighboring source labels", () => {
+  const doc = parseChatProse("See `src/actual.ts`.\n\n1:1:src/actual.ts\n\n```typescript\npersist('example');\n```\n\nsrc/actual.ts:1-1",
+    { sourceCitationMode: "explicit", activeFilePath: "src/actual.ts" });
+  assert.equal(doc.blocks.filter(block => block.type === "code-citation").length, 0);
+  const example = doc.blocks.find(block => block.type === "code-fence");
+  assert.ok(example?.type === "code-fence");
+  assert.equal(example.code, "persist('example');");
+});
+
 const total = passed + failed;
 console.log(`\nchatProseParser: ${passed}/${total} tests passed`);
 if (failed > 0) {

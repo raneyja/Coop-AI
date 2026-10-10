@@ -1,0 +1,100 @@
+{
+  "fixture": "Plane exact original",
+  "threadId": "thread-1791589888335-qavpnl",
+  "commit": "a8e53b6ac7b87bd8e3e931d21188f7679c7ab6c4",
+  "submittedContext": {
+    "owner": "CoopAI-Corp",
+    "repo": "plane",
+    "branch": "preview",
+    "file": null,
+    "selectedLines": null
+  },
+  "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+  "bundleId": "6abd5289981fc2f343a5e4c079324794f60381927b80aadceee88ad15cc85fcc",
+  "sourceAndCitationResult": "Pass",
+  "latencyGuidelineResult": "Fail",
+  "answerStartMs": 44713,
+  "completionMs": 57023,
+  "nativeEvidenceQuality": "Medium",
+  "reviewedFiles": 3,
+  "sourceCitations": [
+    {
+      "threadId": "thread-1791589888335-qavpnl",
+      "path": "apps/api/plane/api/serializers/issue.py",
+      "startLine": 121,
+      "endLine": 126,
+      "sourceLinesAttached": true,
+      "exactQuote": true,
+      "sameLinesIgnoringIndentation": true,
+      "matchesPinnedOracle": true,
+      "oracleBodySha256": "4564f1fd753a7cb28894b2e59492e480b6cecf21f16c2e178c8b94e9dbf6d142"
+    },
+    {
+      "threadId": "thread-1791589888335-qavpnl",
+      "path": "apps/api/plane/db/models/state.py",
+      "startLine": 65,
+      "endLine": 69,
+      "sourceLinesAttached": true,
+      "exactQuote": true,
+      "sameLinesIgnoringIndentation": true,
+      "matchesPinnedOracle": true,
+      "oracleBodySha256": "dee256b42615705f66ce3f0daa639a965d7c55316d656481580e440d63118951"
+    },
+    {
+      "threadId": "thread-1791589888335-qavpnl",
+      "path": "apps/api/plane/app/serializers/issue.py",
+      "startLine": 125,
+      "endLine": 126,
+      "sourceLinesAttached": true,
+      "exactQuote": true,
+      "sameLinesIgnoringIndentation": true,
+      "matchesPinnedOracle": true,
+      "oracleBodySha256": "25c2aa23e9acb12f1ce4f3701e91337dd661817dca1a615a064bbc2e5cb24c6b"
+    },
+    {
+      "threadId": "thread-1791589888335-qavpnl",
+      "path": "apps/api/plane/db/models/state.py",
+      "startLine": 72,
+      "endLine": 76,
+      "sourceLinesAttached": true,
+      "exactQuote": true,
+      "sameLinesIgnoringIndentation": true,
+      "matchesPinnedOracle": true,
+      "oracleBodySha256": "dee256b42615705f66ce3f0daa639a965d7c55316d656481580e440d63118951"
+    },
+    {
+      "threadId": "thread-1791589888335-qavpnl",
+      "path": "apps/api/plane/app/serializers/issue.py",
+      "startLine": 169,
+      "endLine": 176,
+      "sourceLinesAttached": true,
+      "exactQuote": true,
+      "sameLinesIgnoringIndentation": true,
+      "matchesPinnedOracle": true,
+      "oracleBodySha256": "25c2aa23e9acb12f1ce4f3701e91337dd661817dca1a615a064bbc2e5cb24c6b"
+    },
+    {
+      "threadId": "thread-1791589888335-qavpnl",
+      "path": "apps/api/plane/api/serializers/issue.py",
+      "startLine": 288,
+      "endLine": 288,
+      "sourceLinesAttached": true,
+      "exactQuote": true,
+      "sameLinesIgnoringIndentation": true,
+      "matchesPinnedOracle": true,
+      "oracleBodySha256": "4564f1fd753a7cb28894b2e59492e480b6cecf21f16c2e178c8b94e9dbf6d142"
+    },
+    {
+      "threadId": "thread-1791589888335-qavpnl",
+      "path": "apps/api/plane/app/serializers/issue.py",
+      "startLine": 330,
+      "endLine": 330,
+      "sourceLinesAttached": true,
+      "exactQuote": true,
+      "sameLinesIgnoringIndentation": true,
+      "matchesPinnedOracle": true,
+      "oracleBodySha256": "25c2aa23e9acb12f1ce4f3701e91337dd661817dca1a615a064bbc2e5cb24c6b"
+    }
+  ],
+  "semanticReview": "Conditional project membership guards; exact triage manager selection and definitions; same-class write delegation; no exhaustive transition policy, unread superclass/save path, or asserted test/owner directory. Open policy questions remain prospective. Repeat on the final private-review bundle remains pending for consistent qualification."
+}

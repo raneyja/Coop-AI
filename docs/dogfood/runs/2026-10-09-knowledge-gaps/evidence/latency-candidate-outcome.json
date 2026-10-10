@@ -1,0 +1,42 @@
+{
+  "recordedAt": "2026-10-10T07:17:07.600153+00:00",
+  "candidateBundle": "38bb4e6f3465d3c68dc72f7874c86baf8820fa1dbdb576db352f40332e77e95f",
+  "status": "withdrawn after observed accuracy failure",
+  "originalFourCaseAccuracyLedgerPreserved": true,
+  "measurementScope": "two individual requests; no generic speed or scale benchmark",
+  "metrics": [
+    {
+      "threadId": "thread-1791600559977-u9oern",
+      "turnId": "turn-1791600583070-c8v38r",
+      "bundleId": "38bb4e6f3465d3c68dc72f7874c86baf8820fa1dbdb576db352f40332e77e95f",
+      "synthesisStartMs": 7231,
+      "answerStartMs": 178415,
+      "completionMs": 178416,
+      "completedAt": "2026-10-10T02:52:39.135Z",
+      "sourceReviewStartMs": 29679
+    },
+    {
+      "threadId": "thread-1791600644092-56r6b5",
+      "turnId": "turn-1791600802361-q5beez",
+      "bundleId": "38bb4e6f3465d3c68dc72f7874c86baf8820fa1dbdb576db352f40332e77e95f",
+      "synthesisStartMs": 7220,
+      "answerStartMs": 109695,
+      "completionMs": 109697,
+      "completedAt": "2026-10-10T02:55:09.338Z",
+      "sourceReviewStartMs": 25647
+    }
+  ],
+  "firstAnswerRejectedQuotePlaceholder": true,
+  "firstAnswerSurvivingNumericQuotes": 5,
+  "firstAnswerUnsupportedOpening": "The three attached files establish two concrete validation rules for work-item state; transition-matrix policy and old-to-new edge rules are not present in the reviewed source.",
+  "sharedDefect": "Narrative formatting changed blank lines inside quoted source after preflight; later quote alignment substituted a rejection placeholder while the answer still published its unsupported finding.",
+  "regressionEvidence": "knowledgeGapsSourceReview.test.ts exercises consecutive blank lines and opaque fenced code through the real enrichment pipeline across Python, TypeScript, Markdown and Rust/CRLF.",
+  "semanticLimitation": "Exact source citations do not certify arbitrary behavioral prose.",
+  "evidence": [
+    "live-metrics.json",
+    "live-diagnostics.json",
+    "thread-1791600559977-u9oern.json",
+    "thread-1791600644092-56r6b5.json"
+  ],
+  "replacementPolicy": "One source-native synthesis, shared code-opaque formatting, exact quote validation, frozen turn source and final publication gate; no additional named-fixture replay."
+}

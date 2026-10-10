@@ -374,15 +374,17 @@ test("hunt/locate risk index queries attach hunt files not Focus", () => {
   );
 });
 
-test("hunt/locate risk stubs name evidence-class gaps not runbook-only", () => {
+test("question wording cannot manufacture risk flags when source leads exist", () => {
   const stubs = knowledgeGapsFocusTopicGapStubs({
     userFocus: T14_ASK,
     focusHitPaths: ["src/api/agent/searchQuery.ts", "src/api/agent/AgentOrchestrator.ts"]
   });
-  assert.ok(stubs.some((gap) => gap.type === "wrong_file_evidence"));
-  assert.ok(stubs.some((gap) => gap.type === "canned_miss"));
-  assert.ok(stubs.some((gap) => gap.type === "ui_for_api"));
-  assert.ok(!stubs.some((gap) => String(gap.message).includes("Docs/runbook may be thin")));
+  assert.deepEqual(stubs, []);
+  for (const userFocus of [T14_ASK, "Before changing widget routing, which policy is unknown?"]) {
+    const missing = knowledgeGapsFocusTopicGapStubs({ userFocus });
+    assert.ok(missing.length);
+    assert.ok(missing.every(gap => gap.type === "focus_search_miss"));
+  }
 });
 
 test("unrelated chip is secondary for hunt/locate Gaps focus", () => {

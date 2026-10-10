@@ -1,0 +1,59 @@
+{
+  "recordedAt": "2026-10-10T02:50:09.782899+00:00",
+  "scope": "Two Documenso fixtures only; preserve accuracy and all exact source/citation conditions. Plane latency remains unchanged.",
+  "bottleneck": "The model draft was awaited even though the explicit selection/question and opened bodies already determined the complete source proof.",
+  "baseline": [
+    {
+      "threadId": "thread-1791599169177-8qt2pd",
+      "sourceReadsMs": [
+        2653,
+        3180,
+        3283
+      ],
+      "synthesisPreparedMs": 3675,
+      "sourceProofMs": 52050,
+      "unusedDraftWaitMs": 48375,
+      "firstAnswerMs": 52051,
+      "completeMs": 52547
+    },
+    {
+      "threadId": "thread-1791598235832-61mrfs",
+      "sourceReadsMs": [
+        2338,
+        2706,
+        2819
+      ],
+      "synthesisPreparedMs": 4849,
+      "sourceProofMs": 57220,
+      "unusedDraftWaitMs": 52371,
+      "firstAnswerMs": 57221,
+      "completeMs": 57883
+    }
+  ],
+  "candidateBundleId": "ac7ff0c94bfe1c1bbf3d3e4076d2c7fe718f60a8ccad21897abf4eb625327377",
+  "automated": {
+    "test:blast": 0,
+    "lint": 0,
+    "build:extension-dev": 0,
+    "diff-check": 0
+  },
+  "live": "Pass for both affected Documenso fixtures; source/citation accuracy retained. Plane model review is unchanged.",
+  "after": [
+    {
+      "threadId": "thread-1791600959699-4o4a89",
+      "answerStartMs": 4201,
+      "completeMs": 4735,
+      "modelSynthesisRequests": 0,
+      "sessionCostUsd": 0,
+      "answerComparison": "Byte-identical to qualified baseline."
+    },
+    {
+      "threadId": "thread-1791601054095-o2fcky",
+      "answerStartMs": 3141,
+      "completeMs": 3639,
+      "modelSynthesisRequests": 0,
+      "sessionCostUsd": 0,
+      "answerComparison": "Only the two complete caller sections changed order, following read-completion order. All section bytes and remaining text match."
+    }
+  ]
+}

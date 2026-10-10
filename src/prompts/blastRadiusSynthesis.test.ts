@@ -25,6 +25,48 @@ function test(name: string, fn: () => void): void {
   }
 }
 
+test("source-backed synthesis preserves different tasks without selecting a change scenario", () => {
+  const sourceFiles = [
+    { path: "src/action.ts", repoId: "github:org/project", branch: "release", role: "target" as const,
+      content: "export async function action() { return load(); }", startLine: 1, endLine: 1, truncated: false },
+    { path: "src/caller.ts", repoId: "github:org/project", branch: "release", role: "dependent" as const,
+      content: "try { await action(); } catch (error) { retry(error); }", startLine: 1, endLine: 1, truncated: false }
+  ];
+  for (const ask of [
+    "Explain the exception handling in the selected range.",
+    "Which callers are affected if this exported function is removed?",
+    "What changes if this call returns a promise?",
+    "Which concurrency assumptions can the opened sources establish?"
+  ]) {
+    const prompt = buildBlastRadiusSynthesisUserPrompt({ file: "src/action.ts", userQuestion: ask,
+      evidence: { directDependents: ["src/caller.ts"], sourceFiles } });
+    assert.ok(prompt.includes(ask));
+    assert.match(prompt, /Answer the user's actual request/);
+    assert.match(prompt, /An import's spelling is not proof of module resolution/);
+    assert.match(prompt, /partial body cannot establish that other protections are absent/);
+    assert.doesNotMatch(prompt, /Use two sections only|## Source checkpoints to review/);
+  }
+});
+
+test("source formatting does not substitute answers using incidental identifiers or claim phrases", () => {
+  const content = "The SQL query selects pending records. Discuss the optional user parameter and the only remaining question: whether retries can duplicate the conditional operation.";
+  const result = enrichBlastRadiusResponse(content, {
+    file: "src/action.py", directDependents: ["src/caller.py"], sourceEvidenceGathered: true,
+    sourceFiles: [{ path: "src/caller.py", repoId: "github:org/project", branch: "release", role: "dependent",
+      content: "if ready:\n    action()", startLine: 1, endLine: 2, truncated: false }]
+  });
+  assert.equal(result, content, "this formatter proves quote integrity; it does not certify or rewrite prose semantics");
+});
+
+test("a target body with no confirmed dependents keeps the short unknown-impact policy", () => {
+  const prompt = buildBlastRadiusSynthesisUserPrompt({ file: "src/action.go", evidence: {
+    file: "src/action.go", directDependents: [], sourceFiles: [{ path: "src/action.go", repoId: "github:org/project",
+      role: "target", content: "package action", startLine: 1, endLine: 1, truncated: false }]
+  } });
+  assert.match(prompt, /Thin evidence \(required\)/);
+  assert.doesNotMatch(prompt, /Use two sections only/);
+});
+
 test("blast-radius synthesis includes primary target and out-of-scope @ attachments", () => {
   const prompt = buildBlastRadiusSynthesisUserPrompt({
     evidence,
@@ -194,9 +236,9 @@ test("named-function blast prompt does not treat every file importer as breakage
     userFocus: "If we change gateRequest so unauthenticated requests always 401, what else breaks?",
     userQuestion: "If we change gateRequest so unauthenticated requests always 401, what else breaks?"
   });
-  assert.ok(prompt.includes("callers of that identifier"));
-  assert.ok(prompt.includes("other exports are Weak"));
-  assert.ok(prompt.includes("Named function(s): gateRequest"));
+  assert.ok(prompt.includes("actual verified use"));
+  assert.ok(prompt.includes("other exports are weak context"));
+  assert.ok(prompt.includes("Requested identifier(s): gateRequest"));
   assert.ok(!prompt.includes("http/webhooks.ts"));
 });
 

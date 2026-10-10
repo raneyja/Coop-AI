@@ -53,9 +53,13 @@ function splitLines(text: string): string[] {
 function readWorkspaceFile(
   relativePath: string,
   overrides?: Readonly<Record<string, string>>,
-  search?: string
+  search?: string,
+  targetRepo?: PatchCardState["targetRepo"],
+  preferLocalDisk?: boolean
 ): string {
-  const live = collectOpenPatchFileBytes(relativePath, { search });
+  const live = collectOpenPatchFileBytes(relativePath, {
+    search, repo: targetRepo, preferLocalDisk, capturedContent: lookupPatchFileContent(relativePath, overrides)
+  });
   if (live?.trim()) {
     return live;
   }
@@ -466,6 +470,8 @@ export function buildPatchCardState(
     appliedFileCount?: number;
     canUndo?: boolean;
     fileContents?: Readonly<Record<string, string>>;
+    targetRepo?: PatchCardState["targetRepo"];
+    preferLocalDisk?: boolean;
     /** Preserve per-hunk apply/reject when rebuilding previews. */
     previousFiles?: readonly PatchPreviewFile[];
   }
@@ -495,7 +501,9 @@ export function buildPatchCardState(
     const content = readWorkspaceFile(
       filePatch.relativePath,
       options.fileContents,
-      filePatch.hunks[0]?.search
+      filePatch.hunks[0]?.search,
+      options.targetRepo,
+      options.preferLocalDisk
     );
     const rawPreviews: PatchPreviewHunk[] = [];
 
@@ -542,6 +550,8 @@ export function buildPatchCardState(
   return {
     status: options.status,
     messageTimestamp: options.messageTimestamp,
+    targetRepo: options.targetRepo,
+    preferLocalDisk: options.preferLocalDisk,
     fileCount: countUniqueFiles(patches),
     hunkCount: countHunks(patches),
     files,

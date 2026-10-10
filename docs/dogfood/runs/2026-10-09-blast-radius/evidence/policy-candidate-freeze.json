@@ -1,0 +1,291 @@
+{
+  "scope": "General Blast source/task/citation/Stop/usage policy; automated only; scope-specific snapshot",
+  "recordedAt": "2026-10-10T16:30:55.793435+00:00",
+  "candidateDirectory": "/private/tmp/coop-blast-policy-candidate-20261009",
+  "loadedIntoExtensionHost": false,
+  "backendRedeployed": false,
+  "status": "Automated Pass",
+  "sourceRecords": [
+    {
+      "path": "src/context/blastRadiusSourceEvidence.ts",
+      "sha256": "10172f678d6a7b676dcba0d28e373c3a71a636894ebec794c238afb7050ea8ce",
+      "frozenSha256": "10172f678d6a7b676dcba0d28e373c3a71a636894ebec794c238afb7050ea8ce"
+    },
+    {
+      "path": "src/context/blastRadiusSourceEvidence.test.ts",
+      "sha256": "37a7e6b68209b66beef2020cc8b6bf09d2cef0e1a1f0c8243827bafcd7757a12",
+      "frozenSha256": "37a7e6b68209b66beef2020cc8b6bf09d2cef0e1a1f0c8243827bafcd7757a12"
+    },
+    {
+      "path": "src/prompts/blastRadiusSourceGuard.ts",
+      "sha256": "b752e5b4bb9cd4a41fe4e5f5aa72da32ecd9f2da9149dca58ea5244f872564ba",
+      "frozenSha256": "b752e5b4bb9cd4a41fe4e5f5aa72da32ecd9f2da9149dca58ea5244f872564ba"
+    },
+    {
+      "path": "src/prompts/blastRadiusSourceGuard.test.ts",
+      "sha256": "16cef58ec3e8365612e942b7281a94bcd31f3608983e7a4a92acbd5ceb97087d",
+      "frozenSha256": "16cef58ec3e8365612e942b7281a94bcd31f3608983e7a4a92acbd5ceb97087d"
+    },
+    {
+      "path": "src/chat/blastRadiusSourceReview.ts",
+      "sha256": "9d2ce9d6e89ad1f036ddfac03969f630c3633cb43407342379aeaf511f33bcb4",
+      "frozenSha256": "9d2ce9d6e89ad1f036ddfac03969f630c3633cb43407342379aeaf511f33bcb4"
+    },
+    {
+      "path": "src/chat/blastRadiusSourceReview.test.ts",
+      "sha256": "cfb84645de42be35cf89dcdb8190cef1d0b1f17a56814a6b094a930202571aee",
+      "frozenSha256": "cfb84645de42be35cf89dcdb8190cef1d0b1f17a56814a6b094a930202571aee"
+    },
+    {
+      "path": "src/prompts/blastRadiusSynthesis.ts",
+      "sha256": "f509dad18a836a320708107e5c840a26e3bd6b0aebaf9e0ccbc0c16c497fb936",
+      "frozenSha256": "f509dad18a836a320708107e5c840a26e3bd6b0aebaf9e0ccbc0c16c497fb936"
+    },
+    {
+      "path": "src/prompts/blastRadiusSynthesis.test.ts",
+      "sha256": "239adf74c055277368b3a1a7f80ef660e6f41cfb8a0f6f90a226ac3fcef8d8a6",
+      "frozenSha256": "239adf74c055277368b3a1a7f80ef660e6f41cfb8a0f6f90a226ac3fcef8d8a6"
+    },
+    {
+      "path": "src/prompts/systemPrompts.ts",
+      "sha256": "a208ae766dd242a9700d04bd48b02669db9aa4ef8b4e8271c8b91328d9bcfc47",
+      "frozenSha256": "a208ae766dd242a9700d04bd48b02669db9aa4ef8b4e8271c8b91328d9bcfc47"
+    },
+    {
+      "path": "src/prompts/systemPrompts.test.ts",
+      "sha256": "790159c50677c0900434cc1e529801970dc55c98746d8f78a01274c07612b752",
+      "frozenSha256": "790159c50677c0900434cc1e529801970dc55c98746d8f78a01274c07612b752"
+    },
+    {
+      "path": "src/api/blastSourceRequest.test.ts",
+      "sha256": "1261054aa839aec3b289c43b0f1aa4d8b75e4de9b6a75242e6dc2faadbd7688f",
+      "frozenSha256": "1261054aa839aec3b289c43b0f1aa4d8b75e4de9b6a75242e6dc2faadbd7688f"
+    },
+    {
+      "path": "src/api/ModelRouter.ts",
+      "sha256": "a2f766ce98eeba99262b13bef90f1e90b004ba16f3d508b1474298b7e30c9fac",
+      "frozenSha256": "a2f766ce98eeba99262b13bef90f1e90b004ba16f3d508b1474298b7e30c9fac"
+    },
+    {
+      "path": "src/api/ModelRouter.knowledgeGapsPrompt.test.ts",
+      "sha256": "a12ad955c170fca9c08b7bfd2237cb1f4a3759a483a1b37b39448eb31fb85465",
+      "frozenSha256": "a12ad955c170fca9c08b7bfd2237cb1f4a3759a483a1b37b39448eb31fb85465"
+    },
+    {
+      "path": "src/chat/CoopChatSession.ts",
+      "sha256": "0ff077c12913e665c5251da6d19819ffe2f64a85a4b87a787ac3e09835ed5041",
+      "frozenSha256": "0ff077c12913e665c5251da6d19819ffe2f64a85a4b87a787ac3e09835ed5041"
+    },
+    {
+      "path": "src/chat/chatTurn.ts",
+      "sha256": "b4d20799c18e350e7a6393dea4af76b3d0dfda9b2e51b07e60cf09cfaefcd9f2",
+      "frozenSha256": "b4d20799c18e350e7a6393dea4af76b3d0dfda9b2e51b07e60cf09cfaefcd9f2"
+    },
+    {
+      "path": "src/chat/types.ts",
+      "sha256": "2e083d264abdccfa8d3e0352455fc823b30c6453fad4f77470681821646982ec",
+      "frozenSha256": "2e083d264abdccfa8d3e0352455fc823b30c6453fad4f77470681821646982ec"
+    },
+    {
+      "path": "src/chat/threadSync.ts",
+      "sha256": "bd50fdb334ba1af77c0b318b187cef3f3d3d9b605e958ebdae7e9b84b94c882c",
+      "frozenSha256": "bd50fdb334ba1af77c0b318b187cef3f3d3d9b605e958ebdae7e9b84b94c882c"
+    },
+    {
+      "path": "src/chat/chatResponseEnrichment.ts",
+      "sha256": "11db3c546ee4cbdc89de37778cf5ea22426f3407ac46c1a0fe16782c4065bf56",
+      "frozenSha256": "11db3c546ee4cbdc89de37778cf5ea22426f3407ac46c1a0fe16782c4065bf56"
+    },
+    {
+      "path": "src/chat/blastRadiusSourceEvidence.test.ts",
+      "sha256": "dacb94300263bce637b83e2660c8572c962a179d7faaad973f7db7f253247607",
+      "frozenSha256": "dacb94300263bce637b83e2660c8572c962a179d7faaad973f7db7f253247607"
+    },
+    {
+      "path": "src/prompts/markdownProse.ts",
+      "sha256": "d834e065fb8f4e7ecca9cbcafb4c75209e671ccb2cfbc2b615d14879226a0cd4",
+      "frozenSha256": "d834e065fb8f4e7ecca9cbcafb4c75209e671ccb2cfbc2b615d14879226a0cd4"
+    },
+    {
+      "path": "src/prompts/sourceCitationIntegrity.ts",
+      "sha256": "4e95f41bcc282d5450616f3a680d07482f84dfc210ca3a613774c00eeda23580",
+      "frozenSha256": "4e95f41bcc282d5450616f3a680d07482f84dfc210ca3a613774c00eeda23580"
+    },
+    {
+      "path": "src/prompts/evidenceSynthesis.ts",
+      "sha256": "0bd0ba3b61502abd8218b0536e7ae7dd3332f3d304c971c137599d04ba95df4a",
+      "frozenSha256": "0bd0ba3b61502abd8218b0536e7ae7dd3332f3d304c971c137599d04ba95df4a"
+    },
+    {
+      "path": "src/prompts/sourcesFooterEnrichment.ts",
+      "sha256": "16a28a6d44f3de2065917483f902aeb140236133fe601e551713c43442dbe6f1",
+      "frozenSha256": "16a28a6d44f3de2065917483f902aeb140236133fe601e551713c43442dbe6f1"
+    },
+    {
+      "path": "src/chat/customerFacingAnswer.ts",
+      "sha256": "bad865d3e39421eb6b86994bb10691f6b6f90bbc8aa8b7dcd140d66baf7249c3",
+      "frozenSha256": "bad865d3e39421eb6b86994bb10691f6b6f90bbc8aa8b7dcd140d66baf7249c3"
+    },
+    {
+      "path": "src/webview/ChatPanel.tsx",
+      "sha256": "113bb12d8e851a1513d4346cb2e631a1a80144d7f026e1db9baa87f6b1d051c5",
+      "frozenSha256": "113bb12d8e851a1513d4346cb2e631a1a80144d7f026e1db9baa87f6b1d051c5"
+    },
+    {
+      "path": "src/webview/components/ChatStream.tsx",
+      "sha256": "d2039f75ba30a51c9f5943ec0f2a8225dad48be81ebb184ced36de7749ce2a86",
+      "frozenSha256": "d2039f75ba30a51c9f5943ec0f2a8225dad48be81ebb184ced36de7749ce2a86"
+    },
+    {
+      "path": "src/webview/components/ChatProse.tsx",
+      "sha256": "3338089e6da84f73cbb98bb55b5805faf2815129a0e555c2daa272466f5128ce",
+      "frozenSha256": "3338089e6da84f73cbb98bb55b5805faf2815129a0e555c2daa272466f5128ce"
+    },
+    {
+      "path": "src/webview/components/ChatMessageActions.tsx",
+      "sha256": "0177548ee28e0151b0e471ba77c2586e5a06f1421c0fbe281270b88d0a1d0f18",
+      "frozenSha256": "0177548ee28e0151b0e471ba77c2586e5a06f1421c0fbe281270b88d0a1d0f18"
+    },
+    {
+      "path": "src/webview/lib/chatProseParser.ts",
+      "sha256": "3dd440b0784a516a5b032632aad9e2ae6cd94c75a6949ab264b0b47e38b7612c",
+      "frozenSha256": "3dd440b0784a516a5b032632aad9e2ae6cd94c75a6949ab264b0b47e38b7612c"
+    },
+    {
+      "path": "src/webview/lib/chatProseTypes.ts",
+      "sha256": "c312ea4338576aad92f38e1d08cd8448109ddfac8e760ff1b95eed11d729f83f",
+      "frozenSha256": "c312ea4338576aad92f38e1d08cd8448109ddfac8e760ff1b95eed11d729f83f"
+    },
+    {
+      "path": "src/webview/lib/formatChatMessageForCopy.ts",
+      "sha256": "fc292352cf1124939053a7d56e98448bcae70f7d29e09c482eff2007cd7c223b",
+      "frozenSha256": "fc292352cf1124939053a7d56e98448bcae70f7d29e09c482eff2007cd7c223b"
+    },
+    {
+      "path": "src/webview/lib/chatProseParser.test.ts",
+      "sha256": "1a71b55d8162fa55bb0879231dcfffaffc30f872ab3d9aaaaf81d127535b66f4",
+      "frozenSha256": "1a71b55d8162fa55bb0879231dcfffaffc30f872ab3d9aaaaf81d127535b66f4"
+    },
+    {
+      "path": "src/webview/components/ChatProse.test.ts",
+      "sha256": "cf0e4e9004931903cd893554839d447e09016487d7ab82b0d2ff50e2790d6cba",
+      "frozenSha256": "cf0e4e9004931903cd893554839d447e09016487d7ab82b0d2ff50e2790d6cba"
+    },
+    {
+      "path": "src/webview/lib/formatChatMessageForCopy.test.ts",
+      "sha256": "df017fe3bc004df12344b4cd37832389e144cce130d0b46e1182c4956cb0d1e7",
+      "frozenSha256": "df017fe3bc004df12344b4cd37832389e144cce130d0b46e1182c4956cb0d1e7"
+    },
+    {
+      "path": "src/config/responseDeadline.ts",
+      "sha256": "1069b07c5d72ee16190ed2a50d13684a2cc0fd606679f18383a572d5617116b3",
+      "frozenSha256": "1069b07c5d72ee16190ed2a50d13684a2cc0fd606679f18383a572d5617116b3"
+    },
+    {
+      "path": "src/config/coopBuildId.ts",
+      "sha256": "72b577b497e72b102b2e678a95d094ae123bc3e450e0875730cc600304152c02",
+      "frozenSha256": "72b577b497e72b102b2e678a95d094ae123bc3e450e0875730cc600304152c02"
+    },
+    {
+      "path": "package.json",
+      "sha256": "9936a4f8e0e7e8f8105fe099d004637a6eb7fa4348d8a3a288e57bd3000de158",
+      "frozenSha256": "9936a4f8e0e7e8f8105fe099d004637a6eb7fa4348d8a3a288e57bd3000de158"
+    },
+    {
+      "path": ".cursor/rules/chat-code-surfaces.mdc",
+      "sha256": "5378cd25bc4060fe9e1e6683e78110e7e8b4609a153cfb56fd04071bcf214993",
+      "frozenSha256": null
+    },
+    {
+      "path": "src/webview/evidenceCardSummary.ts",
+      "sha256": "b14b0e7785fa744bd209c973ce9c33928032b92ef02b530a43a4027dfc79fdba",
+      "frozenSha256": "b14b0e7785fa744bd209c973ce9c33928032b92ef02b530a43a4027dfc79fdba"
+    },
+    {
+      "path": "src/webview/evidenceCardSummary.test.ts",
+      "sha256": "84bd1ad163b09cb72bdd7aecd1b9e5fe86adbfcdb0d7e971ac37f568f2aabf07",
+      "frozenSha256": "84bd1ad163b09cb72bdd7aecd1b9e5fe86adbfcdb0d7e971ac37f568f2aabf07"
+    },
+    {
+      "path": "src/engines/blastRadiusDependentsFallback.test.ts",
+      "sha256": "47b5ca63cee6490e76695965293f7971ded29b1e98a2a8631741a4f241be1c39",
+      "frozenSha256": "47b5ca63cee6490e76695965293f7971ded29b1e98a2a8631741a4f241be1c39"
+    }
+  ],
+  "bundles": {
+    "extension.js": {
+      "path": "/private/tmp/coop-blast-policy-candidate-20261009/dist/extension.js",
+      "sha256": "aef9c55519cd99888cd1e77d48348f0895b9d128e32c29ed0e34a336a18049b4",
+      "bytes": 3439606
+    },
+    "extension.js.map": {
+      "path": "/private/tmp/coop-blast-policy-candidate-20261009/dist/extension.js.map",
+      "sha256": "07825ac1a0a04b5c313455a99a9093c060a4a90c60f3dd0a6ff80e758bb55cb0",
+      "bytes": 6879373
+    },
+    "webview.js": {
+      "path": "/private/tmp/coop-blast-policy-candidate-20261009/dist/webview.js",
+      "sha256": "efb6a3f380854b30854a2d90c0526d466af975ddcc41bbe5fed2ba72f7d34302",
+      "bytes": 2033370
+    },
+    "webview.js.map": {
+      "path": "/private/tmp/coop-blast-policy-candidate-20261009/dist/webview.js.map",
+      "sha256": "e11a758fd59a8d5a38bb39f0518fbf36087854379796a177e3d36e03b603606b",
+      "bytes": 3540100
+    },
+    "webview.css": {
+      "path": "/private/tmp/coop-blast-policy-candidate-20261009/dist/webview.css",
+      "sha256": "2f1563d780aa9e9a1c578ea61c9b00e3d9ddc210f9dc01f9e2ca4decc5f7ce9a",
+      "bytes": 119368
+    }
+  },
+  "bundleSourceMapChecks": {
+    "extension.js.map": {
+      "mappedOwnedSources": 17,
+      "mappedPaths": [
+        "src/chat/types.ts",
+        "src/config/responseDeadline.ts",
+        "src/chat/CoopChatSession.ts",
+        "src/prompts/markdownProse.ts",
+        "src/chat/customerFacingAnswer.ts",
+        "src/chat/chatTurn.ts",
+        "src/chat/threadSync.ts",
+        "src/prompts/evidenceSynthesis.ts",
+        "src/prompts/sourcesFooterEnrichment.ts",
+        "src/prompts/sourceCitationIntegrity.ts",
+        "src/prompts/blastRadiusSourceGuard.ts",
+        "src/prompts/blastRadiusSynthesis.ts",
+        "src/chat/blastRadiusSourceReview.ts",
+        "src/context/blastRadiusSourceEvidence.ts",
+        "src/chat/chatResponseEnrichment.ts",
+        "src/prompts/systemPrompts.ts",
+        "src/config/coopBuildId.ts"
+      ],
+      "allMappedHashesMatch": true,
+      "typescriptCompilerOrPredicateProofSources": []
+    },
+    "webview.js.map": {
+      "mappedOwnedSources": 9,
+      "mappedPaths": [
+        "src/webview/ChatPanel.tsx",
+        "src/webview/components/ChatStream.tsx",
+        "src/prompts/markdownProse.ts",
+        "src/webview/components/ChatProse.tsx",
+        "src/webview/lib/chatProseParser.ts",
+        "src/prompts/evidenceSynthesis.ts",
+        "src/webview/evidenceCardSummary.ts",
+        "src/webview/components/ChatMessageActions.tsx",
+        "src/webview/lib/formatChatMessageForCopy.ts"
+      ],
+      "allMappedHashesMatch": true,
+      "typescriptCompilerOrPredicateProofSources": []
+    }
+  },
+  "restrictions": {
+    "sharedDistBuilt": false,
+    "commitPushPublish": false,
+    "newLiveFixtureReplay": false
+  },
+  "withdrawnExperimentalBundle": "ac7ff0c94bfe1c1bbf3d3e4076d2c7fe718f60a8ccad21897abf4eb625327377",
+  "snapshotNote": "Owned and shared source hashes match the recorded private build. Concurrent Knowledge Gaps-specific changes are separately qualified and are not represented as included in this snapshot."
+}

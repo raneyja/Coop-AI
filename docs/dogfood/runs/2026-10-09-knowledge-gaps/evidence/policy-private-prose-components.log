@@ -1,0 +1,12 @@
+  ✓ hides the File: header paragraph that precedes a patch block
+  ✓ hides File: headers for multiple files in the same patch response
+  ✓ hides patch cite recovered from **/*.md SEARCH line when patch card owns the turn
+  ✓ hides patch fences even when they are not recovered as citations
+  ✓ does not hide ordinary paragraphs mentioning a file
+  ✓ hides unfenced SEARCH/REPLACE paragraphs when patch card suppresses markdown
+  ✓ anonymous header keeps bash and drops TEXT
+  ✓ validated rendering keeps anonymous examples separate from exact source citations
+  ✓ saved message render policy reaches the actual ChatStream body renderer
+
+ChatProse: 9 passed, 0 failed
+

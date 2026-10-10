@@ -296,6 +296,26 @@ test("blast_radius use case includes impact sections", () => {
   assert.ok(prompt.includes("Do **not** invent Direct impact"));
 });
 
+test("source-backed Blast preserves task and limits behavior claims to inspected evidence", () => {
+  const prompt = systemPromptForUseCase("blast_radius", { blastSourceGrounded: true });
+  assert.ok(prompt.includes("Required response policy — opened source"));
+  assert.ok(prompt.includes("Answer the user's actual request"));
+  assert.ok(prompt.includes("A selected range is context"));
+  assert.ok(prompt.includes("preserve complete conditions, earlier exits, exception branches, and conditional operations"));
+  assert.ok(prompt.includes("Names, comments, defaults, and lifecycle labels"));
+  assert.ok(!prompt.includes("**Top risk surfaces**"));
+  assert.ok(!prompt.includes("**Testing surfaces**"));
+  assert.ok(!prompt.includes("**Operational risk**"));
+  assert.ok(prompt.includes("With no confirmed dependents"));
+  assert.ok(prompt.includes("cite exact contiguous source ranges"));
+});
+
+test("source-backed Blast keeps the paperclip and source citation rules", () => {
+  const prompt = systemPromptForUseCase("blast_radius", { blastSourceGrounded: true, hasPaperclipAttachments: true });
+  assert.ok(prompt.includes("User-attached files (paperclip)"));
+  assert.ok(prompt.includes("copied **verbatim** from attached evidence"));
+});
+
 test("inline_completion excludes audience and output contract", () => {
   const prompt = systemPromptForUseCase("inline_completion");
   assert.equal(prompt.includes(AUDIENCE_MARKER), false);

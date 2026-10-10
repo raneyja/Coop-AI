@@ -647,6 +647,7 @@ export function SettingsView({ vscode }: SettingsViewProps): React.ReactElement 
         pendingTest={pendingTest}
         testResult={testResult}
         onClose={handleClose}
+        onReportIssue={() => post({ type: "ui:report-issue" })}
         onUpdate={(partial) => {
           if (typeof partial.autocompleteEnabled === "boolean") {
             pendingAutocompleteRef.current = partial.autocompleteEnabled;

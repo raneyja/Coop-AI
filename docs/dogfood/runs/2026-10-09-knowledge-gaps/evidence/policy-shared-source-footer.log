@@ -1,0 +1,7 @@
+  ✓ sourceBulletPriority ranks commits and PRs above doc pages
+  ✓ enrichSourcesFooter groups per-page Confluence bullets
+  ✓ enrichSourcesFooter keeps top 3 and adds view-all link
+  ✓ enrichSourcesFooter leaves three-or-fewer bullets unchanged when already grouped
+  ✓ enrichSourcesFooter repairs blank citation labels before the em dash
+sourcesFooterEnrichment: 5 passed
+

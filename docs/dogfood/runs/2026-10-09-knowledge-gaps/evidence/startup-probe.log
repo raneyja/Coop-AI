@@ -1,0 +1,178 @@
+2026-10-10T01:04:44.713Z activate
+2026-10-10T01:04:44.731Z token read start
+2026-10-10T01:04:44.731Z resolve sidebar
+2026-10-10T01:04:44.749Z token read complete
+2026-10-10T01:04:44.750Z preferences read start
+2026-10-10T01:04:44.750Z code host secrets start
+2026-10-10T01:04:44.840Z code host secrets complete; integrations start
+2026-10-10T01:04:46.756Z integration secrets complete
+2026-10-10T01:04:46.757Z session verification start
+2026-10-10T01:04:46.970Z session verification complete
+2026-10-10T01:04:46.971Z preferences read complete
+2026-10-10T01:04:46.998Z session hydrated
+2026-10-10T01:04:47.021Z code host secrets start
+2026-10-10T01:04:47.022Z code host secrets start
+2026-10-10T01:04:47.025Z code host secrets complete; integrations start
+2026-10-10T01:04:47.025Z code host secrets complete; integrations start
+2026-10-10T01:04:49.096Z integration secrets complete
+2026-10-10T01:04:49.096Z session verification start
+2026-10-10T01:04:49.110Z integration secrets complete
+2026-10-10T01:04:49.110Z session verification start
+2026-10-10T01:04:49.422Z session verification complete
+2026-10-10T01:04:49.422Z session verification complete
+
+RECOVERY WINDOW ATTACH PROBE
+2026-10-10T01:19:02.721Z activate
+2026-10-10T01:19:02.734Z token read start
+2026-10-10T01:19:02.734Z resolve sidebar
+2026-10-10T01:19:02.734Z attach disposed=false sidebar
+2026-10-10T01:19:02.734Z render start webview=true
+2026-10-10T01:19:02.735Z html assigned chars=1605
+2026-10-10T01:19:02.840Z token read complete
+2026-10-10T01:19:02.840Z preferences read start
+2026-10-10T01:19:02.840Z code host secrets start
+2026-10-10T01:19:02.947Z code host secrets complete; integrations start
+2026-10-10T01:19:03.020Z inbound chat webview-ready
+2026-10-10T01:19:03.021Z inbound chat lightning:ready
+2026-10-10T01:19:04.801Z integration secrets complete
+2026-10-10T01:19:04.801Z session verification start
+2026-10-10T01:19:05.119Z session verification complete
+2026-10-10T01:19:05.120Z preferences read complete
+2026-10-10T01:19:05.131Z session hydrated
+2026-10-10T01:19:05.189Z code host secrets start
+2026-10-10T01:19:05.212Z code host secrets start
+2026-10-10T01:19:05.214Z code host secrets complete; integrations start
+2026-10-10T01:19:05.215Z code host secrets complete; integrations start
+2026-10-10T01:19:06.886Z integration secrets complete
+2026-10-10T01:19:06.887Z session verification start
+2026-10-10T01:19:07.090Z integration secrets complete
+2026-10-10T01:19:07.090Z session verification start
+2026-10-10T01:19:07.191Z session verification complete
+2026-10-10T01:19:07.322Z session verification complete
+2026-10-10T01:20:08.308Z dispose sidebar
+
+OUTBOUND DELIVERY PROBE
+2026-10-10T01:22:10.086Z activate
+2026-10-10T01:22:10.132Z token read start
+2026-10-10T01:22:10.132Z resolve sidebar
+2026-10-10T01:22:10.132Z attach disposed=false sidebar
+2026-10-10T01:22:10.132Z render start webview=true
+2026-10-10T01:22:10.133Z html assigned chars=1605
+2026-10-10T01:22:10.202Z token read complete
+2026-10-10T01:22:10.202Z preferences read start
+2026-10-10T01:22:10.202Z code host secrets start
+2026-10-10T01:22:10.221Z code host secrets complete; integrations start
+2026-10-10T01:22:12.262Z integration secrets complete
+2026-10-10T01:22:12.262Z session verification start
+2026-10-10T01:22:12.613Z session verification complete
+2026-10-10T01:22:12.613Z preferences read complete
+2026-10-10T01:22:12.614Z outbound theme:update webview=true disposed=false
+2026-10-10T01:22:12.615Z outbound settings:state webview=true disposed=false
+2026-10-10T01:22:12.615Z outbound threads:list webview=true disposed=false
+2026-10-10T01:22:12.616Z outbound context:update webview=true disposed=false
+2026-10-10T01:22:12.616Z outbound chat:history webview=true disposed=false
+2026-10-10T01:22:12.616Z outbound threads:list webview=true disposed=false
+2026-10-10T01:22:12.616Z session hydrated
+2026-10-10T01:22:12.627Z code host secrets start
+2026-10-10T01:22:12.628Z code host secrets start
+2026-10-10T01:22:12.628Z code host secrets complete; integrations start
+2026-10-10T01:22:12.629Z code host secrets complete; integrations start
+2026-10-10T01:22:13.141Z outbound settings:state webview=true disposed=false
+2026-10-10T01:22:14.186Z outbound lightning:state webview=true disposed=false
+2026-10-10T01:22:14.428Z integration secrets complete
+2026-10-10T01:22:14.428Z session verification start
+2026-10-10T01:22:14.462Z integration secrets complete
+2026-10-10T01:22:14.462Z session verification start
+2026-10-10T01:22:14.710Z session verification complete
+2026-10-10T01:22:14.711Z session verification complete
+2026-10-10T01:22:16.808Z outbound chat:quota-cleared webview=true disposed=false
+2026-10-10T01:22:16.879Z outbound chat:quota-cleared webview=true disposed=false
+2026-10-10T01:22:17.172Z outbound settings:state webview=true disposed=false
+2026-10-10T01:22:17.334Z outbound settings:state webview=true disposed=false
+2026-10-10T01:27:56.715Z dispose sidebar
+2026-10-10T01:27:56.716Z delivery error theme:update Canceled
+2026-10-10T01:27:56.716Z delivery error settings:state Canceled
+2026-10-10T01:27:56.716Z delivery error threads:list Canceled
+2026-10-10T01:27:56.716Z delivery error context:update Canceled
+2026-10-10T01:27:56.716Z delivery error chat:history Canceled
+2026-10-10T01:27:56.716Z delivery error threads:list Canceled
+2026-10-10T01:27:56.716Z delivery error settings:state Canceled
+2026-10-10T01:27:56.716Z delivery error lightning:state Canceled
+2026-10-10T01:27:56.716Z delivery error chat:quota-cleared Canceled
+2026-10-10T01:27:56.716Z delivery error chat:quota-cleared Canceled
+2026-10-10T01:27:56.716Z delivery error settings:state Canceled
+2026-10-10T01:27:56.716Z delivery error settings:state Canceled
+2026-10-10T01:27:58.817Z activate
+2026-10-10T01:27:58.847Z token read start
+2026-10-10T01:27:58.848Z resolve sidebar
+2026-10-10T01:27:58.848Z attach disposed=false sidebar
+2026-10-10T01:27:58.848Z render start webview=true
+2026-10-10T01:27:58.849Z html assigned chars=1605
+2026-10-10T01:27:58.896Z token read complete
+2026-10-10T01:27:58.896Z preferences read start
+2026-10-10T01:27:58.896Z code host secrets start
+2026-10-10T01:27:58.919Z code host secrets complete; integrations start
+2026-10-10T01:27:59.067Z inbound chat webview-ready
+2026-10-10T01:27:59.068Z inbound chat lightning:ready
+2026-10-10T01:28:00.905Z outbound lightning:state webview=true disposed=false
+2026-10-10T01:28:00.999Z delivered lightning:state=true
+2026-10-10T01:28:01.528Z integration secrets complete
+2026-10-10T01:28:01.528Z session verification start
+2026-10-10T01:28:01.754Z session verification complete
+2026-10-10T01:28:01.754Z preferences read complete
+2026-10-10T01:28:01.755Z outbound theme:update webview=true disposed=false
+2026-10-10T01:28:01.756Z outbound settings:state webview=true disposed=false
+2026-10-10T01:28:01.757Z outbound threads:list webview=true disposed=false
+2026-10-10T01:28:01.758Z outbound context:update webview=true disposed=false
+2026-10-10T01:28:01.759Z outbound chat:history webview=true disposed=false
+2026-10-10T01:28:01.759Z outbound threads:list webview=true disposed=false
+2026-10-10T01:28:01.760Z session hydrated
+2026-10-10T01:28:01.761Z outbound theme:update webview=true disposed=false
+2026-10-10T01:28:01.761Z outbound context:update webview=true disposed=false
+2026-10-10T01:28:01.762Z outbound chat:history webview=true disposed=false
+2026-10-10T01:28:01.762Z outbound threads:list webview=true disposed=false
+2026-10-10T01:28:01.762Z outbound patch:update webview=true disposed=false
+2026-10-10T01:28:01.762Z outbound settings:state webview=true disposed=false
+2026-10-10T01:28:01.763Z outbound prompts:list webview=true disposed=false
+2026-10-10T01:28:01.763Z delivered theme:update=true
+2026-10-10T01:28:01.763Z delivered settings:state=true
+2026-10-10T01:28:01.763Z delivered threads:list=true
+2026-10-10T01:28:01.764Z delivered context:update=true
+2026-10-10T01:28:01.764Z delivered chat:history=true
+2026-10-10T01:28:01.764Z delivered threads:list=true
+2026-10-10T01:28:01.764Z delivered theme:update=true
+2026-10-10T01:28:01.764Z delivered context:update=true
+2026-10-10T01:28:01.764Z delivered chat:history=true
+2026-10-10T01:28:01.764Z delivered threads:list=true
+2026-10-10T01:28:01.764Z delivered patch:update=true
+2026-10-10T01:28:01.764Z delivered settings:state=true
+2026-10-10T01:28:01.768Z delivered prompts:list=true
+2026-10-10T01:28:01.780Z code host secrets start
+2026-10-10T01:28:01.795Z code host secrets start
+2026-10-10T01:28:01.797Z code host secrets complete; integrations start
+2026-10-10T01:28:01.797Z code host secrets complete; integrations start
+2026-10-10T01:28:02.284Z outbound settings:state webview=true disposed=false
+2026-10-10T01:28:02.284Z outbound settings:state webview=true disposed=false
+2026-10-10T01:28:02.290Z delivered settings:state=true
+2026-10-10T01:28:02.290Z delivered settings:state=true
+2026-10-10T01:28:03.524Z outbound lightning:state webview=true disposed=false
+2026-10-10T01:28:03.525Z delivered lightning:state=true
+2026-10-10T01:28:03.529Z outbound lightning:state webview=true disposed=false
+2026-10-10T01:28:03.530Z delivered lightning:state=true
+2026-10-10T01:28:03.537Z outbound lightning:state webview=true disposed=false
+2026-10-10T01:28:03.538Z delivered lightning:state=true
+2026-10-10T01:28:03.851Z integration secrets complete
+2026-10-10T01:28:03.851Z session verification start
+2026-10-10T01:28:03.852Z integration secrets complete
+2026-10-10T01:28:03.852Z session verification start
+2026-10-10T01:28:04.087Z session verification complete
+2026-10-10T01:28:04.091Z session verification complete
+2026-10-10T01:28:06.275Z outbound chat:quota-cleared webview=true disposed=false
+2026-10-10T01:28:06.276Z delivered chat:quota-cleared=true
+2026-10-10T01:28:06.279Z outbound chat:quota-cleared webview=true disposed=false
+2026-10-10T01:28:06.279Z delivered chat:quota-cleared=true
+2026-10-10T01:28:06.775Z outbound settings:state webview=true disposed=false
+2026-10-10T01:28:06.776Z delivered settings:state=true
+2026-10-10T01:28:06.779Z outbound settings:state webview=true disposed=false
+2026-10-10T01:28:06.779Z delivered settings:state=true
+2026-10-10T01:28:26.574Z dispose sidebar

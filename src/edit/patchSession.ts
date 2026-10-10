@@ -129,8 +129,8 @@ export function getPendingPatches(): ParsedPatchSet | undefined {
 }
 
 export function resolveActivePatchTimestamp(preferred?: number): number | undefined {
-  if (preferred !== undefined && patchRecordsByMessage.has(preferred)) {
-    return preferred;
+  if (preferred !== undefined) {
+    return patchRecordsByMessage.has(preferred) ? preferred : undefined;
   }
   const pending = [...patchRecordsByMessage.entries()]
     .filter(([, record]) => record.card.status === "pending")

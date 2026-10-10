@@ -1,0 +1,15 @@
+{
+  "threadId": "thread-1791592645613-djegbv",
+  "bundle": "8c1a7c0ac60674c1f2104f2da4e2ac66b2335465e64255fe83d5efa7b8905006",
+  "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+  "verdict": "Fail",
+  "answerStartMs": 89013,
+  "completionMs": 108257,
+  "failures": [
+    "Reformatted caller excerpts failed exact source-slice comparison; multi-sign citation end line omitted two actual source lines.",
+    "Pre-ship questions introduced COMPLETED and DRAFT envelope statuses absent from opened bodies.",
+    "Unconditional three-write count contradicted conditional signature upsert; directly exposed claim exceeded unread helper evidence."
+  ],
+  "nextCandidate": "b07ae0e5163acbbabb13c7671451409fd98e612dcab782a6246c85462d17e74c",
+  "offlinePreviewOnly": "Source guard preview repairs citation bytes and removes observed unsupported status/exposure/count wording; this does not count as a live Pass."
+}

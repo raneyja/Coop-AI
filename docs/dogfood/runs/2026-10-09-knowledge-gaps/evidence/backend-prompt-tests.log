@@ -1,0 +1,27 @@
+  ✓ knowledge-gaps synthesis includes primary target and out-of-scope @ attachments
+  ✓ knowledge-gaps synthesis supports repository-wide scope without file
+  ✓ knowledge-gaps synthesis forbids invented gaps when scan is missing
+  ✓ knowledge-gaps synthesis uses response contract instead of invented enrichment
+  ✓ knowledge-gaps synthesis requires Notion pages and scan gaps in response contract
+  ✓ knowledge-gaps synthesis includes Notion opened excerpt in Attached facts
+  ✓ knowledge-gaps synthesis includes Google Docs opened excerpt in Attached facts
+  ✓ knowledge-gaps synthesis includes Jira opened description not just summary
+  ✓ knowledge-gaps synthesis includes Slack opened thread body when threadOpened
+  ✓ knowledge-gaps synthesis labels unattached Notion bodies honestly
+  ✓ knowledge-gaps synthesis includes Teams opened thread body when threadOpened
+  ✓ knowledge-gaps synthesis flags limited evidence when scan missing
+  ✓ knowledge-gaps synthesis frames zero-gap scan with attached docs in response contract
+  ✓ knowledge-gaps synthesis treats missing graph as incomplete not a docs gap
+  ✓ knowledge-gaps synthesis labels Confluence as org docs not repo architecture SoT
+  ✓ knowledge-gaps with focus excerpts audits attached code instead of claiming it is missing
+  ✓ hunt/locate risk prompt names evidence-class gaps not runbook-only
+  ✓ gap recommendations cannot assume earlier proposed edits were applied
+  ✓ gaps synthesis preserves dated ownership evidence and labels scan absence as unproven
+  ✓ gaps full remote bodies retain real line offsets for source citations
+  ✓ incomplete ownership scans require policy verification before recommending CODEOWNERS changes
+  ✓ gaps arbitrary focus snippets cannot invent source line offsets
+  ✓ gap behavior claims require traced conditions and an evidenced expected contract
+  ✓ named fixture audit does not convert observed loop bounds and a caller edge into a proven defect
+  ✓ normalized gaps file graph never labels importers as verified symbol callers
+
+knowledgeGapsSynthesis: 25/25 tests passed

@@ -1,0 +1,141 @@
+
+> coop-ai@0.1.13 test:blast
+> npx tsx src/engines/blastRadiusDependentsFallback.test.ts && npx tsx src/prompts/blastRadiusSynthesis.test.ts && npx tsx src/prompts/blastRadiusSourceGuard.test.ts && npx tsx src/context/blastRadiusSourceEvidence.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/chat/blastRadiusSourceEvidence.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/chat/remoteCitationReview.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/engines/blastRadiusAnalysis.test.ts && npx tsx src/api/blastSourceRequest.test.ts && npx tsx src/chat/blastRadiusSourceReview.test.ts
+
+  ✓ isDocsReferencePath detects markdown, docs trees, and d.ts
+  ✓ splitBlastRadiusDependents separates code from docs references
+  ✓ groupDependentsByTopLevelFolder buckets by top-level folder
+  ✓ rankCodeDependentsByRisk prioritizes production and integration over tests
+  ✓ rankCodeDependentsByRisk prefers prod module over story and e2e
+  ✓ smoke-shaped StateGroup blast is not story-dominated when prod edges exist
+  ✓ smoke-shaped DocumentStatus blast surfaces non-test refs when present
+  ✓ sortDependentsProductionFirst orders mixed dependents for list display
+  ✓ scoreDependentRisk labels stories and e2e as test surfaces
+  ✓ extractBlastSearchSymbols prefers StateGroup from smoke ask
+  ✓ isGenericBlastImpactAsk ignores default chip copy
+  ✓ isGenericBlastImpactAsk treats canned model prompt and history chips as generic
+  ✓ bare blast canned prompt does not name authMiddleware
+  ✓ display Estimate ask stays generic even with file chip boilerplate
+  ✓ file-stem named symbol is stripped unless it is a definition
+  ✓ file-level merge keeps durable importers when named symbols sanitize empty
+  ✓ enrichBlastRadiusResponse keeps file-level callers instead of none-confirmed template
+  ✓ extractBlastSearchSymbols skips default blast ask (no Estimate noise)
+  ✓ extractBlastSearchSymbols takes camelCase and snake_case from the ask
+  ✓ extractBlastSearchSymbols ignores English TitleCase from a list-callers ask
+  ✓ named-symbol blast drops file importers that only use a sibling export
+  ✓ named-symbol hits require the identifier, not a path-only file import
+  ✓ isVerifiedCallerSearchSource rejects embedding and fallback
+  ✓ hitLooksLikeReferenceToTarget requires stem when content is a code line
+  ✓ buildImportSearchPatterns includes path suffixes for relative imports
+  ✓ extractExportNamesFromSource includes Python class names
+  ✓ extractExportNamesFromSource prefers distinctive exports
+  ✓ buildLocalCallerNeedles includes path suffixes and exports
+  ✓ searchDependentsInLocalRoots finds real responseDeadline importers
+  ✓ buildImportSearchPatterns includes symbol and alias forms
+  ✓ mergeSearchDependentsFallbackIntoDependenciesData fills callers when job sample empty
+  ✓ mergeSearchDependentsFallbackIntoDependenciesData replaces junk job callers with search hits
+  ✓ mergeSearchDependentsFallbackIntoDependenciesData clears junk when search empty
+  ✓ mergeSearchDependentsFallbackIntoDependenciesData can keep filtered job edges when search empty
+  ✓ named-function blast does not fail-open to file importers when search is empty
+  ✓ named /blast requireAuth stays named-mode and honest
+  ✓ contentUsesNamedSymbol requires the named export, not a sibling import
+  ✓ resolveNamedBlastSymbols unions the editor chip with the ask
+  ✓ mergeDurableDependentsIntoContextData sets directDependents + import-parse source
+  ✓ same-path named-symbol verification preserves strong evidence and durable provenance
+  ✓ resolveTrustedRemoteDependents uses durable import-parse without localRoots
+  ✓ searchDependentsFallback ignores localRoots by default (Zero-Clone)
+  ✓ named requireAuth blast keeps jobsApi when Zoekt snippet contains requireAuth(
+  ✓ path-only named-function hits are not callers without a remote body
+  ✓ verifyRemoteFilesMentionNamedSymbol keeps requireAuth callers only
+  ✓ searchDependentsFallback stops after the first pattern when shouldAbort
+  ✓ path-only Zoekt requireAuth hits are confirmed via remote file bodies
+  ✓ durable importers that call requireAuth survive when Zoekt snippets are path-only
+
+blastRadiusDependentsFallback: 48/48 tests passed
+  ✓ source-backed synthesis preserves different tasks without selecting a change scenario
+  ✓ source formatting does not substitute answers using incidental identifiers or claim phrases
+  ✓ a target body with no confirmed dependents keeps the short unknown-impact policy
+  ✓ blast-radius synthesis includes primary target and out-of-scope @ attachments
+  ✓ blast-radius synthesis forbids zero-impact language in guardrails
+  ✓ blast-radius synthesis includes dependent details when present
+  ✓ blast-radius synthesis includes docs references section when present
+  ✓ blast-radius synthesis includes top risk surfaces ranking
+  ✓ blast-radius synthesis includes CI rollout guidance when workflows present
+  ✓ verified import relations retain unknown coverage and symbol-use qualification
+  ✓ blast-radius synthesis uses thin-evidence stop when graph is empty
+  ✓ blast-radius synthesis requires attached documentation titles
+  ✓ named-function blast prompt does not treat every file importer as breakage
+  ✓ named-function blast with no callers locks Direct impact empty
+  ✓ enrichBlastRadiusResponse replaces guessed callers when named-function callers are unconfirmed
+  ✓ enrichBlastRadiusResponse replaces file-level essay when graph is empty
+  ✓ enrichBlastRadiusResponse does not replace requireAuth callers from stub search
+  ✓ synthetic src caller stays a dependency without invented production classification
+  ✓ unconfirmed function callers never imply safety or inevitable breakage
+  ✓ import-only named-symbol answer replaces unsupported defect prose but retains dependency evidence
+  ✓ weak heuristic candidates do not become verified file dependencies in the import-only guard
+  ✓ import-only evidence cannot establish named behavior impact or complete depth-one coverage
+
+blastRadiusSynthesis: 22/22 tests passed
+✔ exact source is preserved across languages, comments, whitespace and blank lines (2.403583ms)
+✔ operators, strings, comments, indentation, blank lines and ASI cannot be reconstructed (0.440542ms)
+✔ line metadata repair needs a unique exact span or the full correct claimed span (0.1235ms)
+✔ unopened paths, duplicate files and mixed repository/ref identities fail closed (0.099417ms)
+✔ long and tilde fences keep literal fence lines within exact source (0.206583ms)
+✔ CRLF source bytes and a leading/trailing source blank line remain exact (0.121083ms)
+✔ malformed, empty and unfinished explicit citations fail; anonymous examples stay anonymous (0.753583ms)
+✔ first-body numeric citation is verified without treating arbitrary source paths as metadata (0.064708ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 9.095167
+✔ full target and callers survive bundle extraction and synthesis with guards and conditional writes (10.011584ms)
+✔ graph and SCIP evidence alone cannot preserve an unsupported caller-behavior essay (1.028667ms)
+✔ deadline keeps completed target/caller reads and ignores a late body (183.845166ms)
+✔ Stop prevents late read callbacks and source retention (0.317125ms)
+✔ caller reads are bounded, and truncated bodies cannot earn strong behavior evidence (0.77125ms)
+✔ wrong repository, local origin, wrong returned path and untrusted graph cannot become source proof (0.939917ms)
+✔ Stop ends a pending gather without waiting for its source or index promises (11.767625ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 218.572125
+blastRadiusSourceEvidence hot path: whole-file/range remote reads, turn-owned activity, retained caller bodies, and job bypass passed
+remote citation review uses selected-ref API and fails closed across providers
+blastRadiusAnalysis: ok
+✔ Blast source bodies select the dedicated contract in the actual Anthropic request (18.906375ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 22.386833
+✔ normal source answers use one call and preserve the task and all routing/scope controls (3.079125ms)
+✔ invalid source quotes trigger one replacement preserving original evidence/history/model/thinking/ref/quota (0.302667ms)
+✔ empty, length-cutoff and unfinished long/tilde fences get at most one repair (0.6105ms)
+✔ a failed or invalid repair publishes neither attempt and reports known usage once (0.305042ms)
+✔ Stop before or during synthesis prevents publication and another request (0.242333ms)
+✔ Stop just before repair prevents a second call and retains known first-call cost (0.133042ms)
+✔ missing call usage remains unavailable while known call costs are retained (0.18175ms)
+✔ actual differing model usage is reported per call rather than mislabeled as one model's total (0.117458ms)
+✔ graph-only and other use cases retain their existing single streaming path (0.107791ms)
+✔ quote validity does not create a semantic certification or a mandatory second generation (0.119042ms)
+✔ only successful validation exposes a copied source window for final publication (0.173584ms)
+✔ unavailable usage is never synthesized as a zero-cost completion (0.090458ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 12.508042

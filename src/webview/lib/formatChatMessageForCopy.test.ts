@@ -53,6 +53,22 @@ test("formatChatMessageForCopy keeps Sources citation labels", () => {
   assert.ok(!/^-\s+—/m.test(copy));
 });
 
+test("copy of a validated source answer preserves exact code and anonymous-example provenance", () => {
+  const code = "if ready:\r\n\r\n\r\n    persist()\r";
+  const source = "~~~~8:11:src/action.py\n" + code + "\n~~~~";
+  const copied = formatChatMessageForCopy("**Observed behavior**\n\n" + source + "\n\nSee `src/action.py`.\n\n```python\npersist('example')\n```",
+    { sourceCitationMode: "explicit" });
+  assert.ok(copied.includes(code), "source blank lines, indentation and CRLF must survive whole-message Copy");
+  assert.ok(copied.includes("~~~~\n" + code + "\n~~~~"));
+  assert.ok(copied.includes("```python\npersist('example')\n```"));
+});
+
+test("copy preserves literal inner fences from a validated source quote", () => {
+  const code = "const example = `\n```\nbody\n```\n`;";
+  const copied = formatChatMessageForCopy("````1:5:src/sample.ts\n" + code + "\n````", { sourceCitationMode: "explicit" });
+  assert.ok(copied.includes("````\n" + code + "\n````"));
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);

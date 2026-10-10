@@ -1,0 +1,371 @@
+**Verified call paths and conditions**
+
+The opened dependent bodies below contain calls to `signFieldWithToken`. Effects of relaxing the shown predicate depend on the callers' earlier checks, the target's later checks, and any unopened helpers.
+
+Changed predicate:
+
+```108:110:packages/lib/server-only/field/sign-field-with-token.ts
+  if (envelope.status !== DocumentStatus.PENDING) {
+    throw new Error(`Document ${envelope.id} must be pending for signing`);
+  }
+```
+
+**`packages/trpc/server/field-router/router.ts`**
+
+The ` signFieldWithToken ` flow calls ` signFieldWithToken `. The change can affect that call if execution reaches the changed predicate; earlier return/throw paths and unopened helpers still matter.
+
+Actual call and surrounding checks:
+
+```615:633:packages/trpc/server/field-router/router.ts
+  signFieldWithToken: procedure.input(ZSignFieldWithTokenMutationSchema).mutation(async ({ input, ctx }) => {
+    const { token, fieldId, value, isBase64, authOptions } = input;
+
+    ctx.logger.info({
+      input: {
+        fieldId,
+      },
+    });
+
+    return await signFieldWithToken({
+      token,
+      fieldId,
+      value: value ?? '',
+      isBase64,
+      userId: ctx.user?.id,
+      authOptions,
+      requestMetadata: ctx.metadata.requestMetadata,
+    });
+  }),
+```
+
+**`packages/trpc/server/embedding-router/apply-multi-sign-signature.ts`**
+
+The shown function calls ` signFieldWithToken `. The change can affect that call if execution reaches the changed predicate; earlier return/throw paths and unopened helpers still matter.
+
+Before that call, the source contains these guarded exits:
+
+- L36: throws under ` hasUnviewedDocuments `.
+
+- L52: throws under ` derivedRecipientActionAuth.recipientAccessAuthRequired ||
+          derivedRecipientActionAuth.recipientActionAuthRequired `.
+
+- L62: returns from its enclosing function/callback under ` envelope.recipient.signingStatus === SigningStatus.REJECTED `.
+
+Actual call and surrounding checks:
+
+```18:98:packages/trpc/server/embedding-router/apply-multi-sign-signature.ts
+  .mutation(async ({ input, ctx: { metadata } }) => {
+    try {
+      const { tokens, signature, isBase64 } = input;
+
+      // Get all documents and recipients for the tokens
+      const envelopes = await Promise.all(
+        tokens.map(async (token) => {
+          const document = await getDocumentByToken({ token });
+          const recipient = await getRecipientByToken({ token });
+
+          return { document, recipient };
+        }),
+      );
+
+      // Check if all documents have been viewed
+      const hasUnviewedDocuments = envelopes.some((envelope) => envelope.recipient.readStatus !== ReadStatus.OPENED);
+
+      if (hasUnviewedDocuments) {
+        throw new AppError(AppErrorCode.INVALID_REQUEST, {
+          message: 'All documents must be viewed before signing',
+        });
+      }
+
+      // If we require action auth we should abort here for now
+      for (const envelope of envelopes) {
+        const derivedRecipientActionAuth = extractDocumentAuthMethods({
+          documentAuth: envelope.document.authOptions,
+          recipientAuth: envelope.recipient.authOptions,
+        });
+
+        if (
+          derivedRecipientActionAuth.recipientAccessAuthRequired ||
+          derivedRecipientActionAuth.recipientActionAuthRequired
+        ) {
+          throw new AppError(AppErrorCode.INVALID_REQUEST, {
+            message: 'Documents that require additional authentication cannot be multi signed at the moment',
+          });
+        }
+      }
+
+      // Sign all signature fields for each document
+      await Promise.all(
+        envelopes.map(async (envelope) => {
+          if (envelope.recipient.signingStatus === SigningStatus.REJECTED) {
+            return;
+          }
+
+          const signatureFields = await prisma.field.findMany({
+            where: {
+              envelopeId: envelope.document.id,
+              recipientId: envelope.recipient.id,
+              type: FieldType.SIGNATURE,
+              inserted: false,
+            },
+          });
+
+          await Promise.all(
+            signatureFields.map(async (field) =>
+              signFieldWithToken({
+                token: envelope.recipient.token,
+                fieldId: field.id,
+                value: signature,
+                isBase64,
+                requestMetadata: metadata.requestMetadata,
+              }),
+            ),
+          );
+        }),
+      );
+
+      return { success: true };
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+
+      throw new AppError(AppErrorCode.UNKNOWN_ERROR, {
+        message: 'Failed to apply multi-sign signature',
+      });
+    }
+  });
+```
+
+**Remaining inline rejection paths** — earlier control flow or helpers can prevent reaching these branches:
+
+- L97: throws under ` !envelope `.
+
+- L101: throws under ` !recipient `.
+
+- L105: throws under ` envelope.deletedAt `.
+
+- L115: throws under ` recipient.signingStatus === SigningStatus.SIGNED || field.recipient.signingStatus === SigningStatus.SIGNED `.
+
+- L119: throws under ` field.inserted `.
+
+- L124: throws under ` field.recipientId === null `.
+
+- L132: throws under ` field.type === FieldType.NUMBER && field.fieldMeta ` AND ` errors.length > 0 `.
+
+- L141: throws under ` field.type === FieldType.TEXT && field.fieldMeta ` AND ` errors.length > 0 `.
+
+- L152: throws under ` field.type === FieldType.CHECKBOX && field.fieldMeta ` AND ` errors.length > 0 `.
+
+- L161: throws under ` field.type === FieldType.RADIO && field.fieldMeta ` AND ` errors.length > 0 `.
+
+- L170: throws under ` field.type === FieldType.DROPDOWN && field.fieldMeta ` AND ` errors.length > 0 `.
+
+- L204: throws under ` isSignatureField && !signatureImageAsBase64 && !typedSignature `.
+
+- L208: throws under ` isSignatureField && documentMeta?.typedSignatureEnabled === false && typedSignature `.
+
+- L230: throws under ` field.fieldMeta?.readOnly && !AUTO_SIGNABLE_FIELD_TYPES.includes(field.type) ` AND ` !isAutomaticSigningValueValid `.
+
+A binding used by those predicates:
+
+```129:129:packages/lib/server-only/field/sign-field-with-token.ts
+    const errors = validateNumberField(value, numberFieldParsedMeta, true);
+```
+
+A binding used by those predicates:
+
+```138:138:packages/lib/server-only/field/sign-field-with-token.ts
+    const errors = validateTextField(value, textFieldParsedMeta, true);
+```
+
+A binding used by those predicates:
+
+```149:149:packages/lib/server-only/field/sign-field-with-token.ts
+    const errors = validateCheckboxField(checkboxFieldValues, checkboxFieldParsedMeta, true);
+```
+
+A binding used by those predicates:
+
+```158:158:packages/lib/server-only/field/sign-field-with-token.ts
+    const errors = validateRadioField(value, radioFieldParsedMeta, true);
+```
+
+A binding used by those predicates:
+
+```167:167:packages/lib/server-only/field/sign-field-with-token.ts
+    const errors = validateDropdownField(value, dropdownFieldParsedMeta, true);
+```
+
+A binding used by those predicates:
+
+```182:188:packages/lib/server-only/field/sign-field-with-token.ts
+  const documentMeta = await prisma.documentMeta.findFirst({
+    where: {
+      envelope: {
+        id: envelope.id,
+      },
+    },
+  });
+```
+
+A binding used by those predicates:
+
+```190:190:packages/lib/server-only/field/sign-field-with-token.ts
+  const isSignatureField = field.type === FieldType.SIGNATURE || field.type === FieldType.FREE_SIGNATURE;
+```
+
+A binding used by those predicates:
+
+```194:194:packages/lib/server-only/field/sign-field-with-token.ts
+  const signatureImageAsBase64 = isSignatureField && isBase64 ? value : undefined;
+```
+
+A binding used by those predicates:
+
+```195:195:packages/lib/server-only/field/sign-field-with-token.ts
+  const typedSignature = isSignatureField && !isBase64 ? value : undefined;
+```
+
+A binding used by those predicates:
+
+```216:227:packages/lib/server-only/field/sign-field-with-token.ts
+    const isAutomaticSigningValueValid = match(field.fieldMeta)
+      .with({ type: 'text' }, (meta) => customText === meta.text)
+      .with({ type: 'number' }, (meta) => customText === meta.value)
+      .with({ type: 'checkbox' }, (meta) =>
+        isDeepEqual(
+          fromCheckboxValue(customText ?? ''),
+          meta.values?.filter((v) => v.checked).map((v) => v.value) ?? [],
+        ),
+      )
+      .with({ type: 'radio' }, (meta) => customText === meta.values?.find((v) => v.checked)?.value)
+      .with({ type: 'dropdown' }, (meta) => customText === meta.defaultValue)
+      .otherwise(() => false);
+```
+
+A helper call in the target:
+
+```112:112:packages/lib/server-only/field/sign-field-with-token.ts
+  assertRecipientNotExpired(recipient);
+```
+
+A helper call in the target:
+
+```147:147:packages/lib/server-only/field/sign-field-with-token.ts
+    const checkboxFieldValues: string[] = fromCheckboxValue(value);
+```
+
+A helper call in the target:
+
+```174:180:packages/lib/server-only/field/sign-field-with-token.ts
+  const derivedRecipientActionAuth = await validateFieldAuth({
+    documentAuthOptions: envelope.authOptions,
+    recipient,
+    field,
+    userId,
+    authOptions,
+  });
+```
+
+**Later calls that may be affected** — they are reached only if the preceding control flow allows it:
+
+- L237: ` tx.field.update ` has no enclosing if in the shown function.
+
+- L248: ` tx.signature.upsert ` is enclosed by ` isSignatureField `. Its source has separate create and update payloads.
+
+- L270: ` tx.documentAuditLog.create ` has no enclosing if in the shown function.
+
+Later call sites and their enclosing branch:
+
+```236:312:packages/lib/server-only/field/sign-field-with-token.ts
+  return await prisma.$transaction(async (tx) => {
+    const updatedField = await tx.field.update({
+      where: {
+        id: field.id,
+      },
+      data: {
+        customText,
+        inserted: true,
+      },
+    });
+
+    if (isSignatureField) {
+      const signature = await tx.signature.upsert({
+        where: {
+          fieldId: field.id,
+        },
+        create: {
+          fieldId: field.id,
+          recipientId: field.recipientId,
+          signatureImageAsBase64: signatureImageAsBase64,
+          typedSignature: typedSignature,
+        },
+        update: {
+          signatureImageAsBase64: signatureImageAsBase64,
+          typedSignature: typedSignature,
+        },
+      });
+
+      // Dirty but I don't want to deal with type information
+      Object.assign(updatedField, {
+        signature,
+      });
+    }
+
+    await tx.documentAuditLog.create({
+      data: createDocumentAuditLogData({
+        type:
+          assistant && field.recipientId !== assistant.id
+            ? DOCUMENT_AUDIT_LOG_TYPE.DOCUMENT_FIELD_PREFILLED
+            : DOCUMENT_AUDIT_LOG_TYPE.DOCUMENT_FIELD_INSERTED,
+        envelopeId: envelope.id,
+        user: {
+          email: assistant?.email ?? recipient.email,
+          name: assistant?.name ?? recipient.name,
+        },
+        requestMetadata,
+        data: {
+          recipientEmail: recipient.email,
+          recipientId: recipient.id,
+          recipientName: recipient.name,
+          recipientRole: recipient.role,
+          fieldId: updatedField.secondaryId,
+          field: match(updatedField.type)
+            .with(FieldType.SIGNATURE, FieldType.FREE_SIGNATURE, (type) => ({
+              type,
+              data: signatureImageAsBase64 || typedSignature || '',
+            }))
+            .with(FieldType.DATE, FieldType.EMAIL, FieldType.NAME, FieldType.TEXT, FieldType.INITIALS, (type) => ({
+              type,
+              data: updatedField.customText,
+            }))
+            .with(FieldType.NUMBER, FieldType.RADIO, FieldType.CHECKBOX, FieldType.DROPDOWN, (type) => ({
+              type,
+              data: updatedField.customText,
+            }))
+            .exhaustive(),
+          fieldSecurity: derivedRecipientActionAuth
+            ? {
+                type: derivedRecipientActionAuth,
+              }
+            : undefined,
+        },
+      }),
+    });
+
+    return updatedField;
+  });
+```
+
+**Pre-ship verification**
+
+- For each shown caller, test a newly admitted predicate value with the other checks passing and with each shown rejection condition met. Verify the intended allowed-value policy.
+
+- Test the conditional calls with their enclosing predicates false and true. Verify any create/update payload expectations against the actual stored records.
+
+- Do imported helpers or middleware enforce additional preconditions? Verify their bodies before making an access or status-enforcement claim.
+
+- Which additional caller paths are outside this opened set? The capped dependency set does not establish complete coverage.
+
+These excerpts prove the shown syntax and calls. They do not prove stored-data invariants, helper internals, authentication policy, or inevitable writes.

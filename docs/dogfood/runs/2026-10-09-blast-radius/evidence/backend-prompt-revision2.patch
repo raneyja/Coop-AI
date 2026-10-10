@@ -1,0 +1,72 @@
+--- a/src/prompts/systemPrompts.ts
++++ b/src/prompts/systemPrompts.ts
+@@ -262,11 +262,6 @@
+ 
+   blast_radius: `
+ ## Required response structure
+-When the user message contains ## Opened selected-ref source bodies, use its source-grounded change contract instead of the generic impact structure below: **Verified call paths and conditions**, then **Pre-ship verification** (at most four checks).
+-Read the complete opened target and caller bodies. Begin by locating the changed predicate with exact lines and explain that passing it reaches the remaining checks, not necessarily a write. Cite the actual call site in each opened dependent with an exact contiguous numeric source slice; include its earlier rejects, returns, filters, and helper calls. Report the target's remaining guards and enclosing conditions for writes. Preserve create/update and catch/rethrow branches; never flatten a conditional operation or an exception branch into always/never behavior.
+-Imported procedure names, optional user fields, and comments do not prove authentication policy. Unread middleware and helper implementations remain unverified, even when their caller body is complete. Never claim callers delegate enforcement entirely to the target, or that no other protection exists, without opening every relevant implementation. A lifecycle/status label does not prove stored recipient/field values or whether a write succeeds. Compare the exact fields, operators, and values of remaining predicates: checks on different attributes are not interchangeable without an evidenced invariant. Default/seed values do not establish current stored values or an aggregate maximum. Use only enum/status labels present in the opened source. Do not infer inevitable overwrites, misleading audit records, race conditions, or downstream effects. Keep pre-ship checks tied to the changed predicate, evidenced guards and writes, and explicitly unread helper contracts.
+-Only an exact source citation can substantiate control flow; a graph edge proves a retrieved file relationship. State that listed dependents do not prove complete coverage. Omit the Top risk surfaces, operational-risk, and testing templates for this source-grounded branch.
+-
+ When dependents / callers are confirmed: open with 2–3 sentences. **Lead with the ranked Top risk surfaces** (up to 5, in order). Then state total **code** dependent count (exclude docs) and graph source (scip/zoekt/heuristic) when known. No **Answer**, **Summary**, or **Your question** heading.
+ 
+ When callers/dependents were **not** confirmed (empty graph, Impact unverified): 1–3 sentences stating impact is unverified and that is not zero impact. **Direct impact:** none confirmed. Then **stop**. Do **not** invent Direct impact / Testing / APIs / Operational risk from reading the target file body. Never claim zero impact.
+@@ -459,6 +454,19 @@
+   const paperclip = hasPaperclipAttachments ? `${USER_PAPERCLIP_ATTACHMENTS_SYSTEM_RULE}\n\n` : "";
+   return `${prompt}\n\n${OPERATING_CONTEXT}\n\n${paperclip}${CURSOR_STYLE_OUTPUT_CONTRACT}${structure}`;
+ }
++
++const SOURCE_GROUNDED_BLAST_BODY = `You trace a proposed change through the opened selected-ref target and dependent source bodies. Establish behavior from exact predicates, call sites, early exits, queries, exception branches, and enclosing write conditions. Read the complete bodies before deciding what a change permits. Passing one changed check does not establish that a call reaches a write. Imported names, comments, lifecycle labels, and seed/default values do not establish access policy, stored-data invariants, or current aggregate results. Unopened helper implementations and complete dependency coverage remain unverified.`;
++
++const SOURCE_GROUNDED_BLAST_STRUCTURE = `
++## Required response structure — opened source
++If no dependent was confirmed, state that impact is unverified and that this is not zero impact. **Direct impact:** none confirmed. Then stop.
++
++Otherwise use only **Verified call paths and conditions** and **Pre-ship verification**.
++Begin by copying the changed predicate as an exact numeric source citation, then explain what execution can do after that point, conditional on the remaining checks. Use only enum/status labels actually shown in the opened source; do not supply example statuses from memory.
++For each opened dependent, cite its actual call/query site and identify its earlier inline rejects, returns, filters, and helper calls. Scope claims about missing inline checks to that body. An unopened helper or procedure's implementation remains unknown: its name and optional user fields do not prove authentication, status enforcement, or expiry behavior.
++Before describing a target write, quote the contiguous source slice containing its enclosing condition and operation. Preserve that condition in the prose. For an upsert, include the enclosing condition and distinguish create from update. Preserve catch/rethrow branches. Do not infer inevitable overwrites, audit defects, or race conditions.
++Compare exact fields and operators: checks on different attributes are not interchangeable without an evidenced invariant. Default/seed values do not establish current stored values or aggregate maxima. State that the opened dependents do not prove complete coverage.
++Finish with at most four checks tied to the changed predicate, remaining checks, conditional writes, and explicitly unopened helper contracts. Stop.`;
+ 
+ export function buildComprehensionSystem(
+   activeFile?: string,
+@@ -620,6 +628,9 @@
+     case "ownership":
+       return withOutputContract(OWNERSHIP_INTELLIGENCE_SYSTEM, "ownership", undefined, hasPaperclip);
+     case "blast_radius":
++      if (options?.blastSourceGrounded) {
++        return withOutputContract(SOURCE_GROUNDED_BLAST_BODY, "blast_radius", SOURCE_GROUNDED_BLAST_STRUCTURE, hasPaperclip);
++      }
+       return withOutputContract(BLAST_RADIUS_EVIDENCE_SYSTEM, "blast_radius", undefined, hasPaperclip);
+     case "knowledge_gaps":
+       return withOutputContract(KNOWLEDGE_GAPS_EVIDENCE_SYSTEM, "knowledge_gaps", undefined, hasPaperclip);
+@@ -649,6 +660,8 @@
+ 
+ export type SystemPromptOptions = {
+   activeFile?: string;
++  /** Source-backed Blast gets a dedicated contract, without graph-only risk templates. */
++  blastSourceGrounded?: boolean;
+   /** Inject the paperclip-attachment system rule only when the turn has such uploads. */
+   hasPaperclipAttachments?: boolean;
+   /** Understand Repo locate ask — skip architecture syllabus in the system contract. */
+@@ -669,6 +682,7 @@
+   // an active file for comprehension, locate-only Understand Repo, paperclip, or L file-assistant.
+   if (
+     options?.hasPaperclipAttachments ||
++    options?.blastSourceGrounded ||
+     options?.locateOnly ||
+     options?.fileAssistant ||
+     (useCase === "comprehension" && options?.activeFile?.trim())
+--- a/src/api/ModelRouter.ts
++++ b/src/api/ModelRouter.ts
+@@ -30,6 +30,8 @@
+   }
+   const basePrompt = systemPromptForUseCase(request.useCase, {
+     activeFile: request.context?.file,
++    blastSourceGrounded: request.useCase === "blast_radius" &&
++      request.message.includes("## Opened selected-ref source bodies"),
+     hasPaperclipAttachments: requestHasPaperclipAttachments(request),
+     locateOnly:
+       request.useCase === "comprehension" &&

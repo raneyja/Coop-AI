@@ -1,0 +1,21 @@
+{
+  "checkedAt": "2026-10-10T02:35:12.697381+00:00",
+  "method": "Read-only Railway deployment list in isolated linked candidate plus canonical API health.",
+  "latestDeployment": {
+    "id": "b09b8776-0341-40bd-b026-fefc67aa3646",
+    "status": "SUCCESS"
+  },
+  "priorBlastDeployment": {
+    "id": "efe257d9-6c9c-469c-af6c-b1eed85c5678",
+    "status": "REMOVED"
+  },
+  "health": {
+    "ok": true,
+    "commit": "email-48168d"
+  },
+  "selectedRefs": {
+    "CoopAI-Corp/documenso/main": "a457e1ef7de449e4f758fc6943a8014e952c34c6",
+    "CoopAI-Corp/plane/preview": "a8e53b6ac7b87bd8e3e931d21188f7679c7ab6c4"
+  },
+  "note": "Health commit labels baseline build; deployment identity comes from Railway."
+}

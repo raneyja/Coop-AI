@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as vscode from "vscode";
 import { activeThemeMode } from "./themeMode";
 
-export type WebviewViewMode = "chat" | "settings";
+export type WebviewViewMode = "chat" | "settings" | "support";
 
 function webviewAssetUri(
   webview: vscode.Webview,

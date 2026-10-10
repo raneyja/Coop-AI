@@ -1,0 +1,11 @@
+{
+  "command": "npm run test:response-deadline",
+  "result": "pass",
+  "exitCode": 0,
+  "deadlineChecks": "14 passed, 0 failed",
+  "chatTurn": "ok",
+  "continuationChecks": "4 passed, 0 failed",
+  "historyChecks": "5 passed, 0 failed",
+  "sandboxAttempt": "tsx IPC socket denied with EPERM; escalated rerun passed",
+  "completedOutputChunk": "3895d9"
+}

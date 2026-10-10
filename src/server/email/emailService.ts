@@ -211,12 +211,33 @@ export class EmailService {
     return this.send(params.to, subject, html, text);
   }
 
-  private async send(to: string, subject: string, html: string, text?: string): Promise<{ mocked: boolean }> {
-    assertEmailLinksArePublic(html, text);
+  public async sendSupportNotification(params: { to: string; reportId: string; kind: string; title: string; description: string; contactEmail: string; reviewUrl: string }): Promise<{ mocked: boolean }> {
+    const subject = `New CoopAI ${params.kind.replace(/_/g, " ")} report`;
+    const characters = Array.from(params.description);
+    const truncated = characters.length > 1200;
+    const preview = characters.slice(0, 1200).join("") + (truncated ? "…" : "");
+    const text = ["A new support report is ready for triage.", `Summary: ${params.title}`, `Reporter: ${params.contactEmail}`,
+      `Report ID: ${params.reportId}`, "", "Details:", preview, "", ...(truncated ? ["Preview shortened. Open the report for the full details.", ""] : []), params.reviewUrl].join("\n");
+    const html = emailShell({ title: subject, footer: "CoopAI support notification · Review and manage this report in ops.", body: `
+      <p>A new support report is ready for triage.</p>
+      <h2 style="font-size:20px;line-height:1.4;overflow-wrap:anywhere;">${escapeHtml(params.title)}</h2>
+      <p style="font-size:14px;overflow-wrap:anywhere;"><strong>Reporter:</strong> ${escapeHtml(params.contactEmail)}<br />
+        <strong>Report ID:</strong> ${escapeHtml(params.reportId)}</p>
+      <p style="margin-bottom:8px;"><strong>Details</strong></p>
+      <div style="margin-bottom:24px;overflow-wrap:anywhere;word-break:break-word;">${escapeHtml(preview).replace(/\r?\n/g, "<br />")}</div>
+      ${truncated ? '<p style="font-size:12px;color:#57606a;">Preview shortened. Open the report for the full details.</p>' : ""}
+      ${primaryButton("View report", params.reviewUrl)}` });
+    // Report text may describe localhost/private URLs. It is inert HTML text, not generated links.
+    return this.send(params.to, subject, html, text, { idempotencyKey: `support-report/${params.reportId}`, linkValidationText: params.reviewUrl });
+  }
+
+  private async send(to: string, subject: string, html: string, text?: string, options?: { idempotencyKey?: string; linkValidationText?: string }): Promise<{ mocked: boolean }> {
+    assertEmailLinksArePublic(html, options?.linkValidationText ?? text);
+    const idempotencyKey = options?.idempotencyKey;
 
     if (this.config.emailMock || !this.config.resendApiKey) {
       console.log(`[email:mock] to=${to} subject=${subject}`);
-      const link = text?.match(/https?:\/\/[^\s]+/)?.[0];
+      const link = (options?.linkValidationText ?? text)?.match(/https?:\/\/[^\s]+/)?.[0];
       if (link) {
         console.log(`[email:mock] link=${link}`);
       } else if (text) {
@@ -229,8 +250,10 @@ export class EmailService {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.config.resendApiKey}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {})
       },
+      ...(idempotencyKey ? { signal: AbortSignal.timeout(15000) } : {}),
       body: JSON.stringify({
         from: this.config.emailFrom,
         to: [to],
@@ -328,7 +351,7 @@ function buildPlanWelcomeEmail(params: WelcomeEmailParams, plan: "pro" | "free")
   return { subject, html, text };
 }
 
-function emailShell(options: { title: string; body: string }): string {
+function emailShell(options: { title: string; body: string; footer?: string }): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <body style="margin:0;padding:0;background:#f6f8fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#24292f;line-height:1.5;">
@@ -337,7 +360,7 @@ function emailShell(options: { title: string; body: string }): string {
       ${options.body}
     </div>
     <p style="margin:24px 0 0;font-size:12px;color:#57606a;text-align:center;">
-      Didn't request this? Contact <a href="mailto:support@coop-ai.dev" style="color:#0969da;">support@coop-ai.dev</a>
+      ${options.footer ? escapeHtml(options.footer) : 'Didn\'t request this? Contact <a href="mailto:support@coop-ai.dev" style="color:#0969da;">support@coop-ai.dev</a>'}
     </p>
   </div>
 </body>

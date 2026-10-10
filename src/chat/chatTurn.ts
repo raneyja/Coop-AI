@@ -5,6 +5,7 @@ import { scheduleResponseDeadline } from "../config/responseDeadline";
 import type { ChatIntentPlan } from "./intentPlanner/types";
 import type { LocalFileContextPayload } from "../context/localFileContext";
 import type { RepoSourceScope } from "../context/repoSourceScope";
+import type { ReviewedSourceWindow } from "../prompts/sourceCitationIntegrity";
 
 /** Synthetic id for editor panels that do not use ChatThreadStore. */
 export const SESSION_RUN_THREAD_ID = "session";
@@ -33,6 +34,11 @@ export type ChatTurn = {
   /** Original user source constraints, independent of rewritten search terms. */
   sourceScope?: RepoSourceScope;
   contextBundle: ContextFetchResult[];
+  /** Identity-isolated source snapshot whose quotes passed private validation.
+   * Final publication must not replace it with a later remote body. */
+  sourceCitationWindows?: ReviewedSourceWindow[];
+  /** Minimum verified quotes established by the private source-validation gate. */
+  sourceCitationMinimumQuotes?: number;
   jobResult?: unknown;
   jobId?: string;
   jobGeneration: number;

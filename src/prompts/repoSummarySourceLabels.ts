@@ -218,6 +218,7 @@ export function isGithubOnlyRepoSummaryEvidence(summary: RepoSummaryEvidence): b
  * Rich inventory + tree with a few samples is NOT narrow. Thin → short + partial confidence.
  */
 export function isNarrowRepoSummaryEvidence(summary: RepoSummaryEvidence): boolean {
+  if (summary.focusCoverage?.missing.length) return true;
   const entries = (summary.entryFiles ?? []).filter((file) => file.path?.trim()).length;
   const focusPaths = (summary.focusSearchPaths ?? []).filter((path) => path.trim()).length;
   const anchors = Math.max(entries, focusPaths);

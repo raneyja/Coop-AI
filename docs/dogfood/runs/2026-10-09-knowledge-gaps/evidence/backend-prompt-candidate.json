@@ -1,0 +1,20 @@
+{
+  "candidate": "/private/tmp/coop-gaps-backend-production-candidate-20261009",
+  "productionHealthCommit": "email-48168d",
+  "productionSourceDigest": "48168d433b595c93573dbec9e4b468c349fd1a742021a989b24e8b8f3fc5722c",
+  "changedFiles": {
+    "src/prompts/knowledgeGapsSynthesis.ts": "8b778ccc60b36c95fc96917175a9b6adf344f9a3e0aecfa695e52a75f90278fb",
+    "src/context/knowledgeGapsFocus.ts": "fa45941131968de1aa93425dfa0228cf45e76a14990fd92d1157d8189e969b65",
+    "src/prompts/knowledgeGapsSourceLabels.ts": "e74d50c09b81a4236be6d209917e564f5da4c1f33addf960d8d449f112a49f9e",
+    "src/prompts/systemPrompts.ts": "31f9a3094f57fec66a240934475bf397d76256c7ec23fbaef02f521801d33cb8"
+  },
+  "authorization": "Human approved the scoped update in this chat on 2026-10-09",
+  "deploymentId": "788d0aeb-322c-4937-8788-238d5c638188",
+  "deploymentStatus": "SUCCESS; confirmed active and running at 2026-10-09T20:51:06Z",
+  "healthMarkerNote": "Existing COOP_BUILD_SHA marker is unchanged; deployment identity is verified through Railway.",
+  "imageDigest": "sha256:66667445afa0a441c89e57592f14015327c4ebd1fda765c0fc7f2074da3259bc",
+  "healthProbe": {
+    "ok": true,
+    "commit": "email-48168d"
+  }
+}

@@ -6,7 +6,7 @@ import { readCodeHostProvider } from "../config/codeHostConfig";
 import { findEditorForRepoFile } from "../context/editorFileContext";
 import { parseGithubVfsUri, pathsReferToSameFile, isRemoteTabAbsolutePath } from "../context/githubVfsUri";
 import { resolveLocalAbsolutePath } from "../context/localFileResolver";
-import { rememberedRemoteEntry } from "../context/remoteViewBuffer";
+import { rememberedRemoteEntry, rememberedRemoteBufferForUri, rememberRemotePatchBuffer } from "../context/remoteViewBuffer";
 import { toRepositoryRelativePath } from "../context/repoFilePath";
 import { openRemoteFileInEditor } from "../workspace/repoEditorOpener";
 import { findAllSearchMatches } from "./patchContent";
@@ -82,15 +82,48 @@ function targetFromDocument(doc: vscode.TextDocument): EditablePatchTarget {
   };
 }
 
+function remotePatchIdentity(doc: vscode.TextDocument):
+  | { path: string; owner?: string; repo?: string; provider?: CodeHostProviderPreference; branch?: string }
+  | undefined {
+  const remembered = rememberedRemoteBufferForUri(doc.uri.toString());
+  if (remembered) return remembered;
+  if (doc.uri.scheme !== "vscode-vfs" && doc.uri.scheme !== "github") return undefined;
+  const parsed = parseGithubVfsUri(doc.uri.toString());
+  if (!parsed) return undefined;
+  const query = new URLSearchParams(doc.uri.toString().split("?")[1]?.split("#")[0] ?? "");
+  return { ...parsed, path: parsed.file, provider: "github",
+    branch: query.get("ref") ?? query.get("branch") ?? undefined };
+}
+
+function belongsToPatchRepo(doc: vscode.TextDocument, normalized: string, repo: PatchSessionRepo): boolean {
+  const identity = remotePatchIdentity(doc);
+  return Boolean(identity && identity.owner?.toLowerCase() === repo.owner.toLowerCase() &&
+    identity.repo?.toLowerCase() === repo.repo.toLowerCase() &&
+    (identity.provider ?? "github") === repo.provider && identity.path === normalized);
+}
+
 /**
  * Untitled API tabs (no GitHub Repositories) have no repo path on the URI.
  * Match by exact captured bytes, then by a unique SEARCH hit.
  */
 export function findOpenDocumentForPatchFile(
   relativePath: string,
-  options?: { capturedContent?: string; search?: string }
+  options?: { capturedContent?: string; search?: string; repo?: PatchSessionRepo }
 ): vscode.TextDocument | undefined {
   const normalized = toRepositoryRelativePath(relativePath);
+  if (options?.repo && normalized) {
+    const repo = options.repo;
+    const matches = vscode.workspace.textDocuments.filter((doc) => {
+      if (!belongsToPatchRepo(doc, normalized, repo)) return false;
+      const branch = remotePatchIdentity(doc)?.branch;
+      if (repo.branch && branch) return branch === repo.branch;
+      // A VFS URI without ref metadata can prove the selected baseline by bytes.
+      // Never use a matching SEARCH in a foreign or anonymous buffer as identity.
+      return !repo.branch || (options.capturedContent !== undefined &&
+        normalizeCompareText(doc.getText()) === normalizeCompareText(options.capturedContent));
+    });
+    return matches.length === 1 ? matches[0] : undefined;
+  }
   const captured = options?.capturedContent
     ? normalizeCompareText(options.capturedContent)
     : undefined;
@@ -166,11 +199,18 @@ export function documentMatchesPatchPath(doc: vscode.TextDocument, relativePath:
  */
 export function resolveEditablePatchTarget(
   relativePath: string,
-  options?: { preferLocalDisk?: boolean }
+  options?: { preferLocalDisk?: boolean; repo?: PatchSessionRepo; capturedContent?: string }
 ): EditablePatchTarget | undefined {
   const normalized = toRepositoryRelativePath(relativePath);
   if (!normalized) {
     return undefined;
+  }
+
+  if (options?.repo && !options.preferLocalDisk) {
+    const doc = findOpenDocumentForPatchFile(normalized, {
+      repo: options.repo, capturedContent: options.capturedContent
+    });
+    return doc ? targetFromDocument(doc) : undefined;
   }
 
   if (options?.preferLocalDisk) {
@@ -271,26 +311,35 @@ export async function ensureEditablePatchTarget(
   | { ok: true; target: EditablePatchTarget; usedRemoteOpen: boolean }
   | { ok: false; error: string }
 > {
+  const repo = options?.preferLocalDisk ? undefined : options?.repo ?? readPatchApplyRepoFromConfig();
+  const captured = lookupPatchFileContent(relativePath, options?.fileContents);
   const existing = resolveEditablePatchTarget(relativePath, {
-    preferLocalDisk: options?.preferLocalDisk
+    preferLocalDisk: options?.preferLocalDisk, repo, capturedContent: captured
   });
   if (existing) {
+    if (repo?.branch && captured !== undefined) rememberRemotePatchBuffer(relativePath, existing.uri, captured, repo);
     return { ok: true, target: existing, usedRemoteOpen: false };
   }
   if (options?.preferLocalDisk) {
     return { ok: false, error: missingPatchTargetMessage(relativePath) };
   }
 
-  const captured = lookupPatchFileContent(relativePath, options?.fileContents);
   const openDoc = findOpenDocumentForPatchFile(relativePath, {
+    repo,
     capturedContent: captured,
     search: options?.search
   });
   if (openDoc) {
+    if (repo?.branch && captured !== undefined) rememberRemotePatchBuffer(relativePath, openDoc.uri, captured, repo);
     return { ok: true, target: targetFromDocument(openDoc), usedRemoteOpen: false };
   }
 
-  const repo = options?.repo ?? readPatchApplyRepoFromConfig();
+  if (repo && vscode.workspace.textDocuments.some((doc) =>
+    belongsToPatchRepo(doc, toRepositoryRelativePath(relativePath) ?? relativePath, repo) &&
+    (!remotePatchIdentity(doc)?.branch || remotePatchIdentity(doc)?.branch === repo.branch))) {
+    return { ok: false, error: `${relativePath}: the open remote target is ambiguous or its branch cannot be verified. Reopen the selected repository/branch file before Apply. No files were changed.` };
+  }
+
   if (!repo) {
     if (captured?.trim()) {
       return openCapturedAsUntitled(relativePath, captured);
@@ -329,8 +378,9 @@ export async function ensureEditablePatchTarget(
     }
 
     if (opened) {
-      const after = resolveEditablePatchTarget(relativePath);
+      const after = resolveEditablePatchTarget(relativePath, { repo, capturedContent: captured });
       if (after) {
+        if (repo.branch && captured !== undefined) rememberRemotePatchBuffer(relativePath, after.uri, captured, repo);
         return { ok: true, target: after, usedRemoteOpen: true };
       }
     }
@@ -339,7 +389,7 @@ export async function ensureEditablePatchTarget(
   }
 
   if (captured?.trim()) {
-    return openCapturedAsUntitled(relativePath, captured);
+    return openCapturedAsUntitled(relativePath, captured, repo);
   }
 
   if (provider !== "github") {
@@ -350,12 +400,14 @@ export async function ensureEditablePatchTarget(
 
 async function openCapturedAsUntitled(
   relativePath: string,
-  captured: string
+  captured: string,
+  repo?: PatchSessionRepo
 ): Promise<{ ok: true; target: EditablePatchTarget; usedRemoteOpen: boolean }> {
   const doc = await vscode.workspace.openTextDocument({
     content: captured,
     language: languageIdForPatchPath(relativePath)
   });
+  if (repo) rememberRemotePatchBuffer(relativePath, doc.uri, captured, repo);
   await vscode.window.showTextDocument(doc, {
     preview: false,
     preserveFocus: true
@@ -377,11 +429,14 @@ export function undoSnapshotPathForUri(uri: vscode.Uri): string {
 /** Read bytes from any open tab (including hidden GitHub VFS docs), not only the visible editor. */
 export function collectOpenPatchFileBytes(
   relativePath: string,
-  options?: { search?: string }
+  options?: { search?: string; repo?: PatchSessionRepo; capturedContent?: string; preferLocalDisk?: boolean }
 ): string | undefined {
   const normalized = toRepositoryRelativePath(relativePath);
   if (!normalized) {
     return undefined;
+  }
+  if (options?.repo || options?.preferLocalDisk) {
+    return resolveEditablePatchTarget(normalized, options)?.readText();
   }
   for (const doc of vscode.workspace.textDocuments) {
     if (!documentMatchesPatchPath(doc, normalized)) {

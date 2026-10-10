@@ -1,0 +1,147 @@
+{
+  "id": "thread-1791585490031-nfuldt",
+  "title": "Knowledge Gaps \u00b7 CoopAI-Corp/plane",
+  "messages": [
+    {
+      "clientSubmissionId": "1791585583137-1",
+      "role": "user",
+      "content": "[knowledge-gaps] Before changing quantum teleportation in nonexistent/quantum-teleportation.ts, which code rules can we establish and which policy questions need documentation or tests? Use only this repository.\nrepo: CoopAI-Corp/plane \u00b7 branch: preview",
+      "timestamp": 1791585585616
+    },
+    {
+      "role": "assistant",
+      "content": "**Documentation gaps**\n\nDocumentation coverage is unknown in this pass. No reviewed documentation or supported documentation gap is attached; this does not establish that documentation is absent.\n\nDocumentation and ownership coverage are limited to the evidence attached in this pass. Missing scan matches do not prove that documentation, CODEOWNERS, or maintainers are absent.\n\nNo source body was retrieved for `nonexistent/quantum-teleportation.ts` \u2014 the path does not exist in the `CoopAI-Corp/plane` repository and no file content was attached.\n\n**Source-grounded review**\n\nNo code rules can be established. Without attached source lines there is nothing to cite, and the citation format requires exact contiguous line ranges from real evidence.\n\n**Open questions**\n\nNo policy questions can be motivated without an established rule to tie them to.\n\nIf you meant a different file in this repository, share the correct path or attach the source and I can run the audit against real content.",
+      "timestamp": 1791585596848,
+      "relatedArtifactId": "evidence-1791585592147-d0nczq",
+      "activity": {
+        "durationMs": 13715,
+        "tools": [
+          {
+            "id": "line-tool:0",
+            "kind": "read",
+            "label": "Read `nonexistent/quantum-teleportation.ts`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:1",
+            "kind": "search",
+            "label": "Timed out searching Confluence for `quantum teleportation nonexistent/quantum teleportation.ts`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:2",
+            "kind": "search",
+            "label": "Timed out searching Notion for `quantum teleportation nonexistent/quantum teleportation.ts`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:3",
+            "kind": "search",
+            "label": "Timed out searching Google Docs for `quantum teleportation nonexistent/quantum teleportation.ts`",
+            "status": "done"
+          }
+        ],
+        "files": [
+          {
+            "path": "nonexistent/quantum-teleportation.ts",
+            "action": "read"
+          },
+          {
+            "path": "quantum teleportation nonexistent/quantum teleportation.ts",
+            "action": "searched"
+          },
+          {
+            "path": "teleportation.ts",
+            "action": "explored"
+          }
+        ],
+        "steps": [
+          {
+            "id": "line:0:Read `nonexistent/quantum-teleportation.ts`",
+            "content": "Read `nonexistent/quantum-teleportation.ts`",
+            "status": "completed"
+          },
+          {
+            "id": "line:1:Timed out searching Confluence for `quantum teleportation nonexistent/quantum teleportation.ts`",
+            "content": "Timed out searching Confluence for `quantum teleportation nonexistent/quantum teleportation.ts`",
+            "status": "completed",
+            "detail": "Search did not finish before context gathering ended"
+          },
+          {
+            "id": "line:2:Timed out searching Notion for `quantum teleportation nonexistent/quantum teleportation.ts`",
+            "content": "Timed out searching Notion for `quantum teleportation nonexistent/quantum teleportation.ts`",
+            "status": "completed",
+            "detail": "Search did not finish before context gathering ended"
+          },
+          {
+            "id": "line:3:Timed out searching Google Docs for `quantum teleportation nonexistent/quantum teleportation.ts`",
+            "content": "Timed out searching Google Docs for `quantum teleportation nonexistent/quantum teleportation.ts`",
+            "status": "completed",
+            "detail": "Search did not finish before context gathering ended"
+          }
+        ]
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "evidence-1791585592147-d0nczq",
+      "kind": "knowledge-gaps",
+      "timestamp": 1791585592147,
+      "payload": {
+        "artifactId": "evidence-1791585592147-d0nczq",
+        "evidence": {
+          "file": "nonexistent/quantum-teleportation.ts",
+          "userFocus": "Before changing quantum teleportation in nonexistent/quantum-teleportation.ts, which code rules can we establish and which policy questions need documentation or tests? Use only this repository.",
+          "focusSearchQuery": "Before changing quantum teleportation in nonexistent/quantum-teleportation.ts, which code rules can we establish and which policy questions need documentation or tests? Use only this repository.",
+          "focusSearchPaths": [
+            "nonexistent/quantum-teleportation.ts"
+          ],
+          "focusFiles": [],
+          "jobScan": {
+            "source": "live-heuristic",
+            "cached": false,
+            "foundGaps": 0,
+            "highPriority": 0,
+            "mediumPriority": 0,
+            "lowPriority": 0,
+            "gaps": [],
+            "scanCoverage": "scan_incomplete"
+          },
+          "documentationCoverage": {
+            "status": "documentation-search-requested"
+          },
+          "fileStructure": {
+            "status": "file-structure-requested",
+            "provider": "github"
+          }
+        },
+        "confluence": {
+          "pages": [],
+          "error": "Search timed out before context gathering ended."
+        },
+        "notion": {
+          "pages": [],
+          "error": "Search timed out before context gathering ended."
+        },
+        "googleDocs": {
+          "documents": [],
+          "error": "Search timed out before context gathering ended."
+        },
+        "codeHost": "github"
+      }
+    }
+  ],
+  "sessionCostUsd": 0.019647,
+  "createdAt": 1791585490031,
+  "updatedAt": 1791585690439,
+  "messageCount": 2,
+  "repoContext": {
+    "provider": "github",
+    "owner": "CoopAI-Corp",
+    "repo": "plane",
+    "branch": "preview",
+    "scope": "repo"
+  },
+  "draftInput": ""
+}

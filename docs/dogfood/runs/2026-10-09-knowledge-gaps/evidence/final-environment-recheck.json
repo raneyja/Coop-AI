@@ -1,0 +1,25 @@
+{
+  "checkedAt": "2026-10-10T01:59:42.023447+00:00",
+  "health": {
+    "ok": true,
+    "commit": "email-48168d"
+  },
+  "deploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+  "deploymentStatus": "SUCCESS",
+  "imageDigest": "sha256:c43187846a50c958428bad45117c4c8a1bfb820d67c1499f0c8d3ba866839228",
+  "planePreview": "a8e53b6ac7b87bd8e3e931d21188f7679c7ab6c4",
+  "documensoMain": "a457e1ef7de449e4f758fc6943a8014e952c34c6",
+  "refsUnchanged": true,
+  "commands": [
+    "gh api repos/CoopAI-Corp/plane/commits/preview --jq .sha",
+    "gh api repos/CoopAI-Corp/documenso/commits/main --jq .sha",
+    "npx --yes @railway/cli deployment list --service 6e137dee-ef1a-4e50-8212-76a3e4a11389 --environment ef10e61f-af9b-4a3d-95df-e0e3998a3861 --limit 1 --json",
+    "curl -sS https://api.coop-ai.dev/health"
+  ],
+  "verificationExitCodes": [
+    0,
+    0,
+    0,
+    0
+  ]
+}

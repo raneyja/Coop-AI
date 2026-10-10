@@ -1,0 +1,37 @@
+{
+  "builtAt": "2026-10-09T22:17:43.777621+00:00",
+  "backendDeploymentId": "7bf7d892-2ba5-4c16-a17c-943537bdb501",
+  "knowledgeGapsContractBaseline": "788d0aeb-322c-4937-8788-238d5c638188",
+  "command": "npm run build:extension-dev",
+  "lease": "01a12233-c0f9-79a3-9c05-8c2892b19217",
+  "sourceMapMatches": {
+    "src/context/knowledgeGapsFocus.ts": true,
+    "src/context/intentDetector.ts": true,
+    "src/chat/CoopChatSession.ts": true,
+    "src/config/chatSynthesisThinking.ts": true,
+    "src/prompts/knowledgeGapsSynthesis.ts": true,
+    "src/context/contextBundleEvidence.ts": true,
+    "src/prompts/knowledgeGapsEnrichment.ts": true,
+    "src/prompts/systemPrompts.ts": true,
+    "src/context/knowledgeGapsCodeEvidence.ts": true,
+    "src/context/integrationChatEnrichment.ts": true
+  },
+  "files": {
+    "dist/extension.js": "8436a7b19d8d2235a46142f912d18518a8b8340280788c8c088fe43d1850d9e4",
+    "dist/extension.js.map": "ebf6bbafafa628935481f77ff6467b4fe4257284069e316e4eed22f1ac38619b",
+    "dist/webview.js": "cb2151e634c43ca7dde04112c94f35f8a8a783e3f6d84e0ca08e4568dfa8a7ee",
+    "dist/webview.css": "2f1563d780aa9e9a1c578ea61c9b00e3d9ddc210f9dc01f9e2ca4decc5f7ce9a",
+    "src/context/knowledgeGapsCodeEvidence.ts": "19490137ce6861fa7e4e01c4f3e445cbd3e0c58201538c61f555a7cbf6a27c61",
+    "src/context/knowledgeGapsFocus.ts": "fa45941131968de1aa93425dfa0228cf45e76a14990fd92d1157d8189e969b65",
+    "src/chat/CoopChatSession.ts": "c4337844d7689b93395615450483d01f5bd72056f7b8c0117c0c821fc99c34be",
+    "src/context/intentDetector.ts": "bd99d217753599d858bfa3142247b64caa90fc42a83251ed6d53aad0c99b5661",
+    "src/config/chatSynthesisThinking.ts": "a0bbd6174d843dda91dbe237c35f6f8b28fe8f0ae61d0b3a7497f103ededbf40",
+    "src/prompts/systemPrompts.ts": "2501879f8321a15cd3fced2f686145b92d5c2ff3eee0b059e2bc4b13fd440097",
+    "src/prompts/knowledgeGapsSynthesis.ts": "322433496d70150837ab1e98d80002e7fbb31e3a87e59c649ae2ebf45c01c759",
+    "src/prompts/knowledgeGapsEnrichment.ts": "8eb8f0d659f8ef9147e6a74bc69445ee9d0d065bc9533f6df28807d40f3a8c22",
+    "src/context/integrationChatEnrichment.ts": "a24eb4e87e5c521f6e41f9d118a349c5d52520c24673758398b96db376d7720a",
+    "src/webview/evidenceCardSummary.ts": "da3d1c95803455a666324a03a7c7d3539ef8e907ca62e80d1c064651b7a01db9",
+    "src/webview/EvidenceCards.tsx": "8093bd82ea7f78d907e8a99aed52ab9354092620f902b22fef80fcb6675b346a",
+    "src/context/contextBundleEvidence.ts": "49fb8ee3944bde51ffac42eadef8ab7c115e72932aeef74cc224fc11a62fb7e1"
+  }
+}

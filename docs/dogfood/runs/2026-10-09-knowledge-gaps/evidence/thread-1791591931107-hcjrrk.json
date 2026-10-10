@@ -1,0 +1,91 @@
+{
+  "id": "thread-1791591931107-hcjrrk",
+  "title": "Knowledge Gaps \u00b7 CoopAI-Corp/plane",
+  "messages": [
+    {
+      "clientSubmissionId": "1791591943134-4",
+      "role": "user",
+      "content": "[knowledge-gaps] Before changing quantum teleportation in nonexistent/quantum-teleportation.ts, which code rules can we establish and which policy questions need documentation or tests? Use only this repository.\nrepo: CoopAI-Corp/plane \u00b7 branch: preview",
+      "timestamp": 1791591944944
+    },
+    {
+      "role": "assistant",
+      "content": "This pass did not retrieve source or documentation for that topic, so I can\u2019t establish its code rules or intended policy. Search misses do not prove the implementation or documentation is absent.",
+      "timestamp": 1791591952400,
+      "relatedArtifactId": "evidence-1791591949035-qayzvx",
+      "activity": {
+        "durationMs": 9268,
+        "tools": [
+          {
+            "id": "line-tool:0",
+            "kind": "read",
+            "label": "Read `nonexistent/quantum-teleportation.ts`",
+            "status": "done"
+          }
+        ],
+        "files": [
+          {
+            "path": "nonexistent/quantum-teleportation.ts",
+            "action": "read"
+          }
+        ],
+        "steps": [
+          {
+            "id": "line:0:Read `nonexistent/quantum-teleportation.ts`",
+            "content": "Read `nonexistent/quantum-teleportation.ts`",
+            "status": "completed"
+          }
+        ]
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "evidence-1791591949035-qayzvx",
+      "kind": "knowledge-gaps",
+      "timestamp": 1791591949035,
+      "payload": {
+        "artifactId": "evidence-1791591949035-qayzvx",
+        "evidence": {
+          "file": "nonexistent/quantum-teleportation.ts",
+          "userFocus": "Before changing quantum teleportation in nonexistent/quantum-teleportation.ts, which code rules can we establish and which policy questions need documentation or tests? Use only this repository.",
+          "focusSearchQuery": "Before changing quantum teleportation in nonexistent/quantum-teleportation.ts, which code rules can we establish and which policy questions need documentation or tests? Use only this repository.",
+          "focusSearchPaths": [
+            "nonexistent/quantum-teleportation.ts"
+          ],
+          "focusFiles": [],
+          "jobScan": {
+            "source": "live-heuristic",
+            "cached": false,
+            "foundGaps": 0,
+            "highPriority": 0,
+            "mediumPriority": 0,
+            "lowPriority": 0,
+            "gaps": [],
+            "scanCoverage": "scan_incomplete"
+          },
+          "documentationCoverage": {
+            "status": "documentation-search-requested"
+          },
+          "fileStructure": {
+            "status": "file-structure-requested",
+            "provider": "github"
+          }
+        },
+        "codeHost": "github"
+      }
+    }
+  ],
+  "sessionCostUsd": 0.0156,
+  "createdAt": 1791591931107,
+  "updatedAt": 1791591984898,
+  "messageCount": 2,
+  "repoContext": {
+    "provider": "github",
+    "owner": "CoopAI-Corp",
+    "repo": "plane",
+    "branch": "preview",
+    "scope": "repo"
+  },
+  "draftInput": ""
+}

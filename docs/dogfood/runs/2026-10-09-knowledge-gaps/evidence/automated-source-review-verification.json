@@ -1,0 +1,77 @@
+{
+  "checkedAt": "2026-10-10T00:19:20.095113+00:00",
+  "knowledgeGapsSuite": {
+    "sessionId": 88712,
+    "exitCode": 0,
+    "sourceReviewTests": 4,
+    "backgroundSourcesHotPath": "Pass"
+  },
+  "lint": {
+    "sessionId": 6954,
+    "exitCode": 0
+  },
+  "extensionBuild": {
+    "sessionId": 97874,
+    "exitCode": 0
+  },
+  "finalBackgroundCardBuildPending": false,
+  "continuationRepair": {
+    "checkedAt": "2026-10-10T00:40:48.080818+00:00",
+    "knowledgeGapsSuite": {
+      "sessionId": 51388,
+      "exitCode": 0,
+      "sourceReviewTests": 6,
+      "providerRequestVariants": 6
+    },
+    "lint": {
+      "sessionId": 53873,
+      "exitCode": 0
+    },
+    "build": {
+      "sessionId": 90601,
+      "exitCode": 0,
+      "snapshot": "/private/tmp/coop-parallel-quick-actions-20261009/gaps/extension"
+    }
+  },
+  "privateReplacementRecovery": {
+    "gapsSuiteExitCode": 0,
+    "lintExitCode": 0,
+    "diffCheckExitCode": 0,
+    "isolatedBuildExitCode": 0,
+    "sourceReviewTests": 9,
+    "verifiedAt": "2026-10-10T00:50:44.525959+00:00",
+    "testsSessionId": 90749,
+    "lintSessionId": 22598,
+    "buildSessionId": 4792
+  },
+  "quotePreflightRecovery": {
+    "verifiedAt": "2026-10-10T01:57:08.947859+00:00",
+    "targetedTests": {
+      "count": 12,
+      "exitCode": 0,
+      "sessionId": 28094
+    },
+    "rootGapsSuite": {
+      "exitCode": 0,
+      "sessionId": 9952
+    },
+    "lint": {
+      "exitCode": 0,
+      "sessionId": 76532
+    },
+    "extensionBuild": {
+      "exitCode": 0,
+      "sessionId": 76345
+    },
+    "diffCheck": {
+      "exitCode": 0
+    },
+    "bundleId": "4149a0cc37f23ffb6b8cbc84ff0a3ebf33b42206b4bf02cdf4100866ee3f2a9b",
+    "scope": "existing exact matcher reused before publication; bounded private replacement for unsupported, noncontiguous, or absent numeric source quotes",
+    "isolatedGapsSuite": {
+      "exitCode": 0,
+      "sessionId": 36608,
+      "testHarnessRepair": "Copied the existing test-only VSCode stub after missing preload file in initial isolated run"
+    }
+  }
+}

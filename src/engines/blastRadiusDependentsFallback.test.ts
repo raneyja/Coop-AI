@@ -634,7 +634,8 @@ export async function requireAuth() {}
     warnings: ["Impact unverified"]
   });
   assert.match(honest, /None confirmed in the index this turn/);
-  assert.match(honest, /requireAuth\(/);
+  assert.match(honest, /Inspect remote source for uses of `requireAuth`/);
+  assert.doesNotMatch(honest, /is defined|parameter rename alone/);
 });
 
 test("contentUsesNamedSymbol requires the named export, not a sibling import", () => {

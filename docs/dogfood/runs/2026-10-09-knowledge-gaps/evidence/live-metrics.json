@@ -1,0 +1,1805 @@
+[
+  {
+    "threadId": "thread-1791577177470-6m8077",
+    "turnId": "turn-1791577194974-hynwfq",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "scope": "repo"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "0f4464f1c495663dcd4f6d088a12f415cc9f52598da4987e8053b0598701db62",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 7609,
+    "answerStartMs": 32912,
+    "completionMs": 56217,
+    "completedAt": "2026-10-09T20:20:48.439Z",
+    "enableThinking": true,
+    "requestChars": 41106,
+    "sourceReviewStartMs": null,
+    "sourceWindows": [],
+    "successfulRemoteReviews": [],
+    "openedCitations": []
+  },
+  {
+    "threadId": "thread-1791578065937-x274qm",
+    "turnId": "turn-1791578084159-9temd5",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "scope": "repo"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "5ece3ee4abefc40111cd93236b7bc769799593042e9d1662f59ffa59f28d9d61",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 8027,
+    "answerStartMs": 9801,
+    "completionMs": 32496,
+    "completedAt": "2026-10-09T20:35:13.651Z",
+    "enableThinking": false,
+    "requestChars": 36904,
+    "sourceReviewStartMs": null,
+    "sourceWindows": [
+      {
+        "path": "apps/api/plane/api/serializers/state.py",
+        "startLine": 1,
+        "chars": 1655,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/db/models/state.py",
+        "startLine": 1,
+        "chars": 3824,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 63,
+        "chars": 5084,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 222,
+        "chars": 4406,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 112,
+        "chars": 4982,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 264,
+        "chars": 4198,
+        "truncated": true,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [],
+    "openedCitations": []
+  },
+  {
+    "threadId": "thread-1791579941375-80lc5c",
+    "turnId": "turn-1791579958527-l6zmct",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "scope": "repo"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "747d40892f40b9a17773192f645f271b5bdf71fc6036b9e91d5415e0df9180a3",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 7125,
+    "answerStartMs": 9648,
+    "completionMs": 32810,
+    "completedAt": "2026-10-09T21:06:29.124Z",
+    "enableThinking": false,
+    "requestChars": 36904,
+    "sourceReviewStartMs": null,
+    "sourceWindows": [
+      {
+        "path": "apps/api/plane/api/serializers/state.py",
+        "startLine": 1,
+        "chars": 1655,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/db/models/state.py",
+        "startLine": 1,
+        "chars": 3824,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 63,
+        "chars": 5084,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 222,
+        "chars": 4406,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 112,
+        "chars": 4982,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 264,
+        "chars": 4198,
+        "truncated": true,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [],
+    "openedCitations": []
+  },
+  {
+    "threadId": "thread-1791582369314-xj831u",
+    "turnId": "turn-1791582385722-nv5il2",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "scope": "repo"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "31c34e385193585625ce2d005f19393a947f9da05dd0650346e23600f0e62593",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 7919,
+    "answerStartMs": 12916,
+    "completionMs": 36882,
+    "completedAt": "2026-10-09T21:46:59.903Z",
+    "enableThinking": false,
+    "requestChars": 45833,
+    "sourceReviewStartMs": null,
+    "sourceWindows": [
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 63,
+        "chars": 5084,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 222,
+        "chars": 4406,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 112,
+        "chars": 4982,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 264,
+        "chars": 4198,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/space/serializer/issue.py",
+        "startLine": 124,
+        "chars": 4139,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/space/serializer/issue.py",
+        "startLine": 267,
+        "chars": 4595,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/db/models/state.py",
+        "startLine": 1,
+        "chars": 3824,
+        "truncated": false,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [],
+    "openedCitations": []
+  },
+  {
+    "threadId": "thread-1791583708579-ccw0r0",
+    "turnId": "turn-1791583728068-34crd2",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "scope": "repo"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "f111da04680637827251fa75118912a8fbb076cf84df389b988ef923772e609e",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 7538,
+    "answerStartMs": 43547,
+    "completionMs": 65170,
+    "completedAt": "2026-10-09T22:09:51.084Z",
+    "enableThinking": true,
+    "requestChars": 34916,
+    "sourceReviewStartMs": null,
+    "sourceWindows": [
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 63,
+        "chars": 5084,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 222,
+        "chars": 4406,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 112,
+        "chars": 4982,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 264,
+        "chars": 4198,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/db/models/state.py",
+        "startLine": 1,
+        "chars": 3824,
+        "truncated": false,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [],
+    "openedCitations": []
+  },
+  {
+    "threadId": "thread-1791584305639-9jfg3s",
+    "turnId": "turn-1791584329419-5ohope",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "documenso",
+      "branch": "main",
+      "scope": "repo"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "documenso",
+      "branch": "main",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "8436a7b19d8d2235a46142f912d18518a8b8340280788c8c088fe43d1850d9e4",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 9619,
+    "answerStartMs": 48003,
+    "completionMs": 65604,
+    "completedAt": "2026-10-09T22:19:52.207Z",
+    "enableThinking": true,
+    "requestChars": 37417,
+    "sourceReviewStartMs": null,
+    "sourceWindows": [
+      {
+        "path": "packages/trpc/server/envelope-router/signing-status-envelope.ts",
+        "startLine": 1,
+        "chars": 1989,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/trpc/server/enterprise-router/csc-sign-envelope.ts",
+        "startLine": 1,
+        "chars": 1489,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+        "startLine": 1,
+        "chars": 8744,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/trpc/server/envelope-router/signing-status-envelope.types.ts",
+        "startLine": 1,
+        "chars": 628,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/ee/server-only/signing/csc/client/signatures.ts",
+        "startLine": 1,
+        "chars": 3446,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+        "startLine": 8,
+        "chars": 4710,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+        "startLine": 46,
+        "chars": 4179,
+        "truncated": true,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [],
+    "openedCitations": [
+      {
+        "at": "2026-10-09T22:21:31.797Z",
+        "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+        "line": 105,
+        "branch": "main",
+        "preserveContext": true
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791585490031-nfuldt",
+    "turnId": "turn-1791585585642-uag8yf",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "scope": "repo"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "6c83c865b402a78ae45ed8d9270d9a5692a3173d1b72a35a9a342ea722caaaab",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 9363,
+    "answerStartMs": 10464,
+    "completionMs": 13711,
+    "completedAt": "2026-10-09T22:39:56.849Z",
+    "enableThinking": false,
+    "requestChars": 6510,
+    "sourceReviewStartMs": null,
+    "sourceWindows": [],
+    "successfulRemoteReviews": [],
+    "openedCitations": []
+  },
+  {
+    "threadId": "thread-1791585690446-aw9mbs",
+    "turnId": "turn-1791585743434-ayxa7b",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "scope": "repo"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "0e6ebf889447610b51b7164c0666789d2cb8e47bdfd0e5861dacce54a7671cc0",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 5904,
+    "answerStartMs": 6942,
+    "completionMs": 9326,
+    "completedAt": "2026-10-09T22:42:30.905Z",
+    "enableThinking": false,
+    "requestChars": 7663,
+    "sourceReviewStartMs": null,
+    "sourceWindows": [],
+    "successfulRemoteReviews": [],
+    "openedCitations": []
+  },
+  {
+    "threadId": "thread-1791585866416-mdmsz2",
+    "turnId": "turn-1791585896146-wjytha",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "scope": "file",
+      "file": "apps/api/plane/api/serializers/issue.py",
+      "fileSource": "remote",
+      "languageId": "python"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "file": "apps/api/plane/api/serializers/issue.py",
+      "selectedLines": null
+    },
+    "bundleId": "0e6ebf889447610b51b7164c0666789d2cb8e47bdfd0e5861dacce54a7671cc0",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 8147,
+    "answerStartMs": 44978,
+    "completionMs": null,
+    "completedAt": null,
+    "enableThinking": true,
+    "requestChars": 57416,
+    "sourceReviewStartMs": null,
+    "sourceWindows": [
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 63,
+        "chars": 5084,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 222,
+        "chars": 4406,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 112,
+        "chars": 4982,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 264,
+        "chars": 4198,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/db/models/issue.py",
+        "startLine": 168,
+        "chars": 4863,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/db/models/issue.py",
+        "startLine": 469,
+        "chars": 4734,
+        "truncated": true,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [],
+    "openedCitations": [
+      {
+        "at": "2026-10-09T22:44:47.001Z",
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "line": null,
+        "branch": "preview",
+        "preserveContext": false
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791586180573-7ilqio",
+    "turnId": "turn-1791586222274-c7vo6a",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "scope": "file",
+      "file": "apps/api/plane/api/serializers/issue.py",
+      "fileSource": "remote",
+      "languageId": "python"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "file": "apps/api/plane/api/serializers/issue.py",
+      "selectedLines": null
+    },
+    "bundleId": "8e7b87077afb8f0a393530fc0dd8fd1ef4eef8df406e5558ba0a52f7daf72ed3",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 6451,
+    "answerStartMs": 37842,
+    "completionMs": 58338,
+    "completedAt": "2026-10-09T22:51:18.453Z",
+    "enableThinking": true,
+    "requestChars": 44603,
+    "sourceReviewStartMs": null,
+    "sourceWindows": [
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 63,
+        "chars": 5084,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 222,
+        "chars": 4406,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 112,
+        "chars": 4982,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 264,
+        "chars": 4198,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/db/models/issue.py",
+        "startLine": 168,
+        "chars": 4863,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/db/models/issue.py",
+        "startLine": 469,
+        "chars": 4734,
+        "truncated": true,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [],
+    "openedCitations": [
+      {
+        "at": "2026-10-09T22:50:18.633Z",
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "line": null,
+        "branch": "preview",
+        "preserveContext": false
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791586422809-16kf06",
+    "turnId": "turn-1791586438270-cj2tnj",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "scope": "file",
+      "file": "apps/api/plane/api/serializers/issue.py",
+      "fileSource": "remote",
+      "languageId": "python"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "file": "apps/api/plane/api/serializers/issue.py",
+      "selectedLines": null
+    },
+    "bundleId": "f50a245043db2a270cb9317069e230c5c45d0df47ea2d328d14bef18aa31a02c",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 6584,
+    "answerStartMs": 72318,
+    "completionMs": 83336,
+    "completedAt": "2026-10-09T22:55:19.357Z",
+    "enableThinking": true,
+    "requestChars": 20583,
+    "sourceReviewStartMs": null,
+    "sourceWindows": [
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 63,
+        "chars": 5084,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 222,
+        "chars": 4406,
+        "truncated": true,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [],
+    "openedCitations": [
+      {
+        "at": "2026-10-09T22:53:54.496Z",
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "line": null,
+        "branch": "preview",
+        "preserveContext": false
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791588212248-in5alx",
+    "turnId": "turn-1791588221107-v16wuw",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "documenso",
+      "branch": "main",
+      "scope": "repo"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "documenso",
+      "branch": "main",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "8f559d36aed6f1a65f950150fbe7917aa7562bf2bcfbfc0da6886ebe6fd9529c",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 6627,
+    "answerStartMs": 54489,
+    "completionMs": 68617,
+    "completedAt": "2026-10-09T23:24:47.255Z",
+    "enableThinking": true,
+    "requestChars": 41712,
+    "sourceReviewStartMs": null,
+    "sourceWindows": [
+      {
+        "path": "packages/trpc/server/envelope-router/signing-status-envelope.ts",
+        "startLine": 1,
+        "chars": 1989,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/trpc/server/enterprise-router/csc-sign-envelope.ts",
+        "startLine": 1,
+        "chars": 1489,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+        "startLine": 1,
+        "chars": 8744,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/trpc/server/envelope-router/signing-status-envelope.types.ts",
+        "startLine": 1,
+        "chars": 628,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/ee/server-only/signing/csc/client/signatures.ts",
+        "startLine": 1,
+        "chars": 3446,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+        "startLine": 8,
+        "chars": 4710,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+        "startLine": 46,
+        "chars": 4179,
+        "truncated": true,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [],
+    "openedCitations": []
+  },
+  {
+    "threadId": "thread-1791589888335-qavpnl",
+    "turnId": "turn-1791589899515-mep3ka",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "scope": "repo"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "6abd5289981fc2f343a5e4c079324794f60381927b80aadceee88ad15cc85fcc",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 7242,
+    "answerStartMs": 44713,
+    "completionMs": 57023,
+    "completedAt": "2026-10-09T23:52:34.535Z",
+    "enableThinking": true,
+    "requestChars": 37351,
+    "sourceReviewStartMs": null,
+    "sourceWindows": [
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 63,
+        "chars": 5084,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 222,
+        "chars": 4406,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 112,
+        "chars": 4982,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 264,
+        "chars": 4198,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/db/models/state.py",
+        "startLine": 1,
+        "chars": 3824,
+        "truncated": false,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [
+      {
+        "at": "2026-10-09T23:53:15.197Z",
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "owner": "CoopAI-Corp",
+        "repo": "plane",
+        "branch": "preview",
+        "requestedLine": 121,
+        "requestedEndLine": 126,
+        "revealedStartLine": 121,
+        "revealedEndLine": 126,
+        "source": "remote",
+        "bodyChars": 29531
+      },
+      {
+        "at": "2026-10-09T23:53:15.810Z",
+        "path": "apps/api/plane/db/models/state.py",
+        "owner": "CoopAI-Corp",
+        "repo": "plane",
+        "branch": "preview",
+        "requestedLine": 65,
+        "requestedEndLine": 69,
+        "revealedStartLine": 65,
+        "revealedEndLine": 69,
+        "source": "remote",
+        "bodyChars": 3824
+      },
+      {
+        "at": "2026-10-09T23:53:16.657Z",
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "owner": "CoopAI-Corp",
+        "repo": "plane",
+        "branch": "preview",
+        "requestedLine": 125,
+        "requestedEndLine": 126,
+        "revealedStartLine": 125,
+        "revealedEndLine": 126,
+        "source": "remote",
+        "bodyChars": 34220
+      },
+      {
+        "at": "2026-10-09T23:53:21.644Z",
+        "path": "apps/api/plane/db/models/state.py",
+        "owner": "CoopAI-Corp",
+        "repo": "plane",
+        "branch": "preview",
+        "requestedLine": 72,
+        "requestedEndLine": 76,
+        "revealedStartLine": 72,
+        "revealedEndLine": 76,
+        "source": "remote",
+        "bodyChars": 3824
+      },
+      {
+        "at": "2026-10-09T23:53:22.703Z",
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "owner": "CoopAI-Corp",
+        "repo": "plane",
+        "branch": "preview",
+        "requestedLine": 169,
+        "requestedEndLine": 176,
+        "revealedStartLine": 169,
+        "revealedEndLine": 176,
+        "source": "remote",
+        "bodyChars": 34220
+      },
+      {
+        "at": "2026-10-09T23:53:23.755Z",
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "owner": "CoopAI-Corp",
+        "repo": "plane",
+        "branch": "preview",
+        "requestedLine": 288,
+        "requestedEndLine": 288,
+        "revealedStartLine": 288,
+        "revealedEndLine": 288,
+        "source": "remote",
+        "bodyChars": 29531
+      },
+      {
+        "at": "2026-10-09T23:53:24.832Z",
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "owner": "CoopAI-Corp",
+        "repo": "plane",
+        "branch": "preview",
+        "requestedLine": 330,
+        "requestedEndLine": 330,
+        "revealedStartLine": 330,
+        "revealedEndLine": 330,
+        "source": "remote",
+        "bodyChars": 34220
+      }
+    ],
+    "openedCitations": [
+      {
+        "at": "2026-10-09T23:53:14.583Z",
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "line": 121,
+        "branch": "preview",
+        "preserveContext": true
+      },
+      {
+        "at": "2026-10-09T23:53:15.424Z",
+        "path": "apps/api/plane/db/models/state.py",
+        "line": 65,
+        "branch": "preview",
+        "preserveContext": true
+      },
+      {
+        "at": "2026-10-09T23:53:16.227Z",
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "line": 125,
+        "branch": "preview",
+        "preserveContext": true
+      },
+      {
+        "at": "2026-10-09T23:53:21.632Z",
+        "path": "apps/api/plane/db/models/state.py",
+        "line": 72,
+        "branch": "preview",
+        "preserveContext": true
+      },
+      {
+        "at": "2026-10-09T23:53:22.693Z",
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "line": 169,
+        "branch": "preview",
+        "preserveContext": true
+      },
+      {
+        "at": "2026-10-09T23:53:23.746Z",
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "line": 288,
+        "branch": "preview",
+        "preserveContext": true
+      },
+      {
+        "at": "2026-10-09T23:53:24.823Z",
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "line": 330,
+        "branch": "preview",
+        "preserveContext": true
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791590022377-mpq1vc",
+    "turnId": "turn-1791590030305-5z1wqj",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "documenso",
+      "branch": "main",
+      "scope": "file",
+      "file": "packages/lib/server-only/field/sign-field-with-token.ts",
+      "fileSource": "remote",
+      "languageId": "typescript"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "documenso",
+      "branch": "main",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "6abd5289981fc2f343a5e4c079324794f60381927b80aadceee88ad15cc85fcc",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 6554,
+    "answerStartMs": 57232,
+    "completionMs": 65408,
+    "completedAt": "2026-10-09T23:54:53.474Z",
+    "enableThinking": true,
+    "requestChars": 41712,
+    "sourceReviewStartMs": null,
+    "sourceWindows": [
+      {
+        "path": "packages/trpc/server/envelope-router/signing-status-envelope.ts",
+        "startLine": 1,
+        "chars": 1989,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/trpc/server/enterprise-router/csc-sign-envelope.ts",
+        "startLine": 1,
+        "chars": 1489,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+        "startLine": 1,
+        "chars": 8744,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/trpc/server/envelope-router/signing-status-envelope.types.ts",
+        "startLine": 1,
+        "chars": 628,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/ee/server-only/signing/csc/client/signatures.ts",
+        "startLine": 1,
+        "chars": 3446,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+        "startLine": 8,
+        "chars": 4710,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+        "startLine": 46,
+        "chars": 4179,
+        "truncated": true,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [],
+    "openedCitations": []
+  },
+  {
+    "threadId": "thread-1791591875903-9s4xib",
+    "turnId": "turn-1791591883562-0tslzz",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "documenso",
+      "branch": "main",
+      "scope": "repo"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "documenso",
+      "branch": "main",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "8c1a7c0ac60674c1f2104f2da4e2ac66b2335465e64255fe83d5efa7b8905006",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 7609,
+    "answerStartMs": 158983,
+    "completionMs": 165806,
+    "completedAt": "2026-10-10T00:27:27.261Z",
+    "enableThinking": true,
+    "requestChars": 41712,
+    "sourceReviewStartMs": 74823,
+    "sourceWindows": [
+      {
+        "path": "packages/trpc/server/envelope-router/signing-status-envelope.ts",
+        "startLine": 1,
+        "chars": 1989,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/trpc/server/enterprise-router/csc-sign-envelope.ts",
+        "startLine": 1,
+        "chars": 1489,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+        "startLine": 1,
+        "chars": 8744,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/trpc/server/envelope-router/signing-status-envelope.types.ts",
+        "startLine": 1,
+        "chars": 628,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/ee/server-only/signing/csc/client/signatures.ts",
+        "startLine": 1,
+        "chars": 3446,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+        "startLine": 8,
+        "chars": 4710,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+        "startLine": 46,
+        "chars": 4179,
+        "truncated": true,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [
+      {
+        "at": "2026-10-10T00:30:08.254Z",
+        "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+        "owner": "CoopAI-Corp",
+        "repo": "documenso",
+        "branch": "main",
+        "requestedLine": 105,
+        "requestedEndLine": 109,
+        "revealedStartLine": 105,
+        "revealedEndLine": 109,
+        "source": "remote",
+        "bodyChars": 8744
+      },
+      {
+        "at": "2026-10-10T00:30:09.053Z",
+        "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+        "owner": "CoopAI-Corp",
+        "repo": "documenso",
+        "branch": "main",
+        "requestedLine": 113,
+        "requestedEndLine": 115,
+        "revealedStartLine": 113,
+        "revealedEndLine": 115,
+        "source": "remote",
+        "bodyChars": 19335
+      },
+      {
+        "at": "2026-10-10T00:30:09.302Z",
+        "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+        "owner": "CoopAI-Corp",
+        "repo": "documenso",
+        "branch": "main",
+        "requestedLine": 111,
+        "requestedEndLine": 115,
+        "revealedStartLine": 111,
+        "revealedEndLine": 115,
+        "source": "remote",
+        "bodyChars": 8744
+      }
+    ],
+    "openedCitations": [
+      {
+        "at": "2026-10-10T00:30:07.668Z",
+        "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+        "line": 105,
+        "branch": "main",
+        "preserveContext": true
+      },
+      {
+        "at": "2026-10-10T00:30:08.500Z",
+        "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+        "line": 113,
+        "branch": "main",
+        "preserveContext": true
+      },
+      {
+        "at": "2026-10-10T00:30:09.289Z",
+        "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+        "line": 111,
+        "branch": "main",
+        "preserveContext": true
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791591893640-i4xbux",
+    "turnId": "turn-1791591901029-pqbafo",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "scope": "repo"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "8c1a7c0ac60674c1f2104f2da4e2ac66b2335465e64255fe83d5efa7b8905006",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 8219,
+    "answerStartMs": 213204,
+    "completionMs": 214320,
+    "completedAt": "2026-10-10T00:28:33.331Z",
+    "enableThinking": true,
+    "requestChars": 37249,
+    "sourceReviewStartMs": 92010,
+    "sourceWindows": [
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 63,
+        "chars": 5084,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 222,
+        "chars": 4406,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 112,
+        "chars": 4982,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 264,
+        "chars": 4198,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/db/models/state.py",
+        "startLine": 1,
+        "chars": 3824,
+        "truncated": false,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [],
+    "openedCitations": []
+  },
+  {
+    "threadId": "thread-1791591903290-h5ahvg",
+    "turnId": "turn-1791591927198-zuuldh",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "scope": "file",
+      "file": "apps/api/plane/api/serializers/issue.py",
+      "fileSource": "remote",
+      "languageId": "python",
+      "selectedLines": [
+        288,
+        288
+      ]
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "file": "apps/api/plane/api/serializers/issue.py",
+      "selectedLines": null
+    },
+    "bundleId": "8c1a7c0ac60674c1f2104f2da4e2ac66b2335465e64255fe83d5efa7b8905006",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 5967,
+    "answerStartMs": 96535,
+    "completionMs": 99979,
+    "completedAt": "2026-10-10T00:27:05.261Z",
+    "enableThinking": true,
+    "requestChars": 21527,
+    "sourceReviewStartMs": 27513,
+    "sourceWindows": [
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 63,
+        "chars": 5084,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 222,
+        "chars": 4406,
+        "truncated": true,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [
+      {
+        "at": "2026-10-10T00:29:41.799Z",
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "owner": "CoopAI-Corp",
+        "repo": "plane",
+        "branch": "preview",
+        "requestedLine": 122,
+        "requestedEndLine": 126,
+        "revealedStartLine": 122,
+        "revealedEndLine": 126,
+        "source": "remote",
+        "bodyChars": 29531
+      },
+      {
+        "at": "2026-10-10T00:29:41.833Z",
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "owner": "CoopAI-Corp",
+        "repo": "plane",
+        "branch": "preview",
+        "requestedLine": 288,
+        "requestedEndLine": 288,
+        "revealedStartLine": 288,
+        "revealedEndLine": 288,
+        "source": "remote",
+        "bodyChars": 29531
+      }
+    ],
+    "openedCitations": [
+      {
+        "at": "2026-10-10T00:25:14.225Z",
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "line": null,
+        "branch": "preview",
+        "preserveContext": false
+      },
+      {
+        "at": "2026-10-10T00:29:41.038Z",
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "line": 122,
+        "branch": "preview",
+        "preserveContext": true
+      },
+      {
+        "at": "2026-10-10T00:29:41.764Z",
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "line": 288,
+        "branch": "preview",
+        "preserveContext": true
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791591931107-hcjrrk",
+    "turnId": "turn-1791591944968-k9qfsm",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "scope": "repo"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "8c1a7c0ac60674c1f2104f2da4e2ac66b2335465e64255fe83d5efa7b8905006",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 6166,
+    "answerStartMs": 7685,
+    "completionMs": 9266,
+    "completedAt": "2026-10-10T00:25:52.401Z",
+    "enableThinking": false,
+    "requestChars": 8636,
+    "sourceReviewStartMs": null,
+    "sourceWindows": [],
+    "successfulRemoteReviews": [],
+    "openedCitations": []
+  },
+  {
+    "threadId": "thread-1791592649013-ajzi3p",
+    "turnId": "turn-1791593096509-u15xnc",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "scope": "repo"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "4f036161f62df914e755d7f5276ea085abe6ac3d0fe43ae6ebdcc9a1cc8dad9c",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 8610,
+    "answerStartMs": 174489,
+    "completionMs": 197548,
+    "completedAt": "2026-10-10T00:48:11.640Z",
+    "enableThinking": true,
+    "requestChars": 37351,
+    "sourceReviewStartMs": 55883,
+    "sourceWindows": [
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 63,
+        "chars": 5084,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 222,
+        "chars": 4406,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 112,
+        "chars": 4982,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 264,
+        "chars": 4198,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/db/models/state.py",
+        "startLine": 1,
+        "chars": 3824,
+        "truncated": false,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [],
+    "openedCitations": []
+  },
+  {
+    "threadId": "thread-1791596533331-xw47gg",
+    "turnId": "turn-1791596567286-2t9lsn",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "scope": "repo"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "715cfee234c167b1e7d1f36cd6bb5f472ddd9f86075b2fca5859c8b270bab281",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 6981,
+    "answerStartMs": 163491,
+    "completionMs": 163493,
+    "completedAt": "2026-10-10T01:45:28.241Z",
+    "enableThinking": true,
+    "requestChars": 37351,
+    "sourceReviewStartMs": 51405,
+    "sourceWindows": [
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 63,
+        "chars": 5084,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 222,
+        "chars": 4406,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 112,
+        "chars": 4982,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 264,
+        "chars": 4198,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/db/models/state.py",
+        "startLine": 1,
+        "chars": 3824,
+        "truncated": false,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [],
+    "openedCitations": []
+  },
+  {
+    "threadId": "thread-1791597474808-rdyld6",
+    "turnId": "turn-1791597494152-xdbj75",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "scope": "repo"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "4149a0cc37f23ffb6b8cbc84ff0a3ebf33b42206b4bf02cdf4100866ee3f2a9b",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 6467,
+    "answerStartMs": 261625,
+    "completionMs": 261626,
+    "completedAt": "2026-10-10T02:02:33.620Z",
+    "enableThinking": true,
+    "requestChars": 37351,
+    "sourceReviewStartMs": 133846,
+    "sourceWindows": [
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 63,
+        "chars": 5084,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 222,
+        "chars": 4406,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 112,
+        "chars": 4982,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 264,
+        "chars": 4198,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/db/models/state.py",
+        "startLine": 1,
+        "chars": 3824,
+        "truncated": false,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [
+      {
+        "at": "2026-10-10T02:08:34.667Z",
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "owner": "CoopAI-Corp",
+        "repo": "plane",
+        "branch": "preview",
+        "requestedLine": 121,
+        "requestedEndLine": 126,
+        "revealedStartLine": 121,
+        "revealedEndLine": 126,
+        "source": "remote",
+        "bodyChars": 29531
+      },
+      {
+        "at": "2026-10-10T02:08:57.492Z",
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "owner": "CoopAI-Corp",
+        "repo": "plane",
+        "branch": "preview",
+        "requestedLine": 125,
+        "requestedEndLine": 126,
+        "revealedStartLine": 125,
+        "revealedEndLine": 126,
+        "source": "remote",
+        "bodyChars": 34220
+      },
+      {
+        "at": "2026-10-10T02:09:12.697Z",
+        "path": "apps/api/plane/db/models/state.py",
+        "owner": "CoopAI-Corp",
+        "repo": "plane",
+        "branch": "preview",
+        "requestedLine": 65,
+        "requestedEndLine": 69,
+        "revealedStartLine": 65,
+        "revealedEndLine": 69,
+        "source": "remote",
+        "bodyChars": 3824
+      }
+    ],
+    "openedCitations": [
+      {
+        "at": "2026-10-10T02:08:33.983Z",
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "line": 121,
+        "branch": "preview",
+        "preserveContext": true
+      },
+      {
+        "at": "2026-10-10T02:08:56.804Z",
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "line": 125,
+        "branch": "preview",
+        "preserveContext": true
+      },
+      {
+        "at": "2026-10-10T02:09:12.079Z",
+        "path": "apps/api/plane/db/models/state.py",
+        "line": 65,
+        "branch": "preview",
+        "preserveContext": true
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791600559977-u9oern",
+    "turnId": "turn-1791600583070-c8v38r",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "scope": "repo"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "38bb4e6f3465d3c68dc72f7874c86baf8820fa1dbdb576db352f40332e77e95f",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 7231,
+    "answerStartMs": 178415,
+    "completionMs": 178416,
+    "completedAt": "2026-10-10T02:52:39.135Z",
+    "enableThinking": true,
+    "requestChars": 37351,
+    "sourceReviewStartMs": 29679,
+    "sourceWindows": [
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 63,
+        "chars": 5084,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 222,
+        "chars": 4406,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 112,
+        "chars": 4982,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 264,
+        "chars": 4198,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/db/models/state.py",
+        "startLine": 1,
+        "chars": 3824,
+        "truncated": false,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [],
+    "openedCitations": []
+  },
+  {
+    "threadId": "thread-1791600644092-56r6b5",
+    "turnId": "turn-1791600802361-q5beez",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "documenso",
+      "branch": "main",
+      "scope": "repo"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "documenso",
+      "branch": "main",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "38bb4e6f3465d3c68dc72f7874c86baf8820fa1dbdb576db352f40332e77e95f",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 7220,
+    "answerStartMs": 109695,
+    "completionMs": 109697,
+    "completedAt": "2026-10-10T02:55:09.338Z",
+    "enableThinking": true,
+    "requestChars": 40418,
+    "sourceReviewStartMs": 25647,
+    "sourceWindows": [
+      {
+        "path": "packages/trpc/server/envelope-router/signing-status-envelope.ts",
+        "startLine": 1,
+        "chars": 1989,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/trpc/server/enterprise-router/csc-sign-envelope.ts",
+        "startLine": 1,
+        "chars": 1489,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+        "startLine": 1,
+        "chars": 8744,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/trpc/server/envelope-router/signing-status-envelope.types.ts",
+        "startLine": 1,
+        "chars": 628,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/lib/utils/envelope-signing.ts",
+        "startLine": 1,
+        "chars": 7938,
+        "truncated": false,
+        "retainedInRequest": true
+      },
+      {
+        "path": "packages/ee/server-only/signing/csc/client/signatures.ts",
+        "startLine": 1,
+        "chars": 3446,
+        "truncated": false,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [],
+    "openedCitations": []
+  }
+]

@@ -70,6 +70,7 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
   - FAIL: \`src/server/authMiddleware.ts:70-80\` (or any \`path:range\`) above a language-tagged fence — use a numeric citation fence instead of a Copy dump.
   - FAIL: paraphrased or "cleaned up" snippets that no longer match the file (wrong args, different indent, ellipsis stubs).
 - Invented or non-repo examples only (anonymous intent): ordinary \`\`\`lang fences.
+- Keep examples anonymous even when they resemble the active file or a nearby path. A source citation must identify the actual attached source range; do not assign an example a guessed source identity.
 - Concrete edits the user should apply (edit intent): emit \`File:\` + \`\`\`patch SEARCH/REPLACE blocks (one contiguous edit per block) — never ordinary language fences for proposed changes.
 - File paths in backticks: \`src/foo.ts\` or \`src/foo.ts:42\` (clickable); still use citation fences when showing the actual lines.
 - Links: [label](url) only when a real URL is in evidence; otherwise name the source in plain text.
@@ -289,11 +290,16 @@ Do not emit **Sources**. ${SOURCES_FOOTER_OUTPUT_RULE} Never repeat file paths a
 
   knowledge_gaps: `
 ## Required response structure
+When the user message has ## Focused code rule audit, use its compact contract: **Source-grounded review** followed by **Open questions**, at most three entries each. Cite exact contiguous numeric source slices for established rules. Omit the generic health-scan structure and Recommended next steps below. Partial source cannot prove an absent transition policy, universal allowed moves, a model manager's filters, or atomicity. Include a same-class write delegation when attached.
+
 Group each gap as a subsection with nested bullets — never a flat peer list of titles and field lines.
 
 Open with 1–2 sentences on documentation and ownership health for the active file or area. No **Answer**, **Summary**, or **Your question** heading. When ## User focus is present, those sentences answer the ask.
 
 When ## User focus (required) is present: PASS answers from scan/docs/focus-file evidence (or states scan unavailable). When focus file excerpts are attached, say the subsystems exist and name docs/ownership/default-on risks visible in those excerpts. FAIL: invents gaps; claims indexed code is missing when excerpts are attached.
+
+When focus source bodies are attached, first answer the code half in **Source-grounded review**, citing each established rule with verified numeric source ranges. Then include **Open questions** for specific intended-policy uncertainties motivated by those rules. Distinguish membership guards from old-state/new-state transition rules; a membership guard alone cannot establish a transition matrix. Keep these sections separate from scan and documentation coverage so they survive source normalization.
+When no relevant source bodies or documentation are attached, state the limit in 1–3 sentences and stop. Do not fill template sections, recommend unverified owners or paths, or turn search misses into confirmed gaps.
 
 **Documentation gaps**
 When \`<knowledge_gap_scan>\` is missing or contains \`<empty>\`: write one sentence that structured scan evidence is unavailable — **do not** invent gap subsections from code inspection unless focus file excerpts are attached in the user message.
@@ -450,6 +456,28 @@ function withOutputContract(
   const paperclip = hasPaperclipAttachments ? `${USER_PAPERCLIP_ATTACHMENTS_SYSTEM_RULE}\n\n` : "";
   return `${prompt}\n\n${OPERATING_CONTEXT}\n\n${paperclip}${CURSOR_STYLE_OUTPUT_CONTRACT}${structure}`;
 }
+
+const SOURCE_GROUNDED_BLAST_BODY = `You answer the user's change-impact or source-behavior question from the opened selected-ref target and dependent source bodies. Establish behavior from exact conditions, call sites, early exits, queries, exception branches, and enclosing operations. Inspect the available bodies before deciding what the requested change permits. Passing one check does not establish that execution reaches an operation. Imported names, comments, lifecycle labels, and seed/default values do not establish access policy, stored-data invariants, or current aggregate results. Unopened helper implementations, truncated portions, and complete dependency coverage remain unverified.`;
+
+const SOURCE_GROUNDED_BLAST_STRUCTURE = `
+## Required response policy — opened source
+Answer the user's actual request, with structure and detail appropriate to that task. A selected range is context, not a declaration of a predicate change. Do not invent the proposed change from a name or status mention. If necessary task information is missing, state it plainly.
+With no confirmed dependents, cross-file impact remains unverified; this does not establish zero impact. Keep the answer short and limit it to what the available evidence permits.
+For concrete source behavior, cite exact contiguous source ranges and preserve complete conditions, earlier exits, exception branches, and conditional operations. Quote source verbatim, including whitespace and blank lines; never reconstruct an excerpt.
+Dependency relationships and import spelling do not establish actual caller behavior, binding resolution, deployment, or complete coverage. Unopened helpers and partial paths remain unknown. Names, comments, defaults, and lifecycle labels do not establish access policy, stored-data invariants, or current values.
+State the inspected scope. Distinguish observed source facts from conditional impact inferences and remaining questions. Do not turn a possible effect into an inevitable one, or hide an unsupported claim behind a caveat. Limit suggested checks to the actual task and evidenced uncertainty.`;
+
+const SOURCE_GROUNDED_GAPS_BODY = `You establish code rules from the attached remote source and identify intended-policy questions those rules leave open. A shown predicate establishes its condition and action when execution reaches it. It does not establish raw input decoding, earlier checks, unreviewed superclass behavior, or a complete transition policy. Preserve exact field names, operators, manager selection, and enclosing conditions. An imported helper's name is not its implementation. Documentation establishes intent only when its attached body supports the claim. Search misses do not establish absence.`;
+
+const SOURCE_GROUNDED_GAPS_STRUCTURE = `
+## Required response structure — focused code rules
+This contract replaces the generic multi-item audit format for this request.
+With no relevant source or documentation bodies, state the evidence limit in one to three sentences and stop.
+Otherwise begin with one short sentence acknowledging the reviewed source, then use only **Source-grounded review** and **Open questions**.
+Keep one to three distinct rules. Each has a short title, exactly one condition-bound sentence, and a small numeric citation quoting contiguous source verbatim. Stop the rule after its quote. Do not add uncited explanation or invent raw PATCH/null input behavior. A selected-file audit can use only its relevant guard and same-class write delegation. Delegation alone does not prove a superclass-to-model-save call chain.
+For manager/helper behavior, quote the exact selection/call and its reviewed definition. If the definition is unreviewed, leave its effects open. If you cannot quote a call verbatim, omit that rule rather than reconstructing it. Never collapse arguments, insert ellipses, or add braces to a quote.
+Keep at most three open questions. Each is an interrogative sentence motivated by a cited rule plus one prospective test or documentation suggestion. Do not prefix questions with asserted unreviewed behavior. Ask whether field decoding or later helpers reach the shown guard or writer when that path is unverified.
+Do not infer a policy's absence from partial source, universal allowed transitions from membership, authentication from a procedure name, or atomicity from an ORM update. Omit generic documentation health, ownership, integration operations, contacts, and recommendations. Stop.`;
 
 export function buildComprehensionSystem(
   activeFile?: string,
@@ -611,8 +639,14 @@ function buildUseCaseSystemPrompt(useCase: UseCase, options?: SystemPromptOption
     case "ownership":
       return withOutputContract(OWNERSHIP_INTELLIGENCE_SYSTEM, "ownership", undefined, hasPaperclip);
     case "blast_radius":
+      if (options?.blastSourceGrounded) {
+        return withOutputContract(SOURCE_GROUNDED_BLAST_BODY, "blast_radius", SOURCE_GROUNDED_BLAST_STRUCTURE, hasPaperclip);
+      }
       return withOutputContract(BLAST_RADIUS_EVIDENCE_SYSTEM, "blast_radius", undefined, hasPaperclip);
     case "knowledge_gaps":
+      if (options?.knowledgeGapsCodeRuleAudit) {
+        return withOutputContract(SOURCE_GROUNDED_GAPS_BODY, "knowledge_gaps", SOURCE_GROUNDED_GAPS_STRUCTURE, hasPaperclip);
+      }
       return withOutputContract(KNOWLEDGE_GAPS_EVIDENCE_SYSTEM, "knowledge_gaps", undefined, hasPaperclip);
     case "integration":
       return withOutputContract(INTEGRATION_EVIDENCE_SYSTEM, "integration", undefined, hasPaperclip);
@@ -640,6 +674,10 @@ function buildUseCaseSystemPrompt(useCase: UseCase, options?: SystemPromptOption
 
 export type SystemPromptOptions = {
   activeFile?: string;
+  /** Source-backed Blast gets a dedicated contract, without graph-only risk templates. */
+  blastSourceGrounded?: boolean;
+  /** Focused code audits exclude the generic documentation/ownership scan contract. */
+  knowledgeGapsCodeRuleAudit?: boolean;
   /** Inject the paperclip-attachment system rule only when the turn has such uploads. */
   hasPaperclipAttachments?: boolean;
   /** Understand Repo locate ask — skip architecture syllabus in the system contract. */
@@ -660,6 +698,8 @@ export function systemPromptForUseCase(useCase: UseCase, options?: SystemPromptO
   // an active file for comprehension, locate-only Understand Repo, paperclip, or L file-assistant.
   if (
     options?.hasPaperclipAttachments ||
+    options?.blastSourceGrounded ||
+    options?.knowledgeGapsCodeRuleAudit ||
     options?.locateOnly ||
     options?.fileAssistant ||
     (useCase === "comprehension" && options?.activeFile?.trim())
@@ -700,7 +740,7 @@ export function resolveChatUseCase(
   return useCaseFromQuickAction(quickAction);
 }
 
-type ManifestSnippet = { path: string; content: string; lineRange?: [number, number] };
+type ManifestSnippet = { path: string; content: string; lineRange?: [number, number]; startLine?: number; endLine?: number; truncated?: boolean };
 type MentionFileSnippet = ManifestSnippet & { repoId: string };
 
 /** Shared `<local_files>` block with the authoritative-source guardrail — single owner for both user-turn builders. */
@@ -1153,7 +1193,8 @@ export function buildUserMessageWithContext(
   const agentFileSnippets = extractAgentFileSnippets(context?.contextBundle);
   const agentSearch = extractAgentSearchSummary(context?.contextBundle);
   const agentProposedPatch = extractAgentProposedPatch(context?.contextBundle);
-  const repoSemanticSnippets = extractRepoSemanticSnippets(context?.contextBundle);
+  const repoSemanticSnippets = extractRepoSemanticSnippets(context?.contextBundle).filter(file =>
+    !repoSummarySnippets.some(entry => entry.path === file.path && entry.content === file.content));
   const repoSemanticPathHits = extractRepoSemanticPathHits(context?.contextBundle);
   const dualRepoCompare = extractDualRepoCompareEvidence(context?.contextBundle);
   const repoInventory = extractRepoInventory(context?.contextBundle);
@@ -1269,8 +1310,10 @@ export function buildUserMessageWithContext(
       ? filesForSelectionOnly(repoSummarySnippets, context?.file, context?.selectedLines)
       : repoSummarySnippets;
     for (const file of files) {
-      lines.push(`<file_content path="${file.path}">`);
-      lines.push(file.content);
+      const range = file.startLine ? ` lines="${file.startLine}-${file.endLine ?? file.startLine + file.content.split("\n").length - 1}"` : "";
+      const truncated = file.truncated ? ' truncated="true"' : "";
+      lines.push(`<file_content path="${file.path}"${range}${truncated}>`);
+      lines.push(file.startLine ? file.content.split("\n").map((line, index) => `${file.startLine! + index} | ${line}`).join("\n") : file.content);
       lines.push("</file_content>");
     }
     lines.push("</repo_entry_files>");

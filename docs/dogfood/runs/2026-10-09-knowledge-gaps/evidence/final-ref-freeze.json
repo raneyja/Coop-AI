@@ -1,0 +1,13 @@
+{
+  "checkedAt": "2026-10-09T23:51:07.487669+00:00",
+  "Plane": {
+    "repo": "CoopAI-Corp/plane",
+    "ref": "preview",
+    "commit": "a8e53b6ac7b87bd8e3e931d21188f7679c7ab6c4"
+  },
+  "Documenso": {
+    "repo": "CoopAI-Corp/documenso",
+    "ref": "main",
+    "commit": "a457e1ef7de449e4f758fc6943a8014e952c34c6"
+  }
+}

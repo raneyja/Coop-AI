@@ -587,6 +587,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     return {
       role: "assistant",
       content: debouncedStream,
+      sourceCitationMode: "explicit",
       timestamp: Date.now(),
       links: []
     };
@@ -855,7 +856,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   );
 
   const renderBody = useCallback(
-    (content: string, relatedArtifactId?: string, messageTimestamp?: number) => {
+    (content: string, relatedArtifactId?: string, messageTimestamp?: number, sourceCitationMode?: "explicit") => {
       const card =
         messageTimestamp !== undefined
           ? patchCards.find((entry) => entry.messageTimestamp === messageTimestamp)
@@ -876,6 +877,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         <ChatProse
           key="chat-prose"
           content={content}
+          sourceCitationMode={sourceCitationMode}
           relatedArtifactId={relatedArtifactId}
           hidePatchFences={hidePatchFences}
           activeFilePath={context.file}
@@ -928,8 +930,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
                 }
               });
             }}
-            codeHostProvider={context.provider}
-            defaultBranch={context.branch}
+            codeHostProvider={card.targetRepo?.provider ?? context.provider}
+            defaultBranch={card.targetRepo?.branch ?? context.branch}
             onCreatePullRequest={(draft) => {
               const files = draft.files.filter(
                 (file) => file.path.trim() && file.content.length > 0 && !isOsAbsoluteDiskPath(file.path)
@@ -944,20 +946,21 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
                   return next;
                 });
               }
+              const target = card.targetRepo ?? context;
               const repoId =
-                context.owner && context.repo
-                  ? `${draft.provider ?? context.provider ?? "github"}:${context.owner}/${context.repo}`
+                target.owner && target.repo
+                  ? `${target.provider ?? "github"}:${target.owner}/${target.repo}`
                   : undefined;
               post({
                 type: "patch:create-pr",
                 payload: {
                   messageTimestamp,
                   repoId,
-                  provider: draft.provider ?? context.provider,
+                  provider: target.provider,
                   branch: draft.branch,
                   title: draft.title,
                   body: draft.body,
-                  base: draft.base ?? context.branch,
+                  base: draft.base ?? target.branch,
                   files
                 }
               });

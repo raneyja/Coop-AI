@@ -1,0 +1,48 @@
+{
+  "analyzedAt": "2026-10-10T02:41:33.996490+00:00",
+  "baselineAccuracyGate": "four completed live source/citation passes preserved",
+  "records": [
+    {
+      "fixture": "unavailable-topic",
+      "threadId": "thread-1791591931107-hcjrrk",
+      "bundleId": "8c1a7c0ac60674c1f2104f2da4e2ac66b2335465e64255fe83d5efa7b8905006",
+      "contextBeforeSynthesisMs": 6166,
+      "privateDraftCallMs": null,
+      "privateReviewToPublicationMs": null,
+      "answerStartMs": 7685,
+      "completionMs": 9266
+    },
+    {
+      "fixture": "plane-selected-serializer",
+      "threadId": "thread-1791591903290-h5ahvg",
+      "bundleId": "8c1a7c0ac60674c1f2104f2da4e2ac66b2335465e64255fe83d5efa7b8905006",
+      "contextBeforeSynthesisMs": 5967,
+      "privateDraftCallMs": 21546,
+      "privateReviewToPublicationMs": 69022,
+      "answerStartMs": 96535,
+      "completionMs": 99979
+    },
+    {
+      "fixture": "documenso-repo-only",
+      "threadId": "thread-1791591875903-9s4xib",
+      "bundleId": "8c1a7c0ac60674c1f2104f2da4e2ac66b2335465e64255fe83d5efa7b8905006",
+      "contextBeforeSynthesisMs": 7609,
+      "privateDraftCallMs": 67214,
+      "privateReviewToPublicationMs": 84160,
+      "answerStartMs": 158983,
+      "completionMs": 165806
+    },
+    {
+      "fixture": "plane-repo-only",
+      "threadId": "thread-1791597474808-rdyld6",
+      "bundleId": "4149a0cc37f23ffb6b8cbc84ff0a3ebf33b42206b4bf02cdf4100866ee3f2a9b",
+      "contextBeforeSynthesisMs": 6467,
+      "privateDraftCallMs": 127379,
+      "privateReviewToPublicationMs": 127779,
+      "answerStartMs": 261625,
+      "completionMs": 261626
+    }
+  ],
+  "finding": "In the final Plane replay, the two sequential model calls account for255.158s of261.625s. Both calls enable reasoning. Phase timestamps measure whole model calls, not just provider thinking. Context gathering is6.467s.",
+  "nextScopedChange": "Disable reasoning for the unpublished draft; retain the independent reasoning-enabled source review, exact quote gate, bounded replacement, model/source/context/quota/Stop and usage aggregation."
+}

@@ -1,0 +1,89 @@
+{
+  "id": "thread-1791583358474-cm6hrx",
+  "title": "Blast Radius \u00b7 README.md",
+  "messages": [
+    {
+      "clientSubmissionId": "1791583405566-3",
+      "role": "user",
+      "content": "[blast-radius] Which dependent files were verified for a change to this README, and which impact claims remain unverified?\nfile: README.md \u00b7 repo: CoopAI-Corp/coop-dogfood-launch \u00b7 branch: renamed",
+      "timestamp": 1791583407953
+    },
+    {
+      "role": "assistant",
+      "content": "Impact for `README.md` is **unverified** \u2014 no dependents were confirmed in the index this turn.\n\nThat is not the same as zero impact. I can\u2019t list will-break files or invent APIs / testing surfaces from the file body alone.\n\n**Direct impact**\n\nNone confirmed.",
+      "timestamp": 1791583420834,
+      "relatedArtifactId": "evidence-1791583413144-j8do2a",
+      "activity": {
+        "durationMs": 15270,
+        "tools": [
+          {
+            "id": "line-tool:0",
+            "kind": "read",
+            "label": "Read `README.md`",
+            "status": "done"
+          }
+        ],
+        "files": [
+          {
+            "path": "README.md",
+            "action": "read"
+          }
+        ],
+        "steps": [
+          {
+            "id": "line:0:Read `README.md`",
+            "content": "Read `README.md`",
+            "status": "completed"
+          }
+        ]
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "evidence-1791583413144-j8do2a",
+      "kind": "blast-radius",
+      "timestamp": 1791583413144,
+      "payload": {
+        "artifactId": "evidence-1791583413144-j8do2a",
+        "evidence": {
+          "file": "README.md",
+          "sourceFiles": [
+            {
+              "path": "README.md",
+              "repoId": "github:CoopAI-Corp/coop-dogfood-launch",
+              "branch": "renamed",
+              "role": "target",
+              "content": "# Coop launch test fixture\n\nPrivate, disposable synthetic source for Coop AI tests. This is not the Coop application or a deployable service. All expected answers must be verified from the selected remote commit.\n",
+              "startLine": 1,
+              "endLine": 4,
+              "truncated": false
+            }
+          ],
+          "sourceEvidenceGathered": true,
+          "directDependents": [],
+          "transitiveDependents": [],
+          "completeness": "minimal",
+          "docsReferences": []
+        },
+        "file": "README.md",
+        "codeHost": "github"
+      }
+    }
+  ],
+  "sessionCostUsd": 0.018495,
+  "createdAt": 1791583358474,
+  "updatedAt": 1791583478381,
+  "messageCount": 2,
+  "repoContext": {
+    "provider": "github",
+    "owner": "CoopAI-Corp",
+    "repo": "coop-dogfood-launch",
+    "branch": "renamed",
+    "scope": "file",
+    "file": "README.md",
+    "fileSource": "remote",
+    "languageId": "markdown"
+  },
+  "draftInput": ""
+}

@@ -1,0 +1,35 @@
+{
+  "capturedAt": "2026-10-09T23:30:12.656146+00:00",
+  "command": "npm run build:extension-dev",
+  "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+  "sourceMapMatches": {
+    "src/context/intentDetector.ts": true,
+    "src/chat/CoopChatSession.ts": true,
+    "src/config/chatSynthesisThinking.ts": true,
+    "src/prompts/blastRadiusSourceLabels.ts": true,
+    "src/prompts/blastRadiusSynthesis.ts": true,
+    "src/chat/blastRadiusSourceReview.ts": true,
+    "src/context/blastRadiusSourceEvidence.ts": true,
+    "src/context/contextBundleEvidence.ts": true,
+    "src/chat/chatResponseEnrichment.ts": true,
+    "src/prompts/systemPrompts.ts": true
+  },
+  "hashes": {
+    "dist/extension.js": "6bac752c4c247f4bf2826a72a5fb4eac3a68ab774ae83263192144081d4d959e",
+    "dist/webview.js": "22cc1e65227dc466d90f3c0e667b19f1469bfcb743a17295d2bb82d136e32b5c",
+    "src/context/blastRadiusSourceEvidence.ts": "cb4b7d22aace550c263099f059c5a733e0b982790a3fcd7eb31c031c757693d3",
+    "src/context/contextBundleEvidence.ts": "49fb8ee3944bde51ffac42eadef8ab7c115e72932aeef74cc224fc11a62fb7e1",
+    "src/context/intentDetector.ts": "bd99d217753599d858bfa3142247b64caa90fc42a83251ed6d53aad0c99b5661",
+    "src/config/chatSynthesisThinking.ts": "a0bbd6174d843dda91dbe237c35f6f8b28fe8f0ae61d0b3a7497f103ededbf40",
+    "src/prompts/blastRadiusSynthesis.ts": "ea96f1b55aa3cb4f05a87e7bfd3c94c9877d3cf84489519f37204e695ef64a90",
+    "src/prompts/blastRadiusSourceLabels.ts": "ce93983c1690431f5ff061f93d78f5cc0476e2a4508f2e1892f676c737ef38b7",
+    "src/webview/evidenceCardSummary.ts": "326ec73c11dffcde2800942f1be398044fb8d90806e8c70f9bba6c25b2950654",
+    "src/chat/CoopChatSession.ts": "a0cce01b0fee066c66cfae5bca1063508ab8dc850ca29b92309933d809e2d977",
+    "src/prompts/systemPrompts.ts": "7c6fb53815b4e5a02924a100919102a2dedd6714eb4af14f920973e2228377aa",
+    "src/api/ModelRouter.ts": "a2f766ce98eeba99262b13bef90f1e90b004ba16f3d508b1474298b7e30c9fac",
+    "src/chat/blastRadiusSourceReview.ts": "85b24985acb8495b3624f97c259f9c658a1acbbf3e7a27661604c6214ba27646",
+    "src/chat/blastRadiusSourceReview.test.ts": "fd3d18b13ebfca7ef1d2bda3bed4d8add83063eded4c647ed998029f0120098f",
+    "src/chat/chatResponseEnrichment.ts": "431b4c2d5b0711d28429374d2ce41b0fd9db2ddc806c32f96f159261490a5a0b"
+  },
+  "backendVerifiedAt": "2026-10-09T23:39:25.452626+00:00"
+}

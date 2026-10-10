@@ -1,0 +1,76 @@
+{
+  "recordedAt": "2026-10-10T00:23:51.181342+00:00",
+  "basis": "Independent selected-ref source snapshots; checklist for interpreting live answers, not product repository context.",
+  "documensoChecks": [
+    {
+      "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+      "lines": [
+        108,
+        110
+      ],
+      "fact": "Changed envelope-status predicate is DocumentStatus.PENDING."
+    },
+    {
+      "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+      "lines": [
+        25,
+        55
+      ],
+      "fact": "getDocumentByToken/getRecipientByToken internals unread; all-recipient ReadStatus.OPENED and action-auth checks precede calls."
+    },
+    {
+      "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+      "lines": [
+        61,
+        84
+      ],
+      "fact": "Recipient REJECTED is skipped; field query limits type SIGNATURE and inserted false; actual call follows."
+    },
+    {
+      "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+      "lines": [
+        112,
+        180
+      ],
+      "fact": "Expiry helper unread; either recipient SIGNED rejects; inserted rejects; recipientId null rejects; per-type fieldMeta validation and validateFieldAuth remain."
+    },
+    {
+      "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+      "lines": [
+        203,
+        232
+      ],
+      "fact": "Signature input guards are conditional on signature fields; read-only guard requires readOnly AND type not in AUTO_SIGNABLE_FIELD_TYPES before checking default-value validity."
+    },
+    {
+      "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+      "lines": [
+        236,
+        263
+      ],
+      "fact": "Field update precedes if(isSignatureField) upsert. Create and update differ; relax status does not establish inevitable overwrite."
+    },
+    {
+      "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+      "lines": [
+        89,
+        97
+      ],
+      "fact": "AppError is rethrown; only other caught errors become UNKNOWN_ERROR."
+    },
+    {
+      "path": "packages/trpc/server/field-router/router.ts",
+      "lines": [
+        615,
+        633
+      ],
+      "fact": "Actual delegation uses optional ctx.user.id; unread procedure/schema policy cannot be inferred from names or optionality."
+    }
+  ],
+  "globalLimits": [
+    "Do not assume stored-data invariants from lifecycle/status labels.",
+    "Do not infer complete call coverage from the capped dependency list.",
+    "Do not let a pre-ship question contain an unsupported factual premise.",
+    "Code citations must match attached full bodies, selected ref, and native revealed range."
+  ]
+}

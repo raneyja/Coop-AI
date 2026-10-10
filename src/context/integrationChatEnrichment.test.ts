@@ -2,6 +2,27 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ContextFetchRequest, ContextFetchResult } from "./requestBatcher";
 
+test("Knowledge Gaps documentation jobs search the subsystem instead of question scaffolding", async () => {
+  const { enrichChatContextWithIntegrations } = require("./integrationChatEnrichment") as typeof import("./integrationChatEnrichment");
+  const queries: string[][] = [];
+  const focusTerms = ["work-item state validation", "state", "validation"];
+  await enrichChatContextWithIntegrations({
+    result: {requestId: "gaps-focus", type: "file_metadata", data: {}, fetchedAt: new Date()},
+    request: {id: "gaps-focus", type: "file_metadata", params: {quickAction: "knowledge-gaps", fetchIntegrations: ["confluence", "notion", "google-docs"]}, intent: {context: {queryText: "Before changing work-item state validation, which unanswered questions need documentation?"}}} as ContextFetchRequest,
+    owner: "org", repo: "fixture", extraSearchTerms: focusTerms,
+    jobs: [{capability: "docs", verb: "search", terms: ["unanswered questions"]}],
+    secrets: {} as never, codeHostRouter: {} as never,
+    integrations: {confluence: true, notion: true, googleDocs: true},
+    deps: {
+      fetchConfluenceSearchContext: async options => { queries.push(options.extraTerms ?? []); return {pages: []} as never; },
+      fetchNotionSearchContext: async options => { queries.push(options.extraTerms ?? []); return {pages: []} as never; },
+      fetchGoogleDocsSearchContext: async options => { queries.push(options.extraTerms ?? []); return {documents: []} as never; }
+    }
+  });
+  assert.equal(queries.length, 3);
+  queries.forEach(query => assert.deepEqual(query, focusTerms));
+});
+
 test("job-scoped Google Docs enrichment preserves the raw canonical document URL", async () => {
   const { enrichChatContextWithIntegrations } = require("./integrationChatEnrichment") as typeof import("./integrationChatEnrichment");
   const ask = "Read https://docs.google.com/document/d/known-doc/edit and summarize its body.";

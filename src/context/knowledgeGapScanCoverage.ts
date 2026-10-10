@@ -44,9 +44,14 @@ export function knowledgeGapScanCoverageFromJobScan(
   if (!jobScan) {
     return undefined;
   }
-  const realGaps = knowledgeGapScanGapsWithoutInfra(jobScan.gaps);
+  const realGaps = knowledgeGapScanGapsWithoutInfra(jobScan.gaps).filter(gap =>
+    !gap || typeof gap !== "object" || (gap as { type?: unknown }).type !== "focus_search_miss"
+  );
   if (realGaps.length > 0) {
     return "gaps_found";
+  }
+  if (jobScan.gaps?.some(gap => gap && typeof gap === "object" && (gap as { type?: unknown }).type === "focus_search_miss")) {
+    return "scan_incomplete";
   }
   if (isKnowledgeGapScanCoverage(jobScan.scanCoverage)) {
     return jobScan.scanCoverage;

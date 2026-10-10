@@ -5,6 +5,7 @@
 
 import { isTestPath } from "../indexing/evidencePathNoise";
 import { focusQueryForRetrieval } from "./userFocusQuery";
+import { understandFocusQueries } from "./understandRepoSourceEvidence";
 
 const MAX_TOPIC_QUERIES = 4;
 /** Cap parallel index searches (soft gather budget). */
@@ -156,6 +157,8 @@ function expandOnboardingTopic(topic: string): string[] {
 
 /** Queries actually sent to the index (cap 3). Auth → authentication, not “API auth”. */
 export function onboardingIndexQueries(focus: string | undefined): string[] {
+  const components = understandFocusQueries(focus);
+  if (components) return components;
   const topics = extractOnboardingTopicQueries(focus);
   const out: string[] = [];
   const seen = new Set<string>();

@@ -53,7 +53,10 @@ const GAPS_FOCUS_META_TOKENS = new Set([
   "this",
   "that",
   "area",
-  "areas"
+  "areas",
+  "before", "changing", "change", "rules", "rule", "establish", "code", "can", "we",
+  "unanswered", "questions", "question", "allowed", "need", "needs", "tests", "test",
+  "behavior", "known", "unknown", "documented", "still"
 ]);
 
 export type KnowledgeGapsAuditScope = {
@@ -78,12 +81,22 @@ export function knowledgeGapsGatherQuery(userFocus?: string): string | undefined
   return focusQueryForRetrieval(userFocus);
 }
 
+/** Code-rule audits have a different answer contract from repository health scans. */
+export function isKnowledgeGapsCodeRuleAudit(userFocus?: string): boolean {
+  return Boolean(knowledgeGapsGatherQuery(userFocus) &&
+    /\b(?:rules?|behavio[u]?r|validat\w*)\b/i.test(userFocus ?? "") &&
+    /\b(?:code|source|implementation)\b/i.test(userFocus ?? ""));
+}
+
 /** Strip Gaps question framing + trailing punctuation so topics are subsystems. */
 export function stripKnowledgeGapsTopicFraming(text: string): string {
   return text
+    // The object being changed is the subsystem; the remainder asks how to audit it.
+    .replace(/^(?:before|when)\s+(?:changing|editing|modifying|updating)\s+(.+?)[,;].*$/i, "$1")
     .replace(GAPS_QUESTION_FRAMING, "")
     .replace(FOCUS_FRAMING_PREFIX, "")
     .replace(TRAILING_AUDIT_QUESTION, "")
+    .replace(/\s*[,;]\s*(?:which|what|how|can|do)\b.*$/i, "")
     .replace(/[?!.]+$/g, "")
     .trim();
 }
@@ -145,10 +158,7 @@ export function openFileRelatedToGapsFocus(
   const normalized = path.replace(/\\/g, "/").toLowerCase();
   // Prefer topic content tokens so "documentation" in a verbose ask doesn't
   // falsely relate every docs/ helper file.
-  const tokens = knowledgeGapsFocusTopics(userFocus).flatMap((topic) => [
-    ...knowledgeGapsTopicContentTokens(topic),
-    ...topicIndexSynonyms(topic).map((syn) => syn.toLowerCase())
-  ]);
+  const tokens = knowledgeGapsFocusTopics(userFocus).flatMap(knowledgeGapsTopicContentTokens);
   const fallback = tokenizeFocusTerms(gather).filter(
     (token) => token.length >= 4 && !GAPS_FOCUS_META_TOKENS.has(token)
   );
@@ -239,7 +249,14 @@ export function knowledgeGapsFocusGatherTerms(userFocus?: string): string[] {
   return terms.slice(0, 12);
 }
 
-/** Index queries for Gaps — topics + synonyms, never hunt-shortened `"Focus"`. */
+/** Filename leads use the topic's nouns, not question scaffolding. No repo/path assumptions. */
+export function knowledgeGapsFilenameQueries(userFocus?: string): string[] {
+  const topics = knowledgeGapsFocusTopics(userFocus);
+  return [...new Set(topics.flatMap(knowledgeGapsTopicContentTokens))]
+    .filter(token => !token.includes("/")).slice(0, 4);
+}
+
+/** Index queries derive only from the user's topics and terms. */
 export function knowledgeGapsIndexQueries(userFocus?: string): string[] {
   const topics = knowledgeGapsFocusTopics(userFocus);
   const terms = knowledgeGapsFocusGatherTerms(userFocus);
@@ -259,127 +276,11 @@ export function knowledgeGapsIndexQueries(userFocus?: string): string[] {
   };
   for (const topic of topics) {
     push(topic);
-    for (const synonym of topicIndexSynonyms(topic)) {
-      push(synonym);
-    }
   }
   for (const term of terms) {
     push(term);
   }
   return out.slice(0, 8);
-}
-
-const DISTINCTIVE_TOPIC_TOKENS = new Set([
-  "agent",
-  "slack",
-  "jira",
-  "hunt",
-  "loop",
-  "orchestrator",
-  "webhook",
-  "auth"
-]);
-
-export function isHuntLocateGapsAsk(text: string): boolean {
-  const lower = text.toLowerCase();
-  return (
-    /\bhunt\b/.test(lower) ||
-    /\blocate\b/.test(lower) ||
-    /api[-\s]?error/.test(lower) ||
-    /api returned an error/.test(lower) ||
-    /searchquery/.test(lower) ||
-    /agentorchestrator/.test(lower)
-  );
-}
-
-function topicIndexSynonyms(topic: string): string[] {
-  const lower = topic.toLowerCase();
-  const extra: string[] = [];
-  if (/\bhunt\b|\bloop\b|\bagent\b|\blocate\b/i.test(lower) || isHuntLocateGapsAsk(lower)) {
-    extra.push("orchestrator", "agent", "searchQuery", "AgentOrchestrator");
-  }
-  if (/\bslack\b/i.test(lower)) {
-    extra.push("search_slack", "slack");
-  }
-  if (/\bjira\b/i.test(lower)) {
-    extra.push("search_jira", "jira");
-  }
-  return extra;
-}
-
-function topicHasCodeEvidence(
-  topic: string,
-  hits: string[],
-  bodies?: Array<{ path: string; content?: string }>
-): boolean {
-  const tokens = [
-    ...knowledgeGapsTopicContentTokens(topic),
-    ...topicIndexSynonyms(topic).map((syn) => syn.toLowerCase())
-  ];
-  const uniqueTokens = [...new Set(tokens.filter((token) => token.length >= 4))];
-  const pathHaystacks = hits.map((path) => path.replace(/\\/g, "/").toLowerCase());
-  const bodyHaystacks = (bodies ?? []).map(
-    (file) => `${file.path}\n${file.content ?? ""}`.toLowerCase()
-  );
-  const haystacks = [...pathHaystacks, ...bodyHaystacks];
-  if (haystacks.length === 0) {
-    return false;
-  }
-  const phrase = topic.toLowerCase().replace(/[^a-z0-9]+/g, "");
-  if (phrase.length >= 6) {
-    const phraseHit = haystacks.some((hay) => hay.replace(/[^a-z0-9]/g, "").includes(phrase));
-    if (phraseHit) {
-      return true;
-    }
-  }
-  if (uniqueTokens.length === 0) {
-    return false;
-  }
-  return haystacks.some((hay) => {
-    const matched = uniqueTokens.filter((token) => hay.includes(token));
-    if (matched.length === 0) {
-      return false;
-    }
-    if (uniqueTokens.length === 1) {
-      return matched.length === 1;
-    }
-    return (
-      matched.length >= 2 ||
-      matched.some((token) => token.length >= 5 || DISTINCTIVE_TOPIC_TOKENS.has(token))
-    );
-  });
-}
-
-function huntEvidenceClassStubs(topic: string): Array<Record<string, unknown>> {
-  return [
-    {
-      type: "wrong_file_evidence",
-      priority: "high",
-      topic,
-      message:
-        "Hunt ranking can attach the wrong file (UI, OpenAPI, converters) instead of the serializer/validate reject for the asked field."
-    },
-    {
-      type: "canned_miss",
-      priority: "high",
-      topic,
-      message:
-        "Hunt can post a canned miss before reading validate() / ValidationError for the asked field."
-    },
-    {
-      type: "ui_for_api",
-      priority: "medium",
-      topic,
-      message: "On-call hunt/onboard can treat a frontend modal or store as the API."
-    },
-    {
-      type: "default_on_risk",
-      priority: "medium",
-      topic,
-      message:
-        "Default-on hunt for API-error locates still has evidence-class risk (wrong file, miss, UI-for-API)."
-    }
-  ];
 }
 
 /**
@@ -400,19 +301,8 @@ export function knowledgeGapsFocusTopicGapStubs(options: {
   );
   const bodies = options.focusFiles ?? [];
   const anyHits = hits.length > 0 || bodies.some((file) => (file.content ?? "").trim());
-  const huntAsk = isHuntLocateGapsAsk(`${options.userFocus ?? ""} ${topics.join(" ")}`);
   const gaps: Array<Record<string, unknown>> = [];
   for (const topic of topics) {
-    const huntTopic = isHuntLocateGapsAsk(topic) || (huntAsk && topics.length === 1);
-    if (huntTopic) {
-      gaps.push(...huntEvidenceClassStubs(topic));
-      continue;
-    }
-    if (topicHasCodeEvidence(topic, hits, bodies)) {
-      // A source body proves implementation, not missing documentation or a
-      // default-on operational risk. Those findings need independent evidence.
-      continue;
-    }
     if (anyHits) {
       // Partial retrieval cannot establish that docs/runbooks are thin.
       continue;

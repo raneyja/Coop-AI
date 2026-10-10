@@ -12,6 +12,7 @@ import type {
   SlackSearchEvidence
 } from "../context/contextBundleEvidence";
 import { formatEvidenceStaleness } from "../context/evidenceStaleness";
+import { knowledgeGapScanCoverageFromJobScan } from "../context/knowledgeGapScanCoverage";
 import {
   blastRadiusSourceLabelCodeowners,
   blastRadiusSourceLabelConfluence,
@@ -46,6 +47,7 @@ import {
   knowledgeGapsSourceLabelNotion,
   knowledgeGapsSourceLabelOwnership,
   knowledgeGapsSourceLabelScan,
+  knowledgeGapsSourceLabelCode,
   knowledgeGapsSourceLabelSlack,
   knowledgeGapsSourceLabelTeams
 } from "../prompts/knowledgeGapsSourceLabels";
@@ -457,6 +459,12 @@ export function summarizeBlastRadius(
   const graphSource = evidence.graphMeta?.source;
   const verifiedSource = verifiedRemoteBlastGraphSource(evidence);
   const trustedRemoteGraph = hasVerifiedRemoteBlastDependents(evidence);
+  const callerBodies = (evidence.sourceFiles ?? []).filter(source =>
+    source.role === "dependent" && source.content.trim() && !source.truncated &&
+    [...evidence.directDependents ?? [], ...evidence.transitiveDependents ?? []].includes(source.path));
+  const callerBodyCount = new Set(callerBodies.map(source => source.path)).size;
+  const fullTargetBody = evidence.sourceFiles?.some(source =>
+    source.role === "target" && source.path === file && source.content.trim() && !source.truncated);
   const lightningDisabled = evidence.graphMeta?.lightningEnabled === false;
   const hasOtherSignals =
     !!evidence.graphMeta ||
@@ -469,14 +477,12 @@ export function summarizeBlastRadius(
 
   let quality: EvidenceQuality;
   let qualityReason: string;
-  if (dependentCount > 0 && (prCount > 0 || ownerCount > 0 || testCount > 0 || trustedRemoteGraph)) {
+  if (dependentCount > 0 && trustedRemoteGraph && fullTargetBody && callerBodyCount >= dependentCount) {
     quality = "strong";
-    qualityReason = trustedRemoteGraph
-      ? `Verified ${verifiedSource ?? graphSource ?? "import-parse"} dependency graph identified ${dependentCount} code dependent(s).`
-      : "Dependency impact is backed by dependents plus active PR, test, or ownership evidence.";
+    qualityReason = `Verified ${verifiedSource ?? graphSource ?? "import-parse"} file relationships; opened the target and ${callerBodyCount} dependent source file(s). Total coverage remains unverified.`;
   } else if (dependentCount > 0) {
     quality = "medium";
-    qualityReason = "Dependency graph shows impact paths, but owner/release context is limited.";
+    qualityReason = `Dependency relations identified ${dependentCount} file(s); ${callerBodyCount} complete dependent source file(s) were attached. Behavioral impact requires source verification.`;
   } else if (hasOtherSignals) {
     quality = "weak";
     qualityReason = "Supporting signals exist, but no direct dependents were indexed for this file.";
@@ -490,7 +496,7 @@ export function summarizeBlastRadius(
   const primaryFinding =
     dependentCount > 0
       ? namedCaller
-        ? `${file}: ${directCount} caller(s) of ${namedCaller}${transitiveCount ? ` and ${transitiveCount} transitive` : ""}${displayGraphSource ? ` (source: ${displayGraphSource})` : ""}.`
+        ? `${file}: ${directCount} file dependent(s) relevant to ${namedCaller}${transitiveCount ? ` and ${transitiveCount} transitive` : ""}${displayGraphSource ? ` (source: ${displayGraphSource})` : ""}. Symbol binding and behavioral impact remain unverified.`
         : `${file} has ${directCount} code dependent(s)${transitiveCount ? ` and ${transitiveCount} transitive code dependent(s)` : ""}${docsCount ? ` plus ${docsCount} docs/reference hit(s)` : ""}${displayGraphSource ? ` (source: ${displayGraphSource})` : ""}.`
       : docsCount > 0
         ? `${file} has no code dependents in the index, but ${docsCount} docs/reference file(s) mention it.`
@@ -499,6 +505,9 @@ export function summarizeBlastRadius(
   const limitations = dedupeLimitations([
     dependentCount === 0
       ? "Impact unverified — no dependents found in index; do not assume zero blast radius."
+      : undefined,
+    dependentCount > 0 && callerBodyCount < dependentCount
+      ? "Some dependent bodies were not opened completely; their guards and behavioral impact remain unverified."
       : undefined,
     // Verified import-parse/scip/zoekt callers are the product win — do not hedge with
     // Lightning-off / partial-index copy when remote callers are already proven.
@@ -662,6 +671,9 @@ export function summarizeKnowledgeGaps(
   const host = resolveEvidenceCodeHost(codeHost);
   const scan = evidence.jobScan;
   const foundGaps = scan?.foundGaps ?? scan?.gaps?.length ?? 0;
+  const reviewedPaths = [...new Set((evidence.focusFiles ?? []).filter(file => file.content?.trim()).map(file => file.path))];
+  const onlySearchMisses = Boolean(scan?.gaps?.length && scan.gaps.every(gap => gap.type === "focus_search_miss"));
+  const incompleteEmptyScan = knowledgeGapScanCoverageFromJobScan(scan) === "scan_incomplete" && foundGaps === 0;
   const highPriority = scan?.highPriority ?? 0;
   const confluenceCount = confluence?.pages.length ?? 0;
   const jiraCount = jira?.issues.length ?? 0;
@@ -682,7 +694,15 @@ export function summarizeKnowledgeGaps(
 
   let quality: EvidenceQuality;
   let qualityReason: string;
-  if (scan && (highPriority > 0 || externalSignalCount >= 2 || ownershipCount > 0)) {
+  if ((onlySearchMisses || incompleteEmptyScan) && reviewedPaths.length === 0 && externalSignalCount === 0) {
+    quality = "limited";
+    qualityReason = "Focused searches returned no source bodies or documentation; contributor scores do not establish code rules or missing policy.";
+  } else if (reviewedPaths.length > 0) {
+    quality = externalSignalCount > 0 ? "strong" : "medium";
+    qualityReason = externalSignalCount > 0
+      ? "Reviewed source is accompanied by documentation evidence; claims remain limited to the attached bodies."
+      : "Implementation source was reviewed; intended policy and documentation coverage remain unverified.";
+  } else if (scan && (highPriority > 0 || externalSignalCount >= 2 || ownershipCount > 0)) {
     quality = "strong";
     qualityReason =
       "Automated gap scan is corroborated by additional documentation or ownership evidence.";
@@ -697,7 +717,11 @@ export function summarizeKnowledgeGaps(
     qualityReason = "No structured gap evidence was attached for this area.";
   }
 
-  const primaryFinding = scan
+  const primaryFinding = reviewedPaths.length
+    ? `Reviewed ${reviewedPaths.length} source file(s); code rules can be established from the attached lines.`
+    : onlySearchMisses || incompleteEmptyScan
+      ? "No relevant source bodies were retrieved for this topic. Search misses are coverage limits, not confirmed knowledge gaps."
+      : scan
     ? foundGaps > 0
       ? `${foundGaps} knowledge gap(s) detected${highPriority > 0 ? `, including ${highPriority} high-priority gap(s)` : ""}.`
       : "Automated scan returned no explicit knowledge gaps in this pass."
@@ -705,7 +729,8 @@ export function summarizeKnowledgeGaps(
 
   const limitations = dedupeLimitations([
     !scan ? "No automated knowledge-gap scan results were included." : undefined,
-    scan && foundGaps === 0 ? "Structured scan completed with no explicit gaps in this pass." : undefined,
+    incompleteEmptyScan ? "The scan did not verify this topic; empty results do not establish absence."
+      : scan && foundGaps === 0 ? "Structured scan completed with no explicit gaps in this pass." : undefined,
     confluence && confluenceCount === 0 ? "No Confluence documentation pages were found for this scope." : undefined,
     jira && jiraCount === 0 ? "No Jira issues were found to anchor work tracking context." : undefined,
     slack && slackCount === 0 ? "No Slack discussion evidence was found for this area." : undefined,
@@ -724,6 +749,10 @@ export function summarizeKnowledgeGaps(
   ]);
 
   const sourceContributions: EvidenceSourceContribution[] = [];
+  if (reviewedPaths.length) {
+    sourceContributions.push({ provider: host ?? "code-host", label: knowledgeGapsSourceLabelCode(),
+      contribution: `Read source bodies for ${reviewedPaths.join(", ")}; source windows preserve original line numbers.`, relevance: "direct" });
+  }
   if (scan) {
     sourceContributions.push({
       provider: "scan",

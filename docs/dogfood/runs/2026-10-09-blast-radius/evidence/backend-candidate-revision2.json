@@ -1,0 +1,22 @@
+{
+  "preparedAt": "2026-10-09T21:47:48.135930+00:00",
+  "candidate": "/private/tmp/coop-blast-backend-candidate-20261009",
+  "baselineActiveDeployment": "7bf7d892-2ba5-4c16-a17c-943537bdb501",
+  "preservedProductionSource": "email-48168d",
+  "baselinePromptHashes": {
+    "src/prompts/knowledgeGapsSynthesis.ts": "8b778ccc60b36c95fc96917175a9b6adf344f9a3e0aecfa695e52a75f90278fb",
+    "src/context/knowledgeGapsFocus.ts": "fa45941131968de1aa93425dfa0228cf45e76a14990fd92d1157d8189e969b65",
+    "src/prompts/knowledgeGapsSourceLabels.ts": "e74d50c09b81a4236be6d209917e564f5da4c1f33addf960d8d449f112a49f9e",
+    "src/prompts/systemPrompts.ts": "31f9a3094f57fec66a240934475bf397d76256c7ec23fbaef02f521801d33cb8"
+  },
+  "runtimeChanges": [
+    "Blast-only source-backed system contract and matching ModelRouter discriminator"
+  ],
+  "candidateSystemPromptSha256": "46f88e92f44cecf83143b0932d8e0a571007c9e1a0a1fd4b5377def17314d2da",
+  "deployed": true,
+  "authorizedAt": "2026-10-09T22:09:28.335050+00:00",
+  "authorization": "Jon approved scoped backend deployment in this chat.",
+  "deploymentId": "efe257d9-6c9c-469c-af6c-b1eed85c5678",
+  "revision": 2,
+  "candidateRouterSha256": "48d4da888115c3ba3076718efc4ee981d789dd073175de3c01e795dc417fb767"
+}

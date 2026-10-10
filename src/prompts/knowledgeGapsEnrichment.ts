@@ -1,5 +1,8 @@
 import { sanitizeIntegrationSnippet } from "../context/integrationDocRelevance";
 import { tryParseCitationLocator, tryParseFenceInfoLocator } from "../webview/lib/codeCitationLocator";
+import { isKnowledgeGapsCodeRuleAudit } from "../context/knowledgeGapsFocus";
+import { collapseProseBlankLines, mapMarkdownProse, splitMarkdownBlocks, trimMarkdownProse } from "./markdownProse";
+import { verifySourceCitationQuotes } from "./sourceCitationIntegrity";
 
 export type IntegrationPageForEnrichment = {
   title: string;
@@ -21,6 +24,7 @@ export type IntegrationDocsEnrichmentContext = {
 };
 
 export type KnowledgeGapsEnrichmentContext = IntegrationDocsEnrichmentContext & {
+  userFocus?: string;
   jobScanGaps?: KnowledgeGapScanGap[];
   focusFiles?: Array<{ path: string; content?: string; startLine?: number }>;
   dependencyGraph?: { source?: string; directDependents?: string[] };
@@ -30,6 +34,62 @@ export type KnowledgeGapsEnrichmentContext = IntegrationDocsEnrichmentContext & 
 const CONFLUENCE_REVIEWED_HEADING = "**Confluence pages reviewed**";
 const NOTION_REVIEWED_HEADING = "**Notion pages reviewed**";
 const GOOGLE_DOCS_REVIEWED_HEADING = "**Google Docs reviewed**";
+
+export const KNOWLEDGE_GAPS_SOURCE_SCOPE_LIMIT =
+  "This review is limited to the attached source and documentation evidence. It does not establish complete repository coverage; behavior and policy beyond those sources remain unverified.";
+
+export function knowledgeGapsSourceAuditSections(content: string): { review: number; questions: number } | undefined {
+  let offset = 0;
+  let review: number | undefined, questions: number | undefined;
+  for (const block of splitMarkdownBlocks(content)) {
+    if (block.kind === "prose") {
+      for (const heading of block.text.matchAll(/^\*\*(Source-grounded review|Open questions)\*\*[ \t]*\r?$/gm)) {
+        if (heading[1] === "Source-grounded review" && review === undefined) review = offset + heading.index!;
+        if (heading[1] === "Open questions" && questions === undefined) questions = offset + heading.index!;
+      }
+    }
+    offset += block.text.length;
+  }
+  return review !== undefined && questions !== undefined && questions > review ? { review, questions } : undefined;
+}
+
+/** The client owns the coverage boundary; a generated opening cannot expand it. */
+export function scopeKnowledgeGapsSourceAudit(content: string): string {
+  const sections = knowledgeGapsSourceAuditSections(content);
+  const prefix = KNOWLEDGE_GAPS_SOURCE_SCOPE_LIMIT + "\n\n";
+  const body = sections ? content.slice(sections.review) : content.startsWith(prefix) ? content.slice(prefix.length) : content;
+  return prefix + body;
+}
+
+export function verifyKnowledgeGapsSourceAudit(content: string, files?: KnowledgeGapsEnrichmentContext["focusFiles"]): {
+  content: string; verifiedQuotes?: number; failure?: "incomplete" | "unverified-citation";
+} {
+  const verified = verifySourceCitationQuotes(content, files);
+  if (verified.invalidQuotes) return { content: verified.content, failure: "unverified-citation" };
+  if (splitMarkdownBlocks(verified.content).some(block => block.kind === "code" &&
+      (!block.closed || tryParseFenceInfoLocator(block.info)?.startLine === undefined))) {
+    return { content: verified.content, failure: "unverified-citation" };
+  }
+  const sections = knowledgeGapsSourceAuditSections(verified.content);
+  if (!sections || !verified.content.slice(sections.questions + "**Open questions**".length).trim()) {
+    return { content: verified.content, failure: "incomplete" };
+  }
+  const review = verified.content.slice(sections.review + "**Source-grounded review**".length, sections.questions);
+  let pendingFinding = false, citedFinding = false;
+  for (const block of splitMarkdownBlocks(review)) {
+    if (block.kind === "code") {
+      if (!block.closed || tryParseFenceInfoLocator(block.info)?.startLine === undefined) {
+        return { content: verified.content, failure: "unverified-citation" };
+      }
+      if (pendingFinding) citedFinding = true;
+      pendingFinding = false;
+    } else if (block.text.trim()) {
+      pendingFinding = true;
+    }
+  }
+  return { content: verified.content, verifiedQuotes: verified.verifiedQuotes,
+    ...(pendingFinding || !citedFinding || !verified.verifiedQuotes ? { failure: "incomplete" as const } : {}) };
+}
 
 const DOCUMENTATION_SCAN_GAP_TYPES = new Set([
   "missing_docs",
@@ -56,11 +116,25 @@ const FILE_PATH_RE =
   /\b((?:src|docs|examples|test|integration|lib)\/[\w./-]+|[A-Za-z][\w.-]*\.(?:ts|tsx|js|jsx|py|md|json|yml|yaml))\b/g;
 
 function normalizeFieldLines(content: string): string {
-  return content.replace(FIELD_LINE_RE, (_, label, body) => {
+  return mapMarkdownProse(content, prose => prose.replace(FIELD_LINE_RE, (_, label, body) => {
     const normalized = label.toLowerCase() === "what to check" ? "What to check" : "Open question";
     const cleaned = body.replace(/^\*\*\s*/, "").trim();
     return cleaned ? `- **${normalized}:** ${cleaned}` : `- **${normalized}:**`;
-  });
+  }));
+}
+
+function codeLineIndexes(content: string): Set<number> {
+  const indexes = new Set<number>();
+  let line = 0;
+  for (const block of splitMarkdownBlocks(content)) {
+    const newlines = (block.text.match(/\n/g) ?? []).length;
+    if (block.kind === "code") {
+      const end = line + newlines - (block.text.endsWith("\n") ? 1 : 0);
+      for (let index = line; index <= end; index++) indexes.add(index);
+    }
+    line += newlines;
+  }
+  return indexes;
 }
 
 function stripBoldHeading(line: string): string {
@@ -299,26 +373,24 @@ function rebuildSummaryForZeroScanGaps(content: string, context?: KnowledgeGapsE
     return content;
   }
 
-  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const lines = content.split("\n");
+  const codeLines = codeLineIndexes(content);
   const docLabel = attachedDocSourceLabel(context);
   const summaryBody = `Automated scan found no structured gaps in this pass; attached ${docLabel} doc review (${pageCount} page(s)) suggests follow-up areas under **Documentation gaps** below.`;
   if (/automated scan found no structured gaps/i.test(content)) {
     return content;
   }
 
-  const summaryIdx = lines.findIndex((line) => stripBoldHeading(line.trim()) === "summary");
+  const summaryIdx = lines.findIndex((line, index) => !codeLines.has(index) && stripBoldHeading(line.trim()) === "summary");
   if (summaryIdx >= 0) {
     let end = summaryIdx + 1;
-    while (end < lines.length && !isMainSectionLine(lines[end].trim())) {
+    while (end < lines.length && (codeLines.has(end) || !isMainSectionLine(lines[end].trim()))) {
       end += 1;
     }
-    return [...lines.slice(0, summaryIdx + 1), "", summaryBody, "", ...lines.slice(end)]
-      .join("\n")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
+    return collapseProseBlankLines([...lines.slice(0, summaryIdx + 1), "", summaryBody, "", ...lines.slice(end)].join("\n"));
   }
 
-  return `${summaryBody}\n\n${content}`.replace(/\n{3,}/g, "\n\n").trim();
+  return collapseProseBlankLines(`${summaryBody}\n\n${content}`);
 }
 
 function documentationBlocksFromContext(context?: KnowledgeGapsEnrichmentContext): string[] {
@@ -357,37 +429,32 @@ function rebuildDocumentationGapsSection(content: string, blocks: string[]): str
   if (blocks.length === 0) {
     blocks = ["Documentation coverage is unknown in this pass. No reviewed documentation or supported documentation gap is attached; this does not establish that documentation is absent."];
   }
-  const lines = content.replace(/\r\n/g, "\n").split("\n");
-  const docIdx = lines.findIndex((line) => stripBoldHeading(line) === "documentation gaps");
+  const lines = content.split("\n");
+  const codeLines = codeLineIndexes(content);
+  const docIdx = lines.findIndex((line, index) => !codeLines.has(index) && stripBoldHeading(line) === "documentation gaps");
   const sectionLines = ["**Documentation gaps**", "", ...blocks.flatMap((block) => [block, ""])];
 
   if (docIdx === -1) {
-    const summaryIdx = lines.findIndex((line) => stripBoldHeading(line) === "summary");
+    const summaryIdx = lines.findIndex((line, index) => !codeLines.has(index) && stripBoldHeading(line) === "summary");
     let insertAt = lines.length;
     if (summaryIdx >= 0) {
       insertAt = summaryIdx + 1;
-      while (insertAt < lines.length && lines[insertAt].trim() !== "" && !isMainSectionLine(lines[insertAt].trim())) {
+      while (insertAt < lines.length && (codeLines.has(insertAt) || (lines[insertAt].trim() !== "" && !isMainSectionLine(lines[insertAt].trim())))) {
         insertAt += 1;
       }
     }
-    return [...lines.slice(0, insertAt), "", ...sectionLines, ...lines.slice(insertAt)]
-      .join("\n")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
+    return collapseProseBlankLines([...lines.slice(0, insertAt), "", ...sectionLines, ...lines.slice(insertAt)].join("\n"));
   }
 
   let end = docIdx + 1;
   while (end < lines.length && lines[end].trim() === "") {
     end += 1;
   }
-  while (end < lines.length && !isMainSectionLine(lines[end].trim())) {
+  while (end < lines.length && (codeLines.has(end) || !isMainSectionLine(lines[end].trim()))) {
     end += 1;
   }
 
-  return [...lines.slice(0, docIdx), ...sectionLines, ...lines.slice(end)]
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return collapseProseBlankLines([...lines.slice(0, docIdx), ...sectionLines, ...lines.slice(end)].join("\n"));
 }
 
 function rebuildMainSection(content: string, heading: string, blocks: string[]): string {
@@ -398,9 +465,10 @@ function rebuildMainSection(content: string, heading: string, blocks: string[]):
   const normalizedHeading = heading.toLowerCase();
   let result = stripMainSection(content, normalizedHeading);
 
-  const lines = result.replace(/\r\n/g, "\n").split("\n");
-  const docIdx = lines.findIndex((line) => stripBoldHeading(line) === "documentation gaps");
-  const recIdx = lines.findIndex((line) => stripBoldHeading(line) === "recommended next steps");
+  const lines = result.split("\n");
+  const codeLines = codeLineIndexes(result);
+  const docIdx = lines.findIndex((line, index) => !codeLines.has(index) && stripBoldHeading(line) === "documentation gaps");
+  const recIdx = lines.findIndex((line, index) => !codeLines.has(index) && stripBoldHeading(line) === "recommended next steps");
   const sectionLines = [heading, "", ...blocks.flatMap((block) => [block, ""])];
 
   let insertAt = recIdx >= 0 ? recIdx : lines.length;
@@ -408,32 +476,25 @@ function rebuildMainSection(content: string, heading: string, blocks: string[]):
     insertAt = lines.length;
   }
 
-  return [...lines.slice(0, insertAt), ...sectionLines, ...lines.slice(insertAt)]
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return collapseProseBlankLines([...lines.slice(0, insertAt), ...sectionLines, ...lines.slice(insertAt)].join("\n"));
 }
 
 function stripStrayReviewSubsectionHeadings(content: string): string {
-  const lines = content.replace(/\r\n/g, "\n").split("\n");
-  const out: string[] = [];
-
-  for (const line of lines) {
-    if (FORBIDDEN_SUBSECTION_HEADERS.has(stripBoldHeading(line.trim()))) {
-      continue;
-    }
-    out.push(line);
-  }
-
-  return out.join("\n");
+  return mapMarkdownProse(content, prose => prose.split("\n")
+    .filter(line => !FORBIDDEN_SUBSECTION_HEADERS.has(stripBoldHeading(line.trim()))).join("\n"));
 }
 
 function stripMainSection(content: string, sectionTitle: string): string {
-  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const lines = content.split("\n");
+  const codeLines = codeLineIndexes(content);
   const out: string[] = [];
   let skipping = false;
 
-  for (const line of lines) {
+  for (const [index, line] of lines.entries()) {
+    if (codeLines.has(index)) {
+      if (!skipping) out.push(line);
+      continue;
+    }
     const trimmed = line.trim();
     if (!skipping && stripBoldHeading(trimmed) === sectionTitle) {
       skipping = true;
@@ -449,16 +510,21 @@ function stripMainSection(content: string, sectionTitle: string): string {
     out.push(line);
   }
 
-  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return collapseProseBlankLines(out.join("\n"));
 }
 
 function normalizeRecommendedNextSteps(content: string): string {
-  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const lines = content.split("\n");
+  const codeLines = codeLineIndexes(content);
   const out: string[] = [];
   let inSection = false;
   let stepNumber = 0;
 
-  for (const line of lines) {
+  for (const [index, line] of lines.entries()) {
+    if (codeLines.has(index)) {
+      out.push(line);
+      continue;
+    }
     const trimmed = line.trim();
 
     if (stripBoldHeading(trimmed) === "recommended next steps") {
@@ -500,20 +566,40 @@ export function enrichKnowledgeGapsResponse(
   content: string,
   context?: KnowledgeGapsEnrichmentContext
 ): string {
+  if (!context?.focusFiles?.some(file => file.content?.trim()) && attachedDocPageCount(context) === 0 &&
+      (context?.userFocus?.trim() || (context?.jobScanGaps?.length && context.jobScanGaps.every(gap => gap.type === "focus_search_miss")))) {
+    return "This pass did not retrieve source or documentation for that topic, so I can’t establish its code rules or intended policy. Search misses do not prove the implementation or documentation is absent.";
+  }
   const documentationBlocks = documentationBlocksFromContext(context);
   const ownershipBlocks = ownershipBlocksFromContext(context);
   const integrationBlocks = integrationBlocksFromContext(context);
-
+  const hasSourceBodies = Boolean(context?.focusFiles?.some(file => file.content?.trim()));
   let result = normalizeFieldLines(content);
   result = stripStrayReviewSubsectionHeadings(result);
-  if (attachedDocPageCount(context) === 0) {
+  if (hasSourceBodies) result = scopeKnowledgeGapsSourceAudit(result);
+  if (isKnowledgeGapsCodeRuleAudit(context?.userFocus)) {
+    const verified = verifyKnowledgeGapsSourceAudit(result, context?.focusFiles);
+    if (verified.failure) {
+      return "This answer did not establish code rules with a complete, verifiable source review. Intended policy and behavior outside the attached evidence remain unverified.";
+    }
+    result = verified.content;
+    for (const section of ["documentation gaps", "ownership & maintenance", "integration & operations", "recommended next steps"]) {
+      result = stripMainSection(result, section);
+    }
+    return appendVerifiedFocusCitation(enrichIntegrationDocsResponse(result, context), context?.focusFiles);
+  }
+  if (attachedDocPageCount(context) === 0 && !hasSourceBodies) {
     result = stripMainSection(result, "summary");
     result = "**Summary**\n\nDocumentation and ownership coverage are limited to the evidence attached in this pass. Missing scan matches do not prove that documentation, CODEOWNERS, or maintainers are absent.\n\n" + result;
   }
   result = rebuildSummaryForZeroScanGaps(result, context);
   result = stripMainSection(result, "ownership & maintenance");
   result = stripMainSection(result, "integration & operations");
-  result = rebuildDocumentationGapsSection(result, documentationBlocks);
+  // Source-derived policy questions live in Open questions and survive scan/doc
+  // normalization. An empty doc search must not overwrite the implementation answer.
+  if (documentationBlocks.length || !hasSourceBodies) {
+    result = rebuildDocumentationGapsSection(result, documentationBlocks);
+  }
   result = rebuildMainSection(result, "**Ownership & maintenance**", ownershipBlocks);
   result = rebuildMainSection(result, "**Integration & operations**", integrationBlocks);
 
@@ -536,10 +622,13 @@ export function enrichKnowledgeGapsResponse(
 }
 
 function appendVerifiedFocusCitation(content: string, files?: KnowledgeGapsEnrichmentContext["focusFiles"]): string {
+  content = alignFocusCitationQuotes(content, files);
   const citedPaths = new Set(content.split("\n").flatMap((line) => {
-    const location = tryParseCitationLocator(line.trim()) ?? tryParseFenceInfoLocator(line.replace(/^\s*```/, "").trim());
+    const fence = line.match(/^\s*```(.*)$/);
+    const location = fence ? tryParseFenceInfoLocator(fence[1].trim()) : tryParseCitationLocator(line.trim());
     return location?.startLine !== undefined ? [location.path] : [];
   }));
+  if (citedPaths.size) return content;
   for (const file of files ?? []) {
     if (citedPaths.has(file.path) || !file.content?.trim() || !Number.isInteger(file.startLine) || Number(file.startLine) < 1) continue;
     // Quote complete original lines only, capped to one small interactive source citation.
@@ -560,23 +649,36 @@ function appendVerifiedFocusCitation(content: string, files?: KnowledgeGapsEnric
   return content;
 }
 
+/** Bind quoted code to exact reviewed lines; model-supplied offsets are only leads. */
+export function alignFocusCitationQuotes(
+  content: string,
+  files?: KnowledgeGapsEnrichmentContext["focusFiles"],
+  onUnmatched?: () => void
+): string {
+  const result = verifySourceCitationQuotes(content, files);
+  for (let index = 0; index < result.invalidQuotes; index++) onUnmatched?.();
+  return result.content;
+}
+
 /** Linkify attached Confluence/Notion/Google Docs titles and file paths in narrative responses. */
 export function enrichIntegrationDocsResponse(
   content: string,
   context?: IntegrationDocsEnrichmentContext
 ): string {
-  let result = content;
-  if (context?.confluencePages?.length) {
-    result = linkifyPageTitles(result, context.confluencePages);
-  }
-  if (context?.notionPages?.length) {
-    result = linkifyPageTitles(result, context.notionPages);
-  }
-  if (context?.googleDocs?.length) {
-    result = linkifyPageTitles(result, context.googleDocs);
-  }
-  result = linkifyFilePaths(result);
-  return result.replace(/\n{3,}/g, "\n\n").trim();
+  return trimMarkdownProse(mapMarkdownProse(content, prose => {
+    let result = prose;
+    if (context?.confluencePages?.length) {
+      result = linkifyPageTitles(result, context.confluencePages);
+    }
+    if (context?.notionPages?.length) {
+      result = linkifyPageTitles(result, context.notionPages);
+    }
+    if (context?.googleDocs?.length) {
+      result = linkifyPageTitles(result, context.googleDocs);
+    }
+    result = linkifyFilePaths(result);
+    return result.replace(/\n{3,}/g, "\n\n");
+  }));
 }
 
 type BundleEntry = { data?: Record<string, unknown> };

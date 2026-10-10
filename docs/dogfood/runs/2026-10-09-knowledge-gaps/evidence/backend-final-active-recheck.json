@@ -1,0 +1,20 @@
+{
+  "checkedAt": "2026-10-09T23:22:55.774510+00:00",
+  "activeBackend": [
+    {
+      "deploymentId": "efe257d9-6c9c-469c-af6c-b1eed85c5678",
+      "status": "SUCCESS",
+      "instances": [
+        {
+          "id": "3563966f-f81d-4169-a3a5-5c7a7254a81b",
+          "status": "REMOVED"
+        },
+        {
+          "id": "2372bcbd-5c5c-4aea-8afc-7274d3a853fb",
+          "status": "RUNNING"
+        }
+      ],
+      "imageDigest": "sha256:c06351d7b4727cc8d1ba89fa1ff3307b9ac04fc3fa08dde3c9196b770422fe16"
+    }
+  ]
+}

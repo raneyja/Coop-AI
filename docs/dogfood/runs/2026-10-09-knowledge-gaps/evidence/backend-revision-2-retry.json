@@ -1,0 +1,8 @@
+{
+  "deploymentId": "6786a8b5-ae1c-4ddc-98eb-9c55ccd629b0",
+  "status": "FAILED",
+  "failure": "Docker Hub node:22-bookworm-slim manifest HEAD returned 429 Too Many Requests before application compilation",
+  "failedAt": "2026-10-09T21:17:48.658457481Z",
+  "activeDeploymentAfterFailure": "788d0aeb-322c-4937-8788-238d5c638188",
+  "decision": "Continue testing latest client source ordering and exact-helper instruction against the first successful compact backend contract; no further retry yet."
+}

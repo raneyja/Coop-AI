@@ -1,3 +1,5 @@
+import { parseSlashCommand } from "../../context/slashCommands";
+
 /** True when streamed assistant text is (or will be) a File:/SEARCH-REPLACE patch. */
 export function looksLikePatchStreamingContent(content: string): boolean {
   const trimmed = content.trim();
@@ -20,13 +22,14 @@ export function looksLikePatchStreamingContent(content: string): boolean {
   return false;
 }
 
-/** User bubble that indicates this turn is /edit (or edit composer). */
+/** User bubble that indicates an edit-mode slash command or edit composer. */
 export function isEditHistoryContent(content: string | undefined): boolean {
   const trimmed = content?.trim() ?? "";
   if (!trimmed) {
     return false;
   }
-  return /^\/edit\b/i.test(trimmed) || /^\[edit\]/i.test(trimmed);
+  const target = parseSlashCommand(trimmed)?.def.target;
+  return /^\[edit\]/i.test(trimmed) || (target?.kind === "composer-mode" && target.mode === "edit");
 }
 
 /**

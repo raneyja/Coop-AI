@@ -199,6 +199,10 @@ import { buildDecisionSynthesisUserPrompt } from "../prompts/decisionSynthesis";
 import { buildOwnershipSynthesisUserPrompt } from "../prompts/ownershipSynthesis";
 import { buildRepoSummarySynthesisUserPrompt } from "../prompts/repoSummarySynthesis";
 import { buildBlastRadiusSynthesisUserPrompt, importOnlyNamedBlastAnswer } from "../prompts/blastRadiusSynthesis";
+import { streamSourceGroundedBlast } from "./blastRadiusSourceReview";
+import { verifySourceCitationQuotes } from "../prompts/sourceCitationIntegrity";
+import { buildKnowledgeGapsContinuationMessage, streamSourceReviewedKnowledgeGaps } from "./knowledgeGapsSourceReview";
+import { gatherBlastRadiusSourceEvidence } from "../context/blastRadiusSourceEvidence";
 import { buildKnowledgeGapsSynthesisUserPrompt } from "../prompts/knowledgeGapsSynthesis";
 import { buildIntegrationSynthesisUserPrompt, countIntegrationResults, emptyIntegrationSlashResponse } from "../prompts/integrationSynthesis";
 import {
@@ -430,6 +434,12 @@ import {
 } from "../context/userFocusQuery";
 import { isolateUnderstandRepoSummary } from "../context/understandRepoDomainAttach";
 import {
+  gatherUnderstandSourceEvidence,
+  understandRequestedRoles,
+  understandFocusCoverage,
+  understandIncompleteFocusMessage
+} from "../context/understandRepoSourceEvidence";
+import {
   understandRepoIndexQueries,
   pickOnboardingTopicAttachPaths,
   rankOnboardingEntryFiles,
@@ -444,7 +454,8 @@ import {
   openFileRelatedToGapsFocus,
   resolveKnowledgeGapsAuditScope
 } from "../context/knowledgeGapsFocus";
-import { readKnowledgeGapsNamedFocus } from "../context/knowledgeGapsNamedFocus";
+import { gatherKnowledgeGapsCodeEvidence, type KnowledgeGapsCodeEvidence } from "../context/knowledgeGapsCodeEvidence";
+import { extractNamedSourceFiles } from "../api/agent/searchQuery";
 import {
   knowledgeGapScanCoverageFromJobScan,
   knowledgeGapScanGapsWithoutInfra
@@ -1232,6 +1243,12 @@ export class CoopChatSession {
       (eventEditor && resolveEditorFile(eventEditor).file) ||
       (resolvedEditor && resolveEditorFile(resolvedEditor).file) ||
       this.currentContext.file;
+    // Citation review opens a different body while preserving the chat target.
+    // Its programmatic selection must not become a range on that target file.
+    if (Date.now() < this.editorContextSuppressedUntil && this.currentContext.file && liveFile &&
+        !isSameRepoFilePath(liveFile, this.currentContext.file)) {
+      return;
+    }
     const nextLines = resolveEditTargetLines({
       dragLines,
       fileContent:
@@ -1565,6 +1582,7 @@ export class CoopChatSession {
     // Canceled integration/search activity is not evidence for the stopped
     // placeholder and must not appear beneath the next plain exchange.
     const stoppedMessage: ChatMessage = {
+      sourceCitationMode: "explicit",
       role: "assistant",
       cancelled: true,
       content: partialText || CHAT_STOPPED_MESSAGE,
@@ -1663,6 +1681,11 @@ export class CoopChatSession {
     }
     const stored = this.threadStore.getThreadById(turn.threadId);
     const title = stored?.title ?? "New Chat";
+    // Sources can be recorded after the turn snapshot, before the user switches
+    // chats. Completing in the background must retain that thread's saved cards.
+    turn.artifacts = [...new Map([
+      ...(stored?.artifacts ?? []), ...turn.artifacts
+    ].map(artifact => [artifact.id, artifact])).values()];
     this.threadStore.setThread(
       turn.threadId,
       retainPatchCardsOnMessages(turn.history),
@@ -1680,7 +1703,18 @@ export class CoopChatSession {
   private async finishTurnAssistantMessage(turn: ChatTurn, finalMessage: ChatMessage): Promise<void> {
     if (!this.threadRuns.isStreamActive(turn)) return;
     let message = finalMessage;
-    try {
+    if (turn.sourceCitationWindows !== undefined) {
+      // A source-backed synthesis has already validated this frozen evidence.
+      // Verify final formatting/patch merging against the same bytes; a later
+      // mutable remote read must not replace the turn's reviewed source.
+      const checked = verifySourceCitationQuotes(finalMessage.content, turn.sourceCitationWindows);
+      if (checked.invalidQuotes || checked.verifiedQuotes < (turn.sourceCitationMinimumQuotes ?? 0)) {
+        if (this.isViewingThread(turn.threadId)) this.sessionCostUsd = turn.sessionCostUsd;
+        this.persistTurnThread(turn);
+        throw new Error("Coop could not publish an answer with altered or missing source quotes. Retry this request.");
+      }
+      message = { ...finalMessage, content: checked.content, sourceCitationMode: "explicit" };
+    } else try {
       const groundedContent = await this.groundAssistantCitationFences(finalMessage.content, turn.context, {
         strictRange:
           turn.context.fileSource === "remote" &&
@@ -2374,6 +2408,9 @@ export class CoopChatSession {
         return;
       case "ui:close-settings":
         this.closeSettingsHandler?.();
+        return;
+      case "ui:report-issue":
+        await vscode.commands.executeCommand("coopAI.reportIssue");
         return;
       case "ui:open-settings": {
         const screen = message.payload?.screen;
@@ -3307,6 +3344,7 @@ export class CoopChatSession {
     if (!owner || !repo) {
       return false;
     }
+    const reviewThreadId = options?.reviewOpen ? this.activeThreadId() : undefined;
     try {
       const remote = await this.options.codeHostRouter.getFileContent(filePath, {
         provider: provider ?? this.preferences.defaultCodeHost,
@@ -3338,6 +3376,15 @@ export class CoopChatSession {
             preserveFocus: options?.preserveFocus ?? false
           });
       this.revealLineInEditor(editor, line, options?.endLine);
+      if (reviewThreadId && options?.reviewOpen) {
+        this.logAgentDiagnostic(reviewThreadId, {
+          stage: "remote-review-opened", path: filePath, owner, repo, branch,
+          requestedLine: line, requestedEndLine: options.endLine,
+          revealedStartLine: editor.selection.start.line + 1,
+          revealedEndLine: editor.selection.end.line + 1,
+          bodyChars: text.length, source: "remote"
+        });
+      }
       return true;
     } catch {
       return false;
@@ -3599,19 +3646,11 @@ export class CoopChatSession {
 
   private async fetchContextRequest(request: ContextFetchRequest): Promise<ContextFetchResult> {
     let result: ContextFetchResult;
-    // Start explicit remote source reads alongside the scan, before it spends the gather budget.
+    // Start focused remote discovery alongside the scan, before it spends the gather budget.
     const gapsReadBudgetMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
-    const namedGapsFocusRead = request.params.quickAction === "knowledge-gaps" &&
+    const gapsFocusRead = request.params.quickAction === "knowledge-gaps" &&
       request.type === "knowledge_gaps" && gapsReadBudgetMs > 0
-      ? Promise.race([
-          readKnowledgeGapsNamedFocus({
-            query: request.intent.context.queryText,
-            jobs: request.params.intentPlan?.jobs,
-            target: this.repoTargetForRequest(request),
-            workspace: this.indexedRepoWorkspace()
-          }),
-          delayMs(gapsReadBudgetMs).then(() => undefined)
-        ]).catch(() => undefined)
+      ? this.readKnowledgeGapsCodeFocus(request, gapsReadBudgetMs).catch(() => undefined)
       : undefined;
     const isUnderstandRepo =
       request.params.quickAction === "understand-repo" && request.type === "file_metadata";
@@ -3619,6 +3658,25 @@ export class CoopChatSession {
     if (isUnderstandRepo) {
       // Single path: same loader Remote browse / /understand use. No dual enrich race.
       result = await this.fetchUnderstandRepoEvidence(request);
+    } else if (request.params.quickAction === "blast-radius" && request.type === "dependencies" &&
+        !this.requestIsFileAssistant(request) && request.params.file) {
+      const ownerTurn = this.activityTurnForRequest(request);
+      const evidence = await gatherBlastRadiusSourceEvidence({
+        workspace: this.indexedRepoWorkspace(), indexBackend: this.options.indexBackend,
+        target: this.repoTargetForRequest(request), file: request.params.file,
+        askText: request.intent.context.queryText, selectedSymbol: request.intent.context.selectedSymbol,
+        startedAt: ownerTurn?.startedAt ?? this.chatTurnStartedAt ?? Date.now(),
+        signal: ownerTurn?.streamAbort.signal,
+        onRead: file => {
+          this.recordAttachedFileReads({ files: [file] }, ownerTurn);
+          if (ownerTurn) this.logAttachmentDiagnostic(ownerTurn, "blast-source-read", {
+            path: file.path, role: file.role, chars: file.content.length,
+            startLine: file.startLine, endLine: file.endLine, truncated: file.truncated,
+            sourceRepoId: file.repoId, sourceBranch: file.branch
+          });
+        }
+      });
+      result = { requestId: request.id, type: request.type, data: evidence, fetchedAt: new Date() };
     } else if (request.type === "chat_context") {
       const localPayload = request.params.dualRepoCompare
         ? undefined
@@ -3657,7 +3715,7 @@ export class CoopChatSession {
     }
 
     if (request.params.quickAction === "knowledge-gaps" && request.type === "knowledge_gaps") {
-      result = await this.enrichKnowledgeGapsWithFocusSearch(request, result, namedGapsFocusRead);
+      result = await this.enrichKnowledgeGapsWithFocusSearch(request, result, gapsFocusRead);
     }
 
     // Plain chat "who calls / who imports" and open-file PR review —
@@ -3868,7 +3926,7 @@ export class CoopChatSession {
   private async enrichKnowledgeGapsWithFocusSearch(
     request: ContextFetchRequest,
     result: ContextFetchResult,
-    namedFocusRead?: Promise<Awaited<ReturnType<typeof readKnowledgeGapsNamedFocus>> | undefined>
+    focusRead?: Promise<KnowledgeGapsCodeEvidence | undefined>
   ): Promise<ContextFetchResult> {
     const gatherQuery = knowledgeGapsGatherQuery(request.intent.context.queryText) ??
       locateJobTerms(request.params.intentPlan?.jobs).join(" ");
@@ -3882,70 +3940,19 @@ export class CoopChatSession {
         : {};
     let data: Record<string, unknown> = { ...baseData, userFocus: gatherQuery };
 
-    const target = this.repoTargetForRequest(request);
-    const repoId = target.repoId?.trim();
-    const owner = target.owner?.trim();
-    const repo = target.repo?.trim();
     const remainingMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
-    if (!repoId) {
-      return { ...result, data };
-    }
-
-    const provider =
-      target.provider === "gitlab" || target.provider === "bitbucket" || target.provider === "github"
-        ? target.provider
-        : this.preferences.defaultCodeHost;
-
     try {
-      const namedFocus = namedFocusRead ? await namedFocusRead : remainingMs > 0 ? await Promise.race([
-        readKnowledgeGapsNamedFocus({
-          query: request.intent.context.queryText,
-          jobs: request.params.intentPlan?.jobs,
-          target,
-          workspace: this.indexedRepoWorkspace()
-        }),
-        delayMs(remainingMs).then(() => undefined)
-      ]) : undefined;
-      if (namedFocus?.namedPaths.length) {
-        return {
-          ...result,
-          data: {
-            ...data,
-            file: namedFocus.namedPaths.length === 1 ? namedFocus.namedPaths[0] : undefined,
-            focusSearchQuery: gatherQuery,
-            focusSearchPaths: namedFocus.namedPaths,
-            focusFiles: namedFocus.files
-          }
-        };
-      }
-      const searchRemainingMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
-      if (searchRemainingMs <= 0) {
-        return { ...result, data };
-      }
-      const focusSearch = await Promise.race([
-        searchRepoForFocusQuery({
-          repoId,
-          query: gatherQuery,
-          indexQueries: knowledgeGapsIndexQueries(gatherQuery),
-          maxFiles: 5,
-          indexBackend: this.options.indexBackend,
-          api: this.options.api,
-          apiBaseUrl: this.preferences.apiBaseUrl,
-          branch: target.branch ?? this.currentContext.branch,
-          owner,
-          repo,
-          provider
-        }),
-        new Promise<undefined>((resolve) => {
-          setTimeout(() => resolve(undefined), searchRemainingMs);
-        })
-      ]);
-      if (focusSearch?.files.length) {
+      const focus = focusRead ? await focusRead : remainingMs > 0
+        ? await this.readKnowledgeGapsCodeFocus(request, remainingMs) : undefined;
+      if (focus) {
+        const namedPaths = extractNamedSourceFiles(gatherQuery);
+        const jobPaths = locateJobTerms(request.params.intentPlan?.jobs).flatMap(extractNamedSourceFiles);
+        const explicitPaths = [...new Set([...namedPaths, ...jobPaths])];
         data = {
           ...data,
-          focusSearchQuery: focusSearch.query,
-          focusSearchPaths: focusSearch.files.map((file) => file.path),
-          focusFiles: focusSearch.files
+          ...(explicitPaths.length === 1 ? { file: explicitPaths[0] } : {}),
+          focusSearchQuery: gatherQuery,
+          ...focus
         };
       } else {
         data = { ...data, focusSearchQuery: gatherQuery };
@@ -3955,6 +3962,34 @@ export class CoopChatSession {
     }
 
     return { ...result, data };
+  }
+
+  private async readKnowledgeGapsCodeFocus(
+    request: ContextFetchRequest,
+    budgetMs: number
+  ): Promise<KnowledgeGapsCodeEvidence> {
+    const target = this.repoTargetForRequest(request);
+    const focus = knowledgeGapsGatherQuery(request.intent.context.queryText) ?? locateJobTerms(request.params.intentPlan?.jobs).join(" ");
+    const activityTurn = this.activityTurnForRequest(request);
+    return gatherKnowledgeGapsCodeEvidence({
+      target, workspace: this.indexedRepoWorkspace(), focus,
+      namedPaths: locateJobTerms(request.params.intentPlan?.jobs).flatMap(extractNamedSourceFiles),
+      selectedFile: request.params.file, deadlineAt: Date.now() + budgetMs,
+      signal: activityTurn?.streamAbort.signal,
+      onRead: path => this.appendLiveToolActivityLine(`Read \`${path}\``, "knowledge-gaps", String(request.intent.intent), activityTurn),
+      onDiagnostic: event => this.logAgentDiagnostic(activityTurn?.threadId ?? this.activityFeedbackThreadId ?? this.activeThreadId(), event),
+      searchFocus: async () => {
+        if (!target.repoId) return [];
+        const result = await searchRepoForFocusQuery({
+          repoId: target.repoId, query: focus, indexQueries: knowledgeGapsIndexQueries(focus),
+          maxFiles: 5, indexBackend: this.options.indexBackend, api: this.options.api,
+          apiBaseUrl: this.preferences.apiBaseUrl, branch: target.branch,
+          owner: target.owner, repo: target.repo,
+          provider: target.provider === "github" || target.provider === "gitlab" || target.provider === "bitbucket" ? target.provider : this.preferences.defaultCodeHost
+        });
+        return [...(result?.pathHits ?? []).map(path => ({ path })), ...(result?.files ?? [])];
+      }
+    });
   }
 
   /**
@@ -4001,8 +4036,19 @@ export class CoopChatSession {
 
     const userFocus = focusQueryForRetrieval(request.intent.context.queryText);
     const topicQueries = understandRepoIndexQueries({ userFocus });
+    const focusedBackend = understandRequestedRoles(userFocus).length > 0;
+    const focusedTurn = this.activityTurnForRequest(request);
 
     try {
+      const focusedSourcePromise = focusedBackend && userFocus
+        ? gatherUnderstandSourceEvidence({
+            workspace: this.indexedRepoWorkspace(), target, focus: userFocus,
+            deadlineAt: Date.now() + budgetMs,
+            signal: focusedTurn?.streamAbort.signal,
+            onRead: path => this.appendLiveToolActivityLine(`Read \`${path}\``, "understand-repo", String(request.intent.intent), focusedTurn),
+            onDiagnostic: event => this.logAgentDiagnostic(focusedTurn?.threadId ?? this.activeThreadId(), event)
+          })
+        : Promise.resolve(undefined);
       const evidencePromise = buildRepoSummaryEvidence({
         api: this.options.api,
         apiBaseUrl: this.preferences.apiBaseUrl,
@@ -4018,7 +4064,7 @@ export class CoopChatSession {
         resolveWorkspaceBranch: async (id) => this.resolveWorkspaceDefaultBranch(id)
       });
       const focusSearchPromise =
-        topicQueries.length > 0
+        !focusedBackend && topicQueries.length > 0
           ? searchRepoForFocusQuery({
             repoId,
             query: userFocus ?? topicQueries.join(" "),
@@ -4034,7 +4080,7 @@ export class CoopChatSession {
           })
           : Promise.resolve(undefined);
 
-      const [evidence, initialFocusSearch] = await Promise.all([
+      const [evidence, initialFocusSearch, focusedSources] = await Promise.all([
         Promise.race([
           evidencePromise,
           new Promise<undefined>((resolve) => {
@@ -4046,7 +4092,8 @@ export class CoopChatSession {
           new Promise<undefined>((resolve) => {
             setTimeout(() => resolve(undefined), budgetMs);
           })
-        ])
+        ]),
+        focusedSourcePromise
       ]);
 
       const baseData =
@@ -4057,7 +4104,16 @@ export class CoopChatSession {
         evidence && typeof evidence === "object" ? (evidence as Record<string, unknown>) : {};
 
       let focusSearch = initialFocusSearch;
-      if (topicQueries.length > 0) {
+      if (focusedSources) {
+        const coverage = understandFocusCoverage(userFocus, focusedSources.entryFiles);
+        evidenceData = { ...evidenceData, ...focusedSources, userFocus,
+          repoSemanticSearch: undefined, focusSearchQuery: topicQueries.join(" | "),
+          focusCoverage: coverage };
+        this.logAgentDiagnostic(this.activityTurnForRequest(request)?.threadId ?? this.activeThreadId(), {
+          stage: "understand-focus-coverage", requested: coverage.requested, missing: coverage.missing,
+          paths: [...new Set(focusedSources.entryFiles.map(file => file.path))]
+        });
+      } else if (topicQueries.length > 0) {
         const priorEntries = Array.isArray(evidenceData.entryFiles)
           ? (evidenceData.entryFiles as Array<{ path: string; content?: string; truncated?: boolean }>)
           : [];
@@ -5592,7 +5648,7 @@ export class CoopChatSession {
     }
     // Reject repo-only vendor gathering before scope lookups or activity start,
     // including fallback synthesis when a remote chip has no repository target.
-    if ((request.params.sourceScope ?? resolveRepoSourceScope(request.intent.context.queryText)).repositoryOnly) {
+    if (request.params.sourceScope?.repositoryOnly || resolveRepoSourceScope(request.intent.context.queryText).repositoryOnly) {
       return result;
     }
     const contextText = await this.integrationContextText(result, request);
@@ -6131,6 +6187,8 @@ export class CoopChatSession {
 
   /** Highlight + file bytes for /edit snap — do not depend on VFS resolve at card time. */
   private patchCompleteContext(turn: ChatTurn): {
+    targetRepo?: PatchCardState["targetRepo"];
+    preferLocalDisk?: boolean;
     selectedLines?: [number, number];
     file?: string;
     selectionText?: string;
@@ -6143,9 +6201,14 @@ export class CoopChatSession {
     const selectedLines =
       turn.editAnchor?.selectedLines ?? turn.context.selectedLines;
     const fileContents: Record<string, string> = { ...(turn.editAnchor?.fileContents ?? {}) };
+    const preferLocalDisk = isFileAssistantSession(turn.context);
+    const targetRepo = !preferLocalDisk && turn.context.owner && turn.context.repo
+      ? { owner: turn.context.owner, repo: turn.context.repo,
+          provider: turn.context.provider ?? this.preferences.defaultCodeHost, branch: turn.context.branch }
+      : undefined;
     const wanted = file?.trim();
     if (wanted && !lookupPatchFileContent(wanted, fileContents)) {
-      const fromDocs = collectOpenPatchFileBytes(wanted);
+      const fromDocs = collectOpenPatchFileBytes(wanted, { repo: targetRepo, preferLocalDisk });
       if (fromDocs?.trim()) {
         indexPatchFileContent(wanted, fromDocs, fileContents);
       }
@@ -6161,6 +6224,8 @@ export class CoopChatSession {
       .filter((entry) => entry.role === "user" && !entry.cancelled)
       .map((entry) => entry.content);
     return {
+      targetRepo,
+      preferLocalDisk,
       selectedLines,
       file,
       selectionText: selectionText || undefined,
@@ -6217,7 +6282,7 @@ export class CoopChatSession {
           branch: payload.branch,
           title: payload.title,
           body: payload.body,
-          base: payload.base,
+          base: record?.card.targetRepo?.branch ?? payload.base,
           files: decision.files
         }
       );
@@ -7270,7 +7335,7 @@ export class CoopChatSession {
       modelMessage,
       quickAction,
       intentPlan: turnIntentPlan,
-      sourceScope: resolveRepoSourceScope(message),
+      sourceScope: resolveRepoSourceScope(options?.slashUserArgs || message),
       dualRepoCompare: options?.dualRepoCompare,
       pendingMentions: options?.mentions,
       pendingLocalFiles: this.pendingChatLocalFiles,
@@ -7309,7 +7374,7 @@ export class CoopChatSession {
     );
 
     let skipKnowledgeGapJob = false;
-    if (quickAction === "knowledge-gaps") {
+    if (quickAction === "knowledge-gaps" && !userFocus) {
       try {
         await abortablePromise(
           this.applyIndexedManifestKnowledgeGapScan(turn),
@@ -7347,7 +7412,8 @@ export class CoopChatSession {
           if (!this.threadRuns.isStreamActive(turn)) {
             return;
           }
-          if (remainingContextGatherBudgetMs(turn.startedAt) > 0) {
+          if (remainingContextGatherBudgetMs(turn.startedAt) > 0 &&
+              !blastRadiusFromBundle(turn.contextBundle)?.sourceEvidenceGathered) {
             await abortablePromise(
               this.runAsyncQuickAction(quickAction, modelMessage, turn),
               turn.streamAbort.signal
@@ -8211,14 +8277,22 @@ export class CoopChatSession {
   private recordEvidenceArtifact(
     kind: ChatPersistedArtifact["kind"],
     artifactId: string,
-    payload: Record<string, unknown>
+    payload: Record<string, unknown>,
+    turn?: ChatTurn
   ): void {
-    this.threadArtifacts.push({
+    const artifact: ChatPersistedArtifact = {
       id: artifactId,
       kind,
       timestamp: Date.now(),
       payload
-    });
+    };
+    if (turn && !this.isViewingThread(turn.threadId)) {
+      turn.artifacts.push(artifact);
+      this.persistTurnThread(turn);
+      return;
+    }
+    this.threadArtifacts.push(artifact);
+    if (turn) turn.artifacts = [...this.threadArtifacts];
     this.persistActiveThread();
   }
 
@@ -8241,16 +8315,28 @@ export class CoopChatSession {
       if (turn && !this.threadRuns.isStreamActive(turn)) {
         return;
       }
-      const fileAssistant = isFileAssistantSession(this.currentContext);
+      const scopedCodeEvidence = quickAction === "blast-radius" || quickAction === "knowledge-gaps";
+      const cardContext = scopedCodeEvidence && turn ? turn.context : this.currentContext;
+      const fileAssistant = isFileAssistantSession(cardContext);
       this.lastContextBundle = isolateContextBundleForTurn(
         this.lastContextBundle,
         fileAssistant
-          ? { dropRemoteIntegrations: true, file: this.currentContext.file }
-          : this.isolationScenarioForTurn({ namedIntegration: integrationProvider })
+          ? { dropRemoteIntegrations: true, file: cardContext.file }
+          : scopedCodeEvidence
+            ? { ...cardContext, namedIntegration: integrationProvider }
+            : this.isolationScenarioForTurn({ namedIntegration: integrationProvider })
       );
       const multiTools = (fetchIntegrations ?? []).filter(Boolean);
       if (turn && !this.isViewingThread(turn.threadId)) {
         // Still allocate evidence ids / artifacts onto the turn; skip UI posts.
+        if (quickAction === "blast-radius") {
+          this.postBlastRadiusEvidenceFromBundle(turn);
+          return;
+        }
+        if (quickAction === "knowledge-gaps") {
+          this.postKnowledgeGapsEvidenceFromBundle(turn);
+          return;
+        }
         if (quickAction === "trace-decision") {
           this.beginEvidenceArtifact();
           return;
@@ -8258,7 +8344,6 @@ export class CoopChatSession {
         if (
           quickAction === "find-owner" ||
           quickAction === "understand-repo" ||
-          quickAction === "blast-radius" ||
           quickAction === "knowledge-gaps" ||
           integrationProvider ||
           multiTools.length > 0
@@ -8280,11 +8365,11 @@ export class CoopChatSession {
         return;
       }
       if (quickAction === "blast-radius") {
-        this.postBlastRadiusEvidenceFromBundle();
+        this.postBlastRadiusEvidenceFromBundle(turn);
         return;
       }
       if (quickAction === "knowledge-gaps") {
-        this.postKnowledgeGapsEvidenceFromBundle();
+        this.postKnowledgeGapsEvidenceFromBundle(turn);
         return;
       }
       if (integrationProvider) {
@@ -8418,8 +8503,9 @@ export class CoopChatSession {
     this.post({ type: "repo-summary:card", payload });
   }
 
-  private postBlastRadiusEvidenceFromBundle(): void {
-    const file = this.currentContext.file?.trim();
+  private postBlastRadiusEvidenceFromBundle(turn?: ChatTurn): void {
+    const context = turn?.context ?? this.currentContext;
+    const file = context.file?.trim();
     if (!file) {
       return;
     }
@@ -8429,13 +8515,15 @@ export class CoopChatSession {
       artifactId,
       evidence,
       file,
-      codeHost: this.activeEvidenceCodeHost()
+      codeHost: context.provider ?? this.preferences.defaultCodeHost ?? "github"
     };
-    this.recordEvidenceArtifact("blast-radius", artifactId, payload);
+    this.recordEvidenceArtifact("blast-radius", artifactId, payload, turn);
+    if (turn && !this.isViewingThread(turn.threadId)) return;
     this.post({ type: "blast-radius:card", payload });
   }
 
-  private postKnowledgeGapsEvidenceFromBundle(): void {
+  private postKnowledgeGapsEvidenceFromBundle(turn?: ChatTurn): void {
+    const context = turn?.context ?? this.currentContext;
     const evidence = knowledgeGapsFromBundle(this.lastContextBundle);
     const confluence = confluenceSearchFromBundle(this.lastContextBundle);
     const jira = jiraSearchFromBundle(this.lastContextBundle);
@@ -8449,17 +8537,18 @@ export class CoopChatSession {
     const artifactId = this.beginEvidenceArtifact();
     const payload = {
       artifactId,
-      evidence: evidence ?? { file: this.currentContext.file },
+      evidence: evidence ?? { file: context.file },
       confluence,
       jira,
       slack,
       notion,
       googleDocs,
       teams,
-      file: this.currentContext.file,
-      codeHost: this.activeEvidenceCodeHost()
+      file: context.file,
+      codeHost: context.provider ?? this.preferences.defaultCodeHost ?? "github"
     };
-    this.recordEvidenceArtifact("knowledge-gaps", artifactId, payload);
+    this.recordEvidenceArtifact("knowledge-gaps", artifactId, payload, turn);
+    if (turn && !this.isViewingThread(turn.threadId)) return;
     this.post({ type: "knowledge-gaps:card", payload });
   }
 
@@ -9004,6 +9093,17 @@ export class CoopChatSession {
 
       if (effectiveQuickAction === "understand-repo") {
         const summaryRecord = repoSummary as Record<string, unknown> | undefined;
+        const coverage = understandFocusCoverage(repoSummary?.userFocus,
+          (repoSummary?.entryFiles ?? []).filter((file): file is typeof file & { content: string } => Boolean(file.content?.trim())));
+        const incompleteFocus = understandIncompleteFocusMessage(coverage);
+        if (incompleteFocus) {
+          if (isCancelled()) return;
+          this.clearIntentFeedback(turn.threadId);
+          await this.finishTurnAssistantMessage(turn, {
+            role: "assistant", content: incompleteFocus, timestamp: Date.now()
+          });
+          return;
+        }
         if (!hasRepoSummaryEvidence(summaryRecord)) {
           const responseContent = understandRepoEmptyEvidenceMessage({
             owner: turnContext.owner,
@@ -9379,7 +9479,22 @@ export class CoopChatSession {
                 selectedLines: turnContext.selectedLines,
                 selectionText: turn.editAnchor?.selectionText ?? this.selectedCodeSnippet(4000),
                 languageId: turnContext.languageId,
-                contextBundle
+                contextBundle: effectiveQuickAction === "knowledge-gaps"
+                  ? contextBundle.map(entry => ({ ...entry, data: { ...asRecord(entry.data), focusFiles: undefined,
+                      ...(llmMessage.includes("## Focused code rule audit")
+                        ? { jobScan: undefined, ownershipReport: undefined, dependencyGraph: undefined } : {}),
+                      // The selected file's numbered audit windows already carry its source.
+                      ...(knowledgeGapsEvidence?.focusFiles?.some(source => source.path === turnContext.file && source.content?.trim())
+                        ? { localFiles: undefined } : {})
+                    } }))
+                  : effectiveQuickAction === "blast-radius" && blastRadiusEvidence?.sourceFiles?.length
+                    ? contextBundle.map(entry => ({ ...entry, data: { ...asRecord(entry.data),
+                        // Numbered source bodies already appear once in the Blast synthesis prompt.
+                        sourceFiles: undefined,
+                        ...(blastRadiusEvidence.sourceFiles?.some(source => source.role === "target" && !source.truncated)
+                          ? { localFiles: undefined } : {})
+                      } }))
+                  : contextBundle
               })
             : formatChatMessageWithLocalFiles({
                 message: llmMessage,
@@ -9507,7 +9622,12 @@ export class CoopChatSession {
       const enableSynthesisThinking = shouldEnableSynthesisThinking({
         quickAction: effectiveQuickAction,
         startedAt: turn.startedAt,
-        sourceFacts: effectiveQuickAction === "understand-repo" ? repoSummary : undefined
+        sourceFacts: effectiveQuickAction === "understand-repo" ? repoSummary
+          : effectiveQuickAction === "knowledge-gaps" ? {
+            userFocus: knowledgeGapsEvidence?.userFocus ?? userFocus,
+            entryFiles: knowledgeGapsEvidence?.focusFiles
+          }
+          : undefined
       });
       this.logAgentDiagnostic(turn.threadId, {
         stage: "synthesis-request", turnId: turn.id, runId: `synthesis-${turn.id}`,
@@ -9518,6 +9638,20 @@ export class CoopChatSession {
         commentOnly: this.patchCompleteContext(turn).commentOnly,
         hasAgentPatch: Boolean(extractAgentProposedPatchText(contextBundle)),
         enableThinking: enableSynthesisThinking,
+        ...(effectiveQuickAction === "knowledge-gaps" ? {
+          gapsSources: knowledgeGapsEvidence?.focusFiles?.map(source => ({ path: source.path,
+            startLine: source.startLine, chars: source.content?.length ?? 0, truncated: source.truncated,
+            retainedInRequest: Boolean(source.content && apiMessage.includes(source.content.split("\n")
+              .map((line, index) => `L${Number(source.startLine) + index}: ${line}`).join("\n"))) }))
+        } : {}),
+        ...(effectiveQuickAction === "blast-radius" ? {
+          blastSourceContract: apiMessage.includes("## Opened selected-ref source bodies") ? "opened-source" : "graph",
+          blastSourceCount: blastRadiusEvidence?.sourceFiles?.length ?? 0,
+          blastSources: blastRadiusEvidence?.sourceFiles?.map(source => ({ path: source.path,
+            role: source.role, chars: source.content.length, truncated: source.truncated,
+            retainedInRequest: apiMessage.includes(source.content.split("\n")
+              .map((line, index) => `${source.startLine + index} | ${line}`).join("\n")) }))
+        } : {}),
         buildId: COOP_EXTENSION_BUILD_ID, bundleId: COOP_EXTENSION_BUNDLE_ID
       });
 
@@ -9528,8 +9662,44 @@ export class CoopChatSession {
           route: fileAssistantTurn ? "file-assistant" : "indexed-repo"
         });
       }
-      const result = await this.options.api.streamChat(
-        {
+      const synthesisStream: SecureApiClient["streamChat"] = effectiveQuickAction === "knowledge-gaps"
+        ? (request, onChunk, baseUrl, reviewSignal, onThinking) => streamSourceReviewedKnowledgeGaps({
+          stream: this.options.api.streamChat.bind(this.options.api), request,
+          evidence: knowledgeGapsEvidence, onChunk, baseUrl, signal: reviewSignal, onThinking,
+          onReview: (sourceRequest) => this.logAgentDiagnostic(turn.threadId, {
+            stage: "gaps-source-review", turnId: turn.id, elapsedMs: Date.now() - turn.startedAt,
+            role: "source-synthesis", enableThinking: sourceRequest.enableThinking,
+            model: sourceRequest.model, quotaTurnId: sourceRequest.quotaTurnId,
+            sourceCount: knowledgeGapsEvidence?.focusFiles?.length,
+            bundleId: COOP_EXTENSION_BUNDLE_ID
+          }),
+          onRecovery: (partialAnswerChars, reason, replacementRequest) => this.logAgentDiagnostic(turn.threadId, {
+            stage: "gaps-source-review-recovery", turnId: turn.id, elapsedMs: Date.now() - turn.startedAt,
+            role: "replacement", reason, enableThinking: replacementRequest.enableThinking,
+            model: replacementRequest.model, quotaTurnId: replacementRequest.quotaTurnId,
+            partialAnswerChars, bundleId: COOP_EXTENSION_BUNDLE_ID
+          }),
+          onCallComplete: (role, callResult) => this.logAgentDiagnostic(turn.threadId, {
+            stage: "gaps-model-call-complete", turnId: turn.id, elapsedMs: Date.now() - turn.startedAt,
+            role, finishReason: callResult.finishReason, usage: callResult.usage ?? null,
+            bundleId: COOP_EXTENSION_BUNDLE_ID
+          }),
+          onValidated: (windows, verifiedQuotes) => {
+            turn.sourceCitationWindows = windows;
+            turn.sourceCitationMinimumQuotes = verifiedQuotes;
+          },
+          onFailureUsage: (usage) => {
+            turn.sessionCostUsd += usage.estimatedCostUsd;
+            this.postForThread(turn.threadId, { type: "chat:usage", payload: { ...usage, sessionCostUsd: turn.sessionCostUsd } });
+            if (this.isViewingThread(turn.threadId)) this.sessionCostUsd = turn.sessionCostUsd;
+            this.persistTurnThread(turn);
+          }
+        })
+        : this.options.api.streamChat.bind(this.options.api);
+      const result = await streamSourceGroundedBlast({
+        stream: synthesisStream,
+        evidence: effectiveQuickAction === "blast-radius" ? blastRadiusEvidence : undefined,
+        request: {
           message: apiMessage,
           context: {
             owner: fileAssistantTurn ? undefined : turnContext.owner,
@@ -9547,19 +9717,38 @@ export class CoopChatSession {
           useCase: chatUseCase,
           temperature: this.preferences.temperature,
           maxTokens: resolveChatOutputMaxTokens(this.preferences.maxTokens),
-          enableThinking: enableSynthesisThinking
+          enableThinking: enableSynthesisThinking,
+          ...(["blast-radius", "knowledge-gaps"].includes(effectiveQuickAction ?? "") ? { quotaTurnId: turn.id } : {})
         },
-        (chunk) => {
+        onChunk: (chunk) => {
           outputGate.push(chunk);
         },
-        this.preferences.apiBaseUrl,
+        baseUrl: this.preferences.apiBaseUrl,
         signal,
-        (thinkingChunk) => {
+        onPhase: (phase) => this.logAgentDiagnostic(turn.threadId, {
+          stage: "blast-model-phase", turnId: turn.id, elapsedMs: Date.now() - turn.startedAt,
+          ...phase, bundleId: COOP_EXTENSION_BUNDLE_ID
+        }),
+        onRepair: (details) => this.logAgentDiagnostic(turn.threadId, {
+          stage: "blast-output-repair", turnId: turn.id, elapsedMs: Date.now() - turn.startedAt,
+          ...details, bundleId: COOP_EXTENSION_BUNDLE_ID
+        }),
+        onPartialUsage: (usage) => {
+          turn.sessionCostUsd += usage.estimatedCostUsd;
+          this.postForThread(turn.threadId, { type: "chat:usage", payload: { ...usage, sessionCostUsd: turn.sessionCostUsd } });
+          if (this.isViewingThread(turn.threadId)) this.sessionCostUsd = turn.sessionCostUsd;
+          this.persistTurnThread(turn);
+        },
+        onValidated: (windows, verifiedQuotes) => {
+          turn.sourceCitationWindows = windows;
+          turn.sourceCitationMinimumQuotes = verifiedQuotes;
+        },
+        onThinking: (thinkingChunk) => {
           // Thinking is not folded into answer text or model replay — persisted on the trail only.
           // Keep gather/todos visible until the first answer token.
           this.postThinkingDelta(turn.threadId, thinkingChunk, turn);
         }
-      );
+      });
 
       await outputGate.complete(result.message.content);
 
@@ -9571,9 +9760,18 @@ export class CoopChatSession {
           alreadyContinued: false
         })
       ) {
+        if (effectiveQuickAction === "knowledge-gaps") {
+          this.logAgentDiagnostic(turn.threadId, {
+            stage: "gaps-answer-continuation", turnId: turn.id,
+            elapsedMs: Date.now() - turn.startedAt, finishReason: result.finishReason,
+            partialAnswerChars: full.length, bundleId: COOP_EXTENSION_BUNDLE_ID
+          });
+        }
         const continued = await this.options.api.streamChat(
           {
-            message: LENGTH_CONTINUE_PROMPT,
+            message: effectiveQuickAction === "knowledge-gaps"
+              ? buildKnowledgeGapsContinuationMessage(apiMessage, full)
+              : LENGTH_CONTINUE_PROMPT,
             context: {
               owner: fileAssistantTurn ? undefined : turnContext.owner,
               repo: fileAssistantTurn ? undefined : turnContext.repo,
@@ -9584,14 +9782,15 @@ export class CoopChatSession {
             fileSource: turnContext.fileSource,
             history: [
               ...priorHistory,
-              { role: "assistant", content: full, timestamp: Date.now() }
+              ...(full.trim() ? [{ role: "assistant" as const, content: full, timestamp: Date.now() }] : [])
             ],
             model: runtimeModel.model,
             provider: runtimeModel.provider,
             useCase: chatUseCase,
             temperature: this.preferences.temperature,
             maxTokens: resolveChatOutputMaxTokens(this.preferences.maxTokens),
-            enableThinking: false
+            enableThinking: false,
+            quotaTurnId: turn.id
           },
           (chunk) => {
             outputGate.push(chunk);
@@ -9601,6 +9800,14 @@ export class CoopChatSession {
         );
         if (continued.finishReason === "length" || hasTrailingEmptyHeadings(full)) {
           outputGate.push(withLengthCutoffNotice(full).slice(full.length));
+        }
+        if (result.usage && continued.usage) {
+          result.usage = {
+            ...result.usage,
+            inputTokens: result.usage.inputTokens + continued.usage.inputTokens,
+            outputTokens: result.usage.outputTokens + continued.usage.outputTokens,
+            estimatedCostUsd: result.usage.estimatedCostUsd + continued.usage.estimatedCostUsd
+          };
         }
       } else if (result.finishReason === "length" || hasTrailingEmptyHeadings(full)) {
         outputGate.push(withLengthCutoffNotice(full).slice(full.length));
@@ -9713,6 +9920,13 @@ export class CoopChatSession {
       // paints a second CoopAI bubble that never finishes.
       deltaBatcher.end();
       await this.finishTurnAssistantMessage(turn, finalMessage);
+      if (effectiveQuickAction === "blast-radius") {
+        this.logAgentDiagnostic(turn.threadId, {
+          stage: "blast-answer-complete", turnId: turn.id, elapsedMs: Date.now() - turn.startedAt,
+          contentChars: finalMessage.content.length, finishReason: result.finishReason,
+          bundleId: COOP_EXTENSION_BUNDLE_ID
+        });
+      }
       if (localPayload?.files.length) {
         this.writeCache(cacheKey, finalMessage);
       }
@@ -10205,6 +10419,9 @@ export class CoopChatSession {
     quickAction: string | undefined,
     turn?: ChatTurn
   ): Promise<void> {
+    // Core selected-ref reads already reconciled the file graph. A repo-wide job
+    // must not replace those bodies or spend another gather window on the same edges.
+    if (blastRadiusFromBundle(turn?.contextBundle ?? this.lastContextBundle)?.sourceEvidenceGathered) return;
     this.withTurnSessionMirrors(turn, () => {
       if (quickAction !== "blast-radius" || !this.lastJobResult) {
         return;
@@ -10835,7 +11052,8 @@ export class CoopChatSession {
     }
     await this.withTurnSessionMirrors(turn, async () => {
       this.applyKnowledgeGapJobResultToBundle(quickAction);
-      if (!this.knowledgeGapScanHasFileCoverage()) {
+      const focused = Boolean(knowledgeGapsFromBundle(this.lastContextBundle)?.userFocus);
+      if (!focused && !this.knowledgeGapScanHasFileCoverage()) {
         await this.applyIndexedManifestKnowledgeGapScanUnlocked();
       }
       if (!this.knowledgeGapScanInBundle()) {

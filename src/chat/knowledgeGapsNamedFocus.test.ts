@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { CoopChatSession } from "./CoopChatSession";
 import { knowledgeGapsFromBundle } from "../context/contextBundleEvidence";
 import { importOnlyNamedBlastAnswer } from "../prompts/blastRadiusSynthesis";
+import { enrichChatResponseForAction } from "./chatResponseEnrichment";
 
 async function run(): Promise<void> {
   const target = { repoId: "github:org/fixture", provider: "github", owner: "org", repo: "fixture", branch: "renamed" };
@@ -11,6 +12,8 @@ async function run(): Promise<void> {
         chatTurnStartedAt: Date.now(),
         currentContext: { file: "src/unrelated.ts", branch: "main" },
         preferences: { defaultCodeHost: "github" },
+        appendLiveToolActivityLine: () => undefined,
+        logAgentDiagnostic: () => undefined,
         repoTargetForRequest: () => target,
         indexedRepoWorkspace: () => ({ readFile: async (actualTarget: unknown, path: string) => {
           assert.deepEqual(actualTarget, target);
@@ -29,6 +32,12 @@ async function run(): Promise<void> {
       const evidence = knowledgeGapsFromBundle([result]);
       assert.equal(evidence?.file, "src/mathRenamed.ts");
       assert.equal(evidence?.focusFiles?.length, available ? 1 : 0);
+      if (!available) {
+        const enriched = enrichChatResponseForAction({quickAction: "knowledge-gaps", contextBundle: [result],
+          content: "The file does not exist. Write an ADR.", owner: "org", repo: "fixture"});
+        assert(!enriched.includes("does not exist"));
+        assert(enriched.includes("did not retrieve source"));
+      }
     }
   }
   let reads = 0;
@@ -36,6 +45,8 @@ async function run(): Promise<void> {
     chatTurnStartedAt: Date.now(),
     currentContext: { file: "src/unrelated.ts", branch: "main" },
     preferences: { defaultCodeHost: "github" },
+    appendLiveToolActivityLine: () => undefined,
+    logAgentDiagnostic: () => undefined,
     repoTargetForRequest: () => target,
     requestIsFileAssistant: () => false,
     indexedRepoWorkspace: () => ({ readFile: async (actualTarget: unknown, path: string) => {
@@ -60,6 +71,13 @@ async function run(): Promise<void> {
   assert.equal(earlyResult.data.focusFiles[0].path, "src/mathRenamed.ts");
   assert.equal(earlyResult.data.focusFiles[0].startLine, 1);
   assert.equal(knowledgeGapsFromBundle([earlyResult])?.focusFiles?.length, 1);
+  const repoOnlySession = Object.create(CoopChatSession.prototype);
+  repoOnlySession.integrationContextText = () => { throw new Error("Repository-only asks must not prepare integration context"); };
+  const repoOnlyResult = {requestId: "repo-only", type: "knowledge_gaps", data: {}, fetchedAt: new Date()};
+  assert.equal(await repoOnlySession.enrichChatContextWithIntegrations(repoOnlyResult, {
+    type: "knowledge_gaps", params: {quickAction: "knowledge-gaps", sourceScope: {repositoryOnly: false, excludedIntegrations: []}},
+    intent: {context: {queryText: "Which state rules need tests? Use only this repository."}}
+  }), repoOnlyResult);
   const blastEvidence = { file: "src/mathRenamed.ts", namedAskSymbols: ["positiveSum"], directDependents: ["src/caller.ts"], graphMeta: { source: "import-parse" } };
   const completed: Array<{ turn: unknown; message: { content: string; relatedArtifactId?: string } }> = [];
   const cleared: string[] = [];

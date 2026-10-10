@@ -1,0 +1,20 @@
+{
+  "builtAt": "2026-10-09T20:33:48.371154+00:00",
+  "files": {
+    "dist/extension.js": "5ece3ee4abefc40111cd93236b7bc769799593042e9d1662f59ffa59f28d9d61",
+    "dist/extension.js.map": "47f812d8021613e2a61649ad96af5635ceb3907fae6809223fb5ecfd6b80ab2a",
+    "dist/webview.js": "cb2151e634c43ca7dde04112c94f35f8a8a783e3f6d84e0ca08e4568dfa8a7ee",
+    "dist/webview.css": "2f1563d780aa9e9a1c578ea61c9b00e3d9ddc210f9dc01f9e2ca4decc5f7ce9a",
+    "src/context/knowledgeGapsCodeEvidence.ts": "b1f0903c40d826a6f09a896be5c2671b1fa06a31a0305a709a6fd87f709cfeb7",
+    "src/context/knowledgeGapsFocus.ts": "fa45941131968de1aa93425dfa0228cf45e76a14990fd92d1157d8189e969b65",
+    "src/chat/CoopChatSession.ts": "d4e248faa77fd10c5cc75016bac2b8d504f2b724b5c68ec76fe1d5050b0a6e48",
+    "src/context/intentDetector.ts": "bd99d217753599d858bfa3142247b64caa90fc42a83251ed6d53aad0c99b5661",
+    "src/config/chatSynthesisThinking.ts": "a3febc4218e5fb717e0b4a480781de1fa752e629443f6f36e96989edaa992d5d",
+    "src/prompts/systemPrompts.ts": "51dc92eb507de3c145b1b34ee44db7e4dc3d4aa83885822879ce8051f55b6d46",
+    "src/prompts/knowledgeGapsSynthesis.ts": "8b778ccc60b36c95fc96917175a9b6adf344f9a3e0aecfa695e52a75f90278fb",
+    "src/prompts/knowledgeGapsEnrichment.ts": "1dfc47d0143366daaa638f014919aba1866c6f7a225c8cd04a87a89967c7930b",
+    "src/context/integrationChatEnrichment.ts": "a24eb4e87e5c521f6e41f9d118a349c5d52520c24673758398b96db376d7720a",
+    "src/webview/evidenceCardSummary.ts": "da3d1c95803455a666324a03a7c7d3539ef8e907ca62e80d1c064651b7a01db9",
+    "src/webview/EvidenceCards.tsx": "8093bd82ea7f78d907e8a99aed52ab9354092620f902b22fef80fcb6675b346a"
+  }
+}

@@ -1,0 +1,84 @@
+
+> coop-ai@0.1.13 test:chat-prose
+> npx tsx src/webview/lib/chatProseParser.test.ts && npx tsx src/webview/lib/lightHighlight.test.ts
+
+  ✓ numbered ignore-file output keeps each source and omitted line range separate
+  ✓ simple paragraph
+  ✓ multiple paragraphs separated by blank line
+  ✓ **What changed** on its own line is a section-heading
+  ✓ **Sentence ending with period.** is a paragraph, not section-heading
+  ✓ title with period stays a heading when a list follows
+  ✓ **Open question:** alone is a paragraph, not section-heading
+  ✓ flat knowledge-gap list promotes categories to subheadings with renamed field labels
+  ✓ plain category lines normalize to headings with open question bullets
+  ✓ answer lead remaps to summary with documentation gaps wrapper
+  ✓ open questions layout promotes categories to subheadings with field bullets
+  ✓ grouped knowledge-gap prose uses subsection headings
+  ✓ unordered list with dash marker
+  ✓ ordered list items
+  ✓ inline code renders as inline-code node
+  ✓ backtick file path becomes a file-link node
+  ✓ backtick file path with :line becomes a file-link with line
+  ✓ *term* inline renders as em node
+  ✓ **term** inline renders as strong node
+  ✓ [label](url) renders as external-link with label and url
+  ✓ bare URL becomes external-link with hostname as label
+  ✓ code fence with language tag yields code-fence block
+  ✓ code fence without language tag has undefined language
+  ✓ citation fence with startLine:endLine:path yields code-citation
+  ✓ explicit root locator wins over nearby config path and active file
+  ✓ malformed root coordinates cannot inherit a nearby or active source
+  ✓ ordinary integer object properties still recover the actual config source
+  ✓ citation fence info-string startLine:endLine:path yields code-citation
+  ✓ placeholder startLine:endLine:path recovers as citation (no TEXT fence)
+  ✓ path-only first line recovers as citation
+  ✓ path-only fence with no code body becomes an inline file link
+  ✓ bare absolute local path line becomes a file link
+  ✓ language-tagged fence is still a code-fence (not a citation)
+  ✓ language-tagged fence recovers to citation when active file matches
+  ✓ language-tagged fence recovers to citation from nearby path prose
+  ✓ javascript fence upgrades to cite for open .ts file (js/ts family)
+  ✓ language fence upgrades when open-file basename appears in prose
+  ✓ bash fences stay anonymous even with active file
+  ✓ locator above a language fence becomes a citation with line range
+  ✓ locator above an unlabeled fence becomes a citation
+  ✓ indented fence inside a list recovers as a citation
+  ✓ fence body with list preamble then locator recovers as citation
+  ✓ unfenced numeric locator plus following code becomes a citation
+  ✓ tsx fence after backtick path in a list item upgrades to citation
+  ✓ unclosed fence does not swallow following lists into a Copy box
+  ✓ stray fence opener before a list is ignored
+  ✓ unclosed in-progress code fence stays a fence
+  ✓ locator after a language fence becomes a citation
+  ✓ bold path above a fence becomes a citation
+  ✓ File: path above a tsx fence becomes a citation
+  ✓ File: path above a patch fence stays a File header, not a citation
+  ✓ patch fence with **/*.md SEARCH line stays a patch fence, not a **/*.md cite
+  ✓ plain language tag typescript is not treated as a path citation
+  ✓ mixed: section-heading + paragraph + list + code fence
+  ✓ ### markdown header becomes section-heading with hash stripped
+  ✓ ### numbered section heading strips hash prefix
+  ✓ empty string produces empty blocks array
+  ✓ whitespace-only string produces empty blocks
+  ✓ CRLF line endings normalize correctly
+  ✓ * list marker yields items with marker '*'
+  ✓ list item content parses inline nodes
+  ✓ jira ticket stack parses linked tickets with metadata
+  ✓ parses bare and backtick-wrapped source citations
+  ✓ parses coop-evidence card jump links
+  ✓ long walkthrough with citations keeps the closing sentence
+  ✓ mixed path:range Copy dump and numeric locator still parse as citations
+  ✓ unclosed language fence does not swallow a later numeric locator
+  ✓ explicit source mode preserves long/tilde fences and original CRLF/code blank lines
+  ✓ explicit source mode cannot promote examples using active files or neighboring source labels
+
+chatProseParser: 69/69 tests passed
+  ✓ typescript keywords, types, and functions are classified
+  ✓ strings and comments are classified
+  ✓ property access after a dot is classified
+  ✓ bash fences color strings and hash comments, not monochrome
+  ✓ splitTokensByLine keeps kind across wrapped lines
+  ✓ huge code blocks highlight without hanging the webview
+
+6 passed, 0 failed
+

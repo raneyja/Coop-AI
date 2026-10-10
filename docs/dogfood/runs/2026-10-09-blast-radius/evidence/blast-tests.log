@@ -1,0 +1,156 @@
+
+> coop-ai@0.1.13 test:blast
+> npx tsx src/engines/blastRadiusDependentsFallback.test.ts && npx tsx src/prompts/blastRadiusSynthesis.test.ts && npx tsx src/prompts/blastRadiusSourceGuard.test.ts && npx tsx src/prompts/blastRadiusPredicateProof.test.ts && npx tsx src/context/blastRadiusSourceEvidence.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/chat/blastRadiusSourceEvidence.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/chat/remoteCitationReview.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/engines/blastRadiusAnalysis.test.ts && npx tsx src/api/blastSourceRequest.test.ts && npx tsx src/chat/blastRadiusSourceReview.test.ts
+
+  ✓ isDocsReferencePath detects markdown, docs trees, and d.ts
+  ✓ splitBlastRadiusDependents separates code from docs references
+  ✓ groupDependentsByTopLevelFolder buckets by top-level folder
+  ✓ rankCodeDependentsByRisk prioritizes production and integration over tests
+  ✓ rankCodeDependentsByRisk prefers prod module over story and e2e
+  ✓ smoke-shaped StateGroup blast is not story-dominated when prod edges exist
+  ✓ smoke-shaped DocumentStatus blast surfaces non-test refs when present
+  ✓ sortDependentsProductionFirst orders mixed dependents for list display
+  ✓ scoreDependentRisk labels stories and e2e as test surfaces
+  ✓ extractBlastSearchSymbols prefers StateGroup from smoke ask
+  ✓ isGenericBlastImpactAsk ignores default chip copy
+  ✓ isGenericBlastImpactAsk treats canned model prompt and history chips as generic
+  ✓ bare blast canned prompt does not name authMiddleware
+  ✓ display Estimate ask stays generic even with file chip boilerplate
+  ✓ file-stem named symbol is stripped unless it is a definition
+  ✓ file-level merge keeps durable importers when named symbols sanitize empty
+  ✓ enrichBlastRadiusResponse keeps file-level callers instead of none-confirmed template
+  ✓ extractBlastSearchSymbols skips default blast ask (no Estimate noise)
+  ✓ extractBlastSearchSymbols takes camelCase and snake_case from the ask
+  ✓ extractBlastSearchSymbols ignores English TitleCase from a list-callers ask
+  ✓ named-symbol blast drops file importers that only use a sibling export
+  ✓ named-symbol hits require the identifier, not a path-only file import
+  ✓ isVerifiedCallerSearchSource rejects embedding and fallback
+  ✓ hitLooksLikeReferenceToTarget requires stem when content is a code line
+  ✓ buildImportSearchPatterns includes path suffixes for relative imports
+  ✓ extractExportNamesFromSource includes Python class names
+  ✓ extractExportNamesFromSource prefers distinctive exports
+  ✓ buildLocalCallerNeedles includes path suffixes and exports
+  ✓ searchDependentsInLocalRoots finds real responseDeadline importers
+  ✓ buildImportSearchPatterns includes symbol and alias forms
+  ✓ mergeSearchDependentsFallbackIntoDependenciesData fills callers when job sample empty
+  ✓ mergeSearchDependentsFallbackIntoDependenciesData replaces junk job callers with search hits
+  ✓ mergeSearchDependentsFallbackIntoDependenciesData clears junk when search empty
+  ✓ mergeSearchDependentsFallbackIntoDependenciesData can keep filtered job edges when search empty
+  ✓ named-function blast does not fail-open to file importers when search is empty
+  ✓ named /blast requireAuth stays named-mode and honest
+  ✓ contentUsesNamedSymbol requires the named export, not a sibling import
+  ✓ resolveNamedBlastSymbols unions the editor chip with the ask
+  ✓ mergeDurableDependentsIntoContextData sets directDependents + import-parse source
+  ✓ same-path named-symbol verification preserves strong evidence and durable provenance
+  ✓ resolveTrustedRemoteDependents uses durable import-parse without localRoots
+  ✓ searchDependentsFallback ignores localRoots by default (Zero-Clone)
+  ✓ named requireAuth blast keeps jobsApi when Zoekt snippet contains requireAuth(
+  ✓ path-only named-function hits are not callers without a remote body
+  ✓ verifyRemoteFilesMentionNamedSymbol keeps requireAuth callers only
+  ✓ searchDependentsFallback stops after the first pattern when shouldAbort
+  ✓ path-only Zoekt requireAuth hits are confirmed via remote file bodies
+  ✓ durable importers that call requireAuth survive when Zoekt snippets are path-only
+
+blastRadiusDependentsFallback: 48/48 tests passed
+  ✓ opened route with an unread procedure cannot imply an authentication guarantee
+  ✓ unread middleware caveats do not preserve a categorical token-holder access claim
+  ✓ sole-protection prose is replaced without changing a cited source slice
+  ✓ conditional effects after remaining guards are preserved
+  ✓ universal caller preconditions are preserved as checks rather than stored-data assumptions
+  ✓ a target body with no confirmed dependents keeps only the thin contract
+  ✓ unread helpers cannot support categorical absence of remaining status protection
+  ✓ unsafe prose does not erase adjacent caller checks or the remaining guard list
+  ✓ source prose is not reinterpreted as a status label from uppercase acronyms
+  ✓ blast-radius synthesis includes primary target and out-of-scope @ attachments
+  ✓ blast-radius synthesis forbids zero-impact language in guardrails
+  ✓ blast-radius synthesis includes dependent details when present
+  ✓ blast-radius synthesis includes docs references section when present
+  ✓ blast-radius synthesis includes top risk surfaces ranking
+  ✓ blast-radius synthesis includes CI rollout guidance when workflows present
+  ✓ verified import relations retain unknown coverage and symbol-use qualification
+  ✓ blast-radius synthesis uses thin-evidence stop when graph is empty
+  ✓ blast-radius synthesis requires attached documentation titles
+  ✓ named-function blast prompt does not treat every file importer as breakage
+  ✓ named-function blast with no callers locks Direct impact empty
+  ✓ enrichBlastRadiusResponse replaces guessed callers when named-function callers are unconfirmed
+  ✓ enrichBlastRadiusResponse replaces file-level essay when graph is empty
+  ✓ enrichBlastRadiusResponse does not replace requireAuth callers from stub search
+  ✓ synthetic src caller stays a dependency without invented production classification
+  ✓ unconfirmed function callers never imply safety or inevitable breakage
+  ✓ import-only named-symbol answer replaces unsupported defect prose but retains dependency evidence
+  ✓ weak heuristic candidates do not become verified file dependencies in the import-only guard
+  ✓ import-only evidence cannot establish named behavior impact or complete depth-one coverage
+  ✓ plural sole-gate claims and implied absent helper protection cannot survive or leave empty verification items
+  ✓ a direct call does not establish exposure or an unconditional count of writes
+
+blastRadiusSynthesis: 30/30 tests passed
+✔ rewritten whitespace and wrong line metadata become exact opened source bytes (1.702875ms)
+✔ changed predicates, literal strings and unopened files never become citation code (0.29475ms)
+✔ status examples need opened enum references while ordinary prose acronyms remain intact (0.637167ms)
+✔ Python indentation is never treated as cosmetic citation formatting (0.139125ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8.145167
+✔ source syntax replaces unsupported prose and preserves full predicates, callers and conditional create/update (6.644792ms)
+✔ comments, type imports, shadowed identifiers and imports of a different module do not prove callers (5.456875ms)
+✔ write enclosure retains outer predicates across callbacks and nested reject conjunctions (0.776083ms)
+✔ invalid, truncated and unanchored source cannot become a predicate proof (0.559125ms)
+✔ the frozen selection determines the predicate even when the model returns an incomplete or wrong anchor (1.555542ms)
+✔ an explicit unique enum value in the original ask supplies a missing whole-file model citation (0.895917ms)
+✔ a private length-stopped draft can yield a complete source-derived answer without generic continuation (1.0275ms)
+✔ an explicit source predicate publishes the same complete proof without requesting or charging for a model draft (2.9395ms)
+✔ Stop prevents direct source publication, and an ambiguous focus still uses private model review (5.666167ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 30.461417
+✔ full target and callers survive bundle extraction and synthesis with guards and conditional writes (10.556875ms)
+✔ graph and SCIP evidence alone cannot preserve an unsupported caller-behavior essay (3.760875ms)
+✔ deadline keeps completed target/caller reads and ignores a late body (184.430708ms)
+✔ Stop prevents late read callbacks and source retention (22.735875ms)
+✔ caller reads are bounded, and truncated bodies cannot earn strong behavior evidence (1.204708ms)
+✔ wrong repository/local bodies and untrusted graph edges cannot become remote proof (1.354125ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 226.578417
+blastRadiusSourceEvidence hot path: whole-file/range remote reads, turn-owned activity, retained caller bodies, and job bypass passed
+remote citation review uses selected-ref API and fails closed across providers
+blastRadiusAnalysis: ok
+✔ Blast source bodies select the dedicated contract in the actual Anthropic request (22.068667ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 25.882917
+✔ only the reviewed answer is streamed; the frozen source, model, ref and quota turn survive (7.891125ms)
+✔ Stop between draft and review prevents the second request and publishes no draft (0.327833ms)
+✔ a review failure does not fall back to the unverified draft (0.118541ms)
+✔ unverified review chunks remain private until the complete answer is source-checked (2.196625ms)
+✔ thin and other use cases retain a single streaming request (10.495041ms)
+✔ an incomplete private review is replaced with its original source and never appended (0.749333ms)
+✔ an incomplete replacement publishes neither private attempt (2.84375ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 36.8235

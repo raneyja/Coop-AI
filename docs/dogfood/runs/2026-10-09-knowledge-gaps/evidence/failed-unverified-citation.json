@@ -1,0 +1,119 @@
+{
+  "result": "Fail",
+  "threadId": "thread-1791596533331-xw47gg",
+  "metrics": {
+    "threadId": "thread-1791596533331-xw47gg",
+    "turnId": "turn-1791596567286-2t9lsn",
+    "repoContext": {
+      "provider": "github",
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "scope": "repo"
+    },
+    "submittedContext": {
+      "owner": "CoopAI-Corp",
+      "repo": "plane",
+      "branch": "preview",
+      "file": null,
+      "selectedLines": null
+    },
+    "bundleId": "715cfee234c167b1e7d1f36cd6bb5f472ddd9f86075b2fca5859c8b270bab281",
+    "buildId": "0.1.13",
+    "synthesisStartMs": 6981,
+    "answerStartMs": 163491,
+    "completionMs": 163493,
+    "completedAt": "2026-10-10T01:45:28.241Z",
+    "enableThinking": true,
+    "requestChars": 37351,
+    "sourceReviewStartMs": 51405,
+    "sourceWindows": [
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 63,
+        "chars": 5084,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 222,
+        "chars": 4406,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 112,
+        "chars": 4982,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/app/serializers/issue.py",
+        "startLine": 264,
+        "chars": 4198,
+        "truncated": true,
+        "retainedInRequest": true
+      },
+      {
+        "path": "apps/api/plane/db/models/state.py",
+        "startLine": 1,
+        "chars": 3824,
+        "truncated": false,
+        "retainedInRequest": true
+      }
+    ],
+    "successfulRemoteReviews": [],
+    "openedCitations": []
+  },
+  "numericCitations": [
+    {
+      "threadId": "thread-1791596533331-xw47gg",
+      "path": "apps/api/plane/app/serializers/issue.py",
+      "startLine": 125,
+      "endLine": 126,
+      "sourceLinesAttached": true,
+      "exactQuote": true,
+      "sameLinesIgnoringIndentation": true
+    },
+    {
+      "threadId": "thread-1791596533331-xw47gg",
+      "path": "apps/api/plane/app/serializers/issue.py",
+      "startLine": 168,
+      "endLine": 176,
+      "sourceLinesAttached": true,
+      "exactQuote": true,
+      "sameLinesIgnoringIndentation": true
+    },
+    {
+      "threadId": "thread-1791596533331-xw47gg",
+      "path": "apps/api/plane/api/serializers/issue.py",
+      "startLine": 121,
+      "endLine": 126,
+      "sourceLinesAttached": true,
+      "exactQuote": true,
+      "sameLinesIgnoringIndentation": true
+    },
+    {
+      "threadId": "thread-1791596533331-xw47gg",
+      "path": "apps/api/plane/api/serializers/issue.py",
+      "startLine": 288,
+      "endLine": 288,
+      "sourceLinesAttached": true,
+      "exactQuote": true,
+      "sameLinesIgnoringIndentation": true
+    },
+    {
+      "threadId": "thread-1791596533331-xw47gg",
+      "path": "apps/api/plane/app/serializers/issue.py",
+      "startLine": 330,
+      "endLine": 330,
+      "sourceLinesAttached": true,
+      "exactQuote": true,
+      "sameLinesIgnoringIndentation": true
+    }
+  ],
+  "reason": "The complete answer retained a citation-rejection message: one quoted excerpt could not be matched to reviewed source. Five remaining quotes match; manager-definition prose has no qualified supporting quote. Native citation qualification was not completed.",
+  "startupRecovery": "Sidebar outer frame remained blank; a fresh Coop editor chat panel loaded and selected Plane preview with no file. Verified715c extension, qualified22cc frontend."
+}

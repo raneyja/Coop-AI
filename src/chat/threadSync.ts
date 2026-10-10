@@ -69,6 +69,7 @@ export async function syncThreadToBackend(
             mimeType: attachment.mimeType
           })),
           relatedArtifactId: message.relatedArtifactId,
+          sourceCitationMode: message.sourceCitationMode,
           modelContent: message.modelContent,
           cancelled: message.cancelled,
           patchCard: message.patchCard

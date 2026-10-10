@@ -16,12 +16,14 @@ export type ChatSectionHeadingBlock = {
 
 export type ChatCodeFenceBlock = {
   type: "code-fence";
+  fence?: string;
   language?: string;
   code: string;
 };
 
 export type ChatCodeCitationBlock = {
   type: "code-citation";
+  fence?: string;
   /** Real line range when known; omitted when recovered from a placeholder / path-only locator. */
   startLine?: number;
   endLine?: number;

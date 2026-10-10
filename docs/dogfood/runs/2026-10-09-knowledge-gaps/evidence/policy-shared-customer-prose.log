@@ -1,0 +1,16 @@
+  ✓ keeps a reading-list answer and does not append patch internals
+  ✓ locked-pass answers with no intern-speak stay byte-identical
+  ✓ rewrites I3/I4 intern-speak into teammate English without blanking the bubble
+  ✓ rewrites intern-speak in a mixed sentence instead of deleting the line
+  ✓ does not invent a patch-failure footer when the hunt already answered
+  ✓ rewrites timed-out vendor search into teammate English
+  ✓ leaves Apply-patch answers unchanged
+  ✓ intern-speak only inside a citation fence leaves the bubble byte-identical
+  ✓ keeps locate prose and citation-fence comments about the soft gather budget
+  ✓ citation fences stay byte-identical even when surrounding intern-speak is rewritten
+  ✓ drops latency-banner intern copy without blanking a real answer
+  ✓ highlight change keeps a synthesis patch and does not use the empty-hunt miss
+  ✓ empty agent change hunt still uses the canned miss
+
+customerFacingAnswer: 13/13 tests passed
+

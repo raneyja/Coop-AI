@@ -154,7 +154,7 @@ export type CreatePrWriteDecision =
  * repo id — leftover Use-repo must not become the target.
  */
 export function decideCreatePullRequestWrite(input: {
-  card?: Pick<PatchCardState, "status" | "canCreatePr" | "prBlockedReason" | "prFiles">;
+  card?: Pick<PatchCardState, "status" | "canCreatePr" | "prBlockedReason" | "prFiles" | "targetRepo">;
   files: readonly CreatePrFile[];
   payloadRepoId?: string;
   fallbackRepoId?: string;
@@ -163,10 +163,18 @@ export function decideCreatePullRequestWrite(input: {
   if ((input.card && isLocalFileCreatePrCard(input.card)) || files.some((file) => isOsAbsoluteDiskPath(file.path))) {
     return { ok: false, error: CREATE_PR_LOCAL_FILE_MESSAGE };
   }
+  if (input.card && (input.card.status !== "applied" || input.card.canCreatePr !== true)) {
+    return { ok: false, error: "Apply the patch before creating a pull request." };
+  }
   if (!files.length) {
     return { ok: false, error: "No file changes to ship." };
   }
-  const repoId = input.payloadRepoId?.trim() || input.fallbackRepoId?.trim();
+  const target = input.card?.targetRepo;
+  const targetRepoId = target ? `${target.provider}:${target.owner}/${target.repo}` : undefined;
+  if (targetRepoId && input.payloadRepoId && input.payloadRepoId.toLowerCase() !== targetRepoId.toLowerCase()) {
+    return { ok: false, error: "This patch belongs to a different repository. Reopen Create pull request from its patch card." };
+  }
+  const repoId = targetRepoId || input.payloadRepoId?.trim() || input.fallbackRepoId?.trim();
   if (!repoId) {
     return { ok: false, error: "Pick a Use-repo before creating a pull request." };
   }

@@ -1,4 +1,6 @@
 import type { ServerResponse } from "node:http";
+import type { SupportStore } from "./support/supportStore";
+import { handleOperatorSupport } from "./support/supportApi";
 import { extractBearerToken } from "./authMiddleware";
 import { writeJson } from "./adminApiShared";
 import type { AuditLogger } from "./audit/auditLogger";
@@ -52,6 +54,7 @@ import {
 } from "./operatorUsageCredit";
 
 export type OperatorApiDeps = {
+  supportStore?: SupportStore;
   orgStore?: OrgStore;
   userStore?: UserStore;
   operatorStore?: OperatorStore;
@@ -132,6 +135,8 @@ export async function handleOperatorApiRequest(
     writeJson(response, 200, { ok: true });
     return true;
   }
+
+  if (await handleOperatorSupport(parsed, response, deps.supportStore, operator)) return true;
 
   if (!deps.orgStore) {
     writeJson(response, 503, { error: "organization database not configured" });

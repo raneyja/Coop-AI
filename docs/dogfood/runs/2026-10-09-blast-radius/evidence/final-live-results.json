@@ -1,0 +1,603 @@
+{
+  "recordedAt": "2026-10-10T03:02:06.157266+00:00",
+  "qualification": "Live source-grounding/citation Pass on four named cases. Both affected Documenso latency replays now pass under 15s; preserved Plane latency remains a Fail.",
+  "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+  "candidateBundles": [
+    "ac7ff0c94bfe1c1bbf3d3e4076d2c7fe718f60a8ccad21897abf4eb625327377",
+    "e38059412ba58bbe0127155925a9c954d01c4d03c5b67e309df6f08a5c4ae13a"
+  ],
+  "cases": [
+    {
+      "name": "Documenso whole file",
+      "threadId": "thread-1791600959699-4o4a89",
+      "verdict": "Pass",
+      "reason": "Live direct publication of the same source-qualified conditional impact explanation, before any synthesis model. Complete guards/write branches and exact citations retained; first answer within 15 seconds.",
+      "bundleId": "ac7ff0c94bfe1c1bbf3d3e4076d2c7fe718f60a8ccad21897abf4eb625327377",
+      "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+      "ask": "[blast-radius] If this handler allowed signing when the envelope is not PENDING, which callers or signing flows could be affected, and what should I verify before shipping that change?\nfile: packages/lib/server-only/field/sign-field-with-token.ts \u00b7 repo: CoopAI-Corp/documenso \u00b7 branch: main",
+      "initialSelectedLines": null,
+      "answerStartMs": 4201,
+      "completionMs": 4735,
+      "timingBasis": "Both client diagnostics use Date.now() minus the same turn.startedAt; completion follows finishTurnAssistantMessage.",
+      "soft15SecondStartPass": true,
+      "sessionCostUsd": 0,
+      "sourcesCardRetained": true,
+      "sourceBodies": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "ref": "main",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "f3de734db05bd6df3578971e7438acaca2cf323786dd715945a5e47683e7f12d"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "ref": "main",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "656014f0097c18843c06bff688900476021c5de209a45de9ffe0db6245118d2e"
+        },
+        {
+          "path": "packages/trpc/server/field-router/router.ts",
+          "ref": "main",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "e8fece6232a7676313552486919b279ad7770e9b6b5dd9096a7b76c78f2c3420"
+        }
+      ],
+      "citations": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 108,
+          "endLine": 110,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "startLine": 18,
+          "endLine": 37,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "startLine": 38,
+          "endLine": 57,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "startLine": 58,
+          "endLine": 77,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "startLine": 78,
+          "endLine": 97,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "startLine": 98,
+          "endLine": 98,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/trpc/server/field-router/router.ts",
+          "startLine": 615,
+          "endLine": 633,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 112,
+          "endLine": 112,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 129,
+          "endLine": 129,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 138,
+          "endLine": 138,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 147,
+          "endLine": 149,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 158,
+          "endLine": 158,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 167,
+          "endLine": 186,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 187,
+          "endLine": 195,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 216,
+          "endLine": 227,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 236,
+          "endLine": 255,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 256,
+          "endLine": 275,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 276,
+          "endLine": 295,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 296,
+          "endLine": 312,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        }
+      ],
+      "nativeOpens": [
+        {
+          "at": "2026-10-10T02:57:22.199Z",
+          "threadId": "thread-1791600959699-4o4a89",
+          "stage": "remote-review-opened",
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "owner": "CoopAI-Corp",
+          "repo": "documenso",
+          "branch": "main",
+          "requestedLine": 108,
+          "requestedEndLine": 110,
+          "revealedStartLine": 108,
+          "revealedEndLine": 110,
+          "bodyChars": 10308,
+          "source": "remote"
+        },
+        {
+          "at": "2026-10-10T02:57:23.132Z",
+          "threadId": "thread-1791600959699-4o4a89",
+          "stage": "remote-review-opened",
+          "path": "packages/trpc/server/field-router/router.ts",
+          "owner": "CoopAI-Corp",
+          "repo": "documenso",
+          "branch": "main",
+          "requestedLine": 615,
+          "requestedEndLine": 633,
+          "revealedStartLine": 615,
+          "revealedEndLine": 633,
+          "bodyChars": 18366,
+          "source": "remote"
+        },
+        {
+          "at": "2026-10-10T02:57:33.082Z",
+          "threadId": "thread-1791600959699-4o4a89",
+          "stage": "remote-review-opened",
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "owner": "CoopAI-Corp",
+          "repo": "documenso",
+          "branch": "main",
+          "requestedLine": 236,
+          "requestedEndLine": 255,
+          "revealedStartLine": 236,
+          "revealedEndLine": 255,
+          "bodyChars": 10308,
+          "source": "remote"
+        }
+      ],
+      "sourceProofDiagnostic": {
+        "at": "2026-10-10T02:56:41.655Z",
+        "threadId": "thread-1791600959699-4o4a89",
+        "stage": "blast-predicate-source-proof",
+        "turnId": "turn-1791600999809-ec16y2",
+        "elapsedMs": 4201,
+        "sourceCount": 3,
+        "proofPhase": "before-model",
+        "bundleId": "ac7ff0c94bfe1c1bbf3d3e4076d2c7fe718f60a8ccad21897abf4eb625327377"
+      },
+      "utilityQualification": "Conditional impact paths and concrete preserved boolean checks/write predicates are stated in prose and code cards; helper/access/data invariants remain unknown. Conservative syntax/control enclosure analysis, not a complete dataflow analysis.",
+      "baselineThreadId": "thread-1791599169177-8qt2pd",
+      "baselineAnswerStartMs": 52051,
+      "baselineCompletionMs": 52547,
+      "answerSha256": "d2c588f15a0cf772e241daa82c7d18069512c2dda4bf62ab38c6a32d6d7a204e",
+      "answerByteIdenticalToBaseline": true,
+      "sourceBodiesIdenticalToBaselineByPath": true,
+      "modelSynthesisRequests": 0,
+      "usageAccounting": "No synthesis model request is made; no model token/cost usage is invented. Turn source gathering and artifact persistence remain unchanged.",
+      "sourceCardNativeObservation": "Sources button present; persisted artifact retains all three complete bodies, matching independently qualified source bytes."
+    },
+    {
+      "name": "Documenso selected guard",
+      "threadId": "thread-1791601054095-o2fcky",
+      "verdict": "Pass",
+      "reason": "Live direct publication of the same source-qualified conditional impact explanation, before any synthesis model. Complete guards/write branches and exact citations retained; first answer within 15 seconds.",
+      "bundleId": "ac7ff0c94bfe1c1bbf3d3e4076d2c7fe718f60a8ccad21897abf4eb625327377",
+      "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+      "ask": "[blast-radius] If this selected PENDING guard were relaxed, which opened callers could reach the changed branch, which checks and write conditions remain, and what should I verify before shipping?\nfile: packages/lib/server-only/field/sign-field-with-token.ts \u00b7 selection: L108\u2013110 \u00b7 repo: CoopAI-Corp/documenso \u00b7 branch: main",
+      "answerStartMs": 3141,
+      "completionMs": 3639,
+      "timingBasis": "Both client diagnostics use Date.now() minus the same turn.startedAt; completion follows finishTurnAssistantMessage.",
+      "soft15SecondStartPass": true,
+      "sessionCostUsd": 0,
+      "sourcesCardRetained": true,
+      "sourceBodies": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "ref": "main",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "f3de734db05bd6df3578971e7438acaca2cf323786dd715945a5e47683e7f12d"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "ref": "main",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "656014f0097c18843c06bff688900476021c5de209a45de9ffe0db6245118d2e"
+        },
+        {
+          "path": "packages/trpc/server/field-router/router.ts",
+          "ref": "main",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "e8fece6232a7676313552486919b279ad7770e9b6b5dd9096a7b76c78f2c3420"
+        }
+      ],
+      "citations": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 108,
+          "endLine": 110,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/trpc/server/field-router/router.ts",
+          "startLine": 615,
+          "endLine": 633,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "startLine": 18,
+          "endLine": 98,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 112,
+          "endLine": 112,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 129,
+          "endLine": 129,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 138,
+          "endLine": 138,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 147,
+          "endLine": 149,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 158,
+          "endLine": 158,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 167,
+          "endLine": 195,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 216,
+          "endLine": 227,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 236,
+          "endLine": 312,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        }
+      ],
+      "nativeOpens": [
+        {
+          "at": "2026-10-10T03:00:05.308Z",
+          "threadId": "thread-1791601054095-o2fcky",
+          "stage": "remote-review-opened",
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "owner": "CoopAI-Corp",
+          "repo": "documenso",
+          "branch": "main",
+          "requestedLine": 108,
+          "requestedEndLine": 110,
+          "revealedStartLine": 108,
+          "revealedEndLine": 110,
+          "bodyChars": 10308,
+          "source": "remote"
+        },
+        {
+          "at": "2026-10-10T03:00:06.776Z",
+          "threadId": "thread-1791601054095-o2fcky",
+          "stage": "remote-review-opened",
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "owner": "CoopAI-Corp",
+          "repo": "documenso",
+          "branch": "main",
+          "requestedLine": 18,
+          "requestedEndLine": 98,
+          "revealedStartLine": 18,
+          "revealedEndLine": 98,
+          "bodyChars": 3508,
+          "source": "remote"
+        },
+        {
+          "at": "2026-10-10T03:00:12.126Z",
+          "threadId": "thread-1791601054095-o2fcky",
+          "stage": "remote-review-opened",
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "owner": "CoopAI-Corp",
+          "repo": "documenso",
+          "branch": "main",
+          "requestedLine": 236,
+          "requestedEndLine": 312,
+          "revealedStartLine": 236,
+          "revealedEndLine": 312,
+          "bodyChars": 10308,
+          "source": "remote"
+        }
+      ],
+      "sourceProofDiagnostic": {
+        "at": "2026-10-10T02:58:12.681Z",
+        "threadId": "thread-1791601054095-o2fcky",
+        "stage": "blast-predicate-source-proof",
+        "turnId": "turn-1791601091297-2phfus",
+        "elapsedMs": 3141,
+        "sourceCount": 3,
+        "proofPhase": "before-model",
+        "bundleId": "ac7ff0c94bfe1c1bbf3d3e4076d2c7fe718f60a8ccad21897abf4eb625327377"
+      },
+      "initialSelectedLines": [
+        108,
+        110
+      ],
+      "utilityQualification": "Conditional impact paths and concrete preserved boolean checks/write predicates are stated in prose and code cards; helper/access/data invariants remain unknown. Conservative syntax/control enclosure analysis, not a complete dataflow analysis.",
+      "baselineThreadId": "thread-1791598235832-61mrfs",
+      "baselineAnswerStartMs": 57221,
+      "baselineCompletionMs": 57883,
+      "answerSha256": "cbb9d6b08d25e910d8c1a592e1c9024aafe6be68733efb2ec2f84332a37f577c",
+      "answerByteIdenticalToBaseline": false,
+      "sourceBodiesIdenticalToBaselineByPath": true,
+      "modelSynthesisRequests": 0,
+      "usageAccounting": "No synthesis model request is made; no model token/cost usage is invented. Turn source gathering and artifact persistence remain unchanged.",
+      "sourceCardNativeObservation": "Sources button present; persisted artifact retains all three complete bodies, matching independently qualified source bytes.",
+      "answerDifference": "Only the two complete caller sections changed order, following read-completion order. All section bytes and remaining text match."
+    },
+    {
+      "name": "Plane default manager",
+      "threadId": "thread-1791591217454-f66kd6",
+      "verdict": "Pass",
+      "reason": "Actual aggregate and dependent query conditions retained; group and is_triage distinct; stored aggregate unknown; imports not behavior; unread manager base explicit.",
+      "bundleId": "e38059412ba58bbe0127155925a9c954d01c4d03c5b67e309df6f08a5c4ae13a",
+      "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+      "ask": "[blast-radius] If this file's default model manager stopped hiding triage states, which server consumers could be affected, and what should I verify before shipping?\nfile: apps/api/plane/db/models/state.py \u00b7 repo: CoopAI-Corp/plane \u00b7 branch: preview",
+      "answerStartMs": 121198,
+      "soft15SecondStartPass": false,
+      "sessionCostUsd": 0.24336,
+      "sourcesCardRetained": true,
+      "sourceBodies": [
+        {
+          "path": "apps/api/plane/db/models/state.py",
+          "ref": "preview",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "dee256b42615705f66ce3f0daa639a965d7c55316d656481580e440d63118951"
+        },
+        {
+          "path": "apps/api/plane/db/models/__init__.py",
+          "ref": "preview",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "d4294fdb5f49b0b26d1a32f22dc95d7ce9f190ca4209035cb744cc3551bedbe0"
+        },
+        {
+          "path": "apps/api/plane/db/models/issue.py",
+          "ref": "preview",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "ae65e270f1e7e1edd51869d077fad82be04839b449b2a63e9afbf7b5b057542f"
+        }
+      ],
+      "citations": [
+        {
+          "path": "apps/api/plane/db/models/state.py",
+          "startLine": 119,
+          "endLine": 124,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "preview"
+        },
+        {
+          "path": "apps/api/plane/db/models/issue.py",
+          "startLine": 228,
+          "endLine": 236,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "preview"
+        }
+      ],
+      "nativeOpens": [
+        {
+          "at": "2026-10-10T00:17:46.519Z",
+          "threadId": "thread-1791591217454-f66kd6",
+          "stage": "remote-review-opened",
+          "path": "apps/api/plane/db/models/state.py",
+          "owner": "CoopAI-Corp",
+          "repo": "plane",
+          "branch": "preview",
+          "requestedLine": 119,
+          "requestedEndLine": 124,
+          "revealedStartLine": 119,
+          "revealedEndLine": 124,
+          "bodyChars": 3824,
+          "source": "remote"
+        },
+        {
+          "at": "2026-10-10T00:18:01.033Z",
+          "threadId": "thread-1791591217454-f66kd6",
+          "stage": "remote-review-opened",
+          "path": "apps/api/plane/db/models/issue.py",
+          "owner": "CoopAI-Corp",
+          "repo": "plane",
+          "branch": "preview",
+          "requestedLine": 228,
+          "requestedEndLine": 236,
+          "revealedStartLine": 228,
+          "revealedEndLine": 236,
+          "bodyChars": 30185,
+          "source": "remote"
+        }
+      ],
+      "providerCompletionProxyMs": 132322,
+      "completionMs": null,
+      "timingBasis": "Answer-start uses client turn.startedAt. Historical completion proxy is provider/server assistant timestamp minus user message timestamp; no same-clock client completion diagnostic was present.",
+      "scopePreservation": "Historical e380 live qualification retained under the agreed affected-cases-only replay scope; not rerun on 0bb client."
+    },
+    {
+      "name": "Thin dependency control",
+      "threadId": "thread-1791591169175-00b87h",
+      "verdict": "Pass",
+      "reason": "No confirmed dependents; short honest answer; no zero-impact claim or invented surfaces.",
+      "bundleId": "e38059412ba58bbe0127155925a9c954d01c4d03c5b67e309df6f08a5c4ae13a",
+      "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+      "ask": "[blast-radius] Which dependent files were verified for a change to this README, and which impact claims remain unverified?\nfile: README.md \u00b7 repo: CoopAI-Corp/coop-dogfood-launch \u00b7 branch: renamed",
+      "answerStartMs": 9262,
+      "soft15SecondStartPass": true,
+      "sessionCostUsd": 0.01248,
+      "sourcesCardRetained": true,
+      "sourceBodies": [
+        {
+          "path": "README.md",
+          "ref": "renamed",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "16f6c0e91f63771dde8fd12843f85f068005a3a1401adcc957aed05a4fdc61c5"
+        }
+      ],
+      "citations": [],
+      "nativeOpens": [],
+      "providerCompletionProxyMs": 10182,
+      "completionMs": null,
+      "timingBasis": "Answer-start uses client turn.startedAt. Historical completion proxy is provider/server assistant timestamp minus user message timestamp; no same-clock client completion diagnostic was present.",
+      "scopePreservation": "Historical e380 live qualification retained under the agreed affected-cases-only replay scope; not rerun on 0bb client."
+    }
+  ],
+  "checkedCitationCount": 32,
+  "invalidFixtureAttempt": {
+    "threadId": "thread-1791599106629-3ulkee",
+    "reason": "Prior selection was retained during remote-open suppression; excluded from whole-file qualification. Cleared context before the counted replay, which has no initial selectedLines."
+  },
+  "knownLimitations": [
+    "Whole and range source-derived output proves shown syntax and conditional enclosure, not complete reachability/dataflow or storage/access invariants.",
+    "Only the bounded opened caller set is qualified. Unsupported languages/imports/truncated bodies use the private model-review path; general parity is not claimed.",
+    "Anchored Documenso starts 4.201s whole / 3.141s selected. Preserved Plane starts 121.198s and misses the 15s soft guideline. Thin starts 9.262s.",
+    "TypeScript parser bundling expands the unminified extension bundle to 12.8 MiB; startup overhead was not separately benchmarked.",
+    "Plane/thin are preserved earlier live qualifications, not fresh final-client replays. Historical completion proxies are explicitly separated from same-clock client diagnostics."
+  ],
+  "remainingScope": "The two anchored Documenso latency fixtures are closed. Plane/unsupported model-review latency and parser footprint remain material product limitations.",
+  "latencyBaselineRecord": "source-qualified-slow-baseline.json"
+}

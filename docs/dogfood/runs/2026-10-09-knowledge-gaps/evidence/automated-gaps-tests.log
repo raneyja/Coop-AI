@@ -1,0 +1,176 @@
+
+> coop-ai@0.1.13 test:knowledge-gaps-enrichment
+> npx tsx src/prompts/knowledgeGapsEnrichment.test.ts && npx tsx src/chat/chatResponseEnrichment.test.ts && npx tsx src/context/knowledgeGapsFocus.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/context/knowledgeGapsCodeEvidence.test.ts && npx tsx src/prompts/knowledgeGapsSynthesis.test.ts && npx tsx src/context/docSearchQuery.test.ts && npx tsx src/context/integrationDocRelevance.test.ts && npx tsx src/context/integrationChatEnrichment.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' npx tsx src/chat/knowledgeGapsNamedFocus.test.ts
+
+  ✓ buildConfluencePagesReviewedBlock links titles when htmlUrl is present
+  ✓ enrichKnowledgeGapsResponse moves Confluence pages to top of Documentation gaps
+  ✓ enrichKnowledgeGapsResponse strips invented Ownership and Integration sections
+  ✓ enrichKnowledgeGapsResponse linkifies file paths and Confluence title mentions
+  ✓ buildConfluencePagesReviewedBlock uses keyword heuristics for runbook pages
+  ✓ enrichKnowledgeGapsResponse numbers recommended next steps
+  ✓ enrichKnowledgeGapsResponse rebuilds fastify.js scenario with Notion pages and scan gaps
+  ✓ buildScanGapSubsection uses scan message for What to check
+  ✓ extractNotionPagesFromBundle and extractJobScanGapsFromBundle read bundle entries
+  ✓ buildNotionPagesReviewedBlock links titles when htmlUrl is present
+  ✓ extractConfluencePagesFromBundle reads pages and urls from context bundle
+  ✓ enrichIntegrationDocsResponse linkifies attached page titles
+  ✓ empty documentation evidence cannot preserve model absence claims
+  ✓ missing-docs and owner scan flags are coverage limits rather than absence proof
+  ✓ source-grounded function review survives empty-doc coverage replacement and retains verified citation
+
+15 passed, 0 failed
+  ✓ gaps final output supplies a verbatim interactive source citation when omitted
+  ✓ gaps final output never invents line offsets for arbitrary snippets
+  ✓ knowledge gaps final response rejects absence inferred from empty review evidence
+  ✓ incident reconstruction enriches code-only skim with tickets + gaps
+  ✓ incident reconstruction with disconnected tools still has gaps
+  ✓ existing-capability enricher corrects greenfield blocked_by advice
+  ✓ file-assistant leftover Use-repo evidence does not rewrite the open-file answer
+  ✓ Blast on coop-ai/plane drops leftover Coop-AI docs and stays unverified
+  ✓ Blast on raneyja/Coop-AI keeps the same Coop ADRs
+  ✓ plain R chat does not attach leftover Blast docs
+  ✓ L Desktop file does not inject leftover Blast docs or callers
+  ✓ /docs answers that invent repo files are rewritten to titles only
+  ✓ /docs preserves code paths actually described by the opened document body
+  ✓ /docs final response supplies the opened document source link once
+  ✓ gaps import-only next steps verify symbol use while preserving conditional finding and source
+  ✓ rehydrated production gaps artifact retains import graph scope into final recommendations
+  ✓ normalized production file dependencies require symbol verification even with unknown graph provenance
+  ✓ gaps runtime diagnostics distinguish absent body and disabled action without content logging
+  ✓ actual hybridEnrichContext producer reaches gaps final guard; explicit dependency envelope wins
+
+chatResponseEnrichment: 19/19 tests passed
+  ✓ knowledgeGapsGatherQuery keeps focus as primary gather query
+  ✓ knowledgeGapsFocusTopics splits webhook + certificate subsystems
+  ✓ knowledgeGapsFocusTopics covers notifications and webhooks
+  ✓ signing/document-status NL ask extracts subsystem topics — not documentation meta
+  ✓ openFileRelatedToGapsFocus rejects unrelated helper file
+  ✓ resolveKnowledgeGapsAuditScope demotes unrelated open file when focus present
+  ✓ knowledgeGapsFocusGatherTerms puts webhook/cert tokens first
+  ✓ focus gather terms for signing ask prefer signing/status — not documentation meta flood
+  ✓ knowledgeGapsFocusTopicGapStubs emit honest miss stubs per topic without hits
+  ✓ partial document-path hits do not establish missing signing documentation
+  ✓ mergeKnowledgeGapsFocusStubsIntoScan fills empty job scan with focus stubs
+  ✓ synthesis builder includes focus as primary topic — not unrelated open-file ownership headline
+  ✓ synthesis with notifications/webhooks focus keeps focus primary for plane-style ask
+  ✓ buildConfluenceCql ANDs Use-repo with focus extras (no documentation OR bleed)
+  ✓ buildConfluenceRepoOnlyCql is repo-scoped without focus extras
+  ✓ filterDocPagesForUseRepo drops Coop-AI ADRs when Use-repo is documenso
+  ✓ sanitizeIntegrationSnippet strips mojibake and Confluence highlight markers
+  ✓ scoreDocPageForUseRepo penalizes foreign Coop pages for documenso
+  ✓ E6 ask keeps Slack/Jira as one topic and drops the safety question
+  ✓ E6 index queries are not hunt-shortened to Focus
+  ✓ E6 stubs stay silent on no-indexed-code when AgentOrchestrator and slack paths exist
+  ✓ hunt/locate risk index queries attach hunt files not Focus
+  ✓ hunt/locate risk stubs name evidence-class gaps not runbook-only
+  ✓ unrelated chip is secondary for hunt/locate Gaps focus
+  ✓ named body without attached docs cannot fabricate default-on runbook gaps
+  ✓ matching implementation alone does not prove thin documentation
+
+knowledgeGapsFocus: 26/26 tests passed
+✔ question framing preserves the changed subsystem and omits audit scaffolding (3.214875ms)
+✔ focused Gaps dispatch reads code without serial repo-wide ownership/dependency scans (0.277958ms)
+✔ remote filename discovery survives empty semantic evidence and retains guards (1.822417ms)
+✔ canonical subject validators lead synthesis regardless of remote read completion order (23.71975ms)
+✔ large source retains complete numeric windows beyond the old prefix cap (1.788125ms)
+✔ large serializer retains its writer instead of a neighboring class's validators (0.965583ms)
+✔ source windows preserve enclosing class identity and a copyable exact writer citation (0.725083ms)
+✔ selected source starts immediately, deduplicates discovered reads, and keeps its ref (0.455167ms)
+✔ an explicit selected-file audit cannot substitute neighboring models or serializers (0.264583ms)
+✔ focused rule audits keep scan ownership flags out of the final policy answer (1.284708ms)
+✔ deadline retains completed source and snapshots out late/foreign bodies (27.333167ms)
+✔ completed source starts synthesis without waiting for a hung semantic enrichment (0.333125ms)
+✔ Stop ends focused gathering and prevents late source attachments and helper reads (4.95725ms)
+✔ search misses plus contributor scores cannot become Strong gap evidence or a generic essay (0.453125ms)
+✔ code-only evidence counts distinct reviewed files and keeps intended policy unverified (0.196125ms)
+✔ a focused named-file miss with no scan gaps stops without asserting path absence (0.226583ms)
+✔ code rules and motivated open questions survive empty documentation enrichment (0.233291ms)
+✔ partial membership evidence cannot assert a complete transition-policy absence (0.637083ms)
+✔ a matrix absence claim from attached partial files stays unverified (0.067125ms)
+✔ policy prose normalization never rewrites a verified source quotation (0.423375ms)
+✔ empty documentation evidence cannot turn policy questions into documented absence (0.147666ms)
+✔ quoted rules use exact reviewed offsets and canonical source indentation (0.1435ms)
+✔ noncontiguous model quotes cannot retain an unverified interactive citation (0.075958ms)
+✔ filename ranking prefers relevant server validation over UI and generated catalogs (0.103458ms)
+✔ signing domain ranking prefers executable envelope code over auth and type siblings (0.0775ms)
+✔ reviewed imports discover a canonical remote helper without guessing package aliases (0.353166ms)
+ℹ tests 26
+ℹ suites 0
+ℹ pass 26
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 73.268708
+  ✓ knowledge-gaps synthesis includes primary target and out-of-scope @ attachments
+  ✓ knowledge-gaps synthesis supports repository-wide scope without file
+  ✓ knowledge-gaps synthesis forbids invented gaps when scan is missing
+  ✓ knowledge-gaps synthesis uses response contract instead of invented enrichment
+  ✓ knowledge-gaps synthesis requires Notion pages and scan gaps in response contract
+  ✓ knowledge-gaps synthesis includes Notion opened excerpt in Attached facts
+  ✓ knowledge-gaps synthesis includes Google Docs opened excerpt in Attached facts
+  ✓ knowledge-gaps synthesis includes Jira opened description not just summary
+  ✓ knowledge-gaps synthesis includes Slack opened thread body when threadOpened
+  ✓ knowledge-gaps synthesis labels unattached Notion bodies honestly
+  ✓ knowledge-gaps synthesis includes Teams opened thread body when threadOpened
+  ✓ knowledge-gaps synthesis flags limited evidence when scan missing
+  ✓ knowledge-gaps synthesis frames zero-gap scan with attached docs in response contract
+  ✓ knowledge-gaps synthesis treats missing graph as incomplete not a docs gap
+  ✓ knowledge-gaps synthesis labels Confluence as org docs not repo architecture SoT
+  ✓ knowledge-gaps with focus excerpts audits attached code instead of claiming it is missing
+  ✓ hunt/locate risk prompt names evidence-class gaps not runbook-only
+  ✓ gap recommendations cannot assume earlier proposed edits were applied
+  ✓ gaps synthesis preserves dated ownership evidence and labels scan absence as unproven
+  ✓ gaps full remote bodies retain real line offsets for source citations
+  ✓ incomplete ownership scans require policy verification before recommending CODEOWNERS changes
+  ✓ gaps arbitrary focus snippets cannot invent source line offsets
+  ✓ gap behavior claims require traced conditions and an evidenced expected contract
+  ✓ named fixture audit does not convert observed loop bounds and a caller edge into a proven defect
+  ✓ normalized gaps file graph never labels importers as verified symbol callers
+
+knowledgeGapsSynthesis: 25/25 tests passed
+  ✓ buildConfluenceCql requires repo ∩ extras when both present
+  ✓ buildConfluenceCql falls back to OR when only repo terms exist
+  ✓ buildConfluenceRepoOnlyCql ignores extras
+  ✓ buildRepoSearchTerms prefixes every shipped code host
+  ✓ buildRepoSearchTerms does not prefix every hyphen/underscore mutation
+  ✓ buildRepoSearchTerms puts the Use-repo host first among prefixes
+  ✓ decisionSearchPhrase picks the longest sanitized decision term
+  ✓ sanitizeAtlassianContainsTerm strips hyphens and reserved words
+  ✓ buildConfluenceCql sanitizes hyphenated extras
+  ✓ buildConfluenceCql strips host prefixes that break CQL
+  ✓ buildConfluenceCql extrasOnly skips hyphenated repo slugs
+  ✓ buildRepoOrQuery still joins extras with OR for non-CQL tools
+
+docSearchQuery: 12/12 tests passed
+  ✓ sanitizeIntegrationSnippet removes replacement chars and highlight markers
+  ✓ filterDocPagesForUseRepo drops COOP ticket ADRs when Use-repo is not Coop
+  ✓ filterDocPagesForUseRepo prefers Use-repo pages over Coop bleed
+  ✓ filterDocPagesForUseRepo drops Coop ADRs when owner is coop-ai and repo is plane
+  ✓ filterDocPagesForUseRepo keeps Coop pages when Use-repo is Coop-AI
+  ✓ decision focus keeps a COOP ticket page when the phrase matches
+  ✓ scoreDocPageForUseRepo boosts focus term matches
+
+integrationDocRelevance: 7/7 tests passed
+✔ Knowledge Gaps documentation jobs search the subsystem instead of question scaffolding (38.002459ms)
+✔ job-scoped Google Docs enrichment preserves the raw canonical document URL (0.430166ms)
+✔ explicit Docs command ignores an unrelated selected repo when ranking named documents (1.398583ms)
+✔ enrichChatContextWithIntegrations runs staged parallel integration batches (4.246666ms)
+✔ enrichChatContextWithIntegrations returns partial results when budget elapses (41.999167ms)
+✔ onToolActivity emits query labels and hit detail, not generic theater (1.147666ms)
+✔ onToolActivity surfaces Jira errors instead of No matching results (0.705125ms)
+✔ job-scoped providers start in parallel with capability-specific terms (0.546584ms)
+✔ job-scoped timeout never reports late completion (14.605583ms)
+✔ an aborted turn passes its signal to integrations and drops late evidence (0.368ms)
+✔ job-scoped provider without a matching job does not fall back to repo terms (0.181959ms)
+✔ expired job budget skips fetch instead of claiming searched-empty (0.161ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 106.122417
+knowledgeGapsNamedFocus: 5/5 cold named-target and scan-budget cases passed
+import-only Blast session: finish/artifact, Stop, and verified-evidence bypass passed

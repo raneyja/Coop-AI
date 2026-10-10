@@ -7,6 +7,10 @@ export function knowledgeGapsSourceLabelScan(): string {
   return "[Sources: Knowledge gap scan]";
 }
 
+export function knowledgeGapsSourceLabelCode(): string {
+  return "[Sources: Reviewed source]";
+}
+
 export function knowledgeGapsSourceLabelConfluence(): string {
   return "[Sources: Confluence pages]";
 }
@@ -53,6 +57,9 @@ export function listKnowledgeGapsSourceLabels(
   teams?: { messages?: unknown[]; error?: string }
 ): string[] {
   const labels: string[] = [];
+  if (evidence.focusFiles?.some(file => file.content?.trim())) {
+    labels.push(knowledgeGapsSourceLabelCode());
+  }
   if (evidence.jobScan) {
     labels.push(knowledgeGapsSourceLabelScan());
   }

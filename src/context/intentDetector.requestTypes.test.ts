@@ -82,7 +82,7 @@ test("caller ask without open file does not request dependencies", () => {
   assert.deepEqual(requestTypesForIntent(event), ["chat_context"]);
 });
 
-test("blast-radius still requests file_metadata + dependencies", () => {
+test("blast-radius requests one source-owning dependencies gather", () => {
   const event = detector.fromQuickAction(
     "blast-radius",
     {
@@ -93,7 +93,7 @@ test("blast-radius still requests file_metadata + dependencies", () => {
     },
     "What breaks if we change this?"
   );
-  assert.deepEqual(requestTypesForIntent(event), ["file_metadata", "dependencies"]);
+  assert.deepEqual(requestTypesForIntent(event), ["dependencies"]);
   assert.equal(event.intent, UserIntent.QUICK_ACTION_CLICKED);
 });
 

@@ -87,7 +87,7 @@ export function hydratePatchCardsFromHistory(
       preferredFile,
       readContent: (relativePath) =>
         lookupPatchFileContent(relativePath, options?.fileContents) ??
-        collectOpenPatchFileBytes(relativePath)
+        collectOpenPatchFileBytes(relativePath, { repo: savedCard?.targetRepo, preferLocalDisk: savedCard?.preferLocalDisk })
     });
     const pending = withSuppressionRegistry({
       ...(savedCard

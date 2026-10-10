@@ -1,0 +1,70 @@
+[
+  {
+    "threadId": "thread-1791589176951-mzyn77",
+    "sourcesCardRetained": false,
+    "citations": [
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 108,
+        "endLine": 110,
+        "oracle": "documenso-sign-field.ts",
+        "exactOracleSlice": true
+      },
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "oracle": "documenso-field-router.ts",
+        "exactOracleSlice": true
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 89,
+        "endLine": 97,
+        "oracle": "documenso-multi-sign.ts",
+        "exactOracleSlice": true
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 247,
+        "endLine": 262,
+        "oracle": "documenso-sign-field.ts",
+        "exactOracleSlice": true
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791589305754-xxsg95",
+    "sourcesCardRetained": false,
+    "citations": [
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 108,
+        "endLine": 110,
+        "oracle": "documenso-sign-field.ts",
+        "exactOracleSlice": true
+      },
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "oracle": "documenso-field-router.ts",
+        "exactOracleSlice": true
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 61,
+        "endLine": 84,
+        "oracle": "documenso-multi-sign.ts",
+        "exactOracleSlice": true
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 247,
+        "endLine": 262,
+        "oracle": "documenso-sign-field.ts",
+        "exactOracleSlice": true
+      }
+    ]
+  }
+]

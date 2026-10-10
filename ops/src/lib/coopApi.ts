@@ -15,6 +15,32 @@ export type ApiResult<T> = {
 };
 
 export type OperatorRole = StoredOperatorMe["role"];
+export type SupportStatus = "open" | "in_progress" | "resolved";
+export type SupportReportSummary = {
+  id: string; title: string; kind: "bug" | "feedback" | "feature_request"; status: SupportStatus;
+  contactEmail: string; orgId: string; orgName?: string; assigneeId: string | null; assigneeEmail?: string;
+  notificationStatus: "pending" | "sent" | "failed" | "mocked"; createdAt: string; updatedAt: string;
+};
+export type SupportReportDetail = SupportReportSummary & {
+  description: string; resolvedAt?: string; notificationAttempts: number; revision: number;
+  diagnostics: { extensionVersion: string; vscodeVersion: string; platform: string; architecture: string } | null;
+  diagnosticsExpiresAt: string | null;
+  events: Array<{ id: string; status: SupportStatus; note: string; createdAt: string; operatorEmail: string; assigneeEmail?: string }>;
+};
+export function fetchSupportReports(status: SupportStatus | "", offset = 0) {
+  const query = new URLSearchParams({ offset: String(offset) });
+  if (status) query.set("status", status);
+  return coopFetch<{ reports: SupportReportSummary[]; nextOffset?: number }>(`/v1/operator/support/reports?${query}`);
+}
+export function fetchSupportReport(id: string) {
+  return coopFetch<SupportReportDetail>(`/v1/operator/support/reports/${encodeURIComponent(id)}`);
+}
+export function updateSupportReport(id: string, input: { status: SupportStatus; assigneeId: string | null; note: string; revision: number }) {
+  return coopFetch<{ ok: boolean }>(`/v1/operator/support/reports/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+export function retrySupportNotification(id: string) {
+  return coopFetch<{ ok: boolean }>(`/v1/operator/support/reports/${encodeURIComponent(id)}/retry-notification`, { method: "POST", body: "{}" });
+}
 export type OrgPlan = "free" | "pro" | "enterprise";
 export type Provenance = "stripe_checkout" | "free_signup" | "manual_enterprise" | "manual_pro";
 export type OperatorStatus = "active" | "suspended" | "cancelled";

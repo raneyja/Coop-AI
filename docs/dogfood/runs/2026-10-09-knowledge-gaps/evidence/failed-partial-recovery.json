@@ -1,0 +1,10 @@
+{
+  "threadId": "thread-1791592649013-ajzi3p",
+  "bundleId": "4f036161f62df914e755d7f5276ea085abe6ac3d0fe43ae6ebdcc9a1cc8dad9c",
+  "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+  "result": "Fail",
+  "reason": "Reviewed answer stopped for length with 1794 characters inside a citation. Generic continuation concatenated a restarted answer into an open code fence, duplicating prose and breaking exact source ranges.",
+  "answerStartMs": 174489,
+  "completionMs": 197548,
+  "repair": "Keep review attempts private; recover once with a fresh complete replacement using original reviewed source, empty history, no extra thinking, frozen quota turn and all usage. Never append a restart into the partial citation."
+}

@@ -1,0 +1,25 @@
+{
+  "candidate": "/private/tmp/coop-gaps-backend-production-candidate-20261009",
+  "preservedProductionSource": "email-48168d",
+  "authorization": "Same scoped Knowledge Gaps deployment authorized by Jon; corrective revision after failed live replay",
+  "changedFiles": {
+    "src/prompts/knowledgeGapsSynthesis.ts": "765893337a473525154fcfb072b6308e4d5a5b8232a380dec56065b2a8511310",
+    "src/context/knowledgeGapsFocus.ts": "fa45941131968de1aa93425dfa0228cf45e76a14990fd92d1157d8189e969b65",
+    "src/prompts/knowledgeGapsSourceLabels.ts": "e74d50c09b81a4236be6d209917e564f5da4c1f33addf960d8d449f112a49f9e",
+    "src/prompts/systemPrompts.ts": "dc66798d48c0011552edaa559968e0a9138f79822722a10af84cf68983bc602f"
+  },
+  "status": "FAILED during Docker Hub image metadata fetch before compilation",
+  "validation": {
+    "lint": "pass",
+    "build:backend": "pass",
+    "knowledgeGapsSynthesis": "25/25 pass"
+  },
+  "deploymentId": "abf23b41-7a6d-4f55-815b-4c69dc3122d9",
+  "failure": "node:22-bookworm-slim image manifest HEAD returned 429 Too Many Requests",
+  "retry": {
+    "deploymentId": "6786a8b5-ae1c-4ddc-98eb-9c55ccd629b0",
+    "status": "FAILED",
+    "failure": "Docker Hub node:22-bookworm-slim manifest HEAD 429 before compilation"
+  },
+  "resolution": "Redundant system-only exact-helper line removed from the final source. Client focused prompt retains the instruction; first compact backend contract remains active."
+}

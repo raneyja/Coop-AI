@@ -1,0 +1,123 @@
+{
+  "scope": "General source and evidence policy on the Blast hot path; reusable and adversarial automated checks",
+  "status": "Automated Pass",
+  "substantiveCodeRemaining": [],
+  "checks": [
+    {
+      "command": "npm run test:blast",
+      "exitCode": 0,
+      "log": "policy-blast-tests.log",
+      "includes": [
+        "48 dependent fallback checks",
+        "22 synthesis checks",
+        "8 exact-source guard tests",
+        "7 bounded remote-gather tests",
+        "actual CoopChatSession source retention/background bypass/final publication tests",
+        "selected-ref remote citation review",
+        "Blast engine analysis",
+        "1 actual Anthropic source-contract request test",
+        "12 synthesis/repair/Stop/usage tests"
+      ]
+    },
+    {
+      "command": "npm run lint",
+      "exitCode": 0,
+      "log": "policy-lint.log",
+      "scope": "extension, webview and backend TypeScript checks"
+    },
+    {
+      "command": "npx tsx src/prompts/systemPrompts.test.ts",
+      "exitCode": 0,
+      "tests": 60,
+      "evidence": "Successful tool result; summarized here rather than presented as a raw archived stdout log."
+    },
+    {
+      "command": "npx tsx src/api/ModelRouter.knowledgeGapsPrompt.test.ts",
+      "exitCode": 0,
+      "tests": 1,
+      "evidence": "Successful tool result after sandbox preflight rejection."
+    },
+    {
+      "command": "npm run test:chat-prose",
+      "exitCode": 0,
+      "parserTests": 69,
+      "highlighterTests": 6,
+      "evidence": "Successful tool result after sandbox preflight rejection."
+    },
+    {
+      "command": "npx tsx src/webview/lib/formatChatMessageForCopy.test.ts",
+      "exitCode": 0,
+      "tests": 4,
+      "evidence": "Successful tool result."
+    },
+    {
+      "command": "npx tsx src/webview/components/ChatProse.test.ts",
+      "exitCode": 0,
+      "tests": 9,
+      "scope": "Actual ChatStream flag propagation, source versus anonymous code rendering, and exact fence/body handling",
+      "evidence": "Successful tool result."
+    },
+    {
+      "command": "npx tsx src/webview/evidenceCardSummary.test.ts",
+      "exitCode": 0,
+      "tests": 22,
+      "evidence": "Successful final tool result after relationship label change."
+    },
+    {
+      "command": "npm run build:extension-dev",
+      "exitCode": 0,
+      "workdir": "/private/tmp/coop-blast-policy-candidate-20261009",
+      "log": "policy-isolated-build.log",
+      "scope": "extension, webview and webview CSS; shared dist not built"
+    }
+  ],
+  "invariants": {
+    "task": "Original task, context, history, selected repo/ref, model/provider, thinking and quota controls preserved.",
+    "remoteSource": "One target and up to three dependent bodies; 32,000 characters per body; exact remote origin/repo/requested-path admission; late reads ignored after soft gather budget or Stop.",
+    "quote": "One shared exact contiguous-byte/coordinate owner. Correct range disambiguates repeats; coordinate repair requires unique exact span. Reject altered/malformed/unopened/mixed-identity/ambiguous evidence.",
+    "finalPublication": "Recheck captured windows without reread; reject altered, downgraded or removed validated quotes; persist known cost on failure.",
+    "normalSynthesisCalls": 1,
+    "maximumSynthesisCalls": 2,
+    "repairTrigger": "Objective incomplete/empty/cutoff/unclosed-fence output or invalid explicit source quotation.",
+    "renderAndCopy": "Persisted explicit citation mode uses the shared Markdown parser; original code/fences and anonymous examples retain their identity.",
+    "stopAndUsage": "No follow-up request or publication after Stop; known completed costs retained, unknown usage not represented as zero, differing actual models reported per call."
+  },
+  "semanticBoundary": "Prompt policy constrains behavioral claims. Exact quote checks do not certify model semantic correctness, symbol binding, full reachability or complete coverage.",
+  "peerValidation": {
+    "threadId": "01a12233-c0f9-79a3-9c05-8c2892b19217",
+    "reported": "Knowledge Gaps full suite and lint green, including real final-publication -> store -> restore checks and explicit citation mode retention.",
+    "sharedDependenciesStable": true,
+    "candidateScope": "Latest Knowledge Gaps-specific discovery/source-budget edits are separately qualified in that chat's candidate and are not represented as part of this Blast snapshot."
+  },
+  "sandboxPreflight": {
+    "source": "Initial tsx IPC pipe creation was rejected with listen EPERM; necessary commands were rerun using the required escalation mechanism and passed.",
+    "failedPreflightLogs": [
+      "policy-provider-routing-sandbox-rejected.log",
+      "policy-chat-prose-sandbox-rejected.log"
+    ],
+    "effect": "These files record rejected attempts, not passing command output."
+  },
+  "candidateManifest": "policy-candidate-freeze.json",
+  "currentQualification": {
+    "loadedIntoExtensionHost": false,
+    "backendRedeployed": false,
+    "fullSharedCheckoutCI": false,
+    "genericSemanticCorrectness": false,
+    "generic15SecondStartAnswering": false,
+    "fullRepoCoverage": false
+  },
+  "historical": {
+    "oldReadme": "historical-ast-closeout.md",
+    "oldLiveResults": "final-live-results.json",
+    "oldCandidateManifest": "candidate-freeze.json",
+    "state": "Raw records retained for recorded clients/refs; AST predicate architecture, enum anchoring and fast named-case timings withdrawn as active architecture/completion criterion.",
+    "planeLatencyFailSeconds": 121.198
+  },
+  "restrictions": {
+    "sharedDistBuilt": false,
+    "commitPushPublish": false,
+    "newLiveFixtureReplay": false,
+    "desktopLease": "released"
+  },
+  "recordedAt": "2026-10-10T16:32:43.657051+00:00"
+}

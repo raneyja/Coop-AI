@@ -75,6 +75,12 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
   }
   lines.push("");
   lines.push("## Instructions");
+  const coverage = (input.summary as RepoSummaryEvidence).focusCoverage;
+  if (coverage?.requested.length) {
+    lines.push(`Requested backend components: ${coverage.requested.join(", ")}.`);
+    lines.push("Trace the actual request handler → authentication binding → input validation → persistence from attached source. Distinguish route families when their authentication differs; never merge their policies. Source rows are numbered with original line numbers. Cite only contiguous exact source, using numeric start:end:path fences of at most 20 lines; never combine nonadjacent blocks with ellipses or copy the row-number prefixes into code. Recommend only attached implementation files, honoring the requested reading-list count when evidence supports it. Do not explain typical framework behavior or guess imported implementations.");
+    if (coverage.missing.length) lines.push(`Unverified components: ${coverage.missing.join(", ")}. State this limit in 1–3 sentences and stop.`);
+  }
   const locateOnly = isLocateShapedRepoAsk(input.userFocus);
   if (locateOnly) {
     lines.push(REPO_SUMMARY_LOCATE_ONLY_MARKER);

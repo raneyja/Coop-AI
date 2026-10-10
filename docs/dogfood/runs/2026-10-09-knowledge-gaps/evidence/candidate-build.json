@@ -1,0 +1,29 @@
+{
+  "at": "2026-10-09T20:01:21.585738+00:00",
+  "extensionSha256": "3707b47ec2284271e48c0b86aacd9d483dbf481568535f57475d30185af0a979",
+  "webviewSha256": "68da5ba247dd53b1f0ef5331587b1aebb162f1c010f61757d73a339bd8896b3d",
+  "sourceHashes": {
+    "src/context/knowledgeGapsCodeEvidence.ts": "8807cbe35e16df8180615e3c9d0a213e5b1cc322df126286b6279085bb16a604",
+    "src/context/knowledgeGapsFocus.ts": "6cab91f1ae6f8a3d8bdd2ad857a739835ffce354277961fb44031ad63168a8b7",
+    "src/chat/CoopChatSession.ts": "c843eba54a25ead1479f7b03160e33b99830bffd75e25f08000d1b5333e24aaf",
+    "src/prompts/knowledgeGapsSynthesis.ts": "e5a929ce1a94829a5be48272b7aa0bf0537d1f352b06c844e6761754bd5127cb",
+    "src/prompts/knowledgeGapsEnrichment.ts": "9d66ddaeb1e2b8d6d069e1ed52ecbc48da9a44461e099fbbbb78bace5ab94ce3",
+    "src/context/integrationChatEnrichment.ts": "a24eb4e87e5c521f6e41f9d118a349c5d52520c24673758398b96db376d7720a",
+    "src/webview/EvidenceCards.tsx": "4ac35a05d0b191ee7888db76da456635d810c22f27cceb594a04a3dea0c9edfb",
+    "src/webview/evidenceCardSummary.ts": "42b0419e9b272d5aa76f8af01ca1b0a162b10891147aea885b7cec9dc6358835",
+    "src/webview/components/EvidenceFileSourcePreview.tsx": "fc227648251f6238b213945b51aec4f1c2026342d59501e2cfc3eaae6a7d0eda",
+    "src/prompts/systemPrompts.ts": "a555fe6d6b3da10c268abebc5dd6158c0a2a3338678d6327dd3b663bf52e5413"
+  },
+  "extensionSourceMatches": {
+    "src/context/knowledgeGapsCodeEvidence.ts": true,
+    "src/context/knowledgeGapsFocus.ts": true,
+    "src/chat/CoopChatSession.ts": true,
+    "src/prompts/knowledgeGapsSynthesis.ts": true,
+    "src/prompts/knowledgeGapsEnrichment.ts": true,
+    "src/context/integrationChatEnrichment.ts": true,
+    "src/webview/EvidenceCards.tsx": null,
+    "src/webview/evidenceCardSummary.ts": null,
+    "src/webview/components/EvidenceFileSourcePreview.tsx": null,
+    "src/prompts/systemPrompts.ts": true
+  }
+}

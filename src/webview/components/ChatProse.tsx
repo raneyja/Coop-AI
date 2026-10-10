@@ -12,6 +12,7 @@ import { evidenceArtifactAnchor, sourceCitationAnchor } from "../../prompts/sour
 
 type ChatProseProps = {
   content: string;
+  sourceCitationMode?: "explicit";
   relatedArtifactId?: string;
   hidePatchFences?: boolean;
   /** Open editor path — upgrades mistaken ```lang repo dumps to cite chrome. */
@@ -28,6 +29,7 @@ type RenderOptions = {
 
 export function ChatProse({
   content,
+  sourceCitationMode,
   relatedArtifactId,
   hidePatchFences = false,
   activeFilePath,
@@ -39,8 +41,8 @@ export function ChatProse({
   const openFile = onOpenFile ?? contextLinks.onOpenFile;
   const openLink = onOpenLink ?? contextLinks.onOpenLink;
   const document = useMemo(
-    () => parseChatProse(content, { activeFilePath }),
-    [content, activeFilePath]
+    () => parseChatProse(content, { activeFilePath, sourceCitationMode }),
+    [content, activeFilePath, sourceCitationMode]
   );
 
   const blocks: React.ReactElement[] = [];

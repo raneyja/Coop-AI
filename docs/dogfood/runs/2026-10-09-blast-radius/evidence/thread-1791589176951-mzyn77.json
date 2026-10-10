@@ -1,0 +1,87 @@
+{
+  "id": "thread-1791589176951-mzyn77",
+  "title": "Blast Radius \u00b7 sign-field-with-token.ts",
+  "messages": [
+    {
+      "clientSubmissionId": "1791589192826-2",
+      "role": "user",
+      "content": "[blast-radius] If this handler allowed signing when the envelope is not PENDING, which callers or signing flows could be affected, and what should I verify before shipping that change?\nfile: packages/lib/server-only/field/sign-field-with-token.ts \u00b7 repo: CoopAI-Corp/documenso \u00b7 branch: main",
+      "timestamp": 1791589195325
+    },
+    {
+      "role": "assistant",
+      "content": "Removing the `envelope.status !== DocumentStatus.PENDING` guard at lines 108\u2013110 lets execution proceed past that point for envelopes in any other status, but reaching the write transaction still requires passing every subsequent guard in the function body.\n\n```\n108:110:packages/lib/server-only/field/sign-field-with-token.ts\n  if (envelope.status !== DocumentStatus.PENDING) {\n    throw new Error(`Document ${envelope.id} must be pending for signing`);\n  }\n```\n\n**Verified call paths and conditions**\n\n**`field-router/router.ts`** calls `signFieldWithToken` at lines 615\u2013633 using `procedure` (not `authenticatedProcedure`). The opened body has no envelope status pre-check. `userId` is passed as `ctx.user?.id` \u2014 optionally undefined. The `procedure` middleware's implementation is not opened, so its own access enforcement is unverified.\n\n```\n615:633:packages/trpc/server/field-router/router.ts\n  signFieldWithToken: procedure.input(ZSignFieldWithTokenMutationSchema).mutation(async ({ input, ctx }) => {\n    const { token, fieldId, value, isBase64, authOptions } = input;\n\n    ctx.logger.info({\n      input: {\n        fieldId,\n      },\n    });\n\n    return await signFieldWithToken({\n      token,\n      fieldId,\n      value: value ?? '',\n      isBase64,\n      userId: ctx.user?.id,\n      authOptions,\n      requestMetadata: ctx.metadata.requestMetadata,\n    });\n  }),\n```\n\n**`apply-multi-sign-signature.ts`** pre-call rejects if any recipient's `readStatus !== ReadStatus.OPENED` (line 35), or if `recipientAccessAuthRequired || recipientActionAuthRequired` (line 52). It skips recipients where `signingStatus === SigningStatus.REJECTED` (line 61) and queries only `inserted: false, type: FieldType.SIGNATURE` fields (lines 65\u201372). It passes no `userId` or `authOptions` to `signFieldWithToken` (lines 76\u201382). `getDocumentByToken` (line 25) is called but its body is not opened \u2014 any status filtering it performs is unverified. Critically, the catch block at lines 89\u201397 catches any non-`AppError` throw \u2014 including the plain `Error` objects `signFieldWithToken` emits \u2014 and rethrows as `AppErrorCode.UNKNOWN_ERROR`, discarding the original message.\n\n```\n89:97:packages/trpc/server/embedding-router/apply-multi-sign-signature.ts\n    } catch (error) {\n      if (error instanceof AppError) {\n        throw error;\n      }\n\n      throw new AppError(AppErrorCode.UNKNOWN_ERROR, {\n        message: 'Failed to apply multi-sign signature',\n      });\n    }\n```\n\n**Remaining guards after the changed predicate** \u2014 passing line 110 does not reach the write directly. These apply in order: `assertRecipientNotExpired(recipient)` (line 112, implementation unverified); `signingStatus === SigningStatus.SIGNED` on both `recipient` and `field.recipient` \u2192 throws (line 114); `field.inserted` \u2192 throws (line 118); per-type validation for NUMBER/TEXT/CHECKBOX/RADIO/DROPDOWN (lines 127\u2013172); `validateFieldAuth(...)` (line 174, implementation unverified); signature completeness checks (lines 203\u2013208); `readOnly` default-value check (lines 211\u2013231). If all pass, the transaction runs: `tx.field.update` sets `inserted: true` unconditionally (lines 237\u2013245); `tx.signature.upsert` runs only when `isSignatureField` is true, creating a new row or updating `signatureImageAsBase64`/`typedSignature` on the existing one (lines 248\u2013262); `tx.documentAuditLog.create` always runs (line 270).\n\n```\n247:262:packages/lib/server-only/field/sign-field-with-token.ts\n    if (isSignatureField) {\n      const signature = await tx.signature.upsert({\n        where: {\n          fieldId: field.id,\n        },\n        create: {\n          fieldId: field.id,\n          recipientId: field.recipientId,\n          signatureImageAsBase64: signatureImageAsBase64,\n          typedSignature: typedSignature,\n        },\n        update: {\n          signatureImageAsBase64: signatureImageAsBase64,\n          typedSignature: typedSignature,\n        },\n      });\n```\n\n**Pre-ship verification**\n\n- **Statuses now permitted:** The opened body only references `DocumentStatus.PENDING`; the full `DocumentStatus` enum is not shown. Enumerate every status value that should reach the write and confirm each is intentional \u2014 the opened bodies do not establish which other status values exist.\n- **`getDocumentByToken` status filtering:** Its body is not opened. Verify whether it already gates on `PENDING`; if it does, the `apply-multi-sign-signature` flow may remain protected by that helper even after your change.\n- **`assertRecipientNotExpired` and `validateFieldAuth` contracts:** Neither implementation is opened. Confirm neither assumes `DocumentStatus.PENDING` as a precondition \u2014 especially `validateFieldAuth`, which receives `userId: undefined` and `authOptions: undefined` from the multi-sign caller since those fields are not forwarded there.\n- **`field.inserted` invariant per status:** For the signature upsert to execute, `field.inserted` must be `false` (enforced by line 118). Verify that for whichever non-PENDING statuses you intend to allow, unsigned fields with `inserted: false` can legitimately exist, so the upsert path is reachable as intended.\n\nThe opened dependents do not prove complete coverage; `procedure` middleware, `getDocumentByToken`, `assertRecipientNotExpired`, and `validateFieldAuth` implementations remain unread.",
+      "timestamp": 1791589334074,
+      "relatedArtifactId": "evidence-1791589196637-qrijn3",
+      "activity": {
+        "durationMs": 141955,
+        "thinkingMs": 54903,
+        "thinkingText": "The user wants me to independently verify and correct the untrusted draft, checking every behavioral claim against the opened bodies. Let me carefully trace through the code.\n\n**The changed predicate:**\n```\n108:110:packages/lib/server-only/field/sign-field-with-token.ts\n  if (envelope.status !== DocumentStatus.PENDING) {\n    throw new Error(`Document ${envelope.id} must be pending for signing`);\n  }\n```\n\n**Now let me verify claims about the callers:**\n\n**`field-router/router.ts` call site (lines 615\u2013633):**\nLooking at lines 615-633:\n```\nsignFieldWithToken: procedure.input(ZSignFieldWithTokenMutationSchema).mutation(async ({ input, ctx }) => {\n```\n\nI'm confirming the router passes along the token, fieldId, value, and auth options to the signFieldWithToken call, and that the draft's claims check out: it does use the plain `procedure` rather than `authenticatedProcedure`, and there's indeed no envelope status pre-check visible in this body.\n\nNow I'm tracing into the `apply-multi-sign-signature.ts` call site around lines 33-86, where I see checks for unviewed documents and auth requirements before the call, then a guard against rejected signing status.\n\nThe draft's claims check out: there's no explicit document status check anywhere in that body, and `getDocumentByToken`'s internal filtering remains unverified since its implementation isn't opened. Now I'm moving on to verify the remaining guards inside `signFieldWithToken` that execute after the changed predicate \u2014 specifically `assertRecipientNotExpired` and a subsequent recipient check, though the implementation details of the expiration assertion aren't visible either.\n\nContinuing through the guard chain, I'm confirming the signing-status check throws if already signed, the `field.inserted` check throws, the null recipientId check throws for TypeScript satisfaction, then per-type field validation runs, followed by `validateFieldAuth` whose implementation also isn't opened. Then within the transaction block, field update always sets inserted to true, the signature upsert only fires for signature fields, and the audit log entry always gets created. Now I'm weighing whether the draft's claims about these mechanics hold up correctly.\n\nBoth confirmed callers indeed skip any independent status check before calling `signFieldWithToken`, which matches the draft. I'm now verifying the draft's citation of the multi-sign call site by checking the actual code there \u2014 it iterates envelopes in parallel, skips rejected recipients, then queries matching signature fields for each envelope/recipient pair.\n\nThe code loops through each matching signature field and signs it via `signFieldWithToken`, passing the token, field ID, value, encoding flag, and metadata. The error-handling catch block that rethrows non-AppErrors as UNKNOWN_ERROR isn't mentioned in the draft but is relevant context, and the `inserted: false` filter is correctly cited.\n\nI'm also confirming that the draft's claims about the pre-call guards (unviewed docs, additional-auth required, rejected signing status) and the upsert logic based on `fieldId` existence all check out as accurate against the source.\n\nThe draft's note about `ZSignFieldWithTokenMutationSchema` being unopened and thus unverified is valid, though the same scrutiny should extend to the procedure middleware internals, which are equally unconfirmed. I'm also noting the draft omits the catch/rethrow behavior in lines 89-97 of `apply-multi-sign-signature.ts`, where a plain `Error` gets transformed into `AppErrorCode.UNKNOWN_ERROR` -- worth weighing whether that omission actually matters for the impact analysis.\n\nLooking back at the draft's phrasing, it already qualifies its claim with \"if the remaining internal guards allow it,\" which is an important and accurate hedge given both the `procedure` middleware and the schema validator remain unexamined. So the opening claim about zero independent status enforcement is reasonably supported, just slightly overconfident without that caveat being emphasized more.\n\nI also notice the draft omits a key detail: the catch/rethrow logic in `apply-multi-sign-signature.ts` wraps any plain Error from `signFieldWithToken`'s guards into an `AppErrorCode.UNKNOWN_ERROR`, meaning the original error message wouldn't propagate through that caller path \u2014 something the opened code reveals but the draft doesn't mention.\n\nSeparately, I see that the call to `signFieldWithToken` from `apply-multi-sign-signature.ts` only passes `token`, `fieldId`, `value`, `isBase64`, and `requestMetadata` \u2014 it doesn't pass `userId` or `authOptions` at all. That means the auth validation downstream would receive those as undefined, which the draft doesn't flag either.\n\nLooking further, I notice that before that call site, the code already rejects early if `recipientActionAuthRequired` or `recipientAccessAuthRequired` is true, so the missing userId/authOptions might be safe in practice since auth-required documents never reach this path. I also want to check whether the draft's list of \"remaining guards\" is complete \u2014 it mentions expiration, signing status, inserted fields, per-type validation, and field auth, but seems to omit the `recipientId === null` check and the `readOnly` guard that also appear in the code.\n\nAlso missing are the signature field validation checks and the readOnly check, but these don't affect the core question about removing the PENDING check.\n\nI need to flag a few corrections: the catch block in apply-multi-sign-signature.ts actually swallows plain Error messages and rethrows them as UNKNOWN_ERROR, losing the original message; the claim about field-router having \"zero status enforcement\" should be softened since the procedure middleware wasn't opened; and apply-multi-sign-signature.ts doesn't pass userId or authOptions through to the signing function.\n\nNow let me draft the corrected answer, making sure to cite the changed predicate at lines 108-110 exactly, cover both callers with precise citations, address remaining guards, and keep the prose to roughly 350 words across just two sections.",
+        "tools": [
+          {
+            "id": "line-tool:0",
+            "kind": "read",
+            "label": "Read `packages/lib/server-only/field/sign-field-with-token.ts`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:1",
+            "kind": "read",
+            "label": "Read `packages/trpc/server/embedding-router/apply-multi-sign-signature.ts`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:2",
+            "kind": "read",
+            "label": "Read `packages/trpc/server/field-router/router.ts`",
+            "status": "done"
+          }
+        ],
+        "files": [
+          {
+            "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+            "action": "read"
+          },
+          {
+            "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+            "action": "read"
+          },
+          {
+            "path": "packages/trpc/server/field-router/router.ts",
+            "action": "read"
+          }
+        ],
+        "steps": [
+          {
+            "id": "line:0:Read `packages/lib/server-only/field/sign-field-with-token.ts`",
+            "content": "Read `packages/lib/server-only/field/sign-field-with-token.ts`",
+            "status": "completed"
+          },
+          {
+            "id": "line:1:Read `packages/trpc/server/embedding-router/apply-multi-sign-signature.ts`",
+            "content": "Read `packages/trpc/server/embedding-router/apply-multi-sign-signature.ts`",
+            "status": "completed"
+          },
+          {
+            "id": "line:2:Read `packages/trpc/server/field-router/router.ts`",
+            "content": "Read `packages/trpc/server/field-router/router.ts`",
+            "status": "completed"
+          }
+        ]
+      }
+    }
+  ],
+  "artifacts": [],
+  "sessionCostUsd": 0.240132,
+  "createdAt": 1791589176951,
+  "updatedAt": 1791589888330,
+  "messageCount": 2,
+  "repoContext": {
+    "provider": "github",
+    "owner": "CoopAI-Corp",
+    "repo": "plane",
+    "branch": "preview",
+    "scope": "repo"
+  },
+  "draftInput": "/gaps Before changing work-item state validation, which rules can we establish from the code, and which unanswered questions about allowed transitions need documentation or tests?"
+}

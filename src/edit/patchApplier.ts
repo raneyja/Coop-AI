@@ -30,7 +30,7 @@ export type ApplyPatchesResult =
       usedRemoteEditor: boolean;
       appliedFiles: Array<{ path: string; content: string }>;
     }
-  | { ok: false; error: string; file?: string };
+  | { ok: false; error: string; file?: string; undo?: FileUndoSnapshot[]; appliedFiles?: Array<{ path: string; content: string }> };
 
 export type ApplyPatchesOptions = {
   /**
@@ -58,6 +58,11 @@ function fullDocumentRange(document: vscode.TextDocument): vscode.Range {
   const lastLine = Math.max(0, document.lineCount - 1);
   const lastCharacter = document.lineAt(lastLine).text.length;
   return new vscode.Range(0, 0, lastLine, lastCharacter);
+}
+
+function editorTextMatches(actual: string | undefined, expected: string): boolean {
+  // VS Code keeps the document's EOL even when replacement text uses LF.
+  return actual !== undefined && actual.replace(/\r\n/g, "\n") === expected.replace(/\r\n/g, "\n");
 }
 
 export async function applyPatchesToWorkspace(
@@ -136,12 +141,22 @@ export async function applyPatchesToWorkspace(
   const edits = new vscode.WorkspaceEdit();
   for (const item of planned) {
     if (item.readCurrent() !== item.originalContent) {
+      return { ok: false, error: `${item.relativePath}: buffer changed while preparing Apply. No files were changed.` };
+    }
+    const document = vscode.workspace.textDocuments.find((doc) => doc.uri.toString() === item.uri.toString()) ??
+      await vscode.workspace.openTextDocument(item.uri);
+    item.readCurrent = () => document.getText();
+  }
+  // Recheck all documents after every asynchronous open, including disk targets.
+  for (const item of planned) {
+    if (item.readCurrent() !== item.originalContent) {
       return {
         ok: false,
         error: `${item.relativePath}: buffer changed while preparing Apply. No files were changed.`
       };
     }
-    const document = await vscode.workspace.openTextDocument(item.uri);
+    const document = vscode.workspace.textDocuments.find((doc) => doc.uri.toString() === item.uri.toString());
+    if (!document) return { ok: false, error: `${item.relativePath}: target buffer closed before Apply.` };
     edits.replace(item.uri, fullDocumentRange(document), item.nextContent);
   }
 
@@ -149,20 +164,30 @@ export async function applyPatchesToWorkspace(
   if (!success) {
     return { ok: false, error: "VS Code rejected the edit" };
   }
+  const acknowledged = planned.map((item) => ({ ...item, actualContent: item.readCurrent() }));
+  const unverified = acknowledged.find((item) => !editorTextMatches(item.actualContent, item.nextContent));
+  if (unverified) {
+    const verified = acknowledged.filter((item) => editorTextMatches(item.actualContent, item.nextContent));
+    return { ok: false, file: unverified.relativePath,
+      error: `${unverified.relativePath}: VS Code accepted Apply, but the target buffer does not contain the proposed change. Check the editor before retrying.`,
+      appliedFiles: verified.map((item) => ({ path: item.relativePath, content: item.actualContent! })),
+      undo: verified.map((item) => ({ absolutePath: undoSnapshotPathForUri(item.uri), relativePath: item.relativePath,
+        originalContent: item.originalContent, appliedContent: item.actualContent })) };
+  }
 
   return {
     ok: true,
     filesChanged: planned.length,
     usedRemoteEditor,
-    appliedFiles: planned.map((item) => ({
+    appliedFiles: acknowledged.map((item) => ({
       path: item.relativePath,
-      content: item.nextContent
+      content: item.actualContent!
     })),
-    undo: planned.map((item) => ({
+    undo: acknowledged.map((item) => ({
       absolutePath: undoSnapshotPathForUri(item.uri),
       relativePath: item.relativePath,
       originalContent: item.originalContent,
-      appliedContent: item.nextContent
+      appliedContent: item.actualContent
     }))
   };
 }
@@ -191,6 +216,10 @@ export async function undoPatchApplication(
   const success = await vscode.workspace.applyEdit(edits);
   if (!success) {
     return { ok: false, error: "VS Code rejected the undo" };
+  }
+  const unverified = targets.find(({ document, snapshot }) => !editorTextMatches(document.getText(), snapshot.originalContent));
+  if (unverified) {
+    return { ok: false, error: `${unverified.snapshot.relativePath}: VS Code accepted Undo, but the original buffer text was not restored.` };
   }
 
   return { ok: true };

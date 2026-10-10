@@ -68,6 +68,23 @@ test("isAssistantReplyToEdit is false for a later explain turn after /edit", () 
   assert.equal(isAssistantReplyToEdit(messages, 4), false);
 });
 
+test("/fix and edit aliases retain patch-reply display behavior in restored history", () => {
+  for (const token of ["fix", "repair", "patch"]) {
+    const messages = JSON.parse(JSON.stringify([
+      { role: "user", content: `/${token} improve the pending error\nfile: packages/lib/server-only/field/sign-field-with-token.ts · branch: main`, timestamp: 1 },
+      { role: "assistant", content: "File: packages/lib/server-only/field/sign-field-with-token.ts\n```patch\n<<<<<<< SEARCH\na\n=======\nb\n>>>>>>> REPLACE\n```", timestamp: 2 },
+      { role: "user", content: "Explain the guard", timestamp: 3 },
+      { role: "assistant", content: "The guard requires PENDING.", timestamp: 4 }
+    ]));
+    assert.equal(isEditHistoryContent(messages[0].content), true);
+    assert.equal(isAssistantReplyToEdit(messages, 2), true, `/${token} owns the patch reply`);
+    assert.equal(isAssistantReplyToEdit(messages, 4), false, "ordinary follow-up does not inherit patch display");
+  }
+  for (const command of ["/blast auth", "/understand", "/slack signing", "/compare plane documenso"]) {
+    assert.equal(isEditHistoryContent(command), false);
+  }
+});
+
 test("shouldUseSuggestClarifyingBody stays off for patch bodies so the card can attach", () => {
   const patch = "```patch\n<<<<<<< SEARCH\na\n=======\nb\n>>>>>>> REPLACE\n```";
   assert.equal(shouldUseSuggestClarifyingBody("Did you mean Find Owner?", true), true);

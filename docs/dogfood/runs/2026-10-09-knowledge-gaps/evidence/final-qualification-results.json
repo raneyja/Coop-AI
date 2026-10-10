@@ -1,0 +1,417 @@
+{
+  "cases": [
+    {
+      "fixture": {
+        "id": "unavailable-topic",
+        "repo": "CoopAI-Corp/plane",
+        "branch": "preview",
+        "commit": "a8e53b6ac7b87bd8e3e931d21188f7679c7ab6c4",
+        "file": null,
+        "ask": "/gaps Before changing quantum teleportation in nonexistent/quantum-teleportation.ts, which code rules can we establish and which policy questions need documentation or tests? Use only this repository."
+      },
+      "threadId": "thread-1791591931107-hcjrrk",
+      "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+      "bundleId": "8c1a7c0ac60674c1f2104f2da4e2ac66b2335465e64255fe83d5efa7b8905006",
+      "submittedContext": {
+        "owner": "CoopAI-Corp",
+        "repo": "plane",
+        "branch": "preview",
+        "file": null,
+        "selectedLines": null
+      },
+      "sourceAndCitationResult": "Pass",
+      "latencyGuidelineResult": "Pass",
+      "synthesisStartMs": 6166,
+      "sourceReviewStartMs": null,
+      "answerStartMs": 7685,
+      "completionMs": 9266,
+      "nativeEvidenceQuality": "Limited",
+      "reviewedFiles": 0,
+      "sourceWindows": [],
+      "citations": [],
+      "successfulRemoteReviews": [],
+      "manualSemanticReview": "Two-sentence evidence limit; no invented path absence, implementation, owner, or policy; native Limited card; repository-only scope; no extra source-review request."
+    },
+    {
+      "fixture": {
+        "id": "plane-selected-serializer",
+        "repo": "CoopAI-Corp/plane",
+        "branch": "preview",
+        "commit": "a8e53b6ac7b87bd8e3e931d21188f7679c7ab6c4",
+        "file": "apps/api/plane/api/serializers/issue.py",
+        "ask": "/gaps Before changing state validation in this selected issue serializer, which rules does its code establish, and which transition-policy questions need documentation or tests? Use only this repository."
+      },
+      "threadId": "thread-1791591903290-h5ahvg",
+      "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+      "bundleId": "8c1a7c0ac60674c1f2104f2da4e2ac66b2335465e64255fe83d5efa7b8905006",
+      "submittedContext": {
+        "owner": "CoopAI-Corp",
+        "repo": "plane",
+        "branch": "preview",
+        "file": "apps/api/plane/api/serializers/issue.py",
+        "selectedLines": null
+      },
+      "sourceAndCitationResult": "Pass",
+      "latencyGuidelineResult": "Fail",
+      "synthesisStartMs": 5967,
+      "sourceReviewStartMs": 27513,
+      "answerStartMs": 96535,
+      "completionMs": 99979,
+      "nativeEvidenceQuality": "Medium",
+      "reviewedFiles": 1,
+      "sourceWindows": [
+        {
+          "path": "apps/api/plane/api/serializers/issue.py",
+          "startLine": 63,
+          "lines": 122,
+          "matchesPinnedOracle": true,
+          "oracleBodySha256": "4564f1fd753a7cb28894b2e59492e480b6cecf21f16c2e178c8b94e9dbf6d142"
+        },
+        {
+          "path": "apps/api/plane/api/serializers/issue.py",
+          "startLine": 222,
+          "lines": 122,
+          "matchesPinnedOracle": true,
+          "oracleBodySha256": "4564f1fd753a7cb28894b2e59492e480b6cecf21f16c2e178c8b94e9dbf6d142"
+        }
+      ],
+      "citations": [
+        {
+          "threadId": "thread-1791591903290-h5ahvg",
+          "path": "apps/api/plane/api/serializers/issue.py",
+          "startLine": 122,
+          "endLine": 126,
+          "sourceLinesAttached": true,
+          "exactQuote": true,
+          "sameLinesIgnoringIndentation": true
+        },
+        {
+          "threadId": "thread-1791591903290-h5ahvg",
+          "path": "apps/api/plane/api/serializers/issue.py",
+          "startLine": 288,
+          "endLine": 288,
+          "sourceLinesAttached": true,
+          "exactQuote": true,
+          "sameLinesIgnoringIndentation": true
+        }
+      ],
+      "successfulRemoteReviews": [
+        {
+          "at": "2026-10-10T00:29:41.799Z",
+          "path": "apps/api/plane/api/serializers/issue.py",
+          "owner": "CoopAI-Corp",
+          "repo": "plane",
+          "branch": "preview",
+          "requestedLine": 122,
+          "requestedEndLine": 126,
+          "revealedStartLine": 122,
+          "revealedEndLine": 126,
+          "source": "remote",
+          "bodyChars": 29531
+        },
+        {
+          "at": "2026-10-10T00:29:41.833Z",
+          "path": "apps/api/plane/api/serializers/issue.py",
+          "owner": "CoopAI-Corp",
+          "repo": "plane",
+          "branch": "preview",
+          "requestedLine": 288,
+          "requestedEndLine": 288,
+          "revealedStartLine": 288,
+          "revealedEndLine": 288,
+          "source": "remote",
+          "bodyChars": 29531
+        }
+      ],
+      "manualSemanticReview": "Conditional deserialized-state membership query and same-class update delegation. No unread manager or superclass-save effect is asserted. Null/decoder and transition policy remain questions. Both exact quotes opened remotely at preview; one-file Sources card survived early switching."
+    },
+    {
+      "fixture": {
+        "id": "documenso-repo-only",
+        "repo": "CoopAI-Corp/documenso",
+        "branch": "main",
+        "commit": "a457e1ef7de449e4f758fc6943a8014e952c34c6",
+        "file": null,
+        "ask": "/gaps Before changing signing status validation, which rules can we establish from the code, and which unanswered questions about signing a non-PENDING envelope need documentation or tests?"
+      },
+      "threadId": "thread-1791591875903-9s4xib",
+      "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+      "bundleId": "8c1a7c0ac60674c1f2104f2da4e2ac66b2335465e64255fe83d5efa7b8905006",
+      "submittedContext": {
+        "owner": "CoopAI-Corp",
+        "repo": "documenso",
+        "branch": "main",
+        "file": null,
+        "selectedLines": null
+      },
+      "sourceAndCitationResult": "Pass",
+      "latencyGuidelineResult": "Fail",
+      "synthesisStartMs": 7609,
+      "sourceReviewStartMs": 74823,
+      "answerStartMs": 158983,
+      "completionMs": 165806,
+      "nativeEvidenceQuality": "Medium",
+      "reviewedFiles": 6,
+      "sourceWindows": [
+        {
+          "path": "packages/trpc/server/envelope-router/signing-status-envelope.ts",
+          "startLine": 1,
+          "lines": 80,
+          "matchesPinnedOracle": true,
+          "oracleBodySha256": "80c841f43e2ca95e4836d0688d6a2f5fc14f567957c68279fa4a11a4c3cabfd0"
+        },
+        {
+          "path": "packages/trpc/server/enterprise-router/csc-sign-envelope.ts",
+          "startLine": 1,
+          "lines": 43,
+          "matchesPinnedOracle": true,
+          "oracleBodySha256": "b521c8232f23f283b4cba182eb42f0f2adda2ebd304da582f7c415b762e29df9"
+        },
+        {
+          "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+          "startLine": 1,
+          "lines": 283,
+          "matchesPinnedOracle": true,
+          "oracleBodySha256": "d9abf30aa7a91883aeb2f8f31b6eb6c055332b97ef09b91f1a1e074d2606d96c"
+        },
+        {
+          "path": "packages/trpc/server/envelope-router/signing-status-envelope.types.ts",
+          "startLine": 1,
+          "lines": 14,
+          "matchesPinnedOracle": true,
+          "oracleBodySha256": "ffeaa4712eec936ccaaaadb5c8fac8eab89ca507895ef7dd026c557198ed9e00"
+        },
+        {
+          "path": "packages/ee/server-only/signing/csc/client/signatures.ts",
+          "startLine": 1,
+          "lines": 111,
+          "matchesPinnedOracle": true,
+          "oracleBodySha256": "bf472664ab2df7d2ad2c508d8b03387796a456ff1402aca0443c09630caf50dd"
+        },
+        {
+          "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+          "startLine": 8,
+          "lines": 122,
+          "matchesPinnedOracle": true,
+          "oracleBodySha256": "9be38ce344a6dcc9505e641a829e9b35c25916c65b926b1ef1281efdb5b5fd9f"
+        },
+        {
+          "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+          "startLine": 46,
+          "lines": 122,
+          "matchesPinnedOracle": true,
+          "oracleBodySha256": "9be38ce344a6dcc9505e641a829e9b35c25916c65b926b1ef1281efdb5b5fd9f"
+        }
+      ],
+      "citations": [
+        {
+          "threadId": "thread-1791591875903-9s4xib",
+          "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+          "startLine": 105,
+          "endLine": 109,
+          "sourceLinesAttached": true,
+          "exactQuote": true,
+          "sameLinesIgnoringIndentation": true
+        },
+        {
+          "threadId": "thread-1791591875903-9s4xib",
+          "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+          "startLine": 113,
+          "endLine": 115,
+          "sourceLinesAttached": true,
+          "exactQuote": true,
+          "sameLinesIgnoringIndentation": true
+        },
+        {
+          "threadId": "thread-1791591875903-9s4xib",
+          "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+          "startLine": 111,
+          "endLine": 115,
+          "sourceLinesAttached": true,
+          "exactQuote": true,
+          "sameLinesIgnoringIndentation": true
+        }
+      ],
+      "successfulRemoteReviews": [
+        {
+          "at": "2026-10-10T00:30:08.254Z",
+          "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+          "owner": "CoopAI-Corp",
+          "repo": "documenso",
+          "branch": "main",
+          "requestedLine": 105,
+          "requestedEndLine": 109,
+          "revealedStartLine": 105,
+          "revealedEndLine": 109,
+          "source": "remote",
+          "bodyChars": 8744
+        },
+        {
+          "at": "2026-10-10T00:30:09.053Z",
+          "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+          "owner": "CoopAI-Corp",
+          "repo": "documenso",
+          "branch": "main",
+          "requestedLine": 113,
+          "requestedEndLine": 115,
+          "revealedStartLine": 113,
+          "revealedEndLine": 115,
+          "source": "remote",
+          "bodyChars": 19335
+        },
+        {
+          "at": "2026-10-10T00:30:09.302Z",
+          "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+          "owner": "CoopAI-Corp",
+          "repo": "documenso",
+          "branch": "main",
+          "requestedLine": 111,
+          "requestedEndLine": 115,
+          "revealedStartLine": 111,
+          "revealedEndLine": 115,
+          "source": "remote",
+          "bodyChars": 8744
+        }
+      ],
+      "manualSemanticReview": "PENDING guard qualified by its earlier checks; CSC recipient idempotency scoped to the reviewed window; complete recipient OR guard after PENDING. Unread later CSC status policy stays a question. Three exact remote source ranges opened at main; six-file Sources survived early switching."
+    },
+    {
+      "fixture": {
+        "id": "plane-repo-only",
+        "repo": "CoopAI-Corp/plane",
+        "branch": "preview",
+        "commit": "a8e53b6ac7b87bd8e3e931d21188f7679c7ab6c4",
+        "file": null,
+        "ask": "/gaps Before changing work-item state validation, which rules can we establish from the code, and which unanswered questions about allowed transitions need documentation or tests?"
+      },
+      "threadId": "thread-1791597474808-rdyld6",
+      "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+      "bundleId": "4149a0cc37f23ffb6b8cbc84ff0a3ebf33b42206b4bf02cdf4100866ee3f2a9b",
+      "submittedContext": {
+        "owner": "CoopAI-Corp",
+        "repo": "plane",
+        "branch": "preview",
+        "file": null,
+        "selectedLines": null
+      },
+      "sourceAndCitationResult": "Pass",
+      "latencyGuidelineResult": "Fail",
+      "synthesisStartMs": 6467,
+      "sourceReviewStartMs": 133846,
+      "answerStartMs": 261625,
+      "completionMs": 261626,
+      "nativeEvidenceQuality": "Medium",
+      "reviewedFiles": 3,
+      "sourceWindows": [
+        {
+          "path": "apps/api/plane/api/serializers/issue.py",
+          "startLine": 63,
+          "lines": 122,
+          "matchesPinnedOracle": true,
+          "oracleBodySha256": "4564f1fd753a7cb28894b2e59492e480b6cecf21f16c2e178c8b94e9dbf6d142"
+        },
+        {
+          "path": "apps/api/plane/api/serializers/issue.py",
+          "startLine": 222,
+          "lines": 122,
+          "matchesPinnedOracle": true,
+          "oracleBodySha256": "4564f1fd753a7cb28894b2e59492e480b6cecf21f16c2e178c8b94e9dbf6d142"
+        },
+        {
+          "path": "apps/api/plane/app/serializers/issue.py",
+          "startLine": 112,
+          "lines": 122,
+          "matchesPinnedOracle": true,
+          "oracleBodySha256": "25c2aa23e9acb12f1ce4f3701e91337dd661817dca1a615a064bbc2e5cb24c6b"
+        },
+        {
+          "path": "apps/api/plane/app/serializers/issue.py",
+          "startLine": 264,
+          "lines": 121,
+          "matchesPinnedOracle": true,
+          "oracleBodySha256": "25c2aa23e9acb12f1ce4f3701e91337dd661817dca1a615a064bbc2e5cb24c6b"
+        },
+        {
+          "path": "apps/api/plane/db/models/state.py",
+          "startLine": 1,
+          "lines": 126,
+          "matchesPinnedOracle": true,
+          "oracleBodySha256": "dee256b42615705f66ce3f0daa639a965d7c55316d656481580e440d63118951"
+        }
+      ],
+      "citations": [
+        {
+          "threadId": "thread-1791597474808-rdyld6",
+          "path": "apps/api/plane/api/serializers/issue.py",
+          "startLine": 121,
+          "endLine": 126,
+          "sourceLinesAttached": true,
+          "exactQuote": true,
+          "sameLinesIgnoringIndentation": true
+        },
+        {
+          "threadId": "thread-1791597474808-rdyld6",
+          "path": "apps/api/plane/app/serializers/issue.py",
+          "startLine": 125,
+          "endLine": 126,
+          "sourceLinesAttached": true,
+          "exactQuote": true,
+          "sameLinesIgnoringIndentation": true
+        },
+        {
+          "threadId": "thread-1791597474808-rdyld6",
+          "path": "apps/api/plane/db/models/state.py",
+          "startLine": 65,
+          "endLine": 69,
+          "sourceLinesAttached": true,
+          "exactQuote": true,
+          "sameLinesIgnoringIndentation": true
+        }
+      ],
+      "successfulRemoteReviews": [
+        {
+          "at": "2026-10-10T02:08:34.667Z",
+          "path": "apps/api/plane/api/serializers/issue.py",
+          "owner": "CoopAI-Corp",
+          "repo": "plane",
+          "branch": "preview",
+          "requestedLine": 121,
+          "requestedEndLine": 126,
+          "revealedStartLine": 121,
+          "revealedEndLine": 126,
+          "source": "remote",
+          "bodyChars": 29531
+        },
+        {
+          "at": "2026-10-10T02:08:57.492Z",
+          "path": "apps/api/plane/app/serializers/issue.py",
+          "owner": "CoopAI-Corp",
+          "repo": "plane",
+          "branch": "preview",
+          "requestedLine": 125,
+          "requestedEndLine": 126,
+          "revealedStartLine": 125,
+          "revealedEndLine": 126,
+          "source": "remote",
+          "bodyChars": 34220
+        },
+        {
+          "at": "2026-10-10T02:09:12.697Z",
+          "path": "apps/api/plane/db/models/state.py",
+          "owner": "CoopAI-Corp",
+          "repo": "plane",
+          "branch": "preview",
+          "requestedLine": 65,
+          "requestedEndLine": 69,
+          "revealedStartLine": 65,
+          "revealedEndLine": 69,
+          "source": "remote",
+          "bodyChars": 3824
+        }
+      ],
+      "manualSemanticReview": "The API membership rule preserves truthy deserialized state and the complete project/id query. The app rule establishes context-conditional manager selection. The State.objects binding and StateManager exclusion are verified in the attached model; numeric quotes remain exact and all three native reveals match preview. The answer claims no downstream write/save behavior and leaves the unread SoftDeletionManager, intentional triage acceptance and repository-wide transition policy as questions. Both complete validate bodies in the attached windows support the narrow statement about prior-state inspection. Source/citation Pass; latency Fail."
+    }
+  ],
+  "complete": true,
+  "updatedAt": "2026-10-10T02:10:26.239231+00:00"
+}

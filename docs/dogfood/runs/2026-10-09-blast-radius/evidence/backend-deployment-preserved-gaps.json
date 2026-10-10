@@ -1,0 +1,30 @@
+{
+  "verifiedAt": "2026-10-09T23:39:25.452626+00:00",
+  "latest": {
+    "id": "b09b8776-0341-40bd-b026-fefc67aa3646",
+    "status": "SUCCESS"
+  },
+  "active": [
+    {
+      "id": "b09b8776-0341-40bd-b026-fefc67aa3646",
+      "status": "SUCCESS",
+      "instances": [
+        {
+          "id": "72c38937-76f2-4485-a6e6-8fb013aa776c",
+          "status": "REMOVED"
+        },
+        {
+          "id": "733f6f45-93c5-4db9-bcd5-3f0acf62dd61",
+          "status": "RUNNING"
+        }
+      ],
+      "imageDigest": "sha256:c43187846a50c958428bad45117c4c8a1bfb820d67c1499f0c8d3ba866839228"
+    }
+  ],
+  "preservedBlastHashes": {
+    "body": "e9363647f6431b1e8ce36e056291362e24ac88345ee5be70acc84ad69614c35a",
+    "structure": "4464e7f61aec7c440ef31ed8efffddf0c7098923b16b36ca072e5bbe42ff29d8",
+    "routerDiscriminator": "7840b959f1823b8797cf71186bb80464c1031aa548e1c54bd1b0f473a077337f"
+  },
+  "preservationVerifiedBy": "Knowledge Gaps candidate audit against efe257d9"
+}

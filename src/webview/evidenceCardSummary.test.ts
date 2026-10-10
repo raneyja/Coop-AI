@@ -122,7 +122,7 @@ test("decision summary uses evolution and rationale ranking", () => {
 
   const summary = summarizeDecisionTimeline(timeline, "github");
   assert.equal(summary.target, "src/service/handler.ts:20-40");
-  assert.match(summary.primaryFinding ?? "", /5 commit\(s\) touched this file since introduction/i);
+  assert.match(summary.primaryFinding ?? "", /5 commit\(s\) touched this file since the sampled provenance anchor/i);
   const commitSource = summary.sourceContributions.find((entry) => /commit/i.test(entry.label));
   const prSource = summary.sourceContributions.find((entry) => /PR #410/i.test(entry.label));
   assert.equal(commitSource?.relevance, "supporting");
@@ -274,7 +274,7 @@ test("empty dependents must not claim verified import-parse (Documenso smoke)", 
   );
 });
 
-test("blast radius summary is strong for verified import-parse callers", () => {
+test("blast radius summary limits graph-only import-parse relationships to medium evidence", () => {
   const evidence: BlastRadiusEvidence = {
     file: "src/config/responseDeadline.ts",
     directDependents: [
@@ -288,8 +288,8 @@ test("blast radius summary is strong for verified import-parse callers", () => {
   };
 
   const summary = summarizeBlastRadius(evidence, "src/config/responseDeadline.ts", "github");
-  assert.equal(summary.quality, "strong");
-  assert.match(summary.qualityReason, /import-parse/i);
+  assert.equal(summary.quality, "medium");
+  assert.match(summary.qualityReason, /Behavioral impact requires source verification/i);
   assert.match(summary.primaryFinding ?? "", /3 code dependent/i);
   assert.ok(summary.sourceContributions.some((entry) => entry.provider === "github"));
   assert.ok(
@@ -302,7 +302,7 @@ test("blast radius summary is strong for verified import-parse callers", () => {
   );
 });
 
-test("blast radius summary is strong when only dependentDetails carry import-parse", () => {
+test("blast radius summary limits graph-only dependentDetails to medium evidence", () => {
   const evidence: BlastRadiusEvidence = {
     file: "src/config/responseDeadline.ts",
     directDependents: ["src/chat/CoopChatSession.ts"],
@@ -315,8 +315,8 @@ test("blast radius summary is strong when only dependentDetails carry import-par
   };
 
   const summary = summarizeBlastRadius(evidence, "src/config/responseDeadline.ts");
-  assert.equal(summary.quality, "strong");
-  assert.match(summary.qualityReason, /import-parse/i);
+  assert.equal(summary.quality, "medium");
+  assert.match(summary.qualityReason, /Behavioral impact requires source verification/i);
   assert.ok(!summary.limitations.some((line) => /Deep index|Lightning/i.test(line)));
 });
 

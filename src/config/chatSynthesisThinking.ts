@@ -1,8 +1,9 @@
 import { remainingContextGatherBudgetMs } from "./responseDeadline";
+import { understandFocusCoverage } from "../context/understandRepoSourceEvidence";
 
-/** Finish gathered read-only reports without another reasoning phase when the
- * shared gather allowance is spent. This changes neither the selected model nor
- * the turn's cancellation/lifetime; it still streams a complete grounded answer.
+/** Choose reasoning for gathered reports. Source rule audits retain reasoning
+ * after the soft gather allowance; empty coverage needs only a short answer.
+ * This changes neither the selected model nor the turn's cancellation/lifetime.
  */
 export function shouldEnableSynthesisThinking(options: {
   quickAction?: string;
@@ -18,6 +19,18 @@ export function shouldEnableSynthesisThinking(options: {
   }
   if (options.quickAction === "understand-repo" && hasBoundedSourceResultAsk(options.sourceFacts)) {
     return false;
+  }
+  if (options.quickAction === "understand-repo") {
+    const coverage = understandFocusCoverage(options.sourceFacts?.userFocus,
+      (options.sourceFacts?.entryFiles ?? []).filter((file): file is typeof file & { content: string } => Boolean(file.content?.trim())));
+    // A gathered component report needs an answer stream, not another hidden reasoning phase.
+    if (coverage.requested.length) return false;
+  }
+  if (options.quickAction === "knowledge-gaps" && options.sourceFacts?.userFocus?.trim()) {
+    // Multi-branch rules need reasoning over the gathered source; the soft
+    // latency target must not turn partial evidence into universal behavior.
+    // Empty coverage needs only a short, honest answer.
+    return Boolean(options.sourceFacts.entryFiles?.some(file => file.content?.trim()));
   }
   return remainingContextGatherBudgetMs(options.startedAt, options.now) > 0;
 }

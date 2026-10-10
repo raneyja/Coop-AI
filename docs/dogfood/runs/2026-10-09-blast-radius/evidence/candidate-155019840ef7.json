@@ -1,0 +1,28 @@
+{
+  "capturedAt": "2026-10-09T22:24:44.996998+00:00",
+  "command": "npm run build:extension-dev",
+  "backendDeploymentId": "7bf7d892-2ba5-4c16-a17c-943537bdb501",
+  "sourceMapMatches": {
+    "src/context/intentDetector.ts": true,
+    "src/chat/CoopChatSession.ts": true,
+    "src/config/chatSynthesisThinking.ts": true,
+    "src/prompts/blastRadiusSourceLabels.ts": true,
+    "src/prompts/blastRadiusSynthesis.ts": true,
+    "src/context/blastRadiusSourceEvidence.ts": true,
+    "src/context/contextBundleEvidence.ts": true,
+    "src/prompts/systemPrompts.ts": true
+  },
+  "hashes": {
+    "dist/extension.js": "155019840ef765ff34622bd11bc2d3e9267bff554debfcbaccd90df45c2fd4e1",
+    "dist/webview.js": "cb2151e634c43ca7dde04112c94f35f8a8a783e3f6d84e0ca08e4568dfa8a7ee",
+    "src/context/blastRadiusSourceEvidence.ts": "cb4b7d22aace550c263099f059c5a733e0b982790a3fcd7eb31c031c757693d3",
+    "src/context/contextBundleEvidence.ts": "49fb8ee3944bde51ffac42eadef8ab7c115e72932aeef74cc224fc11a62fb7e1",
+    "src/context/intentDetector.ts": "bd99d217753599d858bfa3142247b64caa90fc42a83251ed6d53aad0c99b5661",
+    "src/config/chatSynthesisThinking.ts": "a0bbd6174d843dda91dbe237c35f6f8b28fe8f0ae61d0b3a7497f103ededbf40",
+    "src/prompts/blastRadiusSynthesis.ts": "316eec7dd75ff4fe41faf9ee0bb508ad526393eaf10eb9d603bdf3083a766222",
+    "src/prompts/blastRadiusSourceLabels.ts": "ce93983c1690431f5ff061f93d78f5cc0476e2a4508f2e1892f676c737ef38b7",
+    "src/webview/evidenceCardSummary.ts": "da3d1c95803455a666324a03a7c7d3539ef8e907ca62e80d1c064651b7a01db9",
+    "src/chat/CoopChatSession.ts": "736616cd73685312b80b14547cdf72331cdf817a4be4362f87915002e170c7b9",
+    "src/prompts/systemPrompts.ts": "2501879f8321a15cd3fced2f686145b92d5c2ff3eee0b059e2bc4b13fd440097"
+  }
+}

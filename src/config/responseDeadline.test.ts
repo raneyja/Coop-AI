@@ -31,6 +31,19 @@ async function test(name: string, fn: () => void | Promise<void>): Promise<void>
 }
 
 async function main(): Promise<void> {
+  await test("focused Knowledge Gaps retains reasoning for source rules and streams empty coverage", () => {
+    const sourceFacts = {userFocus: "Which code rules are established for signing validation?",
+      entryFiles: [{path: "api/sign.ts", content: "if (status !== PENDING) throw new Error();", truncated: true}]};
+    for (const now of [3000, 61000]) {
+      assert.equal(shouldEnableSynthesisThinking({quickAction: "knowledge-gaps", startedAt: 1000, now,
+        sourceFacts}), true);
+      assert.equal(shouldEnableSynthesisThinking({quickAction: "knowledge-gaps", startedAt: 1000, now,
+        sourceFacts: {...sourceFacts, entryFiles: []}}), false);
+      assert.equal(shouldEnableSynthesisThinking({quickAction: "knowledge-gaps", startedAt: 1000, now,
+        sourceFacts: {...sourceFacts, entryFiles: [{path: "api/sign.ts", content: ""}]}}), false);
+    }
+    assert.equal(shouldEnableSynthesisThinking({quickAction: "knowledge-gaps", startedAt: 1000, now: 3000}), true);
+  });
   await test("complete named source result asks stream without a separate thinking phase", () => {
     const sourceFacts = {
       userFocus: "Explain positiveSum in src/mathRenamed.ts. Give the exact results for [], [5], and [1,2,3] from the implementation and cite source lines.",
@@ -69,9 +82,20 @@ async function main(): Promise<void> {
     }
   });
   await test("complex chat, edit, and other quick actions retain reasoning after the soft budget", () => {
-    for (const quickAction of [undefined, "edit", "blast-radius", "compare", "trace", "owner"]) {
+    for (const quickAction of [undefined, "edit", "compare", "trace", "owner", "blast-radius"]) {
       assert.equal(shouldEnableSynthesisThinking({ quickAction, startedAt: 1000, now: 61000 }), true);
     }
+  });
+  await test("Blast control-flow analysis retains reasoning even with complete source bodies", () => {
+    const options = { quickAction: "blast-radius", startedAt: 1000, now: 2000,
+      sourceFacts: { entryFiles: [{ path: "lib/sign.ts", content: "export function sign() {}" },
+        { path: "api/route.ts", content: "sign();" }] } };
+    assert.equal(shouldEnableSynthesisThinking(options), true);
+    assert.equal(shouldEnableSynthesisThinking({ ...options, now: 61000 }), true);
+    assert.equal(shouldEnableSynthesisThinking({ ...options, sourceFacts: { entryFiles: [
+      options.sourceFacts.entryFiles[0], { ...options.sourceFacts.entryFiles[1], truncated: true }
+    ] } }), true);
+    assert.equal(shouldEnableSynthesisThinking({ ...options, quickAction: "edit" }), true);
   });
   await test("remainingResponseBudgetMs clamps at zero", () => {
     assert.equal(remainingResponseBudgetMs(Date.now() - 20_000), 0);

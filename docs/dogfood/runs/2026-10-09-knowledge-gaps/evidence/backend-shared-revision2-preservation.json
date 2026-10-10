@@ -1,0 +1,11 @@
+{
+  "checkedAt": "2026-10-09T23:23:49.569334+00:00",
+  "deploymentId": "efe257d9-6c9c-469c-af6c-b1eed85c5678",
+  "systemBlockPreserved": true,
+  "systemBlockSha256": "a6f7fec028dc73ec8cc69401ca76be7a4338c3161138d6556b206537a68c4582",
+  "runtimeFiles": {
+    "src/context/knowledgeGapsFocus.ts": "fa45941131968de1aa93425dfa0228cf45e76a14990fd92d1157d8189e969b65",
+    "src/prompts/knowledgeGapsSynthesis.ts": "8b778ccc60b36c95fc96917175a9b6adf344f9a3e0aecfa695e52a75f90278fb",
+    "src/prompts/knowledgeGapsSourceLabels.ts": "e74d50c09b81a4236be6d209917e564f5da4c1f33addf960d8d449f112a49f9e"
+  }
+}

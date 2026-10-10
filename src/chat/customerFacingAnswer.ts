@@ -1,13 +1,13 @@
 import { stripEmittedPatchBlocks } from "./agentProposedPatch";
 import type { RepoCodeAction } from "./repoCodeIntent";
+import { mapMarkdownProse, splitMarkdownBlocks } from "../prompts/markdownProse";
 
 /** Shown only when there is no answer to keep — never appended to one. */
 export const CUSTOMER_EMPTY_HUNT_ANSWER =
   "I couldn't find that in this repo. Try a more specific name, or open the file.";
 
-/** Patch/diff, SEARCH/REPLACE, and any ``` fence (cite cards included). */
-const PRESERVED_FENCE_RE =
-  /```[\s\S]*?```|<<<<<<< SEARCH[\s\S]*?>>>>>>> REPLACE/g;
+/** SEARCH/REPLACE outside fences is also opaque to narrative rewriting. */
+const PRESERVED_PATCH_RE = /<<<<<<< SEARCH[\s\S]*?>>>>>>> REPLACE/g;
 
 const INTERN_SPEAK_RE = [
   /\bevidence bundle\b/i,
@@ -62,8 +62,8 @@ const OPERATE_COOP_RE = [
 ];
 
 function proseOutsideFences(content: string): string {
-  PRESERVED_FENCE_RE.lastIndex = 0;
-  return content.replace(PRESERVED_FENCE_RE, "\n");
+  return splitMarkdownBlocks(content).filter(block => block.kind === "prose")
+    .map(block => block.text.replace(PRESERVED_PATCH_RE, "\n")).join("\n");
 }
 
 function hasInternSpeak(content: string): boolean {
@@ -230,17 +230,19 @@ function rewriteSegment(segment: string): string {
 }
 
 function rewritePreservingFences(content: string): string {
-  const parts: string[] = [];
-  let last = 0;
-  PRESERVED_FENCE_RE.lastIndex = 0;
-  for (const match of content.matchAll(PRESERVED_FENCE_RE)) {
-    const idx = match.index ?? 0;
-    parts.push(rewriteSegment(content.slice(last, idx)));
-    parts.push(match[0]);
-    last = idx + match[0].length;
-  }
-  parts.push(rewriteSegment(content.slice(last)));
-  return parts.join("");
+  return mapMarkdownProse(content, segment => {
+    const parts: string[] = [];
+    let last = 0;
+    PRESERVED_PATCH_RE.lastIndex = 0;
+    for (const match of segment.matchAll(PRESERVED_PATCH_RE)) {
+      const idx = match.index ?? 0;
+      parts.push(rewriteSegment(segment.slice(last, idx)));
+      parts.push(match[0]);
+      last = idx + match[0].length;
+    }
+    parts.push(rewriteSegment(segment.slice(last)));
+    return parts.join("");
+  });
 }
 
 /**

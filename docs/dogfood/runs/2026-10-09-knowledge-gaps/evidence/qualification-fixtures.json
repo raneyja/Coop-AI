@@ -1,0 +1,40 @@
+{
+  "status": "complete: four live source/citation passes; source-backed latency Fail",
+  "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+  "cases": [
+    {
+      "id": "plane-repo-only",
+      "repo": "CoopAI-Corp/plane",
+      "branch": "preview",
+      "commit": "a8e53b6ac7b87bd8e3e931d21188f7679c7ab6c4",
+      "file": null,
+      "ask": "/gaps Before changing work-item state validation, which rules can we establish from the code, and which unanswered questions about allowed transitions need documentation or tests?"
+    },
+    {
+      "id": "documenso-repo-only",
+      "repo": "CoopAI-Corp/documenso",
+      "branch": "main",
+      "commit": "a457e1ef7de449e4f758fc6943a8014e952c34c6",
+      "file": null,
+      "ask": "/gaps Before changing signing status validation, which rules can we establish from the code, and which unanswered questions about signing a non-PENDING envelope need documentation or tests?"
+    },
+    {
+      "id": "plane-selected-serializer",
+      "repo": "CoopAI-Corp/plane",
+      "branch": "preview",
+      "commit": "a8e53b6ac7b87bd8e3e931d21188f7679c7ab6c4",
+      "file": "apps/api/plane/api/serializers/issue.py",
+      "ask": "/gaps Before changing state validation in this selected issue serializer, which rules does its code establish, and which transition-policy questions need documentation or tests? Use only this repository."
+    },
+    {
+      "id": "unavailable-topic",
+      "repo": "CoopAI-Corp/plane",
+      "branch": "preview",
+      "commit": "a8e53b6ac7b87bd8e3e931d21188f7679c7ab6c4",
+      "file": null,
+      "ask": "/gaps Before changing quantum teleportation in nonexistent/quantum-teleportation.ts, which code rules can we establish and which policy questions need documentation or tests? Use only this repository."
+    }
+  ],
+  "initialBackendDeploymentId": "788d0aeb-322c-4937-8788-238d5c638188",
+  "qualifiedAt": "2026-10-10T02:10:26.312531+00:00"
+}

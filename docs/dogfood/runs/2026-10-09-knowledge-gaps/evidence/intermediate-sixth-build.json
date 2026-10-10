@@ -1,0 +1,34 @@
+{
+  "builtAt": "2026-10-09T22:08:07.269004+00:00",
+  "backendDeploymentId": "788d0aeb-322c-4937-8788-238d5c638188",
+  "command": "npm run build:extension-dev",
+  "lease": "01a12233-c0f9-79a3-9c05-8c2892b19217",
+  "sourceMapMatches": {
+    "src/context/knowledgeGapsFocus.ts": true,
+    "src/context/intentDetector.ts": true,
+    "src/chat/CoopChatSession.ts": true,
+    "src/config/chatSynthesisThinking.ts": true,
+    "src/prompts/knowledgeGapsSynthesis.ts": true,
+    "src/prompts/knowledgeGapsEnrichment.ts": true,
+    "src/prompts/systemPrompts.ts": true,
+    "src/context/knowledgeGapsCodeEvidence.ts": true,
+    "src/context/integrationChatEnrichment.ts": true
+  },
+  "files": {
+    "dist/extension.js": "f111da04680637827251fa75118912a8fbb076cf84df389b988ef923772e609e",
+    "dist/extension.js.map": "9392d121344e031e1a1c6abc019258ddaea9a997b20a2644eed28d143f945a3d",
+    "dist/webview.js": "cb2151e634c43ca7dde04112c94f35f8a8a783e3f6d84e0ca08e4568dfa8a7ee",
+    "dist/webview.css": "2f1563d780aa9e9a1c578ea61c9b00e3d9ddc210f9dc01f9e2ca4decc5f7ce9a",
+    "src/context/knowledgeGapsCodeEvidence.ts": "bd6a0275c92606f537617164316040b4d429d0c1decca6d8ff3013667bfde739",
+    "src/context/knowledgeGapsFocus.ts": "fa45941131968de1aa93425dfa0228cf45e76a14990fd92d1157d8189e969b65",
+    "src/chat/CoopChatSession.ts": "c4337844d7689b93395615450483d01f5bd72056f7b8c0117c0c821fc99c34be",
+    "src/context/intentDetector.ts": "bd99d217753599d858bfa3142247b64caa90fc42a83251ed6d53aad0c99b5661",
+    "src/config/chatSynthesisThinking.ts": "eff0ef9a69d3233d2404e6e146bc0ed78e31f141ec11d71205e5280f1d109162",
+    "src/prompts/systemPrompts.ts": "2501879f8321a15cd3fced2f686145b92d5c2ff3eee0b059e2bc4b13fd440097",
+    "src/prompts/knowledgeGapsSynthesis.ts": "765893337a473525154fcfb072b6308e4d5a5b8232a380dec56065b2a8511310",
+    "src/prompts/knowledgeGapsEnrichment.ts": "c88021b867fa5d70aa482c03853ff643b433958e52e63f989ff099fe690b35bd",
+    "src/context/integrationChatEnrichment.ts": "a24eb4e87e5c521f6e41f9d118a349c5d52520c24673758398b96db376d7720a",
+    "src/webview/evidenceCardSummary.ts": "da3d1c95803455a666324a03a7c7d3539ef8e907ca62e80d1c064651b7a01db9",
+    "src/webview/EvidenceCards.tsx": "8093bd82ea7f78d907e8a99aed52ab9354092620f902b22fef80fcb6675b346a"
+  }
+}

@@ -1,4 +1,5 @@
 import { parseChatProse } from "./chatProseParser";
+import { collapseProseBlankLines } from "../../prompts/markdownProse";
 import type { ChatInlineNode, ChatProseBlock } from "./chatProseTypes";
 
 function inlineNodesToCopyText(nodes: ChatInlineNode[]): string {
@@ -44,16 +45,16 @@ function blockToCopyLines(block: ChatProseBlock): string[] {
     case "paragraph":
       return [inlineNodesToCopyText(block.content)];
     case "code-fence":
-      return ["", `\`\`\`${block.language ?? ""}`, block.code, "```", ""];
+      return ["", `${block.fence ?? "```"}${block.language ?? ""}`, block.code, block.fence ?? "```", ""];
     case "code-citation":
       return [
         "",
         block.startLine != null && block.endLine != null
           ? `${block.path}:${block.startLine}-${block.endLine}`
           : block.path,
-        "```",
+        block.fence ?? "```",
         block.code,
-        "```",
+        block.fence ?? "```",
         ""
       ];
     case "jira-ticket-stack":
@@ -73,12 +74,12 @@ function blockToCopyLines(block: ChatProseBlock): string[] {
 }
 
 /** Developer-friendly markdown copy — preserves links, file paths, and section structure. */
-export function formatChatMessageForCopy(content: string): string {
+export function formatChatMessageForCopy(content: string, options?: { sourceCitationMode?: "explicit" }): string {
   if (!content.trim()) {
     return "";
   }
 
-  const document = parseChatProse(content);
+  const document = parseChatProse(content, options);
   const lines: string[] = [];
 
   for (const block of document.blocks) {
@@ -92,8 +93,5 @@ export function formatChatMessageForCopy(content: string): string {
     lines.push(...blockLines);
   }
 
-  return lines
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return collapseProseBlankLines(lines.join("\n"));
 }

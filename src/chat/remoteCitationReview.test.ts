@@ -47,6 +47,27 @@ async function run(): Promise<void> {
   session.revealLineInEditor(editor, 203, 531);
   assert.equal(editor.selection.end.line, 263, "revealed ranges cannot exceed the actual document");
   const vscode = createRequire(import.meta.url)("vscode");
+  const targetContext = { file: "src/state.py", selectedLines: [69, 69], fileSource: "remote" };
+  const selectionSession = Object.assign(Object.create(CoopChatSession.prototype), {
+    currentContext: { ...targetContext }, allowPassiveEditorSnap: true,
+    editorContextSuppressedUntil: Date.now() + 15000,
+    liveSelectedLinesFromOpenEditors: () => undefined,
+    postContext() {}
+  });
+  const reviewEditor = (file: string, start: number, end: number) => ({
+    document: { isClosed: false, getText: () => "# source\n".repeat(260),
+      uri: { scheme: "vscode-vfs", path: `/org/repo/${file}`, fsPath: `/org/repo/${file}`,
+        toString: () => `vscode-vfs://github/org/repo/${file}` } },
+    selection: new vscode.Selection(new vscode.Position(start - 1, 0), new vscode.Position(end - 1, 5))
+  });
+  const caller = reviewEditor("src/issue.py", 228, 236);
+  selectionSession.stampLiveEditorSelection(caller, caller);
+  assert.deepEqual(selectionSession.currentContext, targetContext,
+    "opening a caller citation cannot stamp its range onto the preserved target");
+  const selectedTarget = reviewEditor("src/state.py", 69, 74);
+  selectionSession.stampLiveEditorSelection(selectedTarget, selectedTarget);
+  assert.deepEqual(selectionSession.currentContext.selectedLines, [69, 74],
+    "a genuine selection in the target still updates immediately during open suppression");
   const originalWorkspace = {...vscode.workspace};
   const originalWindow = {...vscode.window};
   clearRemotePatchBuffersForTests();
@@ -54,6 +75,7 @@ async function run(): Promise<void> {
     const documents: any[] = [];
     const columns: number[] = [];
     const branches: string[] = [];
+    const openedReviews: any[] = [];
     vscode.workspace.textDocuments = documents;
     vscode.window.visibleTextEditors = [];
     vscode.workspace.openTextDocument = async ({content}: {content: string}) => {
@@ -68,6 +90,8 @@ async function run(): Promise<void> {
       vscode.window.visibleTextEditors = [editor]; return editor;
     };
     const apiSession = Object.assign(Object.create(CoopChatSession.prototype), {
+      activeThreadId: () => "review-thread",
+      logAgentDiagnostic: (thread: string, event: any) => { assert.equal(thread, "review-thread"); openedReviews.push(event); },
       currentContext: {provider: "gitlab", owner: "org", repo: "repo", branch: "preview"},
       preferences: {defaultCodeHost: "github"},
       options: {codeHostRouter: {getFileContent: async (_path: string, target: any) => {
@@ -80,6 +104,9 @@ async function run(): Promise<void> {
     assert.equal(documents.length, 1, "repeat opens reuse exact verified file bytes");
     assert.equal(columns[1], 4, "repeat opens reuse the visible editor group");
     assert.equal(remoteIdentityForUntitledUri(documents[0].uri.toString())?.branch, "preview");
+    assert.deepEqual(openedReviews.map(event => [event.path, event.branch, event.revealedStartLine, event.revealedEndLine]),
+      [["src/auth.ts", "preview", 2, 3], ["src/auth.ts", "preview", 2, 3]]);
+    assert(openedReviews.every(event => event.stage === "remote-review-opened" && event.source === "remote"));
     apiSession.currentContext.branch = "main";
     assert.equal(await apiSession.openRemoteFileFromApi("src/auth.ts", 2, {reviewOpen: true}), true);
     assert.equal(documents.length, 2, "a different ref gets a separate viewing buffer even if bytes match");

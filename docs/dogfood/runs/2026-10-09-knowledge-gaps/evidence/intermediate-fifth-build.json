@@ -1,0 +1,37 @@
+{
+  "builtAt": "2026-10-09T21:46:00.123656+00:00",
+  "backendDeploymentId": "788d0aeb-322c-4937-8788-238d5c638188",
+  "command": "npm run build:extension-dev",
+  "lease": "01a12233-c0f9-79a3-9c05-8c2892b19217",
+  "files": {
+    "dist/extension.js": "31c34e385193585625ce2d005f19393a947f9da05dd0650346e23600f0e62593",
+    "dist/extension.js.map": "8622e65c68766010a95d9d7e2a93e9d2ce215b309cf4dfb7564f3e2d2bdc8145",
+    "dist/webview.js": "cb2151e634c43ca7dde04112c94f35f8a8a783e3f6d84e0ca08e4568dfa8a7ee",
+    "dist/webview.css": "2f1563d780aa9e9a1c578ea61c9b00e3d9ddc210f9dc01f9e2ca4decc5f7ce9a",
+    "src/context/knowledgeGapsCodeEvidence.ts": "ea81ec2f5e2beb791635f25e45d5a3664b4d640fbc50454435ce710d271c0292",
+    "src/context/knowledgeGapsFocus.ts": "fa45941131968de1aa93425dfa0228cf45e76a14990fd92d1157d8189e969b65",
+    "src/chat/CoopChatSession.ts": "7d309a54287e5f182435516cb8733265f143ae05ad03db28d729fb5a9266697c",
+    "src/context/intentDetector.ts": "bd99d217753599d858bfa3142247b64caa90fc42a83251ed6d53aad0c99b5661",
+    "src/config/chatSynthesisThinking.ts": "bbc1057704da42c014f070dee133168ba02811285c65e41733c437dd9db0526b",
+    "src/prompts/systemPrompts.ts": "c45b1d1019fc7844fb86ead498cdf373591ef918e008c44919eed8cb4210b0e9",
+    "src/prompts/knowledgeGapsSynthesis.ts": "765893337a473525154fcfb072b6308e4d5a5b8232a380dec56065b2a8511310",
+    "src/prompts/knowledgeGapsEnrichment.ts": "c88021b867fa5d70aa482c03853ff643b433958e52e63f989ff099fe690b35bd",
+    "src/context/integrationChatEnrichment.ts": "a24eb4e87e5c521f6e41f9d118a349c5d52520c24673758398b96db376d7720a",
+    "src/webview/evidenceCardSummary.ts": "da3d1c95803455a666324a03a7c7d3539ef8e907ca62e80d1c064651b7a01db9",
+    "src/webview/EvidenceCards.tsx": "8093bd82ea7f78d907e8a99aed52ab9354092620f902b22fef80fcb6675b346a"
+  },
+  "sourceMapMatches": {
+    "src/context/knowledgeGapsFocus.ts": true,
+    "src/context/intentDetector.ts": true,
+    "src/chat/CoopChatSession.ts": true,
+    "src/config/chatSynthesisThinking.ts": true,
+    "src/prompts/knowledgeGapsSynthesis.ts": true,
+    "src/prompts/knowledgeGapsEnrichment.ts": true,
+    "src/prompts/systemPrompts.ts": false,
+    "src/context/knowledgeGapsCodeEvidence.ts": true,
+    "src/context/integrationChatEnrichment.ts": true
+  },
+  "knowledgeGapsSystemBlockMatchesSource": true,
+  "compiledKnowledgeGapsSystemBlockSha256": "c6304ea43ba7d9ecdf9b375ff05378ae3886fdc0a44fbb549fc3c5f3f2581e03",
+  "systemPromptSourceDrift": "Sibling prompt edits after build; scoped Knowledge Gaps block compared separately."
+}

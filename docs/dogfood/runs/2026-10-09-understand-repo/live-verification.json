@@ -1,0 +1,437 @@
+{
+  "status": "Fixed / live Pass for the named Plane fixture",
+  "date": "2026-10-09",
+  "fixture": {
+    "repo": "CoopAI-Corp/plane",
+    "branch": "preview",
+    "commit": "a8e53b6ac7b87bd8e3e931d21188f7679c7ab6c4",
+    "scope": "repo",
+    "fileChip": false,
+    "ask": "If I\u2019m joining the Plane backend team to work on issue creation, which components handle request authentication, input validation, and persistence, and which three files should I read first?"
+  },
+  "rootCause": "Component evidence coverage accepted unrelated search anchors; prefix-only source excerpts omitted late implementations. Existing evidence-bound prompt rules were insufficiently enforced by the runtime.",
+  "changes": [
+    "Discover component sources through IndexedRepoWorkspace on the selected remote branch.",
+    "Retain late implementation windows and exact original line numbers.",
+    "Verify handler-to-validator and base-view-to-authentication bindings before synthesis.",
+    "Return a short honest answer when requested component evidence is incomplete.",
+    "Disable the separate thinking phase for focused component synthesis.",
+    "Verify final numeric code citations against attached source and remove unverifiable excerpts."
+  ],
+  "live": {
+    "threadId": "thread-1791578572556-whebs1",
+    "turnId": "turn-1791578752283-ljlsrx",
+    "bundleSha256": "f5b9c7162a20f6adb2a1b5f34b2c6df65aef9b5cf5b37df7f72b3081e3c0c04c",
+    "firstAnswerMs": 11991,
+    "uiWorkedSeconds": 38,
+    "uiObservedCompleted": true,
+    "thinking": false,
+    "coverage": {
+      "requested": [
+        "request handler",
+        "authentication",
+        "input validation",
+        "persistence"
+      ],
+      "missing": []
+    },
+    "sources": [
+      {
+        "path": "apps/api/plane/api/middleware/api_authentication.py",
+        "startLine": 1,
+        "endLine": 53,
+        "sha256": "76fedb6884da101b622b507cd59ff696de3d8b56405d45eda691a3c851709aca"
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 1,
+        "endLine": 75,
+        "sha256": "27814d8577c66a18e695dadef79b99beb8c7229cbea34d5d86454fc4daa27bb5"
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 63,
+        "endLine": 199,
+        "sha256": "94c494bba2d61c00343dad21ab4341fc499d385ecf1c7c2150aa1d3c0c00d9bc"
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 139,
+        "endLine": 275,
+        "sha256": "38430a94adf7cb618e553a52082207dcf0f7e8c54ab9eb172fc464d676178155"
+      },
+      {
+        "path": "apps/api/plane/db/models/issue.py",
+        "startLine": 1,
+        "endLine": 75,
+        "sha256": "38da8462e48e26227079457dd0bc452da27f579afb91736a14cc792f00ef7c12"
+      },
+      {
+        "path": "apps/api/plane/db/models/issue.py",
+        "startLine": 104,
+        "endLine": 123,
+        "sha256": "69ee96fc381c35636a6b3af9f4371f7f856f0b7d7dd18072e6b01b689c482344"
+      },
+      {
+        "path": "apps/api/plane/db/models/issue.py",
+        "startLine": 168,
+        "endLine": 304,
+        "sha256": "5c060659fb044957715ff438cc1b683293b888fca123eb8596d2a3870556e469"
+      },
+      {
+        "path": "apps/api/plane/api/views/issue.py",
+        "startLine": 1,
+        "endLine": 75,
+        "sha256": "31aa421ae6c167784846444dfa982f68129cc6a40ea815f07ff533053a246614"
+      },
+      {
+        "path": "apps/api/plane/api/views/issue.py",
+        "startLine": 256,
+        "endLine": 275,
+        "sha256": "cd6418c01642603a262008f608d66a6575e673742997d0481c23c63253295d50"
+      },
+      {
+        "path": "apps/api/plane/api/views/issue.py",
+        "startLine": 437,
+        "endLine": 573,
+        "sha256": "351c123166dd2dde1dc693818213d6f3f87ade9f1dc49539280802c6badd00b4"
+      },
+      {
+        "path": "apps/api/plane/api/views/base.py",
+        "startLine": 1,
+        "endLine": 267,
+        "sha256": "108264d7b0920264dbde410592b31adaea6be2426928e55d38723ffb3cd36554"
+      }
+    ],
+    "citations": [
+      {
+        "path": "apps/api/plane/api/views/base.py",
+        "startLine": 49,
+        "endLine": 52,
+        "exactRemoteSourceMatch": true
+      },
+      {
+        "path": "apps/api/plane/api/middleware/api_authentication.py",
+        "startLine": 45,
+        "endLine": 52,
+        "exactRemoteSourceMatch": true
+      },
+      {
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "startLine": 107,
+        "endLine": 113,
+        "exactRemoteSourceMatch": true
+      }
+    ],
+    "answer": "The three files to read first are `apps/api/plane/api/views/issue.py`, `apps/api/plane/api/serializers/issue.py`, and `apps/api/plane/db/models/issue.py` \u2014 they own the request handling, validation, and persistence layers respectively. Authentication is wired at the base class level in `apps/api/plane/api/views/base.py` and implemented in `apps/api/plane/api/middleware/api_authentication.py`.\n\n**How a POST /issues request flows**\n\n`IssueListCreateAPIEndpoint` in `apps/api/plane/api/views/issue.py` handles the `POST`. It inherits from `BaseAPIView` in `apps/api/plane/api/views/base.py`, which sets `authentication_classes = [APIKeyAuthentication]` and `permission_classes = [IsAuthenticated]`. Every request therefore passes through `APIKeyAuthentication` before the view method runs.\n\n```49:52:apps/api/plane/api/views/base.py\nclass BaseAPIView(TimezoneMixin, GenericAPIView, ReadReplicaControlMixin, BasePaginator):\n    authentication_classes = [APIKeyAuthentication]\n\n    permission_classes = [IsAuthenticated]\n```\n\n`APIKeyAuthentication.authenticate` reads the `X-Api-Key` header, then calls `validate_api_token`, which queries `APIToken` for a matching active, non-expired token tied to an active user. On success it updates `last_used` and returns `(user, token)`. If the header is absent it returns `None` (anonymous), letting DRF's `IsAuthenticated` reject the request.\n\n```45:52:apps/api/plane/api/middleware/api_authentication.py\n    def authenticate(self, request):\n        token = self.get_api_token(request=request)\n        if not token:\n            return None\n\n        # Validate the API token\n        user, token = self.validate_api_token(token)\n        return user, token\n```\n\n**Validation in `IssueSerializer`**\n\n`IssueSerializer.validate` in `apps/api/plane/api/serializers/issue.py` runs these checks in order:\n- `start_date` must not exceed `target_date`\n- `description_html` is parsed with `lxml`, then passed through `validate_html_content` (which sanitizes and can replace the value)\n- `description_binary` is checked with `validate_binary_data`\n- Assignees are filtered to active `ProjectMember` rows with `role__gte=15` \u2014 anyone not a project member is silently dropped\n- Labels are filtered to the project\n- `state` and `parent` are validated against the project/workspace\n- `estimate_point` is validated against the project/workspace\n\n```107:113:apps/api/plane/api/serializers/issue.py\n        if data.get(\"assignees\", []):\n            data[\"assignees\"] = ProjectMember.objects.filter(\n                project_id=self.context.get(\"project_id\"),\n                is_active=True,\n                role__gte=15,\n                member_id__in=data[\"assignees\"],\n            ).values_list(\"member_id\", flat=True)\n```\n\n**Persistence in `Issue.save`**\n\n`IssueSerializer.create` calls `Issue.objects.create(...)`, which triggers `Issue.save` in `apps/api/plane/db/models/issue.py`. On insert, `save` acquires a PostgreSQL advisory lock keyed to the project UUID (converted to an integer) to serialize sequence assignment, then computes `sequence_id` as `MAX(sequence) + 1`, strips HTML to `description_stripped`, and computes `sort_order`. It also calls `_ensure_default_state` (assigns the project's default state if none was given) and `_sync_completed_at` (sets `completed_at` when the state group is `COMPLETED`).\n\nAfter `serializer.save()`, the view re-fetches the issue and writes `created_at`/`created_by` from the request body (allowing back-dated imports), then fires `issue_activity.delay` and `model_activity.delay` as Celery tasks for audit and notifications.\n\n**Reading order**\n\n1. `apps/api/plane/api/views/issue.py` \u2014 `IssueListCreateAPIEndpoint.post` is the entry point; shows the full request lifecycle including external-ID deduplication and activity dispatch\n2. `apps/api/plane/api/serializers/issue.py` \u2014 `IssueSerializer.validate`, `create`, and `update` cover all business rules and relationship management\n3. `apps/api/plane/db/models/issue.py` \u2014 `Issue.save` with the advisory lock, sequence logic, and state/completion sync\n\n`apps/api/plane/api/middleware/api_authentication.py` and `apps/api/plane/api/views/base.py` are short and worth a quick read once you have the three above \u2014 they explain why every endpoint requires `X-Api-Key` and how rate-limit headers are injected into responses.",
+    "diagnosticEvents": [
+      {
+        "at": "2026-10-09T20:45:52.284Z",
+        "threadId": "thread-1791578572556-whebs1",
+        "stage": "attachment-capture",
+        "turnId": "turn-1791578752283-ljlsrx",
+        "runId": "synthesis-turn-1791578752283-ljlsrx",
+        "elapsedMs": 1,
+        "owner": "CoopAI-Corp",
+        "repo": "plane",
+        "selectedBranch": "preview",
+        "route": "indexed-repo",
+        "buildId": "0.1.13",
+        "bundleId": "f5b9c7162a20f6adb2a1b5f34b2c6df65aef9b5cf5b37df7f72b3081e3c0c04c",
+        "capturedAt": "2026-10-09T20:45:51.888Z",
+        "capturedOwner": "CoopAI-Corp",
+        "capturedRepo": "plane",
+        "capturedBranch": "preview",
+        "fileCount": 0,
+        "bodyChars": 0,
+        "files": []
+      },
+      {
+        "at": "2026-10-09T20:45:53.450Z",
+        "threadId": "thread-1791578572556-whebs1",
+        "stage": "understand-source-read",
+        "path": "apps/api/plane/api/middleware/api_authentication.py",
+        "repoId": "github:CoopAI-Corp/plane",
+        "branch": "preview",
+        "bodyChars": 1563,
+        "windows": [
+          {
+            "startLine": 1,
+            "endLine": 53
+          }
+        ]
+      },
+      {
+        "at": "2026-10-09T20:45:53.666Z",
+        "threadId": "thread-1791578572556-whebs1",
+        "stage": "understand-source-read",
+        "path": "apps/api/plane/api/serializers/issue.py",
+        "repoId": "github:CoopAI-Corp/plane",
+        "branch": "preview",
+        "bodyChars": 29531,
+        "windows": [
+          {
+            "startLine": 1,
+            "endLine": 75
+          },
+          {
+            "startLine": 63,
+            "endLine": 199
+          },
+          {
+            "startLine": 139,
+            "endLine": 275
+          }
+        ]
+      },
+      {
+        "at": "2026-10-09T20:45:53.736Z",
+        "threadId": "thread-1791578572556-whebs1",
+        "stage": "understand-source-read",
+        "path": "apps/api/plane/db/models/issue.py",
+        "repoId": "github:CoopAI-Corp/plane",
+        "branch": "preview",
+        "bodyChars": 30185,
+        "windows": [
+          {
+            "startLine": 1,
+            "endLine": 75
+          },
+          {
+            "startLine": 104,
+            "endLine": 123
+          },
+          {
+            "startLine": 168,
+            "endLine": 304
+          }
+        ]
+      },
+      {
+        "at": "2026-10-09T20:45:53.816Z",
+        "threadId": "thread-1791578572556-whebs1",
+        "stage": "understand-source-read",
+        "path": "apps/api/plane/api/views/issue.py",
+        "repoId": "github:CoopAI-Corp/plane",
+        "branch": "preview",
+        "bodyChars": 101511,
+        "windows": [
+          {
+            "startLine": 1,
+            "endLine": 75
+          },
+          {
+            "startLine": 256,
+            "endLine": 275
+          },
+          {
+            "startLine": 437,
+            "endLine": 573
+          }
+        ]
+      },
+      {
+        "at": "2026-10-09T20:45:54.229Z",
+        "threadId": "thread-1791578572556-whebs1",
+        "stage": "understand-source-read",
+        "path": "apps/api/plane/api/views/base.py",
+        "repoId": "github:CoopAI-Corp/plane",
+        "branch": "preview",
+        "bodyChars": 8910,
+        "windows": [
+          {
+            "startLine": 1,
+            "endLine": 267
+          }
+        ]
+      },
+      {
+        "at": "2026-10-09T20:45:58.164Z",
+        "threadId": "thread-1791578572556-whebs1",
+        "stage": "understand-focus-coverage",
+        "requested": [
+          "request handler",
+          "authentication",
+          "input validation",
+          "persistence"
+        ],
+        "missing": [],
+        "paths": [
+          "apps/api/plane/api/middleware/api_authentication.py",
+          "apps/api/plane/api/serializers/issue.py",
+          "apps/api/plane/db/models/issue.py",
+          "apps/api/plane/api/views/issue.py",
+          "apps/api/plane/api/views/base.py"
+        ]
+      },
+      {
+        "at": "2026-10-09T20:45:58.169Z",
+        "threadId": "thread-1791578572556-whebs1",
+        "stage": "attachment-resolved",
+        "turnId": "turn-1791578752283-ljlsrx",
+        "runId": "synthesis-turn-1791578752283-ljlsrx",
+        "elapsedMs": 9008,
+        "owner": "CoopAI-Corp",
+        "repo": "plane",
+        "selectedBranch": "preview",
+        "route": "indexed-repo",
+        "buildId": "0.1.13",
+        "bundleId": "f5b9c7162a20f6adb2a1b5f34b2c6df65aef9b5cf5b37df7f72b3081e3c0c04c",
+        "skipped": true,
+        "fileCount": 0,
+        "bodyChars": 0,
+        "files": []
+      },
+      {
+        "at": "2026-10-09T20:45:58.169Z",
+        "threadId": "thread-1791578572556-whebs1",
+        "stage": "attachment-post-isolation",
+        "turnId": "turn-1791578752283-ljlsrx",
+        "runId": "synthesis-turn-1791578752283-ljlsrx",
+        "elapsedMs": 9008,
+        "owner": "CoopAI-Corp",
+        "repo": "plane",
+        "selectedBranch": "preview",
+        "route": "indexed-repo",
+        "buildId": "0.1.13",
+        "bundleId": "f5b9c7162a20f6adb2a1b5f34b2c6df65aef9b5cf5b37df7f72b3081e3c0c04c",
+        "fileCount": 0,
+        "bodyChars": 0,
+        "files": []
+      },
+      {
+        "at": "2026-10-09T20:45:58.575Z",
+        "threadId": "thread-1791578572556-whebs1",
+        "stage": "synthesis-request",
+        "turnId": "turn-1791578752283-ljlsrx",
+        "runId": "synthesis-turn-1791578752283-ljlsrx",
+        "elapsedMs": 9413,
+        "useCase": "comprehension",
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-6",
+        "requestChars": 55899,
+        "historyCount": 0,
+        "commentOnly": false,
+        "hasAgentPatch": false,
+        "enableThinking": false,
+        "buildId": "0.1.13",
+        "bundleId": "f5b9c7162a20f6adb2a1b5f34b2c6df65aef9b5cf5b37df7f72b3081e3c0c04c"
+      },
+      {
+        "at": "2026-10-09T20:45:58.576Z",
+        "threadId": "thread-1791578572556-whebs1",
+        "stage": "attachment-final-request",
+        "turnId": "turn-1791578752283-ljlsrx",
+        "runId": "synthesis-turn-1791578752283-ljlsrx",
+        "elapsedMs": 9415,
+        "owner": "CoopAI-Corp",
+        "repo": "plane",
+        "selectedBranch": "preview",
+        "route": "indexed-repo",
+        "buildId": "0.1.13",
+        "bundleId": "f5b9c7162a20f6adb2a1b5f34b2c6df65aef9b5cf5b37df7f72b3081e3c0c04c",
+        "messageChars": 55899,
+        "messageHash": "a703c976bd5ca3aebef11585461a0569cc170a7e172f567cfd193fe888fc7e07",
+        "localFilesBlockCount": 0,
+        "fileContentBlockCount": 11,
+        "serializedBodyChars": 45252,
+        "serializedBodyHashes": [
+          "b4eed9163d4dbe15e8940928fce53d8a3a5466dd4886061dec1aeaa098998d03",
+          "b577095c21da10c9ecf1218593dd305c720c446ac9e1e5c2799f41f2aacaeae9",
+          "1b9043c10bedf9476cfa5401c728601834ff97c5bc6e42f75df8aa7a632519b2",
+          "1696f0b4b86341dab4b732ee42fa859bf72b5f8e185ebb4259ae876279ccedb2",
+          "a64ae0bb8c0f7b2af9a5347a4c42113448d140c189cebc3c27acc87357304212",
+          "f2dc083e1556988fc27e030e0a4589b1feff6af35ba3d54219aba9230747a904",
+          "e5005e7a7bbb4e9c169bb974ef292aaf3f7887628b60384317ec28584369769c",
+          "8637346a4d45369ac838e3467b44a24a0ca5dffa9a320c001d2a45ebbad36c37",
+          "cced07b575c73c4b5e90c9ace0072563dcd0fe482fbf9c73d730e314214429bf",
+          "dcbf1e84d72a874dbd649f5e16dd0656582a7c620360db8cb7e18520a28e7fa7",
+          "40391895950cead765c107a75c5472d23087a61307c32cb6b3e28187a9f4d445"
+        ],
+        "useCase": "comprehension",
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-6"
+      },
+      {
+        "at": "2026-10-09T20:46:01.152Z",
+        "threadId": "thread-1791578572556-whebs1",
+        "stage": "answer-start",
+        "turnId": "turn-1791578752283-ljlsrx",
+        "runId": "synthesis-turn-1791578752283-ljlsrx",
+        "elapsedMs": 11991,
+        "selectedBranch": "preview",
+        "buildId": "0.1.13",
+        "bundleId": "f5b9c7162a20f6adb2a1b5f34b2c6df65aef9b5cf5b37df7f72b3081e3c0c04c"
+      }
+    ]
+  },
+  "automatedChecks": [
+    {
+      "command": "npm run lint",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run build:extension-dev",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run test:indexed-repo-workspace",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run test:response-deadline",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run test:system-prompts",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run test:chat-prose",
+      "exitCode": 0
+    },
+    {
+      "command": "npx tsx src/chat/chatResponseEnrichment.test.ts",
+      "exitCode": 0
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0
+    }
+  ],
+  "regressionsCovered": [
+    "Previously accepted unrelated frontend/URL anchors",
+    "Missing or mismatched authentication implementation",
+    "Unrelated validators and database sources",
+    "Late create/validate/save methods",
+    "Shared gather deadline retaining completed evidence",
+    "Stop prevents new reads and late-result mutation",
+    "Foreign-repository source rejection",
+    "Citation coordinate correction and invented excerpt removal"
+  ],
+  "qualificationScope": "Named focused backend-flow fixture. The response describes the selected API handler family; other Plane route families and unrelated historical dogfood cases were not requalified.",
+  "nextPr": {
+    "ready": true,
+    "committed": false,
+    "pushed": false,
+    "preserveOtherSharedChanges": true,
+    "newFiles": [
+      "src/context/understandRepoSourceEvidence.ts",
+      "src/context/understandRepoSourceEvidence.test.ts",
+      "src/prompts/repoSummaryResponseEnrichment.ts"
+    ],
+    "sharedFilesWithUnderstandHunks": [
+      "src/chat/CoopChatSession.ts",
+      "src/chat/chatSynthesisThinking.ts",
+      "src/chat/chatResponseEnrichment.ts",
+      "src/context/onboardingSearchQueries.ts",
+      "src/context/contextBundleEvidence.ts",
+      "src/prompts/systemPrompts.ts",
+      "src/prompts/repoSummarySynthesis.ts",
+      "src/prompts/repoSummarySourceLabels.ts",
+      "src/webview/EvidenceCards.tsx",
+      "package.json"
+    ],
+    "note": "Include new modules together with their imports, call sites, evidence types, prompt serialization, source preview offsets, and test command. Shared files contain concurrent unrelated work."
+  }
+}

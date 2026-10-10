@@ -1,0 +1,39 @@
+ M .env.backend.example
+ M CHANGELOG.md
+ M ops/src/components/OpsShell.tsx
+ M ops/src/lib/coopApi.ts
+ M package-lock.json
+ M package.json
+ M src/api/CoopBackendClient.ts
+ M src/chat/CoopChatSession.ts
+ M src/chat/SecureApiClient.ts
+ M src/chat/createPrChatRouting.ts
+ M src/chat/renderWebviewHtml.ts
+ M src/chat/types.ts
+ M src/config/coopBuildId.ts
+ M src/edit/handlePatchComplete.ts
+ M src/edit/hydratePatchCardsFromHistory.ts
+ M src/edit/patchActions.ts
+ M src/edit/patchApplier.ts
+ M src/edit/patchDiffPreview.ts
+ M src/edit/patchSession.ts
+ M src/edit/patchTarget.ts
+ M src/edit/phaseB.gates.test.ts
+ M src/extension.ts
+ M src/server/email/emailService.ts
+ M src/server/operatorApi.ts
+ M src/webhooks/webhookServer.ts
+ M src/webview/ChatPanel.tsx
+ M src/webview/SettingsView.tsx
+ M src/webview/components/SettingsPanel.tsx
+ M src/webview/index.tsx
+ M website/content/docs/troubleshooting.md
+?? docs/dogfood/runs/2026-10-09-knowledge-gaps/
+?? docs/support-reporting.md
+?? migrations/032_support_reports.sql
+?? ops/src/app/(ops)/support/
+?? src/server/support/
+?? src/support/
+?? src/webview/SupportReportView.tsx
+?? website/content/docs/reporting-bugs.md
+?? website/public/screenshots/docs/extension-report-issue.png

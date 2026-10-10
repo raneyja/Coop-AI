@@ -1,0 +1,29 @@
+{
+  "verifiedAt": "2026-10-09T22:18:13.410763+00:00",
+  "projectId": "f1d4ad27-4fc8-4b6e-b0c4-227809977af6",
+  "environmentId": "ef10e61f-af9b-4a3d-95df-e0e3998a3861",
+  "serviceId": "6e137dee-ef1a-4e50-8212-76a3e4a11389",
+  "domain": "api.coop-ai.dev",
+  "health": {
+    "ok": true,
+    "commit": "email-48168d"
+  },
+  "activeDeployments": [
+    {
+      "id": "7bf7d892-2ba5-4c16-a17c-943537bdb501",
+      "status": "SUCCESS",
+      "instances": [
+        {
+          "id": "edbad6f1-b4bf-4129-99c7-315700ef1ed6",
+          "status": "REMOVED"
+        },
+        {
+          "id": "29e48da1-2e24-4bd6-9aba-4f4a35d066d9",
+          "status": "RUNNING"
+        }
+      ],
+      "imageDigest": "sha256:bf94e85d864ccfd2bd0e6cad1be52d19dde25657a766721f8e3572120f423f8a",
+      "message": "Blast Radius: scoped source-grounded change contract; preserve email-48168d and active Knowledge Gaps prompt"
+    }
+  ]
+}

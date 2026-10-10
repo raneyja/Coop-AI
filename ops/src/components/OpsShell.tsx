@@ -21,7 +21,8 @@ const NAV_ITEMS = [
   { href: "/", label: "Attention queue" },
   { href: "/customers", label: "Customers" },
   { href: "/customers/new", label: "Provision" },
-  { href: "/activity", label: "Activity" }
+  { href: "/activity", label: "Activity" },
+  { href: "/support", label: "Support" }
 ];
 
 function isActive(pathname: string, href: string): boolean {

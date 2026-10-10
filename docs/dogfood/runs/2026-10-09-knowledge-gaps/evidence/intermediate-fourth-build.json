@@ -1,0 +1,22 @@
+{
+  "builtAt": "2026-10-09T21:05:06.894353+00:00",
+  "backendDeploymentId": "788d0aeb-322c-4937-8788-238d5c638188",
+  "command": "npm run build:extension-dev",
+  "files": {
+    "dist/extension.js": "747d40892f40b9a17773192f645f271b5bdf71fc6036b9e91d5415e0df9180a3",
+    "dist/extension.js.map": "644d7ca840857962fe631d84dfcde11ac5b03ff0b009cf51929785fbe8fe2350",
+    "dist/webview.js": "cb2151e634c43ca7dde04112c94f35f8a8a783e3f6d84e0ca08e4568dfa8a7ee",
+    "dist/webview.css": "2f1563d780aa9e9a1c578ea61c9b00e3d9ddc210f9dc01f9e2ca4decc5f7ce9a",
+    "src/context/knowledgeGapsCodeEvidence.ts": "b1f0903c40d826a6f09a896be5c2671b1fa06a31a0305a709a6fd87f709cfeb7",
+    "src/context/knowledgeGapsFocus.ts": "fa45941131968de1aa93425dfa0228cf45e76a14990fd92d1157d8189e969b65",
+    "src/chat/CoopChatSession.ts": "352d1068e8e9d2ffe3791164b1f42314c2c3089d1b858838285eb49b1e63a8b8",
+    "src/context/intentDetector.ts": "bd99d217753599d858bfa3142247b64caa90fc42a83251ed6d53aad0c99b5661",
+    "src/config/chatSynthesisThinking.ts": "a3febc4218e5fb717e0b4a480781de1fa752e629443f6f36e96989edaa992d5d",
+    "src/prompts/systemPrompts.ts": "72135e2676390a8c553b4b12320ec52acc089b117297739416e6bc56f0a2ce5f",
+    "src/prompts/knowledgeGapsSynthesis.ts": "8b778ccc60b36c95fc96917175a9b6adf344f9a3e0aecfa695e52a75f90278fb",
+    "src/prompts/knowledgeGapsEnrichment.ts": "c88021b867fa5d70aa482c03853ff643b433958e52e63f989ff099fe690b35bd",
+    "src/context/integrationChatEnrichment.ts": "a24eb4e87e5c521f6e41f9d118a349c5d52520c24673758398b96db376d7720a",
+    "src/webview/evidenceCardSummary.ts": "da3d1c95803455a666324a03a7c7d3539ef8e907ca62e80d1c064651b7a01db9",
+    "src/webview/EvidenceCards.tsx": "8093bd82ea7f78d907e8a99aed52ab9354092620f902b22fef80fcb6675b346a"
+  }
+}

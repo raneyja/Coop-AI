@@ -1,0 +1,121 @@
+{
+  "id": "thread-1791586422809-16kf06",
+  "title": "Knowledge Gaps \u00b7 issue.py",
+  "messages": [
+    {
+      "clientSubmissionId": "1791586436019-1",
+      "role": "user",
+      "content": "[knowledge-gaps] Before changing state validation in this selected issue serializer, which rules does its code establish, and which transition-policy questions need documentation or tests? Use only this repository.\nfile: apps/api/plane/api/serializers/issue.py \u00b7 repo: CoopAI-Corp/plane \u00b7 branch: preview",
+      "timestamp": 1791586438248
+    },
+    {
+      "role": "assistant",
+      "content": "The attached window covers `IssueSerializer.validate()` (lines 75\u2013149) and `IssueSerializer.update()` (lines 234\u2013288) in full. [Sources: Reviewed source]\n\n**Source-grounded review**\n\n**State project-membership guard**\nWhen execution reaches this check and `data.get(\"state\")` is truthy, the guard queries `State.objects.filter(project_id=..., pk=data.get(\"state\").id)`. If no record exists, it raises a `ValidationError`. This is a membership check on the target state only; it does not read `self.instance.state` or compare any old-state value.\n\n```122:126:apps/api/plane/api/serializers/issue.py\n        if (\n            data.get(\"state\")\n            and not State.objects.filter(project_id=self.context.get(\"project_id\"), pk=data.get(\"state\").id).exists()\n        ):\n            raise serializers.ValidationError(\"State is not valid please pass a valid state_id\")\n```\n\n**Guard is bypassed when `state` is absent from validated data**\nThe entire check is conditioned on `data.get(\"state\")` being truthy. On a partial update (PATCH) that omits `state_id`, the field is not present in deserialized data and the guard is skipped. No fallback or alternative check is visible in this window for that path.\n\n**Write delegation passes state field to the superclass**\nAfter popping `assignees` and `labels` and stamping `instance.updated_at`, `update()` delegates the remaining `validated_data` \u2014 which still carries the `state` field if supplied \u2014 to the superclass. Superclass behavior is outside this quote.\n\n```288:288:apps/api/plane/api/serializers/issue.py\n        return super().update(instance, validated_data)\n```\n\n**Open questions**\n\n**Old-state / new-state transition policy (from the membership guard)**\n- The guard at 122\u2013126 confirms that the target state belongs to the project but does not inspect `instance.state`. Does any layer \u2014 a view, signal, or model `save()` hook \u2014 enforce which old-state \u2192 new-state edges are permitted, or is project membership the sole gate?\n- A parameterized test over `(old_state_group, new_state_group)` pairs would make that intended policy explicit and verifiable.\n\n**Contract for omitted `state` on partial update (from the bypass behavior)**\n- When `state_id` is absent from a PATCH payload, the validated data reaches `super().update()` with no state guard applied. Should the intended contract allow the state to remain unchanged silently, require re-validation against the current instance, or block the write?\n- A test covering a PATCH with no `state_id` field would pin that intent before any change to this guard.\n\n**`completed_at` population path (from write delegation)**\n- `completed_at` is in `read_only_fields` at line 72, so it cannot be set through this serializer's normal field path. If the model `save()` or a signal sets it when a state's group changes to \"completed,\" that side effect is triggered through `super().update()` at line 288 and is outside this window.\n- Confirming or documenting whether that path exists \u2014 and covering it with a state-transition test \u2014 would clarify what other code depends on this serializer's state field before you modify the guard.",
+      "timestamp": 1791586519355,
+      "relatedArtifactId": "evidence-1791586441981-rk1ick",
+      "activity": {
+        "durationMs": 84099,
+        "thinkingMs": 64071,
+        "thinkingText": "The user wants a focused code rule audit of the state validation in `apps/api/plane/api/serializers/issue.py`. They want two sections only: **Source-grounded review** and **Open questions**, with at most three established rules and three specific questions.\n\nLet me analyze the attached source lines carefully.\n\nThe key state validation rule is at lines 122-126:\n\n```python\n# Check state is from the project only else raise validation error\nif (\n    data.get(\"state\")\n    and not State.objects.filter(project_id=self.context.get(\"project_id\"), pk=data.get(\"state\").id).exists()\n):\n    raise serializers.ValidationError(\"State is not valid please pass a valid state_id\")\n```\n\nThis is purely a membership guard confirming the state belongs to the project -- it doesn't validate transition logic, state group/type, or any transition matrix. Scanning the rest of `validate()`, I see other rules worth noting: date ordering between start_date and target_date, assignee membership restricted to active ProjectMembers with role >= 15, this state project-membership check, parent issue workspace/project membership, and estimate point workspace/project membership checks.\n\nThe class is confirmed to be `IssueSerializer`, and the write path ultimately delegates to `super().update(instance, validated_data)`. So to summarize the key behaviors: the state check is a pure membership guard with no transition awareness, the assignee logic silently narrows invalid assignees rather than raising an error, and the actual write just defers to the parent serializer's update method.\n\nThis raises some open questions worth testing \u2014 particularly whether there's any allowed-transition policy enforced elsewhere (since this guard never inspects `instance.state`), and whether the superclass or model's `save()` triggers additional side effects I haven't traced yet.\n\nI'm also noting that when `state` is absent from the payload entirely, `data.get(\"state\")` is falsy and the guard is skipped outright, which raises the question of whether a guard is still expected in that scenario. Now I should organize these into a concise structure pairing each established rule with its corresponding question.\n\n1. State project-membership guard (lines 122-126)\n2. `validate()` checking only `data.get(\"state\")` without awareness of `instance.state`, meaning no old-state context is considered\n3. The `super().update()` delegation that passes validated state forward to the unseen superclass save\n\nFor the questions, I'm tying the first to whether anything enforces allowed transition edges between old and new states beyond membership, or whether membership alone is treated as sufficient authorization.\n\nThe second question asks whether a PATCH omitting `state` should skip the guard entirely as it currently does, or whether a default state should be applied instead.\n\nThe third asks whether `completed_at` gets set based on the new state's group somewhere in the superclass or model's save method, and if so, whether that logic deserves its own test coverage here or at the model level.\n\nNow I'm pulling the exact line citation for the membership guard, referencing lines 122-126 in the issue serializer, which checks that the given state exists for the current project before allowing the update, raising a validation error otherwise.\n\nI'm also citing the delegation line at 288, where the update method simply calls the superclass's update with the validated data.\n\nThinking through a third rule, I notice `validate()` never references `self.instance`, meaning the previous state of the issue is never inspected during an update \u2014 so no transition logic exists based on the old state. I need to be careful here though: a quoted guard only applies once execution reaches it, and earlier checks could short-circuit before it runs, so I can't claim it governs every call. Similarly, a membership check only validates that a state exists in the project \u2014 it doesn't establish any rules about valid old-state to new-state transitions. Given these constraints, I think the better third rule to establish is around date ordering validation, which executes before the state guard does.\n\nSettling on three distinct rules: the project-membership guard at lines 122-126 as the only state-specific check in validate(), the fact that validate() never compares against the old state since it only sees deserialized incoming data, and the super().update() delegation at line 288 where the state field passes through to the superclass. I also note the unconditional updated_at stamp at line 287 is interesting but not state-specific, so I'll leave it out of the numbered rules.\n\nI'm noting that the update() method delegates to `super().update()` for the write path, and now I'm drafting the final source-grounded review covering both validate() and update(), starting with the state project-membership guard rule \u2014 confirming that it only checks whether the state's primary key belongs to the project, without comparing against the instance's current state.\n\nNext I observe that this guard is skipped entirely when `state` is absent from the validated data, meaning PATCH requests omitting `state_id` bypass the check, and the window doesn't clarify whether that's intentional for partial updates. Then I'm looking at how the validated state field flows through after `assignees` and `labels` are popped and `updated_at` is stamped on the instance.\n\nI'm also noting two open questions this raises: first, whether any layer actually enforces valid old-state-to-new-state transitions, or whether project membership is the only real gate \u2014 and a test parameterizing over state-group pairs could help surface the intended policy here. Second, whether a PATCH that omits `state_id` should be allowed to proceed to `super().update()` without any additional validation being triggered.\n\nI'm also flagging a third open question around whether `completed_at`, marked read-only in the serializer, gets populated elsewhere \u2014 by the model's save method or a signal \u2014 based on the state's group, since this serializer's field path can't set it directly. Then I catch myself reconsidering the formatting instructions, realizing I need to stick to exactly two sections: \"Source-grounded review\" and \"Open questions.\"\n\nI restructure now: starting with a short acknowledging sentence about the reviewed window (covering `validate()` and `update()` in `IssueSerializer`), then organizing each rule or question under its own subsection title with a few bullets, capping it at three rules and three questions each tied to its motivating citation.",
+        "tools": [
+          {
+            "id": "line-tool:0",
+            "kind": "read",
+            "label": "Read `apps/api/plane/api/serializers/issue.py`",
+            "status": "done"
+          }
+        ],
+        "files": [
+          {
+            "path": "apps/api/plane/api/serializers/issue.py",
+            "action": "read"
+          }
+        ],
+        "steps": [
+          {
+            "id": "line:0:Read `apps/api/plane/api/serializers/issue.py`",
+            "content": "Read `apps/api/plane/api/serializers/issue.py`",
+            "status": "completed"
+          }
+        ]
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "evidence-1791586441981-rk1ick",
+      "kind": "knowledge-gaps",
+      "timestamp": 1791586441981,
+      "payload": {
+        "artifactId": "evidence-1791586441981-rk1ick",
+        "evidence": {
+          "file": "apps/api/plane/api/serializers/issue.py",
+          "userFocus": "Before changing state validation in this selected issue serializer, which rules does its code establish, and which transition-policy questions need documentation or tests? Use only this repository.",
+          "focusSearchQuery": "Before changing state validation in this selected issue serializer, which rules does its code establish, and which transition-policy questions need documentation or tests? Use only this repository.",
+          "focusSearchPaths": [
+            "apps/api/plane/api/serializers/issue.py"
+          ],
+          "focusFiles": [
+            {
+              "path": "apps/api/plane/api/serializers/issue.py",
+              "repoId": "github:CoopAI-Corp/plane",
+              "startLine": 63,
+              "content": "        write_only=True,\n        required=False,\n    )\n    type_id = serializers.PrimaryKeyRelatedField(\n        source=\"type\", queryset=IssueType.objects.all(), required=False, allow_null=True\n    )\n\n    class Meta:\n        model = Issue\n        read_only_fields = [\"id\", \"workspace\", \"project\", \"updated_by\", \"updated_at\", \"completed_at\"]\n        exclude = [\"description_json\", \"description_stripped\"]\n\n    def validate(self, data):\n        if (\n            data.get(\"start_date\", None) is not None\n            and data.get(\"target_date\", None) is not None\n            and data.get(\"start_date\", None) > data.get(\"target_date\", None)\n        ):\n            raise serializers.ValidationError(\"Start date cannot exceed target date\")\n\n        try:\n            if data.get(\"description_html\", None) is not None:\n                parsed = html.fromstring(data[\"description_html\"])\n                parsed_str = html.tostring(parsed, encoding=\"unicode\")\n                data[\"description_html\"] = parsed_str\n\n        except Exception:\n            raise serializers.ValidationError(\"Invalid HTML passed\")\n\n        # Validate description content for security\n        if data.get(\"description_html\"):\n            is_valid, error_msg, sanitized_html = validate_html_content(data[\"description_html\"])\n            if not is_valid:\n                raise serializers.ValidationError({\"error\": \"html content is not valid\"})\n            # Update the data with sanitized HTML if available\n            if sanitized_html is not None:\n                data[\"description_html\"] = sanitized_html\n\n        if data.get(\"description_binary\"):\n            is_valid, error_msg = validate_binary_data(data[\"description_binary\"])\n            if not is_valid:\n                raise serializers.ValidationError({\"description_binary\": \"Invalid binary data\"})\n\n        # Validate assignees are from project\n        if data.get(\"assignees\", []):\n            data[\"assignees\"] = ProjectMember.objects.filter(\n                project_id=self.context.get(\"project_id\"),\n                is_active=True,\n                role__gte=15,\n                member_id__in=data[\"assignees\"],\n            ).values_list(\"member_id\", flat=True)\n\n        # Validate labels are from project\n        if data.get(\"labels\", []):\n            data[\"labels\"] = Label.objects.filter(\n                project_id=self.context.get(\"project_id\"), id__in=data[\"labels\"]\n            ).values_list(\"id\", flat=True)\n\n        # Check state is from the project only else raise validation error\n        if (\n            data.get(\"state\")\n            and not State.objects.filter(project_id=self.context.get(\"project_id\"), pk=data.get(\"state\").id).exists()\n        ):\n            raise serializers.ValidationError(\"State is not valid please pass a valid state_id\")\n\n        # Check parent issue is from workspace as it can be cross workspace\n        if (\n            data.get(\"parent\")\n            and not Issue.objects.filter(\n                workspace_id=self.context.get(\"workspace_id\"),\n                project_id=self.context.get(\"project_id\"),\n                pk=data.get(\"parent\").id,\n            ).exists()\n        ):\n            raise serializers.ValidationError(\"Parent is not valid issue_id please pass a valid issue_id\")\n\n        if (\n            data.get(\"estimate_point\")\n            and not EstimatePoint.objects.filter(\n                workspace_id=self.context.get(\"workspace_id\"),\n                project_id=self.context.get(\"project_id\"),\n                pk=data.get(\"estimate_point\").id,\n            ).exists()\n        ):\n            raise serializers.ValidationError(\"Estimate point is not valid please pass a valid estimate_point_id\")\n\n        return data\n\n    def create(self, validated_data):\n        assignees = validated_data.pop(\"assignees\", None)\n        labels = validated_data.pop(\"labels\", None)\n\n        project_id = self.context[\"project_id\"]\n        workspace_id = self.context[\"workspace_id\"]\n        default_assignee_id = self.context[\"default_assignee_id\"]\n\n        issue_type = validated_data.pop(\"type\", None)\n\n        if not issue_type:\n            # Get default issue type\n            issue_type = IssueType.objects.filter(project_issue_types__project_id=project_id, is_default=True).first()\n            issue_type = issue_type\n\n        issue = Issue.objects.create(**validated_data, project_id=project_id, type=issue_type)\n\n        # Issue Audit Users\n        created_by_id = issue.created_by_id\n        updated_by_id = issue.updated_by_id\n\n        if assignees is not None and len(assignees):\n            try:\n                IssueAssignee.objects.bulk_create(\n                    [\n                        IssueAssignee(\n                            assignee_id=assignee_id,\n                            issue=issue,\n                            project_id=project_id,\n                            workspace_id=workspace_id,\n                            created_by_id=created_by_id,\n                            updated_by_id=updated_by_id,\n                        )\n                        for assignee_id in assignees",
+              "truncated": true,
+              "enclosingClass": "IssueSerializer"
+            },
+            {
+              "path": "apps/api/plane/api/serializers/issue.py",
+              "repoId": "github:CoopAI-Corp/plane",
+              "startLine": 222,
+              "content": "                            created_by_id=created_by_id,\n                            updated_by_id=updated_by_id,\n                        )\n                        for label_id in labels\n                    ],\n                    batch_size=10,\n                )\n            except IntegrityError:\n                pass\n\n        return issue\n\n    def update(self, instance, validated_data):\n        assignees = validated_data.pop(\"assignees\", None)\n        labels = validated_data.pop(\"labels\", None)\n\n        # Related models\n        project_id = instance.project_id\n        workspace_id = instance.workspace_id\n        created_by_id = instance.created_by_id\n        updated_by_id = instance.updated_by_id\n\n        if assignees is not None:\n            IssueAssignee.objects.filter(issue=instance).delete()\n            try:\n                IssueAssignee.objects.bulk_create(\n                    [\n                        IssueAssignee(\n                            assignee_id=assignee_id,\n                            issue=instance,\n                            project_id=project_id,\n                            workspace_id=workspace_id,\n                            created_by_id=created_by_id,\n                            updated_by_id=updated_by_id,\n                        )\n                        for assignee_id in assignees\n                    ],\n                    batch_size=10,\n                    ignore_conflicts=True,\n                )\n            except IntegrityError:\n                pass\n\n        if labels is not None:\n            IssueLabel.objects.filter(issue=instance).delete()\n            try:\n                IssueLabel.objects.bulk_create(\n                    [\n                        IssueLabel(\n                            label_id=label_id,\n                            issue=instance,\n                            project_id=project_id,\n                            workspace_id=workspace_id,\n                            created_by_id=created_by_id,\n                            updated_by_id=updated_by_id,\n                        )\n                        for label_id in labels\n                    ],\n                    batch_size=10,\n                    ignore_conflicts=True,\n                )\n            except IntegrityError:\n                pass\n\n        # Time updation occues even when other related models are updated\n        instance.updated_at = timezone.now()\n        return super().update(instance, validated_data)\n\n    def to_representation(self, instance):\n        data = super().to_representation(instance)\n        if \"assignees\" in self.fields:\n            if \"assignees\" in self.expand:\n                from .user import UserLiteSerializer\n\n                data[\"assignees\"] = UserLiteSerializer(\n                    User.objects.filter(\n                        pk__in=IssueAssignee.objects.filter(issue=instance).values_list(\"assignee_id\", flat=True)\n                    ),\n                    many=True,\n                ).data\n            else:\n                data[\"assignees\"] = [\n                    str(assignee)\n                    for assignee in IssueAssignee.objects.filter(issue=instance).values_list(\"assignee_id\", flat=True)\n                ]\n        if \"labels\" in self.fields:\n            if \"labels\" in self.expand:\n                data[\"labels\"] = LabelSerializer(\n                    Label.objects.filter(\n                        pk__in=IssueLabel.objects.filter(issue=instance).values_list(\"label_id\", flat=True)\n                    ),\n                    many=True,\n                ).data\n            else:\n                data[\"labels\"] = [\n                    str(label) for label in IssueLabel.objects.filter(issue=instance).values_list(\"label_id\", flat=True)\n                ]\n\n        return data\n\n\nclass IssueLiteSerializer(BaseSerializer):\n    \"\"\"\n    Lightweight work item serializer for minimal data transfer.\n\n    Provides essential work item identifiers optimized for list views,\n    references, and performance-critical operations.\n    \"\"\"\n\n    class Meta:\n        model = Issue\n        fields = [\"id\", \"sequence_id\", \"project_id\"]\n        read_only_fields = fields\n\n\nclass LabelCreateUpdateSerializer(BaseSerializer):\n    \"\"\"\n    Serializer for creating and updating work item labels.\n\n    Manages label metadata including colors, descriptions, hierarchy,\n    and sorting for work item categorization and filtering.\n    \"\"\"",
+              "truncated": true,
+              "enclosingClass": "IssueSerializer"
+            }
+          ],
+          "jobScan": {
+            "source": "live-heuristic",
+            "cached": false,
+            "foundGaps": 1,
+            "highPriority": 1,
+            "mediumPriority": 0,
+            "lowPriority": 0,
+            "gaps": [
+              {
+                "file": "apps/api/plane/api/serializers/issue.py",
+                "type": "missing_owner",
+                "priority": "high",
+                "message": "No ownership scores attached for this path"
+              }
+            ],
+            "scanCoverage": "gaps_found"
+          },
+          "documentationCoverage": {
+            "status": "documentation-search-requested"
+          },
+          "fileStructure": {
+            "status": "file-structure-requested",
+            "provider": "github"
+          }
+        },
+        "file": "apps/api/plane/api/serializers/issue.py",
+        "codeHost": "github"
+      }
+    }
+  ],
+  "sessionCostUsd": 0.089031,
+  "createdAt": 1791586422809,
+  "updatedAt": 1791587665730,
+  "messageCount": 2,
+  "repoContext": {
+    "provider": "github",
+    "owner": "CoopAI-Corp",
+    "repo": "plane",
+    "branch": "preview",
+    "scope": "file",
+    "file": "apps/api/plane/api/serializers/issue.py",
+    "fileSource": "remote",
+    "languageId": "python"
+  },
+  "draftInput": ""
+}

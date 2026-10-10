@@ -1,0 +1,25 @@
+{
+  "checkedAt": "2026-10-09T22:16:51.463Z",
+  "active": [
+    {
+      "id": "7bf7d892-2ba5-4c16-a17c-943537bdb501",
+      "status": "SUCCESS",
+      "imageDigest": "sha256:bf94e85d864ccfd2bd0e6cad1be52d19dde25657a766721f8e3572120f423f8a",
+      "instances": [
+        {
+          "id": "edbad6f1-b4bf-4129-99c7-315700ef1ed6",
+          "status": "REMOVED"
+        },
+        {
+          "id": "29e48da1-2e24-4bd6-9aba-4f4a35d066d9",
+          "status": "RUNNING"
+        }
+      ],
+      "cliMessage": "Blast Radius: scoped source-grounded change contract; preserve email-48168d and active Knowledge Gaps prompt"
+    }
+  ],
+  "gapsContract": "Verified unchanged against first active backend baseline",
+  "knowledgeGapsSystemBlockPreserved": true,
+  "knowledgeGapsSystemBlockSha256": "5a1626bbdd735aa8e47684a760679f4fa6e14fdf623b0a883c09a9ecf4fca47f",
+  "knowledgeGapsSynthesisSourcePreserved": true
+}

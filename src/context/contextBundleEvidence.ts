@@ -2,11 +2,14 @@ import type { IntegrationChatProvider } from "../chat/types";
 import { filterRepoSummaryInfraWarnings } from "../prompts/repoSummarySourceLabels";
 import type { DecisionTimeline } from "../types/decisionTimeline";
 import type { OwnershipReport } from "../types/ownership";
+import type { BlastRadiusSourceFile } from "./blastRadiusSourceEvidence";
+import type { UnderstandFocusCoverage } from "./understandRepoSourceEvidence";
 
 export type RepoSummaryEvidence = {
   repository?: Record<string, unknown>;
   manifest?: { fileCount?: number; languages?: string[]; entryPoints?: string[] };
-  entryFiles?: Array<{ path: string; content?: string; truncated?: boolean }>;
+  entryFiles?: Array<{ path: string; content?: string; truncated?: boolean; startLine?: number; endLine?: number }>;
+  focusCoverage?: UnderstandFocusCoverage;
   /** User focus ask that biased gather (slash text before/after command). */
   userFocus?: string;
   focusSearchQuery?: string;
@@ -35,6 +38,8 @@ export type RepoSummaryEvidence = {
 
 export type BlastRadiusEvidence = {
   file?: string;
+  sourceFiles?: BlastRadiusSourceFile[];
+  sourceEvidenceGathered?: boolean;
   directDependents?: string[];
   transitiveDependents?: string[];
   dependentDetails?: Array<{ path: string; depth: number; source: string; strength?: string }>;
@@ -106,7 +111,7 @@ export type KnowledgeGapsEvidence = {
   focusSearchQuery?: string;
   focusSearchPaths?: string[];
   /** Focus-ranked file bodies from index search (capped). */
-  focusFiles?: Array<{ path: string; content?: string; truncated?: boolean; repoId?: string; startLine?: number }>;
+  focusFiles?: Array<{ path: string; content?: string; truncated?: boolean; repoId?: string; startLine?: number; enclosingClass?: string }>;
   warnings?: string[];
 };
 
@@ -213,6 +218,7 @@ export function repoSummaryFromBundle(bundle: unknown[]): RepoSummaryEvidence | 
     if (data.repository) merged.repository = data.repository as Record<string, unknown>;
     if (data.manifest) merged.manifest = data.manifest as RepoSummaryEvidence["manifest"];
     if (Array.isArray(data.entryFiles)) merged.entryFiles = data.entryFiles as RepoSummaryEvidence["entryFiles"];
+    if (data.focusCoverage) merged.focusCoverage = data.focusCoverage as UnderstandFocusCoverage;
     if (typeof data.userFocus === "string" && data.userFocus.trim()) {
       merged.userFocus = data.userFocus.trim();
     }
@@ -369,6 +375,10 @@ export function blastRadiusFromBundle(bundle: unknown[]): BlastRadiusEvidence | 
     const type = asRecord(entry).type;
     if (type === "dependencies" || data.report || data.directDependents) {
       if (data.file) merged.file = String(data.file);
+      if (Array.isArray(data.sourceFiles)) {
+        merged.sourceFiles = data.sourceFiles as BlastRadiusSourceFile[];
+      }
+      if (data.sourceEvidenceGathered === true) merged.sourceEvidenceGathered = true;
       if (Array.isArray(data.namedAskSymbols) && data.namedAskSymbols.length) {
         merged.namedAskSymbols = data.namedAskSymbols as string[];
       }

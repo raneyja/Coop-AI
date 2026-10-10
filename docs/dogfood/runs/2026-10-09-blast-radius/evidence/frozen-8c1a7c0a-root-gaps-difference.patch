@@ -1,0 +1,64 @@
+--- frozen-8c1a7c0a/CoopChatSession.ts
++++ current-root/CoopChatSession.ts
+@@ -200,7 +200,7 @@
+ import { buildRepoSummarySynthesisUserPrompt } from "../prompts/repoSummarySynthesis";
+ import { buildBlastRadiusSynthesisUserPrompt, importOnlyNamedBlastAnswer } from "../prompts/blastRadiusSynthesis";
+ import { streamSourceReviewedBlast } from "./blastRadiusSourceReview";
+-import { streamSourceReviewedKnowledgeGaps } from "./knowledgeGapsSourceReview";
++import { buildKnowledgeGapsContinuationMessage, streamSourceReviewedKnowledgeGaps } from "./knowledgeGapsSourceReview";
+ import { gatherBlastRadiusSourceEvidence } from "../context/blastRadiusSourceEvidence";
+ import { buildKnowledgeGapsSynthesisUserPrompt } from "../prompts/knowledgeGapsSynthesis";
+ import { buildIntegrationSynthesisUserPrompt, countIntegrationResults, emptyIntegrationSlashResponse } from "../prompts/integrationSynthesis";
+@@ -9711,9 +9711,18 @@
+           alreadyContinued: false
+         })
+       ) {
++        if (effectiveQuickAction === "knowledge-gaps") {
++          this.logAgentDiagnostic(turn.threadId, {
++            stage: "gaps-answer-continuation", turnId: turn.id,
++            elapsedMs: Date.now() - turn.startedAt, finishReason: result.finishReason,
++            partialAnswerChars: full.length, bundleId: COOP_EXTENSION_BUNDLE_ID
++          });
++        }
+         const continued = await this.options.api.streamChat(
+           {
+-            message: LENGTH_CONTINUE_PROMPT,
++            message: effectiveQuickAction === "knowledge-gaps"
++              ? buildKnowledgeGapsContinuationMessage(apiMessage, full)
++              : LENGTH_CONTINUE_PROMPT,
+             context: {
+               owner: fileAssistantTurn ? undefined : turnContext.owner,
+               repo: fileAssistantTurn ? undefined : turnContext.repo,
+@@ -9724,14 +9733,15 @@
+             fileSource: turnContext.fileSource,
+             history: [
+               ...priorHistory,
+-              { role: "assistant", content: full, timestamp: Date.now() }
++              ...(full.trim() ? [{ role: "assistant" as const, content: full, timestamp: Date.now() }] : [])
+             ],
+             model: runtimeModel.model,
+             provider: runtimeModel.provider,
+             useCase: chatUseCase,
+             temperature: this.preferences.temperature,
+             maxTokens: resolveChatOutputMaxTokens(this.preferences.maxTokens),
+-            enableThinking: false
++            enableThinking: false,
++            quotaTurnId: turn.id
+           },
+           (chunk) => {
+             outputGate.push(chunk);
+@@ -9741,6 +9751,14 @@
+         );
+         if (continued.finishReason === "length" || hasTrailingEmptyHeadings(full)) {
+           outputGate.push(withLengthCutoffNotice(full).slice(full.length));
++        }
++        if (result.usage && continued.usage) {
++          result.usage = {
++            ...result.usage,
++            inputTokens: result.usage.inputTokens + continued.usage.inputTokens,
++            outputTokens: result.usage.outputTokens + continued.usage.outputTokens,
++            estimatedCostUsd: result.usage.estimatedCostUsd + continued.usage.estimatedCostUsd
++          };
+         }
+       } else if (result.finishReason === "length" || hasTrailingEmptyHeadings(full)) {
+         outputGate.push(withLengthCutoffNotice(full).slice(full.length));

@@ -1,0 +1,44 @@
+{
+  "preparedAt": "2026-10-09T23:29:19.270047+00:00",
+  "candidate": "/private/tmp/coop-gaps-focused-backend-candidate-20261009",
+  "baselineActiveDeployment": "efe257d9-6c9c-469c-af6c-b1eed85c5678",
+  "scope": [
+    "src/api/ModelRouter.ts",
+    "src/prompts/systemPrompts.ts",
+    "src/prompts/knowledgeGapsSynthesis.ts"
+  ],
+  "baselineHashes": {
+    "src/api/ModelRouter.ts": "48d4da888115c3ba3076718efc4ee981d789dd073175de3c01e795dc417fb767",
+    "src/prompts/systemPrompts.ts": "46f88e92f44cecf83143b0932d8e0a571007c9e1a0a1fd4b5377def17314d2da",
+    "src/prompts/knowledgeGapsSynthesis.ts": "8b778ccc60b36c95fc96917175a9b6adf344f9a3e0aecfa695e52a75f90278fb"
+  },
+  "candidateHashes": {
+    "src/api/ModelRouter.ts": "a2f766ce98eeba99262b13bef90f1e90b004ba16f3d508b1474298b7e30c9fac",
+    "src/prompts/systemPrompts.ts": "a7c2b49fc4f85aac94bb108efb43fe094f6ef738d8b89ea84869f86f70205924",
+    "src/prompts/knowledgeGapsSynthesis.ts": "1db144498eb8e47a0f5bd73a76a8f4fd9904ea9fc84077583d7e420fd8186ece"
+  },
+  "authorization": "Existing user approval: Deploy the scoped update. Focused Knowledge Gaps contract correction only; preserves active Blast/email production source.",
+  "scopeNote": "System contract and Gaps-only router discriminator; synthesis changes only by exporting its existing marker. No client formatter or dependent type changes enter the backend snapshot.",
+  "preservationChecks": {
+    "SOURCE_GROUNDED_BLAST_BODY": true,
+    "SOURCE_GROUNDED_BLAST_STRUCTURE": true,
+    "BlastRouterClausePreserved": true,
+    "packageVersion": "0.1.13",
+    "scopedRuntimeFiles": [
+      "src/api/ModelRouter.ts",
+      "src/prompts/systemPrompts.ts",
+      "src/prompts/knowledgeGapsSynthesis.ts"
+    ]
+  },
+  "verification": {
+    "lintExitCode": 0,
+    "backendBuildExitCode": 0,
+    "providerRequestTestExitCode": 0
+  },
+  "verifiedAt": "2026-10-09T23:30:26.880773+00:00",
+  "deploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+  "uploadedAt": "2026-10-09T23:31:42.882531+00:00",
+  "deploymentStatus": "SUCCESS",
+  "imageDigest": "sha256:c43187846a50c958428bad45117c4c8a1bfb820d67c1499f0c8d3ba866839228",
+  "activatedAt": "2026-10-09T23:33:33.924Z"
+}

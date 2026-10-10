@@ -41,8 +41,10 @@ import {
 } from "../workspace/repoPackageBoundaryEvidence";
 import { isRepoPackageBoundaryQuery, isRepoStructureQuery } from "../workspace/repoFactIntent";
 import { isFileCallerQuery } from "../context/fileCallerIntent";
-import { blastRadiusFromBundle, knowledgeGapsFromBundle } from "../context/contextBundleEvidence";
+import { blastRadiusFromBundle, knowledgeGapsFromBundle, repoSummaryFromBundle } from "../context/contextBundleEvidence";
+import { enrichUnderstandRepoResponse } from "../prompts/repoSummaryResponseEnrichment";
 import { enrichBlastRadiusResponse } from "../prompts/blastRadiusSynthesis";
+import { groundBlastSourceCitations } from "../prompts/blastRadiusSourceGuard";
 import { enrichPlainChatCallerResponse } from "../prompts/plainChatCallerEnrichment";
 import {
   mentionsHaveOutOfScopeForActiveRepo,
@@ -201,6 +203,7 @@ export function enrichChatResponseForAction(options: {
     case "knowledge-gaps": {
       const gapsEvidence = Array.isArray(contextBundle) ? knowledgeGapsFromBundle(contextBundle) : undefined;
       enriched = enrichKnowledgeGapsResponse(enriched, {
+        userFocus: gapsEvidence?.userFocus ?? options.userQuestion,
         confluencePages: extractConfluencePagesFromBundle(contextBundle),
         notionPages: extractNotionPagesFromBundle(contextBundle),
         googleDocs: extractGoogleDocsFromBundle(contextBundle),
@@ -214,6 +217,9 @@ export function enrichChatResponseForAction(options: {
     }
     case "understand-repo":
     case "blast-radius": {
+      if (quickAction === "understand-repo") {
+        enriched = enrichUnderstandRepoResponse(enriched, Array.isArray(contextBundle) ? repoSummaryFromBundle(contextBundle) : undefined);
+      }
       const docContext = {
         confluencePages: extractConfluencePagesFromBundle(contextBundle),
         notionPages: extractNotionPagesFromBundle(contextBundle),
@@ -265,7 +271,12 @@ export function enrichChatResponseForAction(options: {
   if (fileAssistant && !quickAction && !integrationProvider) {
     return enrichFileAssistantResponse(stripped, { userQuestion: options.userQuestion });
   }
-  return rewriteCustomerFacingProse(stripped);
+  const finalContent = rewriteCustomerFacingProse(stripped);
+  // Formatting and integration enrichment must not introduce an altered source
+  // quote after the same integrity check used by Blast's private synthesis gate.
+  const blast = quickAction === "blast-radius" && Array.isArray(contextBundle)
+    ? blastRadiusFromBundle(contextBundle) : undefined;
+  return blast ? groundBlastSourceCitations(finalContent, blast) : finalContent;
 }
 
 function packageStructureFromBundle(

@@ -12,6 +12,7 @@ import type { RepoContext, UserPreferences } from "../chat/types";
 import { isOpenFileReviewAsk } from "../chat/plainChatExplain";
 import { isFileCallerQuery } from "./fileCallerIntent";
 import { isFileHistoryQuery } from "./fileHistoryIntent";
+import { knowledgeGapsGatherQuery } from "./knowledgeGapsFocus";
 
 export enum UserIntent {
   QUICK_ACTION_CLICKED = "quick_action_clicked",
@@ -295,9 +296,14 @@ export function requestTypesForIntent(event: IntentEvent): ContextRequestType[] 
     return ["file_metadata", "ownership"];
   }
   if (action === "blast-radius") {
-    return ["file_metadata", "dependencies"];
+    // Blast owns the target + bounded remote dependent bodies. A second file
+    // metadata gather duplicates the target read and delays source-backed synthesis.
+    return ["dependencies"];
   }
   if (action === "knowledge-gaps") {
+    // Focused code/policy audits own one remote evidence gather. Repo-wide
+    // ownership/dependency scans otherwise delay the rules the user asked for.
+    if (knowledgeGapsGatherQuery(event.context.queryText)) return ["knowledge_gaps"];
     return ["file_metadata", "ownership", "dependencies", "knowledge_gaps"];
   }
   if (action === "understand-repo") {

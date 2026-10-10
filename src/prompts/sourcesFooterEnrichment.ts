@@ -1,4 +1,5 @@
 import { extractSourceCitationInner, normalizeSourceCitationLabel } from "./sourceCitationRegistry";
+import { mapMarkdownProse, splitMarkdownBlocks } from "./markdownProse";
 
 /** Markdown link parsed by ChatProse to jump to the evidence Sources card for this turn. */
 export const VIEW_ALL_SOURCES_LINK = "[View all sources ↑](coop-evidence:)";
@@ -18,7 +19,8 @@ type ParsedSourceBullet = {
 
 /** True when the response uses the Coop quick-action **Sources** footer section. */
 export function hasSourcesFooterSection(content: string): boolean {
-  return /\n\*\*Sources\*\*\s*\n/i.test(content) || content.trimStart().startsWith("**Sources**");
+  return splitMarkdownBlocks(content).some(block => block.kind === "prose" &&
+    (/\n\*\*Sources\*\*\s*\n/i.test(block.text) || block.text.trimStart().startsWith("**Sources**")));
 }
 
 /**
@@ -26,6 +28,10 @@ export function hasSourcesFooterSection(content: string): boolean {
  * a card jump link when more evidence exists in the Sources card than shown.
  */
 export function enrichSourcesFooter(content: string): string {
+  return mapMarkdownProse(content, enrichSourcesFooterProse);
+}
+
+function enrichSourcesFooterProse(content: string): string {
   if (!hasSourcesFooterSection(content)) {
     return content;
   }

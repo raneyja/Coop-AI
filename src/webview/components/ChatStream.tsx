@@ -42,6 +42,7 @@ import { buildTimelineEntries, groupTimelineSourceCards } from "./chatTimelineEn
 import { shouldUseSuggestClarifyingBody } from "../lib/patchStreamDisplay";
 
 export type ChatMessage = {
+  sourceCitationMode?: "explicit";
   clientSubmissionId?: string;
   role: "user" | "assistant" | "system";
   content: string;
@@ -129,7 +130,7 @@ type ChatStreamProps = {
   modelThinkingStreaming?: boolean;
   onStopStreaming?: () => void;
   endRef: React.RefObject<HTMLDivElement | null>;
-  renderBody: (content: string, relatedArtifactId?: string, messageTimestamp?: number) => React.ReactElement[];
+  renderBody: (content: string, relatedArtifactId?: string, messageTimestamp?: number, sourceCitationMode?: "explicit") => React.ReactElement[];
   actionContext: EvidenceActionContext;
   conflicts?: ConflictSummary[];
   /** Bumps when thread/history loads so the view jumps to the latest messages. */
@@ -353,7 +354,7 @@ function MessageBlock({
   onSuggestResolve
 }: {
   message: ChatMessage;
-  renderBody: (content: string, relatedArtifactId?: string, messageTimestamp?: number) => React.ReactElement[];
+  renderBody: (content: string, relatedArtifactId?: string, messageTimestamp?: number, sourceCitationMode?: "explicit") => React.ReactElement[];
   isStreaming?: boolean;
   onSuggestResolve?: (choice: ChatSuggestResolveChoice) => void;
 }): React.ReactElement {
@@ -398,7 +399,7 @@ function MessageBlock({
               </span>
             ) : null}
             <time className="chat-message-time">{formatTime(message.timestamp)}</time>
-            <ChatMessageActions content={message.content} visible={Boolean(message.content)} />
+            <ChatMessageActions content={message.content} sourceCitationMode={message.sourceCitationMode} visible={Boolean(message.content)} />
           </div>
         ) : isUser ? (
           <time className="chat-message-time chat-message-time--solo">{formatTime(message.timestamp)}</time>
@@ -431,9 +432,9 @@ function MessageBlock({
           <p className="chat-message-stopped">{CHAT_STOPPED_MESSAGE}</p>
         ) : parsed.body ? (
           isUser && parsed.tag ? (
-            <QuickActionBody body={parsed.body} renderBody={renderBody} />
+            <QuickActionBody body={parsed.body} renderBody={(content) => renderBody(content, message.relatedArtifactId, message.timestamp, message.sourceCitationMode)} />
           ) : isUser ? (
-            <PlainChatBody body={parsed.body} renderBody={(content) => renderBody(content, message.relatedArtifactId)} />
+            <PlainChatBody body={parsed.body} renderBody={(content) => renderBody(content, message.relatedArtifactId, message.timestamp, message.sourceCitationMode)} />
           ) : shouldUseSuggestClarifyingBody(parsed.body, Boolean(message.suggest)) ? (
             <div className="chat-message-body">
               <SuggestClarifyingBody content={parsed.body} />
@@ -441,7 +442,7 @@ function MessageBlock({
             </div>
           ) : (
             <div className="chat-message-body">
-              {renderBody(parsed.body, message.relatedArtifactId, message.timestamp)}
+              {renderBody(parsed.body, message.relatedArtifactId, message.timestamp, message.sourceCitationMode)}
               <SuggestChipRow message={message} onSuggestResolve={onSuggestResolve} />
             </div>
           )

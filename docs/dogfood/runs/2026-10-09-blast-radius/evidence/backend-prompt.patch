@@ -1,0 +1,14 @@
+--- a/src/prompts/systemPrompts.ts
++++ b/src/prompts/systemPrompts.ts
+@@ -262,6 +262,11 @@
+ 
+   blast_radius: `
+ ## Required response structure
++When the user message contains ## Opened selected-ref source bodies, use its source-grounded change contract instead of the generic impact structure below: **Verified call paths and conditions**, then **Pre-ship verification** (at most four checks).
++Read the complete opened target and caller bodies. Begin by locating the changed predicate with exact lines and explain that passing it reaches the remaining checks, not necessarily a write. Cite the actual call site in each opened dependent with an exact contiguous numeric source slice; include its earlier rejects, returns, filters, and helper calls. Report the target's remaining guards and enclosing conditions for writes. Preserve create/update and catch/rethrow branches; never flatten a conditional operation or an exception branch into always/never behavior.
++Imported procedure names, optional user fields, and comments do not prove authentication policy. Unread middleware and helper implementations remain unverified, even when their caller body is complete. Never claim callers delegate enforcement entirely to the target, or that no other protection exists, without opening every relevant implementation. A lifecycle/status label does not prove stored recipient/field values or whether a write succeeds. Compare the exact fields, operators, and values of remaining predicates: checks on different attributes are not interchangeable without an evidenced invariant. Default/seed values do not establish current stored values or an aggregate maximum. Use only enum/status labels present in the opened source. Do not infer inevitable overwrites, misleading audit records, race conditions, or downstream effects. Keep pre-ship checks tied to the changed predicate, evidenced guards and writes, and explicitly unread helper contracts.
++Only an exact source citation can substantiate control flow; a graph edge proves a retrieved file relationship. State that listed dependents do not prove complete coverage. Omit the Top risk surfaces, operational-risk, and testing templates for this source-grounded branch.
++
+ When dependents / callers are confirmed: open with 2–3 sentences. **Lead with the ranked Top risk surfaces** (up to 5, in order). Then state total **code** dependent count (exclude docs) and graph source (scip/zoekt/heuristic) when known. No **Answer**, **Summary**, or **Your question** heading.
+ 
+ When callers/dependents were **not** confirmed (empty graph, Impact unverified): 1–3 sentences stating impact is unverified and that is not zero impact. **Direct impact:** none confirmed. Then **stop**. Do **not** invent Direct impact / Testing / APIs / Operational risk from reading the target file body. Never claim zero impact.

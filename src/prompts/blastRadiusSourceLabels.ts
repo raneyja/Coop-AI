@@ -183,7 +183,7 @@ export function listBlastRadiusSourcesChecklist(evidence: BlastRadiusEvidence): 
   if (hasVerifiedRemoteBlastDependents(evidence)) {
     const source = verifiedRemoteBlastGraphSource(evidence) ?? "import-parse";
     dependencyNotes.push(
-      `Verified ${source} dependency graph; listed callers are import/symbol-backed.`
+      `Verified ${source} dependency graph; listed file relationships are import/symbol-backed. Caller behavior requires opened source bodies.`
     );
   } else if (hasPartialIndexCoverage(evidence)) {
     dependencyNotes.push("Index coverage is partial; dependency impact may be incomplete.");

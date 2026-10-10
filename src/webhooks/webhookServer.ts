@@ -92,6 +92,9 @@ import { handleBillingApiRequest } from "../server/billing/billingApi";
 import { StripeService } from "../server/billing/stripeService";
 import { loadBillingConfig } from "../server/billing/billingConfig";
 import { EmailService } from "../server/email/emailService";
+import { SupportStore } from "../server/support/supportStore";
+import { handleSupportSubmission } from "../server/support/supportApi";
+import { startSupportNotifications } from "../server/support/supportNotifications";
 import { applyCors, loadCorsOrigins } from "../server/cors";
 import { loadAuthConfig } from "../server/auth/authConfig";
 import { AuthIdentityStore } from "../server/auth/authIdentityStore";
@@ -403,6 +406,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
   const billingConfig = loadBillingConfig();
   const operatorStripeService = new StripeService(billingConfig);
   const emailService = new EmailService(billingConfig);
+  const supportStore = pool ? new SupportStore(pool) : undefined;
 
   const corsOrigins = loadCorsOrigins();
 
@@ -671,9 +675,12 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
         return;
       }
 
+      if (await handleSupportSubmission(orgParsed, response, supportStore, auth)) return;
+
       // Operator console routes must run before handleOrgApiRequest (which claims all /v1/*).
       if (
         await handleOperatorApiRequest(orgParsed, response, {
+          supportStore,
           orgStore,
           userStore,
           operatorStore,
@@ -928,6 +935,12 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       writeJson(response, 500, reportServerError(error, { requestId, route, service: "api" }));
     }
   });
+
+  if (supportStore) {
+    const stopSupport = startSupportNotifications(supportStore, emailService, operatorAuthConfig.opsPortalUrl,
+      process.env.COOP_SUPPORT_NOTIFICATION_EMAIL?.trim() || "support@coop-ai.dev");
+    server.on("close", stopSupport);
+  }
 
   return {
     server,

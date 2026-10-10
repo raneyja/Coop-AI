@@ -1,0 +1,227 @@
+--- production/src/prompts/knowledgeGapsSynthesis.ts
++++ candidate/src/prompts/knowledgeGapsSynthesis.ts
+@@ -15,6 +15,7 @@
+ } from "../context/knowledgeGapScanCoverage";
+ import {
+   isHuntLocateGapsAsk,
++  isKnowledgeGapsCodeRuleAudit,
+   knowledgeGapsGatherQuery,
+   resolveKnowledgeGapsAuditScope
+ } from "../context/knowledgeGapsFocus";
+@@ -55,6 +56,7 @@
+ export const KNOWLEDGE_GAPS_EVIDENCE_SYSTEM = `You audit engineering health using only attached evidence from the Sources card and synthesis bundle.
+ Universal behavior claims require tracing the relevant input conditions in attached source. Do not infer "every nonempty input fails" from one example: identify the condition that causes failure and check relevant counterexamples. Describe a defect with the narrowest condition the implementation supports.
+ Separate observed implementation behavior from the expected contract. A function name alone is not a formal specification. Without attached tests, documentation, or an explicit user requirement establishing intent, describe a potential defect conditional on the expected behavior and ask for that intent to be confirmed.
++Partial source windows cannot prove the absence of transition logic, a transition matrix, or a workflow policy in a file or repository. Never assert "any state to any state passes" from a membership guard. State only that this guard checks membership; the old-state/new-state policy and unshown guards remain unverified. Never guess an unread model manager's filters.
+ When intent is unverified, do not label behavior a confirmed error, blocker, or wrong result and then qualify that claim later. Put the condition in the finding itself: observed behavior first, potential defect only if the expected contract requires different behavior. Naming conventions do not establish that contract. An import or call edge proves a dependency, not that callers inevitably receive wrong results; caller impact requires a verified contract and relevant inputs.
+ When ### Focus file excerpts are attached, you MAY name documentation, ownership, or default-on risks that are visible in those excerpts (allowlists, call caps, missing confirmation). Cite the path. Still fail: inventing files not attached, foreign-repo paths, or a 40-bullet dump.
+ When focus excerpts are absent, list scan-backed gaps and integration hits only — never invent gap subsections from code inspection or generic framework knowledge.
+@@ -95,6 +97,9 @@
+     userFocus,
+     focusHitPaths: input.evidence.focusSearchPaths
+   });
++  if (isKnowledgeGapsCodeRuleAudit(userFocus)) {
++    return buildFocusedCodeRuleAuditPrompt(input, userFocus!, scope);
++  }
+   const repoWide =
+     !scope.focusPrimary &&
+     !input.file?.trim() &&
+@@ -243,6 +248,34 @@
+   return lines.join("\n");
+ }
+ 
++function buildFocusedCodeRuleAuditPrompt(
++  input: KnowledgeGapsSynthesisInput,
++  userFocus: string,
++  scope: ReturnType<typeof resolveKnowledgeGapsAuditScope>
++): string {
++  const lines = [
++    "## Focused code rule audit",
++    userFocus,
++    "Answer this question with two sections only: **Source-grounded review** and **Open questions**. Begin with one short sentence acknowledging the reviewed code. Keep at most three established rules and three specific questions, each tied to the cited rule that motivates it. A question can name a proposed test or policy document without implying it already exists or is missing.",
++    "Establish only the conditions and actions directly visible in numbered source below. Include a same-class update/save delegation when attached. Do not substitute unrelated state creation, defaults, ownership, or scan coverage for the requested validation/write path.",
++    "A membership guard checks record membership. It cannot establish allowed old-state/new-state edges or the absence of a transition matrix. Unshown guards and intended transition policy remain unverified. Never say that all same-project moves pass, that the only guard is membership, or that no transition logic exists anywhere.",
++    "A model manager name cannot prove its filters; an imported procedure name cannot prove authentication. Do not infer atomicity or concurrency guarantees from an ORM update. Review attached definitions or leave those effects unknown.",
++    "Every established rule needs a small numeric start:end:path citation fence quoting contiguous, exact supplied source lines. Never merge nonadjacent ranges with an ellipsis. Use only reviewed paths; never invent test directories, owners, or source locations.",
++    "If no relevant code or document bodies are attached, state the coverage limit in 1–3 sentences and stop. Missing searches do not prove that source, documentation, tests, or policy are absent.",
++    "Documentation can settle intent only when an attached body establishes it. Treat org docs as supplementary. Without supporting docs, add at most one final sentence about that evidence limit; omit generic recommendations and health-scan sections."
++  ];
++  appendMentionScopeSection(lines, input);
++  // The focused contract uses reviewed code/docs, not generic health-scan flags.
++  lines.push(formatKnowledgeGapsForPrompt({
++    userFocus, focusSearchQuery: input.evidence.focusSearchQuery,
++    focusSearchPaths: input.evidence.focusSearchPaths, focusFiles: input.evidence.focusFiles
++  }, input.confluence, input.jira, input.slack, input.notion, input.googleDocs, input.teams,
++  scope.relatedOpenFile, input.owner, input.repo, scope));
++  appendCitationKeysSection(lines, listKnowledgeGapsSourceLabels(input.evidence,
++    input.confluence, input.jira, input.slack, input.notion, input.googleDocs, input.teams));
++  return lines.join("\n\n");
++}
++
+ function appendKnowledgeGapsResponseContract(
+   lines: string[],
+   input: KnowledgeGapsSynthesisInput,
+@@ -300,8 +333,12 @@
+     );
+   }
+   if (hasFocusExcerpts) {
++    lines.push("Keep this focused audit compact: at most three established code rules and three specific open questions. Omit unrelated state creation or ownership material. Include the same-class write delegation if its source is attached; do not treat that delegation as a complete transition policy. Quote only small, relevant numeric citation slices.");
+     lines.push(
+       "Opening — PASS: acknowledge the attached source. Include a separate **Source-grounded review** section before scan coverage sections: answer the user's function or implementation question from the attached bodies, trace relevant behavior and boundary conditions, distinguish observed behavior from an unverified intended contract, and cite verified numeric source ranges when supplied. Keep these findings outside Summary so coverage summarization cannot replace them. Generic missing_docs/missing_owner flags do not substitute for reading the attached function. If no concrete source-backed issue is established, state that narrowly with the reviewed evidence. FAIL: claiming no indexed code; generic scan flags as the only answer; empty “looks good”; a 40-bullet dump."
++    );
++    lines.push(
++      "After the established code rules, include **Open questions** with at most three specific uncertainties that follow from those rules. Cite the rule that motivates each question and name the documentation or test that would settle the intended policy. Missing docs/searches do not prove a policy is absent. Membership validation proves which records may be assigned; it does not establish an old-state/new-state transition matrix, universal allowed transitions, or backlog semantics. Do not invent allowed edges from a membership guard."
+     );
+   }
+   if (isHuntLocateGapsAsk(`${input.userFocus ?? ""} ${input.userQuestion ?? ""} ${input.evidence.userFocus ?? ""}`)) {
+@@ -350,7 +387,9 @@
+     Boolean(input.notion?.pages?.length) ||
+     Boolean(input.confluence?.pages?.length) ||
+     Boolean(input.googleDocs?.documents?.length);
+-  if (coverage === "scan_incomplete") {
++  if (hasFocusExcerpts) {
++    lines.push("- Lead with the established source behavior. Describe incomplete documentation/scan coverage briefly after the code review; it must not replace or reorder the code half of the answer.");
++  } else if (coverage === "scan_incomplete") {
+     lines.push(
+       `- The opening must start: "${knowledgeGapScanIncompleteCopy()}" Name attached documentation or ownership gaps on real repo paths. FAIL: treating a missing Coop dependency graph as the documentation audit; recommending GitHub Dependency Submission API, depcruise, or inventing blast-radius. Do not quote raw API errors or internal coverage tokens.`
+     );
+@@ -360,7 +399,7 @@
+     );
+   } else if (scanGapCount === 0) {
+     lines.push(
+-      "- The opening should note the scan found no structured gaps in this pass when no doc pages are attached."
++      "- The opening should state the coverage limit. Focus search misses are not confirmed product gaps and do not establish a completed clean scan. With no relevant code bodies or document evidence, answer in 1–3 sentences and stop; omit sections, contacts, guessed paths, manual-grep instructions, and generic recommendations."
+     );
+   } else {
+     lines.push(
+@@ -597,7 +636,6 @@
+   return sections.join("\n\n");
+ }
+ 
+-const FOCUS_EXCERPT_CHARS = 4_000;
+ const OPENED_ARTIFACT_BODY_CHARS = 1_200;
+ 
+ /** Opened doc/ticket body for Gaps — title alone is not enough. */
+@@ -631,17 +669,18 @@
+ ): string | undefined {
+   const excerpts = (files ?? [])
+     .filter((file) => file.path.trim() && (file.content ?? "").trim())
+-    .slice(0, 6)
++    .slice(0, 16)
+     .map((file) => {
+       const body = file.content ?? "";
+-      const truncated = body.length > FOCUS_EXCERPT_CHARS;
+-      const shown = truncated ? body.slice(0, FOCUS_EXCERPT_CHARS) : body;
++      // Gather already selects bounded, complete source windows. A second prefix
++      // cut can silently discard the very guard or writer that was selected.
++      const shown = body;
+       if (Number.isInteger(file.startLine) && Number(file.startLine) >= 1) {
+         const start = Number(file.startLine);
+         const numbered = shown.split("\n").map((line, index) => `L${start + index}: ${line}`).join("\n");
+-        return `#### ${file.path}\nVerified source lines ${start}–${start + shown.split("\n").length - 1}. Cite implementation claims with numeric start:end:path citation fences using only these supplied lines; omit L prefixes from the quoted code.\n${numbered}${truncated ? "\n… [truncated]" : ""}`;
++        return `#### ${file.path}\nVerified source lines ${start}–${start + shown.split("\n").length - 1}. Cite implementation claims with numeric start:end:path citation fences using only these supplied lines; omit L prefixes from the quoted code.${file.truncated ? " This is a source window; unshown code was not inspected in synthesis." : ""}\n${numbered}`;
+       }
+-      return `#### ${file.path}\nSource line offsets unavailable. Cite this path without inventing line numbers.\n${shown}${truncated ? "\n… [truncated]" : ""}`;
++      return `#### ${file.path}\nSource line offsets unavailable. Cite this path without inventing line numbers.\n${shown}`;
+     });
+   if (excerpts.length === 0) {
+     return undefined;
+--- production/src/context/knowledgeGapsFocus.ts
++++ candidate/src/context/knowledgeGapsFocus.ts
+@@ -53,7 +53,10 @@
+   "this",
+   "that",
+   "area",
+-  "areas"
++  "areas",
++  "before", "changing", "change", "rules", "rule", "establish", "code", "can", "we",
++  "unanswered", "questions", "question", "allowed", "need", "needs", "tests", "test",
++  "behavior", "known", "unknown", "documented", "still"
+ ]);
+ 
+ export type KnowledgeGapsAuditScope = {
+@@ -78,12 +81,22 @@
+   return focusQueryForRetrieval(userFocus);
+ }
+ 
++/** Code-rule audits have a different answer contract from repository health scans. */
++export function isKnowledgeGapsCodeRuleAudit(userFocus?: string): boolean {
++  return Boolean(knowledgeGapsGatherQuery(userFocus) &&
++    /\b(?:rules?|behavio[u]?r|validat\w*)\b/i.test(userFocus ?? "") &&
++    /\b(?:code|source|implementation)\b/i.test(userFocus ?? ""));
++}
++
+ /** Strip Gaps question framing + trailing punctuation so topics are subsystems. */
+ export function stripKnowledgeGapsTopicFraming(text: string): string {
+   return text
++    // The object being changed is the subsystem; the remainder asks how to audit it.
++    .replace(/^(?:before|when)\s+(?:changing|editing|modifying|updating)\s+(.+?)[,;].*$/i, "$1")
+     .replace(GAPS_QUESTION_FRAMING, "")
+     .replace(FOCUS_FRAMING_PREFIX, "")
+     .replace(TRAILING_AUDIT_QUESTION, "")
++    .replace(/\s*[,;]\s*(?:which|what|how|can|do)\b.*$/i, "")
+     .replace(/[?!.]+$/g, "")
+     .trim();
+ }
+@@ -237,6 +250,19 @@
+     }
+   }
+   return terms.slice(0, 12);
++}
++
++/** Filename leads use the topic's nouns, not question scaffolding. No repo/path assumptions. */
++export function knowledgeGapsFilenameQueries(userFocus?: string): string[] {
++  const topics = knowledgeGapsFocusTopics(userFocus);
++  const tokens = topics.flatMap(knowledgeGapsTopicContentTokens);
++  const aliases = /\bwork[-\s]?items?\b/i.test(topics.join(" ")) ? ["issue"] : [];
++  const stems = tokens.flatMap(token => {
++    if (/^(signing|signer|signed)$/.test(token)) return ["sign"];
++    if (/^(states|transitions)$/.test(token)) return [token.replace(/s$/, "")];
++    return [token];
++  }).filter(token => !token.includes("/") && !/^(validation|implementation)$/.test(token));
++  return [...new Set([...aliases, ...stems])].slice(0, 4);
+ }
+ 
+ /** Index queries for Gaps — topics + synonyms, never hunt-shortened `"Focus"`. */
+--- production/src/prompts/knowledgeGapsSourceLabels.ts
++++ candidate/src/prompts/knowledgeGapsSourceLabels.ts
+@@ -5,6 +5,10 @@
+ 
+ export function knowledgeGapsSourceLabelScan(): string {
+   return "[Sources: Knowledge gap scan]";
++}
++
++export function knowledgeGapsSourceLabelCode(): string {
++  return "[Sources: Reviewed source]";
+ }
+ 
+ export function knowledgeGapsSourceLabelConfluence(): string {
+@@ -53,6 +57,9 @@
+   teams?: { messages?: unknown[]; error?: string }
+ ): string[] {
+   const labels: string[] = [];
++  if (evidence.focusFiles?.some(file => file.content?.trim())) {
++    labels.push(knowledgeGapsSourceLabelCode());
++  }
+   if (evidence.jobScan) {
+     labels.push(knowledgeGapsSourceLabelScan());
+   }
+--- production/src/prompts/systemPrompts.ts
++++ candidate/src/prompts/systemPrompts.ts
+@@ -288,11 +288,16 @@
+ 
+   knowledge_gaps: `
+ ## Required response structure
++When the user message has ## Focused code rule audit, use its compact contract: **Source-grounded review** followed by **Open questions**, at most three entries each. Cite exact contiguous numeric source slices for established rules. Omit the generic health-scan structure and Recommended next steps below. Partial source cannot prove an absent transition policy, universal allowed moves, a model manager's filters, or atomicity. Include a same-class write delegation when attached.
++
+ Group each gap as a subsection with nested bullets — never a flat peer list of titles and field lines.
+ 
+ Open with 1–2 sentences on documentation and ownership health for the active file or area. No **Answer**, **Summary**, or **Your question** heading. When ## User focus is present, those sentences answer the ask.
+ 
+ When ## User focus (required) is present: PASS answers from scan/docs/focus-file evidence (or states scan unavailable). When focus file excerpts are attached, say the subsystems exist and name docs/ownership/default-on risks visible in those excerpts. FAIL: invents gaps; claims indexed code is missing when excerpts are attached.
++
++When focus source bodies are attached, first answer the code half in **Source-grounded review**, citing each established rule with verified numeric source ranges. Then include **Open questions** for specific intended-policy uncertainties motivated by those rules. Distinguish membership guards from old-state/new-state transition rules; a membership guard alone cannot establish a transition matrix. Keep these sections separate from scan and documentation coverage so they survive source normalization.
++When no relevant source bodies or documentation are attached, state the limit in 1–3 sentences and stop. Do not fill template sections, recommend unverified owners or paths, or turn search misses into confirmed gaps.
+ 
+ **Documentation gaps**
+ When \`<knowledge_gap_scan>\` is missing or contains \`<empty>\`: write one sentence that structured scan evidence is unavailable — **do not** invent gap subsections from code inspection unless focus file excerpts are attached in the user message.

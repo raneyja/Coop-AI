@@ -288,7 +288,7 @@ test("knowledge-gaps with focus excerpts audits attached code instead of claimin
   assert.ok(prompt.includes("Do not claim the code is missing"));
 });
 
-test("hunt/locate risk prompt names evidence-class gaps not runbook-only", () => {
+test("source audit uses attached evidence without injecting question-specific risks", () => {
   const prompt = buildKnowledgeGapsSynthesisUserPrompt({
     evidence: {
       file: "src/config/responseDeadline.ts",
@@ -312,9 +312,11 @@ test("hunt/locate risk prompt names evidence-class gaps not runbook-only", () =>
     file: "src/config/responseDeadline.ts",
     userFocus: "What's still unsafe about default-on hunt for on-call API-error locates?"
   });
-  assert.ok(prompt.includes("wrong-file ranking"));
-  assert.ok(prompt.includes("canned miss"));
-  assert.ok(prompt.includes("docs/runbook may be thin"));
+  assert.ok(prompt.includes("export function isApiRejectAsk() { return true; }"));
+  assert.ok(prompt.includes("Hunt ranking can attach the wrong file"));
+  assert.ok(prompt.includes("Preserve the complete conditions and call boundaries"));
+  assert.ok(!prompt.includes("canned miss"));
+  assert.ok(!prompt.includes("docs/runbook may be thin"));
 });
 
 test("gap recommendations cannot assume earlier proposed edits were applied", () => {

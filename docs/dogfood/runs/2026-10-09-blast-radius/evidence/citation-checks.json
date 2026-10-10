@@ -1,0 +1,1094 @@
+[
+  {
+    "threadId": "thread-1791576807948-r8t2ar",
+    "citations": [
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 59,
+        "endLine": 78,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 79,
+        "endLine": 82,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791577679358-w4kveq",
+    "citations": []
+  },
+  {
+    "threadId": "thread-1791578287346-rvjrul",
+    "citations": [
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 59,
+        "endLine": 78,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 79,
+        "endLine": 86,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791578495614-iwk323",
+    "citations": [
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 58,
+        "endLine": 77,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 78,
+        "endLine": 86,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791578956153-ki5avc",
+    "citations": [
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 74,
+        "endLine": 84,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791579308674-s5mr3g",
+    "citations": [
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 59,
+        "endLine": 78,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 79,
+        "endLine": 86,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791579642259-hm8m8s",
+    "citations": [
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 59,
+        "endLine": 78,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 79,
+        "endLine": 86,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791580204921-b21kdl",
+    "citations": [
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 59,
+        "endLine": 78,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 79,
+        "endLine": 86,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791582162183-7qlvt9",
+    "citations": [
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 59,
+        "endLine": 78,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 79,
+        "endLine": 86,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791583190412-yd7t7i",
+    "citations": [
+      {
+        "path": "apps/api/plane/db/models/state.py",
+        "startLine": 117,
+        "endLine": 126,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "preview"
+      },
+      {
+        "path": "apps/api/plane/db/models/issue.py",
+        "startLine": 228,
+        "endLine": 236,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "preview"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791583358474-cm6hrx",
+    "citations": []
+  },
+  {
+    "threadId": "thread-1791584711973-jl1bjm",
+    "citations": [
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 61,
+        "endLine": 80,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 81,
+        "endLine": 84,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791584886094-r2xsjy",
+    "citations": [
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 74,
+        "endLine": 84,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791587665736-bi8w6z",
+    "citations": [
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 59,
+        "endLine": 86,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 236,
+        "endLine": 268,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791589176951-mzyn77",
+    "citations": [
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 108,
+        "endLine": 110,
+        "bodyAttached": false,
+        "exactSlice": false,
+        "sourceRef": null
+      },
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": false,
+        "exactSlice": false,
+        "sourceRef": null
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 89,
+        "endLine": 97,
+        "bodyAttached": false,
+        "exactSlice": false,
+        "sourceRef": null
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 247,
+        "endLine": 262,
+        "bodyAttached": false,
+        "exactSlice": false,
+        "sourceRef": null
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791589305754-xxsg95",
+    "citations": [
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 108,
+        "endLine": 110,
+        "bodyAttached": false,
+        "exactSlice": false,
+        "sourceRef": null
+      },
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": false,
+        "exactSlice": false,
+        "sourceRef": null
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 61,
+        "endLine": 84,
+        "bodyAttached": false,
+        "exactSlice": false,
+        "sourceRef": null
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 247,
+        "endLine": 262,
+        "bodyAttached": false,
+        "exactSlice": false,
+        "sourceRef": null
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791591067921-fggn8l",
+    "citations": [
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 108,
+        "endLine": 110,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 59,
+        "endLine": 78,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 79,
+        "endLine": 86,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 247,
+        "endLine": 262,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791591111221-epfpg1",
+    "citations": [
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 108,
+        "endLine": 110,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 59,
+        "endLine": 86,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 236,
+        "endLine": 262,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791591169175-00b87h",
+    "citations": []
+  },
+  {
+    "threadId": "thread-1791591217454-f66kd6",
+    "citations": [
+      {
+        "path": "apps/api/plane/db/models/state.py",
+        "startLine": 119,
+        "endLine": 124,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "preview"
+      },
+      {
+        "path": "apps/api/plane/db/models/issue.py",
+        "startLine": 228,
+        "endLine": 236,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "preview"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791592645613-djegbv",
+    "citations": [
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 108,
+        "endLine": 110,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": true,
+        "exactSlice": false,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 59,
+        "endLine": 84,
+        "bodyAttached": true,
+        "exactSlice": false,
+        "sourceRef": "main"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791595011481-ohhwh2",
+    "citations": [
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 108,
+        "endLine": 110,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791595087709-n51dfx",
+    "citations": []
+  },
+  {
+    "threadId": "thread-1791598012223-7mb57x",
+    "citations": [
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 33,
+        "endLine": 52,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 53,
+        "endLine": 56,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791598235832-61mrfs",
+    "citations": [
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 108,
+        "endLine": 110,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 18,
+        "endLine": 98,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 112,
+        "endLine": 112,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 129,
+        "endLine": 129,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 138,
+        "endLine": 138,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 147,
+        "endLine": 149,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 158,
+        "endLine": 158,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 167,
+        "endLine": 195,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 216,
+        "endLine": 227,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 236,
+        "endLine": 312,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791599106629-3ulkee",
+    "citations": []
+  },
+  {
+    "threadId": "thread-1791599169177-8qt2pd",
+    "citations": [
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 108,
+        "endLine": 110,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 18,
+        "endLine": 37,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 38,
+        "endLine": 57,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 58,
+        "endLine": 77,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 78,
+        "endLine": 97,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 98,
+        "endLine": 98,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 112,
+        "endLine": 112,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 129,
+        "endLine": 129,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 138,
+        "endLine": 138,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 147,
+        "endLine": 149,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 158,
+        "endLine": 158,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 167,
+        "endLine": 186,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 187,
+        "endLine": 195,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 216,
+        "endLine": 227,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 236,
+        "endLine": 255,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 256,
+        "endLine": 275,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 276,
+        "endLine": 295,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 296,
+        "endLine": 312,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791600959699-4o4a89",
+    "citations": [
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 108,
+        "endLine": 110,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 18,
+        "endLine": 37,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 38,
+        "endLine": 57,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 58,
+        "endLine": 77,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 78,
+        "endLine": 97,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 98,
+        "endLine": 98,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 112,
+        "endLine": 112,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 129,
+        "endLine": 129,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 138,
+        "endLine": 138,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 147,
+        "endLine": 149,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 158,
+        "endLine": 158,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 167,
+        "endLine": 186,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 187,
+        "endLine": 195,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 216,
+        "endLine": 227,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 236,
+        "endLine": 255,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 256,
+        "endLine": 275,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 276,
+        "endLine": 295,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 296,
+        "endLine": 312,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      }
+    ]
+  },
+  {
+    "threadId": "thread-1791601054095-o2fcky",
+    "citations": [
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 108,
+        "endLine": 110,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/field-router/router.ts",
+        "startLine": 615,
+        "endLine": 633,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+        "startLine": 18,
+        "endLine": 98,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 112,
+        "endLine": 112,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 129,
+        "endLine": 129,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 138,
+        "endLine": 138,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 147,
+        "endLine": 149,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 158,
+        "endLine": 158,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 167,
+        "endLine": 195,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 216,
+        "endLine": 227,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      },
+      {
+        "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+        "startLine": 236,
+        "endLine": 312,
+        "bodyAttached": true,
+        "exactSlice": true,
+        "sourceRef": "main"
+      }
+    ]
+  }
+]

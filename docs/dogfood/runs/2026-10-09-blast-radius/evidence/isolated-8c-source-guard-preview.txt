@@ -1,0 +1,95 @@
+Behavioral effects depend on the remaining checks passing; sole enforcement across unread helpers and middleware remains **unverified**.
+
+**Verified call paths and conditions**
+
+Changed predicate:
+
+```108:110:packages/lib/server-only/field/sign-field-with-token.ts
+  if (envelope.status !== DocumentStatus.PENDING) {
+    throw new Error(`Document ${envelope.id} must be pending for signing`);
+  }
+```
+
+**`field-router/router.ts` — `signFieldWithToken` procedure** (lines 615–633) calls the target with no envelope-status pre-filter. `ctx.user` is accessed as `ctx.user?.id` (optional chaining), indicating `ctx.user` may be absent. The `procedure` middleware body is not opened, so whether it enforces authentication is unknown and cannot be inferred from the name.
+
+```615:633:packages/trpc/server/field-router/router.ts
+  signFieldWithToken: procedure.input(ZSignFieldWithTokenMutationSchema).mutation(async ({ input, ctx }) => {
+    const { token, fieldId, value, isBase64, authOptions } = input;
+
+    ctx.logger.info({
+      input: {
+        fieldId,
+      },
+    });
+
+    return await signFieldWithToken({
+      token,
+      fieldId,
+      value: value ?? '',
+      isBase64,
+      userId: ctx.user?.id,
+      authOptions,
+      requestMetadata: ctx.metadata.requestMetadata,
+    });
+  }),
+```
+
+**`apply-multi-sign-signature.ts`** pre-checks before reaching `signFieldWithToken`: rejects if any `recipient.readStatus !== ReadStatus.OPENED` (lines 33–39); rejects if `derivedRecipientActionAuth.recipientAccessAuthRequired || derivedRecipientActionAuth.recipientActionAuthRequired` (lines 48–55); skips a recipient if `envelope.recipient.signingStatus === SigningStatus.REJECTED` (lines 61–63); queries fields with `inserted: false` AND `type: FieldType.SIGNATURE` (lines 65–72). None of these conditions gate on `envelope.status`. `getDocumentByToken` at line 25 is unread — whether it independently enforces `PENDING` is unknown.
+
+```59:86:packages/trpc/server/embedding-router/apply-multi-sign-signature.ts
+      await Promise.all(
+        envelopes.map(async (envelope) => {
+          if (envelope.recipient.signingStatus === SigningStatus.REJECTED) {
+            return;
+          }
+
+          const signatureFields = await prisma.field.findMany({
+            where: {
+              envelopeId: envelope.document.id,
+              recipientId: envelope.recipient.id,
+              type: FieldType.SIGNATURE,
+              inserted: false,
+            },
+          });
+
+          await Promise.all(
+            signatureFields.map(async (field) =>
+              signFieldWithToken({
+                token: envelope.recipient.token,
+                fieldId: field.id,
+                value: signature,
+                isBase64,
+                requestMetadata: metadata.requestMetadata,
+              }),
+            ),
+          );
+        }),
+      );
+```
+
+Non-`AppError` exceptions thrown by `signFieldWithToken` (plain `Error` instances) are caught at line 89 and rethrown as `AppErrorCode.UNKNOWN_ERROR` by the embedding router, masking the underlying failure cause.
+
+**Remaining guards after the changed predicate** (all still enforce rejection before the transaction):
+- Line 112: `assertRecipientNotExpired(recipient)` — unread helper, internals unknown
+- Lines 114–116: throws if `recipient.signingStatus === SigningStatus.SIGNED || field.recipient.signingStatus === SigningStatus.SIGNED`
+- Lines 118–120: throws if `field.inserted === true`
+- Lines 127–172: type-specific validation for NUMBER, TEXT, CHECKBOX, RADIO, DROPDOWN fields
+- Line 174: `validateFieldAuth(...)` — unread helper, enforcement unknown
+- Lines 203–205: throws if `isSignatureField && !signatureImageAsBase64 && !typedSignature`
+- Lines 207–209: throws if `isSignatureField && documentMeta?.typedSignatureEnabled === false && typedSignature`
+- Lines 211–231: throws if `field.fieldMeta?.readOnly && !AUTO_SIGNABLE_FIELD_TYPES.includes(field.type)` and submitted value does not match the field's default
+
+
+- `tx.field.update` (lines 237–245): sets `customText` and `inserted: true` — no enclosing status condition
+- `tx.signature.upsert` (lines 248–262): conditional on `isSignatureField === true` (i.e., `field.type === FieldType.SIGNATURE || field.type === FieldType.FREE_SIGNATURE`); creates a new signature record when none exists for `fieldId`, or updates `signatureImageAsBase64`/`typedSignature` on an existing one
+- `tx.documentAuditLog.create` (lines 270–309): no enclosing status condition
+
+**Pre-ship verification**
+
+1. **`getDocumentByToken`** (called at line 25 of `apply-multi-sign-signature.ts`) — body unread. The opened bodies do not establish those status values; verify the actual enum and intended status policy.
+
+2. **`assertRecipientNotExpired` and `validateFieldAuth`** — both unread. Confirm neither relies on `DocumentStatus.PENDING` as an implicit precondition; removing the status guard changes what envelope states these helpers now receive.
+
+3. **`tx.signature.upsert` create vs. update** — when `isSignatureField` is true, the upsert will create a new signature record or overwrite stored `signatureImageAsBase64`/`typedSignature` for a non-PENDING envelope.
+
+4. **`procedure` middleware** — its implementation is not opened. Verify what authentication, if any, it enforces before the `signFieldWithToken` route in `field-router/router.ts` is reachable; the optional `ctx.user?.id` does not confirm the call is unauthenticated, but it cannot be ruled out from the opened bodies alone.

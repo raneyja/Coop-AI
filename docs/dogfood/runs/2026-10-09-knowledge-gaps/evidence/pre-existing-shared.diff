@@ -1,0 +1,70 @@
+diff --git a/src/chat/CoopChatSession.ts b/src/chat/CoopChatSession.ts
+index c010fe3..1d08c65 100644
+--- a/src/chat/CoopChatSession.ts
++++ b/src/chat/CoopChatSession.ts
+@@ -2375,6 +2375,9 @@ export class CoopChatSession {
+       case "ui:close-settings":
+         this.closeSettingsHandler?.();
+         return;
++      case "ui:report-issue":
++        await vscode.commands.executeCommand("coopAI.reportIssue");
++        return;
+       case "ui:open-settings": {
+         const screen = message.payload?.screen;
+         this.openSettings(screen && isSettingsScreen(migrateSettingsScreen(screen)) ? migrateSettingsScreen(screen) : undefined);
+@@ -6131,6 +6134,8 @@ export class CoopChatSession {
+ 
+   /** Highlight + file bytes for /edit snap — do not depend on VFS resolve at card time. */
+   private patchCompleteContext(turn: ChatTurn): {
++    targetRepo?: PatchCardState["targetRepo"];
++    preferLocalDisk?: boolean;
+     selectedLines?: [number, number];
+     file?: string;
+     selectionText?: string;
+@@ -6143,9 +6148,14 @@ export class CoopChatSession {
+     const selectedLines =
+       turn.editAnchor?.selectedLines ?? turn.context.selectedLines;
+     const fileContents: Record<string, string> = { ...(turn.editAnchor?.fileContents ?? {}) };
++    const preferLocalDisk = isFileAssistantSession(turn.context);
++    const targetRepo = !preferLocalDisk && turn.context.owner && turn.context.repo
++      ? { owner: turn.context.owner, repo: turn.context.repo,
++          provider: turn.context.provider ?? this.preferences.defaultCodeHost, branch: turn.context.branch }
++      : undefined;
+     const wanted = file?.trim();
+     if (wanted && !lookupPatchFileContent(wanted, fileContents)) {
+-      const fromDocs = collectOpenPatchFileBytes(wanted);
++      const fromDocs = collectOpenPatchFileBytes(wanted, { repo: targetRepo, preferLocalDisk });
+       if (fromDocs?.trim()) {
+         indexPatchFileContent(wanted, fromDocs, fileContents);
+       }
+@@ -6161,6 +6171,8 @@ export class CoopChatSession {
+       .filter((entry) => entry.role === "user" && !entry.cancelled)
+       .map((entry) => entry.content);
+     return {
++      targetRepo,
++      preferLocalDisk,
+       selectedLines,
+       file,
+       selectionText: selectionText || undefined,
+@@ -6217,7 +6229,7 @@ export class CoopChatSession {
+           branch: payload.branch,
+           title: payload.title,
+           body: payload.body,
+-          base: payload.base,
++          base: record?.card.targetRepo?.branch ?? payload.base,
+           files: decision.files
+         }
+       );
+diff --git a/src/config/coopBuildId.ts b/src/config/coopBuildId.ts
+index 7ca4164..6ae97d6 100644
+--- a/src/config/coopBuildId.ts
++++ b/src/config/coopBuildId.ts
+@@ -5,7 +5,7 @@
+ import { createHash } from "node:crypto";
+ import { readFileSync } from "node:fs";
+ 
+-export const COOP_EXTENSION_BUILD_ID = "0.1.12";
++export const COOP_EXTENSION_BUILD_ID = "0.1.13";
+ /** Capture once at module load, before a rebuild can replace the running bundle. */
+ export const COOP_EXTENSION_BUNDLE_ID = (() => {
+   try {

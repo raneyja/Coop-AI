@@ -9,6 +9,7 @@ import { createProviderClient, createFimClient } from "./providers";
 import { selectFimProvider } from "./fimRouter";
 import { buildUserMessageWithContext, buildProjectInstructionsSystemBlock, systemPromptForUseCase } from "../prompts/systemPrompts";
 import { REPO_SUMMARY_LOCATE_ONLY_MARKER } from "../prompts/repoSummarySynthesis";
+import { KNOWLEDGE_GAPS_CODE_RULE_AUDIT_MARKER } from "../prompts/knowledgeGapsSynthesis";
 import { appendUserPaperclipAttachmentsPrompt } from "../chat/paperclipAttachments";
 import { resolveProviderThinking } from "../config/modelThinking";
 
@@ -30,6 +31,10 @@ function buildChatSystemContent(request: CompletionRequest, overridePrompt?: str
   }
   const basePrompt = systemPromptForUseCase(request.useCase, {
     activeFile: request.context?.file,
+    knowledgeGapsCodeRuleAudit: request.useCase === "knowledge_gaps" &&
+      request.message.includes(KNOWLEDGE_GAPS_CODE_RULE_AUDIT_MARKER),
+    blastSourceGrounded: request.useCase === "blast_radius" &&
+      request.message.includes("## Opened selected-ref source bodies"),
     hasPaperclipAttachments: requestHasPaperclipAttachments(request),
     locateOnly:
       request.useCase === "comprehension" &&

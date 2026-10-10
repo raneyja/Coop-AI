@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { parseChatProse } from "../lib/chatProseParser";
 import { anonymousCodeSurfaceLabel } from "./ChatCodeBlock";
-import { shouldHidePatchBlock } from "./ChatProse";
+import { ChatProse, shouldHidePatchBlock } from "./ChatProse";
+import { ChatStream } from "./ChatStream";
 
 let passed = 0;
 let failed = 0;
@@ -130,6 +133,26 @@ test("anonymous header keeps bash and drops TEXT", () => {
   assert.equal(anonymousCodeSurfaceLabel("TEXT"), undefined);
   assert.equal(anonymousCodeSurfaceLabel("plaintext"), undefined);
   assert.equal(anonymousCodeSurfaceLabel(undefined), undefined);
+});
+
+test("validated rendering keeps anonymous examples separate from exact source citations", () => {
+  const content = "```1:1:src/actual.ts\npersist();\n```\n\nExample for `src/actual.ts`:\n\n```typescript\npersist('example');\n```";
+  const html = renderToStaticMarkup(React.createElement(ChatProse, {
+    content, sourceCitationMode: "explicit", activeFilePath: "src/actual.ts"
+  }));
+  assert.equal(html.match(/data-code-surface="cite"/g)?.length, 1);
+  assert.equal(html.match(/data-code-surface="anonymous"/g)?.length, 1);
+});
+
+test("saved message render policy reaches the actual ChatStream body renderer", () => {
+  let received: string | undefined;
+  renderToStaticMarkup(React.createElement(ChatStream, {
+    messages: [{ role: "assistant", content: "```typescript\npersist('example');\n```", timestamp: 1,
+      sourceCitationMode: "explicit" }], artifacts: [], streamingMessage: null,
+    endRef: { current: null }, actionContext: {},
+    renderBody: (_content, _artifact, _timestamp, mode) => { received = mode; return []; }
+  }));
+  assert.equal(received, "explicit");
 });
 
 console.log(`\nChatProse: ${passed} passed, ${failed} failed`);

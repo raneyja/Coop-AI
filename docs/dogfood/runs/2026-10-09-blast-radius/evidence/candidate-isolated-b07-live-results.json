@@ -1,0 +1,29 @@
+{
+  "recordedAt": "2026-10-10T01:34:04.146715+00:00",
+  "bundleId": "b07ae0e5163acbbabb13c7671451409fd98e612dcab782a6246c85462d17e74c",
+  "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+  "cases": [
+    {
+      "threadId": "thread-1791595011481-ohhwh2",
+      "verdict": "Fail",
+      "reason": "Still shortened remaining signature/read-only predicates, omitted the actual multi-sign call citation, and left a mismatched write excerpt unverified.",
+      "answerStartMs": 143238,
+      "completionMs": null,
+      "sourcesCardRetained": true,
+      "sessionCostUsd": 0.246558,
+      "providerCompletionMs": 143227,
+      "timingLimit": "Answer start uses the client turn clock. The saved assistant timestamp predates private source-check publication; actual final UI completion was not separately instrumented on this candidate."
+    },
+    {
+      "threadId": "thread-1791595087709-n51dfx",
+      "verdict": "Fail",
+      "reason": "Length stop inside the first citation triggered a generic continuation with no original source; unusable incomplete answer.",
+      "answerStartMs": 170233,
+      "completionMs": null,
+      "sourcesCardRetained": true,
+      "sessionCostUsd": 0.29500499999999996,
+      "providerCompletionMs": 170232,
+      "timingLimit": "Answer start uses the client turn clock. The saved assistant timestamp predates private source-check publication; actual final UI completion was not separately instrumented on this candidate."
+    }
+  ]
+}

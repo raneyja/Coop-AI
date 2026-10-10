@@ -1,0 +1,533 @@
+[
+  {
+    "threadId": "thread-1791576113652-ji6no7",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "startLine": 121,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791576113652-ji6no7",
+    "path": "apps/api/plane/app/serializers/issue.py",
+    "startLine": 124,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791576113652-ji6no7",
+    "path": "apps/api/plane/app/serializers/state.py",
+    "startLine": 31,
+    "endLine": 34,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791576113652-ji6no7",
+    "path": "apps/api/plane/api/serializers/state.py",
+    "startLine": 1,
+    "endLine": 20,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791577177470-6m8077",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "startLine": 121,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791577177470-6m8077",
+    "path": "apps/api/plane/app/serializers/issue.py",
+    "startLine": 124,
+    "endLine": 176,
+    "sourceLinesAttached": true,
+    "exactQuote": false,
+    "sameLinesIgnoringIndentation": false
+  },
+  {
+    "threadId": "thread-1791577177470-6m8077",
+    "path": "apps/api/plane/api/serializers/state.py",
+    "startLine": 19,
+    "endLine": 26,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791577177470-6m8077",
+    "path": "apps/api/plane/db/models/issue_type.py",
+    "startLine": 1,
+    "endLine": 20,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791578065937-x274qm",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "startLine": 121,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791578065937-x274qm",
+    "path": "apps/api/plane/app/serializers/issue.py",
+    "startLine": 125,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791578065937-x274qm",
+    "path": "apps/api/plane/api/serializers/state.py",
+    "startLine": 24,
+    "endLine": 26,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791579941375-80lc5c",
+    "path": "apps/api/plane/api/serializers/state.py",
+    "startLine": 24,
+    "endLine": 26,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791579941375-80lc5c",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "startLine": 122,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791582369314-xj831u",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "startLine": 121,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791582369314-xj831u",
+    "path": "apps/api/plane/app/serializers/issue.py",
+    "startLine": 125,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791582369314-xj831u",
+    "path": "apps/api/plane/app/serializers/issue.py",
+    "startLine": 328,
+    "endLine": 330,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791583708579-ccw0r0",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "startLine": 121,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791583708579-ccw0r0",
+    "path": "apps/api/plane/db/models/state.py",
+    "startLine": 65,
+    "endLine": 69,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791583708579-ccw0r0",
+    "path": "apps/api/plane/app/serializers/issue.py",
+    "startLine": 125,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791583708579-ccw0r0",
+    "path": "apps/api/plane/app/serializers/issue.py",
+    "startLine": 168,
+    "endLine": 176,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791583708579-ccw0r0",
+    "path": "apps/api/plane/db/models/state.py",
+    "startLine": 72,
+    "endLine": 76,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791584305639-9jfg3s",
+    "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+    "startLine": 105,
+    "endLine": 109,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791584305639-9jfg3s",
+    "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+    "startLine": 111,
+    "endLine": 115,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791584305639-9jfg3s",
+    "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+    "startLine": 110,
+    "endLine": 115,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791586180573-7ilqio",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "startLine": 122,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791586180573-7ilqio",
+    "path": "apps/api/plane/app/serializers/issue.py",
+    "startLine": 125,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791586180573-7ilqio",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "startLine": 288,
+    "endLine": 288,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791586180573-7ilqio",
+    "path": "apps/api/plane/db/models/issue.py",
+    "startLine": 244,
+    "endLine": 254,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791586422809-16kf06",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "startLine": 122,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791586422809-16kf06",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "startLine": 288,
+    "endLine": 288,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791588212248-in5alx",
+    "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+    "startLine": 105,
+    "endLine": 109,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791588212248-in5alx",
+    "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+    "startLine": 113,
+    "endLine": 115,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791589888335-qavpnl",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "startLine": 121,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791589888335-qavpnl",
+    "path": "apps/api/plane/db/models/state.py",
+    "startLine": 65,
+    "endLine": 69,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791589888335-qavpnl",
+    "path": "apps/api/plane/app/serializers/issue.py",
+    "startLine": 125,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791589888335-qavpnl",
+    "path": "apps/api/plane/db/models/state.py",
+    "startLine": 72,
+    "endLine": 76,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791589888335-qavpnl",
+    "path": "apps/api/plane/app/serializers/issue.py",
+    "startLine": 169,
+    "endLine": 176,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791589888335-qavpnl",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "startLine": 288,
+    "endLine": 288,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791589888335-qavpnl",
+    "path": "apps/api/plane/app/serializers/issue.py",
+    "startLine": 330,
+    "endLine": 330,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791590022377-mpq1vc",
+    "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+    "startLine": 105,
+    "endLine": 109,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791590022377-mpq1vc",
+    "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+    "startLine": 110,
+    "endLine": 115,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791591875903-9s4xib",
+    "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+    "startLine": 105,
+    "endLine": 109,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791591875903-9s4xib",
+    "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+    "startLine": 113,
+    "endLine": 115,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791591875903-9s4xib",
+    "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+    "startLine": 111,
+    "endLine": 115,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791591893640-i4xbux",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "startLine": 63,
+    "endLine": 82,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791591903290-h5ahvg",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "startLine": 122,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791591903290-h5ahvg",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "startLine": 288,
+    "endLine": 288,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791592649013-ajzi3p",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "startLine": 122,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791592649013-ajzi3p",
+    "path": "apps/api/plane/db/models/state.py",
+    "startLine": 65,
+    "endLine": 69,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791592649013-ajzi3p",
+    "path": "apps/api/plane/app/serializers/issue.py",
+    "startLine": 125,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791592649013-ajzi3p",
+    "path": "apps/api/plane/appThe three reviewed source files establish two concrete membership rules and leave the transition policy unverified.",
+    "startLine": 169,
+    "endLine": 176,
+    "sourceLinesAttached": false,
+    "exactQuote": false,
+    "sameLinesIgnoringIndentation": false
+  },
+  {
+    "threadId": "thread-1791596533331-xw47gg",
+    "path": "apps/api/plane/app/serializers/issue.py",
+    "startLine": 125,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791596533331-xw47gg",
+    "path": "apps/api/plane/app/serializers/issue.py",
+    "startLine": 168,
+    "endLine": 176,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791596533331-xw47gg",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "startLine": 121,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791596533331-xw47gg",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "startLine": 288,
+    "endLine": 288,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791596533331-xw47gg",
+    "path": "apps/api/plane/app/serializers/issue.py",
+    "startLine": 330,
+    "endLine": 330,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791597474808-rdyld6",
+    "path": "apps/api/plane/api/serializers/issue.py",
+    "startLine": 121,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791597474808-rdyld6",
+    "path": "apps/api/plane/app/serializers/issue.py",
+    "startLine": 125,
+    "endLine": 126,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  },
+  {
+    "threadId": "thread-1791597474808-rdyld6",
+    "path": "apps/api/plane/db/models/state.py",
+    "startLine": 65,
+    "endLine": 69,
+    "sourceLinesAttached": true,
+    "exactQuote": true,
+    "sameLinesIgnoringIndentation": true
+  }
+]

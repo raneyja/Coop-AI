@@ -1,0 +1,25 @@
+  ✓ NARRATIVE_CITATION_RULES keeps source pills out of a Sources footer
+  ✓ EVIDENCE_CITATION_RULES includes narrative citation rules
+  ✓ appendEvidenceQualityInstructions adds grounding without intern-speak
+  ✓ EVIDENCE_BOUND_ANSWERS_RULE is short-honest-stop
+  ✓ appendUserFocusInstructions requires opening prose for specific asks
+  ✓ stripTemplateSectionHeadings drops Answer/Summary/Your question titles
+  ✓ appendUserFocusInstructions is a no-op when focus is empty
+  ✓ buildSourcesChecklistFromKeys replaces default line when extra matches citation key
+  ✓ appendCitationKeysSection steers keys to Sources footer
+  ✓ appendEvidenceEnrichmentInstructions adds Evidence enrichment section when enrichment is present
+  ✓ appendEvidenceEnrichmentInstructions is gated off when no enrichment is present
+  ✓ truncationNote flags omitted rows only past the shown limit
+  ✓ appendSupplementarySourceCitationGuardrails omits narrative citations for absent checklist keys
+  ✓ appendNarrativeCitationInstructions forbids a Sources footer
+  ✓ supplementaryKeysOmittedFromChecklist returns keys missing from checklist
+  ✓ stripDisallowedNarrativeSourceCitations removes pills from narrative sections
+  ✓ extractCitationKeysFromSourcesSection reads allowed keys
+  ✓ GENERAL_CHAT_EVIDENCE_RULES covers citations, empty integrations, and source weighting
+  ✓ AGENT_REPO_HUNT_RULES forbids inventing absences and restating the ask
+  ✓ hunt answer prompt and skipNote use teammate miss copy
+  ✓ synthesis builders do not use a writer-facing Evidence bundle heading
+  ✓ empty-evidence honesty quotes Body and forbids timeout jargon
+
+evidenceSynthesis: 22/22 tests passed
+

@@ -109,6 +109,7 @@ Coop **operators** (self-hosted or support): post-deploy validation steps in [En
 
 ## Still stuck?
 
+- [Report a bug or send feedback](/docs/reporting-bugs) from the VS Code extension
 - Email [support@coop-ai.dev](mailto:support@coop-ai.dev)
 - [Book a demo](/demo) for enterprise support
 - See [FAQ](/docs/faq)

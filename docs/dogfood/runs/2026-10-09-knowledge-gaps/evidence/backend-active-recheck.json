@@ -1,0 +1,29 @@
+{
+  "checkedAt": "2026-10-09T21:45:28.313Z",
+  "service": "Coop-AI",
+  "domain": [
+    "api.coop-ai.dev"
+  ],
+  "activeDeployments": [
+    {
+      "id": "788d0aeb-322c-4937-8788-238d5c638188",
+      "status": "SUCCESS",
+      "instances": [
+        {
+          "id": "bf3b6f9c-ac00-406a-b427-b4d620278b2e",
+          "status": "REMOVED"
+        },
+        {
+          "id": "25522cda-6381-47f3-8423-e89a590b27b5",
+          "status": "RUNNING"
+        }
+      ],
+      "imageDigest": "sha256:66667445afa0a441c89e57592f14015327c4ebd1fda765c0fc7f2074da3259bc",
+      "cliMessage": "Knowledge Gaps: scoped code-rule audit prompt; preserve email-48168d source"
+    }
+  ],
+  "latestDeployment": {
+    "id": "6786a8b5-ae1c-4ddc-98eb-9c55ccd629b0",
+    "status": "FAILED"
+  }
+}

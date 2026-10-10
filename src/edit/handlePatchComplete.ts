@@ -56,6 +56,8 @@ export function showPatchReadyNotification(patches: ParsedPatchSet): void {
 
 export type HandlePatchCompleteOptions = {
   messageTimestamp?: number;
+  targetRepo?: PatchCardState["targetRepo"];
+  preferLocalDisk?: boolean;
   publish?: PatchSnapshotPublisher;
   /**
    * Ask-mode opportunistic patches: if the response has no valid File:/SEARCH-REPLACE
@@ -104,7 +106,7 @@ function filesForSutGrounding(
   }
   const sibling = sutPathForEditAsk(options.file);
   if (sibling) {
-    const fromDocs = collectOpenPatchFileBytes(sibling);
+      const fromDocs = collectOpenPatchFileBytes(sibling, { repo: options.targetRepo, preferLocalDisk: options.preferLocalDisk });
     if (fromDocs?.trim()) {
       push(sibling, fromDocs);
     }
@@ -131,6 +133,8 @@ function publishFailedPatch(
   const failed = withSuppressionRegistry({
     status: "failed",
     messageTimestamp: options.messageTimestamp,
+    targetRepo: options.targetRepo,
+    preferLocalDisk: options.preferLocalDisk,
     fileCount: 0,
     hunkCount: 0,
     files: [],
@@ -178,7 +182,7 @@ export async function handlePatchComplete(
     commentOnly: options.commentOnly,
     readContent: (relativePath) =>
       lookupAttachedFileContent(relativePath, options.fileContents) ??
-      collectOpenPatchFileBytes(relativePath)
+      collectOpenPatchFileBytes(relativePath, { repo: options.targetRepo, preferLocalDisk: options.preferLocalDisk })
   });
   const sutFiles = filesForSutGrounding(options);
   const expectation = options.ask ? sutNumericExpectation(options.ask, sutFiles) : undefined;
@@ -209,9 +213,13 @@ export async function handlePatchComplete(
   const pending = buildPatchCardState(grounded, {
     status: "pending",
     messageTimestamp: options.messageTimestamp,
-    fileContents: options.fileContents
+    fileContents: options.fileContents,
+    targetRepo: options.targetRepo,
+    preferLocalDisk: options.preferLocalDisk
   });
-  const pendingWithSuppress = withSuppressionRegistry({ ...pending, suppressMarkdown: true });
+  const pendingWithSuppress = withSuppressionRegistry({
+    ...pending, suppressMarkdown: true
+  });
 
   if (options.messageTimestamp !== undefined) {
     upsertPatchRecord(options.messageTimestamp, grounded, pendingWithSuppress, {

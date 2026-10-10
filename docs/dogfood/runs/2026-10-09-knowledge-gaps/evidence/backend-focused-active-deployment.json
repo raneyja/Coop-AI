@@ -1,0 +1,16 @@
+{
+  "checkedAt": "2026-10-09T23:33:33.924Z",
+  "deploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+  "status": "SUCCESS",
+  "imageDigest": "sha256:c43187846a50c958428bad45117c4c8a1bfb820d67c1499f0c8d3ba866839228",
+  "instances": [
+    {
+      "id": "72c38937-76f2-4485-a6e6-8fb013aa776c",
+      "status": "REMOVED"
+    },
+    {
+      "id": "733f6f45-93c5-4db9-bcd5-3f0acf62dd61",
+      "status": "RUNNING"
+    }
+  ]
+}

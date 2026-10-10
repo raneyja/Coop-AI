@@ -3,20 +3,21 @@ import { formatChatMessageForCopy } from "../lib/formatChatMessageForCopy";
 
 type ChatMessageActionsProps = {
   content: string;
+  sourceCitationMode?: "explicit";
   visible: boolean;
 };
 
-export function ChatMessageActions({ content, visible }: ChatMessageActionsProps): React.ReactElement {
+export function ChatMessageActions({ content, visible, sourceCitationMode }: ChatMessageActionsProps): React.ReactElement {
   const handleCopy = useCallback(async () => {
     if (!content) {
       return;
     }
     try {
-      await navigator.clipboard.writeText(formatChatMessageForCopy(content));
+      await navigator.clipboard.writeText(formatChatMessageForCopy(content, { sourceCitationMode }));
     } catch {
       // Ignore clipboard failures in restricted environments.
     }
-  }, [content]);
+  }, [content, sourceCitationMode]);
 
   return (
     <div className="coop-chat-message-actions" aria-hidden={!visible}>

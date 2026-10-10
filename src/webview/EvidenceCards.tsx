@@ -36,6 +36,7 @@ import {
   knowledgeGapsSourceLabelNotion,
   knowledgeGapsSourceLabelOwnership,
   knowledgeGapsSourceLabelScan,
+  knowledgeGapsSourceLabelCode,
   knowledgeGapsSourceLabelSlack,
   knowledgeGapsSourceLabelTeams
 } from "../prompts/knowledgeGapsSourceLabels";
@@ -219,7 +220,7 @@ export function RepoSummaryEvidenceCard({
               </IntegrationResultText>
               <ul className="mt-2 space-y-3">
                 {evidence.entryFiles!.slice(0, 12).map((file) => (
-                  <li key={file.path} className="space-y-1">
+                  <li key={`${file.path}:${file.startLine ?? 1}`} className="space-y-1">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <code className="coop-result-text">{file.path}</code>
                       {onOpenFile ? (
@@ -233,7 +234,7 @@ export function RepoSummaryEvidenceCard({
                       ) : null}
                     </div>
                     {file.content?.trim() ? (
-                      <EvidenceFileSourcePreview path={file.path} content={file.content} />
+                      <EvidenceFileSourcePreview path={file.path} content={file.content} startLine={file.startLine} />
                     ) : file.truncated ? (
                       <IntegrationResultText muted>Truncated in bundle — open the file for full source.</IntegrationResultText>
                     ) : null}
@@ -1122,6 +1123,7 @@ export function KnowledgeGapsEvidenceCard({
 }): React.ReactElement {
   const host = evidenceCodeHostConnection(codeHost);
   const [expanded, setExpanded] = useState({
+    code: false,
     scan: true,
     confluence: true,
     jira: true,
@@ -1140,6 +1142,9 @@ export function KnowledgeGapsEvidenceCard({
   const teamsCount = teams?.messages?.length ?? 0;
   const ownerCount = evidence.ownershipReport?.scores?.length ?? 0;
   const depCount = evidence.dependencyGraph?.directDependents?.length ?? 0;
+  const focusFiles = (evidence.focusFiles ?? []).filter(file => file.content?.trim());
+  const sourceFileCount = new Set(focusFiles.map(file => file.path)).size;
+  const onlySearchMisses = Boolean(evidence.jobScan?.gaps?.length && evidence.jobScan.gaps.every(gap => gap.type === "focus_search_miss"));
 
   const summary = useMemo(
     () => summarizeKnowledgeGaps(evidence, file, confluence, jira, slack, notion, googleDocs, teams, codeHost),
@@ -1206,9 +1211,11 @@ export function KnowledgeGapsEvidenceCard({
         <EvidenceConnectionGroup
           connection={host ?? "code-host"}
           briefSummary={
-            evidence.jobScan
+            sourceFileCount
+              ? { title: `Reviewed source (${sourceFileCount})`, sourceLabel: knowledgeGapsSourceLabelCode() }
+              : evidence.jobScan
               ? {
-                  title: `Background gap scan (${evidence.jobScan.foundGaps ?? evidence.jobScan.gaps?.length ?? 0})`,
+                  title: `${onlySearchMisses ? "Focused search coverage" : "Background gap scan"} (${evidence.jobScan.foundGaps ?? evidence.jobScan.gaps?.length ?? 0})`,
                   sourceLabel: knowledgeGapsSourceLabelScan()
                 }
               : evidence.ownershipReport
@@ -1224,16 +1231,33 @@ export function KnowledgeGapsEvidenceCard({
                   : undefined
           }
         >
+          {sourceFileCount > 0 ? (
+            <IntegrationResultCollapsible
+              title={`Reviewed source (${sourceFileCount})`}
+              sourceLabel={knowledgeGapsSourceLabelCode()}
+              sectionDomId={evidenceSectionDomId(artifactId, knowledgeGapsSourceLabelCode())}
+              open={expanded.code}
+              onToggle={() => setExpanded(state => ({ ...state, code: !state.code }))}
+            >
+              <ul className="space-y-3">
+                {focusFiles.map(file => (
+                  <li key={`${file.path}:${file.startLine}`} className="space-y-1">
+                    <EvidenceFileSourcePreview path={file.path} content={file.content!} startLine={file.startLine} />
+                  </li>
+                ))}
+              </ul>
+            </IntegrationResultCollapsible>
+          ) : null}
           {evidence.jobScan ? (
             <IntegrationResultCollapsible
-              title={`Background gap scan (${evidence.jobScan.foundGaps ?? evidence.jobScan.gaps?.length ?? 0})`}
+              title={`${onlySearchMisses ? "Focused search coverage" : "Background gap scan"} (${evidence.jobScan.foundGaps ?? evidence.jobScan.gaps?.length ?? 0})`}
               sourceLabel={knowledgeGapsSourceLabelScan()}
               sectionDomId={evidenceSectionDomId(artifactId, knowledgeGapsSourceLabelScan())}
               open={expanded.scan}
               onToggle={() => setExpanded((state) => ({ ...state, scan: !state.scan }))}
             >
               <IntegrationResultText muted>
-                Found {evidence.jobScan.foundGaps ?? evidence.jobScan.gaps?.length ?? 0} gaps
+                {onlySearchMisses ? "No source matches attached; absence is unverified." : `Found ${evidence.jobScan.foundGaps ?? evidence.jobScan.gaps?.length ?? 0} gaps`}
                 {Number(evidence.jobScan.highPriority ?? 0) > 0
                   ? ` (${evidence.jobScan.highPriority} high priority)`
                   : ""}

@@ -133,6 +133,8 @@ export type ChatTurnActivity = {
 };
 
 export type ChatMessage = {
+  /** Validated source turns keep anonymous examples separate from explicit quotes. */
+  sourceCitationMode?: "explicit";
   clientSubmissionId?: string;
   role: "user" | "assistant" | "system";
   content: string;
@@ -262,6 +264,10 @@ export type PatchCardStatus = "idle" | "pending" | "applied" | "failed" | "undon
 export type PatchCardState = {
   status: PatchCardStatus;
   messageTimestamp?: number;
+  /** Frozen at generation; actions must not borrow the current Use-repo. */
+  targetRepo?: { owner: string; repo: string; provider: CodeHostProviderPreference; branch?: string };
+  /** Frozen local-file scope, including after changing the active chat context. */
+  preferLocalDisk?: boolean;
   fileCount: number;
   hunkCount: number;
   files: PatchPreviewFile[];
@@ -764,6 +770,7 @@ export type WebviewInbound =
   | { type: "ownership:copy-draft"; payload: { text: string } }
   | { type: "evidence:copy-text"; payload: { text: string; toast?: string } }
   | { type: "ui:close-settings" }
+  | { type: "ui:report-issue" }
   | { type: "ui:open-settings"; payload?: { screen?: string } }
   | { type: "ui:ensure-min-width"; payload: { width: number; minWidth: number } }
   | { type: "lightning:ready" }

@@ -14,7 +14,7 @@ import {
   isInfraDependencyGraphGap
 } from "../context/knowledgeGapScanCoverage";
 import {
-  isHuntLocateGapsAsk,
+  isKnowledgeGapsCodeRuleAudit,
   knowledgeGapsGatherQuery,
   resolveKnowledgeGapsAuditScope
 } from "../context/knowledgeGapsFocus";
@@ -53,8 +53,9 @@ import { formatOwnershipReportForPrompt } from "./ownershipSynthesis";
 import { ORG_DOCS_EVIDENCE_LABEL, orgDocsSynthesisGuardrail } from "../workspace/repoEvidenceIsolation";
 
 export const KNOWLEDGE_GAPS_EVIDENCE_SYSTEM = `You audit engineering health using only attached evidence from the Sources card and synthesis bundle.
-Universal behavior claims require tracing the relevant input conditions in attached source. Do not infer "every nonempty input fails" from one example: identify the condition that causes failure and check relevant counterexamples. Describe a defect with the narrowest condition the implementation supports.
+Universal behavior claims require tracing the relevant input conditions in attached source. One example does not establish behavior for every input: identify the condition that causes the observed result and check relevant counterexamples. Describe a defect with the narrowest condition the implementation supports.
 Separate observed implementation behavior from the expected contract. A function name alone is not a formal specification. Without attached tests, documentation, or an explicit user requirement establishing intent, describe a potential defect conditional on the expected behavior and ask for that intent to be confirmed.
+Partial source windows establish only the conditions and operations shown. They cannot prove complete repository coverage or absence of implementation, documentation, tests, or policy. Unshown conditions and called implementations remain unverified; names and call edges cannot substitute for their source.
 When intent is unverified, do not label behavior a confirmed error, blocker, or wrong result and then qualify that claim later. Put the condition in the finding itself: observed behavior first, potential defect only if the expected contract requires different behavior. Naming conventions do not establish that contract. An import or call edge proves a dependency, not that callers inevitably receive wrong results; caller impact requires a verified contract and relevant inputs.
 When ### Focus file excerpts are attached, you MAY name documentation, ownership, or default-on risks that are visible in those excerpts (allowlists, call caps, missing confirmation). Cite the path. Still fail: inventing files not attached, foreign-repo paths, or a 40-bullet dump.
 When focus excerpts are absent, list scan-backed gaps and integration hits only — never invent gap subsections from code inspection or generic framework knowledge.
@@ -67,6 +68,8 @@ Org Confluence/Notion hits are org-wide supplementary docs — never the active 
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
 ${EVIDENCE_CITATION_RULES}`;
+
+export const KNOWLEDGE_GAPS_CODE_RULE_AUDIT_MARKER = "## Focused code rule audit";
 
 export type KnowledgeGapsSynthesisInput = {
   evidence: KnowledgeGapsEvidence;
@@ -95,6 +98,9 @@ export function buildKnowledgeGapsSynthesisUserPrompt(input: KnowledgeGapsSynthe
     userFocus,
     focusHitPaths: input.evidence.focusSearchPaths
   });
+  if (isKnowledgeGapsCodeRuleAudit(userFocus)) {
+    return buildFocusedCodeRuleAuditPrompt(input, userFocus!, scope);
+  }
   const repoWide =
     !scope.focusPrimary &&
     !input.file?.trim() &&
@@ -243,6 +249,40 @@ export function buildKnowledgeGapsSynthesisUserPrompt(input: KnowledgeGapsSynthe
   return lines.join("\n");
 }
 
+function buildFocusedCodeRuleAuditPrompt(
+  input: KnowledgeGapsSynthesisInput,
+  userFocus: string,
+  scope: ReturnType<typeof resolveKnowledgeGapsAuditScope>
+): string {
+  const lines = [
+    KNOWLEDGE_GAPS_CODE_RULE_AUDIT_MARKER,
+    userFocus,
+    "Answer the original question with two sections only: **Source-grounded review** and **Open questions**. Begin directly with the first heading. Keep one to three distinct findings relevant to the request; do not duplicate a condition and its operation as separate findings.",
+    "Each finding consists of a short title, one condition-bound sentence, and a small exact numeric source quote. Preserve the full condition, including when execution reaches the operation. End the finding after its quote; do not add an uncited factual premise or infer unreviewed input, lifecycle, or policy behavior. A selected implementation can require a second exact quote of its attached definition.",
+    "Each open question consists of an interrogative sentence tied to a cited finding, followed by a prospective test or documentation suggestion. Keep at most three. Do not preface questions with unverified factual assertions. Unreviewed input handling and later calls are questions to verify, not established execution paths. Proposed checks do not imply that tests or documents already exist or are missing.",
+    "Establish only the conditions and operations directly visible in the attached numbered source and relevant to the original request. Do not replace the requested analysis with unrelated findings or scan coverage.",
+    "Describe a guard when execution reaches that check. Earlier rejects may run first; one quoted guard cannot establish the same error for every call to its containing function.",
+    "A shown input check or call establishes that local boundary, not the behavior of unreviewed callers, decoding, called implementations, or later execution. Ask how those boundaries connect when their source is not attached.",
+    "Partial source and search misses cannot establish exhaustive coverage or absence of implementation, documentation, tests, or intended policy. One observed check does not establish that it is the only check or that passing it guarantees the final outcome.",
+    "Names and framework conventions cannot prove behavior, intended policy, or operational guarantees. Review attached definitions or leave those effects unknown.",
+    "When a branch selects an implementation, trace the exact selected identifier to its attached definition. Do not substitute a similarly named implementation. Quote the selection and the relevant definition before attributing called behavior to that path.",
+    "Every established rule needs a small numeric start:end:path citation fence quoting contiguous, exact supplied source lines. Never merge nonadjacent ranges with an ellipsis. Use only reviewed paths; never invent test directories, owners, or source locations.",
+    "Use only enclosing function or type identity established by attached source; do not infer it from a filename. A call quote proves that call in the shown context, not unreviewed earlier or later behavior.",
+    "If no relevant code or document bodies are attached, state the coverage limit in 1–3 sentences and stop. Missing searches do not prove that source, documentation, tests, or policy are absent.",
+    "Documentation can settle intent only when an attached body establishes it. Treat org docs as supplementary. Without supporting docs, add at most one final sentence about that evidence limit; omit generic recommendations and health-scan sections."
+  ];
+  appendMentionScopeSection(lines, input);
+  // The focused contract uses reviewed code/docs, not generic health-scan flags.
+  lines.push(formatKnowledgeGapsForPrompt({
+    userFocus, focusSearchQuery: input.evidence.focusSearchQuery,
+    focusSearchPaths: input.evidence.focusSearchPaths, focusFiles: input.evidence.focusFiles
+  }, input.confluence, input.jira, input.slack, input.notion, input.googleDocs, input.teams,
+  scope.relatedOpenFile, input.owner, input.repo, scope));
+  appendCitationKeysSection(lines, listKnowledgeGapsSourceLabels(input.evidence,
+    input.confluence, input.jira, input.slack, input.notion, input.googleDocs, input.teams));
+  return lines.join("\n\n");
+}
+
 function appendKnowledgeGapsResponseContract(
   lines: string[],
   input: KnowledgeGapsSynthesisInput,
@@ -300,13 +340,12 @@ function appendKnowledgeGapsResponseContract(
     );
   }
   if (hasFocusExcerpts) {
+    lines.push("Keep this source audit compact: at most three relevant findings and three specific open questions. Preserve the complete conditions and call boundaries supported by attached source. Quote small exact numeric source slices; unrelated operations and unreviewed behavior remain outside the findings.");
     lines.push(
       "Opening — PASS: acknowledge the attached source. Include a separate **Source-grounded review** section before scan coverage sections: answer the user's function or implementation question from the attached bodies, trace relevant behavior and boundary conditions, distinguish observed behavior from an unverified intended contract, and cite verified numeric source ranges when supplied. Keep these findings outside Summary so coverage summarization cannot replace them. Generic missing_docs/missing_owner flags do not substitute for reading the attached function. If no concrete source-backed issue is established, state that narrowly with the reviewed evidence. FAIL: claiming no indexed code; generic scan flags as the only answer; empty “looks good”; a 40-bullet dump."
     );
-  }
-  if (isHuntLocateGapsAsk(`${input.userFocus ?? ""} ${input.userQuestion ?? ""} ${input.evidence.userFocus ?? ""}`)) {
     lines.push(
-      "Opening — PASS: name hunt evidence-class risks from attached hunt code (wrong-file ranking, canned miss, UI-as-API, default-on). FAIL: echo the ask; “docs/runbook may be thin” as the only answer. Do not invent plane paths."
+      "After the source findings, include **Open questions** with at most three specific uncertainties that follow from those findings. Tie each question to its source finding and suggest documentation or a test that would settle the intended policy. Missing docs/searches do not prove a policy is absent. Do not infer unreviewed conditions, calls, final outcomes, or guarantees from one observed operation."
     );
   }
   lines.push("**Documentation gaps** must include, in order (after the attached page titles above):");
@@ -350,7 +389,9 @@ function appendKnowledgeGapsResponseContract(
     Boolean(input.notion?.pages?.length) ||
     Boolean(input.confluence?.pages?.length) ||
     Boolean(input.googleDocs?.documents?.length);
-  if (coverage === "scan_incomplete") {
+  if (hasFocusExcerpts) {
+    lines.push("- Lead with the established source behavior. Describe incomplete documentation/scan coverage briefly after the code review; it must not replace or reorder the code half of the answer.");
+  } else if (coverage === "scan_incomplete") {
     lines.push(
       `- The opening must start: "${knowledgeGapScanIncompleteCopy()}" Name attached documentation or ownership gaps on real repo paths. FAIL: treating a missing Coop dependency graph as the documentation audit; recommending GitHub Dependency Submission API, depcruise, or inventing blast-radius. Do not quote raw API errors or internal coverage tokens.`
     );
@@ -360,7 +401,7 @@ function appendKnowledgeGapsResponseContract(
     );
   } else if (scanGapCount === 0) {
     lines.push(
-      "- The opening should note the scan found no structured gaps in this pass when no doc pages are attached."
+      "- The opening should state the coverage limit. Focus search misses are not confirmed product gaps and do not establish a completed clean scan. With no relevant code bodies or document evidence, answer in 1–3 sentences and stop; omit sections, contacts, guessed paths, manual-grep instructions, and generic recommendations."
     );
   } else {
     lines.push(
@@ -597,7 +638,6 @@ function formatKnowledgeGapsForPrompt(
   return sections.join("\n\n");
 }
 
-const FOCUS_EXCERPT_CHARS = 4_000;
 const OPENED_ARTIFACT_BODY_CHARS = 1_200;
 
 /** Opened doc/ticket body for Gaps — title alone is not enough. */
@@ -631,17 +671,19 @@ function formatFocusFileExcerpts(
 ): string | undefined {
   const excerpts = (files ?? [])
     .filter((file) => file.path.trim() && (file.content ?? "").trim())
-    .slice(0, 6)
+    .slice(0, 16)
     .map((file) => {
       const body = file.content ?? "";
-      const truncated = body.length > FOCUS_EXCERPT_CHARS;
-      const shown = truncated ? body.slice(0, FOCUS_EXCERPT_CHARS) : body;
+      // Gather already selects bounded, complete source windows. A second prefix
+      // cut can silently discard relevant evidence that was selected.
+      const shown = body;
       if (Number.isInteger(file.startLine) && Number(file.startLine) >= 1) {
         const start = Number(file.startLine);
-        const numbered = shown.split("\n").map((line, index) => `L${start + index}: ${line}`).join("\n");
-        return `#### ${file.path}\nVerified source lines ${start}–${start + shown.split("\n").length - 1}. Cite implementation claims with numeric start:end:path citation fences using only these supplied lines; omit L prefixes from the quoted code.\n${numbered}${truncated ? "\n… [truncated]" : ""}`;
+        const sourceLines = shown.split("\n");
+        const numbered = sourceLines.map((line, index) => `L${start + index}: ${line}`).join("\n");
+        return `#### ${file.path}\nVerified source lines ${start}–${start + sourceLines.length - 1}. Cite implementation claims with numeric start:end:path citation fences using only these supplied lines; omit L prefixes from the quoted code.${file.truncated ? " This is a source window; unshown code was not inspected in synthesis." : ""}\n${numbered}`;
       }
-      return `#### ${file.path}\nSource line offsets unavailable. Cite this path without inventing line numbers.\n${shown}${truncated ? "\n… [truncated]" : ""}`;
+      return `#### ${file.path}\nSource line offsets unavailable. Cite this path without inventing line numbers.\n${shown}`;
     });
   if (excerpts.length === 0) {
     return undefined;

@@ -1,0 +1,78 @@
+--- active/src/api/ModelRouter.ts
++++ candidate/src/api/ModelRouter.ts
+@@ -9,6 +9,7 @@
+ import { selectFimProvider } from "./fimRouter";
+ import { buildUserMessageWithContext, buildProjectInstructionsSystemBlock, systemPromptForUseCase } from "../prompts/systemPrompts";
+ import { REPO_SUMMARY_LOCATE_ONLY_MARKER } from "../prompts/repoSummarySynthesis";
++import { KNOWLEDGE_GAPS_CODE_RULE_AUDIT_MARKER } from "../prompts/knowledgeGapsSynthesis";
+ import { appendUserPaperclipAttachmentsPrompt } from "../chat/paperclipAttachments";
+ import { resolveProviderThinking } from "../config/modelThinking";
+ 
+@@ -30,6 +31,8 @@
+   }
+   const basePrompt = systemPromptForUseCase(request.useCase, {
+     activeFile: request.context?.file,
++    knowledgeGapsCodeRuleAudit: request.useCase === "knowledge_gaps" &&
++      request.message.includes(KNOWLEDGE_GAPS_CODE_RULE_AUDIT_MARKER),
+     blastSourceGrounded: request.useCase === "blast_radius" &&
+       request.message.includes("## Opened selected-ref source bodies"),
+     hasPaperclipAttachments: requestHasPaperclipAttachments(request),
+--- active/src/prompts/systemPrompts.ts
++++ candidate/src/prompts/systemPrompts.ts
+@@ -468,6 +468,18 @@
+ Compare exact fields and operators: checks on different attributes are not interchangeable without an evidenced invariant. Default/seed values do not establish current stored values or aggregate maxima. State that the opened dependents do not prove complete coverage.
+ Finish with at most four checks tied to the changed predicate, remaining checks, conditional writes, and explicitly unopened helper contracts. Stop.`;
+ 
++const SOURCE_GROUNDED_GAPS_BODY = `You establish code rules from the attached remote source and identify intended-policy questions those rules leave open. A shown predicate establishes its condition and action when execution reaches it. It does not establish raw input decoding, earlier checks, unreviewed superclass behavior, or a complete transition policy. Preserve exact field names, operators, manager selection, and enclosing conditions. An imported helper's name is not its implementation. Documentation establishes intent only when its attached body supports the claim. Search misses do not establish absence.`;
++
++const SOURCE_GROUNDED_GAPS_STRUCTURE = `
++## Required response structure — focused code rules
++This contract replaces the generic multi-item audit format for this request.
++With no relevant source or documentation bodies, state the evidence limit in one to three sentences and stop.
++Otherwise begin with one short sentence acknowledging the reviewed source, then use only **Source-grounded review** and **Open questions**.
++Keep one to three distinct rules. Each has a short title, exactly one condition-bound sentence, and a small numeric citation quoting contiguous source verbatim. Stop the rule after its quote. Do not add uncited explanation or invent raw PATCH/null input behavior. A selected-file audit can use only its relevant guard and same-class write delegation. Delegation alone does not prove a superclass-to-model-save call chain.
++For manager/helper behavior, quote the exact selection/call and its reviewed definition. If the definition is unreviewed, leave its effects open. If you cannot quote a call verbatim, omit that rule rather than reconstructing it. Never collapse arguments, insert ellipses, or add braces to a quote.
++Keep at most three open questions. Each is an interrogative sentence motivated by a cited rule plus one prospective test or documentation suggestion. Do not prefix questions with asserted unreviewed behavior. Ask whether field decoding or later helpers reach the shown guard or writer when that path is unverified.
++Do not infer a policy's absence from partial source, universal allowed transitions from membership, authentication from a procedure name, or atomicity from an ORM update. Omit generic documentation health, ownership, integration operations, contacts, and recommendations. Stop.`;
++
+ export function buildComprehensionSystem(
+   activeFile?: string,
+   hasPaperclipAttachments = false,
+@@ -633,6 +645,9 @@
+       }
+       return withOutputContract(BLAST_RADIUS_EVIDENCE_SYSTEM, "blast_radius", undefined, hasPaperclip);
+     case "knowledge_gaps":
++      if (options?.knowledgeGapsCodeRuleAudit) {
++        return withOutputContract(SOURCE_GROUNDED_GAPS_BODY, "knowledge_gaps", SOURCE_GROUNDED_GAPS_STRUCTURE, hasPaperclip);
++      }
+       return withOutputContract(KNOWLEDGE_GAPS_EVIDENCE_SYSTEM, "knowledge_gaps", undefined, hasPaperclip);
+     case "integration":
+       return withOutputContract(INTEGRATION_EVIDENCE_SYSTEM, "integration", undefined, hasPaperclip);
+@@ -662,6 +677,8 @@
+   activeFile?: string;
+   /** Source-backed Blast gets a dedicated contract, without graph-only risk templates. */
+   blastSourceGrounded?: boolean;
++  /** Focused code audits exclude the generic documentation/ownership scan contract. */
++  knowledgeGapsCodeRuleAudit?: boolean;
+   /** Inject the paperclip-attachment system rule only when the turn has such uploads. */
+   hasPaperclipAttachments?: boolean;
+   /** Understand Repo locate ask — skip architecture syllabus in the system contract. */
+@@ -683,6 +700,7 @@
+   if (
+     options?.hasPaperclipAttachments ||
+     options?.blastSourceGrounded ||
++    options?.knowledgeGapsCodeRuleAudit ||
+     options?.locateOnly ||
+     options?.fileAssistant ||
+     (useCase === "comprehension" && options?.activeFile?.trim())
+--- active/src/prompts/knowledgeGapsSynthesis.ts
++++ candidate/src/prompts/knowledgeGapsSynthesis.ts
+@@ -70,6 +70,8 @@
+ 
+ ${EVIDENCE_CITATION_RULES}`;
+ 
++export const KNOWLEDGE_GAPS_CODE_RULE_AUDIT_MARKER = "## Focused code rule audit";
++
+ export type KnowledgeGapsSynthesisInput = {
+   evidence: KnowledgeGapsEvidence;
+   confluence?: ConfluenceSearchEvidence;

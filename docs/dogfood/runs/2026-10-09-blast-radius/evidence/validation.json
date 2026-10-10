@@ -1,0 +1,34 @@
+{
+  "checkedAt": "2026-10-10T03:02:06.157266+00:00",
+  "commands": {
+    "npm run test:blast": 0,
+    "npm run lint": 0,
+    "npm run build:backend (isolated candidate)": 0,
+    "npm run build:extension-dev": 0,
+    "git diff --check": 0
+  },
+  "backendDifferenceOutsideBlastSection": false,
+  "preservedPromptHashes": {
+    "src/prompts/knowledgeGapsSynthesis.ts": "8b778ccc60b36c95fc96917175a9b6adf344f9a3e0aecfa695e52a75f90278fb",
+    "src/context/knowledgeGapsFocus.ts": "fa45941131968de1aa93425dfa0228cf45e76a14990fd92d1157d8189e969b65",
+    "src/prompts/knowledgeGapsSourceLabels.ts": "e74d50c09b81a4236be6d209917e564f5da4c1f33addf960d8d449f112a49f9e"
+  },
+  "selectedRefs": {
+    "CoopAI-Corp/documenso/main": "a457e1ef7de449e4f758fc6943a8014e952c34c6",
+    "CoopAI-Corp/plane/preview": "a8e53b6ac7b87bd8e3e931d21188f7679c7ab6c4"
+  },
+  "oracleHashes": {
+    "plane-state.py": "dee256b42615705f66ce3f0daa639a965d7c55316d656481580e440d63118951",
+    "plane-models-init.py": "d4294fdb5f49b0b26d1a32f22dc95d7ce9f190ca4209035cb744cc3551bedbe0",
+    "plane-issue.py": "ae65e270f1e7e1edd51869d077fad82be04839b449b2a63e9afbf7b5b057542f"
+  },
+  "scope": "The two anchored Documenso latency fixtures are closed. Plane/unsupported model-review latency and parser footprint remain material product limitations.",
+  "sourceGuardTests": 4,
+  "synthesisTests": 30,
+  "sourceReviewTests": 7,
+  "predicateProofTests": 9,
+  "finalBundleId": "ac7ff0c94bfe1c1bbf3d3e4076d2c7fe718f60a8ccad21897abf4eb625327377",
+  "selectedRefVerificationAt": "2026-10-10T02:32:22.247010+00:00",
+  "liveQualification": "final-live-results.json",
+  "fullCiClaimed": false
+}

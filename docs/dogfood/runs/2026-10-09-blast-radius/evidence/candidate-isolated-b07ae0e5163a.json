@@ -1,0 +1,43 @@
+{
+  "capturedAt": "2026-10-10T01:12:50.205044+00:00",
+  "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+  "command": "npm run build:extension-dev",
+  "frozenExtensionPath": "/private/tmp/coop-parallel-quick-actions-20261009/blast/extension",
+  "windowTitle": "[Extension Development Host] Coop Blast Isolated \u2014",
+  "workspaceState": "/Users/jonraney/Library/Application Support/Code/User/workspaceStorage/fdc4d49032968307687b767399f97c5a",
+  "profile": "Coop Blast Isolated",
+  "runtimeLog": "/Users/jonraney/Library/Application Support/Code/logs/20261008T124201/window4",
+  "sourceMapMatches": {
+    "src/context/intentDetector.ts": true,
+    "src/chat/CoopChatSession.ts": true,
+    "src/config/chatSynthesisThinking.ts": true,
+    "src/prompts/blastRadiusSourceLabels.ts": true,
+    "src/prompts/blastRadiusSourceGuard.ts": true,
+    "src/prompts/blastRadiusSynthesis.ts": true,
+    "src/chat/blastRadiusSourceReview.ts": true,
+    "src/context/blastRadiusSourceEvidence.ts": true,
+    "src/context/contextBundleEvidence.ts": true,
+    "src/chat/chatResponseEnrichment.ts": true,
+    "src/prompts/systemPrompts.ts": true
+  },
+  "bundledSourceHashes": {
+    "src/context/intentDetector.ts": "bd99d217753599d858bfa3142247b64caa90fc42a83251ed6d53aad0c99b5661",
+    "src/chat/CoopChatSession.ts": "ec8f0602009352f0bafe15bacd309555989cfae8acef043f4bb3bda864e369ed",
+    "src/config/chatSynthesisThinking.ts": "a0bbd6174d843dda91dbe237c35f6f8b28fe8f0ae61d0b3a7497f103ededbf40",
+    "src/prompts/blastRadiusSourceLabels.ts": "ce93983c1690431f5ff061f93d78f5cc0476e2a4508f2e1892f676c737ef38b7",
+    "src/prompts/blastRadiusSourceGuard.ts": "f094bb7a1c9d7f4386179c82135d86c7ea0692469ac8d18f6dcf7a664b28e77b",
+    "src/prompts/blastRadiusSynthesis.ts": "47b360b23a297cc1af6f0e7b0ae7dc611a4e8a4a170a8f655fe4b3fe3f938db3",
+    "src/chat/blastRadiusSourceReview.ts": "87527fa730844c0b0b9f9e51b2a165a5fa15347f69da4dce70edc250b1f75edd",
+    "src/context/blastRadiusSourceEvidence.ts": "cb4b7d22aace550c263099f059c5a733e0b982790a3fcd7eb31c031c757693d3",
+    "src/context/contextBundleEvidence.ts": "49fb8ee3944bde51ffac42eadef8ab7c115e72932aeef74cc224fc11a62fb7e1",
+    "src/chat/chatResponseEnrichment.ts": "431b4c2d5b0711d28429374d2ce41b0fd9db2ddc806c32f96f159261490a5a0b",
+    "src/prompts/systemPrompts.ts": "7c6fb53815b4e5a02924a100919102a2dedd6714eb4af14f920973e2228377aa"
+  },
+  "hashes": {
+    "dist/extension.js": "b07ae0e5163acbbabb13c7671451409fd98e612dcab782a6246c85462d17e74c",
+    "dist/extension.js.map": "745e2f0a628d0252ed9fb8139a12e0cd36a76a4d72c6a44f99c1b68c778fe07c",
+    "dist/webview.js": "22cc1e65227dc466d90f3c0e667b19f1469bfcb743a17295d2bb82d136e32b5c",
+    "dist/webview.js.map": "e930adc28143ac751086f8405bc1ba6927bd59e098b826af291106db1219710d"
+  },
+  "validation": "Lint and test:blast exited 0 before snapshot copy; no Blast request pending. Both draft and source review are private until final opened-source checks finish."
+}

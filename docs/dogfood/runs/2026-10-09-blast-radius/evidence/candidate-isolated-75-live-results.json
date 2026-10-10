@@ -1,0 +1,256 @@
+{
+  "recordedAt": "2026-10-10T02:28:10.425339+00:00",
+  "cases": [
+    {
+      "name": "Documenso whole file",
+      "threadId": "thread-1791598012223-7mb57x",
+      "verdict": "Fail",
+      "reason": "No changed-predicate anchor in the draft/review; fallback prose still shortened remaining guards and inferred effects despite unopened helpers.",
+      "bundleId": "75dea96e4bebbd4a79adf0647a3d0d7de7f2f23ca273b70d4182951f9aa25931",
+      "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+      "ask": "[blast-radius] If this handler allowed signing when the envelope is not PENDING, which callers or signing flows could be affected, and what should I verify before shipping that change?\nfile: packages/lib/server-only/field/sign-field-with-token.ts \u00b7 repo: CoopAI-Corp/documenso \u00b7 branch: main",
+      "answerStartMs": 130509,
+      "completionMs": 131026,
+      "timingBasis": "Both client diagnostics use Date.now() minus the same turn.startedAt; completion follows finishTurnAssistantMessage.",
+      "soft15SecondStartPass": false,
+      "sessionCostUsd": 0.23435100000000003,
+      "sourcesCardRetained": true,
+      "sourceBodies": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "ref": "main",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "f3de734db05bd6df3578971e7438acaca2cf323786dd715945a5e47683e7f12d"
+        },
+        {
+          "path": "packages/trpc/server/field-router/router.ts",
+          "ref": "main",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "e8fece6232a7676313552486919b279ad7770e9b6b5dd9096a7b76c78f2c3420"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "ref": "main",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "656014f0097c18843c06bff688900476021c5de209a45de9ffe0db6245118d2e"
+        }
+      ],
+      "citations": [
+        {
+          "path": "packages/trpc/server/field-router/router.ts",
+          "startLine": 615,
+          "endLine": 633,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "startLine": 33,
+          "endLine": 52,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "startLine": 53,
+          "endLine": 56,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        }
+      ],
+      "nativeOpens": [],
+      "sourceProofDiagnostic": null
+    },
+    {
+      "name": "Documenso selected guard",
+      "threadId": "thread-1791598235832-61mrfs",
+      "verdict": "Pass",
+      "reason": "Source-derived conditional call paths retain caller exits, compound guards, helper uncertainty, and conditional create/update. Actual source excerpts and native opens verified; latency fails separately.",
+      "bundleId": "75dea96e4bebbd4a79adf0647a3d0d7de7f2f23ca273b70d4182951f9aa25931",
+      "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+      "ask": "[blast-radius] If this selected PENDING guard were relaxed, which opened callers could reach the changed branch, which checks and write conditions remain, and what should I verify before shipping?\nfile: packages/lib/server-only/field/sign-field-with-token.ts \u00b7 selection: L108\u2013110 \u00b7 repo: CoopAI-Corp/documenso \u00b7 branch: main",
+      "answerStartMs": 57221,
+      "completionMs": 57883,
+      "timingBasis": "Both client diagnostics use Date.now() minus the same turn.startedAt; completion follows finishTurnAssistantMessage.",
+      "soft15SecondStartPass": false,
+      "sessionCostUsd": 0.105624,
+      "sourcesCardRetained": true,
+      "sourceBodies": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "ref": "main",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "f3de734db05bd6df3578971e7438acaca2cf323786dd715945a5e47683e7f12d"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "ref": "main",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "656014f0097c18843c06bff688900476021c5de209a45de9ffe0db6245118d2e"
+        },
+        {
+          "path": "packages/trpc/server/field-router/router.ts",
+          "ref": "main",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "e8fece6232a7676313552486919b279ad7770e9b6b5dd9096a7b76c78f2c3420"
+        }
+      ],
+      "citations": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 108,
+          "endLine": 110,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "startLine": 18,
+          "endLine": 98,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/trpc/server/field-router/router.ts",
+          "startLine": 615,
+          "endLine": 633,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 112,
+          "endLine": 112,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 129,
+          "endLine": 129,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 138,
+          "endLine": 138,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 147,
+          "endLine": 149,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 158,
+          "endLine": 158,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 167,
+          "endLine": 195,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 216,
+          "endLine": 227,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 236,
+          "endLine": 312,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        }
+      ],
+      "nativeOpens": [
+        {
+          "at": "2026-10-10T02:15:59.687Z",
+          "threadId": "thread-1791598235832-61mrfs",
+          "stage": "remote-review-opened",
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "owner": "CoopAI-Corp",
+          "repo": "documenso",
+          "branch": "main",
+          "requestedLine": 108,
+          "requestedEndLine": 110,
+          "revealedStartLine": 108,
+          "revealedEndLine": 110,
+          "bodyChars": 10308,
+          "source": "remote"
+        },
+        {
+          "at": "2026-10-10T02:16:48.906Z",
+          "threadId": "thread-1791598235832-61mrfs",
+          "stage": "remote-review-opened",
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "owner": "CoopAI-Corp",
+          "repo": "documenso",
+          "branch": "main",
+          "requestedLine": 18,
+          "requestedEndLine": 98,
+          "revealedStartLine": 18,
+          "revealedEndLine": 98,
+          "bodyChars": 3508,
+          "source": "remote"
+        },
+        {
+          "at": "2026-10-10T02:18:41.024Z",
+          "threadId": "thread-1791598235832-61mrfs",
+          "stage": "remote-review-opened",
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "owner": "CoopAI-Corp",
+          "repo": "documenso",
+          "branch": "main",
+          "requestedLine": 236,
+          "requestedEndLine": 312,
+          "revealedStartLine": 236,
+          "revealedEndLine": 312,
+          "bodyChars": 10308,
+          "source": "remote"
+        }
+      ],
+      "sourceProofDiagnostic": {
+        "at": "2026-10-10T02:11:49.774Z",
+        "threadId": "thread-1791598235832-61mrfs",
+        "stage": "blast-predicate-source-proof",
+        "turnId": "turn-1791598254366-tmewq8",
+        "elapsedMs": 57220,
+        "sourceCount": 3,
+        "bundleId": "75dea96e4bebbd4a79adf0647a3d0d7de7f2f23ca273b70d4182951f9aa25931"
+      }
+    }
+  ],
+  "remaining": "Whole-file unique question predicate anchor replay on 0bb00374fe6f; range output preserved because explicit selection overrides question matching."
+}

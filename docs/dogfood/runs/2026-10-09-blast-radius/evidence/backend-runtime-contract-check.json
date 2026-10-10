@@ -1,0 +1,7 @@
+{
+  "checkedAt": "2026-10-09T23:30:26.763006+00:00",
+  "method": "read-only SSH via API domain with existing registered identity",
+  "deploymentId": "efe257d9-6c9c-469c-af6c-b1eed85c5678",
+  "sourceContract": true,
+  "sourceGroundedDiscriminator": true
+}

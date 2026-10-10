@@ -1,0 +1,15 @@
+{
+  "capturedAt": "2026-10-09T21:42:26.454577+00:00",
+  "hashes": {
+    "dist/extension.js": "31c34e385193585625ce2d005f19393a947f9da05dd0650346e23600f0e62593",
+    "dist/webview.js": "cb2151e634c43ca7dde04112c94f35f8a8a783e3f6d84e0ca08e4568dfa8a7ee",
+    "src/context/blastRadiusSourceEvidence.ts": "cb4b7d22aace550c263099f059c5a733e0b982790a3fcd7eb31c031c757693d3",
+    "src/context/contextBundleEvidence.ts": "a2ef982e684af4bf7a50c10127e2792a2b049a54d05bf7235b33bf9b83ba277b",
+    "src/context/intentDetector.ts": "bd99d217753599d858bfa3142247b64caa90fc42a83251ed6d53aad0c99b5661",
+    "src/config/chatSynthesisThinking.ts": "bbc1057704da42c014f070dee133168ba02811285c65e41733c437dd9db0526b",
+    "src/prompts/blastRadiusSynthesis.ts": "337cb8cedd6d56bf780c1ff6172a941e320cbd01cf976b67b333ca1b2ee98bd8",
+    "src/prompts/blastRadiusSourceLabels.ts": "ce93983c1690431f5ff061f93d78f5cc0476e2a4508f2e1892f676c737ef38b7",
+    "src/webview/evidenceCardSummary.ts": "da3d1c95803455a666324a03a7c7d3539ef8e907ca62e80d1c064651b7a01db9",
+    "src/chat/CoopChatSession.ts": "7d309a54287e5f182435516cb8733265f143ae05ad03db28d729fb5a9266697c"
+  }
+}

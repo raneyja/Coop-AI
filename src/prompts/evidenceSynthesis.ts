@@ -1,6 +1,7 @@
 /**
  * Shared helpers for evidence-card ↔ LLM summary alignment across quick actions and slash commands.
  */
+import { mapMarkdownProse, splitMarkdownBlocks, trimMarkdownProse } from "./markdownProse";
 
 export function appendCitationKeysSection(lines: string[], citationKeys: string[]): void {
   if (citationKeys.length === 0) {
@@ -133,10 +134,12 @@ const TEMPLATE_SECTION_HEADING_RE = /^\s*\*\*(?:Answer|Summary|Your question)\*\
 
 /** Drop leftover report-template titles so the lead reads as Cursor-style prose. */
 export function stripTemplateSectionHeadings(content: string): string {
-  return content.replace(TEMPLATE_SECTION_HEADING_RE, "").replace(/\n{3,}/g, "\n\n").trim();
+  return trimMarkdownProse(mapMarkdownProse(content, prose => prose.replace(TEMPLATE_SECTION_HEADING_RE, "")
+    .replace(/\n{3,}/g, "\n\n")));
 }
 
 export function extractCitationKeysFromSourcesSection(content: string): string[] {
+  content = splitMarkdownBlocks(content).filter(block => block.kind === "prose").map(block => block.text).join("\n");
   const match = content.match(/\*\*Sources\*\*/i);
   if (!match || match.index === undefined) {
     return [];
@@ -168,44 +171,45 @@ export function stripDisallowedNarrativeSourceCitations(
   }
 
   const maxSummaryCitations = options?.maxSummaryCitations ?? 2;
-  const lines = content.split("\n");
-  const out: string[] = [];
   let currentSection: string | undefined;
   let summaryCitationCount = 0;
-
-  for (const line of lines) {
-    const headerMatch = line.match(SECTION_HEADER_RE);
-    if (headerMatch) {
-      currentSection = headerMatch[1].trim().toLowerCase();
-      out.push(line);
-      continue;
-    }
-
-    if (currentSection === "sources" || !SOURCE_CITATION_TOKEN_RE.test(line)) {
-      out.push(line);
-      continue;
-    }
-
-    const isSummary = currentSection === "summary";
-    let processed = line.replace(SOURCE_CITATION_TOKEN_RE, (citation) => {
-      if (!citationAllowedInNarrative(citation, allowedKeys)) {
-        return "";
+  return mapMarkdownProse(content, prose => {
+    const lines = prose.split("\n");
+    const out: string[] = [];
+    for (const line of lines) {
+      const headerMatch = line.match(SECTION_HEADER_RE);
+      if (headerMatch) {
+        currentSection = headerMatch[1].trim().toLowerCase();
+        out.push(line);
+        continue;
       }
-      if (isSummary) {
-        summaryCitationCount += 1;
-        if (summaryCitationCount > maxSummaryCitations) {
+
+      if (currentSection === "sources" || !SOURCE_CITATION_TOKEN_RE.test(line)) {
+        out.push(line);
+        continue;
+      }
+
+      const isSummary = currentSection === "summary";
+      let processed = line.replace(SOURCE_CITATION_TOKEN_RE, (citation) => {
+        if (!citationAllowedInNarrative(citation, allowedKeys)) {
           return "";
         }
-      } else {
-        return "";
-      }
-      return citation;
-    });
-    processed = processed.replace(/ {2,}/g, " ").replace(/ ([.,;:])/g, "$1").trimEnd();
-    out.push(processed);
-  }
+        if (isSummary) {
+          summaryCitationCount += 1;
+          if (summaryCitationCount > maxSummaryCitations) {
+            return "";
+          }
+        } else {
+          return "";
+        }
+        return citation;
+      });
+      processed = processed.replace(/ {2,}/g, " ").replace(/ ([.,;:])/g, "$1").trimEnd();
+      out.push(processed);
+    }
 
-  return out.join("\n");
+    return out.join("\n");
+  });
 }
 
 /**

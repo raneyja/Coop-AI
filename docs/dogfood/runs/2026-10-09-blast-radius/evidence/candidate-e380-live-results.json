@@ -1,0 +1,270 @@
+{
+  "recordedAt": "2026-10-10T00:21:37.495240+00:00",
+  "cases": [
+    {
+      "name": "Documenso whole file",
+      "threadId": "thread-1791591067921-fggn8l",
+      "verdict": "Fail",
+      "reason": "Incorrect only-remaining-gates premise in pre-ship question; absent-helper-constraint inference; empty numbered item.",
+      "bundleId": "e38059412ba58bbe0127155925a9c954d01c4d03c5b67e309df6f08a5c4ae13a",
+      "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+      "ask": "[blast-radius] If this handler allowed signing when the envelope is not PENDING, which callers or signing flows could be affected, and what should I verify before shipping that change?\nfile: packages/lib/server-only/field/sign-field-with-token.ts \u00b7 repo: CoopAI-Corp/documenso \u00b7 branch: main",
+      "answerStartMs": 105986,
+      "completionMs": 121477,
+      "soft15SecondStartPass": false,
+      "sessionCostUsd": 0.235734,
+      "sourcesCardRetained": true,
+      "sourceBodies": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "ref": "main",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "f3de734db05bd6df3578971e7438acaca2cf323786dd715945a5e47683e7f12d"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "ref": "main",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "656014f0097c18843c06bff688900476021c5de209a45de9ffe0db6245118d2e"
+        },
+        {
+          "path": "packages/trpc/server/field-router/router.ts",
+          "ref": "main",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "e8fece6232a7676313552486919b279ad7770e9b6b5dd9096a7b76c78f2c3420"
+        }
+      ],
+      "citations": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 108,
+          "endLine": 110,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/trpc/server/field-router/router.ts",
+          "startLine": 615,
+          "endLine": 633,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "startLine": 59,
+          "endLine": 78,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "startLine": 79,
+          "endLine": 86,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 247,
+          "endLine": 262,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        }
+      ],
+      "nativeOpens": []
+    },
+    {
+      "name": "Documenso selected guard",
+      "threadId": "thread-1791591111221-epfpg1",
+      "verdict": "Fail",
+      "reason": "Read-only value guard omitted the !AUTO_SIGNABLE_FIELD_TYPES.includes(field.type) conjunct.",
+      "bundleId": "e38059412ba58bbe0127155925a9c954d01c4d03c5b67e309df6f08a5c4ae13a",
+      "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+      "ask": "[blast-radius] If this selected PENDING guard were relaxed, which opened callers could reach the changed branch, which checks and write conditions remain, and what should I verify before shipping?\nfile: packages/lib/server-only/field/sign-field-with-token.ts \u00b7 selection: L108\u2013110 \u00b7 repo: CoopAI-Corp/documenso \u00b7 branch: main",
+      "answerStartMs": 122928,
+      "completionMs": 138468,
+      "soft15SecondStartPass": false,
+      "sessionCostUsd": 0.252534,
+      "sourcesCardRetained": true,
+      "sourceBodies": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "ref": "main",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "f3de734db05bd6df3578971e7438acaca2cf323786dd715945a5e47683e7f12d"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "ref": "main",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "656014f0097c18843c06bff688900476021c5de209a45de9ffe0db6245118d2e"
+        },
+        {
+          "path": "packages/trpc/server/field-router/router.ts",
+          "ref": "main",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "e8fece6232a7676313552486919b279ad7770e9b6b5dd9096a7b76c78f2c3420"
+        }
+      ],
+      "citations": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 108,
+          "endLine": 110,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/trpc/server/field-router/router.ts",
+          "startLine": 615,
+          "endLine": 633,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "startLine": 59,
+          "endLine": 86,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        },
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 236,
+          "endLine": 262,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "main"
+        }
+      ],
+      "nativeOpens": []
+    },
+    {
+      "name": "Plane default manager",
+      "threadId": "thread-1791591217454-f66kd6",
+      "verdict": "Pass",
+      "reason": "Actual aggregate and dependent query conditions retained; group and is_triage distinct; stored aggregate unknown; imports not behavior; unread manager base explicit.",
+      "bundleId": "e38059412ba58bbe0127155925a9c954d01c4d03c5b67e309df6f08a5c4ae13a",
+      "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+      "ask": "[blast-radius] If this file's default model manager stopped hiding triage states, which server consumers could be affected, and what should I verify before shipping?\nfile: apps/api/plane/db/models/state.py \u00b7 repo: CoopAI-Corp/plane \u00b7 branch: preview",
+      "answerStartMs": 121198,
+      "completionMs": 132322,
+      "soft15SecondStartPass": false,
+      "sessionCostUsd": 0.24336,
+      "sourcesCardRetained": true,
+      "sourceBodies": [
+        {
+          "path": "apps/api/plane/db/models/state.py",
+          "ref": "preview",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "dee256b42615705f66ce3f0daa639a965d7c55316d656481580e440d63118951"
+        },
+        {
+          "path": "apps/api/plane/db/models/__init__.py",
+          "ref": "preview",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "d4294fdb5f49b0b26d1a32f22dc95d7ce9f190ca4209035cb744cc3551bedbe0"
+        },
+        {
+          "path": "apps/api/plane/db/models/issue.py",
+          "ref": "preview",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "ae65e270f1e7e1edd51869d077fad82be04839b449b2a63e9afbf7b5b057542f"
+        }
+      ],
+      "citations": [
+        {
+          "path": "apps/api/plane/db/models/state.py",
+          "startLine": 119,
+          "endLine": 124,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "preview"
+        },
+        {
+          "path": "apps/api/plane/db/models/issue.py",
+          "startLine": 228,
+          "endLine": 236,
+          "bodyAttached": true,
+          "exactSlice": true,
+          "sourceRef": "preview"
+        }
+      ],
+      "nativeOpens": [
+        {
+          "at": "2026-10-10T00:17:46.519Z",
+          "threadId": "thread-1791591217454-f66kd6",
+          "stage": "remote-review-opened",
+          "path": "apps/api/plane/db/models/state.py",
+          "owner": "CoopAI-Corp",
+          "repo": "plane",
+          "branch": "preview",
+          "requestedLine": 119,
+          "requestedEndLine": 124,
+          "revealedStartLine": 119,
+          "revealedEndLine": 124,
+          "bodyChars": 3824,
+          "source": "remote"
+        },
+        {
+          "at": "2026-10-10T00:18:01.033Z",
+          "threadId": "thread-1791591217454-f66kd6",
+          "stage": "remote-review-opened",
+          "path": "apps/api/plane/db/models/issue.py",
+          "owner": "CoopAI-Corp",
+          "repo": "plane",
+          "branch": "preview",
+          "requestedLine": 228,
+          "requestedEndLine": 236,
+          "revealedStartLine": 228,
+          "revealedEndLine": 236,
+          "bodyChars": 30185,
+          "source": "remote"
+        }
+      ]
+    },
+    {
+      "name": "Thin dependency control",
+      "threadId": "thread-1791591169175-00b87h",
+      "verdict": "Pass",
+      "reason": "No confirmed dependents; short honest answer; no zero-impact claim or invented surfaces.",
+      "bundleId": "e38059412ba58bbe0127155925a9c954d01c4d03c5b67e309df6f08a5c4ae13a",
+      "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+      "ask": "[blast-radius] Which dependent files were verified for a change to this README, and which impact claims remain unverified?\nfile: README.md \u00b7 repo: CoopAI-Corp/coop-dogfood-launch \u00b7 branch: renamed",
+      "answerStartMs": 9262,
+      "completionMs": 10182,
+      "soft15SecondStartPass": true,
+      "sessionCostUsd": 0.01248,
+      "sourcesCardRetained": true,
+      "sourceBodies": [
+        {
+          "path": "README.md",
+          "ref": "renamed",
+          "bodyMatchesIndependentOracle": true,
+          "truncated": false,
+          "sha256": "16f6c0e91f63771dde8fd12843f85f068005a3a1401adcc957aed05a4fdc61c5"
+        }
+      ],
+      "citations": [],
+      "nativeOpens": []
+    }
+  ],
+  "remaining": "Rebuild is prepared; rerun the two affected Documenso cases before final qualification."
+}

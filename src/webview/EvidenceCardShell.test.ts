@@ -27,7 +27,11 @@ test("header status prefers summary.quality over completeness-driven statusTone"
     file: "src/config/responseDeadline.ts",
     directDependents: ["src/chat/CoopChatSession.ts"],
     graphMeta: { edgeCount: 10, source: "import-parse", lightningEnabled: false },
-    completeness: "partial"
+    completeness: "partial",
+    sourceFiles: [
+      { path: "src/config/responseDeadline.ts", repoId: "github:acme/repo", role: "target", content: "const deadline = 15000;", startLine: 1, endLine: 1, truncated: false },
+      { path: "src/chat/CoopChatSession.ts", repoId: "github:acme/repo", role: "dependent", content: "remainingContextGatherBudgetMs(startedAt);", startLine: 1, endLine: 1, truncated: false }
+    ]
   };
   const summary = summarizeBlastRadius(evidence, evidence.file!);
   assert.equal(summary.quality, "strong");

@@ -7,6 +7,7 @@ import type {
   ChatProseDocument
 } from "./chatProseTypes";
 import { isCoopMainSection } from "./coopChatSections";
+import { splitMarkdownBlocks } from "../../prompts/markdownProse";
 import {
   isKgFieldLabelText,
   normalizeCoopChatProse,
@@ -52,6 +53,8 @@ const JIRA_TICKET_LINK_LINE_RE = /^\[([A-Z][A-Z0-9]+-\d+)\]\((https?:\/\/[^)]+)\
 const JIRA_FIELD_LINE_RE = /^([A-Za-z][A-Za-z ]*):\s*(.+)$/;
 
 export type ParseChatProseOptions = {
+  /** A validated source turn cannot acquire guessed provenance in the renderer. */
+  sourceCitationMode?: "explicit";
   /**
    * When the model dumps a language-tagged fence for the open file instead of a
    * citation locator, upgrade it to the cite surface so chrome stays IDE-native.
@@ -60,6 +63,37 @@ export type ParseChatProseOptions = {
 };
 
 export function parseChatProse(content: string, options?: ParseChatProseOptions): ChatProseDocument {
+  if (options?.sourceCitationMode !== "explicit") return parseChatProseLegacy(content, options);
+  const blocks: ChatProseBlock[] = [];
+  // Use the same fence boundaries as source validation. Formatting only sees
+  // prose; code bytes and anonymous examples remain opaque through display/copy.
+  for (const block of splitMarkdownBlocks(content)) {
+    if (block.kind === "prose") {
+      blocks.push(...parseChatProseLegacy(block.text, options).blocks);
+      continue;
+    }
+    let code = block.body.replace(/\n$/, "");
+    let locator = tryParseFenceInfoLocator(block.info);
+    if (!locator) {
+      const firstBreak = code.indexOf("\n");
+      const first = firstBreak < 0 ? code : code.slice(0, firstBreak);
+      const bodyLocator = tryParseCitationLocator(first.trim());
+      if (bodyLocator?.startLine !== undefined && bodyLocator.endLine !== undefined) {
+        locator = bodyLocator;
+        code = firstBreak < 0 ? "" : code.slice(firstBreak + 1);
+      }
+    }
+    if (locator?.startLine !== undefined && locator.endLine !== undefined) {
+      blocks.push({ type: "code-citation", path: locator.path, startLine: locator.startLine,
+        endLine: locator.endLine, code, fence: block.fence });
+    } else {
+      blocks.push({ type: "code-fence", language: block.info || undefined, code, fence: block.fence });
+    }
+  }
+  return { blocks };
+}
+
+function parseChatProseLegacy(content: string, options?: ParseChatProseOptions): ChatProseDocument {
   const normalized = normalizeCoopChatProse(
     normalizeJiraTicketBreaks(normalizeNumberedCitationFences(content))
   );
@@ -329,6 +363,7 @@ function tryParseBareCitation(
   startIndex: number,
   options?: ParseChatProseOptions
 ): { block: ChatProseBlock; nextIndex: number } | null {
+  if (options?.sourceCitationMode === "explicit") return null;
   const locator = locatorFromProseLine(lines[startIndex] ?? "");
   if (!locator) {
     return null;

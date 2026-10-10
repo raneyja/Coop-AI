@@ -1,0 +1,135 @@
+{
+  "recordedAt": "2026-10-10T16:29:55.536Z",
+  "claimTier": "Automated Pass",
+  "sourceSnapshot": "/private/tmp/coop-gaps-policy-client-candidate-20261009",
+  "checks": [
+    {
+      "name": "root-gaps",
+      "command": "npm run test:knowledge-gaps-enrichment",
+      "workdir": "/Users/jonraney/Coop-AI",
+      "exitCode": 0,
+      "log": "policy-root-gaps.log"
+    },
+    {
+      "name": "private-gaps",
+      "command": "npm run test:knowledge-gaps-enrichment",
+      "workdir": "/private/tmp/coop-gaps-policy-client-candidate-20261009",
+      "exitCode": 0,
+      "log": "policy-private-gaps.log"
+    },
+    {
+      "name": "root-lint",
+      "command": "npm run lint",
+      "workdir": "/Users/jonraney/Coop-AI",
+      "exitCode": 0,
+      "log": "policy-root-lint.log"
+    },
+    {
+      "name": "private-lint",
+      "command": "npm run lint",
+      "workdir": "/private/tmp/coop-gaps-policy-client-candidate-20261009",
+      "exitCode": 0,
+      "log": "policy-private-lint.log"
+    },
+    {
+      "name": "private-build",
+      "command": "npm run build:extension-dev",
+      "workdir": "/private/tmp/coop-gaps-policy-client-candidate-20261009",
+      "exitCode": 0,
+      "log": "policy-private-build.log"
+    },
+    {
+      "name": "root-system-prompts",
+      "command": "npm run test:system-prompts",
+      "workdir": "/Users/jonraney/Coop-AI",
+      "exitCode": 0,
+      "log": "policy-root-system-prompts.log"
+    },
+    {
+      "name": "shared-source-footer",
+      "command": "npx tsx src/prompts/sourcesFooterEnrichment.test.ts",
+      "workdir": "/Users/jonraney/Coop-AI",
+      "exitCode": 0,
+      "log": "policy-shared-source-footer.log"
+    },
+    {
+      "name": "shared-evidence",
+      "command": "npx tsx src/prompts/evidenceSynthesis.test.ts",
+      "workdir": "/Users/jonraney/Coop-AI",
+      "exitCode": 0,
+      "log": "policy-shared-evidence.log"
+    },
+    {
+      "name": "shared-customer-prose",
+      "command": "npx tsx src/chat/customerFacingAnswer.test.ts",
+      "workdir": "/Users/jonraney/Coop-AI",
+      "exitCode": 0,
+      "log": "policy-shared-customer-prose.log"
+    },
+    {
+      "name": "private-chat-prose",
+      "command": "npm run test:chat-prose",
+      "workdir": "/private/tmp/coop-gaps-policy-client-candidate-20261009",
+      "exitCode": 0,
+      "log": "policy-private-chat-prose.log"
+    },
+    {
+      "name": "private-copy",
+      "command": "npm run test:format-chat-copy",
+      "workdir": "/private/tmp/coop-gaps-policy-client-candidate-20261009",
+      "exitCode": 0,
+      "log": "policy-private-copy.log"
+    },
+    {
+      "name": "private-prose-components",
+      "command": "npx tsx src/webview/components/ChatProse.test.ts",
+      "workdir": "/private/tmp/coop-gaps-policy-client-candidate-20261009",
+      "exitCode": 0,
+      "log": "policy-private-prose-components.log"
+    },
+    {
+      "name": "root-diff-check",
+      "command": "git diff --check",
+      "workdir": "/Users/jonraney/Coop-AI",
+      "exitCode": 0,
+      "log": "policy-root-diff-check.log"
+    }
+  ],
+  "coverage": {
+    "sourceSynthesisPolicy": 15,
+    "remoteGapsEvidence": 29,
+    "sharedEvidenceSynthesis": 22,
+    "sharedFooter": 5,
+    "sharedCustomerProse": 13,
+    "systemPrompts": 60,
+    "rendererParser": 69,
+    "highlight": 6,
+    "wholeAnswerCopy": 4,
+    "reactRenderer": 9,
+    "realPublicationAndRestore": "Verified frozen source, two required quotes, explicit source mode and original Sources; rejects altered, downgraded and removed quotes while retaining known cost.",
+    "sourceRefAndModel": "Original task/history, provider/model, reasoning, context/ref, source, quota turn and output budget preserved.",
+    "boundedCalls": "One normal source-native synthesis; at most one private replacement for objective structural/quote failure.",
+    "boundedRemoteEvidence": {
+      "primaryReads": 4,
+      "oneHopLinkedReads": 2,
+      "filenameQueries": 4,
+      "candidatesPerQuery": 30,
+      "windowsPerLargeFile": 2,
+      "windowChars": 8000,
+      "wholeFileChars": 14000,
+      "aggregateSourceChars": 96000,
+      "imports": "Unique literal relative path leads only; aliases and ambiguous modules remain unknown.",
+      "sourceSampler": "One scan of each chosen source body, a fixed number of candidate anchors, complete original lines."
+    },
+    "missingUsage": "Known completed-call subtotal retained; missing provider measurement not fabricated."
+  },
+  "bounds": {
+    "newLivePass": false,
+    "genericLatencyBenchmark": false,
+    "arbitraryScaleBenchmark": false,
+    "arbitraryProseSemanticsProven": false,
+    "backendDeploymentChanged": false,
+    "sharedExtensionHostRuntimeChanged": false,
+    "originalFourCaseLiveLedgerPreserved": true
+  }
+}

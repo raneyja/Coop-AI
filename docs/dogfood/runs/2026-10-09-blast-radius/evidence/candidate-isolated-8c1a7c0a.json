@@ -1,0 +1,38 @@
+{
+  "capturedAt": "2026-10-10T00:41:53.767667+00:00",
+  "backendDeploymentId": "b09b8776-0341-40bd-b026-fefc67aa3646",
+  "frozenExtensionPath": "/private/tmp/coop-parallel-quick-actions-20261009/blast/extension",
+  "windowTitle": "[Extension Development Host] Coop Blast Isolated \u2014",
+  "workspaceState": "/Users/jonraney/Library/Application Support/Code/User/workspaceStorage/fdc4d49032968307687b767399f97c5a",
+  "profile": "Coop Blast Isolated",
+  "sourceMapVerification": "Root source map captured while root bundle and frozen bundle SHA-256 match exactly. Frozen snapshot intentionally omits .map.",
+  "sourceMapMatches": {
+    "src/context/intentDetector.ts": true,
+    "src/chat/CoopChatSession.ts": false,
+    "src/config/chatSynthesisThinking.ts": true,
+    "src/prompts/blastRadiusSourceLabels.ts": true,
+    "src/prompts/blastRadiusSynthesis.ts": true,
+    "src/chat/blastRadiusSourceReview.ts": true,
+    "src/context/blastRadiusSourceEvidence.ts": true,
+    "src/context/contextBundleEvidence.ts": true,
+    "src/chat/chatResponseEnrichment.ts": true,
+    "src/prompts/systemPrompts.ts": true
+  },
+  "bundledSourceHashes": {
+    "src/context/intentDetector.ts": "bd99d217753599d858bfa3142247b64caa90fc42a83251ed6d53aad0c99b5661",
+    "src/chat/CoopChatSession.ts": "877c07adb1b2e38b79e05390184c95eaf624315931f45eb52ac935e4ed540fb7",
+    "src/config/chatSynthesisThinking.ts": "a0bbd6174d843dda91dbe237c35f6f8b28fe8f0ae61d0b3a7497f103ededbf40",
+    "src/prompts/blastRadiusSourceLabels.ts": "ce93983c1690431f5ff061f93d78f5cc0476e2a4508f2e1892f676c737ef38b7",
+    "src/prompts/blastRadiusSynthesis.ts": "35660aa68d3a33ec8c9ed70d9aa3021dc585f5a1c6834f77a0e0f47645183235",
+    "src/chat/blastRadiusSourceReview.ts": "c51677b5b0d676c84f37accc10fdd7b4d40e869ec1eeff5a23645d81c3ef0494",
+    "src/context/blastRadiusSourceEvidence.ts": "cb4b7d22aace550c263099f059c5a733e0b982790a3fcd7eb31c031c757693d3",
+    "src/context/contextBundleEvidence.ts": "49fb8ee3944bde51ffac42eadef8ab7c115e72932aeef74cc224fc11a62fb7e1",
+    "src/chat/chatResponseEnrichment.ts": "431b4c2d5b0711d28429374d2ce41b0fd9db2ddc806c32f96f159261490a5a0b",
+    "src/prompts/systemPrompts.ts": "7c6fb53815b4e5a02924a100919102a2dedd6714eb4af14f920973e2228377aa"
+  },
+  "hashes": {
+    "dist/extension.js": "8c1a7c0ac60674c1f2104f2da4e2ac66b2335465e64255fe83d5efa7b8905006",
+    "dist/webview.js": "22cc1e65227dc466d90f3c0e667b19f1469bfcb743a17295d2bb82d136e32b5c"
+  },
+  "sourceMapMismatchExplanation": "Current root has a later Knowledge Gaps continuation repair and general continuation bookkeeping, documented in frozen-8c1a7c0a-root-gaps-difference.patch. Frozen 8c1a7c0a retains the complete verified Blast source/card changes and compound-predicate review contract."
+}

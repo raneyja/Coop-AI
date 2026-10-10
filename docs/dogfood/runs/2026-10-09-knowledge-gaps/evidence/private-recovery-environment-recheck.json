@@ -1,0 +1,13 @@
+{
+  "checkedAt": "2026-10-10 00:59:51 UTC",
+  "health": {
+    "ok": true,
+    "commit": "email-48168d"
+  },
+  "planePreview": "a8e53b6ac7b87bd8e3e931d21188f7679c7ab6c4",
+  "documensoMain": "a457e1ef7de449e4f758fc6943a8014e952c34c6",
+  "deployment": "b09b8776-0341-40bd-b026-fefc67aa3646",
+  "status": "SUCCESS",
+  "imageDigest": "sha256:c43187846a50c958428bad45117c4c8a1bfb820d67c1499f0c8d3ba866839228",
+  "sharedBackendUnchanged": true
+}

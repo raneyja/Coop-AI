@@ -1,0 +1,225 @@
+{
+  "id": "thread-1791577177470-6m8077",
+  "title": "Knowledge Gaps \u00b7 CoopAI-Corp/plane",
+  "messages": [
+    {
+      "clientSubmissionId": "1791577192221-1",
+      "role": "user",
+      "content": "[knowledge-gaps] Before changing work-item state validation, which rules can we establish from the code, and which unanswered questions about allowed transitions need documentation or tests?\nrepo: CoopAI-Corp/plane \u00b7 branch: preview",
+      "timestamp": 1791577194964
+    },
+    {
+      "role": "assistant",
+      "content": "The attached serializer bodies establish several concrete rules, but there is **no old-state \u2192 new-state transition matrix** anywhere in the inspected code \u2014 both issue serializers enforce only project membership, not allowed edges between states. [Sources: Reviewed source]\n\n**Source-grounded review**\n\nThree rules are verifiable directly from the code:\n\n**Rule 1 \u2014 State must belong to the project**\n\nBoth issue serializers reject a state that is not a member of the current project. Neither checks what the current state is before accepting the new one.\n\n```\n121:126:apps/api/plane/api/serializers/issue.py\n        # Check state is from the project only else raise validation error\n        if (\n            data.get(\"state\")\n            and not State.objects.filter(project_id=self.context.get(\"project_id\"), pk=data.get(\"state\").id).exists()\n        ):\n            raise serializers.ValidationError(\"State is not valid please pass a valid state_id\")\n```\n\n**Rule 2 \u2014 Triage states are gated by a context flag, and only in the app serializer**\n\nThe app-layer serializer (`apps/api/plane/app/serializers/issue.py`) switches between `State.triage_objects` and `State.objects` based on `allow_triage_state` context (default `False`), so triage states are silently excluded from valid states unless a caller opts in. The public API serializer (`apps/api/plane/api/serializers/issue.py`) uses plain `State.objects` with no triage guard at all \u2014 a divergence between the two paths.\n\n```\n124:176:apps/api/plane/app/serializers/issue.py\n        allow_triage = self.context.get(\"allow_triage_state\", False)\n        state_manager = State.triage_objects if allow_triage else State.objects\n        ...\n        if (\n            attrs.get(\"state\")\n            and not state_manager.filter(\n                project_id=self.context.get(\"project_id\"),\n                pk=attrs.get(\"state\").id,\n            ).exists()\n        ):\n            raise serializers.ValidationError(\"State is not valid please pass a valid state_id\")\n```\n\n**Rule 3 \u2014 Triage states cannot be created; setting default is atomic**\n\n`StateSerializer` raises a hard error on creation of any `StateGroup.TRIAGE` state and atomically clears all other project states' `default` flag when one is set to default.\n\n```\n19:26:apps/api/plane/api/serializers/state.py\n    def validate(self, data):\n        # If the default is being provided then make all other states default False\n        if data.get(\"default\", False):\n            State.objects.filter(project_id=self.context.get(\"project_id\")).update(default=False)\n\n        if data.get(\"group\", None) == StateGroup.TRIAGE.value:\n            raise serializers.ValidationError(\"Cannot create triage state\")\n        return data\n```\n\n**Open questions**\n\n**1 \u2014 Are any state-to-state transitions blocked?**\n\nNeither serializer's `update()` reads `instance.state` before writing the new value. There is no matrix preventing, for example, moving from `cancelled` back to `backlog` or from `completed` to `in_progress`. The only guard is project membership. A test or spec document covering allowed edges (if any exist) would settle whether the membership check is the entire intended policy or if transition rules live elsewhere (e.g., a signal, a view-layer guard, or a frontend-only constraint).\n\n**2 \u2014 Which callers set `allow_triage_state=True`, and is the policy documented?**\n\nThe app serializer's triage gate only activates when a caller injects `allow_triage_state=True` into serializer context. The attached code does not show which views do this, so the intended scope of triage assignment is unknown. A test asserting the expected callers, or a doc naming the workflow that legitimately assigns triage states, would establish the policy boundary.\n\n**3 \u2014 Is the API-path / app-path triage divergence intentional?**\n\nThe public API path (`apps/api/plane/api/serializers/issue.py`) has no `allow_triage_state` logic \u2014 it accepts any project state including triage via `State.objects`. The app path gates this. Whether the API path is intentionally permissive (external API callers may assign triage) or is missing the guard is not documented in the attached code.\n\n**Documentation gaps**\n\nNo Confluence, Notion, or Google Docs pages were returned for this area, and the knowledge gap scan did not complete a structured pass. There are no attached tests covering state transition validation in these files. The open questions above \u2014 especially the transition matrix and triage-assignment scope \u2014 are currently resolvable only by searching view-layer context injection and any existing integration tests in `apps/api/tests/`.\n\n**Recommended next steps**\n\n1. Search `allow_triage_state` across the view layer to enumerate every caller that opts into triage assignment \u2014 that list defines the current triage policy even in the absence of docs.\n2. Grep `instance.state` or `old_state` in views and signals to confirm (or rule out) any transition-matrix enforcement outside the serializer layer before adding one.\n3. Add parametrized tests in `apps/api/tests/` covering: (a) same-group transition, (b) cross-group transition, (c) triage state assignment with and without the context flag, and (d) state from a different project \u2014 these tests will either expose a missing policy or lock in the current membership-only intent.\n\n**Reviewed source**\n\n```1:20:apps/api/plane/db/models/issue_type.py\n# Copyright (c) 2023-present Plane Software, Inc. and contributors\n# SPDX-License-Identifier: AGPL-3.0-only\n# See the LICENSE file for details.\n\n# Django imports\nfrom django.db import models\nfrom django.db.models import Q\n\n# Module imports\nfrom .project import ProjectBaseModel\nfrom .base import BaseModel\n\n\nclass IssueType(BaseModel):\n    workspace = models.ForeignKey(\"db.Workspace\", related_name=\"issue_types\", on_delete=models.CASCADE)\n    name = models.CharField(max_length=255)\n    description = models.TextField(blank=True)\n    logo_props = models.JSONField(default=dict)\n    is_epic = models.BooleanField(default=False)\n    is_default = models.BooleanField(default=False)\n```",
+      "timestamp": 1791577248436,
+      "relatedArtifactId": "evidence-1791577199158-eoqej0",
+      "activity": {
+        "durationMs": 56827,
+        "thinkingMs": 21787,
+        "thinkingText": "Let me analyze the attached source files carefully to establish what rules can be determined from the code and what open questions remain about work-item state validation and allowed transitions.\n\n**What the code shows:**\n\n1. **`apps/api/plane/api/serializers/state.py`** (`StateSerializer`):\n   - Blocks creation of `StateGroup.TRIAGE` states via validation error (L24-25)\n   - When `default=True` is set, all other states in the project are set to `default=False` (L21-22)\n   - No transition matrix or allowed-transition logic here \u2014 just state creation/update validation\n\n2. **`apps/api/plane/api/serializers/issue.py`** (the API-layer issue serializer, L63-343):\n   - State validation just checks the state belongs to the project using the plain `State` manager, with no triage-awareness and no logic comparing old state to new state\n   - Assignee, parent, and estimate point validations are scoped by project/workspace membership and activity status, but again no transition rules appear\n\n3. Now I'm moving to the app-layer issue serializer to check if it handles state transitions differently from the API layer.\n\nThe app-layer serializer does introduce a key difference: it reads an `allow_triage_state` context flag, and if true it uses `State.triage_objects` instead of `State.objects` as the manager for filtering valid states by project \u2014 so triage states are excluded by default unless explicitly allowed. Still, neither serializer has any old-state-to-new-state transition matrix, nothing blocking moving backward from `completed` to `in_progress`, and no `is_active` filter on states at all.\n\nChecking `issue_type.py`, `IssueType` has `is_epic`, `is_default`, `is_active`, and `level` fields, with `ProjectIssueType` linking types to projects via unique constraints \u2014 this doesn't seem directly relevant to state transitions though.\n\nSo the established rules I can pull from the code so far: a state must belong to the project (pure membership, not a transition policy), triage states are blocked from assignment unless `allow_triage_state=True` is passed in context (only in the app serializer, not the API one), triage states can't be created via `StateSerializer` at all, and marking a state default atomically un-defaults all others in the project. I still need to check whether there are any explicit allowed or blocked transition edges defined anywhere.\n\nNeither serializer actually checks the old state during `update()`, so there's no enforced transition graph like cancelled\u2192backlog or completed\u2192in_progress. I also want to know who sets `allow_triage_state=True` and whether that policy is documented, and whether the API serializer's lack of triage awareness (unlike the app serializer) is intentional or just an oversight. On the documentation side, there's no structured gap report, no Confluence/Notion/Docs pages, and no visible tests for transition validation \u2014 so this area is genuinely underspecified. Now I want to lay out the two serializer paths clearly in my response.",
+        "tools": [
+          {
+            "id": "line-tool:0",
+            "kind": "read",
+            "label": "Read `apps/api/plane/api/serializers/issue.py`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:1",
+            "kind": "read",
+            "label": "Read `apps/api/plane/api/serializers/state.py`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:2",
+            "kind": "read",
+            "label": "Read `apps/api/plane/app/serializers/issue.py`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:3",
+            "kind": "read",
+            "label": "Read `apps/api/plane/db/models/issue_type.py`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:4",
+            "kind": "search",
+            "label": "Searched Notion for `work item state validation`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:5",
+            "kind": "search",
+            "label": "Searched Google Docs for `work item state validation`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:6",
+            "kind": "search",
+            "label": "Searched Confluence for `work item state validation`",
+            "status": "done"
+          }
+        ],
+        "files": [
+          {
+            "path": "apps/api/plane/api/serializers/issue.py",
+            "action": "read"
+          },
+          {
+            "path": "apps/api/plane/api/serializers/state.py",
+            "action": "read"
+          },
+          {
+            "path": "apps/api/plane/app/serializers/issue.py",
+            "action": "read"
+          },
+          {
+            "path": "apps/api/plane/db/models/issue_type.py",
+            "action": "read"
+          },
+          {
+            "path": "work item state validation",
+            "action": "searched"
+          }
+        ],
+        "steps": [
+          {
+            "id": "line:0:Read `apps/api/plane/api/serializers/issue.py`",
+            "content": "Read `apps/api/plane/api/serializers/issue.py`",
+            "status": "completed"
+          },
+          {
+            "id": "line:1:Read `apps/api/plane/api/serializers/state.py`",
+            "content": "Read `apps/api/plane/api/serializers/state.py`",
+            "status": "completed"
+          },
+          {
+            "id": "line:2:Read `apps/api/plane/app/serializers/issue.py`",
+            "content": "Read `apps/api/plane/app/serializers/issue.py`",
+            "status": "completed"
+          },
+          {
+            "id": "line:3:Read `apps/api/plane/db/models/issue_type.py`",
+            "content": "Read `apps/api/plane/db/models/issue_type.py`",
+            "status": "completed"
+          },
+          {
+            "id": "line:4:Searched Notion for `work item state validation`",
+            "content": "Searched Notion for `work item state validation`",
+            "status": "completed",
+            "detail": "No matching results"
+          },
+          {
+            "id": "line:5:Searched Google Docs for `work item state validation`",
+            "content": "Searched Google Docs for `work item state validation`",
+            "status": "completed",
+            "detail": "No matching results"
+          },
+          {
+            "id": "line:6:Searched Confluence for `work item state validation`",
+            "content": "Searched Confluence for `work item state validation`",
+            "status": "completed",
+            "detail": "No matching results"
+          }
+        ]
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "evidence-1791577199158-eoqej0",
+      "kind": "knowledge-gaps",
+      "timestamp": 1791577199158,
+      "payload": {
+        "artifactId": "evidence-1791577199158-eoqej0",
+        "evidence": {
+          "userFocus": "Before changing work-item state validation, which rules can we establish from the code, and which unanswered questions about allowed transitions need documentation or tests?",
+          "focusSearchQuery": "Before changing work-item state validation, which rules can we establish from the code, and which unanswered questions about allowed transitions need documentation or tests?",
+          "focusSearchPaths": [
+            "apps/api/plane/api/serializers/issue.py",
+            "apps/api/plane/api/serializers/state.py",
+            "apps/api/plane/app/serializers/issue.py",
+            "apps/api/plane/db/models/issue_type.py"
+          ],
+          "focusFiles": [
+            {
+              "path": "apps/api/plane/api/serializers/state.py",
+              "repoId": "github:CoopAI-Corp/plane",
+              "content": "# Copyright (c) 2023-present Plane Software, Inc. and contributors\n# SPDX-License-Identifier: AGPL-3.0-only\n# See the LICENSE file for details.\n\n# Module imports\nfrom .base import BaseSerializer\nfrom plane.db.models import State, StateGroup\nfrom rest_framework import serializers\n\n\nclass StateSerializer(BaseSerializer):\n    \"\"\"\n    Serializer for work item states with default state management.\n\n    Handles state creation and updates including default state validation\n    and automatic default state switching for workflow management.\n    \"\"\"\n\n    def validate(self, data):\n        # If the default is being provided then make all other states default False\n        if data.get(\"default\", False):\n            State.objects.filter(project_id=self.context.get(\"project_id\")).update(default=False)\n\n        if data.get(\"group\", None) == StateGroup.TRIAGE.value:\n            raise serializers.ValidationError(\"Cannot create triage state\")\n        return data\n\n    class Meta:\n        model = State\n        fields = \"__all__\"\n        read_only_fields = [\n            \"id\",\n            \"created_by\",\n            \"updated_by\",\n            \"created_at\",\n            \"updated_at\",\n            \"workspace\",\n            \"project\",\n            \"deleted_at\",\n            \"slug\",\n        ]\n\n\nclass StateLiteSerializer(BaseSerializer):\n    \"\"\"\n    Lightweight state serializer for minimal data transfer.\n\n    Provides essential state information including visual properties\n    and grouping data optimized for UI display and filtering.\n    \"\"\"\n\n    class Meta:\n        model = State\n        fields = [\"id\", \"name\", \"color\", \"group\"]\n        read_only_fields = fields\n",
+              "origin": "remote",
+              "truncated": false,
+              "startLine": 1
+            },
+            {
+              "path": "apps/api/plane/db/models/issue_type.py",
+              "repoId": "github:CoopAI-Corp/plane",
+              "content": "# Copyright (c) 2023-present Plane Software, Inc. and contributors\n# SPDX-License-Identifier: AGPL-3.0-only\n# See the LICENSE file for details.\n\n# Django imports\nfrom django.db import models\nfrom django.db.models import Q\n\n# Module imports\nfrom .project import ProjectBaseModel\nfrom .base import BaseModel\n\n\nclass IssueType(BaseModel):\n    workspace = models.ForeignKey(\"db.Workspace\", related_name=\"issue_types\", on_delete=models.CASCADE)\n    name = models.CharField(max_length=255)\n    description = models.TextField(blank=True)\n    logo_props = models.JSONField(default=dict)\n    is_epic = models.BooleanField(default=False)\n    is_default = models.BooleanField(default=False)\n    is_active = models.BooleanField(default=True)\n    level = models.FloatField(default=0)\n    external_source = models.CharField(max_length=255, null=True, blank=True)\n    external_id = models.CharField(max_length=255, blank=True, null=True)\n\n    class Meta:\n        verbose_name = \"Issue Type\"\n        verbose_name_plural = \"Issue Types\"\n        db_table = \"issue_types\"\n\n    def __str__(self):\n        return self.name\n\n\nclass ProjectIssueType(ProjectBaseModel):\n    issue_type = models.ForeignKey(\"db.IssueType\", related_name=\"project_issue_types\", on_delete=models.CASCADE)\n    level = models.PositiveIntegerField(default=0)\n    is_default = models.BooleanField(default=False)\n\n    class Meta:\n        unique_together = [\"project\", \"issue_type\", \"deleted_at\"]\n        constraints = [\n            models.UniqueConstraint(\n                fields=[\"project\", \"issue_type\"],\n                condition=Q(deleted_at__isnull=True),\n                name=\"project_issue_type_unique_project_issue_type_when_deleted_at_null\",\n            )\n        ]\n        verbose_name = \"Project Issue Type\"\n        verbose_name_plural = \"Project Issue Types\"\n        db_table = \"project_issue_types\"\n        ordering = (\"project\", \"issue_type\")\n\n    def __str__(self):\n        return f\"{self.project} - {self.issue_type}\"\n",
+              "origin": "remote",
+              "truncated": false,
+              "startLine": 1
+            },
+            {
+              "path": "apps/api/plane/api/serializers/issue.py",
+              "repoId": "github:CoopAI-Corp/plane",
+              "startLine": 63,
+              "content": "        write_only=True,\n        required=False,\n    )\n    type_id = serializers.PrimaryKeyRelatedField(\n        source=\"type\", queryset=IssueType.objects.all(), required=False, allow_null=True\n    )\n\n    class Meta:\n        model = Issue\n        read_only_fields = [\"id\", \"workspace\", \"project\", \"updated_by\", \"updated_at\", \"completed_at\"]\n        exclude = [\"description_json\", \"description_stripped\"]\n\n    def validate(self, data):\n        if (\n            data.get(\"start_date\", None) is not None\n            and data.get(\"target_date\", None) is not None\n            and data.get(\"start_date\", None) > data.get(\"target_date\", None)\n        ):\n            raise serializers.ValidationError(\"Start date cannot exceed target date\")\n\n        try:\n            if data.get(\"description_html\", None) is not None:\n                parsed = html.fromstring(data[\"description_html\"])\n                parsed_str = html.tostring(parsed, encoding=\"unicode\")\n                data[\"description_html\"] = parsed_str\n\n        except Exception:\n            raise serializers.ValidationError(\"Invalid HTML passed\")\n\n        # Validate description content for security\n        if data.get(\"description_html\"):\n            is_valid, error_msg, sanitized_html = validate_html_content(data[\"description_html\"])\n            if not is_valid:\n                raise serializers.ValidationError({\"error\": \"html content is not valid\"})\n            # Update the data with sanitized HTML if available\n            if sanitized_html is not None:\n                data[\"description_html\"] = sanitized_html\n\n        if data.get(\"description_binary\"):\n            is_valid, error_msg = validate_binary_data(data[\"description_binary\"])\n            if not is_valid:\n                raise serializers.ValidationError({\"description_binary\": \"Invalid binary data\"})\n\n        # Validate assignees are from project\n        if data.get(\"assignees\", []):\n            data[\"assignees\"] = ProjectMember.objects.filter(\n                project_id=self.context.get(\"project_id\"),\n                is_active=True,\n                role__gte=15,\n                member_id__in=data[\"assignees\"],\n            ).values_list(\"member_id\", flat=True)\n\n        # Validate labels are from project\n        if data.get(\"labels\", []):\n            data[\"labels\"] = Label.objects.filter(\n                project_id=self.context.get(\"project_id\"), id__in=data[\"labels\"]\n            ).values_list(\"id\", flat=True)\n\n        # Check state is from the project only else raise validation error\n        if (\n            data.get(\"state\")\n            and not State.objects.filter(project_id=self.context.get(\"project_id\"), pk=data.get(\"state\").id).exists()\n        ):\n            raise serializers.ValidationError(\"State is not valid please pass a valid state_id\")\n\n        # Check parent issue is from workspace as it can be cross workspace\n        if (\n            data.get(\"parent\")\n            and not Issue.objects.filter(\n                workspace_id=self.context.get(\"workspace_id\"),\n                project_id=self.context.get(\"project_id\"),\n                pk=data.get(\"parent\").id,\n            ).exists()\n        ):\n            raise serializers.ValidationError(\"Parent is not valid issue_id please pass a valid issue_id\")\n\n        if (\n            data.get(\"estimate_point\")\n            and not EstimatePoint.objects.filter(\n                workspace_id=self.context.get(\"workspace_id\"),\n                project_id=self.context.get(\"project_id\"),\n                pk=data.get(\"estimate_point\").id,\n            ).exists()\n        ):\n            raise serializers.ValidationError(\"Estimate point is not valid please pass a valid estimate_point_id\")\n\n        return data\n\n    def create(self, validated_data):\n        assignees = validated_data.pop(\"assignees\", None)\n        labels = validated_data.pop(\"labels\", None)\n\n        project_id = self.context[\"project_id\"]\n        workspace_id = self.context[\"workspace_id\"]\n        default_assignee_id = self.context[\"default_assignee_id\"]\n\n        issue_type = validated_data.pop(\"type\", None)\n\n        if not issue_type:\n            # Get default issue type\n            issue_type = IssueType.objects.filter(project_issue_types__project_id=project_id, is_default=True).first()\n            issue_type = issue_type\n\n        issue = Issue.objects.create(**validated_data, project_id=project_id, type=issue_type)\n\n        # Issue Audit Users\n        created_by_id = issue.created_by_id\n        updated_by_id = issue.updated_by_id\n\n        if assignees is not None and len(assignees):\n            try:\n                IssueAssignee.objects.bulk_create(\n                    [\n                        IssueAssignee(\n                            assignee_id=assignee_id,\n                            issue=issue,\n                            project_id=project_id,\n                            workspace_id=workspace_id,\n                            created_by_id=created_by_id,\n                            updated_by_id=updated_by_id,\n                        )\n                        for assignee_id in assignees",
+              "truncated": true
+            },
+            {
+              "path": "apps/api/plane/api/serializers/issue.py",
+              "repoId": "github:CoopAI-Corp/plane",
+              "startLine": 222,
+              "content": "                            created_by_id=created_by_id,\n                            updated_by_id=updated_by_id,\n                        )\n                        for label_id in labels\n                    ],\n                    batch_size=10,\n                )\n            except IntegrityError:\n                pass\n\n        return issue\n\n    def update(self, instance, validated_data):\n        assignees = validated_data.pop(\"assignees\", None)\n        labels = validated_data.pop(\"labels\", None)\n\n        # Related models\n        project_id = instance.project_id\n        workspace_id = instance.workspace_id\n        created_by_id = instance.created_by_id\n        updated_by_id = instance.updated_by_id\n\n        if assignees is not None:\n            IssueAssignee.objects.filter(issue=instance).delete()\n            try:\n                IssueAssignee.objects.bulk_create(\n                    [\n                        IssueAssignee(\n                            assignee_id=assignee_id,\n                            issue=instance,\n                            project_id=project_id,\n                            workspace_id=workspace_id,\n                            created_by_id=created_by_id,\n                            updated_by_id=updated_by_id,\n                        )\n                        for assignee_id in assignees\n                    ],\n                    batch_size=10,\n                    ignore_conflicts=True,\n                )\n            except IntegrityError:\n                pass\n\n        if labels is not None:\n            IssueLabel.objects.filter(issue=instance).delete()\n            try:\n                IssueLabel.objects.bulk_create(\n                    [\n                        IssueLabel(\n                            label_id=label_id,\n                            issue=instance,\n                            project_id=project_id,\n                            workspace_id=workspace_id,\n                            created_by_id=created_by_id,\n                            updated_by_id=updated_by_id,\n                        )\n                        for label_id in labels\n                    ],\n                    batch_size=10,\n                    ignore_conflicts=True,\n                )\n            except IntegrityError:\n                pass\n\n        # Time updation occues even when other related models are updated\n        instance.updated_at = timezone.now()\n        return super().update(instance, validated_data)\n\n    def to_representation(self, instance):\n        data = super().to_representation(instance)\n        if \"assignees\" in self.fields:\n            if \"assignees\" in self.expand:\n                from .user import UserLiteSerializer\n\n                data[\"assignees\"] = UserLiteSerializer(\n                    User.objects.filter(\n                        pk__in=IssueAssignee.objects.filter(issue=instance).values_list(\"assignee_id\", flat=True)\n                    ),\n                    many=True,\n                ).data\n            else:\n                data[\"assignees\"] = [\n                    str(assignee)\n                    for assignee in IssueAssignee.objects.filter(issue=instance).values_list(\"assignee_id\", flat=True)\n                ]\n        if \"labels\" in self.fields:\n            if \"labels\" in self.expand:\n                data[\"labels\"] = LabelSerializer(\n                    Label.objects.filter(\n                        pk__in=IssueLabel.objects.filter(issue=instance).values_list(\"label_id\", flat=True)\n                    ),\n                    many=True,\n                ).data\n            else:\n                data[\"labels\"] = [\n                    str(label) for label in IssueLabel.objects.filter(issue=instance).values_list(\"label_id\", flat=True)\n                ]\n\n        return data\n\n\nclass IssueLiteSerializer(BaseSerializer):\n    \"\"\"\n    Lightweight work item serializer for minimal data transfer.\n\n    Provides essential work item identifiers optimized for list views,\n    references, and performance-critical operations.\n    \"\"\"\n\n    class Meta:\n        model = Issue\n        fields = [\"id\", \"sequence_id\", \"project_id\"]\n        read_only_fields = fields\n\n\nclass LabelCreateUpdateSerializer(BaseSerializer):\n    \"\"\"\n    Serializer for creating and updating work item labels.\n\n    Manages label metadata including colors, descriptions, hierarchy,\n    and sorting for work item categorization and filtering.\n    \"\"\"",
+              "truncated": true
+            },
+            {
+              "path": "apps/api/plane/app/serializers/issue.py",
+              "repoId": "github:CoopAI-Corp/plane",
+              "startLine": 112,
+              "content": "            \"updated_at\",\n            \"completed_at\",\n        ]\n\n    def to_representation(self, instance):\n        data = super().to_representation(instance)\n        assignee_ids = self.initial_data.get(\"assignee_ids\")\n        data[\"assignee_ids\"] = assignee_ids if assignee_ids else []\n        label_ids = self.initial_data.get(\"label_ids\")\n        data[\"label_ids\"] = label_ids if label_ids else []\n        return data\n\n    def validate(self, attrs):\n        allow_triage = self.context.get(\"allow_triage_state\", False)\n        state_manager = State.triage_objects if allow_triage else State.objects\n\n        if (\n            attrs.get(\"start_date\", None) is not None\n            and attrs.get(\"target_date\", None) is not None\n            and attrs.get(\"start_date\", None) > attrs.get(\"target_date\", None)\n        ):\n            raise serializers.ValidationError(\"Start date cannot exceed target date\")\n\n        # Validate description content for security\n        if \"description_html\" in attrs and attrs[\"description_html\"]:\n            is_valid, error_msg, sanitized_html = validate_html_content(attrs[\"description_html\"])\n            if not is_valid:\n                raise serializers.ValidationError({\"error\": \"html content is not valid\"})\n            # Update the attrs with sanitized HTML if available\n            if sanitized_html is not None:\n                attrs[\"description_html\"] = sanitized_html\n\n        if \"description_binary\" in attrs and attrs[\"description_binary\"]:\n            is_valid, error_msg = validate_binary_data(attrs[\"description_binary\"])\n            if not is_valid:\n                raise serializers.ValidationError({\"description_binary\": \"Invalid binary data\"})\n\n        # Validate assignees are from project\n        if attrs.get(\"assignee_ids\", []):\n            attrs[\"assignee_ids\"] = ProjectMember.objects.filter(\n                project_id=self.context[\"project_id\"],\n                role__gte=15,\n                is_active=True,\n                member_id__in=attrs[\"assignee_ids\"],\n            ).values_list(\"member_id\", flat=True)\n\n        # Validate labels are from project\n        if attrs.get(\"label_ids\"):\n            label_ids = [label.id for label in attrs[\"label_ids\"]]\n            attrs[\"label_ids\"] = list(\n                Label.objects.filter(\n                    project_id=self.context.get(\"project_id\"),\n                    id__in=label_ids,\n                ).values_list(\"id\", flat=True)\n            )\n\n        # Check state is from the project only else raise validation error\n        if (\n            attrs.get(\"state\")\n            and not state_manager.filter(\n                project_id=self.context.get(\"project_id\"),\n                pk=attrs.get(\"state\").id,\n            ).exists()\n        ):\n            raise serializers.ValidationError(\"State is not valid please pass a valid state_id\")\n\n        # Check parent issue is from workspace as it can be cross workspace\n        if (\n            attrs.get(\"parent\")\n            and not Issue.objects.filter(\n                project_id=self.context.get(\"project_id\"),\n                pk=attrs.get(\"parent\").id,\n            ).exists()\n        ):\n            raise serializers.ValidationError(\"Parent is not valid issue_id please pass a valid issue_id\")\n\n        if (\n            attrs.get(\"estimate_point\")\n            and not EstimatePoint.objects.filter(\n                project_id=self.context.get(\"project_id\"),\n                pk=attrs.get(\"estimate_point\").id,\n            ).exists()\n        ):\n            raise serializers.ValidationError(\"Estimate point is not valid please pass a valid estimate_point_id\")\n\n        return attrs\n\n    def create(self, validated_data):\n        assignees = validated_data.pop(\"assignee_ids\", None)\n        labels = validated_data.pop(\"label_ids\", None)\n\n        project_id = self.context[\"project_id\"]\n        workspace_id = self.context[\"workspace_id\"]\n        default_assignee_id = self.context[\"default_assignee_id\"]\n\n        # Create Issue\n        issue = Issue.objects.create(**validated_data, project_id=project_id)\n\n        # Issue Audit Users\n        created_by_id = issue.created_by_id\n        updated_by_id = issue.updated_by_id\n\n        if assignees is not None and len(assignees):\n            try:\n                IssueAssignee.objects.bulk_create(\n                    [\n                        IssueAssignee(\n                            assignee_id=assignee_id,\n                            issue=issue,\n                            project_id=project_id,\n                            workspace_id=workspace_id,\n                            created_by_id=created_by_id,\n                            updated_by_id=updated_by_id,\n                        )\n                        for assignee_id in assignees\n                    ],\n                    batch_size=10,\n                )\n            except IntegrityError:\n                pass\n        else:\n            # Then assign it to default assignee, if it is a valid assignee",
+              "truncated": true
+            },
+            {
+              "path": "apps/api/plane/app/serializers/issue.py",
+              "repoId": "github:CoopAI-Corp/plane",
+              "startLine": 264,
+              "content": "                            created_by_id=created_by_id,\n                            updated_by_id=updated_by_id,\n                        )\n                        for label_id in labels\n                    ],\n                    batch_size=10,\n                )\n            except IntegrityError:\n                pass\n\n        return issue\n\n    def update(self, instance, validated_data):\n        assignees = validated_data.pop(\"assignee_ids\", None)\n        labels = validated_data.pop(\"label_ids\", None)\n\n        # Related models\n        project_id = instance.project_id\n        workspace_id = instance.workspace_id\n        created_by_id = instance.created_by_id\n        updated_by_id = instance.updated_by_id\n\n        if assignees is not None:\n            IssueAssignee.objects.filter(issue=instance).delete()\n            try:\n                IssueAssignee.objects.bulk_create(\n                    [\n                        IssueAssignee(\n                            assignee_id=assignee_id,\n                            issue=instance,\n                            project_id=project_id,\n                            workspace_id=workspace_id,\n                            created_by_id=created_by_id,\n                            updated_by_id=updated_by_id,\n                        )\n                        for assignee_id in assignees\n                    ],\n                    batch_size=10,\n                    ignore_conflicts=True,\n                )\n            except IntegrityError:\n                pass\n\n        if labels is not None:\n            IssueLabel.objects.filter(issue=instance).delete()\n            try:\n                IssueLabel.objects.bulk_create(\n                    [\n                        IssueLabel(\n                            label_id=label_id,\n                            issue=instance,\n                            project_id=project_id,\n                            workspace_id=workspace_id,\n                            created_by_id=created_by_id,\n                            updated_by_id=updated_by_id,\n                        )\n                        for label_id in labels\n                    ],\n                    batch_size=10,\n                    ignore_conflicts=True,\n                )\n            except IntegrityError:\n                pass\n\n        # Time updation occues even when other related models are updated\n        instance.updated_at = timezone.now()\n        return super().update(instance, validated_data)\n\n\nclass IssueActivitySerializer(BaseSerializer):\n    actor_detail = UserLiteSerializer(read_only=True, source=\"actor\")\n    issue_detail = IssueFlatSerializer(read_only=True, source=\"issue\")\n    project_detail = ProjectLiteSerializer(read_only=True, source=\"project\")\n    workspace_detail = WorkspaceLiteSerializer(read_only=True, source=\"workspace\")\n    source_data = serializers.SerializerMethodField()\n\n    def get_source_data(self, obj):\n        if hasattr(obj, \"issue\") and hasattr(obj.issue, \"source_data\") and obj.issue.source_data:\n            return {\n                \"source\": obj.issue.source_data[0].source,\n                \"source_email\": obj.issue.source_data[0].source_email,\n                \"extra\": obj.issue.source_data[0].extra,\n            }\n        return None\n\n    class Meta:\n        model = IssueActivity\n        fields = \"__all__\"\n\n\nclass ProjectUserPropertySerializer(BaseSerializer):\n    class Meta:\n        model = ProjectUserProperty\n        fields = \"__all__\"\n        read_only_fields = [\"user\", \"workspace\", \"project\"]\n\n\nclass LabelSerializer(BaseSerializer):\n    class Meta:\n        model = Label\n        fields = [\n            \"parent\",\n            \"name\",\n            \"color\",\n            \"id\",\n            \"project_id\",\n            \"workspace_id\",\n            \"sort_order\",\n        ]\n        read_only_fields = [\"workspace\", \"project\"]\n\n    def validate_name(self, value):\n        project_id = self.context.get(\"project_id\")\n\n        label = Label.objects.filter(project_id=project_id, name__iexact=value)\n\n        if self.instance:\n            label = label.exclude(id=self.instance.pk)\n\n        if label.exists():\n            raise serializers.ValidationError(detail=\"LABEL_NAME_ALREADY_EXISTS\")\n",
+              "truncated": true
+            }
+          ],
+          "jobScan": {
+            "source": "live-heuristic",
+            "cached": false,
+            "foundGaps": 0,
+            "highPriority": 0,
+            "mediumPriority": 0,
+            "lowPriority": 0,
+            "gaps": [],
+            "scanCoverage": "scan_incomplete"
+          },
+          "documentationCoverage": {
+            "status": "documentation-search-requested"
+          },
+          "fileStructure": {
+            "status": "file-structure-requested",
+            "provider": "github"
+          }
+        },
+        "codeHost": "github"
+      }
+    }
+  ],
+  "sessionCostUsd": 0.082512,
+  "createdAt": 1791577177470,
+  "updatedAt": 1791577679354,
+  "messageCount": 2,
+  "repoContext": {
+    "provider": "github",
+    "owner": "CoopAI-Corp",
+    "repo": "plane",
+    "branch": "preview",
+    "scope": "repo"
+  },
+  "draftInput": ""
+}

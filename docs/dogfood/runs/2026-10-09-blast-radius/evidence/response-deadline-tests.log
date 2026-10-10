@@ -1,0 +1,34 @@
+
+> coop-ai@0.1.13 test:response-deadline
+> npx tsx src/config/responseDeadline.test.ts && npx tsx src/chat/chatTurn.test.ts && npx tsx src/chat/lengthContinue.test.ts && npx tsx src/chat/agentAnswerHistory.test.ts
+
+  ✓ focused Knowledge Gaps streams its gathered source audit without another hidden phase
+  ✓ complete named source result asks stream without a separate thinking phase
+  ✓ gathered read-only synthesis skips another thinking phase at the gather boundary
+  ✓ complex chat, edit, and other quick actions retain reasoning after the soft budget
+  ✓ Blast control-flow analysis retains reasoning even with complete source bodies
+  ✓ remainingResponseBudgetMs clamps at zero
+  ✓ remainingContextGatherBudgetMs reserves synthesis time
+  ✓ locateSearchBudgetMs does not skip locate when gather leftover is zero
+  ✓ scheduleResponseDeadline never aborts the turn signal
+  ✓ soft gather hitting zero does not abort a stream AbortSignal
+  ✓ abortablePromise rejects when signal aborts (user Stop)
+  ✓ abortablePromise resolves when work finishes first
+  ✓ isResponseDeadlineAbort detects legacy reason only
+  ✓ isSoftGatherLatencyMessage detects internal latency copy
+
+responseDeadline: 14 passed, 0 failed
+chatTurn.test.ts: ok
+  ✓ detects trailing heading-only sections
+  ✓ filled last heading is not a length stop
+  ✓ finishReason length continues once
+  ✓ cutoff notice is visible and not duplicated
+
+lengthContinue: 4 passed, 0 failed
+  ✓ summarizes read_file bodies instead of dumping the full JSON
+  ✓ plain text is clipped
+  ✓ read_file with a late writeJson 401 unauthorized keeps that excerpt
+  ✓ verified remote evidence survives synthesis without a header-only clip
+  ✓ turn-owned attachment retains its late implementation and provenance
+
+agentAnswerHistory: 5 passed, 0 failed

@@ -1,0 +1,94 @@
+{
+  "id": "thread-1791589305754-xxsg95",
+  "title": "Blast Radius \u00b7 sign-field-with-token.ts",
+  "messages": [
+    {
+      "clientSubmissionId": "1791589322540-3",
+      "role": "user",
+      "content": "[blast-radius] If this selected PENDING guard were relaxed, which opened callers could reach the changed branch, which checks and write conditions remain, and what should I verify before shipping?\nfile: packages/lib/server-only/field/sign-field-with-token.ts \u00b7 selection: L108\u2013110 \u00b7 repo: CoopAI-Corp/documenso \u00b7 branch: main",
+      "timestamp": 1791589324824
+    },
+    {
+      "role": "assistant",
+      "content": "Relaxing lines 108\u2013110 lets execution continue past the status gate into the remaining guards in `signFieldWithToken`. Neither opened caller adds its own `DocumentStatus` check before delegating, so both call sites can reach the modified code with envelopes in statuses other than `PENDING`. Passing the changed guard does not guarantee reaching the transaction writes \u2014 several guards remain.\n\n**Verified call paths and conditions**\n\n```\n108:110:packages/lib/server-only/field/sign-field-with-token.ts\n  if (envelope.status !== DocumentStatus.PENDING) {\n    throw new Error(`Document ${envelope.id} must be pending for signing`);\n  }\n```\n\n`field-router/router.ts` (lines 615\u2013633) defines `signFieldWithToken` on `procedure` (not `authenticatedProcedure`) with `ctx.user?.id` optional. No document-status check appears in the handler before the call. The `procedure` middleware and `ZSignFieldWithTokenMutationSchema` were not opened; their constraints are unverified.\n\n```\n615:633:packages/trpc/server/field-router/router.ts\n  signFieldWithToken: procedure.input(ZSignFieldWithTokenMutationSchema).mutation(async ({ input, ctx }) => {\n    const { token, fieldId, value, isBase64, authOptions } = input;\n\n    ctx.logger.info({\n      input: {\n        fieldId,\n      },\n    });\n\n    return await signFieldWithToken({\n      token,\n      fieldId,\n      value: value ?? '',\n      isBase64,\n      userId: ctx.user?.id,\n      authOptions,\n      requestMetadata: ctx.metadata.requestMetadata,\n    });\n  }),\n```\n\n`apply-multi-sign-signature.ts` also uses `procedure` (line 15). Three caller-side guards precede each `signFieldWithToken` call: unviewed-document rejection (line 35), additional-auth rejection (lines 48\u201355), and a skip for `SigningStatus.REJECTED` recipients (line 61). The field query at lines 65\u201372 additionally filters to `FieldType.SIGNATURE` with `inserted: false`. No `DocumentStatus` check appears in this handler. `getDocumentByToken` and `getRecipientByToken` (lines 25\u201326) were not opened \u2014 whether either filters by status is unknown.\n\n```\n61:84:packages/trpc/server/embedding-router/apply-multi-sign-signature.ts\n          if (envelope.recipient.signingStatus === SigningStatus.REJECTED) {\n            return;\n          }\n\n          const signatureFields = await prisma.field.findMany({\n            where: {\n              envelopeId: envelope.document.id,\n              recipientId: envelope.recipient.id,\n              type: FieldType.SIGNATURE,\n              inserted: false,\n            },\n          });\n\n          await Promise.all(\n            signatureFields.map(async (field) =>\n              signFieldWithToken({\n                token: envelope.recipient.token,\n                fieldId: field.id,\n                value: signature,\n                isBase64,\n                requestMetadata: metadata.requestMetadata,\n              }),\n            ),\n          );\n```\n\nAfter the changed guard, the target enforces: `assertRecipientNotExpired(recipient)` (line 112, implementation unread); `signingStatus === SigningStatus.SIGNED` for the token recipient or `field.recipient` (line 114); `field.inserted` (line 118); per-type field validations (lines 127\u2013172); `validateFieldAuth(...)` (line 174, implementation unread); signature presence and typed-signature restrictions (lines 203\u2013209); and readOnly default-value enforcement (lines 211\u2013231).\n\nWithin `prisma.$transaction`, `tx.field.update` (lines 237\u2013245) runs unconditionally, setting `customText` and `inserted: true`. `tx.signature.upsert` runs only when `isSignatureField` is true:\n\n```\n247:262:packages/lib/server-only/field/sign-field-with-token.ts\n    if (isSignatureField) {\n      const signature = await tx.signature.upsert({\n        where: {\n          fieldId: field.id,\n        },\n        create: {\n          fieldId: field.id,\n          recipientId: field.recipientId,\n          signatureImageAsBase64: signatureImageAsBase64,\n          typedSignature: typedSignature,\n        },\n        update: {\n          signatureImageAsBase64: signatureImageAsBase64,\n          typedSignature: typedSignature,\n        },\n      });\n```\n\nIts `create` path fires when no signature row exists for `fieldId`; `update` overwrites both `signatureImageAsBase64` and `typedSignature`. `tx.documentAuditLog.create` (lines 270\u2013309) runs unconditionally inside the transaction.\n\n**Pre-ship verification**\n\n1. **`getDocumentByToken` and `getRecipientByToken`:** Open both bodies \u2014 either may carry an indirect status filter not visible in `apply-multi-sign-signature.ts`'s own body.\n2. **`assertRecipientNotExpired` and `validateFieldAuth`:** Both execute before the transaction; their rejection conditions are not established by name alone \u2014 open their bodies.\n3. **`procedure` middleware (both callers):** Both callers use `procedure`, not `authenticatedProcedure`; the middleware was not opened, so authentication and authorization requirements cannot be inferred from the procedure name or the optional `userId` field.\n4. **Remaining inline guards for non-PENDING envelopes:** Establish whether `signingStatus === SigningStatus.SIGNED` (line 114) and `field.inserted` (line 118) reliably prevent writes for documents in other statuses \u2014 the opened bodies do not establish what those fields contain for non-PENDING records.",
+      "timestamp": 1791589485819,
+      "relatedArtifactId": "evidence-1791589326288-mkjx3n",
+      "activity": {
+        "durationMs": 163859,
+        "thinkingMs": 89483,
+        "thinkingText": "The user wants me to verify the draft against the actual opened source bodies and produce a corrected, accurate answer. Let me trace through the code carefully.\n\n**Changed predicate (lines 108-110):**\n```typescript\nif (envelope.status !== DocumentStatus.PENDING) {\n    throw new Error(`Document ${envelope.id} must be pending for signing`);\n}\n```\n\n**Remaining guards after line 110 in sign-field-with-token.ts:**\n\n1. Line 112: `assertRecipientNotExpired(recipient)` \u2014 implementation not opened\n2. Lines 114-116: `if (recipient.signingStatus === SigningStatus.SIGNED || field.recipient.signingStatus === SigningStatus.SIGNED)` \u2014 throws if already signed\n3. Lines 118-120: throws if the field was already inserted\n4. Lines 123-125: throws if there's no recipientId on the field\n5. Lines 127-172: validations specific to each field type (NUMBER, TEXT, CHECKBOX, RADIO, DROPDOWN)\n6. Line 174: calls `validateFieldAuth(...)`, implementation not opened\n7. Lines 203-209: checks specific to signature fields\n8. Lines 211-231: checks for readOnly fields\n\nThen for the transaction writes, I see it updates the field record, setting `customText` and marking `inserted: true`.\n\nLooking more carefully, that update runs unconditionally once inside the transaction \u2014 there's no guard around it. After that, there's a `tx.signature.upsert` gated behind `isSignatureField`, and an unconditional `tx.documentAuditLog.create` call.\n\nNow checking the first caller, the `signFieldWithToken` route in field-router/router.ts around lines 615-633: it uses the plain `procedure` rather than `authenticatedProcedure`, so `ctx.user?.id` is optional, and notably there's no document-status check before this route calls `signFieldWithToken`.\n\nI haven't opened the `procedure` middleware implementation or the `ZSignFieldWithTokenMutationSchema` definition yet, so I should check those too.\n\nLooking at the second caller, apply-multi-sign-signature.ts, it imports `procedure` from the trpc module and applies several guards before reaching `signFieldWithToken`: it rejects if any recipient's read status isn't OPENED, rejects if recipient access or action auth is required, skips early if the recipient's signing status is REJECTED, and then queries for a specific field type before proceeding.\n\nI'm reconsidering the draft's claim that completed documents would have signed recipients while draft documents wouldn't \u2014 that's speculative inference about stored state from a status label rather than describing the actual predicate. I need to remove that and instead just state plainly what the check at line 114 verifies: whether `signingStatus === SigningStatus.SIGNED`, without inferring what values are typically present.\n\nAlso the citation for lines 59-84 uses \"...\" ellipsis substitution, which violates the formatting rule against abbreviating repo code. I should flag this and also verify whether `apply-multi-sign-signature.ts` uses the `procedure` middleware too, since the draft only mentions `field-router/router.ts`.\n\nChecking the import and export lines, yes, it confirms both callers use `procedure`, so the draft has a gap I need to fix. Now I'm drafting the corrected answer, starting with how relaxing the status gate lets execution reach remaining guards since neither caller adds its own status check, then laying out the verified call paths with the changed predicate citation.\n\nLooking at the `field-router/router.ts` call site, it uses the plain `procedure` rather than `authenticatedProcedure`, treats `ctx.user?.id` as optional, and has no document-status check before invoking `signFieldWithToken` \u2014 though I haven't verified the middleware implementation or the input schema's own constraints, so those remain unconfirmed.\n\nNow checking the `apply-multi-sign-signature.ts` call site, which also uses `procedure` but layers three guards before signing: rejecting unviewed documents, rejecting when additional auth is required, and skipping recipients with `REJECTED` signing status, then further filters its query to signature-type fields that haven't been inserted yet.\n\nI notice this handler has no `DocumentStatus` check, and I haven't confirmed whether `getDocumentByToken` or `getRecipientByToken` filter by status internally.\n\nLooking at the target implementation's remaining guards, I see it checks recipient expiration, rejects already-signed recipients or fields, prevents re-inserting fields, validates field types like NUMBER, TEXT, CHECKBOX, RADIO, and DROPDOWN, calls `validateFieldAuth`, and verifies signature field presence \u2014 though I haven't opened the implementations for `assertRecipientNotExpired` or `validateFieldAuth` yet.\n\nNow I'm tracing the transaction writes: `tx.field.update` unconditionally sets `customText` and `inserted: true` for the field, while `tx.signature.upsert` only runs when `isSignatureField` is true, with its `create` branch firing when no signature row yet exists for that `fieldId`.\n\nThe audit log creation runs unconditionally within the transaction, so before shipping I need to verify a few things: whether `getDocumentByToken` or `getRecipientByToken` filter by pending status, what conditions `assertRecipientNotExpired` and `validateFieldAuth` actually reject, and whether the `procedure` middleware used by both callers provides an equivalent guard that the draft can't otherwise confirm.\n\nNow I need to make sure I format this properly per the typography rules, using plain code fences with line ranges rather than language tags.\n\nI should also trim the draft down since the instructions cap prose at 350 words excluding citations, and I noticed the draft had some citation formatting issues like ellipses inside code blocks that aren't allowed.\n\nI need to drop the speculative claim about what status a COMPLETED vs DRAFT document's recipients would have \u2014 there's no evidence backing that in the draft. I also want to fix the citation formatting to remove ellipses, clarify that both callers use the same procedure rather than just the field-router file, and avoid speculating about what state a DRAFT document write path would be in for the pre-ship verification point.\n\nInstead, I should just state plainly that the signingStatus and field.inserted predicates are the remaining inline guards, and that whether they actually block writes for non-PENDING documents depends on stored values the opened file bodies don't establish. Then I'll write the final answer, aiming for under 350 words.\n\nLooking at the call sites, neither the field router nor the other caller adds its own document-status predicate before delegating into `signFieldWithToken`, so both paths can reach the changed code with envelopes in statuses other than PENDING \u2014 passing the changed check doesn't guarantee the transaction writes are reached, since other guards remain. I'm noting that the router defines this route on the unauthenticated `procedure` rather than `authenticatedProcedure`, with no document-status check in the handler itself before the call.\n\nThis handler also checks for a rejected signing status and skips those recipients, then filters fields by signature type that haven't been inserted yet, but I notice there's no explicit document status check here. I still haven't opened `getDocumentByToken` or `getRecipientByToken` to confirm whether they handle status filtering themselves.\n\nLooking at the other location, the target code is more thorough: it verifies the recipient isn't expired, checks for `SIGNED` status on either the recipient or field's recipient, confirms `field.inserted`, validates each field type individually, and runs `validateFieldAuth`.\n\nInside the transaction, the field is updated unconditionally with the new text and marked as inserted, while the signature upsert only happens when the field is actually a signature type, creating or updating the signature record with the image or typed text.\n\nBefore shipping, I need to check whether `getDocumentByToken` or `getRecipientByToken` already filter by pending status, which would mean the status guard is handled elsewhere rather than in this file directly. I also want to verify where `assertRecipientNotExpired` and `validateFieldAuth` are invoked relative to the transaction to confirm the ordering of checks.\n\nI should also open the `procedure` middleware both callers rely on, since they use `procedure` rather than `authenticatedProcedure` \u2014 I can't assume auth requirements just from the naming or the optional `userId` field. And I still need to confirm whether the `signingStatus === SIGNED` and `field.inserted` checks actually block writes for non-pending documents, since I haven't established what values those fields hold outside the pending state.\n\nNow I'm double-checking my response length to make sure the prose stays within a reasonable word count, excluding citations.\n\nI'm listing the remaining unread guard checks still to cite\u2014recipient expiration, signing status, field insertion, per-type validations, field auth, signature restrictions, and readOnly enforcement\u2014then describing the transaction logic where field updates run unconditionally while signature upserts are conditional on field type, distinguishing create versus update behavior based on whether a row already exists.\n\nI still have four pre-ship items to verify before finishing: opening `getDocumentByToken`/`getRecipientByToken` for hidden status filters, opening `assertRecipientNotExpired`/`validateFieldAuth` to confirm their rejection logic, checking that both callers use `procedure` rather than `authenticatedProcedure` (meaning I can't infer auth requirements without seeing the middleware), and confirming whether the signing-status and field-inserted checks actually block writes for non-PENDING envelopes.",
+        "tools": [
+          {
+            "id": "line-tool:0",
+            "kind": "read",
+            "label": "Read `packages/lib/server-only/field/sign-field-with-token.ts`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:1",
+            "kind": "read",
+            "label": "Read `packages/trpc/server/embedding-router/apply-multi-sign-signature.ts`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:2",
+            "kind": "read",
+            "label": "Read `packages/trpc/server/field-router/router.ts`",
+            "status": "done"
+          }
+        ],
+        "files": [
+          {
+            "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+            "action": "read"
+          },
+          {
+            "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+            "action": "read"
+          },
+          {
+            "path": "packages/trpc/server/field-router/router.ts",
+            "action": "read"
+          }
+        ],
+        "steps": [
+          {
+            "id": "line:0:Read `packages/lib/server-only/field/sign-field-with-token.ts`",
+            "content": "Read `packages/lib/server-only/field/sign-field-with-token.ts`",
+            "status": "completed"
+          },
+          {
+            "id": "line:1:Read `packages/trpc/server/embedding-router/apply-multi-sign-signature.ts`",
+            "content": "Read `packages/trpc/server/embedding-router/apply-multi-sign-signature.ts`",
+            "status": "completed"
+          },
+          {
+            "id": "line:2:Read `packages/trpc/server/field-router/router.ts`",
+            "content": "Read `packages/trpc/server/field-router/router.ts`",
+            "status": "completed"
+          }
+        ]
+      }
+    }
+  ],
+  "artifacts": [],
+  "sessionCostUsd": 0.283605,
+  "createdAt": 1791589305755,
+  "updatedAt": 1791589486422,
+  "messageCount": 2,
+  "repoContext": {
+    "provider": "github",
+    "owner": "CoopAI-Corp",
+    "repo": "documenso",
+    "branch": "main",
+    "scope": "file",
+    "file": "packages/lib/server-only/field/sign-field-with-token.ts",
+    "fileSource": "remote",
+    "languageId": "typescript",
+    "selectedLines": [
+      108,
+      110
+    ]
+  },
+  "draftInput": ""
+}

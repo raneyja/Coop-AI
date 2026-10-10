@@ -21,7 +21,6 @@ import {
   undoPatchApplication,
   type FileUndoSnapshot
 } from "./patchApplier";
-import { applyHunksToContent } from "./patchContent";
 import { lookupPatchFileContent } from "./patchFileContents";
 import {
   findOpenDocumentForPatchFile,
@@ -260,7 +259,11 @@ function readAppliedFileContent(
   relativePath: string,
   record: ReturnType<typeof getPatchRecord>
 ): string | undefined {
-  const live = resolveEditablePatchTarget(relativePath)?.readText();
+  const appliedContent = record?.undo?.find((snap) => snap.relativePath === relativePath)?.appliedContent;
+  const live = resolveEditablePatchTarget(relativePath, {
+    repo: record?.card.targetRepo, preferLocalDisk: record?.card.preferLocalDisk,
+    capturedContent: appliedContent ?? lookupPatchFileContent(relativePath, record?.fileContents)
+  })?.readText();
   if (live?.trim()) {
     return live;
   }
@@ -270,7 +273,8 @@ function readAppliedFileContent(
     pathsReferToSameFile(entry.relativePath, relativePath)
   );
   const fromOpen = findOpenDocumentForPatchFile(relativePath, {
-    capturedContent: captured,
+    repo: record?.card.targetRepo,
+    capturedContent: appliedContent ?? captured,
     search: filePatch?.hunks[0]?.search
   })?.getText();
   if (fromOpen?.trim()) {
@@ -295,16 +299,9 @@ function readAppliedFileContent(
     }
   }
 
-  const original =
-    captured ??
-    record?.undo?.find((snap) => pathsReferToSameFile(snap.relativePath, relativePath))?.originalContent;
-  if (original && filePatch?.hunks.length) {
-    const applied = applyHunksToContent(original, filePatch.hunks);
-    if (applied.ok && applied.content.trim()) {
-      return applied.content;
-    }
-  }
-  return undefined;
+  // Closed targets still have the bytes verified at Apply. Replaying every
+  // proposed hunk here would also ship rejected hunks in a mixed decision card.
+  return appliedContent ?? record?.card.prFiles?.find((file) => file.path === relativePath)?.content;
 }
 
 function withCreatePrState(
@@ -318,7 +315,9 @@ function withCreatePrState(
   const fromApply = (appliedFiles ?? []).filter(
     (file) => file.path.trim() && file.content.length > 0
   );
-  const prFiles = fromApply.length > 0 ? fromApply : collectAppliedPrFiles(card);
+  const prFiles = [...new Map(
+    [...collectAppliedPrFiles(card), ...fromApply].map((file) => [file.path, file])
+  ).values()];
   return {
     ...card,
     ...stampAppliedCreatePr({
@@ -533,27 +532,42 @@ async function applyPendingPatchHunksUnlocked(
     return false;
   }
 
+  const preferLocalDisk = record.card.preferLocalDisk ?? applyOptions?.preferLocalDisk;
   const preview = buildPatchCardState(record.patches, {
     status: "pending",
     messageTimestamp: timestamp,
     previousFiles: record.card.files,
-    fileContents: record.fileContents
+    fileContents: record.fileContents,
+    targetRepo: record.card.targetRepo,
+    preferLocalDisk
   });
 
   const result = await applyPatchesToWorkspace(subset, {
     matchIndicesByFileHunk: selections.matchIndicesByFileHunk,
     fileContents: record.fileContents,
-    preferLocalDisk: applyOptions?.preferLocalDisk
+    repo: record.card.targetRepo,
+    preferLocalDisk
   });
   if (!result.ok) {
     setLastPatchApplyError(result.error);
     emitPatchEvent("edit.patch_failed", { phase: "apply", error: result.error, file: result.file });
+    let verifiedPreview = preview;
+    if (result.undo?.length) {
+      setPatchRecordUndo(timestamp, mergeUndoSnapshots(record.undo, result.undo));
+      const verifiedPaths = new Set(result.appliedFiles?.map((file) => file.path));
+      for (const hunkId of hunkIds) {
+        const located = locateHunkById(record.patches, hunkId);
+        if (located && verifiedPaths.has(located.file.relativePath)) {
+          verifiedPreview = setHunkStatusOnCard(verifiedPreview, hunkId, "applied");
+        }
+      }
+    }
     const failed: PatchCardState = {
-      ...preview,
+      ...verifiedPreview,
       status: "failed",
       error: result.error,
       suppressMarkdown: true,
-      canUndo: Boolean(record.undo?.length)
+      canUndo: Boolean(record.undo?.length || result.undo?.length)
     };
     updatePatchRecordCard(timestamp, failed);
     publishSnapshot(publish, timestamp);
@@ -571,7 +585,7 @@ async function applyPendingPatchHunksUnlocked(
   nextCard = finalizeCardAfterHunkUpdate(nextCard, {
     appliedFiles: result.appliedFiles,
     preferLocalDisk:
-      applyOptions?.preferLocalDisk === true || record.card.prBlockedReason === "local-file"
+      preferLocalDisk === true || record.card.prBlockedReason === "local-file"
   });
 
   if (pendingHunkIds(nextCard).length === 0) {
@@ -730,7 +744,9 @@ async function undoLastPatchWithStateUnlocked(
   const pending = buildPatchCardState(record.patches, {
     status: "pending",
     messageTimestamp: timestamp,
-    fileContents: record.fileContents
+    fileContents: record.fileContents,
+    targetRepo: record.card.targetRepo,
+    preferLocalDisk: record.card.preferLocalDisk
   });
   const review: PatchCardState =
     record.card.files.length > 0

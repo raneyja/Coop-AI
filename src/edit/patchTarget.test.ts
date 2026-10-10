@@ -112,6 +112,45 @@ async function main(): Promise<void> {
     assert.equal(result.target.uri.scheme, "untitled");
   });
 
+  await test("bound remote Apply refuses anonymous or foreign buffers even with identical SEARCH and content", async () => {
+    (vscode.workspace.textDocuments as unknown[]).length = 0;
+    clearRemotePatchBuffersForTests();
+    const body = "const x = 1;\n";
+    const docs = vscode.workspace.textDocuments as unknown as vscode.TextDocument[];
+    docs.push(fakeDoc("untitled:anonymous", body), fakeDoc("vscode-vfs://github/other/demo/src/foo.ts?ref=main", body),
+      fakeDoc("vscode-vfs://github/acme/demo/src/foo.ts?ref=preview", body));
+    const repo = { owner: "acme", repo: "demo", provider: "github" as const, branch: "main" };
+    assert.equal(findOpenDocumentForPatchFile("src/foo.ts", { repo, capturedContent: body, search: "const x = 1;" }), undefined);
+    const main = fakeDoc("vscode-vfs://github/acme/demo/src/foo.ts?ref=main", body);
+    docs.push(main);
+    assert.equal(findOpenDocumentForPatchFile("src/foo.ts", { repo, capturedContent: body }), main);
+  });
+
+  await test("ambiguous or unverified changed-ref buffers fail without opening an Apply copy", async () => {
+    const repo = { owner: "acme", repo: "demo", provider: "github" as const, branch: "main" };
+    for (const duplicate of [false, true]) {
+      (vscode.workspace.textDocuments as unknown[]).length = 0;
+      clearRemotePatchBuffersForTests();
+      const docs = vscode.workspace.textDocuments as unknown as vscode.TextDocument[];
+      docs.push(fakeDoc("vscode-vfs://github/acme/demo/src/foo.ts", "user work\n"));
+      if (duplicate) {
+        docs.length = 0;
+        docs.push(fakeDoc("untitled:first", "const x = 1;\n"), fakeDoc("untitled:second", "const x = 1;\n"));
+        for (const doc of docs) rememberRemotePatchBuffer("src/foo.ts", doc.uri, doc.getText(), repo);
+      }
+      let opens = 0;
+      const result = await ensureEditablePatchTarget("src/foo.ts", {
+        repo, fileContents: { "src/foo.ts": "const x = 1;\n" }, openRemoteFile: async () => { opens++; return false; }
+      });
+      assert.equal(result.ok, false);
+      if (!result.ok) assert.match(result.error, /ambiguous|branch cannot be verified/);
+      assert.equal(opens, 0);
+      assert.equal(docs.length, duplicate ? 2 : 1);
+    }
+    (vscode.workspace.textDocuments as unknown[]).length = 0;
+    clearRemotePatchBuffersForTests();
+  });
+
   await test("collectOpenPatchFileBytes reads a remembered untitled API buffer", () => {
     (vscode.workspace.textDocuments as unknown[]).length = 0;
     clearRemotePatchBuffersForTests();

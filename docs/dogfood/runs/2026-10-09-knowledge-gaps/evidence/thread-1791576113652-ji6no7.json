@@ -1,0 +1,1222 @@
+{
+  "id": "thread-1791576113652-ji6no7",
+  "title": "Knowledge Gaps \u00b7 CoopAI-Corp/plane",
+  "messages": [
+    {
+      "clientSubmissionId": "1791576140611-1",
+      "role": "user",
+      "content": "[knowledge-gaps] Before changing work-item state validation, which rules can we establish from the code, and which unanswered questions about allowed transitions need documentation or tests?\nrepo: CoopAI-Corp/plane \u00b7 branch: preview",
+      "timestamp": 1791576143655
+    },
+    {
+      "role": "assistant",
+      "content": "The attached serializer files establish several concrete state-validation rules, but reveal a complete absence of transition-graph logic \u2014 the code only validates *membership* (is this state in this project?), not *allowed moves* (can an issue move from state A to state B?). [Sources: Reviewed source]\n\n**Established rules from the code**\n\n**Rule 1 \u2014 State must belong to the current project**\n\nBoth the `app` and `api` issue serializers enforce this at write time. In `apps/api/plane/api/serializers/issue.py`:\n\n```\n121:126:apps/api/plane/api/serializers/issue.py\n        # Check state is from the project only else raise validation error\n        if (\n            data.get(\"state\")\n            and not State.objects.filter(project_id=self.context.get(\"project_id\"), pk=data.get(\"state\").id).exists()\n        ):\n            raise serializers.ValidationError(\"State is not valid please pass a valid state_id\")\n```\n\nThe `app` serializer (`apps/api/plane/app/serializers/issue.py` lines 168\u2013176) does the same check but routes through a different manager depending on context (see Rule 2).\n\n**Rule 2 \u2014 Triage state access is caller-controlled, not enforced by default**\n\nThe `app` issue serializer switches the ORM manager based on a context flag:\n\n```\n124:126:apps/api/plane/app/serializers/issue.py\n    def validate(self, attrs):\n        allow_triage = self.context.get(\"allow_triage_state\", False)\n        state_manager = State.triage_objects if allow_triage else State.objects\n```\n\nWhen `allow_triage_state` is `False` (the default), `State.objects` is used, which *presumably* excludes triage-group states. When `True`, `State.triage_objects` is used instead. The `api` serializer (`apps/api/plane/api/serializers/issue.py` line 124) always uses `State.objects` \u2014 it has no triage-aware branching at all.\n\n**Rule 3 \u2014 Triage states cannot be created or assigned as a group via the state serializers**\n\nBoth `StateSerializer` implementations block creation of a state with `group == StateGroup.TRIAGE`. In `apps/api/plane/app/serializers/state.py`:\n\n```\n31:34:apps/api/plane/app/serializers/state.py\n    def validate(self, attrs):\n        if attrs.get(\"group\") == StateGroup.TRIAGE.value:\n            raise serializers.ValidationError(\"Cannot create triage state\")\n        return attrs\n```\n\n`apps/api/plane/api/serializers/state.py` (lines 24\u201325) has the same guard, plus it also clears all other `default=True` flags project-wide when a new default state is set (line 22) \u2014 a side-effectful mutation inside `validate()` that the `app` version does not replicate.\n\n**Rule 4 \u2014 No transition matrix exists in any of these serializers**\n\nNone of the five files contain logic that checks the *current* state of an issue before accepting the new state. The validation is purely: \"does this state ID exist in this project?\" Any state \u2192 any state move within the same project passes serializer validation.\n\n**Open questions**\n\n**Q1 \u2014 What does `State.triage_objects` actually filter?**\nThe `app` issue serializer branches on it (line 126), but the manager definition is in `plane.db.models.State`, which is not attached. Without knowing its queryset filter, it is unknown whether triage-group states are excluded from `State.objects` by default or only when `allow_triage_state=False` suppresses the alternate manager. This matters for any change to state validation because the `api` serializer never uses `triage_objects` \u2014 if `State.objects` *does* include triage states, the two serializer stacks have different effective state allowlists right now.\n\n**Q2 \u2014 Is there a transition graph enforced anywhere outside these serializers?**\nThe serializers only validate state membership. If allowed-transition rules exist (e.g., cannot move from `done` back to `backlog`, or `cancelled` is terminal), they would have to live in view logic, signals, or a separate service layer \u2014 none of which are in the attached evidence. Before adding transition constraints to the serializers, confirm whether any such rules already exist elsewhere to avoid double-enforcement or contradiction.\n\n**Q3 \u2014 Which callers set `allow_triage_state=True`, and is the `api` stack's omission intentional?**\nThe `app` serializer's triage gate is only as strong as the callers that pass the context key. If any view omits it, triage states are silently blocked. The `api` serializer has no equivalent gate at all. Whether this asymmetry is intentional (the `api` surface is public/external and should never allow triage) or an oversight needs a decision recorded in documentation or a test that asserts the `api` serializer rejects triage-group state IDs.\n\n**Documentation gaps**\n\nNo documentation integration hits, Confluence pages, Notion pages, or structured scan gaps were returned for this area. The gap scan completed with zero findings, but its status was `scan_incomplete` \u2014 that is a coverage limit, not a clean bill of health. The specific unknowns that need documentation or tests:\n\n- The contract for `State.triage_objects` vs `State.objects` (what each manager returns)\n- The intended allowed-transition policy (if any) between `StateGroup` values\n- The deliberate or accidental divergence between `app` and `api` state validation paths\n\n**Recommended next steps**\n\n1. Read `plane/db/models/state.py` to verify what `triage_objects` filters and whether `State.objects` includes or excludes triage-group states \u2014 this directly determines whether the `api` serializer has a silent gap.\n2. Search view/signal code for any existing transition guards (e.g., `completed_at` population logic or state-group change handlers) before adding serializer-level transition rules, to avoid conflicting enforcement.\n3. Add serializer tests that assert: (a) a triage-group state ID is rejected by the `api` issue serializer, (b) `allow_triage_state=False` rejects triage states in the `app` serializer, and (c) any intended terminal-state transition rules are enforced.\n4. Document the intended state-group transition policy (even a short ADR or inline docstring on `IssueSerializer.validate`) so the distinction between membership validation and transition validation is explicit before the next change to this code.\n\n**Reviewed source**\n\n```1:20:apps/api/plane/api/serializers/state.py\n# Copyright (c) 2023-present Plane Software, Inc. and contributors\n# SPDX-License-Identifier: AGPL-3.0-only\n# See the LICENSE file for details.\n\n# Module imports\nfrom .base import BaseSerializer\nfrom plane.db.models import State, StateGroup\nfrom rest_framework import serializers\n\n\nclass StateSerializer(BaseSerializer):\n    \"\"\"\n    Serializer for work item states with default state management.\n\n    Handles state creation and updates including default state validation\n    and automatic default state switching for workflow management.\n    \"\"\"\n\n    def validate(self, data):\n        # If the default is being provided then make all other states default False\n```",
+      "timestamp": 1791576193455,
+      "relatedArtifactId": "evidence-1791576154349-t111te",
+      "activity": {
+        "durationMs": 53449,
+        "tools": [
+          {
+            "id": "line-tool:0",
+            "kind": "read",
+            "label": "Read `apps/api/plane/api/serializers/issue.py`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:1",
+            "kind": "read",
+            "label": "Read `apps/api/plane/api/serializers/state.py`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:2",
+            "kind": "read",
+            "label": "Read `apps/api/plane/app/serializers/issue.py`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:3",
+            "kind": "read",
+            "label": "Read `apps/api/plane/app/serializers/state.py`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:4",
+            "kind": "read",
+            "label": "Read `apps/api/plane/space/serializer/issue.py`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:5",
+            "kind": "generic",
+            "label": "Skipped Confluence for `work-item state validation` \u2014 gather time expired",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:6",
+            "kind": "generic",
+            "label": "Skipped Notion for `work-item state validation` \u2014 gather time expired",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:7",
+            "kind": "generic",
+            "label": "Skipped Jira for `work-item state validation` \u2014 gather time expired",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:8",
+            "kind": "generic",
+            "label": "Skipped Google Docs for `work-item state validation` \u2014 gather time expired",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:9",
+            "kind": "generic",
+            "label": "Skipped Slack for `work-item state validation` \u2014 gather time expired",
+            "status": "done"
+          }
+        ],
+        "files": [
+          {
+            "path": "apps/api/plane/api/serializers/issue.py",
+            "action": "read"
+          },
+          {
+            "path": "apps/api/plane/api/serializers/state.py",
+            "action": "read"
+          },
+          {
+            "path": "apps/api/plane/app/serializers/issue.py",
+            "action": "read"
+          },
+          {
+            "path": "apps/api/plane/app/serializers/state.py",
+            "action": "read"
+          },
+          {
+            "path": "apps/api/plane/space/serializer/issue.py",
+            "action": "read"
+          },
+          {
+            "path": "work-item state validation",
+            "action": "explored"
+          }
+        ],
+        "steps": [
+          {
+            "id": "line:0:Read `apps/api/plane/api/serializers/issue.py`",
+            "content": "Read `apps/api/plane/api/serializers/issue.py`",
+            "status": "completed"
+          },
+          {
+            "id": "line:1:Read `apps/api/plane/api/serializers/state.py`",
+            "content": "Read `apps/api/plane/api/serializers/state.py`",
+            "status": "completed"
+          },
+          {
+            "id": "line:2:Read `apps/api/plane/app/serializers/issue.py`",
+            "content": "Read `apps/api/plane/app/serializers/issue.py`",
+            "status": "completed"
+          },
+          {
+            "id": "line:3:Read `apps/api/plane/app/serializers/state.py`",
+            "content": "Read `apps/api/plane/app/serializers/state.py`",
+            "status": "completed"
+          },
+          {
+            "id": "line:4:Read `apps/api/plane/space/serializer/issue.py`",
+            "content": "Read `apps/api/plane/space/serializer/issue.py`",
+            "status": "completed"
+          },
+          {
+            "id": "line:5:Skipped Confluence for `work-item state validation` \u2014 gather time expired",
+            "content": "Skipped Confluence for `work-item state validation` \u2014 gather time expired",
+            "status": "completed",
+            "detail": "Search did not start because context gathering had ended"
+          },
+          {
+            "id": "line:6:Skipped Notion for `work-item state validation` \u2014 gather time expired",
+            "content": "Skipped Notion for `work-item state validation` \u2014 gather time expired",
+            "status": "completed",
+            "detail": "Search did not start because context gathering had ended"
+          },
+          {
+            "id": "line:7:Skipped Jira for `work-item state validation` \u2014 gather time expired",
+            "content": "Skipped Jira for `work-item state validation` \u2014 gather time expired",
+            "status": "completed",
+            "detail": "Search did not start because context gathering had ended"
+          },
+          {
+            "id": "line:8:Skipped Google Docs for `work-item state validation` \u2014 gather time expired",
+            "content": "Skipped Google Docs for `work-item state validation` \u2014 gather time expired",
+            "status": "completed",
+            "detail": "Search did not start because context gathering had ended"
+          },
+          {
+            "id": "line:9:Skipped Slack for `work-item state validation` \u2014 gather time expired",
+            "content": "Skipped Slack for `work-item state validation` \u2014 gather time expired",
+            "status": "completed",
+            "detail": "Search did not start because context gathering had ended"
+          }
+        ]
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "evidence-1791576154349-t111te",
+      "kind": "knowledge-gaps",
+      "timestamp": 1791576154349,
+      "payload": {
+        "artifactId": "evidence-1791576154349-t111te",
+        "evidence": {
+          "documentationCoverage": {
+            "status": "documentation-search-requested"
+          },
+          "fileStructure": {
+            "status": "file-structure-requested",
+            "provider": "github"
+          },
+          "ownershipReport": {
+            "path": "(repository)",
+            "provider": "github",
+            "owner": "CoopAI-Corp",
+            "repo": "plane",
+            "scores": [
+              {
+                "owner": "sriramveeraghanta",
+                "githubLogin": "sriramveeraghanta",
+                "score": 100,
+                "tier": "primary",
+                "specialty": "frontend/ui",
+                "commitCount": 39,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 5,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "mguptahub",
+                "githubLogin": "mguptahub",
+                "score": 74,
+                "tier": "primary",
+                "specialty": "security/auth",
+                "commitCount": 30,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 5,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "dependabot[bot]",
+                "githubLogin": "dependabot[bot]",
+                "score": 1,
+                "tier": "familiar",
+                "specialty": "frontend/ui",
+                "commitCount": 6,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 2,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "codingwolf-at",
+                "githubLogin": "codingwolf-at",
+                "score": 1,
+                "tier": "familiar",
+                "commitCount": 2,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 5,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "Rahulcheryala",
+                "githubLogin": "Rahulcheryala",
+                "score": 0,
+                "tier": "familiar",
+                "commitCount": 3,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 2,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "okxint",
+                "githubLogin": "okxint",
+                "score": 0,
+                "tier": "familiar",
+                "commitCount": 2,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 2,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "KanteshMurade",
+                "githubLogin": "KanteshMurade",
+                "score": 0,
+                "tier": "familiar",
+                "commitCount": 2,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 2,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "sangeethailango",
+                "githubLogin": "sangeethailango",
+                "score": 0,
+                "tier": "familiar",
+                "commitCount": 2,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 2,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "b-saikrishnakanth",
+                "githubLogin": "b-saikrishnakanth",
+                "score": 0,
+                "tier": "familiar",
+                "commitCount": 2,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 2,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "akhil-vamshi-konam",
+                "githubLogin": "akhil-vamshi-konam",
+                "score": 0,
+                "tier": "familiar",
+                "commitCount": 1,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 5,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "wildsurfer",
+                "githubLogin": "wildsurfer",
+                "score": 0,
+                "tier": "familiar",
+                "commitCount": 1,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 2,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "ch4og",
+                "githubLogin": "ch4og",
+                "score": 0,
+                "tier": "familiar",
+                "commitCount": 1,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 2,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "karthiksuki",
+                "githubLogin": "karthiksuki",
+                "score": 0,
+                "tier": "familiar",
+                "commitCount": 1,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 2,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "durgeshhhhhhh",
+                "githubLogin": "durgeshhhhhhh",
+                "score": 0,
+                "tier": "familiar",
+                "commitCount": 1,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 2,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "pratapalakshmi",
+                "githubLogin": "pratapalakshmi",
+                "score": 0,
+                "tier": "familiar",
+                "commitCount": 1,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 2,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "bubacho",
+                "githubLogin": "bubacho",
+                "score": 0,
+                "tier": "familiar",
+                "commitCount": 1,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 2,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "astarte75",
+                "githubLogin": "astarte75",
+                "score": 0,
+                "tier": "familiar",
+                "commitCount": 1,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 2,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "jamartineztelecoengineer84-dotcom",
+                "githubLogin": "jamartineztelecoengineer84-dotcom",
+                "score": 0,
+                "tier": "familiar",
+                "commitCount": 1,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 2,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "MinitJain",
+                "githubLogin": "MinitJain",
+                "score": 0,
+                "tier": "familiar",
+                "commitCount": 1,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 2,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "Saurabhkmr98",
+                "githubLogin": "Saurabhkmr98",
+                "score": 0,
+                "tier": "familiar",
+                "commitCount": 1,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 2,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              },
+              {
+                "owner": "PhuongPN6689",
+                "githubLogin": "PhuongPN6689",
+                "score": 0,
+                "tier": "familiar",
+                "commitCount": 1,
+                "reviewApprovals": 0,
+                "issueResolutions": 0,
+                "activityWeight": 2,
+                "role": "author",
+                "presence": {
+                  "state": "unknown",
+                  "label": "Not linked"
+                }
+              }
+            ],
+            "teamGraph": {
+              "members": [
+                {
+                  "owner": "sriramveeraghanta",
+                  "role": "primary",
+                  "score": 100,
+                  "available": false
+                },
+                {
+                  "owner": "mguptahub",
+                  "role": "primary",
+                  "score": 74,
+                  "available": false
+                },
+                {
+                  "owner": "dependabot[bot]",
+                  "role": "backup",
+                  "score": 1,
+                  "available": false
+                },
+                {
+                  "owner": "codingwolf-at",
+                  "role": "backup",
+                  "score": 1,
+                  "available": false
+                },
+                {
+                  "owner": "Rahulcheryala",
+                  "role": "backup",
+                  "score": 0,
+                  "available": false
+                },
+                {
+                  "owner": "okxint",
+                  "role": "backup",
+                  "score": 0,
+                  "available": false
+                },
+                {
+                  "owner": "KanteshMurade",
+                  "role": "backup",
+                  "score": 0,
+                  "available": false
+                },
+                {
+                  "owner": "sangeethailango",
+                  "role": "backup",
+                  "score": 0,
+                  "available": false
+                }
+              ],
+              "escalationPath": "Suggested contact order from contribution and declared-owner evidence; not a verified on-call policy. If @sriramveeraghanta is unavailable, reach out to @dependabot[bot] next [Sources: GitHub commits & reviews]."
+            },
+            "risk": {
+              "singlePointOfFailure": false,
+              "expertUnavailable": false,
+              "orphaned": false,
+              "highTurnover": false,
+              "teamDispersion": false
+            },
+            "history": [
+              {
+                "period": "3y",
+                "label": "3 years ago",
+                "primaryOwner": "sriramveeraghanta",
+                "secondaryOwners": [
+                  "mguptahub",
+                  "dependabot[bot]",
+                  "Rahulcheryala"
+                ],
+                "narrative": "sriramveeraghanta was primary (39% of commits); mguptahub, dependabot[bot], Rahulcheryala contributed."
+              },
+              {
+                "period": "1y",
+                "label": "1 year ago",
+                "primaryOwner": "unknown",
+                "secondaryOwners": [],
+                "narrative": "No commits in this period."
+              },
+              {
+                "period": "quarter",
+                "label": "Last quarter",
+                "primaryOwner": "unknown",
+                "secondaryOwners": [],
+                "narrative": "No commits in this period."
+              },
+              {
+                "period": "now",
+                "label": "Current",
+                "primaryOwner": "sriramveeraghanta",
+                "secondaryOwners": [
+                  "mguptahub",
+                  "dependabot[bot]",
+                  "Rahulcheryala"
+                ],
+                "narrative": "sriramveeraghanta was primary (42% of commits); mguptahub, dependabot[bot], Rahulcheryala contributed."
+              }
+            ],
+            "messageDraft": {
+              "recipient": "sriramveeraghanta",
+              "text": "@sriramveeraghanta I noticed you're the primary maintainer of this area (39+ commits in last 6 months).\nI have a question about : a change in this area\nAre you available for a quick discussion?"
+            },
+            "warnings": [
+              "PR review data unavailable: path query parameter is required"
+            ],
+            "completeness": "full",
+            "signals": {
+              "commits": [
+                {
+                  "author": "sriramveeraghanta",
+                  "authorLogin": "sriramveeraghanta",
+                  "counts": {
+                    "sixMonths": 39,
+                    "oneYear": 39,
+                    "allTime": 39
+                  },
+                  "recencyScore": 84,
+                  "messages": [
+                    "chore(deps): resolve open Dependabot security alerts (#9456)\n\nBumps three dependencies flagged by Dependabot, closing all 7 open alerts:\n\n- axios 1.16.0 -> 1.18.1 (catalog), closing 5 alerts:\n  GHSA-gcfj-64vw-6mp9 (high, inherited proxy after interceptor config clone),\n  GHSA-hcpx-6fm6-wx23, GHSA-mwf2-3pr3-8698, GHSA-f4gw-2p7v-4548,\n  GHSA-xj6q-8x83-jv6g. Dependabot proposed 1.18.0; 1.18.1 is a pure bugfix\n  release on top of it that also fixes runtime crashes and AxiosError\n  circular-serialisation, so it is used instead. Supersedes PR #9447.\n\n- brace-expansion 5.0.6 -> 5.0.7 (override), closing GHSA-3jxr-9vmj-r5cp\n  (high, DoS via exponential-time expansion of consecutive {} groups).\n\n- morgan -> 1.11.0 (new override), closing GHSA-4vj7-5mj6-jm8m (log forging\n  via unneutralized control characters in :remote-user). Pulled in\n  transitively by @react-router/serve.\n\nVerified: check:types 28/28, check:lint 16/16, build 16/16.",
+                    "chore: clean up React Doctor warnings in admin app (#9418)\n\n* chore: clean up React Doctor warnings in admin app\n\nRaises the admin app's React Doctor score from 61 to 89 by resolving 49 of\n53 diagnostics (3 errors + 46 warnings).\n\nErrors (render purity):\n- authentication/page.tsx: move ref write out of render into useEffect\n- workspace/create/form.tsx: guard window.location.origin read\n- sign-in-form.tsx: drop redundant setState-forwarding arrow\n\nAccessibility:\n- aria-labels on icon-only buttons (password toggles, sidebar, header)\n- destination-naming aria-labels on ambiguous \"learn more\"/\"here\" links\n- positive tabIndex -> 0; auth-banner dismiss div -> native <button>\n\nMaintainability / bugs:\n- delete 6 orphaned files; remove 3 unused deps (@tanstack/react-virtual,\n  @tanstack/virtual-core, axios)\n- hoist static form-field objects and pure helpers to module scope\n- extract StoreContext into providers/store-context.ts (Fast Refresh)\n- explicit button type; stable list key in sidebar-menu\n\nLeft in place: @react-router/node + isbot (required by react-router build,\nfalse positives), String.includes in sidebar-menu (not array membership),\nand the InstanceSetupForm split (cohesive form; deferred).\n\nNote: committed with --no-verify; the pre-commit hook flags only pre-existing\nunrelated lint warnings in the touched files. Changes pass check:types,\ncheck:lint (759 cap), and check:format.\n\n* chore: address PR review comments on admin react-doctor cleanup\n\n- workspace/create/form.tsx: use useState with a lazy initializer + effect\n  for workspaceBaseURL (removes the SSR-guard hydration concern and the\n  per-render recompute)\n- header: drop the always-true breadcrumb guard (keeps behavior; `> 0`\n  would hide the root \"Settings\" crumb on top-level pages)\n- remove tabIndex={-1} from password toggles and doc links so they are\n  keyboard-accessible (setup-form, controller-input, gitea/github/gitlab/google)\n- store-context: default StoreContext to undefined so the existing hook\n  guards are live (fail-fast outside StoreProvider)\n- store.provider: replace stale Next.js pages/ssg comment\n- sidebar-menu: use startsWith for active-route detection (correct prefix\n  match; also clears the js-set-map-lookups false positive)",
+                    "fix(security): block bot user logins (#9368)\n\nBot service accounts (User.is_bot=True, e.g. the WORKSPACE_SEED bot) are\ninternal identities meant to act only through API tokens. Nothing stopped\none from being driven through the interactive login flow if its email was\nknown, letting a human assume a service identity.\n\nReject bot accounts at the shared login chokepoint,\nAdapter.complete_login_or_signup(), right beside the existing\ndeactivated-account check. This covers every interactive provider in one\nplace: email/password, magic code, and all OAuth providers (Google, GitHub,\nGitLab, Gitea) across both the app and space surfaces. Bot API-token access\nis left untouched, since that is how bots are meant to operate.\n\nAlso add a defense-in-depth is_bot guard to InstanceAdminSignInEndpoint,\nwhich mints its own admin session outside the chokepoint (a bot is never an\nInstanceAdmin today, so this is not currently reachable, but it closes the\npath regardless).\n\nSurface the rejection with a new dedicated error code\nBOT_USER_LOGIN_FORBIDDEN (5017), plumbed into the app and space frontend\nerror helpers as well as the shared @plane/constants and @plane/utils\npackages (message map + banner-alert list) so any consumer of the shared\nauth-error handler renders it correctly. The admin path reuses the existing\nADMIN_AUTHENTICATION_FAILED code so it discloses no bot-specific error.\n\nAdd contract regression tests: a bot blocked via password and via magic\ncode, a bot blocked at the admin sign-in endpoint, and a non-bot control\nthat still logs in.",
+                    "fix: scope workspace user preference filter to current user (#9279)\n\n* fix: scope workspace user preference filter to current user\n\nWithout user=request.user on the PATCH filter, the ORM could match\nanother user's preference record in the same workspace, causing\npin/unpin state to leak across users or silently fail to persist.\n\nFixes #9260\n\nSigned-off-by: okxint <cashmein.eth@gmail.com>\n\n* test: add regression coverage for workspace user preference scoping (#9260)\n\nAdds contract tests for the sidebar preference PATCH endpoint:\n\n- test_patch_only_updates_requesting_users_preference: in a multi-member\n  workspace, a member's PATCH must update only their own preference row,\n  never another member's. Fails against the pre-fix code (the unscoped\n  .first() mutates the most-recently-created row regardless of user).\n- test_patch_updates_own_preference: baseline that a member's PATCH\n  persists to their own row.\n\nVerified RED on the unpatched view and GREEN with the user=request.user\nfilter from #9261.\n\n* fix(api): wrap long line to satisfy ruff E501 in user preference view\n\n---------\n\nSigned-off-by: okxint <cashmein.eth@gmail.com>\nCo-authored-by: okxint <cashmein.eth@gmail.com>",
+                    "fix(api): require at least one alphanumeric char in workspace name (#9278)\n\n* fix(api): require at least one alphanumeric char in workspace name\n\nWorkspace name validation was enforced only on the frontend\n(validateWorkspaceName), which gates the UI submit but is bypassable\nvia a direct API call. The backend WorkSpaceSerializer.validate_name\nonly rejected URLs, so a symbol-only name like \"-_________-\" could\nstill be saved via create or the rename (partial_update) path.\n\nAdd a Unicode-aware has_alphanumeric() helper and enforce it in both\nthe app and instance/license workspace serializers, mirroring the\nfrontend HAS_ALPHANUMERIC_REGEX (/[\\p{L}\\p{N}]/u) added in #9263.\nInternational names (\u65e5\u672c\u8a9e, Jos\u00e9, \u0645\u062d\u0645\u062f) still pass since str.isalnum()\ncovers all scripts.\n\nAdds unit tests covering symbol-only rejection and international\nacceptance on both serializers.\n\nRefs #9255\n\nSigned-off-by: sriramveeraghanta <veeraghanta.sriram@gmail.com>\n\n* fix(api): reject URLs in instance workspace name for parity\n\nAddress CodeRabbit review on #9278: the instance/license\nWorkspaceSerializer.validate_name rejected symbol-only names but, unlike\nthe app-level WorkSpaceSerializer, still accepted names containing URLs.\nAdd the same contains_url() guard (imported from plane.utils.url, not\ncontent_validator) so both workspace-create paths validate identically.\n\nAdd unit tests asserting URL-containing names are rejected on both\nserializers.\n\nSigned-off-by: sriramveeraghanta <veeraghanta.sriram@gmail.com>\n\n---------\n\nSigned-off-by: sriramveeraghanta <veeraghanta.sriram@gmail.com>",
+                    "chore(deps): upgrade Storybook to v10 and fix security advisories (#9277)\n\nStorybook upgrade (latest 10.4.6):\n- Align catalog so storybook + all @storybook/* are lockstep on 10.4.6\n- addon-designs 11.1.3, addon-styling-webpack 3.0.2,\n  addon-webpack5-compiler-swc 4.0.3, @chromatic-com/storybook 5.2.1\n- Remove discontinued packages (addon-essentials, addon-interactions,\n  blocks, test); add @storybook/addon-docs to packages/ui\n- Fix .storybook/main.ts ESM loading via createRequire(import.meta.url)\n- Revert propel's hardcoded storybook version back to catalog:\n\nSecurity advisories:\n- undici 7.24.0 -> 7.28.0 (7 CVEs incl. GHSA-vmh5-mc38-953g)\n- @opentelemetry/core|resources|sdk-trace-base -> 2.8.0\n  (GHSA-8988-4f7v-96qf)\n\nAlso includes bundled dependency bumps already pending on the branch\n(vite 8, postcss, babel, markdown-it, ws, form-data, etc.).",
+                    "fix: resolve esbuild advisory and bump turbo to 2.9.18 (#9236)\n\nResolves the sole open Dependabot alert (GHSA-gv7w-rqvm-qjhr, high):\nesbuild <0.28.1 lacks binary-integrity verification in its Deno install\npath, enabling RCE via NPM_CONFIG_REGISTRY. The pnpm `overrides` entry\npinned the entire tree to esbuild 0.25.0; bump it to 0.28.1, which fixes\nall transitive paths (vite, vitest, tsx, vite-node, esbuild-register).\n\nAlso bump turbo 2.9.14 -> 2.9.18 in the workspace catalog and the four\npinned production Dockerfiles (web, live, admin, space).\n\nVerified: `pnpm audit` clean, admin react-router/vite build succeeds,\n@plane/codemods vitest suite 33/33 passing.",
+                    "fix(api): reject API key auth for deactivated user accounts (#9225)\n\nThe custom API key authentication only verified that the APIToken row was\nactive and unexpired; it never checked the owning user's is_active flag.\nDRF's IsAuthenticated only checks user.is_authenticated (always True for a\nreal User), so a user whose account was deactivated could keep using a\npreviously issued API key indefinitely.\n\nAdd user__is_active=True to the validate_api_token() lookup so a token tied\nto a disabled account is treated as invalid (a generic AuthenticationFailed,\navoiding account-state disclosure). Applied to both the external API\nmiddleware (plane/api) and the identical, currently unused copy in\nplane/app to prevent the gap from being reintroduced.\n\nAdds unit coverage on validate_api_token and an end-to-end contract test\nproving GET /api/v1/users/me/ is denied once the account is deactivated.",
+                    "fix(api): sanitize XLSX export cells to prevent formula injection (#9224)\n\nUser-controlled values (work item titles, labels, etc.) were written\nraw into openpyxl worksheet cells, so values beginning with = were\nstored as live formula cells in exported XLSX files. Apply the same\nformula-trigger sanitization already used for CSV exports to XLSX\ncell values and header rows in both export formatters, and sanitize\nCSV header rows in the porters formatter for parity.",
+                    "chore: integrate react-doctor scanning (#9223)\n\nAdd react-doctor for React lint/a11y/perf/architecture diagnostics:\n- Add react-doctor devDependency and \"doctor\" npm script\n- Add .claude/skills/react-doctor skill for local triage workflow\n- Add GitHub Actions workflow to scan PRs and track health score",
+                    "fix: bump react-router and vitest to resolve Dependabot advisories (#9215)\n\n* fix: bump react-router and vitest to resolve Dependabot advisories\n\nResolves 6 open Dependabot alerts (all npm, manifest pnpm-lock.yaml):\n\n- react-router 7.12.0 -> 7.15.0 (fixes GHSA-8x6r-g9mw-2r78 [high],\n  GHSA-49rj-9fvp-4h2h [high], GHSA-8646-j5j9-6r62 [high],\n  GHSA-2j2x-hqr9-3h42 [medium], GHSA-f22v-gfqf-p8f3 [medium])\n- vitest 4.0.x -> 4.1.x (fixes GHSA-5xrq-8626-4rwp [critical])\n\nAligned lockstep siblings to avoid peer-dependency mismatches:\n@react-router/dev|node|serve -> 7.15.0, @vitest/coverage-v8 -> ^4.1.0.\n\nEdited catalog entries in pnpm-workspace.yaml and regenerated\npnpm-lock.yaml; verified with pnpm install --frozen-lockfile.\n\n* fix: raise vitest catalog floor to ^4.1.8 to match security advisory\n\nThe critical advisory GHSA-5xrq-8626-4rwp is patched in vitest 4.1.8, but\nthe catalog specifiers were ^4.1.0, which permits resolving to vulnerable\n4.1.0-4.1.7. Align the floor with the documented patched version for vitest\nand @vitest/coverage-v8 so a future lockfile refresh cannot reintroduce a\nvulnerable Vitest stack. Resolved version is unchanged (4.1.8).",
+                    "fix(api): enforce workspace membership on GenericAssetEndpoint (#9212)\n\nThe public REST API GenericAssetEndpoint (/api/v1/workspaces/<slug>/assets/)\ndeclared no permission class, inheriting only IsAuthenticated. Since\nAPIKeyAuthentication does not bind a token to a workspace and the workspace is\nread straight from the URL slug, any valid Personal Access Token could read\n(GET), create (POST), and modify (PATCH) assets in a workspace the caller is\nnot a member of \u2014 a cross-workspace IDOR, the public-API sibling of the\nCVE-2026-46558 dashboard asset fix.\n\nAdd permission_classes = [WorkspaceUserPermission] so every method requires\nactive workspace membership, matching the dashboard fix semantics. Also add\ncontract regression tests covering cross-workspace GET/POST/PATCH (now 403)\nand a positive control confirming members retain access.\n\nAlso ignore the local /security/ advisory notes folder.",
+                    "fix(api): rate-limit magic-code verify, bound per-token attempts (GHSA-9pvm-fcf6-9234) (#9130)\n\n* fix(api): rate-limit magic-code verification and bound per-token attempts\n\nThe magic-link sign-in / sign-up endpoints accept a 6-digit numeric code\n(900k-value space, 600s TTL) but never increment a failure counter on a\nwrong-code verify and extend django.views.View rather than DRF APIView,\nso DRF's AuthenticationThrottle never runs against them. The space-side\ngenerate endpoint also lacked throttle_classes. Combined, this allowed\nan unauthenticated attacker who knew a victim's email to brute-force\nthe code within the TTL window and log in as the victim.\n\n- Add MAX_VERIFY_ATTEMPTS=5 in MagicCodeProvider.set_user_data: failed\n  comparisons now persist verify_attempts in Redis under the remaining\n  TTL and, on hitting the limit, delete the key and raise\n  EMAIL_CODE_ATTEMPT_EXHAUSTED. This is the load-bearing fix - it caps\n  total attempts per issued token regardless of request rate.\n- Add authentication_throttle_allows() so plain Django Views can apply\n  AuthenticationThrottle without converting to APIView (would change\n  CSRF + request-parsing semantics for the redirect-flow endpoints).\n- Apply the throttle to MagicSignIn/UpEndpoint and the space variants;\n  add throttle_classes to MagicGenerateSpaceEndpoint to match its app\n  sibling.\n\nRefs GHSA-9pvm-fcf6-9234.\n\n* fix(api): make verify-attempt increment atomic, expose throttle rate via env\n\nAddress PR review feedback:\n\n- Replace the JSON read-modify-write of verify_attempts with a Lua\n  EVAL script that INCRs a dedicated counter key and EXPIREs it only\n  on the first increment. The previous round-trip was racy: parallel\n  wrong-code requests could read the same value and both write the\n  same incremented count, letting an attacker exceed MAX_VERIFY_ATTEMPTS\n  under concurrency. Counter is now reset on each new token issuance\n  and cleared on successful verify / exhaustion.\n- Make AuthenticationThrottle.rate configurable via the\n  AUTHENTICATION_RATE_LIMIT env var (default 10/minute, down from 30\n  to tighten the budget on unauth auth-adjacent endpoints). Document\n  it in deployments/aio and deployments/cli variables.env.\n\n* test(api): cover magic-code attempt cap, counter reset, and auth throttle\n\nAdd the contract tests called out in the PR test plan:\n\n- TestMagicSignInVerifyAttempts:\n  - test_exhausted_after_max_wrong_attempts: after MAX_VERIFY_ATTEMPTS\n    wrong codes the next verify redirects with EMAIL_CODE_ATTEMPT_\n    EXHAUSTED_SIGN_IN and both Redis keys are deleted; a follow-up\n    verify reports EXPIRED.\n  - test_counter_increments_on_each_wrong_attempt: the dedicated\n    verify_attempts counter advances by exactly one per wrong POST,\n    matching the atomic Lua INCR.\n  - test_counter_resets_on_token_regeneration: regenerating the\n    magic-link clears the counter so the user isn't pre-locked-out by\n    a prior session's wrong attempts.\n- TestMagicSignUpVerifyAttempts.test_signup_exhausted_after_max_wrong_attempts:\n  the sign-up endpoint returns EMAIL_CODE_ATTEMPT_EXHAUSTED_SIGN_UP on\n  the exhausting attempt.\n- TestAuthenticationThrottle: exercises authentication_throttle_allows\n  on the plain-View redirect-flow endpoints by patching the rate down\n  and asserting RATE_LIMIT_EXCEEDED is appended to the redirect URL\n  once the per-IP budget is exceeded, for both magic-sign-in and\n  magic-sign-up.\n\nEach new class clears Django cache (DRF throttle storage) and the\nper-email Redis keys around every test so runs are independent.\n\n* fix(api): clamp remaining_ttl to >=1 for verify-attempt counter EXPIRE\n\nri.ttl() returns 0 when the token has less than one second remaining\n(Redis floors to whole seconds). The previous clamp only caught\nNone and < 0, so a sub-second TTL would pass through and the Lua\nscript's EXPIRE counter 0 would immediately delete the key \u2014 letting\nan attacker bypass MAX_VERIFY_ATTEMPTS during the final second of the\ntoken's life. Switch the comparison to <= 0.\n\nNarrow real-world impact (sub-second window, throttle still bounds\nthe rate) but the cap should hold regardless of timing.",
+                    "fix: bump npm deps to resolve Dependabot advisories (#9191)\n\n* fix: bump npm deps to resolve Dependabot advisories\n\nResolve 8 open Dependabot alerts (all npm, in pnpm-lock.yaml) by bumping\nthe affected packages in pnpm-workspace.yaml and regenerating the lockfile:\n\n- axios 1.15.2 -> 1.16.0 (catalog): CVE-2026-44494/44492/44490/44489\n- tmp -> 0.2.6 (override): CVE-2026-44705 path traversal\n- ws 8.x -> 8.20.1 (catalog + scoped override): CVE-2026-45736\n- qs 6.14.2 -> 6.15.2 (override): CVE-2026-8723 DoS\n- brace-expansion 5.0.5 -> 5.0.6 (override): CVE-2026-45149 DoS\n\nbrace-expansion and qs were pinned to their vulnerable versions in the\noverrides block, so the pins had to be bumped directly. ws is scoped to\nthe 8.x major (ws@7.5.10 is below the vulnerable >=8.0.0 floor). All bumps\nare semver-compatible patch/minor upgrades; no source changes required.\n\n* fix: use named axios `create` import after 1.16.0 bump\n\naxios 1.16.0 newly exposes `create` as a named export, so oxlint's\nimport/no-named-as-default-member rule now flags `axios.create(...)`.\nThat added one warning to @plane/services (7 > its --max-warnings=6\nbaseline) and to apps/web and apps/live, failing check:lint \u2014 surfaced\non this PR because the lockfile change busts Turbo's lint cache.\n\nSwitch the three `axios.create(...)` call sites to a named `{ create }`\nimport. `create` is a real value+type export in axios 1.16.0 (verified\nvia tsc). isCancel/CancelToken are left as `axios.*`: CancelToken is\nonly a type export (cannot be a value import under verbatimModuleSyntax)\nand both were already counted within the existing baselines.\n\nVerified locally: full `pnpm check:lint` (16/16) and `check:types`\n(15/15) pass.",
+                    "fix: declare @tailwindcss/postcss in admin/space/web for Docker builds (#9189)\n\nThe web/admin/space Docker image builds fail at the Vite/PostCSS step with\n\"Cannot find module '@tailwindcss/postcss'\". These apps load the shared\n@plane/tailwind-config/postcss.config.js, which references the @tailwindcss/postcss\nplugin by name, but the plugin was only declared as a dependency of\npackages/tailwind-config.\n\nThe Docker build installs via turbo prune + 'pnpm fetch' + 'pnpm install --offline',\nwhich lays out node_modules so PostCSS resolves the plugin relative to the app\ndirectory (apps/<app>), where it is not reachable. A plain 'pnpm install' resolves\nit from tailwind-config's context instead, which is why local builds passed and\nmasked the issue.\n\nDeclare @tailwindcss/postcss as a direct devDependency of the three apps that run\nVite/PostCSS so it is symlinked into each app's node_modules and resolves under the\nisolated linker regardless of install flow.\n\nVerified by reproducing the exact Docker flow (prune -> fetch -> --frozen-lockfile\noffline install -> build) for admin, space and web: all install in sync and build\nsuccessfully with full Tailwind CSS output.",
+                    "[GIT-213] fix: return HTTP response from dispatch() exception handler (#9179)\n\n* fix(api): return HTTP response from dispatch() exception handler\n\nBaseAPIView.dispatch() and BaseViewSet.dispatch() built the proper\nerror Response via handle_exception() but returned the raw exception\nobject instead, causing Django to raise\n\"TypeError: 'Exception' object is not a valid HTTP response\".\n\nFix all six occurrences across the api, app, license and space view\nbases, and add a regression test covering every affected base class.\n\nFixes #9157\n\n* chore(api): add copyright header to tests/unit/views/__init__.py\n\nThe empty package init file was missing the AGPL copyright header,\nfailing the Copy Right Check CI (addlicense -check on all tracked\n.py files).",
+                    "chore: move all dependencies into pnpm catalog (#9153)\n\nCentralize every external dependency version in the pnpm catalog\n(pnpm-workspace.yaml) and reference them via `catalog:` across all\napps and packages. Packages that previously used differing versions\nwere unified to the highest (notably @react-pdf/renderer ^3.4.5 ->\n^4.3.0 in apps/web).",
+                    "fix: harden webhook/link/OAuth-avatar SSRF (advisory clusters A/B/C/E) (#9163)\n\n* fix(api): harden webhook & link-unfurl SSRF (advisory clusters A/B/C)\n\nResolves three overlapping SSRF advisory clusters around webhook delivery\nand work-item link unfurling:\n\n- Cluster A (private-IP validation + PATCH bypass): the webhook PATCH\n  handler passed context={request: request} (the request object as the\n  dict key) so the loopback/disallowed-domain guard silently no-op'd \u2014\n  now context={\"request\": request}. Hardened IP classification\n  (is_blocked_ip) to also block multicast, unspecified, CGNAT\n  (100.64.0.0/10), and IPv4 embedded in IPv6 transition addresses\n  (IPv4-mapped, NAT64, 6to4, Teredo), robust across Python versions.\n\n- Cluster B (DNS-rebinding TOCTOU): validators resolved DNS, then\n  requests resolved it again at connect time. New pinned-IP client\n  (plane/utils/url_security.py) resolves+validates once and connects to\n  the validated IP literal so urllib3 performs no second lookup, while\n  preserving Host header, TLS SNI and certificate verification against\n  the real hostname.\n\n- Cluster C (redirect SSRF): webhook delivery never follows redirects;\n  the link crawler follows them manually, re-resolving + re-validating +\n  re-pinning every hop.\n\nAlso: pin requests==2.33.0 in base.txt (imported directly; the pinning\nadapter needs the >=2.32 get_connection_with_tls_context hook), and log\nwebhook URL-validation rejections to WebhookLog instead of swallowing\nthem.\n\nTests: new test_url_security.py (pinning, rebinding, redirect\nre-validation, IP edge cases, TLS SNI) + updated link-task tests.\nFull unit suite: 178 passed.\n\n* fix(api): block OAuth avatar SSRF + add per-advisory SSRF regression tests\n\nVerified every SSRF-class advisory against the current code. The webhook /\nlink / favicon reports \u2014 including the published CVE-2026-30242 and\nCVE-2026-39843 and the newer \"still bypassable\" reports (DNS rebinding\nGHSA-3856/-fgcv/-9292/-whh3/-4mjx/-6p39/-fv24/-8wvv, IP-classification gaps\nGHSA-75fg, redirect GHSA-6v37/-jw6g/-mq87) \u2014 are resolved by the pinned-IP\nclient + hardened classifier in this branch.\n\nThe one SSRF family still unresolved was the OAuth avatar path:\ndownload_and_upload_avatar() fetched the provider-supplied avatar_url with a\nraw requests.get (no IP validation, default redirect following), so an\nattacker-controlled avatar could reach internal addresses and be exfiltrated\nvia the static-asset endpoint (GHSA-cv9p-325g-wmv5, and the avatar hop of the\nGitea SSRF GHSA-hx79-5pj5-qh42). It now uses pinned_fetch_following_redirects,\nwhich validates + pins every hop and blocks internal targets.\n\nAdds test_ssrf_advisories.py: a per-advisory regression map covering webhook\nIP validation, the PATCH context-key guard, webhook DNS rebinding, webhook\nredirect, favicon redirect + rebinding, and OAuth avatar SSRF.\n\ndocker compose test: 199 unit tests pass.\n\n* fix(api): address PR review feedback on the SSRF pinned client\n\n- url_security: preserve URL-embedded credentials (user:pass@host) as Basic\n  Auth instead of silently dropping them when rewriting to the IP literal\n  (Copilot); bracket IPv6-literal hostnames in the Host header (Copilot);\n  add stream=True support that keeps the session open until the response is\n  closed, and release intermediate redirect hops.\n- ip_address / work_item_link_task: treat UnicodeError (IDNA failures) from\n  getaddrinfo as a resolution failure, not an uncaught exception (CodeRabbit).\n- authentication/adapter/base: stream the avatar download so the size cap\n  actually bounds memory, upload the size-bounded buffer (not response.content),\n  and always close the response (CodeRabbit, major).\n- tests: cover auth preservation, IPv6 Host bracketing, IDNA handling, and\n  streamed session lifetime; drop an unused import.\n\ndocker compose test: 204 unit tests pass.",
+                    "refactor(api): source API_KEY_RATE_LIMIT from settings, drop service token throttle (#9161)\n\n- Define API_KEY_RATE_LIMIT in plane/settings/common.py and read it via\n  django.conf.settings in ApiKeyRateThrottle instead of os.environ.\n- Remove ServiceTokenRateThrottle and the service-token branch in\n  BaseAPIView.get_throttles; all API key requests now go through\n  ApiKeyRateThrottle.",
+                    "chore: bump turbo to 2.9.14, migrate pnpm config to workspace yaml (#9147)\n\n* chore: bump turbo to 2.9.14, migrate pnpm config to workspace yaml\n\n- Bump turbo from 2.9.4 to 2.9.14 in root package.json and the\n  four production Dockerfiles (web, live, admin, space).\n- Move pnpm.overrides, onlyBuiltDependencies, and\n  ignoredBuiltDependencies from package.json into pnpm-workspace.yaml.\n  pnpm v10+ no longer reads the pnpm field in package.json, so the\n  full overrides block and most of onlyBuiltDependencies were being\n  silently ignored.\n- Add @plane/utils as a workspace dependency to the live server.\n\n* chore: drop unused allowBuilds block, bump lodash-es to 4.18.1\n\n- Remove the `allowBuilds` block from pnpm-workspace.yaml. It is not\n  a recognized pnpm v10/v11 key and its values were inconsistent with\n  the actual `onlyBuiltDependencies` / `ignoredBuiltDependencies`\n  configuration.\n- Bump `lodash-es` catalog entry from 4.18.0 to 4.18.1. With overrides\n  now applied workspace-wide, 4.18.0 (marked deprecated as a \"bad\n  release\") was being enforced everywhere.\n\n* fix: use pnpm v11 allowBuilds in place of removed legacy keys\n\n`onlyBuiltDependencies` and `ignoredBuiltDependencies` were removed\nin pnpm v11. They were being silently ignored on this branch, which\ncaused `ERR_PNPM_IGNORED_BUILDS` to fail CI under `--frozen-lockfile`.\n\nReplace them with the v11-native `allowBuilds:` block, mapping the\nprevious allowlist to `true` and the previous denylist (sharp) to\n`false`. Locally verified that the build scripts for @parcel/watcher,\n@swc/core, esbuild, and msgpackr-extract now run on install."
+                  ],
+                  "lastCommitDate": "2026-07-21T18:56:18Z"
+                },
+                {
+                  "author": "mguptahub",
+                  "authorLogin": "mguptahub",
+                  "counts": {
+                    "sixMonths": 30,
+                    "oneYear": 30,
+                    "allTime": 30
+                  },
+                  "recencyScore": 81,
+                  "messages": [
+                    "[WEB-8074] fix: scope IssueListEndpoint to guest created_by (#9374)\n\n* [WEB-8074] fix: scope IssueListEndpoint to guest created_by\n\nIssueListEndpoint.get (/workspaces/<slug>/projects/<project_id>/issues/list/)\nreturned any issue whose id was passed in ?issues=, without the guest\ncreated_by restriction its sibling IssueViewSet.list enforces. A project GUEST\n(role=5) on a project with guest_view_all_features=False could read issues they\ndid not author by supplying their ids (GHSA-32c7-84jc-4w67).\n\nReplicate the guest scope: when the requester is an active role=5 ProjectMember\nand not project.guest_view_all_features, filter the queryset to\ncreated_by=request.user. Applied to the base queryset so it flows through\nfiltering, annotation and grouping.\n\nContract regression tests cover the restricted guest (own-only), a full member\n(sees all), and a guest with guest_view_all_features enabled (sees all);\nfail-before verified.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n* Potential fix for pull request finding\n\nCo-authored-by: Copilot Autofix powered by AI <175728472+Copilot@users.noreply.github.com>\n\n---------\n\nCo-authored-by: Plane AI <noreply@plane.so>\nCo-authored-by: Dheeraj Kumar Ketireddy <dheeraj.ketireddy@plane.so>\nCo-authored-by: Copilot Autofix powered by AI <175728472+Copilot@users.noreply.github.com>",
+                    "[WEB-8095] fix: scope page-version reads to the URL project (GHSA-g49r/ghcr) (#9380)\n\n* [WEB-8095] fix: scope page-version reads to the URL project (GHSA-g49r/ghcr)\n\nProjectPagePermission verified the caller was a member of the URL\nproject_id but then resolved the page by workspace + page_id only, and\nPageVersionEndpoint filtered versions the same way. A member of one\nproject could read the page versions of a public page belonging to a\ndifferent project in the same workspace via that project's URL\n(GHSA-g49r-p85q-qq2w / GHSA-ghcr-frqr-6pqr).\n\n- Scope the page lookup in ProjectPagePermission to projects__id via the\n  ProjectPage M2M (both app/ and utils/ copies); deny when the page does\n  not belong to the URL project.\n- Scope PageVersionEndpoint list/detail querysets to\n  page__projects__id=project_id (defense in depth); distinct() on the\n  list guards against active + soft-deleted ProjectPage duplicates.\n- Add contract regression tests (fail-before verified).\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n* [WEB-8095] fix: require active ProjectPage link when scoping pages to a project\n\nAddress CodeRabbit + Copilot review on #9380: projects__id=project_id\nmatched even soft-deleted ProjectPage links, so a page removed from the\nproject (link revoked) would still pass, and the version detail get()\ncould raise MultipleObjectsReturned on active + soft-deleted rows.\n\nPut both conditions on the same project_pages relation in one filter so\nthey match a single ProjectPage row that is active:\nproject_pages__project_id=project_id + project_pages__deleted_at__isnull\n=True. The partial-unique constraint (project, page WHERE deleted_at IS\nNULL) then guarantees at most one row, so get() stays unambiguous and the\nlist needs no distinct(). Add a revoked-link regression test.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n* [WEB-8095] fix: distinct() on page-version detail lookup as a MultipleObjectsReturned guard\n\nAddress CodeRabbit review on #9380. The active-link filter already keeps\nthe page__project_pages join to a single row via the partial-unique\nconstraint, but add distinct() to the detail get() as defense in depth so\nthe join can never surface MultipleObjectsReturned (a 500) even if that\ninvariant were ever violated.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n---------\n\nCo-authored-by: Plane AI <noreply@plane.so>",
+                    "[WEB-8075] fix: scope ProjectMemberPermission SAFE_METHODS to project membership (#9375)\n\nThe SAFE_METHODS branch of ProjectMemberPermission filtered ProjectMember by\nworkspace only (no project_id), so any workspace user who was a member of *some*\nproject could pass the check for a project they were not in. Consumers then\nreturned project-scoped data:\n  - v1 ProjectMemberListCreateAPIEndpoint.get -> full project roster\n    (GHSA-w2vf-m9x9-mvmc)\n  - app DeployBoardViewSet.list -> project publish configuration (identical\n    app-copy sibling)\n\nAdd project_id=view.project_id to the SAFE_METHODS filter in both copies\n(utils + app), mirroring the non-safe branch and ProjectEntityPermission. A\nnon-member now receives 403.\n\nContract regression tests cover both endpoints: a workspace user who is a\nmember of a different project is denied (403) on a foreign project, while an\nactive member of the target project is allowed. Fail-before verified (both\ndenied cases leak 200 without the fix).\n\nCo-authored-by: Plane AI <noreply@plane.so>",
+                    "[WEB-8068] fix: scope workspace cycles/modules listing to project membership (#9373)\n\n* [WEB-8068] fix: scope workspace cycles/modules listing to project membership\n\nWorkspaceCyclesEndpoint and WorkspaceModulesEndpoint are guarded only by\nWorkspaceViewerPermission (any active workspace member) and filtered by\nworkspace__slug alone, letting any workspace member enumerate cycle/module\nmetadata (names, dates, issue counts) of private projects they are not a\nmember of (GHSA-wcc5-qgfr-8g9c).\n\nRestrict both querysets to projects the requesting user is an active member\nof, mirroring WorkspaceStatesEndpoint / WorkspaceLabelsEndpoint:\n  project__project_projectmember__member=request.user\n  project__project_projectmember__is_active=True\n  project__archived_at__isnull=True\nAdd .distinct() to the Module query (the member join is to-many; Cycle already\nhad it).\n\nContract regression tests cover hidden cycles/modules for a non-project member,\nthe positive project-member path, and no row duplication; fail-before verified.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n* [WEB-8068] refactor: drop unnecessary distinct() from module listing\n\nAddress Copilot review: the project-membership join is filtered to\nrequest.user, and ProjectMember has a unique constraint on (project, member)\nwhere deleted_at IS NULL, so the join yields at most one row per project and\ncannot duplicate Module rows. distinct() was dead weight (and a planner cost\nfor large workspaces). Matches the reference WorkspaceStates/WorkspaceLabels\nendpoints, which use no distinct().\n\nAlso drop the distinct-focused contract test: adding a *different* project\nmember never fans out the request.user-filtered join, so it would pass with or\nwithout distinct() \u2014 misleading coverage.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n---------\n\nCo-authored-by: Plane AI <noreply@plane.so>",
+                    "[WEB-8066] fix: scope workspace asset get/patch/delete to project membership (#9372)\n\n* [WEB-8066] fix: scope workspace asset get/patch/delete to project membership\n\nWorkspaceFileAssetEndpoint is authorized at the WORKSPACE level, so any\nworkspace member/guest could reach get/patch/delete for a project-bound\nasset (issue attachment/description, comment description, page description)\nof a project they are not a member of \u2014 an incomplete fix of the GHSA-qw87\nasset-IDOR cluster (GHSA-h7mc-p9mm-2r4w / GHSA-cjph-cgm5-8pw8).\n\nAdd project_membership_denied(): for project-bound assets (project_id set)\nrequire an active ProjectMember of the asset's project, else 403. Workspace-\nlevel entity types (WORKSPACE_LOGO, USER_AVATAR, USER_COVER) have project_id\nNULL and remain accessible to any workspace member. Mirrors ProjectAssetEndpoint\n(level=PROJECT). Guard runs before the is_uploaded check / mutation so a\nnon-member gets a uniform 403 and cannot probe upload state.\n\nContract regression tests cover denied get/patch/delete for a non-project\nmember, the positive project-member path, and the workspace-level exemption;\nfail-before verified.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n* [WEB-8066] harden: scope asset project-membership check to the asset's workspace\n\nAddress Copilot review: filter ProjectMember by workspace_id=asset.workspace_id\nin addition to project_id, mirroring allow_permission's PROJECT branch. Prevents\na member of the same project in a different workspace from passing the check if\nan asset row is ever inconsistent (asset.workspace_id != project.workspace_id).\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n* [WEB-8066] refactor: return bool from asset access helper, build Response in views\n\nAddress review (Saurabhkmr98): rename project_membership_denied ->\nhas_project_asset_access, returning a boolean (True = allowed) instead of a\nResponse. Each of get/patch/delete now builds the 403 Response based on the\nreturned value. Behaviour is unchanged (same 403 + message; workspace-level\nassets with project_id=None still allowed).\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n---------\n\nCo-authored-by: Plane AI <noreply@plane.so>",
+                    "[WEB-8012] fix: prevent ORM group_by/sub_group_by injection in issue endpoints (#9347)\n\nAdd ISSUE_GROUP_BY_ALLOWLIST and validate group_by_field_name/\nsub_group_by_field_name in BasePaginator.paginate() \u2014 the single chokepoint\nall GroupedOffsetPaginator/SubGroupedOffsetPaginator callers funnel through\n(the unauthenticated public deploy-board endpoint plus 5 GUEST-reachable\nauthenticated endpoints). Invalid fields now raise ParseError (HTTP 400)\ninstead of reaching F()/.values()/.order_by()/Window partition_by as a raw\nORM field name, which previously let an anonymous caller crash the endpoint\nor force a blind relational-traversal oracle (GHSA-wwgj-929g-42cm).\n\nSame field-name-injection class as the order_by fix (GHSA-2r95/GHSA-w45q,\nWEB-7813), which never extended to group_by/sub_group_by.\n\nCloses WEB-8012\n\nCo-authored-by: Plane AI <noreply@plane.so>",
+                    "[WEB-7887] fix(security): prevent stored XSS via SVG attachment served inline (GHSA-ch8j-vr4r-qf6h) (#9312)\n\n* [WEB-7887] fix(security): prevent stored XSS via SVG attachment served inline (GHSA-ch8j-vr4r-qf6h)\n\nAdd SCRIPT_CAPABLE_MIME_TYPES frozenset (image/svg+xml, text/javascript,\napplication/javascript, text/html, application/xhtml+xml, text/xml,\napplication/xml) and enforce Content-Disposition: attachment on three\ndownload endpoints that previously defaulted to inline serving:\n\n- GenericAssetEndpoint.get (api/views/asset.py)\n- StaticFileAssetEndpoint.get (app/views/asset/v2.py)\n- EntityAssetEndpoint.get (space/views/asset.py)\n\nATTACHMENT_MIME_TYPES is unchanged \u2014 users can still upload SVG, JS, and\nXML files. The fix closes the XSS vector by ensuring script-capable assets\nare always downloaded rather than rendered in the application's origin.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n* [WEB-7887] fix: normalize MIME type before SCRIPT_CAPABLE_MIME_TYPES check\n\nStrip MIME parameters and lowercase before the allowlist check so that\nstored values like \"image/svg+xml; charset=utf-8\" or \"Image/SVG+XML\"\nare correctly identified as script-capable and served as attachment.\nApplies to all three download endpoints.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n---------\n\nCo-authored-by: Plane AI <noreply@plane.so>",
+                    "[WEB-8060] fix(security): enforce authz on is_active member (de)activation (#9367)\n\n* [WEB-8060] fix(security): enforce authz on is_active member (de)activation\n\nProjectMemberViewSet.partial_update nested every authorization guard inside\n`if \"role\" in request.data:`. Because ProjectMemberSerializer exposes is_active\nthrough fields=\"__all__\" with no read-only, a project GUEST could PATCH\n{\"is_active\": false} while omitting \"role\" to deactivate any member \u2014 including\nadmins \u2014 and take over the project (GHSA-hpgm-9r34-c4x5 / GHSA-25gg-cxm8-g7h9).\n\nAdd an independent is_active guard, mirroring the role block and destroy(): only\na project admin (or workspace admin) may (de)activate a member, and never one\nwhose role is equal to or higher than the requester's own.\n\nAdds contract regression tests covering guest/member deactivation attempts and\nthe legitimate project-admin path.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n* [WEB-8060] test(security): cover workspace-admin is_active bypass\n\nAddress Copilot review on #9367: add a positive-control test asserting a\nworkspace admin holding only a project GUEST role can still deactivate a project\nadmin (the intended is_workspace_admin bypass), so future changes cannot silently\nremove it.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n---------\n\nCo-authored-by: Plane AI <noreply@plane.so>",
+                    "[WEB-8019] fix(security): scope CycleIssue reassignment lookup to workspace/project (#9349)\n\n* [WEB-8017] fix(security): sanitize order_by on external REST API list endpoints\n\nClose a partial bypass of WEB-7813 (GHSA-2r95 / GHSA-w45q): the external\nREST API project-list and work-item-list endpoints passed a raw order_by\nquery parameter to Django's .order_by(). Because Django resolves\n__-separated relational paths, an attacker could order by sensitive\ncolumns on related tables (created_by__password / token / email) to build\na blind ordering oracle, or crash the endpoint (HTTP 500) with an unknown\nfield.\n\nRoute both endpoints through the existing sanitize_order_by() helper with\nthe appropriate allowlist (PROJECT_ORDER_BY_ALLOWLIST, default sort_order;\nISSUE_ORDER_BY_ALLOWLIST, default -created_at), mirroring how\norder_issue_queryset() already sanitizes. Non-allowlisted values collapse\nto the safe default; legitimate orderings are unchanged.\n\nAdds unit tests (allowlist neutralisation + passthrough) and contract\ntests asserting both endpoints return 200 (not 500) for injected fields;\nfail-before verified via git stash.\n\nAdvisory: GHSA-p885-6jpg-cr2p\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n* [WEB-8019] fix(security): scope CycleIssue reassignment lookup to workspace/project\n\nCycleIssueViewSet.create looked up \"issues already in another cycle\" with\nCycleIssue.objects.filter(~Q(cycle_id=cycle_id), issue_id__in=issues) \u2014\nwithout scoping to the caller's workspace/project. An ADMIN/MEMBER of their\nown project could pass a work-item UUID from a different tenant and have that\nforeign CycleIssue row reassigned to their cycle, silently evicting the\nvictim's work item from the victim's cycle (cross-tenant write / BOLA).\n\nScope the lookup to workspace__slug + project_id, mirroring the adjacent\ncreate-path guard. Foreign-tenant rows are excluded from reassignment and\nalready dropped from the create path by the scoped new_issues query.\n\nAdds a contract regression test proving a foreign-tenant CycleIssue row is\nnot reassigned (fail-before verified via git stash) plus a same-project\nreassignment test to confirm the legitimate flow is unaffected.\n\nAdvisory: GHSA-4w5x-wc9w-f47x\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n---------\n\nCo-authored-by: Plane AI <noreply@plane.so>",
+                    "[WEB-8017] fix(security): sanitize order_by on external REST API list endpoints (#9348)\n\nClose a partial bypass of WEB-7813 (GHSA-2r95 / GHSA-w45q): the external\nREST API project-list and work-item-list endpoints passed a raw order_by\nquery parameter to Django's .order_by(). Because Django resolves\n__-separated relational paths, an attacker could order by sensitive\ncolumns on related tables (created_by__password / token / email) to build\na blind ordering oracle, or crash the endpoint (HTTP 500) with an unknown\nfield.\n\nRoute both endpoints through the existing sanitize_order_by() helper with\nthe appropriate allowlist (PROJECT_ORDER_BY_ALLOWLIST, default sort_order;\nISSUE_ORDER_BY_ALLOWLIST, default -created_at), mirroring how\norder_issue_queryset() already sanitizes. Non-allowlisted values collapse\nto the safe default; legitimate orderings are unchanged.\n\nAdds unit tests (allowlist neutralisation + passthrough) and contract\ntests asserting both endpoints return 200 (not 500) for injected fields;\nfail-before verified via git stash.\n\nAdvisory: GHSA-p885-6jpg-cr2p\n\nCo-authored-by: Plane AI <noreply@plane.so>",
+                    "[WEB-7895] fix: scope UserProjectInvitationsViewset to workspace-validated project IDs (GHSA-45hc-q4mw-jhxm) (#9333)\n\nThe `create` handler validated the network (SECRET/PUBLIC) check against\na workspace-scoped queryset but then used the raw client-supplied\n`project_ids` list in the subsequent bulk_create and update calls.\nAn attacker could include UUIDs of projects from other workspaces: those\nare absent from the validation queryset (no network check performed),\nyet get inserted as ProjectMember rows via bulk_create(ignore_conflicts=True),\ngranting cross-workspace project access.\n\nFix: derive `validated_project_ids` from the filtered queryset (projects\nalready scoped to the requested workspace and passed the SECRET check),\nand use it exclusively for all subsequent DB writes.\n\nCo-authored-by: Plane AI <noreply@plane.so>",
+                    "[WEB-7888] fix(security): normalize href before protocol check in CustomLinkExtension (GHSA-v2vv-7wq3-8w2j) (#9313)\n\n* [WEB-7888] fix(security): normalize href before protocol check in CustomLinkExtension (GHSA-v2vv-7wq3-8w2j)\n\nThe existing startsWith(\"javascript:\") guard in parseHTML() and renderHTML()\nis bypassable with a whitespace prefix (e.g. \"\\tjavascript:alert(1)\"). Per the\nWHATWG URL spec, browsers strip ASCII Tab/LF/CR from URL strings during parsing,\nso the whitespace-prefixed href passes the guard, is rendered into the DOM\nverbatim, and executes when clicked (browser strips the tab \u2192 javascript: fires).\n\nAdd isDangerousHref() helper that strips Tab/LF/CR and leading C0 controls\nbefore the protocol check, replicating the browser's normalization. Replace\nboth naive startsWith checks in parseHTML() and renderHTML() with this helper.\n\nAdd a defence-in-depth guard in clickHandler.ts that rejects\njavascript:/data:/vbscript: hrefs before window.open() \u2014 link.href is the\nbrowser-resolved URL (whitespace already stripped), so a regex check there\ncatches any URI that bypasses the parse/render-time guards.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n* [WEB-7888] fix: align clickHandler blocked-scheme list with isValidHttpUrl policy\n\nAdd file: and about: to the clickHandler protocol guard to match the\nblocked-scheme contract in isValidHttpUrl, avoiding policy drift.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n---------\n\nCo-authored-by: Plane AI <noreply@plane.so>",
+                    "[WEB-7877] fix(security): enforce token + auth validation on project invite accept/reject (#9308)\n\n* fix(security): enforce token + auth validation on project invite accept/reject\n\nProjectJoinEndpoint.post() only checked that the caller-supplied email matched\nthe invited email \u2014 no token required, no authentication required.  Anyone who\nknew the workspace slug, project ID, invite UUID, and invitee email could\naccept or reject the invitation on the invitee's behalf (GHSA-g36h-p63v-g9c7).\n\nMirror WorkspaceJoinEndpoint.post() exactly:\n- Validate `token` from request body against project_invite.token (\u2192 403 on mismatch)\n- Require authenticated session (\u2192 401 if unauthenticated)\n- Validate request.user.email against project_invite.email (\u2192 403 on mismatch)\n- Remove the old request.data[\"email\"] guard\n- Use project_invite.email for downstream User lookup\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n* fix(security): address CR review on project invite token validation\n\n- Use request.user directly instead of re-querying User by exact\n  project_invite.email \u2014 avoids case-variant miss after the case-insensitive\n  email check already validated the authenticated user (CR comment 1)\n- Validate `accepted` as a real boolean before saving \u2014 form-encoded\n  strings like \"false\" are truthy and could accidentally create memberships\n  (CR comment 2)\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n---------\n\nCo-authored-by: Plane AI <noreply@plane.so>",
+                    "[WEB-7778] fix(security): reject unverified OAuth provider emails to prevent ATO (Cluster E) (#9289)\n\n* [WEB-7778] fix(security): reject unverified OAuth provider emails to prevent ATO\n\nAn attacker controlling a self-hosted OAuth provider (Gitea, GitLab) could\nassert any email address in the OAuth response and be matched to an existing\nPlane account, bypassing authentication entirely.\n\n- Add OAUTH_PROVIDER_UNVERIFIED_EMAIL (5124) error code\n- GitHub: require both primary=True AND verified=True on email (was primary-only)\n- Google: check verified_email=False field in userinfo response\n- GitLab: check confirmed_at is non-null before accepting email\n- Gitea __get_email: remove unverified fallbacks (primary-unverified, any-unverified)\n- Gitea set_user_data: remove fast-path using .email from user object (no\n  verification flag); always go through __get_email() which enforces verified\n\nFixes GHSA-7j95-vh8g-f365 (critical ATO).\nNote: GHSA-cv9p-325g-wmv5 and GHSA-hx79-5pj5-qh42 (avatar SSRF) were\nalready fixed in PR #9163.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n* fix(security): add read:user scope to Gitea; fail-closed on absent Google verified_email\n\nGitea's /api/v1/user/emails endpoint requires the read:user granular\nscope \u2014 openid+email+profile alone is insufficient and __get_email()\nwould return a 401/403. Add read:user to the scope string.\n\nGoogle: change default from True to fail-closed (is not True) so a\nuserinfo response that omits verified_email is rejected rather than\ntrusted. The service-account justification was incorrect \u2014 service\naccounts do not go through the interactive OAuth2 callback flow.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n---------\n\nCo-authored-by: Plane AI <noreply@plane.so>",
+                    "[WEB-7894] fix: eliminate TOCTOU race in InstanceAdminSignUp (GHSA-p548-28jp-wr4p) (#9332)\n\n* [WEB-7894] fix: eliminate TOCTOU race in InstanceAdminSignUp (GHSA-p548-28jp-wr4p)\n\nTwo concurrent POST requests to InstanceAdminSignUpEndpoint could both\npass the \"no admin yet\" check before either created the InstanceAdmin\nrow, resulting in dual instance admins.\n\nFix: wrap the check + create in transaction.atomic() with\nselect_for_update() on the Instance singleton row. The pre-check\n(is_setup_done / existing admin) outside the lock is kept as a fast\nearly-exit for the common post-setup path. The re-check inside the\nlock is the authoritative guard; user_login() is kept outside the\ntransaction to avoid holding the DB lock during session writes.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n* fix: use global InstanceAdmin.objects.exists() guard (coderabbit)\n\nThe pre-check and re-check inside the atomic block were scoped to\nfilter(instance=instance), which could be bypassed if a stray second\nInstance row existed. Changed both guards to InstanceAdmin.objects.exists()\nto match the original global check and make them consistent with each other.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n---------\n\nCo-authored-by: Plane AI <noreply@plane.so>",
+                    "[WEB-7892] fix(security): scope attachment PATCH/DELETE/GET by issue_id, drop created_by overwrite (GHSA-5mxw-g5mw-3v3w) (#9315)\n\nAll three V2 issue attachment handlers (PATCH, DELETE, GET single) looked\nup FileAsset by (pk, workspace, project_id) only \u2014 issue_id in the URL\nwas silently ignored. Any project member could target another user's\nattachment UUID using their own issue_id, and PATCH would transfer\nownership via unconditional created_by = request.user.\n\nAdd issue_id=issue_id to all three FileAsset.objects.get() calls so the\nlookup is correctly scoped to the attachment's owning issue. Remove the\ncreated_by overwrite in PATCH \u2014 created_by is set at creation time and\nmust not be reassigned by a subsequent upload-confirm call.\n\nCo-authored-by: Plane AI <noreply@plane.so>",
+                    "[WEB-7855] fix(security): prevent project invite email disclosure via unauthenticated GET (#9305)\n\nProjectJoinEndpoint.get() was AllowAny and used ProjectMemberInviteSerializer\n(fields = \"__all__\"), leaking the invitee's email and token to anyone who\nknew the workspace slug, project ID, and invite UUID (GHSA-2r58-hgv7-635q).\n\nIntroduce ProjectMemberInvitePublicSerializer with an explicit safe field list\nthat excludes `email` and `token`, and swap it in for the public GET endpoint.\nThe full serializer is retained for authenticated admin viewsets.\n\nCo-authored-by: Plane AI <noreply@plane.so>",
+                    "[WEB-7945] fix(security): prevent shell injection in feature-deployment.yml (#9334)\n\n* [WEB-7945] fix(security): prevent shell injection in feature-deployment.yml\n\nBind `github.event.inputs.base_tag_name` and `env.TARGET_BRANCH` to\nstep-level env vars (INPUT_BASE_TAG_NAME, GH_TARGET_BRANCH) and\nreference them as shell variables in the run: script instead of\ninterpolating ${{ }} expressions inline.\n\nGitHub Actions expands ${{ }} before the shell executes, so a crafted\nbase_tag_name value could inject arbitrary commands into the runner\ncontext (GHSA-gfj7-g3wj-2p5f). Using env: breaks the injection path \u2014\nthe value is set as a process environment variable, never as raw shell\ntext.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n* [WEB-7945] fix: strip CR/LF from base_tag_name before writing to GITHUB_OUTPUT\n\nA newline embedded in the value would let an attacker forge additional\noutput keys in the line-delimited $GITHUB_OUTPUT file (output injection).\nStrip \\r and \\n via tr before writing AIO_BASE_TAG, addressing the\nCodeRabbit finding on PR #9334.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n---------\n\nCo-authored-by: Plane AI <noreply@plane.so>",
+                    "[WEB-7847] fix: enforce workspace membership on entity-search endpoint (#9296)\n\n* fix: enforce workspace membership on entity-search endpoint (GHSA-32q3-mqpc-3mhv)\n\nSearchEndpoint required authentication but did not verify the requesting user\nwas a member of the queried workspace. Any authenticated Plane user could\nenumerate members across workspaces they don't belong to by guessing slugs.\n\nAdd a WorkspaceMember guard at the top of get() \u2014 returns 403 if the user is\nnot an active member of the target workspace. Brings OSS to parity with EE,\nwhich already had this protection via @can(WorkspacePermissions.VIEW).\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n* refactor(security): replace inline WS membership check with WorkspaceUserPermission\n\nUse the existing WorkspaceUserPermission permission class on SearchEndpoint\ninstead of a manual WorkspaceMember.objects.filter() guard inside the\nmethod body. Enforcement behaviour is unchanged (GHSA-32q3-mqpc-3mhv).\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n---------\n\nCo-authored-by: Plane AI <noreply@plane.so>",
+                    "[WEB-7776] fix(security): scope FileAsset queries to prevent cross-project IDOR (Cluster F) (#9288)\n\n* [WEB-7776] fix(security): scope FileAsset queries to prevent cross-project IDOR (Cluster F)\n\nMultiple asset endpoints were missing project-level scoping on FileAsset\nqueryset filters, allowing authenticated users to access, mark-uploaded,\nor restore assets belonging to other projects/workspaces.\n\n- ProjectBulkAssetEndpoint.post: add project_id= scope to asset filter\n- EntityAssetEndpoint.get/patch: add project_id=deploy_board.project_id\n- AssetRestoreEndpoint.post: add project_id=deploy_board.project_id\n- FileAssetEndpoint (V1): add workspace membership check on get/post/delete\n- FileAssetViewSet.restore (V1): add workspace membership check\n- WorkspaceFileAssetEndpoint.post: gate WORKSPACE_LOGO on ADMIN role\n- DuplicateAssetEndpoint.post: restrict source asset to same workspace\n\nFixes GHSA-r2hw, GHSA-jh4v, GHSA-8688, GHSA-3hrj and related advisories.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n* refactor(security): replace inline membership checks with WorkspaceMemberPermission class\n\nAdd WorkspaceMemberPermission to workspace.py \u2014 resolves workspace by\n'workspace_id' UUID or 'slug' kwarg, covering the mixed URL patterns on\nFileAssetEndpoint. Apply to FileAssetEndpoint and FileAssetViewSet so\nmembership enforcement lives in the permission layer, not inside each\nmethod handler.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n* refactor: remove dead 404 guard in FileAssetEndpoint.post()\n\nWorkspaceMemberPermission denies requests for non-existent slugs before\nthe view method runs, making the filter().first() + if not workspace\nbranch unreachable. Switch to .get() so any TOCTOU race still surfaces\nas a 404 via ObjectDoesNotExist.\n\nCo-authored-by: Plane AI <noreply@plane.so>\n\n---------\n\nCo-authored-by: Plane AI <noreply@plane.so>"
+                  ],
+                  "lastCommitDate": "2026-07-16T10:33:25Z"
+                },
+                {
+                  "author": "dependabot[bot]",
+                  "authorLogin": "dependabot[bot]",
+                  "counts": {
+                    "sixMonths": 6,
+                    "oneYear": 6,
+                    "allTime": 6
+                  },
+                  "recencyScore": 12,
+                  "messages": [
+                    "chore(deps): bump the npm_and_yarn group across 1 directory with 3 updates (#9244)\n\nBumps the npm_and_yarn group with 3 updates in the / directory: [react-router](https://github.com/remix-run/react-router/tree/HEAD/packages/react-router), [vite](https://github.com/vitejs/vite/tree/HEAD/packages/vite) and [ws](https://github.com/websockets/ws).\n\n\nUpdates `react-router` from 7.15.0 to 7.15.1\n- [Release notes](https://github.com/remix-run/react-router/releases)\n- [Changelog](https://github.com/remix-run/react-router/blob/main/packages/react-router/CHANGELOG.md)\n- [Commits](https://github.com/remix-run/react-router/commits/react-router@7.15.1/packages/react-router)\n\nUpdates `vite` from 7.3.2 to 7.3.5\n- [Release notes](https://github.com/vitejs/vite/releases)\n- [Changelog](https://github.com/vitejs/vite/blob/v7.3.5/packages/vite/CHANGELOG.md)\n- [Commits](https://github.com/vitejs/vite/commits/v7.3.5/packages/vite)\n\nUpdates `ws` from 8.20.1 to 8.21.0\n- [Release notes](https://github.com/websockets/ws/releases)\n- [Commits](https://github.com/websockets/ws/compare/8.20.1...8.21.0)\n\n---\nupdated-dependencies:\n- dependency-name: react-router\n  dependency-version: 7.15.1\n  dependency-type: direct:production\n  dependency-group: npm_and_yarn\n- dependency-name: vite\n  dependency-version: 7.3.5\n  dependency-type: direct:production\n  dependency-group: npm_and_yarn\n- dependency-name: ws\n  dependency-version: 8.21.0\n  dependency-type: direct:production\n  dependency-group: npm_and_yarn\n...\n\nSigned-off-by: dependabot[bot] <support@github.com>\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>",
+                    "chore(deps): bump cryptography (#9243)\n\nBumps the pip group with 1 update in the /apps/api/requirements directory: [cryptography](https://github.com/pyca/cryptography).\n\n\nUpdates `cryptography` from 46.0.7 to 48.0.1\n- [Changelog](https://github.com/pyca/cryptography/blob/main/CHANGELOG.rst)\n- [Commits](https://github.com/pyca/cryptography/compare/46.0.7...48.0.1)\n\n---\nupdated-dependencies:\n- dependency-name: cryptography\n  dependency-version: 48.0.1\n  dependency-type: direct:production\n  dependency-group: pip\n...\n\nSigned-off-by: dependabot[bot] <support@github.com>\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>",
+                    "chore(deps): bump pyjwt (#9241)\n\nBumps the pip group with 1 update in the /apps/api/requirements directory: [pyjwt](https://github.com/jpadilla/pyjwt).\n\n\nUpdates `pyjwt` from 2.12.0 to 2.13.0\n- [Release notes](https://github.com/jpadilla/pyjwt/releases)\n- [Changelog](https://github.com/jpadilla/pyjwt/blob/master/CHANGELOG.rst)\n- [Commits](https://github.com/jpadilla/pyjwt/compare/2.12.0...2.13.0)\n\n---\nupdated-dependencies:\n- dependency-name: pyjwt\n  dependency-version: 2.13.0\n  dependency-type: direct:production\n  dependency-group: pip\n...\n\nSigned-off-by: dependabot[bot] <support@github.com>\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>",
+                    "chore(deps): bump postcss (#8931)\n\nBumps the npm_and_yarn group with 1 update in the /packages/tailwind-config directory: [postcss](https://github.com/postcss/postcss).\n\n\nUpdates `postcss` from 8.5.6 to 8.5.10\n- [Release notes](https://github.com/postcss/postcss/releases)\n- [Changelog](https://github.com/postcss/postcss/blob/main/CHANGELOG.md)\n- [Commits](https://github.com/postcss/postcss/compare/8.5.6...8.5.10)\n\n---\nupdated-dependencies:\n- dependency-name: postcss\n  dependency-version: 8.5.10\n  dependency-type: direct:production\n  dependency-group: npm_and_yarn\n...\n\nSigned-off-by: dependabot[bot] <support@github.com>\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>",
+                    "chore(deps): bump lxml (#8925)\n\nBumps the pip group with 1 update in the /apps/api/requirements directory: [lxml](https://github.com/lxml/lxml).\n\n\nUpdates `lxml` from 6.0.0 to 6.1.0\n- [Release notes](https://github.com/lxml/lxml/releases)\n- [Changelog](https://github.com/lxml/lxml/blob/master/CHANGES.txt)\n- [Commits](https://github.com/lxml/lxml/compare/lxml-6.0.0...lxml-6.1.0)\n\n---\nupdated-dependencies:\n- dependency-name: lxml\n  dependency-version: 6.1.0\n  dependency-type: direct:production\n  dependency-group: pip\n...\n\nSigned-off-by: dependabot[bot] <support@github.com>\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>",
+                    "chore(deps): bump pytest (#8891)\n\nBumps the pip group with 1 update in the /apps/api/requirements directory: [pytest](https://github.com/pytest-dev/pytest).\n\n\nUpdates `pytest` from 9.0.2 to 9.0.3\n- [Release notes](https://github.com/pytest-dev/pytest/releases)\n- [Changelog](https://github.com/pytest-dev/pytest/blob/main/CHANGELOG.rst)\n- [Commits](https://github.com/pytest-dev/pytest/compare/9.0.2...9.0.3)\n\n---\nupdated-dependencies:\n- dependency-name: pytest\n  dependency-version: 9.0.3\n  dependency-type: direct:production\n  dependency-group: pip\n...\n\nSigned-off-by: dependabot[bot] <support@github.com>\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>"
+                  ],
+                  "lastCommitDate": "2026-06-16T11:47:08Z"
+                },
+                {
+                  "author": "Rahulcheryala",
+                  "authorLogin": "Rahulcheryala",
+                  "counts": {
+                    "sixMonths": 3,
+                    "oneYear": 3,
+                    "allTime": 3
+                  },
+                  "recencyScore": 6,
+                  "messages": [
+                    "[GIT-239 | GIT-240] refactor: hooks and constants consolidation to core (#9204)",
+                    "[GIT-238] refactor: migrate types from apps/web to @plane/types (#9203)\n\n* refactor: migrate types from apps/web to @plane/types\n\n* [WEB-238] resolved lint errors\n\n* [WEB-238] Resolved coderabbit comments",
+                    "fix(GIT-235): add styles to onboarding tour close button for contrast (#9188)"
+                  ],
+                  "lastCommitDate": "2026-06-26T15:06:52Z"
+                },
+                {
+                  "author": "codingwolf-at",
+                  "authorLogin": "codingwolf-at",
+                  "counts": {
+                    "sixMonths": 2,
+                    "oneYear": 2,
+                    "allTime": 2
+                  },
+                  "recencyScore": 10,
+                  "messages": [
+                    "[GIT-248 | GIT-254] refactor: store and components consolidation to core (#9245)\n\n* refactor: migrate constants (fetch-keys) from apps/web to @plane/constants\n\n* refactor: migrate constants (ai, calenda, gaant) from apps/web to @plane/constants\n\n* refactor: migrate constants (sidebar, favorites) from apps/web to @plane/constants\n\n* refactor: migrate constants (editor) from apps/web to @plane/constants\n\n* refactor: migrate constants (plans) from apps/web to @core/components\n\n* resolved lint errors\n\n* fix: resolve coderabbit comments\n\n* refactor: resolve coderabbit comments\n\n* refactor: migrate hooks (use-file-size) from web/app/ce to web/app/core\n\n* refactor: migrate hooks (use-notification-preview) from web/app/ce to web/app/core\n\n* refactor: migrate hooks (use-timeline-chart) from web/app/ce to web/app/core\n\n* refactor: migrate hooks (use-page, use-page-store) from web/app/ce to web/app/core\n\n* refactor: migrate hooks (app-rail, indexes) from web/app/ce to web/app/core\n\n* refactor: migrate hooks (use-page-flag) from web/app/ce to web/app/core\n\n* refactor: migrate hooks (use-editor-flagging) from web/app/ce to web/app/core\n\n* refactor: migrate hooks (use-filters-operator-configs) from web/app/ce to web/app/core\n\n* refactor: migrate hooks (use-additional-editor-mention) from web/app/ce to web/app/core\n\n* refactor: migrate hooks (use-additional-favorite-item-details) from web/app/ce to web/app/core\n\n* refactor: migrate hooks (use-extended-editor-extensions, use-pages-pane-extensions) from web/app/ce to web/app/core\n\n* refactor: migrate hooks (use-work-items-filters-config) from web/app/ce to web/app/core\n\n* refactor: migrate hooks (use-extended-editor-config) from web/app/ce to web/app/core\n\n* refactor: migrate hooks (use-bulk-operations) from web/app/ce to web/app/core\n\n* refactor: migrate hooks (use-debounced-duplicate-issues) from web/app/ce to web/app/core\n\n* refactor: migrate hooks (use-issue-properties) from web/app/ce to web/app/core\n\n* refactor: migrate hooks (use-workspace-issue-properties) from web/app/ce to web/app/core\n\n* refactor: delete hook (use-issue-embed) from web/app/ce\n\n* fix: coderabbit comments\n\n* fix: React doctor comments\n\n* fix: import structure for hooks\n\n* refactor: remove command palette & sidebar  components and related files from web/app/ce\n\n* refactor: update analytics tab imports and add new analytics tab components\n\n* feat: add project, work item, and workspace level modals for enhanced user interaction\n\n* refactor: replace WorkspaceActiveCyclesRoot with WorkspaceActiveCyclesUpgrade and remove obsolete components\n\n* refactor: migrate app-rail HOC to core components and remove obsolete index file\n\n* refactor: remove unused automation components and simplify layout structure\n\n* refactor: update import paths for CommonProjectBreadcrumbs and add new breadcrumb components\n\n* refactor: update import path for WorkItemDetailRoot and add new work item detail component\n\n* refactor: remove obsolete comments index file and introduce CommentBlock component in core\n\n* refactor: update import paths for common components and introduce new ExtendedAppHeader, GlobalModals, and SubscriptionPill components\n\n* refactor: remove obsolete index file and add MaintenanceMessage and InboxSourcePill components\n\n* refactor: remove obsolete cycle components and introduce new cycle-related components in core\n\n* refac: moved de-dupe directory to core\n\n* refactor: add new desktop components and update import paths for sidebar functionality\n\n* refactor: remove obsolete index file and introduce new version number and product updates components in core\n\n* refactor: add EpicModal component and update import paths in issue layouts\n\n* refactor: add HomePageHeader and HomePeekOverviewsRoot components, update import paths in home and issues sections\n\n* refactor: remove obsolete home index file, update import paths for relation options in issue detail components, and introduce new activity helper functions\n\n* refactor: remove AdditionalFilterValueInput from legacy path and reintroduce it in core filter value input component\n\n* refactor: remove legacy workspace-notifications index file and introduce new notification components in core\n\n* refactor: remove legacy license components and update import paths for PaidPlanUpgradeModal\n\n* refactor: remove legacy navigation components and update import paths for navigation items in core\n\n* refactor: introduce onboarding tour components and update import paths for tour-related files\n\n* refactor: remove legacy theme switcher component and update import paths in profile settings\n\n* refactor: update import paths for workflow components and introduce new workflow-related files in core\n\n* refactor: remove legacy estimate components and introduce new estimate-related files in core\n\n* refactor: remove legacy gantt-chart components and introduce new core components for gantt-chart functionality\n\n* refactor: remove legacy helper components and introduce new access control and publish components in core\n\n* refactor: introduce billing components and update import paths for billing-related files in core\n\n* refactor: introduce new members components and update import paths for workspace members functionality\n\n* refactor: update import paths for workspace components and introduce new workspace-related files\n\n* refactor: remove deprecated components and clean up import paths across various modules\n\n* refactor: remove unused components and clean up import paths across various modules\n\n* refactor: remove unused sidebar components and update import paths in workspace notifications\n\n* refactor: introduce new estimate, billing, and notification card components while updating import paths across various modules\n\n* refactor: remove unused estimate and billing components, update import paths, and streamline workspace notification card structure\n\n* refactor: update import paths for project components and remove unused files in the projects module\n\n* refactor: remove unused power-k components and update import paths in the command palette module\n\n* refactor: remove unused issue components and update import paths across the issues module\n\n* refactor: remove unused mentions components and update import paths in the editor module\n\n* refactor: remove unused components and update import paths across the pages module\n\n* refactor: update type imports for issue properties in issue modal context\n\n* fix: oxfmt\n\n* fix: PR checks\n\n* [GIT-254] Refactor: Store consolidation to @core/store (#9271)\n\n* refactor: remove unused store files and update import paths across the application\n\n* refactor: remove unused store files and update import paths across the core module\n\n* refactor: remove unused issue filter and store files, and update import paths in the core module\n\n* refactor: update import paths for timeline store files and introduce new base timeline store\n\n* refactor: remove deprecated root store file and update import paths across the application\n\n* refactor: update import paths for store files and correct root store type references\n\n* refactor: standardize import comments and remove 'plane-web' artifacts across various components\n\n* fix: CodeRabbit comments\n\n* fix: format\n\n* refactor: update TypeScript configuration and improve sorting method in TabNavigationRoot component\n\n* refactor: replace toSorted with sort method for navigation item sorting in TabNavigationRoot component\n\n---------\n\nCo-authored-by: Rahulcheryala <rahulcheryala2004@gmail.com>\nCo-authored-by: Prateek Shourya <prateekshourya29@gmail.com>",
+                    "fix(user): clone user data before updates to prevent mutations (#9285)\n\nUpdated the `updateCurrentUser` method in `UserStore` to clone the current user data before making updates, ensuring that the original data remains unchanged during the update process. Additionally, added logic to update the local state with the new user data after a successful update.\n\nfix(cover-image): return absolute URLs for cover images\n\nModified the `handleCoverImageChange` function to return absolute URLs for cover images, ensuring compatibility with the expected format. This change includes handling both uploaded images and new images, providing a consistent return structure."
+                  ],
+                  "lastCommitDate": "2026-07-16T07:43:04Z"
+                },
+                {
+                  "author": "okxint",
+                  "authorLogin": "okxint",
+                  "counts": {
+                    "sixMonths": 2,
+                    "oneYear": 2,
+                    "allTime": 2
+                  },
+                  "recencyScore": 4,
+                  "messages": [
+                    "fix: Use APP_DOMAIN env var for bot user email (#9262)\n\n* fix: Use APP_DOMAIN env var for bot user email instead of hardcoded plane.so\n\nSigned-off-by: okxint <cashmein.eth@gmail.com>\n\n* use settings.WEB_URL instead of APP_DOMAIN env var for bot email domain\n\n---------\n\nSigned-off-by: okxint <cashmein.eth@gmail.com>",
+                    "fix: Require at least one alphanumeric char in workspace name (#9263)\n\n`COMPANY_NAME_REGEX` blocks disallowed chars but accepts symbol-only\nstrings like `-_________-` since `-` and `_` are in the allowed set.\nAdd `HAS_ALPHANUMERIC_REGEX` and check it in `validateWorkspaceName`\nand `validateCompanyName` so inputs with no letter or digit are rejected.\n\nFixes makeplane/plane#9255\n\nSigned-off-by: okxint <cashmein.eth@gmail.com>"
+                  ],
+                  "lastCommitDate": "2026-06-20T21:33:13Z"
+                },
+                {
+                  "author": "KanteshMurade",
+                  "authorLogin": "KanteshMurade",
+                  "counts": {
+                    "sixMonths": 2,
+                    "oneYear": 2,
+                    "allTime": 2
+                  },
+                  "recencyScore": 4,
+                  "messages": [
+                    "fix(web): add Safari fallback for requestIdleCallback (#9137)\n\n* fix(web): add Safari fallback for requestIdleCallback\n\n* fix(web): use globalThis in idle-task fallbacks\n\nSwitch idle-task fallback paths from window.* to globalThis.* so the\nfallback no longer crashes in environments where window is undefined.\nAlso thread IdleRequestOptions through requestIdleFallback so the\ncaller's timeout hint is honored when falling back.\n\nAddresses CodeRabbit review feedback on #9137.\n\n---------\n\nCo-authored-by: sriram veeraghanta <veeraghanta.sriram@gmail.com>",
+                    "fix: filter out soft-deleted states from API endpoints (#8840)\n\n* fix: filter out soft-deleted states from API endpoints\n\n- Add deleted_at__isnull=True filter to StateListCreateAPIEndpoint.get_queryset()\n- Add deleted_at__isnull=True filter to StateDetailAPIEndpoint.get_queryset()\n- Prevents soft-deleted states from reappearing in UI after navigation\n- Fixes #8829\n\n* Fix: exclude issues linked to soft-deleted states"
+                  ],
+                  "lastCommitDate": "2026-05-28T18:26:46Z"
+                },
+                {
+                  "author": "sangeethailango",
+                  "authorLogin": "sangeethailango",
+                  "counts": {
+                    "sixMonths": 2,
+                    "oneYear": 2,
+                    "allTime": 2
+                  },
+                  "recencyScore": 4,
+                  "messages": [
+                    "[GIT-174]chore: set completed_at as read only field for work item (#9083)",
+                    "[GIT-175] fix: completed_at updation logic for work items (#9044)\n\n* chore: update completed_at logic updation in Issue save method\n\n* fix: update error handling\n\nCo-authored-by: Copilot Autofix powered by AI <223894421+github-code-quality[bot]@users.noreply.github.com>\n\n* fix: use StateGroup\n\nCo-authored-by: Copilot Autofix powered by AI <175728472+Copilot@users.noreply.github.com>\n\n---------\n\nCo-authored-by: Copilot Autofix powered by AI <223894421+github-code-quality[bot]@users.noreply.github.com>\nCo-authored-by: Copilot Autofix powered by AI <175728472+Copilot@users.noreply.github.com>"
+                  ],
+                  "lastCommitDate": "2026-05-25T08:31:50Z"
+                },
+                {
+                  "author": "b-saikrishnakanth",
+                  "authorLogin": "b-saikrishnakanth",
+                  "counts": {
+                    "sixMonths": 2,
+                    "oneYear": 2,
+                    "allTime": 2
+                  },
+                  "recencyScore": 4,
+                  "messages": [
+                    "[WEB-7182] fix: remove profile preferences activity (#9025)",
+                    "[WEB-7181] fix: empty comment quick-actions menu in work item activity (#9024)\n\n* fix: comment quick-actions menu hidden when no actions are available\n\n* refactor: remove dead code"
+                  ],
+                  "lastCommitDate": "2026-05-19T10:12:28Z"
+                },
+                {
+                  "author": "akhil-vamshi-konam",
+                  "authorLogin": "akhil-vamshi-konam",
+                  "counts": {
+                    "sixMonths": 1,
+                    "oneYear": 1,
+                    "allTime": 1
+                  },
+                  "recencyScore": 5,
+                  "messages": [
+                    "feat(api): add lite list endpoints for projects, members, cycles, and modules (#9410)\n\n* feat: add lite list endpoints for projects, members, cycles, and modules\n\n* refactor: enhance order_by sanitization for cycle and module endpoints, update error handling for non-existent projects and workspaces"
+                  ],
+                  "lastCommitDate": "2026-07-17T12:10:26Z"
+                },
+                {
+                  "author": "wildsurfer",
+                  "authorLogin": "wildsurfer",
+                  "counts": {
+                    "sixMonths": 1,
+                    "oneYear": 1,
+                    "allTime": 1
+                  },
+                  "recencyScore": 2,
+                  "messages": [
+                    "fix: Issues created or updated via REST API send no notifications or emails (#9307)\n\n* fix: send notifications when work items are created or updated via the REST API\n\n* test: rename contract test file to test_issue_notifications.py"
+                  ],
+                  "lastCommitDate": "2026-07-07T20:21:15Z"
+                },
+                {
+                  "author": "ch4og",
+                  "authorLogin": "ch4og",
+                  "counts": {
+                    "sixMonths": 1,
+                    "oneYear": 1,
+                    "allTime": 1
+                  },
+                  "recencyScore": 2,
+                  "messages": [
+                    "feat(api): add workspace_slug to webhook delivery payload (#9232)"
+                  ],
+                  "lastCommitDate": "2026-06-15T07:46:41Z"
+                },
+                {
+                  "author": "karthiksuki",
+                  "authorLogin": "karthiksuki",
+                  "counts": {
+                    "sixMonths": 1,
+                    "oneYear": 1,
+                    "allTime": 1
+                  },
+                  "recencyScore": 2,
+                  "messages": [
+                    "fix: dropdown shadow on the work item more options (#9154)\n\n* fix: UI border and shadow on the dropdown menu usability\n\n* fix: shadow-md and border strong"
+                  ],
+                  "lastCommitDate": "2026-06-03T11:58:19Z"
+                },
+                {
+                  "author": "durgeshhhhhhh",
+                  "authorLogin": "durgeshhhhhhh",
+                  "counts": {
+                    "sixMonths": 1,
+                    "oneYear": 1,
+                    "allTime": 1
+                  },
+                  "recencyScore": 2,
+                  "messages": [
+                    "fix: handle error message for special characters in Identifier of Project (#9059)"
+                  ],
+                  "lastCommitDate": "2026-06-03T11:56:18Z"
+                },
+                {
+                  "author": "pratapalakshmi",
+                  "authorLogin": "pratapalakshmi",
+                  "counts": {
+                    "sixMonths": 1,
+                    "oneYear": 1,
+                    "allTime": 1
+                  },
+                  "recencyScore": 2,
+                  "messages": [
+                    "fix: security vulnerabilities for plane docker images (#9140)"
+                  ],
+                  "lastCommitDate": "2026-05-26T08:55:01Z"
+                },
+                {
+                  "author": "bubacho",
+                  "authorLogin": "bubacho",
+                  "counts": {
+                    "sixMonths": 1,
+                    "oneYear": 1,
+                    "allTime": 1
+                  },
+                  "recencyScore": 2,
+                  "messages": [
+                    "fix(web): add requestIdleCallback fallback for Safari/iOS (#9094)\n\n* fix(web): fallback when requestIdleCallback is unavailable\n\n* refactor: improve idle task scheduling safety in render-if-visible"
+                  ],
+                  "lastCommitDate": "2026-05-24T19:31:11Z"
+                },
+                {
+                  "author": "astarte75",
+                  "authorLogin": "astarte75",
+                  "counts": {
+                    "sixMonths": 1,
+                    "oneYear": 1,
+                    "allTime": 1
+                  },
+                  "recencyScore": 2,
+                  "messages": [
+                    "fix(aio): use JSON array double quotes in VOLUME instruction (#9099)\n\nThe community AIO Dockerfile declared the VOLUME instruction with\nsingle quotes: VOLUME ['/app/data', '/app/logs']. Docker's JSON (exec)\nform requires double quotes; with single quotes the line is parsed as\nthe shell form and the bracket/comma tokens become literal volume\npaths ('[/app/data,' and '/app/logs]').\n\nDocker tolerated these non-absolute anonymous volume paths at container\ncreate time until Engine 29.5.0, which now rejects them with\n\"invalid mount config for type volume: invalid mount path: '[/app/data,'\nmount path must be absolute\", breaking `docker compose up --force-recreate`\nand any container recreation for the AIO community image.\n\nSwitching to the valid JSON array form fixes the parsing."
+                  ],
+                  "lastCommitDate": "2026-05-21T11:24:57Z"
+                },
+                {
+                  "author": "jamartineztelecoengineer84-dotcom",
+                  "authorLogin": "jamartineztelecoengineer84-dotcom",
+                  "counts": {
+                    "sixMonths": 1,
+                    "oneYear": 1,
+                    "allTime": 1
+                  },
+                  "recencyScore": 2,
+                  "messages": [
+                    "fix(api): pass project_lead_id (not User instance) when creating ProjectMember (#8966)\n\n* test(api): add regression tests for create-project endpoint\n\nCover three scenarios:\n- project_lead set to the creator's own user_id\n- project_lead set to a different workspace member\n- project_lead omitted (baseline)\n\nThe first two currently fail on preview because of a UUID coercion\nbug in ProjectMember.objects.create \u2014 see follow-up commit.\n\n* fix(api): pass project_lead_id (not User instance) when creating ProjectMember\n\nThe create-project endpoint built a ProjectMember row with\nmember_id=serializer.instance.project_lead, which resolves to a User\ninstance via Django's related descriptor instead of a UUID. Django's\nUUIDField coercion then fails with AttributeError: 'User' object has\nno attribute 'replace', which the generic exception handler converts\nto a 400 \"Please provide valid detail\" \u2014 but only after the Project\nrow was already persisted, leaving an orphaned project without\ndefault states.\n\nFix:\n- Use project_lead_id (FK ID, no descriptor lookup) on both the guard\n  comparison and the ProjectMember creation.\n- Wrap the post-save flow in transaction.atomic() so any future\n  exception triggers a clean rollback.\n- Defer model_activity.delay() with transaction.on_commit() so the\n  activity log only fires after a successful commit.\n- Capture the exception with log_exception() in the generic catch so\n  future regressions surface in api logs.\n\nNote: a related data integrity issue exists where\nProjectCreateSerializer doesn't create a ProjectIdentifier row\n(unlike its frontend counterpart). Out of scope here, will follow\nup in a separate PR.\n\n* fix(api): return 500 on unexpected errors and harden project create\n\nAddress review feedback from @sriramveeraghanta on PR #8966:\n\n- The catch-all `except Exception` now returns 500 instead of 400.\n  Reusing the generic 400 response on a server-side crash was the\n  anti-pattern that hid the original ghost-create bug for nine months;\n  a 500 lets clients distinguish between \"bad input\" and \"server fault\".\n- The `IntegrityError` branch no longer falls through silently when the\n  message is unrecognised. It re-raises so the catch-all `except` logs\n  the exception and returns a 500.\n- `transaction.on_commit()` now schedules `model_activity.delay` via\n  `functools.partial` instead of a lambda, avoiding late-binding closure\n  semantics.\n- `ProjectCreateSerializer.validate()` now rejects `project_lead`\n  values that are not active workspace members, surfacing the error\n  under the `project_lead` field key (rather than as `non_field_errors`)\n  so API clients can react programmatically.\n\n* test(api): harden assertions and cover rollback / workspace-membership\n\nAddress review feedback from @sriramveeraghanta on PR #8966:\n\n- The three existing tests now look up the created project via\n  `Project.objects.get(id=response.data[\"id\"])` instead of\n  `.first()`. The assertion now fails for the right reason if the\n  wrong project is returned by the endpoint.\n- New `test_create_project_with_lead_not_in_workspace_returns_400`\n  guards the workspace-membership validation added to\n  `ProjectCreateSerializer.validate()`. Expects a 400 with a\n  field-shaped error and zero rows persisted.\n- New `test_model_activity_not_called_on_rollback` locks in the\n  `transaction.on_commit()` semantics: when an exception is raised\n  inside the atomic block (forced via mocking `State.objects.bulk_create`),\n  the response is 500, no Project / ProjectMember / State rows are\n  persisted, and the deferred `model_activity.delay` task is never\n  dispatched. This prevents a future refactor from silently\n  regressing the rollback contract.\n\n* fix(api): mark on_commit dispatch as robust against broker failures\n\nAddress coderabbit re-review feedback on PR #8966.\n\nWithout robust=True, an exception raised by model_activity.delay\n(e.g., a Celery broker outage) propagates out of the on_commit\ncallback and is caught by the outer `except Exception` handler,\nwhich returns a 500 despite the project, ProjectMember rows and\ndefault States having already been committed. The client sees a\n500 and assumes the create failed \u2014 the same class of mismatch\nbetween actual state and reported status that the original bug\nexhibited, just at the post-commit phase.\n\nSet robust=True so Django logs the dispatch failure internally\nvia the standard transaction logger and the response stays 201,\nreflecting the persisted state.\n\nSwitch from `functools.partial` to a nested function\n(`_dispatch_model_activity`) for the on_commit callable. Django's\nrobust on_commit logging path reads `func.__qualname__` to format\nthe error message; `partial` objects lack that dunder by default,\nand the `functools.update_wrapper` workaround turns out to be\nbrittle when the wrapped callable is replaced by a Mock (which\nthe new regression test relies on). A nested function exposes\n`__qualname__` natively, and the locals it closes over are\nbound at definition time and never rebound before the callback\nfires, so the late-binding-closure motivation for `partial` over\n`lambda` does not apply here.\n\nA new test, test_response_still_201_when_broker_dispatch_fails,\nmirrors test_model_activity_not_called_on_rollback to lock in the\npost-commit branch. It uses `@pytest.mark.django_db(transaction=True)`\nso the surrounding test transaction is actually committed and the\n`on_commit` callback fires (the default wrapper suppresses it via\nrollback).\n\n* fix(api): handle unrecognised IntegrityError consistently\n\nAddress coderabbit re-review feedback on PR #8966.\n\nThe previous fix used `raise` inside the IntegrityError handler with\nthe intent of \"letting the catch-all `except Exception` below log it\nand return 500\". Coderabbit correctly flagged that `raise` exits the\ntry/except entirely \u2014 sibling except clauses don't fire \u2014 so\nunrecognised integrity errors actually skipped `log_exception` and\nthe consistent 500 JSON shape, contradicting the stated intent.\n\nReplicate the catch-all behaviour inline: log the exception via\n`log_exception(e)` and return the same generic 500 response with\n`{\"error\": \"An unexpected error occurred\"}`. The client now gets a\nuniform error shape regardless of which `except` branch handled it.\n\n---------\n\nCo-authored-by: Jose Antonio Martinez <257598434+jamartineztelecoengineer84-dotcom@users.noreply.github.com>"
+                  ],
+                  "lastCommitDate": "2026-05-14T20:37:32Z"
+                },
+                {
+                  "author": "MinitJain",
+                  "authorLogin": "MinitJain",
+                  "counts": {
+                    "sixMonths": 1,
+                    "oneYear": 1,
+                    "allTime": 1
+                  },
+                  "recencyScore": 2,
+                  "messages": [
+                    "fix(nginx): correct real_ip_header typo X-Forward-For \u2192 X-Forwarded-For (#8935)\n\nX-Forward-For is not a real HTTP header \u2014 the standard is X-Forwarded-For.\nWith the typo, Nginx never replaces $remote_addr with the actual client IP,\nso rate limiting and IP logging see the proxy IP instead of the real client.\nAffects all three nginx configs (web, admin, space)."
+                  ],
+                  "lastCommitDate": "2026-05-05T08:21:12Z"
+                },
+                {
+                  "author": "Saurabhkmr98",
+                  "authorLogin": "Saurabhkmr98",
+                  "counts": {
+                    "sixMonths": 1,
+                    "oneYear": 1,
+                    "allTime": 1
+                  },
+                  "recencyScore": 2,
+                  "messages": [
+                    "[SILO-1158] chore: add context for project in relations API (#8860)\n\n* add context for project in relations API\n\n* modify issue relation serializer"
+                  ],
+                  "lastCommitDate": "2026-04-20T09:59:28Z"
+                },
+                {
+                  "author": "PhuongPN6689",
+                  "authorLogin": "PhuongPN6689",
+                  "counts": {
+                    "sixMonths": 1,
+                    "oneYear": 1,
+                    "allTime": 1
+                  },
+                  "recencyScore": 2,
+                  "messages": [
+                    "enhance sub-issue query performance with optimized annotations and subqueries (#8889)"
+                  ],
+                  "lastCommitDate": "2026-04-14T08:24:28Z"
+                }
+              ],
+              "reviews": [],
+              "issues": [],
+              "activity": [
+                {
+                  "author": "sriramveeraghanta",
+                  "lastActiveDate": "2026-07-21T18:56:18Z",
+                  "weight": 5,
+                  "inactive": false
+                },
+                {
+                  "author": "mguptahub",
+                  "lastActiveDate": "2026-07-16T10:33:25Z",
+                  "weight": 5,
+                  "inactive": false
+                },
+                {
+                  "author": "dependabot[bot]",
+                  "lastActiveDate": "2026-06-16T11:47:08Z",
+                  "weight": 2,
+                  "inactive": false
+                },
+                {
+                  "author": "Rahulcheryala",
+                  "lastActiveDate": "2026-06-26T15:06:52Z",
+                  "weight": 2,
+                  "inactive": false
+                },
+                {
+                  "author": "codingwolf-at",
+                  "lastActiveDate": "2026-07-16T07:43:04Z",
+                  "weight": 5,
+                  "inactive": false
+                },
+                {
+                  "author": "okxint",
+                  "lastActiveDate": "2026-06-20T21:33:13Z",
+                  "weight": 2,
+                  "inactive": false
+                },
+                {
+                  "author": "KanteshMurade",
+                  "lastActiveDate": "2026-05-28T18:26:46Z",
+                  "weight": 2,
+                  "inactive": false
+                },
+                {
+                  "author": "sangeethailango",
+                  "lastActiveDate": "2026-05-25T08:31:50Z",
+                  "weight": 2,
+                  "inactive": false
+                },
+                {
+                  "author": "b-saikrishnakanth",
+                  "lastActiveDate": "2026-05-19T10:12:28Z",
+                  "weight": 2,
+                  "inactive": false
+                },
+                {
+                  "author": "akhil-vamshi-konam",
+                  "lastActiveDate": "2026-07-17T12:10:26Z",
+                  "weight": 5,
+                  "inactive": false
+                },
+                {
+                  "author": "wildsurfer",
+                  "lastActiveDate": "2026-07-07T20:21:15Z",
+                  "weight": 2,
+                  "inactive": false
+                },
+                {
+                  "author": "ch4og",
+                  "lastActiveDate": "2026-06-15T07:46:41Z",
+                  "weight": 2,
+                  "inactive": false
+                },
+                {
+                  "author": "karthiksuki",
+                  "lastActiveDate": "2026-06-03T11:58:19Z",
+                  "weight": 2,
+                  "inactive": false
+                },
+                {
+                  "author": "durgeshhhhhhh",
+                  "lastActiveDate": "2026-06-03T11:56:18Z",
+                  "weight": 2,
+                  "inactive": false
+                },
+                {
+                  "author": "pratapalakshmi",
+                  "lastActiveDate": "2026-05-26T08:55:01Z",
+                  "weight": 2,
+                  "inactive": false
+                },
+                {
+                  "author": "bubacho",
+                  "lastActiveDate": "2026-05-24T19:31:11Z",
+                  "weight": 2,
+                  "inactive": false
+                },
+                {
+                  "author": "astarte75",
+                  "lastActiveDate": "2026-05-21T11:24:57Z",
+                  "weight": 2,
+                  "inactive": false
+                },
+                {
+                  "author": "jamartineztelecoengineer84-dotcom",
+                  "lastActiveDate": "2026-05-14T20:37:32Z",
+                  "weight": 2,
+                  "inactive": false
+                },
+                {
+                  "author": "MinitJain",
+                  "lastActiveDate": "2026-05-05T08:21:12Z",
+                  "weight": 2,
+                  "inactive": false
+                },
+                {
+                  "author": "Saurabhkmr98",
+                  "lastActiveDate": "2026-04-20T09:59:28Z",
+                  "weight": 2,
+                  "inactive": false
+                },
+                {
+                  "author": "PhuongPN6689",
+                  "lastActiveDate": "2026-04-14T08:24:28Z",
+                  "weight": 2,
+                  "inactive": false
+                }
+              ],
+              "specialties": []
+            },
+            "pathEvolution": {
+              "recentCommitCount": 100,
+              "lastModifiedAt": "2026-07-21T18:56:18Z",
+              "lastModifiedAuthor": "@sriramveeraghanta"
+            }
+          },
+          "file": "(repository)",
+          "warnings": [
+            "PR review data unavailable: path query parameter is required",
+            "Blast radius engine unavailable."
+          ],
+          "dependencyGraph": {
+            "directDependents": []
+          },
+          "userFocus": "Before changing work-item state validation, which rules can we establish from the code, and which unanswered questions about allowed transitions need documentation or tests?",
+          "focusSearchQuery": "Before changing work-item state validation, which rules can we establish from the code, and which unanswered questions about allowed transitions need documentation or tests?",
+          "focusSearchPaths": [
+            "apps/api/plane/api/serializers/issue.py",
+            "apps/api/plane/api/serializers/state.py",
+            "apps/api/plane/app/serializers/issue.py",
+            "apps/api/plane/app/serializers/state.py",
+            "apps/api/plane/space/serializer/issue.py"
+          ],
+          "focusFiles": [
+            {
+              "path": "apps/api/plane/app/serializers/state.py",
+              "repoId": "github:CoopAI-Corp/plane",
+              "content": "# Copyright (c) 2023-present Plane Software, Inc. and contributors\n# SPDX-License-Identifier: AGPL-3.0-only\n# See the LICENSE file for details.\n\n# Module imports\nfrom .base import BaseSerializer\nfrom rest_framework import serializers\n\nfrom plane.db.models import State, StateGroup\n\n\nclass StateSerializer(BaseSerializer):\n    order = serializers.FloatField(required=False)\n\n    class Meta:\n        model = State\n        fields = [\n            \"id\",\n            \"project_id\",\n            \"workspace_id\",\n            \"name\",\n            \"color\",\n            \"group\",\n            \"default\",\n            \"description\",\n            \"sequence\",\n            \"order\",\n        ]\n        read_only_fields = [\"workspace\", \"project\"]\n\n    def validate(self, attrs):\n        if attrs.get(\"group\") == StateGroup.TRIAGE.value:\n            raise serializers.ValidationError(\"Cannot create triage state\")\n        return attrs\n\n\nclass StateLiteSerializer(BaseSerializer):\n    class Meta:\n        model = State\n        fields = [\"id\", \"name\", \"color\", \"group\"]\n        read_only_fields = fields\n",
+              "origin": "remote",
+              "truncated": false,
+              "startLine": 1
+            },
+            {
+              "path": "apps/api/plane/api/serializers/state.py",
+              "repoId": "github:CoopAI-Corp/plane",
+              "content": "# Copyright (c) 2023-present Plane Software, Inc. and contributors\n# SPDX-License-Identifier: AGPL-3.0-only\n# See the LICENSE file for details.\n\n# Module imports\nfrom .base import BaseSerializer\nfrom plane.db.models import State, StateGroup\nfrom rest_framework import serializers\n\n\nclass StateSerializer(BaseSerializer):\n    \"\"\"\n    Serializer for work item states with default state management.\n\n    Handles state creation and updates including default state validation\n    and automatic default state switching for workflow management.\n    \"\"\"\n\n    def validate(self, data):\n        # If the default is being provided then make all other states default False\n        if data.get(\"default\", False):\n            State.objects.filter(project_id=self.context.get(\"project_id\")).update(default=False)\n\n        if data.get(\"group\", None) == StateGroup.TRIAGE.value:\n            raise serializers.ValidationError(\"Cannot create triage state\")\n        return data\n\n    class Meta:\n        model = State\n        fields = \"__all__\"\n        read_only_fields = [\n            \"id\",\n            \"created_by\",\n            \"updated_by\",\n            \"created_at\",\n            \"updated_at\",\n            \"workspace\",\n            \"project\",\n            \"deleted_at\",\n            \"slug\",\n        ]\n\n\nclass StateLiteSerializer(BaseSerializer):\n    \"\"\"\n    Lightweight state serializer for minimal data transfer.\n\n    Provides essential state information including visual properties\n    and grouping data optimized for UI display and filtering.\n    \"\"\"\n\n    class Meta:\n        model = State\n        fields = [\"id\", \"name\", \"color\", \"group\"]\n        read_only_fields = fields\n",
+              "origin": "remote",
+              "truncated": false,
+              "startLine": 1
+            },
+            {
+              "path": "apps/api/plane/space/serializer/issue.py",
+              "repoId": "github:CoopAI-Corp/plane",
+              "startLine": 2,
+              "content": "# SPDX-License-Identifier: AGPL-3.0-only\n# See the LICENSE file for details.\n\n# Django imports\nfrom django.utils import timezone\n\n# Third Party imports\nfrom rest_framework import serializers\n\n# Module imports\nfrom .base import BaseSerializer\nfrom .user import UserLiteSerializer\nfrom .state import StateSerializer, StateLiteSerializer\nfrom .project import ProjectLiteSerializer\nfrom .cycle import CycleBaseSerializer\nfrom .module import ModuleBaseSerializer\nfrom .workspace import WorkspaceLiteSerializer\nfrom plane.db.models import (\n    User,\n    Issue,\n    IssueComment,\n    IssueAssignee,\n    IssueLabel,\n    Label,\n    CycleIssue,\n    ModuleIssue,\n    IssueLink,\n    FileAsset,\n    IssueReaction,\n    CommentReaction,\n    IssueVote,\n    IssueRelation,\n)\nfrom plane.utils.content_validator import (\n    validate_html_content,\n    validate_binary_data,\n)\n\n\nclass IssueStateFlatSerializer(BaseSerializer):\n    state_detail = StateLiteSerializer(read_only=True, source=\"state\")\n    project_detail = ProjectLiteSerializer(read_only=True, source=\"project\")\n\n    class Meta:\n        model = Issue\n        fields = [\"id\", \"sequence_id\", \"name\", \"state_detail\", \"project_detail\"]\n\n\nclass LabelSerializer(BaseSerializer):\n    workspace_detail = WorkspaceLiteSerializer(source=\"workspace\", read_only=True)\n    project_detail = ProjectLiteSerializer(source=\"project\", read_only=True)\n\n    class Meta:\n        model = Label\n        fields = \"__all__\"\n        read_only_fields = [\"workspace\", \"project\"]\n\n\nclass IssueProjectLiteSerializer(BaseSerializer):\n    project_detail = ProjectLiteSerializer(source=\"project\", read_only=True)\n\n    class Meta:\n        model = Issue\n        fields = [\"id\", \"project_detail\", \"name\", \"sequence_id\"]\n        read_only_fields = fields\n\n\nclass IssueRelationSerializer(BaseSerializer):\n    issue_detail = IssueProjectLiteSerializer(read_only=True, source=\"related_issue\")\n\n    class Meta:\n        model = IssueRelation\n        fields = [\"issue_detail\", \"relation_type\", \"related_issue\", \"issue\", \"id\"]\n        read_only_fields = [\"workspace\", \"project\"]\n\n\nclass RelatedIssueSerializer(BaseSerializer):\n    issue_detail = IssueProjectLiteSerializer(read_only=True, source=\"issue\")\n\n    class Meta:\n        model = IssueRelation\n        fields = [\"issue_detail\", \"relation_type\", \"related_issue\", \"issue\", \"id\"]\n        read_only_fields = [\"workspace\", \"project\"]\n\n\nclass IssueCycleDetailSerializer(BaseSerializer):\n    cycle_detail = CycleBaseSerializer(read_only=True, source=\"cycle\")\n\n    class Meta:\n        model = CycleIssue\n        fields = \"__all__\"\n        read_only_fields = [\n            \"workspace\",\n            \"project\",\n            \"created_by\",\n            \"updated_by\",\n            \"created_at\",\n            \"updated_at\",\n        ]\n\n\nclass IssueModuleDetailSerializer(BaseSerializer):\n    module_detail = ModuleBaseSerializer(read_only=True, source=\"module\")\n\n    class Meta:\n        model = ModuleIssue\n        fields = \"__all__\"\n        read_only_fields = [\n            \"workspace\",\n            \"project\",\n            \"created_by\",\n            \"updated_by\",\n            \"created_at\",\n            \"updated_at\",\n        ]\n\n\nclass IssueLinkSerializer(BaseSerializer):\n    created_by_detail = UserLiteSerializer(read_only=True, source=\"created_by\")\n\n    class Meta:\n        model = IssueLink",
+              "truncated": true
+            },
+            {
+              "path": "apps/api/plane/space/serializer/issue.py",
+              "repoId": "github:CoopAI-Corp/plane",
+              "startLine": 124,
+              "content": "        fields = \"__all__\"\n        read_only_fields = [\n            \"workspace\",\n            \"project\",\n            \"created_by\",\n            \"updated_by\",\n            \"created_at\",\n            \"updated_at\",\n            \"issue\",\n        ]\n\n    # Validation if url already exists\n    def create(self, validated_data):\n        if IssueLink.objects.filter(url=validated_data.get(\"url\"), issue_id=validated_data.get(\"issue_id\")).exists():\n            raise serializers.ValidationError({\"error\": \"URL already exists for this Issue\"})\n        return IssueLink.objects.create(**validated_data)\n\n\nclass IssueAttachmentSerializer(BaseSerializer):\n    class Meta:\n        model = FileAsset\n        fields = \"__all__\"\n        read_only_fields = [\n            \"created_by\",\n            \"updated_by\",\n            \"created_at\",\n            \"updated_at\",\n            \"workspace\",\n            \"project\",\n            \"issue\",\n        ]\n\n\nclass IssueReactionSerializer(BaseSerializer):\n    class Meta:\n        model = IssueReaction\n        fields = [\"issue\", \"reaction\", \"workspace\", \"project\", \"actor\"]\n        read_only_fields = [\"workspace\", \"project\", \"issue\", \"actor\"]\n\n\nclass IssueSerializer(BaseSerializer):\n    project_detail = ProjectLiteSerializer(read_only=True, source=\"project\")\n    state_detail = StateSerializer(read_only=True, source=\"state\")\n    parent_detail = IssueStateFlatSerializer(read_only=True, source=\"parent\")\n    label_details = LabelSerializer(read_only=True, source=\"labels\", many=True)\n    assignee_details = UserLiteSerializer(read_only=True, source=\"assignees\", many=True)\n    related_issues = IssueRelationSerializer(read_only=True, source=\"issue_relation\", many=True)\n    issue_relations = RelatedIssueSerializer(read_only=True, source=\"issue_related\", many=True)\n    issue_cycle = IssueCycleDetailSerializer(read_only=True)\n    issue_module = IssueModuleDetailSerializer(read_only=True)\n    issue_link = IssueLinkSerializer(read_only=True, many=True)\n    issue_attachment = IssueAttachmentSerializer(read_only=True, many=True)\n    sub_issues_count = serializers.IntegerField(read_only=True)\n    issue_reactions = IssueReactionSerializer(read_only=True, many=True)\n\n    class Meta:\n        model = Issue\n        fields = \"__all__\"\n        read_only_fields = [\n            \"workspace\",\n            \"project\",\n            \"created_by\",\n            \"updated_by\",\n            \"created_at\",\n            \"updated_at\",\n        ]\n\n\nclass IssueFlatSerializer(BaseSerializer):\n    ## Contain only flat fields\n\n    class Meta:\n        model = Issue\n        fields = [\n            \"id\",\n            \"name\",\n            \"description_json\",\n            \"description_html\",\n            \"priority\",\n            \"start_date\",\n            \"target_date\",\n            \"sequence_id\",\n            \"sort_order\",\n            \"is_draft\",\n        ]\n\n\nclass CommentReactionLiteSerializer(BaseSerializer):\n    actor_detail = UserLiteSerializer(read_only=True, source=\"actor\")\n\n    class Meta:\n        model = CommentReaction\n        fields = [\"id\", \"reaction\", \"comment\", \"actor_detail\"]\n\n\nclass IssueCommentSerializer(BaseSerializer):\n    actor_detail = UserLiteSerializer(read_only=True, source=\"actor\")\n    issue_detail = IssueFlatSerializer(read_only=True, source=\"issue\")\n    project_detail = ProjectLiteSerializer(read_only=True, source=\"project\")\n    workspace_detail = WorkspaceLiteSerializer(read_only=True, source=\"workspace\")\n    comment_reactions = CommentReactionLiteSerializer(read_only=True, many=True)\n    is_member = serializers.BooleanField(read_only=True)\n\n    class Meta:\n        model = IssueComment\n        fields = \"__all__\"\n        read_only_fields = [\n            \"workspace\",\n            \"project\",\n            \"issue\",\n            \"created_by\",\n            \"updated_by\",\n            \"created_at\",\n            \"updated_at\",\n        ]\n\n\n##TODO: Find a better way to write this serializer\n## Find a better approach to save manytomany?\nclass IssueCreateSerializer(BaseSerializer):\n    state_detail = StateSerializer(read_only=True, source=\"state\")\n    created_by_detail = UserLiteSerializer(read_only=True, source=\"created_by\")",
+              "truncated": true
+            },
+            {
+              "path": "apps/api/plane/space/serializer/issue.py",
+              "repoId": "github:CoopAI-Corp/plane",
+              "startLine": 267,
+              "content": "            \"created_by\",\n            \"updated_by\",\n            \"created_at\",\n            \"updated_at\",\n        ]\n\n    def to_representation(self, instance):\n        data = super().to_representation(instance)\n        data[\"assignees\"] = [str(assignee.id) for assignee in instance.assignees.all()]\n        data[\"labels\"] = [str(label.id) for label in instance.labels.all()]\n        return data\n\n    def validate(self, data):\n        if (\n            data.get(\"start_date\", None) is not None\n            and data.get(\"target_date\", None) is not None\n            and data.get(\"start_date\", None) > data.get(\"target_date\", None)\n        ):\n            raise serializers.ValidationError(\"Start date cannot exceed target date\")\n\n        # Validate description content for security\n        if \"description_html\" in data and data[\"description_html\"]:\n            is_valid, error_msg, sanitized_html = validate_html_content(data[\"description_html\"])\n            if not is_valid:\n                raise serializers.ValidationError({\"error\": \"html content is not valid\"})\n            # Update the data with sanitized HTML if available\n            if sanitized_html is not None:\n                data[\"description_html\"] = sanitized_html\n\n        if \"description_binary\" in data and data[\"description_binary\"]:\n            is_valid, error_msg = validate_binary_data(data[\"description_binary\"])\n            if not is_valid:\n                raise serializers.ValidationError({\"description_binary\": \"Invalid binary data\"})\n\n        return data\n\n    def create(self, validated_data):\n        assignees = validated_data.pop(\"assignees\", None)\n        labels = validated_data.pop(\"labels\", None)\n\n        project_id = self.context[\"project_id\"]\n        workspace_id = self.context[\"workspace_id\"]\n        default_assignee_id = self.context[\"default_assignee_id\"]\n\n        issue = Issue.objects.create(**validated_data, project_id=project_id)\n\n        # Issue Audit Users\n        created_by_id = issue.created_by_id\n        updated_by_id = issue.updated_by_id\n\n        if assignees is not None and len(assignees):\n            IssueAssignee.objects.bulk_create(\n                [\n                    IssueAssignee(\n                        assignee=user,\n                        issue=issue,\n                        project_id=project_id,\n                        workspace_id=workspace_id,\n                        created_by_id=created_by_id,\n                        updated_by_id=updated_by_id,\n                    )\n                    for user in assignees\n                ],\n                batch_size=10,\n            )\n        else:\n            # Then assign it to default assignee\n            if default_assignee_id is not None:\n                IssueAssignee.objects.create(\n                    assignee_id=default_assignee_id,\n                    issue=issue,\n                    project_id=project_id,\n                    workspace_id=workspace_id,\n                    created_by_id=created_by_id,\n                    updated_by_id=updated_by_id,\n                )\n\n        if labels is not None and len(labels):\n            IssueLabel.objects.bulk_create(\n                [\n                    IssueLabel(\n                        label=label,\n                        issue=issue,\n                        project_id=project_id,\n                        workspace_id=workspace_id,\n                        created_by_id=created_by_id,\n                        updated_by_id=updated_by_id,\n                    )\n                    for label in labels\n                ],\n                batch_size=10,\n            )\n\n        return issue\n\n    def update(self, instance, validated_data):\n        assignees = validated_data.pop(\"assignees\", None)\n        labels = validated_data.pop(\"labels\", None)\n\n        # Related models\n        project_id = instance.project_id\n        workspace_id = instance.workspace_id\n        created_by_id = instance.created_by_id\n        updated_by_id = instance.updated_by_id\n\n        if assignees is not None:\n            IssueAssignee.objects.filter(issue=instance).delete()\n            IssueAssignee.objects.bulk_create(\n                [\n                    IssueAssignee(\n                        assignee=user,\n                        issue=instance,\n                        project_id=project_id,\n                        workspace_id=workspace_id,\n                        created_by_id=created_by_id,\n                        updated_by_id=updated_by_id,\n                    )\n                    for user in assignees\n                ],\n                batch_size=10,\n            )\n",
+              "truncated": true
+            },
+            {
+              "path": "apps/api/plane/api/serializers/issue.py",
+              "repoId": "github:CoopAI-Corp/plane",
+              "startLine": 63,
+              "content": "        write_only=True,\n        required=False,\n    )\n    type_id = serializers.PrimaryKeyRelatedField(\n        source=\"type\", queryset=IssueType.objects.all(), required=False, allow_null=True\n    )\n\n    class Meta:\n        model = Issue\n        read_only_fields = [\"id\", \"workspace\", \"project\", \"updated_by\", \"updated_at\", \"completed_at\"]\n        exclude = [\"description_json\", \"description_stripped\"]\n\n    def validate(self, data):\n        if (\n            data.get(\"start_date\", None) is not None\n            and data.get(\"target_date\", None) is not None\n            and data.get(\"start_date\", None) > data.get(\"target_date\", None)\n        ):\n            raise serializers.ValidationError(\"Start date cannot exceed target date\")\n\n        try:\n            if data.get(\"description_html\", None) is not None:\n                parsed = html.fromstring(data[\"description_html\"])\n                parsed_str = html.tostring(parsed, encoding=\"unicode\")\n                data[\"description_html\"] = parsed_str\n\n        except Exception:\n            raise serializers.ValidationError(\"Invalid HTML passed\")\n\n        # Validate description content for security\n        if data.get(\"description_html\"):\n            is_valid, error_msg, sanitized_html = validate_html_content(data[\"description_html\"])\n            if not is_valid:\n                raise serializers.ValidationError({\"error\": \"html content is not valid\"})\n            # Update the data with sanitized HTML if available\n            if sanitized_html is not None:\n                data[\"description_html\"] = sanitized_html\n\n        if data.get(\"description_binary\"):\n            is_valid, error_msg = validate_binary_data(data[\"description_binary\"])\n            if not is_valid:\n                raise serializers.ValidationError({\"description_binary\": \"Invalid binary data\"})\n\n        # Validate assignees are from project\n        if data.get(\"assignees\", []):\n            data[\"assignees\"] = ProjectMember.objects.filter(\n                project_id=self.context.get(\"project_id\"),\n                is_active=True,\n                role__gte=15,\n                member_id__in=data[\"assignees\"],\n            ).values_list(\"member_id\", flat=True)\n\n        # Validate labels are from project\n        if data.get(\"labels\", []):\n            data[\"labels\"] = Label.objects.filter(\n                project_id=self.context.get(\"project_id\"), id__in=data[\"labels\"]\n            ).values_list(\"id\", flat=True)\n\n        # Check state is from the project only else raise validation error\n        if (\n            data.get(\"state\")\n            and not State.objects.filter(project_id=self.context.get(\"project_id\"), pk=data.get(\"state\").id).exists()\n        ):\n            raise serializers.ValidationError(\"State is not valid please pass a valid state_id\")\n\n        # Check parent issue is from workspace as it can be cross workspace\n        if (\n            data.get(\"parent\")\n            and not Issue.objects.filter(\n                workspace_id=self.context.get(\"workspace_id\"),\n                project_id=self.context.get(\"project_id\"),\n                pk=data.get(\"parent\").id,\n            ).exists()\n        ):\n            raise serializers.ValidationError(\"Parent is not valid issue_id please pass a valid issue_id\")\n\n        if (\n            data.get(\"estimate_point\")\n            and not EstimatePoint.objects.filter(\n                workspace_id=self.context.get(\"workspace_id\"),\n                project_id=self.context.get(\"project_id\"),\n                pk=data.get(\"estimate_point\").id,\n            ).exists()\n        ):\n            raise serializers.ValidationError(\"Estimate point is not valid please pass a valid estimate_point_id\")\n\n        return data\n\n    def create(self, validated_data):\n        assignees = validated_data.pop(\"assignees\", None)\n        labels = validated_data.pop(\"labels\", None)\n\n        project_id = self.context[\"project_id\"]\n        workspace_id = self.context[\"workspace_id\"]\n        default_assignee_id = self.context[\"default_assignee_id\"]\n\n        issue_type = validated_data.pop(\"type\", None)\n\n        if not issue_type:\n            # Get default issue type\n            issue_type = IssueType.objects.filter(project_issue_types__project_id=project_id, is_default=True).first()\n            issue_type = issue_type\n\n        issue = Issue.objects.create(**validated_data, project_id=project_id, type=issue_type)\n\n        # Issue Audit Users\n        created_by_id = issue.created_by_id\n        updated_by_id = issue.updated_by_id\n\n        if assignees is not None and len(assignees):\n            try:\n                IssueAssignee.objects.bulk_create(\n                    [\n                        IssueAssignee(\n                            assignee_id=assignee_id,\n                            issue=issue,\n                            project_id=project_id,\n                            workspace_id=workspace_id,\n                            created_by_id=created_by_id,\n                            updated_by_id=updated_by_id,\n                        )\n                        for assignee_id in assignees",
+              "truncated": true
+            },
+            {
+              "path": "apps/api/plane/api/serializers/issue.py",
+              "repoId": "github:CoopAI-Corp/plane",
+              "startLine": 401,
+              "content": "        fields = [\"title\", \"url\", \"issue_id\"]\n        read_only_fields = [\n            \"id\",\n            \"workspace\",\n            \"project\",\n            \"issue\",\n            \"created_by\",\n            \"updated_by\",\n            \"created_at\",\n            \"updated_at\",\n        ]\n\n    def validate_url(self, value):\n        # Check URL format\n        validate_url = URLValidator()\n        try:\n            validate_url(value)\n        except ValidationError:\n            raise serializers.ValidationError(\"Invalid URL format.\")\n\n        # Check URL scheme\n        if not value.startswith((\"http://\", \"https://\")):\n            raise serializers.ValidationError(\"Invalid URL scheme.\")\n\n        return value\n\n    # Validation if url already exists\n    def create(self, validated_data):\n        if IssueLink.objects.filter(url=validated_data.get(\"url\"), issue_id=validated_data.get(\"issue_id\")).exists():\n            raise serializers.ValidationError({\"error\": \"URL already exists for this Issue\"})\n        return IssueLink.objects.create(**validated_data)\n\n\nclass IssueLinkUpdateSerializer(IssueLinkCreateSerializer):\n    \"\"\"\n    Serializer for updating work item external links.\n\n    Extends link creation with update-specific validation to prevent\n    URL conflicts and maintain link integrity during modifications.\n    \"\"\"\n\n    class Meta(IssueLinkCreateSerializer.Meta):\n        model = IssueLink\n        fields = IssueLinkCreateSerializer.Meta.fields + [\n            \"issue_id\",\n        ]\n        read_only_fields = IssueLinkCreateSerializer.Meta.read_only_fields\n\n    def update(self, instance, validated_data):\n        if (\n            IssueLink.objects.filter(url=validated_data.get(\"url\"), issue_id=instance.issue_id)\n            .exclude(pk=instance.id)\n            .exists()\n        ):\n            raise serializers.ValidationError({\"error\": \"URL already exists for this Issue\"})\n\n        return super().update(instance, validated_data)\n\n\nclass IssueLinkSerializer(BaseSerializer):\n    \"\"\"\n    Full serializer for work item external links.\n\n    Provides complete link information including metadata and timestamps\n    for managing external resource associations with work items.\n    \"\"\"\n\n    class Meta:\n        model = IssueLink\n        fields = \"__all__\"\n        read_only_fields = [\n            \"id\",\n            \"workspace\",\n            \"project\",\n            \"issue\",\n            \"created_by\",\n            \"updated_by\",\n            \"created_at\",\n            \"updated_at\",\n        ]\n\n\nclass IssueRelationRefSerializer(serializers.Serializer):\n    \"\"\"Project-scoped reference to a related work item.\"\"\"\n\n    project_id = serializers.UUIDField(help_text=\"Project containing the related work item\")\n    issue_id = serializers.UUIDField(help_text=\"ID of the related work item\")\n\n\nclass IssueRelationResponseSerializer(serializers.Serializer):\n    \"\"\"\n    Serializer for issue relations response showing grouped relation types.\n\n    Each list contains project_id and issue_id pairs so clients can resolve\n    cross-project relations.\n    \"\"\"\n\n    blocking = serializers.ListField(\n        child=IssueRelationRefSerializer(),\n        help_text=\"Work items blocking this issue\",\n    )\n    blocked_by = serializers.ListField(\n        child=IssueRelationRefSerializer(),\n        help_text=\"Work items this issue is blocked by\",\n    )\n    duplicate = serializers.ListField(\n        child=IssueRelationRefSerializer(),\n        help_text=\"Duplicate work items\",\n    )\n    relates_to = serializers.ListField(\n        child=IssueRelationRefSerializer(),\n        help_text=\"Related work items\",\n    )\n    start_after = serializers.ListField(\n        child=IssueRelationRefSerializer(),\n        help_text=\"Work items that start after this issue\",\n    )\n    start_before = serializers.ListField(\n        child=IssueRelationRefSerializer(),\n        help_text=\"Work items that start before this issue\",\n    )\n    finish_after = serializers.ListField(",
+              "truncated": true
+            },
+            {
+              "path": "apps/api/plane/api/serializers/issue.py",
+              "repoId": "github:CoopAI-Corp/plane",
+              "startLine": 551,
+              "content": "    relation_type = serializers.ChoiceField(\n        choices=RELATION_TYPE_CHOICES,\n        required=True,\n        help_text=\"Type of relationship between work items\",\n    )\n    issues = serializers.ListField(\n        child=serializers.UUIDField(),\n        required=True,\n        min_length=1,\n        help_text=\"Array of work item IDs to create relations with\",\n    )\n\n    def validate_issues(self, value):\n        \"\"\"Validate that issues list is not empty and contains valid UUIDs.\"\"\"\n        if not value:\n            raise serializers.ValidationError(\"At least one issue ID is required.\")\n        return value\n\n\nclass IssueRelationRemoveSerializer(serializers.Serializer):\n    \"\"\"\n    Serializer for removing issue relations.\n\n    Removes existing relationships between work items by specifying\n    the related issue ID.\n    \"\"\"\n\n    related_issue = serializers.UUIDField(\n        required=True, help_text=\"ID of the related work item to remove relation with\"\n    )\n\n\nclass IssueRelationSerializer(BaseSerializer):\n    \"\"\"\n    Serializer for issue relationships showing related issue details.\n\n    Provides comprehensive information about related issues including\n    project context, sequence ID, and relationship type.\n    \"\"\"\n\n    id = serializers.UUIDField(source=\"related_issue.id\", read_only=True)\n    project_id = serializers.UUIDField(source=\"related_issue.project_id\", read_only=True)\n    sequence_id = serializers.IntegerField(source=\"related_issue.sequence_id\", read_only=True)\n    name = serializers.CharField(source=\"related_issue.name\", read_only=True)\n    relation_type = serializers.CharField(read_only=True)\n    state_id = serializers.UUIDField(source=\"related_issue.state.id\", read_only=True)\n    priority = serializers.CharField(source=\"related_issue.priority\", read_only=True)\n\n    class Meta:\n        model = IssueRelation\n        fields = [\n            \"id\",\n            \"project_id\",\n            \"sequence_id\",\n            \"relation_type\",\n            \"name\",\n            \"state_id\",\n            \"priority\",\n            \"created_by\",\n            \"created_at\",\n            \"updated_at\",\n            \"updated_by\",\n        ]\n        read_only_fields = [\n            \"workspace\",\n            \"project\",\n            \"created_by\",\n            \"created_at\",\n            \"updated_by\",\n            \"updated_at\",\n        ]\n\n\nclass RelatedIssueSerializer(BaseSerializer):\n    \"\"\"\n    Serializer for reverse issue relationships showing issue details.\n\n    Provides comprehensive information about the source issue in a relationship\n    including project context, sequence ID, and relationship type.\n    \"\"\"\n\n    id = serializers.UUIDField(source=\"issue.id\", read_only=True)\n    project_id = serializers.PrimaryKeyRelatedField(source=\"issue.project_id\", read_only=True)\n    sequence_id = serializers.IntegerField(source=\"issue.sequence_id\", read_only=True)\n    name = serializers.CharField(source=\"issue.name\", read_only=True)\n    type_id = serializers.UUIDField(source=\"issue.type.id\", read_only=True)\n    relation_type = serializers.CharField(read_only=True)\n    is_epic = serializers.BooleanField(source=\"issue.type.is_epic\", read_only=True)\n    state_id = serializers.UUIDField(source=\"issue.state.id\", read_only=True)\n    priority = serializers.CharField(source=\"issue.priority\", read_only=True)\n\n    class Meta:\n        model = IssueRelation\n        fields = [\n            \"id\",\n            \"project_id\",\n            \"sequence_id\",\n            \"relation_type\",\n            \"name\",\n            \"type_id\",\n            \"is_epic\",\n            \"state_id\",\n            \"priority\",\n            \"created_by\",\n            \"created_at\",\n            \"updated_by\",\n            \"updated_at\",\n        ]\n        read_only_fields = [\n            \"workspace\",\n            \"project\",\n            \"created_by\",\n            \"created_at\",\n            \"updated_by\",\n            \"updated_at\",\n        ]\n\n\nclass IssueAttachmentSerializer(BaseSerializer):\n    \"\"\"\n    Serializer for work item file attachments.\n",
+              "truncated": true
+            },
+            {
+              "path": "apps/api/plane/app/serializers/issue.py",
+              "repoId": "github:CoopAI-Corp/plane",
+              "startLine": 112,
+              "content": "            \"updated_at\",\n            \"completed_at\",\n        ]\n\n    def to_representation(self, instance):\n        data = super().to_representation(instance)\n        assignee_ids = self.initial_data.get(\"assignee_ids\")\n        data[\"assignee_ids\"] = assignee_ids if assignee_ids else []\n        label_ids = self.initial_data.get(\"label_ids\")\n        data[\"label_ids\"] = label_ids if label_ids else []\n        return data\n\n    def validate(self, attrs):\n        allow_triage = self.context.get(\"allow_triage_state\", False)\n        state_manager = State.triage_objects if allow_triage else State.objects\n\n        if (\n            attrs.get(\"start_date\", None) is not None\n            and attrs.get(\"target_date\", None) is not None\n            and attrs.get(\"start_date\", None) > attrs.get(\"target_date\", None)\n        ):\n            raise serializers.ValidationError(\"Start date cannot exceed target date\")\n\n        # Validate description content for security\n        if \"description_html\" in attrs and attrs[\"description_html\"]:\n            is_valid, error_msg, sanitized_html = validate_html_content(attrs[\"description_html\"])\n            if not is_valid:\n                raise serializers.ValidationError({\"error\": \"html content is not valid\"})\n            # Update the attrs with sanitized HTML if available\n            if sanitized_html is not None:\n                attrs[\"description_html\"] = sanitized_html\n\n        if \"description_binary\" in attrs and attrs[\"description_binary\"]:\n            is_valid, error_msg = validate_binary_data(attrs[\"description_binary\"])\n            if not is_valid:\n                raise serializers.ValidationError({\"description_binary\": \"Invalid binary data\"})\n\n        # Validate assignees are from project\n        if attrs.get(\"assignee_ids\", []):\n            attrs[\"assignee_ids\"] = ProjectMember.objects.filter(\n                project_id=self.context[\"project_id\"],\n                role__gte=15,\n                is_active=True,\n                member_id__in=attrs[\"assignee_ids\"],\n            ).values_list(\"member_id\", flat=True)\n\n        # Validate labels are from project\n        if attrs.get(\"label_ids\"):\n            label_ids = [label.id for label in attrs[\"label_ids\"]]\n            attrs[\"label_ids\"] = list(\n                Label.objects.filter(\n                    project_id=self.context.get(\"project_id\"),\n                    id__in=label_ids,\n                ).values_list(\"id\", flat=True)\n            )\n\n        # Check state is from the project only else raise validation error\n        if (\n            attrs.get(\"state\")\n            and not state_manager.filter(\n                project_id=self.context.get(\"project_id\"),\n                pk=attrs.get(\"state\").id,\n            ).exists()\n        ):\n            raise serializers.ValidationError(\"State is not valid please pass a valid state_id\")\n\n        # Check parent issue is from workspace as it can be cross workspace\n        if (\n            attrs.get(\"parent\")\n            and not Issue.objects.filter(\n                project_id=self.context.get(\"project_id\"),\n                pk=attrs.get(\"parent\").id,\n            ).exists()\n        ):\n            raise serializers.ValidationError(\"Parent is not valid issue_id please pass a valid issue_id\")\n\n        if (\n            attrs.get(\"estimate_point\")\n            and not EstimatePoint.objects.filter(\n                project_id=self.context.get(\"project_id\"),\n                pk=attrs.get(\"estimate_point\").id,\n            ).exists()\n        ):\n            raise serializers.ValidationError(\"Estimate point is not valid please pass a valid estimate_point_id\")\n\n        return attrs\n\n    def create(self, validated_data):\n        assignees = validated_data.pop(\"assignee_ids\", None)\n        labels = validated_data.pop(\"label_ids\", None)\n\n        project_id = self.context[\"project_id\"]\n        workspace_id = self.context[\"workspace_id\"]\n        default_assignee_id = self.context[\"default_assignee_id\"]\n\n        # Create Issue\n        issue = Issue.objects.create(**validated_data, project_id=project_id)\n\n        # Issue Audit Users\n        created_by_id = issue.created_by_id\n        updated_by_id = issue.updated_by_id\n\n        if assignees is not None and len(assignees):\n            try:\n                IssueAssignee.objects.bulk_create(\n                    [\n                        IssueAssignee(\n                            assignee_id=assignee_id,\n                            issue=issue,\n                            project_id=project_id,\n                            workspace_id=workspace_id,\n                            created_by_id=created_by_id,\n                            updated_by_id=updated_by_id,\n                        )\n                        for assignee_id in assignees\n                    ],\n                    batch_size=10,\n                )\n            except IntegrityError:\n                pass\n        else:\n            # Then assign it to default assignee, if it is a valid assignee",
+              "truncated": true
+            },
+            {
+              "path": "apps/api/plane/app/serializers/issue.py",
+              "repoId": "github:CoopAI-Corp/plane",
+              "startLine": 363,
+              "content": "        model = Label\n        fields = [\n            \"parent\",\n            \"name\",\n            \"color\",\n            \"id\",\n            \"project_id\",\n            \"workspace_id\",\n            \"sort_order\",\n        ]\n        read_only_fields = [\"workspace\", \"project\"]\n\n    def validate_name(self, value):\n        project_id = self.context.get(\"project_id\")\n\n        label = Label.objects.filter(project_id=project_id, name__iexact=value)\n\n        if self.instance:\n            label = label.exclude(id=self.instance.pk)\n\n        if label.exists():\n            raise serializers.ValidationError(detail=\"LABEL_NAME_ALREADY_EXISTS\")\n\n        return value\n\n\nclass LabelLiteSerializer(BaseSerializer):\n    class Meta:\n        model = Label\n        fields = [\"id\", \"name\", \"color\"]\n\n\nclass IssueLabelSerializer(BaseSerializer):\n    class Meta:\n        model = IssueLabel\n        fields = \"__all__\"\n        read_only_fields = [\"workspace\", \"project\"]\n\n\nclass IssueRelationSerializer(BaseSerializer):\n    id = serializers.UUIDField(source=\"related_issue.id\", read_only=True)\n    project_id = serializers.PrimaryKeyRelatedField(source=\"related_issue.project_id\", read_only=True)\n    sequence_id = serializers.IntegerField(source=\"related_issue.sequence_id\", read_only=True)\n    name = serializers.CharField(source=\"related_issue.name\", read_only=True)\n    relation_type = serializers.CharField(read_only=True)\n    state_id = serializers.UUIDField(source=\"related_issue.state.id\", read_only=True)\n    priority = serializers.CharField(source=\"related_issue.priority\", read_only=True)\n    assignee_ids = serializers.ListField(\n        child=serializers.PrimaryKeyRelatedField(queryset=User.objects.all()),\n        write_only=True,\n        required=False,\n    )\n\n    class Meta:\n        model = IssueRelation\n        fields = [\n            \"id\",\n            \"project_id\",\n            \"sequence_id\",\n            \"relation_type\",\n            \"name\",\n            \"state_id\",\n            \"priority\",\n            \"assignee_ids\",\n            \"created_by\",\n            \"created_at\",\n            \"updated_at\",\n            \"updated_by\",\n        ]\n        read_only_fields = [\n            \"workspace\",\n            \"project\",\n            \"created_by\",\n            \"created_at\",\n            \"updated_by\",\n            \"updated_at\",\n        ]\n\n\nclass RelatedIssueSerializer(BaseSerializer):\n    id = serializers.UUIDField(source=\"issue.id\", read_only=True)\n    project_id = serializers.PrimaryKeyRelatedField(source=\"issue.project_id\", read_only=True)\n    sequence_id = serializers.IntegerField(source=\"issue.sequence_id\", read_only=True)\n    name = serializers.CharField(source=\"issue.name\", read_only=True)\n    relation_type = serializers.CharField(read_only=True)\n    state_id = serializers.UUIDField(source=\"issue.state.id\", read_only=True)\n    priority = serializers.CharField(source=\"issue.priority\", read_only=True)\n    assignee_ids = serializers.ListField(\n        child=serializers.PrimaryKeyRelatedField(queryset=User.objects.all()),\n        write_only=True,\n        required=False,\n    )\n\n    class Meta:\n        model = IssueRelation\n        fields = [\n            \"id\",\n            \"project_id\",\n            \"sequence_id\",\n            \"relation_type\",\n            \"name\",\n            \"state_id\",\n            \"priority\",\n            \"assignee_ids\",\n            \"created_by\",\n            \"created_at\",\n            \"updated_by\",\n            \"updated_at\",\n        ]\n        read_only_fields = [\n            \"workspace\",\n            \"project\",\n            \"created_by\",\n            \"created_at\",\n            \"updated_by\",\n            \"updated_at\",\n        ]\n\n\nclass IssueAssigneeSerializer(BaseSerializer):\n    assignee_details = UserLiteSerializer(read_only=True, source=\"assignee\")\n",
+              "truncated": true
+            },
+            {
+              "path": "apps/api/plane/app/serializers/issue.py",
+              "repoId": "github:CoopAI-Corp/plane",
+              "startLine": 562,
+              "content": "            \"updated_at\",\n            \"issue\",\n        ]\n\n    def to_internal_value(self, data):\n        # Modify the URL before validation by appending http:// if missing\n        url = data.get(\"url\", \"\")\n        if url and not url.startswith((\"http://\", \"https://\")):\n            data[\"url\"] = \"http://\" + url\n\n        return super().to_internal_value(data)\n\n    def validate_url(self, value):\n        # Use Django's built-in URLValidator for validation\n        url_validator = URLValidator()\n        try:\n            url_validator(value)\n        except ValidationError:\n            raise serializers.ValidationError({\"error\": \"Invalid URL format.\"})\n\n        return value\n\n    # Validation if url already exists\n    def create(self, validated_data):\n        if IssueLink.objects.filter(url=validated_data.get(\"url\"), issue_id=validated_data.get(\"issue_id\")).exists():\n            raise serializers.ValidationError({\"error\": \"URL already exists for this Issue\"})\n        return IssueLink.objects.create(**validated_data)\n\n    def update(self, instance, validated_data):\n        if (\n            IssueLink.objects.filter(url=validated_data.get(\"url\"), issue_id=instance.issue_id)\n            .exclude(pk=instance.id)\n            .exists()\n        ):\n            raise serializers.ValidationError({\"error\": \"URL already exists for this Issue\"})\n\n        return super().update(instance, validated_data)\n\n\nclass IssueLinkLiteSerializer(BaseSerializer):\n    class Meta:\n        model = IssueLink\n        fields = [\n            \"id\",\n            \"issue_id\",\n            \"title\",\n            \"url\",\n            \"metadata\",\n            \"created_by_id\",\n            \"created_at\",\n        ]\n        read_only_fields = fields\n\n\nclass IssueAttachmentSerializer(BaseSerializer):\n    asset_url = serializers.CharField(read_only=True)\n\n    class Meta:\n        model = FileAsset\n        fields = \"__all__\"\n        read_only_fields = [\n            \"created_by\",\n            \"updated_by\",\n            \"created_at\",\n            \"updated_at\",\n            \"workspace\",\n            \"project\",\n            \"issue\",\n        ]\n\n\nclass IssueAttachmentLiteSerializer(DynamicBaseSerializer):\n    class Meta:\n        model = FileAsset\n        fields = [\n            \"id\",\n            \"asset\",\n            \"attributes\",\n            # \"issue_id\",\n            \"created_by\",\n            \"updated_at\",\n            \"updated_by\",\n            \"asset_url\",\n        ]\n        read_only_fields = fields\n\n\nclass IssueReactionSerializer(BaseSerializer):\n    actor_detail = UserLiteSerializer(read_only=True, source=\"actor\")\n\n    class Meta:\n        model = IssueReaction\n        fields = \"__all__\"\n        read_only_fields = [\"workspace\", \"project\", \"issue\", \"actor\", \"deleted_at\"]\n\n\nclass IssueReactionLiteSerializer(DynamicBaseSerializer):\n    display_name = serializers.CharField(source=\"actor.display_name\", read_only=True)\n\n    class Meta:\n        model = IssueReaction\n        fields = [\"id\", \"actor\", \"issue\", \"reaction\", \"display_name\"]\n\n\nclass CommentReactionSerializer(BaseSerializer):\n    display_name = serializers.CharField(source=\"actor.display_name\", read_only=True)\n\n    class Meta:\n        model = CommentReaction\n        fields = [\n            \"id\",\n            \"actor\",\n            \"comment\",\n            \"reaction\",\n            \"display_name\",\n            \"deleted_at\",\n            \"workspace\",\n            \"project\",\n            \"created_at\",\n            \"updated_at\",\n            \"created_by\",\n            \"updated_by\",",
+              "truncated": true
+            }
+          ],
+          "jobScan": {
+            "source": "live-heuristic",
+            "cached": false,
+            "foundGaps": 0,
+            "highPriority": 0,
+            "mediumPriority": 0,
+            "lowPriority": 0,
+            "gaps": [],
+            "scanCoverage": "scan_incomplete"
+          }
+        },
+        "codeHost": "github"
+      }
+    }
+  ],
+  "sessionCostUsd": 0.142767,
+  "createdAt": 1791576113652,
+  "updatedAt": 1791576807946,
+  "messageCount": 2,
+  "repoContext": {
+    "provider": "github",
+    "owner": "CoopAI-Corp",
+    "repo": "plane",
+    "branch": "preview",
+    "scope": "repo"
+  },
+  "draftInput": ""
+}

@@ -1,0 +1,267 @@
+{
+  "id": "thread-1791591875903-9s4xib",
+  "title": "Knowledge Gaps \u00b7 CoopAI-Corp/documenso",
+  "messages": [
+    {
+      "clientSubmissionId": "1791591881453-1",
+      "role": "user",
+      "content": "[knowledge-gaps] Before changing signing status validation, which rules can we establish from the code, and which unanswered questions about signing a non-PENDING envelope need documentation or tests?\nrepo: CoopAI-Corp/documenso \u00b7 branch: main",
+      "timestamp": 1791591883537
+    },
+    {
+      "role": "assistant",
+      "content": "The reviewed source covers `sign-envelope-field.ts` (L1\u2013284), `execute-tsp-sign.ts` (L8\u2013167), and `signing-status-envelope.ts` (L1\u201381).\n\n**Source-grounded review**\n\n**Envelope must be PENDING for field signing**\nWhen `signEnvelopeFieldRoute` reaches the status check \u2014 after the `deletedAt` guard at L99 \u2014 `envelope.status !== DocumentStatus.PENDING` throws `AppErrorCode.INVALID_REQUEST`.\n\n```105:109:packages/trpc/server/envelope-router/sign-envelope-field.ts\n    if (envelope.status !== DocumentStatus.PENDING) {\n      throw new AppError(AppErrorCode.INVALID_REQUEST, {\n        message: `Document ${envelope.id} must be pending for signing`,\n      });\n    }\n```\n\n**CSC path treats already-SIGNED recipient as idempotent; no envelope-status guard is visible in the reviewed window**\nWhen `executeTspSign` reaches the idempotency check \u2014 after session, token, and session-ownership checks at L88\u2013L108 \u2014 `recipient.signingStatus === SigningStatus.SIGNED` returns `{ outcome: 'already_signed' }` with no `envelope.status` check anywhere in the reviewed window (L8\u2013L167).\n\n```113:115:packages/ee/server-only/signing/csc/execute-tsp-sign.ts\n  if (recipient.signingStatus === SigningStatus.SIGNED) {\n    return { outcome: 'already_signed' };\n  }\n```\n\n**Recipient already-signed guard fires only after the PENDING check passes**\nWhen `signEnvelopeFieldRoute` reaches L111 \u2014 only after the PENDING guard at L105 has not thrown \u2014 `recipient.signingStatus === SigningStatus.SIGNED || field.recipient.signingStatus === SigningStatus.SIGNED` throws `AppErrorCode.INVALID_REQUEST`.\n\n```111:115:packages/trpc/server/envelope-router/sign-envelope-field.ts\n    if (recipient.signingStatus === SigningStatus.SIGNED || field.recipient.signingStatus === SigningStatus.SIGNED) {\n      throw new AppError(AppErrorCode.INVALID_REQUEST, {\n        message: `Recipient ${recipient.id} has already signed`,\n      });\n    }\n```\n\n**Open questions**\n\n1. Does `executeTspSign` apply an `envelope.status === PENDING` guard in the body beyond L167, the end of the reviewed window? A test calling `cscSignEnvelopeRoute` with a COMPLETED envelope and a non-SIGNED recipient would confirm whether the CSC path enforces envelope PENDING independently of the recipient idempotency check.\n\n2. When recipient-level state satisfies the `isComplete` condition at L65\u2013L69 of `signing-status-envelope.ts` but the envelope row has not yet transitioned to `DocumentStatus.COMPLETED`, can the route's `'PROCESSING'` status persist indefinitely if the post-signing completion handler fails? Document or test what mechanism is expected to advance the envelope row and whether any timeout or retry policy bounds the `PROCESSING` window.\n\n3. In `signEnvelopeFieldRoute`, the ASSISTANT field query at L42\u2013L51 filters on the target recipient's `signingStatus` and `signingOrder` but not on `envelope.status`, so the field lookup can resolve for a non-PENDING envelope before the PENDING guard fires at L105; does intended policy require ASSISTANT callers against a non-PENDING envelope to receive `INVALID_REQUEST` rather than `NOT_FOUND`? A test against a COMPLETED envelope would pin the intended guard ordering before any refactor.",
+      "timestamp": 1791592047260,
+      "relatedArtifactId": "evidence-1791591888313-9kd0v5",
+      "activity": {
+        "durationMs": 166280,
+        "thinkingMs": 83022,
+        "thinkingText": "Let me carefully re-read all the source lines and verify each claim in the draft before producing the corrected answer.\n\n**Rule 1: Envelope must be PENDING for field signing**\n\nFrom `sign-envelope-field.ts` L105-109:\n```\nif (envelope.status !== DocumentStatus.PENDING) {\n  throw new AppError(AppErrorCode.INVALID_REQUEST, {\n    message: `Document ${envelope.id} must be pending for signing`,\n  });\n}\n```\n\nThis is clearly established. The guard fires after the `deletedAt` check at L99-103 and before the recipient already-signed check at L111-115. This is solid.\nChecking `execute-tsp-sign.ts` L113-115, I see the CSC path returns an 'already_signed' outcome if the recipient's signing status is already SIGNED, which confirms idempotency there. I also confirm the reviewed window doesn't show any envelope.status check on this path. Now I'm looking at the recipient already-signed guard back in sign-envelope-field.ts at L111-115.\n\nThis guard throws an INVALID_REQUEST error if the recipient has already signed, firing right after the PENDING check at L105 - that looks solid. Moving to open questions, I want to verify whether executeTspSign checks envelope.status somewhere beyond the reviewed L167 window, since I can't rule that out from a partial view, and then I'll look at the PROCESSING state handling in the signing-status route around L65-69.\n\nFor Q2, the route computes completion by checking if any recipient rejected or if every non-CC recipient has signed, returning PROCESSING when that's true and COMPLETED only when the envelope's actual status field matches - but the code that transitions the envelope row isn't shown, so that's a legitimate gap. For Q3, I'm examining whether the ASSISTANT caller's field query filters only on signingStatus and signingOrder without checking envelope.status, which could let a lookup succeed even when it shouldn't.\n\nConfirming this: the ASSISTANT branch of the query indeed omits any envelope.status filter, so a field can be found even if the envelope is already COMPLETED, provided the target recipient hasn't signed yet - meaning the PENDING guard later would be what catches it and throws an error, not the field query itself.\n\nThis claim about the field query not filtering on envelope.status is factually supported by the code, so the question built on it is valid. Now I'm weighing whether all three guard rules are needed, since rules 1 and 3 both come from the same file but cover distinct conditions, while the instructions call for one to three rules.\n\nI'm double-checking that rule 3 correctly preserves the OR logic rather than collapsing it into an AND, and tracing through the sequence of guard checks in sign-envelope-field.ts to confirm the order of NOT_FOUND and INVALID_REQUEST conditions matches the source.\n\nI'm also verifying that execute-tsp-sign.ts has no envelope.status guard in the reviewed window, and checking the PROCESSING return path in signing-status-envelope.ts.\n\nTracing the exact branch conditions: REJECTED and COMPLETED statuses return directly, while PROCESSING fires when isComplete is true (any recipient rejected, or all recipients are CC/SIGNED), otherwise falling through to PENDING. This confirms the draft's logic and validates both open questions Q1 and Q2.\n\nChecking Q3 more carefully now: the concern about the ASSISTANT field query filtering on signingStatus/signingOrder without checking envelope.status, potentially succeeding before the PENDING guard fires, is actually a verified claim grounded in the source code rather than an unverified assertion, so it satisfies the instruction constraints.\n\nBut the format is wrong\u2014it's phrased as a statement plus a test suggestion rather than the required interrogative sentence followed by a test suggestion, so I need to restructure it as a question.\n\nI should weigh whether Q3 is even necessary given only three questions are allowed \u2014 Q1 about the unshown body of executeTspSign and Q2 about the PROCESSING state feel more critical. I'll reformulate all three as proper interrogatives and start drafting the final answer covering the PENDING field-signing rule, the CSC idempotency exit for already-SIGNED recipients, and the already-signed guard.\n\nI'm also considering whether to add a fourth rule about the signing-status route's isComplete/PROCESSING logic, but since three rules is the cap and the current three are the most essential to the question, I'll stick with those.\n\nI'm settling on three rules: the envelope PENDING guard in sign-envelope-field.ts, the CSC idempotency check for already-signed executions without a visible envelope.status guard, and the recipient already-signed guard.\n\nFor open questions, I want to probe whether executeTspSign checks envelope.status beyond what's shown, what happens if the completion handler fails after isComplete triggers, and most importantly whether the CSC path has an equivalent guard to the PENDING check in sign-envelope-field.ts \u2014 that gap seems like the key thing worth flagging.\n\nor whether the field query should instead be restricted by envelope status directly \u2014 a test with an ASSISTANT against a COMPLETED envelope would clarify the intended guard ordering before any refactor.\n\nNow reconsidering whether Rule 3, covering a recipient who already signed within a PENDING envelope, adds anything beyond Rule 1's PENDING check \u2014 it does, since it can fire even when the envelope itself is PENDING. But for the core question of signing a non-PENDING envelope, Rules 1 and 2 remain the most directly relevant, so I'm ready to write the final answer concisely.\n\nI'm pulling together the sourced review of the three files, starting with the PENDING-status guard in the envelope field signing route that throws an invalid-request error if the envelope isn't PENDING.\n\nFor the CSC path, I'm noting that `executeTspSign` checks if the recipient's signing status is already SIGNED and just returns an \"already_signed\" outcome idempotently, without any visible envelope-status guard in the reviewed window.\n\nIn contrast, the tRPC route checks for an already-signed recipient only after the PENDING status check has already passed \u2014 it throws an INVALID_REQUEST error if either the recipient or the field's recipient has a SIGNED status.\n\nSome open questions remain: whether `executeTspSign` independently enforces envelope PENDING status beyond the recipient-level guard, what happens when recipient-level completion conditions are met but the envelope row hasn't transitioned to COMPLETED status (could it stay stuck in 'PROCESSING' indefinitely?), and whether the ASSISTANT field query in `signEnvelopeFieldRoute` properly filters on envelope status.\n\nI'm also double-checking line citations in `execute-tsp-sign.ts` \u2014 verifying the SIGNED status check at lines 113-115 returns an 'already_signed' outcome correctly before moving on to re-examine the first citation.\n\nThat confirms the duplicate-signature check throws correctly when a recipient has already signed. Now I'm double-checking the query logic for ASSISTANT-role recipients, which matches on signing status and order within the envelope rather than by exact recipient id, unlike the default case which filters by id directly.\n\nThe same PENDING guard would fire, so the outcome is identical, just less surprising. This confirms the Q3 concern is valid and well-supported, so I'm satisfied with the answer and ready to write it up.",
+        "tools": [
+          {
+            "id": "line-tool:0",
+            "kind": "read",
+            "label": "Read `packages/trpc/server/envelope-router/signing-status-envelope.ts`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:1",
+            "kind": "read",
+            "label": "Read `packages/trpc/server/enterprise-router/csc-sign-envelope.ts`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:2",
+            "kind": "read",
+            "label": "Read `packages/trpc/server/envelope-router/sign-envelope-field.ts`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:3",
+            "kind": "read",
+            "label": "Read `packages/trpc/server/envelope-router/signing-status-envelope.types.ts`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:4",
+            "kind": "read",
+            "label": "Read `packages/ee/server-only/signing/csc/execute-tsp-sign.ts`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:5",
+            "kind": "read",
+            "label": "Read `packages/ee/server-only/signing/csc/client/signatures.ts`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:6",
+            "kind": "search",
+            "label": "Searched Notion for `signing status validation`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:7",
+            "kind": "search",
+            "label": "Searched Confluence for `signing status validation`",
+            "status": "done"
+          },
+          {
+            "id": "line-tool:8",
+            "kind": "search",
+            "label": "Searched Google Docs for `signing status validation`",
+            "status": "done"
+          }
+        ],
+        "files": [
+          {
+            "path": "packages/trpc/server/envelope-router/signing-status-envelope.ts",
+            "action": "read"
+          },
+          {
+            "path": "packages/trpc/server/enterprise-router/csc-sign-envelope.ts",
+            "action": "read"
+          },
+          {
+            "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+            "action": "read"
+          },
+          {
+            "path": "packages/trpc/server/envelope-router/signing-status-envelope.types.ts",
+            "action": "read"
+          },
+          {
+            "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+            "action": "read"
+          },
+          {
+            "path": "packages/ee/server-only/signing/csc/client/signatures.ts",
+            "action": "read"
+          },
+          {
+            "path": "signing status validation",
+            "action": "searched"
+          }
+        ],
+        "steps": [
+          {
+            "id": "line:0:Read `packages/trpc/server/envelope-router/signing-status-envelope.ts`",
+            "content": "Read `packages/trpc/server/envelope-router/signing-status-envelope.ts`",
+            "status": "completed"
+          },
+          {
+            "id": "line:1:Read `packages/trpc/server/enterprise-router/csc-sign-envelope.ts`",
+            "content": "Read `packages/trpc/server/enterprise-router/csc-sign-envelope.ts`",
+            "status": "completed"
+          },
+          {
+            "id": "line:2:Read `packages/trpc/server/envelope-router/sign-envelope-field.ts`",
+            "content": "Read `packages/trpc/server/envelope-router/sign-envelope-field.ts`",
+            "status": "completed"
+          },
+          {
+            "id": "line:3:Read `packages/trpc/server/envelope-router/signing-status-envelope.types.ts`",
+            "content": "Read `packages/trpc/server/envelope-router/signing-status-envelope.types.ts`",
+            "status": "completed"
+          },
+          {
+            "id": "line:4:Read `packages/ee/server-only/signing/csc/execute-tsp-sign.ts`",
+            "content": "Read `packages/ee/server-only/signing/csc/execute-tsp-sign.ts`",
+            "status": "completed"
+          },
+          {
+            "id": "line:5:Read `packages/ee/server-only/signing/csc/client/signatures.ts`",
+            "content": "Read `packages/ee/server-only/signing/csc/client/signatures.ts`",
+            "status": "completed"
+          },
+          {
+            "id": "line:6:Searched Notion for `signing status validation`",
+            "content": "Searched Notion for `signing status validation`",
+            "status": "completed",
+            "detail": "No matching results"
+          },
+          {
+            "id": "line:7:Searched Confluence for `signing status validation`",
+            "content": "Searched Confluence for `signing status validation`",
+            "status": "completed",
+            "detail": "No matching results"
+          },
+          {
+            "id": "line:8:Searched Google Docs for `signing status validation`",
+            "content": "Searched Google Docs for `signing status validation`",
+            "status": "completed",
+            "detail": "No matching results"
+          }
+        ]
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "evidence-1791591888313-9kd0v5",
+      "kind": "knowledge-gaps",
+      "timestamp": 1791591888313,
+      "payload": {
+        "artifactId": "evidence-1791591888313-9kd0v5",
+        "evidence": {
+          "userFocus": "Before changing signing status validation, which rules can we establish from the code, and which unanswered questions about signing a non-PENDING envelope need documentation or tests?",
+          "focusSearchQuery": "Before changing signing status validation, which rules can we establish from the code, and which unanswered questions about signing a non-PENDING envelope need documentation or tests?",
+          "focusSearchPaths": [
+            "packages/trpc/server/envelope-router/signing-status-envelope.ts",
+            "packages/trpc/server/enterprise-router/csc-sign-envelope.ts",
+            "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+            "packages/trpc/server/envelope-router/signing-status-envelope.types.ts",
+            "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+            "packages/ee/server-only/signing/csc/client/signatures.ts"
+          ],
+          "focusFiles": [
+            {
+              "path": "packages/trpc/server/envelope-router/signing-status-envelope.ts",
+              "repoId": "github:CoopAI-Corp/documenso",
+              "content": "import { AppError, AppErrorCode } from '@documenso/lib/errors/app-error';\nimport { prisma } from '@documenso/prisma';\nimport { DocumentStatus, EnvelopeType, RecipientRole, SigningStatus } from '@prisma/client';\n\nimport { maybeAuthenticatedProcedure } from '../trpc';\nimport {\n  ZSigningStatusEnvelopeRequestSchema,\n  ZSigningStatusEnvelopeResponseSchema,\n} from './signing-status-envelope.types';\n\n// Internal route - not intended for public API usage\nexport const signingStatusEnvelopeRoute = maybeAuthenticatedProcedure\n  .input(ZSigningStatusEnvelopeRequestSchema)\n  .output(ZSigningStatusEnvelopeResponseSchema)\n  .query(async ({ input, ctx }) => {\n    const { token } = input;\n\n    ctx.logger.info({\n      input: {\n        token,\n      },\n    });\n\n    const envelope = await prisma.envelope.findFirst({\n      where: {\n        type: EnvelopeType.DOCUMENT,\n        recipients: {\n          some: {\n            token,\n          },\n        },\n      },\n      include: {\n        recipients: {\n          select: {\n            id: true,\n            name: true,\n            email: true,\n            signingStatus: true,\n            role: true,\n          },\n        },\n      },\n    });\n\n    if (!envelope) {\n      throw new AppError(AppErrorCode.NOT_FOUND, {\n        message: 'Envelope not found',\n      });\n    }\n\n    // Check if envelope is rejected\n    if (envelope.status === DocumentStatus.REJECTED) {\n      return {\n        status: 'REJECTED',\n      };\n    }\n\n    if (envelope.status === DocumentStatus.COMPLETED) {\n      return {\n        status: 'COMPLETED',\n      };\n    }\n\n    const isComplete =\n      envelope.recipients.some((recipient) => recipient.signingStatus === SigningStatus.REJECTED) ||\n      envelope.recipients.every(\n        (recipient) => recipient.role === RecipientRole.CC || recipient.signingStatus === SigningStatus.SIGNED,\n      );\n\n    if (isComplete) {\n      return {\n        status: 'PROCESSING',\n      };\n    }\n\n    return {\n      status: 'PENDING',\n    };\n  });\n",
+              "origin": "remote",
+              "truncated": false,
+              "startLine": 1
+            },
+            {
+              "path": "packages/trpc/server/enterprise-router/csc-sign-envelope.ts",
+              "repoId": "github:CoopAI-Corp/documenso",
+              "content": "import { executeTspSign } from '@documenso/ee/server-only/signing/csc/execute-tsp-sign';\nimport { AppError, AppErrorCode } from '@documenso/lib/errors/app-error';\n\nimport { procedure } from '../trpc';\nimport { ZCscSignEnvelopeRequestSchema, ZCscSignEnvelopeResponseSchema } from './csc-sign-envelope.types';\n\n/**\n * Internal mutation that drives the CSC TSP sign-time pipeline.\n *\n * `executeTspSign` does the heavy lifting (capture \u2192 batched signHash \u2192\n * embed \u2192 tx). This route wraps it in a 15s `Promise.race` so an unresponsive\n * TSP surfaces as `CSC_TSP_TIMEOUT` instead of hanging the request. The\n * idle-timer is a soft cap on TSP round-trip latency; the underlying tx\n * keeps running on the server until it completes or errors.\n */\n\nconst SIGN_TIMEOUT_MS = 15_000;\n\nexport const cscSignEnvelopeRoute = procedure\n  .input(ZCscSignEnvelopeRequestSchema)\n  .output(ZCscSignEnvelopeResponseSchema)\n  .mutation(async ({ input, ctx }) => {\n    const result = await Promise.race([\n      executeTspSign({\n        sessionId: input.sessionId,\n        recipientToken: input.recipientToken,\n        requestMetadata: ctx.metadata.requestMetadata,\n      }),\n      new Promise<never>((_, reject) =>\n        setTimeout(\n          () =>\n            reject(\n              new AppError(AppErrorCode.CSC_TSP_TIMEOUT, {\n                message: 'CSC TSP did not respond within 15s.',\n              }),\n            ),\n          SIGN_TIMEOUT_MS,\n        ),\n      ),\n    ]);\n\n    return result;\n  });\n",
+              "origin": "remote",
+              "truncated": false,
+              "startLine": 1
+            },
+            {
+              "path": "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+              "repoId": "github:CoopAI-Corp/documenso",
+              "content": "import { isBase64Image } from '@documenso/lib/constants/signatures';\nimport { AppError, AppErrorCode } from '@documenso/lib/errors/app-error';\nimport { validateFieldAuth } from '@documenso/lib/server-only/document/validate-field-auth';\nimport { DOCUMENT_AUDIT_LOG_TYPE } from '@documenso/lib/types/document-audit-logs';\nimport { createDocumentAuditLogData } from '@documenso/lib/utils/document-audit-logs';\nimport { extractFieldInsertionValues } from '@documenso/lib/utils/envelope-signing';\nimport { prisma } from '@documenso/prisma';\nimport { DocumentStatus, FieldType, RecipientRole, SigningStatus } from '@prisma/client';\nimport { match } from 'ts-pattern';\n\nimport { procedure } from '../trpc';\nimport { ZSignEnvelopeFieldRequestSchema, ZSignEnvelopeFieldResponseSchema } from './sign-envelope-field.types';\n\n// Note that this is an unauthenticated public procedure route.\nexport const signEnvelopeFieldRoute = procedure\n  .input(ZSignEnvelopeFieldRequestSchema)\n  .output(ZSignEnvelopeFieldResponseSchema)\n  .mutation(async ({ input, ctx }) => {\n    const { user, metadata } = ctx;\n    const { token, fieldId, fieldValue, authOptions } = input;\n\n    ctx.logger.info({\n      input: {\n        fieldId,\n      },\n    });\n\n    const recipient = await prisma.recipient.findFirst({\n      where: {\n        token,\n      },\n    });\n\n    if (!recipient) {\n      throw new AppError(AppErrorCode.NOT_FOUND);\n    }\n\n    const field = await prisma.field.findFirst({\n      where: {\n        id: fieldId,\n        recipient: {\n          ...(recipient.role === RecipientRole.ASSISTANT\n            ? {\n                signingStatus: {\n                  not: SigningStatus.SIGNED,\n                },\n                signingOrder: {\n                  gte: recipient.signingOrder ?? 0,\n                },\n                envelopeId: recipient.envelopeId,\n              }\n            : {\n                id: recipient.id,\n              }),\n        },\n      },\n      include: {\n        envelope: {\n          include: {\n            recipients: true,\n            documentMeta: true,\n          },\n        },\n        recipient: true,\n      },\n    });\n\n    if (!field) {\n      throw new AppError(AppErrorCode.NOT_FOUND, {\n        message: `Field ${fieldId} not found`,\n      });\n    }\n\n    const { envelope } = field;\n    const { documentMeta } = envelope;\n\n    if (envelope.internalVersion !== 2) {\n      throw new AppError(AppErrorCode.NOT_FOUND, {\n        message: `Envelope ${envelope.id} is not a version 2 envelope`,\n      });\n    }\n\n    if (\n      field.type === FieldType.SIGNATURE &&\n      recipient.id !== field.recipientId &&\n      recipient.role === RecipientRole.ASSISTANT\n    ) {\n      throw new AppError(AppErrorCode.INVALID_REQUEST, {\n        message: `Assistant recipients cannot sign signature fields`,\n      });\n    }\n\n    if (fieldValue.type !== field.type) {\n      throw new AppError(AppErrorCode.NOT_FOUND, {\n        message: 'Selected values do not match the field values',\n      });\n    }\n\n    if (envelope.deletedAt) {\n      throw new AppError(AppErrorCode.INVALID_REQUEST, {\n        message: `Document ${envelope.id} has been deleted`,\n      });\n    }\n\n    if (envelope.status !== DocumentStatus.PENDING) {\n      throw new AppError(AppErrorCode.INVALID_REQUEST, {\n        message: `Document ${envelope.id} must be pending for signing`,\n      });\n    }\n\n    if (recipient.signingStatus === SigningStatus.SIGNED || field.recipient.signingStatus === SigningStatus.SIGNED) {\n      throw new AppError(AppErrorCode.INVALID_REQUEST, {\n        message: `Recipient ${recipient.id} has already signed`,\n      });\n    }\n\n    if (field.fieldMeta?.readOnly) {\n      throw new AppError(AppErrorCode.INVALID_REQUEST, {\n        message: `Field ${fieldId} is read only`,\n      });\n    }\n\n    // Unreachable code based on the above query but we need to satisfy TypeScript\n    if (field.recipientId === null) {\n      throw new Error(`Field ${fieldId} has no recipientId`);\n    }\n\n    const insertionValues = extractFieldInsertionValues({ fieldValue, field, documentMeta });\n\n    // Early return for uninserting fields.\n    if (!insertionValues.inserted) {\n      return await prisma.$transaction(async (tx) => {\n        const updatedField = await tx.field.update({\n          where: {\n            id: field.id,\n          },\n          data: {\n            customText: '',\n            inserted: false,\n          },\n        });\n\n        await tx.signature.deleteMany({\n          where: {\n            fieldId: field.id,\n          },\n        });\n\n        if (recipient.role !== RecipientRole.ASSISTANT) {\n          await tx.documentAuditLog.create({\n            data: createDocumentAuditLogData({\n              type: DOCUMENT_AUDIT_LOG_TYPE.DOCUMENT_FIELD_UNINSERTED,\n              envelopeId: envelope.id,\n              user: {\n                name: recipient.name,\n                email: recipient.email,\n              },\n              requestMetadata: metadata.requestMetadata,\n              data: {\n                field: field.type,\n                fieldId: field.secondaryId,\n              },\n            }),\n          });\n        }\n\n        return {\n          signedField: updatedField,\n        };\n      });\n    }\n\n    const derivedRecipientActionAuth = await validateFieldAuth({\n      documentAuthOptions: envelope.authOptions,\n      recipient,\n      field,\n      userId: user?.id,\n      authOptions,\n    });\n\n    const assistant = recipient.role === RecipientRole.ASSISTANT ? recipient : undefined;\n\n    let signatureImageAsBase64 = null;\n    let typedSignature = null;\n\n    if (field.type === FieldType.SIGNATURE) {\n      if (fieldValue.type !== FieldType.SIGNATURE) {\n        throw new AppError(AppErrorCode.INVALID_REQUEST, {\n          message: `Field ${fieldId} is not a signature field`,\n        });\n      }\n\n      if (fieldValue.value) {\n        const isBase64 = isBase64Image(fieldValue.value);\n\n        signatureImageAsBase64 = isBase64 ? fieldValue.value : null;\n        typedSignature = !isBase64 ? fieldValue.value : null;\n      }\n    }\n\n    return await prisma.$transaction(async (tx) => {\n      const updatedField = await tx.field.update({\n        where: {\n          id: field.id,\n        },\n        data: {\n          customText: insertionValues.customText,\n          inserted: insertionValues.inserted,\n        },\n        include: {\n          signature: true,\n        },\n      });\n\n      if (field.type === FieldType.SIGNATURE) {\n        const signature = await tx.signature.upsert({\n          where: {\n            fieldId: field.id,\n          },\n          create: {\n            fieldId: field.id,\n            recipientId: field.recipientId,\n            signatureImageAsBase64: signatureImageAsBase64,\n            typedSignature: typedSignature,\n          },\n          update: {\n            signatureImageAsBase64: signatureImageAsBase64,\n            typedSignature: typedSignature,\n          },\n        });\n\n        // Dirty but I don't want to deal with type information\n        Object.assign(updatedField, {\n          signature,\n        });\n      }\n\n      await tx.documentAuditLog.create({\n        data: createDocumentAuditLogData({\n          type:\n            assistant && field.recipientId !== assistant.id\n              ? DOCUMENT_AUDIT_LOG_TYPE.DOCUMENT_FIELD_PREFILLED\n              : DOCUMENT_AUDIT_LOG_TYPE.DOCUMENT_FIELD_INSERTED,\n          envelopeId: envelope.id,\n          user: {\n            email: assistant?.email ?? recipient.email,\n            name: assistant?.name ?? recipient.name,\n          },\n          requestMetadata: metadata.requestMetadata,\n          data: {\n            recipientEmail: recipient.email,\n            recipientId: recipient.id,\n            recipientName: recipient.name,\n            recipientRole: recipient.role,\n            fieldId: updatedField.secondaryId,\n            field: match(updatedField.type)\n              .with(FieldType.SIGNATURE, FieldType.FREE_SIGNATURE, (type) => ({\n                type,\n                data: signatureImageAsBase64 || typedSignature || '',\n              }))\n              .with(FieldType.DATE, FieldType.EMAIL, FieldType.NAME, FieldType.TEXT, FieldType.INITIALS, (type) => ({\n                type,\n                data: updatedField.customText,\n              }))\n              .with(FieldType.NUMBER, FieldType.RADIO, FieldType.CHECKBOX, FieldType.DROPDOWN, (type) => ({\n                type,\n                data: updatedField.customText,\n              }))\n              .exhaustive(),\n            fieldSecurity: derivedRecipientActionAuth\n              ? {\n                  type: derivedRecipientActionAuth,\n                }\n              : undefined,\n          },\n        }),\n      });\n\n      return {\n        signedField: updatedField,\n      };\n    });\n  });\n",
+              "origin": "remote",
+              "truncated": false,
+              "startLine": 1
+            },
+            {
+              "path": "packages/trpc/server/envelope-router/signing-status-envelope.types.ts",
+              "repoId": "github:CoopAI-Corp/documenso",
+              "content": "import { z } from 'zod';\n\nexport const EnvelopeSigningStatus = z.enum(['PENDING', 'PROCESSING', 'COMPLETED', 'REJECTED']);\n\nexport const ZSigningStatusEnvelopeRequestSchema = z.object({\n  token: z.string().describe('The recipient token to check the signing status for'),\n});\n\nexport const ZSigningStatusEnvelopeResponseSchema = z.object({\n  status: EnvelopeSigningStatus.describe('The current signing status of the envelope'),\n});\n\nexport type TSigningStatusEnvelopeRequest = z.infer<typeof ZSigningStatusEnvelopeRequestSchema>;\nexport type TSigningStatusEnvelopeResponse = z.infer<typeof ZSigningStatusEnvelopeResponseSchema>;\n",
+              "origin": "remote",
+              "truncated": false,
+              "startLine": 1
+            },
+            {
+              "path": "packages/ee/server-only/signing/csc/client/signatures.ts",
+              "repoId": "github:CoopAI-Corp/documenso",
+              "content": "import { cscJsonPost, joinCscUrl } from './http';\nimport {\n  type TCscSignHashRequest,\n  type TCscSignHashResponse,\n  type TCscTimestampRequest,\n  type TCscTimestampResponse,\n  ZCscSignHashResponseSchema,\n  ZCscTimestampResponseSchema,\n} from './types';\n\ntype CscSignHashOptions = TCscSignHashRequest & {\n  baseUrl: string;\n  /** Service-scope bearer token. The SAD (in the body) is the credential-scope grant. */\n  accessToken: string;\n  signal?: AbortSignal;\n};\n\n/**\n * `signatures/signHash` (\u00a711.9) \u2014 submit one or more pre-computed hashes for\n * the TSP to sign with the credential identified by `credentialID`.\n *\n * Authorisation is two-layered:\n * - The service-scope bearer token authenticates the API call itself.\n * - The credential-scope SAD (in the JSON body) authorises the specific\n *   hashes \u2014 the TSP rejects with `invalid_request` (\"Hash is not authorized\n *   by the SAD\") if any hash in the array wasn't bound at SAD issuance.\n *\n * The returned `signatures` array is position-ordered with `hash` per \u00a711.9.\n * Callers SHALL preserve order when mapping responses back to PDF embed\n * slots (the fifoSigner relies on this).\n */\nexport const cscSignHash = async (opts: CscSignHashOptions): Promise<TCscSignHashResponse> => {\n  const { baseUrl, accessToken, signal, credentialID, SAD, hash, hashAlgo, signAlgo, signAlgoParams, clientData } =\n    opts;\n\n  const body: Record<string, unknown> = {\n    credentialID,\n    SAD,\n    hash,\n    signAlgo,\n  };\n\n  if (hashAlgo !== undefined) {\n    body.hashAlgo = hashAlgo;\n  }\n\n  if (signAlgoParams !== undefined) {\n    body.signAlgoParams = signAlgoParams;\n  }\n\n  if (clientData !== undefined) {\n    body.clientData = clientData;\n  }\n\n  return await cscJsonPost(\n    {\n      url: joinCscUrl({ baseUrl, path: 'signatures/signHash' }),\n      body,\n      accessToken,\n      signal,\n    },\n    ZCscSignHashResponseSchema,\n  );\n};\n\ntype CscTimestampOptions = TCscTimestampRequest & {\n  baseUrl: string;\n  /**\n   * Service-scope bearer token. Per \u00a711.10 the timestamp endpoint may or may\n   * not require auth depending on TSP policy; the spec is silent. We send the\n   * token unconditionally because all known TSPs gate this endpoint.\n   */\n  accessToken: string;\n  signal?: AbortSignal;\n};\n\n/**\n * `signatures/timestamp` (\u00a711.10) \u2014 request an RFC 3161 / RFC 5816 time-stamp\n * token for a pre-computed hash. Driven by {@link CscTspTimestampAuthority}\n * at sign time, when {@link resolveCscSignTimeTsa} selects the TSP source\n * (TSP advertises `signatures/timestamp` in `info.methods`). The bearer is\n * the current recipient's own service-scope token. Seal-time archival\n * timestamps do not go through this endpoint \u2014 they use the env-configured\n * RFC 3161 TSA directly.\n *\n * If `nonce` is supplied, the TSP MUST round-trip it in the token \u2014 we leave\n * verification to LibPDF / our TSA helper, not this client.\n */\nexport const cscTimestamp = async (opts: CscTimestampOptions): Promise<TCscTimestampResponse> => {\n  const { baseUrl, accessToken, signal, hash, hashAlgo, nonce, clientData } = opts;\n\n  const body: Record<string, unknown> = { hash, hashAlgo };\n\n  if (nonce !== undefined) {\n    body.nonce = nonce;\n  }\n\n  if (clientData !== undefined) {\n    body.clientData = clientData;\n  }\n\n  return await cscJsonPost(\n    {\n      url: joinCscUrl({ baseUrl, path: 'signatures/timestamp' }),\n      body,\n      accessToken,\n      signal,\n    },\n    ZCscTimestampResponseSchema,\n  );\n};\n",
+              "origin": "remote",
+              "truncated": false,
+              "startLine": 1
+            },
+            {
+              "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+              "repoId": "github:CoopAI-Corp/documenso",
+              "startLine": 8,
+              "content": "import { getFileServerSide } from '@documenso/lib/universal/upload/get-file.server';\nimport { putPdfFileServerSide } from '@documenso/lib/universal/upload/put-file.server';\nimport { createDocumentAuditLogData } from '@documenso/lib/utils/document-audit-logs';\nimport { extractDocumentAuthMethods } from '@documenso/lib/utils/document-auth';\nimport { mapSecondaryIdToDocumentId } from '@documenso/lib/utils/envelope';\nimport { prisma } from '@documenso/prisma';\nimport { PDF } from '@libpdf/core';\nimport {\n  type DocumentDataType,\n  EnvelopeType,\n  RecipientRole,\n  SendStatus,\n  SigningStatus,\n  WebhookTriggerEvents,\n} from '@prisma/client';\n\nimport { type CscDigest, hashOidForDigest, policyToLibpdfSignerAlgo } from './algorithm-resolver';\nimport { decodeCscCertChain } from './cert-chain';\nimport { decryptCscToken } from './ciphers';\nimport { cscSignHash } from './client/signatures';\nimport { loadCscCredential } from './credential';\nimport { buildTspAnchorName } from './pdf-names';\nimport { consumeCscSession, loadCscSession } from './sign-session';\nimport { CscCaptureSigner } from './signers/capture-signer';\nimport { CscFifoSigner } from './signers/fifo-signer';\nimport { getCscTransport } from './transport';\nimport { resolveCscSignTimeTsa } from './tsa-resolver';\n\n/**\n * CSC TSP sign-time orchestrator.\n *\n * Two-pass run, both passes operating on the same prep-time-persisted PDF\n * bytes (`CscSession.items[i].documentDataId` pins an immutable rendered\n * orphan row \u2014 see `prepare-recipient-signing.ts`):\n *\n * 1. Capture re-derives each item's `signedAttrs` digest under the\n *    session-pinned `signingTime` and asserts it matches the prep-time hash\n *    bit-for-bit. Defense in depth \u2014 the bytes are identical so a mismatch\n *    means libpdf changed between prep and sign or the row was tampered\n *    with. Throws `CSC_BASE_DOCUMENT_MUTATED` on divergence.\n * 2. A single batched `signatures/signHash` (\u00a711.9) returns position-ordered\n *    signatures that the embed pass writes back into the same anchors via\n *    `CscFifoSigner`.\n *\n * Output bytes are in-place-copied onto `envelopeItem.documentData` (the\n * row id stays stable; only `type` + `data` change) \u2014 same pattern as\n * `materializeTspAnchorsForEnvelope`. The uploaded rows from\n * `putPdfFileServerSide` orbit as orphans.\n *\n * Persistence is bundled into one outer transaction so document-content\n * updates, recipient signing-status, audit log, and session consume commit\n * atomically. Post-tx side effects (webhooks, emails) run after.\n */\n\nexport type ExecuteTspSignOptions = {\n  sessionId: string;\n  recipientToken: string;\n  requestMetadata?: RequestMetadata;\n};\n\nexport type ExecuteTspSignResult = { outcome: 'signed' } | { outcome: 'already_signed' };\n\ntype CapturedItem = {\n  envelopeItemId: string;\n  recapturedDigestB64: string;\n  anchorName: string;\n  pdfBytes: Uint8Array;\n};\n\ntype SignedItemDataUpdate = {\n  /** Existing `envelopeItem.documentDataId` \u2014 receives the in-place data update. */\n  envelopeItemDataId: string;\n  /** Payload to copy onto the existing row. */\n  uploadedType: DocumentDataType;\n  uploadedData: string;\n};\n\nexport const executeTspSign = async (opts: ExecuteTspSignOptions): Promise<ExecuteTspSignResult> => {\n  const { sessionId, recipientToken, requestMetadata } = opts;\n\n  const session = await loadCscSession(sessionId);\n\n  if (!session) {\n    throw new AppError(AppErrorCode.NOT_FOUND, {\n      message: `CSC session \"${sessionId}\" not found.`,\n    });\n  }\n\n  const recipient = await getRecipientByToken({ token: recipientToken }).catch(() => null);\n\n  if (!recipient) {\n    throw new AppError(AppErrorCode.NOT_FOUND, {\n      message: `Recipient with token \"${recipientToken}\" not found.`,\n    });\n  }\n\n  if (recipient.id !== session.recipientId) {\n    throw new AppError(AppErrorCode.UNAUTHORIZED, {\n      message: 'CSC session does not belong to the recipient identified by token.',\n    });\n  }\n\n  // Idempotency: a 15s tRPC timeout that races with a successful sign can\n  // leave the client retrying after the recipient row already flipped to\n  // SIGNED. Return success rather than re-running.\n  if (recipient.signingStatus === SigningStatus.SIGNED) {\n    return { outcome: 'already_signed' };\n  }\n\n  if (!session.encryptedSad || !session.sadExpiresAt) {\n    throw new AppError(AppErrorCode.CSC_SAD_EXPIRED_PRE_SIGN, {\n      message: 'CSC session has no attached SAD \u2014 credential-scope OAuth must complete first.',\n    });\n  }\n\n  if (session.sadExpiresAt.getTime() <= Date.now()) {\n    throw new AppError(AppErrorCode.CSC_SAD_EXPIRED_PRE_SIGN, {\n      message: 'CSC SAD expired before sign-time execution.',\n    });\n  }\n\n  const sad = decryptCscToken(session.encryptedSad);",
+              "truncated": true
+            },
+            {
+              "path": "packages/ee/server-only/signing/csc/execute-tsp-sign.ts",
+              "repoId": "github:CoopAI-Corp/documenso",
+              "startLine": 46,
+              "content": " *    means libpdf changed between prep and sign or the row was tampered\n *    with. Throws `CSC_BASE_DOCUMENT_MUTATED` on divergence.\n * 2. A single batched `signatures/signHash` (\u00a711.9) returns position-ordered\n *    signatures that the embed pass writes back into the same anchors via\n *    `CscFifoSigner`.\n *\n * Output bytes are in-place-copied onto `envelopeItem.documentData` (the\n * row id stays stable; only `type` + `data` change) \u2014 same pattern as\n * `materializeTspAnchorsForEnvelope`. The uploaded rows from\n * `putPdfFileServerSide` orbit as orphans.\n *\n * Persistence is bundled into one outer transaction so document-content\n * updates, recipient signing-status, audit log, and session consume commit\n * atomically. Post-tx side effects (webhooks, emails) run after.\n */\n\nexport type ExecuteTspSignOptions = {\n  sessionId: string;\n  recipientToken: string;\n  requestMetadata?: RequestMetadata;\n};\n\nexport type ExecuteTspSignResult = { outcome: 'signed' } | { outcome: 'already_signed' };\n\ntype CapturedItem = {\n  envelopeItemId: string;\n  recapturedDigestB64: string;\n  anchorName: string;\n  pdfBytes: Uint8Array;\n};\n\ntype SignedItemDataUpdate = {\n  /** Existing `envelopeItem.documentDataId` \u2014 receives the in-place data update. */\n  envelopeItemDataId: string;\n  /** Payload to copy onto the existing row. */\n  uploadedType: DocumentDataType;\n  uploadedData: string;\n};\n\nexport const executeTspSign = async (opts: ExecuteTspSignOptions): Promise<ExecuteTspSignResult> => {\n  const { sessionId, recipientToken, requestMetadata } = opts;\n\n  const session = await loadCscSession(sessionId);\n\n  if (!session) {\n    throw new AppError(AppErrorCode.NOT_FOUND, {\n      message: `CSC session \"${sessionId}\" not found.`,\n    });\n  }\n\n  const recipient = await getRecipientByToken({ token: recipientToken }).catch(() => null);\n\n  if (!recipient) {\n    throw new AppError(AppErrorCode.NOT_FOUND, {\n      message: `Recipient with token \"${recipientToken}\" not found.`,\n    });\n  }\n\n  if (recipient.id !== session.recipientId) {\n    throw new AppError(AppErrorCode.UNAUTHORIZED, {\n      message: 'CSC session does not belong to the recipient identified by token.',\n    });\n  }\n\n  // Idempotency: a 15s tRPC timeout that races with a successful sign can\n  // leave the client retrying after the recipient row already flipped to\n  // SIGNED. Return success rather than re-running.\n  if (recipient.signingStatus === SigningStatus.SIGNED) {\n    return { outcome: 'already_signed' };\n  }\n\n  if (!session.encryptedSad || !session.sadExpiresAt) {\n    throw new AppError(AppErrorCode.CSC_SAD_EXPIRED_PRE_SIGN, {\n      message: 'CSC session has no attached SAD \u2014 credential-scope OAuth must complete first.',\n    });\n  }\n\n  if (session.sadExpiresAt.getTime() <= Date.now()) {\n    throw new AppError(AppErrorCode.CSC_SAD_EXPIRED_PRE_SIGN, {\n      message: 'CSC SAD expired before sign-time execution.',\n    });\n  }\n\n  const sad = decryptCscToken(session.encryptedSad);\n\n  if (!sad) {\n    throw new AppError(AppErrorCode.CSC_SAD_EXPIRED_PRE_SIGN, {\n      message: 'CSC SAD decrypt failed \u2014 key rotation or row corruption.',\n    });\n  }\n\n  const credential = await loadCscCredential(recipient.id);\n\n  if (!credential) {\n    throw new AppError(AppErrorCode.NOT_FOUND, {\n      message: 'CSC credential missing at sign time.',\n    });\n  }\n\n  if (!credential.certCache) {\n    throw new AppError(AppErrorCode.CSC_CERT_INVALID, {\n      message: 'CSC credential has no persisted certificate chain.',\n    });\n  }\n\n  if (credential.keyLenBits === null) {\n    throw new AppError(AppErrorCode.CSC_ALGORITHM_REFUSED, {\n      message: 'CSC credential omits persisted keyLenBits \u2014 service-scope OAuth must re-run.',\n    });\n  }\n\n  if (!credential.serviceTokenCiphertext || !credential.serviceTokenExpiresAt) {\n    throw new AppError(AppErrorCode.CSC_REQUEST_FAILED, {\n      message: 'CSC credential has no persisted service token \u2014 recipient must re-auth.',\n    });\n  }\n\n  if (credential.serviceTokenExpiresAt.getTime() <= Date.now()) {\n    throw new AppError(AppErrorCode.CSC_REQUEST_FAILED, {\n      message: 'CSC service token expired \u2014 recipient must re-auth via service-scope OAuth.',\n    });\n  }",
+              "truncated": true
+            }
+          ],
+          "jobScan": {
+            "source": "live-heuristic",
+            "cached": false,
+            "foundGaps": 0,
+            "highPriority": 0,
+            "mediumPriority": 0,
+            "lowPriority": 0,
+            "gaps": [],
+            "scanCoverage": "scan_incomplete"
+          },
+          "documentationCoverage": {
+            "status": "documentation-search-requested"
+          },
+          "fileStructure": {
+            "status": "file-structure-requested",
+            "provider": "github"
+          }
+        },
+        "codeHost": "github"
+      }
+    }
+  ],
+  "sessionCostUsd": 0.25445399999999996,
+  "createdAt": 1791591875903,
+  "updatedAt": 1791592217513,
+  "messageCount": 2,
+  "repoContext": {
+    "provider": "github",
+    "owner": "CoopAI-Corp",
+    "repo": "documenso",
+    "branch": "main",
+    "scope": "repo"
+  },
+  "draftInput": ""
+}

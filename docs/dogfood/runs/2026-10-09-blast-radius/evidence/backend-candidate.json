@@ -1,0 +1,20 @@
+{
+  "preparedAt": "2026-10-09T21:47:48.135930+00:00",
+  "candidate": "/private/tmp/coop-blast-backend-candidate-20261009",
+  "baselineActiveDeployment": "788d0aeb-322c-4937-8788-238d5c638188",
+  "preservedProductionSource": "email-48168d",
+  "baselinePromptHashes": {
+    "src/prompts/knowledgeGapsSynthesis.ts": "8b778ccc60b36c95fc96917175a9b6adf344f9a3e0aecfa695e52a75f90278fb",
+    "src/context/knowledgeGapsFocus.ts": "fa45941131968de1aa93425dfa0228cf45e76a14990fd92d1157d8189e969b65",
+    "src/prompts/knowledgeGapsSourceLabels.ts": "e74d50c09b81a4236be6d209917e564f5da4c1f33addf960d8d449f112a49f9e",
+    "src/prompts/systemPrompts.ts": "31f9a3094f57fec66a240934475bf397d76256c7ec23fbaef02f521801d33cb8"
+  },
+  "runtimeChanges": [
+    "src/prompts/systemPrompts.ts: blast_radius required output contract only"
+  ],
+  "candidateSystemPromptSha256": "6aaf3f4c5a98337170da96252cb64d13626ae79e22003305c7215f5627021373",
+  "deployed": true,
+  "authorizedAt": "2026-10-09T22:09:28.335050+00:00",
+  "authorization": "Jon approved scoped backend deployment in this chat.",
+  "deploymentId": "7bf7d892-2ba5-4c16-a17c-943537bdb501"
+}
