@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import cards from "@/components/MarketingCards.module.css";
 import { PageHeader } from "@/components/PageHeader";
 import { CTASection } from "@/components/CTASection";
 import { Button } from "@/components/Button";
@@ -91,16 +92,15 @@ const selfServeTiers: PricingTier[] = [
 const enterpriseFeatures = [
   "Everything in Max",
   "Custom usage contract",
-  "Zero-retention LLM routing",
-  "Bring Your Own Key (BYOK)",
+  "Provider request controls",
   "Self-hosted deployment",
-  "Compliance attestation & DPA"
+  "DPA discussion"
 ];
 
 export default function PricingPage() {
   return (
     <>
-      <PageHeader tight eyebrow="Pricing" title="Your codebase, finally explained" />
+      <PageHeader tight eyebrow="Pricing" title="Your codebase," secondaryTitle="finally explained" />
 
       <section className="pb-20">
         <div className="mx-auto w-full max-w-[100rem] px-4 sm:px-6 lg:px-10">
@@ -108,23 +108,19 @@ export default function PricingPage() {
             {selfServeTiers.map((tier) => (
               <div
                 key={tier.name}
-                className={`relative flex h-full min-w-0 flex-col rounded-sm border p-6 md:p-7 ${
-                  tier.highlighted
-                    ? "border-gray-900 bg-white/90 shadow-sm backdrop-blur-sm"
-                    : "border-coop-border bg-white/70 backdrop-blur-sm"
-                }`}
+                className={`relative flex h-full min-w-0 flex-col p-6 md:p-7 ${cards.plan} ${tier.highlighted ? cards.recommended : ""}`}
               >
                 <div className="flex min-h-[1.75rem] items-start justify-between gap-2">
                   <h2 className="text-lg font-semibold text-gray-900">{tier.name}</h2>
                   {tier.recommended ? (
-                    <span className="shrink-0 rounded-sm border border-gray-300 bg-gray-100 px-2 py-0.5 font-mono text-[11px] text-gray-700">
+                    <span className={`shrink-0 ${cards.planBadge}`}>
                       recommended
                     </span>
                   ) : null}
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                  <span className="text-4xl font-semibold tracking-tight text-gray-900">{tier.price}</span>
+                  <span className={`text-4xl tracking-tight ${cards.price}`}>{tier.price}</span>
                   {tier.period ? <span className="text-sm text-coop-muted">{tier.period}</span> : null}
                 </div>
 
@@ -154,11 +150,11 @@ export default function PricingPage() {
             ))}
           </div>
 
-          <div className="mt-5 rounded-sm border border-coop-border bg-white/70 px-6 py-5 backdrop-blur-sm md:px-8 md:py-6">
+          <div className={`mt-5 px-6 py-5 md:px-8 md:py-6 ${cards.plan}`}>
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
               <div className="shrink-0 lg:w-52">
                 <h2 className="text-lg font-semibold text-gray-900">Enterprise</h2>
-                <p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">Custom</p>
+                <p className={`mt-2 text-3xl tracking-tight ${cards.price}`}>Custom</p>
                 <p className="mt-2 text-sm text-coop-muted">Security, self-host, and a custom contract.</p>
               </div>
               <ul className="grid flex-1 gap-x-8 gap-y-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -202,22 +198,22 @@ export default function PricingPage() {
               <div>
                 <dt className="font-medium text-gray-900">Do we replace Copilot / Cursor / Codex?</dt>
                 <dd className="mt-2 text-sm leading-relaxed text-coop-muted">
-                  No. We sit beside them with org context.
+                  CoopAI works alongside them, bringing shared organizational context into your coding workflow.
                 </dd>
               </div>
               <div>
                 <dt className="font-medium text-gray-900">Does source leave our infrastructure?</dt>
                 <dd className="mt-2 text-sm leading-relaxed text-coop-muted">
-                  Zero-clone. See{" "}
+                  Repository source is processed by Coop infrastructure for indexing and on-demand reads, and relevant source can be sent to configured model providers for inference. See{" "}
                   <Link href="/security" className="font-medium text-gray-900 hover:underline">
-                    /security
+                    how data is handled
                   </Link>
                   .
                 </dd>
               </div>
               <div>
                 <dt className="font-medium text-gray-900">Do you train on our code?</dt>
-                <dd className="mt-2 text-sm leading-relaxed text-coop-muted">No.</dd>
+                <dd className="mt-2 text-sm leading-relaxed text-coop-muted">Coop routes requests for inference. Provider training and retention terms depend on the actual account and agreement; see our <Link href="/security" className="font-medium text-gray-900 hover:underline">security details</Link>.</dd>
               </div>
               <div>
                 <dt className="font-medium text-gray-900">Can we start on two teams / ~20 users?</dt>

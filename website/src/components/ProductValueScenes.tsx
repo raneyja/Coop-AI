@@ -5,7 +5,7 @@ import Link from "next/link";
 import { SectionHeading } from "@/components/SectionHeading";
 import { QuickActionPromptCarousel } from "@/components/QuickActionPromptCarousel";
 import { ProductCreationMock } from "@/components/ProductCreationMock";
-import { ContextConstellation } from "@/components/ContextConstellation";
+import { IndexedRepoIllustration } from "@/components/IndexedRepoIllustration";
 import { CODE_CREATION_STORIES } from "@/lib/codeCreationScenarios";
 
 const WRITE_PILLARS = [
@@ -36,8 +36,8 @@ const INDEX_TRUST = [
     body: "Company Slack and Jira in VS Code sit next to PRs and CODEOWNERS — shared org context your admin connected — so you can find a code owner and see blast radius before you merge."
   },
   {
-    title: "Honest when incomplete",
-    body: "When graph data is missing, Coop says so instead of guessing."
+    title: "Context you can verify",
+    body: "Trace answers back to code and team sources, with a clear view of what supports each recommendation. Review the evidence before you change the code."
   }
 ] as const;
 
@@ -48,7 +48,7 @@ export function ProductAskScene() {
       <div className="mx-auto max-w-6xl px-6">
         <SectionHeading
           label="ask"
-          title="Questions that used to take a Slack archaeology dig"
+          title="Questions that used to take" secondaryTitle="a Slack archaeology dig"
           description="Architecture, find a code owner, blast radius of a change, and the ticket that explains why — with company Slack and Jira in VS Code, across the repo graph."
         />
 
@@ -76,8 +76,8 @@ export function ProductChangeScene() {
           <div className="min-w-0">
             <SectionHeading
               label="change"
-              title="Write and edit like a teammate who's already in the repo"
-              description="Complete and edit in the open file, using the graph. You review the diff. Nothing rewrites the tree on its own."
+              title="Write and edit like a teammate" secondaryTitle="who's already in the repo"
+              description="Complete and edit in the open file with repository context. Review the diff and choose what to apply."
             />
             <ul className="mt-10 space-y-6">
               {WRITE_PILLARS.map((item) => (
@@ -88,7 +88,7 @@ export function ProductChangeScene() {
               ))}
             </ul>
             <p className="mt-8 text-xs leading-relaxed text-coop-muted">
-              Inline complete uses a separate zero-retention path.{" "}
+              Inline complete uses a dedicated route with provider request controls.{" "}
               <Link href="/docs/autocomplete" className="text-gray-800 underline-offset-2 hover:underline">
                 Autocomplete docs
               </Link>
@@ -125,11 +125,11 @@ export function ProductChangeScene() {
 export function ProductIndexedScene() {
   return (
     <section className="scroll-mt-20 border-t border-coop-border py-20 md:py-24" id="lightning-mode">
-      <div className="mx-auto max-w-7xl px-6 xl:grid xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] xl:items-center xl:gap-12">
+      <div className="mx-auto max-w-6xl px-6">
         <div className="min-w-0">
           <SectionHeading
             label="indexed"
-            title="Cross-repo context without cloning the monorepo"
+            title="Cross-repo context" secondaryTitle="without cloning the monorepo"
             description="Lightning Mode Deep-Indexes a knowledge graph across services so you can understand the codebase without cloning the monorepo onto every laptop."
           />
           <p className="mt-6 text-sm leading-relaxed text-coop-muted">
@@ -139,19 +139,17 @@ export function ProductIndexedScene() {
           <p className="mt-4 font-mono text-xs text-gray-700">
             Free: up to 3 Deep-Indexed repos · Pro: unlimited
           </p>
-          <dl className="mt-10 space-y-5 border-l border-coop-border pl-4">
+          <dl className="mt-10 grid gap-6 md:grid-cols-3">
             {INDEX_TRUST.map((item) => (
-              <div key={item.title}>
+              <div key={item.title} className="border-l border-coop-border pl-4">
                 <dt className="font-mono text-sm text-gray-800">{item.title}</dt>
                 <dd className="mt-1 text-sm text-coop-muted">{item.body}</dd>
               </div>
             ))}
           </dl>
         </div>
-        <div className="mt-10 w-full min-w-0 xl:mt-0">
-          <div className="relative mx-auto w-full max-w-full overflow-hidden rounded-2xl ring-1 ring-coop-border aspect-[6/5] sm:aspect-[920/580] sm:max-w-4xl xl:aspect-auto xl:max-w-none xl:h-[34rem]">
-            <ContextConstellation className="absolute inset-0 h-full w-full" />
-          </div>
+        <div className="mt-10">
+          <IndexedRepoIllustration />
         </div>
       </div>
     </section>

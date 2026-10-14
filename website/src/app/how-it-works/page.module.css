@@ -1,0 +1,16 @@
+.compareGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; margin-top:40px; }
+.compareStage { display:flex; min-width:0; padding:28px; border-radius:4px; }
+.sageStage { background:#e0e5d8; }
+.blueStage { background:#dee5e7; }
+.comparePanel { display:flex; flex-direction:column; flex:1; min-width:0; padding:28px; background:#f9faf7; border:1px solid #cbd6c3; border-radius:5px; }
+.blueStage .comparePanel { border-color:#c8d5d5; }
+.compareHeader { display:flex; justify-content:space-between; align-items:center; gap:16px; color:#75876c; }
+.blueStage .compareHeader { color:#6f8d83; }
+.compareLabel { margin:0; font-size:10px; font-weight:500; letter-spacing:.085em; line-height:1.5; text-transform:uppercase; }
+.compareTitle { margin:18px 0 0; color:#202820; font-size:20.4px !important; font-weight:400; letter-spacing:-.04em; line-height:1.25; }
+.compareItems { display:grid; gap:17px; list-style:none; padding:0; margin:27px 0; }
+.compareItems li { display:flex; align-items:baseline; gap:12px; color:#626d62; font-size:14px; line-height:1.65; }
+.contextDot { display:inline-block; flex-shrink:0; width:5px; height:5px; border-radius:50%; background:#819675; }
+.blueStage .contextDot { background:#7b9a8e; }
+.compareNote { margin:auto 0 0; padding-top:18px; border-top:1px solid #dce2d8; color:#788174; font-size:12px; line-height:1.75; }
+@media(max-width:639px) { .compareGrid { grid-template-columns:1fr; gap:20px; } .compareStage { padding:20px; } .comparePanel { padding:22px; } .compareTitle { font-size:18.7px !important; } }

@@ -16,14 +16,14 @@ export const HOW_IT_WORKS_LOOP = [
     label: "query_live",
     title: "Query the stack live",
     summary: "Company Slack, Jira, and docs in VS Code — shared org context, fetched when you ask.",
-    body: "An org admin connects Slack, Jira, Confluence, Notion, and Google Docs once for the company. Those tools are not background-indexed, and they are not each developer’s personal accounts. When a question needs them, Coop fetches from the shared company workspace and places that context next to the code graph. Your conversations are not stored as a standing search index."
+    body: "An org admin connects Slack, Jira, Confluence, Notion, and Google Docs once for the company. When a question needs team context, Coop queries those shared sources live and brings the relevant discussion, ticket, or document into the editor alongside repository context."
   },
   {
     id: "in-vscode",
     step: "03",
     label: "in_vscode",
     title: "Ask, complete, and edit",
-    summary: "Stay in VS Code. Review the diff. Nothing rewrites the tree on its own.",
+    summary: "Stay in VS Code. Review the diff. Choose what to apply.",
     body: "Pick Use repo on an indexed remote repository, or work from the file you have open. Chat and quick actions answer from the graph plus live tools — including Find Owner (CODEOWNERS), Blast Radius, and Trace Decision. Ghost-text complete as you type. Highlight a block, describe the change, and apply or reject a patch."
   }
 ] as const;
@@ -38,7 +38,7 @@ export const INDEXED_VS_LIVE = {
       "Commit, PR, and CODEOWNERS signals",
       "Inventory facts — file counts, languages, size"
     ],
-    note: "The temporary clone is deleted when the index job finishes. Coop does not keep a git mirror on every laptop."
+    note: "A searchable map on the server brings repository context to your editor. The temporary clone is deleted when the index job finishes."
   },
   live: {
     label: "Fetched when you ask",
@@ -49,7 +49,7 @@ export const INDEXED_VS_LIVE = {
       "Company Confluence, Notion, and Google Docs",
       "The current file body from the code host"
     ],
-    note: "Admin-connected for the org. Live fetch keeps tickets and threads current without copying them into a second index — and without using each developer’s personal accounts."
+    note: "Connected once by your org admin. Relevant tickets, threads, and documents are fetched live from the shared workspace when you ask."
   }
 } as const;
 
@@ -67,7 +67,7 @@ export const EDITOR_SURFACES = [
   {
     id: "edit",
     title: "Edit",
-    body: "Highlight a block, describe the change, review an inline diff. Apply, retry, or undo. You stay in the file — Coop does not rewrite the tree on its own."
+    body: "Highlight a block, describe the change, and review an inline diff. Apply, retry, or undo while staying in the file."
   }
 ] as const;
 
@@ -109,13 +109,13 @@ export const HOW_IT_WORKS_FAQS: FaqPair[] = [
       "Org admins connect the company integrations once in the admin portal. Developers sign in to the extension and query that shared org context. They do not paste personal OAuth tokens in production."
   },
   {
-    question: "What if graph or ticket context is missing?",
+    question: "How can I verify an answer?",
     answer:
-      "Coop says what is missing instead of guessing. Code-only questions still work if Slack or Jira are not connected. Repo facts such as file counts come from the index — Coop does not estimate them."
+      "Review the code and team sources supporting the answer. Coop makes the available context and what still needs verification clear, so you can follow up before making a change. Repository totals, such as file counts, come from indexed inventory."
   },
   {
     question: "Can I choose the model?",
     answer:
-      "Not on Developer or Pro. Coop assigns a model per feature (chat, quick actions, edit, autocomplete). Provider keys stay on the Coop server, not in the IDE."
+      "Auto selects a model for each feature by default. Pro, Pro+, Max, and Enterprise users can choose a catalog model from the chat composer; Free uses Auto. Autocomplete and other dedicated features use their assigned models. Provider keys stay on the server."
   }
 ];

@@ -97,7 +97,7 @@ function EditorCodeBody({
     <>
       {story.kind === "edit" && editPhase !== "idle" && editPhase !== "select" ? (
         <div
-          className={`mb-3 shrink-0 rounded-sm border border-coop-border bg-[#252526] px-3 py-2 transition-opacity duration-300 ${
+          className={`mb-3 shrink-0 rounded-xs border border-coop-border bg-[#252526] px-3 py-2 transition-opacity duration-300 ${
             editPhase === "prompt" || editPhase === "diff" || editPhase === "hold"
               ? "opacity-100"
               : "opacity-0"
@@ -127,7 +127,7 @@ function EditorCodeBody({
       </p>
 
       {story.kind === "complete" && completePhase === "accepted" ? (
-        <span className="absolute bottom-3 right-3 rounded-sm border border-coop-border bg-[#252526] px-2 py-0.5 font-mono text-[10px] text-coop-index">
+        <span className="absolute bottom-3 right-3 rounded-xs border border-coop-border bg-[#252526] px-2 py-0.5 font-mono text-[10px] text-coop-index">
           Tab accepted
         </span>
       ) : null}
@@ -153,7 +153,7 @@ function CompleteEditorBody({
       {story.lines.map((line) => (
         <CodeEditorLineRow key={line.n} line={line} />
       ))}
-      <div className="flex gap-2 rounded-sm pr-4">
+      <div className="flex gap-2 rounded-xs pr-4">
         <span className="w-4 shrink-0 select-none text-right text-darkUi-lineNumber">{story.cursorLine}</span>
         <span className="min-w-0 flex-1 whitespace-pre-wrap break-all">
           <span className={TOKEN_COLOR.plain}>{story.typedPrefix}</span>
@@ -219,7 +219,7 @@ function CodeEditorLineRow({
           : "";
 
   return (
-    <div className={`flex gap-2 rounded-sm pr-4 ${rowClass}`}>
+    <div className={`flex gap-2 rounded-xs pr-4 ${rowClass}`}>
       <span className="w-4 shrink-0 select-none text-right text-darkUi-lineNumber">{line.n}</span>
       <span className="min-w-0 flex-1">
         {line.tokens.length === 0 ? (

@@ -53,7 +53,7 @@ export function HeroPatchDemoCard({
       className={
         dark
           ? "overflow-hidden rounded-lg border border-white/10 bg-neutral-900"
-          : "overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
+          : "overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xs"
       }
       role="img"
       aria-label={

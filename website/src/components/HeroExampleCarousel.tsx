@@ -161,7 +161,7 @@ export function HeroExampleCarousel({ compact = false }: HeroExampleCarouselProp
       }}
     >
       <div
-        className={`coop-panel-inset relative overflow-hidden rounded-sm ${cardPadding}`}
+        className={`coop-panel-inset relative overflow-hidden rounded-xs ${cardPadding}`}
       >
 
         {/* In-flow sizer: all slides visible to layout (fixes mobile Safari grid + opacity) */}
@@ -317,7 +317,7 @@ function HeroSlideBody({
           type="button"
           onClick={onActivate}
           tabIndex={isActive ? 0 : -1}
-          className="group w-full rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+          className="group w-full rounded-lg text-left focus:outline-hidden focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
           aria-label={`Example question: ${item.question}. Click to copy.`}
         >
           {question}
@@ -379,8 +379,8 @@ function HighlightPill({
     <span
       className={
         variant === "default"
-          ? `inline-flex items-center rounded-sm border border-coop-border bg-gray-100 font-mono text-gray-700 ${size}`
-          : `inline-flex items-center rounded-sm border border-coop-border bg-white font-mono text-gray-600 ${size}`
+          ? `inline-flex items-center rounded-xs border border-coop-border bg-gray-100 font-mono text-gray-700 ${size}`
+          : `inline-flex items-center rounded-xs border border-coop-border bg-white font-mono text-gray-600 ${size}`
       }
     >
       {children}

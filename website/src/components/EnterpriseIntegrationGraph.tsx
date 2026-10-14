@@ -115,7 +115,7 @@ export function EnterpriseIntegrationGraph() {
               animationDelay: "0.05s"
             }}
           >
-            <div className="enterprise-graph-hub-ring flex h-full items-center justify-center rounded-xl border-2 border-coop-index bg-white/90 px-4 font-mono shadow-sm backdrop-blur-sm">
+            <div className="enterprise-graph-hub-ring flex h-full items-center justify-center rounded-xl border-2 border-coop-index bg-white/90 px-4 font-mono shadow-xs backdrop-blur-xs">
               <p className="whitespace-nowrap text-[1.65cqw] font-semibold text-gray-900">
                 coop<span className="text-coop-index">index</span>
               </p>
@@ -157,7 +157,7 @@ function GraphNodeCard({
       aria-label={`${node.label}: ${node.categoryLabel}`}
     >
       <div
-        className="group flex h-full w-full items-stretch overflow-hidden rounded-xl border border-gray-200/80 bg-white/85 shadow-sm backdrop-blur-sm transition duration-200 hover:border-gray-300 hover:bg-white"
+        className="group flex h-full w-full items-stretch overflow-hidden rounded-xl border border-gray-200/80 bg-white/85 shadow-xs backdrop-blur-xs transition duration-200 hover:border-gray-300 hover:bg-white"
         style={{
           borderLeftWidth: 3,
           borderLeftColor: theme.accent

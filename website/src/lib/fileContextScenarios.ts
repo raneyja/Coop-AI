@@ -135,7 +135,7 @@ export const FILE_CONTEXT_SCENARIOS: FileContextScenario[] = [
         toggleable: true
       },
       { id: "confluence", source: "Confluence", detail: "Auth middleware RFC v2" },
-      { id: "model", source: "Model", detail: "Routed via BYOK · zero-retention flags" }
+      { id: "model", source: "Model", detail: "Routed through configured provider controls" }
     ],
     exampleQuestion:
       "Pull the Slack thread and Jira ticket tied to `auth_middleware.go`: why did we add zero-retention headers here? Cross-reference commits on `internal/llm/router.go` from the last 90 days.",
@@ -219,7 +219,7 @@ export const FILE_CONTEXT_SCENARIOS: FileContextScenario[] = [
       { id: "services", source: "Services", detail: "api-gateway · webhook-processor · billing-worker" },
       { id: "slack", source: "Slack", detail: "#billing-auth · blast radius discussion", toggleable: true },
       { id: "codeowners", source: "Ownership", detail: "@jessica_dawson · 90% blame (60d)" },
-      { id: "model", source: "Model", detail: "Routed via BYOK · zero-retention flags" }
+      { id: "model", source: "Model", detail: "Routed through configured provider controls" }
     ],
     exampleQuestion:
       "If I refactor `TokenValidator.validate()` in `internal/auth/token_validator.ts`, what breaks downstream? List dependents in `api-gateway`, `workers/webhook-processor`, and shared libs.",
@@ -304,7 +304,7 @@ export const FILE_CONTEXT_SCENARIOS: FileContextScenario[] = [
       { id: "jira", source: "Jira", detail: "PROJ-2102 · open · no linked doc", toggleable: true },
       { id: "gap", source: "Gap", detail: "⚠ No design doc for dedupe branch" },
       { id: "github", source: "GitHub", detail: "PR #901 · partial test coverage", toggleable: true },
-      { id: "model", source: "Model", detail: "Routed via BYOK · zero-retention flags" }
+      { id: "model", source: "Model", detail: "Routed through configured provider controls" }
     ],
     exampleQuestion:
       "Before I ship changes to `GraphConsistencyManager.applyEvent()`, what am I missing? Any Slack threads or Jira tickets on webhook dedupe?",

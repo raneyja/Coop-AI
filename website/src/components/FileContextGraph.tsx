@@ -139,7 +139,7 @@ export function FileContextGraph({
             key={s.id}
             type="button"
             onClick={() => switchScenario(s.id)}
-            className={`rounded-sm border px-3.5 py-1.5 font-mono text-xs transition md:text-sm ${
+            className={`rounded-xs border px-3.5 py-1.5 font-mono text-xs transition md:text-sm ${
               s.id === scenarioId
                 ? "border-gray-900 bg-gray-100 text-gray-900"
                 : "border-coop-border bg-white text-gray-500 hover:border-gray-300 hover:text-gray-800"
@@ -154,7 +154,7 @@ export function FileContextGraph({
       {/* Desktop graph */}
       <div
         className={`file-context-graph-stage relative overflow-hidden bg-gray-50 ${
-          compact ? "h-full min-h-[18rem] flex-1" : "hidden rounded-sm border border-coop-border md:block"
+          compact ? "h-full min-h-[18rem] flex-1" : "hidden rounded-xs border border-coop-border md:block"
         } ${
           transitioning ? "opacity-60" : "opacity-100"
         } transition-opacity duration-200`}
@@ -238,7 +238,7 @@ export function FileContextGraph({
             onBlur={() => setFileFocused(false)}
           >
             <div
-              className={`relative flex h-full flex-col justify-center rounded-xl border bg-white px-4 shadow-sm transition duration-300 ${
+              className={`relative flex h-full flex-col justify-center rounded-xl border bg-white px-4 shadow-xs transition duration-300 ${
                 fileFocused
                   ? "border-[#79C0FF]/55 shadow-[0_0_40px_rgba(121,192,255,0.2)]"
                   : "border-[#79C0FF]/30"
@@ -270,7 +270,7 @@ export function FileContextGraph({
             className="absolute z-10 -translate-x-1/2"
             style={{ left: `${hubLeftPct}%`, top: `${hubTopPct + heightPct(FILE_CARD.height) * 0.72}%` }}
           >
-            <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11px] text-gray-500 backdrop-blur-sm">
+            <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11px] text-gray-500 backdrop-blur-xs">
               <span className="h-2 w-2 rounded-full bg-[#3FB950]" aria-hidden />
               Answers in VS Code sidebar
             </div>
@@ -415,7 +415,7 @@ function OrbitNodeCard({
       onBlur={onLeave}
     >
       <div
-        className={`group flex h-full w-full items-stretch overflow-hidden rounded-sm border bg-white transition duration-200 hover:border-gray-300 ${
+        className={`group flex h-full w-full items-stretch overflow-hidden rounded-xs border bg-white transition duration-200 hover:border-gray-300 ${
           node.isGap
             ? "border-dashed border-amber-400/45"
             : active

@@ -47,7 +47,7 @@ const hubCards = [
   },
   {
     title: "Enterprise",
-    description: "Zero-retention routing, BYOK, self-hosted deployment, and compliance.",
+    description: "Provider request controls, SSO, and enterprise deployment.",
     href: "/docs/enterprise-deployment"
   },
   {
@@ -88,7 +88,7 @@ export default function DocsHubPage() {
                   <Link
                     key={card.href}
                     href={card.href}
-                    className="coop-panel block p-6 transition hover:border-coop-index/50 hover:shadow-sm"
+                    className="coop-panel block p-6 transition hover:border-coop-index/50 hover:shadow-xs"
                   >
                     <h2 className="text-base font-semibold text-gray-900">{card.title}</h2>
                     <p className="mt-2 text-sm leading-relaxed text-coop-muted">{card.description}</p>

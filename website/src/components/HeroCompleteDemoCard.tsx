@@ -36,7 +36,7 @@ export function HeroCompleteDemoCard({
       className={
         dark
           ? "overflow-hidden rounded-lg border border-white/10 bg-neutral-900"
-          : "overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
+          : "overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xs"
       }
       role="img"
       aria-label={
@@ -151,7 +151,7 @@ export function HeroCompleteDemoCard({
                       : "scale-95 border-gray-800 bg-gray-800 text-white"
                     : dark
                       ? "border-white/20 bg-white/10 text-white"
-                      : "border-gray-300 bg-gray-50 text-gray-800 shadow-sm"
+                      : "border-gray-300 bg-gray-50 text-gray-800 shadow-xs"
               }`}
               aria-hidden
             >

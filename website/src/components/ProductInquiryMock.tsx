@@ -247,7 +247,7 @@ export function ProductInquiryMock({
 
             {showCodeHighlight ? (
               <div
-                className={`story-bubble-in absolute right-2 top-[5.5rem] max-w-[11rem] rounded-md border bg-[#252526]/95 px-2 py-1.5 text-[9px] leading-snug shadow-lg backdrop-blur-sm md:right-4 ${CALLOUT_BORDER[scenario.code.callout.tone]}`}
+                className={`story-bubble-in absolute right-2 top-[5.5rem] max-w-[11rem] rounded-md border bg-[#252526]/95 px-2 py-1.5 text-[9px] leading-snug shadow-lg backdrop-blur-xs md:right-4 ${CALLOUT_BORDER[scenario.code.callout.tone]}`}
               >
                 <p
                   className={
@@ -317,7 +317,7 @@ function CodeLine({
 
   return (
     <div
-      className={`flex gap-2 rounded-sm pr-28 ${highlight ? "bg-coop-index/10 ring-1 ring-inset ring-coop-index/35" : ""}`}
+      className={`flex gap-2 rounded-xs pr-28 ${highlight ? "bg-coop-index/10 ring-1 ring-inset ring-coop-index/35" : ""}`}
     >
       <span className="w-4 shrink-0 select-none text-right text-darkUi-lineNumber">{n}</span>
       <span className="min-w-0 flex-1">

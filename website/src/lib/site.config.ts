@@ -30,7 +30,7 @@ export const siteConfig = {
       enterprise: {
         title: "Enterprise | Secure code intelligence",
         description:
-          "CoopAI Enterprise: zero-retention LLM routing, BYOK, audit logging, multi-tenant deployment, and self-hosted options for security-conscious teams."
+          "CoopAI Enterprise: provider request controls, SSO, audit logging, and enterprise deployment options for engineering teams."
       },
       pricing: {
         title: "Pricing | Plans for engineering teams",
@@ -40,7 +40,7 @@ export const siteConfig = {
       security: {
         title: "Architecture and data handling | CoopAI",
         description:
-          "How CoopAI protects your code and context: zero-clone architecture, zero-retention LLM routing, BYOK, admin-connected integrations, and DPA on request."
+          "How CoopAI protects your code and context: zero-clone architecture, provider request controls, admin-connected integrations, and DPA discussion."
       },
       forEngineeringManagers: {
         title: "For engineering managers | CoopAI",
@@ -90,7 +90,7 @@ export const siteConfig = {
     demo: "/demo"
   },
   nav: [
-    { label: "Product", href: "/#product" },
+    { label: "Product", href: "/product" },
     { label: "Pricing", href: "/pricing" },
     { label: "Security", href: "/security" },
     { label: "Owner's Manual", href: "/manual" },
@@ -162,7 +162,7 @@ export const siteConfig = {
         id: "completion-routing",
         title: "Completion-only routing",
         description:
-          "Inline requests use a separate zero-retention path (`x-use-case: code-completion-only`), distinct from chat, with keys on your server."
+          "Inline requests use a dedicated completion route with provider request controls (`x-use-case: code-completion-only`), distinct from chat, with keys on your server."
       }
     ]
   },
@@ -195,10 +195,9 @@ export const siteConfig = {
     ]
   },
   trustBadges: [
-    { label: "No model training", description: "Your code is never used to train models." },
-    { label: "Zero-retention routing", description: "Enterprise-confidential context with retention flags disabled." },
+    { label: "Confidential context", description: "Chat formatting includes confidentiality instructions." },
+    { label: "Provider request controls", description: "Account retention settings and agreements require verification." },
     { label: "Keys on your server", description: "LLM provider keys stay server-side, not in the IDE." },
-    { label: "BYOK ready", description: "Route inference through your own provider accounts." }
   ]
 } as const;
 

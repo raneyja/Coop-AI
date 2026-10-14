@@ -10,7 +10,7 @@ export function OpenVsCodeSignInButton() {
     <div className="space-y-3">
       <a
         href={vscodeSignInHref()}
-        className="inline-flex w-full items-center justify-center rounded-sm bg-coop-index px-4 py-2 text-sm font-medium text-white hover:bg-[#46c35a]"
+        className="inline-flex w-full items-center justify-center rounded-xs bg-coop-index px-4 py-2 text-sm font-medium text-white hover:bg-[#46c35a]"
         onClick={() => {
           window.setTimeout(() => setShowFallback(true), 1500);
         }}

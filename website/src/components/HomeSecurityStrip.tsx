@@ -2,10 +2,10 @@ import Link from "next/link";
 import { SectionHeading } from "@/components/SectionHeading";
 
 const SECURITY_POINTS = [
-  "Source stays on your infrastructure. Zero-clone — we index metadata, ownership, and history, not a copy of the monorepo on every laptop.",
-  "Server-side model router. Zero-retention configuration. Bring your own keys.",
-  "We do not train on your code, prompts, or completions.",
-  "SAML SSO, admin-connected integrations, and an audit log — org context your admin connected, not each person’s private accounts."
+  "Zero-clone repository intelligence uses remote files and server indexing. Durable indexes can contain source chunks; inference can transmit selected context.",
+  "Server-side model routing with operator-configured provider keys. Retention and training terms require actual account verification.",
+  "Conversation history can persist locally and in synced server storage; clearing local chat does not erase every stored copy.",
+  "SAML sign-in, configurable integration scope and selected-action audit records. Qualify the supported deployment and access boundaries."
 ] as const;
 
 type HomeSecurityStripProps = {
@@ -27,7 +27,7 @@ export function HomeSecurityStrip({ tone = "light" }: HomeSecurityStripProps) {
         <SectionHeading
           tone={tone}
           title="Built for teams that cannot paste the monorepo into a chatbot."
-          description="Enterprise-confidential context stays under your control. CoopAI is the shared org layer, not a personal chatbot with your repo pasted in."
+          description="Review how repository and integration context reaches storage and configured inference providers, and which controls need deployment-specific evidence."
         />
 
         <ul className="mt-10 grid gap-4 sm:grid-cols-2">

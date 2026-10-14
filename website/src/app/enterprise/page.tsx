@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import cards from "@/components/MarketingCards.module.css";
 import { PageHeader } from "@/components/PageHeader";
 import { CTASection } from "@/components/CTASection";
 import { EnterpriseIntegrationGraph } from "@/components/EnterpriseIntegrationGraph";
@@ -16,26 +17,26 @@ export const metadata: Metadata = buildPageMetadata(
 const securityFeatures = [
   {
     title: "Instance-wide indexing",
-    body: "Your entire codebase is indexed at the instance level. Users access organizational knowledge without managing individual repository clones."
+    body: "Org-selected repositories are indexed on configured server infrastructure. Users access admitted repository context without managing intelligence clones on their laptops."
   },
   {
-    title: "Zero-retention LLM routing",
-    body: "Your code and context never train models. Every request uses enterprise-confidential headers and no-training flags.",
+    title: "LLM request controls",
+    body: "Chat formatting includes confidentiality instructions and provider-compatible controls. Other endpoints need separate checks; retention depends on the actual provider account and agreement.",
     link: { href: "/security", label: "Learn how this works →" }
   },
   {
-    title: "Bring Your Own Key (BYOK)",
-    body: "Connect your own LLM provider (AWS Bedrock, Azure, Vertex AI) or use Anthropic/OpenAI with your API key.",
+    title: "Provider keys on your server",
+    body: "For your own deployment, the server operator configures supported provider API keys. Customer-key routing per organization is not available.",
     link: { href: "/pricing", label: "See deployment options →" }
   },
   {
-    title: "Audit-ready logging",
-    body: "Every context query is logged for compliance and debugging.",
+    title: "Audit records",
+    body: "Selected actions produce tenant and actor audit records. Audit writes are best-effort; complete coverage, retention and operator access need qualification.",
     link: { href: "/security", label: "Security details →" }
   },
   {
     title: "SAML single sign-on",
-    body: "Enterprise orgs sign in with Okta, Entra ID, or any SAML 2.0 IdP. Admins configure SSO once in the admin portal.",
+    body: "Enterprise orgs can configure SAML 2.0 sign-in in the admin portal. Qualify the configured IdP and supported browser/editor flow for the deployment.",
     link: { href: "/docs/sso", label: "SSO setup guide →" }
   }
 ];
@@ -46,7 +47,7 @@ export default function EnterprisePage() {
       <PageHeader
         tight
         eyebrow="Enterprise"
-        title="Your codebase, finally explained"
+        title="Your codebase," secondaryTitle="finally explained"
         description="CoopAI gives engineering teams deep code intelligence and graph-grounded context across their entire stack."
       />
 
@@ -58,10 +59,10 @@ export default function EnterprisePage() {
 
       <section className="pt-6 pb-16 md:pt-8">
         <div className="mx-auto max-w-6xl px-6">
-          <SectionHeading label="security" title="Security and compliance, built in" />
+          <SectionHeading label="security" title="Security and compliance," secondaryTitle="built in" />
           <div className="mt-10 grid gap-6 md:grid-cols-2">
-            {securityFeatures.map((feature) => (
-              <div key={feature.title} className="coop-card">
+            {securityFeatures.map((feature, index) => (
+              <div key={feature.title} className={`${cards.card} ${index % 2 ? cards.blue : ""}`}>
                 <h3 className="text-lg font-semibold text-gray-900">{feature.title}</h3>
                 <p className="mt-3 text-sm leading-relaxed text-coop-muted">{feature.body}</p>
                 {feature.link ? (
@@ -99,7 +100,7 @@ export default function EnterprisePage() {
             </li>
             <li className="flex gap-3">
               <span className="text-gray-900">✓</span>
-              DPA-ready zero-retention addendum template available
+              Discuss deployment-specific data handling and contractual requirements
             </li>
           </ul>
         </div>
@@ -122,7 +123,7 @@ export default function EnterprisePage() {
       </section>
 
       <CTASection
-        title="Talk to us about enterprise deployment"
+        title="Talk to us about" secondaryTitle="enterprise deployment"
         description="We'll walk through your security requirements, deployment model, and pilot timeline."
       />
     </>

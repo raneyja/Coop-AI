@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import cards from "@/components/MarketingCards.module.css";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/Button";
 import { CTASection } from "@/components/CTASection";
@@ -13,16 +14,16 @@ export const metadata: Metadata = buildPageMetadata(
 );
 
 const neverLeaves = [
-  "Source remains on your infrastructure (zero-clone architecture).",
+  "Repository files originate at your code host; index jobs and on-demand reads bring source into Coop.",
   "We index repository metadata, ownership graphs, and change history — not a full copy of the tree onto every laptop.",
-  "Admin-connected integrations (GitHub/GitLab/Bitbucket, Slack/Teams, Jira, Confluence, Notion, Google Docs). Developers do not OAuth their personal Slack into the org graph."
+  "Org admins configure supported integration connections and scopes. Actual access depends on the deployment mode and vendor permissions."
 ] as const;
 
 const inference = [
   "Server-side model router.",
-  "Zero-retention configuration for enterprise-confidential context.",
-  "Bring your own keys. Provider keys live on your server, not in the IDE or source control.",
-  "We do not use your code, prompts, or completions to train models."
+  "Application request controls; provider retention requires verified account settings and agreements.",
+  "Server operators configure supported provider keys. Customer-key routing per organization is not available.",
+  "Prompts and source excerpts are sent for inference; provider training terms require account-specific verification."
 ] as const;
 
 const controls = [
@@ -38,14 +39,14 @@ export default function SecurityPage() {
       <PageHeader
         tight
         eyebrow="Security"
-        title="Architecture and data handling"
-        description="CoopAI is built for teams that cannot paste a monorepo into a chatbot. Source stays on your infrastructure. Org context is connected by an admin. Inference can run with zero-retention and your own keys."
+        title="Architecture" secondaryTitle="and data handling"
+        description="See how repository source, conversation history and integration context move through Coop storage and configured providers, and which deployment controls need verification."
       />
 
       <section className="pb-16">
         <div className="mx-auto max-w-3xl space-y-14 px-6">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">What never leaves your control</h2>
+            <h2 className="text-xl font-semibold text-gray-900">Repository data flow</h2>
             <ul className="mt-5 space-y-3">
               {neverLeaves.map((item) => (
                 <li key={item} className="flex gap-3 text-sm leading-relaxed text-coop-muted">
@@ -58,12 +59,14 @@ export default function SecurityPage() {
             </ul>
             <p className="mt-4 text-sm leading-relaxed text-coop-muted">
               Index jobs use a transient shallow clone on the server to build indexes, then delete the
-              clone when the job completes. Persistent storage holds search indexes and graph
-              metadata, not long-lived git mirrors — the same zero-clone model described in{" "}
+              returned clone through the job cleanup path. Process death or early clone failure needs
+              separate cleanup. Persistent storage includes search indexes, graph metadata and source
+              chunks, together with synced chat history — the same zero-clone model described in{" "}
               <Link href="/blog/introducing-coop-ai" className="font-medium text-gray-900 hover:underline">
                 Introducing CoopAI
               </Link>
-              .
+              . Clearing local chat does not guarantee deletion of synced server history or backups.
+              Retention and deletion must be qualified for the deployment.
             </p>
           </div>
 
@@ -80,8 +83,8 @@ export default function SecurityPage() {
               ))}
             </ul>
             <p className="mt-4 text-sm leading-relaxed text-coop-muted">
-              Model providers (Anthropic, OpenAI, Google, Fireworks, or the customer&apos;s BYOK
-              endpoint) process prompts only under the customer&apos;s configuration. More detail:{" "}
+              Supported model providers process prompts for inference. Provider-side retention depends
+              on the actual account settings and agreement. More detail:{" "}
               <Link
                 href="/docs/security-architecture"
                 className="font-medium text-gray-900 hover:underline"
@@ -112,7 +115,7 @@ export default function SecurityPage() {
               Exact subprocessors depend on the customer&apos;s chosen model providers and connected
               tools. We will send a current list on request.
             </p>
-            <div className="mt-6 overflow-x-auto rounded-sm border border-coop-border">
+            <div className="mt-6 overflow-x-auto rounded-xs border border-coop-border">
               <table className="min-w-full text-left text-sm">
                 <thead className="border-b border-coop-border bg-gray-50">
                   <tr>
@@ -125,10 +128,10 @@ export default function SecurityPage() {
                   <tr>
                     <td className="px-4 py-3 text-coop-muted">Model providers</td>
                     <td className="px-4 py-3 text-coop-muted">
-                      Anthropic, OpenAI, Google, Fireworks, or customer BYOK endpoint
+                      Supported provider API accounts
                     </td>
                     <td className="px-4 py-3 text-coop-muted">
-                      Process prompts under the customer&apos;s configuration only
+                      Process prompts under their applicable account settings and agreement
                     </td>
                   </tr>
                   <tr>
@@ -152,7 +155,7 @@ export default function SecurityPage() {
             </div>
           </div>
 
-          <div className="rounded-sm border border-coop-border bg-white/70 p-6 md:p-8">
+          <div className={cards.noteCard}>
             <h2 className="text-xl font-semibold text-gray-900">Request a DPA</h2>
             <p className="mt-3 text-sm leading-relaxed text-coop-muted">
               Email{" "}

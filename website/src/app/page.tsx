@@ -1,10 +1,4 @@
-import { Hero } from "@/components/Hero";
-import { HomePartnerLogos } from "@/components/HomePartnerLogos";
-import { HomeStackContextSection } from "@/components/HomeStackContextSection";
-import { HomeSecurityStrip } from "@/components/HomeSecurityStrip";
-import { HomeCloseSection } from "@/components/HomeCloseSection";
-import { HomePageTheme } from "@/components/HomePageTheme";
-import { Testimonial } from "@/components/Testimonial";
+import { HomepagePreview } from "@/components/homepage-preview/HomepagePreview";
 import { buildPageMetadata } from "@/lib/pageMetadata";
 import { siteConfig } from "@/lib/site.config";
 import type { Metadata } from "next";
@@ -31,20 +25,5 @@ export const metadata: Metadata = {
 };
 
 export default function HomePage() {
-  return (
-    <HomePageTheme>
-      <Hero />
-      <HomeStackContextSection tone="dark" />
-
-      <section className="border-t border-white/10 py-10 md:py-12">
-        <div className="mx-auto max-w-6xl px-6">
-          <HomePartnerLogos tone="dark" />
-        </div>
-      </section>
-
-      <HomeSecurityStrip tone="dark" />
-      <Testimonial tone="dark" />
-      <HomeCloseSection />
-    </HomePageTheme>
-  );
+  return <HomepagePreview />;
 }

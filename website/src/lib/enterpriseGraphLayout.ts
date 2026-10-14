@@ -66,7 +66,7 @@ export const GRAPH_NODES: GraphNodeDef[] = [
   { id: "slack", label: "Slack", categoryLabel: "Threads & decisions", category: "collab", connectionWeight: "passive", icon: "slack" },
   { id: "auth", label: "auth_middleware.go", categoryLabel: "Ownership & blame", category: "code", connectionWeight: "active", icon: "fileCode" },
   { id: "folder", label: "components/", categoryLabel: "92 files · symbol graph", category: "code", connectionWeight: "active", icon: "folder" },
-  { id: "llm", label: "LLM providers", categoryLabel: "BYOK · zero-retention", category: "ai", connectionWeight: "passive", icon: "sparkles" },
+  { id: "llm", label: "LLM providers", categoryLabel: "Provider request controls", category: "ai", connectionWeight: "passive", icon: "sparkles" },
   { id: "token", label: "token_validator.ts", categoryLabel: "Cross-repo references", category: "code", connectionWeight: "active", icon: "fileCode" },
   { id: "vscode", label: "VS Code", categoryLabel: "Sidebar & quick actions", category: "editor", connectionWeight: "active", icon: "vscode" }
 ];

@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import matter from "gray-matter";
+import { parseFrontmatter } from "./frontmatter";
 import {
   estimateReadTime,
   normalizeCategory,
@@ -25,7 +25,7 @@ const postsDirectory = path.join(process.cwd(), "content/blog");
 function readPostFile(filename: string): BlogPost {
   const filePath = path.join(postsDirectory, filename);
   const fileContents = fs.readFileSync(filePath, "utf8");
-  const { data, content } = matter(fileContents);
+  const { data, content } = parseFrontmatter(fileContents);
   const slug = filename.replace(/\.md$/, "");
   const category = normalizeCategory(data.category);
 
