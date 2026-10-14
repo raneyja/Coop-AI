@@ -38,6 +38,16 @@ function DocsMarkdownBlock({ content, compact }: { content: string; compact?: bo
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
+        table: ({ children }) => (
+          <div
+            className="my-8 max-w-full overflow-x-auto"
+            role="region"
+            aria-label="Scrollable documentation table"
+            tabIndex={0}
+          >
+            <table className="my-0">{children}</table>
+          </div>
+        ),
         h2: ({ children }) => {
           afterImageRef.current = false;
           const text = String(children);

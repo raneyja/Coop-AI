@@ -2,6 +2,7 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { installExtensionHref } from "@/lib/site.config";
+import { slugifyHeading } from "@/lib/manual.shared";
 
 type BlogMarkdownProps = {
   content: string;
@@ -15,6 +16,16 @@ export function BlogMarkdown({ content }: BlogMarkdownProps) {
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
+        h2: ({ children }) => (
+          <h2 id={slugifyHeading(String(children))} className="scroll-mt-24">
+            {children}
+          </h2>
+        ),
+        h3: ({ children }) => (
+          <h3 id={slugifyHeading(String(children))} className="scroll-mt-24">
+            {children}
+          </h3>
+        ),
         a: ({ href, children }) => {
           const label = String(children);
           const isInstallCta = label === "Install extension";
