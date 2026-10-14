@@ -24,6 +24,7 @@ export default function ProductPage() {
       <PageHeader
         eyebrow="Product"
         title="Context from your entire stack" secondaryTitle="(not just your codebase)"
+        titleClassName="product-page-title"
       />
 
       <section className="border-b border-coop-border pb-16 pt-4 md:pb-20">

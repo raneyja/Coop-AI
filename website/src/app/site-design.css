@@ -109,3 +109,6 @@ html { background: #f9faf7; }
 .site-design:where(:not(:has([data-homepage]))) .prose-lg :where(h1) { font-size:2.266667em; }
 .site-design:where(:not(:has([data-homepage]))) .prose-lg :where(h2) { font-size:1.416667em; }
 .site-design:where(:not(:has([data-homepage]))) .prose-lg :where(h3) { font-size:1.133333em; }
+
+/* Product hero: keep the parenthetical subordinate to the main title. */
+.site-design .product-page-title .site-title-secondary { font-size: .7em; }
