@@ -1,0 +1,114 @@
+/* Presentation only: retain existing page content, order, layouts, and navigation. */
+.site-design {
+  background: #f9faf7;
+  color: #202820;
+}
+html { background: #f9faf7; }
+.site-design :where(a, button, input, textarea, select, summary):focus-visible {
+  outline: 2px solid #3d6950;
+  outline-offset: 4px;
+}
+.site-design .coop-panel,
+.site-design .coop-card {
+  border-color: #dce2d8;
+  border-radius: 5px;
+  background: #fcfdf9;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.site-design :where(h1, h2, h3):not([class*="font-mono"]) {
+  letter-spacing: -.035em;
+}
+.site-design .prose {
+  --tw-prose-body: #4f5c4e;
+  --tw-prose-headings: #202820;
+  --tw-prose-links: #294e38;
+}
+.site-design .prose :where(pre) { border-radius: 5px; }
+.site-design main :where(form) :where(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea, select) {
+  background: #f9faf7;
+  border-color: #cdd6c7;
+  border-radius: 5px;
+  color: #202820;
+}
+.site-design main :where(form) :where(button[type="submit"]) { background: #202820; border-radius: 5px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+/* Intentional two-line marketing titles share the homepage hierarchy. */
+.site-design .site-title { color: #202820; }
+.site-design .site-title-secondary { display: block; color: #657461; }
+.site-design .site-title-dark { color: #fff; }
+.site-design .site-title-dark .site-title-secondary { color: #a7b59e; }
+
+/* Match the homepage's restrained heading weights, including inner-page cards. */
+.site-design :where(h1):not([class*="font-mono"]) { font-weight: 500; }
+.site-design :where(h2,h3):not([class*="font-mono"]) { font-weight: 400; }
+.site-design .site-page-title { font-size: clamp(35.7px, 3.825vw, 57.8px); line-height: 1.075; letter-spacing: -.056em; }
+
+/* Inner-page headings only: retain the homepage's approved sizing. */
+.site-design:where(:not(:has([data-homepage]))) :where(:is(h1,h2,h3,h4,h5,h6)) { font-size: .85em; }
+.site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="text-xs"] { font-size: 0.6375rem; }
+.site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="text-sm"] { font-size: 0.74375rem; }
+.site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="text-base"] { font-size: 0.85rem; }
+.site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="text-lg"] { font-size: 0.95625rem; }
+.site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="text-xl"] { font-size: 1.0625rem; }
+.site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="text-2xl"] { font-size: 1.275rem; }
+.site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="text-3xl"] { font-size: 1.59375rem; }
+.site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="text-4xl"] { font-size: 1.9125rem; }
+.site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="text-5xl"] { font-size: 2.55rem; }
+.site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="text-6xl"] { font-size: 3.1875rem; }
+.site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="text-7xl"] { font-size: 3.825rem; }
+@media (min-width: 640px) {
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="sm:text-sm"] { font-size: 0.74375rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="sm:text-base"] { font-size: 0.85rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="sm:text-lg"] { font-size: 0.95625rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="sm:text-xl"] { font-size: 1.0625rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="sm:text-2xl"] { font-size: 1.275rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="sm:text-3xl"] { font-size: 1.59375rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="sm:text-4xl"] { font-size: 1.9125rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="sm:text-5xl"] { font-size: 2.55rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="sm:text-6xl"] { font-size: 3.1875rem; }
+}
+@media (min-width: 768px) {
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="md:text-sm"] { font-size: 0.74375rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="md:text-base"] { font-size: 0.85rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="md:text-lg"] { font-size: 0.95625rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="md:text-xl"] { font-size: 1.0625rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="md:text-2xl"] { font-size: 1.275rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="md:text-3xl"] { font-size: 1.59375rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="md:text-4xl"] { font-size: 1.9125rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="md:text-5xl"] { font-size: 2.55rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="md:text-6xl"] { font-size: 3.1875rem; }
+}
+@media (min-width: 1024px) {
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="lg:text-sm"] { font-size: 0.74375rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="lg:text-base"] { font-size: 0.85rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="lg:text-lg"] { font-size: 0.95625rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="lg:text-xl"] { font-size: 1.0625rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="lg:text-2xl"] { font-size: 1.275rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="lg:text-3xl"] { font-size: 1.59375rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="lg:text-4xl"] { font-size: 1.9125rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="lg:text-5xl"] { font-size: 2.55rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="lg:text-6xl"] { font-size: 3.1875rem; }
+}
+@media (min-width: 1280px) {
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="xl:text-sm"] { font-size: 0.74375rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="xl:text-base"] { font-size: 0.85rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="xl:text-lg"] { font-size: 0.95625rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="xl:text-xl"] { font-size: 1.0625rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="xl:text-2xl"] { font-size: 1.275rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="xl:text-3xl"] { font-size: 1.59375rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="xl:text-4xl"] { font-size: 1.9125rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="xl:text-5xl"] { font-size: 2.55rem; }
+  .site-design:where(:not(:has([data-homepage]))) :is(h1,h2,h3,h4,h5,h6)[class~="xl:text-6xl"] { font-size: 3.1875rem; }
+}
+.site-design:where(:not(:has([data-homepage]))) .prose :where(h1) { font-size:1.9125em; }
+.site-design:where(:not(:has([data-homepage]))) .prose :where(h2) { font-size:1.275em; }
+.site-design:where(:not(:has([data-homepage]))) .prose :where(h3) { font-size:1.0625em; }
+.site-design:where(:not(:has([data-homepage]))) .prose :where(h4) { font-size:.85em; }
+.site-design:where(:not(:has([data-homepage]))) .prose-lg :where(h1) { font-size:2.266667em; }
+.site-design:where(:not(:has([data-homepage]))) .prose-lg :where(h2) { font-size:1.416667em; }
+.site-design:where(:not(:has([data-homepage]))) .prose-lg :where(h3) { font-size:1.133333em; }
+
+/* Product hero: keep the parenthetical subordinate to the main title. */
+.site-design .product-page-title .site-title-secondary { font-size: .7em; }

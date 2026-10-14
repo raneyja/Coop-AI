@@ -1,0 +1,12 @@
+.section { background:#e7ecdf; border-top:1px solid #dce2d8; padding:86px 24px; }
+.content { max-width:1000px; margin:auto; text-align:center; }
+.title { font-size:clamp(27.2px,2.975vw,40.8px) !important; font-weight:400; line-height:1.15; letter-spacing:-.048em; margin:0; }
+.description { max-width:590px; margin:22px auto 0; color:#626d62; font-size:15px; line-height:1.75; }
+.actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:12px; margin-top:30px; }
+.actions a { border-radius:5px; padding:13px 20px; font-size:13px; font-weight:500; line-height:1.4; }
+.actions .primary { background:#202820; color:white; }
+.actions .primary:hover { background:#354933; }
+.actions .secondary { background:transparent; color:#202820; border:1px solid #bfcbb7; }
+.actions .secondary:hover { background:#f0f3eb; }
+.caption { margin:24px 0 0; font-size:11px; color:#788174; }
+@media(max-width:639px) { .section { padding:60px 24px; } .actions { flex-direction:column; align-items:stretch; max-width:360px; margin-inline:auto; } }

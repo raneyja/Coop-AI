@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import { Inter, Geist_Mono } from "next/font/google";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { SiteAtmosphere } from "@/components/SiteAtmosphere";
 import { SiteAnalytics } from "@/components/SiteAnalytics";
 import { SiteSchema } from "@/components/SiteSchema";
 import { TawkChat } from "@/components/TawkChat";
 import { siteConfig } from "@/lib/site.config";
 import "./globals.css";
+import "./site-design.css";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -60,13 +60,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body
-        className={`${inter.variable} ${geistMono.variable} min-h-screen font-sans text-coop-foreground antialiased`}
+        className={`${inter.variable} ${geistMono.variable} site-design min-h-screen font-sans text-coop-foreground antialiased`}
       >
         <SiteSchema />
-        <SiteAtmosphere />
         <div className="relative z-10">
           <Header />
-          <main>{children}</main>
+          <main id="main-content" tabIndex={-1}>{children}</main>
           <Footer />
         </div>
         <SiteAnalytics />

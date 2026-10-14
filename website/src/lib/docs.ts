@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import matter from "gray-matter";
+import { parseFrontmatter } from "./frontmatter";
 import {
   buildDocsNav,
   type DocsNavEntry,
@@ -13,7 +13,7 @@ const docsDirectory = path.join(process.cwd(), "content/docs");
 function readDocFile(filename: string): DocsPage {
   const filePath = path.join(docsDirectory, filename);
   const fileContents = fs.readFileSync(filePath, "utf8");
-  const { data, content } = matter(fileContents);
+  const { data, content } = parseFrontmatter(fileContents);
   const slug = filename.replace(/\.md$/, "");
 
   return {

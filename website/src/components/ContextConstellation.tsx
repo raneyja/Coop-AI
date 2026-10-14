@@ -239,7 +239,7 @@ export function ContextConstellation({ className = "", tone = "light" }: Context
 
   return (
     <div
-      className={`context-constellation relative flex h-full min-h-[16rem] w-full max-w-full flex-col overflow-hidden rounded-sm ${
+      className={`context-constellation relative flex h-full min-h-[16rem] w-full max-w-full flex-col overflow-hidden rounded-xs ${
         dark ? "border border-white/10 bg-neutral-950" : "border border-coop-border bg-gray-50"
       } ${className}`.trim()}
       aria-label={`${scenario.file.name} gathering context from ${scenario.sourceCount} stack sources`}
@@ -394,7 +394,7 @@ export function ContextConstellation({ className = "", tone = "light" }: Context
               >
                 <div
                   className={`context-hub-card relative flex flex-col rounded-xl border px-3.5 py-3 transition-[border-color,box-shadow] duration-500 ${
-                    dark ? "bg-neutral-900" : "bg-white shadow-sm"
+                    dark ? "bg-neutral-900" : "bg-white shadow-xs"
                   } ${
                     chips.length > 0
                       ? "border-[#79C0FF]/55 shadow-[0_0_28px_rgba(121,192,255,0.16)]"
@@ -435,7 +435,7 @@ export function ContextConstellation({ className = "", tone = "light" }: Context
                       chips.map((chip) => (
                         <span
                           key={chip.id}
-                          className={`context-chip-in inline-flex max-w-full items-center gap-1 rounded-sm border px-1.5 py-0.5 font-mono text-[10px] ${
+                          className={`context-chip-in inline-flex max-w-full items-center gap-1 rounded-xs border px-1.5 py-0.5 font-mono text-[10px] ${
                             dark
                               ? "border-white/10 bg-white/[0.04] text-white/70"
                               : "border-coop-border bg-gray-50 text-gray-700"
@@ -504,7 +504,7 @@ function OrbitPill({
     >
       <div
         className={`flex items-center gap-2 rounded-full border px-2.5 py-1.5 transition-[opacity,box-shadow,border-color,transform] duration-500 ease-out ${
-          dark ? "bg-neutral-900" : "bg-white shadow-sm"
+          dark ? "bg-neutral-900" : "bg-white shadow-xs"
         } ${pulsing ? "context-orbit-pill--pulse" : ""} ${
           active
             ? dark

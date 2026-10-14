@@ -31,7 +31,7 @@ export const productCapabilityGroups: CapabilityGroup[] = [
       },
       {
         title: "Completion-only routing",
-        body: "Inline requests use a dedicated zero-retention path (`x-use-case: code-completion-only`), separate from chat, with keys on your server."
+        body: "Inline requests use a dedicated completion route with provider request controls (`x-use-case: code-completion-only`), separate from chat, with keys on your server."
       }
     ]
   },

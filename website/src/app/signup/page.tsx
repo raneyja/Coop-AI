@@ -80,7 +80,7 @@ function SignupForm() {
   }
 
   const inputClassName =
-    "w-full rounded-md border border-coop-border bg-white px-3 py-2 text-gray-900 placeholder:text-coop-muted/60 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300";
+    "w-full rounded-md border border-coop-border bg-white px-3 py-2 text-gray-900 placeholder:text-coop-muted/60 focus:border-gray-400 focus:outline-hidden focus:ring-1 focus:ring-gray-300";
   const googleDisabled = loading || (forTeam && !orgName.trim());
 
   return (
@@ -178,7 +178,7 @@ function SignupForm() {
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex w-full items-center justify-center rounded-sm bg-coop-index px-4 py-2 text-sm font-medium text-white hover:bg-[#46c35a] disabled:opacity-50"
+            className="inline-flex w-full items-center justify-center rounded-xs bg-coop-index px-4 py-2 text-sm font-medium text-white hover:bg-[#46c35a] disabled:opacity-50"
           >
             {loading ? "Redirecting to Stripe…" : "Continue to checkout"}
           </button>

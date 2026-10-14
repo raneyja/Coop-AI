@@ -147,7 +147,7 @@ export function QuickActionPromptCarousel({ tone = "light" }: { tone?: CarouselT
               role="tab"
               aria-selected={i === index}
               onClick={() => handleDotClick(i)}
-              className={`min-h-10 shrink-0 snap-start rounded-sm border px-3 py-2 font-mono text-xs transition sm:min-h-0 sm:py-1.5 ${
+              className={`min-h-10 shrink-0 snap-start rounded-xs border px-3 py-2 font-mono text-xs transition sm:min-h-0 sm:py-1.5 ${
                 i === index
                   ? tone === "dark"
                     ? "border-white bg-white text-neutral-950"
@@ -270,7 +270,7 @@ function SlideBody({ item, tone = "light" }: { item: QuickActionPrompt; tone?: C
     <div className="flex min-w-0 flex-col">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <span
-          className={`inline-flex items-center rounded-sm border px-2.5 py-1 font-mono text-xs ${
+          className={`inline-flex items-center rounded-xs border px-2.5 py-1 font-mono text-xs ${
             dark
               ? "border-white/15 bg-white/[0.06] text-white/80"
               : "border-coop-border bg-gray-100 text-gray-800"
@@ -359,7 +359,7 @@ function SourceChip({ source, tone = "light" }: { source: QuickActionSource; ton
   const dark = tone === "dark";
   return (
     <span
-      className={`inline-flex items-center rounded-sm border px-2 py-0.5 font-mono text-[10px] sm:text-[11px] ${
+      className={`inline-flex items-center rounded-xs border px-2 py-0.5 font-mono text-[10px] sm:text-[11px] ${
         dark
           ? "border-white/15 bg-white/[0.04] text-white/55"
           : "border-coop-border bg-white text-gray-600"

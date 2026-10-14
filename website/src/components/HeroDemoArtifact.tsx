@@ -987,7 +987,7 @@ export function HeroDemoArtifact({ tone = "light" }: { tone?: "light" | "dark" }
   const stageLabel = dark ? "font-mono text-sm text-white/40" : "font-mono text-sm text-gray-500";
   const chatShell = dark
     ? "rounded-2xl border border-white/10 bg-white/[0.045] px-4 py-4 sm:px-5"
-    : "rounded-2xl border border-gray-200 bg-white px-4 py-4 shadow-sm sm:px-5";
+    : "rounded-2xl border border-gray-200 bg-white px-4 py-4 shadow-xs sm:px-5";
   const chatHeader = dark
     ? "mb-3 flex items-center gap-2.5 border-b border-white/10 pb-3"
     : "mb-3 flex items-center gap-2.5 border-b border-gray-100 pb-3";

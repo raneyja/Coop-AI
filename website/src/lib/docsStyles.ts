@@ -19,7 +19,7 @@ export const docsInlineLinkClassName =
   "text-coop-index no-underline transition-colors hover:text-coop-blue";
 
 export const docsFigureClassName =
-  "not-prose my-6 mx-auto block max-w-xl overflow-hidden rounded-sm border border-coop-border bg-gray-50 shadow-sm";
+  "not-prose my-6 mx-auto block max-w-xl overflow-hidden rounded-xs border border-coop-border bg-gray-50 shadow-xs";
 
 export const docsFigureCaptionClassName =
   "not-prose -mt-4 mb-8 max-w-xl mx-auto text-center text-sm text-gray-500";
@@ -29,7 +29,7 @@ export const docsFigureGridClassName =
 
 // Compact variants: ~20% smaller max widths for the Owner's Manual.
 export const docsFigureCompactClassName =
-  "not-prose my-6 mx-auto block max-w-[28.8rem] overflow-hidden rounded-sm border border-coop-border bg-gray-50 shadow-sm";
+  "not-prose my-6 mx-auto block max-w-[28.8rem] overflow-hidden rounded-xs border border-coop-border bg-gray-50 shadow-xs";
 
 export const docsFigureCompactCaptionClassName =
   "not-prose -mt-4 mb-8 max-w-[28.8rem] mx-auto text-center text-sm text-gray-500";
@@ -57,7 +57,7 @@ export const docsFigureSingleExtraSmallClassName = "not-prose my-6 mx-auto max-w
 export const docsFigureSingleSmallClassName = "not-prose my-6 mx-auto max-w-[26.9rem]";
 
 export const docsFigureTileClassName =
-  "block overflow-hidden rounded-sm border border-coop-border bg-gray-50 shadow-sm";
+  "block overflow-hidden rounded-xs border border-coop-border bg-gray-50 shadow-xs";
 
 export const docsFigureGridCaptionClassName =
   "mt-2 text-center text-xs leading-relaxed text-gray-500";

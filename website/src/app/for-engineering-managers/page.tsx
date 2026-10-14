@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import cards from "@/components/MarketingCards.module.css";
 import { PageHeader } from "@/components/PageHeader";
 import { Button, InstallExtensionButton } from "@/components/Button";
 import { CTASection } from "@/components/CTASection";
@@ -28,13 +29,13 @@ const costsToday = [
 ] as const;
 
 const whatChanges = [
-  "Minutes to find owner, decision trail, and last shipped pattern",
+  "Find the owner, decision trail, and last shipped pattern in the editor",
   "Shared org workspace (admin-connected), not personal chat",
   "Ask, complete, and edit with citations still in VS Code"
 ] as const;
 
 const demoSteps = [
-  "You pick a real service, not a toy repo",
+  "You pick a service from your codebase",
   "We ask who owns a path, why a module exists, and what a change breaks",
   "We make a small edit grounded in that context"
 ] as const;
@@ -45,8 +46,8 @@ export default function ForEngineeringManagersPage() {
       <PageHeader
         tight
         eyebrow="For engineering managers"
-        title="Onboarding and interruptions are the tax. The editor should pay it down."
-        description="CoopAI sits next to Copilot, Codex, and Cursor. It does not replace them. It puts Slack, tickets, owners, and shipped history into VS Code so new hires stop asking, staff engineers stop answering, and changes carry blast radius before the PR."
+        title="Onboarding and interruptions are the tax." secondaryTitle="The editor should pay it down."
+        description="Bring Slack, tickets, owners, and shipped history into VS Code alongside Copilot, Codex, and Cursor. Help new hires find their footing, reduce repeated context questions, and understand the impact of a change before the PR."
       />
 
       <section className="pb-16">
@@ -54,9 +55,9 @@ export default function ForEngineeringManagersPage() {
           <div>
             <h2 className="text-xl font-semibold text-gray-900">What it costs today</h2>
             <div className="mt-6 grid gap-4 sm:grid-cols-3">
-              {costsToday.map((item) => (
-                <div key={item.label} className="rounded-sm border border-coop-border bg-white/70 p-5">
-                  <p className="font-mono text-xs uppercase tracking-wide text-gray-400">
+              {costsToday.map((item, index) => (
+                <div key={item.label} className={`${cards.card} ${cards.compact} ${index === 1 ? cards.blue : index === 2 ? cards.clay : ""}`}>
+                  <p className={cards.label}>
                     {item.label}
                   </p>
                   <p className="mt-3 text-sm leading-relaxed text-coop-muted">{item.body}</p>
@@ -84,8 +85,8 @@ export default function ForEngineeringManagersPage() {
               Works with the assistants you already bought
             </h2>
             <p className="mt-4 text-sm leading-relaxed text-coop-muted">
-              Keep Copilot, Codex, or Cursor. CoopAI is the org-context layer those tools do not
-              have.
+              Use CoopAI alongside Copilot, Codex, or Cursor to bring shared team context into
+              your existing coding workflow.
             </p>
           </div>
 
@@ -129,7 +130,7 @@ export default function ForEngineeringManagersPage() {
       </section>
 
       <CTASection
-        title="See CoopAI on your codebase"
+        title="See CoopAI" secondaryTitle="on your codebase"
         description="Install the extension, or spend 20 minutes on your actual repo with the founder."
         primaryLabel="Book a 20-minute demo on your repo"
       />

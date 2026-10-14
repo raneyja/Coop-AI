@@ -33,7 +33,7 @@ export function QuickActionList({
   const allFeatures = [...features, ...codeCreationFeatures];
 
   return (
-    <ul className={`divide-y divide-coop-border rounded-sm border border-coop-border bg-coop-editor ${className}`.trim()}>
+    <ul className={`divide-y divide-coop-border rounded-xs border border-coop-border bg-coop-editor ${className}`.trim()}>
       {allFeatures.map((f) => (
         <li key={f.id} className={rowGrid}>
           <code className="font-mono text-xs leading-5 text-gray-700 sm:pt-0.5">

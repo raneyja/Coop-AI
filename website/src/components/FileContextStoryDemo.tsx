@@ -319,7 +319,7 @@ export function FileContextStoryDemo({
       )}
 
       <div
-        className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-sm bg-[#1e1e1e] ring-1 ring-coop-border transition-opacity duration-300 ${
+        className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-xs bg-[#1e1e1e] ring-1 ring-coop-border transition-opacity duration-300 ${
           fading ? "opacity-0" : "opacity-100"
         }`}
       >
@@ -465,13 +465,13 @@ function InquiryEditorPreview({
         {[1, 2, 3, 4, 5].map((n) => (
           <div
             key={n}
-            className={`flex gap-2 rounded-sm py-0.5 pr-2 ${
+            className={`flex gap-2 rounded-xs py-0.5 pr-2 ${
               active && n === 3 ? "bg-coop-index/10 ring-1 ring-inset ring-coop-index/35" : ""
             }`}
           >
             <span className="w-4 shrink-0 text-right text-darkUi-lineNumber">{n}</span>
             <span
-              className={`h-3 flex-1 rounded-sm ${
+              className={`h-3 flex-1 rounded-xs ${
                 active && n === 3 ? "bg-coop-index/20" : "bg-white/[0.06]"
               }`}
             />

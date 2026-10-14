@@ -8,7 +8,7 @@ export function CapabilitiesMatrix({ groups }: CapabilitiesMatrixProps) {
   let itemCounter = 0;
 
   return (
-    <div className="mt-10 overflow-hidden rounded-sm border border-coop-border bg-coop-editor">
+    <div className="mt-10 overflow-hidden rounded-xs border border-coop-border bg-coop-editor">
       {groups.map((group, groupIndex) => (
         <div key={group.label}>
           <div

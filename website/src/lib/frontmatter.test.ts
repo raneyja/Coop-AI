@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import { parseFrontmatter } from './frontmatter';
+assert.deepEqual(parseFrontmatter('plain\nbody\n'),{data:{},content:'plain\nbody\n'});
+assert.deepEqual(parseFrontmatter('\uFEFFplain'),{data:{},content:'plain'});
+assert.deepEqual(parseFrontmatter('---\ntitle: "quoted: title"\nfeatured: false\norder: 4\n---\n\n# Body\n'),{data:{title:'quoted: title',featured:false,order:4},content:'\n# Body\n'});
+assert.deepEqual(parseFrontmatter('---\r\ntitle: Windows\r\n---\r\nbody\r\n'),{data:{title:'Windows'},content:'body\r\n'});
+assert.deepEqual(parseFrontmatter('---\n---\nbody'),{data:{},content:'body'});
+assert.equal((parseFrontmatter('---\ndate: 2026-01-01\n---\nbody').data.date as Date).toISOString(),'2026-01-01T00:00:00.000Z');
+assert.equal(parseFrontmatter('---\ntitle: yes\n---\nbody').data.title,'yes');
+assert.throws(()=>parseFrontmatter('---\ntitle: x\nbody'),/Unclosed/);
+assert.throws(()=>parseFrontmatter('---\ntitle: a\ntitle: b\n---\nbody'));
+assert.throws(()=>parseFrontmatter('---\n- sequence\n---\nbody'),/mapping/);
+assert.throws(()=>parseFrontmatter('---\nbad: [\n---\nbody'));
+console.log('frontmatter: 11 controls PASS');

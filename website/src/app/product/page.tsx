@@ -23,8 +23,8 @@ export default function ProductPage() {
     <>
       <PageHeader
         eyebrow="Product"
-        title="Context from your entire stack (not just your codebase)"
-        description="VS Code code intelligence that Deep-Indexes your repos, pulls company Slack and Jira when you ask, and helps you find owners, check blast radius, and edit — without cloning the monorepo."
+        title="Context from your entire stack" secondaryTitle="(not just your codebase)"
+        titleClassName="product-page-title"
       />
 
       <section className="border-b border-coop-border pb-16 pt-4 md:pb-20">
@@ -39,9 +39,9 @@ export default function ProductPage() {
         </div>
       </section>
 
+      <ProductIndexedScene />
       <ProductAskScene />
       <ProductChangeScene />
-      <ProductIndexedScene />
 
       <section className="border-t border-coop-border py-12">
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-3 px-6 sm:flex-row sm:items-center">

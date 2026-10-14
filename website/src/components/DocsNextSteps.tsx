@@ -30,7 +30,7 @@ export function DocsNextSteps({ prev, next, links }: DocsNextStepsProps) {
         {prev ? (
           <Link
             href={`/docs/${prev.slug}`}
-            className="coop-panel block p-4 transition hover:border-coop-index/50 hover:shadow-sm"
+            className="coop-panel block p-4 transition hover:border-coop-index/50 hover:shadow-xs"
           >
             <p className="text-xs text-coop-muted">Previous</p>
             <p className="mt-1 text-sm font-medium text-gray-900">{prev.title}</p>
@@ -41,7 +41,7 @@ export function DocsNextSteps({ prev, next, links }: DocsNextStepsProps) {
         {next ? (
           <Link
             href={`/docs/${next.slug}`}
-            className="coop-panel block p-4 text-right transition hover:border-coop-index/50 hover:shadow-sm sm:col-start-2"
+            className="coop-panel block p-4 text-right transition hover:border-coop-index/50 hover:shadow-xs sm:col-start-2"
           >
             <p className="text-xs text-coop-muted">Next</p>
             <p className="mt-1 text-sm font-medium text-gray-900">{next.title}</p>

@@ -71,10 +71,10 @@ export function getGoogleAuthStartUrl(options: {
 }
 
 export const authInputClassName =
-  "w-full rounded-md border border-coop-border bg-white px-3 py-2 text-gray-900 placeholder:text-coop-muted/60 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300";
+  "w-full rounded-md border border-coop-border bg-white px-3 py-2 text-gray-900 placeholder:text-coop-muted/60 focus:border-gray-400 focus:outline-hidden focus:ring-1 focus:ring-gray-300";
 
 export const authErrorClassName =
-  "rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-700";
+  "rounded-xs border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-700";
 
 export const authSuccessClassName =
-  "rounded-sm border border-coop-index/30 bg-coop-index/10 px-3 py-2 text-sm text-gray-900";
+  "rounded-xs border border-coop-index/30 bg-coop-index/10 px-3 py-2 text-sm text-gray-900";

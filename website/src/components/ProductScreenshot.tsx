@@ -24,7 +24,7 @@ export function ProductScreenshot({ size = "compact" }: ProductScreenshotProps) 
         aria-hidden
       />
 
-      <div className="relative rounded-2xl border border-white/10 bg-coop-surface/80 p-2 shadow-2xl shadow-coop-blue/10 backdrop-blur-sm">
+      <div className="relative rounded-2xl border border-white/10 bg-coop-surface/80 p-2 shadow-2xl shadow-coop-blue/10 backdrop-blur-xs">
         <div className="overflow-hidden rounded-xl border border-white/5">
           <Image
             src="/screenshots/product-dark.png"

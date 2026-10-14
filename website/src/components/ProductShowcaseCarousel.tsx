@@ -66,7 +66,7 @@ export function ProductShowcaseCarousel() {
       }}
     >
       <div
-        className={`relative w-full overflow-hidden rounded-2xl ring-1 ring-coop-border shadow-sm ${SLIDE_HEIGHT}`}
+        className={`relative w-full overflow-hidden rounded-2xl ring-1 ring-coop-border shadow-xs ${SLIDE_HEIGHT}`}
         aria-live="polite"
         aria-atomic
       >
@@ -93,7 +93,7 @@ export function ProductShowcaseCarousel() {
               role="tab"
               aria-selected={i === index}
               onClick={() => selectSlide(i)}
-              className={`rounded-sm border px-3 py-1.5 font-mono text-xs transition ${
+              className={`rounded-xs border px-3 py-1.5 font-mono text-xs transition ${
                 i === index
                   ? "border-gray-900 bg-gray-100 text-gray-900"
                   : "border-coop-border bg-white text-coop-muted hover:border-gray-300 hover:text-gray-900"

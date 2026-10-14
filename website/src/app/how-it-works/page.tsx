@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { GitBranch, Radio } from "lucide-react";
+import styles from "./page.module.css";
+import cards from "@/components/MarketingCards.module.css";
 import { BreadcrumbSchema } from "@/components/BreadcrumbSchema";
 import { CTASection } from "@/components/CTASection";
 import { FaqPageSchema } from "@/components/FaqPageSchema";
@@ -54,7 +57,7 @@ export default function HowItWorksPage() {
 
       <PageHeader
         eyebrow="how_it_works"
-        title="Index the code. Query the stack. Stay in the file."
+        title="Index the code. Query the stack." secondaryTitle="Stay in the file."
         description="VS Code code intelligence that Deep-Indexes your repositories once, pulls company Slack and Jira when you ask, then lets you find owners, check blast radius, complete, and edit — without cloning the monorepo."
       />
 
@@ -68,10 +71,10 @@ export default function HowItWorksPage() {
         <div className="mx-auto max-w-6xl px-6">
           <SectionHeading
             label="the_split"
-            title="What we keep vs what we fetch"
-            description="Only repositories are Deep-Indexed. Company Slack, tickets, and docs are queried live from the admin-connected workspace so Coop does not store a second copy — and does not use each developer’s personal accounts."
+            title="What we keep" secondaryTitle="vs what we fetch"
+            description="Repository indexes provide a searchable map of your code. Company Slack, tickets, and docs are queried live from the shared workspace your admin connects, bringing relevant team context into the same conversation."
           />
-          <div className="mt-10 grid gap-4 sm:grid-cols-2">
+          <div className={styles.compareGrid}>
             <CompareColumn
               label={INDEXED_VS_LIVE.indexed.label}
               title={INDEXED_VS_LIVE.indexed.title}
@@ -112,12 +115,12 @@ export default function HowItWorksPage() {
         <div className="mx-auto max-w-6xl px-6">
           <SectionHeading
             label="roles"
-            title="Connect once. The whole org asks from VS Code."
-            description="Admins wire the stack in the admin portal. Developers never paste tokens."
+            title="Connect once." secondaryTitle="The whole org asks from VS Code."
+            description="Admins connect the stack in the admin portal. Developers sign in to access shared organizational context."
           />
           <div className="mt-10 grid gap-6 md:grid-cols-2">
             <RoleCard title={WHO_DOES_WHAT.admin.title} items={WHO_DOES_WHAT.admin.items} />
-            <RoleCard title={WHO_DOES_WHAT.developer.title} items={WHO_DOES_WHAT.developer.items} />
+            <RoleCard blue title={WHO_DOES_WHAT.developer.title} items={WHO_DOES_WHAT.developer.items} />
           </div>
           <p className="mt-8 text-sm text-coop-muted">
             Install steps live in the{" "}
@@ -171,7 +174,7 @@ export default function HowItWorksPage() {
       </section>
 
       <CTASection
-        title="See the loop on your codebase"
+        title="See the loop" secondaryTitle="on your codebase"
         description="Book a walkthrough, or install the free VS Code extension and Deep-Index a repo."
       />
     </>
@@ -228,9 +231,9 @@ function EditorSurfaces() {
   );
 }
 
-function RoleCard({ title, items }: { title: string; items: readonly string[] }) {
+function RoleCard({ title, items, blue = false }: { title: string; items: readonly string[]; blue?: boolean }) {
   return (
-    <div className="coop-card">
+    <div className={`${cards.card} ${blue ? cards.blue : ""}`}>
       <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
       <ul className="mt-4 space-y-2.5">
         {items.map((item) => (
@@ -259,39 +262,22 @@ function CompareColumn({
   note: string;
   emphasized?: boolean;
 }) {
+  const Icon = emphasized ? GitBranch : Radio;
   return (
-    <div
-      className={`rounded-sm border p-5 ${
-        emphasized ? "border-gray-900 bg-gray-900 text-white" : "border-coop-border bg-white"
-      }`}
-    >
-      <p
-        className={`font-mono text-xs uppercase tracking-wide ${
-          emphasized ? "text-coop-index" : "text-gray-500"
-        }`}
-      >
-        {label}
-      </p>
-      <p className={`mt-2 text-base font-semibold ${emphasized ? "text-white" : "text-gray-900"}`}>
-        {title}
-      </p>
-      <ul className="mt-4 space-y-2">
-        {items.map((item) => (
-          <li
-            key={item}
-            className={`text-sm leading-relaxed ${emphasized ? "text-gray-300" : "text-coop-muted"}`}
-          >
-            {item}
-          </li>
-        ))}
-      </ul>
-      <p
-        className={`mt-4 border-t pt-3 text-xs leading-relaxed ${
-          emphasized ? "border-white/10 text-gray-400" : "border-coop-border text-coop-muted"
-        }`}
-      >
-        {note}
-      </p>
-    </div>
+    <article className={`${styles.compareStage} ${emphasized ? styles.sageStage : styles.blueStage}`}>
+      <div className={styles.comparePanel}>
+        <div className={styles.compareHeader}>
+          <p className={styles.compareLabel}>{label}</p>
+          <Icon size={22} strokeWidth={1.5} aria-hidden="true" />
+        </div>
+        <h3 className={styles.compareTitle}>{title}</h3>
+        <ul className={styles.compareItems}>
+          {items.map((item) => (
+            <li key={item}><span className={styles.contextDot} aria-hidden="true" /><span>{item}</span></li>
+          ))}
+        </ul>
+        <p className={styles.compareNote}>{note}</p>
+      </div>
+    </article>
   );
 }

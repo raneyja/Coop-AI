@@ -1,13 +1,13 @@
 import fs from "fs";
 import path from "path";
-import matter from "gray-matter";
+import { parseFrontmatter } from "./frontmatter";
 import { extractToc, type ManualContent } from "@/lib/manual.shared";
 
 const manualPath = path.join(process.cwd(), "content/manual/index.md");
 
 export function getManual(): ManualContent {
   const fileContents = fs.readFileSync(manualPath, "utf8");
-  const { data, content } = matter(fileContents);
+  const { data, content } = parseFrontmatter(fileContents);
 
   return {
     title: String(data.title ?? "CoopAI Owner's Manual"),

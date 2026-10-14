@@ -2,6 +2,7 @@ type SectionHeadingProps = {
   /** Renders as // label in mono */
   label?: string;
   title: string;
+  secondaryTitle?: string;
   description?: string;
   className?: string;
   tone?: "light" | "dark";
@@ -10,6 +11,7 @@ type SectionHeadingProps = {
 export function SectionHeading({
   label,
   title,
+  secondaryTitle,
   description,
   className = "",
   tone = "light"
@@ -23,9 +25,9 @@ export function SectionHeading({
         </p>
       ) : null}
       <h2
-        className={`text-2xl font-semibold ${dark ? "text-white" : "text-gray-900"}${label ? " mt-2" : ""}`}
+        className={`site-title${dark ? " site-title-dark" : ""} text-2xl font-normal ${dark ? "text-white" : "text-gray-900"}${label ? " mt-2" : ""}`}
       >
-        {title}
+        {title}{secondaryTitle && <> <span className="site-title-secondary">{secondaryTitle}</span></>}
       </h2>
       {description ? (
         <p
