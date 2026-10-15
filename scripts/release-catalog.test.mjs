@@ -104,7 +104,7 @@ test('private package content checks exact CRC/source/runtime identity and rejec
  const d=fs.mkdtempSync(path.join(os.tmpdir(),'coop-package-content-'));
  try{
   const archive=path.join(d,'fixture.vsix'),program=`import pathlib,json,zipfile,sys
-r=pathlib.Path(sys.argv[1]);pkg={'name':'fixture','publisher':'fixture','version':'1.0.0'};(r/'package.json').write_text(json.dumps(pkg));files={'changelog.md':'CHANGELOG.md','LICENSE.txt':'LICENSE.txt','readme.md':'README.md','package.json':'package.json','dist/extension.js':'dist/extension.js','dist/webview.css':'dist/webview.css','dist/webview.js':'dist/webview.js','media/coop-icon.png':'media/coop-icon.png','media/coop-icon.svg':'media/coop-icon.svg'}
+r=pathlib.Path(sys.argv[1]);pkg={'name':'fixture','publisher':'fixture','version':'1.0.0'};(r/'package.json').write_text(json.dumps(pkg));files={'changelog.md':'CHANGELOG.md','LICENSE.txt':'LICENSE','readme.md':'README.md','package.json':'package.json','dist/extension.js':'dist/extension.js','dist/webview.css':'dist/webview.css','dist/webview.js':'dist/webview.js','media/coop-icon.png':'media/coop-icon.png','media/coop-icon.svg':'media/coop-icon.svg'}
 for name in files.values():
  p=r/name;p.parent.mkdir(parents=True,exist_ok=True)
  if name!='package.json':p.write_text('const fixture = 1;' if name.endswith('.js') else 'fixture')
