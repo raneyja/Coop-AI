@@ -62,7 +62,7 @@ async function main() {
     await page.fill("#seats", "2");
     await page.click('button[type="submit"]');
 
-    await page.waitForURL(/checkout\.stripe\.com/, { timeout: 30000 });
+    await page.waitForURL((url) => url.protocol === "https:" && url.hostname === "checkout.stripe.com", { timeout: 30000 });
 
     const stripeFrame = page.frameLocator('iframe[name*="__privateStripeFrame"]').first();
     const cardInput = page.locator('input[name="cardNumber"], input[placeholder*="1234"]').first();
