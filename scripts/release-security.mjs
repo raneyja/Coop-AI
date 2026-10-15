@@ -241,7 +241,7 @@ export function checkImageReceipt(receipt,{exceptions=[],now=Date.now(),root=pro
   for(const db of receipt.databases){const metadata=readJson(db.metadataPath);if(!SHA.test(db.sha256??'')||hashFile(db.path)!==db.sha256||!SHA.test(db.metadataSha256??'')||hashFile(db.metadataPath)!==db.metadataSha256||metadata.NextUpdate!==db.nextUpdate||!Number.isFinite(Date.parse(db.nextUpdate))||Date.parse(db.nextUpdate)<=now)throw new Error('Expired or mismatched image advisory database');}
   const validation=validateImageReport(readJson(receipt.reportPath),receipt);if(!validation.pass)return validation;
   const scopeSha256=digest({bindingSchema:INPUT_BINDING_SCHEMA,role:receipt.role,artifactId:receipt.artifactId,inputsSha256,scannerSha256:receipt.scannerSha256,databases:receipt.databases.map(db=>db.sha256)});
-  return {...enforceFindingPolicy(validation.findings,exceptions,{scopeSha256},now),role:receipt.role,bindingSchema:INPUT_BINDING_SCHEMA,inputsSha256,scopeSha256,reportSha256:receipt.reportSha256};
+  return {...enforceFindingPolicy(validation.findings,exceptions,{scopeSha256},now),role:receipt.role,artifactId:receipt.artifactId,bindingSchema:INPUT_BINDING_SCHEMA,inputsSha256,scopeSha256,reportSha256:receipt.reportSha256};
  }catch(error){return outcome([error.message]);}
 }
 export function reuseJavaReceipt(receipt) {
