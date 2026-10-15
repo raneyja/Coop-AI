@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { randomBytes } from "node:crypto";
 import * as vscode from "vscode";
 import { activeThemeMode } from "./themeMode";
 
@@ -78,10 +79,5 @@ export function getWebviewOptions(extensionUri: vscode.Uri): vscode.WebviewOptio
 }
 
 function createNonce(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let value = "";
-  for (let i = 0; i < 32; i++) {
-    value += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return value;
+  return randomBytes(24).toString("base64");
 }
