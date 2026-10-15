@@ -23,6 +23,10 @@ function mockResponse(): ServerResponse & { statusCode?: number; body?: string }
 function mockOrgStore(orgId: string): OrgStore {
   return {
     resolveAuth: async () => undefined,
+    isOrgSuspended: async (candidateOrgId: string) => {
+      assert.equal(candidateOrgId, orgId);
+      return false;
+    },
     getOrganization: async (id: string) => ({
       id,
       name: "Test Org",
@@ -122,6 +126,14 @@ void (async () => {
   assert.equal(body.entries[0]?.action, "chat.completion");
   assert.equal(body.entries[0]?.principal, "user:u1");
   assert.ok(!body.entries.some((entry) => entry.principal === "user:other"));
+
+  const suspendedDeps = baseDeps(mockAuditLogger());
+  const suspendedOrgStore = suspendedDeps.orgStore;
+  assert.ok(suspendedOrgStore);
+  suspendedOrgStore.isOrgSuspended = async () => true;
+  const suspended = await request(suspendedDeps);
+  assert.equal(suspended.statusCode, 403);
+  assert.equal(JSON.parse(suspended.body ?? "{}").error, "org_suspended");
 
   const unavailable = await request(baseDeps(undefined));
   assert.equal(unavailable.statusCode, 503);

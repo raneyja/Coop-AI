@@ -1,0 +1,1817 @@
+{
+  "schema": "coop-enterprise-eval-v1",
+  "sourceCorpusSha256": "934319adf97f815fda2f8a341752e359201e6a400b2bba49bc58a41498a4e3b0",
+  "cases": [
+    {
+      "id": "EH06-locate-read-facts-01",
+      "family": "locate-read-facts",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "typescript",
+      "questionSha256": "571136a9c094973c198601be4a670f5a35b1dde6b35ee598270d0ae3f36e0612",
+      "oracleSha256": "f3af379c0ca1a3bc921681c648b73e9759e0198876238626dbdb47f5bbbea9ca",
+      "caseSha256": "915473c9807b76327030b7663ee6108615624714189f40bcc6f425ce97f66aee",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "odd/queries/retrieve",
+          "first": 1,
+          "last": 3,
+          "sha256": "8a31a87f12939952a08f82244bfb7ea516afb71ce50876ec5add400e98ab06f6"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "28e87590a0e311b34f49d5c3b04da8881f93e473280a165160819e7321af346b",
+          "scope": "Canonical measured fixture inventory at pinned fixture ref; unrelated to customer repos",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "2847d0380b8e0951e51e71b84062a6297a16c71583fab63e5a96361dde13c109",
+          "scope": "Listed fixture paths only",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-locate-read-facts-02",
+      "family": "locate-read-facts",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "python",
+      "questionSha256": "c58f78d441931153960a2672250020854c30a7395212115404e1789ec0be2d21",
+      "oracleSha256": "e6d0436ab2c83ed6f94df5889d1a170c05addbba32bbf5fb98a300d66c95f39b",
+      "caseSha256": "b03b7d741940c61babef0b5bbe8b4c1d743aac33eaddf596cba9fd3b15ded8cd",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "task_units/old.archive/job.py",
+          "first": 1,
+          "last": 6,
+          "sha256": "ad768e02d09eea7be4885b9ada96354682c8ac38e50778af8c7a4e1efb028b81"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "44901a1f2622100598ce7ac68e94bc5ce9f4f14b223bfbeb7523147de08a093a",
+          "scope": "Canonical measured fixture inventory at pinned fixture ref; unrelated to customer repos",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "333229619b5c8c129c2c449631b2c52964720ff6994c7f2724ff373034329f2b",
+          "scope": "Listed fixture paths only",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-locate-read-facts-03",
+      "family": "locate-read-facts",
+      "split": "heldout",
+      "caseType": "expected-unknown",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "go",
+      "questionSha256": "e1f3bbdc97d28c4ca9a101e8c8ea3b57a0332a884eb7f064f7546f908dfc10d3",
+      "oracleSha256": "345082fb0aaf3f2c40c08fc658aa85face2af6e0310351833abc9c06229b8907",
+      "caseSha256": "f25f64409ec4b6049c56c6c32dd72c09eee788a271f71c9c52142906c7767a25",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "system/boundaries/token.go",
+          "first": 1,
+          "last": 6,
+          "sha256": "8712a40eaed2889dae4261eb1d84f13bf7e75a6ef27682b3204a9a10ff4fa762"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "27210fc7f7e2d4ae8ce592a65f33261022f2776e371007d2371f69feac477153",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "5e5473132807bae21eab0858f39bd871541fe3cce75b5b6161bd64f58ae6643f",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-locate-read-facts-04",
+      "family": "locate-read-facts",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "rust",
+      "questionSha256": "5253db7a9331e499b3c9bbeafdd33696d535fd4d410bbbde41a69ab4bc54be6d",
+      "oracleSha256": "0e39ccf53ab8cbda113f9a4464d2dc49689e9232e0d57e878835024bf9365466",
+      "caseSha256": "7621090b5ed83b56d51914374d6f3d2bc9c49b551519571ee7826edb10eaf6a7",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "plugins/unused-name/lower.rs",
+          "first": 1,
+          "last": 7,
+          "sha256": "1f18da145e65d2bcd7c76e8090f431afb5ff130be677cac40e44ab71d4466618"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "c6c103e878c27d7d8fcfc9cc96047c874533b0e9f70775ae16ac0d73d60cabb6",
+          "scope": "Canonical measured fixture inventory at pinned fixture ref; unrelated to customer repos",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "fa88c7acda55a547e21723ed26ae1fdd9e1fbef9d45915591b07b5612fb099cf",
+          "scope": "Listed fixture paths only",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-locate-read-facts-05",
+      "family": "locate-read-facts",
+      "split": "development",
+      "caseType": "misleading-premise",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "typescript",
+      "questionSha256": "385f190f0bc6750196f64adf58321dc100253689f98404a331d100386baa23dc",
+      "oracleSha256": "dbcfeded318770d78e4613ce31e62ec00022545b84c76e3b36634b63d84506e7",
+      "caseSha256": "2cfa7e2b8902bb03fc6a3040b7b21ecb065597a0c27e8b580ccf4494d1bc193f",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "code roots/value conditions.ts",
+          "first": 1,
+          "last": 7,
+          "sha256": "374cdd635e8d097daa2ce0cd2226af2c715cdb04fdab96f87408144424be44bb"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "6b733e08d17502d3fb911d993af1c51ca08eecda55e570b81360c8e094a18914",
+          "scope": "Canonical measured fixture inventory at pinned fixture ref; unrelated to customer repos",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "bd7ef4904c5cc890a099f02f1f517ecc9032e4d340123b3c49d27bfbff916403",
+          "scope": "Listed fixture paths only",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-locate-read-facts-06",
+      "family": "locate-read-facts",
+      "split": "heldout",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "javascript",
+      "questionSha256": "2d30d9a393c778ee14d12aa187455648feaed0950c25ae191605887318f153d8",
+      "oracleSha256": "20758f4d82f737f1caaefe3984d40544701227af27acd6f8f929e6b84136509c",
+      "caseSha256": "22610154488284f3f577c60f5ea2bee8c17c022b2cb1381bac6ac82a87f4911f",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "mix/entry-scope.mjs",
+          "first": 1,
+          "last": 4,
+          "sha256": "925869d91701203f09bea9f49e2d315594e02f630e1091564466a70bf7712f1a"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "50f9b85d20bc23742cbdb0272995b1dd6bee51b6deb8f412401bdf523c7c5f5a",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "a4947d4c93c720b430189a00997ee5f6cea28ace108267f417eb7b16041b8d44",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-locate-read-facts-07",
+      "family": "locate-read-facts",
+      "split": "development",
+      "caseType": "expected-unknown",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "typescript",
+      "questionSha256": "e501d20856ac407a9103f54126ebf8b0a8ddf2557965ca7c05788de5d214066a",
+      "oracleSha256": "ab68eb6adac478c38d44ed80781ce5ddb9e19f7decedaa213289490ec3f5705c",
+      "caseSha256": "ff64f05ef157b85b0abf34f7d2fc9cca757b9d9836d53c0e09411f4cb3197dd2",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "archives/date-messages.ts",
+          "first": 1,
+          "last": 8,
+          "sha256": "a0d129e3ed0500225bc202f99941e5a45730cb3c86a25ff8ab5c583f77c63dd5"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "4b38de98636c59e80106e8306716a10e7b8b0ee9fb18c87deb096f9db9704e69",
+          "scope": "Canonical measured fixture inventory at pinned fixture ref; unrelated to customer repos",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "d4f713408c3a6e1ecdea7f465332be685084022cefcd24cc0c37222409e730e0",
+          "scope": "Listed fixture paths only",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-locate-read-facts-08",
+      "family": "locate-read-facts",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "ruby",
+      "questionSha256": "129e16a3baa979aca5514175cd58734867cab5692f51339aef1c4ee8dff6ea2b",
+      "oracleSha256": "6dbe92094e70470c18c981ef7bbb1c8cb91c00d43b3ef26533a9634ace879d43",
+      "caseSha256": "ab6694256e20c9f022128aec18512b5bc787b78a12c6d97decd3dbe531f53d25",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "modules/reporting/leftover.rb",
+          "first": 1,
+          "last": 5,
+          "sha256": "8bb1d620615baee3e76875bda5ae01fba5c2fa4a636199a0782285bf94881219"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "5247259d73bed3a38e53af5bee4cfcb4f82d741e6a12759de68a6b2930205187",
+          "scope": "Canonical measured fixture inventory at pinned fixture ref; unrelated to customer repos",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "26d1eac64d8d8a88279c2cfbca87ab33dd2f4d7cbbf5eeab5aeeab3d977d90de",
+          "scope": "Listed fixture paths only",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-locate-read-facts-09",
+      "family": "locate-read-facts",
+      "split": "heldout",
+      "caseType": "negative-control",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "csharp",
+      "questionSha256": "944d63cb4b2c95b49253ae93144c7d2a773266aae0c7c90484e07116647151e1",
+      "oracleSha256": "cafe3176c8896e86f2cc062e35ab5cae55a46275c8231660edffa8a9886fb147",
+      "caseSha256": "2afb6d2e8feff0c038da013e5a65a27a73f09ee44887bdd0f087ada22d7755c9",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "services-not-services/Entry.cs",
+          "first": 1,
+          "last": 5,
+          "sha256": "bf14c9298e9dc217d2c1492ed9cde7f20431b6fe369c4f962d876ceb9774123d"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "6d0c9245075856d8d787eff2ecf4f71d5ec9c4bb97cf973246c1ca5b3a9b1501",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "a6c35625e071247b05ff6565402fb24076a95aa0f3d9d100cd7d1671176890d8",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-locate-read-facts-10",
+      "family": "locate-read-facts",
+      "split": "heldout",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "javascript",
+      "questionSha256": "c9ea6607d8c90ccb72feaaa3cb67007744bae5c08a031db40c0b46771b1412d5",
+      "oracleSha256": "cdc0629599875fbc164934cd73ceb6c87f75197d3915378587fe35bc11b9e3b1",
+      "caseSha256": "9d239b1a801e31fbc9eeca696ef00940e9c6e6e63bfcea7f143cdb01ec568cda",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "root/évent words.js",
+          "first": 1,
+          "last": 4,
+          "sha256": "c6562103aa206b8e2ae0ceb3824e4c503e0af113aeaaa70a1aaaced1d7389791"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "b9abefcddecadfedb32f60eded57d74e1df61728eb51f60504efa4a3b53e7e43",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "75002500277818df0c53ff1421209602e624206742b11f472082ae518aea92ba",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-understanding-01",
+      "family": "understanding",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "typescript",
+      "questionSha256": "bc7bcd50f4a6f07ba1aaf2b66048f6716a4735ec23438e244067f629dd5e72da",
+      "oracleSha256": "e2895f058e30b02375f748ce56430feaea456d5d1a7ac82e4b25067682f7770c",
+      "caseSha256": "c39d61e55665739809677df78f1db3d87f503d65a83913e07cf9aea88087c2c2",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "odd/queries/retrieve",
+          "first": 1,
+          "last": 3,
+          "sha256": "8a31a87f12939952a08f82244bfb7ea516afb71ce50876ec5add400e98ab06f6"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-understanding-02",
+      "family": "understanding",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "python",
+      "questionSha256": "9bead85ab158a8ffdb8eb093399cd7bdb56da80cc497f2596e71e60513336d76",
+      "oracleSha256": "6d09f42d5352fc813c14e3b16b5cd73d0eadcc4c6d1f7d1a0af17da22f0b0b75",
+      "caseSha256": "ac0bab34255b3b3a3349443379c8fa7e3b8f6b86dab3247235e122f820e764e2",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "task_units/old.archive/job.py",
+          "first": 1,
+          "last": 6,
+          "sha256": "ad768e02d09eea7be4885b9ada96354682c8ac38e50778af8c7a4e1efb028b81"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-understanding-03",
+      "family": "understanding",
+      "split": "heldout",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "go",
+      "questionSha256": "7931c215fb6779c8c1349c0547321eb483d123768335d7e833407e3751a1e64f",
+      "oracleSha256": "60c3a88708d178aadca8946a831126b60e0ced13045661aadeefb033307d0c48",
+      "caseSha256": "d318024ac46868618990cafeceb16f2c9bf7bdc7ee3bf85b591a368dedc59be6",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "system/boundaries/token.go",
+          "first": 1,
+          "last": 6,
+          "sha256": "8712a40eaed2889dae4261eb1d84f13bf7e75a6ef27682b3204a9a10ff4fa762"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-understanding-04",
+      "family": "understanding",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "rust",
+      "questionSha256": "d9dfe3033b92670a77467ad2bccf1e6ac913376d10ad5e3d4072494b5d626e0c",
+      "oracleSha256": "cc57e7ace2d424a136d2db1893738dea7e522c4bb353c368f7291c7e7f1d7de2",
+      "caseSha256": "3a6c522f20e6037bebc7facf7ff8edb6b265cda432790baf31cb61931208f192",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "plugins/unused-name/lower.rs",
+          "first": 1,
+          "last": 7,
+          "sha256": "1f18da145e65d2bcd7c76e8090f431afb5ff130be677cac40e44ab71d4466618"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-understanding-05",
+      "family": "understanding",
+      "split": "development",
+      "caseType": "expected-unknown",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "typescript",
+      "questionSha256": "09a171f0fa9cbccb97fbc860488bd002c203f7440fee049eb12fcbd092d1e0e8",
+      "oracleSha256": "9444163ccfb630aaf57567af853e24d6c22f3c72948d1e57d554389885846c19",
+      "caseSha256": "ae1537e8bcf76315451a40d5e35b03ebdc3da3bb8e3316e99eed8f1fb91549e6",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "code roots/value conditions.ts",
+          "first": 1,
+          "last": 7,
+          "sha256": "374cdd635e8d097daa2ce0cd2226af2c715cdb04fdab96f87408144424be44bb"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-understanding-06",
+      "family": "understanding",
+      "split": "heldout",
+      "caseType": "misleading-premise",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "javascript",
+      "questionSha256": "0da37bd72d16474f3c63655aa62c76398a8a5073af7d8f9821d26e9c2540f0b8",
+      "oracleSha256": "2042d22fe620ed50d672db75b06b20905a0128ce84f9cbaf6486156f104970d0",
+      "caseSha256": "8586290b3a818b4c0060655d897f4791f89fdc6c9c38f4995568a1cabde4736d",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "mix/entry-scope.mjs",
+          "first": 1,
+          "last": 4,
+          "sha256": "925869d91701203f09bea9f49e2d315594e02f630e1091564466a70bf7712f1a"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-understanding-07",
+      "family": "understanding",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "typescript",
+      "questionSha256": "1b5411eb080a8f628b49e4e48999355fca8639885c7af4e6433ce5496e67ea0d",
+      "oracleSha256": "0a622049398a39bc4cddadc91bed1dcd9608accc796f513de457c6d3b7676c3b",
+      "caseSha256": "8e9c68b41da916a52057964b9afc7670b7b1ab2ce80452655d3deea7268d220a",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "archives/date-messages.ts",
+          "first": 1,
+          "last": 8,
+          "sha256": "a0d129e3ed0500225bc202f99941e5a45730cb3c86a25ff8ab5c583f77c63dd5"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-understanding-08",
+      "family": "understanding",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "ruby",
+      "questionSha256": "1b2f41c59058408b4ae1846c174221562ffb1163f03195d74d0ef9e1c883a633",
+      "oracleSha256": "fe56181d1c3de920e21dc3510d2cc8eda2d80f6526cbf07b3b4e817f7e00ab04",
+      "caseSha256": "576939ccc72f93b64ad9b295c4a27d66f1981a23f60763d04bdf3f26fb6ec924",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "modules/reporting/leftover.rb",
+          "first": 1,
+          "last": 5,
+          "sha256": "8bb1d620615baee3e76875bda5ae01fba5c2fa4a636199a0782285bf94881219"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-understanding-09",
+      "family": "understanding",
+      "split": "heldout",
+      "caseType": "expected-unknown",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "csharp",
+      "questionSha256": "4d57762c0d5c46fe2620b6e048fe40bd3751e13a259df53654cfe0538cfa87e1",
+      "oracleSha256": "bcd71370c7fd1acad74585db74670660f7a782ebd71d93a607525e9658a11998",
+      "caseSha256": "85c987ed285a4a554e7c6ab8c42a61f766aebd66815fd902f84a609fb29af532",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "services-not-services/Entry.cs",
+          "first": 1,
+          "last": 5,
+          "sha256": "bf14c9298e9dc217d2c1492ed9cde7f20431b6fe369c4f962d876ceb9774123d"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-understanding-10",
+      "family": "understanding",
+      "split": "heldout",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "javascript",
+      "questionSha256": "fdc7757e4253104de04c41a0fdfaf0c4d55e23ea2469d8c32d40cb83b7ae1818",
+      "oracleSha256": "a15519039f7e8bcbc062cb3cb9431553ceaa2617d2f1ebf0937d667b6107e539",
+      "caseSha256": "f1b9a71f931664bc3e2c49952df457d325435db2fddecb0318be6cc2070ce560",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "root/évent words.js",
+          "first": 1,
+          "last": 4,
+          "sha256": "c6562103aa206b8e2ae0ceb3824e4c503e0af113aeaaa70a1aaaced1d7389791"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-blast-01",
+      "family": "blast",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "typescript",
+      "questionSha256": "82f97999d67b7d5ae3dec1c6ec4e00165886d09989d47bae1a436c582d6697bc",
+      "oracleSha256": "8d5044330b426426b508514b89fad63ce95b8495560aea3454975f033c37842d",
+      "caseSha256": "baeb1d0b4f64b8c2ae3a7e3d0bbbaa8e7a99cb2a5ab3695934f426de4ecbc5cc",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "odd/queries/retrieve",
+          "first": 1,
+          "last": 3,
+          "sha256": "8a31a87f12939952a08f82244bfb7ea516afb71ce50876ec5add400e98ab06f6"
+        },
+        {
+          "kind": "source-window",
+          "path": "call sites/1.ts",
+          "first": 1,
+          "last": 2,
+          "sha256": "a3f98a7e793646c039626340cc390287613230b77ad3df5767cf295e6f534334"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "d034bd3b74f261d037348a489bd27936df612e14d6377fb03f4e594cf17c7684",
+          "scope": "Admitted fixture import relationship, no exhaustive coverage",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-blast-02",
+      "family": "blast",
+      "split": "development",
+      "caseType": "misleading-premise",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "python",
+      "questionSha256": "cb9f75668d0a7340c4499d622ede9f594efae19f6c81ee1e7d1ba5dc9a63abb9",
+      "oracleSha256": "ae4b38f6b4907e86a597bafaed723af9ebe27aedf1342040b675414080e9d0be",
+      "caseSha256": "de9135076202601a0a6d32f864e572fcbe6ca867cafcf8488a60a6b4aac46597",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "task_units/old.archive/job.py",
+          "first": 1,
+          "last": 6,
+          "sha256": "ad768e02d09eea7be4885b9ada96354682c8ac38e50778af8c7a4e1efb028b81"
+        },
+        {
+          "kind": "source-window",
+          "path": "call sites/2.py",
+          "first": 1,
+          "last": 2,
+          "sha256": "1bc96b6da22faed0687aeb5590375270166a2665ed5b88d2a1c0cf5e595b734b"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "7f3a732506a3e791bd27accadfe2cdd427fe0f2115b60d48ac86afb58ce4637a",
+          "scope": "Admitted fixture import relationship, no exhaustive coverage",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-blast-03",
+      "family": "blast",
+      "split": "heldout",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "go",
+      "questionSha256": "f397666f640320db6ee7e1e866fa488cd248480a02871b9cea7f639efb1de19f",
+      "oracleSha256": "31a67ec1a19d844d15532bf0d1a3d4bf24f1ee362993db2b09cc09442ff52bec",
+      "caseSha256": "ba2b7f76077f14a0796763f7b13de2687f30077716af29a4a1397d17721a9ebe",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "system/boundaries/token.go",
+          "first": 1,
+          "last": 6,
+          "sha256": "8712a40eaed2889dae4261eb1d84f13bf7e75a6ef27682b3204a9a10ff4fa762"
+        },
+        {
+          "kind": "source-window",
+          "path": "call sites/3.go",
+          "first": 1,
+          "last": 1,
+          "sha256": "bb8b7cfd2416719248e5c31b9e24d42bc53813db811b7cb2c405b46c42a99868"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "a45217e27be71cb20c66211516dce60193665dbb1a511cdaed7d41941e7c53fd",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-blast-04",
+      "family": "blast",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "rust",
+      "questionSha256": "40dcdc37aca9f12f045dc6000960a42c69c5fa187f8fbeb6dd752f2228b93e9d",
+      "oracleSha256": "79bcec8a8687351ab6831650a704d18ac95340f9035bc513149e142873783cf8",
+      "caseSha256": "167c4401379bb23a92d732d3cba7a2f158800e2b558efbb94ee93cc31c6b8bee",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "plugins/unused-name/lower.rs",
+          "first": 1,
+          "last": 7,
+          "sha256": "1f18da145e65d2bcd7c76e8090f431afb5ff130be677cac40e44ab71d4466618"
+        },
+        {
+          "kind": "source-window",
+          "path": "call sites/4.rs",
+          "first": 1,
+          "last": 1,
+          "sha256": "561dd01780530653b56df34a394e7dd262cb79432d786c0cfb4fe8977b422242"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "3b42cc0422a207ffed948cc729efd82e1710c1dd7f54b25a7a342561ea20fe60",
+          "scope": "Admitted fixture import relationship, no exhaustive coverage",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-blast-05",
+      "family": "blast",
+      "split": "development",
+      "caseType": "expected-unknown",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "typescript",
+      "questionSha256": "dada3a4db719206e928f78b3686a95962ba8927bcc9cf7a0c439a6110022eb68",
+      "oracleSha256": "5431fcff4d8bb8e59547ef7c8045573fa41c7e44ad3f27da5e7a83a7e12d4820",
+      "caseSha256": "1be6b9eeb7f9e2a7ef268b881a038523ca2d60cd5ddbc781cf4ef3081cfe3194",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "code roots/value conditions.ts",
+          "first": 1,
+          "last": 7,
+          "sha256": "374cdd635e8d097daa2ce0cd2226af2c715cdb04fdab96f87408144424be44bb"
+        },
+        {
+          "kind": "source-window",
+          "path": "call sites/5.ts",
+          "first": 1,
+          "last": 1,
+          "sha256": "4e3eca08402ff633fa42bc43006dc895fb553a97dee8a79c9dfc12d4c649fc2f"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "487328e2eea5769556552c1108b4ff1f09270e1ac4082acfd4a0c2a5b3535d24",
+          "scope": "Admitted fixture import relationship, no exhaustive coverage",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-blast-06",
+      "family": "blast",
+      "split": "heldout",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "javascript",
+      "questionSha256": "bc23ab2295e5c56f0032e126ba556232815e4841e9160e1e80079e767771aeb0",
+      "oracleSha256": "e91f5189512cb8b10e321aedd3a8ed73e43981d2e80e00c918eadf74bfb6d494",
+      "caseSha256": "a6192e0bce999ca7a6839937b2e579a608ca4c921c75df3d7e78b7172afeab00",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "mix/entry-scope.mjs",
+          "first": 1,
+          "last": 4,
+          "sha256": "925869d91701203f09bea9f49e2d315594e02f630e1091564466a70bf7712f1a"
+        },
+        {
+          "kind": "source-window",
+          "path": "call sites/6.mjs",
+          "first": 1,
+          "last": 1,
+          "sha256": "3d5daf5d427093f074ed754db5dc29ceae3f9ef7dd94807ff27d66979bdf1594"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "91c0d482ff65d805d4ec5e9fc8aac7e9313e56ab9970cdfbb7e2b3cb522a2c96",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-blast-07",
+      "family": "blast",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "typescript",
+      "questionSha256": "7071c5942b0c10a491e54c5b25bd76764283236681c6b6bd433bb35e05fcce50",
+      "oracleSha256": "5e1acda5201917bca96e05a27fa0d6f48bcc3949d01aeaa681ccd3e1401802fb",
+      "caseSha256": "9019ffeb6a9b15dc10787303026e51c730d5c322445d1b72c8384513c1dda9b0",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "archives/date-messages.ts",
+          "first": 1,
+          "last": 8,
+          "sha256": "a0d129e3ed0500225bc202f99941e5a45730cb3c86a25ff8ab5c583f77c63dd5"
+        },
+        {
+          "kind": "source-window",
+          "path": "call sites/7.ts",
+          "first": 1,
+          "last": 1,
+          "sha256": "e6654931c533d73ab6b14366bedb089535b4aac819c8a0bc4e44cad71976bf3e"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "f8eaee2910d39ffb440709d393e547c2fff76a74b1a7566934c011109dc8fb75",
+          "scope": "Admitted fixture import relationship, no exhaustive coverage",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-blast-08",
+      "family": "blast",
+      "split": "development",
+      "caseType": "negative-control",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "ruby",
+      "questionSha256": "e9008bd8d3a3efa823575e1cd3a044b5e0c1647913a1d3ef29bd3dccc06ece43",
+      "oracleSha256": "c3228f68d8657307368195543cdaf0e955688e98a0b30ec18e74b56d3b883966",
+      "caseSha256": "f2922a8fc4005d2b32b107072423a8f8fa5d0f4bd8f7454c21f9a1492fc9027a",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "modules/reporting/leftover.rb",
+          "first": 1,
+          "last": 6,
+          "sha256": "7611b86a0625b164e0feaa89ae233d29ace2add5114787bdeab37fe24d8701d6"
+        },
+        {
+          "kind": "source-window",
+          "path": "call sites/8.rb",
+          "first": 1,
+          "last": 3,
+          "sha256": "ee85df631b132cffac4e1182b414350b29c1fc3b1ffa8e92a4972603bf677668"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "f97e39325847f2010050e1a4bdfefc609a4f19025f957e5d3442d0980ea00274",
+          "scope": "Admitted fixture import relationship, no exhaustive coverage",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-blast-09",
+      "family": "blast",
+      "split": "heldout",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "csharp",
+      "questionSha256": "d431508804881b7970e934d7a4380fd2a8396d34ac5ec2611cd63c6bd6ec6d8e",
+      "oracleSha256": "02f8c518f30282382c3511e84b8bca7a2d076e38b726d0879ca35260ea99c11e",
+      "caseSha256": "68a46e5ae4181d003e0b25e7f0bfe2aafd9807147939d9a59282c5b29c50dd0e",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "services-not-services/Entry.cs",
+          "first": 1,
+          "last": 5,
+          "sha256": "bf14c9298e9dc217d2c1492ed9cde7f20431b6fe369c4f962d876ceb9774123d"
+        },
+        {
+          "kind": "source-window",
+          "path": "call sites/9.cs",
+          "first": 1,
+          "last": 1,
+          "sha256": "6aabf021fea2774ea506c7dfacb7097d4bc022568d41503ac34843b2ea33833a"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "bbf0efa440f694819eb41f3e9958b72c531aac29aadc9fe3a4c730776819adf8",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-blast-10",
+      "family": "blast",
+      "split": "heldout",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "javascript",
+      "questionSha256": "c9bc0803bd75f415d1e925a68bac6d8231a5a34affea3a66fc042bdfa9b51289",
+      "oracleSha256": "3ea0e37b89f8566f9bc1175da37346d5bd339215df531862d178b4fd6e6176ac",
+      "caseSha256": "977de2ff386d19fda19b835f6b870c9bb840b39282070d2cff09784430c547f9",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "root/évent words.js",
+          "first": 1,
+          "last": 4,
+          "sha256": "c6562103aa206b8e2ae0ceb3824e4c503e0af113aeaaa70a1aaaced1d7389791"
+        },
+        {
+          "kind": "source-window",
+          "path": "call sites/10.mjs",
+          "first": 1,
+          "last": 1,
+          "sha256": "c290e2eb481b57f9ef96b8d342fefbb9cd65ba274ae75e0437a9bbfc5a403369"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "b77b0877eeae51cbf1310a412d1ca32f4584f837e17b5929211d807a109f33f7",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-gaps-01",
+      "family": "gaps",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "typescript",
+      "questionSha256": "72b5bf28ce873284a1118cba128a0ab9d6a5223949b86db2714eda1cb8f518a5",
+      "oracleSha256": "bb0b8bea253031fabc2a050cabd235ea7ece3d9f6036cf6408b681c9d94c38f4",
+      "caseSha256": "2f812226a016521aa3633dcc3b01d7f994c507f832f57f3912a87df9bb3565ba",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "odd/queries/retrieve",
+          "first": 1,
+          "last": 3,
+          "sha256": "8a31a87f12939952a08f82244bfb7ea516afb71ce50876ec5add400e98ab06f6"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-gaps-02",
+      "family": "gaps",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "python",
+      "questionSha256": "797e0e10741de02e7e48fa3c3e510cc5ae07d6896eb7dbcc39e0f2ef5c16fa9e",
+      "oracleSha256": "b9ce7184e5d88ad4dd5183066e9302b66baf3d1243cc58e8a6a28b8e9c70beff",
+      "caseSha256": "6ab1b1f5a82e7d5afeb5f2c48720da2eb731246a56f30b7c3830d4b0e74094e5",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "task_units/old.archive/job.py",
+          "first": 1,
+          "last": 6,
+          "sha256": "ad768e02d09eea7be4885b9ada96354682c8ac38e50778af8c7a4e1efb028b81"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-gaps-03",
+      "family": "gaps",
+      "split": "heldout",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "go",
+      "questionSha256": "1d59cf46b1bac34572671547bc675355327a24867eb11e1dfffb3e0356190863",
+      "oracleSha256": "e677057546e4aa3e628789b5e2ce44dd2da99488df074b741dab9f878dbc0fc3",
+      "caseSha256": "e9297d38b7972a14c925455b365a3c006d9d42d3088b3a0cc2b9784b49263c23",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "system/boundaries/token.go",
+          "first": 1,
+          "last": 6,
+          "sha256": "8712a40eaed2889dae4261eb1d84f13bf7e75a6ef27682b3204a9a10ff4fa762"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-gaps-04",
+      "family": "gaps",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "rust",
+      "questionSha256": "08b8f1f9537bb88c3994ccdb132935be76f3454a88430d7296145c62edc87cbc",
+      "oracleSha256": "b4b19ecc832c97ac35a768580528276dab12a18519d93b9d325d3a0b8563bd4e",
+      "caseSha256": "7316f7f233cf62be48264241d0cc5caf399f1706995e8f82f7212b9d709e34f3",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "plugins/unused-name/lower.rs",
+          "first": 1,
+          "last": 7,
+          "sha256": "1f18da145e65d2bcd7c76e8090f431afb5ff130be677cac40e44ab71d4466618"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-gaps-05",
+      "family": "gaps",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "typescript",
+      "questionSha256": "774cf618445e91ad6ea8c72cd77bccea4012b3958420c9ed4b8fdfe029df24ad",
+      "oracleSha256": "1eeba7975ab0b99d17eff79250b3d8a062f10e3efd52f9094c4f2ea6112c7125",
+      "caseSha256": "380ed265539f277bfd50725c1e3265d80ac8e36125e19db7bb48c01652f68cdc",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "code roots/value conditions.ts",
+          "first": 1,
+          "last": 7,
+          "sha256": "374cdd635e8d097daa2ce0cd2226af2c715cdb04fdab96f87408144424be44bb"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-gaps-06",
+      "family": "gaps",
+      "split": "heldout",
+      "caseType": "misleading-premise",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "javascript",
+      "questionSha256": "8cfc4afc8e85c9591214e1e0019fbb15f85f68e91315cdcb6ffed5732275da67",
+      "oracleSha256": "781a36baa89108d9799f247b7289175f0da564171f11688c71aa94412fe49931",
+      "caseSha256": "c10ddb74c15064bab754d9e9d04aa1ec6695ef8b6bf4995c972fe7a22abe5537",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "mix/entry-scope.mjs",
+          "first": 1,
+          "last": 4,
+          "sha256": "925869d91701203f09bea9f49e2d315594e02f630e1091564466a70bf7712f1a"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-gaps-07",
+      "family": "gaps",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "typescript",
+      "questionSha256": "57ba220e0ea1feda1f3d2add95df5c97f8b2efa651a525f10ff25816c7bd0983",
+      "oracleSha256": "b0110ff7ab589e14ba392ee0905079a4bc56227d9d56c52262dc8e71fc98c477",
+      "caseSha256": "e3588f90ef9f79336c9defabc7a073490d3c7a129a68c0793f38b563137e5da1",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "archives/date-messages.ts",
+          "first": 1,
+          "last": 8,
+          "sha256": "a0d129e3ed0500225bc202f99941e5a45730cb3c86a25ff8ab5c583f77c63dd5"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-gaps-08",
+      "family": "gaps",
+      "split": "development",
+      "caseType": "expected-unknown",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "ruby",
+      "questionSha256": "9363e64446e6a7c5b4d1adbf70edff0ef7c7373ebc86278c646b8ecfb76b8785",
+      "oracleSha256": "2513ef79483f72fe081c4d3760698d640b39ad99e1520eb7f31e44ebba859e62",
+      "caseSha256": "c138c95fbf1bc55eff766869350c0510eceb571660e3c478abd168dfebdc5a49",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "modules/reporting/leftover.rb",
+          "first": 1,
+          "last": 5,
+          "sha256": "8bb1d620615baee3e76875bda5ae01fba5c2fa4a636199a0782285bf94881219"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-gaps-09",
+      "family": "gaps",
+      "split": "heldout",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "csharp",
+      "questionSha256": "067898dcb13a06eea73f0d8c5c908607aaf9a0fc2635e628c1910ac1558983f2",
+      "oracleSha256": "5c34db7cfde97784562dbb5d6bae65fcdb06dfa22f7c908359162fe3938a285b",
+      "caseSha256": "d68dfe4a166544f7c3276e0ef724672a9f49eb152c817751ae660ea3535d525c",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "services-not-services/Entry.cs",
+          "first": 1,
+          "last": 5,
+          "sha256": "bf14c9298e9dc217d2c1492ed9cde7f20431b6fe369c4f962d876ceb9774123d"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-gaps-10",
+      "family": "gaps",
+      "split": "heldout",
+      "caseType": "negative-control",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "javascript",
+      "questionSha256": "21a8f1c751aba3757cfd512864b75b4e4104b5cf84ee0939df97c4195ab690a7",
+      "oracleSha256": "b6805a982d1044d3345ebf55e3180fa29245ada9a5c6161c693e861cbded2d56",
+      "caseSha256": "b857257c2312b9e443f03e2ac9294aec298db6dbaa7f273ed8cb907e62177b04",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "root/évent words.js",
+          "first": 1,
+          "last": 4,
+          "sha256": "c6562103aa206b8e2ae0ceb3824e4c503e0af113aeaaa70a1aaaced1d7389791"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-owner-01",
+      "family": "owner",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "typescript",
+      "questionSha256": "a213862364b7d137425d0105496649a21870ce0e46f1cb2dfdc4768b90e91f68",
+      "oracleSha256": "c844efb1fc3f545ef79220bcccdad18f9830001ecb37a90dc499c9cf95dd7780",
+      "caseSha256": "bfa94a7c6e8b60483cf3787d153888fae81021bb91b3bbe1ad203689ea4d839b",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "odd/queries/retrieve",
+          "first": 1,
+          "last": 3,
+          "sha256": "8a31a87f12939952a08f82244bfb7ea516afb71ce50876ec5add400e98ab06f6"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "c4e7ee8a80714afed21a3e4a1282de0bbc20550165fee4519798971e4ebb8684",
+          "scope": "Retrieved contribution sample only; no current duty/availability",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "074cd1c0af89d20bc5d1faeddcae62d44113c84c03607bf9fc9b2a59b3f0c9ed",
+          "scope": "Matched policy only when present; otherwise unknown",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-owner-02",
+      "family": "owner",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "python",
+      "questionSha256": "b6d2f68111e7c3f43106aa896560dae724cb3300605420cb5909753e522d2e9e",
+      "oracleSha256": "f350535980955a6b60938f67fd4b7aa9620bd120b32d41ff3e27318d200e1556",
+      "caseSha256": "80b688ab15a29313897f562797774c59fd425866dbb81a641d73e786003e1d60",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "task_units/old.archive/job.py",
+          "first": 1,
+          "last": 6,
+          "sha256": "ad768e02d09eea7be4885b9ada96354682c8ac38e50778af8c7a4e1efb028b81"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "c4e7ee8a80714afed21a3e4a1282de0bbc20550165fee4519798971e4ebb8684",
+          "scope": "Retrieved contribution sample only; no current duty/availability",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "4ab939520df8ee9521a0b1cc486a74c58adec1f0b2f8b6493bf319f5c888fadd",
+          "scope": "Matched policy only when present; otherwise unknown",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-owner-03",
+      "family": "owner",
+      "split": "heldout",
+      "caseType": "expected-unknown",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "go",
+      "questionSha256": "2d2f611cc028c4f66ecc7d445f320fddba08dc064fab399dfb9c209fb2438e70",
+      "oracleSha256": "f81f8755050062d4a1ccbc42adb77e482ea469786b1db1ac4bc1eee566a3649c",
+      "caseSha256": "267f1d502ac29522f2d87390c55bb121cbda1223476ef986e97d0ac6fbcb2c4f",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "system/boundaries/token.go",
+          "first": 1,
+          "last": 6,
+          "sha256": "8712a40eaed2889dae4261eb1d84f13bf7e75a6ef27682b3204a9a10ff4fa762"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "c4e7ee8a80714afed21a3e4a1282de0bbc20550165fee4519798971e4ebb8684",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "4ab939520df8ee9521a0b1cc486a74c58adec1f0b2f8b6493bf319f5c888fadd",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-owner-04",
+      "family": "owner",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "rust",
+      "questionSha256": "81a2c6e2370c1f3ec4d57b6aace531254ab2b4c8267a1bc3adaab9294442c57d",
+      "oracleSha256": "4e9f7dbf495f17d5057277770ba00a13958f7eaf1040f1cd749747f98e60bbea",
+      "caseSha256": "ea3b82fc676dc93926dda3ca91a05a1a2cb2afe7b147ea1bb52b8cd08544f348",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "plugins/unused-name/lower.rs",
+          "first": 1,
+          "last": 7,
+          "sha256": "1f18da145e65d2bcd7c76e8090f431afb5ff130be677cac40e44ab71d4466618"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "c4e7ee8a80714afed21a3e4a1282de0bbc20550165fee4519798971e4ebb8684",
+          "scope": "Retrieved contribution sample only; no current duty/availability",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "074cd1c0af89d20bc5d1faeddcae62d44113c84c03607bf9fc9b2a59b3f0c9ed",
+          "scope": "Matched policy only when present; otherwise unknown",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-owner-05",
+      "family": "owner",
+      "split": "development",
+      "caseType": "misleading-premise",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "typescript",
+      "questionSha256": "a0449856fed2eca7d197a74631b8104b64eab243658a6a32d1902b9537d7e81c",
+      "oracleSha256": "4004fcbdfc28ab1fd933337aa851616c1eb894f56454d8f60dc4b17009aa4c54",
+      "caseSha256": "ffc238157f6fde6e218b930e60b82a87f307128d4969e1d6e18e5f342e0b76ae",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "code roots/value conditions.ts",
+          "first": 1,
+          "last": 7,
+          "sha256": "374cdd635e8d097daa2ce0cd2226af2c715cdb04fdab96f87408144424be44bb"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "c4e7ee8a80714afed21a3e4a1282de0bbc20550165fee4519798971e4ebb8684",
+          "scope": "Retrieved contribution sample only; no current duty/availability",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "4ab939520df8ee9521a0b1cc486a74c58adec1f0b2f8b6493bf319f5c888fadd",
+          "scope": "Matched policy only when present; otherwise unknown",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-owner-06",
+      "family": "owner",
+      "split": "heldout",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "javascript",
+      "questionSha256": "30b548362517985eaee33589c32ff3997a75ccf13bee9e7dc2ae37f93b4eb4dc",
+      "oracleSha256": "4344782fab07378a4fb1f07f4371eaac85eec912351b1983ddccc3c3cd3ae641",
+      "caseSha256": "fd8aab3fc255529372af7d98b43eeb7ef677e06dda71c5375da53a723413c2fd",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "mix/entry-scope.mjs",
+          "first": 1,
+          "last": 4,
+          "sha256": "925869d91701203f09bea9f49e2d315594e02f630e1091564466a70bf7712f1a"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "c4e7ee8a80714afed21a3e4a1282de0bbc20550165fee4519798971e4ebb8684",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "4ab939520df8ee9521a0b1cc486a74c58adec1f0b2f8b6493bf319f5c888fadd",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 2,
+          "sha256": "a463cd8f1c45d0baf997af46c6f81172528b08859eca760eb0c9b08df912b7dd",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-owner-07",
+      "family": "owner",
+      "split": "development",
+      "caseType": "negative-control",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "typescript",
+      "questionSha256": "dca04066fb998752b08892c2c89e9575e8f1d5d5e96e83c51ed1c5bbac0b273d",
+      "oracleSha256": "eaea0b2166f60340d8890fb81968f86f0b43f4f0b4a9dc8d2f8fba245c4f0887",
+      "caseSha256": "c2416bb9b66f5ba9be09f91626939e2a2781f6eb41ca130f17cc54d66b3e71f9",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "archives/date-messages.ts",
+          "first": 1,
+          "last": 8,
+          "sha256": "a0d129e3ed0500225bc202f99941e5a45730cb3c86a25ff8ab5c583f77c63dd5"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "c4e7ee8a80714afed21a3e4a1282de0bbc20550165fee4519798971e4ebb8684",
+          "scope": "Retrieved contribution sample only; no current duty/availability",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "4ab939520df8ee9521a0b1cc486a74c58adec1f0b2f8b6493bf319f5c888fadd",
+          "scope": "Matched policy only when present; otherwise unknown",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-owner-08",
+      "family": "owner",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "ruby",
+      "questionSha256": "432d0cea2c09a3e1c10874c6b9cd2812d5527ff92230260ed9a53747b7987c9f",
+      "oracleSha256": "210fe66f1d5aeb4e5f2a5a250af7bcdd76b25ede4cedeab1a25103fe7f64de1c",
+      "caseSha256": "c496e7892f5ff6452fac4a051db3e4ab8c773b681a8b82ddf2e5aa65ac46e25a",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "modules/reporting/leftover.rb",
+          "first": 1,
+          "last": 5,
+          "sha256": "8bb1d620615baee3e76875bda5ae01fba5c2fa4a636199a0782285bf94881219"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "c4e7ee8a80714afed21a3e4a1282de0bbc20550165fee4519798971e4ebb8684",
+          "scope": "Retrieved contribution sample only; no current duty/availability",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "4ab939520df8ee9521a0b1cc486a74c58adec1f0b2f8b6493bf319f5c888fadd",
+          "scope": "Matched policy only when present; otherwise unknown",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-owner-09",
+      "family": "owner",
+      "split": "heldout",
+      "caseType": "expected-unknown",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "csharp",
+      "questionSha256": "6ee4266f30c9589046cb7e0ba6950aedb6fa3297363a8e8eda8a8de13ef0bdf4",
+      "oracleSha256": "b8b124d0bd3548c346c0e3cabf28482be28cd93f7993e806a5a814b6604985e0",
+      "caseSha256": "198faf20278e935c2773383fb0f85c1fb8f7ed2b7aa3f05cff4e69a5924c22f0",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "services-not-services/Entry.cs",
+          "first": 1,
+          "last": 5,
+          "sha256": "bf14c9298e9dc217d2c1492ed9cde7f20431b6fe369c4f962d876ceb9774123d"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "c4e7ee8a80714afed21a3e4a1282de0bbc20550165fee4519798971e4ebb8684",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "4ab939520df8ee9521a0b1cc486a74c58adec1f0b2f8b6493bf319f5c888fadd",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-owner-10",
+      "family": "owner",
+      "split": "heldout",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "javascript",
+      "questionSha256": "2dc6a1e3b2fc70c0d02b0ab9febdbf3af95cc3f109823fd46370c3e10816ce31",
+      "oracleSha256": "7ada1aa84c68ff3259e30ac692267a205b4f21338beeb1482464358b72b7c0ef",
+      "caseSha256": "217eaa75a3d4120ce8951fbf4760fea808787c239911123e22df6c09897cbe23",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "root/évent words.js",
+          "first": 1,
+          "last": 4,
+          "sha256": "c6562103aa206b8e2ae0ceb3824e4c503e0af113aeaaa70a1aaaced1d7389791"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "c4e7ee8a80714afed21a3e4a1282de0bbc20550165fee4519798971e4ebb8684",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "4ab939520df8ee9521a0b1cc486a74c58adec1f0b2f8b6493bf319f5c888fadd",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 2,
+          "sha256": "8b255a1bceeaf88252968b807508b62f758bab38bd6ebb220f6bfd3bdcffe7f2",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-trace-01",
+      "family": "trace",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "typescript",
+      "questionSha256": "a6a77b9fc4c46ec1c66b9e41b4257850085d845eeeac1a31c20b43085c277c59",
+      "oracleSha256": "358d85eafe19db358487dc1b4a55f499b8bf9a535b0ea65a2c4f9ee35633b34c",
+      "caseSha256": "c0ff7f8c590c0f1a971c4438b2519bb44244ed7bfd64db0b85540be4e16032e4",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "odd/queries/retrieve",
+          "first": 1,
+          "last": 3,
+          "sha256": "8a31a87f12939952a08f82244bfb7ea516afb71ce50876ec5add400e98ab06f6"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "a1b2a9a9e20fedd81b2d380ed3b24c6f1cf88f3ac9380d88f0d813d4250f081f",
+          "scope": "Exact sampled commit title/author/date; no patch unless explicit",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-trace-02",
+      "family": "trace",
+      "split": "development",
+      "caseType": "negative-control",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "python",
+      "questionSha256": "c04c0a93b97f30288c44c52ee65fd9bd1805aa71e1dc4f3deb30d3a52972b03b",
+      "oracleSha256": "401307b9982fb309bd909c4894f918507034e6b5e77e3e544875e9fbe2e8a0a7",
+      "caseSha256": "39ffcb3bc8fe858ca75f166a873a2b9f26ca5b885cf0cf8125c2256fa34f3487",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "task_units/old.archive/job.py",
+          "first": 1,
+          "last": 6,
+          "sha256": "ad768e02d09eea7be4885b9ada96354682c8ac38e50778af8c7a4e1efb028b81"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "a1b2a9a9e20fedd81b2d380ed3b24c6f1cf88f3ac9380d88f0d813d4250f081f",
+          "scope": "Exact sampled commit title/author/date; no patch unless explicit",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-trace-03",
+      "family": "trace",
+      "split": "heldout",
+      "caseType": "expected-unknown",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "go",
+      "questionSha256": "5c6bd81f81779747288efda0a3d794224d8c9031c471263c35068e4b5cf5a5c1",
+      "oracleSha256": "568407e5d4258b34d867088a61d5744d3082fbd4e3d2a1084fa7a9d26a98ca6e",
+      "caseSha256": "408f953c5bffa1de10148f651f0517ea577f53f53f01c689c67336379d71237c",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "system/boundaries/token.go",
+          "first": 1,
+          "last": 6,
+          "sha256": "8712a40eaed2889dae4261eb1d84f13bf7e75a6ef27682b3204a9a10ff4fa762"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "a1b2a9a9e20fedd81b2d380ed3b24c6f1cf88f3ac9380d88f0d813d4250f081f",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-v2-review-required"
+    },
+    {
+      "id": "EH06-trace-04",
+      "family": "trace",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "rust",
+      "questionSha256": "4c560525a654d5d64395af8c1c67ab818972fc8884c94cdf190af1f06ab2dbfc",
+      "oracleSha256": "676f092e064a651e77c22f2ae7cce3db5077c058d350927a59acf4c690589679",
+      "caseSha256": "c234813a505cad645399d67508d1df9bef1c40164ceee9327d8e99d4d07a344f",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "plugins/unused-name/lower.rs",
+          "first": 1,
+          "last": 7,
+          "sha256": "1f18da145e65d2bcd7c76e8090f431afb5ff130be677cac40e44ab71d4466618"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "a1b2a9a9e20fedd81b2d380ed3b24c6f1cf88f3ac9380d88f0d813d4250f081f",
+          "scope": "Exact sampled commit title/author/date; no patch unless explicit",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-trace-05",
+      "family": "trace",
+      "split": "development",
+      "caseType": "misleading-premise",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "typescript",
+      "questionSha256": "ce73dfe0a2028256414649f38c72b262ac16a6e344db44e7ca5a95914999259e",
+      "oracleSha256": "8b7cfe8f94a594ea3c60563f140027ca8ca890e14448a65d0098d913c4bda7ce",
+      "caseSha256": "11c581f44bedf6df053c69b0493a6f1117e3f542b8cb164d231594c465923f42",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "code roots/value conditions.ts",
+          "first": 1,
+          "last": 7,
+          "sha256": "374cdd635e8d097daa2ce0cd2226af2c715cdb04fdab96f87408144424be44bb"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "a1b2a9a9e20fedd81b2d380ed3b24c6f1cf88f3ac9380d88f0d813d4250f081f",
+          "scope": "Exact sampled commit title/author/date; no patch unless explicit",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-trace-06",
+      "family": "trace",
+      "split": "heldout",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "javascript",
+      "questionSha256": "c93b21de6088b097b9e178d1cb52a0acb77d45a4b90bbfa438249ad1206c2bc5",
+      "oracleSha256": "eeb1055bbbfad4c38157156063f61b1b40282c465506f486bf7b3c3f5eb5816f",
+      "caseSha256": "9ad5e5d2bbeb7b7377e06f600b494a79aef7da20262a2558517a5ef7a5bb9df0",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "mix/entry-scope.mjs",
+          "first": 1,
+          "last": 4,
+          "sha256": "925869d91701203f09bea9f49e2d315594e02f630e1091564466a70bf7712f1a"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "a1b2a9a9e20fedd81b2d380ed3b24c6f1cf88f3ac9380d88f0d813d4250f081f",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "3fdc339f9634a5a07d96a182dfb3e73120bddbb3d66b912adeb74ffe2267f06d",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-trace-07",
+      "family": "trace",
+      "split": "development",
+      "caseType": "expected-unknown",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "typescript",
+      "questionSha256": "bc322dc84348866dd638317ae26f14a044f7da317539e9bcbc638d6e27895c76",
+      "oracleSha256": "f912eb4d73feb59c72d7b77d49aa36264fa538e137316ba9f160b7df41112bf0",
+      "caseSha256": "ebff29c6689b42c5d094694e24af53e043f729fd711ee1909cbac7d0ad52e6f9",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "archives/date-messages.ts",
+          "first": 1,
+          "last": 8,
+          "sha256": "a0d129e3ed0500225bc202f99941e5a45730cb3c86a25ff8ab5c583f77c63dd5"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "a1b2a9a9e20fedd81b2d380ed3b24c6f1cf88f3ac9380d88f0d813d4250f081f",
+          "scope": "Exact sampled commit title/author/date; no patch unless explicit",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-trace-08",
+      "family": "trace",
+      "split": "development",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "ruby",
+      "questionSha256": "08aa53473a026d6f19787dd82f7f9ccd5f68040a635960013e319df3e9802526",
+      "oracleSha256": "f68f48df4dc637d087fd54b0d484a35d73a6a927abdee454362a493ae1617cf6",
+      "caseSha256": "0a955a4390b8d02fb7a6909d02e34b50f8e3ba9eb941516edaaec0396b5f8ae8",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "modules/reporting/leftover.rb",
+          "first": 1,
+          "last": 6,
+          "sha256": "7611b86a0625b164e0feaa89ae233d29ace2add5114787bdeab37fe24d8701d6"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "a1b2a9a9e20fedd81b2d380ed3b24c6f1cf88f3ac9380d88f0d813d4250f081f",
+          "scope": "Exact sampled commit title/author/date; no patch unless explicit",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-trace-09",
+      "family": "trace",
+      "split": "heldout",
+      "caseType": "negative-control",
+      "positiveFindingRequired": false,
+      "requiredUsefulFinding": true,
+      "languageFamily": "csharp",
+      "questionSha256": "d4a868423b1ac9deedbbd1f1166ee3b69cbb196190ce985aafc53ddee32a19b2",
+      "oracleSha256": "ecdeb30cbdb0e6cb7a9a14506c60cdf77817393abaa074c93792b2c9e2ac003f",
+      "caseSha256": "6cee985831e5d21db7c61a0d8e045e209401a508ad47e7145064a735ad1b69f6",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "services-not-services/Entry.cs",
+          "first": 1,
+          "last": 5,
+          "sha256": "bf14c9298e9dc217d2c1492ed9cde7f20431b6fe369c4f962d876ceb9774123d"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "a1b2a9a9e20fedd81b2d380ed3b24c6f1cf88f3ac9380d88f0d813d4250f081f",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    },
+    {
+      "id": "EH06-trace-10",
+      "family": "trace",
+      "split": "heldout",
+      "caseType": "positive",
+      "positiveFindingRequired": true,
+      "requiredUsefulFinding": true,
+      "languageFamily": "javascript",
+      "questionSha256": "0ddf56e29181132e2785ed479858e74178a781b1d2b5fa02a1a8156155d1ad26",
+      "oracleSha256": "ec5f9f2251bff3621ed74c8318d95fe0f2d9fa705a3c454dbe23dc488d6af58a",
+      "caseSha256": "2b3a6e6fad6ecf939fd6b86ad1f64a21590adbc5d84fd656afe38493d8149dd1",
+      "evidenceAnchors": [
+        {
+          "kind": "source-window",
+          "path": "root/évent words.js",
+          "first": 1,
+          "last": 4,
+          "sha256": "c6562103aa206b8e2ae0ceb3824e4c503e0af113aeaaa70a1aaaced1d7389791"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 0,
+          "sha256": "a1b2a9a9e20fedd81b2d380ed3b24c6f1cf88f3ac9380d88f0d813d4250f081f",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        },
+        {
+          "kind": "fixture-fact",
+          "index": 1,
+          "sha256": "e8b0e9c8e880044342f16e197bdd2ac942845f0bb21a5acb8b2d3967ed0cba8b",
+          "origin": "explicit fictional fixture record; not actual customer/provider truth"
+        }
+      ],
+      "oracleReviewStatus": "fresh-independent-review-required"
+    }
+  ],
+  "revision": "v2"
+}

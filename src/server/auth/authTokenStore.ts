@@ -1,11 +1,13 @@
 import { randomBytes } from "node:crypto";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { hashApiKey } from "../credentialCrypto";
 
 export type AuthTokenPurpose = "email_verify" | "password_reset" | "user_invite" | "refresh" | "auth_code";
 
 export class AuthTokenStore {
-  public constructor(private readonly pool: Pool) {}
+  public constructor(private readonly pool: Pick<Pool, "query">) {}
+
+  public inTransaction(client: PoolClient): AuthTokenStore { return new AuthTokenStore(client); }
 
   public async createToken(
     userId: string,

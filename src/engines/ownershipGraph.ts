@@ -1,3 +1,4 @@
+import { createSlackClientFromCredentials } from "../api/integrations/buildIntegrationClients";
 import { toRepositoryRelativePath } from "../context/repoFilePath";
 import type { GraphQueryApi } from "../api/graphQuery";
 import { CodeHostSecrets } from "../api/codeHosts/codeHostSecrets";
@@ -292,10 +293,7 @@ export class OwnershipGraphEngine {
       return this.options.slackClient;
     }
     const token = await this.options.integrationSecrets.getCredentials();
-    if (!token.slackToken) {
-      return undefined;
-    }
-    return new SlackClient({ token: token.slackToken });
+    return createSlackClientFromCredentials(token);
   }
 
   private assessCompleteness(

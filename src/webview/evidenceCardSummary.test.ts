@@ -229,7 +229,14 @@ test("ownership summary highlights primary owner", () => {
 
   const slackSearch: SlackSearchEvidence = { messages: [] };
   const summary = summarizeOwnershipReport(report, slackSearch, "github");
-  assert.match(summary.primaryFinding ?? "", /@alice is the primary owner/i);
+  assert.match(summary.primaryFinding ?? "", /@alice is the highest-ranked sampled contributor/i);
+  assert.doesNotMatch(summary.primaryFinding ?? "", /is the primary owner/);
+  assert.ok(summary.limitations.some((item) => item.includes("Response availability and on-call policy are unverified")));
+  assert.ok(summary.sourceContributions.some((item) => item.contribution.includes("CODEOWNERS declares alice, bob")));
+  const sampleOnly = summarizeOwnershipReport({...report, orgContext: undefined, risk: {singlePointOfFailure: true, expertUnavailable: true, orphaned: true, highTurnover: true, teamDispersion: true}}, undefined, "github");
+  assert.ok(sampleOnly.limitations.includes("Declared ownership is unverified in this pass."));
+  assert.ok(sampleOnly.limitations.some((item) => item.includes("No commits from the past six months were retrieved")));
+  assert.doesNotMatch(sampleOnly.limitations.join(" "), /experts appear unavailable|ownership appears unstable|across many teams/i);
   assert.ok(summary.sourceContributions.some((entry) => entry.provider === "github"));
   assert.ok(summary.recommendedActions.some((action) => action.kind === "open-file"));
 });

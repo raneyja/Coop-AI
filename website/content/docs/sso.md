@@ -211,9 +211,9 @@ Quick reference:
 | **12-hour sessions, no refresh** | SAML sessions expire after TTL (default 12h); users re-authenticate through the IdP |
 | **Shared service provider** | One Entity ID and ACS URL per Coop deployment; org resolved via RelayState |
 | **API keys bypass `requireSso`** | Org API keys authenticate automation even when SSO is required — rotate or revoke for offboarded users. Password and Google sign-in and refresh are blocked. |
-| **ForceAuthn on every login** | Coop sets `ForceAuthn="true"` on every SAML AuthnRequest; Azure AD also gets `prompt=login` so Microsoft must show an interactive sign-in challenge instead of silent SSO |
+| **ForceAuthn on every login** | Coop sets `ForceAuthn="true"` on every SAML AuthnRequest; Azure AD also gets `prompt=login` to request an interactive challenge. The actual challenge depends on the IdP/session policy and needs qualification |
 | **No IdP single logout (SLO)** | Signing out of Coop ends the Coop session only — it does not terminate your Okta/Azure browser session |
-| **No assertion replay cache** | `InResponseTo` replay protection is disabled on multi-instance backends; signature and timestamp checks still apply |
+| **Shared request state required** | This version validates `InResponseTo` against a pending PostgreSQL request with opaque RelayState, browser/tenant binding and single-use admission. Signature, issuer, audience and time checks remain required; qualify the deployed version and actual IdP/browser flow. |
 | **IdP cert storage** | X.509 signing certificates are stored in plaintext in `org_sso_config` (unlike encrypted OAuth integration tokens) |
 
 ## Security notes

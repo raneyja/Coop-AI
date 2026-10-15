@@ -85,7 +85,8 @@ export function analyzeCommitPatterns(commits: CommitInfo[], now = Date.now()): 
     if (commit.authorLogin && !entry.authorLogin) {
       entry.authorLogin = commit.authorLogin;
     }
-    const age = now - new Date(commit.date).getTime();
+    const stamp = Date.parse(commit.date);
+    const age = now - stamp;
     entry.counts.allTime += 1;
     if (age <= MS_180D) {
       entry.counts.sixMonths += 1;
@@ -93,9 +94,19 @@ export function analyzeCommitPatterns(commits: CommitInfo[], now = Date.now()): 
     if (age <= MS_365D) {
       entry.counts.oneYear += 1;
     }
-    entry.recencyScore += recencyWeightForAge(age);
-    if (!entry.lastCommitDate || commit.date > entry.lastCommitDate) {
-      entry.lastCommitDate = commit.date;
+    if (Number.isFinite(stamp)) {
+      entry.recencyScore += recencyWeightForAge(age);
+      const prior = entry.latestSampledCommit;
+      const priorStamp = prior ? Date.parse(prior.date) : -Infinity;
+      if (stamp > priorStamp) {
+        entry.lastCommitDate = new Date(stamp).toISOString();
+        entry.latestSampledCommit = { sha: commit.sha, date: commit.date, message: commit.message, sameTimeCount: 1 };
+      } else if (prior && stamp === priorStamp) {
+        const sameTimeCount = prior.sameTimeCount + 1;
+        entry.latestSampledCommit = commit.sha < prior.sha
+          ? { sha: commit.sha, date: commit.date, message: commit.message, sameTimeCount }
+          : { ...prior, sameTimeCount };
+      }
     }
     if (entry.messages.length < 20) {
       entry.messages.push(commit.message);
@@ -431,12 +442,12 @@ function buildEscalationPath(args: {
   if (secondaryLead) {
     if (avenues.length > 0) {
       return (
-        `No primary owner; @${secondaryLead.owner} has the most context ${commitReviewSource}. ` +
+        `No primary score tier; @${secondaryLead.owner} is the highest-ranked sampled contact candidate ${commitReviewSource}. ` +
         `Escalation: ${avenues.join("; ")}.`
       );
     }
     return (
-      `No primary owner; @${secondaryLead.owner} has the most context ${commitReviewSource}. ` +
+      `No primary score tier; @${secondaryLead.owner} is the highest-ranked sampled contact candidate ${commitReviewSource}. ` +
       `${ESCALATION_ADMIN_GAP} ${commitReviewSource}.`
     );
   }
@@ -464,8 +475,15 @@ export function collectEscalationAvenues(
   }
 
   const org = escalationInput.orgContext;
-  if (org) {
-    const teamHandle = org.teamSlug?.trim() || (org.source === "github_teams" ? org.teamName.trim() : "");
+  if (org?.source === "github_teams") {
+    const teamHandle = org.teamSlug?.trim() || org.teamName.trim();
+    if (teamHandle) {
+      avenues.push(`repository team @${teamHandle.replace(/^@/, "")} (suggested contact; path ownership unverified) [Sources: GitHub repository teams]`);
+      named.add(normalizeOwnerLogin(teamHandle));
+    }
+  }
+  if (org?.source === "codeowners") {
+    const teamHandle = org.teamSlug?.trim() || "";
     if (teamHandle) {
       avenues.push(`CODEOWNERS team @${teamHandle.replace(/^@/, "")} ${ESCALATION_SOURCE_CODEOWNERS}`);
       named.add(normalizeOwnerLogin(teamHandle));
@@ -576,11 +594,11 @@ export function draftOwnerMessage(report: OwnershipReport, context: OwnerMessage
   const brief = context.briefContext ?? context.userQuestion ?? "a change in this area";
 
   const commitPart =
-    primary && primary.commitCount > 0 ? `${primary.commitCount}+ commits in last 6 months` : "recent activity on this path";
+    primary && primary.commitCount > 0 ? `${primary.commitCount} sampled commits in last 6 months` : "sampled contribution signals on this path";
   const reviewPart =
     primary && primary.reviewApprovals > 0 ? `, ${primary.reviewApprovals} approved PRs` : "";
 
-  const text = `@${recipient} I noticed you're the primary maintainer of this area (${commitPart}${reviewPart}).
+  const text = `@${recipient} I found your contributions to this area (${commitPart}${reviewPart}).
 I have a question about ${moduleName}: ${brief}
 Are you available for a quick discussion?`;
 
@@ -649,20 +667,23 @@ export function buildOrgContextFromCodeowners(
   match: CodeownersMatch,
   teams: GitHubRepoTeam[]
 ): OrgTeamContext | undefined {
-  const teamOwner = match.owners.find((o) => teams.some((t) => t.slug === o || t.name === o));
-  const team = teams.find((t) => t.slug === teamOwner || t.name === teamOwner);
+  const teamOwner = match.owners.find((o) => teams.some((t) => t.slug === o.split("/").pop() || t.name === o));
+  const team = teams.find((t) => t.slug === teamOwner?.split("/").pop() || t.name === teamOwner);
   if (team) {
     return {
       teamName: team.name,
-      teamSlug: team.slug,
-      members: team.members ?? match.owners,
+      teamSlug: teamOwner,
+      members: [...match.owners],
+      teamMembers: team.members ? [...team.members] : undefined,
+      codeownersPattern: match.pattern,
       htmlUrl: team.htmlUrl,
-      source: "github_teams"
+      source: "codeowners"
     };
   }
   return {
     teamName: match.owners.join(", "),
-    members: match.owners,
+    members: [...match.owners],
+    codeownersPattern: match.pattern,
     source: "codeowners"
   };
 }

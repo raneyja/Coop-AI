@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import type { IntegrationProvider } from "./integrationConnectionStore";
 import type { IntegrationScopePolicy } from "../integrationScope/types";
 
@@ -9,13 +9,17 @@ export type IntegrationScopePolicyRecord = {
 };
 
 export class IntegrationScopePolicyStore {
-  public constructor(private readonly pool: Pool) {}
+  public constructor(private readonly pool: Pool, private readonly sql: Pick<Pool, "query"> = pool) {}
+
+  public inTransaction(client: PoolClient): IntegrationScopePolicyStore {
+    return new IntegrationScopePolicyStore(this.pool, client);
+  }
 
   public async get(
     orgId: string,
     provider: IntegrationProvider
   ): Promise<IntegrationScopePolicyRecord | undefined> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT provider, policy, updated_at
        FROM org_integration_policies
        WHERE org_id = $1 AND provider = $2`,
@@ -37,7 +41,7 @@ export class IntegrationScopePolicyStore {
     provider: IntegrationProvider,
     policy: IntegrationScopePolicy
   ): Promise<IntegrationScopePolicyRecord> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `INSERT INTO org_integration_policies (org_id, provider, policy, updated_at)
        VALUES ($1, $2, $3::jsonb, NOW())
        ON CONFLICT (org_id, provider) DO UPDATE SET
@@ -55,7 +59,7 @@ export class IntegrationScopePolicyStore {
   }
 
   public async delete(orgId: string, provider: IntegrationProvider): Promise<void> {
-    await this.pool.query(
+    await this.sql.query(
       `DELETE FROM org_integration_policies WHERE org_id = $1 AND provider = $2`,
       [orgId, provider]
     );

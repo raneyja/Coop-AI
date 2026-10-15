@@ -97,7 +97,7 @@ export function IndexingQueueList({
   }
 
   return (
-    <div className={`space-y-3 ${compact ? "" : "rounded-sm border border-coop-border bg-white/[0.02] p-4"}`}>
+    <div className={`space-y-3 ${compact ? "" : "rounded-xs border border-coop-border bg-white/[0.02] p-4"}`}>
       <QueueSection title="In progress" items={inFlight} compact={compact} />
       <QueueSection title="Needs attention" items={attention} compact={compact} />
       {readySlice.length > 0 ? (

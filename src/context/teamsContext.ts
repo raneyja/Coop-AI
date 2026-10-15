@@ -1,3 +1,4 @@
+import { createTeamsClientFromCredentials } from "../api/integrations/buildIntegrationClients";
 import { TeamsClient, type TeamsSearchHit, type TeamsThread } from "../api/teams/teamsClient";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ResolvedIntegrationScope } from "../integrationScope/types";
@@ -154,7 +155,10 @@ export async function fetchTeamsSearchContext(options: {
   }
 
   const creds = await options.secrets.getCredentials();
-  if (!creds.teamsToken && !options.client) {
+  if (creds.proxy && (!options.integrationScope?.enforced || !options.integrationScope.allowed)) {
+    return { source: "teams-search", query: "", messages: [], error: "Integration source authorization is unavailable." };
+  }
+  if (!creds.proxy && !creds.teamsToken && !options.client) {
     return {
       source: "teams-search",
       query: "",
@@ -168,7 +172,7 @@ export async function fetchTeamsSearchContext(options: {
   const existingMessages = teamsMessagesFromHits(options.existingHits);
   const client =
     options.client ??
-    new TeamsClient({ accessToken: creds.teamsToken!, signal: options.signal });
+    createTeamsClientFromCredentials(creds, { signal: options.signal })!;
   if (options.openIds?.length && existingMessages.length > 0) {
     const scopedExistingMessages = options.integrationScope?.enforced
       ? filterTeamsHitsByChannel(
@@ -178,7 +182,7 @@ export async function fetchTeamsSearchContext(options: {
       : existingMessages;
     const messages = await attachTeamsThreadBodies(client, scopedExistingMessages, {
       jobScoped: true,
-      openIds: options.openIds
+      openIds: options.openIds, failClosed: Boolean(creds.proxy)
     });
     return {
       source: "teams-search",
@@ -243,7 +247,7 @@ export async function fetchTeamsSearchContext(options: {
     : await attachTeamsThreadBodies(
         client,
         [...seen.values()].slice(0, limit),
-        { jobScoped: Boolean(options.jobScoped || options.openAfterHit), openIds: options.openIds }
+        { jobScoped: Boolean(options.jobScoped || options.openAfterHit), openIds: options.openIds, failClosed: Boolean(creds.proxy) }
       );
 
   const repoQuery =
@@ -280,31 +284,33 @@ const OPENED_THREAD_BODY_CHARS = OPENED_ARTIFACT_BODY_CHARS;
 async function attachTeamsThreadBodies(
   client: TeamsSearchClient,
   messages: TeamsSearchMessage[],
-  options: { jobScoped: boolean; openIds?: string[] }
+  options: { failClosed?: boolean; jobScoped: boolean; openIds?: string[] }
 ): Promise<TeamsSearchMessage[]> {
   if (messages.length === 0) {
     return messages;
   }
   if (options.openIds?.length) {
     return openHitsByIds({
+      failClosed: options.failClosed,
       hits: messages,
       ids: options.openIds,
       idOf: (message) => message.messageId ?? teamsMessageKey(message),
-      openOne: (message) => openTeamsArtifact(client, message)
+      openOne: (message) => openTeamsArtifact(client, message, options.failClosed)
     });
   }
   if (!options.jobScoped) {
     return messages;
   }
   const selected = messages.slice(0, 3);
-  const opened = await Promise.all(selected.map((message) => openTeamsArtifact(client, message)));
+  const opened = await Promise.all(selected.map((message) => openTeamsArtifact(client, message, options.failClosed)));
   const byKey = new Map(opened.map((message) => [teamsMessageKey(message), message]));
   return messages.map((message) => byKey.get(teamsMessageKey(message)) ?? message);
 }
 
 async function openTeamsArtifact(
   client: TeamsSearchClient,
-  message: TeamsSearchMessage
+  message: TeamsSearchMessage,
+  failClosed = false
 ): Promise<TeamsSearchMessage> {
   const marked = { ...message, opened: true as const };
   const teamId = message.teamId?.trim();
@@ -325,10 +331,12 @@ async function openTeamsArtifact(
           return { ...marked, body, threadOpened: true };
         }
       }
-    } catch {
+    } catch (error) {
+      if (failClosed) throw error;
       /* keep the search hit */
     }
   }
+  if (failClosed) throw new Error("Authorized integration read returned no body.");
   const body = sanitizeIntegrationSnippet(message.body);
   return body ? { ...marked, body, threadOpened: true } : marked;
 }

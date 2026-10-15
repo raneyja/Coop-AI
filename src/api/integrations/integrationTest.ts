@@ -12,6 +12,7 @@ import { NotionClient } from "../notion/notionClient";
 import { SlackClient } from "../slack/slackClient";
 import { TeamsClient } from "../teams/teamsClient";
 import {
+  createSlackClientFromCredentials, createTeamsClientFromCredentials, createNotionClientFromCredentials, createGoogleDocsClientFromCredentials,
   createConfluenceClientFromCredentials,
   createJiraClientFromCredentials
 } from "./buildIntegrationClients";
@@ -42,6 +43,12 @@ export async function testIntegrationChat(
   draft?: IntegrationTestDraft
 ): Promise<{ ok: boolean; message: string }> {
   const creds = await secrets.getCredentials();
+  if (creds.proxy && !draft?.token && !draft?.email) {
+    const clients = { slack: createSlackClientFromCredentials(creds), teams: createTeamsClientFromCredentials(creds),
+      jira: createJiraClientFromCredentials(creds), confluence: createConfluenceClientFromCredentials(creds),
+      notion: createNotionClientFromCredentials(creds), "google-docs": createGoogleDocsClientFromCredentials(creds) };
+    return clients[provider]?.testConnection() ?? { ok: false, message: "Integration is not connected." };
+  }
   switch (provider) {
     case "slack": {
       if (!creds.slackToken) {

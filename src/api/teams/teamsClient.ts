@@ -1,10 +1,11 @@
-import { fetchWithTimeout } from "../networkResilience";
-import { INTEGRATION_HTTP_TIMEOUT_MS, integrationAuthFailureMessage } from "../integrations/integrationHttp";
+import type { IntegrationProxy } from "../integrations/integrationOperations";
+import { fetchIntegrationResponse, INTEGRATION_HTTP_TIMEOUT_MS, integrationAuthFailureMessage } from "../integrations/integrationHttp";
 
 const GRAPH_API = "https://graph.microsoft.com/v1.0";
 const MESSAGE_CACHE_TTL_MS = 60 * 60 * 1000;
 
 export type TeamsClientOptions = {
+  proxy?: IntegrationProxy;
   accessToken: string;
   graphBaseUrl?: string;
   now?: () => number;
@@ -81,6 +82,7 @@ export class TeamsClient {
   }
 
   public async testConnection(): Promise<{ ok: boolean; message: string }> {
+    if (this.options.proxy) return this.options.proxy("teams.testConnection", [], this.options.signal);
     try {
       await this.request<{ displayName?: string }>("/me");
       return { ok: true, message: "Microsoft Teams is reachable." };
@@ -96,6 +98,7 @@ export class TeamsClient {
    * Search team channel messages the user can access.
    */
   public async searchMessages(query: string, options?: { limit?: number }): Promise<TeamsSearchHit[]> {
+    if (this.options.proxy) return this.options.proxy("teams.searchMessages", [query, options], this.options.signal);
     const limit = options?.limit ?? 25;
     const result = await this.request<TeamsSearchQueryResponse>(`/search/query`, {
       method: "POST",
@@ -113,7 +116,28 @@ export class TeamsClient {
     return teamsSearchHitsFromGraph(result, limit);
   }
 
+  /** Graph global search does not preserve an org channel allowlist; read only approved channel paths. */
+  public async searchChannelMessages(channels: Array<{ teamId: string; channelId: string }>, query: string, limit = 20): Promise<TeamsSearchHit[]> {
+    const hits: TeamsSearchHit[] = [];
+    const terms = query.toLowerCase().split(/\s+/).filter(term => term && term !== "*" && term !== "or");
+    for (const channel of channels.slice(0, 50)) {
+      const result = await this.request<{ value?: TeamsGraphMessage[] }>(
+        `/teams/${encodeURIComponent(channel.teamId)}/channels/${encodeURIComponent(channel.channelId)}/messages?$top=50`
+      );
+      for (const message of result.value ?? []) {
+        const body = stripHtml(message.body?.content ?? "");
+        if (!terms.length || terms.some(term => body.toLowerCase().includes(term))) hits.push({
+          teamId: channel.teamId, channelId: channel.channelId, messageId: message.id, body,
+          fromUserName: message.from?.user?.displayName, createdAt: message.createdDateTime ?? "", webUrl: message.webUrl
+        });
+      }
+      if (hits.length >= limit) break;
+    }
+    return hits.slice(0, limit);
+  }
+
   public async getThread(teamId: string, channelId: string, messageId: string): Promise<TeamsThread> {
+    if (this.options.proxy) return this.options.proxy("teams.getThread", [teamId, channelId, messageId], this.options.signal);
     const cacheKey = `${teamId}:${channelId}:${messageId}`;
     const cached = this.threadCache.get(cacheKey);
     if (cached && cached.expiresAt > this.now()) {
@@ -159,6 +183,7 @@ export class TeamsClient {
   }
 
   public async getUserInfo(userId: string): Promise<TeamsUserInfo> {
+    if (this.options.proxy) return this.options.proxy("teams.getUserInfo", [userId], this.options.signal);
     const user = await this.request<{
       id: string;
       displayName?: string;
@@ -229,13 +254,13 @@ export class TeamsClient {
 
   private async request<T>(path: string, options?: { method?: string; body?: unknown }): Promise<T> {
     const url = path.startsWith("http") ? path : `${this.baseUrl}${path}`;
-    const response = await fetchWithTimeout(
+    const response = await fetchIntegrationResponse(
       url,
       {
         method: options?.method ?? "GET",
         headers: this.headers,
         body: options?.body ? JSON.stringify(options.body) : undefined,
-        signal: this.options.signal
+        signal: this.options.signal, redirect: "error"
       },
       INTEGRATION_HTTP_TIMEOUT_MS
     );

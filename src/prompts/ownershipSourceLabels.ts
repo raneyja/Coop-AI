@@ -34,6 +34,10 @@ export function ownershipSourceLabelCodeowners(): string {
   return "[Sources: CODEOWNERS]";
 }
 
+export function ownershipSourceLabelRepositoryTeams(): string {
+  return "[Sources: GitHub repository teams]";
+}
+
 export function ownershipSourceLabelJira(): string {
   return "[Sources: Jira issues]";
 }
@@ -53,8 +57,10 @@ export function listOwnershipSourceLabels(
   if (slackSearch?.messages?.length) {
     labels.push(ownershipSourceLabelSlackDiscussions());
   }
-  if (report.orgContext?.source === "codeowners" || report.orgContext?.source === "github_teams") {
+  if (report.orgContext?.source === "codeowners") {
     labels.push(ownershipSourceLabelCodeowners());
+  } else if (report.orgContext?.source === "github_teams") {
+    labels.push(ownershipSourceLabelRepositoryTeams());
   }
   return labels;
 }
@@ -68,7 +74,7 @@ export function listOwnershipSourcesChecklist(
   const hasDiscussions = (slackSearch?.messages?.length ?? 0) > 0;
   if (hasPresence && !hasDiscussions) {
     extra.push(
-      `${ownershipSourceLabelSlack()} — Slack presence signals show owner availability; cite this label for active/away status (no Slack discussion messages were found).`
+      `${ownershipSourceLabelSlack()} — cite only the observed active/away status and identity qualifier; response availability is unverified (no Slack discussion messages were found).`
     );
   }
   return buildSourcesChecklistFromKeys(listOwnershipSourceLabels(report, slackSearch), extra);

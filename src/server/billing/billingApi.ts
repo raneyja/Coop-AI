@@ -1,5 +1,6 @@
 import type { ServerResponse } from "node:http";
 import type { Pool } from "pg";
+import { BillingRecoveryError, dispatchBillingEmails, processBillingEvent, readCheckoutReceipt } from "./billingRecovery";
 import type { OrgStore } from "../orgStore";
 import type { UserStore } from "../users/userStore";
 import type { EmailService } from "../email/emailService";
@@ -7,13 +8,13 @@ import { type AuditLogger } from "../audit/auditLogger";
 import { requireAuth, requireOrgAdmin, resolveAuthContext, resolveOrgPlanFromDb } from "../authMiddleware";
 import { clampSeatCountForPlan } from "../planGates";
 import type { ServerConfig } from "../serverConfig";
+import type { AuthRateLimitStore } from "../auth/authRateLimit";
 import { loadBillingConfig, type BillingConfig } from "./billingConfig";
 import { adminPortalFreshLoginUrl } from "./adminPortalUrl";
-import { StripeService, isTerminalStripeSubscriptionStatus, subscriptionAllowsPaidMutation } from "./stripeService";
+import { StripeService, subscriptionAllowsPaidMutation } from "./stripeService";
 import { handleFreeSignupApiRequest } from "../freeSignupApi";
 import {
   CheckoutFulfillmentIncompleteError,
-  fulfillPaidCheckoutSession,
   readStripeCustomerId
 } from "./fulfillCheckout";
 import {
@@ -35,7 +36,6 @@ import type { AuthTokenStore } from "../auth/authTokenStore";
 import type { AuthConfig } from "../auth/authConfig";
 import { mapStripeConvertError, SeatConvertError, subscriptionInactiveMessage } from "./convertSeat";
 import { billingEmailBelongsToOrg, resolveBillingContact } from "./billingEmail";
-import { captureException } from "../observability/errorReporter";
 
 type ParsedRequest = {
   method: string;
@@ -44,9 +44,11 @@ type ParsedRequest = {
   headers: Record<string, string | undefined>;
   body: unknown;
   rawBody: Buffer;
+  peerAddress?: string;
 };
 
 export type BillingApiDeps = {
+  authRateLimitStore?: AuthRateLimitStore;
   orgStore?: OrgStore;
   userStore?: UserStore;
   emailService?: EmailService;
@@ -77,6 +79,7 @@ export async function handleBillingApiRequest(
         method: parsed.method,
         pathname: parsed.pathname,
         headers: parsed.headers,
+        peerAddress: parsed.peerAddress,
         body: parsed.body
       },
       response,
@@ -86,7 +89,9 @@ export async function handleBillingApiRequest(
         emailService: deps.emailService,
         authIdentityStore: deps.authIdentityStore,
         authTokenStore: deps.authTokenStore,
-        authConfig: deps.authConfig
+        authConfig: deps.authConfig,
+        serverConfig: deps.serverConfig,
+        authRateLimitStore: deps.authRateLimitStore
       }
     )
   ) {
@@ -349,17 +354,27 @@ async function handleCheckoutStatus(
     }
 
     let org = await findReadyCheckoutOrg(deps.orgStore, customerId);
+    if (org) {
+      const billing = await deps.orgStore.getOrganizationBilling(org.id);
+      const subscriptionId = readStripeCustomerId(session.subscription);
+      if (billing?.stripeSubscriptionId && billing.stripeSubscriptionId !== subscriptionId) {
+        const receipt = deps.pool ? await readCheckoutReceipt(deps.pool,session.id) : undefined;
+        // Completed history is safe to revisit, but an unreceipted old payment
+        // is a replacement conflict requiring the billing owner's reconciliation.
+        if (!receipt || receipt.customerId !== customerId || receipt.subscriptionId !== subscriptionId || receipt.orgId !== org.id) {
+          pending();return true;
+        }
+      }
+    }
     if (!org && paymentSettled && deps.userStore && deps.emailService) {
       try {
-        await fulfillPaidCheckoutSession(session, {
-          orgStore: deps.orgStore,
-          userStore: deps.userStore,
-          emailService: deps.emailService,
-          authTokenStore: deps.authTokenStore,
-          authIdentityStore: deps.authIdentityStore
-        });
+        if (!deps.pool) { pending(); return true; }
+        const outcome = await processBillingEvent(deps,stripe,{ id: `checkout-poll:${session.id}`,
+          type: "checkout.session.completed",data: { object: { id: session.id,customer: customerId } } });
+        if (outcome === "in_progress") { pending(); return true; }
+        try { await dispatchBillingEmails(deps); } catch { /* Durable delivery remains pending. */ }
       } catch (error) {
-        if (error instanceof CheckoutFulfillmentIncompleteError) {
+        if (error instanceof CheckoutFulfillmentIncompleteError || error instanceof BillingRecoveryError) {
           pending();
           return true;
         }
@@ -381,7 +396,7 @@ async function handleCheckoutStatus(
   } catch (error) {
     writeJson(response, 502, {
       status: "invalid",
-      message: error instanceof Error ? error.message : "Could not verify checkout session."
+      message: "Could not verify checkout session."
     });
   }
   return true;
@@ -703,221 +718,19 @@ async function handleStripeWebhook(
 
   const type = String(event.type ?? "");
   const eventId = String(event.id ?? "");
-  if (eventId) {
-    const claimed = await claimStripeWebhookEvent(deps.pool, eventId, type);
-    if (claimed === "unavailable") {
-      writeJson(response, 503, { error: "webhook_dedup_unavailable" });
-      return true;
-    }
-    if (claimed === "in_progress") {
-      writeJson(response, 500, { error: "webhook_in_progress" });
-      return true;
-    }
-    if (claimed === "duplicate") {
-      writeJson(response, 200, { received: true, duplicate: true });
-      return true;
-    }
-  }
-
+  if (!eventId || !type) { writeJson(response,400,{ error: "invalid_event" }); return true; }
+  if (!deps.pool) { writeJson(response,503,{ error: "webhook_dedup_unavailable" }); return true; }
   try {
-    if (type === "checkout.session.completed") {
-      await handleCheckoutCompleted(event, deps);
-    } else if (type === "customer.subscription.updated" || type === "customer.subscription.deleted") {
-      await handleSubscriptionChange(event, deps);
-    } else if (type === "invoice.payment_failed") {
-      await handleInvoicePaymentFailed(event, deps);
-    }
-    if (eventId) {
-      await completeStripeWebhookEvent(deps.pool, eventId);
-    }
-  } catch (error) {
-    if (eventId) {
-      await failStripeWebhookEvent(deps.pool, eventId);
-    }
-    console.error("[stripe] webhook handler error:", error);
-    captureException(error, { service: "api", route: "/webhooks/stripe" });
-    writeJson(response, 500, { error: "webhook_handler_failed" });
-    return true;
+    const result = await processBillingEvent(deps,stripe,event);
+    if (result === "in_progress") { writeJson(response,500,{ error: "webhook_in_progress" }); return true; }
+    // Notifications are committed first; transient mail failure stays recoverable.
+    try { await dispatchBillingEmails(deps); } catch { /* Reconciler reports missing delivery dependencies. */ }
+    writeJson(response,200,{ received: true, ...(result === "duplicate" ? { duplicate: true } : {}) });
+  } catch {
+    console.warn("[billing] event processing failed",{ eventId,type });
+    writeJson(response,500,{ error: "webhook_handler_failed" });
   }
-
-  writeJson(response, 200, { received: true });
   return true;
-}
-
-async function handleCheckoutCompleted(event: Record<string, unknown>, deps: BillingApiDeps): Promise<void> {
-  const session = asRecord(asRecord(event.data).object);
-  const fulfilled = await fulfillPaidCheckoutSession(session, {
-    orgStore: deps.orgStore!,
-    userStore: deps.userStore!,
-    emailService: deps.emailService!,
-    authTokenStore: deps.authTokenStore,
-    authIdentityStore: deps.authIdentityStore
-  });
-
-  await deps.auditLogger?.record({
-    orgId: fulfilled.orgId,
-    action: "billing.checkout.completed",
-    metadata: {
-      orgName: fulfilled.requestedOrgName,
-      adminEmail: fulfilled.adminEmail,
-      seatCount: fulfilled.seatCount,
-      stripeCustomerId: fulfilled.stripeCustomerId,
-      existingOrgId: fulfilled.existingOrgId,
-      upgrade: fulfilled.upgrade
-    }
-  });
-}
-
-async function handleSubscriptionChange(event: Record<string, unknown>, deps: BillingApiDeps): Promise<void> {
-  const object = asRecord(asRecord(event.data).object);
-  const customerId = readStripeCustomerId(object.customer);
-  const status = String(object.status ?? "");
-  let org = customerId ? await deps.orgStore!.findOrganizationByStripeCustomerId(customerId) : undefined;
-  if (!org) {
-    const existingOrgId = String(asRecord(object.metadata).existing_org_id ?? "").trim();
-    if (existingOrgId) {
-      org = await deps.orgStore!.getOrganization(existingOrgId);
-    }
-  }
-  if (!org) return;
-
-  const config = loadBillingConfig();
-  const items = readStripeSubscriptionItems(object);
-  const inventory = parseStripeItemsToInventory(items, stripeUsagePriceIds(config));
-  const quantity = Math.max(1, seatInventoryTotal(inventory) || readSubscriptionQuantity(object));
-  const mixed = isMixedSeatInventory(inventory);
-  const homogeneous = homogeneousUsageTier(inventory);
-  const usageTier = mixed
-    ? (org.usageTier ?? "pro")
-    : (homogeneous ?? usageTierForStripePrice(items[0]?.priceId, config));
-  const priceId = mixed
-    ? stripePriceIdForUsageTier(usageTier, stripeUsagePriceIds(config)) ?? items[0]?.priceId
-    : items[0]?.priceId ?? readStripePriceIdFromSubscription(object);
-
-  const linkedCustomer = customerId.startsWith("cus_") ? { stripeCustomerId: customerId } : {};
-
-  if (status === "active" || status === "trialing") {
-    await deps.orgStore!.setOrganizationPlan(org.id, "pro");
-    await deps.orgStore!.updateOrganizationBilling(org.id, {
-      ...linkedCustomer,
-      billingStatus: "active",
-      stripeSubscriptionId: String(object.id ?? ""),
-      seatCount: quantity,
-      usageTier,
-      stripePriceId: priceId ?? null,
-      seatInventory: inventory
-    });
-  } else if (isTerminalStripeSubscriptionStatus(status)) {
-    // Keep stripeSubscriptionId so convert/ops can see the canceled sub and refuse.
-    // Drop plan + purchased inventory + per-user SKUs so Max/Pro+ cannot linger.
-    await deps.orgStore!.setOrganizationPlan(org.id, "free");
-    await deps.orgStore!.updateOrganizationBilling(org.id, {
-      ...linkedCustomer,
-      billingStatus: status === "incomplete_expired" ? "canceled" : status,
-      usageTier: null,
-      stripePriceId: null,
-      seatCount: 1,
-      seatInventory: { pro: 0, pro_plus: 0, max: 0 }
-    });
-    await deps.userStore?.clearOrgUsersUsageTiers(org.id);
-  }
-}
-
-async function handleInvoicePaymentFailed(event: Record<string, unknown>, deps: BillingApiDeps): Promise<void> {
-  const object = asRecord(asRecord(event.data).object);
-  const customerId = readStripeCustomerId(object.customer);
-  const org = customerId ? await deps.orgStore!.findOrganizationByStripeCustomerId(customerId) : undefined;
-  if (!org) return;
-
-  await deps.orgStore!.updateOrganizationBilling(org.id, { billingStatus: "past_due" });
-}
-
-type WebhookClaim = "claimed" | "duplicate" | "in_progress" | "unavailable";
-
-async function claimStripeWebhookEvent(
-  pool: Pool | null | undefined,
-  eventId: string,
-  eventType: string
-): Promise<WebhookClaim> {
-  if (!pool) {
-    return "unavailable";
-  }
-  try {
-    const inserted = await pool.query(
-      `INSERT INTO stripe_webhook_events (event_id, event_type, status)
-       VALUES ($1, $2, 'processing')
-       ON CONFLICT (event_id) DO NOTHING
-       RETURNING event_id`,
-      [eventId, eventType]
-    );
-    if ((inserted.rowCount ?? 0) > 0) {
-      return "claimed";
-    }
-
-    const reclaimed = await pool.query(
-      `UPDATE stripe_webhook_events
-       SET status = 'processing', event_type = $2, processed_at = now()
-       WHERE event_id = $1 AND status = 'failed'
-       RETURNING event_id`,
-      [eventId, eventType]
-    );
-    if ((reclaimed.rowCount ?? 0) > 0) {
-      return "claimed";
-    }
-
-    const current = await pool.query<{ status?: string }>(
-      `SELECT status FROM stripe_webhook_events WHERE event_id = $1`,
-      [eventId]
-    );
-    const status = String(current.rows[0]?.status ?? "");
-    if (status === "completed") {
-      return "duplicate";
-    }
-    if (!status) {
-      return "unavailable";
-    }
-    return "in_progress";
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[stripe] webhook dedup check failed for ${eventId}: ${message}`);
-    return "unavailable";
-  }
-}
-
-async function completeStripeWebhookEvent(
-  pool: Pool | null | undefined,
-  eventId: string
-): Promise<void> {
-  if (!pool) {
-    return;
-  }
-  await pool.query(
-    `UPDATE stripe_webhook_events
-     SET status = 'completed', processed_at = now()
-     WHERE event_id = $1 AND status = 'processing'`,
-    [eventId]
-  );
-}
-
-/** Leave the event retryable. A later delivery may claim it again. */
-async function failStripeWebhookEvent(
-  pool: Pool | null | undefined,
-  eventId: string
-): Promise<void> {
-  if (!pool) {
-    return;
-  }
-  try {
-    await pool.query(
-      `UPDATE stripe_webhook_events
-       SET status = 'failed', processed_at = now()
-       WHERE event_id = $1 AND status = 'processing'`,
-      [eventId]
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[stripe] webhook claim release failed for ${eventId}: ${message}`);
-  }
 }
 
 function readStripeSubscriptionItems(object: Record<string, unknown>): Array<{

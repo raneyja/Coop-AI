@@ -7,6 +7,7 @@ import type { ServerConfig } from "./serverConfig";
 import type { UserStore } from "./users/userStore";
 import {
   ChatThreadsStore,
+  ChatThreadWriteForbiddenError,
   decodeThreadCursor,
   type ChatMessageRow,
   type ChatThreadRow
@@ -291,6 +292,7 @@ export async function handleChatThreadsApiRequest(
       try {
         const thread = await store.upsertThread({
           id: threadId,
+          writeScope: personalThreadScope(auth, actor),
           orgId: auth.orgId,
           userId: threadUserId,
           principal: actor.principal,
@@ -306,7 +308,9 @@ export async function handleChatThreadsApiRequest(
 
         writeJson(response, 200, { thread: threadToJson(thread) });
       } catch (error) {
-        if (isMissingChatThreadsTable(error)) {
+        if (error instanceof ChatThreadWriteForbiddenError) {
+          writeJson(response, 403, { error: "forbidden" });
+        } else if (isMissingChatThreadsTable(error)) {
           writeChatThreadsSchemaError(response);
         } else {
           throw error;

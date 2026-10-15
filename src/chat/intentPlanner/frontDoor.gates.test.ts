@@ -5,9 +5,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+import type { CoopChatSession, CoopChatSessionOptions } from "../CoopChatSession";
 import { createRequire } from "node:module";
-import { ThreadRunManager, SESSION_RUN_THREAD_ID } from "../chatTurn";
+import { SESSION_RUN_THREAD_ID } from "../chatTurn";
 import {
   extraTermsForIntegration,
   formatIntentBriefForAgent,
@@ -25,6 +26,30 @@ import {
   planRawChatAskFromRules,
   shouldInterpretChatAsk
 } from "./frontDoor";
+
+// Construct the actual session so newly added lifecycle state is exercised.
+// Dependencies outside this routing boundary fail loudly if unexpectedly used.
+async function routingSession(t: TestContext) {
+  createRequire(__filename)("../../../scripts/vscode-test-stub.cjs");
+  const vscode = createRequire(__filename)("vscode");
+  const { CoopChatSession } = await import("../CoopChatSession");
+  const { SecureApiClient } = await import("../SecureApiClient");
+  const unused = <K extends keyof CoopChatSessionOptions>(name: K): CoopChatSessionOptions[K] =>
+    new Proxy({}, { get() { throw new Error(`Unexpected routing dependency: ${name}`); } }) as CoopChatSessionOptions[K];
+  const session = new CoopChatSession({
+    extensionUri: vscode.Uri.file("/private/tmp/coop-routing-fixture"),
+    extensionContext: unused("extensionContext"),
+    api: new SecureApiClient({ get: async () => undefined, store: async () => {}, delete: async () => {},
+      onDidChange: () => ({ dispose() {} }) }),
+    healthMonitor: unused("healthMonitor"), degradationCache: unused("degradationCache"),
+    codeHostRouter: unused("codeHostRouter"), codeHostSecrets: unused("codeHostSecrets"),
+    integrationSecrets: unused("integrationSecrets"), indexManager: unused("indexManager"),
+    indexBackend: unused("indexBackend"), lightningStatusBar: unused("lightningStatusBar"),
+    identityDirectoryStore: unused("identityDirectoryStore"), agentOrchestrator: unused("agentOrchestrator")
+  });
+  t.after(() => session.dispose());
+  return session as unknown as { handleChatSend: CoopChatSession["handleChatSend"]; handleStreamCancel(threadId?: string): void };
+}
 
 const USE_REPO = "coopai-group/training-java-monolith-refactor";
 const CONNECTED = ["slack", "jira", "confluence", "teams"] as const;
@@ -323,16 +348,12 @@ test("N5 locate+decision plans call quarterback refine without a command constra
   );
 });
 
-test("handleChatSend interprets before routeSlashCommand (slash bypass is impossible)", async () => {
-  createRequire(__filename)("../../../scripts/vscode-test-stub.cjs");
-  const { CoopChatSession } = await import("../CoopChatSession");
+test("handleChatSend interprets before routeSlashCommand (slash bypass is impossible)", async (t) => {
   for (const ask of ["/slack SQL injection", "/blast auth", "/edit Rename header", "/compare org/one org/two auth"]) {
     const events: string[] = [];
     const plan = planRawChatAskFromRules(ask).plan;
-    const session = Object.assign(Object.create(CoopChatSession.prototype), {
+    const session = Object.assign(await routingSession(t), {
       currentContext: { provider: "gitlab", owner: "org", repo: "one", branch: "main", scope: "repo" },
-      options: { api: { beginQuotaTurn() {} } },
-      threadRuns: new ThreadRunManager(),
       dismissPendingQuickActionSuggest() { events.push("dismiss"); },
       async resolveChatIntentPlan() { events.push("interpret"); return plan; },
       async routeSlashCommand(_parsed: unknown, _attachments: unknown, _mentions: unknown, routedPlan: unknown, submissionId: unknown, requestStartedAt: unknown) {
@@ -377,15 +398,12 @@ test("handleChatSend interprets before routeSlashCommand (slash bypass is imposs
   );
 });
 
-test("integration document slash commands reach interpretation without a selected repo", async () => {
-  createRequire(__filename)("../../../scripts/vscode-test-stub.cjs");
-  const { CoopChatSession } = await import("../CoopChatSession");
+test("integration document slash commands reach interpretation without a selected repo", async (t) => {
   for (const ask of ["/docs Read Coop AI — Architecture Overview", "/notion Read Architecture Overview", "/confluence Read Architecture Overview"]) {
     const events: string[] = [];
     const plan = planRawChatAskFromRules(ask).plan;
-    const session = Object.assign(Object.create(CoopChatSession.prototype), {
-      currentContext: {}, options: { api: { beginQuotaTurn() {} } },
-      threadRuns: new ThreadRunManager(),
+    const session = Object.assign(await routingSession(t), {
+      currentContext: {},
       dismissPendingQuickActionSuggest() {},
       async completeMissingIntentClarification() { events.push("blocked"); },
       async resolveChatIntentPlan() { events.push("interpret"); return plan; },
@@ -396,9 +414,7 @@ test("integration document slash commands reach interpretation without a selecte
   }
 });
 
-test("Stop during intent planning prevents late slash execution and permits the next send", async () => {
-  createRequire(__filename)("../../../scripts/vscode-test-stub.cjs");
-  const { CoopChatSession } = await import("../CoopChatSession");
+test("Stop during intent planning prevents late slash execution and permits the next send", async (t) => {
   const ask = "/edit Rename the accumulator";
   const plan = planRawChatAskFromRules(ask).plan;
   let resolvePlan!: (value: typeof plan) => void;
@@ -406,10 +422,8 @@ test("Stop during intent planning prevents late slash execution and permits the 
   const routes: string[] = [];
   const diagnostics: Array<Record<string, unknown>> = [];
   let first = true;
-  const session = Object.assign(Object.create(CoopChatSession.prototype), {
+  const session = Object.assign(await routingSession(t), {
     currentContext: { provider: "gitlab", owner: "org", repo: "one", branch: "main", scope: "repo" },
-    options: { api: { beginQuotaTurn() {} } },
-    threadRuns: new ThreadRunManager(),
     dismissPendingQuickActionSuggest() {},
     resolveChatIntentPlan() { if (first) { first = false; return pendingPlan; } return Promise.resolve(plan); },
     async routeSlashCommand() { routes.push("route"); },

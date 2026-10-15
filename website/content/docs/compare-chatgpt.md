@@ -14,7 +14,7 @@ CoopAI is for teams that need **private, org-grounded VS Code code intelligence*
 
 - **Private graph + live tools** — not a public chat trained on the open web as your source of truth for internal services.
 - **Ownership and blast radius** — first-class workflows.
-- **Enterprise controls** — SSO, zero-retention options, admin-connected integrations.
+- **Enterprise controls** — SSO, provider request controls (account retention requires verification), admin-connected integrations.
 - **Editor loop** — ask → complete → reviewable edit → optional PR.
 
 ## Comparison matrix

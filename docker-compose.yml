@@ -14,6 +14,8 @@ services:
       - ./migrations:/docker-entrypoint-initdb.d:ro
 
   api:
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
     build: .
     restart: unless-stopped
     ports:
@@ -34,6 +36,8 @@ services:
       - zoekt
 
   worker:
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
     build: .
     restart: unless-stopped
     command: ["node", "dist/workerEntry.js"]
@@ -54,6 +58,8 @@ services:
       - zoekt
 
   zoekt:
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
     # Same image as api/worker — the Zoekt webserver binary is included.
     # Serves the full-text index shards built by the worker container.
     build: .

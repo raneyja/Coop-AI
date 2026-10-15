@@ -33,19 +33,19 @@ Manual checklist for admin wizard + extension checklist after [in-product-onboar
 
 ## API spot checks (optional)
 
-**Terminal** (replace `coop_…`):
+**Terminal:** Set `COOP_API_KEY` in this shell to the developer key issued for this smoke test (`coop_…`); keep its value out of files and Git. The calls below stop locally if it is unset.
 
 ```bash
 # Integration health
-curl -s -H "Authorization: Bearer coop_YOUR_KEY" \
+curl -s -H "Authorization: Bearer ${COOP_API_KEY:?set COOP_API_KEY}" \
   http://localhost:8787/v1/admin/integrations/health | jq
 
 # Live tests
-curl -s -H "Authorization: Bearer coop_YOUR_KEY" \
+curl -s -H "Authorization: Bearer ${COOP_API_KEY:?set COOP_API_KEY}" \
   "http://localhost:8787/v1/admin/integrations/health?refresh=true" | jq
 
 # Extension /v1/me fields
-curl -s -H "Authorization: Bearer coop_YOUR_KEY" \
+curl -s -H "Authorization: Bearer ${COOP_API_KEY:?set COOP_API_KEY}" \
   http://localhost:8787/v1/me | jq '.onboardingCompleted, .adminPortalUrl, .integrationHealthSummary'
 ```
 

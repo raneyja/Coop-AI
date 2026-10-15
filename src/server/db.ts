@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import databasePoolOptions from "./databasePoolOptions.cjs";
 
 let sharedPool: Pool | null = null;
 
@@ -15,17 +16,8 @@ export async function getDbPool(connectionString?: string): Promise<Pool | null>
   if (!PoolCtor) {
     throw new Error("pg module did not export Pool");
   }
-  sharedPool = new PoolCtor(poolOptions(url));
+  sharedPool = new PoolCtor(databasePoolOptions(url));
   return sharedPool;
-}
-
-function poolOptions(connectionString: string): { connectionString: string; ssl?: { rejectUnauthorized: boolean } } {
-  const needsSsl =
-    process.env.DATABASE_SSL === "true" ||
-    /sslmode=(require|verify-ca|verify-full)/i.test(connectionString);
-  return needsSsl
-    ? { connectionString, ssl: { rejectUnauthorized: false } }
-    : { connectionString };
 }
 
 export async function closeDbPool(): Promise<void> {

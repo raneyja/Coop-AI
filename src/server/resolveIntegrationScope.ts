@@ -21,7 +21,7 @@ export async function resolveIntegrationScope(options: {
   provider: IntegrationProvider;
   orgPlan: string;
   connected: boolean;
-  scopePolicyStore?: IntegrationScopePolicyStore;
+  scopePolicyStore?: Pick<IntegrationScopePolicyStore, "get">;
 }): Promise<ResolvedIntegrationScope> {
   const { orgId, provider, orgPlan, connected, scopePolicyStore } = options;
 
@@ -56,7 +56,7 @@ async function resolveSlackScope(
   orgId: string,
   orgPlan: string,
   connected: boolean,
-  scopePolicyStore?: IntegrationScopePolicyStore
+  scopePolicyStore?: Pick<IntegrationScopePolicyStore, "get">
 ): Promise<ResolvedIntegrationScope> {
   const provider: IntegrationProvider = "slack";
   const scopeGated = requiresIntegrationScope(orgPlan);
@@ -107,7 +107,7 @@ async function resolveAtlassianScope(
   orgId: string,
   orgPlan: string,
   connected: boolean,
-  scopePolicyStore?: IntegrationScopePolicyStore
+  scopePolicyStore?: Pick<IntegrationScopePolicyStore, "get">
 ): Promise<ResolvedIntegrationScope> {
   const provider: IntegrationProvider = "atlassian";
   const scopeGated = requiresIntegrationScope(orgPlan);
@@ -169,7 +169,7 @@ async function resolveNotionScope(
   orgId: string,
   orgPlan: string,
   connected: boolean,
-  scopePolicyStore?: IntegrationScopePolicyStore
+  scopePolicyStore?: Pick<IntegrationScopePolicyStore, "get">
 ): Promise<ResolvedIntegrationScope> {
   const provider: IntegrationProvider = "notion";
   const scopeGated = requiresIntegrationScope(orgPlan);
@@ -221,7 +221,7 @@ async function resolveGoogleDocsScope(
   orgId: string,
   orgPlan: string,
   connected: boolean,
-  scopePolicyStore?: IntegrationScopePolicyStore
+  scopePolicyStore?: Pick<IntegrationScopePolicyStore, "get">
 ): Promise<ResolvedIntegrationScope> {
   const provider: IntegrationProvider = "google-docs";
   const scopeGated = requiresIntegrationScope(orgPlan);
@@ -274,7 +274,7 @@ async function resolveTeamsScope(
   orgId: string,
   orgPlan: string,
   connected: boolean,
-  scopePolicyStore?: IntegrationScopePolicyStore
+  scopePolicyStore?: Pick<IntegrationScopePolicyStore, "get">
 ): Promise<ResolvedIntegrationScope> {
   const provider: IntegrationProvider = "teams";
   const scopeGated = requiresIntegrationScope(orgPlan);
@@ -317,6 +317,7 @@ async function resolveTeamsScope(
     teams: {
       channelIds: teamsPolicy!.channels.map((channel) => channel.id),
       channelNames: teamsPolicy!.channels.map((channel) => channel.name),
+      channelTeamIds: Object.fromEntries(teamsPolicy!.channels.filter(channel => channel.teamId).map(channel => [channel.id, channel.teamId!])),
       teamIds: [
         ...new Set(
           teamsPolicy!.channels
@@ -335,4 +336,67 @@ function unrestricted(provider: IntegrationProvider, scopeStatus: ScopeStatus): 
     allowed: true,
     scopeStatus
   };
+}
+
+/** Shared install access is organization-approved; it never inherits an individual vendor ACL. */
+export async function resolveActorIntegrationScope(options: {
+  orgId: string; provider: IntegrationProvider; connected: boolean;
+  scopePolicyStore?: Pick<IntegrationScopePolicyStore, "get">; principal: string;
+}): Promise<ResolvedIntegrationScope> {
+  // Resolve the source allowlist and member grants from one policy snapshot.
+  const record = await options.scopePolicyStore?.get(options.orgId, options.provider);
+  const scope = await resolveIntegrationScope({ ...options, orgPlan: "enterprise",
+    scopePolicyStore: { get: async () => record } });
+  if (!scope.allowed) return scope;
+  const denied = (): ResolvedIntegrationScope => ({ provider: options.provider,
+    enforced: true, allowed: false, scopeStatus: "required", reason: "Integration sources are not authorized for this actor." });
+  const access = (record?.policy as { access?: unknown } | undefined)?.access;
+  if (access === undefined) return scope; // Existing allowlists approve those sources for org members.
+  if (!access || typeof access !== "object") return denied();
+  const policy = access as { mode?: unknown; members?: unknown; directory?: unknown };
+  if (policy.mode === "organization-approved") return scope;
+  if (policy.mode !== "member-grants" || !policy.members || typeof policy.members !== "object") return denied();
+  const grants = (policy.members as Record<string, unknown>)[options.principal];
+  if (!Array.isArray(grants) || grants.some(value => typeof value !== "string")) return denied();
+  const allowed = new Set(grants);
+  if (scope.slack) {
+    const indices = scope.slack.channelIds.map((value, i) => allowed.has(value) ? i : -1).filter(i => i >= 0);
+    scope.slack = { channelIds: indices.map(i => scope.slack!.channelIds[i]!), channelNames: indices.map(i => scope.slack!.channelNames[i]!) };
+  }
+  if (scope.atlassian) {
+    const a = scope.atlassian;
+    const projects = a.jiraProjectIds.map((value, i) => allowed.has(value) ? i : -1).filter(i => i >= 0);
+    const spaces = a.confluenceSpaceIds.map((value, i) => allowed.has(value) ? i : -1).filter(i => i >= 0);
+    scope.atlassian = { jiraProjectIds: projects.map(i => a.jiraProjectIds[i]!), jiraProjectKeys: projects.map(i => a.jiraProjectKeys[i]!),
+      jiraProjectNames: projects.map(i => a.jiraProjectNames[i]!), confluenceSpaceIds: spaces.map(i => a.confluenceSpaceIds[i]!),
+      confluenceSpaceKeys: spaces.map(i => a.confluenceSpaceKeys[i]!), confluenceSpaceNames: spaces.map(i => a.confluenceSpaceNames[i]!) };
+  }
+  if (scope.notion) {
+    const n = scope.notion; const indices = n.resourceIds.map((value, i) => allowed.has(value) ? i : -1).filter(i => i >= 0);
+    scope.notion = { resourceIds: indices.map(i => n.resourceIds[i]!), resourceTitles: indices.map(i => n.resourceTitles[i]!), resourceTypes: indices.map(i => n.resourceTypes[i]!) };
+  }
+  if (scope.googleDocs) {
+    const g = scope.googleDocs;
+    // Folder grants must explicitly name expanded children; membership cannot widen to an entire drive.
+    const indices = g.folderIds.map((value, i) => allowed.has(value) ? i : -1).filter(i => i >= 0);
+    scope.googleDocs = {
+      folderIds: indices.map(i => g.folderIds[i]!),
+      folderNames: indices.map(i => g.folderNames[i]!),
+      folderKinds: indices.map(i => g.folderKinds[i]!),
+      expandedFolderIds: g.expandedFolderIds.filter(value => allowed.has(value))
+    };
+  }
+  if (scope.teams) {
+    const t = scope.teams;
+    const indices = t.channelIds.map((value, i) => allowed.has(value) ? i : -1).filter(i => i >= 0);
+    const channelIds = indices.map(i => t.channelIds[i]!);
+    const channelTeamIds = Object.fromEntries(channelIds.flatMap(channel => t.channelTeamIds?.[channel] ? [[channel, t.channelTeamIds[channel]!]] : []));
+    scope.teams = {
+      channelIds,
+      channelNames: indices.map(i => t.channelNames[i]!),
+      channelTeamIds,
+      teamIds: [...new Set(Object.values(channelTeamIds))]
+    };
+  }
+  return scope;
 }

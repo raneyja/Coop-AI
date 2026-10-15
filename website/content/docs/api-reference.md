@@ -97,7 +97,7 @@ Streams assistant output as Server-Sent Events (SSE).
 
 Streaming or batch completion for editor ghost text (`useCase: inline_completion`). Same auth as `/v1/chat`.
 
-The VS Code extension sends `x-use-case: code-completion-only` for zero-retention routing.
+The VS Code extension sends `x-use-case: code-completion-only` for its dedicated inline route. Provider request controls and account retention must be verified for the actual completion endpoint.
 
 **Request body:**
 

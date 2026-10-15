@@ -1,0 +1,1155 @@
+{
+  "schema": "coop-historical-control-registry-v1",
+  "oracleLedger": {
+    "path": "/Users/jonraney/Coop-AI/docs/enterprise-hardening/run/oracle-adjudication.json",
+    "sha256": "ad560a19a2df908010edaab2800fb345f93d1e467d9fca5c1ebdd01a0c9e2955",
+    "role": "dated starting evidence; latest mechanical repair review supersedes unknown Plane formatter cause only"
+  },
+  "completeObservedFailures": [
+    {
+      "id": "c17-owner-published",
+      "originalLabel": "Fail / unsupported latest-message association",
+      "independentLabel": "severe unsupported relationship",
+      "originalCandidateSha256": "f0be7d7f2b5ecd0d402b6d17d7134e8a0c952f82741c9756f05995f4f97e0d96",
+      "source": "commit-sample facts7/9; analyzeCommitPatterns max-date update separate from capped traversal messages",
+      "reason": "Both temporal-superlative units passed model review, but no per-message dates/order guarantee admitted. The titles and author association are supported; latest association is not. This does not prove those titles were factually not latest.",
+      "counterpart": "Report exact sampled titles as sampled, and max date independently; or explicit dated latest-in-sample tuple."
+    },
+    {
+      "id": "c17-trace-correction",
+      "originalLabel": "Fail; no answer",
+      "independentLabel": "correct semantic rejection",
+      "reason": "Intentionally carrying duplication and rejected/deferred alternative exceed author TODO/comment. Attributed comment text survives.",
+      "counterpart": "trace-trace-full-c11-scoped-positive"
+    },
+    {
+      "id": "c17-gaps-correction",
+      "originalLabel": "Fail; no useful answer",
+      "independentLabel": "correct semantic rejection with useful positive route required",
+      "reason": "Calling assertRecipientNotExpired is established; expiry rejection criteria/effect is not. Existing adjacent explicit throw branches and exact query conditions are useful.",
+      "counterpart": "gaps-full-scoped-positive with current action format"
+    },
+    {
+      "id": "c17-blast-correction",
+      "originalLabel": "Fail; card-budget overflow",
+      "independentLabel": "correct deterministic refusal; semantic claim remains unqualified",
+      "reason": "20 requested cards exceed16; whole range refusal preserves exact bytes. Private-mutation comment does not establish procedure policy.",
+      "counterpart": "blast-full-scoped-positive with budget-fit selections"
+    },
+    {
+      "id": "c17-plane-correction",
+      "originalLabel": "Fail; postprepare cause unknown",
+      "independentLabel": "unknown mechanical rejection; positive backend task unmet",
+      "reason": "Raw reference/completeness checks pass. No final review call. Do not assert false refusal until actual postprepare cause observed. Supplied sample lacks requested backend implementation; nearby exception/title/template observations do not fulfill positive backend ask.",
+      "counterpart": "Need source-verified remote backend handler/auth/validation/save fixture; adjacent-behavior unknown is separate expected-unknown case."
+    }
+  ],
+  "availableCounterparts": [
+    {
+      "id": "gaps-full-scoped-positive",
+      "originalLabel": "supported",
+      "independentLabel": "supported-with-product-format-separate",
+      "reason": "Local guards require matching type and truthy metadata; callee/schema/transaction outcomes explicitly unknown. Prospective questions do not assert absence occurs in production. Semantically supported but original candidate headings do not satisfy focused Gaps required format; product-format success separately required.",
+      "candidateSha256": "9b34972c9dbd50e9b4c9fc4610f95117335cc558f521b75141685e0d9f6e1cc4",
+      "sourceWindows": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 1,
+          "sha256": "f3de734db05bd6df3578971e7438acaca2cf323786dd715945a5e47683e7f12d"
+        }
+      ],
+      "layer": "complete supplied-answer source judgment; not new generation/session/UI pass"
+    },
+    {
+      "id": "blast-full-scoped-positive",
+      "originalLabel": "supported",
+      "independentLabel": "supported-with-product-format-separate",
+      "reason": "Actual supplied callers/arguments/catch branches support conditional compatibility checks. Imported procedure/auth/middleware/transaction outcomes stay unknown; duplicated-body note remains attributed with if required.",
+      "candidateSha256": "851f0bf53e81316a681e44ebc22c401e03b8449de46405cf3926c34f3ff1d4b8",
+      "sourceWindows": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 1,
+          "sha256": "f3de734db05bd6df3578971e7438acaca2cf323786dd715945a5e47683e7f12d"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "startLine": 1,
+          "sha256": "656014f0097c18843c06bff688900476021c5de209a45de9ffe0db6245118d2e"
+        },
+        {
+          "path": "packages/trpc/server/field-router/router.ts",
+          "startLine": 1,
+          "sha256": "e8fece6232a7676313552486919b279ad7770e9b6b5dd9096a7b76c78f2c3420"
+        }
+      ],
+      "layer": "complete supplied-answer source judgment; not new generation/session/UI pass"
+    },
+    {
+      "id": "owner-full-scoped-positive",
+      "originalLabel": "supported",
+      "independentLabel": "supported-with-product-format-separate",
+      "reason": "Samples/date/counts/contact suggestions are separately scoped; messages are reported as sampled topics rather than latest-at-date relation. Unknown policy/presence does not become absence/unavailability.",
+      "candidateSha256": "bf8d2a03ee1a256c65e2a474db4df6746a319871e226f2502e2e45c3c591f311",
+      "sourceWindows": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 1,
+          "sha256": "f3de734db05bd6df3578971e7438acaca2cf323786dd715945a5e47683e7f12d"
+        }
+      ],
+      "layer": "complete supplied-answer source judgment; not new generation/session/UI pass"
+    },
+    {
+      "id": "trace-trace-full-c11-scoped-positive",
+      "originalLabel": "supported",
+      "independentLabel": "supported-with-product-format-separate",
+      "reason": "Literal not/gte/default/envelope arguments retained, exact commit message attributed, no patch-to-current-guard introduction claim. Overall rationale/alternatives/responsibility remain unknown.",
+      "candidateSha256": "c3d5c2a2d7c627533fd7a1cdc0205f76035735c054670ca57204888bbf7d0a12",
+      "sourceWindows": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 1,
+          "sha256": "f3de734db05bd6df3578971e7438acaca2cf323786dd715945a5e47683e7f12d"
+        }
+      ],
+      "layer": "complete supplied-answer source judgment; not new generation/session/UI pass"
+    }
+  ],
+  "ambiguousHistoricalOracles": [
+    {
+      "id": "gaps-hypothetical-old-positive",
+      "originalLabel": "supported-authored",
+      "independentLabel": "UNRESOLVED_OR_OVERPROMISED",
+      "reason": "A prospective test may be valid, but an asserted defect or outcome as its premise needs supplied expected contract. Preserve original full-answer labels/results; do not make all questions pass."
+    },
+    {
+      "id": "general-rust-default-condition-positive",
+      "originalLabel": "supported",
+      "independentLabel": "UNRESOLVED_SOURCE_ONLY_CONTRACT",
+      "reason": "Bare unwrap_or name/call lacks its method body under strict unopened-callee contract. Supplied Bound::resolve positive is a new valid counterpart, not replacement or relabeling of the original."
+    },
+    {
+      "id": "understand-cross-paragraph-positive",
+      "originalLabel": "supported",
+      "independentLabel": "REVIEW_CONTEXT_AMBIGUITY",
+      "reason": "Scoped sentence packets may omit antecedents in different prose units. Self-contained candidate is a new control; preserve original result and assess full paragraph/source before changing labels."
+    },
+    {
+      "id": "owner-admin-next-step-initial",
+      "originalLabel": "model revise",
+      "independentLabel": "POTENTIAL_FALSE_REFUSAL",
+      "reason": "Policy/admin check can be a recommendation for missing evidence, not asserted existing escalation rule. Must preserve conditional recommendation vs unsupported known responsibility distinction."
+    }
+  ],
+  "missingEvidence": [
+    "Original first three raw captures overwritten before prior archival: only recorded tool readouts remain; do not reconstruct them.",
+    "Plane actual corrective prepared body and first failing stage absent from original stage logging.",
+    "Native composer/DOM/Copy and representative first-useful-display evidence absent for c17."
+  ],
+  "privacy": "Original/private bodies remain in original private source artifacts. Hashes/labels/availability retained; never synthesize a missing original.",
+  "latestPlaneMechanicalReview": {
+    "path": "/private/tmp/coop-enterprise-eh05-plane-review-report.json",
+    "sha256": "ee1f633d656ba05d366538bc58d81bb911d04eb667d230dffc10c4de6185692c",
+    "scope": "5\u21925 offline mechanical replay; final semantic result unavailable, no live pass"
+  },
+  "finalRepeatStatus": "not-executed",
+  "privateOriginalReferences": [
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/diagnosis-private/owner-policy/calls.json",
+      "sha256": "bbadc4e49b8bf6cf93799d408f030fc6f060320eafccf8379623b3995430ad8f",
+      "availability": "available-private; preserve recorded labels and exact scope",
+      "action": "owner-policy"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/diagnosis-private/owner-policy/replay-2-prepared.txt",
+      "sha256": "6b72e7d4af490cfe02c5f53cef9509881b4bc627eabfbe6a20e96c14709d70f9",
+      "availability": "available-private; preserve recorded labels and exact scope",
+      "action": "owner-policy"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/diagnosis-private/owner-policy/replay-4-prepared.txt",
+      "sha256": "f0be7d7f2b5ecd0d402b6d17d7134e8a0c952f82741c9756f05995f4f97e0d96",
+      "availability": "available-private; preserve recorded labels and exact scope",
+      "action": "owner-policy"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/diagnosis-private/trace-policy/calls.json",
+      "sha256": "3cae4f10d77a128dc99ea961c34a376365a23a7c28698528f92354d431908304",
+      "availability": "available-private; preserve recorded labels and exact scope",
+      "action": "trace-policy"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/diagnosis-private/trace-policy/replay-2-prepared.txt",
+      "sha256": "f114e515f7013d39e4c4beca503d5d4175d2ed17e5ae65327b5eac199d049912",
+      "availability": "available-private; preserve recorded labels and exact scope",
+      "action": "trace-policy"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/diagnosis-private/trace-policy/replay-4-prepared.txt",
+      "sha256": "a2cab733354dceaf001768b890f6bc8958619cd463f71be3027123001610c33d",
+      "availability": "available-private; preserve recorded labels and exact scope",
+      "action": "trace-policy"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/diagnosis-private/gaps-policy/calls.json",
+      "sha256": "4c4ee9c8ca48ab4339bb1515b75ee9561f07d39fa26e85d1bd3f4c1b2f5a4f4d",
+      "availability": "available-private; preserve recorded labels and exact scope",
+      "action": "gaps-policy"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/diagnosis-private/gaps-policy/replay-2-prepared.txt",
+      "sha256": "23658ce7c83b807ea33896335dc49960914beaff81b5938161890508b77639ec",
+      "availability": "available-private; preserve recorded labels and exact scope",
+      "action": "gaps-policy"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/diagnosis-private/blast-semantic-repair/calls.json",
+      "sha256": "0a051e926cc089b8cf99559afb9f64c33dba0dc64367e6ecc918e742d6ca23f3",
+      "availability": "available-private; preserve recorded labels and exact scope",
+      "action": "blast-semantic-repair"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/diagnosis-private/blast-semantic-repair/replay-2-prepared.txt",
+      "sha256": "767c86990116ade7b3a20e99220009f353d0133fc0c0873d3f1ff0e1330bc9b9",
+      "availability": "available-private; preserve recorded labels and exact scope",
+      "action": "blast-semantic-repair"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/diagnosis-private/blast-semantic-repair/replay-4-prepared.txt",
+      "sha256": "5c8028b7029039ffb6fb51619b28a7813b4fc3989c81f08f3d43fbe89f467e04",
+      "availability": "available-private; preserve recorded labels and exact scope",
+      "action": "blast-semantic-repair"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/diagnosis-private/understand-policy/calls.json",
+      "sha256": "34024de888325f45fc27bab1258e428e7302c2a853e38a4333e7d85d8c3eb45a",
+      "availability": "available-private; preserve recorded labels and exact scope",
+      "action": "understand-policy"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/diagnosis-private/understand-policy/replay-2-prepared.txt",
+      "sha256": "d9236459e076f7807f89f4f9515f7303b1794756333f5bec2408278fab4dabf5",
+      "availability": "available-private; preserve recorded labels and exact scope",
+      "action": "understand-policy"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/diagnosis-private/understand-policy/replay-4-prepared.txt",
+      "sha256": "84033ed5d5bfa7addea5d9fa3e86a67bcf4f92f30f28595eb42a8e11c3dd26e0",
+      "availability": "available-private; preserve recorded labels and exact scope",
+      "action": "understand-policy"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/batch-understand-documenso-positive-private.json",
+      "sha256": "1b067b060f6fcc1e6b3392cc4dab4487d642c51adb8a883c2f0b467e51acd425",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/owner-c10b-full-negative-full-review-request-private.json",
+      "sha256": "713e22457eb43655f3f6702ee22a8b986bec0677738334c6ed37f01a1007dfda",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-independent-reviewer-results-private-batch-owner-full-scoped-positive-private.json",
+      "sha256": "6331fc27418f05a88a9fad60ffb77f30a96da0de30268e483f433265148ddec4",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-unit-general-rust-default-condition-positive-private.json",
+      "sha256": "7c27794318525db6fb1a96aa40bbf79a980691c89ed14edf1c62a95024f9264c",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/trace-trace-full-c11-scoped-positive-full-review-request-private.json",
+      "sha256": "d89ec74cf63579c0132c603513ea909520b1f3d2325452f4b3b92a1783f365d6",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-local-only-results-private-batch-trace-trace-full-c11-scoped-positive-private.json",
+      "sha256": "812360305da1116df0b88f2ba2a80913261148d33a49a27658711009ec892ced",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-general-results-private-batch-trace-trace-full-c10b-original-negative-private.json",
+      "sha256": "b1f040223884e17c097f1a8e5d50daba20005c6155c371efd9294f27f5ab3c19",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-local-only-results-private-batch-owner-full-scoped-positive-private.json",
+      "sha256": "ebf0707e4433878f62c6e8cf352bd9dca325759ffda7161f8b6d724df259a6c8",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private.json",
+      "sha256": "7c0d1e7b18bae8c902b5f35b029992cc8fb5671ec859eb6ae879940dcd09ee20",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-unit-trace-trace-full-c10b-original-negative-block-6-private.json",
+      "sha256": "078fda02e0065ada66f2caf7ed3d3a01f0af3465ea54e402f131bc5892debf9b",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-independent-reviewer-results-private-batch-trace-trace-full-c10b-original-negative-private.json",
+      "sha256": "4301fdff3adf1eada01d411f639537439ae9f8ed3c97d72c054a22a4ea553fb9",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-owner-c10b-full-negative-private.json",
+      "sha256": "995e58139cc0803c9dbafd893a00bf2134fe5b0fe453612acaa2a708314bb00e",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/product-policy-cases-private.json",
+      "sha256": "70800088b18e0c6e82f9d287360d14059bde46d178df6591efb9951666f7320f",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-independent-reviewer-results-private-batch-owner-full-comment-coupling-negative-private.json",
+      "sha256": "585dd154719acdbab55b05562c082be59f5d8ff2a121882d4f20f0d1dbc2d7a0",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-general-results-private-batch-trace-trace-full-c11-scoped-positive-private.json",
+      "sha256": "7f72fe32eecd2db2e1377e8b79e00a9ab565c90a7198c66c6deea172552f70bf",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-unit-results-private.json",
+      "sha256": "50dc072cafbe2b1d6876998dae3e8880864ffa298fd899480d187c022dcd5ad3",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/owner-full-scoped-positive-full-review-request-private.json",
+      "sha256": "efdd75bff4c789ea216d35c82a6658b6ff25b1df0daf03e6c58499164a9435dc",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/full-blast-c4-plain-errors-full-review-request-private.json",
+      "sha256": "c494d3d8e36ada331151363bdaea554a9b9ed4d4f0fbffcd7e62239de9014062",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/batch-understand-plane-negative-private.json",
+      "sha256": "e0ac11630347d4e58edbe8ce30056f3810ee32208226a486d83009723ba19a40",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/batch-full-blast-c4-plain-errors-private.json",
+      "sha256": "2d2f869f680d58d1d060e3239d67ca3d95d54e6cbee2c93f50a7e2f2063082f6",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-independent-reviewer-results-private.json",
+      "sha256": "b53b71bcd0f8df5dc5f77c7f8aaf68db47408e1dfab8155ebca272b78b43d066",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-understand-documenso-positive-private.json",
+      "sha256": "4342d3c5037cadfd6a8c0e0390948f00bb70c1aed528d99d9190614e5583cbf2",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-trace-trace-full-c10b-original-negative-private.json",
+      "sha256": "22aed5e85aafc8ccadcbb858710285e835493489810d602175afdbbb55e23d81",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-unit-trace-trace-full-c10b-original-negative-block-31-private.json",
+      "sha256": "3f85ec1c1ba929ccea427003075d46008d8b3ce2cafd767231b022ce2fca772c",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/batch-owner-c10b-full-negative-private.json",
+      "sha256": "508b92a783904555b4efcf2edb6b83ea4143e8f6b331a3cedcabca5c50f9ebef",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/owner-full-scoped-positive-private.json",
+      "sha256": "930a41151658b9e29a3b8deacddfa96e80614143455810e2f9a2c9a6fa96efb5",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-general-cases-private.json",
+      "sha256": "3aee37990d713792e5807d7fb80a78edb8eafb0c780c27fdd583fad498668e72",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-general-go-error-branch-negative-private.json",
+      "sha256": "26af523e2e74978277545b55d1747f2e65069e04fd9e0ddd919c9e9a382aa3c4",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/blast-full-scoped-positive-private.json",
+      "sha256": "6acc421cd112ae3508419c829c67b61765d091afd81df24198633ee1a3bcaa08",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-understand-documenso-full-scoped-positive-private.json",
+      "sha256": "c2c233feb1ee62d3b8a3da17a302e1cc94af812a64e8a336de385fd90fbe4ce7",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-positive-independent-audit-private.json",
+      "sha256": "8b01ba7c36878e85924d8d6642b03626ab4d59324cda9317b0b6b719d0472790",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/gaps-full-scoped-positive-private.json",
+      "sha256": "1d0c8affda2704645f531b504fa2ec414f7827d4e843bf65b6891c7e78238a9a",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c17-focused-controls-batch-c15-query-default-isolated-negative-private.json",
+      "sha256": "188866a0ea22b69c3c0b6d73cedc822de4ef42145e0c65a606346f0148681ca4",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/batch-owner-full-comment-coupling-negative-private.json",
+      "sha256": "135376213335e9c020a21daf34feb8541fa9e0776cd56d408b00f3723c1f3167",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-unit-general-go-error-branch-negative-private.json",
+      "sha256": "a9dceeae9227e0148ba56909ed4b1532c742b30136a76ab1b73b796624ea1226",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/results-private.json",
+      "sha256": "d5314247bea27f507babb87e0c5315a82e49eddde6406081a80ce92e48b0ffb4",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/batch-understand-documenso-full-scoped-positive-private.json",
+      "sha256": "0f22cde27b8df73eacb6448b9039328edf92e69584059669a899002327b824b1",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-general-python-call-boundary-negative-private.json",
+      "sha256": "8a8cc10410e51aac68a0edc425f1cc0e7bf9e78ac6fe4ed5c3794a583bb8797b",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-full-blast-c4-plain-errors-private.json",
+      "sha256": "d1cb083123d9f6eb28c8b67a20f541bd30bca2b4189b9aca5baee44dc91288ea",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-general-results-private-batch-owner-full-comment-coupling-negative-private.json",
+      "sha256": "60773cd52431b9685918ffc907c5033a020e2022f8b7039da5985f1227956610",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-independent-reviewer-results-private-batch-trace-trace-full-c11-scoped-positive-private.json",
+      "sha256": "5bf5b832aa62909ebf515fffbcb17e787f124e04d3ade9ae32298b48bf4ad8df",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c17-focused-controls-batch-c15-deferral-premise-isolated-negative-private.json",
+      "sha256": "32605860373f993636185e17176453ed5e4cd073b0484bbe3218283c148ea0da",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-understand-plane-positive-private.json",
+      "sha256": "d2c0ab6a71e88989977caa9eb134cb8c0290a274ccdf4dfd2356a5f2b68b2930",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-general-results-private-batch-general-python-call-boundary-positive-private.json",
+      "sha256": "5abd42bd6c619cecf7d74fdbd13f5a23f491eaaae345321398dda2270e7c7a66",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/dense-positive-experiment-results-private.json",
+      "sha256": "d5314247bea27f507babb87e0c5315a82e49eddde6406081a80ce92e48b0ffb4",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-general-results-private.json",
+      "sha256": "1d4a0fe7e2dc8e09e8491c105b8444c7ea7c12ef5d8896c12566bc5ce9baa327",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-local-only-results-private-batch-owner-full-comment-coupling-negative-private.json",
+      "sha256": "487fc9559e91de3586ee42a8cc6d00faa0d66aa856022fb48febe4ccee829577",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-general-results-private-batch-general-rust-default-condition-negative-private.json",
+      "sha256": "0925f45e4bd8328380c65aaa00125c5bb0b370a8b76968c8af9af553df829b39",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-local-only-results-private-batch-trace-trace-full-c10b-original-negative-private.json",
+      "sha256": "d0a54909f81644991a29f510eb6e5dccbe6d545afb393a8b26b5f1d859964e91",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/independent-comment-coupling-audit-private.json",
+      "sha256": "0448aa88e6157ca87c01b753b4a64709ad1a3403d2509574f30f39629a814b1a",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-general-results-private-batch-owner-full-scoped-positive-private.json",
+      "sha256": "91de1ed20e854b4fe8928eee8a405642753229513ac15e3afd9062db69f5ba92",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/batch-trace-trace-full-c11-scoped-positive-private.json",
+      "sha256": "261bb781740680c0d0471bb0dd8cbdc3542c1eef7b5744d0147987a2c206917f",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-general-results-private-batch-general-go-error-branch-negative-private.json",
+      "sha256": "990a8ddcd7ce2a007659c246c859c2fe16a4084911180d2e3d43ecfc6c186029",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/gpt55-local-only-independent-audit-private.json",
+      "sha256": "05710e3866214d12bbff4d1b6059fefb18f648d447d86291388e75fa0b73bea4",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c17-focused-controls-batch-general-rust-local-default-body-negative-private.json",
+      "sha256": "019ccdf841418b02f0f88fec1d5eecc559adc61b2a192bffd00c29b3a4f3bdcb",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-unit-general-python-call-boundary-positive-private.json",
+      "sha256": "b8953d9e7f9a24afee5c87b38eb20a8dc9ee59abb062ab2f47e405dc7014262e",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-owner-full-role-origin-negative-private.json",
+      "sha256": "3e85492dabcd2e568d709580a3c6cf3d9a7472c9f38de70aa529c03452a2ef6d",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-general-rust-default-condition-negative-private.json",
+      "sha256": "097e765888f7576bf9d741e799b08eaa18ff3b723942519d32c680c5c9ffdd7d",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/batch-gaps-full-scoped-positive-private.json",
+      "sha256": "e82307dea75f1d999541dc91478c5fdfd481ebabd0f557667feec0c74925df14",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-general-results-private-batch-blast-full-scoped-positive-private.json",
+      "sha256": "d6c404d9e797e82ed291ee303ee1dff854edfe7d46d83b77df3e0805c561a52d",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/reviewer-comparison-cases-private.json",
+      "sha256": "10884bae156c9aa9d108758e24a5044d52e5623c24038989a00a5b7bb360d630",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c17-focused-controls-batch-c15-python-runtime-negative-private.json",
+      "sha256": "8b67bece9fb15711cd98523562a65266ba91473152c8a79ca5aa62139b94a3be",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-understand-documenso-negative-private.json",
+      "sha256": "43ad347496eeb4da69d70b046c69cd3ba0c8295db4f7045ed8992a7c4f7c4c6b",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-owner-full-comment-coupling-negative-private.json",
+      "sha256": "54dffff00b600222791003b8592e59cf0c783e56bcfb80109f4e5c6f62fa1563",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/batch-understand-plane-positive-private.json",
+      "sha256": "d5e23545b422ffd966f73f8db1e4d4334e10c7adb3293d1faede23dad688188a",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/understand-documenso-full-scoped-positive-private.json",
+      "sha256": "aa3c7f779ed0fa3ffd10ca98def212899cdab2ec651682837f3d0c0f42c30fe3",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/complete-cases-private.json",
+      "sha256": "a54ff278b4decc26531c13f18459f604a5767b1fc508e6f7fe4eed732b519c70",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-general-go-error-branch-positive-private.json",
+      "sha256": "3cd2196ee6f8c89893ab5a13bdd498bc4a02b5f6f307ef4c158899cfa1c8dbe4",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-unit-trace-trace-full-c10b-original-negative-block-9-private.json",
+      "sha256": "a789fa3545845464e3c86868825308b198b73e22b7b109890c421f1e86892828",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/understand-plane-positive-full-review-request-private.json",
+      "sha256": "1c58f2d43068fe82536669fa26e85e292ae72f5d0cb7a2f7e7c288c767f11414",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/trace-trace-full-c10b-original-negative-full-review-request-private.json",
+      "sha256": "adfe3ac92f48883ca91b758329a6d651b998886db316c693c6f31fddffcf07d8",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-unit-general-rust-default-condition-negative-private.json",
+      "sha256": "00149f5c0c58559abc5b76c29db6214e6a54709648d610749c13d5855a8b7e7d",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/batch-owner-full-scoped-positive-private.json",
+      "sha256": "72bc6ac85e7b909e71c1f7086c6697c87a6a8b15db774bdd64fb12f1410ccff8",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c17-focused-controls-private.json",
+      "sha256": "7580c1ca1aa56d150039f0c7e2e66b4c2dc2ad25a7ecd54203df2710016deb99",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/cases-private.json",
+      "sha256": "591bc953f7f674535267d71ab5e1c8ae2042f81f73fed3c260ee8fa98b53cc9f",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/batch-understand-documenso-negative-private.json",
+      "sha256": "d696542768ccc66a5a55db123ad588f9ac994aebdd176a91728d748664c114d4",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/gaps-full-scoped-positive-full-review-request-private.json",
+      "sha256": "e29b2205619964f1ea5767abc48abf7f728c596fab3ec01d9bf3913f3ee2f1f5",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-general-schema-rejection-private.json",
+      "sha256": "bb956c00e5d73a24ce55386462031b620b5175749272ffbf59fc280029ab27e4",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/batch-trace-trace-full-c10b-replacement-negative-private.json",
+      "sha256": "4bfcbd71bcee911f2c64944d0815128e3251fc5f7c041da5dfcbd40497009c1d",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/owner-full-material-negative-controls-private.json",
+      "sha256": "eae7d4d5775abc1c0c89828e3c2193716c06339c0d0cc96c8e91210561a56bb1",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-gaps-full-scoped-positive-private.json",
+      "sha256": "492358c8a2d651acaf42ef02ae75dba136e46d50162644c50db865e5d3c7e703",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-local-only-results-private.json",
+      "sha256": "d54ef1309bc5ab195c304768ecc9b7e964c97e483ca37ae23e7144569c3165f8",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c15-scope-controls-private.json",
+      "sha256": "a015e1d12cb9beea2e58636cbbdd395975edefa66cab0881f61680709bc0d278",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/understand-documenso-negative-full-review-request-private.json",
+      "sha256": "d417b69e64d0238c7364c84e01b3f2b071b547170471ac95cb0053a07ff6e9b9",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-unit-owner-full-comment-coupling-negative-block-36-private.json",
+      "sha256": "8b815a675d2a5ba37eca8cdb20693f153e367633672b9fdd9e45a64ad0e97768",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/reviewer-comparison-results-private.json",
+      "sha256": "2a7c67b88e0f57273b080c1d17d359bc6586061627f1ba3ef69c706abe625591",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-cases-private.json",
+      "sha256": "516d782828063f0ad42a1d4cee68813b7c346774f9121c37009692d2a0926dea",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/batch-blast-full-scoped-positive-private.json",
+      "sha256": "d7c86d5423605cace1a0d429cefa098dda5fbe8c8d2060eb70afb8d5ea678042",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-unit-trace-trace-full-c10b-original-negative-block-5-private.json",
+      "sha256": "4118dc23680adb2da2d61a7574266108e8c687db01b73d6b15e88a7f3fac3fa9",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/owner-material-results-private.json",
+      "sha256": "4a7f22dec4b729662fe9311e53588309b1c4e748002a0d29eb7b34ade0f69944",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-general-results-private-batch-general-go-error-branch-positive-private.json",
+      "sha256": "4c8582763c974f440245a2d182f8753454c2a3e5268f957180c4799ba61bd9bc",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/batch-full-gaps-c3-unchecked-write-private.json",
+      "sha256": "a1468a5a1bee46f4a70542363d84884e5f11d469596575d0129843707336eca3",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-owner-full-scoped-positive-private.json",
+      "sha256": "8b3d45ec45202e9351721dad47e9d5ab06bcd7b85e69884c04459874f5e7519d",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-trace-trace-full-c11-scoped-positive-private.json",
+      "sha256": "7d94eb3d072c4c444f0a7111458ca69e854ae4b3aa348aa1fb7f2c9d1a49e038",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/blast-full-scoped-positive-full-review-request-private.json",
+      "sha256": "d3a2b647f134dbc31e0bf3ff881776b1ffc2f7a4724f85e81c80a6caf28022df",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-general-rust-default-condition-positive-private.json",
+      "sha256": "acd16e27281400995487ec65020f79fd68edd7dec37d639f64cecaaa2222cb4b",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c17-focused-controls-batch-general-rust-local-default-body-positive-private.json",
+      "sha256": "02d56a584ade7807c24fe77beda7e4d150cf8d7d8e777571c6aeb7ff5e0b9c9b",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-blast-full-scoped-positive-private.json",
+      "sha256": "054d1fc926bca09e3726ad6ab810cb87419d1b4ea15d998dde2a4ce9e25ec230",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-unit-general-python-call-boundary-negative-private.json",
+      "sha256": "b48261e0e87c417fef3c079a06d967d53c449eab58ebbee5b88581f3dc2c8055",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/batch-owner-full-role-origin-negative-private.json",
+      "sha256": "b6cc84957d6c75296afc2885068336d86e088b6f5662640306c1e2d0825ab7c8",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-general-results-private-batch-gaps-full-scoped-positive-private.json",
+      "sha256": "a0957863bb0c34572fb45897525d251b43d9178c0eb392be15de4458ac75b4ec",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/trace-trace-full-c10b-replacement-negative-full-review-request-private.json",
+      "sha256": "4a4a5838d3587e893ecc20e8915e2c7d421067af888917d995686de2faed68a8",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/understand-documenso-positive-full-review-request-private.json",
+      "sha256": "7e41c6e9b026d334b8d4d3f53050a7b93bdd3a665d50c42bfb168be8e5141e28",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-general-python-call-boundary-positive-private.json",
+      "sha256": "b6678883d56ec82594d8b570c2dc9094772669879e7c53e08523463b0b990a79",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/dense-positive-cases-private.json",
+      "sha256": "141c4ffd625b06c8d13ff7f322301242ff495c3bf9bf1f9aed3c6efaf7ff2f99",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-unit-general-go-error-branch-positive-private.json",
+      "sha256": "748f864285838b022765731651985dbaaf451fde6679d7e2985084ce5b67b844",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/understand-documenso-full-scoped-positive-full-review-request-private.json",
+      "sha256": "194ad41a78d0369bdd90c052dcc953ee9f825ace99c4794e5e0da0a1e639cc8b",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/manifest-private.json",
+      "sha256": "05f39b610df533a79218568909a2f7e0321a748dc4d41c7127c225563a640306",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/product-policy-results-private.json",
+      "sha256": "32c2e5619588375001d96ed499d72cad9d982a5918373913e0e8f009847a8f2f",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-unit-trace-trace-full-c10b-original-negative-block-4-private.json",
+      "sha256": "b2b2edf96095e4fe9553cd2edc674bf810696393d8e117fbe5651d168aed574b",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c17-focused-controls-batch-c15-python-source-order-positive-private.json",
+      "sha256": "82771000f17eab1d56a858dfef3832b70f93dff1617675c42f1edcf62f07d803",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/first10-results-private.json",
+      "sha256": "91a82ce5d8eda20f09d55522f6bbe4377e29183ce747862fb70cc088990bd6ab",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-understand-plane-negative-private.json",
+      "sha256": "920dc79bc95f264e21da9fe02f665d5952c0be4e5a0c81f7109672de9e36511d",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-general-results-private-batch-general-python-call-boundary-negative-private.json",
+      "sha256": "b97a9e7805f9544295f1a4ca14c640191044071d80e1a02d9d092077c5f7dc7c",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/independent-first10-audit-private.json",
+      "sha256": "1995ae1eabf0bda493cc477cf740fc44a01f36beb771d1f4edf4d328a20884ce",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/batch-trace-trace-full-c10b-original-negative-private.json",
+      "sha256": "707563c75af133ac9a3235c2c4870fca5427c58f4d43a7c0e1b9e20c08ea0578",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/understand-plane-negative-full-review-request-private.json",
+      "sha256": "e61f3bd4f5b1b6b667a3aedc251f3221822d634cc01fda053c1ae1e6dac838d1",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-trace-trace-full-c10b-replacement-negative-private.json",
+      "sha256": "1898d2bbaf94bed0066d73e63562215e2b66462eebbce576c8e162ce7565871a",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/additional-positive-cases-private.json",
+      "sha256": "9909e53879d8ca97b6a3d7011cfedc6465408c4dcab45d38b1e799c3ba6d8f5a",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/c14-product-policy-results-private-batch-full-gaps-c3-unchecked-write-private.json",
+      "sha256": "4789f717eb8fa327cc9c0f3072ce5108ac21fef455d3939f41388b4997ec905b",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/v3-general-results-private-batch-general-rust-default-condition-positive-private.json",
+      "sha256": "8962fbf943610cbfb8229524bd4d98329c9a91dd1f6a254572cc049c08c6749d",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    },
+    {
+      "path": "/private/tmp/coop-enterprise-run-20261011/preserved-claim-evidence/phase-capacity-calibration/full-gaps-c3-unchecked-write-full-review-request-private.json",
+      "sha256": "25105de1cfd65dc8fc68a4f7fd407a7b730783351551cf47b25afb5e56a33e7f",
+      "availability": "available-private; originals/controls not rewritten",
+      "action": "calibration"
+    }
+  ],
+  "allAvailableOracleControls": [
+    {
+      "id": "c15-python-runtime-negative",
+      "originalLabel": "revise",
+      "originalObserved": "revise",
+      "independentLabel": "revise",
+      "labelChanged": false,
+      "reason": "Calls to audit/store do not establish absence of side effects or guaranteed successful completion; earlier disabled return and thrown/failed awaits are counterexamples.",
+      "candidateSha256": "a185cee1e6a3c90b653396e593b60f103ce36b2ac93520a41d48c4af69b058c3",
+      "sourceWindows": [
+        {
+          "path": "services/archive/jobs.py",
+          "startLine": 1,
+          "sha256": "ad768e02d09eea7be4885b9ada96354682c8ac38e50778af8c7a4e1efb028b81"
+        }
+      ],
+      "fullAnswerAvailable": false,
+      "layer": "isolated semantic reviewer control; not complete product answer qualification"
+    },
+    {
+      "id": "c15-python-source-order-positive",
+      "originalLabel": "supported",
+      "originalObserved": "supported",
+      "independentLabel": "supported",
+      "labelChanged": false,
+      "reason": "Describes shown statement ordering, explicitly leaves reachability/side effects/completion unknown. A failed audit does not contradict statement order.",
+      "candidateSha256": "8c877b1b93f8f64beb8b21bf2c24d4b994c8f9627d6a532394f1e52b46bea736",
+      "sourceWindows": [
+        {
+          "path": "services/archive/jobs.py",
+          "startLine": 1,
+          "sha256": "ad768e02d09eea7be4885b9ada96354682c8ac38e50778af8c7a4e1efb028b81"
+        }
+      ],
+      "fullAnswerAvailable": false,
+      "layer": "isolated semantic reviewer control; not complete product answer qualification"
+    },
+    {
+      "id": "c15-query-default-isolated-negative",
+      "originalLabel": "revise",
+      "originalObserved": "supported",
+      "independentLabel": "revise",
+      "labelChanged": false,
+      "reason": "Exact source supplies gte: recipient.signingOrder ?? 0. Rewriting to >= recipient.signingOrder drops nullable fallback without value-domain evidence. A nearby lookup exception cannot certify this different relation.",
+      "candidateSha256": "10f433e57b8f69b9dab7b1ebbfa0678f3f152f36ff3dfe0cd6f67af7832fafc1",
+      "sourceWindows": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 1,
+          "sha256": "f3de734db05bd6df3578971e7438acaca2cf323786dd715945a5e47683e7f12d"
+        }
+      ],
+      "fullAnswerAvailable": true,
+      "layer": "isolated semantic reviewer control; not complete product answer qualification"
+    },
+    {
+      "id": "c15-deferral-premise-isolated-negative",
+      "originalLabel": "revise",
+      "originalObserved": "supported",
+      "independentLabel": "revise",
+      "labelChanged": false,
+      "reason": "No record explains why implementation was deferred embeds a factual deliberate-deferral premise. TODO/preferred future design plus history absence does not establish that premise. History-sample qualifier narrows absence, not deferral.",
+      "candidateSha256": "ada5f19a4379fabdc08b786b179554925ee0178eee4c19bc4379115d1fb031bf",
+      "sourceWindows": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 1,
+          "sha256": "f3de734db05bd6df3578971e7438acaca2cf323786dd715945a5e47683e7f12d"
+        }
+      ],
+      "fullAnswerAvailable": true,
+      "layer": "isolated semantic reviewer control; not complete product answer qualification"
+    },
+    {
+      "id": "general-rust-local-default-body-positive",
+      "originalLabel": "supported",
+      "originalObserved": "supported",
+      "independentLabel": "supported",
+      "labelChanged": false,
+      "reason": "Supplied Bound::resolve method body includes Absent->fallback and Present->carried value; supplied allowed call passes fallback0. Local comparison claim has body support.",
+      "candidateSha256": "e73a0e5d0115d97f76196595366e8bdbff07600731cf8e5ec6e6bf6b6e3b6dd2",
+      "sourceWindows": [
+        {
+          "path": "synthetic/limits/complete-local-bound.rs",
+          "startLine": 51,
+          "sha256": "3a8eafd3a85a1e949652c493e87c54ba571763063689d5191d0d0e5edcd01383"
+        }
+      ],
+      "fullAnswerAvailable": false,
+      "layer": "isolated semantic reviewer control; not complete product answer qualification"
+    },
+    {
+      "id": "general-rust-local-default-body-negative",
+      "originalLabel": "revise",
+      "originalObserved": "revise",
+      "independentLabel": "revise",
+      "labelChanged": false,
+      "reason": "Absent selects fallback0, so unbounded acceptance is false for negative values. Explicit local body establishes condition.",
+      "candidateSha256": "2862544d5f6c0b4d54b90980ca6bcef459e9c8c170a7126ceaff15ba85174bb9",
+      "sourceWindows": [
+        {
+          "path": "synthetic/limits/complete-local-bound.rs",
+          "startLine": 51,
+          "sha256": "3a8eafd3a85a1e949652c493e87c54ba571763063689d5191d0d0e5edcd01383"
+        }
+      ],
+      "fullAnswerAvailable": false,
+      "layer": "isolated semantic reviewer control; not complete product answer qualification"
+    },
+    {
+      "id": "gaps-full-scoped-positive",
+      "originalLabel": "supported",
+      "independentLabel": "supported-with-product-format-separate",
+      "reason": "Local guards require matching type and truthy metadata; callee/schema/transaction outcomes explicitly unknown. Prospective questions do not assert absence occurs in production. Semantically supported but original candidate headings do not satisfy focused Gaps required format; product-format success separately required.",
+      "candidateSha256": "9b34972c9dbd50e9b4c9fc4610f95117335cc558f521b75141685e0d9f6e1cc4",
+      "sourceWindows": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 1,
+          "sha256": "f3de734db05bd6df3578971e7438acaca2cf323786dd715945a5e47683e7f12d"
+        }
+      ],
+      "layer": "complete supplied-answer source judgment; not new generation/session/UI pass"
+    },
+    {
+      "id": "blast-full-scoped-positive",
+      "originalLabel": "supported",
+      "independentLabel": "supported-with-product-format-separate",
+      "reason": "Actual supplied callers/arguments/catch branches support conditional compatibility checks. Imported procedure/auth/middleware/transaction outcomes stay unknown; duplicated-body note remains attributed with if required.",
+      "candidateSha256": "851f0bf53e81316a681e44ebc22c401e03b8449de46405cf3926c34f3ff1d4b8",
+      "sourceWindows": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 1,
+          "sha256": "f3de734db05bd6df3578971e7438acaca2cf323786dd715945a5e47683e7f12d"
+        },
+        {
+          "path": "packages/trpc/server/embedding-router/apply-multi-sign-signature.ts",
+          "startLine": 1,
+          "sha256": "656014f0097c18843c06bff688900476021c5de209a45de9ffe0db6245118d2e"
+        },
+        {
+          "path": "packages/trpc/server/field-router/router.ts",
+          "startLine": 1,
+          "sha256": "e8fece6232a7676313552486919b279ad7770e9b6b5dd9096a7b76c78f2c3420"
+        }
+      ],
+      "layer": "complete supplied-answer source judgment; not new generation/session/UI pass"
+    },
+    {
+      "id": "owner-full-scoped-positive",
+      "originalLabel": "supported",
+      "independentLabel": "supported-with-product-format-separate",
+      "reason": "Samples/date/counts/contact suggestions are separately scoped; messages are reported as sampled topics rather than latest-at-date relation. Unknown policy/presence does not become absence/unavailability.",
+      "candidateSha256": "bf8d2a03ee1a256c65e2a474db4df6746a319871e226f2502e2e45c3c591f311",
+      "sourceWindows": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 1,
+          "sha256": "f3de734db05bd6df3578971e7438acaca2cf323786dd715945a5e47683e7f12d"
+        }
+      ],
+      "layer": "complete supplied-answer source judgment; not new generation/session/UI pass"
+    },
+    {
+      "id": "trace-trace-full-c11-scoped-positive",
+      "originalLabel": "supported",
+      "independentLabel": "supported-with-product-format-separate",
+      "reason": "Literal not/gte/default/envelope arguments retained, exact commit message attributed, no patch-to-current-guard introduction claim. Overall rationale/alternatives/responsibility remain unknown.",
+      "candidateSha256": "c3d5c2a2d7c627533fd7a1cdc0205f76035735c054670ca57204888bbf7d0a12",
+      "sourceWindows": [
+        {
+          "path": "packages/lib/server-only/field/sign-field-with-token.ts",
+          "startLine": 1,
+          "sha256": "f3de734db05bd6df3578971e7438acaca2cf323786dd715945a5e47683e7f12d"
+        }
+      ],
+      "layer": "complete supplied-answer source judgment; not new generation/session/UI pass"
+    }
+  ]
+}

@@ -290,7 +290,7 @@ Not configured in the extension UI. See:
 | [webhook-backend.md](./webhook-backend.md) | GitHub/GitLab/Slack inbound webhooks |
 | [job-queue.md](./job-queue.md) | Jobs API, Postgres, Redis |
 | [llm-provider-keys.md](./llm-provider-keys.md) | Register LLM providers (plain-language guide) |
-| [zero-retention-llm.md](./zero-retention-llm.md) | LLM env vars, BYOK |
+| [zero-retention-llm.md](./zero-retention-llm.md) | LLM request controls and retention qualification |
 
 ### LLM provider env vars (server)
 

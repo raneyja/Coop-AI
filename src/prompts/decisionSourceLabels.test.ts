@@ -79,10 +79,21 @@ assert.ok(bitbucketLabels.includes("[Sources: PR #1506]"));
 
 const checklist = listDecisionSourcesChecklist(timeline);
 assert.equal(checklist.length, labels.length);
-assert.ok(checklist.some((line) => line.includes("PR description, review comments")));
-assert.ok(checklist.some((line) => line.includes("ticket requirements, acceptance criteria")));
+assert.ok(checklist.some((line) => line.includes("attached description")));
+assert.ok(checklist.some((line) => line.includes("attached ticket fields")));
 assert.ok(checklist.some((line) => line.includes("sampled commit and message — provenance")));
 assert.ok(checklist.every((line) => line.includes(" — ")));
 assert.ok(!checklist.some((line) => line.includes("No Slack thread")));
 
 console.log("decisionSourceLabels: ok");
+
+const metadataOnly = { ...timeline, linkedPR: { ...timeline.linkedPR!, description: "", reviews: [] }, integrationSearch: { notion: { pages: [{ id: "n", title: "ADR", url: "https://example/n" }] }, googleDocs: { documents: [{ id: "d", title: "Design", url: "https://example/d" }] } } };
+const metadataChecklist = listDecisionSourcesChecklist(metadataOnly);
+assert.ok(metadataChecklist.some(line => line.includes("listed approvers")));
+assert.ok(!metadataChecklist.some(line => line.includes("attached description") || line.includes("attached review comment")));
+assert.ok(metadataChecklist.filter(line => /Notion|Google Docs/.test(line)).every(line => line.includes("bodies not attached") || line.includes("body not attached")));
+
+const focusedTimeline = { ...timeline, focusCommit: { ...timeline.originalCommit!, sha: "def789abc123" } };
+assert.deepEqual(listDecisionSourceLabels(focusedTimeline).slice(0, 2), ["[Sources: GitHub commit def789a]", "[Sources: GitHub commit abc123d]"]);
+assert.equal(listDecisionSourceLabels({ ...timeline, focusCommit: timeline.originalCommit }).filter(label => label.includes("commit abc123d")).length, 1);
+assert.ok(listDecisionSourcesChecklist(focusedTimeline).some(line => line.includes("commit def789a") && line.includes("provenance")));

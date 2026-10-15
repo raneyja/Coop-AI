@@ -1,0 +1,2406 @@
+[
+  {
+    "id": "EH06-locate-read-facts-01",
+    "family": "locate-read-facts",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Open the admitted query body and report the recorded inventory file total.",
+    "oracle": "Exact admitted body + canonical inventory total; not sample extrapolation.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "locate-read-facts",
+      "branch": "fixture-v1",
+      "file": "odd/queries/retrieve"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "odd/queries/retrieve",
+        "startLine": 1,
+        "content": "export function retrieve(limit) {\n  return store.query({ gte: limit ?? 0, tenant: 'fixture-a' });\n}"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "inventory",
+        "scope": "Canonical measured fixture inventory at pinned fixture ref; unrelated to customer repos",
+        "value": {
+          "fileCount": 23,
+          "lineCount": 1000,
+          "source": "index-stats",
+          "branch": "fixture-v1"
+        }
+      },
+      {
+        "kind": "tree",
+        "scope": "Listed fixture paths only",
+        "value": {
+          "files": [
+            "odd/queries/retrieve"
+          ]
+        }
+      }
+    ],
+    "languageFamily": "typescript",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "odd/queries/retrieve",
+        "first": 1,
+        "last": 3,
+        "sha256": "8a31a87f12939952a08f82244bfb7ea516afb71ce50876ec5add400e98ab06f6"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "28e87590a0e311b34f49d5c3b04da8881f93e473280a165160819e7321af346b",
+        "scope": "Canonical measured fixture inventory at pinned fixture ref; unrelated to customer repos",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 1,
+        "sha256": "2847d0380b8e0951e51e71b84062a6297a16c71583fab63e5a96361dde13c109",
+        "scope": "Listed fixture paths only",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-locate-read-facts-02",
+    "family": "locate-read-facts",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Locate the archive body within the admitted tree and state its shown disabled branch.",
+    "oracle": "Shown path/body; no global uniqueness.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "locate-read-facts",
+      "branch": "fixture-v1",
+      "file": "task_units/old.archive/job.py"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "task_units/old.archive/job.py",
+        "startLine": 1,
+        "content": "async def archive(request):\n    if not request.enabled:\n        return None\n    await audit(request)\n    await store.archive(request.id)\n    return True"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "inventory",
+        "scope": "Canonical measured fixture inventory at pinned fixture ref; unrelated to customer repos",
+        "value": {
+          "fileCount": 24,
+          "lineCount": 1037,
+          "source": "index-stats",
+          "branch": "fixture-v1"
+        }
+      },
+      {
+        "kind": "tree",
+        "scope": "Listed fixture paths only",
+        "value": {
+          "files": [
+            "task_units/old.archive/job.py"
+          ]
+        }
+      }
+    ],
+    "languageFamily": "python",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "task_units/old.archive/job.py",
+        "first": 1,
+        "last": 6,
+        "sha256": "ad768e02d09eea7be4885b9ada96354682c8ac38e50778af8c7a4e1efb028b81"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "44901a1f2622100598ce7ac68e94bc5ce9f4f14b223bfbeb7523147de08a093a",
+        "scope": "Canonical measured fixture inventory at pinned fixture ref; unrelated to customer repos",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 1,
+        "sha256": "333229619b5c8c129c2c449631b2c52964720ff6994c7f2724ff373034329f2b",
+        "scope": "Listed fixture paths only",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-locate-read-facts-04",
+    "family": "locate-read-facts",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Read the explicit Bound implementation and return the recorded repository line total.",
+    "oracle": "Canonical inventory line count separately from body sample.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "locate-read-facts",
+      "branch": "fixture-v1",
+      "file": "plugins/unused-name/lower.rs"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "plugins/unused-name/lower.rs",
+        "startLine": 1,
+        "content": "enum Bound { Absent, Present(i32) }\nimpl Bound {\n fn resolve(self, fallback: i32) -> i32 {\n  match self { Bound::Absent => fallback, Bound::Present(v) => v }\n }\n}\nfn allowed(value:i32, bound:Bound)->bool { value >= bound.resolve(0) }"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "inventory",
+        "scope": "Canonical measured fixture inventory at pinned fixture ref; unrelated to customer repos",
+        "value": {
+          "fileCount": 26,
+          "lineCount": 1111,
+          "source": "index-stats",
+          "branch": "fixture-v1"
+        }
+      },
+      {
+        "kind": "tree",
+        "scope": "Listed fixture paths only",
+        "value": {
+          "files": [
+            "plugins/unused-name/lower.rs"
+          ]
+        }
+      }
+    ],
+    "languageFamily": "rust",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "plugins/unused-name/lower.rs",
+        "first": 1,
+        "last": 7,
+        "sha256": "1f18da145e65d2bcd7c76e8090f431afb5ff130be677cac40e44ab71d4466618"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "c6c103e878c27d7d8fcfc9cc96047c874533b0e9f70775ae16ac0d73d60cabb6",
+        "scope": "Canonical measured fixture inventory at pinned fixture ref; unrelated to customer repos",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 1,
+        "sha256": "fa88c7acda55a547e21723ed26ae1fdd9e1fbef9d45915591b07b5612fb099cf",
+        "scope": "Listed fixture paths only",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-locate-read-facts-05",
+    "family": "locate-read-facts",
+    "split": "development",
+    "caseType": "misleading-premise",
+    "positiveFindingRequired": false,
+    "question": "Since this is the only validation file, list all validation rules in the repository.",
+    "oracle": "Reject uniqueness/exhaustiveness premise; state admitted guard.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "locate-read-facts",
+      "branch": "fixture-v1",
+      "file": "code roots/value conditions.ts"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "code roots/value conditions.ts",
+        "startLine": 1,
+        "content": "export function validate(field, value) {\n if (field.type === 'number' && field.meta) {\n  const errors = validateNumber(value, field.meta, true);\n  if (errors.length > 0) throw new Error(errors.join(','));\n }\n return writer(value);\n}"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "inventory",
+        "scope": "Canonical measured fixture inventory at pinned fixture ref; unrelated to customer repos",
+        "value": {
+          "fileCount": 27,
+          "lineCount": 1148,
+          "source": "index-stats",
+          "branch": "fixture-v1"
+        }
+      },
+      {
+        "kind": "tree",
+        "scope": "Listed fixture paths only",
+        "value": {
+          "files": [
+            "code roots/value conditions.ts"
+          ]
+        }
+      }
+    ],
+    "languageFamily": "typescript",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "code roots/value conditions.ts",
+        "first": 1,
+        "last": 7,
+        "sha256": "374cdd635e8d097daa2ce0cd2226af2c715cdb04fdab96f87408144424be44bb"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "6b733e08d17502d3fb911d993af1c51ca08eecda55e570b81360c8e094a18914",
+        "scope": "Canonical measured fixture inventory at pinned fixture ref; unrelated to customer repos",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 1,
+        "sha256": "bd7ef4904c5cc890a099f02f1f517ecc9032e4d340123b3c49d27bfbff916403",
+        "scope": "Listed fixture paths only",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-locate-read-facts-07",
+    "family": "locate-read-facts",
+    "split": "development",
+    "caseType": "expected-unknown",
+    "positiveFindingRequired": false,
+    "question": "Does a two-message sample establish the repository commit total?",
+    "oracle": "No; canonical commit total absent.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "locate-read-facts",
+      "branch": "fixture-v1",
+      "file": "archives/date-messages.ts"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "archives/date-messages.ts",
+        "startLine": 1,
+        "content": "export function sample(commits) {\n let newest; const messages=[];\n for (const c of commits) {\n  if (!newest || c.date > newest) newest=c.date;\n  if (messages.length < 2) messages.push(c.message);\n }\n return {newest,messages};\n}"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "inventory",
+        "scope": "Canonical measured fixture inventory at pinned fixture ref; unrelated to customer repos",
+        "value": {
+          "fileCount": 29,
+          "lineCount": 1222,
+          "source": "index-stats",
+          "branch": "fixture-v1"
+        }
+      },
+      {
+        "kind": "tree",
+        "scope": "Listed fixture paths only",
+        "value": {
+          "files": [
+            "archives/date-messages.ts"
+          ]
+        }
+      }
+    ],
+    "languageFamily": "typescript",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "archives/date-messages.ts",
+        "first": 1,
+        "last": 8,
+        "sha256": "a0d129e3ed0500225bc202f99941e5a45730cb3c86a25ff8ab5c583f77c63dd5"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "4b38de98636c59e80106e8306716a10e7b8b0ee9fb18c87deb096f9db9704e69",
+        "scope": "Canonical measured fixture inventory at pinned fixture ref; unrelated to customer repos",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 1,
+        "sha256": "d4f713408c3a6e1ecdea7f465332be685084022cefcd24cc0c37222409e730e0",
+        "scope": "Listed fixture paths only",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-locate-read-facts-08",
+    "family": "locate-read-facts",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Open the unusual-layout Ruby path and quote its enabled guard.",
+    "oracle": "Exact path/range bytes; not path-role guessing.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "locate-read-facts",
+      "branch": "fixture-v1",
+      "file": "modules/reporting/leftover.rb"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "modules/reporting/leftover.rb",
+        "startLine": 1,
+        "content": "def send_report(report)\n return nil unless report.enabled\n audit(report.id)\n client.send(report.body)\nend"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "inventory",
+        "scope": "Canonical measured fixture inventory at pinned fixture ref; unrelated to customer repos",
+        "value": {
+          "fileCount": 30,
+          "lineCount": 1259,
+          "source": "index-stats",
+          "branch": "fixture-v1"
+        }
+      },
+      {
+        "kind": "tree",
+        "scope": "Listed fixture paths only",
+        "value": {
+          "files": [
+            "modules/reporting/leftover.rb"
+          ]
+        }
+      }
+    ],
+    "languageFamily": "ruby",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "modules/reporting/leftover.rb",
+        "first": 1,
+        "last": 5,
+        "sha256": "8bb1d620615baee3e76875bda5ae01fba5c2fa4a636199a0782285bf94881219"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "5247259d73bed3a38e53af5bee4cfcb4f82d741e6a12759de68a6b2930205187",
+        "scope": "Canonical measured fixture inventory at pinned fixture ref; unrelated to customer repos",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 1,
+        "sha256": "26d1eac64d8d8a88279c2cfbca87ab33dd2f4d7cbbf5eeab5aeeab3d977d90de",
+        "scope": "Listed fixture paths only",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-understanding-01",
+    "family": "understanding",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Explain the literal query bound, including null fallback.",
+    "oracle": "Preserve gte and default0; no ORM effect/permission inference.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "understanding",
+      "branch": "fixture-v1",
+      "file": "odd/queries/retrieve"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "odd/queries/retrieve",
+        "startLine": 1,
+        "content": "export function retrieve(limit) {\n  return store.query({ gte: limit ?? 0, tenant: 'fixture-a' });\n}"
+      }
+    ],
+    "facts": [],
+    "languageFamily": "typescript",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "odd/queries/retrieve",
+        "first": 1,
+        "last": 3,
+        "sha256": "8a31a87f12939952a08f82244bfb7ea516afb71ce50876ec5add400e98ab06f6"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-understanding-02",
+    "family": "understanding",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Explain the archive guard and shown awaited call order.",
+    "oracle": "Enabled early exit and syntactic order; callee outcomes unknown.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "understanding",
+      "branch": "fixture-v1",
+      "file": "task_units/old.archive/job.py"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "task_units/old.archive/job.py",
+        "startLine": 1,
+        "content": "async def archive(request):\n    if not request.enabled:\n        return None\n    await audit(request)\n    await store.archive(request.id)\n    return True"
+      }
+    ],
+    "facts": [],
+    "languageFamily": "python",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "task_units/old.archive/job.py",
+        "first": 1,
+        "last": 6,
+        "sha256": "ad768e02d09eea7be4885b9ada96354682c8ac38e50778af8c7a4e1efb028b81"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-understanding-04",
+    "family": "understanding",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Explain Bound::Absent versus Bound::Present in allowed.",
+    "oracle": "Supplied resolve body proves selected fallback/local comparison.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "understanding",
+      "branch": "fixture-v1",
+      "file": "plugins/unused-name/lower.rs"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "plugins/unused-name/lower.rs",
+        "startLine": 1,
+        "content": "enum Bound { Absent, Present(i32) }\nimpl Bound {\n fn resolve(self, fallback: i32) -> i32 {\n  match self { Bound::Absent => fallback, Bound::Present(v) => v }\n }\n}\nfn allowed(value:i32, bound:Bound)->bool { value >= bound.resolve(0) }"
+      }
+    ],
+    "facts": [],
+    "languageFamily": "rust",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "plugins/unused-name/lower.rs",
+        "first": 1,
+        "last": 7,
+        "sha256": "1f18da145e65d2bcd7c76e8090f431afb5ff130be677cac40e44ab71d4466618"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-understanding-05",
+    "family": "understanding",
+    "split": "development",
+    "caseType": "expected-unknown",
+    "positiveFindingRequired": false,
+    "question": "Do missing field metadata guarantee a successful write?",
+    "oracle": "Shown branch skipped; writer/other constraints unknown.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "understanding",
+      "branch": "fixture-v1",
+      "file": "code roots/value conditions.ts"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "code roots/value conditions.ts",
+        "startLine": 1,
+        "content": "export function validate(field, value) {\n if (field.type === 'number' && field.meta) {\n  const errors = validateNumber(value, field.meta, true);\n  if (errors.length > 0) throw new Error(errors.join(','));\n }\n return writer(value);\n}"
+      }
+    ],
+    "facts": [],
+    "languageFamily": "typescript",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "code roots/value conditions.ts",
+        "first": 1,
+        "last": 7,
+        "sha256": "374cdd635e8d097daa2ce0cd2226af2c715cdb04fdab96f87408144424be44bb"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-understanding-07",
+    "family": "understanding",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Explain whether newest date is bound to messages[0].",
+    "oracle": "Separate derivation does not establish relation.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "understanding",
+      "branch": "fixture-v1",
+      "file": "archives/date-messages.ts"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "archives/date-messages.ts",
+        "startLine": 1,
+        "content": "export function sample(commits) {\n let newest; const messages=[];\n for (const c of commits) {\n  if (!newest || c.date > newest) newest=c.date;\n  if (messages.length < 2) messages.push(c.message);\n }\n return {newest,messages};\n}"
+      }
+    ],
+    "facts": [],
+    "languageFamily": "typescript",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "archives/date-messages.ts",
+        "first": 1,
+        "last": 8,
+        "sha256": "a0d129e3ed0500225bc202f99941e5a45730cb3c86a25ff8ab5c583f77c63dd5"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-understanding-08",
+    "family": "understanding",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Explain the Ruby guard and source statement ordering.",
+    "oracle": "Local shown order; external effects unknown.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "understanding",
+      "branch": "fixture-v1",
+      "file": "modules/reporting/leftover.rb"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "modules/reporting/leftover.rb",
+        "startLine": 1,
+        "content": "def send_report(report)\n return nil unless report.enabled\n audit(report.id)\n client.send(report.body)\nend"
+      }
+    ],
+    "facts": [],
+    "languageFamily": "ruby",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "modules/reporting/leftover.rb",
+        "first": 1,
+        "last": 5,
+        "sha256": "8bb1d620615baee3e76875bda5ae01fba5c2fa4a636199a0782285bf94881219"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-blast-01",
+    "family": "blast",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "If retrieve requires an extra required argument, what shown caller needs compatibility review?",
+    "oracle": "Supplied synthetic caller lacking argument; conditional compile/interface impact only.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "blast",
+      "branch": "fixture-v1",
+      "file": "odd/queries/retrieve"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "odd/queries/retrieve",
+        "startLine": 1,
+        "content": "export function retrieve(limit) {\n  return store.query({ gte: limit ?? 0, tenant: 'fixture-a' });\n}"
+      },
+      {
+        "id": "window-2",
+        "path": "call sites/1.ts",
+        "startLine": 1,
+        "content": "import {retrieve} from '../odd/queries/retrieve';\nexport function consumer(limit) { return retrieve(limit); }"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "dependency",
+        "scope": "Admitted fixture import relationship, no exhaustive coverage",
+        "value": {
+          "target": "odd/queries/retrieve",
+          "dependent": "call sites/1.ts",
+          "source": "scip"
+        }
+      }
+    ],
+    "languageFamily": "typescript",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "odd/queries/retrieve",
+        "first": 1,
+        "last": 3,
+        "sha256": "8a31a87f12939952a08f82244bfb7ea516afb71ce50876ec5add400e98ab06f6"
+      },
+      {
+        "kind": "source-window",
+        "path": "call sites/1.ts",
+        "first": 1,
+        "last": 2,
+        "sha256": "a3f98a7e793646c039626340cc390287613230b77ad3df5767cf295e6f534334"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "d034bd3b74f261d037348a489bd27936df612e14d6377fb03f4e594cf17c7684",
+        "scope": "Admitted fixture import relationship, no exhaustive coverage",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-blast-02",
+    "family": "blast",
+    "split": "development",
+    "caseType": "misleading-premise",
+    "positiveFindingRequired": false,
+    "question": "Will every change to archive break all callers?",
+    "oracle": "Dependency cannot prove every change; comment-only counterexample.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "blast",
+      "branch": "fixture-v1",
+      "file": "task_units/old.archive/job.py"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "task_units/old.archive/job.py",
+        "startLine": 1,
+        "content": "async def archive(request):\n    if not request.enabled:\n        return None\n    await audit(request)\n    await store.archive(request.id)\n    return True"
+      },
+      {
+        "id": "window-2",
+        "path": "call sites/2.py",
+        "startLine": 1,
+        "content": "async def consumer(request):\n    return await archive(request)"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "dependency",
+        "scope": "Admitted fixture import relationship, no exhaustive coverage",
+        "value": {
+          "target": "task_units/old.archive/job.py",
+          "dependent": "call sites/2.py",
+          "source": "scip"
+        }
+      }
+    ],
+    "languageFamily": "python",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "task_units/old.archive/job.py",
+        "first": 1,
+        "last": 6,
+        "sha256": "ad768e02d09eea7be4885b9ada96354682c8ac38e50778af8c7a4e1efb028b81"
+      },
+      {
+        "kind": "source-window",
+        "path": "call sites/2.py",
+        "first": 1,
+        "last": 2,
+        "sha256": "1bc96b6da22faed0687aeb5590375270166a2665ed5b88d2a1c0cf5e595b734b"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "7f3a732506a3e791bd27accadfe2cdd427fe0f2115b60d48ac86afb58ce4637a",
+        "scope": "Admitted fixture import relationship, no exhaustive coverage",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-blast-04",
+    "family": "blast",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "If allowed inverts its boolean predicate, explain the shown consumer condition.",
+    "oracle": "Explicit consumer branch + specific incompatible behavior, no unseen consumers.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "blast",
+      "branch": "fixture-v1",
+      "file": "plugins/unused-name/lower.rs"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "plugins/unused-name/lower.rs",
+        "startLine": 1,
+        "content": "enum Bound { Absent, Present(i32) }\nimpl Bound {\n fn resolve(self, fallback: i32) -> i32 {\n  match self { Bound::Absent => fallback, Bound::Present(v) => v }\n }\n}\nfn allowed(value:i32, bound:Bound)->bool { value >= bound.resolve(0) }"
+      },
+      {
+        "id": "window-2",
+        "path": "call sites/4.rs",
+        "startLine": 1,
+        "content": "fn consumer(value:i32,bound:Bound)->bool { if allowed(value,bound) { return true; } false }"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "dependency",
+        "scope": "Admitted fixture import relationship, no exhaustive coverage",
+        "value": {
+          "target": "plugins/unused-name/lower.rs",
+          "dependent": "call sites/4.rs",
+          "source": "scip"
+        }
+      }
+    ],
+    "languageFamily": "rust",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "plugins/unused-name/lower.rs",
+        "first": 1,
+        "last": 7,
+        "sha256": "1f18da145e65d2bcd7c76e8090f431afb5ff130be677cac40e44ab71d4466618"
+      },
+      {
+        "kind": "source-window",
+        "path": "call sites/4.rs",
+        "first": 1,
+        "last": 1,
+        "sha256": "561dd01780530653b56df34a394e7dd262cb79432d786c0cfb4fe8977b422242"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "3b42cc0422a207ffed948cc729efd82e1710c1dd7f54b25a7a342561ea20fe60",
+        "scope": "Admitted fixture import relationship, no exhaustive coverage",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-blast-05",
+    "family": "blast",
+    "split": "development",
+    "caseType": "expected-unknown",
+    "positiveFindingRequired": false,
+    "question": "Which UI components fail when validate changes?",
+    "oracle": "No UI relation; report supplied caller only.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "blast",
+      "branch": "fixture-v1",
+      "file": "code roots/value conditions.ts"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "code roots/value conditions.ts",
+        "startLine": 1,
+        "content": "export function validate(field, value) {\n if (field.type === 'number' && field.meta) {\n  const errors = validateNumber(value, field.meta, true);\n  if (errors.length > 0) throw new Error(errors.join(','));\n }\n return writer(value);\n}"
+      },
+      {
+        "id": "window-2",
+        "path": "call sites/5.ts",
+        "startLine": 1,
+        "content": "export function consumer(field,value) { const result=validate(field,value); return result; }"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "dependency",
+        "scope": "Admitted fixture import relationship, no exhaustive coverage",
+        "value": {
+          "target": "code roots/value conditions.ts",
+          "dependent": "call sites/5.ts",
+          "source": "scip"
+        }
+      }
+    ],
+    "languageFamily": "typescript",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "code roots/value conditions.ts",
+        "first": 1,
+        "last": 7,
+        "sha256": "374cdd635e8d097daa2ce0cd2226af2c715cdb04fdab96f87408144424be44bb"
+      },
+      {
+        "kind": "source-window",
+        "path": "call sites/5.ts",
+        "first": 1,
+        "last": 1,
+        "sha256": "4e3eca08402ff633fa42bc43006dc895fb553a97dee8a79c9dfc12d4c649fc2f"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "487328e2eea5769556552c1108b4ff1f09270e1ac4082acfd4a0c2a5b3535d24",
+        "scope": "Admitted fixture import relationship, no exhaustive coverage",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-blast-07",
+    "family": "blast",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "If sample removes newest, what shown consumer expression uses it?",
+    "oracle": "Supplied caller property read; no full history claim.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "blast",
+      "branch": "fixture-v1",
+      "file": "archives/date-messages.ts"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "archives/date-messages.ts",
+        "startLine": 1,
+        "content": "export function sample(commits) {\n let newest; const messages=[];\n for (const c of commits) {\n  if (!newest || c.date > newest) newest=c.date;\n  if (messages.length < 2) messages.push(c.message);\n }\n return {newest,messages};\n}"
+      },
+      {
+        "id": "window-2",
+        "path": "call sites/7.ts",
+        "startLine": 1,
+        "content": "export function consumer(commits) { return sample(commits).newest; }"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "dependency",
+        "scope": "Admitted fixture import relationship, no exhaustive coverage",
+        "value": {
+          "target": "archives/date-messages.ts",
+          "dependent": "call sites/7.ts",
+          "source": "scip"
+        }
+      }
+    ],
+    "languageFamily": "typescript",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "archives/date-messages.ts",
+        "first": 1,
+        "last": 8,
+        "sha256": "a0d129e3ed0500225bc202f99941e5a45730cb3c86a25ff8ab5c583f77c63dd5"
+      },
+      {
+        "kind": "source-window",
+        "path": "call sites/7.ts",
+        "first": 1,
+        "last": 1,
+        "sha256": "e6654931c533d73ab6b14366bedb089535b4aac819c8a0bc4e44cad71976bf3e"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "f8eaee2910d39ffb440709d393e547c2fff76a74b1a7566934c011109dc8fb75",
+        "scope": "Admitted fixture import relationship, no exhaustive coverage",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-blast-08",
+    "family": "blast",
+    "split": "development",
+    "caseType": "negative-control",
+    "positiveFindingRequired": false,
+    "question": "Does a duplicated-code comment prove a mandatory parallel edit?",
+    "oracle": "Only attributed comment, if-required condition; counterpart body absent.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "blast",
+      "branch": "fixture-v1",
+      "file": "modules/reporting/leftover.rb"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "modules/reporting/leftover.rb",
+        "startLine": 1,
+        "content": "# Maintenance note: related logic is duplicated elsewhere; update if required.\ndef send_report(report)\n return nil unless report.enabled\n audit(report.id)\n client.send(report.body)\nend"
+      },
+      {
+        "id": "window-2",
+        "path": "call sites/8.rb",
+        "startLine": 1,
+        "content": "def consumer(report)\n send_report(report)\nend"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "dependency",
+        "scope": "Admitted fixture import relationship, no exhaustive coverage",
+        "value": {
+          "target": "modules/reporting/leftover.rb",
+          "dependent": "call sites/8.rb",
+          "source": "scip"
+        }
+      }
+    ],
+    "languageFamily": "ruby",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "modules/reporting/leftover.rb",
+        "first": 1,
+        "last": 6,
+        "sha256": "7611b86a0625b164e0feaa89ae233d29ace2add5114787bdeab37fe24d8701d6"
+      },
+      {
+        "kind": "source-window",
+        "path": "call sites/8.rb",
+        "first": 1,
+        "last": 3,
+        "sha256": "ee85df631b132cffac4e1182b414350b29c1fc3b1ffa8e92a4972603bf677668"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "f97e39325847f2010050e1a4bdfefc609a4f19025f957e5d3442d0980ea00274",
+        "scope": "Admitted fixture import relationship, no exhaustive coverage",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-gaps-01",
+    "family": "gaps",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Identify the nullable query bound and ask what external query semantics remain unknown.",
+    "oracle": "Exact bound and callee question, not permission defect.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "gaps",
+      "branch": "fixture-v1",
+      "file": "odd/queries/retrieve"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "odd/queries/retrieve",
+        "startLine": 1,
+        "content": "export function retrieve(limit) {\n  return store.query({ gte: limit ?? 0, tenant: 'fixture-a' });\n}"
+      }
+    ],
+    "facts": [],
+    "languageFamily": "typescript",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "odd/queries/retrieve",
+        "first": 1,
+        "last": 3,
+        "sha256": "8a31a87f12939952a08f82244bfb7ea516afb71ce50876ec5add400e98ab06f6"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-gaps-02",
+    "family": "gaps",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Find what archive establishes and what audit failure behavior needs investigation.",
+    "oracle": "Shown calls; prospective outcomes, no assertion absence of effects.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "gaps",
+      "branch": "fixture-v1",
+      "file": "task_units/old.archive/job.py"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "task_units/old.archive/job.py",
+        "startLine": 1,
+        "content": "async def archive(request):\n    if not request.enabled:\n        return None\n    await audit(request)\n    await store.archive(request.id)\n    return True"
+      }
+    ],
+    "facts": [],
+    "languageFamily": "python",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "task_units/old.archive/job.py",
+        "first": 1,
+        "last": 6,
+        "sha256": "ad768e02d09eea7be4885b9ada96354682c8ac38e50778af8c7a4e1efb028b81"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-gaps-04",
+    "family": "gaps",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Test the local Bound::Absent comparison with a negative value.",
+    "oracle": "Explicit body yields false at value<0; not all-input acceptance.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "gaps",
+      "branch": "fixture-v1",
+      "file": "plugins/unused-name/lower.rs"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "plugins/unused-name/lower.rs",
+        "startLine": 1,
+        "content": "enum Bound { Absent, Present(i32) }\nimpl Bound {\n fn resolve(self, fallback: i32) -> i32 {\n  match self { Bound::Absent => fallback, Bound::Present(v) => v }\n }\n}\nfn allowed(value:i32, bound:Bound)->bool { value >= bound.resolve(0) }"
+      }
+    ],
+    "facts": [],
+    "languageFamily": "rust",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "plugins/unused-name/lower.rs",
+        "first": 1,
+        "last": 7,
+        "sha256": "1f18da145e65d2bcd7c76e8090f431afb5ff130be677cac40e44ab71d4466618"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-gaps-05",
+    "family": "gaps",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Audit truthy-metadata validation and propose a conditional contract test.",
+    "oracle": "Skip branch does not prove unchecked success; missing expected requirement unknown.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "gaps",
+      "branch": "fixture-v1",
+      "file": "code roots/value conditions.ts"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "code roots/value conditions.ts",
+        "startLine": 1,
+        "content": "export function validate(field, value) {\n if (field.type === 'number' && field.meta) {\n  const errors = validateNumber(value, field.meta, true);\n  if (errors.length > 0) throw new Error(errors.join(','));\n }\n return writer(value);\n}"
+      }
+    ],
+    "facts": [],
+    "languageFamily": "typescript",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "code roots/value conditions.ts",
+        "first": 1,
+        "last": 7,
+        "sha256": "374cdd635e8d097daa2ce0cd2226af2c715cdb04fdab96f87408144424be44bb"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-gaps-07",
+    "family": "gaps",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Identify the date/message relationship gap in the sampler.",
+    "oracle": "No tuple association; recommend relational provenance characterization.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "gaps",
+      "branch": "fixture-v1",
+      "file": "archives/date-messages.ts"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "archives/date-messages.ts",
+        "startLine": 1,
+        "content": "export function sample(commits) {\n let newest; const messages=[];\n for (const c of commits) {\n  if (!newest || c.date > newest) newest=c.date;\n  if (messages.length < 2) messages.push(c.message);\n }\n return {newest,messages};\n}"
+      }
+    ],
+    "facts": [],
+    "languageFamily": "typescript",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "archives/date-messages.ts",
+        "first": 1,
+        "last": 8,
+        "sha256": "a0d129e3ed0500225bc202f99941e5a45730cb3c86a25ff8ab5c583f77c63dd5"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-gaps-08",
+    "family": "gaps",
+    "split": "development",
+    "caseType": "expected-unknown",
+    "positiveFindingRequired": false,
+    "question": "Is client.send idempotent in this source?",
+    "oracle": "Imported callee unprovided; no idempotency guarantee/absence.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "gaps",
+      "branch": "fixture-v1",
+      "file": "modules/reporting/leftover.rb"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "modules/reporting/leftover.rb",
+        "startLine": 1,
+        "content": "def send_report(report)\n return nil unless report.enabled\n audit(report.id)\n client.send(report.body)\nend"
+      }
+    ],
+    "facts": [],
+    "languageFamily": "ruby",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "modules/reporting/leftover.rb",
+        "first": 1,
+        "last": 5,
+        "sha256": "8bb1d620615baee3e76875bda5ae01fba5c2fa4a636199a0782285bf94881219"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-owner-01",
+    "family": "owner",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Name the matched declared handles for this query path.",
+    "oracle": "Supplied matched policy handles only; lookup members distinct.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "owner",
+      "branch": "fixture-v1",
+      "file": "odd/queries/retrieve"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "odd/queries/retrieve",
+        "startLine": 1,
+        "content": "export function retrieve(limit) {\n  return store.query({ gte: limit ?? 0, tenant: 'fixture-a' });\n}"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "sample",
+        "scope": "Retrieved contribution sample only; no current duty/availability",
+        "value": {
+          "account": "fixture-author",
+          "lastSampledCommitDate": "2026-01-02T00:00:00Z",
+          "messages": [
+            "recorded topic alpha",
+            "recorded topic beta"
+          ],
+          "sampledCommits": {
+            "sixMonths": 0,
+            "allRetrieved": 2
+          }
+        }
+      },
+      {
+        "kind": "provenance",
+        "scope": "Matched policy only when present; otherwise unknown",
+        "value": {
+          "source": "matched-codeowners",
+          "declaredHandles": [
+            "fixture-policy"
+          ],
+          "lookupMembers": [
+            "fixture-member"
+          ],
+          "declaredPolicyMatchReturned": true
+        }
+      }
+    ],
+    "languageFamily": "typescript",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "odd/queries/retrieve",
+        "first": 1,
+        "last": 3,
+        "sha256": "8a31a87f12939952a08f82244bfb7ea516afb71ce50876ec5add400e98ab06f6"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "c4e7ee8a80714afed21a3e4a1282de0bbc20550165fee4519798971e4ebb8684",
+        "scope": "Retrieved contribution sample only; no current duty/availability",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 1,
+        "sha256": "074cd1c0af89d20bc5d1faeddcae62d44113c84c03607bf9fc9b2a59b3f0c9ed",
+        "scope": "Matched policy only when present; otherwise unknown",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-owner-02",
+    "family": "owner",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Suggest sampled archive contacts while leaving present responsibility unknown.",
+    "oracle": "Dated contributor sample and recommendation; no mandatory reviewer.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "owner",
+      "branch": "fixture-v1",
+      "file": "task_units/old.archive/job.py"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "task_units/old.archive/job.py",
+        "startLine": 1,
+        "content": "async def archive(request):\n    if not request.enabled:\n        return None\n    await audit(request)\n    await store.archive(request.id)\n    return True"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "sample",
+        "scope": "Retrieved contribution sample only; no current duty/availability",
+        "value": {
+          "account": "fixture-author",
+          "lastSampledCommitDate": "2026-01-02T00:00:00Z",
+          "messages": [
+            "recorded topic alpha",
+            "recorded topic beta"
+          ],
+          "sampledCommits": {
+            "sixMonths": 0,
+            "allRetrieved": 2
+          }
+        }
+      },
+      {
+        "kind": "provenance",
+        "scope": "Matched policy only when present; otherwise unknown",
+        "value": {
+          "source": "ownership-policy-coverage",
+          "declaredHandles": [],
+          "lookupMembers": [
+            "fixture-member"
+          ],
+          "declaredPolicyMatchReturned": false
+        }
+      }
+    ],
+    "languageFamily": "python",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "task_units/old.archive/job.py",
+        "first": 1,
+        "last": 6,
+        "sha256": "ad768e02d09eea7be4885b9ada96354682c8ac38e50778af8c7a4e1efb028b81"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "c4e7ee8a80714afed21a3e4a1282de0bbc20550165fee4519798971e4ebb8684",
+        "scope": "Retrieved contribution sample only; no current duty/availability",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 1,
+        "sha256": "4ab939520df8ee9521a0b1cc486a74c58adec1f0b2f8b6493bf319f5c888fadd",
+        "scope": "Matched policy only when present; otherwise unknown",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-owner-04",
+    "family": "owner",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Separate team lookup membership from declared owners for Bound.",
+    "oracle": "Matched handles vs extra members; no owner promotion.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "owner",
+      "branch": "fixture-v1",
+      "file": "plugins/unused-name/lower.rs"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "plugins/unused-name/lower.rs",
+        "startLine": 1,
+        "content": "enum Bound { Absent, Present(i32) }\nimpl Bound {\n fn resolve(self, fallback: i32) -> i32 {\n  match self { Bound::Absent => fallback, Bound::Present(v) => v }\n }\n}\nfn allowed(value:i32, bound:Bound)->bool { value >= bound.resolve(0) }"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "sample",
+        "scope": "Retrieved contribution sample only; no current duty/availability",
+        "value": {
+          "account": "fixture-author",
+          "lastSampledCommitDate": "2026-01-02T00:00:00Z",
+          "messages": [
+            "recorded topic alpha",
+            "recorded topic beta"
+          ],
+          "sampledCommits": {
+            "sixMonths": 0,
+            "allRetrieved": 2
+          }
+        }
+      },
+      {
+        "kind": "provenance",
+        "scope": "Matched policy only when present; otherwise unknown",
+        "value": {
+          "source": "matched-codeowners",
+          "declaredHandles": [
+            "fixture-policy"
+          ],
+          "lookupMembers": [
+            "fixture-member"
+          ],
+          "declaredPolicyMatchReturned": true
+        }
+      }
+    ],
+    "languageFamily": "rust",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "plugins/unused-name/lower.rs",
+        "first": 1,
+        "last": 7,
+        "sha256": "1f18da145e65d2bcd7c76e8090f431afb5ff130be677cac40e44ab71d4466618"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "c4e7ee8a80714afed21a3e4a1282de0bbc20550165fee4519798971e4ebb8684",
+        "scope": "Retrieved contribution sample only; no current duty/availability",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 1,
+        "sha256": "074cd1c0af89d20bc5d1faeddcae62d44113c84c03607bf9fc9b2a59b3f0c9ed",
+        "scope": "Matched policy only when present; otherwise unknown",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-owner-05",
+    "family": "owner",
+    "split": "development",
+    "caseType": "misleading-premise",
+    "positiveFindingRequired": false,
+    "question": "The contributor has no recent commits, so explain why they are unavailable.",
+    "oracle": "Commit sample not all activity/availability; unknown presence.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "owner",
+      "branch": "fixture-v1",
+      "file": "code roots/value conditions.ts"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "code roots/value conditions.ts",
+        "startLine": 1,
+        "content": "export function validate(field, value) {\n if (field.type === 'number' && field.meta) {\n  const errors = validateNumber(value, field.meta, true);\n  if (errors.length > 0) throw new Error(errors.join(','));\n }\n return writer(value);\n}"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "sample",
+        "scope": "Retrieved contribution sample only; no current duty/availability",
+        "value": {
+          "account": "fixture-author",
+          "lastSampledCommitDate": "2026-01-02T00:00:00Z",
+          "messages": [
+            "recorded topic alpha",
+            "recorded topic beta"
+          ],
+          "sampledCommits": {
+            "sixMonths": 0,
+            "allRetrieved": 2
+          }
+        }
+      },
+      {
+        "kind": "provenance",
+        "scope": "Matched policy only when present; otherwise unknown",
+        "value": {
+          "source": "ownership-policy-coverage",
+          "declaredHandles": [],
+          "lookupMembers": [
+            "fixture-member"
+          ],
+          "declaredPolicyMatchReturned": false
+        }
+      }
+    ],
+    "languageFamily": "typescript",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "code roots/value conditions.ts",
+        "first": 1,
+        "last": 7,
+        "sha256": "374cdd635e8d097daa2ce0cd2226af2c715cdb04fdab96f87408144424be44bb"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "c4e7ee8a80714afed21a3e4a1282de0bbc20550165fee4519798971e4ebb8684",
+        "scope": "Retrieved contribution sample only; no current duty/availability",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 1,
+        "sha256": "4ab939520df8ee9521a0b1cc486a74c58adec1f0b2f8b6493bf319f5c888fadd",
+        "scope": "Matched policy only when present; otherwise unknown",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-owner-07",
+    "family": "owner",
+    "split": "development",
+    "caseType": "negative-control",
+    "positiveFindingRequired": false,
+    "question": "Which message is latest from max date and separately sampled strings?",
+    "oracle": "No relation; report independently scoped fields only.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "owner",
+      "branch": "fixture-v1",
+      "file": "archives/date-messages.ts"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "archives/date-messages.ts",
+        "startLine": 1,
+        "content": "export function sample(commits) {\n let newest; const messages=[];\n for (const c of commits) {\n  if (!newest || c.date > newest) newest=c.date;\n  if (messages.length < 2) messages.push(c.message);\n }\n return {newest,messages};\n}"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "sample",
+        "scope": "Retrieved contribution sample only; no current duty/availability",
+        "value": {
+          "account": "fixture-author",
+          "lastSampledCommitDate": "2026-01-02T00:00:00Z",
+          "messages": [
+            "recorded topic alpha",
+            "recorded topic beta"
+          ],
+          "sampledCommits": {
+            "sixMonths": 0,
+            "allRetrieved": 2
+          }
+        }
+      },
+      {
+        "kind": "provenance",
+        "scope": "Matched policy only when present; otherwise unknown",
+        "value": {
+          "source": "ownership-policy-coverage",
+          "declaredHandles": [],
+          "lookupMembers": [
+            "fixture-member"
+          ],
+          "declaredPolicyMatchReturned": false
+        }
+      }
+    ],
+    "languageFamily": "typescript",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "archives/date-messages.ts",
+        "first": 1,
+        "last": 8,
+        "sha256": "a0d129e3ed0500225bc202f99941e5a45730cb3c86a25ff8ab5c583f77c63dd5"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "c4e7ee8a80714afed21a3e4a1282de0bbc20550165fee4519798971e4ebb8684",
+        "scope": "Retrieved contribution sample only; no current duty/availability",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 1,
+        "sha256": "4ab939520df8ee9521a0b1cc486a74c58adec1f0b2f8b6493bf319f5c888fadd",
+        "scope": "Matched policy only when present; otherwise unknown",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-owner-08",
+    "family": "owner",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Suggest a contact by recorded message topic without claiming they introduced it.",
+    "oracle": "Topic/contact suggestion, no implementation authorship.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "owner",
+      "branch": "fixture-v1",
+      "file": "modules/reporting/leftover.rb"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "modules/reporting/leftover.rb",
+        "startLine": 1,
+        "content": "def send_report(report)\n return nil unless report.enabled\n audit(report.id)\n client.send(report.body)\nend"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "sample",
+        "scope": "Retrieved contribution sample only; no current duty/availability",
+        "value": {
+          "account": "fixture-author",
+          "lastSampledCommitDate": "2026-01-02T00:00:00Z",
+          "messages": [
+            "recorded topic alpha",
+            "recorded topic beta"
+          ],
+          "sampledCommits": {
+            "sixMonths": 0,
+            "allRetrieved": 2
+          }
+        }
+      },
+      {
+        "kind": "provenance",
+        "scope": "Matched policy only when present; otherwise unknown",
+        "value": {
+          "source": "ownership-policy-coverage",
+          "declaredHandles": [],
+          "lookupMembers": [
+            "fixture-member"
+          ],
+          "declaredPolicyMatchReturned": false
+        }
+      }
+    ],
+    "languageFamily": "ruby",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "modules/reporting/leftover.rb",
+        "first": 1,
+        "last": 5,
+        "sha256": "8bb1d620615baee3e76875bda5ae01fba5c2fa4a636199a0782285bf94881219"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "c4e7ee8a80714afed21a3e4a1282de0bbc20550165fee4519798971e4ebb8684",
+        "scope": "Retrieved contribution sample only; no current duty/availability",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 1,
+        "sha256": "4ab939520df8ee9521a0b1cc486a74c58adec1f0b2f8b6493bf319f5c888fadd",
+        "scope": "Matched policy only when present; otherwise unknown",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-trace-01",
+    "family": "trace",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Attribute the supplied commit title and distinguish the current query default.",
+    "oracle": "Exact history text; no patch/introduction inference.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "trace",
+      "branch": "fixture-v1",
+      "file": "odd/queries/retrieve"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "odd/queries/retrieve",
+        "startLine": 1,
+        "content": "export function retrieve(limit) {\n  return store.query({ gte: limit ?? 0, tenant: 'fixture-a' });\n}"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "provenance",
+        "scope": "Exact sampled commit title/author/date; no patch unless explicit",
+        "value": {
+          "author": "fixture-author",
+          "date": "2026-01-01",
+          "title": "change comparison handling"
+        }
+      }
+    ],
+    "languageFamily": "typescript",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "odd/queries/retrieve",
+        "first": 1,
+        "last": 3,
+        "sha256": "8a31a87f12939952a08f82244bfb7ea516afb71ce50876ec5add400e98ab06f6"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "a1b2a9a9e20fedd81b2d380ed3b24c6f1cf88f3ac9380d88f0d813d4250f081f",
+        "scope": "Exact sampled commit title/author/date; no patch unless explicit",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-trace-02",
+    "family": "trace",
+    "split": "development",
+    "caseType": "negative-control",
+    "positiveFindingRequired": false,
+    "question": "Do an audit call and TODO prove a deliberate deferral decision?",
+    "oracle": "No; historical premise lacks explicit decision/patch.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "trace",
+      "branch": "fixture-v1",
+      "file": "task_units/old.archive/job.py"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "task_units/old.archive/job.py",
+        "startLine": 1,
+        "content": "async def archive(request):\n    if not request.enabled:\n        return None\n    await audit(request)\n    await store.archive(request.id)\n    return True"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "provenance",
+        "scope": "Exact sampled commit title/author/date; no patch unless explicit",
+        "value": {
+          "author": "fixture-author",
+          "date": "2026-01-01",
+          "title": "change comparison handling"
+        }
+      }
+    ],
+    "languageFamily": "python",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "task_units/old.archive/job.py",
+        "first": 1,
+        "last": 6,
+        "sha256": "ad768e02d09eea7be4885b9ada96354682c8ac38e50778af8c7a4e1efb028b81"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "a1b2a9a9e20fedd81b2d380ed3b24c6f1cf88f3ac9380d88f0d813d4250f081f",
+        "scope": "Exact sampled commit title/author/date; no patch unless explicit",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-trace-04",
+    "family": "trace",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Describe explicit local fallback and admit unknown historical rationale.",
+    "oracle": "Implementation body valid; reason not invented.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "trace",
+      "branch": "fixture-v1",
+      "file": "plugins/unused-name/lower.rs"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "plugins/unused-name/lower.rs",
+        "startLine": 1,
+        "content": "enum Bound { Absent, Present(i32) }\nimpl Bound {\n fn resolve(self, fallback: i32) -> i32 {\n  match self { Bound::Absent => fallback, Bound::Present(v) => v }\n }\n}\nfn allowed(value:i32, bound:Bound)->bool { value >= bound.resolve(0) }"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "provenance",
+        "scope": "Exact sampled commit title/author/date; no patch unless explicit",
+        "value": {
+          "author": "fixture-author",
+          "date": "2026-01-01",
+          "title": "change comparison handling"
+        }
+      }
+    ],
+    "languageFamily": "rust",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "plugins/unused-name/lower.rs",
+        "first": 1,
+        "last": 7,
+        "sha256": "1f18da145e65d2bcd7c76e8090f431afb5ff130be677cac40e44ab71d4466618"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "a1b2a9a9e20fedd81b2d380ed3b24c6f1cf88f3ac9380d88f0d813d4250f081f",
+        "scope": "Exact sampled commit title/author/date; no patch unless explicit",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-trace-05",
+    "family": "trace",
+    "split": "development",
+    "caseType": "misleading-premise",
+    "positiveFindingRequired": false,
+    "question": "Since missing metadata was intentionally accepted, explain that decision.",
+    "oracle": "Intentional-acceptance premise unsupported; local condition only.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "trace",
+      "branch": "fixture-v1",
+      "file": "code roots/value conditions.ts"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "code roots/value conditions.ts",
+        "startLine": 1,
+        "content": "export function validate(field, value) {\n if (field.type === 'number' && field.meta) {\n  const errors = validateNumber(value, field.meta, true);\n  if (errors.length > 0) throw new Error(errors.join(','));\n }\n return writer(value);\n}"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "provenance",
+        "scope": "Exact sampled commit title/author/date; no patch unless explicit",
+        "value": {
+          "author": "fixture-author",
+          "date": "2026-01-01",
+          "title": "change comparison handling"
+        }
+      }
+    ],
+    "languageFamily": "typescript",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "code roots/value conditions.ts",
+        "first": 1,
+        "last": 7,
+        "sha256": "374cdd635e8d097daa2ce0cd2226af2c715cdb04fdab96f87408144424be44bb"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "a1b2a9a9e20fedd81b2d380ed3b24c6f1cf88f3ac9380d88f0d813d4250f081f",
+        "scope": "Exact sampled commit title/author/date; no patch unless explicit",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-trace-07",
+    "family": "trace",
+    "split": "development",
+    "caseType": "expected-unknown",
+    "positiveFindingRequired": false,
+    "question": "Which author introduced the newest-date algorithm without a patch?",
+    "oracle": "Commit title/topic alone cannot establish line authorship.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "trace",
+      "branch": "fixture-v1",
+      "file": "archives/date-messages.ts"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "archives/date-messages.ts",
+        "startLine": 1,
+        "content": "export function sample(commits) {\n let newest; const messages=[];\n for (const c of commits) {\n  if (!newest || c.date > newest) newest=c.date;\n  if (messages.length < 2) messages.push(c.message);\n }\n return {newest,messages};\n}"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "provenance",
+        "scope": "Exact sampled commit title/author/date; no patch unless explicit",
+        "value": {
+          "author": "fixture-author",
+          "date": "2026-01-01",
+          "title": "change comparison handling"
+        }
+      }
+    ],
+    "languageFamily": "typescript",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "archives/date-messages.ts",
+        "first": 1,
+        "last": 8,
+        "sha256": "a0d129e3ed0500225bc202f99941e5a45730cb3c86a25ff8ab5c583f77c63dd5"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "a1b2a9a9e20fedd81b2d380ed3b24c6f1cf88f3ac9380d88f0d813d4250f081f",
+        "scope": "Exact sampled commit title/author/date; no patch unless explicit",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  },
+  {
+    "id": "EH06-trace-08",
+    "family": "trace",
+    "split": "development",
+    "caseType": "positive",
+    "positiveFindingRequired": true,
+    "question": "Report the comment maintenance note with its if-required condition.",
+    "oracle": "Literal attributed comment; other implementation unknown.",
+    "identity": {
+      "owner": "explicit-synthetic-fixture",
+      "repo": "trace",
+      "branch": "fixture-v1",
+      "file": "modules/reporting/leftover.rb"
+    },
+    "windows": [
+      {
+        "id": "window-1",
+        "path": "modules/reporting/leftover.rb",
+        "startLine": 1,
+        "content": "# Maintenance note: related logic is duplicated elsewhere; update if required.\ndef send_report(report)\n return nil unless report.enabled\n audit(report.id)\n client.send(report.body)\nend"
+      }
+    ],
+    "facts": [
+      {
+        "kind": "provenance",
+        "scope": "Exact sampled commit title/author/date; no patch unless explicit",
+        "value": {
+          "author": "fixture-author",
+          "date": "2026-01-01",
+          "title": "change comparison handling"
+        }
+      }
+    ],
+    "languageFamily": "ruby",
+    "layer": "controlled-source envelope / real-provider generation+review if run; synthetic source does not qualify real remote retrieval",
+    "status": "frozen-not-scored",
+    "priorOracleReviewer": "independent EH05-A source reviewer",
+    "oracleReviewStatus": "fresh-independent-review-required",
+    "evidenceAnchors": [
+      {
+        "kind": "source-window",
+        "path": "modules/reporting/leftover.rb",
+        "first": 1,
+        "last": 6,
+        "sha256": "7611b86a0625b164e0feaa89ae233d29ace2add5114787bdeab37fe24d8701d6"
+      },
+      {
+        "kind": "fixture-fact",
+        "index": 0,
+        "sha256": "a1b2a9a9e20fedd81b2d380ed3b24c6f1cf88f3ac9380d88f0d813d4250f081f",
+        "scope": "Exact sampled commit title/author/date; no patch unless explicit",
+        "origin": "explicit fictional fixture record; not actual customer/provider truth"
+      }
+    ],
+    "requiredUsefulFinding": true,
+    "severityCategories": [
+      "access-security",
+      "inevitable-impact",
+      "current-ownership-history",
+      "unverified-action-premise"
+    ],
+    "forbiddenInference": "Anything exceeding the exact local conditions, admitted relation and attribution in the oracle"
+  }
+]

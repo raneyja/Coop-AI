@@ -37,6 +37,9 @@ const authConfig = {
 } as AuthConfig;
 
 const serverConfig = {
+  nodeEnv: "test",
+  devMode: true,
+  jobsWorkersEnabled: false,
   legacyApiToken: undefined,
   requireApiAuth: false,
   ssoBaseUrl: undefined,

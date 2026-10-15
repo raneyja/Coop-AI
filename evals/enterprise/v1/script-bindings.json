@@ -1,0 +1,12 @@
+{
+  "owner": "EH04 package.json/CI integrator",
+  "mutationsApplied": false,
+  "scripts": {
+    "test:enterprise:deterministic": "NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' tsx --test scripts/enterprise-eval.test.ts && NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' tsx scripts/enterprise-eval.ts deterministic",
+    "eval:enterprise:provider": "NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' tsx scripts/enterprise-eval.ts provider",
+    "eval:enterprise:score": "tsx scripts/enterprise-eval.ts score",
+    "eval:enterprise:remote": "NODE_OPTIONS='-r ./scripts/vscode-test-stub.cjs' tsx scripts/enterprise-eval.ts remote"
+  },
+  "requiredExistingOwnerCI": "Retain test:source-claims and existing workspace/agent policy tests; new eval does not replace them.",
+  "scoringAdmission": "v3 score requires independently reviewed pre-run observedRunPlan and post-run observedRunSelection original journal commitments; no provider scoring before fresh review"
+}

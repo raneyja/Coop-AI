@@ -1,3 +1,4 @@
+import { createNotionClientFromCredentials } from "../api/integrations/buildIntegrationClients";
 import { NotionClient } from "../api/notion/notionClient";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
@@ -109,7 +110,10 @@ export async function fetchNotionSearchContext(options: {
   }
 
   const creds = await options.secrets.getCredentials();
-  if (!creds.notionToken && !options.client) {
+  if (creds.proxy && (!options.integrationScope?.enforced || !options.integrationScope.allowed)) {
+    return { source: "notion-search", query: "", pages: [], error: "Integration source authorization is unavailable." };
+  }
+  if (!creds.proxy && !creds.notionToken && !options.client) {
     return {
       source: "notion-search",
       query: "",
@@ -120,7 +124,7 @@ export async function fetchNotionSearchContext(options: {
 
   const client =
     options.client ??
-    new NotionClient({ token: creds.notionToken!, signal: options.signal });
+    createNotionClientFromCredentials(creds, { signal: options.signal })!;
   const existingPages = pagesFromExistingHits(options.existingHits);
   if (options.openIds?.length && existingPages.length > 0) {
     const pages = await attachNotionPageBodies(
@@ -128,7 +132,7 @@ export async function fetchNotionSearchContext(options: {
       filterScopedNotionPages(existingPages, options.integrationScope),
       {
       jobScoped: false,
-      openIds: options.openIds
+      openIds: options.openIds, failClosed: Boolean(creds.proxy)
       }
     );
     return { source: "notion-search", query: "", pages };
@@ -199,7 +203,7 @@ export async function fetchNotionSearchContext(options: {
           ),
           extraTerms: options.extraTerms,
           deadlineAt: options.deadlineAt,
-          openIds: options.openIds
+          openIds: options.openIds, failClosed: Boolean(creds.proxy)
         });
     const repoQuery =
       options.owner?.trim() && options.repo?.trim()
@@ -295,7 +299,7 @@ function pagesToOpen(
 async function attachNotionPageBodies(
   client: NotionSearchClient,
   pages: NotionSearchPage[],
-  options: { jobScoped: boolean; extraTerms?: string[]; deadlineAt?: number; openIds?: string[] }
+  options: { failClosed?: boolean; jobScoped: boolean; extraTerms?: string[]; deadlineAt?: number; openIds?: string[] }
 ): Promise<NotionSearchPage[]> {
   if (pages.length === 0 || !client.getPagePlainText) {
     return pages;
@@ -309,10 +313,11 @@ async function attachNotionPageBodies(
   const remainingMs =
     options.deadlineAt === undefined ? undefined : Math.max(0, options.deadlineAt - Date.now());
   if (remainingMs !== undefined && remainingMs <= 0) {
-    return pages;
+    return options.failClosed ? [] : pages;
   }
   const openBodies = options.openIds?.length
     ? openHitsByIds({
+        failClosed: options.failClosed,
         hits: pages,
         ids: options.openIds,
         idOf: (page) => page.id,
@@ -322,30 +327,34 @@ async function attachNotionPageBodies(
             const excerpt = sanitizeIntegrationSnippet(
               clipOpenedBody(raw, OPENED_PAGE_BODY_CHARS) ?? ""
             );
-            return excerpt ? { ...page, excerpt, opened: true } : { ...page, opened: true };
-          } catch {
+            if (!excerpt && options.failClosed) throw new Error("Authorized integration read returned no body.");
+          return excerpt ? { ...page, excerpt, opened: true } : { ...page, opened: true };
+          } catch (error) {
+            if (options.failClosed) throw error;
             return { ...page, opened: true };
           }
         }
       })
-    : mergeOpenedPageBodies(client, pages, selected);
+    : mergeOpenedPageBodies(client, pages, selected, options.failClosed);
   if (remainingMs === undefined) {
     return openBodies;
   }
-  return firstCompleted(openBodies, pages, remainingMs);
+  return firstCompleted(openBodies, options.failClosed ? [] : pages, remainingMs);
 }
 
 async function mergeOpenedPageBodies(
   client: NotionSearchClient,
   pages: NotionSearchPage[],
-  selected: NotionSearchPage[]
+  selected: NotionSearchPage[],
+  failClosed = false
 ): Promise<NotionSearchPage[]> {
   const bodies = await Promise.all(
     selected.map(async (page) => {
       try {
         const body = await client.getPagePlainText?.(page.id);
         return { id: page.id, body };
-      } catch {
+      } catch (error) {
+        if (failClosed) throw error;
         return { id: page.id, body: undefined };
       }
     })

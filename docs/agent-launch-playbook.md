@@ -1,5 +1,13 @@
 # Agent Launch Playbook — Build Everything Today
 
+> Historical June 2026 launch plan, reviewed October 11. Its copied prompts,
+> schedules, checkout path, duplicate-file deletion, numbered migrations,
+> pricing/readiness and deployment checklist are not current marching orders
+> or authority. Preserve the dated record; inspect current source and follow
+> `../AGENTS.md`, the human's scope and `enterprise-hardening/EXECUTION_PLAN.md`
+> for the enterprise program. Do not replay the agents or cleanup/migration
+> commands merely by reading this file.
+
 **Date:** June 10, 2026  
 **Repo:** `/Users/jonraney/Desktop/Coop AI`
 

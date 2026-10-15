@@ -19,7 +19,7 @@ import {
   sanitizeAuthRedirect,
   writeJson
 } from "./sessionDelivery";
-import { authClientKey, consumeAuthRateLimit } from "./authRateLimit";
+import { consumeAuthRequest, type AuthRateLimitStore } from "./authRateLimit";
 import { adminPortalFreshLoginUrl, adminPortalLoginUrl } from "../billing/adminPortalUrl";
 import { loadBillingConfig } from "../billing/billingConfig";
 import { StripeService } from "../billing/stripeService";
@@ -34,9 +34,12 @@ type ParsedRequest = {
   query?: URLSearchParams;
   headers: Record<string, string | undefined>;
   body: unknown;
+  /** Transport-owned socket address, never derived from a request header or body. */
+  peerAddress?: string;
 };
 
 export type UserAuthApiDeps = {
+  authRateLimitStore?: AuthRateLimitStore;
   orgStore?: OrgStore;
   userStore?: UserStore;
   authIdentityStore?: AuthIdentityStore;
@@ -112,6 +115,17 @@ export async function handleUserAuthApiRequest(
   return true;
 }
 
+async function requireAuthAttempt(parsed: ParsedRequest, response: ServerResponse, deps: UserAuthApiDeps): Promise<boolean> {
+  try {
+    if (await consumeAuthRequest({ headers: parsed.headers, peerAddress: parsed.peerAddress,
+      serverConfig: deps.serverConfig, authRateLimitStore: deps.authRateLimitStore })) return true;
+    writeJson(response, 429, { error: "rate_limited", message: "Too many attempts. Try again in a few minutes." });
+  } catch {
+    writeJson(response, 503, { error: "auth_unavailable", message: "Sign-in is temporarily unavailable. Try again later." });
+  }
+  return false;
+}
+
 async function handleRegister(
   parsed: ParsedRequest,
   response: ServerResponse,
@@ -124,13 +138,7 @@ async function handleRegister(
   const password = String(body.password ?? "");
   const orgNameInput = String(body.orgName ?? body.displayName ?? "").trim();
 
-  if (!consumeAuthRateLimit(authClientKey(parsed.headers, email))) {
-    writeJson(response, 429, {
-      error: "rate_limited",
-      message: "Too many attempts. Try again in a few minutes."
-    });
-    return true;
-  }
+  if (!(await requireAuthAttempt(parsed, response, deps))) return true;
 
   if (!isValidEmail(email)) {
     writeJson(response, 400, { error: "invalid_email", message: "Enter a valid email address." });
@@ -186,13 +194,7 @@ async function handleLogin(
     .toLowerCase();
   const password = String(body.password ?? "");
 
-  if (!consumeAuthRateLimit(authClientKey(parsed.headers, email))) {
-    writeJson(response, 429, {
-      error: "rate_limited",
-      message: "Too many attempts. Try again in a few minutes."
-    });
-    return true;
-  }
+  if (!(await requireAuthAttempt(parsed, response, deps))) return true;
 
   if (!email || !password) {
     writeJson(response, 400, { error: "invalid_credentials", message: "Enter your email and password." });
@@ -313,13 +315,7 @@ async function handleForgotPassword(
     .trim()
     .toLowerCase();
 
-  if (!consumeAuthRateLimit(authClientKey(parsed.headers, email))) {
-    writeJson(response, 429, {
-      error: "rate_limited",
-      message: "Too many attempts. Try again in a few minutes."
-    });
-    return true;
-  }
+  if (!(await requireAuthAttempt(parsed, response, deps))) return true;
 
   writeJson(response, 200, {
     ok: true,
@@ -351,13 +347,7 @@ async function handleResetPassword(
   const token = String(body.token ?? "").trim();
   const password = String(body.password ?? "");
 
-  if (!consumeAuthRateLimit(authClientKey(parsed.headers, token.slice(0, 16)))) {
-    writeJson(response, 429, {
-      error: "rate_limited",
-      message: "Too many attempts. Try again in a few minutes."
-    });
-    return true;
-  }
+  if (!(await requireAuthAttempt(parsed, response, deps))) return true;
 
   const passwordError = validatePasswordStrength(password, deps.authConfig.passwordMinLength);
   if (passwordError) {

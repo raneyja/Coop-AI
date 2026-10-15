@@ -12,12 +12,12 @@ import {
   DEFAULT_ESTIMATED_DURATION_MS,
   type CreateJobInput,
   type Job,
-  type JobPriority,
+  type JobLease,
   type JobProgressEvent,
   type JobStatus,
   type JobSubmitResponse,
   JobType,
-  PRIORITY_WEIGHT,
+  EFFECT_JOB_TYPES,
   formatWaitTime,
   serializeJob
 } from "./types";
@@ -81,7 +81,7 @@ export class JobQueue extends EventEmitter {
 
     const estimatedDurationMs =
       input.estimatedDurationMs ?? DEFAULT_ESTIMATED_DURATION_MS[input.type] ?? 120_000;
-    const job: Job = {
+    let job: Job = {
       id: randomUUID(),
       type: input.type,
       status: "queued",
@@ -95,7 +95,9 @@ export class JobQueue extends EventEmitter {
       scheduled: input.scheduled
     };
 
-    await this.backend.save(job);
+    const saved = await this.backend.save(job);
+    if (saved && saved.id !== job.id) return {jobId:saved.id,status:saved.status,estimatedWaitTimeMs:0,estimatedWaitTime:formatWaitTime(0),deduplicated:true};
+    job = saved ?? job;
     if (this.backend.recordJobSubmission) {
       await this.backend.recordJobSubmission(userId, input.type);
     } else {
@@ -119,99 +121,62 @@ export class JobQueue extends EventEmitter {
   }
 
   public async cancelJob(id: string, options?: { includeRunning?: boolean }): Promise<Job | undefined> {
-    const job = await this.backend.get(id);
-    if (!job) {
-      return undefined;
-    }
-    const cancellable =
-      job.status === "queued" || (options?.includeRunning === true && job.status === "running");
-    if (!cancellable) {
-      return undefined;
-    }
-    job.status = "cancelled";
-    job.completedAt = new Date();
-    job.error = options?.includeRunning ? "Superseded by a new Deep-Index request" : "Cancelled by user";
-    await this.backend.update(job);
-    this.emitProgress(job, "Job cancelled");
+    const job = await this.backend.cancel(id, options?.includeRunning === true);
+    if (job) this.emitProgress(job, 'Job cancelled');
     return job;
   }
 
-  public async claimNext(): Promise<Job | undefined> {
-    const job = this.backend.claimNext
-      ? await this.backend.claimNext()
-      : await this.claimNextInMemory();
-    if (job) {
-      this.emitProgress(job, "Job started");
-    }
+  public async claimNext(ownerId: string, leaseMs: number): Promise<Job | undefined> {
+    if (!ownerId || !Number.isFinite(leaseMs) || leaseMs <= 0) throw new Error('Invalid worker lease');
+    const job = await this.backend.claimNext(ownerId, leaseMs);
+    if (job) this.emitProgress(job, 'Job started');
     return job;
   }
 
-  private async claimNextInMemory(): Promise<Job | undefined> {
-    const queued = await this.backend.listByStatus(["queued"]);
-    if (queued.length === 0) {
-      return undefined;
-    }
-    queued.sort(compareJobs);
-    const job = queued[0];
-    job.status = "running";
-    job.startedAt = new Date();
-    job.progress = 5;
-    await this.backend.update(job);
-    return job;
+  public async renew(job: Job, leaseMs: number): Promise<boolean> {
+    return this.backend.renew(job.id, jobLease(job), leaseMs);
   }
 
-  public async updateProgress(jobId: string, progress: number, message?: string): Promise<void> {
-    const job = await this.backend.get(jobId);
-    if (!job || job.status !== "running") {
-      return;
-    }
-    job.progress = Math.max(0, Math.min(100, progress));
-    await this.backend.update(job);
-    this.emitProgress(job, message);
+  public async reclaimExpired(maxRetries: number): Promise<number> {
+    return this.backend.reclaimExpired(maxRetries);
   }
 
-  public async completeJob(jobId: string, result: unknown, status: JobStatus = "completed"): Promise<Job | undefined> {
-    const job = await this.backend.get(jobId);
-    if (!job) {
-      return undefined;
-    }
-    job.status = status;
-    job.progress = 100;
-    job.result = result;
-    job.completedAt = new Date();
-    await this.backend.update(job);
-    await this.results.store(jobId, result, job.scheduled);
-    this.emitProgress(job, "Job completed");
-    this.emit("job:completed", job);
-    return job;
+  public async updateProgress(job: Job, progress: number, message?: string): Promise<boolean> {
+    const updated = await this.backend.updateOwned({...job, status: 'running', progress: Math.max(0, Math.min(100, progress))}, jobLease(job));
+    if (!updated) return false;
+    this.emitProgress(updated, message);
+    return true;
   }
 
-  public async failJob(jobId: string, error: string, partialResult?: unknown): Promise<Job | undefined> {
-    const job = await this.backend.get(jobId);
-    if (!job) {
-      return undefined;
-    }
-    job.status = partialResult ? "partial" : "failed";
-    job.error = error;
-    job.result = partialResult;
-    job.completedAt = new Date();
-    await this.backend.update(job);
-    if (partialResult !== undefined) {
-      await this.results.store(jobId, partialResult, job.scheduled);
-    }
-    this.emitProgress(job, error);
-    this.emit("job:failed", job);
-    return job;
+  public async completeJob(job: Job, result: unknown, status: 'completed' | 'partial' = 'completed'): Promise<Job | undefined> {
+    job=structuredClone(job);result=structuredClone(result);
+    const record = this.results.prepare(job.id, result, job.scheduled);
+    const updated = await this.backend.updateOwned({...job, status, progress: 100, result,
+      effectQuarantined: status === 'partial' && EFFECT_JOB_TYPES.includes(job.type), completedAt: new Date()}, jobLease(job), record);
+    if (!updated) return undefined;
+    this.results.remember(record);
+    this.emitProgress(updated, 'Job completed');
+    this.emit('job:completed', updated);
+    return updated;
   }
 
-  public async requeue(job: Job): Promise<void> {
-    job.status = "queued";
-    job.startedAt = undefined;
-    job.progress = 0;
-    job.retryCount += 1;
-    await this.backend.update(job);
-    this.emit("job:enqueued", job);
-    this.emitProgress(job, `Retry ${job.retryCount}`);
+  public async failJob(job: Job, error: string, partialResult?: unknown): Promise<Job | undefined> {
+    job=structuredClone(job);partialResult=partialResult === undefined ? undefined : structuredClone(partialResult);
+    const record = partialResult === undefined ? undefined : this.results.prepare(job.id, partialResult, job.scheduled);
+    const updated = await this.backend.updateOwned({...job, status: record ? 'partial' : 'failed', error, result: partialResult,
+      effectQuarantined: EFFECT_JOB_TYPES.includes(job.type), completedAt: new Date()}, jobLease(job), record);
+    if (!updated) return undefined;
+    if (record) this.results.remember(record);
+    this.emitProgress(updated, error);
+    this.emit('job:failed', updated);
+    return updated;
+  }
+
+  public async requeue(job: Job, delayMs = 0, countRetry = true): Promise<void> {
+    const updated = await this.backend.requeue(job.id, jobLease(job), delayMs, countRetry);
+    if (!updated) return;
+    this.emit('job:enqueued', updated);
+    this.emitProgress(updated, countRetry ? `Retry ${updated.retryCount}` : 'Worker shutdown; job queued');
   }
 
   public snapshot(): JobQueueSnapshot {
@@ -310,12 +275,9 @@ export class JobRateLimitError extends Error {
   }
 }
 
-function compareJobs(a: Job, b: Job): number {
-  const priority = PRIORITY_WEIGHT[a.priority] - PRIORITY_WEIGHT[b.priority];
-  if (priority !== 0) {
-    return priority;
-  }
-  return a.createdAt.getTime() - b.createdAt.getTime();
+export function jobLease(job: Job): JobLease {
+  if (!job.ownerId || !job.attemptId) throw new Error('Running job has no admitted attempt');
+  return {ownerId: job.ownerId, attemptId: job.attemptId};
 }
 
 function summarize(jobs: Job[]): JobQueueSnapshot {

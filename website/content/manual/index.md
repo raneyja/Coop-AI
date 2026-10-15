@@ -35,10 +35,9 @@ CoopAI builds a secure cross-repo knowledge graph from webhooks and index jobs, 
 
 | Badge | Meaning |
 | --- | --- |
-| **No model training** | Your code is never used to train models |
-| **Zero-retention routing** | Enterprise-confidential context with retention flags disabled |
+| **Confidential chat context** | Chat formatting includes confidentiality instructions; provider account terms require verification |
+| **LLM request controls** | Confidentiality instructions and provider-compatible controls; account retention requires verification |
 | **Keys on your server** | LLM provider keys stay server-side, not in the IDE |
-| **BYOK ready** | Route inference through your own provider accounts |
 
 See the [Security page](/security) for architecture details.
 
@@ -419,7 +418,7 @@ Full guide: [Inline autocomplete](/docs/autocomplete).
 
 Full guide: [Edit mode](/docs/edit-mode).
 
-**Completion-only routing** — Inline requests use a separate zero-retention path (`x-use-case: code-completion-only`), distinct from chat.
+**Completion-only routing** — Inline requests use a dedicated completion route with provider request controls (`x-use-case: code-completion-only`), distinct from chat. Verify controls and account retention for the actual endpoint.
 
 ## Create a pull request
 

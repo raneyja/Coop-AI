@@ -2,6 +2,22 @@
 
 Owner scope: Test 6, `/gaps` code-rule discovery and evidence-bound policy questions. The original four-case source/citation qualification is complete. Jon subsequently redirected the follow-up to shared product policy and enforcement and stopped named-repository/question replay loops. The current policy revision is qualified by automated checks; it has no new live or latency Pass. Source-backed latency and intermittent isolated sidebar startup remain limitations of the historical live baseline. Jon approved the recorded scoped backend deployment; this follow-up does not deploy another backend or modify the shared Extension Host runtime. The completed October 7 file-context baseline remains intact. No commit, push, or PR is part of this run.
 
+Latest follow-up: October 11 founder dogfood exposed a selected-file scope mismatch. The repaired selected-source/quote path has automated checks and two bounded live publications recorded below. Broader semantic correctness and the 15-second guideline are not certified by those observations; Blast's related prose failure remains open.
+
+## October 11 selected-file scope repair
+
+Jon asked about the remote file selected in his chat. Diagnostics on bundle `4d47d7b629fd684d3f3c3717fa253fdcdefff84b7f054e0a4944145e57ffe531` show the selected body was fetched, but the focused review and quote checker received six other paths. The selected body was present separately in legacy context. This is a concrete evidence-scope mismatch; the private failed answer bodies were not captured, so the reason for every individual quote rejection is not established.
+
+`knowledgeGapsFocusUsesSelectedFile` is now the shared scope decision for explicit references to the selected file. File selection takes precedence over lexical path relevance in the gather, attachment and synthesis owners. An unavailable selected body remains unavailable rather than substituting neighboring search results. Named targets and unrelated subsystem asks retain their previous scope. No domain alias, repository/path preference or language-specific answer was added. Quote verification remains strict.
+
+Regression checks use unrelated paths with TypeScript, Python, Rust and opaque extensions, multiple file-reference phrasings, negative documentation/open-question controls, an unavailable selected body, and actual gather-to-prompt-to-private-review publication. The complete Gaps suite, Blast suite, lint, extension/webview build and diff check pass.
+
+The first repair-owned replay on `e11bbee689328bbe0792f030d1abcc556df523a9feafa714ae43e2b7dd4d247a` reviewed only the requested complete remote body and published three checked citations with one model call. Host completion was 65.765 seconds. One open question overstated database selection as signing permission, so that answer is not a general quality Pass. The focused contract now explicitly distinguishes lookup criteria from authorization and preserves this rule in premises inside open questions.
+
+The final candidate `1be49f4a25efe779eb2cb6dc0a79f0a9b128b5b5d96f6795a781377ee625728d` was loaded after one reload of the repair-owned window. Both saved conversations and the remote selected-file chip were restored, and startup reached `session-restored`. Repeating the same Gaps question in its own conversation again retained the requested body, published three checked citations and used one model call, completing at the host in 32.885 seconds. This qualifies the selected-file rejection repair; it is not proof of arbitrary prose correctness, a representative latency improvement, or a causal repair of the earlier intermittent blank frame. History/cache/model variation prevents attributing the timing difference to this patch.
+
+The original founder window and its unsaved work were not reloaded or rebuilt. A separate window in the existing test profile carries the final candidate; a separately launched copied profile was not used for prompts. No API deployment, commit, push or publication occurred. Metadata-only evidence, runtime hashes and remaining limitations are in [the follow-up record](evidence/2026-10-11-quick-action-follow-up.json).
+
 ## Original failure
 
 Remote repository `CoopAI-Corp/plane`, branch `preview`, with no file chip:
@@ -102,6 +118,40 @@ The initial server correction still carried the generic health-scan system body 
 ## Isolated host startup observation
 
 The Gaps sidebar frame intermittently remained `about:blank`, with the native VS Code Network panel showing its outer `index.html` request at HTTP 200, zero bytes, and Pending. A private diagnostic probe confirmed activation and session hydration; one load delivered messages successfully. A fresh Coop editor chat panel mounted and successfully bound remote Plane `preview` with no file, allowing the remaining qualification on the verified build. Reload also restored that editor panel. The probe was replaced before submitting any test request. The evidence establishes an intermittent sidebar startup problem, without establishing its root cause; it is retained as a separate limitation. Diagnostics are in `evidence/startup-probe.log`.
+
+### Planned follow-up: shared sidebar startup reliability
+
+Jon requested a repair plan for this remaining startup issue. This is a shared
+window/session lifecycle investigation, independent of repository, language,
+file, or question. The existing empty-HTML reattachment guard and disabled
+hidden-context retention are already present; they do not establish the cause
+of the recorded pending outer frame.
+
+1. Reproduce cold launch, window reload, sidebar hide/show, and reopening the
+   sidebar on the current build. Compare the editor chat panel only to localize
+   the failing surface. Preserve saved chats and unrelated unsaved work.
+2. Trace provider resolution, HTML assignment, frontend mounting, ready-message
+   delivery, and session restoration with lifecycle metadata only. Distinguish
+   VS Code frame/resource loading from frontend exceptions or delayed session
+   hydration before selecting a repair. Do not log credentials, source bodies,
+   or conversations.
+3. Fix the confirmed lifecycle defect in its existing owner. Preserve one active
+   message listener, correct window/session ownership, and saved state. If
+   recovery is needed, bound it and expose a clear failure instead of an
+   indefinite blank panel; avoid blind repeated reloads.
+4. Add regressions for the discovered failure and relevant reattachment,
+   disposal, delayed initialization, and failure boundaries. Run targeted checks,
+   lint, and the extension/webview build, then verify repeated launches, reloads,
+   and hide/show cycles in the actual Extension Host.
+
+Completion requires the sidebar to become usable, or present an actionable
+failure when startup cannot complete, without losing saved context or duplicating
+requests. One successful reload is not sufficient. No implementation or live fix
+is claimed by this plan.
+
+Response-speed work is currently measurement and tracking, not an instruction
+to reduce answer quality or pursue additional speed optimizations. Broad workload
+tracking has not been implemented or qualified by this record.
 
 Final environment check: Railway still reports `b09b8776` SUCCESS with image `sha256:c43187846a50c958428bad45117c4c8a1bfb820d67c1499f0c8d3ba866839228`; the API is healthy, and Plane `preview` / Documenso `main` still match the pinned commits. Evidence: `evidence/final-environment-recheck.json`. No commit, push, or PR was made.
 

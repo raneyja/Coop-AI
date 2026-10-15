@@ -1,11 +1,13 @@
-import { fetchWithTimeout, isFetchTimeout } from "../networkResilience";
-import { INTEGRATION_HTTP_TIMEOUT_MS, integrationAuthFailureMessage } from "../integrations/integrationHttp";
+import type { IntegrationProxy } from "../integrations/integrationOperations";
+import { isFetchTimeout } from "../networkResilience";
+import { fetchIntegrationResponse, INTEGRATION_HTTP_TIMEOUT_MS, integrationAuthFailureMessage } from "../integrations/integrationHttp";
 import { applyGoogleDocsFolderScope } from "../../integrationScope/googleDocsQuery";
 import type { GoogleDocsFolderKind } from "../../integrationScope/types";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 
 export type GoogleDocsClientOptions = {
+  proxy?: IntegrationProxy;
   accessToken: string;
   signal?: AbortSignal;
 };
@@ -49,6 +51,7 @@ export class GoogleDocsClient {
   }
 
   public async testConnection(): Promise<{ ok: boolean; message: string }> {
+    if (this.options.proxy) return this.options.proxy("googleDocs.testConnection", [], this.options.signal);
     try {
       const result = await this.request<{ user?: { displayName?: string } }>("/about", {
         query: { fields: "user" }
@@ -137,11 +140,13 @@ export class GoogleDocsClient {
     limit = 20,
     scope?: GoogleDocsSearchScope
   ): Promise<GoogleDoc[]> {
+    if (this.options.proxy) return this.options.proxy("googleDocs.searchDocumentsForTerms", [terms, limit, scope], this.options.signal);
     return this.searchDocuments(terms.join(" OR "), limit, scope);
   }
 
   /** Resolve URL identity and parent scope before exporting a document body. */
   public async getDocument(documentId: string): Promise<GoogleDoc | undefined> {
+    if (this.options.proxy) return this.options.proxy("googleDocs.getDocument", [documentId], this.options.signal);
     const file = await this.request<{
       id: string; name?: string; modifiedTime?: string; webViewLink?: string;
       parents?: string[]; mimeType?: string; trashed?: boolean;
@@ -157,6 +162,7 @@ export class GoogleDocsClient {
     limit = 20,
     scope?: GoogleDocsSearchScope
   ): Promise<GoogleDoc[]> {
+    if (this.options.proxy) return this.options.proxy("googleDocs.listRecentDocuments", [limit, scope], this.options.signal);
     const folderIds = scope?.expandedFolderIds ?? [];
     if (folderIds.length === 0) {
       return [];
@@ -198,6 +204,7 @@ export class GoogleDocsClient {
    * Uses drive.readonly (no Docs API / documents.readonly reconnect).
    */
   public async getDocumentPlainText(documentId: string): Promise<string | undefined> {
+    if (this.options.proxy) return this.options.proxy("googleDocs.getDocumentPlainText", [documentId], this.options.signal);
     const id = documentId.trim();
     if (!id) {
       return undefined;
@@ -205,12 +212,12 @@ export class GoogleDocsClient {
     const url = new URL(`${DRIVE_API}/files/${encodeURIComponent(id)}/export`);
     url.searchParams.set("mimeType", "text/plain");
 
-    const response = await fetchWithTimeout(
+    const response = await fetchIntegrationResponse(
       url.toString(),
       {
         method: "GET",
         headers: this.headers,
-        signal: this.options.signal
+        signal: this.options.signal, redirect: "error"
       },
       INTEGRATION_HTTP_TIMEOUT_MS
     );
@@ -237,6 +244,7 @@ export class GoogleDocsClient {
     limit = 20,
     scope?: GoogleDocsSearchScope
   ): Promise<GoogleDoc[]> {
+    if (this.options.proxy) return this.options.proxy("googleDocs.searchDocuments", [query, limit, scope], this.options.signal);
     const terms = splitDriveSearchTerms(query);
     if (terms.length === 0) {
       return [];
@@ -355,12 +363,12 @@ export class GoogleDocsClient {
       }
     }
 
-    const response = await fetchWithTimeout(
+    const response = await fetchIntegrationResponse(
       url.toString(),
       {
         method: "GET",
         headers: this.headers,
-        signal: this.options.signal
+        signal: this.options.signal, redirect: "error"
       },
       INTEGRATION_HTTP_TIMEOUT_MS
     );

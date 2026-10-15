@@ -14,24 +14,8 @@ function createOrgStoreStub(records: Map<string, OrgRepoRecord>): OrgStore {
   } as unknown as Pool;
   const store = new OrgStore(pool);
   store.getOrgRepo = async (orgId, repoId) => records.get(`${orgId}:${repoId}`);
-  store.upsertOrgRepo = async (orgId, repoId, patch) => {
-    const key = `${orgId}:${repoId}`;
-    const existing = records.get(key);
-    const next: OrgRepoRecord = {
-      orgId,
-      repoId,
-      lightningEnabled: patch.lightningEnabled ?? existing?.lightningEnabled ?? false,
-      indexStatus: patch.indexStatus ?? existing?.indexStatus ?? "idle",
-      embeddingStatus:
-        "embeddingStatus" in patch ? patch.embeddingStatus : existing?.embeddingStatus,
-      embeddingError: "embeddingError" in patch ? patch.embeddingError : existing?.embeddingError,
-      lastJobId: patch.lastJobId ?? existing?.lastJobId,
-      lastIndexedAt: patch.lastIndexedAt ?? existing?.lastIndexedAt,
-      error: "error" in patch ? patch.error : existing?.error,
-      updatedAt: new Date()
-    };
-    records.set(key, next);
-    return next;
+  store.upsertOrgRepo = async () => {
+    assert.fail("request-side enqueue cannot publish repository status; owned claim/effect owner does that");
   };
   return store;
 }
@@ -80,11 +64,12 @@ async function testSkipsDuplicateActiveJob() {
   assert.equal((await queue.listAllJobs()).filter((job) => job.status === "queued").length, 1);
 
   const record = records.get(`${orgId}:${repoId}`);
-  assert.equal(record?.embeddingStatus, undefined);
+  assert.equal(record?.embeddingStatus, "complete");
   assert.equal(record?.lightningEnabled, true);
+  assert.equal(record?.lastJobId, "job-1");
 }
 
-async function testReenablesLightningWhenActiveJobAlreadyTracked() {
+async function testSupersedesDisabledRepoWithoutRequestPublication() {
   const orgId = "org-3";
   const repoId = "github:raneyja/Coop-AI";
   const queue = new JobQueue(
@@ -121,9 +106,9 @@ async function testReenablesLightningWhenActiveJobAlreadyTracked() {
   assert.equal(cancelled?.status, "cancelled");
 
   const record = records.get(`${orgId}:${repoId}`);
-  assert.equal(record?.lightningEnabled, true);
-  assert.equal(record?.indexStatus, "queued");
-  assert.equal(record?.lastJobId, result.jobId);
+  assert.equal(record?.lightningEnabled, false);
+  assert.equal(record?.indexStatus, "disabled");
+  assert.equal(record?.lastJobId, created.jobId);
 }
 
 async function testForceSupersedesStuckEmbeddingJob() {
@@ -136,12 +121,10 @@ async function testForceSupersedesStuckEmbeddingJob() {
     userId: `org:${orgId}`,
     params: { orgId, repoId }
   });
-  const stuck = await queue.getJob(created.jobId);
+  const stuck = await queue.claimNext('test-index-worker', 30_000);
   assert.ok(stuck);
-  stuck.status = "running";
-  stuck.progress = 79;
-  stuck.startedAt = new Date(Date.now() - 11 * 60 * 1000);
-  await backend.update(stuck);
+  assert.equal(stuck.id, created.jobId);
+  await queue.updateProgress(stuck, 79);
 
   const records = new Map<string, OrgRepoRecord>([
     [
@@ -166,10 +149,11 @@ async function testForceSupersedesStuckEmbeddingJob() {
   assert.equal(result.outcome, "queued");
   assert.notEqual(result.jobId, created.jobId);
   assert.equal((await queue.getJob(created.jobId))?.status, "cancelled");
-  assert.equal(records.get(`${orgId}:${repoId}`)?.lastJobId, result.jobId);
+  assert.equal(records.get(`${orgId}:${repoId}`)?.lastJobId, created.jobId);
+  assert.equal(records.get(`${orgId}:${repoId}`)?.indexStatus, "indexing");
 }
 
-async function testQueuesFreshJobAndClearsEmbeddings() {
+async function testQueuesFreshJobWithoutRequestPublication() {
   const orgId = "org-2";
   const repoId = "github:acme/fresh";
   const records = new Map<string, OrgRepoRecord>([
@@ -195,15 +179,19 @@ async function testQueuesFreshJobAndClearsEmbeddings() {
   const result = await queueOrgRepoIndex(orgId, repoId, { orgStore, jobQueue: queue });
   assert.equal(result.outcome, "queued");
   const record = records.get(`${orgId}:${repoId}`);
-  assert.equal(record?.indexStatus, "queued");
-  assert.equal(record?.embeddingStatus, undefined);
-  assert.equal(record?.lastJobId, result.jobId);
+  assert.equal(record?.indexStatus, "ready");
+  assert.equal(record?.embeddingStatus, "complete");
+  assert.equal(record?.lastJobId, "old-job");
+  const queued = await queue.getJob(result.jobId!);
+  assert.equal(queued?.status, "queued");
+  assert.equal(queued?.params.orgId, orgId);
+  assert.equal(queued?.params.repoId, repoId);
 }
 
 async function run() {
   await testSkipsDuplicateActiveJob();
-  await testQueuesFreshJobAndClearsEmbeddings();
-  await testReenablesLightningWhenActiveJobAlreadyTracked();
+  await testQueuesFreshJobWithoutRequestPublication();
+  await testSupersedesDisabledRepoWithoutRequestPublication();
   await testForceSupersedesStuckEmbeddingJob();
   console.log("queueOrgRepoIndex: 4/4 tests passed");
 }

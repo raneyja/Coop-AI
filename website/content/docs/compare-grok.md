@@ -15,7 +15,7 @@ The comparison is less “which model is smarter” and more “which product br
 - **Repo graph + live tools** as the product.
 - **Find Owner, Blast Radius, Trace Decision** workflows.
 - **Zero-clone** for large engineering orgs.
-- **Enterprise packaging** — SSO, admin integrations, zero-retention options.
+- **Enterprise packaging** — SSO, admin integrations, provider request controls (account retention requires verification).
 
 ## Comparison matrix
 

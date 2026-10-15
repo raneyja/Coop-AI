@@ -52,7 +52,12 @@ import {
 import { formatOwnershipReportForPrompt } from "./ownershipSynthesis";
 import { ORG_DOCS_EVIDENCE_LABEL, orgDocsSynthesisGuardrail } from "../workspace/repoEvidenceIsolation";
 
+/** The same source boundary applies to focused rules and ordinary health audits. */
+const KNOWLEDGE_GAPS_SOURCE_BOUNDARY_RULE =
+  "A query or lookup establishes selection criteria, not permission to perform an operation. Preserve every shown constraint when describing that selection; authorization requires the relevant checks and subsequent execution path. This distinction also applies to factual premises inside open questions. Preserve branch conditions, earlier rejects, alternative outcomes, and exception handling whenever they qualify a finding. Skipping one guard establishes only that guard's bypass, never downstream reachability, absence of other checks, or an unchecked write. Earlier guards and normal return from intervening awaited calls remain conditions; an unattached callee may reject or throw. A comment establishes what its author stated, not independently verified behavior or intent. Exact source quotes establish the quoted text; they do not by themselves establish the explanation's correctness.";
+
 export const KNOWLEDGE_GAPS_EVIDENCE_SYSTEM = `You audit engineering health using only attached evidence from the Sources card and synthesis bundle.
+${KNOWLEDGE_GAPS_SOURCE_BOUNDARY_RULE}
 Universal behavior claims require tracing the relevant input conditions in attached source. One example does not establish behavior for every input: identify the condition that causes the observed result and check relevant counterexamples. Describe a defect with the narrowest condition the implementation supports.
 Separate observed implementation behavior from the expected contract. A function name alone is not a formal specification. Without attached tests, documentation, or an explicit user requirement establishing intent, describe a potential defect conditional on the expected behavior and ask for that intent to be confirmed.
 Partial source windows establish only the conditions and operations shown. They cannot prove complete repository coverage or absence of implementation, documentation, tests, or policy. Unshown conditions and called implementations remain unverified; names and call edges cannot substitute for their source.
@@ -259,10 +264,12 @@ function buildFocusedCodeRuleAuditPrompt(
     userFocus,
     "Answer the original question with two sections only: **Source-grounded review** and **Open questions**. Begin directly with the first heading. Keep one to three distinct findings relevant to the request; do not duplicate a condition and its operation as separate findings.",
     "Each finding consists of a short title, one condition-bound sentence, and a small exact numeric source quote. Preserve the full condition, including when execution reaches the operation. End the finding after its quote; do not add an uncited factual premise or infer unreviewed input, lifecycle, or policy behavior. A selected implementation can require a second exact quote of its attached definition.",
+    "Keep numeric comparisons literal: a fallback and lower-bound comparison do not establish matching every possible stored value. Describe the shown predicate rather than assuming the data domain. For chained library calls, describe the shown callback expressions and local conditional throw; library dispatch, equality semantics, or database behavior require an attached definition. Headings must preserve the same conditions and evidence boundaries as their findings.",
     "Each open question consists of an interrogative sentence tied to a cited finding, followed by a prospective test or documentation suggestion. Keep at most three. Do not preface questions with unverified factual assertions. Unreviewed input handling and later calls are questions to verify, not established execution paths. Proposed checks do not imply that tests or documents already exist or are missing.",
     "Establish only the conditions and operations directly visible in the attached numbered source and relevant to the original request. Do not replace the requested analysis with unrelated findings or scan coverage.",
     "Describe a guard when execution reaches that check. Earlier rejects may run first; one quoted guard cannot establish the same error for every call to its containing function.",
     "A shown input check or call establishes that local boundary, not the behavior of unreviewed callers, decoding, called implementations, or later execution. Ask how those boundaries connect when their source is not attached.",
+    KNOWLEDGE_GAPS_SOURCE_BOUNDARY_RULE,
     "Partial source and search misses cannot establish exhaustive coverage or absence of implementation, documentation, tests, or intended policy. One observed check does not establish that it is the only check or that passing it guarantees the final outcome.",
     "Names and framework conventions cannot prove behavior, intended policy, or operational guarantees. Review attached definitions or leave those effects unknown.",
     "When a branch selects an implementation, trace the exact selected identifier to its attached definition. Do not substitute a similarly named implementation. Quote the selection and the relevant definition before attributing called behavior to that path.",
@@ -340,6 +347,7 @@ function appendKnowledgeGapsResponseContract(
     );
   }
   if (hasFocusExcerpts) {
+    lines.push(KNOWLEDGE_GAPS_SOURCE_BOUNDARY_RULE);
     lines.push("Keep this source audit compact: at most three relevant findings and three specific open questions. Preserve the complete conditions and call boundaries supported by attached source. Quote small exact numeric source slices; unrelated operations and unreviewed behavior remain outside the findings.");
     lines.push(
       "Opening — PASS: acknowledge the attached source. Include a separate **Source-grounded review** section before scan coverage sections: answer the user's function or implementation question from the attached bodies, trace relevant behavior and boundary conditions, distinguish observed behavior from an unverified intended contract, and cite verified numeric source ranges when supplied. Keep these findings outside Summary so coverage summarization cannot replace them. Generic missing_docs/missing_owner flags do not substitute for reading the attached function. If no concrete source-backed issue is established, state that narrowly with the reviewed evidence. FAIL: claiming no indexed code; generic scan flags as the only answer; empty “looks good”; a 40-bullet dump."

@@ -27,6 +27,7 @@ export class GeminiProviderClient extends BaseProviderClient {
     }
 
     const applied = applyGeminiThinking(formatted.body, options.thinking);
+    const strict = options.requireCompletedMessage === true;
     const state: ParseState = { text: "" };
     let response: Response;
     try {
@@ -43,22 +44,32 @@ export class GeminiProviderClient extends BaseProviderClient {
           })
       });
     } catch (error) {
-      yield { type: "error", message: error instanceof Error ? error.message : "Gemini request failed." };
+      if (strict && options.signal?.aborted) {
+        yield {type: "done", usage: resolveUsage("gemini", options, state), model: options.model,
+          provider: "gemini", finishReason: "cancelled"};
+        return;
+      }
+      yield { type: "error", message: strict ? "Gemini request failed." : error instanceof Error ? error.message : "Gemini request failed." };
       return;
     }
 
     if (!response.ok || !response.body) {
       const text = await response.text().catch(() => "");
-      yield { type: "error", message: `Gemini returned ${response.status}: ${text.slice(0, 200)}` };
+      yield { type: "error", message: strict ? `Gemini returned ${response.status}.` : `Gemini returned ${response.status}: ${text.slice(0, 200)}` };
       return;
     }
 
     const reader = response.body.getReader();
-    const decoder = new TextDecoder();
+    const decoder = new TextDecoder("utf-8", {fatal: strict});
     let buffer = "";
 
     try {
       while (true) {
+        if (strict && options.signal?.aborted) {
+          yield {type: "done", usage: resolveUsage("gemini", options, state), model: options.model,
+            provider: "gemini", finishReason: "cancelled"};
+          return;
+        }
         const { done, value } = await reader.read();
         if (done) {
           break;
@@ -67,41 +78,52 @@ export class GeminiProviderClient extends BaseProviderClient {
         const parts = buffer.split("\n");
         buffer = parts.pop() ?? "";
         for (const line of parts) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith("data:")) {
-            continue;
-          }
-          const payload = trimmed.slice(5).trim();
-          if (!payload) {
-            continue;
-          }
-          try {
-            const data = JSON.parse(payload) as Record<string, unknown>;
-            const usageMetadata = data.usageMetadata as Record<string, unknown> | undefined;
-            if (usageMetadata) {
-              const inputTokens = readUsageInt(usageMetadata.promptTokenCount);
-              const outputTokens = geminiBilledOutputTokens(usageMetadata);
-              if (inputTokens !== undefined) {
-                state.inputTokens = inputTokens;
-              }
-              if (outputTokens !== undefined) {
-                state.outputTokens = outputTokens;
-              }
+          for (const chunk of parseGeminiSseLine(line, state, strict)) {
+            if (strict && options.signal?.aborted) {
+              yield {type: "done", usage: resolveUsage("gemini", options, state), model: options.model,
+                provider: "gemini", finishReason: "cancelled"};
+              return;
             }
-            const candidates = data.candidates as Array<Record<string, unknown>> | undefined;
-            const content = candidates?.[0]?.content as Record<string, unknown> | undefined;
-            const partsOut = content?.parts as Array<Record<string, unknown>> | undefined;
-            for (const chunk of parseGeminiParts(partsOut)) {
-              if (chunk.type === "delta") {
-                state.text += chunk.text;
-              }
-              yield chunk;
+            if (chunk.type === "delta") state.text += chunk.text;
+            if (chunk.type === "error") {
+              yield {type: "done", usage: resolveUsage("gemini", options, state), model: options.model,
+                provider: "gemini", finishReason: options.signal?.aborted ? "cancelled" : "error"};
+              if (!options.signal?.aborted) yield chunk;
+              return;
             }
-          } catch {
-            // ignore malformed chunks
+            yield chunk;
           }
         }
       }
+      if (strict && options.signal?.aborted) {
+        yield {type: "done", usage: resolveUsage("gemini", options, state), model: options.model,
+          provider: "gemini", finishReason: "cancelled"};
+        return;
+      }
+      buffer += decoder.decode();
+      for (const line of buffer.split("\n")) {
+        for (const chunk of parseGeminiSseLine(line, state, strict)) {
+          if (strict && options.signal?.aborted) {
+            yield {type: "done", usage: resolveUsage("gemini", options, state), model: options.model,
+              provider: "gemini", finishReason: "cancelled"};
+            return;
+          }
+          if (chunk.type === "delta") state.text += chunk.text;
+          if (chunk.type === "error") {
+            yield {type: "done", usage: resolveUsage("gemini", options, state), model: options.model,
+              provider: "gemini", finishReason: options.signal?.aborted ? "cancelled" : "error"};
+            if (!options.signal?.aborted) yield chunk;
+            return;
+          }
+          yield chunk;
+        }
+      }
+    } catch (error) {
+      if (!strict) throw error;
+      yield {type: "done", usage: resolveUsage("gemini", options, state), model: options.model,
+        provider: "gemini", finishReason: options.signal?.aborted ? "cancelled" : "error"};
+      if (!options.signal?.aborted) yield {type: "error", message: "Gemini stream failed before completion."};
+      return;
     } finally {
       reader.releaseLock();
     }
@@ -111,8 +133,51 @@ export class GeminiProviderClient extends BaseProviderClient {
       usage: resolveUsage("gemini", options, state),
       model: options.model,
       provider: "gemini",
-      finishReason: "stop"
+      finishReason: options.signal?.aborted && strict ? "cancelled" : strict ? state.finishReason ?? "error" : "stop"
     };
+    if (strict && !options.signal?.aborted && state.finishReason !== "stop" && state.finishReason !== "length") {
+      yield {type: "error", message: "Gemini stream ended without a supported completion reason."};
+    }
+  }
+}
+
+/** Native Gemini SSE has no [DONE] sentinel: the candidate's finishReason is
+ * its terminal signal. https://ai.google.dev/api/generate-content#FinishReason */
+export function parseGeminiSseLine(line: string, state: ParseState, strict = false): StreamChunk[] {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("data:")) return [];
+  const payload = trimmed.slice(5).trim();
+  if (!payload) return [];
+  try {
+    const data = JSON.parse(payload) as Record<string, unknown>;
+    if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Invalid event");
+    const usageMetadata = data.usageMetadata as Record<string, unknown> | undefined;
+    if (usageMetadata) {
+      const inputTokens = readUsageInt(usageMetadata.promptTokenCount);
+      const outputTokens = geminiBilledOutputTokens(usageMetadata);
+      if (inputTokens !== undefined) state.inputTokens = inputTokens;
+      if (outputTokens !== undefined) state.outputTokens = outputTokens;
+    }
+    if (data.error) return strict ? [{type: "error", message: "Gemini returned a streaming error."}] : [];
+    const candidates = data.candidates as Array<Record<string, unknown>> | undefined;
+    if (strict && candidates !== undefined && !Array.isArray(candidates)) throw new Error("Invalid candidates");
+    const candidate = candidates?.[0];
+    if (strict && candidates?.length && (!candidate || typeof candidate !== "object" || Array.isArray(candidate))) throw new Error("Invalid candidate");
+    const content = candidate?.content as Record<string, unknown> | undefined;
+    if (strict && content != null && (typeof content !== "object" || Array.isArray(content)
+      || (content.parts !== undefined && !Array.isArray(content.parts)))) throw new Error("Invalid content");
+    const chunks: StreamChunk[] = parseGeminiParts(content?.parts as Array<Record<string, unknown>> | undefined);
+    const reason = candidate?.finishReason;
+    if (strict && reason != null && typeof reason !== "string") throw new Error("Invalid reason");
+    if (typeof reason === "string" && reason && reason !== "FINISH_REASON_UNSPECIFIED") {
+      const mapped = reason === "STOP" ? "stop" : reason === "MAX_TOKENS" ? "length" : "error";
+      if (strict && state.finishReason && state.finishReason !== mapped) return [{type: "error", message: "Gemini returned conflicting completion reasons."}];
+      state.finishReason = mapped;
+      if (strict && mapped === "error") chunks.push({type: "error", message: "Gemini stopped without a supported completion reason."});
+    }
+    return chunks;
+  } catch {
+    return strict ? [{type: "error", message: "Gemini returned malformed stream data."}] : [];
   }
 }
 

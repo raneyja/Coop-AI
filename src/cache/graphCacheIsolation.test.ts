@@ -38,37 +38,29 @@ assert.equal(memory.getGraph("org-b", repoId)?.fileTree[0]?.path, "b.ts");
 void (async () => {
 const writes: Array<{ sql: string; params: unknown[] }> = [];
 const stored = new Map<string, unknown>();
+const heads=new Map<string,{requested_generation:string;published_generation:string;revision:string;tombstone:boolean;origin:string}>();
 const pool = {
-  query: async (sql: string, params: unknown[] = []) => {
+  connect:async()=>({query:pool.query,release:()=>undefined}),
+  query: async (sql: string, params: unknown[] = []):Promise<{rows:Record<string,unknown>[];rowCount?:number}> => {
     writes.push({ sql, params });
+    const key=String(params[0])+"\u0000"+String(params[1]);
+    if(sql.includes('INSERT INTO graph_publication_heads')) {
+      if(!heads.has(key))heads.set(key,{requested_generation:'0',published_generation:'0',revision:'0',tombstone:false,origin:'legacy-unattested'});
+    }
+    if(sql.includes('SELECT * FROM graph_publication_heads'))return {rows:heads.has(key)?[{...heads.get(key)}]:[]};
+    if(sql.includes('UPDATE graph_publication_heads')) {
+      heads.set(key,{requested_generation:String(params[2]),published_generation:String(params[2]),revision:String(params[3]),tombstone:Boolean(params[4]),origin:String(params[5])});
+    }
     if (sql.includes("INSERT INTO graph_snapshots")) {
-      stored.set(`${params[0]}\u0000${params[1]}`, params[2]);
-      return { rows: [] };
+      stored.set(key,params[2]);return {rows:[]};
     }
     if (sql.includes("DELETE FROM graph_snapshots")) {
-      stored.delete(`${params[0]}\u0000${params[1]}`);
-      return { rows: [], rowCount: 1 };
+      stored.delete(key);return {rows:[],rowCount:1};
     }
-    if (sql.includes("FROM graph_snapshots") && sql.includes("SELECT")) {
-      if (!sql.includes("WHERE org_id = $1")) {
-        return {
-          rows: [...stored.entries()].map(([key, payload]) => ({
-            repo_id: key.split("\u0000")[1],
-            payload
-          }))
-        };
-      }
-      const orgId = String(params[0]);
-      const rows = [];
-      for (const [key, payload] of stored) {
-        if (!key.startsWith(`${orgId}\u0000`)) {
-          continue;
-        }
-        rows.push({ repo_id: key.split("\u0000")[1], payload });
-      }
-      return { rows };
-    }
-    return { rows: [] };
+    if(sql.includes('SELECT repo_id FROM graph_publication_heads'))return {rows:[...heads.keys()]
+      .filter(key=>key.startsWith(String(params[0])+'\u0000')).map(key=>({repo_id:key.split('\u0000')[1]}))};
+    if(sql.includes('LEFT JOIN graph_snapshots'))return {rows:heads.has(key)?[{...heads.get(key),payload:stored.get(key)}]:[]};
+    return {rows:[]};
   }
 };
 
@@ -80,8 +72,9 @@ const inserts = writes.filter((entry) => entry.sql.includes("INSERT INTO graph_s
 assert.equal(inserts.length, 2);
 assert.equal(inserts[0]?.params[0], "org-a");
 assert.equal(inserts[1]?.params[0], "org-b");
-assert.match(inserts[0]?.sql ?? "", /ON CONFLICT \(org_id, repo_id\)/);
+assert.match(inserts[0]?.sql ?? "", /ON CONFLICT\s*\(org_id,\s*repo_id\)/);
 assert.equal(durable.deleteGraph("org-a", repoId), true);
+await durable.flush(); // Public mutation stays synchronous; persistence is explicitly awaited.
 assert.equal(durable.getGraph("org-b", repoId)?.fileTree[0]?.path, "b.ts");
 assert.equal(stored.has(`org-b\u0000${repoId}`), true);
 assert.equal(stored.has(`org-a\u0000${repoId}`), false);

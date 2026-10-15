@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3001",
-    "build": "next build --webpack",
+    "build": "next build",
     "start": "next start",
     "lint": "npm run typecheck",
     "typecheck": "tsc --noEmit",
@@ -33,7 +33,7 @@
     "tsx": "4.23.15"
   },
   "engines": {
-    "node": ">=24.16.0 <25"
+    "node": ">=22.23.3 <23 || >=24.16.0 <25"
   },
   "overrides": {
     "@tailwindcss/typography": {

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { buildUserMessageWithContext } from "./systemPrompts";
+import { buildUserMessageWithContext, systemPromptForUseCase } from "./systemPrompts";
 import type { OwnershipReport } from "../types/ownership";
-import { buildOwnershipSynthesisUserPrompt, formatOwnershipReportForPrompt, OWNERSHIP_INTELLIGENCE_SYSTEM } from "./ownershipSynthesis";
+import { buildOwnershipSynthesisUserPrompt, formatOwnershipReportForPrompt, OWNERSHIP_EVIDENCE_SCOPE_RULES, OWNERSHIP_INTELLIGENCE_SYSTEM } from "./ownershipSynthesis";
+import { listOwnershipSourceLabels } from "./ownershipSourceLabels";
 
 const report: OwnershipReport = {
   owner: "acme",
@@ -32,6 +33,58 @@ function test(name: string, fn: () => void): void {
     failed++;
   }
 }
+
+test("team lookup is not a CODEOWNERS source or declared ownership", () => {
+  const lookup = {...report, orgContext: {source: "github_teams" as const, teamName: "Platform", teamSlug: "platform", members: ["alice"]}};
+  assert.ok(!listOwnershipSourceLabels(lookup).includes("[Sources: CODEOWNERS]"));
+  assert.ok(listOwnershipSourceLabels(lookup).includes("[Sources: GitHub repository teams]"));
+  const formatted = formatOwnershipReportForPrompt(lookup);
+  assert.match(formatted, /lookup does not establish declared ownership/);
+  assert.doesNotMatch(formatted, /### \[Sources: CODEOWNERS\]/);
+  assert.match(OWNERSHIP_INTELLIGENCE_SYSTEM, /team lookup members are not additional CODEOWNERS/);
+});
+
+test("prompt uses the active code host and preserves matched rule handles", () => {
+  for (const provider of ["github", "gitlab", "bitbucket"] as const) {
+    const declared = {...report, provider, orgContext: {source: "codeowners" as const, teamName: "Platform", members: ["org/platform", "reviewer"], codeownersPattern: "*", teamMembers: ["extra-member"]}};
+    const formatted = formatOwnershipReportForPrompt(declared);
+    const codeHostLabel = listOwnershipSourceLabels(declared)[0];
+    assert.ok(formatted.includes(`### ${codeHostLabel}`));
+    if (provider !== "github") assert.doesNotMatch(formatted, /GitHub commits & reviews/);
+    assert.match(formatted, /Declared handles: org\/platform, reviewer/);
+    assert.match(formatted, /Matched rule: \*/);
+    assert.match(formatted, /Team lookup members \(not additional declared owners\): extra-member/);
+  }
+});
+
+test("independent heading and person-level scope policy reaches hosted system and actual user synthesis", () => {
+  const hosted = systemPromptForUseCase("ownership", {activeFile: report.path});
+  const user = buildOwnershipSynthesisUserPrompt({report, file: report.path});
+  assert.ok(hosted.includes(OWNERSHIP_EVIDENCE_SCOPE_RULES));
+  assert.ok(user.includes(OWNERSHIP_EVIDENCE_SCOPE_RULES));
+  assert.match(OWNERSHIP_EVIDENCE_SCOPE_RULES, /Every heading, person bullet and recommendation must independently/);
+  assert.match(OWNERSHIP_EVIDENCE_SCOPE_RULES, /sampled contributor may also be a declared owner under unreviewed policy/);
+  assert.match(OWNERSHIP_EVIDENCE_SCOPE_RULES, /not establish no activity, inactivity/);
+  assert.match(OWNERSHIP_EVIDENCE_SCOPE_RULES, /comment without a person's name does not establish an ownership or staffing gap/);
+  assert.doesNotMatch(hosted, /Slack availability status|Be pragmatic: if someone is listed as owner but inactive|who should learn this|contact candidate, not a declared owner/);
+});
+
+test("zero commit buckets and old retrieved history remain commit samples across languages and layouts", () => {
+  for (const path of ["odd/runtime.ts", "feature/handler.py", "engine.rs", "cmd/start.go"]) {
+    const sampled: OwnershipReport = {...report, path,
+      scores: [{...report.scores[0], commitCount: 0}],
+      signals: {commits: [{author: "alice", authorLogin: "alice", counts: {sixMonths: 0, oneYear: 0, allTime: 4},
+        recencyScore: 0, lastCommitDate: "2020-01-01T00:00:00Z", messages: []}], reviews: [], issues: [], activity: [], specialties: []},
+      pathEvolution: {recentCommitCount: 4, lastModifiedAt: "2020-01-01T00:00:00Z", lastModifiedAuthor: "alice"}};
+    const prompt = buildOwnershipSynthesisUserPrompt({report: sampled, file: path, now: new Date("2026-10-11T22:00:00Z")});
+    assert.match(prompt, /0 retrieved commits \(6mo sample\)/);
+    assert.match(prompt, /sampled commit counts 6mo=0, 1yr=0, all retrieved=4; other activity and contact availability unverified/);
+    assert.match(prompt, /Retrieved commits analyzed: 4/);
+    assert.match(prompt, /4 retrieved commit\(s\)/);
+    assert.doesNotMatch(prompt, /4 recent commit\(s\)|Recent commits analyzed: 4/);
+    assert.match(prompt, /older commit dates cannot establish that a person is inactive or unavailable/);
+  }
+});
 
 test("presence and legacy team availability cannot prove reachability", () => {
   assert.match(OWNERSHIP_INTELLIGENCE_SYSTEM, /not proof someone is reachable/);
@@ -143,7 +196,7 @@ test("ownership synthesis omits outreach draft and includes pathEvolution guidan
   });
   assert.ok(prompt.includes("## Evidence enrichment"));
   assert.ok(prompt.includes("## Path evolution guidance"));
-  assert.ok(prompt.includes("12 recent commit(s)"));
+  assert.ok(prompt.includes("12 retrieved commit(s)"));
   assert.ok(!prompt.includes("Suggested outreach draft"));
 });
 
@@ -208,16 +261,16 @@ test("today's dated commit contradicts stale risk rather than becoming inactive 
   };
   const prompt = buildOwnershipSynthesisUserPrompt({report: today, file: today.path, now});
   assert.match(prompt, /Analysis time \(UTC\): 2026-10-04T22:00:00.000Z/);
-  assert.match(prompt, /last commit 2026-10-04T20:00:00.000Z/);
+  assert.match(prompt, /last retrieved commit 2026-10-04T20:00:00.000Z/);
   assert.match(prompt, /Recent dated activity conflicts/);
   assert.doesNotMatch(prompt, /Orphaned — no commits in 6\+ months|All experts appear unavailable \(inactive 3\+ months\)/);
 });
 
 test("sampled author and Slack away cannot establish declared ownership or inactivity", () => {
-  assert.match(OWNERSHIP_INTELLIGENCE_SYSTEM, /contact candidate, not a declared owner/);
+  assert.match(OWNERSHIP_INTELLIGENCE_SYSTEM, /declared-owner status is a separate question, unverified without explicit attached/);
   assert.match(OWNERSHIP_INTELLIGENCE_SYSTEM, /Slack away\/offline indicates presence only/);
   const prompt = formatOwnershipReportForPrompt(report, undefined, new Date("2026-10-04T22:00:00Z"));
-  assert.match(prompt, /Score tiers rank sampled contributors; they do not declare ownership/);
+  assert.match(prompt, /Score tiers rank sampled contributors; their declared-owner status is separate and unverified/);
   assert.match(prompt, /Missing or contradictory recency evidence is unknown/);
 });
 
@@ -229,7 +282,7 @@ test("sole author and derived admin fallback preserve unknown ownership coverage
   assert.match(prompt, /Missing a scored secondary does not establish that no secondary owner exists/);
   assert.match(prompt, /Repository admins are a suggested fallback/);
   assert.match(OWNERSHIP_INTELLIGENCE_SYSTEM, /coverage question, not proof the repository is a single point of failure/);
-  assert.match(prompt, /Retrieved counts are sampled evidence, not complete history/);
+  assert.match(prompt, /Retrieved commit counts measure commits, not all activity or contact suitability/);
   assert.match(OWNERSHIP_INTELLIGENCE_SYSTEM, /single seed commit cannot prove no commits in earlier quarters\/years/);
 });
 

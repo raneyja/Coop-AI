@@ -23,8 +23,9 @@ export function shouldEnableSynthesisThinking(options: {
   if (options.quickAction === "understand-repo") {
     const coverage = understandFocusCoverage(options.sourceFacts?.userFocus,
       (options.sourceFacts?.entryFiles ?? []).filter((file): file is typeof file & { content: string } => Boolean(file.content?.trim())));
-    // A gathered component report needs an answer stream, not another hidden reasoning phase.
-    if (coverage.requested.length) return false;
+    // Source availability does not certify behavior. Keep reasoning for multi-
+    // component audits so the model evaluates conditions and implementations.
+    if (coverage.requested.length) return Boolean(coverage.sourceBodiesAvailable);
   }
   if (options.quickAction === "knowledge-gaps" && options.sourceFacts?.userFocus?.trim()) {
     // Multi-branch rules need reasoning over the gathered source; the soft

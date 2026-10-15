@@ -3,10 +3,10 @@ title: Enterprise deployment
 description: Self-hosted CoopAI on Railway or your infrastructure.
 section: enterprise
 order: 3
-lastUpdated: "2026-07-09"
+lastUpdated: "2026-10-12"
 ---
 
-Enterprise customers can deploy CoopAI on their own infrastructure with full control over data residency and LLM routing.
+Enterprise deployments can run Coop storage and services on infrastructure selected by the operator. Requests to configured code hosts, integrations and model providers can leave that infrastructure. Hosting location alone does not establish end-to-end data residency, private networking or provider retention; qualify those requirements for the deployment.
 
 ## Deployment options
 
@@ -23,7 +23,8 @@ Contact [support@coop-ai.dev](mailto:support@coop-ai.dev) for Enterprise licensi
 | Service | Purpose |
 | --- | --- |
 | **API** | Chat, completions, webhooks, integrations |
-| **Postgres** | Orgs, users, API keys, integration tokens. Deep-Index (Zoekt shards, graph snapshots, symbol rows) is stored per organization, so one customer’s repo never shows up in another customer’s index. |
+| **Postgres** | Orgs, users, hashed API/session tokens, encrypted integration credentials, chat message content/metadata, support/audit/usage records, graph snapshots, symbol rows and embedding source chunks/vectors. Records use org/repo scope; qualify complete access and publication boundaries before relying on isolation claims. |
+| **Worker and index storage** | Background index jobs use temporary clones; Zoekt searchable shards live in configured filesystem storage, not PostgreSQL. Cleanup, storage access, publication and backup handling require operator qualification. |
 | **Redis** (optional) | Job queue, caching |
 | **Admin portal** | Org admin UI (`admin.coop-ai.dev` or self-hosted) |
 
@@ -47,7 +48,7 @@ Copy `.env.backend.example` to `.env.backend` on your API host:
 docker compose up -d --build api
 ```
 
-Verify: `curl https://your-api-host/health` returns `"ok": true`.
+Liveness check: `curl https://your-api-host/health` returns `"ok": true`. This does not qualify database/schema, index storage, worker fleet, dependencies or enterprise readiness. The worker and required index services need separate deployment and qualification.
 
 ## OAuth callback URLs
 
@@ -63,7 +64,7 @@ Register these redirect URIs in each vendor console:
 
 ## Lightning Mode (Pro/Enterprise)
 
-Lightning Mode indexes repos on Coop cloud infrastructure for faster symbol-graph retrieval. Self-hosted Enterprise can enable managed indexing or run index jobs locally.
+Lightning Mode index jobs run on the configured worker infrastructure. They build durable repository facts, symbols, source chunks/vectors and searchable shards; they do not keep a repository clone as a supported intelligence fallback. Normal cleanup of a returned clone runs in a finally block; process death or failure before clone setup returns still requires operator cleanup. The embedding path sends source chunks to its configured OpenAI API account. Qualify that account and separate index storage in a self-hosted deployment too.
 
 ## Webhooks
 

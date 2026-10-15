@@ -1,5 +1,11 @@
 # Gap 03 — Agent-owned gather (architecture cut incomplete)
 
+> Historical September 29 diagnosis, reviewed October 11. The implementation
+> descriptions, line numbers and open gates below are dated observations, not
+> current source status. Use this as design/failure evidence; follow current
+> `AGENTS.md`, applicable rules and the enterprise plan for launch and scope.
+> Snippet attachment alone cannot satisfy remotely verified source gates.
+
 Planning only. Agent 3 of 5. Repo: Coop-AI. Date: 2026-09-29.
 
 Related product prompt: `.cursor/intent-quarterback-agent-owns-reject.prompt.md`  

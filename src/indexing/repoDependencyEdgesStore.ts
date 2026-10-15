@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 
 const INSERT_BATCH_SIZE = 100;
 
@@ -46,12 +46,13 @@ export class RepoDependencyEdgesStore {
     orgId: string,
     repoId: string,
     rows: RepoDependencyEdgeRow[],
-    indexedAt: Date
+    indexedAt: Date,
+    transaction?: PoolClient
   ): Promise<void> {
     const deduped = dedupeDependencyEdgeRows(rows);
-    const client = await this.pool.connect();
+    const client = transaction ?? await this.pool.connect();
     try {
-      await client.query("BEGIN");
+      if (!transaction) await client.query("BEGIN");
       await client.query(`DELETE FROM repo_dependency_edges WHERE org_id = $1 AND repo_id = $2`, [
         orgId,
         repoId
@@ -67,16 +68,16 @@ export class RepoDependencyEdgesStore {
           values
         );
       }
-      await client.query("COMMIT");
+      if (!transaction) await client.query("COMMIT");
     } catch (error) {
       try {
-        await client.query("ROLLBACK");
+        if (!transaction) await client.query("ROLLBACK");
       } catch {
         /* ignore rollback errors */
       }
       throw error;
     } finally {
-      client.release();
+      if (!transaction) client.release();
     }
   }
 

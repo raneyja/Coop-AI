@@ -6,13 +6,13 @@ alwaysApply: false
 
 # Marketing site — canonical source
 
-**Production truth:** [https://coop-ai.dev](https://coop-ai.dev) (deployed from `main`).
+**Canonical production URL:** [https://coop-ai.dev](https://coop-ai.dev); the configured production branch is `main`. Local source/design and actual deployed identity are distinct: verify the deployment before claiming an edit is live.
 
 When editing the homepage, hero, or marketing demos, use the **current** stack — not legacy dark-theme VS Code mock carousels.
 
-## Current homepage (local mock)
+## Current homepage source
 
-Dark environment with **deployed page order**: hero → the gap → logos → quotes → close. Inner pages stay light.
+Dark environment with source page order: hero → the gap → logos → quotes → close. Inner pages stay light. Confirm the current entrypoint when editing; do not infer production artifact identity from this description.
 
 | Piece | File |
 |-------|------|
@@ -45,9 +45,9 @@ Before changing hero demo behavior, **confirm `Hero.tsx` imports `HeroDemoArtifa
 
 Feature branches may lag `main` on `website/` (missing `HeroDemoArtifact.tsx`, old `Hero.tsx`). If local preview looks wrong:
 
-1. Compare: `git diff main -- website/src/components/Hero.tsx`
-2. Restore from main: `git checkout main -- website/` (or merge `main` into your branch)
-3. Restart dev server after checkout
+1. Inspect staged/unstaged/untracked website work and its owner. Compare the specific entrypoint read-only: `git diff main -- website/src/components/Hero.tsx` when that ref exists.
+2. Preserve the intended candidate and reconcile only the identified files under the authorized scope. Do not run a blanket `git checkout main -- website/`, subtree restore or branch reset; main may omit newer uncommitted repairs.
+3. Restart the isolated preview only after integrating the intended changes; preserve any other agent's shared server.
 
 ## Local preview
 

@@ -7,6 +7,8 @@ import { enrichKnowledgeGapsResponse } from "../prompts/knowledgeGapsEnrichment"
 import { summarizeKnowledgeGaps } from "../webview/evidenceCardSummary";
 import { knowledgeGapScanCoverageFromJobScan } from "./knowledgeGapScanCoverage";
 import { IntentDetector, requestTypesForIntent } from "./intentDetector";
+import { streamSourceReviewedKnowledgeGaps } from "../chat/knowledgeGapsSourceReview";
+import { withPassingClaimReview } from "../chat/sourceClaimReviewTestFixture";
 
 const ask = "Before changing work-item state validation, which rules can we establish from the code, and which unanswered questions about allowed transitions need documentation or tests?";
 const target = { repoId: "github:org/fixture", provider: "github", owner: "org", repo: "fixture", branch: "preview" };
@@ -127,6 +129,53 @@ test("an explicit selected-file audit cannot substitute neighboring models or se
     searchFocus: () => {throw new Error("Selected-file audit must not broaden to semantic search");}});
   assert.deepEqual(evidence.focusFiles.map(file => file.path), ["service/serializers/issue.py"]);
   assert(evidence.focusFiles[0].content.includes("super().update"));
+});
+
+test("this-file audits retain the actual remote body, not more similarly named search results", async () => {
+  for (const selectedFile of ["opaque/a.ts", "nested/b.py", "c.rs", "rules.data"]) {
+    const reads: string[] = [];
+    const focus = "Before changing validation in this file, which rules are established by the code, and which questions need more evidence?";
+    const evidence = await gatherKnowledgeGapsCodeEvidence({target, focus, selectedFile, deadlineAt: Date.now() + 1_000,
+      workspace: {
+        findFiles: async () => { assert.fail("Explicit file scope must not search for replacements"); },
+        readFile: async (actualTarget, path) => {
+          assert.deepEqual(actualTarget, target); reads.push(path);
+          return {path, repoId: target.repoId, origin: "remote", content: source};
+        }
+      },
+      searchFocus: async () => { assert.fail("Explicit file scope must not broaden to semantic hits"); }
+    });
+    assert.deepEqual(reads, [selectedFile]);
+    assert.deepEqual(evidence.focusFiles.map(file => file.path), [selectedFile]);
+    const prompt = buildKnowledgeGapsSynthesisUserPrompt({evidence, file: selectedFile, userFocus: focus});
+    assert(prompt.includes(selectedFile));
+    assert(prompt.includes("L4:             raise ValidationError"));
+    assert(!prompt.includes("secondary"));
+    const quote = `\`\`\`1:5:${selectedFile}\n${source.split("\n").slice(0, 5).join("\n")}\n\`\`\``;
+    let published = "", calls = 0;
+    await streamSourceReviewedKnowledgeGaps({
+      evidence,
+      request: {message: prompt, context: {owner: target.owner, repo: target.repo, branch: target.branch},
+        model: "test-model", provider: "anthropic", useCase: "knowledge_gaps"},
+      stream: withPassingClaimReview(async () => {
+        calls++;
+        return {message: {role: "assistant", timestamp: 1,
+          content: `**Source-grounded review**\n\nWhen reached, this guard rejects a truthy state outside the shown set.\n\n${quote}\n\n**Open questions**\n\nWhich inputs reach this check? Verify the caller contract.`}, finishReason: "stop"};
+      }),
+      baseUrl: "https://example.test", onChunk: chunk => published += chunk
+    });
+    assert.equal(calls, 1, "A valid quote of the selected source needs no replacement");
+    assert(published.includes(quote));
+  }
+});
+
+test("an unreadable explicitly selected file cannot be replaced by a neighboring source", async () => {
+  const evidence = await gatherKnowledgeGapsCodeEvidence({target, focus: "Which rules does the code in this file establish?", selectedFile: "opaque/source.data", deadlineAt: Date.now() + 1_000,
+    workspace: {
+      findFiles: async () => { assert.fail("An unavailable file is a coverage limit"); },
+      readFile: async () => undefined
+    }});
+  assert.deepEqual(evidence.focusFiles, []);
 });
 
 test("focused rule audits keep scan ownership flags out of the final policy answer", () => {

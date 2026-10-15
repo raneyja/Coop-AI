@@ -14,7 +14,7 @@ export type StoredRepoStats = Omit<RepoStatsRecord, "indexedAt"> & { indexedAt: 
 
 /** Durable repository facts written by INDEX_REPOSITORY. Counts only — no source bodies. */
 export class RepoStatsStore {
-  public constructor(private readonly pool: Pool) {}
+  public constructor(private readonly pool: Pick<Pool, "query">) {}
 
   public async upsertStats(orgId: string, repoId: string, stats: RepoStatsRecord): Promise<void> {
     await this.pool.query(

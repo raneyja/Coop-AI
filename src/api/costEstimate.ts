@@ -1,4 +1,5 @@
 import type { LlmProvider } from "./zeroRetentionConfig";
+import { billUsdCents } from "../config/modelCreditWeights";
 
 /** Rough USD per 1M tokens (input, output) for UI estimates only. */
 const PRICING_PER_MILLION: Record<LlmProvider, { input: number; output: number }> = {
@@ -9,7 +10,10 @@ const PRICING_PER_MILLION: Record<LlmProvider, { input: number; output: number }
   mistral: { input: 0.3, output: 0.9 }
 };
 
-export function estimateCostUsd(provider: LlmProvider, inputTokens: number, outputTokens: number): number {
+export function estimateCostUsd(provider: LlmProvider, inputTokens: number, outputTokens: number, model?: string): number {
+  // Actual model callers share the quota catalog. Legacy provider-only UI calls
+  // retain their rough estimate; neither path is a provider invoice.
+  if (model) return billUsdCents({ provider, model, inputTokens, outputTokens }).estimatedUsd;
   const rates = PRICING_PER_MILLION[provider];
   const inputCost = (inputTokens / 1_000_000) * rates.input;
   const outputCost = (outputTokens / 1_000_000) * rates.output;

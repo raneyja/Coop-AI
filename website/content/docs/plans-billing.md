@@ -22,9 +22,8 @@ lastUpdated: "2026-09-25"
 | **Collections** | No | Yes | Yes | Yes | Yes |
 | **Admin portal** | Personal account | Full org admin | Full org admin | Full org admin | Full + SSO |
 | **Self-hosted** | No | No | No | No | Yes |
-| **BYOK** | No | No | No | No | Yes |
-| **Zero-retention routing** | Standard | Standard | Standard | Standard | Enterprise-confidential |
-| **DPA / attestation** | No | No | No | No | Yes |
+| **LLM request controls** | Provider-specific | Provider-specific | Provider-specific | Provider-specific | Provider-specific |
+| **DPA discussion** | No | No | No | No | Contact us |
 
 See current pricing at [coop-ai.dev/pricing](/pricing).
 
@@ -70,9 +69,9 @@ Public names: **Pro** ($25), **Pro+** ($60), **Max** ($100). There is no Ultra /
 Contact [support@coop-ai.dev](mailto:support@coop-ai.dev) or [book a demo](/demo) for:
 
 - Self-hosted deployment on your infrastructure
-- BYOK (bring your own LLM provider keys)
-- Zero-retention LLM routing for confidential code
-- Dedicated onboarding, compliance attestation, and DPA
+- Supported provider keys configured by the server operator for the deployment
+- Confidential-context request formatting and provider controls; account retention settings require verification
+- Dedicated onboarding and DPA discussion; automated retention attestations are not available
 - Custom pooled usage (no hard stop in v1)
 
 ### SAML single sign-on

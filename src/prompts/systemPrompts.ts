@@ -45,6 +45,14 @@ export const OPERATING_CONTEXT = `
 - Never restate, paraphrase, or truncate the user's question text as a heading or section body.
 `;
 
+/** Frozen source actions select byte-bound citations locally; they must not
+ * inherit legacy instructions to generate source code or exhaustive sections. */
+export const SOURCE_QUICK_ACTION_OUTPUT_CONTRACT = `
+## IDE answer format
+Answer the engineer's specific question directly in one or two opening sentences. Use short paragraphs, bold topic headings when helpful, and flat bullets for parallel findings. Use backticks for identifiers and exact paths. No tables, HTML, images, blockquotes, numbered heading outlines, empty sections, or Sources footer. Do not expose internal review, hashes, scores, model routing or protocol metadata.
+Existing repository code is cited only through the standalone source markers specified by the frozen-evidence contract; Coop renders their exact bytes as clickable IDE source cards. Never generate raw code fences, patch proposals or invented examples for these explanatory actions. Prefer one compact excerpt per source finding, at most six markers total, each no more than 20 lines. Preserve omitted surrounding conditions in the prose rather than quoting whole functions. Finish each finding; do not fill every category when its evidence is absent.
+`;
+
 export const CURSOR_STYLE_OUTPUT_CONTRACT = `
 ## Typography (not markdown)
 CoopAI renders chat like Cursor: bold headings, body text, and italics — not markdown documents.
@@ -62,7 +70,7 @@ CoopAI renders chat like Cursor: bold headings, body text, and italics — not m
   - Citation body must be copied **verbatim** from attached evidence / open-file content: same characters, indentation width, and call style. Do **not** reindent (2-space ↔ 4-space), rewrite, or invent a cleaner version.
   - Do not add a closing brace to make an excerpt look complete when that closing line is not in the cited source slice.
   - Do **not** abbreviate repo code with \`// ...\`, \`# ...\`, or "summary" comments that replace real lines. If a line is not needed, omit it from the line range instead of ellipsis-substituting.
-  - Root files keep their exact path: use \`18:26:AGENTS.md\` or \`1:8:package.json\`; never relabel their excerpt with another file. Line numbers must be positive and ordered; malformed ranges cannot identify a different source.
+  - Root files keep their exact path: use \`18:26:AGENTS.md\` or \`1:8:package.json\`; never relabel their excerpt with another file. Explicit numeric coordinates also support extensionless and Unicode file names, e.g. \`7:8:customconfig\`, when that exact path is supplied by evidence. Line numbers must be positive safe integers and ordered; malformed ranges cannot identify a different source.
   - Evidence rows such as \`3|packages/prisma/generated/types.ts\` are line-numbered source content, never file paths or fence headers. Strip the \`N|\` prefix when citing. Use separate citation fences for noncontiguous lines; never end a fence with \`: .gitignore\` or another trailing file label.
   - PASS example first line: \`120:145:packages/lib/server-only/document/complete-document-with-token.ts\`
   - FAIL: literal placeholders \`startLine:endLine:path\` or \`startLine:endLine:apps/...\` — always substitute concrete line numbers from evidence.

@@ -1,3 +1,4 @@
+import type { IntegrationProxy } from "./integrationOperations";
 import * as vscode from "vscode";
 
 export const SECRET_SLACK_TOKEN = "coop.slack.token";
@@ -12,6 +13,7 @@ export const SECRET_NOTION_TOKEN = "coop.notion.token";
 export const SECRET_GOOGLE_DOCS_TOKEN = "coop.googleDocs.token";
 
 export type IntegrationCredentials = {
+  proxy?: IntegrationProxy;
   slackToken?: string;
   jiraToken?: string;
   jiraEmail?: string;
@@ -25,7 +27,7 @@ export type IntegrationCredentials = {
   googleDocsToken?: string;
 };
 
-export type IntegrationCloudFetcher = () => Promise<Partial<IntegrationCredentials>>;
+export type IntegrationCloudFetcher = () => Promise<Partial<IntegrationCredentials> | undefined>;
 
 export class IntegrationSecrets {
   private cloudFetcher?: IntegrationCloudFetcher;
@@ -37,16 +39,11 @@ export class IntegrationSecrets {
   }
 
   public async getCredentials(): Promise<IntegrationCredentials> {
-    const local = await this.readLocalCredentials();
-    if (!this.cloudFetcher) {
-      return local;
-    }
-    try {
+    if (this.cloudFetcher) {
       const cloud = await this.cloudFetcher();
-      return mergeIntegrationCredentials(local, cloud);
-    } catch {
-      return local;
+      if (cloud) return cloud;
     }
+    return this.readLocalCredentials();
   }
 
   private async readLocalCredentials(): Promise<IntegrationCredentials> {
@@ -170,22 +167,3 @@ function trimOrUndefined(value: string | undefined): string | undefined {
   return trimmed || undefined;
 }
 
-function mergeIntegrationCredentials(
-  local: IntegrationCredentials,
-  cloud: Partial<IntegrationCredentials>
-): IntegrationCredentials {
-  // Cloud (org) credentials win over local SecretStorage when both are set.
-  // Local-only keys remain for developer fallback when the org is not connected.
-  const merged = { ...local };
-  for (const [key, value] of Object.entries(cloud) as Array<
-    [keyof IntegrationCredentials, string | undefined]
-  >) {
-    if (typeof value === "string" && value.trim()) {
-      merged[key] = value.trim();
-    }
-  }
-  return merged;
-}
-
-/** @internal exported for unit tests */
-export const mergeIntegrationCredentialsForTests = mergeIntegrationCredentials;

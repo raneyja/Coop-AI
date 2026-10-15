@@ -98,6 +98,17 @@ async function run(): Promise<void> {
     assert.equal(focus?.role, "rationale");
   });
 
+  await test("approval-only PR and sampled provenance remain provenance", () => {
+    const timeline = baseTimeline({ focusCommit: undefined, linkedPR: { number: 7, title: "Approved", description: "", state: "merged", labels: [], reviews: [], approvers: ["alice"] } });
+    assert.equal(buildRationaleRanking(timeline, false).some(entry => entry.role === "rationale"), false);
+    assert.equal(buildRationaleRanking(baseTimeline({ focusCommit: undefined }), false).some(entry => entry.role === "rationale"), false);
+  });
+
+  await test("attached PR discussion is eligible without approval metadata", () => {
+    const timeline = baseTimeline({ linkedPR: { number: 7, title: "Notification policy", description: "We rejected polling because freshness matters.", state: "merged", labels: [], reviews: [], approvers: [] } });
+    assert.equal(buildRationaleRanking(timeline, false).find(entry => entry.source === "pr:7")?.role, "rationale");
+  });
+
   const total = passed + failed;
   console.log(`\ndecisionRationaleRanking: ${passed}/${total} tests passed`);
   if (failed > 0) {

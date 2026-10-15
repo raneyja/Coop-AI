@@ -40,7 +40,7 @@ export function buildRationaleRanking(
   if (timeline.linkedPR) {
     const pr = timeline.linkedPR;
     const hasDetailedPrContext =
-      (pr.description?.trim().length ?? 0) >= 20 || pr.reviews.length > 0 || pr.approvers.length > 0;
+      (pr.description?.trim().length ?? 0) >= 20 || pr.reviews.some((review) => Boolean(review.body.trim()));
     ranking.push({
       source: `pr:${pr.number}`,
       role: prRelevant && hasDetailedPrContext ? "rationale" : "provenance",
@@ -51,7 +51,9 @@ export function buildRationaleRanking(
   for (const [index, ticket] of (timeline.jiraTickets ?? []).entries()) {
     ranking.push({
       source: `jira:${ticket.key}`,
-      role: index === 0 ? "rationale" : "provenance",
+      role: index === 0 && Boolean(ticket.description.trim() || ticket.acceptanceCriteria.some((criterion) => criterion.trim()))
+        ? "rationale"
+        : "provenance",
       label: `Jira ${ticket.key}`
     });
   }
@@ -131,19 +133,6 @@ export function buildRationaleRanking(
     }
   }
 
-  const hasRationale = deduped.some((entry) => entry.role === "rationale");
-  if (!hasRationale && deduped.length > 0) {
-    const first = deduped[0];
-    const firstIsUnalignedFocus =
-      concreteAsk &&
-      focus &&
-      first.source === `commit:${focus.sha}` &&
-      (focusCommitScore === 0 || focusIsMega || qualityBlocksRationale);
-    // Fail closed for Z3: do not invent a primary rationale from the wrong mega touch.
-    if (!firstIsUnalignedFocus) {
-      deduped[0] = { ...first, role: "rationale" };
-    }
-  }
 
   return deduped;
 }

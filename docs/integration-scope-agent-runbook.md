@@ -1,5 +1,12 @@
 # Integration scope governance — cloud agent runbook
 
+> Legacy integration-scope launch prompt, reviewed October 11. The branch,
+> cloud-only directions, schema plan and product assumptions below are
+> historical inputs, not current launch authority. Do not create competing
+> policies/routes or rerun this prompt merely by reading it. Inspect the current
+> implementation and follow `../AGENTS.md`; enterprise authorization repair
+> uses EH02 in `enterprise-hardening/EXECUTION_PLAN.md` with its current gates.
+
 **Goal:** Security teams can approve Coop because admins define **allowlists** — connect OAuth once, then configure what the model may search.
 
 **Monitor while away:** [cursor.com/agents](https://cursor.com/agents) (web/mobile) or GitHub PR notifications.

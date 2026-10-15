@@ -1,5 +1,5 @@
-import { fetchWithTimeout } from "../networkResilience";
-import { INTEGRATION_HTTP_TIMEOUT_MS, integrationAuthFailureMessage } from "../integrations/integrationHttp";
+import type { IntegrationProxy } from "../integrations/integrationOperations";
+import { fetchIntegrationResponse, INTEGRATION_HTTP_TIMEOUT_MS, integrationAuthFailureMessage } from "../integrations/integrationHttp";
 import {
   isSlackBotAccessToken,
   SLACK_BOT_TOKEN_SEARCH_MESSAGE
@@ -9,6 +9,8 @@ const SLACK_API = "https://slack.com/api";
 const THREAD_CACHE_TTL_MS = 60 * 60 * 1000;
 
 export type SlackClientOptions = {
+  proxy?: IntegrationProxy;
+  resolveThreadUserNames?: boolean;
   token: string;
   now?: () => number;
   signal?: AbortSignal;
@@ -85,6 +87,7 @@ export class SlackClient {
   }
 
   public async testConnection(): Promise<{ ok: boolean; message: string }> {
+    if (this.options.proxy) return this.options.proxy("slack.testConnection", [], this.options.signal);
     try {
       if (isSlackBotAccessToken(this.options.token)) {
         return { ok: false, message: SLACK_BOT_TOKEN_SEARCH_MESSAGE };
@@ -122,6 +125,7 @@ export class SlackClient {
    * Search messages the authenticated user can access (channels, groups, DMs).
    */
   public async searchMessages(query: string, options?: { limit?: number }): Promise<SlackSearchHit[]> {
+    if (this.options.proxy) return this.options.proxy("slack.searchMessages", [query, options], this.options.signal);
     if (isSlackBotAccessToken(this.options.token)) {
       throw new SlackApiError(SLACK_BOT_TOKEN_SEARCH_MESSAGE, "not_allowed_token_type");
     }
@@ -171,6 +175,7 @@ export class SlackClient {
   }
 
   public async getThread(channelId: string, threadTs: string): Promise<SlackThread> {
+    if (this.options.proxy) return this.options.proxy("slack.getThread", [channelId, threadTs], this.options.signal);
     const cacheKey = `${channelId}:${threadTs}`;
     const cached = this.threadCache.get(cacheKey);
     if (cached && cached.expiresAt > this.now()) {
@@ -205,7 +210,7 @@ export class SlackClient {
       }
     }
 
-    const userNames = await this.resolveUserNames([...userIds]);
+    const userNames = this.options.resolveThreadUserNames === false ? new Map<string, string>() : await this.resolveUserNames([...userIds]);
 
     for (const msg of rawMessages) {
       messages.push({
@@ -232,6 +237,7 @@ export class SlackClient {
   }
 
   public async getUserInfo(userId: string): Promise<SlackUserInfo> {
+    if (this.options.proxy) return this.options.proxy("slack.getUserInfo", [userId], this.options.signal);
     const result = await this.api<{
       ok: boolean;
       user?: {
@@ -260,6 +266,7 @@ export class SlackClient {
   }
 
   public async getUserPresence(userId: string): Promise<{ presence: string; autoAway?: boolean }> {
+    if (this.options.proxy) return this.options.proxy("slack.getUserPresence", [userId], this.options.signal);
     const result = await this.api<{
       ok: boolean;
       presence?: string;
@@ -278,6 +285,7 @@ export class SlackClient {
   }
 
   public async findUserByEmail(email: string): Promise<string | undefined> {
+    if (this.options.proxy) return this.options.proxy("slack.findUserByEmail", [email], this.options.signal);
     const result = await this.api<{
       ok: boolean;
       user?: { id: string };
@@ -291,6 +299,7 @@ export class SlackClient {
   }
 
   public async findUserByName(name: string): Promise<string | undefined> {
+    if (this.options.proxy) return this.options.proxy("slack.findUserByName", [name], this.options.signal);
     const normalized = name.toLowerCase();
     const result = await this.api<{
       ok: boolean;
@@ -390,6 +399,7 @@ export class SlackClient {
   }
 
   public async getChannelInfo(channelId: string): Promise<SlackChannelInfo> {
+    if (this.options.proxy) return this.options.proxy("slack.getChannelInfo", [channelId], this.options.signal);
     const result = await this.api<{
       ok: boolean;
       channel?: {
@@ -480,9 +490,9 @@ export class SlackClient {
       init.headers = { ...this.headers, "Content-Type": "application/x-www-form-urlencoded" };
     }
 
-    const response = await fetchWithTimeout(
+    const response = await fetchIntegrationResponse(
       url,
-      { ...init, signal: this.options.signal },
+      { ...init, signal: this.options.signal, redirect: "error" },
       INTEGRATION_HTTP_TIMEOUT_MS
     );
     if ("timeout" in response) {

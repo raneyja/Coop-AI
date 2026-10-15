@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import type { DecisionTimeline } from "../types/decisionTimeline";
 import {
+  alternativesSectionsLackGrounding,
+  buildGroundedAlternativesTradeOffsSections,
   asksAboutAlternativesOrTradeoffs,
   buildThinAlternativesTradeOffsResponse,
   enrichTraceDecisionResponse,
@@ -75,13 +77,13 @@ test("buildThinAlternativesTradeOffsResponse stays compact and honest", () => {
 test("enrichTraceDecisionResponse does not replace initial trace run when model prompt mentions trade-offs", () => {
   const goodTrace = [
     "**Summary**",
-    "fastify.js was introduced in commit dd2bb73.",
+    "Attached history for fastify.js includes sampled commit dd2bb73.",
     "",
     "**Business context**",
     "Core server bootstrap.",
     "",
     "**Sources**",
-    "- [Sources: GitHub commit dd2bb73] — introducing commit"
+    "- [Sources: GitHub commit dd2bb73] — sampled provenance"
   ].join("\n");
 
   const enriched = enrichTraceDecisionResponse({
@@ -153,7 +155,7 @@ test("enrichTraceDecisionResponse uses fallback timeline when bundle lost decisi
   assert.ok(!enriched.includes("Robustness vs"));
 });
 
-test("timelineHasDiscussionEvidence requires PR Slack Jira or extracted alternatives", () => {
+test("timelineHasDiscussionEvidence requires original attached discussion text", () => {
   const withDocs: DecisionTimeline = {
     ...thinTimeline,
     integrationSearch: {
@@ -223,13 +225,13 @@ test("enrichTraceDecisionResponse replaces speculative trace when Slack/Jira att
 test("enrichTraceDecisionResponse strips narrative source pills on thin evidence", () => {
   const withPills = [
     "**Summary**",
-    "Introduced in dd2bb73 [Sources: GitHub commit dd2bb73].",
+    "Sampled history includes dd2bb73 [Sources: GitHub commit dd2bb73].",
     "",
     "**Architecture**",
     "Pattern from [Sources: Ownership signals].",
     "",
     "**Sources**",
-    "- [Sources: GitHub commit dd2bb73] — introducing commit"
+    "- [Sources: GitHub commit dd2bb73] — sampled provenance"
   ].join("\n");
 
   const enriched = enrichTraceDecisionResponse({
@@ -242,7 +244,7 @@ test("enrichTraceDecisionResponse strips narrative source pills on thin evidence
   });
 
   assert.ok(!enriched.includes("[Sources: Ownership signals]"));
-  assert.ok(enriched.includes("[Sources: GitHub commit dd2bb73] — introducing commit"));
+  assert.ok(enriched.includes("[Sources: GitHub commit dd2bb73] — sampled provenance"));
 });
 
 test("enrichTraceDecisionResponse injects commit/PR when model did a code walkthrough", () => {
@@ -263,7 +265,7 @@ test("enrichTraceDecisionResponse injects commit/PR when model did a code walkth
     isFollowUp: false
   });
 
-  assert.ok(enriched.includes("dd2bb73"), "must cite introducing commit SHA");
+  assert.ok(enriched.includes("dd2bb73"), "must cite sampled commit SHA");
   assert.ok(enriched.includes("Decision history for") || enriched.includes("**Summary**"));
   assert.ok(enriched.includes("**Sources**") || enriched.includes("[Sources: GitHub commit"));
 });
@@ -313,10 +315,10 @@ test("Z3 Gate B: does not force-cite mega demoted focus as the decision", () => 
 test("enrichTraceDecisionResponse leaves answers that already cite the commit", () => {
   const cited = [
     "**Summary**",
-    "StateGroup was introduced in commit dd2bb73.",
+    "Attached history for StateGroup includes sampled commit dd2bb73.",
     "",
     "**Sources**",
-    "- [Sources: GitHub commit dd2bb73] — introducing commit"
+    "- [Sources: GitHub commit dd2bb73] — sampled provenance"
   ].join("\n");
 
   const enriched = enrichTraceDecisionResponse({
@@ -329,6 +331,73 @@ test("enrichTraceDecisionResponse leaves answers that already cite the commit", 
 
   assert.equal(enriched.includes("Decision history for"), false);
   assert.ok(enriched.includes("dd2bb73"));
+});
+
+test("metadata and approval presence do not become discussion evidence", () => {
+  const timeline: DecisionTimeline = { ...thinTimeline, linkedPR: { number: 7, title: "Approval", description: "", state: "merged", labels: [], reviews: [], approvers: ["alice"] } };
+  assert.equal(timelineHasDiscussionEvidence(timeline), false);
+});
+
+test("arbitrary quotes and identifiers cannot ground alternatives", () => {
+  const timeline: DecisionTimeline = { ...thinTimeline, slackThread: { channelId: "C7", channelName: "engineering", threadTs: "7", participants: ["alice"], messages: [{ user: "alice", text: "We rejected polling because notifications preserve freshness.", ts: "7" }] } };
+  for (const unsupported of ['"We rejected queues for latency."', 'PR #7 rejected queues for latency.', '#engineering rejected queues for latency.', 'alice rejected queues for latency.']) {
+    const answer = `**Alternatives considered**\n${unsupported}\n\n**Trade-offs**\nUnknown.`;
+    assert.equal(alternativesSectionsLackGrounding(answer, timeline), true, unsupported);
+    const enriched = enrichTraceDecisionResponse({ content: answer, contextBundle: [{ type: "decision_history", data: { timeline } }], userQuestion: "What alternatives were considered?" });
+    assert.ok(!enriched.includes("queues for latency"));
+    assert.ok(enriched.includes("notifications preserve freshness"));
+    assert.equal((enriched.match(/\*\*Alternatives considered\*\*/g) ?? []).length, 1);
+  }
+  assert.equal(alternativesSectionsLackGrounding('**Alternatives considered**\n"We rejected polling because notifications preserve freshness."\n\n**Trade-offs**\nUnknown.', timeline), false);
+  assert.equal(alternativesSectionsLackGrounding('**Alternatives considered**\n"We rejected polling because notifications preserve freshness."\n- Queues were rejected for latency.\n\n**Trade-offs**\nUnknown.', timeline), true);
+});
+
+test("choosing an option does not manufacture trade-offs", () => {
+  const timeline: DecisionTimeline = { ...thinTimeline, teamsThread: { teamId: "T", channelId: "C", rootMessageId: "1", participants: ["alice"], messages: [{ user: "alice", text: "We chose notifications instead of polling.", date: "2026-10-11" }] } };
+  const sections = buildGroundedAlternativesTradeOffsSections(timeline);
+  assert.ok(sections.alternatives.includes("We chose notifications instead of polling."));
+  assert.ok(sections.tradeoffs.includes("Not explicitly recorded"));
+  assert.ok(!sections.tradeoffs.includes("implied"));
+});
+
+test("derived-only alternative summaries cannot ground or enter a prepared answer", () => {
+  const derived: DecisionTimeline = {
+    ...thinTimeline,
+    alternatives: [{ option: "Polling", reason_rejected: "Invented latency reason", proposed_by: "alice", source: "pr:7" }]
+  };
+  const candidate = '**Alternatives considered**\nPolling — rejected because Invented latency reason (pr:7).\n\n**Trade-offs**\nUnknown.';
+  assert.equal(timelineHasDiscussionEvidence(derived), false);
+  assert.equal(alternativesSectionsLackGrounding(candidate, derived), true);
+  const sections = buildGroundedAlternativesTradeOffsSections(derived);
+  assert.ok(sections.alternatives.includes("Not explicitly recorded"));
+  assert.ok(!sections.alternatives.includes("Invented latency reason"));
+  const enriched = enrichTraceDecisionResponse({ content: candidate, contextBundle: [{ type: "decision_history", data: { timeline: derived } }], userQuestion: "What alternatives were considered?" });
+  assert.ok(!enriched.includes("Invented latency reason"));
+  const original: DecisionTimeline = { ...derived, linkedPR: { number: 7, title: "Choice", description: "We rejected polling because notifications preserve freshness.", state: "merged", approvers: [], reviews: [] } };
+  const grounded = buildGroundedAlternativesTradeOffsSections(original);
+  assert.ok(grounded.alternatives.includes("notifications preserve freshness"));
+  assert.ok(!grounded.alternatives.includes("Invented latency reason"));
+});
+
+test("long excerpts and separate Jira fields remain source members on repeat enrichment", () => {
+  const timeline: DecisionTimeline = { ...thinTimeline, linkedPR: { number: 8, title: "Choice", description: "We rejected polling because " + "freshness matters ".repeat(30), state: "merged", labels: [], reviews: [], approvers: [] }, jiraTickets: [{ key: "APP-8", summary: "Choice", description: "Context only.", acceptanceCriteria: ["Decision: we chose notifications instead of polling."], technicalDebt: false, htmlUrl: "https://example/8" }] };
+  const sections = buildGroundedAlternativesTradeOffsSections(timeline);
+  const answer = `**Alternatives considered**\n${sections.alternatives}\n\n**Trade-offs**\n${sections.tradeoffs}`;
+  assert.equal(alternativesSectionsLackGrounding(answer, timeline), false);
+  assert.ok(answer.includes('" … (excerpt truncated)'));
+  assert.ok(!answer.includes('Context only.\nDecision:'));
+  const options = { content: answer, userQuestion: "What alternatives?", contextBundle: [{ type: "decision_history", data: { timeline } }] };
+  const once = enrichTraceDecisionResponse(options);
+  assert.equal(enrichTraceDecisionResponse({ ...options, content: once }), once);
+});
+
+test("combined heading repair keeps one alternatives section and separates status", () => {
+  const timeline: DecisionTimeline = { ...thinTimeline, linkedPR: { number: 9, title: "Choice", description: "We rejected polling because freshness matters.", state: "merged", labels: [], reviews: [], approvers: [] } };
+  const content = '**Alternatives considered / Decision status**\nUnknown.\n\nDecision status: Current behavior is visible; historical rationale remains unknown.';
+  const enriched = enrichTraceDecisionResponse({ content, contextBundle: [{ type: "decision_history", data: { timeline } }], userQuestion: "What alternatives were considered?" });
+  assert.equal((enriched.match(/\*\*Alternatives considered/g) ?? []).length, 1);
+  assert.ok(!enriched.includes('Alternatives considered / Decision status'));
+  assert.ok(enriched.includes('**Decision status**\nCurrent behavior is visible'));
 });
 
 console.log(`\ndecisionResponseEnrichment: ${passed}/${passed + failed} tests passed`);

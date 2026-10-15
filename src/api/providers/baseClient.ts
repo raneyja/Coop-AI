@@ -28,7 +28,8 @@ export abstract class BaseProviderClient {
     url: string,
     init: RequestInit,
     options: ProviderStreamOptions,
-    parseLine: (line: string, state: ParseState) => StreamChunk | undefined
+    parseLine: (line: string, state: ParseState) => StreamChunk | undefined,
+    hasCompletedMessage?: (state: ParseState) => boolean
   ): AsyncGenerator<StreamChunk> {
     assertStandardInferenceEndpoint(this.provider, url);
     let response: Response;
@@ -87,6 +88,8 @@ export abstract class BaseProviderClient {
           } else if (chunk?.type === "thinking") {
             yield chunk;
           } else if (chunk?.type === "error") {
+            if (hasCompletedMessage) yield {type: "done", usage: resolveUsage(this.provider, options, state),
+              model: options.model, provider: this.provider, finishReason: "error"};
             yield chunk;
             return;
           }
@@ -102,17 +105,37 @@ export abstract class BaseProviderClient {
           return;
         }
       }
+      buffer += decoder.decode();
+      for (const line of buffer.split("\n")) {
+        const chunk = parseLine(line, state);
+        if (chunk?.type === "delta") {state.text += chunk.text; yield chunk;}
+        else if (chunk?.type === "thinking") yield chunk;
+        else if (chunk?.type === "error") {
+          if (hasCompletedMessage) yield {type: "done", usage: resolveUsage(this.provider, options, state),
+            model: options.model, provider: this.provider, finishReason: "error"};
+          yield chunk; return;
+        }
+      }
+    } catch (error) {
+      if (!hasCompletedMessage) throw error;
+      const cancelled = options.signal?.aborted === true;
+      yield {type: "done", usage: resolveUsage(this.provider, options, state), model: options.model,
+        provider: this.provider, finishReason: cancelled ? "cancelled" : "error"};
+      if (!cancelled) yield {type: "error", message: error instanceof Error ? error.message : "Provider stream failed."};
+      return;
     } finally {
       reader.releaseLock();
     }
 
+    const incomplete = hasCompletedMessage && !hasCompletedMessage(state);
     yield {
       type: "done",
       usage: resolveUsage(this.provider, options, state),
       model: options.model,
       provider: this.provider,
-      finishReason: state.finishReason ?? "stop"
+      finishReason: options.signal?.aborted ? "cancelled" : incomplete ? "error" : state.finishReason ?? "stop"
     };
+    if (incomplete && !options.signal?.aborted) yield {type: "error", message: "Provider stream ended without a supported completed message."};
   }
 
   protected buildFormattedRequest(options: ProviderStreamOptions, extraSystem?: string): {
@@ -154,6 +177,8 @@ export type ParseState = {
   finishReason?: FinishReason;
   inputTokens?: number;
   outputTokens?: number;
+  /** OpenAI-compatible [DONE] marker, used by clients requiring strict completion. */
+  streamTerminated?: boolean;
 };
 
 export function resolveUsage(
@@ -167,7 +192,7 @@ export function resolveUsage(
     return {
       inputTokens,
       outputTokens,
-      estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens)
+      estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens, options.model)
     };
   }
   return buildUsage(provider, options, state.text);
@@ -180,7 +205,7 @@ export function buildUsage(provider: LlmProvider, options: ProviderStreamOptions
   return {
     inputTokens,
     outputTokens,
-    estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens)
+    estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens, options.model)
   };
 }
 

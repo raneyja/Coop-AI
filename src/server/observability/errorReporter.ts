@@ -52,18 +52,19 @@ export function initErrorReporter(options: {
 }
 
 export function captureException(error: unknown, context: ErrorReportContext = {}): void {
-  if (shouldIgnore(error)) {
-    return;
-  }
-  const reportable = toReportableError(error);
-  const tags = sanitizeErrorContext({
-    ...context,
-    service: context.service ?? defaultService
-  });
   try {
+    if (shouldIgnore(error)) {
+      return;
+    }
+    const reportable = toReportableError(error);
+    const tags = sanitizeErrorContext({
+      ...context,
+      service: context.service ?? defaultService
+    });
     sink?.(reportable, tags);
   } catch {
-    // Reporting must never break the request or job.
+    // Inspection, redaction, context sanitization, and sink failures must never
+    // break the request or job. Unsafe reports are dropped rather than sent raw.
   }
 }
 
@@ -72,7 +73,14 @@ export function reportServerError(
   context: ErrorReportContext
 ): { error: string; requestId?: string } {
   captureException(error, context);
-  const message = error instanceof Error ? error.message : "unexpected server error";
+  let message = "unexpected server error";
+  try {
+    if (error instanceof Error && typeof error.message === "string") {
+      message = redactSecretsFromErrorMessage(error.message);
+    }
+  } catch {
+    // Keep the existing generic client response if error inspection/redaction fails.
+  }
   return context.requestId ? { error: message, requestId: context.requestId } : { error: message };
 }
 
@@ -96,12 +104,13 @@ export function sanitizeErrorContext(context: ErrorReportContext): ErrorReportCo
 function toReportableError(error: unknown): Error {
   if (error instanceof Error) {
     const redacted = redactSecretsFromErrorMessage(error.message);
-    if (redacted === error.message) {
+    const stack = error.stack === undefined ? undefined : redactSecretsFromErrorMessage(error.stack);
+    if (redacted === error.message && stack === error.stack) {
       return error;
     }
     const copy = new Error(redacted);
     copy.name = error.name;
-    copy.stack = error.stack;
+    copy.stack = stack;
     return copy;
   }
   return new Error(redactSecretsFromErrorMessage(String(error)));

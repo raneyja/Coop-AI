@@ -41,6 +41,7 @@ export async function fulfillPaidCheckoutSession(
     emailService: EmailService;
     authTokenStore?: AuthTokenStore;
     authIdentityStore?: AuthIdentityStore;
+    requireDurableEmail?: boolean;
   }
 ): Promise<FulfillCheckoutResult> {
   const metadata = readMetadata(session);
@@ -87,7 +88,8 @@ export async function fulfillPaidCheckoutSession(
       googleSub
     },
     deps.authTokenStore,
-    deps.authIdentityStore
+    deps.authIdentityStore,
+    deps.requireDurableEmail
   );
 
   return {

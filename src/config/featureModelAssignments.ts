@@ -18,6 +18,7 @@ import {
 export type CoopFeatureId =
   | "chat"
   | "quickActions"
+  | "sourceVerification"
   | "edit"
   | "autocomplete"
   | "intentSuggest"
@@ -44,6 +45,12 @@ export const COOP_FEATURE_MODEL_ASSIGNMENTS: FeatureModelAssignment[] = [
     label: "Quick actions",
     provider: "anthropic",
     model: "claude-sonnet-4-6"
+  },
+  {
+    feature: "sourceVerification",
+    label: "Source verification",
+    provider: "openai",
+    model: "gpt-5.5"
   },
   {
     feature: "edit",
@@ -155,6 +162,14 @@ export function pickerAppliesToUseCase(useCase: UseCase): boolean {
 export const FREE_FLASH_MODEL = "gemini-2.5-flash";
 const FREE_FORCED_MODEL = { provider: "gemini" as const, model: FREE_FLASH_MODEL };
 
+/** Private verification capacity is operator-owned, independent of answer preferences. */
+export const SOURCE_VERIFICATION_MAX_TOKENS = 32_768;
+
+export function resolveAssignedSourceVerificationModel(): { provider: LlmProvider; model: string } {
+  const assignment = getFeatureModelAssignment("sourceVerification");
+  return { provider: assignment.provider, model: assignment.model };
+}
+
 export function resolveRuntimeModelForUseCase(
   useCase: UseCase,
   prefs: RuntimeModelPrefs
@@ -187,7 +202,12 @@ export function resolveHonoredChatModel(input: {
   useCase: UseCase;
   clientProvider?: LlmProvider;
   clientModel?: string;
+  sourceClaimReview?: boolean;
+  sourceEvidenceRepair?: boolean;
 }): { provider: LlmProvider; model: string; selection: string } {
+  if (input.sourceClaimReview === true || input.sourceEvidenceRepair === true) {
+    return { ...resolveAssignedSourceVerificationModel(), selection: "auto" };
+  }
   const assigned = resolveAssignedModelForUseCase(input.useCase);
   if (input.plan === "free" && input.useCase !== "inline_completion") {
     return { ...FREE_FORCED_MODEL, selection: "auto" };

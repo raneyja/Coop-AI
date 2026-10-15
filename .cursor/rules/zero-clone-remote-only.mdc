@@ -5,6 +5,10 @@ alwaysApply: true
 
 # Zero-Clone — indexed remote only
 
+Scope: Coop's customer repository-intelligence runtime. Authorized engineering
+inspection, edits and tests of Coop's own checkout are allowed; they must not
+become a runtime evidence fallback or a claimed remote product pass.
+
 ## Product law
 
 Coop works **without downloading a local copy** of any repo. Repository intelligence
@@ -38,7 +42,9 @@ Policy flag: `src/workspace/zeroClonePolicy.ts` (`mayReadLocalRepoDiskForIntelli
 ## Allowed exceptions (not repo intelligence)
 
 - Patch apply into an open editor buffer
-- AGENTS.md / prompt library pickers
+- Explicit AGENTS.md / prompt-library selection for the chosen surface. Local
+  selections do not become instructions or source evidence for another Use-repo;
+  selected remote repository instructions follow its remote identity/ref.
 - Autocomplete on the active buffer
 - Explicit `fileSource: "external"` uploads (Cmd+O outside the Use-repo)
 

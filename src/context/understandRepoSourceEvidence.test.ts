@@ -1,134 +1,106 @@
 import assert from "node:assert/strict";
 import {
-  gatherUnderstandSourceEvidence, understandFocusCoverage, understandIncompleteFocusMessage,
+  gatherUnderstandSourceEvidence, rankUnderstandSourcePaths,
+  understandFocusCoverage, understandIncompleteFocusMessage,
   understandSourceWindows, understandFocusQueries
 } from "./understandRepoSourceEvidence";
-import { IndexedRepoWorkspace } from "../workspace/IndexedRepoWorkspace";
-import type { RepoInventoryDeps } from "../workspace/repoInventorySources";
-import { buildUserMessageWithContext } from "../prompts/systemPrompts";
-import { repoSummaryFromBundle } from "./contextBundleEvidence";
-import { isolateUnderstandRepoSummary } from "./understandRepoDomainAttach";
-import { shouldEnableSynthesisThinking } from "../config/chatSynthesisThinking";
 import { enrichUnderstandRepoResponse } from "../prompts/repoSummaryResponseEnrichment";
+import { shouldEnableSynthesisThinking } from "../config/chatSynthesisThinking";
 
-const ask = "If I’m joining the Plane backend team to work on issue creation, which components handle request authentication, input validation, and persistence, and which three files should I read first?";
-const target = { repoId: "github:org/service", owner: "org", repo: "service", provider: "github", branch: "preview" };
-const padding = Array.from({length: 450}, (_, i) => `# unrelated line ${i} with enough bytes to exceed the old prefix cap`).join("\n");
-const source: Record<string, string> = {
-  "apps/api/service/api/views/issue.py": `from service.api.views.base import BaseAPIView\n${padding}\nclass IssueCreate(BaseAPIView):\n    def post(self, request):\n        serializer = IssueSerializer(data=request.data)\n        if serializer.is_valid():\n            serializer.save()`,
-  "apps/api/service/api/serializers/issue.py": `class IssueSerializer:\n    def validate(self, data):\n        if not data.get('state'):\n            raise ValidationError('state required')\n        return data\n    def create(self, data):\n        return Issue.objects.create(**data)`,
-  "apps/api/service/db/models/issue.py": `class Issue:\n    def save(self):\n        super(Issue, self).save()`,
-  "apps/api/service/api/views/base.py": `class BaseAPIView:\n    authentication_classes = [APIKeyAuthentication]\n    permission_classes = [IsAuthenticated]`,
-  "apps/api/service/api/middleware/api_authentication.py": `class APIKeyAuthentication:\n    def authenticate(self, request):\n        token = request.headers.get('X-Api-Key')\n        if not token:\n            raise AuthenticationFailed('required')\n        return user, token`,
-  "apps/api/service/app/serializers/issue.py": `class OtherSerializer: pass`,
-  "apps/web/components/issue.ts": `function createIssue() { return db.issue.create({}); }`
-};
+const focus = "Which backend components handle authentication, input validation, and persistence when creating records?";
+const target = { repoId: "github:org/service", owner: "org", repo: "service", provider: "github" as const, branch: "preview" };
+const sources = [
+  { path: "odd-layout/endpoint.go", content: "func Process(req Request) error { return check(req) }" },
+  { path: "core/actions.rs", content: "async fn create(input: Input) -> Result<Row> { authorize(input)?; write(input).await }" },
+  { path: "Modules/RecordHandler.cs", content: "async Task<Row> Create(Input input) { Validate(input); return await Save(input); }" },
+  { path: "lib/operation.py", content: "def create(data):\n    check(data)\n    return save(data)" },
+  { path: "Records/Operation", content: "validate input; store record" },
+  { path: "frontend/web/actions.tsx", content: "export const action = async (request: Request) => validate(await request.json());" }
+];
 
 async function main(): Promise<void> {
-  const queries = understandFocusQueries(ask)!;
-  assert.deepEqual(queries, ["issue", "authentication", "serializer", "model"]);
-  assert.ok(!queries.some(query => /joining|Plane|three/.test(query)));
-  const failedFiles = [
-    {path: "apps/api/service/api/urls/intake.py", content: 'path("issues/", IssueView.as_view())'},
-    {path: "apps/api/service/space/urls/issue.py", content: 'path("issues/", PublicIssueView.as_view())'},
-    {path: "apps/web/profile/form.ts", content: 'validate(); db.issue.create({});'},
-    {path: "apps/admin/authentication/page.ts", content: 'authentication settings'},
-    {path: "packages/utils/src/validation.ts", content: 'const validate = (input) => input;'}
-  ];
-  const missing = understandFocusCoverage(ask, failedFiles);
-  assert.deepEqual(missing.missing, missing.requested);
-  assert.ok(understandIncompleteFocusMessage(missing)?.includes("unverified"));
-  assert.ok(!understandIncompleteFocusMessage(missing)?.includes("typical"));
-  console.log("✓ exact failed anchors cannot establish the backend components");
+  assert.deepEqual(understandFocusQueries(focus), ["record", "authentication", "input validation", "persistence"]);
+  for (const source of sources) {
+    const coverage = understandFocusCoverage(focus, [source]);
+    assert.equal(coverage.sourceBodiesAvailable, true);
+    assert.deepEqual(coverage.missing, coverage.requested, "availability never proves requested behavior");
+    assert.equal(understandIncompleteFocusMessage(coverage), undefined, "language/layout does not cause pre-synthesis rejection");
+    assert.equal(enrichUnderstandRepoResponse("Read the attached source; imported implementations remain unknown.", {userFocus: focus, entryFiles: [source]}), "Read the attached source; imported implementations remain unknown.");
+    assert.equal(shouldEnableSynthesisThinking({quickAction: "understand-repo", startedAt: Date.now() - 20_000, sourceFacts: {userFocus: focus, entryFiles: [source]}}), true, "elapsed soft target cannot drop reasoning on multi-component audit");
+  }
+  assert.ok(understandIncompleteFocusMessage(understandFocusCoverage(focus, []))?.includes("unverified"));
+  assert.equal(understandIncompleteFocusMessage(understandFocusCoverage(focus, [{path: "route", content: "   "}])), understandIncompleteFocusMessage(understandFocusCoverage(focus, [])));
+  console.log("✓ languages/layouts remain eligible without certifying behavior; empty sources stay honest");
 
-  const calls: Array<{path: string; branch?: string}> = [];
-  const diagnostics: Record<string, unknown>[] = [];
-  const deps = {
-    apiBaseUrl: "https://api.coop-ai.dev",
-    api: {
-      fetchIndexedRepoFileMap: async () => ({repoId: target.repoId, indexedBranch: target.branch,
-        indexedCommit: "commit", stale: false, data: Object.keys(source).map(path => ({path}))}),
-      getBackendClient: () => ({fetchRepoFile: async (_url: string, repoId: string, path: string, branch: string) => {
-        assert.equal(repoId, target.repoId); calls.push({path, branch}); return {path, content: source[path]};
-      }})
-    },
-    codeHostRouter: {searchRepositoryFiles: async () => []}
-  } as unknown as RepoInventoryDeps;
-  const result = await gatherUnderstandSourceEvidence({workspace: new IndexedRepoWorkspace(deps), target,
-    focus: ask, deadlineAt: Date.now() + 1000, onDiagnostic: event => diagnostics.push(event)});
-  const isolated = isolateUnderstandRepoSummary({ ...result, userFocus: ask,
-    treeOverview: {topLevelDirs: ["apps", "packages"]} });
-  assert.ok(isolated.entryFiles.some(file => file.content.includes("def post(")), "late request implementation survives source selection");
-  assert.ok(isolated.entryFiles.some(file => file.path.endsWith("api/views/base.py")), "read actual imported authentication binding");
-  assert.ok(!calls.some(call => call.path.includes("apps/web") || call.path.includes("app/serializers")));
-  assert.ok(calls.every(call => call.branch === "preview"));
-  const coverage = understandFocusCoverage(ask, isolated.entryFiles);
-  assert.deepEqual(coverage.missing, []);
-  assert.equal(understandIncompleteFocusMessage(coverage), undefined);
-  const bundle = [{type: "file_metadata", data: {...isolated, focusCoverage: coverage}}];
-  assert.deepEqual(repoSummaryFromBundle(bundle)?.focusCoverage, coverage);
-  const message = buildUserMessageWithContext(ask, { owner: "org", repo: "service", branch: "preview", contextBundle: bundle });
-  const late = isolated.entryFiles.find(file => file.content.includes("def post("))!;
-  assert.ok(message.includes(`lines="${late.startLine}-${late.endLine}" truncated="true"`));
-  assert.ok(message.includes("def post("));
-  assert.ok(message.includes(`${late.startLine} | `), "source rows carry original numeric offsets");
-  assert.equal(shouldEnableSynthesisThinking({quickAction: "understand-repo", startedAt: Date.now(), sourceFacts: isolated}), false);
-  console.log("✓ canonical remote discovery → late source windows → coverage → serialized citations");
-  const exactLines = late.content.split("\n");
-  const index = exactLines.findIndex(line => line.includes("def post("));
-  const actualLine = late.startLine! + index;
-  const exact = exactLines.slice(index, index + 3).join("\n");
-  const summary = {...isolated, focusCoverage: coverage};
-  assert.ok(enrichUnderstandRepoResponse(`Flow\n\n\`\`\`1:3:${late.path}\n${exact}\n\`\`\``, summary).includes(`\`\`\`${actualLine}:${actualLine + 2}:${late.path}`), "verbatim code gets its real coordinates");
-  assert.ok(!enrichUnderstandRepoResponse(`Flow\n\n\`\`\`104:149:${late.path}\n${exact}\n...\ninvented.save()\n\`\`\``, summary).includes("invented.save"), "unverified code/ranges do not survive the finish gate");
-  assert.equal(enrichUnderstandRepoResponse("Speculative implementation essay", {...summary, entryFiles: failedFiles}), understandIncompleteFocusMessage(missing));
-  console.log("✓ finish gate replaces unsupported reports and removes unverified citation ranges");
+  const ranked = rankUnderstandSourcePaths(["src/unrelated.py", "custom/Authentication.KT", "node_modules/authentication.js", "custom/record.go"], focus);
+  assert.ok(ranked.indexOf("custom/Authentication.KT") < ranked.indexOf("src/unrelated.py"));
+  assert.ok(!ranked.some(path => path.includes("node_modules")));
+  console.log("✓ lexical relevance chooses evidence without framework or extension exclusions");
 
-  const withoutAuthImplementation = isolated.entryFiles.filter(file => !file.path.includes("middleware"));
-  assert.ok(understandFocusCoverage(ask, withoutAuthImplementation).missing.includes("authentication"), "a binding alone does not prove imported authentication");
-  const wrongAuthentication = isolated.entryFiles.map(file => file.path.includes("middleware")
-    ? {...file, content: file.content.replace(/APIKeyAuthentication/g, "UnrelatedAuthentication")} : file);
-  assert.ok(understandFocusCoverage(ask, wrongAuthentication).missing.includes("authentication"), "an unrelated auth implementation does not satisfy the binding");
-  const noWriter = isolated.entryFiles.filter(file => !/serializers|models/.test(file.path));
-  assert.ok(understandFocusCoverage(ask, noWriter).missing.includes("persistence"), "serializer.save alone does not establish persistence");
-  const unrelated = [...noWriter, {path: "apps/api/service/validators/random.py",
-    content: "class UnrelatedValidator:\n    def validate(self, data):\n        return Other.objects.create(**data)"}];
-  assert.ok(understandFocusCoverage(ask, unrelated).missing.includes("input validation"));
-  assert.ok(understandFocusCoverage(ask, unrelated).missing.includes("persistence"), "unrelated backend bodies cannot fill the flow's obligations");
-  console.log("✓ unresolved authentication and persistence bodies remain coverage limits");
+  const padding = Array.from({length: 500}, (_, i) => `unrelated filler ${i} ${"x".repeat(50)}`).join("\n");
+  for (const path of ["odd/handler.go", "odd/handler.rs", "odd/handler.custom"]) {
+    const file = {path, startLine: 51, content: padding + "\nauthentication validation persistence record\nreturn authorizeAndStore(input)"};
+    const windows = understandSourceWindows(file, focus);
+    assert.ok(windows.some(window => window.content.includes("authorizeAndStore")));
+    assert.ok(windows.reduce((sum, window) => sum + window.content.length, 0) <= 24_000);
+    for (const window of windows) assert.equal(window.content, file.content.split("\n").slice(window.startLine! - 51, window.endLine! - 50).join("\n"));
+    assert.ok(windows.every(window => window.truncated));
+  }
+  const hugeLine = understandSourceWindows({path: "opaque", content: "x".repeat(30_000)});
+  assert.equal(hugeLine.length, 0, "never slice a partial source line into purported exact evidence");
+  console.log("✓ relevance windows retain original complete lines, numeric offsets, and bounded bytes");
 
-  const slowWorkspace = {
-    findFiles: async (_target: unknown, query: string) => {
+  const reads: string[] = [];
+  const result = await gatherUnderstandSourceEvidence({workspace: {
+    findFiles: async () => sources.map(source => ({path: source.path, name: source.path.split("/").pop()!})),
+    readFile: async (askedTarget, path) => {
+      assert.equal(askedTarget.branch, "preview"); reads.push(path);
+      return {...sources.find(source => source.path === path)!, repoId: target.repoId, origin: "remote" as const};
+    }
+  }, target, focus, deadlineAt: Date.now() + 1000});
+  assert.ok(result.entryFiles.length);
+  assert.equal(new Set(reads).size, reads.length, "independent topics share reads");
+  assert.ok(reads.length <= 8);
+  assert.ok(result.entryFiles.every(file => file.repoId === target.repoId));
+  console.log("✓ canonical remote gather pins scope, deduplicates parallel topics, and bounds reads");
+
+  const slow = await gatherUnderstandSourceEvidence({workspace: {
+    findFiles: async (_target, query) => {
       if (query === "authentication") await new Promise(resolve => setTimeout(resolve, 100));
-      return Object.keys(source).filter(path => path.includes(query)).map(path => ({path, name: path.split('/').pop()!}));
+      return [{path: "odd-layout/endpoint.go", name: "endpoint.go"}];
     },
-    readFile: async (_target: unknown, path: string) => ({path, repoId: target.repoId, origin: "remote" as const, content: source[path]})
-  };
-  const partial = await gatherUnderstandSourceEvidence({workspace: slowWorkspace, target, focus: ask, deadlineAt: Date.now() + 30});
-  assert.ok(partial.entryFiles.some(file => file.content.includes("def post(")), "slow auth search does not discard completed domain reads");
-  const snapshot = JSON.stringify(partial);
+    readFile: async (_target, path) => ({path, repoId: target.repoId, origin: "remote" as const, content: sources[0].content})
+  }, target, focus, deadlineAt: Date.now() + 30});
+  assert.ok(slow.entryFiles.length);
+  const snapshot = JSON.stringify(slow);
   await new Promise(resolve => setTimeout(resolve, 110));
-  assert.equal(JSON.stringify(partial), snapshot, "late completions cannot mutate delivered evidence");
-  assert.ok(understandFocusCoverage(ask, partial.entryFiles).missing.includes("authentication"));
-  console.log("✓ partial evidence survives a slow sibling and cannot mutate after deadline");
-  const stop = new AbortController();
-  let stopReads = 0;
-  const stopped = gatherUnderstandSourceEvidence({workspace: {
-    findFiles: async () => { await new Promise(resolve => setTimeout(resolve, 40)); return [{path: Object.keys(source)[0], name: "issue.py"}]; },
-    readFile: slowWorkspace.readFile
-  }, target, focus: ask, deadlineAt: Date.now() + 1000, signal: stop.signal, onRead: () => stopReads++});
-  stop.abort();
-  assert.equal((await stopped).entryFiles.length, 0);
-  await new Promise(resolve => setTimeout(resolve, 50));
-  assert.equal(stopReads, 0, "Stop prevents late discovery from scheduling reads");
-  console.log("✓ user Stop freezes the gather and prevents later source reads");
+  assert.equal(JSON.stringify(slow), snapshot);
+  console.log("✓ slow sibling does not erase completed evidence or mutate it after deadline");
 
-  const rejected = await gatherUnderstandSourceEvidence({workspace: {findFiles: slowWorkspace.findFiles,
-    readFile: async (_target, path) => ({path, repoId: "github:other/repo", origin: "remote", content: source[path]})},
-    target, focus: ask, deadlineAt: Date.now() + 200});
-  assert.equal(rejected.entryFiles.length, 0, "foreign bodies rejected");
-  const windows = understandSourceWindows({path: 'src/serializer.py', content: padding + '\n    def validate(self, data):\n        raise ValidationError("bad")\n    def create(self, data):\n        return Record.objects.create(**data)'});
-  for (const window of windows) assert.equal(window.content, (padding + '\n    def validate(self, data):\n        raise ValidationError("bad")\n    def create(self, data):\n        return Record.objects.create(**data)').split('\n').slice(window.startLine! - 1, window.endLine).join('\n'));
-  console.log("✓ foreign evidence rejected and numeric ranges match original source");
+  const stop = new AbortController();
+  let lateReads = 0;
+  const stopped = gatherUnderstandSourceEvidence({workspace: {
+    findFiles: async () => {await new Promise(resolve => setTimeout(resolve, 30)); return [{path: "odd/file", name: "file"}];},
+    readFile: async (_target, path) => {lateReads++; return {path, repoId: target.repoId, origin: "remote" as const, content: "body"};}
+  }, target, focus, deadlineAt: Date.now() + 1000, signal: stop.signal});
+  stop.abort();
+  assert.deepEqual((await stopped).entryFiles, []);
+  await new Promise(resolve => setTimeout(resolve, 40));
+  assert.equal(lateReads, 0);
+  for (const origin of ["remote", "external"] as const) {
+    const rejected = await gatherUnderstandSourceEvidence({workspace: {
+      findFiles: async () => [{path: "odd/file", name: "file"}],
+      readFile: async (_target, path) => ({path, repoId: origin === "remote" ? "github:foreign/repo" : target.repoId, origin, content: "body"})
+    }, target, focus, deadlineAt: Date.now() + 100});
+    assert.equal(rejected.entryFiles.length, 0);
+  }
+  console.log("✓ Stop prevents late reads; foreign/local body origins cannot pass remote gathering");
+
+  const file = {path: "odd/record.custom", content: "validate(input);\nreturn await store(input);", startLine: 70, endLine: 71};
+  const quoted = enrichUnderstandRepoResponse("Flow\n\n```70:71:odd/record.custom\nvalidate(input);\nreturn await store(input);\n```", {userFocus: focus, entryFiles: [file]});
+  assert.ok(quoted.includes("```70:71:odd/record.custom"));
+  const invalid = enrichUnderstandRepoResponse("Flow\n\n```70:71:odd/record.custom\nvalidate(input);\nreturn invented(input);\n```", {userFocus: focus, entryFiles: [file]});
+  assert.ok(!invalid.includes("invented(input)"));
+  console.log("✓ source quote integrity remains enforced independently of semantic availability");
 }
 void main();

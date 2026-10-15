@@ -21,6 +21,8 @@ export type CommitPatternStats = {
   counts: TimeBucketCounts;
   recencyScore: number;
   lastCommitDate?: string;
+  /** Date/message/identity from one retrieved commit, never paired by list order. */
+  latestSampledCommit?: { sha: string; date: string; message: string; sameTimeCount: number };
   messages: string[];
 };
 
@@ -116,6 +118,9 @@ export type OrgTeamContext = {
   teamName: string;
   teamSlug?: string;
   members: string[];
+  /** Matched declared handles remain in members; lookup membership is separate. */
+  teamMembers?: string[];
+  codeownersPattern?: string;
   manager?: string;
   slackChannel?: string;
   htmlUrl?: string;

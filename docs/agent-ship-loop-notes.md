@@ -1,5 +1,11 @@
 # Agent ship loop — stage notes
 
+> Historical stage evidence, reviewed October 11. Preserve individual dated
+> results and their limits; an old open/required stage does not automatically
+> reopen a completed workflow. Current scope follows `../AGENTS.md`, later run
+> reports and the human's instructions. Enterprise progress belongs in its
+> own run ledger rather than inventing new entries in this historical log.
+
 **Required log** for [agent-ship-loop-build-plan.md](./agent-ship-loop-build-plan.md).  
 **Jon’s live dogfood:** [agent-dogfood.md](./agent-dogfood.md) — Plane = `APIKeyAuthentication`; Slack/Jira = Coop-AI + **COOP-101**. Older “What Jon re-runs” lines that ask `requireAuth` on plane are stale.
 

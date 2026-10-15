@@ -1,0 +1,11 @@
+{
+  "schema": "coop-scip-java-inputs-v1",
+  "sourceCommit": "baba91a2482300612abfe67c53184fadd3b5fcac",
+  "sourceUrl": "https://codeload.github.com/scip-code/scip-java/tar.gz/baba91a2482300612abfe67c53184fadd3b5fcac",
+  "sourceSha256": "3ac77ca1f0468049f2bce977fb5a0d3e3440c3c55e0c33d94d8e3c6d5cc5cc9e",
+  "gradleVersion": "9.8.1",
+  "gradleUrl": "https://services.gradle.org/distributions/gradle-9.8.1-bin.zip",
+  "gradleSha256": "dce76f55f8e251a3a1f130eb120f30b3d271de2b76c9b0729d316b5a1b6dc01f",
+  "releaseVersion": "0.13.1-coop-stage5-baba91a",
+  "jdkImage": "eclipse-temurin:25@sha256:8c0a84ea11c8f6ed52600fc19f1040121f2a162998e9f50a5faebbbad9172dcc"
+}

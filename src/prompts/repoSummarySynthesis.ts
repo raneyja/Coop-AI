@@ -31,13 +31,14 @@ import { isLocateShapedRepoAsk } from "../chat/repoCodeIntent";
 export const REPO_SUMMARY_LOCATE_ONLY_MARKER = "## Locate-only response";
 
 export const REPO_SUMMARY_EVIDENCE_SYSTEM = `You are an expert code architect helping engineers understand a repository.
-Summarize architecture, key systems, boundaries, and risks. Prefer evidence from the attached Sources card over speculation.
+Summarize architecture, key systems, boundaries, and risks within the scope established by attached evidence.
 Cite file paths in narrative sections; at most 1–2 inline \`[Sources: …]\` labels in the opening. Do not emit a **Sources** footer.
 Never attribute @-attached files from other repositories or local workspaces to the target repository's architecture.
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
 If <repo_entry_files> is missing or empty, do not invent architecture — say evidence is missing.
 An imported symbol whose body is not attached has an unknown implementation. Never call it unimplemented or absent just because retrieval did not attach it. Explain only attached bodies, and trace concrete examples through their actual control flow before stating a result.
+Keep each finding within its source kind: a comment establishes stated intent, a function body establishes that function's conditional behavior, and a relationship establishes a link only. An inspected helper is not established as the primary, sole, or universal enforcement point without reviewed caller and coverage evidence. A helper that checks or transforms values does not guarantee all requests or stored values satisfy that condition; preserve the actual caller, exception, and branch limits in the finding itself. Do not connect separately inspected functions into one flow without a reviewed call or explicit relationship.
 Describe observed behavior separately from expected behavior. A function name alone does not establish its contract. Without attached tests, documentation, or an explicit user requirement, do not call a surprising result a correctness bug, latent defect, or blocker. State the potential defect conditionally in the finding itself: if the intended contract requires a different result, this implementation would violate it; otherwise intent remains unknown.
 
 ${EVIDENCE_CITATION_RULES}`;
@@ -79,7 +80,7 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
   if (coverage?.requested.length) {
     lines.push(`Requested backend components: ${coverage.requested.join(", ")}.`);
     lines.push("Trace the actual request handler → authentication binding → input validation → persistence from attached source. Distinguish route families when their authentication differs; never merge their policies. Source rows are numbered with original line numbers. Cite only contiguous exact source, using numeric start:end:path fences of at most 20 lines; never combine nonadjacent blocks with ellipses or copy the row-number prefixes into code. Recommend only attached implementation files, honoring the requested reading-list count when evidence supports it. Do not explain typical framework behavior or guess imported implementations.");
-    if (coverage.missing.length) lines.push(`Unverified components: ${coverage.missing.join(", ")}. State this limit in 1–3 sentences and stop.`);
+    lines.push("Attached source bodies establish availability only. Evaluate every requested behavior from actual control flow; report unsupported components as unverified. Filenames, language/framework conventions, imports without implementations, and search matches never certify a component.");
   }
   const locateOnly = isLocateShapedRepoAsk(input.userFocus);
   if (locateOnly) {
@@ -89,23 +90,23 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
     );
   } else if (input.userFocus?.trim()) {
     lines.push(
-      "Answer the ## User focus ask first in the opening sentences. Then synthesize a **repository-wide** overview weighted toward that focus using `<repo_entry_files>`, `<graph_context>`, and manifest metadata in attached context. Do not use **Answer**, **Summary**, or **Your question** headings."
+      "Answer the ## User focus ask first in the opening sentences. Then give an overview scoped to the inspected bodies and admitted relationships, weighted toward that focus. A manifest is a file sample, not proof of repository-wide behavior. Do not use **Answer**, **Summary**, or **Your question** headings."
     );
     lines.push(
       "When the focus asks where something lives or how a flow works: the opening must name the attached files/symbols that answer that ask, before Architecture. If they also asked for files to read first: list the attached **domain** paths that support the answer — however many that is (2 is fine; 6 is fine). Do **not** pad to 5, repeat a file, or invent paths to fill a count. There is no official reading list. README / docker-compose / package.json only if that is the only evidence. Tests/migrations only if that is the only attached evidence. Never name a path that is not attached (no invented `models.py`). If the ask has multiple topics, cover each topic that has attached evidence. Architecture / Key subsystems FAIL if they are only compose service names (web, api, postgres, redis) with no domain path."
     );
     lines.push(
-      "If the focus asks where **the API** creates, writes, or rejects something: name attached serializer/view/handler/API paths in the opening. A frontend modal, store, or widget is not the API — do not call it that. If no API-layer files are attached, say the API path was not in attached evidence; never invent one."
+      "If the focus asks where **the API** creates, writes, or rejects something: name the attached implementation whose actual body performs that operation. A directory or filename does not establish an API or frontend role. If attached bodies do not establish the API implementation, state that it remains unverified; never invent a path."
     );
     lines.push(
-      "A `types.ts`, `interfaces/`, or `.d.ts` file defines shapes. It is not where a message is sent, handled, or dispatched. If the focus asks where something happens and the only attached files are type declarations, say the implementation path was not in attached evidence — do not name the types file as the send/handle path, and do not pad a reading list. If implementation files are attached, name those first."
+      "Determine declarations versus executed behavior from the attached body, never from a filename such as `types.ts`, a directory such as `interfaces/`, or an extension such as `.d.ts`. If attached bodies contain only declarations, state that the implementation remains unverified. If a body performs the requested operation, cite that implementation regardless of its path or language; do not pad a reading list."
     );
   } else {
     lines.push(
-      "Synthesize a **repository-wide** overview using `<repo_entry_files>`, `<graph_context>`, and manifest metadata in attached context."
+      "Synthesize an overview scoped to the inspected bodies and admitted relationships. A manifest is a file sample, not proof of repository-wide behavior."
     );
     lines.push(
-      "Architecture / Key subsystems FAIL if they are only compose service names (web, api, postgres, redis, minio) with no attached domain path under apps/, packages/, or src/. **Entry points** must be attached source files a new hire would open (auth, models, views, app routers) — not docker-entrypoint scripts, compose files, or AGENTS.md unless those are the only attached files."
+      "Architecture / Key subsystems FAIL if they are only compose service names (web, api, postgres, redis, minio) with no attached implementation evidence. **Entry points** must follow actual behavior in attached source files, anywhere in the repository and in any language. Deployment scripts and compose service names describe deployment only; they do not prove runtime architecture. AGENTS.md describes instructions only unless its own content establishes a different purpose."
     );
   }
   if (!locateOnly) {
@@ -170,6 +171,7 @@ export function buildRepoSummarySynthesisUserPrompt(input: RepoSummarySynthesisI
 
 function appendRepoSummaryCraftInstructions(lines: string[], summary: RepoSummaryEvidence): void {
   lines.push("## Grounding");
+  lines.push("- Repository totals come only from canonical repository inventory. Describe manifest counts only as sampled entries, even when they match an inventory count. Never call a manifest sample a repository-wide file count or use it to claim exhaustive coverage.");
   lines.push("- Open with what can be responsibly concluded from attached sources.");
   if (isGithubOnlyRepoSummaryEvidence(summary)) {
     lines.push(
@@ -258,7 +260,7 @@ export function formatRepoSummaryForPrompt(summary: RepoSummaryEvidence | Record
 
   const manifest = summary.manifest as Record<string, unknown> | undefined;
   if (manifest) {
-    const fileCount = manifest.fileCount ?? "unknown";
+    const sampledFileCount = manifest.fileCount ?? "unknown";
     const extensions = manifest.extensionBreakdown as Record<string, number> | undefined;
     const extLine = extensions
       ? Object.entries(extensions)
@@ -267,7 +269,7 @@ export function formatRepoSummaryForPrompt(summary: RepoSummaryEvidence | Record
           .map(([ext, count]) => `${ext}: ${count}`)
           .join(", ")
       : "unknown";
-    sections.push(`### Indexed manifest\n- Files: ${fileCount}\n- Extensions: ${extLine}`);
+    sections.push(`### Indexed manifest sample\n- Sampled entries: ${sampledFileCount}\n- Sample extensions: ${extLine}\n- This is a retrieval sample, never a repository total. Only Repository inventory can supply totals; missing totals are unavailable.`);
     const entryPoints = manifest.entryPoints as string[] | undefined;
     if (entryPoints?.length) {
       sections.push(`- Entry points: ${entryPoints.join(", ")}`);

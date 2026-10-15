@@ -54,10 +54,10 @@ const CATALOG: ModelDefinition[] = [
     label: "GPT-5.5",
     docsUrl: "https://developers.openai.com/api/docs/models/gpt-5.5",
     summary: "OpenAI’s flagship — best for the hardest reasoning and large edits.",
-    contextWindowTokens: 400_000,
+    contextWindowTokens: 1_050_000,
     pool: "frontier",
     usdPerMillionIn: 5,
-    usdPerMillionOut: 15
+    usdPerMillionOut: 30
   },
   {
     id: "gpt-5-mini",
@@ -231,6 +231,14 @@ export { INLINE_DEFAULT_MODEL_BY_PROVIDER } from "./inlineModelPresets";
 
 export function listCatalogModels(): ModelDefinition[] {
   return CATALOG.slice();
+}
+
+/** Pricing identity is stricter than display/routing alias recovery. Unknown
+ * suffixes (including Pro) never inherit another model's standard price. */
+export function getModelPricingDefinition(provider: LlmProvider, model: string): ModelDefinition | undefined {
+  const id = model.trim().toLowerCase();
+  const pricedId = provider === "openai" && id === "gpt-5.5-2026-04-23" ? "gpt-5.5" : id;
+  return CATALOG.find(entry => entry.provider === provider && entry.id === pricedId);
 }
 
 /** Providers shown in the global chat picker. Mistral (Codestral) and DeepSeek stay assigned-only. */

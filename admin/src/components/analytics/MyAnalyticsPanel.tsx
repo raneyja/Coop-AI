@@ -334,7 +334,7 @@ export function MyAnalyticsPanel() {
             </button>
           ))}
         </div>
-        <div className="mb-1 flex rounded-sm border border-coop-border">
+        <div className="mb-1 flex rounded-xs border border-coop-border">
           {(["7d", "30d", "90d"] as AnalyticsRange[]).map((option) => (
             <button
               key={option}

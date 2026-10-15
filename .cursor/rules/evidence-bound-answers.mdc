@@ -5,7 +5,9 @@ alwaysApply: true
 
 # Evidence-bound answers
 
-**Product law:** Answer only from **attached evidence for this turn**. When dependents, anchors, owners, docs, or bodies are missing, empty, or unverified: say that in **1–3 sentences and stop**. Thin evidence → short answer. Never pad.
+**Product law:** Coop's factual repository/integration claims must be supported by **admitted evidence for this turn**. When the requested fact or relation is missing, empty or unverified, state that limit briefly and omit unsupported sections. Preserve other useful supported findings when present; one missing evidence kind does not invalidate a different supported finding. Never pad or present a scoped hypothesis as an established fact.
+
+This governs product answer content, not the length of an authorized engineering plan/audit or whether its agent should continue work. A truthful unknown can pass an expected-unknown case; unnecessary abstention fails a supported-positive task. Private validation failures do not authorize publishing the rejected draft.
 
 ## Applies to
 
@@ -16,7 +18,7 @@ Blast Radius, Understand Repo, Knowledge Gaps, Trace Decision, Find Owner, plain
 | Evidence state | Answer shape |
 |----------------|--------------|
 | Confirmed dependents / rich anchors / owners / docs | Cite them; be dense enough to act |
-| Empty graph / unverified impact | “Unverified” + none confirmed — **stop**. No invented Direct impact / APIs / Testing from the file body |
+| Empty graph / unverified impact | State the impact limit briefly. Explain any actually admitted local behavior within its scope; do not invent dependents, inevitable impact or unrelated checklist sections |
 | Narrow Understand anchors | Low/partial confidence. Do **not** overfit the product story to one route or file |
 | L file only | Attached body only + honest-limit. No invented callers, serializers, NuGet, checklists |
 | Empty integration / hunt | Honest miss. Do not invent tickets, decisions, or paths |

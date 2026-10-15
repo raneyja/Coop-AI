@@ -1,7 +1,6 @@
 import type { DecisionTimeline } from "../types/decisionTimeline";
 import {
   appendCitationKeysSection,
-  appendEvidenceEnrichmentInstructions,
   appendEvidenceQualityInstructions,
   appendSourcesChecklistSection,
   appendSupplementarySourceCitationGuardrails,
@@ -34,14 +33,12 @@ export const DECISION_HISTORIAN_SYSTEM = `You are a code historian. You have bee
 
 Each evidence section is labeled with an exact citation key like \`[Sources: PR #1506]\` or \`[Sources: Slack #engineering]\`.
 
-Synthesize a clear narrative explaining:
-1. What was the business problem or technical need?
-2. What alternatives were considered and why were they rejected?
-3. What trade-offs were made?
-4. Are there known limitations or future improvements noted?
-5. Which people participated in the attached historical evidence?
-6. What is the current **Decision status** (active, superseded, or unclear from evidence)?
-7. **Who to engage** — name possible contacts with their observed evidence role (authors, approvers, thread participants), not generic role titles.
+Answer the user's question with a short trace, separating these evidence kinds:
+1. **Current observations** — only behavior directly visible in the selected current source, with its actual conditions and scope. Attribute comments as comments; they do not verify another file, whether a proposed improvement remains unimplemented, or organizational intent.
+2. **Recorded history** — attribute exact commit/PR/discussion accounts to their source and time. A title or message describes that record, not the exact guard/function it introduced. Claim a particular code addition only when an attached relevant target patch establishes it; bounded history and a patch still do not prove original introduction unless independently verified.
+3. **Unknowns** — state briefly what the attached evidence cannot establish about rationale, rejected alternatives, trade-offs, decision status, or current responsibility. Do not fill these gaps with a design story inferred from the present code or multiple sampled commits.
+
+Use only the partitions needed for the ask. Within recorded history, explain a business problem, rejection reason or accepted trade-off only when the original source explicitly records it. **Who to engage** may name possible contacts with their observed evidence role (authors, approvers, thread participants), not generic role titles.
 
 Contact evidence is sampled historical participation, not verified current ownership, expertise, availability, or an exhaustive contact roster. Even when one person authored every attached commit, do not call them the only person to engage, the sole expert, or the required approver. Suggest that observed participant as a possible starting point; current responsibility and other contacts remain unknown unless an attached current ownership policy explicitly establishes them.
 
@@ -52,13 +49,14 @@ If warnings say history for the target file is thin, truncated, or missing, say 
 ${OUT_OF_SCOPE_MENTIONS_SYSTEM_RULE}
 
 ${EVIDENCE_CITATION_RULES}
+Source presence and ranking are retrieval hints, not proof of a decision rationale. An approval records approval, not why a choice was made. A source title, link, identifier, or arbitrary quote cannot establish alternatives or trade-offs; use only the attached body and preserve what it actually says. Choosing Y instead of X does not state a reason for rejecting X. Document titles without excerpts establish only a search result, not an ADR or its contents.
 State confidence when evidence is thin. Keep answers concise — limited evidence warrants short sections, not speculative essays.
-Historical commits and discussions describe the decision at that time. Declare it active only when the selected current source independently supports the same behavior. If current source is absent or conflicts with the historical account, say current status is unverified or changed; do not infer continuity from a commit title.
-Follow-up questions use the same required section structure; omit sections the user did not ask about when they have no evidence.
-For **Alternatives considered** and **Trade-offs**, ground every claim in a PR review comment, Slack/Jira/Teams message, or extracted alternative — quote or paraphrase with plain provenance (e.g. "PR #1506 review by @alice"). If no discussion source documents options, write unknown — never invent them.
+Historical commits and discussions describe their account at that time. Current code can show a behavior remains present, but that does not establish the design decision is active, approved, or superseded. **Decision status** is optional; without an explicit current decision record, say status is unverified. A latest sampled date does not establish the last change or exhaust all activity.
+Follow-up questions use the same evidence partitions; omit sections the user did not ask about when they have no evidence.
+For **Alternatives considered** and **Trade-offs**, ground every claim in original attached PR review, Slack/Jira/Teams or decision-document text — quote or paraphrase with plain provenance (e.g. "PR #1506 review by @alice"). Extracted alternatives and rankings are navigation hints, not independent proof. If no original source documents options, write unknown — never invent them.
 When only a sampled commit is attached (no PR, Slack, Jira, or design doc), say alternatives and trade-offs are unknown — never invent them.
 When enriched fields are attached (targetLabel, introducingDiffSummary, evolution, rationaleRanking, focusCommit), use them per the Evidence enrichment section in the user prompt.
-When a user focus ask is present, prefer commits/PRs that match that ask and the open file over a generic recent multi-file change. Otherwise, for full-file traces without a specific ask, lead Summary / Technical decision with recent evolution and focusCommit; treat originalCommit as a sampled provenance anchor. Bounded path history and selected-line blame do not prove when a file or requested function was introduced. A rename is not an introduction; use fileChange and the patch to describe only the observed change.`;
+When a user focus ask is present, prefer commits/PRs that match that ask and the open file over a generic recent multi-file change. For full-file traces, focusCommit and evolution select sampled historical accounts to attribute, not a confirmed recent decision story; treat originalCommit as a sampled provenance anchor. Bounded path history and selected-line blame do not prove when a file or requested function was introduced. A rename is not an introduction; use fileChange and the patch to describe only the observed change.`;
 
 export type DecisionSynthesisInput = {
   timeline: DecisionTimeline;
@@ -125,7 +123,12 @@ export function buildDecisionSynthesisUserPrompt(input: DecisionSynthesisInput):
     supplementaryKeysOmittedFromChecklist(citationKeys, sourcesChecklist)
   );
   appendEvidenceQualityInstructions(lines);
-  appendEvidenceEnrichmentInstructions(lines, hasDecisionEnrichment(timeline));
+  if (hasDecisionEnrichment(timeline)) {
+    lines.push("## Evidence enrichment");
+    lines.push("- Target labels, focus/evolution selection, chronology, rationale ranking and diff summaries guide retrieval only. Do not turn them into a recent decision story, current decision status, complete activity record, or code-introduction claim.");
+    lines.push("- Attribute exact original commit/PR/discussion text. A relevant target patch may establish its observed changed lines, not original introduction; aggregate diff counts and a commit title cannot establish which current guard/function was added. A rename is not an introduction.");
+    lines.push("");
+  }
   appendAlternativesTradeOffGuidance(lines, timeline);
   if (input.isFollowUp) {
     appendFollowUpInstructions(lines, input.userBubble ?? userQuestion);
@@ -135,7 +138,7 @@ export function buildDecisionSynthesisUserPrompt(input: DecisionSynthesisInput):
   );
   if (!input.isFollowUp) {
     lines.push(
-      "Produce a short trace for the primary file (opening + at most 3 topic headings such as Technical decision) — do not collapse the answer to only alternatives or trade-offs."
+      "Produce a short trace for the primary file (opening + at most 3 evidence partitions) — do not collapse the answer to only alternatives or trade-offs."
     );
   }
   if (input.userFocus?.trim()) {
@@ -147,9 +150,12 @@ export function buildDecisionSynthesisUserPrompt(input: DecisionSynthesisInput):
     "If the attached sources warn that history for this file is thin/truncated/missing, say that plainly for this file — never substitute a different migration or model file as the main subject."
   );
   lines.push(
-    "Include **Decision status** (active / superseded / unclear) and **Who to engage** when evidence supports it — cite approvers, authors, or thread participants as possible contacts with their observed roles. A single author across sampled commits does not establish an exclusive contact, sole expert, required approver, or current owner; current responsibility and other contacts remain unknown without an attached current ownership policy."
+    "Separate **Current observations**, exact attributed **Recorded history**, and **Unknowns** as needed. Recent/focus commits, rationale rankings, chronology narratives and aggregate diff summaries are navigation hints, not proof of a code addition or motivation. Only a relevant attached target patch can support a specific guard/function addition; quote a commit title as its title instead of mapping it to current code. Comments support their attributed statements, not verified current duplication, unimplemented improvements or accepted design trade-offs."
   );
-  lines.push("Follow the required response structure in your system instructions.");
+  lines.push(
+    "Do not force **Decision status** to active/superseded: current code presence and a recent sampled commit do not establish decision approval or exhaustive last activity. **Who to engage** may cite approvers, authors, or thread participants as possible contacts with their observed roles. A single author across sampled commits does not establish an exclusive contact, sole expert, required approver, or current owner; current responsibility and other contacts remain unknown without an attached current ownership policy."
+  );
+  lines.push("Follow the evidence partitions in your system instructions. Prefer fewer supported claims over a complete-looking speculative story.");
 
   return lines.join("\n");
 }
@@ -183,20 +189,23 @@ function appendFollowUpInstructions(lines: string[], userQuestion: string | unde
 
 function appendAlternativesTradeOffGuidance(lines: string[], timeline: DecisionTimeline): void {
   const hasDiscussion =
-    Boolean(timeline.linkedPR) ||
-    Boolean(timeline.slackThread) ||
-    Boolean(timeline.teamsThread) ||
-    (timeline.jiraTickets?.length ?? 0) > 0 ||
-    timeline.alternatives.length > 0;
+    Boolean(timeline.linkedPR?.description?.trim()) ||
+    (timeline.linkedPR?.reviews.some(review => review.body.trim()) ?? false) ||
+    (timeline.slackThread?.messages.some(message => message.text.trim()) ?? false) ||
+    (timeline.teamsThread?.messages.some(message => message.text.trim()) ?? false) ||
+    (timeline.jiraTickets?.some(ticket => ticket.description.trim() || ticket.acceptanceCriteria.some(text => text.trim())) ?? false) ||
+    (timeline.integrationSearch?.confluence?.pages.some(page => page.excerpt?.trim()) ?? false) ||
+    (timeline.integrationSearch?.slack?.messages.some(message => message.text.trim()) ?? false) ||
+    (timeline.integrationSearch?.teams?.messages.some(message => (message.text ?? message.body ?? "").trim()) ?? false);
   lines.push("## Alternatives / trade-offs guidance");
   if (hasDiscussion) {
     lines.push(
-      "- Before stating any alternative or trade-off, quote or paraphrase the PR review, Slack/Jira/Teams message, or extracted alternative — use plain provenance in narrative (e.g. PR #1506 review by @alice); reserve `[Sources: …]` labels for **Sources**."
+      "- Before stating any alternative or trade-off, quote or paraphrase the original attached PR review, Slack/Jira/Teams message or decision-document excerpt — use plain provenance in narrative (e.g. PR #1506 review by @alice); reserve `[Sources: …]` labels for **Sources**. Extracted alternatives are hints to inspect the original text, not independent evidence."
     );
     lines.push("- Do not list options or trade-offs that no attached discussion source mentions.");
   } else {
     lines.push(
-      "- Bundle has no PR, Slack, Teams, Jira, or extracted alternatives — **Alternatives considered** and **Trade-offs** must say unknown or not documented (one line each)."
+      "- Bundle has no original attached discussion body — **Alternatives considered** and **Trade-offs** must say unknown or not documented (one line each). Metadata, approvals and extracted alternatives do not fill that gap."
     );
     lines.push("- Do not infer generic trade-offs from software best practices or the sampled commit alone.");
   }
@@ -245,10 +254,10 @@ export function formatTimelineForPrompt(timeline: DecisionTimeline): string {
         )
         .join("\n") ?? "";
     sections.push(
-      "### Sampled file evolution (lead with this for full-file traces)\n" +
+      "### Sampled file evolution (historical accounts, not exhaustive activity)\n" +
         `- Sampled later commits: ${evolution.commitCountSinceIntroduction}` +
-        (evolution.lastModifiedAt ? `\n- Last modified: ${evolution.lastModifiedAt}` : "") +
-        (evolution.lastModifiedAuthor ? `\n- Last modifier: ${evolution.lastModifiedAuthor}` : "") +
+        (evolution.lastModifiedAt ? `\n- Latest sampled change: ${evolution.lastModifiedAt}` : "") +
+        (evolution.lastModifiedAuthor ? `\n- Latest sampled author: ${evolution.lastModifiedAuthor}` : "") +
         (recentLines ? `\n- Recent commits:\n${recentLines}` : "")
     );
   }
@@ -258,7 +267,7 @@ export function formatTimelineForPrompt(timeline: DecisionTimeline): string {
     const isRecentFocus =
       timeline.originalCommit && focus.sha !== timeline.originalCommit.sha;
     sections.push(
-      `### ${isRecentFocus ? "Recent decision commit" : decisionSourceLabelCommit(focus.sha)}\n` +
+      `### ${isRecentFocus ? "Recent sampled commit" : decisionSourceLabelCommit(focus.sha)}\n` +
         `- SHA: ${focus.sha.slice(0, 12)}\n- Author: ${focus.author}\n- Date: ${focus.date}\n- Message:\n${focus.message}`
     );
   } else if (timeline.fallbackMessage) {
@@ -302,11 +311,11 @@ export function formatTimelineForPrompt(timeline: DecisionTimeline): string {
   if (timeline.rationaleRanking?.length) {
     const primaryRationale = timeline.rationaleRanking.find((entry) => entry.role === "rationale");
     sections.push(
-      "### Rationale ranking\n" +
+      "### Rationale ranking (candidate sources; attached body must establish the reason)\n" +
         timeline.rationaleRanking
           .map((entry) => {
             const primary =
-              primaryRationale && entry.source === primaryRationale.source ? " (primary rationale source)" : "";
+              primaryRationale && entry.source === primaryRationale.source ? " (primary rationale source candidate)" : "";
             return `- ${entry.label} — ${entry.role}${primary} [${entry.source}]`;
           })
           .join("\n")

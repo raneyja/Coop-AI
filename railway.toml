@@ -6,8 +6,8 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "node dist/webhookServer.js"
-preDeployCommand = "node scripts/run-migrations.mjs"
+startCommand = "/usr/local/bin/coop-runtime-entrypoint node dist/webhookServer.js"
+preDeployCommand = "/usr/local/bin/coop-runtime-entrypoint node scripts/run-migrations.mjs"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"

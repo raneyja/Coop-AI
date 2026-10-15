@@ -92,6 +92,17 @@ test("path:range locator parses Cursor form", () => {
   assert.equal(locator?.path, "apps/space/components/issues/issue-layouts/utils.tsx");
 });
 
+test("explicit coordinates support arbitrary file names without promoting bare prose", () => {
+  for (const parse of [tryParseCitationLocator, adminLocator, websiteLocator]) {
+    for (const path of ["customconfig", "nested/opaque", "λ/設定", "file with spaces", "./nested/opaque"]) {
+      assert.deepEqual(parse(`7:8:${path}`), { path: path.replace(/^\.\//, ""), startLine: 7, endLine: 8 });
+    }
+    for (const rejected of ["1:2:../source.ts", "1:2:src/../source.ts", "1:2:src//file", "1:2:src/./file", "1:2:source\u0000", "1:2:file`name", "1:2:file|name", "9007199254740992:9007199254740992:src/x.ts", "customconfig", "typescript"]) {
+      assert.equal(parse(rejected), null, rejected);
+    }
+  }
+});
+
 test("backtick-wrapped numeric locator parses", () => {
   const locator = tryParseCitationLocator(
     "`1:11:apps/web/core/components/issues/issue-layouts/filters/applied-filters/state-group.tsx`"

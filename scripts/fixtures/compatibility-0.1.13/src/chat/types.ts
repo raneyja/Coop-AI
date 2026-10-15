@@ -1,0 +1,1065 @@
+import type { IdentityDirectory } from "../identity/types";
+
+export const VIEW_ID = "coopAI.sidebar";
+export const CHAT_PANEL_VIEW_TYPE = "coopAI.chatEditor";
+export const SETTINGS_PANEL_VIEW_TYPE = "coopAI.settings";
+export const SECRET_KEY_API_TOKEN = "coopAI.apiToken";
+export const SECRET_KEY_REFRESH_TOKEN = "coopAI.refreshToken";
+export const CACHE_TTL_MS = 5 * 60 * 1000;
+export const DEFAULT_API_BASE = "https://api.coop-ai.dev";
+
+export type ThemeMode = "light" | "dark" | "high-contrast";
+
+export type CodeHostProviderPreference = "github" | "gitlab" | "bitbucket";
+
+export type DecisionIntegrationProvider = "slack" | "jira" | "teams";
+export type DocIntegrationProvider = "confluence" | "notion" | "google-docs";
+export type IntegrationChatProvider = DecisionIntegrationProvider | DocIntegrationProvider;
+
+export type RepoContextFileSource = "workspace" | "git" | "remote" | "external";
+
+export type ProjectInstructionsStatus = "loaded" | "missing" | "disabled" | "no_git";
+
+export type ProjectInstructionsState = {
+  status: ProjectInstructionsStatus;
+  /** Repo root when git-backed workspace is open. */
+  gitRoot?: string;
+  /** Instruction file paths loaded on each chat turn. */
+  sources?: string[];
+  /** True when AGENTS.md will be loaded (Use-repo file or this account's upload). */
+  hasAgentsMd?: boolean;
+  /** Basename of a user-attached AGENTS.md file, when set. */
+  attachedAgentsMdLabel?: string;
+  /** repo = Use-repo file; attached = this signed-in account's upload/create. */
+  source?: "repo" | "attached";
+  /** Signed-in account can create, upload, or remove a personal file (no Use-repo). */
+  canMutate?: boolean;
+};
+
+/** Settings-visible fact. Injected only when `source` is non-empty. */
+export type VisibleMemoryFact = {
+  id: string;
+  text: string;
+  source: string;
+  repoId?: string;
+  createdAt: number;
+};
+
+export type RepoContext = {
+  repoSelectionPending?: boolean;
+  provider?: CodeHostProviderPreference;
+  owner?: string;
+  repo?: string;
+  branch?: string;
+  scope?: "repo" | "file";
+  file?: string;
+  /** How `file` was chosen — GitHub features need workspace or git, not a loose Cmd+O path. */
+  fileSource?: RepoContextFileSource;
+  contextWarning?: string;
+  selectedLines?: [number, number];
+  /** Symbol at cursor/selection when available (for manifest scoring). */
+  selectedSymbol?: string;
+  /** Repo-relative paths for open editor tabs. */
+  openEditors?: string[];
+  languageId?: string;
+  projectInstructions?: ProjectInstructionsState;
+};
+
+export type ChatImageAttachment = {
+  id: string;
+  name: string;
+  mimeType: string;
+  dataUrl: string;
+};
+
+export type ChatFileMention = {
+  repoId: string;
+  path: string;
+  lines?: [number, number];
+  /** Search snippet when picked from @ menu (optional). */
+  snippet?: string;
+  /** Whether the mention came from local workspace search or indexed graph search. */
+  source?: "local" | "indexed";
+};
+
+export type SearchScopeMode = "repo" | "indexed" | "org" | "collection";
+
+export type ComposerMode = "ask" | "edit";
+
+/** Chip on a clarifying assistant turn (plain-chat → quick-action suggest). */
+export type ChatSuggestChip = {
+  kind: "quick-action" | "plain";
+  /** QuickActionId when kind is quick-action. */
+  actionId?: string;
+  label: string;
+};
+
+export type ChatSuggestPayload = {
+  /** Original user focus text to pass into the chosen pipeline. */
+  focus: string;
+  chips: ChatSuggestChip[];
+  /** True after the user picks a chip or sends a new message. */
+  resolved?: boolean;
+};
+
+export type ChatTurnActivityTodo = {
+  id: string;
+  content: string;
+  status: "pending" | "in_progress" | "completed";
+  /** Expandable hit list / error under a real search row. */
+  detail?: string;
+};
+
+export type ChatTurnActivityTool = {
+  id: string;
+  kind: "search" | "read" | "explore" | "generic";
+  label: string;
+  status: "active" | "done";
+};
+
+export type ChatTurnActivityFile = {
+  path: string;
+  action: "read" | "searched" | "explored";
+};
+
+/** Cursor-style trail persisted on an assistant message after the turn finishes. */
+export type ChatTurnActivity = {
+  durationMs: number;
+  thinkingMs?: number;
+  thinkingText?: string;
+  tools: ChatTurnActivityTool[];
+  files: ChatTurnActivityFile[];
+  steps?: ChatTurnActivityTodo[];
+};
+
+export type ChatMessage = {
+  /** Validated source turns keep anonymous examples separate from explicit quotes. */
+  sourceCitationMode?: "explicit";
+  clientSubmissionId?: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  /** Full payload sent to the model for this user turn (may differ from visible bubble). */
+  modelContent?: string;
+  /** Display history is retained, but stopped instructions must never be replayed. */
+  cancelled?: boolean;
+  timestamp: number;
+  links?: Array<{ label: string; url: string }>;
+  attachments?: ChatImageAttachment[];
+  relatedArtifactId?: string;
+  /** Clarifying suggest chips under an assistant message. */
+  suggest?: ChatSuggestPayload;
+  /** Collapsed “Worked for…” trail. Display-only — never sent back to the model. */
+  activity?: ChatTurnActivity;
+  /** Display-only patch decision, retained through window reload. */
+  patchCard?: PatchCardState;
+};
+
+/** Serializable evidence card stored with chat thread history. */
+export type ChatPersistedArtifact = {
+  id: string;
+  kind:
+    | "decision"
+    | "ownership"
+    | "repo-summary"
+    | "blast-radius"
+    | "knowledge-gaps"
+    | "integration";
+  timestamp: number;
+  payload: Record<string, unknown>;
+};
+
+export type ChatHistoryPayload = {
+  threadId?: string;
+  revision?: number;
+  messages: ChatMessage[];
+  artifacts: ChatPersistedArtifact[];
+  /** Restored with the thread so /edit chrome is not lost on reopen. */
+  patchCards?: PatchCardState[];
+  suppressedMessageTimestamps?: number[];
+};
+
+export type PatchDiffLineKind = "context" | "remove" | "add";
+
+export type PatchDiffLine = {
+  kind: PatchDiffLineKind;
+  text: string;
+  lineNumber?: number;
+};
+
+export type PatchPreviewHunkStatus = "pending" | "applied" | "rejected";
+
+/** One SEARCH hit when the same block matches multiple places in a file. */
+export type PatchMatchLocation = {
+  id: string;
+  /** 1-based start line in the current file. */
+  startLine: number;
+  /** 1-based end line (inclusive) of the SEARCH match. */
+  endLine: number;
+  /** Context + remove/add lines for this location. */
+  lines: PatchDiffLine[];
+  /** User chose this location for Apply. */
+  selected?: boolean;
+};
+
+/** Competing edit that could apply at a shared file location. */
+export type PatchMatchProposal = {
+  id: string;
+  hunkId: string;
+  /** Index into findAllSearchMatches for this SEARCH. */
+  matchIndex: number;
+  lines: PatchDiffLine[];
+};
+
+/**
+ * Unique place in a file when several patch hunks share the same ambiguous SEARCH.
+ * At most one proposal may be selected per location.
+ */
+export type PatchSharedMatchLocation = {
+  id: string;
+  startLine: number;
+  endLine: number;
+  proposals: PatchMatchProposal[];
+  selectedProposalId?: string;
+};
+
+export type PatchSharedMatchGroup = {
+  id: string;
+  hunkIds: string[];
+  locations: PatchSharedMatchLocation[];
+};
+
+export type PatchPreviewHunk = {
+  id: string;
+  lines: PatchDiffLine[];
+  matchStatus: "matched" | "not_found" | "ambiguous";
+  /** Present when matchStatus is ambiguous — user picks one or more. */
+  matchLocations?: PatchMatchLocation[];
+  /**
+   * When SEARCH is still ambiguous in the file but this hunk was paired to
+   * specific match index(es). Apply must use these indices.
+   */
+  resolvedMatchIndices?: number[];
+  /** Per-edit review state — defaults to pending when omitted. */
+  status?: PatchPreviewHunkStatus;
+  /** Class.method (or function) that contains this edit. */
+  anchorLabel?: string;
+  /** 1-based SEARCH start in the file. */
+  startLine?: number;
+  /** 1-based SEARCH end (inclusive). */
+  endLine?: number;
+};
+
+export type PatchPreviewFile = {
+  relativePath: string;
+  hunks: PatchPreviewHunk[];
+  /**
+   * When multiple hunks share one ambiguous SEARCH and cannot be 1:1 paired,
+   * locations are listed once here (checkbox = file place; proposal = which edit).
+   */
+  sharedMatchGroups?: PatchSharedMatchGroup[];
+};
+
+export type PatchCardStatus = "idle" | "pending" | "applied" | "failed" | "undone" | "rejected";
+
+export type PatchCardState = {
+  status: PatchCardStatus;
+  messageTimestamp?: number;
+  /** Frozen at generation; actions must not borrow the current Use-repo. */
+  targetRepo?: { owner: string; repo: string; provider: CodeHostProviderPreference; branch?: string };
+  /** Frozen local-file scope, including after changing the active chat context. */
+  preferLocalDisk?: boolean;
+  fileCount: number;
+  hunkCount: number;
+  files: PatchPreviewFile[];
+  error?: string;
+  appliedFileCount?: number;
+  canUndo?: boolean;
+  /**
+   * True after a successful Apply on Use-repo / remote work with file bodies.
+   * Local-file Apply leaves this false and sets `prBlockedReason`.
+   * The button stays a coop-text-btn, not a new primary row.
+   */
+  canCreatePr?: boolean;
+  /** Set at Apply. Local-file work keeps the button visible and disabled. */
+  prBlockedReason?: "local-file";
+  /**
+   * Once a patch card has been shown for this assistant message, keep hiding the raw
+   * SEARCH/REPLACE fence for that message.
+   */
+  suppressMarkdown?: boolean;
+  /**
+   * Every assistant message timestamp that has ever had a patch card this session.
+   * Used so earlier messages keep raw markdown hidden even after newer /edit cards appear.
+   */
+  suppressedMessageTimestamps?: number[];
+  /**
+   * Full file bodies for a confirmed Create PR (fixture in Wave 2 C; B apply session at Join).
+   * Paths without content are blocked — never an empty commit.
+   */
+  prFiles?: Array<{ path: string; content: string }>;
+};
+
+export type PatchCardsUpdatePayload = {
+  cards: PatchCardState[];
+  activeMessageTimestamp?: number;
+  suppressedMessageTimestamps?: number[];
+};
+
+export type ChatThreadListItem = {
+  id: string;
+  title: string;
+  updatedAt: number;
+  messageCount: number;
+  /** Generation still running after the user switched away. */
+  isRunning?: boolean;
+};
+
+export type ChatThreadsListPayload = {
+  activeId: string;
+  activeTitle: string;
+  threads: ChatThreadListItem[];
+};
+
+export type LlmProviderPreference = "openai" | "anthropic" | "deepseek" | "gemini" | "mistral";
+
+export type UserPreferences = {
+  model: string;
+  llmProvider: LlmProviderPreference;
+  temperature: number;
+  maxTokens: number;
+  llmEnabled: boolean;
+  autocompleteEnabled: boolean;
+  useCachedResponses: boolean;
+  includeSelection: boolean;
+  includeActiveFile: boolean;
+  apiBaseUrl: string;
+  owner: string;
+  repo: string;
+  branch: string;
+  isSignedIn: boolean;
+  /** @deprecated Use isSignedIn */
+  hasApiKey: boolean;
+  defaultCodeHost: CodeHostProviderPreference;
+  gitlabBaseUrl: string;
+  hasGitHubToken: boolean;
+  hasGitHubAppInstalled: boolean;
+  githubNeedsReconnect?: boolean;
+  devMode: boolean;
+  orgName?: string;
+  /** Signed-in account email from /v1/me (when available). */
+  userEmail?: string;
+  plan?: "free" | "pro" | "enterprise";
+  usageTier?: "pro" | "pro_plus" | "max" | null;
+  pendingSeatUpgrade?: {
+    id: string;
+    fromTier: string;
+    toTier: string;
+    createdAt?: string;
+  };
+  incomingSeatUpgradeRequests?: Array<{
+    id: string;
+    memberEmail: string;
+    fromTier: string;
+    toTier: string;
+    createdAt?: string;
+  }>;
+  usageMeters?: {
+    usageTier: "pro" | "pro_plus" | "max";
+    displayName: string;
+    seatPriceUsd: number;
+    periodStart: string;
+    periodEnd: string;
+    usedCents: number;
+    limitCents: number;
+    remainingCents: number;
+    usedRatio: number;
+    auto: { usedCents: number; limitCents: number; remainingCents: number; usedRatio: number };
+    frontier: { usedCents: number; limitCents: number; remainingCents: number; usedRatio: number };
+    nextTier?: "pro" | "pro_plus" | "max";
+    nextTierName?: string;
+    nextTierPriceUsd?: number;
+  };
+  userRole?: string;
+  authMethod?: "api_key" | "sso_session" | "password" | "google_oauth";
+  canInstallIntegrations?: boolean;
+  onboardingCompleted?: boolean;
+  adminPortalUrl?: string;
+  integrationHealthSummary?: {
+    connected: number;
+    scopeRequired: number;
+  };
+  orgIntegrationStatuses?: import("./integrationStatusTypes").OrgIntegrationStatusEntry[];
+  hasGitLabToken: boolean;
+  hasGitLabAppInstalled: boolean;
+  hasBitbucketCredentials: boolean;
+  hasBitbucketAppInstalled: boolean;
+  hasSlackToken: boolean;
+  hasSlackInstalled: boolean;
+  slackNeedsReconnect?: boolean;
+  slackTeamName?: string;
+  hasAtlassianInstalled: boolean;
+  atlassianSiteName?: string;
+  hasJiraCredentials: boolean;
+  hasTeamsInstalled: boolean;
+  teamsDisplayName?: string;
+  hasTeamsToken: boolean;
+  hasConfluenceCredentials: boolean;
+  hasNotionInstalled: boolean;
+  notionWorkspaceName?: string;
+  hasNotionToken: boolean;
+  hasGoogleDocsInstalled: boolean;
+  googleDocsDisplayName?: string;
+  hasGoogleDocsToken: boolean;
+  jiraBaseUrl: string;
+  confluenceBaseUrl: string;
+  searchScopeMode: SearchScopeMode;
+  searchCollectionId: string;
+  workspaceRepoIds?: string[];
+  workspaceRepoCount?: number;
+  workspaceRepoLimit?: number | null;
+  canAddMoreWorkspaceRepos?: boolean;
+  primaryWorkspaceRepoId?: string;
+  repoAccessMode?: "all_indexed" | "per_user";
+  adminControlledRepos?: boolean;
+  /** IANA timezone id; defaults to US Pacific (PST). */
+  timezone?: string;
+  quotaCredits?: {
+    usedRatio: number;
+    exhausted?: boolean;
+    nearLimit?: boolean;
+    blockedWindow?: "cycle" | "week";
+    windowHours: number;
+    resetsAt: string;
+    retryAfterMs: number;
+  };
+};
+
+export type SettingsStatePayload = UserPreferences & {
+  identityDirectory: IdentityDirectory;
+  projectInstructions?: ProjectInstructionsState;
+  /** Visible/clearable facts (Settings only — not chat chrome). */
+  visibleMemory?: VisibleMemoryFact[];
+};
+
+export type ChatUsagePayload = {
+  inputTokens: number;
+  outputTokens: number;
+  estimatedCostUsd: number;
+  provider: string;
+  model: string;
+  sessionCostUsd: number;
+};
+
+export type WorkspacePromptSummary = {
+  id: string;
+  title: string;
+  template?: string;
+  actionId?: string;
+};
+
+export type PromptLibraryListPayload = {
+  prompts: WorkspacePromptSummary[];
+  pinnedIds: string[];
+  hasWorkspace: boolean;
+};
+
+export type IntentFeedbackState = {
+  status: "idle" | "loading" | "warning" | "rate-limited" | "complete" | "error";
+  intent?: string;
+  actionId?: string;
+  title: string;
+  message?: string;
+  /** Rotating status lines while context is loading. */
+  activityMessages?: string[];
+  progress?: number;
+  stale?: boolean;
+};
+
+export type ConflictActionId = "accept-authoritative" | "dismiss" | "escalate";
+
+export type ConflictSummary = {
+  id: string;
+  type: string;
+  severity: "low" | "medium" | "high" | "critical";
+  title: string;
+  message: string;
+  recommendation: string;
+  authoritative: {
+    source: string;
+    value: unknown;
+    score: number;
+    reason: string;
+  };
+  alternatives: Array<{
+    source: string;
+    value: unknown;
+    score: number;
+  }>;
+  actionRequired: boolean;
+  detectedAt: string;
+  file?: string;
+  repoId?: string;
+};
+
+export type ConflictResolutionState = {
+  status: "idle" | "detected" | "resolved";
+  conflicts: ConflictSummary[];
+  updatedAt: string;
+};
+
+export type DegradationNotificationPayload = {
+  id: string;
+  severity: "info" | "warning" | "critical";
+  title: string;
+  message: string;
+  provider?: string;
+  feature?: string;
+  action?: "retry" | "refresh";
+};
+
+export type JobProgressPayload = {
+  jobId: string;
+  status: "queued" | "running" | "completed" | "failed" | "cancelled" | "partial";
+  title: string;
+  message?: string;
+  progress: number;
+  estimatedWaitTime?: string;
+  estimatedTimeRemaining?: string;
+  /** Chat answer is the deliverable — hide terminal scan-complete UI. */
+  deliverable?: "chat" | "standalone";
+  /** Dev-only: allow opening raw JSON job output. */
+  showViewResults?: boolean;
+  resultSummary?: {
+    foundGaps?: number;
+    highPriority?: number;
+    mediumPriority?: number;
+    lowPriority?: number;
+  };
+};
+
+export type WebviewInbound =
+  | { type: "webview-ready" }
+  | {
+      type: "chat:send";
+      payload: {
+        clientSubmissionId?: string;
+        message: string;
+        quickAction?: string;
+        savedPromptId?: string;
+        attachments?: ChatImageAttachment[];
+        mentions?: ChatFileMention[];
+        historyContent?: string;
+        slashUserArgs?: string;
+        /** Scope a quick action to a repository path (e.g. anchor file from a Sources card). */
+        targetFile?: string;
+      };
+    }
+  | {
+      type: "chat:suggest-resolve";
+      payload: { choice: "plain" } | { choice: "action"; actionId: string };
+    }
+  | { type: "mention:search"; payload: { pattern: string } }
+  | { type: "collections:list-request" }
+  | { type: "prompts:list-request" }
+  | {
+      type: "prompts:run";
+      payload: {
+        id: string;
+        mentions?: ChatFileMention[];
+        attachments?: ChatImageAttachment[];
+        /** Optional composer text to prepend to the saved template. */
+        composerText?: string;
+      };
+    }
+  | { type: "prompts:save"; payload: { title: string; template: string; actionId?: string } }
+  | { type: "prompts:update"; payload: { id: string; title: string; template: string; actionId?: string } }
+  | { type: "prompts:delete"; payload: { id: string } }
+  | { type: "prompts:update-pinned"; payload: { pinnedIds: string[] } }
+  | {
+      type: "prompts:commit";
+      payload: {
+        prompts: { id: string; title: string; template: string; actionId?: string }[];
+        pinnedIds: string[];
+      };
+    }
+  | { type: "job:cancel"; payload: { jobId: string } }
+  | { type: "job:view-results"; payload: { jobId: string } }
+  | { type: "chat:stream-cancel" }
+  | { type: "chat:new" }
+  | { type: "chat:clear" }
+  | { type: "threads:switch"; payload: { threadId: string } }
+  | { type: "threads:new" }
+  | { type: "threads:draft"; payload: { threadId: string; text: string } }
+  | {
+      type: "repo:list";
+      payload: {
+        path?: string;
+        scope?: "repos" | "files";
+        owner?: string;
+        repo?: string;
+        branch?: string;
+        provider?: CodeHostProviderPreference;
+        /** When true, load tree without changing chat workspace context. */
+        ephemeral?: boolean;
+      };
+    }
+  | {
+      type: "repo:search";
+      payload: {
+        query: string;
+        owner?: string;
+        repo?: string;
+        branch?: string;
+        provider?: CodeHostProviderPreference;
+        ephemeral?: boolean;
+      };
+    }
+  | { type: "repo:select"; payload: { provider: CodeHostProviderPreference; owner: string; repo: string; branch?: string } }
+  | { type: "repo:open-repo"; payload: { provider: CodeHostProviderPreference; owner: string; repo: string; branch?: string } }
+  | { type: "repo:open-file"; payload: { path: string; line?: number; endLine?: number; preserveContext?: boolean } }
+  | { type: "link:open"; payload: { url: string } }
+  | { type: "github:repos:list"; payload?: { query?: string; requestId?: string } }
+  | { type: "workspace:repos:save"; payload: { repoIds: string[] } }
+  | { type: "workspace:repos:load" }
+  | { type: "settings:update"; payload: Partial<UserPreferences> }
+  | { type: "settings:update-api-key"; payload: { apiKey: string } }
+  | { type: "settings:clear-api-key" }
+  | { type: "settings:copy-api-key" }
+  | { type: "settings:reveal-api-key" }
+  | { type: "settings:sign-in-password"; payload: { email: string; password: string } }
+  | { type: "settings:sign-in-google" }
+  | { type: "settings:forgot-password"; payload: { email: string } }
+  | { type: "settings:sign-in-sso"; payload?: { org?: string } }
+  | { type: "settings:sign-out" }
+  | { type: "settings:test-connection" }
+  | { type: "settings:complete-onboarding" }
+  | { type: "settings:request-seat-upgrade"; payload: { usageTier: "pro_plus" | "max" } }
+  | { type: "settings:convert-own-seat"; payload: { usageTier: "pro_plus" | "max" } }
+  | { type: "billing:upgrade-to-pro" }
+  | { type: "settings:auth-cancel" }
+  | { type: "settings:update-github-token"; payload: { token: string } }
+  | { type: "settings:clear-github-token" }
+  | { type: "settings:install-github-app" }
+  | { type: "settings:refresh-github-installation" }
+  | { type: "settings:install-gitlab-app" }
+  | { type: "settings:refresh-gitlab-installation" }
+  | { type: "settings:update-gitlab-token"; payload: { token: string } }
+  | { type: "settings:clear-gitlab-token" }
+  | { type: "settings:install-bitbucket-app" }
+  | { type: "settings:refresh-bitbucket-installation" }
+  | { type: "settings:install-slack-app" }
+  | { type: "settings:refresh-slack-installation" }
+  | { type: "settings:install-atlassian-app" }
+  | { type: "settings:refresh-atlassian-installation"; payload?: { key?: "jira" | "confluence" } }
+  | { type: "settings:install-notion-app" }
+  | { type: "settings:refresh-notion-installation" }
+  | { type: "settings:install-google-docs-app" }
+  | { type: "settings:refresh-google-docs-installation" }
+  | { type: "settings:install-teams-app" }
+  | { type: "settings:refresh-teams-installation" }
+  | {
+      type: "settings:update-bitbucket-credentials";
+      payload: { username: string; appPassword: string };
+    }
+  | { type: "settings:clear-bitbucket-credentials" }
+  | { type: "settings:test-code-host"; payload: { provider: CodeHostProviderPreference } }
+  | { type: "settings:update-slack-token"; payload: { token: string } }
+  | { type: "settings:clear-slack-token" }
+  | {
+      type: "settings:update-jira-credentials";
+      payload: { email: string; token: string; baseUrl?: string };
+    }
+  | { type: "settings:clear-jira-credentials" }
+  | { type: "settings:update-teams-token"; payload: { token: string } }
+  | { type: "settings:clear-teams-token" }
+  | {
+      type: "settings:update-confluence-credentials";
+      payload: { email: string; token: string; baseUrl?: string };
+    }
+  | { type: "settings:clear-confluence-credentials" }
+  | { type: "settings:copy-jira-to-confluence" }
+  | { type: "settings:update-notion-token"; payload: { token: string } }
+  | { type: "settings:clear-notion-token" }
+  | { type: "settings:update-google-docs-token"; payload: { token: string } }
+  | { type: "settings:clear-google-docs-token" }
+  | { type: "settings:save-identity-directory"; payload: { directory: IdentityDirectory } }
+  | {
+      type: "settings:test-integration";
+      payload: {
+        provider: IntegrationChatProvider;
+        draft?: { email?: string; token?: string; baseUrl?: string };
+      };
+    }
+  | { type: "context:dismiss-warning" }
+  | { type: "context:clear" }
+  | { type: "agents:create-skeleton" }
+  | { type: "agents:start-from-template" }
+  | { type: "agents:attach" }
+  | { type: "agents:open" }
+  | { type: "agents:detach" }
+  | { type: "memory:add"; payload: { text: string; source: string; repoId?: string } }
+  | { type: "memory:clear"; payload?: { id?: string } }
+  | { type: "degradation:refresh"; payload?: { feature?: string; retrace?: boolean } }
+  | { type: "conflict:action"; payload: { conflictId: string; action: ConflictActionId } }
+  | {
+      type: "patch:apply";
+      payload?: {
+        messageTimestamp?: number;
+        /** Selected match location ids per ambiguous hunk (`hunkId` → location ids). */
+        matchSelections?: Record<string, string[]>;
+      };
+    }
+  | { type: "patch:reject"; payload?: { messageTimestamp?: number } }
+  | {
+      type: "patch:apply-hunk";
+      payload: {
+        messageTimestamp?: number;
+        hunkId: string;
+        /** Required when that hunk's SEARCH matches multiple places. */
+        matchLocationIds?: string[];
+      };
+    }
+  | {
+      type: "patch:reject-hunk";
+      payload: { messageTimestamp?: number; hunkId: string };
+    }
+  | {
+      type: "patch:set-match-locations";
+      payload: {
+        messageTimestamp?: number;
+        hunkId: string;
+        locationIds: string[];
+      };
+    }
+  | {
+      type: "patch:set-shared-match-proposal";
+      payload: {
+        messageTimestamp?: number;
+        relativePath: string;
+        groupId: string;
+        locationId: string;
+        /** Proposal id to select, or null/empty to clear. */
+        proposalId?: string | null;
+      };
+    }
+  | { type: "patch:undo"; payload?: { messageTimestamp?: number } }
+  | { type: "patch:open-file"; payload: { path: string } }
+  | {
+      /** Wave 2 C confirm payload. Join (J-G1) wires the CoopChatSession handler. */
+      type: "patch:create-pr";
+      payload: {
+        messageTimestamp?: number;
+        repoId?: string;
+        provider?: CodeHostProviderPreference;
+        branch: string;
+        title: string;
+        body?: string;
+        base?: string;
+        files: Array<{ path: string; content: string }>;
+      };
+    }
+  | {
+      type: "patch:summarize-pr";
+      payload: {
+        messageTimestamp?: number;
+        title: string;
+        diff: string;
+        files?: string[];
+      };
+    }
+  | { type: "ownership:copy-draft"; payload: { text: string } }
+  | { type: "evidence:copy-text"; payload: { text: string; toast?: string } }
+  | { type: "ui:close-settings" }
+  | { type: "ui:report-issue" }
+  | { type: "ui:open-settings"; payload?: { screen?: string } }
+  | { type: "ui:ensure-min-width"; payload: { width: number; minWidth: number } }
+  | { type: "lightning:ready" }
+  | { type: "lightning:enable-global" }
+  | { type: "lightning:disable-global" }
+  | { type: "lightning:enable-repo"; payload: { repoId: string } }
+  | { type: "lightning:disable-repo"; payload: { repoId: string } }
+  | { type: "lightning:refresh-repo"; payload: { repoId: string } }
+  | { type: "lightning:upgrade" };
+
+export type MentionSearchResult = {
+  repoId: string;
+  path: string;
+  lineNumber?: number;
+  content?: string;
+  score?: number;
+  /** Local workspace vs indexed remote graph (Pro+ hybrid search). */
+  source?: "local" | "indexed";
+};
+
+export type OrgCollectionSummary = {
+  id: string;
+  name: string;
+  description?: string;
+  repoCount: number;
+  repoIds?: string[];
+};
+
+export type WebviewOutbound =
+  | { type: "theme:update"; payload: ThemePayload }
+  | { type: "context:update"; payload: RepoContext }
+  | { type: "chat:history"; payload: ChatHistoryPayload | ChatMessage[] }
+  | { type: "threads:list"; payload: ChatThreadsListPayload }
+  | { type: "chat:thread-changed"; payload: { threadId: string; title: string; preserveDraft?: boolean; draftInput?: string } }
+  | { type: "chat:delta"; payload: { chunk: string; threadId?: string } }
+  | { type: "chat:thinking-delta"; payload: { chunk: string; threadId?: string } }
+  | {
+      type: "agent:activity";
+      payload: {
+        threadId?: string;
+        steps: Array<{ index: number; tool: string; summary: string; completed: boolean }>;
+      };
+    }
+  | { type: "chat:complete"; payload: { message: ChatMessage; threadId?: string } }
+  | {
+      type: "chat:cancelled";
+      payload: { message?: ChatMessage; threadId?: string; hadPartial?: boolean };
+    }
+  | { type: "chat:error"; payload: { message: string; threadId?: string } }
+  | { type: "chat:stream-resume"; payload: { threadId: string; partialText: string } }
+  | {
+      type: "chat:quota-exceeded";
+      payload: {
+        resetsAt: string;
+        upgradeUrl: string;
+        timezone?: string;
+        retryAfterMs?: number;
+        message?: string;
+        pool?: "paid" | "auto" | "frontier" | "free";
+        blockedWindow?: "cycle" | "week";
+        upgradeAction?: "checkout-pro" | "convert-seat" | "request-seat" | "enterprise-contact" | "none";
+        nextTier?: "pro_plus" | "max";
+        nextTierLabel?: string;
+      };
+    }
+  | { type: "chat:quota-cleared" }
+  | { type: "chat:usage"; payload: ChatUsagePayload }
+  | { type: "prompts:list"; payload: PromptLibraryListPayload }
+  | { type: "prompts:insert"; payload: { text: string; actionId?: string } }
+  | {
+      type: "repo:tree";
+      payload: {
+        path: string;
+        items: RemoteTreeNode[];
+        scope?: "repos" | "files";
+        error?: string;
+        stale?: boolean;
+        provider?: CodeHostProviderPreference;
+        loading?: boolean;
+        emptyHint?: "workspace" | "workspace_admin" | "workspace_admin_self";
+        listLabel?: "workspace";
+      };
+    }
+  | {
+      type: "repo:search-results";
+      payload: {
+        query: string;
+        items: RemoteTreeNode[];
+        error?: string;
+        loading?: boolean;
+      };
+    }
+  | { type: "intent:feedback"; payload: IntentFeedbackState }
+  | { type: "conflict:update"; payload: ConflictResolutionState }
+  | { type: "patch:update"; payload: PatchCardsUpdatePayload }
+  | {
+      /** Open the existing Create PR confirm modal for applied patches or editor changes. */
+      type: "patch:open-create-pr";
+      payload: {
+        messageTimestamp: number;
+        files?: Array<{ path: string; content: string }>;
+        diff?: string;
+      };
+    }
+  | {
+      type: "patch:pr-notes";
+      payload: { messageTimestamp?: number; notes?: string; title?: string };
+    }
+  | {
+      type: "patch:pr-created";
+      payload: {
+        messageTimestamp?: number;
+        htmlUrl: string;
+        number: number;
+        provider?: CodeHostProviderPreference;
+      };
+    }
+  | {
+      type: "patch:pr-error";
+      payload: { messageTimestamp?: number; error: string };
+    }
+  | { type: "settings:state"; payload: SettingsStatePayload }
+  | { type: "settings:auth-pending" }
+  | { type: "settings:auth-failed" }
+  | { type: "settings:navigate"; payload: { screen: string } }
+  | { type: "settings:test-result"; payload: { ok: boolean; message: string } }
+  | { type: "settings:convert-own-seat-result"; payload: { ok: boolean; message: string } }
+  | {
+      type: "settings:upgrade-to-pro-result";
+      payload: {
+        ok: boolean;
+        message: string;
+        phase?: "confirming" | "success" | "timeout" | "error";
+      };
+    }
+  | { type: "settings:refresh-result"; payload: { ok: boolean; message: string } }
+  | { type: "settings:api-key-revealed"; payload: { apiKey: string } }
+  | { type: "degradation:notification"; payload: DegradationNotificationPayload }
+  | { type: "trace:autoload"; payload: { message: string } }
+  | {
+      type: "command:confirm";
+      payload: {
+        title: string;
+        message: string;
+        run: {
+          message: string;
+          quickAction: string;
+          attachments?: ChatImageAttachment[];
+        historyContent?: string;
+        mentions?: ChatFileMention[];
+        slashUserArgs?: string;
+        /** Scope a quick action to a repository path (e.g. anchor file from a Sources card). */
+        targetFile?: string;
+      };
+    };
+    }
+  | { type: "decision:timeline"; payload: { artifactId?: string; timeline: unknown; codeHost?: string; dismissed?: boolean } }
+  | {
+      type: "ownership:card";
+      payload: { artifactId?: string; report: unknown; slackSearch?: unknown; codeHost?: string; dismissed?: boolean };
+    }
+  | {
+      type: "repo-summary:card";
+      payload: {
+        artifactId?: string;
+        evidence: unknown;
+        owner: string;
+        repo: string;
+        branch?: string;
+        codeHost?: string;
+        dismissed?: boolean;
+      };
+    }
+  | {
+      type: "blast-radius:card";
+      payload: { artifactId?: string; evidence: unknown; file: string; codeHost?: string; dismissed?: boolean };
+    }
+  | {
+      type: "knowledge-gaps:card";
+      payload: {
+        artifactId?: string;
+        evidence: unknown;
+        confluence?: unknown;
+        jira?: unknown;
+        slack?: unknown;
+        notion?: unknown;
+        googleDocs?: unknown;
+        teams?: unknown;
+        file?: string;
+        codeHost?: string;
+        dismissed?: boolean;
+      };
+    }
+  | {
+      type: "integration:card";
+      payload: { artifactId?: string; provider: IntegrationChatProvider; evidence: unknown; dismissed?: boolean };
+    }
+  | { type: "job:progress"; payload: JobProgressPayload }
+  | { type: "job:complete"; payload: JobProgressPayload & { result?: unknown } }
+  | {
+      type: "mention:results";
+      payload: {
+        pattern: string;
+        items: MentionSearchResult[];
+        error?: string;
+        loading?: boolean;
+        hint?: string;
+      };
+    }
+  | { type: "collections:list"; payload: { collections: OrgCollectionSummary[]; error?: string } }
+  | { type: "lightning:open" }
+  | {
+      type: "lightning:state";
+      payload: {
+        plan: "free" | "pro" | "enterprise";
+        canUseLightning: boolean;
+        globalEnabled: boolean;
+        maxDiskGb: number;
+        totalDiskBytes: number;
+        enabledRepos: number;
+        readyRepos: number;
+        indexingRepos: number;
+        repos: Array<{
+          repoId: string;
+          owner: string;
+          repo: string;
+          enabled: boolean;
+          status: "idle" | "cloning" | "indexing" | "ready" | "error" | "disabled";
+          localPath?: string;
+          lastIndexedAt?: string;
+          diskUsageBytes?: number;
+          zoektAvailable?: boolean;
+          scipAvailable?: boolean;
+          error?: string;
+        }>;
+        currentRepoId?: string;
+        backend?: "local" | "cloud";
+      };
+    }
+  | {
+      type: "github:repos:list-result";
+      payload: {
+        requestId?: string;
+        repos: GithubRepoOption[];
+        error?: string;
+        loading?: boolean;
+      };
+    }
+  | {
+      type: "workspace:repos:state";
+      payload: {
+        repos: GithubRepoOption[];
+        selectedRepoIds: string[];
+        selectedCount: number;
+        limit: number | null;
+        canAddMore: boolean;
+        primaryRepoId?: string;
+        error?: string;
+        loading?: boolean;
+        saving?: boolean;
+      };
+    };
+
+export type GithubRepoOption = {
+  repoId: string;
+  owner: string;
+  name: string;
+  defaultBranch: string;
+  provider?: string;
+  isPrivate?: boolean;
+  htmlUrl?: string;
+  lightningEnabled?: boolean;
+  indexStatus?: string;
+  workspaceSelected?: boolean;
+};
+
+export type RemoteTreeNode = {
+  path: string;
+  name: string;
+  type: "file" | "dir" | "repo";
+  size?: number;
+  updatedAt?: string;
+};
+
+export type ThemePayload = {
+  mode: ThemeMode;
+};
+
+export type CachedValue = {
+  expiresAt: number;
+  value: unknown;
+};

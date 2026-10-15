@@ -1,5 +1,11 @@
 # Agent rebuild roadmap (Boris bar)
 
+> Historical August design/status, reviewed October 11. The P0 labels and
+> budgets below are dated inputs, not current results or launch instructions.
+> Use current `../AGENTS.md`, applicable rules, run evidence and
+> `enterprise-hardening/EXECUTION_PLAN.md`; verify callers before adopting any
+> architecture or timeout described here.
+
 **Status:** P0 in progress (2026-08-14).  
 **Companion:** landscape diagnosis in chat; ship gates in `docs/agent-ship-loop-build-plan.md`.
 

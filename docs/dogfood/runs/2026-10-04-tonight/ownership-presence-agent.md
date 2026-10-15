@@ -1,5 +1,9 @@
 # Ownership presence assessment
 
+Historical October 4 job report, reviewed October 11. Preserve the observations
+below; later ownership/quick-action ledgers own current status. References to
+parent ownership and remaining retests describe that run, not new launch orders.
+
 Status: owned source frozen; targeted Automated Pass. No new live pass, deployment, or commit claimed.
 
 Parent observed a post-deploy ownership answer saying the contributor was reachable/available now. The evidence card contained Slack presence for that contributor, so the claim was not evidence-free and the fixture's intended lack of Slack usage does not establish disconnected access. The particular identity mapping and presence observation remain independently unverified.

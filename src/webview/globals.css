@@ -1,6 +1,31 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss" source(none);
+@config "../../tailwind.config.js";
+@source "./";
+
+/* Preserve the existing v3 theme and preflight through the security upgrade. */
+@theme {
+  --color-blue-500: #3b82f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-400: #9ca3af;
+  --default-ring-width: 3px;
+  --default-ring-color: var(--color-blue-500);
+}
+@utility coop-notice-base{
+    @apply flex items-start justify-between gap-2 rounded-lg border px-3 py-2.5 text-xs;
+    background: var(--coop-settings-card);
+    border-color: var(--coop-settings-divider);
+    color: var(--coop-panel-foreground);
+}
+@utility coop-notice--compact-base{
+    @apply rounded-md py-1.5 text-[11px];
+}
+@layer base {
+  *, ::before, ::after, ::backdrop, ::file-selector-button { border-color: var(--color-gray-200, currentColor); }
+  input::placeholder, textarea::placeholder { color: var(--color-gray-400); }
+  button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
+  dialog { margin: auto; }
+}
+
 
 @layer base {
   :root {
@@ -227,6 +252,12 @@
 }
 
 @layer components {
+  .coop-notice{
+    @apply coop-notice-base;
+  }
+  .coop-notice--compact{
+    @apply coop-notice--compact-base;
+  }
   .coop-panel,
   .coop-settings-shell {
     flex: 1 1 auto;
@@ -261,7 +292,7 @@
 
   .thread-switcher-trigger {
     @apply flex min-h-8 w-full items-center gap-2 rounded-md border px-2.5 py-1 text-left text-[12px] transition-colors duration-150;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--coop-composer-border-focus)];
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--coop-composer-border-focus)];
     background: var(--coop-composer-surface);
     border-color: var(--coop-composer-border);
     color: var(--coop-panel-foreground);
@@ -433,7 +464,7 @@
   .coop-quick-action-row {
     @apply flex w-full cursor-pointer items-center justify-center rounded px-2 py-2 text-center text-[13px] leading-tight transition-colors duration-150;
     color: var(--coop-panel-muted);
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-panel-canvas)];
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-panel-canvas)];
   }
 
   .coop-quick-action-row:hover:not(:disabled) {
@@ -446,7 +477,7 @@
 
   .coop-quick-action-pill {
     @apply inline-flex h-[22px] w-auto min-w-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-center text-[11.9px] font-light transition-colors duration-200 ease-out;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--coop-panel-canvas)];
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--coop-panel-canvas)];
     background-color: var(--coop-pill-surface);
     border-color: var(--coop-pill-border);
     color: var(--coop-pill-text);
@@ -472,7 +503,7 @@
 
   .coop-composer-pill {
     @apply inline-flex h-7 cursor-pointer items-center gap-1 rounded-full border px-2.5 text-[11px] font-medium transition-colors duration-150;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-composer-surface)];
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-composer-surface)];
     background-color: color-mix(in srgb, var(--coop-pill-surface) 70%, var(--coop-composer-surface) 30%);
     border-color: var(--coop-pill-border);
     color: var(--coop-pill-text);
@@ -505,7 +536,7 @@
 
   .coop-queued-followup-remove {
     @apply shrink-0 px-0.5 text-[var(--coop-panel-muted)] hover:text-[var(--coop-panel-foreground)];
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50;
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/50;
   }
 
   .coop-prompt-menu {
@@ -899,7 +930,7 @@
   .coop-panel-back-btn,
   .coop-settings-back-btn {
     @apply inline-flex max-w-[45%] shrink-0 cursor-pointer items-center gap-1 rounded-md px-1 py-0.5 text-[11px] transition-colors duration-150;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-panel-canvas)];
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-panel-canvas)];
     background: transparent;
     border: none;
     color: var(--coop-panel-muted);
@@ -1757,7 +1788,7 @@
   }
 
   .chat-activity-strip-row {
-    @apply coop-notice coop-notice--compact flex items-center gap-2 px-2.5;
+    @apply coop-notice-base coop-notice--compact-base flex items-center gap-2 px-2.5;
   }
 
   .chat-activity-strip-loading {
@@ -2312,7 +2343,7 @@
   /* Cursor-style actionable references in chat (files, Confluence, Jira, PRs). */
   .coop-chat-action-link {
     @apply inline max-w-full cursor-pointer border-0 bg-transparent p-0 text-left transition-colors duration-150;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-panel-canvas)];
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-panel-canvas)];
     color: var(--vscode-textLink-foreground);
     font: inherit;
     text-decoration: underline;
@@ -2368,8 +2399,15 @@
   }
 
   .coop-settings-card {
-    @apply space-y-3 rounded-lg p-3.5;
+    @apply rounded-lg p-3.5;
     background: var(--coop-settings-card);
+  }
+
+  /* Keep sibling spacing when a settings card has inline action children. */
+  .coop-settings-card > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(0.75rem * (1 - var(--tw-space-y-reverse)));
+    margin-bottom: calc(0.75rem * var(--tw-space-y-reverse));
   }
 
   .coop-settings-card-title {
@@ -2489,7 +2527,7 @@
   }
 
   .coop-settings-field {
-    @apply w-full min-w-0 rounded-md px-2.5 py-1.5 text-[13px] outline-none transition-colors duration-150;
+    @apply w-full min-w-0 rounded-md px-2.5 py-1.5 text-[13px] outline-hidden transition-colors duration-150;
     background: var(--coop-settings-field);
     border: 1px solid var(--coop-settings-field-border);
     color: var(--coop-composer-text);
@@ -2543,7 +2581,7 @@
 
   .coop-auth-btn {
     @apply flex w-full cursor-pointer items-center justify-center gap-2 rounded-full border px-3 py-2 text-[12px] font-medium transition-colors duration-150;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-settings-card)];
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-settings-card)];
     background: var(--coop-pill-surface);
     border-color: var(--coop-pill-border);
     color: var(--coop-pill-text);
@@ -2589,7 +2627,7 @@
 
   .coop-settings-action-btn {
     @apply inline-flex cursor-pointer items-center rounded-md border px-2.5 py-1 text-[11px] transition-colors duration-150;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-settings-card)];
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-settings-card)];
     background: var(--coop-pill-surface);
     border-color: var(--coop-pill-border);
     color: var(--coop-pill-text);
@@ -2637,7 +2675,7 @@
   .coop-nav-row,
   .coop-settings-nav-row {
     @apply flex w-full cursor-pointer items-center gap-2 px-3.5 py-2.5 text-left transition-colors duration-150;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-inset;
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-inset;
     background: transparent;
     border: none;
     color: inherit;
@@ -2758,17 +2796,6 @@
 
   .coop-settings-test-message--error {
     color: var(--vscode-inputValidation-errorBorder, #f87171);
-  }
-
-  .coop-notice {
-    @apply flex items-start justify-between gap-2 rounded-lg border px-3 py-2.5 text-xs;
-    background: var(--coop-settings-card);
-    border-color: var(--coop-settings-divider);
-    color: var(--coop-panel-foreground);
-  }
-
-  .coop-notice--compact {
-    @apply rounded-md py-1.5 text-[11px];
   }
 
   .coop-notice--stacked {
@@ -2906,7 +2933,7 @@
 
   .coop-explorer-row {
     @apply flex w-full items-center gap-1.5 rounded-md px-3.5 py-2.5 text-left text-[12px] transition-colors duration-150;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-settings-card)];
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-settings-card)];
     color: var(--coop-panel-foreground);
   }
 
@@ -3108,7 +3135,7 @@
 
   .coop-result-header-toggle {
     @apply flex min-w-0 flex-1 items-start gap-2 px-3.5 py-2.5 text-left;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40;
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/40;
     color: inherit;
   }
 
@@ -3241,7 +3268,7 @@
 
   .coop-result-connection-inventory-item {
     @apply flex w-full min-w-0 items-start gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors duration-150;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40;
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/40;
     color: var(--coop-panel-foreground);
   }
 
@@ -3360,7 +3387,7 @@
 
   .coop-result-collapsible-toggle {
     @apply flex min-w-0 flex-1 items-start gap-2 text-left text-[12px] font-medium transition-colors duration-150;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-settings-card)];
+    @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--coop-settings-card)];
     color: var(--coop-panel-foreground);
   }
 

@@ -52,7 +52,7 @@ function generateOperatorSessionToken(): string {
 }
 
 export class OperatorStore {
-  public constructor(private readonly pool: Pool) {}
+  public constructor(private readonly pool: Pick<Pool, "query">) {}
 
   public async findOperatorByEmail(email: string): Promise<OperatorRecord | undefined> {
     const result = await this.pool.query(

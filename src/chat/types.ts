@@ -134,6 +134,7 @@ export type ChatTurnActivity = {
 
 export type ChatMessage = {
   /** Validated source turns keep anonymous examples separate from explicit quotes. */
+  responseTiming?: import("./chatResponseTiming").AnswerTimingIdentity;
   sourceCitationMode?: "explicit";
   clientSubmissionId?: string;
   role: "user" | "assistant" | "system";
@@ -539,6 +540,8 @@ export type JobProgressPayload = {
 
 export type WebviewInbound =
   | { type: "webview-ready" }
+  | { type: "webview:startup"; payload: { stage: "document-loaded" | "frontend-mounted" | "frontend-failed" } }
+  | { type: "chat:display-receipt"; payload: { traceId: string; submissionId?: string; elapsedMs: number; milestone: "first-answer-content" | "complete" } }
   | {
       type: "chat:send";
       payload: {
@@ -805,8 +808,8 @@ export type WebviewOutbound =
   | { type: "chat:history"; payload: ChatHistoryPayload | ChatMessage[] }
   | { type: "threads:list"; payload: ChatThreadsListPayload }
   | { type: "chat:thread-changed"; payload: { threadId: string; title: string; preserveDraft?: boolean; draftInput?: string } }
-  | { type: "chat:delta"; payload: { chunk: string; threadId?: string } }
-  | { type: "chat:thinking-delta"; payload: { chunk: string; threadId?: string } }
+  | { type: "chat:delta"; payload: { chunk: string; threadId?: string; responseTiming?: import("./chatResponseTiming").AnswerTimingIdentity } }
+  | { type: "chat:thinking-delta"; payload: { chunk: string; threadId?: string; responseTiming?: import("./chatResponseTiming").AnswerTimingIdentity } }
   | {
       type: "agent:activity";
       payload: {
@@ -820,7 +823,7 @@ export type WebviewOutbound =
       payload: { message?: ChatMessage; threadId?: string; hadPartial?: boolean };
     }
   | { type: "chat:error"; payload: { message: string; threadId?: string } }
-  | { type: "chat:stream-resume"; payload: { threadId: string; partialText: string } }
+  | { type: "chat:stream-resume"; payload: { threadId: string; partialText: string; responseTiming?: import("./chatResponseTiming").AnswerTimingIdentity } }
   | {
       type: "chat:quota-exceeded";
       payload: {

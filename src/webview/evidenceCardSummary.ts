@@ -107,11 +107,11 @@ export type EvidenceCardSummary = {
 const WEAK_COMMIT_MESSAGE_RE = /^(wip|fix|update|changes?|misc|tmp|test|merge|refactor)\b/i;
 
 const OWNERSHIP_RISK_LABELS: Record<keyof OwnershipRisk, string> = {
-  singlePointOfFailure: "Observed contributions are concentrated in one person; knowledge coverage is unverified.",
-  expertUnavailable: "Top experts appear unavailable.",
-  orphaned: "Recent ownership activity looks stale.",
-  highTurnover: "Ownership appears unstable due to high turnover.",
-  teamDispersion: "Expertise is spread across many teams."
+  singlePointOfFailure: "One top-ranked contributor, without a scored secondary.",
+  expertUnavailable: "Dated activity for top-ranked contributors is older than 90 days.",
+  orphaned: "No commits from the past six months were retrieved.",
+  highTurnover: "At least five sampled authors, without a primary score tier.",
+  teamDispersion: "At least three contributors marked active, without a primary score tier."
 };
 
 export function summarizeDecisionTimeline(timeline: DecisionTimeline, codeHost?: string | null): EvidenceCardSummary {
@@ -346,10 +346,10 @@ export function summarizeOwnershipReport(
   ) {
     quality = "strong";
     qualityReason =
-      "Ownership is backed by a clear primary owner plus corroborating team or activity signals.";
+      "Several sampled contributors have corroborating team or activity signals; declared ownership is a separate policy question.";
   } else if (primary || report.scores.length >= 2) {
     quality = "medium";
-    qualityReason = "Ownership has a likely lead, but supporting signals are incomplete.";
+    qualityReason = "A contributor contact candidate was identified, but supporting signals are incomplete.";
   } else if (report.scores.length === 1) {
     quality = "weak";
     qualityReason = "Ownership is inferred from a single contributor signal.";
@@ -359,19 +359,19 @@ export function summarizeOwnershipReport(
   }
 
   const primaryFinding = primary
-    ? `@${primary.owner} is the primary owner for ${report.path}${primary.commitCount ? ` (${primary.commitCount} recent commit(s))` : ""}.`
+    ? `@${primary.owner} is the highest-ranked sampled contributor for ${report.path}${primary.commitCount ? ` (${primary.commitCount} sampled commit(s) in six months)` : ""}; a suggested contact, with declared ownership checked separately.`
       : fallback
-      ? `@${fallback.owner} is the top available ownership signal for ${report.path}.`
-      : `No clear owner was identified for ${report.path}.`;
+      ? `@${fallback.owner} is a sampled contributor contact candidate for ${report.path}.`
+      : `No contributor contact candidate was identified for ${report.path}.`;
 
   const riskLimitations = (Object.entries(report.risk) as Array<[keyof OwnershipRisk, boolean]>)
     .filter(([, active]) => active)
-    .map(([key]) => OWNERSHIP_RISK_LABELS[key]);
+    .map(([key]) => `Sample-derived coverage flag: ${OWNERSHIP_RISK_LABELS[key]} — requires verification; not established personnel risk.`);
 
   const limitations = dedupeLimitations([
-    !primary ? "No explicit primary owner was identified." : undefined,
+    report.orgContext?.source !== "codeowners" ? "Declared ownership is unverified in this pass." : undefined,
     report.scores.length === 0 ? "No ownership scores were computed for this path." : undefined,
-    !hasSlackPresence && !slackSearch ? "No Slack presence evidence was included for owner availability." : undefined,
+    "Response availability and on-call policy are unverified by contributor ranking or Slack presence.",
     ...riskLimitations,
     ...report.warnings
   ]);
@@ -399,7 +399,7 @@ export function summarizeOwnershipReport(
     sourceContributions.push({
       provider: host ?? "code-host",
       label: ownershipSourceLabelCodeowners(),
-      contribution: `CODEOWNERS maps this area to ${report.orgContext.teamName}, which supports escalation routing.`,
+      contribution: `CODEOWNERS declares ${report.orgContext.members.join(", ") || report.orgContext.teamName} for this area, which supports escalation routing.`,
       relevance: "supporting",
       url: report.orgContext.htmlUrl
     });

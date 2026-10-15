@@ -27,6 +27,8 @@ export type ChatMessageRow = {
 
 export type UpsertThreadInput = {
   id: string;
+  /** Authenticated writer, distinct from new-thread ownerEmail attribution. */
+  writeScope: { principal: string; userId?: string };
   orgId: string;
   userId?: string;
   principal: string;
@@ -186,10 +188,21 @@ export function buildThreadListWhere(filters: ListThreadsFilters): {
   return { clauses, params };
 }
 
+export class ChatThreadWriteForbiddenError extends Error {
+  public constructor() {
+    super("Chat thread write is not permitted");
+    this.name = "ChatThreadWriteForbiddenError";
+  }
+}
+
 export class ChatThreadsStore {
   public constructor(private readonly pool: Pool) {}
 
   public async upsertThread(input: UpsertThreadInput): Promise<ChatThreadRow> {
+    if (!input.writeScope?.principal?.trim() || input.writeScope.principal !== input.principal ||
+        (input.writeScope.userId && input.writeScope.userId !== input.userId)) {
+      throw new ChatThreadWriteForbiddenError();
+    }
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -205,8 +218,6 @@ export class ChatThreadsStore {
          )
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          ON CONFLICT (id) DO UPDATE SET
-           user_id = EXCLUDED.user_id,
-           principal = EXCLUDED.principal,
            title = EXCLUDED.title,
            repo_owner = EXCLUDED.repo_owner,
            repo_name = EXCLUDED.repo_name,
@@ -214,6 +225,9 @@ export class ChatThreadsStore {
            message_count = EXCLUDED.message_count,
            preview_text = EXCLUDED.preview_text,
            updated_at = EXCLUDED.updated_at
+         WHERE chat_threads.org_id = EXCLUDED.org_id
+           AND (chat_threads.principal = $13 OR
+                ($14::uuid IS NOT NULL AND chat_threads.user_id = $14::uuid))
          RETURNING *`,
         [
           input.id,
@@ -227,10 +241,15 @@ export class ChatThreadsStore {
           messageCount,
           input.previewText ?? null,
           createdAt,
-          updatedAt
+          updatedAt,
+          input.writeScope.principal,
+          input.writeScope.userId ?? null
         ]
       );
 
+      // ON CONFLICT locks the row and atomically admits the writer. An omitted
+      // RETURNING row must never reach message replacement, even after a read race.
+      if (!threadResult.rows[0]) throw new ChatThreadWriteForbiddenError();
       await client.query(`DELETE FROM chat_messages WHERE thread_id = $1`, [input.id]);
 
       for (const message of input.messages) {

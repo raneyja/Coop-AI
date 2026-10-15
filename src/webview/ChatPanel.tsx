@@ -6,6 +6,7 @@ import { ChatActivityStrip } from "./components/ChatActivityStrip";
 import { CoopNotice } from "./components/CoopNotice";
 import { QuotaExceededNotice, type QuotaExceededNoticeState } from "./components/QuotaExceededNotice";
 import { ChatComposer } from "./components/ChatComposer";
+import { SubmissionDisplayClock, type AnswerTimingIdentity } from "../chat/chatResponseTiming";
 import { ChatStream, ChatMessage, type ChatInlineArtifact, renderInlineArtifact } from "./components/ChatStream";
 import { ChatProse } from "./components/ChatProse";
 import { CitationNavigationProvider } from "./components/CitationNavigationContext";
@@ -125,8 +126,8 @@ type InboundMessage =
   | { type: "theme:update"; payload: { mode: "light" | "dark" | "high-contrast" } }
   | { type: "context:update"; payload: RepoContext }
   | { type: "chat:history"; payload: ChatHistoryPayload | ChatMessage[] }
-  | { type: "chat:delta"; payload: { chunk: string; threadId?: string } }
-  | { type: "chat:thinking-delta"; payload: { chunk: string; threadId?: string } }
+  | { type: "chat:delta"; payload: { chunk: string; threadId?: string; responseTiming?: AnswerTimingIdentity } }
+  | { type: "chat:thinking-delta"; payload: { chunk: string; threadId?: string; responseTiming?: AnswerTimingIdentity } }
   | {
       type: "agent:activity";
       payload: {
@@ -140,7 +141,7 @@ type InboundMessage =
       payload: { message?: ChatMessage; threadId?: string; hadPartial?: boolean };
     }
   | { type: "chat:error"; payload: { message: string; threadId?: string } }
-  | { type: "chat:stream-resume"; payload: { threadId: string; partialText: string } }
+  | { type: "chat:stream-resume"; payload: { threadId: string; partialText: string; responseTiming?: import("../chat/chatResponseTiming").AnswerTimingIdentity } }
   | {
       type: "chat:quota-exceeded";
       payload: {
@@ -576,6 +577,18 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     return false;
   }, [messages]);
 
+  const displaySubmissionsRef = useRef(new SubmissionDisplayClock());
+  const [streamTiming, setStreamTiming] = useState<AnswerTimingIdentity | undefined>();
+  const onAnswerPaint = useCallback((identity: AnswerTimingIdentity, milestone: "first-answer-content" | "complete") => {
+    const elapsedMs = displaySubmissionsRef.current.receipt(identity, milestone);
+    if (elapsedMs === undefined) return false;
+    vscode.postMessage({ type: "chat:display-receipt", payload: { ...identity, milestone, elapsedMs } });
+    return true;
+  }, [vscode]);
+
+  const canObserveAnswer = useCallback((identity: AnswerTimingIdentity, streaming: boolean) =>
+    displaySubmissionsRef.current.pending(identity, streaming ? "first-answer-content" : "complete"), []);
+
   const streamMessage = useMemo<ChatMessage | null>(() => {
     if (!debouncedStream) {
       return null;
@@ -587,11 +600,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     return {
       role: "assistant",
       content: debouncedStream,
+      responseTiming: streamTiming,
       sourceCitationMode: "explicit",
       timestamp: Date.now(),
       links: []
     };
-  }, [debouncedStream, streamingEditTurn]);
+  }, [debouncedStream, streamingEditTurn, streamTiming]);
 
   const inlineThinkingOptions = useMemo(
     () => ({ awaitingResponse: isStreaming && !streamMessage }),
@@ -823,6 +837,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         return;
       }
       const clientSubmissionId = `${Date.now()}-${++submissionSequenceRef.current}`;
+      displaySubmissionsRef.current.submit(clientSubmissionId);
+      setStreamTiming(undefined);
       outgoing.payload = { ...outgoing.payload, clientSubmissionId };
       payload = outgoing;
       const optimistic: ChatMessage = {
@@ -1434,6 +1450,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setThinkingBuffer("");
           setAgentOverlay(undefined);
           setIsStreaming(true);
+          setStreamTiming(message.payload.responseTiming);
           setStreamingBuffer(message.payload.partialText);
           break;
         }
@@ -1471,6 +1488,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           }
           setIntentFeedback(undefined);
           setIsStreaming(true);
+          setStreamTiming(message.payload.responseTiming);
           setStreamingBuffer((prev) => prev + message.payload.chunk);
           break;
         }
@@ -2550,6 +2568,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       {isActiveChat ? (
         <>
           <ChatStream
+            onAnswerPaint={onAnswerPaint}
+            canObserveAnswer={canObserveAnswer}
             messages={messages}
             artifacts={inlineArtifacts}
             streamingMessage={streamMessage}

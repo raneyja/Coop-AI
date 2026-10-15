@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import type { ServerResponse } from "node:http";
-import { handleBillingApiRequest, usageTierForStripePrice, type BillingApiDeps } from "./billingApi";
+import { handleBillingApiRequest as actualBillingApiRequest, usageTierForStripePrice, type BillingApiDeps } from "./billingApi";
 import type { AuthContext, OrgStore } from "../orgStore";
 import type { ServerConfig } from "../serverConfig";
 import { StripeRequestError, type StripeService, type StripeSubscription } from "./stripeService";
@@ -16,44 +16,87 @@ function mockSubscription(quantity: number, itemId = "si_123"): StripeSubscripti
   };
 }
 
+type ClaimFixture = { query: (sql: string,params?: unknown[]) => Promise<{ rowCount: number; rows: Record<string,unknown>[] }>;
+  connect: () => Promise<ClaimFixture & { release: () => void }>; on: () => ClaimFixture; off: () => ClaimFixture; orgs?: OrgStore; release: () => void };
 function freshClaimPool(): NonNullable<BillingApiDeps["pool"]> {
-  const statusById = new Map<string, string>();
-  return {
-    query: async (sql: string, params?: unknown[]) => {
-      const id = String(params?.[0] ?? "");
+  const events = new Map<string,Record<string,unknown>>(), receipts = new Map<string,Record<string,unknown>>(), mail = new Map<string,Record<string,unknown>>();
+  const fixture: ClaimFixture = { release() {},on: () => fixture,off: () => fixture,connect: async () => fixture,
+    query: async (sql,params = []) => {
+      const id = String(params[0] ?? ""), row = events.get(id);
+      const output = (value?: Record<string,unknown>) => ({ rowCount: value ? 1 : 0,rows: value ? [value] : [] });
       if (sql.includes("INSERT INTO stripe_webhook_events")) {
-        if (statusById.has(id)) {
-          return { rowCount: 0, rows: [] };
-        }
-        statusById.set(id, "processing");
-        return { rowCount: 1, rows: [{ event_id: id }] };
+        if (row?.status === "completed" || row?.status === "processing") return output();
+        const created = { event_id: id,event_type: params[1],status: "processing",attempt_token: params[2] ?? "fixture-held",
+          resource_id: params[3],customer_id: params[4] };events.set(id,created);return output(created);
       }
-      if (sql.includes("SET status = 'processing'")) {
-        if (statusById.get(id) === "failed") {
-          statusById.set(id, "processing");
-          return { rowCount: 1, rows: [{ event_id: id }] };
-        }
-        return { rowCount: 0, rows: [] };
+      if (sql.includes("FROM stripe_webhook_events")) return output(row);
+      if (sql.includes("UPDATE stripe_webhook_events")) {
+        if (!row || row.attempt_token !== params[1]) return output();
+        row.status = sql.includes("status='completed'") ? "completed" : "failed";return output(row);
       }
-      if (sql.includes("SET status = 'completed'")) {
-        if (statusById.get(id) === "processing") {
-          statusById.set(id, "completed");
-        }
-        return { rowCount: 1, rows: [] };
+      if (sql.includes("FROM billing_checkout_receipts")) return output(receipts.get(id));
+      if (sql.includes("INSERT INTO billing_checkout_receipts")) { receipts.set(id,{ customer_id: params[1],subscription_id: params[2],org_id: params[3] });return output({}); }
+      if (sql.includes("SELECT id FROM organizations WHERE stripe_customer_id")) {
+        const org = await fixture.orgs?.findOrganizationByStripeCustomerId(id);return output(org ? { id: org.id } : undefined);
       }
-      if (sql.includes("SET status = 'failed'")) {
-        if (statusById.get(id) === "processing") {
-          statusById.set(id, "failed");
-        }
-        return { rowCount: 1, rows: [] };
+      if (sql.includes("SELECT encrypted_payload") && sql.includes("FROM billing_email_outbox")) return output(mail.has(id) ? { ...mail.get(id),remaining_ms: 60000 } : undefined);
+      if (sql.includes("INSERT INTO billing_email_outbox")) { mail.set(id,{ delivery_key: id,status: "pending",encrypted_payload: params[3] });return output({}); }
+      if (sql.includes("SELECT delivery_key FROM billing_email_outbox")) return { rowCount: mail.size,rows: [...mail.values()].filter(r => r.status === "pending") };
+      if (sql.includes("UPDATE billing_email_outbox") && params.length) {
+        const notification = mail.get(id);if (!notification) return output();
+        notification.attempt_token = params[1];
+        notification.status = sql.includes("status='sent'") ? "sent" : sql.includes("status='sending'") ? "sending" : "pending";
+        return output(notification);
       }
-      if (sql.includes("SELECT status")) {
-        const status = statusById.get(id);
-        return { rowCount: status ? 1 : 0, rows: status ? [{ status }] : [] };
-      }
-      return { rowCount: 0, rows: [] };
+      if (sql.includes("count(*)::int")) return output({ n: 0 });
+      return output();
     }
-  } as NonNullable<BillingApiDeps["pool"]>;
+  };
+  return fixture as unknown as NonNullable<BillingApiDeps["pool"]>;
+}
+
+// These remain fast contract fixtures. Actual transaction/signature/provider/fault
+// ownership is qualified separately by billingRecovery.integration.test.ts.
+async function handleBillingApiRequest(...args: Parameters<typeof actualBillingApiRequest>) {
+  const [request,,deps] = args;
+  if (request.pathname === "/webhooks/stripe" || request.pathname === "/v1/billing/checkout-status") {
+    const event = request.pathname === "/webhooks/stripe" ? deps.stripeService?.verifyWebhookSignature("{}","fixture") as Record<string,unknown> : undefined;
+    const object = ((event?.data as { object?: Record<string,unknown> })?.object ?? {});
+    const stripe = deps.stripeService!;
+    if (!stripe.retrieveCheckoutSession && object.id) stripe.retrieveCheckoutSession = async () => ({
+      ...object,id: String(object.id),status: "complete",payment_status: "paid" } as Awaited<ReturnType<StripeService["retrieveCheckoutSession"]>>);
+    if (!stripe.retrieveSubscription) stripe.retrieveSubscription = async id => {
+      const session = request.pathname === "/v1/billing/checkout-status" ? await stripe.retrieveCheckoutSession("cs_paid_existing") : object;
+      const metadata = session.metadata as Record<string,string> | undefined;
+      const items = (object.items as { data?: Array<{ quantity?: number; price?: { id?: string } }> })?.data;
+      return { id,status: String(object.status ?? "active"),customer: typeof session.customer === "string" ? session.customer : (session.customer as { id?: string })?.id,
+        metadata: metadata?.existing_org_id ? { ...metadata,upgrade: "true" } : metadata,
+        items: items?.map((item,i) => ({ id: `si_${i}`,quantity: item.quantity ?? 1,priceId: item.price?.id })) ?? [{ id: "si_fixture",quantity: 1,priceId: "price_pro" }] };
+    };
+    if (deps.orgStore) {
+      const store = deps.orgStore, patches = new Map<string,Record<string,unknown>>();
+      if (!store.inTransaction) store.inTransaction = () => store;
+      if (!store.getOrganization) store.getOrganization = async id => ({ ...(await store.findOrganizationByStripeCustomerId(String(object.customer)))!,id });
+      if (!store.isOrgSuspended) store.isOrgSuspended = async () => false;
+      if (!store.getOrganizationBilling) store.getOrganizationBilling = async id => {
+        const mapped = await store.findOrganizationByStripeCustomerId(typeof object.customer === "string" ? object.customer : (object.customer as { id?: string })?.id ?? "");
+        return { seatCount: 1,billingStatus: "none",...(mapped ? { stripeSubscriptionId: String(object.id) } : {}),...patches.get(id) };
+      };
+      const update = store.updateOrganizationBilling;
+      store.updateOrganizationBilling = async (id,patch) => { patches.set(id,{ ...patches.get(id),...patch });await update(id,patch); };
+      if (!store.setOrganizationPlan) store.setOrganizationPlan = async () => undefined;
+      if (deps.pool) (deps.pool as unknown as ClaimFixture).orgs = store;
+    }
+    if (deps.userStore && !deps.userStore.inTransaction) deps.userStore.inTransaction = () => deps.userStore!;
+    deps.serverConfig.credentialsEncryptionKey = "eh09-unit-fixture-only";
+    if (deps.emailService && !deps.emailService.sendPrepared) deps.emailService.sendPrepared = async message => {
+      if (message.subject.includes("is now on")) await deps.emailService!.sendProUpgradeWelcome({ to: message.to,orgName: "fixture",adminPortalUrl: "https://admin.coop-ai.dev/login" });
+    };
+    if (request.pathname === "/v1/billing/checkout-status" && !deps.pool) {
+      deps.pool = freshClaimPool();(deps.pool as unknown as ClaimFixture).orgs = deps.orgStore;
+    }
+  }
+  return actualBillingApiRequest(...args);
 }
 
 function mockResponse(): ServerResponse & { statusCode?: number; body?: string } {
@@ -1080,7 +1123,7 @@ void (async () => {
     assert.equal(planSet, "pro");
     assert.equal(billingPatches[0]?.stripeCustomerId, "cus_linked");
     assert.equal(billingPatches[0]?.stripeSubscriptionId, "sub_linked");
-    assert.equal(billingPatches[0]?.billingStatus, "active");
+    assert.equal(billingPatches.find(patch => patch.billingStatus)?.billingStatus, "active");
     assert.notEqual(billingPatches[0]?.stripeCustomerId, "[object Object]");
   }
 

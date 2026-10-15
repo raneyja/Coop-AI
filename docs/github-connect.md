@@ -86,7 +86,7 @@ After you change Contents or Pull requests, GitHub asks each org install to **ac
 |-------|--------|
 | Active | Checked |
 | Webhook URL | `https://api.coop-ai.dev/webhooks/github` |
-| Secret | `baileythedog123098654` |
+| Secret | `<your-own-generated-secret>` |
 
 Subscribe to events: **Installation**, **Installation repositories**, **Push**, **Pull request**, **Pull request review**, **Issues**, **Repository**.
 
@@ -105,7 +105,7 @@ Subscribe to events: **Installation**, **Installation repositories**, **Push**, 
 | `GITHUB_APP_ID` | `4216192` |
 | `GITHUB_APP_SLUG` | `coopai-for-vs-code` |
 | `GITHUB_APP_PRIVATE_KEY` | Full PEM from Downloads file **or** base64-encode: `base64 -i ~/Downloads/coopai-for-vs-code*.pem \| tr -d '\n'` |
-| `GITHUB_WEBHOOK_SECRET` | `baileythedog123098654` (must match GitHub webhook secret exactly) |
+| `GITHUB_WEBHOOK_SECRET` | `<your-own-generated-secret>` (must match GitHub webhook secret exactly) |
 | `COOP_PUBLIC_BASE_URL` | `https://api.coop-ai.dev` |
 
 **Remove or clear** on Railway (production must not use OAuth):
@@ -119,7 +119,7 @@ Redeploy **Coop-AI** after saving.
 
 ### 6. Local `.env.backend` (optional)
 
-Same App vars + `GITHUB_WEBHOOK_SECRET=baileythedog123098654` if testing webhooks locally; keep OAuth vars for local-only Connect if you prefer.
+Same App vars + `GITHUB_WEBHOOK_SECRET=<your-own-generated-secret>` if testing webhooks locally; keep OAuth vars for local-only Connect if you prefer.
 
 ## Coop admin vs GitHub org owner (production)
 

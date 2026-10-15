@@ -33,7 +33,7 @@ export function TopBar() {
   }
 
   return (
-    <header className="sticky top-0 z-10 flex h-12 items-center justify-between border-b border-coop-border bg-coop-dark/90 px-6 backdrop-blur-sm">
+    <header className="sticky top-0 z-10 flex h-12 items-center justify-between border-b border-coop-border bg-coop-dark/90 px-6 backdrop-blur-xs">
       <div className="flex items-baseline gap-2">
         <p className="text-sm text-white/90">{orgLabel}</p>
         {me ? (

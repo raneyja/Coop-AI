@@ -127,16 +127,51 @@ async function run(): Promise<void> {
     assert.match(parsed.hits[0]?.content ?? "", /require_auth/);
   });
 
-  await test("search_code reports when index is disabled for repo", async () => {
+  await test("search_code reports unavailable index without inventing hits", async () => {
+    const diagnostics: Record<string, unknown>[] = [];
     const registry = createAgentToolRegistry({
       indexBackend: mockIndexBackend({
-        isEnabledForRepo: async () => false
+        isEnabledForRepo: async () => false,
+        search: async () => ({ source: "fallback", stale: true, availability: "unavailable", hits: [], symbols: [] })
       }),
-      resolveAbsolutePath: () => undefined
+      resolveAbsolutePath: () => undefined,
+      onDiagnostic: event => diagnostics.push(event)
     });
-    const raw = await registry.search_code!({ query: "auth", repoId: "acme/demo" });
-    const parsed = JSON.parse(raw) as { error: string };
-    assert.match(parsed.error, /not enabled/i);
+    const parsed = JSON.parse(await registry.search_code!({ query: "auth", repoId: "acme/demo" }));
+    assert.equal(parsed.availability, "unavailable");
+    assert.deepEqual(parsed.hits, []);
+    assert.deepEqual(parsed.symbols, []);
+    assert.equal(parsed.hitCount, 0);
+    assert.equal(parsed.codeHostFallbackAttempted, false);
+    assert.ok(diagnostics.some(event => event.stage === "index-unavailable"));
+  });
+
+  await test("disabled index still opens the exact remote implementation through code-host fallback", async () => {
+    const calls: string[] = [];
+    const registry = createAgentToolRegistry({
+      locateMode: true, researchQuery: "Where is verifyToken implemented?",
+      indexBackend: mockIndexBackend({
+        isEnabledForRepo: async () => false,
+        search: async () => ({ source: "fallback", stale: true, availability: "unavailable", hits: [], symbols: [] })
+      }),
+      resolveAbsolutePath: () => { throw new Error("Local source access is forbidden"); },
+      searchCodeHost: async options => {
+        assert.equal(options.repoId, "acme/demo");
+        calls.push(options.query);
+        return [{ path: "src/auth.ts" }];
+      },
+      readRemoteFile: async options => {
+        assert.equal(options.repoId, "acme/demo");
+        assert.equal(options.path, "src/auth.ts");
+        return { path: "src/auth.ts", content: "export function verifyToken() { return true; }" };
+      }
+    });
+    const parsed = JSON.parse(await registry.search_code!({ query: "verifyToken", repoId: "acme/demo" }));
+    assert.ok(calls.length > 0);
+    assert.equal(parsed.codeHostFallbackAttempted, true);
+    assert.equal(parsed.codeHostFallbackStatus, "results");
+    assert.equal(parsed.hits[0]?.fileName, "src/auth.ts");
+    assert.match(parsed.hits[0]?.content ?? "", /export function verifyToken/);
   });
 
   await test("read_file does not use local workspace absolute paths (Zero-Clone)", async () => {

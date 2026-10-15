@@ -1,0 +1,10 @@
+
+7
+	scip-java0.0.0-SNAPSHOTfile:///fixtures/java/ «
+src/main/java/Fixture.java*scip-java maven . . Fixture#BRy1'scip-java maven . . Fixture#`<init>`().B2"scip-java maven . . Fixture#add().B),RJlocal 0B12R-2local 1B89R49local 0BDElocal 1BFG2"scip-java maven . . Fixture#use().B]`RKw*"scip-java maven . . Fixture#add().BloG
+scip-java maven . . Fixture#(2Fixture:"java*public class FixtureM
+'scip-java maven . . Fixture#`<init>`().(	2<init>:"java*public Fixture()X
+"scip-java maven . . Fixture#add().(P2add:+"java*#public static int add(int x, int y)?
+local 02x:"java*int xB"scip-java maven . . Fixture#add().?
+local 12y:"java*int yB"scip-java maven . . Fixture#add().L
+"scip-java maven . . Fixture#use().(P2use:"java*public static int use()"java

@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { decryptCredential, encryptCredential } from "./credentialCrypto";
 
 export type IntegrationProvider = "slack" | "atlassian" | "notion" | "google-docs" | "teams";
@@ -22,6 +22,8 @@ export type IntegrationConnectionMetadata = {
 
 export type IntegrationConnectionRecord = {
   provider: IntegrationProvider;
+  /** Database-generated generation; every write invalidates prior credentials/admission. */
+  revision: string;
   tokenExpiresAt?: Date;
   metadata: IntegrationConnectionMetadata;
   updatedAt: Date;
@@ -30,8 +32,13 @@ export type IntegrationConnectionRecord = {
 export class IntegrationConnectionStore {
   public constructor(
     private readonly pool: Pool,
-    private readonly credentialsEncryptionKey?: string
+    private readonly credentialsEncryptionKey?: string,
+    private readonly sql: Pick<Pool, "query"> = pool
   ) {}
+
+  public inTransaction(client: PoolClient): IntegrationConnectionStore {
+    return new IntegrationConnectionStore(this.pool, this.credentialsEncryptionKey, client);
+  }
 
   public async upsert(
     orgId: string,
@@ -58,7 +65,7 @@ export class IntegrationConnectionStore {
         this.credentialsEncryptionKey
       );
     }
-    await this.pool.query(
+    await this.sql.query(
       `INSERT INTO org_integration_connections
          (org_id, provider, encrypted_access_token, encrypted_refresh_token, token_expires_at, metadata, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW())
@@ -80,8 +87,8 @@ export class IntegrationConnectionStore {
   }
 
   public async get(orgId: string, provider: IntegrationProvider): Promise<IntegrationConnectionRecord | undefined> {
-    const result = await this.pool.query(
-      `SELECT provider, token_expires_at, metadata, updated_at
+    const result = await this.sql.query(
+      `SELECT provider, revision, token_expires_at, metadata, updated_at
        FROM org_integration_connections WHERE org_id = $1 AND provider = $2`,
       [orgId, provider]
     );
@@ -89,46 +96,83 @@ export class IntegrationConnectionStore {
     if (!row) {
       return undefined;
     }
+    assertRevision(row.revision);
     return {
       provider,
+      revision: row.revision,
       tokenExpiresAt: row.token_expires_at ? new Date(row.token_expires_at) : undefined,
       metadata: parseMetadata(row.metadata),
       updatedAt: new Date(row.updated_at)
     };
   }
 
-  public async getAccessToken(orgId: string, provider: IntegrationProvider): Promise<string | undefined> {
-    if (!this.credentialsEncryptionKey) {
-      return undefined;
-    }
-    const result = await this.pool.query(
-      `SELECT encrypted_access_token FROM org_integration_connections WHERE org_id = $1 AND provider = $2`,
-      [orgId, provider]
-    );
-    const row = result.rows[0];
-    if (!row?.encrypted_access_token) {
-      return undefined;
-    }
-    return decryptCredential(String(row.encrypted_access_token), this.credentialsEncryptionKey);
+  public async getAccessToken(orgId: string, provider: IntegrationProvider, expectedRevision?: string): Promise<string | undefined> {
+    return this.readToken(orgId, provider, "encrypted_access_token", expectedRevision);
   }
 
-  public async getRefreshToken(orgId: string, provider: IntegrationProvider): Promise<string | undefined> {
+  public async getRefreshToken(orgId: string, provider: IntegrationProvider, expectedRevision?: string): Promise<string | undefined> {
+    return this.readToken(orgId, provider, "encrypted_refresh_token", expectedRevision);
+  }
+
+  /** Refresh never creates a connection or changes its installation metadata. */
+  public async saveRefreshedTokens(
+    orgId: string,
+    provider: IntegrationProvider,
+    expectedRevision: string,
+    accessToken: string,
+    options: { refreshToken?: string; expiresAt?: Date } = {}
+  ): Promise<boolean> {
+    if (typeof orgId !== "string" || !UUID.test(orgId) || !PROVIDERS.includes(provider)) {
+      throw new Error("Invalid integration connection target");
+    }
+    assertRevision(expectedRevision);
+    const access = checkedToken(accessToken);
+    if (!options || typeof options !== "object" || (Object.getPrototypeOf(options) !== Object.prototype && Object.getPrototypeOf(options) !== null)
+      || (options.expiresAt !== undefined && (!(options.expiresAt instanceof Date) || !Number.isFinite(options.expiresAt.getTime())))) {
+      throw new Error("Invalid refreshed credential options");
+    }
+    const refresh = options.refreshToken === undefined ? undefined : checkedToken(options.refreshToken);
+    if (!this.credentialsEncryptionKey) throw new Error("CREDENTIALS_ENCRYPTION_KEY is not configured");
+    const result = await this.sql.query(
+      `UPDATE org_integration_connections SET
+         encrypted_access_token = $4,
+         encrypted_refresh_token = COALESCE($5, encrypted_refresh_token),
+         token_expires_at = $6,
+         updated_at = NOW()
+       WHERE org_id = $1 AND provider = $2 AND revision = $3::uuid
+       RETURNING revision`,
+      [orgId, provider, expectedRevision,
+        encryptCredential(access, this.credentialsEncryptionKey),
+        refresh === undefined ? null : encryptCredential(refresh, this.credentialsEncryptionKey),
+        options.expiresAt ?? null]
+    );
+    return result.rowCount === 1;
+  }
+
+  private async readToken(
+    orgId: string,
+    provider: IntegrationProvider,
+    column: "encrypted_access_token" | "encrypted_refresh_token",
+    expectedRevision?: string
+  ): Promise<string | undefined> {
+    if (expectedRevision !== undefined) assertRevision(expectedRevision);
     if (!this.credentialsEncryptionKey) {
       return undefined;
     }
-    const result = await this.pool.query(
-      `SELECT encrypted_refresh_token FROM org_integration_connections WHERE org_id = $1 AND provider = $2`,
-      [orgId, provider]
+    const result = await this.sql.query(
+      `SELECT ${column} FROM org_integration_connections
+       WHERE org_id = $1 AND provider = $2 AND ($3::uuid IS NULL OR revision = $3::uuid)`,
+      [orgId, provider, expectedRevision ?? null]
     );
     const row = result.rows[0];
-    if (!row?.encrypted_refresh_token) {
+    if (!row?.[column]) {
       return undefined;
     }
-    return decryptCredential(String(row.encrypted_refresh_token), this.credentialsEncryptionKey);
+    return decryptCredential(String(row[column]), this.credentialsEncryptionKey);
   }
 
   public async delete(orgId: string, provider: IntegrationProvider): Promise<void> {
-    await this.pool.query(
+    await this.sql.query(
       `DELETE FROM org_integration_connections WHERE org_id = $1 AND provider = $2`,
       [orgId, provider]
     );
@@ -148,6 +192,24 @@ export class IntegrationConnectionStore {
     }
     return decryptCredential(encrypted, this.credentialsEncryptionKey);
   }
+}
+
+const PROVIDERS: IntegrationProvider[] = ["slack", "atlassian", "notion", "google-docs", "teams"];
+const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const MAX_TOKEN_BYTES = 64 * 1024;
+
+function assertRevision(value: unknown): asserts value is string {
+  if (typeof value !== "string" || !UUID.test(value)) throw new Error("Invalid integration connection revision");
+}
+
+function checkedToken(value: unknown): string {
+  // Bound normalization/encryption before allocating ciphertext or reaching SQL.
+  if (typeof value !== "string" || value.length > MAX_TOKEN_BYTES || Buffer.byteLength(value, "utf8") > MAX_TOKEN_BYTES) {
+    throw new Error("Invalid refreshed credential");
+  }
+  const token = value.trim();
+  if (!token || /[\u0000-\u0020\u007f]/.test(token)) throw new Error("Invalid refreshed credential");
+  return token;
 }
 
 function parseMetadata(raw: unknown): IntegrationConnectionMetadata {

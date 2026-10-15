@@ -3,12 +3,12 @@ title: Model assignments
 description: How CoopAI routes chat, quick actions, edit mode, and autocomplete — Auto by default, with a paid global picker.
 section: extension
 order: 2
-lastUpdated: "2026-09-09"
+lastUpdated: "2026-10-11"
 ---
 
 CoopAI assigns an LLM per feature when you leave the picker on **Auto** (the default). **Free** stays Auto-only. **Pro, Pro+, Max, and Enterprise** pick a model from the **model menu in chat**. Picking a Frontier model fills the monthly usage bar faster. See [Plans & billing](/docs/plans-billing).
 
-Autocomplete, intent suggest, source previews, and PR notes always use the assigned model and count as **Base model** on the monthly bar. They do not follow the chat picker.
+Autocomplete, intent suggest, source previews, source verification, and PR notes always use the assigned model and count as **Base model** on the monthly bar. They do not follow the chat picker. Your selection controls the first answer. Source verification uses a separate assigned model to check it against reviewed evidence; that model also writes the one corrective replacement if needed.
 
 <!-- figures ml -->
 ![Model & chat — what Auto uses for Chat, Quick actions, /edit, and Autocomplete](/screenshots/docs/extension-settings-models-and-chat.png)
@@ -24,6 +24,7 @@ Autocomplete, intent suggest, source previews, and PR notes always use the assig
 | **Autocomplete** (inline ghost text) | Mistral | Codestral | `completionRouter.ts` → FIM when available |
 | **Intent suggest** (quick-action chips when phrase match is weak) | OpenAI | GPT-4o mini | Same (`intent_suggest` use case) |
 | **Sources expand preview** (short AI overview for expanded source cards) | OpenAI | GPT-4o mini | Same (`evidence_preview` use case) |
+| **Source verification** (private checks for the five source quick actions) | OpenAI | GPT-5.5 | Assigned independently of the answer model; original action use case retained |
 | **PR notes** (Create pull request summary) | OpenAI | GPT-4o mini | Same (`pr_summary` use case) |
 | **Embeddings** (Deep-Index semantic search) | OpenAI | text-embedding-3-small | Backend only — not shown in settings |
 
@@ -42,6 +43,8 @@ Paid users see:
 - **Save model settings** persists the autocomplete toggle. Change models from the model menu in chat.
 
 This page does **not** change when you pick a model in chat.
+
+Source verification and its one corrective replacement retain the same assignment on Free and paid plans. Their actual model costs count toward the applicable allowance; multiple internal calls from one quick action still count as one Free message. These steps do not provide a second model picker.
 
 Free users see the same page. The model menu in chat is Pro and above.
 

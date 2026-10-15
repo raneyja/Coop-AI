@@ -115,7 +115,7 @@ import {
 } from "../context/committedActivity";
 import { readSemanticRetrievalEnabled } from "../config/semanticRetrievalConfig";
 import { CacheEntry, RateLimitAwareExecutor } from "../context/rateLimitAwareExecution";
-import { createChatOutputGate, delayUntilMinResponseVisible } from "./chatResponseTiming";
+import { createChatOutputGate, delayUntilMinResponseVisible, ResponseTimingTrace, registerResponseTiming, acceptDisplayReceipt } from "./chatResponseTiming";
 import { shouldEnableSynthesisThinking } from "../config/chatSynthesisThinking";
 import { createStreamDeltaBatcher } from "./streamDeltaBatcher";
 import { resolveChatOutputMaxTokens } from "../config/chatOutputBudget";
@@ -200,6 +200,11 @@ import { buildOwnershipSynthesisUserPrompt } from "../prompts/ownershipSynthesis
 import { buildRepoSummarySynthesisUserPrompt } from "../prompts/repoSummarySynthesis";
 import { buildBlastRadiusSynthesisUserPrompt, importOnlyNamedBlastAnswer } from "../prompts/blastRadiusSynthesis";
 import { streamSourceGroundedBlast } from "./blastRadiusSourceReview";
+import { streamSourceReviewedUnderstand } from "./understandRepoSourceReview";
+import { streamSourceReviewedTraceDecision } from "./traceDecisionSourceReview";
+import { streamSourceReviewedOwnership } from "./ownershipSourceReview";
+import { ownershipCurrentWindows } from "../context/ownershipClaimEvidence";
+import { traceDecisionCurrentWindows } from "../context/traceDecisionClaimEvidence";
 import { verifySourceCitationQuotes } from "../prompts/sourceCitationIntegrity";
 import { buildKnowledgeGapsContinuationMessage, streamSourceReviewedKnowledgeGaps } from "./knowledgeGapsSourceReview";
 import { gatherBlastRadiusSourceEvidence } from "../context/blastRadiusSourceEvidence";
@@ -253,10 +258,6 @@ import {
   messageNeedsSelectedRepo,
   shouldClarifyFirstChatTurn
 } from "./chatMessageIntent";
-import {
-  shouldOfferQuickActionSuggest,
-  suggestRunChipLabel
-} from "./quickActionSuggestIntent";
 import {
   INTENT_SUGGEST_TIMEOUT_MS,
   type IntentSuggestCompleteFn
@@ -633,6 +634,7 @@ import {
 } from "./createPrChatRouting";
 import { isCommentOnlyEditAsk } from "./editAskKind";
 import { isConversationalChat, type RepoCodeAction } from "./repoCodeIntent";
+import type { WebviewStartupEvent } from "./webviewStartup";
 
 export type CoopChatSessionOptions = {
   extensionUri: vscode.Uri;
@@ -650,6 +652,7 @@ export type CoopChatSessionOptions = {
   agentOrchestrator: import("../api/agent/AgentOrchestrator").AgentOrchestrator;
   onDescriptionChange?: (description: string) => void;
   onTitleChange?: (title: string) => void;
+  onWebviewStartup?: (event: WebviewStartupEvent) => void;
   enforceSidebarMinWidth?: boolean;
   /** When set, enables persisted multi-thread history for this session (sidebar). */
   threadScopeKey?: string;
@@ -672,6 +675,7 @@ const UNDERSTAND_REPO_INTEGRATION_BUDGET_MS = 10_000;
 
 export class CoopChatSession {
   private webview?: vscode.Webview;
+  private chatStartupGeneration?: string;
   private settingsWebview?: vscode.Webview;
   /** Async hydration can finish after its panel/webview has been disposed. */
   private disposed = false;
@@ -742,6 +746,9 @@ export class CoopChatSession {
   private workspacePromptWatcher?: vscode.Disposable;
   private contextDebugChannel?: vscode.OutputChannel;
   private agentDiagnosticChannel?: vscode.OutputChannel;
+  private readonly activeSubmissionTimings = new Map<string, ResponseTimingTrace>();
+  private readonly submissionResponseTimings = new Map<string, { trace: ResponseTimingTrace; endPreparation: () => void }>();
+  private readonly pendingDisplayTimings = new Map<string, ResponseTimingTrace>();
   private readonly agentDiagnosticEventCounts = new Map<string, number>();
   private pendingChatLocalFiles?: LocalFileContextPayload;
   /** Plain chat and /edit attach the whole chip file, not the caret window. */
@@ -872,6 +879,8 @@ export class CoopChatSession {
     // EH reload + visibility re-attach call this repeatedly. Settings already
     // replaces its listener; chat must too or one Send is handled twice.
     this.webview = webview;
+    this.chatMessageDisposable?.dispose();
+    this.chatMessageDisposable = undefined;
     this.chatMessageDisposable = replaceExclusiveDisposable(
       this.chatMessageDisposable,
       this.wireWebview(webview, "chat")
@@ -884,11 +893,23 @@ export class CoopChatSession {
     if (!this.webview) {
       return;
     }
+    this.chatStartupGeneration = crypto.randomUUID();
+    this.options.onWebviewStartup?.({ generation: this.chatStartupGeneration, stage: "html-assigned" });
     this.webview.html = renderWebviewHtml(this.webview, this.options.extensionUri, {
       view: "chat",
       enforceMinWidth: this.options.enforceSidebarMinWidth,
-      panelSessionId: this.options.panelSessionId
+      panelSessionId: this.options.panelSessionId,
+      startupGeneration: this.chatStartupGeneration
     });
+  }
+
+  /** A sidebar view can be disposed without disposing its persisted session. */
+  public detachWebview(webview: vscode.Webview): void {
+    if (this.webview !== webview) { return; }
+    this.chatMessageDisposable?.dispose();
+    this.chatMessageDisposable = undefined;
+    this.webview = undefined;
+    this.chatStartupGeneration = undefined;
   }
 
   public attachSettingsWebview(webview: vscode.Webview, onClose?: () => void): void {
@@ -1481,11 +1502,12 @@ export class CoopChatSession {
 
   /** Batch token-sized chat:delta posts so a long stream cannot freeze the host. */
   private createChatDeltaBatcher(threadId: string) {
+    const identity = this.threadRuns.get(threadId)?.responseTiming?.identity;
     return createStreamDeltaBatcher({
       publish: (chunk) => {
         this.postForThread(threadId, {
           type: "chat:delta",
-          payload: { chunk, threadId }
+          payload: { chunk, threadId, responseTiming: identity }
         });
       }
     });
@@ -1543,6 +1565,7 @@ export class CoopChatSession {
   private handleStreamCancel(threadId: string): void {
     this.intentSuggestAbort?.abort();
     this.intentSuggestAbort = undefined;
+    this.activeSubmissionTimings.get(threadId)?.finish("canceled");
 
     const turn = this.threadRuns.get(threadId);
     const partialText = turn?.partialAssistant?.trim() ?? "";
@@ -1702,6 +1725,7 @@ export class CoopChatSession {
 
   private async finishTurnAssistantMessage(turn: ChatTurn, finalMessage: ChatMessage): Promise<void> {
     if (!this.threadRuns.isStreamActive(turn)) return;
+    const endPublication = turn.responseTiming?.span("publication-validation");
     let message = finalMessage;
     if (turn.sourceCitationWindows !== undefined) {
       // A source-backed synthesis has already validated this frozen evidence.
@@ -1711,6 +1735,7 @@ export class CoopChatSession {
       if (checked.invalidQuotes || checked.verifiedQuotes < (turn.sourceCitationMinimumQuotes ?? 0)) {
         if (this.isViewingThread(turn.threadId)) this.sessionCostUsd = turn.sessionCostUsd;
         this.persistTurnThread(turn);
+        endPublication?.("failed");
         throw new Error("Coop could not publish an answer with altered or missing source quotes. Retry this request.");
       }
       message = { ...finalMessage, content: checked.content, sourceCitationMode: "explicit" };
@@ -1725,10 +1750,12 @@ export class CoopChatSession {
         message = { ...finalMessage, content: groundedContent };
       }
     } catch {
+      turn.responseTiming?.event("publication-grounding-unavailable");
       // Fail open — never drop the turn if cite grounding cannot read the file.
     }
-    if (!this.threadRuns.isStreamActive(turn)) return;
-    message = attachChatTurnActivity(message, turn);
+    if (!this.threadRuns.isStreamActive(turn)) { endPublication?.("canceled"); return; }
+    endPublication?.();
+    message = { ...attachChatTurnActivity(message, turn), responseTiming: turn.responseTiming?.identity };
     turn.history.push(message);
     if (this.isViewingThread(turn.threadId)) {
       this.chatHistory.push(message);
@@ -1739,6 +1766,7 @@ export class CoopChatSession {
     } else {
       this.persistTurnThread(turn);
     }
+    turn.responseTiming?.event("publication-complete", { viewed: this.isViewingThread(turn.threadId) });
     this.threadRuns.complete(turn);
     this.pushThreadsList();
   }
@@ -2060,14 +2088,6 @@ export class CoopChatSession {
     };
   }
 
-  /** Existing chip source for local-buffer attach — pin counts as remote even if stamp was demoted. */
-  private chipSourceBeforeLocalAttach(): RepoContext["fileSource"] {
-    if (this.isWorkingOnRemoteProvenance()) {
-      return "remote";
-    }
-    return this.currentContext.fileSource;
-  }
-
   /** Remote pin for autocomplete. Same-path clone stays graph-eligible. */
   public autocompleteRemotePin(): string | undefined {
     return this.remoteProvenanceFile;
@@ -2308,21 +2328,6 @@ export class CoopChatSession {
     });
   }
 
-  private async runPromptLibraryEntry(
-    entry: WorkspacePromptEntry,
-    options?: {
-      mentions?: ChatFileMention[];
-      attachments?: ChatImageAttachment[];
-      composerText?: string;
-    }
-  ): Promise<void> {
-    const text = this.resolvePromptLibraryText(entry, options?.composerText);
-    await this.runResolvedPromptText(text, entry.actionId, {
-      mentions: options?.mentions,
-      attachments: options?.attachments
-    });
-  }
-
   public async submitQuickAction(actionId: QuickActionId, context?: RepoContext): Promise<void> {
     if (context) {
       // Merge so an explicit file (including outside-workspace) is never dropped.
@@ -2355,10 +2360,31 @@ export class CoopChatSession {
   }
 
   private wireWebview(webview: vscode.Webview, source: "chat" | "settings"): vscode.Disposable {
-    return webview.onDidReceiveMessage(async (raw: WebviewInbound) => {
+    return webview.onDidReceiveMessage(async (raw: WebviewInbound & { startupGeneration?: string }) => {
+      const generation = this.chatStartupGeneration;
+      const isCurrent = (): boolean => !this.disposed && (source === "chat"
+        ? this.webview === webview && generation === this.chatStartupGeneration && raw.startupGeneration === generation
+        : this.settingsWebview === webview);
+      if (!isCurrent()) { return; }
       try {
-        await this.handleMessage(raw, source);
+        if (source === "chat" && generation) {
+          if (raw.type === "webview:startup") {
+            this.options.onWebviewStartup?.({ generation, stage: raw.payload.stage });
+            return;
+          }
+          if (raw.type === "webview-ready") {
+            this.options.onWebviewStartup?.({ generation, stage: "webview-ready" });
+          }
+        }
+        await this.handleMessage(raw, source, isCurrent);
+        if (isCurrent() && source === "chat" && generation && raw.type === "webview-ready") {
+          this.options.onWebviewStartup?.({ generation, stage: "session-restored" });
+        }
       } catch (error) {
+        if (!isCurrent()) { return; }
+        if (source === "chat" && generation && raw.type === "webview-ready") {
+          this.options.onWebviewStartup?.({ generation, stage: "session-failed" });
+        }
         const message = formatUserFacingNetworkError(error, "Unexpected extension error.");
         if (source === "chat") {
           this.postToChat({ type: "chat:error", payload: { message } });
@@ -2367,10 +2393,11 @@ export class CoopChatSession {
     });
   }
 
-  private async handleMessage(message: WebviewInbound, source: "chat" | "settings"): Promise<void> {
+  private async handleMessage(message: WebviewInbound, source: "chat" | "settings", isCurrent: () => boolean = () => !this.disposed): Promise<void> {
     switch (message.type) {
       case "webview-ready":
         await this.initialize();
+        if (!isCurrent()) { return; }
         this.postTheme();
         if (source === "chat") {
           // Snap open tabs only when passive editor following is armed.
@@ -2463,7 +2490,16 @@ export class CoopChatSession {
         await this.pushSettingsState();
         return;
       }
+      case "chat:display-receipt": {
+        const { traceId, submissionId, elapsedMs, milestone } = message.payload;
+        const trace = this.pendingDisplayTimings.get(traceId);
+        if (trace && acceptDisplayReceipt(trace, { traceId, submissionId, elapsedMs, milestone })) {
+          if (milestone === "complete") this.pendingDisplayTimings.delete(traceId);
+        }
+        return;
+      }
       case "chat:send":
+        try {
         await this.handleChatSend(
           message.payload.message,
           message.payload.quickAction,
@@ -2476,6 +2512,10 @@ export class CoopChatSession {
             targetFile: message.payload.targetFile
           }
         );
+        } catch (error) {
+          if (message.payload.clientSubmissionId) this.submissionResponseTimings.get(message.payload.clientSubmissionId)?.trace.finish("failed");
+          throw error;
+        }
         return;
       case "chat:suggest-resolve":
         await this.handleSuggestResolve(message.payload);
@@ -3645,6 +3685,13 @@ export class CoopChatSession {
   }
 
   private async fetchContextRequest(request: ContextFetchRequest): Promise<ContextFetchResult> {
+    const turn = this.activityTurnForRequest(request);
+    const end = turn?.responseTiming?.span("evidence", { requestType: request.type });
+    try { const result = await this.fetchContextRequestMeasured(request); end?.(result.error ? "failed" : "completed"); return result; }
+    catch (error) { end?.(turn?.streamAbort.signal.aborted ? "canceled" : "failed"); throw error; }
+  }
+
+  private async fetchContextRequestMeasured(request: ContextFetchRequest): Promise<ContextFetchResult> {
     let result: ContextFetchResult;
     // Start focused remote discovery alongside the scan, before it spends the gather budget.
     const gapsReadBudgetMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
@@ -4258,38 +4305,6 @@ export class CoopChatSession {
         message: `${coopBuildBanner()}: ${message}`
       };
     }
-  }
-
-  private mergeUnderstandRepoContextResults(
-    indexedFirst: ContextFetchResult,
-    featureResult: ContextFetchResult
-  ): ContextFetchResult {
-    const indexedData =
-      typeof indexedFirst.data === "object" && indexedFirst.data !== null
-        ? (indexedFirst.data as Record<string, unknown>)
-        : {};
-    const featureData =
-      typeof featureResult.data === "object" && featureResult.data !== null
-        ? (featureResult.data as Record<string, unknown>)
-        : {};
-
-    const mergedData = {
-      ...featureData,
-      ...indexedData,
-      entryFiles: indexedData.entryFiles ?? featureData.entryFiles,
-      manifest: featureData.manifest ?? indexedData.manifest,
-      treeOverview: indexedData.treeOverview ?? featureData.treeOverview,
-      repoInventory: indexedData.repoInventory ?? featureData.repoInventory,
-      repository: featureData.repository ?? indexedData.repository
-    };
-
-    return {
-      ...featureResult,
-      ...indexedFirst,
-      data: mergedData,
-      error: hasRepoSummaryEvidence(mergedData) ? undefined : featureResult.error ?? indexedFirst.error,
-      message: featureResult.message ?? indexedFirst.message
-    };
   }
 
   /** Single entry point for indexed-repo facts and remote file reads. */
@@ -4971,39 +4986,16 @@ export class CoopChatSession {
     const repo = this.currentContext.repo ?? this.preferences.repo;
     const secrets = this.options.integrationSecrets;
     const gathering = this.contextGatheringOptions();
-    let slackScope: ResolvedIntegrationScope | undefined;
-    let atlassianScope: ResolvedIntegrationScope | undefined;
-    let notionScope: ResolvedIntegrationScope | undefined;
-    let googleDocsScope: ResolvedIntegrationScope | undefined;
-    let teamsScope: ResolvedIntegrationScope | undefined;
-    if (!isCoopDevMode()) {
-      const scoped: ScopedIntegrationProvider | undefined =
-        provider === "slack"
-          ? "slack"
-          : provider === "jira" || provider === "confluence"
-            ? "atlassian"
-            : provider === "notion"
-              ? "notion"
-              : provider === "google-docs"
-                ? "google-docs"
-                : provider === "teams"
-                  ? "teams"
-                  : undefined;
-      if (scoped) {
-        try {
-          const resolved = await this.options.api.getIntegrationScope(
-            this.preferences.apiBaseUrl,
-            scoped
-          );
-          if (scoped === "slack") slackScope = resolved;
-          if (scoped === "atlassian") atlassianScope = resolved;
-          if (scoped === "notion") notionScope = resolved;
-          if (scoped === "google-docs") googleDocsScope = resolved;
-          if (scoped === "teams") teamsScope = resolved;
-        } catch {
-          /* scope optional when API unavailable */
-        }
-      }
+    const scoped: ScopedIntegrationProvider =
+      provider === "jira" || provider === "confluence" ? "atlassian" : provider;
+    let scope: ResolvedIntegrationScope;
+    try {
+      scope = await this.options.api.getIntegrationScope(this.preferences.apiBaseUrl, scoped);
+    } catch {
+      scope = {
+        provider: scoped, enforced: true, allowed: false, scopeStatus: "required",
+        reason: "Integration access could not be verified."
+      };
     }
     const extraTerms = query.trim() ? [query.trim()] : undefined;
     const searchOnly = !extra?.openIds?.length;
@@ -5030,7 +5022,7 @@ export class CoopChatSession {
       case "slack":
         return fetchSlackSearchContext({
           ...base,
-          integrationScope: slackScope
+          integrationScope: scope
         });
       case "jira":
         return fetchJiraSearchContext({
@@ -5038,7 +5030,7 @@ export class CoopChatSession {
           preferHost: this.currentContext.provider,
           codeHostRouter: this.options.codeHostRouter,
           codeHostConnected: gathering.codeHostConnected ?? this.isCodeHostConnected(),
-          integrationScope: atlassianScope
+          integrationScope: scope
         });
       case "teams":
         if (isTeamsComingSoon()) {
@@ -5046,7 +5038,7 @@ export class CoopChatSession {
         }
         return fetchTeamsSearchContext({
           ...base,
-          integrationScope: teamsScope
+          integrationScope: scope
         });
       case "notion":
         return fetchNotionSearchContext({
@@ -5056,7 +5048,7 @@ export class CoopChatSession {
           limit: 8,
           extraTerms,
           jobScoped: true,
-          integrationScope: notionScope,
+          integrationScope: scope,
           searchOnly,
           openIds,
           existingHits,
@@ -5070,7 +5062,7 @@ export class CoopChatSession {
           limit: 8,
           extraTerms,
           jobScoped: true,
-          integrationScope: atlassianScope,
+          integrationScope: scope,
           searchOnly,
           openIds,
           existingHits,
@@ -5081,7 +5073,7 @@ export class CoopChatSession {
           ...base,
           extraTerms,
           jobScoped: true,
-          integrationScope: googleDocsScope
+          integrationScope: scope
         });
       default:
         return { error: `Unsupported integration: ${provider}` };
@@ -5864,10 +5856,6 @@ export class CoopChatSession {
   private async resolveIntegrationScopes(
     request: ContextFetchRequest
   ): Promise<Partial<Record<ScopedIntegrationProvider, ResolvedIntegrationScope>> | undefined> {
-    if (isCoopDevMode()) {
-      return undefined;
-    }
-
     const providers: ScopedIntegrationProvider[] = [];
     if (shouldFetchSlackContext(request)) {
       providers.push("slack");
@@ -5897,7 +5885,10 @@ export class CoopChatSession {
             provider
           );
         } catch {
-          /* scope optional when API unavailable */
+          scopes[provider] = {
+            provider, enforced: true, allowed: false, scopeStatus: "required",
+            reason: "Integration access could not be verified."
+          };
         }
       })
     );
@@ -6878,11 +6869,27 @@ export class CoopChatSession {
   ): Promise<void> {
     const requestStartedAt = options?.requestStartedAt ?? Date.now();
     const submissionThreadId = this.activeThreadId();
+    const submissionId = options?.clientSubmissionId;
+    if (submissionId && !this.submissionResponseTimings.has(submissionId) &&
+        vscode.workspace.getConfiguration("coopAI").get<boolean>("agentDiagnostics", false)) {
+      const traceId = `response-${crypto.randomUUID()}`;
+      const trace = new ResponseTimingTrace({ traceId, submissionId }, event =>
+        this.logAgentDiagnostic(submissionThreadId, { ...event, turnId: traceId,
+          buildId: COOP_EXTENSION_BUILD_ID, bundleId: COOP_EXTENSION_BUNDLE_ID }));
+      this.activeSubmissionTimings.get(submissionThreadId)?.finish("canceled");
+      this.activeSubmissionTimings.set(submissionThreadId, trace);
+      if (this.activeSubmissionTimings.size > 64) this.activeSubmissionTimings.delete(this.activeSubmissionTimings.keys().next().value!);
+      trace.event("submission-received", { clock: "host-monotonic" });
+      this.submissionResponseTimings.set(submissionId, { trace, endPreparation: trace.span("preparation") });
+      if (this.submissionResponseTimings.size > 64) this.submissionResponseTimings.delete(this.submissionResponseTimings.keys().next().value!);
+    }
+    const submissionTiming = submissionId ? this.submissionResponseTimings.get(submissionId) : undefined;
     const cancellationGeneration = this.threadRuns.cancellationGeneration(submissionThreadId);
     const submissionCancelled = () =>
       this.threadRuns.cancellationGeneration(submissionThreadId) !== cancellationGeneration ||
       this.activeThreadId() !== submissionThreadId;
     if (this.currentContext.repoSelectionPending) {
+      submissionTiming?.trace.finish("failed");
       this.post({ type: "chat:error", payload: { message: "The selected repository branch is still loading. Try again once it is ready." } });
       return;
     }
@@ -6997,7 +7004,7 @@ export class CoopChatSession {
         parsed: parsedSlash,
         slashUserArgs: options?.slashUserArgs
       });
-      const plan = await this.resolveChatIntentPlan(interpretMessage, { constraint });
+      const plan = await this.resolveChatIntentPlan(interpretMessage, { constraint, responseTiming: submissionTiming?.trace });
       if (submissionCancelled()) return;
       options = { ...options, intentPlan: plan };
 
@@ -7346,6 +7353,20 @@ export class CoopChatSession {
     // Align turn clock with chat timing helper (soft gather budgets use startedAt).
     if (capturedAttachmentMetadata) this.logAttachmentDiagnostic(turn, "attachment-capture", capturedAttachmentMetadata);
     turn.startedAt = this.chatTurnStartedAt;
+    if (vscode.workspace.getConfiguration("coopAI").get<boolean>("agentDiagnostics", false)) {
+      submissionTiming?.endPreparation();
+      const trace = submissionTiming?.trace ?? new ResponseTimingTrace({ traceId: turn.id },
+        event => this.logAgentDiagnostic(turn.threadId, { ...event, turnId: turn.id,
+          buildId: COOP_EXTENSION_BUILD_ID, bundleId: COOP_EXTENSION_BUNDLE_ID }),
+        () => performance.now(), Date.now() - requestStartedAt);
+      turn.responseTiming = trace;
+      registerResponseTiming(turn.streamAbort.signal, trace);
+      trace.event("turn-start", { submissionClock: options?.clientSubmissionId ? "webview-receipt-pending" : "host-only" });
+      this.pendingDisplayTimings.set(trace.identity.traceId, trace);
+      if (this.pendingDisplayTimings.size > 64) {
+        this.pendingDisplayTimings.delete(this.pendingDisplayTimings.keys().next().value!);
+      }
+    }
     this.turnStreamAbort = turn.streamAbort.signal;
     this.pushThreadsList();
 
@@ -7793,72 +7814,6 @@ export class CoopChatSession {
     }
   }
 
-  private async completeQuickActionSuggestClarification(
-    message: string,
-    offer: NonNullable<ReturnType<typeof shouldOfferQuickActionSuggest>>,
-    mentions?: ChatFileMention[],
-    attachments?: ChatImageAttachment[],
-    intentPlan?: ChatIntentPlan
-  ): Promise<void> {
-    const mentionRefs = this.quickActionMentionRefs(mentions);
-    const historyContent = plainChatHistoryContent(message, mentionRefs, {
-      context: this.currentContext,
-      includeContextChips: true
-    });
-    const userMessage: ChatMessage = {
-      role: "user",
-      content: historyContent,
-      timestamp: Date.now(),
-      attachments: attachments?.length ? attachments : undefined
-    };
-    this.chatHistory.push(userMessage);
-    if (this.chatHistory.length === 1) {
-      this.setThreadTitle(
-        summarizeThreadTitle({
-          content: historyContent || attachments?.[0]?.name || "File attachment",
-          context: this.currentContext
-        })
-      );
-    }
-    this.postChatHistory();
-    this.persistActiveThread();
-    this.chatTurnStartedAt = Date.now();
-    this.clearIntentFeedback();
-
-    const chips = [
-      ...offer.suggestions.map((suggestion) => ({
-        kind: "quick-action" as const,
-        actionId: suggestion.actionId,
-        label: suggestRunChipLabel(suggestion.actionId)
-      })),
-      { kind: "plain" as const, label: "Just answer" }
-    ];
-
-    await delayUntilMinResponseVisible(this.chatTurnStartedAt);
-    const assistantTimestamp = Date.now();
-    const finalMessage: ChatMessage = {
-      role: "assistant",
-      content: offer.clarifyingPrompt,
-      timestamp: assistantTimestamp,
-      suggest: {
-        focus: message.trim(),
-        chips
-      }
-    };
-    this.chatHistory.push(finalMessage);
-    this.pendingQuickActionSuggest = {
-      focus: message.trim(),
-      mentions,
-      attachments,
-      assistantTimestamp,
-      intentPlan
-    };
-    void this.emitUsageEvent("suggest_chip.shown");
-    this.post({ type: "chat:complete", payload: { message: finalMessage } });
-    this.postChatHistory();
-    this.persistActiveThread();
-  }
-
   private async handleSuggestResolve(
     payload: { choice: "plain" } | { choice: "action"; actionId: string }
   ): Promise<void> {
@@ -8145,7 +8100,7 @@ export class CoopChatSession {
    */
   private async resolveChatIntentPlan(
     message: string,
-    options?: { constraint?: ChatCommandConstraint }
+    options?: { constraint?: ChatCommandConstraint; responseTiming?: ResponseTimingTrace }
   ): Promise<ChatIntentPlan> {
     const connectedTools = this.listConnectedIntegrationTools();
     const owner = this.currentContext.owner?.trim() || this.preferences.owner?.trim();
@@ -8172,6 +8127,7 @@ export class CoopChatSession {
     this.intentSuggestAbort?.abort();
     const controller = new AbortController();
     this.intentSuggestAbort = controller;
+    if (options?.responseTiming) registerResponseTiming(controller.signal, options.responseTiming, false);
     const complete: IntentSuggestCompleteFn = async (params) => {
       let full = "";
       await this.options.api.streamChat(
@@ -9662,10 +9618,19 @@ export class CoopChatSession {
           route: fileAssistantTurn ? "file-assistant" : "indexed-repo"
         });
       }
+      let sourceReviewedAnswer: string | undefined;
+      const prepareSourceAnswer = (answer: string) => enrichChatResponseForAction({
+        quickAction: effectiveQuickAction, integrationProvider, content: answer, contextBundle,
+        activeFile: turnContext.file, mentions: mentionRefs, activeRepoId,
+        owner: turnContext.owner, repo: turnContext.repo, userQuestion: lastUserBubble,
+        fileAssistant: fileAssistantTurn
+      });
       const synthesisStream: SecureApiClient["streamChat"] = effectiveQuickAction === "knowledge-gaps"
         ? (request, onChunk, baseUrl, reviewSignal, onThinking) => streamSourceReviewedKnowledgeGaps({
           stream: this.options.api.streamChat.bind(this.options.api), request,
           evidence: knowledgeGapsEvidence, onChunk, baseUrl, signal: reviewSignal, onThinking,
+          question: userFocus?.trim() || taskContent,
+          prepareAnswer: prepareSourceAnswer,
           onReview: (sourceRequest) => this.logAgentDiagnostic(turn.threadId, {
             stage: "gaps-source-review", turnId: turn.id, elapsedMs: Date.now() - turn.startedAt,
             role: "source-synthesis", enableThinking: sourceRequest.enableThinking,
@@ -9684,9 +9649,10 @@ export class CoopChatSession {
             role, finishReason: callResult.finishReason, usage: callResult.usage ?? null,
             bundleId: COOP_EXTENSION_BUNDLE_ID
           }),
-          onValidated: (windows, verifiedQuotes) => {
+          onValidated: (windows, verifiedQuotes, answer) => {
             turn.sourceCitationWindows = windows;
             turn.sourceCitationMinimumQuotes = verifiedQuotes;
+            sourceReviewedAnswer = answer;
           },
           onFailureUsage: (usage) => {
             turn.sessionCostUsd += usage.estimatedCostUsd;
@@ -9695,17 +9661,96 @@ export class CoopChatSession {
             this.persistTurnThread(turn);
           }
         })
+        : effectiveQuickAction === "understand-repo"
+          ? (request, onChunk, baseUrl, reviewSignal, onThinking) => streamSourceReviewedUnderstand({
+            stream: this.options.api.streamChat.bind(this.options.api), request, summary: repoSummary,
+            question: userFocus?.trim() || taskContent, prepareAnswer: prepareSourceAnswer,
+            onChunk, baseUrl, signal: reviewSignal, onThinking,
+            onPhase: phase => this.logAgentDiagnostic(turn.threadId, {
+              stage: "understand-model-phase", turnId: turn.id, elapsedMs: Date.now() - turn.startedAt,
+              ...phase, bundleId: COOP_EXTENSION_BUNDLE_ID
+            }),
+            onRepair: details => this.logAgentDiagnostic(turn.threadId, {
+              stage: "understand-output-repair", turnId: turn.id, elapsedMs: Date.now() - turn.startedAt,
+              ...details, bundleId: COOP_EXTENSION_BUNDLE_ID
+            }),
+            onValidated: (windows, verifiedQuotes, answer) => {
+              turn.sourceCitationWindows = windows;
+              turn.sourceCitationMinimumQuotes = verifiedQuotes;
+              sourceReviewedAnswer = answer;
+            },
+            onFailureUsage: usage => {
+              turn.sessionCostUsd += usage.estimatedCostUsd;
+              this.postForThread(turn.threadId, {type: "chat:usage", payload: {...usage, sessionCostUsd: turn.sessionCostUsd}});
+              if (this.isViewingThread(turn.threadId)) this.sessionCostUsd = turn.sessionCostUsd;
+              this.persistTurnThread(turn);
+            }
+          })
+        : effectiveQuickAction === "trace-decision"
+          ? (request, onChunk, baseUrl, reviewSignal, onThinking) => streamSourceReviewedTraceDecision({
+            stream: this.options.api.streamChat.bind(this.options.api), request, timeline: decisionTimeline,
+            windows: traceDecisionCurrentWindows(localPayload, turnContext.file),
+            question: userFocus?.trim() || taskContent, prepareAnswer: prepareSourceAnswer,
+            onChunk, baseUrl, signal: reviewSignal, onThinking,
+            onPhase: phase => this.logAgentDiagnostic(turn.threadId, {
+              stage: "trace-model-phase", turnId: turn.id, elapsedMs: Date.now() - turn.startedAt,
+              ...phase, bundleId: COOP_EXTENSION_BUNDLE_ID
+            }),
+            onRepair: details => this.logAgentDiagnostic(turn.threadId, {
+              stage: "trace-output-repair", turnId: turn.id, elapsedMs: Date.now() - turn.startedAt,
+              ...details, bundleId: COOP_EXTENSION_BUNDLE_ID
+            }),
+            onValidated: (windows, verifiedQuotes, answer) => {
+              turn.sourceCitationWindows = windows;
+              turn.sourceCitationMinimumQuotes = verifiedQuotes;
+              sourceReviewedAnswer = answer;
+            },
+            onFailureUsage: usage => {
+              turn.sessionCostUsd += usage.estimatedCostUsd;
+              this.postForThread(turn.threadId, {type: "chat:usage", payload: {...usage, sessionCostUsd: turn.sessionCostUsd}});
+              if (this.isViewingThread(turn.threadId)) this.sessionCostUsd = turn.sessionCostUsd;
+              this.persistTurnThread(turn);
+            }
+          })
+        : effectiveQuickAction === "find-owner"
+          ? (request, onChunk, baseUrl, reviewSignal, onThinking) => streamSourceReviewedOwnership({
+            stream: this.options.api.streamChat.bind(this.options.api), request, report: ownershipReport,
+            slackSearch: slackEvidence, windows: ownershipCurrentWindows(localPayload, turnContext.file),
+            question: userFocus?.trim() || taskContent, prepareAnswer: prepareSourceAnswer,
+            onChunk, baseUrl, signal: reviewSignal, onThinking,
+            onPhase: phase => this.logAgentDiagnostic(turn.threadId, {
+              stage: "owner-model-phase", turnId: turn.id, elapsedMs: Date.now() - turn.startedAt,
+              ...phase, bundleId: COOP_EXTENSION_BUNDLE_ID
+            }),
+            onRepair: details => this.logAgentDiagnostic(turn.threadId, {
+              stage: "owner-output-repair", turnId: turn.id, elapsedMs: Date.now() - turn.startedAt,
+              ...details, bundleId: COOP_EXTENSION_BUNDLE_ID
+            }),
+            onValidated: (windows, verifiedQuotes, answer) => {
+              turn.sourceCitationWindows = windows;
+              turn.sourceCitationMinimumQuotes = verifiedQuotes;
+              sourceReviewedAnswer = answer;
+            },
+            onFailureUsage: usage => {
+              turn.sessionCostUsd += usage.estimatedCostUsd;
+              this.postForThread(turn.threadId, {type: "chat:usage", payload: {...usage, sessionCostUsd: turn.sessionCostUsd}});
+              if (this.isViewingThread(turn.threadId)) this.sessionCostUsd = turn.sessionCostUsd;
+              this.persistTurnThread(turn);
+            }
+          })
         : this.options.api.streamChat.bind(this.options.api);
       const result = await streamSourceGroundedBlast({
         stream: synthesisStream,
         evidence: effectiveQuickAction === "blast-radius" ? blastRadiusEvidence : undefined,
+        question: userFocus?.trim() || taskContent,
+        prepareAnswer: prepareSourceAnswer,
         request: {
           message: apiMessage,
           context: {
             owner: fileAssistantTurn ? undefined : turnContext.owner,
             repo: fileAssistantTurn ? undefined : turnContext.repo,
             branch: fileAssistantTurn ? undefined : turnContext.branch,
-            file: effectiveQuickAction === "understand-repo" ? turnContext.file : undefined
+            file: ["blast-radius", "knowledge-gaps", "understand-repo", "trace-decision", "find-owner"].includes(effectiveQuickAction ?? "") ? turnContext.file : undefined
           },
           sessionMode: sessionModeForContext(turnContext),
           fileSource: turnContext.fileSource,
@@ -9718,7 +9763,7 @@ export class CoopChatSession {
           temperature: this.preferences.temperature,
           maxTokens: resolveChatOutputMaxTokens(this.preferences.maxTokens),
           enableThinking: enableSynthesisThinking,
-          ...(["blast-radius", "knowledge-gaps"].includes(effectiveQuickAction ?? "") ? { quotaTurnId: turn.id } : {})
+          ...(["blast-radius", "knowledge-gaps", "understand-repo", "trace-decision", "find-owner"].includes(effectiveQuickAction ?? "") ? { quotaTurnId: turn.id } : {})
         },
         onChunk: (chunk) => {
           outputGate.push(chunk);
@@ -9739,9 +9784,10 @@ export class CoopChatSession {
           if (this.isViewingThread(turn.threadId)) this.sessionCostUsd = turn.sessionCostUsd;
           this.persistTurnThread(turn);
         },
-        onValidated: (windows, verifiedQuotes) => {
+        onValidated: (windows, verifiedQuotes, answer) => {
           turn.sourceCitationWindows = windows;
           turn.sourceCitationMinimumQuotes = verifiedQuotes;
+          sourceReviewedAnswer = answer;
         },
         onThinking: (thinkingChunk) => {
           // Thinking is not folded into answer text or model replay — persisted on the trail only.
@@ -9776,7 +9822,7 @@ export class CoopChatSession {
               owner: fileAssistantTurn ? undefined : turnContext.owner,
               repo: fileAssistantTurn ? undefined : turnContext.repo,
               branch: fileAssistantTurn ? undefined : turnContext.branch,
-              file: effectiveQuickAction === "understand-repo" ? turnContext.file : undefined
+              file: ["blast-radius", "knowledge-gaps", "understand-repo", "trace-decision", "find-owner"].includes(effectiveQuickAction ?? "") ? turnContext.file : undefined
             },
             sessionMode: sessionModeForContext(turnContext),
             fileSource: turnContext.fileSource,
@@ -9842,7 +9888,7 @@ export class CoopChatSession {
               localWorkspaceAttached
             })
           : full;
-      const enrichedContent = enrichChatResponseForAction({
+      const enrichedContent = sourceReviewedAnswer === full ? sourceReviewedAnswer : enrichChatResponseForAction({
         onDiagnostic: (event) => this.logAgentDiagnostic(turn.threadId, {...event, turnId: turn.id}),
         quickAction: effectiveQuickAction,
         integrationProvider,
@@ -9876,7 +9922,7 @@ export class CoopChatSession {
       // patch, strip invented SEARCH blocks so Apply never shows SEARCH not found
       // on a random UI file.
       const agentPatch = extractAgentProposedPatchText(contextBundle);
-      const contentForPatchCard = applyChangeHuntFinish({
+      const contentForPatchCard = sourceReviewedAnswer === full ? enrichedContent : applyChangeHuntFinish({
         agentAction: turn.agentAction ?? "none",
         hasAgentPatch: Boolean(agentPatch),
         content: mergeAnswerWithAgentPatch(enrichedContent, agentPatch),
@@ -12484,6 +12530,7 @@ export class CoopChatSession {
       return;
     }
     this.agentDiagnosticEventCounts.set(key, count + 1);
+    if (this.agentDiagnosticEventCounts.size > 256) this.agentDiagnosticEventCounts.delete(this.agentDiagnosticEventCounts.keys().next().value!);
     const redact = (value: string) =>
       value
         .replace(/\b(authorization|token|secret|password|api[_-]?key)(\s*[:=]\s*)[^\s,;]+/gi, "$1$2[redacted]")
@@ -13013,6 +13060,22 @@ export class CoopChatSession {
   }
 
   private postToChat(message: WebviewOutbound): void {
+    if (message.type === "chat:complete" && !message.payload.message.responseTiming) {
+      const user = this.chatHistory.slice(-4).reverse().find(entry => entry.role === "user");
+      const submission = user?.clientSubmissionId ? this.submissionResponseTimings.get(user.clientSubmissionId) : undefined;
+      if (submission && !this.threadRuns.get(this.activeThreadId())) {
+        submission.endPreparation();
+        submission.trace.event("publication-complete", { viewed: true, modelCall: false });
+        submission.trace.finish("completed");
+        this.pendingDisplayTimings.set(submission.trace.identity.traceId, submission.trace);
+        if (this.pendingDisplayTimings.size > 64) this.pendingDisplayTimings.delete(this.pendingDisplayTimings.keys().next().value!);
+        message = { ...message, payload: { ...message.payload, message: { ...message.payload.message, responseTiming: submission.trace.identity } } };
+      }
+    }
+    if (message.type === "chat:stream-resume") {
+      const turn = this.threadRuns.get(message.payload.threadId);
+      message = { ...message, payload: { ...message.payload, responseTiming: turn?.responseTiming?.identity } };
+    }
     void this.webview?.postMessage(message);
   }
 
@@ -13859,27 +13922,6 @@ function preparingAnswerMessageForAction(actionId: string): string {
     default:
       return "Preparing answer…";
   }
-}
-
-function extractGapSummary(result: Record<string, unknown>): JobProgressPayload["resultSummary"] | undefined {
-  if (typeof result.foundGaps !== "number") {
-    const nested = result.results as Record<string, unknown> | undefined;
-    if (nested && typeof nested.foundGaps === "number") {
-      return {
-        foundGaps: Number(nested.foundGaps),
-        highPriority: Number(nested.highPriority ?? 0),
-        mediumPriority: Number(nested.mediumPriority ?? 0),
-        lowPriority: Number(nested.lowPriority ?? 0)
-      };
-    }
-    return undefined;
-  }
-  return {
-    foundGaps: Number(result.foundGaps),
-    highPriority: Number(result.highPriority ?? 0),
-    mediumPriority: Number(result.mediumPriority ?? 0),
-    lowPriority: Number(result.lowPriority ?? 0)
-  };
 }
 
 function completionMessageFor(event: IntentEvent): string {

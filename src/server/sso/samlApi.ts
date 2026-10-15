@@ -12,7 +12,9 @@ import type { AuthConfig } from "../auth/authConfig";
 import type { OrgStore } from "../orgStore";
 import type { ServerConfig } from "../serverConfig";
 import type { UserStore } from "../users/userStore";
-import { SsoConfigError, type SamlService } from "./samlService";
+import { SamlRequestStateError } from "./samlRequestStore";
+import { IdpIdentityError } from "../users/userStore";
+import { SsoConfigError, samlCookieName, type SamlService, type SamlAssertion } from "./samlService";
 import type { SsoConfigStore } from "./ssoConfigStore";
 
 type ParsedRequest = {
@@ -56,6 +58,8 @@ export async function handleSamlApiRequest(
   if (!parsed.pathname.startsWith(SAML_PREFIX)) {
     return false;
   }
+  response.setHeader("cache-control", "no-store");
+  response.setHeader("referrer-policy", "no-referrer");
 
   if (!deps.orgStore || !deps.userStore || !deps.ssoConfigStore || !deps.samlService) {
     writeJson(response, 503, { error: "sso_unavailable", message: "Enterprise SSO is not configured on this server." });
@@ -64,6 +68,9 @@ export async function handleSamlApiRequest(
 
   if (parsed.method === "GET" && parsed.pathname === `${SAML_PREFIX}/metadata`) {
     return handleMetadata(parsed, response, deps);
+  }
+  if (parsed.method === "GET" && parsed.pathname === `${SAML_PREFIX}/continue`) {
+    return handleContinue(parsed, response, deps);
   }
   if (parsed.method === "GET" && parsed.pathname === `${SAML_PREFIX}/start`) {
     return handlePublicStart(parsed, response, deps);
@@ -111,6 +118,10 @@ async function handlePublicStart(
   const orgId = parsed.query?.get("orgId")?.trim();
   const orgName = parsed.query?.get("org")?.trim();
   const redirect = sanitizeSamlRedirect(parsed.query?.get("redirect"), deps);
+  if (parsed.query?.get("redirect") && !redirect) {
+    writeJson(response, 400, { error: "invalid_redirect" });
+    return true;
+  }
   const preferJson = parsed.query?.get("format") === "json";
   const mode = parsed.query?.get("mode")?.trim() === "test" ? "test" : "login";
 
@@ -132,7 +143,7 @@ async function handlePublicStart(
   }
 
   const org = await deps.orgStore!.getOrganization(resolvedOrgId);
-  if (!org || org.plan !== "enterprise") {
+  if (!org || org.plan !== "enterprise" || await deps.orgStore!.isOrgSuspended(org.id)) {
     respondBrowserOrJson(
       response,
       preferJson,
@@ -157,13 +168,8 @@ async function handlePublicStart(
     return true;
   }
 
-  const relayState = encodeRelayState({
-    orgId: resolvedOrgId,
-    redirect: redirect ?? undefined,
-    mode
-  });
   try {
-    const url = await deps.samlService!.getLoginRedirectUrl(config, relayState);
+    const url = await deps.samlService!.beginLogin(config, { redirect, mode });
     if (preferJson) {
       writeJson(response, 200, { redirectUrl: url });
     } else {
@@ -177,7 +183,7 @@ async function handlePublicStart(
       redirect,
       502,
       "sso_login_failed",
-      errorMessage(error)
+      "SSO sign-in could not start. Contact your organization administrator."
     );
   }
   return true;
@@ -198,6 +204,10 @@ async function handleLogin(
   }
 
   const redirect = sanitizeSamlRedirect(parsed.query?.get("redirect"), deps);
+  if (parsed.query?.get("redirect") && !redirect) {
+    writeJson(response, 400, { error: "invalid_redirect" });
+    return true;
+  }
   const preferJson = parsed.query?.get("format") === "json";
 
   const config = await deps.ssoConfigStore!.getEnabledConfig(auth.orgId);
@@ -213,10 +223,9 @@ async function handleLogin(
     return true;
   }
 
-  const relayState = encodeRelayState({ orgId: auth.orgId, redirect });
 
   try {
-    const url = await deps.samlService!.getLoginRedirectUrl(config, relayState);
+    const url = await deps.samlService!.beginLogin(config, { redirect, mode: "login" });
     if (preferJson) {
       writeJson(response, 200, { redirectUrl: url });
     } else {
@@ -230,7 +239,7 @@ async function handleLogin(
       redirect,
       502,
       "sso_login_failed",
-      errorMessage(error)
+      "SSO sign-in could not start. Contact your organization administrator."
     );
   }
   return true;
@@ -239,7 +248,7 @@ async function handleLogin(
 // ---------------------------------------------------------------------------
 // POST /v1/auth/saml/callback  — UNAUTHENTICATED browser POST from the IdP.
 // Cannot carry a CoopAI bearer token. Gating is enforced by:
-//   (1) resolving the org from signed RelayState, and
+//   (1) resolving a pending opaque state bound to the initiating browser, and
 //   (2) requiring that org's plan === 'enterprise' AND SSO is enabled.
 // Trust in the assertion itself comes from SAML signature validation.
 // ---------------------------------------------------------------------------
@@ -249,8 +258,18 @@ async function handleCallback(
   deps: SamlApiDeps
 ): Promise<boolean> {
   // CRITICAL: requires rawBody (application/x-www-form-urlencoded) — webhookServer must pass rawBody for this route or SAMLResponse will be missing.
+  if (!parsed.headers["content-type"]?.toLowerCase().startsWith("application/x-www-form-urlencoded")) {
+    writeJson(response, 415, { error: "unsupported_media_type" });
+    return true;
+  }
   const form = readForm(parsed);
-  const earlyRelay = decodeRelayState(form.get("RelayState"), deps);
+  if (form.getAll("RelayState").length > 1 || form.getAll("SAMLResponse").length > 1) {
+    writeJson(response, 400, { error: "invalid_saml_form" });
+    return true;
+  }
+  const relayToken = form.get("RelayState") ?? "";
+  const state = await deps.samlService!.getLoginState(relayToken, parsed.headers.cookie);
+  const earlyRelay = state && { orgId: state.orgId, redirect: state.redirect, mode: state.mode };
 
   const samlResponse = form.get("SAMLResponse");
   if (!samlResponse) {
@@ -271,14 +290,19 @@ async function handleCallback(
       undefined,
       400,
       "missing_relay_state",
-      "SP-initiated login is required (no org in RelayState)."
+      "A pending browser-bound SP-initiated login is required."
     );
     return true;
   }
 
-  // Enterprise-plan gate, resolved from the RelayState org rather than a bearer.
+  if (relay.redirect && sanitizeSamlRedirect(relay.redirect, deps) !== relay.redirect) {
+    writeJson(response, 400, { error: "invalid_redirect" });
+    return true;
+  }
+
+  // Enterprise-plan gate, resolved from durable state rather than client JSON.
   const org = await deps.orgStore!.getOrganization(relay.orgId);
-  if (!org || org.plan !== "enterprise") {
+  if (!org || org.plan !== "enterprise" || await deps.orgStore!.isOrgSuspended(org.id)) {
     respondCallbackError(
       response,
       relay,
@@ -301,20 +325,40 @@ async function handleCallback(
     return true;
   }
 
-  let assertion;
+  let assertion: SamlAssertion | undefined;
+  let accepted;
   try {
-    assertion = await deps.samlService!.validateCallback(config, samlResponse);
+    const verified = await deps.samlService!.validateCallback(config, samlResponse, state!);
+    assertion = verified;
+    accepted = await deps.samlService!.acceptCallback(config, samlResponse, state!, async (verified, transaction) => {
+      if (relay.mode === "test") return undefined;
+      const user = await deps.userStore!.upsertUserFromIdp({ orgId: relay.orgId,
+        email: verified.email, idpSubject: verified.idpSubject, idpProvider: verified.idpProvider }, transaction);
+      const session = await deps.userStore!.createSession(user.id, relay.orgId, {
+        ttlMs: deps.serverConfig.ssoSessionTtlMs, authProvider: "saml", samlConfigHash: state!.configHash, transaction
+      });
+      return { user, session };
+    });
   } catch (error) {
-    // node-saml throws here on signature/audience/timestamp/status failures.
+    if (error instanceof IdpIdentityError) {
+      respondCallbackError(response, relay, 403, "sso_account_unavailable", "Contact your organization administrator to restore access.");
+      return true;
+    }
+    if (!(error instanceof SsoConfigError) && !(error instanceof SamlRequestStateError)
+      && assertion) throw error;
+    // Signature/binding failure or current-eligibility denial: no session effects.
     respondCallbackError(
       response,
       relay,
       401,
       "saml_validation_failed",
-      errorMessage(error)
+      "The SAML response could not be verified. Start sign-in again."
     );
     return true;
   }
+
+  if (!assertion) throw new Error("SAML validation returned no identity");
+  response.setHeader("set-cookie", `${samlCookieName(relayToken)}=; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=0`);
 
   // Admin "Test connection" — validate only; do not create/swap sessions.
   if (relay.mode === "test") {
@@ -336,17 +380,8 @@ async function handleCallback(
     return true;
   }
 
-  const user = await deps.userStore!.upsertUserFromIdp({
-    orgId: relay.orgId,
-    email: assertion.email,
-    idpSubject: assertion.idpSubject,
-    idpProvider: assertion.idpProvider
-  });
-
-  const session = await deps.userStore!.createSession(user.id, relay.orgId, {
-    ttlMs: deps.serverConfig.ssoSessionTtlMs,
-    authProvider: "saml"
-  });
+  if (!accepted) throw new Error("SAML login admission returned no session");
+  const { user, session } = accepted;
 
   await deps.auditLogger?.record({
     orgId: relay.orgId,
@@ -423,7 +458,7 @@ async function handleOffboard(
       return true;
     }
     const idpSubject = String(body.idpSubject);
-    const changed = await deps.userStore!.deactivateByIdpSubject(config.provider, idpSubject);
+    const changed = await deps.userStore!.deactivateByIdpSubject(auth.orgId, config.provider, idpSubject);
     await deps.auditLogger?.record({
       orgId: auth.orgId,
       principal,
@@ -471,36 +506,17 @@ async function requireEnterpriseBearer(
   return { orgId: auth.orgId, apiKeyId: auth.apiKeyId };
 }
 
-function encodeRelayState(state: RelayState): string {
-  return Buffer.from(JSON.stringify(state), "utf8").toString("base64url");
-}
-
-function decodeRelayState(
-  raw: string | null | undefined,
-  deps: { authConfig?: AuthConfig } = {}
-): RelayState | undefined {
-  if (!raw) {
-    return undefined;
-  }
+async function handleContinue(parsed: ParsedRequest, response: ServerResponse, deps: SamlApiDeps): Promise<boolean> {
   try {
-    const json = Buffer.from(raw, "base64url").toString("utf8");
-    const parsed = JSON.parse(json) as Partial<RelayState>;
-    if (parsed && typeof parsed.orgId === "string" && parsed.orgId) {
-      const mode = parsed.mode === "test" ? "test" : "login";
-      return {
-        orgId: parsed.orgId,
-        redirect: sanitizeSamlRedirect(parsed.redirect, deps),
-        mode
-      };
-    }
+    const relay = parsed.query?.get("RelayState") ?? "";
+    const login = await deps.samlService!.continueLogin(relay);
+    response.writeHead(302, { location: login.authorizeUrl, "set-cookie": login.cookie,
+      "cache-control": "no-store", "referrer-policy": "no-referrer" });
+    response.end();
   } catch {
-    // Not our encoded RelayState — fall through.
+    writeJson(response, 400, { error: "invalid_saml_state", message: "Start sign-in again." });
   }
-  // Tolerate a bare orgId (UUID) as RelayState for simple integrations.
-  if (/^[0-9a-fA-F-]{16,}$/.test(raw)) {
-    return { orgId: raw, mode: "login" };
-  }
-  return undefined;
+  return true;
 }
 
 function sanitizeSamlRedirect(
@@ -512,7 +528,13 @@ function sanitizeSamlRedirect(
   const allowlist: AuthRedirectAllowlist | undefined = deps.authConfig
     ? authRedirectAllowlistFromConfig(deps.authConfig)
     : undefined;
-  return sanitizeAuthRedirect(redirect, allowlist);
+  const safe = sanitizeAuthRedirect(redirect, allowlist);
+  if (!safe) return undefined;
+  const url = new URL(safe);
+  if (url.username || url.password || url.hash) return undefined;
+  if (["vscode:", "vscode-insiders:", "cursor:", "cursor-insiders:"].includes(url.protocol)
+    && (url.hostname !== "coop-ai.coop-ai" || url.pathname !== "/auth/callback")) return undefined;
+  return safe;
 }
 
 function deliverSsoTestResult(
@@ -597,11 +619,10 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof SsoConfigError || error instanceof Error ? error.message : String(error);
-}
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
+  response.setHeader("cache-control", "no-store");
+  response.setHeader("referrer-policy", "no-referrer");
   response.writeHead(statusCode, { "content-type": "application/json; charset=utf-8" });
   response.end(JSON.stringify(body));
 }

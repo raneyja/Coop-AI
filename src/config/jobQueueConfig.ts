@@ -14,6 +14,9 @@ export type JobQueueConfig = {
   backend: JobQueueBackend;
   workerConcurrency: number;
   maxJobDurationMs: number;
+  leaseDurationMs?: number;
+  heartbeatIntervalMs?: number;
+  shutdownTimeoutMs?: number;
   resultRetentionDays: number;
   scheduledRetentionDays: number;
   databaseUrl?: string;
@@ -43,8 +46,11 @@ const DEFAULT_SCHEDULES: JobScheduleConfig[] = [
 export function loadJobQueueConfig(env: NodeJS.ProcessEnv = process.env): JobQueueConfig {
   return {
     backend: readBackend(env.JOBS_BACKEND),
-    workerConcurrency: readNumber(env.JOBS_WORKER_CONCURRENCY, 2),
+    workerConcurrency: readNumber(env.JOBS_WORKER_CONCURRENCY, 1),
     maxJobDurationMs: readNumber(env.JOBS_MAX_DURATION_MS, 300_000),
+    leaseDurationMs: readNumber(env.JOBS_LEASE_DURATION_MS, 30_000),
+    heartbeatIntervalMs: readNumber(env.JOBS_HEARTBEAT_INTERVAL_MS, 10_000),
+    shutdownTimeoutMs: readNumber(env.JOBS_SHUTDOWN_TIMEOUT_MS, 10_000),
     resultRetentionDays: readNumber(env.JOBS_RESULT_RETENTION_DAYS, 7),
     scheduledRetentionDays: readNumber(env.JOBS_SCHEDULED_RETENTION_DAYS, 30),
     databaseUrl: env.DATABASE_URL,

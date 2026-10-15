@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildBlastRadiusSynthesisUserPrompt, enrichBlastRadiusResponse, BLAST_RADIUS_EVIDENCE_SYSTEM } from "./blastRadiusSynthesis";
+import { buildBlastRadiusSynthesisUserPrompt, enrichBlastRadiusResponse, BLAST_RADIUS_EVIDENCE_SYSTEM, BLAST_RADIUS_BEHAVIORAL_SCOPE_POLICY } from "./blastRadiusSynthesis";
 import { buildUserMessageWithContext, systemPromptForUseCase } from "./systemPrompts";
 
 const evidence = {
@@ -56,6 +56,34 @@ test("source formatting does not substitute answers using incidental identifiers
       content: "if ready:\n    action()", startLine: 1, endLine: 2, truncated: false }]
   });
   assert.equal(result, content, "this formatter proves quote integrity; it does not certify or rewrite prose semantics");
+});
+
+test("normal and exceptional behavior use the same general rule across languages and layouts", () => {
+  const fixtures = [
+    { path: "modules/worker/operation.ts", caller: "apps/run.ts", source: "try { await perform(); } catch (error) { if (known(error)) throw error; throw translate(error); }" },
+    { path: "operation.py", caller: "runner.py", source: "try:\n    perform()\nexcept KnownFailure:\n    raise\nexcept Exception as error:\n    raise translate(error)" },
+    { path: "crates/task/src/lib.rs", caller: "crates/client/src/main.rs", source: "match perform().await { Ok(value) => Ok(value), Err(Error::Known(error)) => Err(error), Err(error) => Err(translate(error)) }" },
+    { path: "internal/task/action.go", caller: "cmd/run/main.go", source: "value, err := perform()\nif errors.Is(err, known) { return value, err }\nif err != nil { return value, translate(err) }\nreturn value, nil" }
+  ];
+  for (const fixture of fixtures) {
+    const prompt = buildBlastRadiusSynthesisUserPrompt({ file: fixture.path,
+      userQuestion: "What could be affected if this file changes? Separate confirmed dependencies from possible impact and unknowns.",
+      evidence: { directDependents: [fixture.caller], sourceFiles: [
+        { path: fixture.path, repoId: "github:org/arbitrary", branch: "review", role: "target", content: fixture.source,
+          startLine: 1, endLine: fixture.source.split("\n").length, truncated: false },
+        { path: fixture.caller, repoId: "github:org/arbitrary", branch: "review", role: "dependent", content: "consume(operation)",
+          startLine: 1, endLine: 1, truncated: false }
+      ] } });
+    assert.ok(prompt.includes(BLAST_RADIUS_BEHAVIORAL_SCOPE_POLICY));
+    assert.ok(BLAST_RADIUS_EVIDENCE_SYSTEM.includes(BLAST_RADIUS_BEHAVIORAL_SCOPE_POLICY));
+    assert.match(prompt, /actual branches instead of generalizing one branch to all errors/);
+    assert.match(prompt, /unopened calls can throw other errors or cause side effects/);
+    assert.match(prompt, /does not establish that no earlier writes occurred/);
+    assert.match(prompt, /framework error codes, rollback, commit, and client serialization semantics require attached supporting evidence/);
+    assert.match(prompt, /opened caller's handling establishes that/);
+    assert.match(prompt, /If no particular change is specified/);
+    assert.doesNotMatch(prompt, /sign-field-with-token|documenso|UNKNOWN_ERROR/);
+  }
 });
 
 test("a target body with no confirmed dependents keeps the short unknown-impact policy", () => {

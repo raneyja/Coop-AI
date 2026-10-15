@@ -524,10 +524,12 @@ export async function fetchJiraSearchContext(options: {
     };
   }
 
-  const client =
-    options.client ?? createJiraClientFromCredentials(await options.secrets.getCredentials(), {
-      signal: options.signal
-    });
+  const creds = options.client ? undefined : await options.secrets.getCredentials();
+  const failClosed = Boolean(creds?.proxy);
+  if (failClosed && (!options.integrationScope?.enforced || !options.integrationScope.allowed)) {
+    return { source: "jira-search", jql: "", issues: [], error: "Integration source authorization is unavailable." };
+  }
+  const client = options.client ?? createJiraClientFromCredentials(creds!, { signal: options.signal });
   if (!client) {
     return {
       source: "jira-search",
@@ -540,14 +542,18 @@ export async function fetchJiraSearchContext(options: {
   const existingIssues = (options.existingHits?.issues ?? []) as JiraSearchTicket[];
   if (options.openIds?.length && existingIssues.length > 0) {
     const scopedExistingIssues = filterScopedIssues(existingIssues, options.integrationScope);
-    return {
-      source: "jira-search",
-      jql: "",
-      issues: await openJiraSearchHitBodies(client, scopedExistingIssues, options.openIds),
-      ...(scopedExistingIssues.length === 0 && options.integrationScope?.enforced
-        ? { error: "The selected Jira ticket is outside the allowed project scope." }
-        : {})
-    };
+    try {
+      return {
+        source: "jira-search",
+        jql: "",
+        issues: await openJiraSearchHitBodies(client, scopedExistingIssues, options.openIds, failClosed),
+        ...(scopedExistingIssues.length === 0 && options.integrationScope?.enforced
+          ? { error: "The selected Jira ticket is outside the allowed project scope." }
+          : {})
+      };
+    } catch {
+      return { source: "jira-search", jql: "", issues: [], error: "The selected Jira ticket is unavailable or no longer authorized." };
+    }
   }
 
   const queryText = options.queryText ?? "";
@@ -755,7 +761,8 @@ export async function fetchJiraSearchContext(options: {
       mapIssues([...issuesByKey.values()]),
       options.openIds?.length
         ? options.openIds
-        : focusRank.slice(0, Math.min(limit, 3)).map((issue) => issue.key)
+        : focusRank.slice(0, Math.min(limit, 3)).map((issue) => issue.key),
+      failClosed
     );
     for (const ticket of opened) {
       const prior = issuesByKey.get(ticket.key);
@@ -907,9 +914,11 @@ function jiraLatestAllowlisted(scope: ResolvedIntegrationScope | undefined): boo
 async function openJiraSearchHitBodies(
   client: JiraSearchClient,
   hits: JiraSearchTicket[],
-  ids: string[]
+  ids: string[],
+  failClosed = false
 ): Promise<JiraSearchTicket[]> {
   return openHitsByIds({
+    failClosed,
     hits,
     ids,
     idOf: (issue) => issue.key,
@@ -917,7 +926,8 @@ async function openJiraSearchHitBodies(
       try {
         const opened = await client.getIssue(issue.key);
         return { ...mapIssues([opened])[0]!, opened: true };
-      } catch {
+      } catch (error) {
+        if (failClosed) throw error;
         return { ...issue, opened: true };
       }
     }

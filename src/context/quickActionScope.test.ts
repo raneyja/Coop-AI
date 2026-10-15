@@ -308,8 +308,23 @@ async function run(): Promise<void> {
         userFocus: "What's still unsafe about default-on hunt for on-call API-error locates?",
         context: { ...repoContext, file: "src/api/agent/AgentOrchestrator.ts", scope: "file" }
       }),
-      false
+      true
     );
+  });
+
+  test("explicit selected-file Gaps focus preserves attachment independently of filename", () => {
+    for (const file of ["opaque/a.ts", "nested/b.py", "rules/c.rs"]) {
+      assert.equal(shouldSkipOpenFileAttach({
+        quickAction: "knowledge-gaps",
+        userFocus: "Before changing validation in this file, which rules does its code establish?",
+        context: { ...repoContext, file, scope: "file" }
+      }), false);
+      assert.equal(shouldSkipOpenFileAttach({
+        quickAction: "knowledge-gaps",
+        userFocus: "Review webhook delivery and signature certificates",
+        context: { ...repoContext, file, scope: "file" }
+      }), true);
+    }
   });
 
   test("skip open-file attach for sticky Use-repo plain chat without a file chip", () => {

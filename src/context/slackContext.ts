@@ -1,3 +1,4 @@
+import { createSlackClientFromCredentials } from "../api/integrations/buildIntegrationClients";
 import { SlackClient, type SlackSearchHit, type SlackThread } from "../api/slack/slackClient";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
 import type { ContextFetchRequest } from "./requestBatcher";
@@ -233,7 +234,10 @@ export async function fetchSlackSearchContext(options: {
   }
 
   const creds = await options.secrets.getCredentials();
-  if (!creds.slackToken && !options.client) {
+  if (creds.proxy && (!options.integrationScope?.enforced || !options.integrationScope.allowed)) {
+    return { source: "slack-search", query: "", messages: [], error: "Integration source authorization is unavailable." };
+  }
+  if (!creds.proxy && !creds.slackToken && !options.client) {
     return {
       source: "slack-search",
       query: "",
@@ -271,7 +275,7 @@ export async function fetchSlackSearchContext(options: {
 
   const client =
     options.client ??
-    new SlackClient({ token: creds.slackToken!, signal: options.signal });
+    createSlackClientFromCredentials(creds, { signal: options.signal })!;
   const existingMessages = slackMessagesFromHits(options.existingHits);
   if (options.openIds?.length && existingMessages.length > 0) {
     const scopedExistingMessages = options.integrationScope?.enforced
@@ -282,7 +286,7 @@ export async function fetchSlackSearchContext(options: {
       : existingMessages;
     const messages = await attachSlackThreadBodies(client, scopedExistingMessages, {
       jobScoped: true,
-      openIds: options.openIds
+      openIds: options.openIds, failClosed: Boolean(creds.proxy)
     });
     return {
       source: "slack-search",
@@ -330,7 +334,7 @@ export async function fetchSlackSearchContext(options: {
         jobScoped: Boolean(
           (options.jobScoped && options.jobVerb !== "latest") || options.openAfterHit
         ),
-        openIds: options.openIds
+        openIds: options.openIds, failClosed: Boolean(creds.proxy)
       });
 
   const repoQuery =
@@ -395,31 +399,33 @@ const MAX_OPENED_THREADS = 3;
 async function attachSlackThreadBodies(
   client: SlackSearchClient,
   messages: SlackSearchMessage[],
-  options: { jobScoped: boolean; openIds?: string[] }
+  options: { failClosed?: boolean; jobScoped: boolean; openIds?: string[] }
 ): Promise<SlackSearchMessage[]> {
   if (messages.length === 0) {
     return messages;
   }
   if (options.openIds?.length) {
     return openHitsByIds({
+      failClosed: options.failClosed,
       hits: messages.map(withSlackHitId),
       ids: options.openIds,
       idOf: (message) => slackHitId(message),
-      openOne: (message) => openSlackArtifact(client, message)
+      openOne: (message) => openSlackArtifact(client, message, options.failClosed)
     });
   }
   if (!options.jobScoped) {
     return messages.map(withSlackHitId);
   }
   const selected = messages.slice(0, MAX_OPENED_THREADS);
-  const opened = await Promise.all(selected.map((message) => openSlackArtifact(client, message)));
+  const opened = await Promise.all(selected.map((message) => openSlackArtifact(client, message, options.failClosed)));
   const byKey = new Map(opened.map((message) => [messageKey(message), message]));
   return messages.map((message) => byKey.get(messageKey(message)) ?? withSlackHitId(message));
 }
 
 async function openSlackArtifact(
   client: SlackSearchClient,
-  message: SlackSearchMessage
+  message: SlackSearchMessage,
+  failClosed = false
 ): Promise<SlackSearchMessage> {
   const marked = { ...withSlackHitId(message), opened: true as const };
   if (client.getThread) {
@@ -442,10 +448,12 @@ async function openSlackArtifact(
           }
         }
       }
-    } catch {
+    } catch (error) {
+      if (failClosed) throw error;
       /* keep the search hit */
     }
   }
+  if (failClosed) throw new Error("Authorized integration read returned no body.");
   const text = sanitizeIntegrationSnippet(message.text);
   return text ? { ...marked, text, threadOpened: true } : marked;
 }
@@ -456,7 +464,8 @@ function messageKey(message: SlackSearchMessage): string {
 
 function resolveSlackThreadCoords(
   client: SlackSearchClient,
-  message: SlackSearchMessage
+  message: SlackSearchMessage,
+  failClosed = false
 ): { channelId: string; threadTs: string } | undefined {
   const channelId = message.channelId?.trim();
   const threadTs = (message.threadTs ?? message.ts)?.trim();

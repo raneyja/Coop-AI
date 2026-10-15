@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { isValidX509Cert, normalizeX509Cert } from "./x509Cert";
 
@@ -12,6 +13,7 @@ export type OrgSsoConfig = {
   enabled: boolean;
   createdAt: Date;
   updatedAt: Date;
+  authVersion?: string;
 };
 
 export type OrgSsoConfigInput = {
@@ -32,7 +34,7 @@ export class SsoConfigStore {
 
   public async getConfig(orgId: string): Promise<OrgSsoConfig | undefined> {
     const result = await this.pool.query(
-      `SELECT org_id, provider, idp_entity_id, idp_sso_url, idp_x509_cert, enabled, created_at, updated_at
+      `SELECT org_id, provider, idp_entity_id, idp_sso_url, idp_x509_cert, enabled, created_at, updated_at, auth_version
        FROM org_sso_config WHERE org_id = $1`,
       [orgId]
     );
@@ -64,7 +66,7 @@ export class SsoConfigStore {
          idp_x509_cert = EXCLUDED.idp_x509_cert,
          enabled = EXCLUDED.enabled,
          updated_at = NOW()
-       RETURNING org_id, provider, idp_entity_id, idp_sso_url, idp_x509_cert, enabled, created_at, updated_at`,
+       RETURNING org_id, provider, idp_entity_id, idp_sso_url, idp_x509_cert, enabled, created_at, updated_at, auth_version`,
       [orgId, input.provider, input.idpEntityId, input.idpSsoUrl, idpX509Cert, input.enabled ?? true]
     );
     return rowToConfig(result.rows[0]);
@@ -74,7 +76,7 @@ export class SsoConfigStore {
     const result = await this.pool.query(
       `UPDATE org_sso_config SET enabled = $2, updated_at = NOW()
        WHERE org_id = $1
-       RETURNING org_id, provider, idp_entity_id, idp_sso_url, idp_x509_cert, enabled, created_at, updated_at`,
+       RETURNING org_id, provider, idp_entity_id, idp_sso_url, idp_x509_cert, enabled, created_at, updated_at, auth_version`,
       [orgId, enabled]
     );
     const row = result.rows[0];
@@ -87,7 +89,7 @@ export class SsoConfigStore {
   }
 }
 
-function rowToConfig(row: Record<string, unknown>): OrgSsoConfig {
+export function rowToConfig(row: Record<string, unknown>): OrgSsoConfig {
   return {
     orgId: String(row.org_id),
     provider: String(row.provider) as SsoProvider,
@@ -95,7 +97,14 @@ function rowToConfig(row: Record<string, unknown>): OrgSsoConfig {
     idpSsoUrl: String(row.idp_sso_url),
     idpX509Cert: String(row.idp_x509_cert),
     enabled: Boolean(row.enabled),
-    createdAt: new Date(String(row.created_at)),
-    updatedAt: new Date(String(row.updated_at))
+    createdAt: row.created_at instanceof Date ? new Date(row.created_at) : new Date(String(row.created_at)),
+    updatedAt: row.updated_at instanceof Date ? new Date(row.updated_at) : new Date(String(row.updated_at)),
+    authVersion: row.auth_version == null ? undefined : String(row.auth_version)
   };
+}
+
+
+export function ssoConfigFingerprint(config: OrgSsoConfig): string {
+  return createHash("sha256").update(JSON.stringify([config.orgId, config.provider, config.idpEntityId,
+    config.idpSsoUrl, normalizeX509Cert(config.idpX509Cert), config.enabled, config.updatedAt.toISOString(), config.authVersion ?? "0"])).digest("hex");
 }

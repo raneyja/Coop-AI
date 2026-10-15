@@ -8,7 +8,7 @@ test("Blast source bodies select the dedicated contract in the actual Anthropic 
   const bodies: Record<string, unknown>[] = [];
   globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
     bodies.push(JSON.parse(String(init?.body)));
-    return new Response('data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"verified"}}\n\ndata: {"type":"message_stop"}\n\n', {
+    return new Response('data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"verified"}}\n\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":1}}\n\ndata: {"type":"message_stop"}\n\n', {
       headers: { "content-type": "text/event-stream" }
     });
   }) as typeof fetch;

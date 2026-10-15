@@ -346,7 +346,7 @@ test("gaps synthesis preserves dated ownership evidence and labels scan absence 
   });
   assert.ok(prompt.includes("Coverage flag (missing_owner)"));
   assert.ok(prompt.includes("absence is not established"));
-  assert.ok(prompt.includes("last commit 2026-10-04T21:00:00Z"));
+  assert.ok(prompt.includes("last retrieved commit 2026-10-04T21:00:00Z"));
   assert.ok(prompt.includes("Analysis time (UTC)"));
   assert.ok(prompt.includes("reviewer checks, recommendations, and suggested contacts"));
   assert.ok(prompt.includes("Aggregate commit counts do not establish last-quarter inactivity"));
@@ -417,6 +417,36 @@ test("normalized gaps file graph never labels importers as verified symbol calle
   assert.ok(prompt.includes("Retrieved file dependencies (1; sample, not complete caller coverage)"));
   assert.ok(prompt.includes("Graph provenance: unknown. Symbol use is unverified"));
   assert.ok(prompt.includes("do not call these named-function callers or claim behavior propagates"));
+});
+
+test("all source-audit modes preserve selection constraints and apply the same claim boundaries across languages", () => {
+  const files = [
+    {path: "opaque.ts", content: "const selected = entries.find(entry => entry.group === group && entry.role === role);\nif (!selected) throw new Error('missing');\nreturn authorize(selected, user);"},
+    {path: "nested/lib/a.py", content: "selected = [entry for entry in entries if entry.group == group and entry.role == role]\nif not selected:\n    raise ValueError('missing')\nreturn authorize(selected[0], user)"},
+    {path: "b.rs", content: "let selected = entries.iter().find(|entry| entry.group == group && entry.role == role);\nlet selected = selected.ok_or(Error::Missing)?;\nauthorize(selected, user)"},
+    {path: "other/c.rb", content: "selected = entries.find { |entry| entry.group == group && entry.role == role }\nraise 'missing' unless selected\nauthorize(selected, user)"}
+  ];
+  for (const file of files) {
+    for (const userFocus of ["Which rules are established by the code in this file?", "Review knowledge gaps in this file."]) {
+      const prompt = buildKnowledgeGapsSynthesisUserPrompt({
+        file: file.path, userFocus,
+        evidence: {focusFiles: [{...file, startLine: 41, truncated: true}]}
+      });
+      for (const [index, line] of file.content.split("\n").entries()) {
+        assert.ok(prompt.includes(`L${41 + index}: ${line}`), "Every supplied source constraint survives prompt assembly");
+      }
+      assert.match(prompt, /lookup establishes selection criteria, not permission/);
+      assert.match(prompt, /Preserve every shown constraint/);
+      assert.match(prompt, /factual premises inside open questions/);
+      assert.match(prompt, /earlier rejects, alternative outcomes, and exception handling/);
+      assert.match(prompt, /Skipping one guard establishes only that guard's bypass, never downstream reachability/);
+      assert.match(prompt, /normal return from intervening awaited calls remain conditions/);
+      assert.match(prompt, /A comment establishes what its author stated/);
+      assert.match(prompt, /unshown code was not inspected/);
+      assert.equal(prompt.includes("Documenso"), false);
+    }
+  }
+  assert.match(KNOWLEDGE_GAPS_EVIDENCE_SYSTEM, /lookup establishes selection criteria, not permission/);
 });
 
 console.log(`\nknowledgeGapsSynthesis: ${passed}/${passed + failed} tests passed`);

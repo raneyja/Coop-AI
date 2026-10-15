@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
 import {
   adminPortalAcceptInviteUrl,
   adminPortalFreshLoginUrl,
@@ -8,62 +9,48 @@ import {
 
 describe("adminPortalLoginUrl", () => {
   it("appends /login to base URL", () => {
-    expect(adminPortalLoginUrl("https://admin.coop-ai.dev")).toBe("https://admin.coop-ai.dev/login");
+    assert.equal(adminPortalLoginUrl("https://admin.coop-ai.dev"), "https://admin.coop-ai.dev/login");
   });
 
   it("does not double-append /login", () => {
-    expect(adminPortalLoginUrl("https://admin.coop-ai.dev/login")).toBe("https://admin.coop-ai.dev/login");
+    assert.equal(adminPortalLoginUrl("https://admin.coop-ai.dev/login"), "https://admin.coop-ai.dev/login");
   });
 
   it("strips trailing slashes", () => {
-    expect(adminPortalLoginUrl("https://admin.coop-ai.dev/")).toBe("https://admin.coop-ai.dev/login");
+    assert.equal(adminPortalLoginUrl("https://admin.coop-ai.dev/"), "https://admin.coop-ai.dev/login");
   });
 });
 
 describe("adminPortalFreshLoginUrl", () => {
   it("adds signedOut flag for email CTAs", () => {
-    expect(adminPortalFreshLoginUrl("https://admin.coop-ai.dev")).toBe(
-      "https://admin.coop-ai.dev/login?signedOut=1"
-    );
+    assert.equal(adminPortalFreshLoginUrl("https://admin.coop-ai.dev"), "https://admin.coop-ai.dev/login?signedOut=1");
   });
 
   it("prefills email when provided", () => {
-    expect(adminPortalFreshLoginUrl("https://admin.coop-ai.dev", { email: "owner@example.com" })).toBe(
-      "https://admin.coop-ai.dev/login?signedOut=1&email=owner%40example.com"
-    );
+    assert.equal(adminPortalFreshLoginUrl("https://admin.coop-ai.dev", { email: "owner@example.com" }), "https://admin.coop-ai.dev/login?signedOut=1&email=owner%40example.com");
   });
 
   it("strips /login suffix from base before building", () => {
-    expect(adminPortalFreshLoginUrl("https://admin.coop-ai.dev/login/", { email: "a@b.co" })).toBe(
-      "https://admin.coop-ai.dev/login?signedOut=1&email=a%40b.co"
-    );
+    assert.equal(adminPortalFreshLoginUrl("https://admin.coop-ai.dev/login/", { email: "a@b.co" }), "https://admin.coop-ai.dev/login?signedOut=1&email=a%40b.co");
   });
 
   it("ignores blank email", () => {
-    expect(adminPortalFreshLoginUrl("https://admin.coop-ai.dev", { email: "  " })).toBe(
-      "https://admin.coop-ai.dev/login?signedOut=1"
-    );
+    assert.equal(adminPortalFreshLoginUrl("https://admin.coop-ai.dev", { email: "  " }), "https://admin.coop-ai.dev/login?signedOut=1");
   });
 });
 
 describe("adminPortalSeatRequestsUrl", () => {
   it("appends /requests and strips /login", () => {
-    expect(adminPortalSeatRequestsUrl("https://admin.coop-ai.dev/login/")).toBe(
-      "https://admin.coop-ai.dev/requests"
-    );
+    assert.equal(adminPortalSeatRequestsUrl("https://admin.coop-ai.dev/login/"), "https://admin.coop-ai.dev/requests");
   });
 });
 
 describe("adminPortalAcceptInviteUrl", () => {
   it("builds accept-invite URL with encoded token", () => {
-    expect(adminPortalAcceptInviteUrl("https://admin.coop-ai.dev", "coop_invite_abc+def")).toBe(
-      "https://admin.coop-ai.dev/accept-invite?token=coop_invite_abc%2Bdef"
-    );
+    assert.equal(adminPortalAcceptInviteUrl("https://admin.coop-ai.dev", "coop_invite_abc+def"), "https://admin.coop-ai.dev/accept-invite?token=coop_invite_abc%2Bdef");
   });
 
   it("strips /login suffix from base URL", () => {
-    expect(adminPortalAcceptInviteUrl("https://admin.coop-ai.dev/login", "coop_invite_xyz")).toBe(
-      "https://admin.coop-ai.dev/accept-invite?token=coop_invite_xyz"
-    );
+    assert.equal(adminPortalAcceptInviteUrl("https://admin.coop-ai.dev/login", "coop_invite_xyz"), "https://admin.coop-ai.dev/accept-invite?token=coop_invite_xyz");
   });
 });

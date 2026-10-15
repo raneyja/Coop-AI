@@ -18,7 +18,7 @@ export type SimilarChunkHit = {
 };
 
 export class RepoEmbeddingsStore {
-  public constructor(private readonly pool: Pool) {}
+  public constructor(private readonly pool: Pick<Pool, "query">) {}
 
   public async countChunks(orgId: string, repoId: string): Promise<number> {
     return this.countChunksForRepos(orgId, [repoId]);

@@ -82,7 +82,7 @@ export function MemberOnboardingProvider({ children }: MemberOnboardingProviderP
     <MemberOnboardingContext.Provider value={ctx}>
       {children}
       {showSetup && pathname !== "/" && !dismissedToday ? (
-        <div className="fixed bottom-6 left-1/2 z-[90] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-lg border border-coop-border bg-coop-dark/95 px-4 py-3 shadow-xl shadow-black/40 backdrop-blur-sm">
+        <div className="fixed bottom-6 left-1/2 z-[90] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-lg border border-coop-border bg-coop-dark/95 px-4 py-3 shadow-xl shadow-black/40 backdrop-blur-xs">
           <p className="text-sm text-coop-muted">Finish your member setup to install the extension.</p>
           <button type="button" className="admin-btn-primary shrink-0" onClick={continueSetup}>
             Continue setup

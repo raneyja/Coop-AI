@@ -276,3 +276,4 @@ export function isUnfencedCitationStartLine(line: string): boolean {
   const locator = locatorFromProseLine(line);
   return locator != null && locator.startLine != null;
 }
+

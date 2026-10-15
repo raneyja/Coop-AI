@@ -4,7 +4,7 @@ import type { ManifestFileEntry, ManifestSymbol } from "./types";
 const UPSERT_BATCH_SIZE = 100;
 
 export class RepoManifestStore {
-  public constructor(private readonly pool: Pool) {}
+  public constructor(private readonly pool: Pick<Pool, "query">) {}
 
   public async deleteForRepo(orgId: string, repoId: string): Promise<void> {
     await this.pool.query(`DELETE FROM repo_manifests WHERE org_id = $1 AND repo_id = $2`, [

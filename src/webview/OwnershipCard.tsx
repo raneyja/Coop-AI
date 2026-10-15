@@ -50,11 +50,11 @@ type OwnershipCardProps = {
 };
 
 const RISK_LABELS: Record<keyof OwnershipRisk, string> = {
-  singlePointOfFailure: "Contribution concentration",
-  expertUnavailable: "All experts unavailable",
-  orphaned: "Orphaned (no recent commits)",
-  highTurnover: "High turnover",
-  teamDispersion: "Expertise dispersed"
+  singlePointOfFailure: "No scored secondary",
+  expertUnavailable: "Older sampled contributor activity",
+  orphaned: "No recent commits retrieved",
+  highTurnover: "Several authors; no primary tier",
+  teamDispersion: "Several active contributors; no primary tier"
 };
 
 function warningsBeyondLimitations(warnings: string[], limitations: string[]): string[] {
@@ -92,8 +92,8 @@ export function OwnershipCard({
     if (report.scores.some((score) => score.presence)) {
       list.push({ provider: "slack", detail: "Presence" });
     }
-    if (report.orgContext?.source === "codeowners" || report.orgContext?.source === "github_teams") {
-      list.push(evidenceCardCodeHostSource(host, "CODEOWNERS"));
+    if (report.orgContext) {
+      list.push(evidenceCardCodeHostSource(host, report.orgContext.source === "codeowners" ? "CODEOWNERS" : "Repository team lookup"));
     }
     if (report.signals?.issues?.length) {
       list.push({
@@ -129,7 +129,7 @@ export function OwnershipCard({
       <EvidenceConnectionStack>
         <EvidenceDerivedGroup>
           {activeRisks.length > 0 ? (
-            <IntegrationResultSection label="Risk flags">
+            <IntegrationResultSection label="Sample coverage flags — verify before action">
               <div className="flex flex-wrap gap-1.5">
                 {activeRisks.map(([key]) => (
                   <IntegrationResultBadge key={key} tone="warning">
@@ -173,12 +173,12 @@ export function OwnershipCard({
             onToggle={() => setExpanded((s) => ({ ...s, github: !s.github }))}
           >
             <div className="space-y-2">
-              {primary ? <ExpertRow label="Primary" expert={primary} /> : null}
+              {primary ? <ExpertRow label="Top contributor" expert={primary} /> : null}
               {secondary.map((expert) => (
-                <ExpertRow key={expert.owner} label="Secondary" expert={expert} />
+                <ExpertRow key={expert.owner} label="Contributor" expert={expert} />
               ))}
               {backup.slice(0, 2).map((expert) => (
-                <ExpertRow key={expert.owner} label="Backup" expert={expert} />
+                <ExpertRow key={expert.owner} label="Other contributor" expert={expert} />
               ))}
               {!primary && report.scores.length === 0 ? (
                 <IntegrationResultText muted>
@@ -213,7 +213,7 @@ export function OwnershipCard({
           {report.orgContext ? (
             <IntegrationResultSection label="Team">
               <IntegrationResultText>
-                Owned by{" "}
+                {report.orgContext.source === "codeowners" ? "Declared ownership: " : "Repository team (path ownership unverified): "}
                 {report.orgContext.htmlUrl ? (
                   <ChatActionLink
                     kind="external"
@@ -225,7 +225,7 @@ export function OwnershipCard({
                 )}
               </IntegrationResultText>
               {report.orgContext.members.length > 0 ? (
-                <IntegrationResultText muted>Members: {report.orgContext.members.join(", ")}</IntegrationResultText>
+                <IntegrationResultText muted>{report.orgContext.source === "codeowners" ? "Declared handles" : "Lookup members"}: {report.orgContext.members.join(", ")}</IntegrationResultText>
               ) : null}
               {report.orgContext.slackChannel ? (
                 <IntegrationResultText muted>Slack channel: {report.orgContext.slackChannel}</IntegrationResultText>

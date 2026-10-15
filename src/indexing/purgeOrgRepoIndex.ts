@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
+import { withJobEffectExclusion } from "../jobs/jobEffectAdmission";
 import type { GraphCache } from "../cache/graphCache";
 import { RepoManifestStore } from "../manifest/repoManifestStore";
-import { RepoDependencyEdgesStore } from "./repoDependencyEdgesStore";
 import { RepoEmbeddingsStore } from "./repoEmbeddingsStore";
 import { RepoSymbolIndexStore } from "./repoSymbolIndexStore";
 import { deleteZoektShardsForOrg, deleteZoektShardsForRepo } from "./zoektShardFiles";
@@ -22,15 +22,24 @@ export async function purgeOrgRepoIndex(
   repoId: string,
   options?: { graphCache?: GraphCache }
 ): Promise<PurgeOrgRepoIndexResult> {
-  await new RepoSymbolIndexStore(pool).deleteForRepo(orgId, repoId);
-  await new RepoEmbeddingsStore(pool).deleteForRepo(orgId, repoId);
-  await new RepoStatsStore(pool).deleteForRepo(orgId, repoId);
-  await new RepoDependencyEdgesStore(pool).deleteForRepo(orgId, repoId);
-  await new RepoManifestStore(pool).deleteForRepo(orgId, repoId);
-  await pool.query(`DELETE FROM graph_snapshots WHERE org_id = $1 AND repo_id = $2`, [orgId, repoId]);
-  options?.graphCache?.deleteGraph(orgId, repoId);
-  const zoektShardsRemoved = deleteZoektShardsForRepo(orgId, repoId);
-  return { purged: true, zoektShardsRemoved };
+  const result = await withJobEffectExclusion(pool, async client => {
+    await new RepoSymbolIndexStore(client).deleteForRepo(orgId, repoId);
+    await new RepoEmbeddingsStore(client).deleteForRepo(orgId, repoId);
+    await new RepoStatsStore(client).deleteForRepo(orgId, repoId);
+    await client.query('DELETE FROM repo_dependency_edges WHERE org_id = $1 AND repo_id = $2', [orgId, repoId]);
+    await new RepoManifestStore(client).deleteForRepo(orgId, repoId);
+    await client.query('INSERT INTO graph_publication_heads(org_id,repo_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[orgId,repoId]);
+    await client.query(`UPDATE graph_publication_heads SET requested_generation=requested_generation+1,
+      published_generation=requested_generation+1,revision=revision+1,tombstone=TRUE,
+      requested_job_id=NULL,published_job_id=NULL,origin='purge' WHERE org_id=$1 AND repo_id=$2`,[orgId,repoId]);
+    await client.query(`DELETE FROM graph_snapshots WHERE org_id = $1 AND repo_id = $2`, [orgId, repoId]);
+    // Filesystem deletion is not transactional. This admission prevents a job
+    // from writing new shards, but a failed unlink still needs reconciliation.
+    const zoektShardsRemoved = deleteZoektShardsForRepo(orgId, repoId);
+    return {purged: true as const, zoektShardsRemoved};
+  });
+  options?.graphCache?.deleteGraph(orgId, repoId, {persist: false});
+  return result;
 }
 
 /** Remove this org's Zoekt shards. Postgres rows cascade when the organization row is deleted. */

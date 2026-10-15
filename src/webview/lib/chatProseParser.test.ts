@@ -438,9 +438,35 @@ test("malformed root coordinates cannot inherit a nearby or active source", () =
   }
 });
 
-test("ordinary integer object properties still recover the actual config source", () => {
-  const doc = parseChatProse("Config is `src/config.ts`.\n\n```ts\nconst config = {\n  port:3000,\n};\n```", { activeFilePath: "src/config.ts" });
-  assert.ok(doc.blocks.some((value) => value.type === "code-citation" && value.path === "src/config.ts"));
+test("list and comment citation preambles with source punctuation still recover the following exact locator", () => {
+  for (const parse of [parseChatProse, parseAdminProse, parseWebsiteProse]) {
+    for (const preamble of ["- The implementation uses {}", "// The implementation uses {};", "Rules:"]) {
+      const doc = parse(`\`\`\`\n${preamble}\n1:1:src/actual.ts\nexport const x = 1;\n\`\`\``);
+      const block = doc.blocks.find(value => value.type === "code-citation");
+      assert.ok(block && block.type === "code-citation");
+      if (block.type === "code-citation") {
+        assert.equal(block.path, "src/actual.ts");
+        assert.equal(block.code, "export const x = 1;");
+      }
+    }
+  }
+});
+
+test("ordinary integer object properties preserve source and recover the actual config path on all surfaces", () => {
+  const code = "const config = {\n  port:3000,\n  retries:3,\n};";
+  for (const parse of [parseChatProse, parseAdminProse, parseWebsiteProse]) {
+    const doc = parse(`Config is \`src/config.ts\`.\n\n\`\`\`ts\n${code}\n\`\`\``, { activeFilePath: "src/config.ts" });
+    const block = doc.blocks.find(value => value.type === "code-citation");
+    assert.ok(block && block.type === "code-citation");
+    if (block.type === "code-citation") {
+      assert.equal(block.path, "src/config.ts");
+      assert.equal(block.code, code);
+    }
+  }
+  {
+    const explicit = parseChatProse(`\`\`\`ts\n${code}\n\`\`\``, { activeFilePath: "src/config.ts", sourceCitationMode: "explicit" });
+    assert.equal(explicit.blocks.some(value => value.type === "code-citation"), false);
+  }
 });
 
 test("citation fence info-string startLine:endLine:path yields code-citation", () => {

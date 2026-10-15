@@ -1,0 +1,126 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {splitAnd,expandScripts,releaseCatalog,SUPPLEMENTAL_SCRIPT_GROUPS,validateStage5Receipts,CI_EVIDENCE_FILES,writeCiReceipt,verifyPrivatePackage} from './release-catalog.mjs';
+import {databaseSuite} from './enterprise-database-suites.mjs';
+
+test('deduplication preserves cwd groups and quoted AND; missing/cyclic groups reject',()=>{
+ assert.deepEqual(splitAnd("tsx a && (cd admin && tsx b) && NODE_OPTIONS='a&&b' tsx c"),['tsx a','(cd admin && tsx b)',"NODE_OPTIONS='a&&b' tsx c"]);
+ assert.deepEqual(expandScripts({a:'tsx x && npm run b',b:'tsx x && tsx y'},['a']).map(x=>x.command),['tsx x','tsx y']);
+ assert.throws(()=>expandScripts({a:'npm run a'},['a']),/cyclic/);assert.throws(()=>expandScripts({},['a']),/Missing/);
+ assert.throws(()=>splitAnd('(tsx x'),/Unbalanced/);
+});
+test('required database, separately authorized publication, TLS and security cannot disappear as unit passes',()=>{
+ const catalog=releaseCatalog();
+ assert(!catalog.lanes.unit.some(x=>x.command.includes('.integration.')));
+ assert.equal(new Set(catalog.lanes.unit.map(x=>x.command)).size,catalog.lanes.unit.length);
+ assert(catalog.lanes.database.some(x=>x.suite==='graph-lock'));
+ assert.equal(catalog.lanes.auth[0].command,'node scripts/run-enterprise-database.mjs --suite auth');
+ assert.equal(catalog.lanes.auth[0].currentStatus,undefined);
+ assert(!catalog.lanes.database.some(x=>x.suite==='auth'),'auth is qualified once in its required lane');
+ assert.equal(catalog.lanes.publication[0].requiresSeparateAuthorization,true);
+ assert.equal(catalog.lanes.publication[0].currentStatus,undefined);
+ assert.equal(catalog.lanes.publication[0].command,'npm run test:publication-regression');
+ assert.equal(catalog.lanes.publication.length,2);
+ assert.equal(catalog.lanes.publication[1].command,'node scripts/run-enterprise-database.mjs --suite publication-extra');
+ assert.equal(catalog.lanes.tls[0].command,'node scripts/run-enterprise-database.mjs --suite tls');
+ assert.equal(catalog.lanes.tls[0].currentStatus,undefined);
+ assert(!catalog.lanes.database.some(x=>x.suite==='tls'),'TLS is qualified once in its required lane');
+ assert(!catalog.lanes.database.some(x=>x.command.includes('publication')));
+ assert.throws(()=>databaseSuite('publication'),/Unknown/);assert.throws(()=>databaseSuite('__proto__'),/Unknown/);
+});
+
+test('script-owned directory changes keep descendants together and root siblings isolated',()=>{
+ const scripts={root:'npm run admin && tsx root.ts && npm run admin',admin:'cd admin && tsx one.ts && tsx two.ts'};
+ assert.deepEqual(expandScripts(scripts,['root']).map(x=>x.command),['(cd admin && tsx one.ts && tsx two.ts)','tsx root.ts']);
+ const unit=releaseCatalog().lanes.unit;
+ assert(!unit.some(x=>/^cd(?:\s|$)/.test(x.command)),'a detached cd command cannot qualify descendants');
+ assert(unit.some(x=>x.command==='(cd admin && tsx --tsconfig tsconfig.json src/lib/indexingProgress.test.ts && tsx --tsconfig tsconfig.json src/lib/integrationStatus.test.ts)'));
+ const grant='cd admin && tsx --tsconfig tsconfig.json src/lib/activeGrantRepoIds.test.ts';
+ assert.deepEqual(expandScripts({grant},['grant']).map(x=>x.command),['('+grant+')']);
+});
+
+
+test('unit fixture preparation is owned by the declared build and precedes dependent checks', async()=>{
+ const {default:fs}=await import('node:fs');const {default:os}=await import('node:os');const {default:path}=await import('node:path');const {spawnSync}=await import('node:child_process');
+ const catalog=releaseCatalog();
+ assert.equal(catalog.lanes.unitPreparation.length,1);
+ assert.equal(catalog.lanes.unitPreparation[0].command,splitAnd(JSON.parse(fs.readFileSync('package.json','utf8')).scripts['test:jobs-leases']).find(command=>command.startsWith('esbuild ')&&command.includes('--outfile=dist/tests/jobLeases.integration.test.cjs')));
+ const actualRunner=path.resolve('scripts/run-release-checks.mjs');
+ for(const fault of ['none','build','unit','mod-drift','sum-drift']){
+  const broken=fault!=='none',sourceDrift=fault.endsWith('-drift'),commandFailure=fault==='build'||fault==='unit';let evidenceDirectory;
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'coop-unit-preparation-'));
+  try{
+   for(const folder of ['src/jobs','scripts','migrations','admin','ops','website','.github/workflows','evals/enterprise/v1','docs/dogfood','.vscode'])fs.mkdirSync(path.join(root,folder),{recursive:true});
+   fs.symlinkSync(path.resolve('node_modules'),path.join(root,'node_modules'),'dir');
+   fs.writeFileSync(path.join(root,'src/jobs/jobLeases.integration.test.ts'),'export const fixtureOnly = 42;');
+   fs.writeFileSync(path.join(root,'scripts/check.mjs'),(fault==='unit'?"throw Error('UNIT_FAULT');":'')+"import fs from 'node:fs';import assert from 'node:assert/strict';import {createRequire} from 'node:module';assert.equal(createRequire(import.meta.url)('../dist/tests/jobLeases.integration.test.cjs').fixtureOnly,42);fs.writeFileSync('unit-ran','yes');"+(sourceDrift?`fs.appendFileSync('scripts/indexer-tools/go.${fault==='mod-drift'?'mod':'sum'}','changed');`:''));
+   const compile='esbuild '+(fault==='build'?'missing.ts':'src/jobs/jobLeases.integration.test.ts')+' --bundle --platform=node --format=cjs --outfile=dist/tests/jobLeases.integration.test.cjs';
+   const scripts={'test:ci':'node scripts/check.mjs','test:agent-ship:a':`node --eval "require('node:fs').writeFileSync('later-unit-ran','yes')"`,'test:codegen':'node scripts/check.mjs','test:enterprise-unit':'node scripts/check.mjs',lint:'node --eval "process.exit(0)"',build:'node --eval "process.exit(0)"',package:'node --eval "process.exit(0)"','test:jobs-leases':compile+' && node --eval "throw Error(\'DATABASE_SUITE_MUST_NOT_RUN\')"'};
+   for(const name of SUPPLEMENTAL_SCRIPT_GROUPS)scripts[name]='node --eval "process.exit(0)"';
+   fs.writeFileSync(path.join(root,'package.json'),JSON.stringify({scripts}));
+   for(const input of catalog.inputs)if(input.path!=='package.json'){fs.mkdirSync(path.dirname(path.join(root,input.path)),{recursive:true});fs.writeFileSync(path.join(root,input.path),'{}');}
+   const result=spawnSync(process.execPath,[actualRunner,'--lane','unit'],{cwd:root,encoding:'utf8',timeout:15000,env:{PATH:process.env.PATH}});
+   const match=/Release evidence: (.+)/.exec(result.stdout);assert.ok(match,result.stderr);
+   evidenceDirectory=match[1];
+   const evidence=JSON.parse(fs.readFileSync(path.join(evidenceDirectory,'result.json'),'utf8'));
+   assert.equal(result.status,broken?1:0,result.stdout+result.stderr);
+   assert.equal(evidence.pass,!broken);assert.equal(evidence.sourceUnchanged,!sourceDrift);
+   assert.equal(evidence.results[0].lane,'unitPreparation');
+   assert.equal(evidence.results.length,fault==='build'?1:fault==='unit'?2:3);
+   assert.equal(fs.existsSync(path.join(root,'later-unit-ran')),!commandFailure);
+   assert.equal(fs.existsSync(path.join(root,'unit-ran')),!commandFailure);
+   assert.ok(!JSON.stringify(evidence).includes('DATABASE_SUITE_MUST_NOT_RUN'));
+   }finally{if(evidenceDirectory)fs.rmSync(evidenceDirectory,{recursive:true,force:true});fs.rmSync(root,{recursive:true,force:true});}
+ }
+});
+
+
+test('supplemental controls are declared separately from real provider and database execution',()=>{
+ const catalog=releaseCatalog();
+ assert.equal(catalog.lanes.supplemental.length,154);
+ assert(catalog.lanes.supplemental.some(x=>x.command.includes('scripts/enterprise-eval.test.ts')));
+ assert(catalog.lanes.supplemental.some(x=>x.command.includes('scripts/dogfood-release.test.mjs')));
+ assert(catalog.lanes.supplemental.some(x=>x.command==='(cd admin && tsx --tsconfig tsconfig.json src/lib/activeGrantRepoIds.test.ts)'));
+ assert(!catalog.lanes.supplemental.some(x=>x.command.includes('integrationConnectionStore.lifecycle')||x.command.includes('.integration.')));
+});
+
+const candidate='a'.repeat(40),jobs=()=>Object.fromEntries(['regression','builds','database','code-security','container'].map(name=>[name,{result:'success'}]));
+const receipts=()=>Object.entries(CI_EVIDENCE_FILES).map(([job,files])=>({schema:'coop-ci-receipt-v1',job,commit:candidate,pass:true,files:files.map(path=>({path,sha256:'b'.repeat(64)}))}));
+test('Stage5 accepts exact successful receipts; failed/skipped/canceled/missing/wrong-source evidence fails',()=>{
+ assert.equal(validateStage5Receipts({jobs:jobs(),receipts:receipts(),commit:candidate}).pass,true);
+ for(const state of ['failure','skipped','cancelled',undefined]){const j=jobs();j.database.result=state;assert.equal(validateStage5Receipts({jobs:j,receipts:receipts(),commit:candidate}).pass,false);}
+ for(const change of ['missing','source','receipt-failure','traversal','missing-file']){const r=receipts();if(change==='missing')r.pop();if(change==='source')r[0].commit='c'.repeat(40);if(change==='receipt-failure')r[0].pass=false;if(change==='traversal')r[0].files[0].path='../escape';if(change==='missing-file')r[0].files.pop();assert.equal(validateStage5Receipts({jobs:jobs(),receipts:r,commit:candidate}).pass,false);}
+});
+test('receipt owner rejects missing or malformed actual evidence instead of manufacturing pass',async()=>{
+ const fs=(await import('node:fs')).default,os=(await import('node:os')).default,path=(await import('node:path')).default;
+ const d=fs.mkdtempSync(path.join(os.tmpdir(),'coop-ci-evidence-'));
+ try{assert.equal(writeCiReceipt('regression',d,candidate).pass,false);assert.equal(JSON.parse(fs.readFileSync(path.join(d,'receipt.json'),'utf8')).pass,false);assert.throws(()=>writeCiReceipt('unknown',d,candidate),/Unknown/);}
+ finally{fs.rmSync(d,{recursive:true,force:true});}
+});
+test('private package content checks exact CRC/source/runtime identity and rejects changed or extra bytes',async()=>{
+ const fs=(await import('node:fs')).default,os=(await import('node:os')).default,path=(await import('node:path')).default,{spawnSync}=await import('node:child_process');
+ const d=fs.mkdtempSync(path.join(os.tmpdir(),'coop-package-content-'));
+ try{
+  const archive=path.join(d,'fixture.vsix'),program=`import pathlib,json,zipfile,sys
+r=pathlib.Path(sys.argv[1]);pkg={'name':'fixture','publisher':'fixture','version':'1.0.0'};(r/'package.json').write_text(json.dumps(pkg));files={'changelog.md':'CHANGELOG.md','LICENSE.txt':'LICENSE.txt','readme.md':'README.md','package.json':'package.json','dist/extension.js':'dist/extension.js','dist/webview.css':'dist/webview.css','dist/webview.js':'dist/webview.js','media/coop-icon.png':'media/coop-icon.png','media/coop-icon.svg':'media/coop-icon.svg'}
+for name in files.values():
+ p=r/name;p.parent.mkdir(parents=True,exist_ok=True)
+ if name!='package.json':p.write_text('const fixture = 1;' if name.endswith('.js') else 'fixture')
+with zipfile.ZipFile(r/'fixture.vsix','w') as z:
+ z.writestr('extension.vsixmanifest','<PackageManifest><Identity Id="fixture" Publisher="fixture" Version="1.0.0"/></PackageManifest>');z.writestr('[Content_Types].xml','<Types/>')
+ for name,source in files.items():z.writestr('extension/'+name,(r/source).read_bytes())`;
+  const built=spawnSync('python3',['-c',program,d],{encoding:'utf8',timeout:10000});assert.equal(built.status,0,built.stderr);
+  assert.equal(verifyPrivatePackage(archive,d).pass,true);fs.writeFileSync(path.join(d,'dist/extension.js'),'changed');assert.equal(verifyPrivatePackage(archive,d).pass,false);
+  fs.writeFileSync(archive,'corrupted ZIP');assert.equal(verifyPrivatePackage(archive,d).pass,false);
+ }finally{fs.rmSync(d,{recursive:true,force:true});}
+});
+
+test('actual Stage5 CLI verifies downloaded hashes and rejects a tampered artifact',async()=>{
+ const fs=(await import('node:fs')).default,os=(await import('node:os')).default,path=(await import('node:path')).default,{spawnSync}=await import('node:child_process'),{createHash}=await import('node:crypto');
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'coop-retained-retrieval-'));
+ try{
+  for(const [job,entries] of Object.entries(CI_EVIDENCE_FILES)){const folder=path.join(root,job),files=[];for(const entry of entries){const file=path.join(folder,entry);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,'{"synthetic":true}');files.push({path:entry,sha256:createHash('sha256').update(fs.readFileSync(file)).digest('hex')});}fs.writeFileSync(path.join(folder,'receipt.json'),JSON.stringify({schema:'coop-ci-receipt-v1',job,commit:candidate,pass:true,files}));}
+  const run=()=>spawnSync(process.execPath,['scripts/release-catalog.mjs','--stage5-acceptance'],{encoding:'utf8',timeout:10000,env:{PATH:process.env.PATH,GITHUB_SHA:candidate,COOP_RELEASE_JOB_RESULTS:JSON.stringify(jobs()),COOP_RELEASE_DOWNLOADED_EVIDENCE:root}});
+  assert.equal(run().status,0);fs.writeFileSync(path.join(root,'database/database/result.json'),'tampered');const bad=run();assert.equal(bad.status,1);assert.match(bad.stderr,/hash\/identity mismatch/);
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
+});

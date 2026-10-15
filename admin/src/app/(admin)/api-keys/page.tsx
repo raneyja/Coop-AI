@@ -172,7 +172,7 @@ export default function ApiKeysPage() {
           Copy this key now — you won&apos;t be able to see it again.
         </p>
         <div className="flex gap-2">
-          <code className="flex-1 break-all rounded-sm border border-coop-border bg-coop-dark px-3 py-2 font-mono text-xs">
+          <code className="flex-1 break-all rounded-xs border border-coop-border bg-coop-dark px-3 py-2 font-mono text-xs">
             {newKeyModal?.rawKey}
           </code>
           <button type="button" className="admin-btn-secondary shrink-0" onClick={copyKey}>

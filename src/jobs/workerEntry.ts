@@ -4,7 +4,6 @@ import { loadWebhookConfig } from "../config/webhookConfig";
 import { createGraphCache } from "../cache/graphCachePostgres";
 import { GraphConsistencyManager } from "../cache/graphConsistency";
 import { createJobRuntime, startJobRuntime, stopJobRuntime } from "./jobRuntime";
-import { reclaimOrphanedRunningJobs, reclaimStaleRunningJobs } from "./backends/postgresBackend";
 import { resumeEmbeddingFailuresForAllOrgs } from "../server/queueOrgRepoIndex";
 import { getDbPool, closeDbPool } from "../server/db";
 import { OrgStore } from "../server/orgStore";
@@ -23,11 +22,12 @@ import { createBitbucketConnector } from "../server/codeHostConnectors/bitbucket
 import { registerConnector } from "../server/codeHostConnectors/registry";
 
 /** Railway/Docker healthchecks expect HTTP /health — workers are not the API. */
-function startWorkerHealthServer(port: number): ReturnType<typeof createServer> {
+function startWorkerHealthServer(port: number, acceptingWork: () => boolean): ReturnType<typeof createServer> {
   const server = createServer((request, response) => {
     if (request.url === "/health" || request.url?.startsWith("/health?")) {
-      response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({ ok: true, role: "worker" }));
+      const ok = acceptingWork();
+      response.writeHead(ok ? 200 : 503, { "content-type": "application/json" });
+      response.end(JSON.stringify({ ok, role: "worker" }));
       return;
     }
     response.writeHead(404);
@@ -107,17 +107,7 @@ async function main(): Promise<void> {
     allowPatFallback: serverConfig.devMode
   });
 
-  await startJobRuntime(runtime, {
-    reclaimStaleJobs:
-      pool && jobConfig.backend === "postgres"
-        ? () => reclaimOrphanedRunningJobs(pool)
-        : undefined,
-    periodicReclaim:
-      pool && jobConfig.backend === "postgres"
-        ? () => reclaimStaleRunningJobs(pool, jobConfig.maxJobDurationMs)
-        : undefined,
-    reclaimIntervalMs: 60_000
-  });
+  await startJobRuntime(runtime);
 
   if (pool && orgStore) {
     void resumeEmbeddingFailuresForAllOrgs({
@@ -148,14 +138,25 @@ async function main(): Promise<void> {
 
   const healthPort = Number(process.env.PORT ?? 8787);
   const healthServer = startWorkerHealthServer(
-    Number.isFinite(healthPort) && healthPort > 0 ? healthPort : 8787
+    Number.isFinite(healthPort) && healthPort > 0 ? healthPort : 8787,
+    () => runtime.workers.acceptingWork
   );
 
   console.log("[workers] CoopAI job workers started");
 
+  let shuttingDown = false;
   const shutdown = async () => {
-    stopJobRuntime(runtime);
+    if (shuttingDown) return;
+    shuttingDown = true;
+    const drained = await stopJobRuntime(runtime);
+    if (!drained) {
+      console.error('[workers] shutdown did not drain admitted work/cache persistence; terminating before replacement may claim work');
+      process.exit(1);
+    }
+    healthServer.closeAllConnections();
     await new Promise<void>((resolve) => healthServer.close(() => resolve()));
+    const backend = runtime.queue.getBackend();
+    if ('close' in backend && typeof backend.close === 'function') await backend.close();
     await closeDbPool();
     process.exit(0);
   };

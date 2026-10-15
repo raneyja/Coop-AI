@@ -1,5 +1,9 @@
 # Autocomplete selected-branch isolation
 
+Historical October 4 job report, reviewed October 11. Preserve the observations
+below; later run evidence and the current scope govern qualification. Parent
+ownership and retest instructions describe that run, not new launch orders.
+
 Source qualification: automated pass; current packaged/live branch-switch qualification remains open.
 
 The active session now supplies selected branch with repository identity. Router cache, in-flight reuse and manifest-symbol cache are partitioned by branch. Provider pending results are rejected after a branch switch, including the same repository and unchanged buffer. Both inline backend client payloads and the API carry the optional branch. Existing clients without a branch remain compatible.

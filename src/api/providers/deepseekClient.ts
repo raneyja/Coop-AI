@@ -22,7 +22,9 @@ export class DeepSeekProviderClient extends BaseProviderClient {
         })
       },
       options,
-      parseOpenAiSseLine
+      parseOpenAiSseLine,
+      options.requireCompletedMessage ? state => state.streamTerminated === true
+        && (state.finishReason === "stop" || state.finishReason === "length") : undefined
     );
   }
 

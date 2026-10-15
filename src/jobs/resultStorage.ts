@@ -12,7 +12,8 @@ export class ResultStorage {
     private readonly backend?: QueueBackend
   ) {}
 
-  public async store(jobId: string, result: unknown, scheduled = false): Promise<JobResultRecord> {
+  /** Queue completion persists this together with its attempt CAS. */
+  public prepare(jobId: string, result: unknown, scheduled = false): JobResultRecord {
     const serialized = JSON.stringify(result ?? null);
     const retentionDays = scheduled ? this.config.scheduledRetentionDays : this.config.resultRetentionDays;
     const now = new Date();
@@ -24,11 +25,11 @@ export class ResultStorage {
       expiresAt: new Date(now.getTime() + retentionDays * 86_400_000),
       accessCount: 0
     };
-    this.hot.set(jobId, record);
-    if (this.backend && "saveResult" in this.backend) {
-      await (this.backend as PostgresCapableBackend).saveResult(record);
-    }
     return record;
+  }
+
+  public remember(record: JobResultRecord): void {
+    this.hot.set(record.jobId, record);
   }
 
   public async get(jobId: string): Promise<JobResultRecord | undefined> {
@@ -76,7 +77,6 @@ export class ResultStorage {
 }
 
 export type PostgresCapableBackend = QueueBackend & {
-  saveResult(record: JobResultRecord): Promise<void>;
   getResult(jobId: string): Promise<JobResultRecord | undefined>;
   purgeExpiredResults(): Promise<number>;
 };

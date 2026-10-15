@@ -89,7 +89,7 @@ export function Sidebar() {
               <li key={item.href} className={item.indented ? "mt-1 border-t border-coop-border/40 pt-2" : undefined}>
                 <Link
                   href={href}
-                  className={`block rounded-sm py-1.5 text-sm transition-colors ${
+                  className={`block rounded-xs py-1.5 text-sm transition-colors ${
                     item.indented ? "pl-7 pr-3" : "px-3"
                   } ${
                     active

@@ -50,9 +50,9 @@ function HorizontalBarRows({
           <span className="truncate text-sm text-coop-muted" title={d.label}>
             {d.label}
           </span>
-          <div className="h-2.5 min-w-0 rounded-sm bg-coop-dark">
+          <div className="h-2.5 min-w-0 rounded-xs bg-coop-dark">
             <div
-              className="h-2.5 rounded-sm"
+              className="h-2.5 rounded-xs"
               style={{
                 width: `${Math.max(d.value > 0 ? 4 : 0, (d.value / peak) * 100)}%`,
                 backgroundColor: fill,

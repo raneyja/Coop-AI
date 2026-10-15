@@ -1,11 +1,37 @@
 import type { IntegrationProvider } from "../server/integrationConnectionStore";
 
+/** Organization-approved shared source access, independent of vendor member ACLs. */
+export type IntegrationAccessPolicy = {
+  mode: "organization-approved" | "member-grants";
+  directory?: boolean;
+  members?: Record<string, string[]>;
+};
+type IntegrationSourceAccess = { access?: IntegrationAccessPolicy };
+
+export function parseIntegrationAccess(raw: unknown): IntegrationAccessPolicy | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const value = raw as Record<string, unknown>;
+  if (value.mode !== "organization-approved" && value.mode !== "member-grants") return undefined;
+  if (Object.keys(value).some(key => !["mode", "directory", "members"].includes(key))) return undefined;
+  if (value.directory !== undefined && typeof value.directory !== "boolean") return undefined;
+  if (value.mode === "organization-approved") {
+    if (value.members !== undefined) return undefined;
+    return { mode: value.mode, ...(value.directory !== undefined ? { directory: value.directory as boolean } : {}) };
+  }
+  if (!value.members || typeof value.members !== "object" || Array.isArray(value.members)) return undefined;
+  const entries = Object.entries(value.members);
+  if (entries.length > 1000 || entries.some(([principal, grants]) => !/^[a-zA-Z0-9_:@-]{1,200}$/.test(principal) ||
+      !Array.isArray(grants) || grants.length > 1000 || grants.some(id => typeof id !== "string" || !/^[a-zA-Z0-9_.:@-]{1,200}$/.test(id)))) return undefined;
+  return { mode: value.mode, members: Object.fromEntries(entries) as Record<string, string[]>,
+    ...(value.directory !== undefined ? { directory: value.directory as boolean } : {}) };
+}
+
 export type SlackChannelRef = {
   id: string;
   name: string;
 };
 
-export type SlackIntegrationPolicy = {
+export type SlackIntegrationPolicy = IntegrationSourceAccess & {
   version: 1;
   mode: "allowlist";
   channels: SlackChannelRef[];
@@ -23,7 +49,7 @@ export type AtlassianSpaceRef = {
   name: string;
 };
 
-export type AtlassianIntegrationPolicy = {
+export type AtlassianIntegrationPolicy = IntegrationSourceAccess & {
   version: 1;
   mode: "allowlist";
   jiraProjects: AtlassianProjectRef[];
@@ -38,7 +64,7 @@ export type NotionResourceRef = {
   type: NotionResourceType;
 };
 
-export type NotionIntegrationPolicy = {
+export type NotionIntegrationPolicy = IntegrationSourceAccess & {
   version: 1;
   mode: "allowlist";
   resources: NotionResourceRef[];
@@ -52,7 +78,7 @@ export type GoogleDocsFolderRef = {
   kind: GoogleDocsFolderKind;
 };
 
-export type GoogleDocsIntegrationPolicy = {
+export type GoogleDocsIntegrationPolicy = IntegrationSourceAccess & {
   version: 1;
   mode: "allowlist";
   folders: GoogleDocsFolderRef[];
@@ -66,7 +92,7 @@ export type TeamsChannelRef = {
   teamName?: string;
 };
 
-export type TeamsIntegrationPolicy = {
+export type TeamsIntegrationPolicy = IntegrationSourceAccess & {
   version: 1;
   mode: "allowlist";
   channels: TeamsChannelRef[];
@@ -113,6 +139,7 @@ export type ResolvedIntegrationScope = {
     channelIds: string[];
     channelNames: string[];
     teamIds: string[];
+    channelTeamIds?: Record<string, string>;
   };
   reason?: string;
 };
@@ -133,6 +160,8 @@ export function parseSlackIntegrationPolicy(raw: unknown): SlackIntegrationPolic
     return undefined;
   }
   const record = raw as Record<string, unknown>;
+  const access = parseIntegrationAccess(record.access);
+  if (record.access !== undefined && !access) return undefined;
   if (record.mode !== "allowlist") {
     return undefined;
   }
@@ -154,6 +183,7 @@ export function parseSlackIntegrationPolicy(raw: unknown): SlackIntegrationPolic
   }
   return {
     version: 1,
+    ...(access ? { access } : {}),
     mode: "allowlist",
     channels
   };
@@ -170,6 +200,8 @@ export function parseAtlassianIntegrationPolicy(
     return undefined;
   }
   const record = raw as Record<string, unknown>;
+  const access = parseIntegrationAccess(record.access);
+  if (record.access !== undefined && !access) return undefined;
   if (record.mode !== "allowlist") {
     return undefined;
   }
@@ -210,6 +242,7 @@ export function parseAtlassianIntegrationPolicy(
 
   return {
     version: 1,
+    ...(access ? { access } : {}),
     mode: "allowlist",
     jiraProjects,
     confluenceSpaces
@@ -227,6 +260,8 @@ export function parseNotionIntegrationPolicy(raw: unknown): NotionIntegrationPol
     return undefined;
   }
   const record = raw as Record<string, unknown>;
+  const access = parseIntegrationAccess(record.access);
+  if (record.access !== undefined && !access) return undefined;
   if (record.mode !== "allowlist") {
     return undefined;
   }
@@ -249,6 +284,7 @@ export function parseNotionIntegrationPolicy(raw: unknown): NotionIntegrationPol
   }
   return {
     version: 1,
+    ...(access ? { access } : {}),
     mode: "allowlist",
     resources
   };
@@ -265,6 +301,8 @@ export function parseGoogleDocsIntegrationPolicy(
     return undefined;
   }
   const record = raw as Record<string, unknown>;
+  const access = parseIntegrationAccess(record.access);
+  if (record.access !== undefined && !access) return undefined;
   if (record.mode !== "allowlist") {
     return undefined;
   }
@@ -297,6 +335,7 @@ export function parseGoogleDocsIntegrationPolicy(
   }
   return {
     version: 1,
+    ...(access ? { access } : {}),
     mode: "allowlist",
     folders,
     expandedFolderIds
@@ -312,6 +351,8 @@ export function parseTeamsIntegrationPolicy(raw: unknown): TeamsIntegrationPolic
     return undefined;
   }
   const record = raw as Record<string, unknown>;
+  const access = parseIntegrationAccess(record.access);
+  if (record.access !== undefined && !access) return undefined;
   if (record.mode !== "allowlist") {
     return undefined;
   }
@@ -340,6 +381,7 @@ export function parseTeamsIntegrationPolicy(raw: unknown): TeamsIntegrationPolic
   }
   return {
     version: 1,
+    ...(access ? { access } : {}),
     mode: "allowlist",
     channels
   };

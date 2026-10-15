@@ -7,7 +7,7 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "node dist/workerEntry.js"
+startCommand = "/usr/local/bin/coop-runtime-entrypoint node dist/workerEntry.js"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"

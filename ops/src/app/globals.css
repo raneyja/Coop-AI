@@ -1,6 +1,28 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss" source(none);
+@config "../../tailwind.config.ts";
+@source "../";
+
+/* Preserve the existing v3 theme and preflight through the security upgrade. */
+@theme {
+  --color-blue-500: #3b82f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-400: #9ca3af;
+  --color-red-300: #fca5a5;
+  --color-red-400: #f87171;
+  --color-red-500: #ef4444;
+  --default-ring-width: 3px;
+  --default-ring-color: var(--color-blue-500);
+}
+@utility admin-btn-base{
+    @apply inline-flex items-center justify-center rounded-md px-3.5 py-2 font-sans text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-coop-index disabled:cursor-not-allowed disabled:opacity-50;
+}
+@layer base {
+  *, ::before, ::after, ::backdrop, ::file-selector-button { border-color: var(--color-gray-200, currentColor); }
+  input::placeholder, textarea::placeholder { color: var(--color-gray-400); }
+  button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
+  dialog { margin: auto; }
+}
+
 
 @layer base {
   html {
@@ -19,6 +41,9 @@
 }
 
 @layer components {
+  .admin-btn{
+    @apply admin-btn-base;
+  }
   .coop-logo-mark {
     @apply h-auto w-auto opacity-90 invert;
     mix-blend-mode: screen;
@@ -145,24 +170,20 @@
     @apply flex flex-wrap gap-x-5 gap-y-1 border-t border-coop-border/40 pt-3 text-sm text-coop-muted;
   }
 
-  .admin-btn {
-    @apply inline-flex items-center justify-center rounded-md px-3.5 py-2 font-sans text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-coop-index disabled:cursor-not-allowed disabled:opacity-50;
-  }
-
   .admin-btn-primary {
-    @apply admin-btn bg-coop-index text-coop-dark hover:bg-[#46c35a];
+    @apply admin-btn-base bg-coop-index text-coop-dark hover:bg-[#46c35a];
   }
 
   .admin-btn-secondary {
-    @apply admin-btn border border-coop-border bg-transparent text-white/90 hover:border-coop-muted/50 hover:bg-white/[0.03];
+    @apply admin-btn-base border border-coop-border bg-transparent text-white/90 hover:border-coop-muted/50 hover:bg-white/[0.03];
   }
 
   .admin-btn-danger {
-    @apply admin-btn border border-red-500/40 bg-transparent text-red-300 hover:bg-red-500/10;
+    @apply admin-btn-base border border-red-500/40 bg-transparent text-red-300 hover:bg-red-500/10;
   }
 
   .admin-input {
-    @apply w-full rounded-md border border-coop-border bg-coop-dark px-3 py-2 font-sans text-sm text-white placeholder:text-coop-muted/60 focus:border-coop-index focus:outline-none focus:ring-1 focus:ring-coop-index/30;
+    @apply w-full rounded-md border border-coop-border bg-coop-dark px-3 py-2 font-sans text-sm text-white placeholder:text-coop-muted/60 focus:border-coop-index focus:outline-hidden focus:ring-1 focus:ring-coop-index/30;
   }
 
   .admin-label {

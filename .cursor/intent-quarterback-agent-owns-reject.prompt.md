@@ -1,6 +1,13 @@
 # Intent quarterback — agent owns reject gather (subtract rails, then agentic)
 
-Paste this **entire file** into a **new** agent chat.
+> Historical reject-gather prompt, reviewed October 11. Do not launch its old
+> job merely by reading or copying repository context. Current `AGENTS.md`,
+> rules, source-based qualification and the human's scope govern conflicts;
+> enterprise work follows `docs/enterprise-hardening/EXECUTION_PLAN.md`.
+> Preserve its failure cases, but snippet attachment is a lead, not proof of
+> an opened remote body or a substitute for the verified-source gate.
+
+The original launch text below is retained as history, not a current instruction to start another agent.
 
 **Product bet:** Copilot-mixed — thin durable rails for modes / security / latency / honesty; **agentic gather** for repo search. Do not grow foresight rails (“if they say create/update, prefer path X”).
 
@@ -236,7 +243,7 @@ Optional (Coop-AI Use-repo): `DOGFOOD_HUNT_QUESTION` — symbol/middleware locat
 | Quarterback | `intentPlanner/*` |
 | Fixtures | `dogfoodContract.ts` — `LIVE_PARENT_PASS_ASK`, T2/C2/L3/Tripwire |
 | Gates | `plainChatMustNotPromote`, `noRepoSpecificRules`, ship-claim-discipline |
-| Prior planning | `.cursor/plans/gap-03-agent-owned-gather.md`, `gap-04-finish-attach-rails.md` (history — this prompt wins on conflict) |
+| Prior planning | `.cursor/plans/gap-03-agent-owned-gather.md`, `gap-04-finish-attach-rails.md` (historical design inputs; current human instructions, AGENTS and applicable rules govern conflicts) |
 
 ---
 

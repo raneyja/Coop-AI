@@ -4,7 +4,7 @@ import type { LlmServerConfig } from "./llmServerConfig";
 import { loadLlmServerConfig } from "./llmServerConfig";
 import type { LlmProvider } from "./zeroRetentionConfig";
 import { DEFAULT_MODEL_BY_PROVIDER } from "../config/llmModels";
-import { resolveHonoredChatModel } from "../config/featureModelAssignments";
+import { resolveHonoredChatModel, SOURCE_VERIFICATION_MAX_TOKENS } from "../config/featureModelAssignments";
 import { resolveChatOutputMaxTokens } from "../config/chatOutputBudget";
 import { handleInlineCompletionRequest, defaultInlineModelFor } from "./inlineCompletionApi";
 import type { ChatOrgPlan, UseCase, V1ChatRequestBody } from "./types";
@@ -76,6 +76,7 @@ export async function handleChatApiRequest(
   deps: ChatApiDeps = {},
   rawRequest?: IncomingMessage
 ): Promise<boolean> {
+  const requestStarted = performance.now();
   const config = deps.config ?? loadLlmServerConfig();
   const serverConfig = deps.serverConfig ?? loadServerConfig();
 
@@ -177,7 +178,8 @@ export async function handleChatApiRequest(
   }
 
   const planQuota = resolvePlanQuota(deps);
-  const maxTokens = resolveChatOutputMaxTokens(
+  const sourceVerificationModel = body.sourceClaimReview === true || body.sourceEvidenceRepair === true;
+  const maxTokens = sourceVerificationModel ? SOURCE_VERIFICATION_MAX_TOKENS : resolveChatOutputMaxTokens(
     typeof body.maxTokens === "number" ? body.maxTokens : undefined
   );
   const history = Array.isArray(body.history) ? body.history.filter(isHistoryMessage) : [];
@@ -186,6 +188,19 @@ export async function handleChatApiRequest(
     visionAttachmentCount > 0 ||
     history.some((entry) => countVisionWeightedAttachments(entry.attachments) > 0);
   const useCase = readUseCase(body.useCase);
+  if ((body.sourceClaimReview !== undefined && typeof body.sourceClaimReview !== "boolean")
+    || (body.sourceEvidenceSynthesis !== undefined && typeof body.sourceEvidenceSynthesis !== "boolean")
+    || (body.sourceEvidenceRepair !== undefined && typeof body.sourceEvidenceRepair !== "boolean")
+    || (body.sourceClaimReview === true && body.sourceEvidenceSynthesis === true)
+    || (body.sourceEvidenceRepair === true && (body.sourceEvidenceSynthesis !== true || body.sourceClaimReview === true))) {
+    writeJson(response, 400, { error: "invalid_request", message: "Invalid private source phase flags" });
+    return true;
+  }
+  if ((body.sourceClaimReview === true || body.sourceEvidenceSynthesis === true)
+    && !["blast_radius", "knowledge_gaps", "comprehension", "decision_archaeology", "ownership"].includes(useCase)) {
+    writeJson(response, 400, { error: "invalid_request", message: "Source claim review requires a source quick action" });
+    return true;
+  }
   const clientProvider = readProvider(body.provider, config.defaultProvider);
   const clientModel = typeof body.model === "string" && body.model ? body.model : undefined;
   const honored = resolveHonoredChatModel({
@@ -193,7 +208,9 @@ export async function handleChatApiRequest(
     plan: org.plan,
     useCase,
     clientProvider,
-    clientModel
+    clientModel,
+    sourceClaimReview: body.sourceClaimReview === true,
+    sourceEvidenceRepair: body.sourceEvidenceRepair === true
   });
   const provider = honored.provider;
   const model = honored.model;
@@ -217,6 +234,8 @@ export async function handleChatApiRequest(
         selection,
         provider,
         model,
+        quotaTurnId: typeof body.quotaTurnId === "string" ? body.quotaTurnId : undefined,
+        internalSourceCall: body.sourceClaimReview === true || body.sourceEvidenceSynthesis === true,
         periodAnchor: org.createdAt
       }
     );
@@ -242,13 +261,28 @@ export async function handleChatApiRequest(
     "x-request-id": requestId
   });
 
+  const timing = body.responseTiming;
+  const timingEnabled = timing && typeof timing.traceId === "string" && typeof timing.callId === "string"
+    && /^[a-zA-Z0-9_-]{1,128}$/.test(timing.traceId) && /^[a-zA-Z0-9_-]{1,160}$/.test(timing.callId);
+  const emitTiming = (event: string) => {
+    if (timingEnabled && !response.destroyed) {
+      try { writeSse(response, { type: "response-timing",
+        traceId: timing.traceId, callId: timing.callId, requestId, event,
+        elapsedMs: Math.max(0, performance.now() - requestStarted) }); }
+      catch { /* Optional diagnostics must not interrupt provider processing. */ }
+    }
+  };
+  emitTiming("accepted");
   const abortController = new AbortController();
   bindAbort(rawRequest, abortController);
 
     let usageTokens: { inputTokens: number; outputTokens: number } | undefined;
     let recordedUsage = false;
+    let firstDelta = false;
+    let modelFailed = false;
 
     try {
+      emitTiming("model-start");
       for await (const chunk of router.stream(
         {
           requestId,
@@ -260,7 +294,10 @@ export async function handleChatApiRequest(
           attachments: attachments.length ? attachments : undefined,
           useCase,
           allowUnapprovedProvider: config.allowUnapprovedProvider,
-          enableThinking: body.enableThinking === true,
+          enableThinking: sourceVerificationModel || body.enableThinking === true,
+          sourceClaimReview: body.sourceClaimReview === true,
+          sourceEvidenceSynthesis: body.sourceEvidenceSynthesis === true,
+          sourceEvidenceRepair: body.sourceEvidenceRepair === true,
           sessionMode: body.sessionMode,
           modelConfig: {
             provider,
@@ -271,6 +308,10 @@ export async function handleChatApiRequest(
         },
         abortController.signal
       )) {
+        if (chunk.type === "delta" && !firstDelta && chunk.text.trim()) {
+          firstDelta = true; emitTiming("first-delta");
+        }
+        if (chunk.type === "error") modelFailed = true;
         if (chunk.type === "done" && !recordedUsage) {
           usageTokens = {
             inputTokens: chunk.usage.inputTokens,
@@ -284,7 +325,9 @@ export async function handleChatApiRequest(
             sessionMode: body.sessionMode,
             fileSource: body.fileSource,
             useCase,
-            quotaTurnId: typeof body.quotaTurnId === "string" ? body.quotaTurnId : undefined
+            quotaTurnId: typeof body.quotaTurnId === "string" ? body.quotaTurnId : undefined,
+            sourceClaimReview: body.sourceClaimReview === true,
+            sourceEvidenceRepair: body.sourceEvidenceRepair === true
           });
           recordedUsage = true;
         }
@@ -293,7 +336,9 @@ export async function handleChatApiRequest(
           break;
         }
       }
+      emitTiming(abortController.signal.aborted ? "canceled" : modelFailed ? "failed" : recordedUsage ? "completed" : "incomplete");
     } catch (error) {
+    emitTiming(abortController.signal.aborted ? "canceled" : "failed");
     captureException(error, {
       service: "api",
       orgId: org.orgId,
@@ -323,7 +368,9 @@ export async function handleChatApiRequest(
       sessionMode: body.sessionMode,
       fileSource: body.fileSource,
       useCase,
-      quotaTurnId: typeof body.quotaTurnId === "string" ? body.quotaTurnId : undefined
+      quotaTurnId: typeof body.quotaTurnId === "string" ? body.quotaTurnId : undefined,
+      sourceClaimReview: body.sourceClaimReview === true,
+      sourceEvidenceRepair: body.sourceEvidenceRepair === true
     });
   }
 
@@ -358,6 +405,8 @@ export async function recordV1ChatUsageTokens(
     fileSource?: "workspace" | "git" | "remote" | "external";
     useCase?: UseCase;
     quotaTurnId?: string;
+    sourceClaimReview?: boolean;
+    sourceEvidenceRepair?: boolean;
   }
 ): Promise<void> {
   await planQuota.recordTokens(org.orgId, org.plan, {
@@ -370,6 +419,8 @@ export async function recordV1ChatUsageTokens(
     principal: org.principal,
     metadata: {
       requestId: usage.requestId,
+      ...(usage.sourceClaimReview === true ? { sourceClaimReview: true } : {}),
+      ...(usage.sourceEvidenceRepair === true ? { sourceEvidenceRepair: true } : {}),
       ...(usage.sessionMode ? { sessionMode: usage.sessionMode } : {}),
       ...(usage.fileSource ? { fileSource: usage.fileSource } : {})
     },
