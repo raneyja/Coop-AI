@@ -7,6 +7,7 @@ RUN test "$(npm --version)" = "10.9.9" && npm ci --no-audit --no-fund
 COPY tsconfig.backend.json ./
 COPY src ./src
 COPY scripts/admin-org.ts ./scripts/admin-org.ts
+COPY scripts/local-demo-db-target.ts ./scripts/local-demo-db-target.ts
 RUN npm run build:backend && npm run build:workers && npm run build:admin
 
 FROM golang:1.26.9-bookworm AS gotools
