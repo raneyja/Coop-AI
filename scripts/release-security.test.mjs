@@ -106,6 +106,12 @@ test('image receipt binds current source, scanner, report and advisory metadata;
   const accepted=checkImageReceipt(receipt,{now,root:d});
   assert.equal(accepted.pass,true);
   assert.equal(accepted.artifactId,receipt.artifactId);
+  const vulnerable=imageReport();vulnerable.Results[0].Vulnerabilities=[{VulnerabilityID:'CVE-fixture',PkgName:'fixture',InstalledVersion:'1',Severity:'HIGH'}];
+  fs.writeFileSync(reportPath,JSON.stringify(vulnerable));receipt.reportSha256=sha(reportPath);
+  const blocked=checkImageReceipt(receipt,{now,root:d});assert.equal(blocked.pass,false);assert.equal(blocked.unaccepted.length,1);
+  const exception={findingSha256:blocked.unaccepted[0].findingSha256,scopeSha256:blocked.scopeSha256,approved:true,owner:'fixture-owner',approvalReference:'fixture-risk-decision',reason:'fixture-risk',activatedAt:'2026-10-12T23:00:00Z',expiresAt:'2026-10-26T23:00:00Z'};
+  assert.equal(checkImageReceipt(receipt,{exceptions:[exception],now,root:d}).pass,true);
+  assert.equal(checkImageReceipt(receipt,{exceptions:[{...exception,expiresAt:'2026-10-26T23:00:01Z'}],now,root:d}).pass,false);
   assert.equal(checkImageReceipt(receipt,{now:Date.parse('2026-10-14T00:00:00Z'),root:d}).pass,false);
   fs.writeFileSync(source,'changed');assert.equal(checkImageReceipt(receipt,{now,root:d}).pass,false);fs.writeFileSync(source,'fixture');
   fs.writeFileSync(metadataPath,JSON.stringify({NextUpdate:'2026-10-12T00:00:00Z'}));assert.equal(checkImageReceipt(receipt,{now,root:d}).pass,false);
@@ -118,6 +124,17 @@ test('CodeQL analysis success alone cannot waive HIGH/CRITICAL/ERROR or incomple
  for(const changed of [{complete:false},{analyses:[]},{commit:'b'.repeat(40)},{ref:'refs/heads/other'}])assert.equal(validateCodeqlFindings({...base,...changed}).pass,false);
  for(const [severity,security] of [['warning','high'],['warning','critical'],['error',null],['invented',null]])assert.equal(validateCodeqlFindings({...base,alerts:[{state:'open',tool:{name:'CodeQL'},rule:{id:'fixture',severity,security_severity_level:security},number:1}]}).pass,false);
  assert.equal(validateCodeqlFindings({...base,alerts:[{state:'open',tool:{name:'CodeQL'},rule:{id:'fixture',severity:'warning',security_severity_level:'medium'},number:1}]}).pass,true);
+});
+
+test('exact CodeQL risk acceptance expires and cannot cover another alert or candidate',()=>{
+ const now=Date.parse('2026-10-15T21:00:00Z'),commit='a'.repeat(40),ref='refs/pull/67/merge';
+ const alert={state:'open',tool:{name:'CodeQL'},rule:{id:'js/fixture',severity:'warning',security_severity_level:'high'},number:32};
+ const base={commit,ref,complete:true,analyses:[{commit_sha:commit,ref,tool:{name:'CodeQL'},error:'',results_count:1,rules_count:1}],alerts:[alert]};
+ const exception={number:32,rule:'js/fixture',severity:'warning',securitySeverity:'high',commit,ref,approved:true,owner:'fixture-owner',approvalReference:'fixture-risk-decision',reason:'fixture-risk',activatedAt:'2026-10-15T20:00:00Z',expiresAt:'2026-10-29T20:00:00Z'};
+ assert.equal(validateCodeqlFindings({...base,exceptions:[exception]},now).pass,true);
+ for(const invalid of [{...exception,commit:'b'.repeat(40)},{...exception,number:33},{...exception,securitySeverity:'critical'},{...exception,expiresAt:'2026-10-15T20:30:00Z'},{...exception,expiresAt:'2026-10-29T20:00:01Z'},{...exception,approved:false}])assert.equal(validateCodeqlFindings({...base,exceptions:[invalid]},now).pass,false);
+ assert.equal(validateCodeqlFindings({...base,exceptions:[exception,exception]},now).pass,false);
+ assert.equal(validateCodeqlFindings({...base,alerts:[{...alert,number:33}],exceptions:[exception]},now).pass,false);
 });
 
 const externalContext={repository:'fixture/repo',commit:'a'.repeat(40),ref:'refs/heads/fixture',workflowSha256:'b'.repeat(64),ownerSha256:'c'.repeat(64)};
@@ -256,8 +273,8 @@ test('frozen image scope transfers between source roots but changed image/report
   const roots=['a','b'].map(name=>{const p=path.join(d,name);fs.mkdirSync(p);fs.writeFileSync(path.join(p,'source'),'same source');return p;});
   const receipt={role:'api',artifactId:report.Metadata.ImageID,requiredTypes:['debian','node-pkg'],scannerVersion:'0.72.0',scannerPath,scannerSha256:sha(scannerPath),reportPath,reportSha256:sha(reportPath),scannedAt:'2026-10-12T23:00:00Z',inputs:[{path:'source',sha256:sha(path.join(roots[0],'source'))}],databases:[{path:db,sha256:sha(db),metadataPath,metadataSha256:sha(metadataPath),nextUpdate:'2099-01-01T00:00:00Z'}]};
   const first=checkImageReceipt(receipt,{root:roots[0],now});assert.equal(first.unaccepted.length,1);
-  const approval={findingSha256:first.unaccepted[0].findingSha256,scopeSha256:first.scopeSha256,approved:true,owner:'synthetic-owner',approvalReference:'synthetic-only-control',reason:'synthetic fixture',expiresAt:'2099-01-01T00:00:00Z'};
-  const moved=checkImageReceipt(receipt,{root:roots[1],now,exceptions:[approval]});assert.equal(moved.pass,true);assert.equal(moved.scopeSha256,first.scopeSha256);
+  const approval={findingSha256:first.unaccepted[0].findingSha256,scopeSha256:first.scopeSha256,approved:true,owner:'synthetic-owner',approvalReference:'synthetic-only-control',reason:'synthetic fixture',activatedAt:'2026-10-12T23:00:00Z',expiresAt:'2026-10-26T23:00:00Z'};
+  const moved=checkImageReceipt(receipt,{root:roots[1],now,exceptions:[approval]});assert.equal(moved.pass,true,JSON.stringify(moved.issues));assert.equal(moved.scopeSha256,first.scopeSha256);
   assert.equal(checkImageReceipt({...receipt,artifactId:'sha256:'+'b'.repeat(64)},{root:roots[1],now,exceptions:[approval]}).pass,false);
   fs.writeFileSync(db,'changed db');assert.equal(checkImageReceipt(receipt,{root:roots[1],now,exceptions:[approval]}).pass,false);fs.writeFileSync(db,'synthetic db');
   fs.writeFileSync(reportPath,'{}');assert.equal(checkImageReceipt(receipt,{root:roots[1],now,exceptions:[approval]}).pass,false);fs.writeFileSync(reportPath,JSON.stringify(report));

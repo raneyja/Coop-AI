@@ -195,6 +195,7 @@ jobs:
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
+          COOP_RELEASE_CODEQL_EXCEPTIONS: ${{ vars.COOP_RELEASE_CODEQL_EXCEPTIONS }}
         run: node scripts/release-security.mjs --codeql-findings
       - name: Bind retained evidence to this candidate
         if: always()
@@ -261,6 +262,8 @@ jobs:
       - name: Scan actual image and enforce exact findings
         env:
           COOP_RELEASE_IMAGE_ROLE: ${{ matrix.target }}
+          COOP_RELEASE_IMAGE_API_EXCEPTIONS: ${{ vars.COOP_RELEASE_IMAGE_API_EXCEPTIONS }}
+          COOP_RELEASE_IMAGE_WORKER_EXCEPTIONS: ${{ vars.COOP_RELEASE_IMAGE_WORKER_EXCEPTIONS }}
         run: |
           export TRIVY_BIN="$RUNNER_TEMP/trivy" TRIVY_CACHE_DIR="$RUNNER_TEMP/trivy-cache"
           export COOP_RELEASE_TRIVY_SHA256="$(sha256sum "$TRIVY_BIN" | cut -d' ' -f1)"

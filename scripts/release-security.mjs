@@ -234,6 +234,7 @@ export function validateImageReport(report,{artifactId,requiredTypes}) {
 }
 export function checkImageReceipt(receipt,{exceptions=[],now=Date.now(),root=process.cwd()}={}) {
  try {
+  if(!Array.isArray(exceptions)||exceptions.some(e=>!Number.isFinite(Date.parse(e?.activatedAt))||Date.parse(e.activatedAt)>now||!Number.isFinite(Date.parse(e.expiresAt))||Date.parse(e.expiresAt)-Date.parse(e.activatedAt)>14*24*60*60*1000))throw new Error('Invalid or overlong image risk exception');
   if(!receipt||!['api','worker'].includes(receipt.role)||receipt.scannerVersion!=='0.72.0'||!SHA.test(receipt.scannerSha256??'')||!SHA.test(receipt.reportSha256??'')||hashFile(receipt.reportPath)!==receipt.reportSha256||!Number.isFinite(Date.parse(receipt.scannedAt))||Date.parse(receipt.scannedAt)>now||now-Date.parse(receipt.scannedAt)>24*60*60*1000||!Array.isArray(receipt.databases)||!receipt.databases.length)throw new Error('Missing, malformed or stale image scan receipt');
   const required=receipt.role==='api'?['debian','node-pkg']:['debian','node-pkg','gobinary'];if(!Array.isArray(receipt.requiredTypes)||required.some(type=>!receipt.requiredTypes.includes(type)))throw new Error('Incomplete declared image role coverage');
   const inputsSha256=binding(receipt.inputs,root);
@@ -347,19 +348,29 @@ export function runSecurity({root=process.cwd(),inputs={},evidenceDirectory}) {
  const localPass=results.every(x=>x.pass),externalRequirements=external.pass?[]:external.issues;
  return {schema:'coop-release-security-v1',pass:localPass&&external.pass,localPass,results,external,externalRequirements,qualification:'Automated security evidence only; package/live/provider/operations/production authorization remain separate required gates.'};
 }
-export function validateCodeqlFindings({analyses,alerts,commit,ref,complete}) {
+export function validateCodeqlFindings({analyses,alerts,commit,ref,complete,exceptions=[]},now=Date.now()) {
  const issues=[];
- if(!/^[a-f0-9]{40}$/.test(commit??'')||typeof ref!=='string'||!ref.startsWith('refs/')||complete!==true||!Array.isArray(analyses)||!Array.isArray(alerts))return outcome(['Missing complete source-bound CodeQL evidence']);
+ if(!/^[a-f0-9]{40}$/.test(commit??'')||typeof ref!=='string'||!ref.startsWith('refs/')||complete!==true||!Array.isArray(analyses)||!Array.isArray(alerts)||!Array.isArray(exceptions))return outcome(['Missing complete source-bound CodeQL evidence']);
  const current=analyses.filter(a=>a.commit_sha===commit&&a.ref===ref&&a.tool?.name==='CodeQL');
  if(!current.length||current.some(a=>a.error!==''||!Number.isSafeInteger(a.results_count)||a.results_count<0||!Number.isSafeInteger(a.rules_count)||a.rules_count<=0))issues.push('Current CodeQL analysis absent/failed');
- const findings=[];
+ const findings=[],accepted=[],keys=new Set();
+ for(const e of exceptions){
+  const key=e?.number+':'+e?.rule;
+  if(!Number.isSafeInteger(e?.number)||e.number<=0||typeof e.rule!=='string'||!e.rule||!['error','warning','note'].includes(e.severity)||!['critical','high','medium','low',null].includes(e.securitySeverity)||e.commit!==commit||e.ref!==ref||e.approved!==true||typeof e.owner!=='string'||!e.owner.trim()||typeof e.approvalReference!=='string'||!e.approvalReference.trim()||typeof e.reason!=='string'||!e.reason.trim()||!Number.isFinite(Date.parse(e.activatedAt))||!Number.isFinite(Date.parse(e.expiresAt))||Date.parse(e.activatedAt)>now||Date.parse(e.expiresAt)<=now||Date.parse(e.expiresAt)-Date.parse(e.activatedAt)>14*24*60*60*1000||keys.has(key))issues.push('Invalid, mismatched, duplicate or expired CodeQL exception');
+  keys.add(key);
+ }
  for(const alert of alerts){
   const severity=alert?.rule?.severity,security=alert?.rule?.security_severity_level;
   if(alert?.state!=='open'||alert.tool?.name!=='CodeQL'||!['error','warning','note'].includes(severity)||(security!==null&&security!==undefined&&!['critical','high','medium','low'].includes(security))){issues.push('Malformed/unscoped CodeQL alert');continue;}
-  if(severity==='error'||['critical','high'].includes(security))findings.push({number:alert.number,rule:alert.rule.id,severity,securitySeverity:security??null});
+  if(severity==='error'||['critical','high'].includes(security)){
+   const finding={number:alert.number,rule:alert.rule.id,severity,securitySeverity:security??null},exception=exceptions.find(e=>e.number===finding.number&&e.rule===finding.rule);
+   if(exception&&exception.severity===finding.severity&&exception.securitySeverity===finding.securitySeverity&&!issues.length)accepted.push({number:finding.number,rule:finding.rule,owner:exception.owner,expiresAt:exception.expiresAt,approvalReference:exception.approvalReference});
+   else findings.push(finding);
+  }
  }
+ if(exceptions.some(e=>!accepted.some(a=>a.number===e.number&&a.rule===e.rule)))issues.push('CodeQL exception has no exact open blocking alert');
  if(findings.length)issues.push('Blocking CodeQL HIGH/CRITICAL/security ERROR findings');
- return outcome(issues,{commit,ref,alertsReviewed:alerts.length,findings});
+ return outcome(issues,{commit,ref,alertsReviewed:alerts.length,findings,accepted});
 }
 function codeqlFindings() {
  if(process.env.GITHUB_ACTIONS!=='true'||!process.env.GH_TOKEN||!/^[-\w.]+\/[-\w.]+$/.test(process.env.GITHUB_REPOSITORY??''))return outcome(['CodeQL requires authorized GitHub CI context and read access']);
@@ -371,7 +382,8 @@ function codeqlFindings() {
   }throw new Error('CodeQL pagination cap reached; incomplete evidence');};
   const analyses=fetchPages('analyses').map(a=>({commit_sha:a.commit_sha,ref:a.ref,tool:{name:a.tool?.name},error:a.error===''?'':'analysis error',results_count:a.results_count,rules_count:a.rules_count})),alerts=fetchPages('alerts').map(a=>({number:a.number,state:a.state,tool:{name:a.tool?.name},rule:{id:a.rule?.id,severity:a.rule?.severity,security_severity_level:a.rule?.security_severity_level}}));
   const receipt=observation('codeql',{analyses,alerts});
-  return {...validateCodeqlFindings({analyses,alerts,commit:process.env.GITHUB_SHA,ref:process.env.GITHUB_REF,complete:true}),observation:receipt};
+  const exceptions=process.env.COOP_RELEASE_CODEQL_EXCEPTIONS?JSON.parse(process.env.COOP_RELEASE_CODEQL_EXCEPTIONS):[];
+  return {...validateCodeqlFindings({analyses,alerts,commit:process.env.GITHUB_SHA,ref:process.env.GITHUB_REF,complete:true,exceptions}),observation:receipt};
  }catch(error){return outcome([error.message]);}
 }
 function frozenImageDecision(policy,{role,context,root=process.cwd(),now=Date.now()}) {
@@ -446,7 +458,7 @@ function main() {
  let result;
  if(args.length===1&&args[0]==='--governance-observation'){try{const policy=readJson(process.env.COOP_RELEASE_GOVERNANCE_POLICY),receipt=collectGovernance(policy);result={...validateExternalObservation(receipt,{kind:'governance',context:securitySourceContext(),policy}),observation:receipt};}catch(error){result=outcome([error.message]);}}
  else if(args.length===1&&args[0]==='--codeql-findings')result=codeqlFindings();
- else if(args.length===1&&args[0]==='--image-report'){try{const custody=process.env.COOP_RELEASE_FROZEN_IMAGE_POLICY?frozenImageFromEnvironment(true):null;result=checkImageReceipt(imageReceiptFromEnvironment());if(custody)result.frozenImport={pass:true,archiveSha256:custody.archiveSha256,configurationId:custody.configurationId,inputsSha256:custody.inputsSha256,policySha256:custody.policySha256};}catch(error){result=outcome([error.message]);}}
+ else if(args.length===1&&args[0]==='--image-report'){try{const custody=process.env.COOP_RELEASE_FROZEN_IMAGE_POLICY?frozenImageFromEnvironment(true):null;const role=process.env.COOP_RELEASE_IMAGE_ROLE;const raw=role==='api'?process.env.COOP_RELEASE_IMAGE_API_EXCEPTIONS:role==='worker'?process.env.COOP_RELEASE_IMAGE_WORKER_EXCEPTIONS:null;const exceptions=raw?JSON.parse(raw):[];result=checkImageReceipt(imageReceiptFromEnvironment(),{exceptions});if(custody)result.frozenImport={pass:true,archiveSha256:custody.archiveSha256,configurationId:custody.configurationId,inputsSha256:custody.inputsSha256,policySha256:custody.policySha256};}catch(error){result=outcome([error.message]);}}
  else if(args.length===1&&args[0]==='--java-archive')result=scanJavaArchives({directory:process.env.COOP_RELEASE_JAVA_ROOT,inventoryPath:process.env.COOP_RELEASE_JAVA_INVENTORY,executable:process.env.TRIVY_BIN,expectedExecutableSha256:process.env.COOP_RELEASE_TRIVY_SHA256,cacheDirectory:process.env.TRIVY_CACHE_DIR,evidenceDirectory:directory});
  else if(args.length===1&&args[0]==='--source'){
   try{const inputs=readJson(process.env.COOP_RELEASE_SECURITY_INPUTS),results=[{scan:'audits',...runAudits({npmCli:inputs.npmCli,receipts:inputs.auditReceipts,evidenceDirectory:directory})}];
