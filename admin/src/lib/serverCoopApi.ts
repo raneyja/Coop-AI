@@ -4,6 +4,11 @@ import { NextResponse } from "next/server";
 export const SESSION_COOKIE = "coop_session";
 
 const DEFAULT_API_BASE = "https://api.coop-ai.dev";
+const PRODUCTION_ADMIN_ORIGIN = "https://admin.coop-ai.dev";
+
+export function adminPublicOrigin(requestOrigin: string, nodeEnv = process.env.NODE_ENV): string {
+  return nodeEnv === "production" ? PRODUCTION_ADMIN_ORIGIN : requestOrigin.replace(/\/$/, "");
+}
 
 function resolveCoopApiBase(configured: string | undefined): string {
   const trimmed = configured?.trim().replace(/\/$/, "") ?? "";

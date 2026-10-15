@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { serverApiBase, setSessionCookie } from "@/lib/serverCoopApi";
+import { adminPublicOrigin, serverApiBase, setSessionCookie } from "@/lib/serverCoopApi";
 import { callbackStateCookie, ADMIN_OAUTH_STATE_COOKIE } from "@/lib/googleOauthState";
 
 const INVITE_OAUTH_COOKIE = "coop_oauth_invite";
@@ -47,7 +47,7 @@ function inviteTokenFromRequest(request: Request): string {
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const adminOrigin = url.origin.replace(/\/$/, "");
+  const adminOrigin = adminPublicOrigin(url.origin);
   const oauthCallback = `${adminOrigin}/api/auth/google/callback`;
   const inviteCookie = inviteTokenFromRequest(request);
 

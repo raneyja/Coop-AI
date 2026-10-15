@@ -2,6 +2,23 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { GET } from "./route";
 
+test("admin production callback keeps invitation errors on the canonical origin", async () => {
+  const previous = Object.getOwnPropertyDescriptor(process.env, "NODE_ENV");
+  Object.defineProperty(process.env, "NODE_ENV", { configurable: true, enumerable: true, writable: true, value: "production" });
+  try {
+    const response = await GET(new Request("https://attacker.example/api/auth/google/callback?error=access_denied", {
+      headers: { cookie: "coop_oauth_invite=invite-123" }
+    }));
+    const target = new URL(response.headers.get("location")!);
+    assert.equal(target.origin, "https://admin.coop-ai.dev");
+    assert.equal(target.pathname, "/accept-invite");
+    assert.equal(target.searchParams.get("token"), "invite-123");
+  } finally {
+    if (previous === undefined) Reflect.deleteProperty(process.env, "NODE_ENV");
+    else Object.defineProperty(process.env, "NODE_ENV", previous);
+  }
+});
+
 test("admin callback rejects mismatched browser state before exchange", async () => {
   const originalFetch = globalThis.fetch;
   let backendCalls = 0;

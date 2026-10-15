@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { serverApiBase } from "@/lib/serverCoopApi";
+import { adminPublicOrigin, serverApiBase } from "@/lib/serverCoopApi";
 import { authorizeState, ADMIN_OAUTH_STATE_COOKIE, ADMIN_OAUTH_STATE_MAX_AGE_SEC } from "@/lib/googleOauthState";
 
 const INVITE_OAUTH_COOKIE = "coop_oauth_invite";
@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   const firstName = url.searchParams.get("firstName")?.trim() ?? "";
   const lastName = url.searchParams.get("lastName")?.trim() ?? "";
   const timezone = url.searchParams.get("timezone")?.trim() ?? "";
-  const adminOrigin = url.origin.replace(/\/$/, "");
+  const adminOrigin = adminPublicOrigin(url.origin);
   const oauthCallback = `${adminOrigin}/api/auth/google/callback`;
   const finalRedirect = `${adminOrigin}/auth/callback`;
 

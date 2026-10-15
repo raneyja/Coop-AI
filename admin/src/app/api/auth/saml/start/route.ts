@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { serverApiBase } from "@/lib/serverCoopApi";
+import { adminPublicOrigin, serverApiBase } from "@/lib/serverCoopApi";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   }
 
   const mode = url.searchParams.get("mode")?.trim() === "test" ? "test" : "login";
-  const adminOrigin = url.origin.replace(/\/$/, "");
+  const adminOrigin = adminPublicOrigin(url.origin);
   const finalRedirect =
     mode === "test"
       ? `${adminOrigin}/settings/single-sign-on`
