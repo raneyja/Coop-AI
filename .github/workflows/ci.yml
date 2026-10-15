@@ -23,6 +23,13 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run release:check -- --lane unit
+      - name: Retain synthetic Git lifecycle failure location
+        if: failure()
+        run: |
+          log="$COOP_RELEASE_EVIDENCE_DIR/unit/221.log"
+          if [ -f "$log" ]; then
+            grep -F 'Owned clone control failed; supplied credentials omitted' "$log" | head -n 1 > "$COOP_RELEASE_EVIDENCE_DIR/unit/git-clone-failure-location.txt" || true
+          fi
       - run: npm run release:check -- --lane supplemental
       - name: Bind retained evidence to this candidate
         if: always()
@@ -38,6 +45,7 @@ jobs:
             ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/unit/result.json
             ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/unit/source-before.json
             ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/unit/source-after.json
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/unit/git-clone-failure-location.txt
             ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/supplemental/result.json
             ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/supplemental/source-before.json
             ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/supplemental/source-after.json

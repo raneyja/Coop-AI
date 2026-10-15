@@ -46,14 +46,15 @@ test('unit fixture preparation is owned by the declared build and precedes depen
  assert.equal(catalog.lanes.unitPreparation.length,1);
  assert.equal(catalog.lanes.unitPreparation[0].command,splitAnd(JSON.parse(fs.readFileSync('package.json','utf8')).scripts['test:jobs-leases']).find(command=>command.startsWith('esbuild ')&&command.includes('--outfile=dist/tests/jobLeases.integration.test.cjs')));
  const actualRunner=path.resolve('scripts/run-release-checks.mjs');
- for(const fault of ['none','build','unit','mod-drift','sum-drift']){
-  const broken=fault!=='none',sourceDrift=fault.endsWith('-drift'),commandFailure=fault==='build'||fault==='unit';let evidenceDirectory;
+ for(const fault of ['none','brief-child','lingering-child','build','unit','mod-drift','sum-drift']){
+  const broken=!['none','brief-child'].includes(fault),sourceDrift=fault.endsWith('-drift'),commandFailure=['build','unit','lingering-child'].includes(fault);let evidenceDirectory;
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'coop-unit-preparation-'));
   try{
    for(const folder of ['src/jobs','scripts','migrations','admin','ops','website','.github/workflows','evals/enterprise/v1','docs/dogfood','.vscode'])fs.mkdirSync(path.join(root,folder),{recursive:true});
    fs.symlinkSync(path.resolve('node_modules'),path.join(root,'node_modules'),'dir');
    fs.writeFileSync(path.join(root,'src/jobs/jobLeases.integration.test.ts'),'export const fixtureOnly = 42;');
-   fs.writeFileSync(path.join(root,'scripts/check.mjs'),(fault==='unit'?"throw Error('UNIT_FAULT');":'')+"import fs from 'node:fs';import assert from 'node:assert/strict';import {createRequire} from 'node:module';assert.equal(createRequire(import.meta.url)('../dist/tests/jobLeases.integration.test.cjs').fixtureOnly,42);fs.writeFileSync('unit-ran','yes');"+(sourceDrift?`fs.appendFileSync('scripts/indexer-tools/go.${fault==='mod-drift'?'mod':'sum'}','changed');`:''));
+   const child=fault==='brief-child'||fault==='lingering-child'?`import {spawn} from 'node:child_process';spawn(process.execPath,['-e',${JSON.stringify(fault==='brief-child'?'setTimeout(()=>{},1200)':'setInterval(()=>{},1000)')}],{stdio:'ignore'}).unref();`:'';
+   fs.writeFileSync(path.join(root,'scripts/check.mjs'),(fault==='unit'?"throw Error('UNIT_FAULT');":'')+"import fs from 'node:fs';import assert from 'node:assert/strict';import {createRequire} from 'node:module';assert.equal(createRequire(import.meta.url)('../dist/tests/jobLeases.integration.test.cjs').fixtureOnly,42);fs.writeFileSync('unit-ran','yes');"+child+(sourceDrift?`fs.appendFileSync('scripts/indexer-tools/go.${fault==='mod-drift'?'mod':'sum'}','changed');`:''));
    const compile='esbuild '+(fault==='build'?'missing.ts':'src/jobs/jobLeases.integration.test.ts')+' --bundle --platform=node --format=cjs --outfile=dist/tests/jobLeases.integration.test.cjs';
    const scripts={'test:ci':'node scripts/check.mjs','test:agent-ship:a':`node --eval "require('node:fs').writeFileSync('later-unit-ran','yes')"`,'test:codegen':'node scripts/check.mjs','test:enterprise-unit':'node scripts/check.mjs',lint:'node --eval "process.exit(0)"',build:'node --eval "process.exit(0)"',package:'node --eval "process.exit(0)"','test:jobs-leases':compile+' && node --eval "throw Error(\'DATABASE_SUITE_MUST_NOT_RUN\')"'};
    for(const name of SUPPLEMENTAL_SCRIPT_GROUPS)scripts[name]='node --eval "process.exit(0)"';
@@ -66,9 +67,10 @@ test('unit fixture preparation is owned by the declared build and precedes depen
    assert.equal(result.status,broken?1:0,result.stdout+result.stderr);
    assert.equal(evidence.pass,!broken);assert.equal(evidence.sourceUnchanged,!sourceDrift);
    assert.equal(evidence.results[0].lane,'unitPreparation');
-   assert.equal(evidence.results.length,fault==='build'?1:fault==='unit'?2:3);
+   assert.equal(evidence.results.length,fault==='build'?1:['unit','lingering-child'].includes(fault)?2:3);
    assert.equal(fs.existsSync(path.join(root,'later-unit-ran')),!commandFailure);
-   assert.equal(fs.existsSync(path.join(root,'unit-ran')),!commandFailure);
+   assert.equal(fs.existsSync(path.join(root,'unit-ran')),!['build','unit'].includes(fault));
+   if(fault==='brief-child'||fault==='lingering-child')assert.equal(evidence.results[1].lingering,fault==='lingering-child');
    assert.ok(!JSON.stringify(evidence).includes('DATABASE_SUITE_MUST_NOT_RUN'));
    }finally{if(evidenceDirectory)fs.rmSync(evidenceDirectory,{recursive:true,force:true});fs.rmSync(root,{recursive:true,force:true});}
  }

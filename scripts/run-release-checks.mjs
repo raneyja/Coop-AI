@@ -38,10 +38,17 @@ async function execute(entry,index){
  const timer=setTimeout(()=>{expired=true;active?.();},15*60*1000);
  const outcome=await new Promise(resolve=>{child.once('error',error=>resolve({error:error.message}));child.once('close',(code,signal)=>resolve({code,signal,physicalClose:true}));});
  clearTimeout(timer);clearTimeout(grace);active=undefined;
- let lingering=false;try{process.kill(-child.pid,0);lingering=true;kill('SIGKILL');}catch(error){if(error.code!=='ESRCH')throw error;}
+ const groupAlive=()=>{try{process.kill(-child.pid,0);return true;}catch(error){if(error.code==='ESRCH')return false;throw error;}};
+ let lingering=groupAlive(),groupDrainMs=0;
+ if(lingering&&outcome.code===0&&!outcome.signal&&!expired&&!cancelled&&!termination){
+  const drainStart=performance.now();
+  do{await new Promise(resolve=>setTimeout(resolve,100));lingering=groupAlive();}while(lingering&&performance.now()-drainStart<3000);
+  groupDrainMs=Math.round(performance.now()-drainStart);
+ }
+ if(lingering)kill('SIGKILL');
  await new Promise((resolve,reject)=>log.end(error=>error?reject(error):resolve()));
  const pass=outcome.code===0&&!outcome.signal&&!outcome.error&&!expired&&!cancelled&&!termination&&!loggingError&&!lingering;
- return {...entry,...outcome,status:pass?'AUTOMATED_PASS':'FAIL',expired,cancelled,termination,lingering,seconds:(performance.now()-started)/1000,log:path.basename(logfile),logSha256:hash(logfile)};
+ return {...entry,...outcome,status:pass?'AUTOMATED_PASS':'FAIL',expired,cancelled,termination,lingering,groupDrainMs,seconds:(performance.now()-started)/1000,log:path.basename(logfile),logSha256:hash(logfile)};
 }
 try {
  const lanes=lane==='full'?['unitPreparation','unit','supplemental','build','database','security','publication','tls','auth']:lane==='unit'?['unitPreparation','unit']:lane==='database'?['unitPreparation','database','publication','tls','auth']:[lane];

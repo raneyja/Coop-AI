@@ -43,7 +43,8 @@ const token = 'SYNTHETIC_ONLY@:/?+%', saved = {...process.env};
 const target = {repoId: 'github:synthetic/fixture', owner: 'synthetic', repo: 'fixture', provider: 'github', orgId: 'synthetic-org', jobId: 'synthetic-job-attempt'};
 const reset = extra => {for (const k of Object.keys(process.env)) delete process.env[k]; Object.assign(process.env, clean, extra);};
 const results = [];
-const control = async (name, action) => {await action(); results.push({name, pass: true});};
+let activeControl = 'fixture setup';
+const control = async (name, action) => {activeControl = name; await action(); results.push({name, pass: true}); activeControl = 'none';};
 let invocation = 0;
 const wrapper = (mode, provider = 'github') => {
   const dir = path.join(root, 'bin-' + (++invocation)); fs.mkdirSync(dir);
@@ -196,4 +197,4 @@ const noOwnedDirectories = () => assert.deepEqual(fs.readdirSync(workRoot).sort(
   await control('public clone has no Authorization and a genuine local Git positive',async()=>{const w=wrapper('normal');reset({PATH:w.dir});const c=await cloneRepository(target,undefined,workRoot);assert.equal(effective(record(w).env,'http.extraHeader','https://github.com/synthetic/fixture.git'),'');assert.match(c.headCommit,/^[a-f0-9]{40}$/);removeRepositoryClone(c.localPath);noOwnedDirectories();});
   assert(fs.existsSync(path.join(prior,'retained.txt')));assert(fs.existsSync(path.join(workRoot,'neighbor','retained.txt')));
   console.log(JSON.stringify({passed:results.length,externalRequests:0,nativeTimeoutFixtureMs:500,productionRequestedCloneTimeoutMs:600000,actualOwnerChildrenCaptured:true}));
-}finally{for(const k of Object.keys(process.env))delete process.env[k];Object.assign(process.env,saved);cp.execFile=nativeExecFile;fs.rmSync(root,{recursive:true,force:true});}})().catch(error=>{console.error(error.name,'Owned clone control failed; supplied credentials omitted',error.stack?.split('\n').filter(line=>line.trim().startsWith('at ')).slice(0,2).join('\n'));process.exitCode=1;});
+}finally{for(const k of Object.keys(process.env))delete process.env[k];Object.assign(process.env,saved);cp.execFile=nativeExecFile;fs.rmSync(root,{recursive:true,force:true});}})().catch(error=>{console.error(error.name,'Owned clone control failed; supplied credentials omitted',activeControl,error.stack?.split('\n').filter(line=>line.trim().startsWith('at ')).slice(0,2).join('\n'));process.exitCode=1;});
