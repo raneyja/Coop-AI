@@ -34,7 +34,8 @@ No Caddy, no VM SSH, no Oracle networking. Railway terminates TLS on custom doma
 | File | Purpose |
 |------|---------|
 | `railway.toml` | Dockerfile build, start, pre-deploy migrations, `/health` check |
-| `Dockerfile` | Production API image |
+| `Dockerfile.api` | Minimal production API image; no worker indexing toolchain |
+| `Dockerfile` | Worker and Zoekt indexing image |
 | `scripts/run-migrations.mjs` | Applies `migrations/*.sql` using `DATABASE_URL` |
 | `.env.backend.example` | Variable names — copy values from local `.env.backend` into Railway |
 

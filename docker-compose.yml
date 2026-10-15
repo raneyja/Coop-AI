@@ -16,7 +16,9 @@ services:
   api:
     cap_drop: ["ALL"]
     security_opt: ["no-new-privileges:true"]
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.api
     restart: unless-stopped
     ports:
       - "8787:8787"

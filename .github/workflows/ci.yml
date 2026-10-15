@@ -260,7 +260,13 @@ jobs:
           docker image tag "$configuration" "coop-$COOP_RELEASE_IMAGE_ROLE:ci"
       - name: Build current image when no frozen campaign is configured
         if: env.COOP_RELEASE_FROZEN_IMAGE_POLICY == ''
-        run: docker build --platform linux/amd64 --target ${{ matrix.target }} -t coop-${{ matrix.target }}:ci .
+        run: |
+          if [ "${{ matrix.target }}" = api ]; then
+            dockerfile=Dockerfile.api
+          else
+            dockerfile=Dockerfile
+          fi
+          docker build --platform linux/amd64 --file "$dockerfile" --target ${{ matrix.target }} -t coop-${{ matrix.target }}:ci .
       - name: Scan actual image and enforce exact findings
         env:
           COOP_RELEASE_IMAGE_ROLE: ${{ matrix.target }}
