@@ -95,8 +95,10 @@ if(!clone){
 const record = (w, kind = 'clone') => JSON.parse(fs.readFileSync(w.log + '.' + kind, 'utf8'));
 const waiting = async file => {for (let i=0; !fs.existsSync(file) && i<400; i++) await delay(10); assert(fs.existsSync(file));};
 const forbidden = ['GIT_CONFIG_PARAMETERS','GIT_TEMPLATE_DIR','GIT_SSL_NO_VERIFY','COOP_PROVIDER_KEY','AWS_SECRET_ACCESS_KEY','NODE_OPTIONS','SSH_AUTH_SOCK'];
+// Probe the child's policy outside the Actions checkout, whose local Git config
+// can contain a separate credential header unrelated to this sealed child.
 const effective = (env, key, remote) => {
-  const r=cp.spawnSync('/usr/bin/git',['config','--get-urlmatch',key,remote],{env,encoding:'utf8'});
+  const r=cp.spawnSync('/usr/bin/git',['config','--get-urlmatch',key,remote],{env,cwd:ambient,encoding:'utf8'});
   assert([0,1].includes(r.status)); return r.stdout.trim();
 };
 const assertSealed = (r, provider, credentialed) => {
@@ -121,7 +123,7 @@ const assertSealed = (r, provider, credentialed) => {
    assert(r.homeEmptyAtCloneSpawn);assert(!r.args.join(' ').includes(token));assert(!r.args[3].includes('@'));
    assert.equal(effective(r.env,'http.extraHeader','https://'+host+'/synthetic/other.git'),'');
   }else assert(!JSON.stringify(r.env).includes(token) && !JSON.stringify(r.env).includes(Buffer.from(username+':'+token).toString('base64')));
-  const filled=cp.spawnSync('/usr/bin/git',['credential','fill'],{env:r.env,input:'protocol=https\nhost='+host+'\npath=synthetic/fixture.git\n\n',encoding:'utf8'});
+  const filled=cp.spawnSync('/usr/bin/git',['credential','fill'],{env:r.env,cwd:ambient,input:'protocol=https\nhost='+host+'\npath=synthetic/fixture.git\n\n',encoding:'utf8'});
   assert.notEqual(filled.status,0);
 };
 let prior;
