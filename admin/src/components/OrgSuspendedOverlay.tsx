@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { clearSession, displayOrgName, getStoredMe, signOutRemote } from "@/lib/auth";
 import { ORG_SUSPENDED_SALES_EMAIL } from "@/lib/coopApi";
@@ -29,6 +29,8 @@ export function OrgSuspendedOverlay({
 }: OrgSuspendedOverlayProps) {
   const router = useRouter();
   const orgLabel = orgNameProp?.trim() || displayOrgName(getStoredMe());
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -42,7 +44,14 @@ export function OrgSuspendedOverlay({
   if (!open) return null;
 
   async function signOut() {
-    await signOutRemote();
+    setSigningOut(true);
+    setSignOutError(null);
+    const signedOut = await signOutRemote();
+    setSigningOut(false);
+    if (!signedOut) {
+      setSignOutError("Could not sign out. Please try again.");
+      return;
+    }
     clearSession();
     router.replace("/login");
   }
@@ -79,9 +88,10 @@ export function OrgSuspendedOverlay({
           </a>{" "}
           regarding your account access.
         </p>
+        {signOutError ? <p role="alert" className="mt-3 text-sm text-red-300">{signOutError}</p> : null}
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <button type="button" onClick={handleSecondary} className="admin-btn-secondary">
-            {variant === "sign-in" ? "Back to sign in" : "Sign out"}
+          <button type="button" onClick={handleSecondary} disabled={signingOut} className="admin-btn-secondary">
+            {variant === "sign-in" ? "Back to sign in" : signingOut ? "Signing out…" : "Sign out"}
           </button>
           <a href={`mailto:${ORG_SUSPENDED_SALES_EMAIL}`} className="admin-btn-primary text-center">
             Contact sales

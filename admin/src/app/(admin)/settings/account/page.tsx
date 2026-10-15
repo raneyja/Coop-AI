@@ -54,6 +54,8 @@ export default function SettingsAccountPage() {
   const [savingName, setSavingName] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
   const [nameSaved, setNameSaved] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,7 +98,14 @@ export default function SettingsAccountPage() {
   }
 
   async function handleSignOut() {
-    await signOutRemote();
+    setSigningOut(true);
+    setSignOutError(null);
+    const signedOut = await signOutRemote();
+    setSigningOut(false);
+    if (!signedOut) {
+      setSignOutError("Could not sign out. Please try again.");
+      return;
+    }
     clearSession();
     router.replace("/login");
   }
@@ -139,13 +148,17 @@ export default function SettingsAccountPage() {
             )}
           </SettingsRow>
           <SettingsRow label="Session">
-            <button
-              type="button"
-              className="admin-btn-danger !px-3 !py-1.5 text-xs"
-              onClick={() => void handleSignOut()}
-            >
-              Sign out
-            </button>
+            <div className="flex flex-col items-start gap-2">
+              <button
+                type="button"
+                className="admin-btn-danger !px-3 !py-1.5 text-xs"
+                disabled={signingOut}
+                onClick={() => void handleSignOut()}
+              >
+                {signingOut ? "Signing out…" : "Sign out"}
+              </button>
+              {signOutError ? <p role="alert" className="text-xs text-red-300">{signOutError}</p> : null}
+            </div>
           </SettingsRow>
         </dl>
       </section>

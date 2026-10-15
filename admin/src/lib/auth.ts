@@ -1,6 +1,6 @@
 import { clearOrgSuspended } from "./orgSuspendedState";
 
-/** Fired on `window` after the signed-in org name is written to session storage. */
+/** Fired on `window` after the signed-in org name changes. */
 export const ORG_NAME_UPDATED_EVENT = "coop:org-name-updated";
 
 const TOKEN_KEY = "coop_admin_api_token";
@@ -8,6 +8,9 @@ const REFRESH_TOKEN_KEY = "coop_admin_refresh_token";
 const ORG_NAME_KEY = "coop_admin_org_name";
 const ME_KEY = "coop_admin_me";
 const UPGRADE_POPUP_DISMISS_KEY = "coop-upgrade-popup-dismissed";
+let currentMe: StoredMe | null = null;
+let currentOrgNameOverride: string | null = null;
+if (typeof window !== "undefined") clearLegacySensitiveStorage();
 
 export type StoredMe = {
   orgId: string;
@@ -27,53 +30,22 @@ export type StoredMe = {
   seats?: number | null;
 };
 
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return sessionStorage.getItem(TOKEN_KEY);
-}
-
-/** @deprecated Use getToken — kept for older automation-key session storage. */
-export const getApiToken = getToken;
-
-export function getRefreshToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return sessionStorage.getItem(REFRESH_TOKEN_KEY);
-}
-
 export function getOrgNameOverride(): string | null {
-  if (typeof window === "undefined") return null;
-  return sessionStorage.getItem(ORG_NAME_KEY);
+  return currentOrgNameOverride;
 }
 
 export function getStoredMe(): StoredMe | null {
-  if (typeof window === "undefined") return null;
-  const raw = sessionStorage.getItem(ME_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as StoredMe;
-  } catch {
-    return null;
-  }
+  return typeof window === "undefined" ? null : currentMe;
 }
 
 export function saveSession(
-  token: string,
   me: StoredMe,
-  orgNameOverride?: string,
-  refreshToken?: string
+  orgNameOverride?: string
 ): void {
-  sessionStorage.setItem(TOKEN_KEY, token);
-  sessionStorage.setItem(ME_KEY, JSON.stringify(me));
-  if (refreshToken?.trim()) {
-    sessionStorage.setItem(REFRESH_TOKEN_KEY, refreshToken.trim());
-  } else {
-    sessionStorage.removeItem(REFRESH_TOKEN_KEY);
-  }
-  if (orgNameOverride?.trim()) {
-    sessionStorage.setItem(ORG_NAME_KEY, orgNameOverride.trim());
-  } else {
-    sessionStorage.removeItem(ORG_NAME_KEY);
-  }
+  if (typeof window === "undefined") throw new Error("Browser session state is unavailable on the server");
+  currentMe = me;
+  currentOrgNameOverride = orgNameOverride?.trim() || null;
+  clearLegacySensitiveStorage();
   // Successful sign-in for this org — clear any prior suspended-org latch.
   clearOrgSuspended();
   clearUpgradePopupDismissed();
@@ -81,7 +53,8 @@ export function saveSession(
 
 /** Update cached /v1/me profile without touching tokens. */
 export function updateStoredMe(me: StoredMe): void {
-  sessionStorage.setItem(ME_KEY, JSON.stringify(me));
+  if (typeof window === "undefined") throw new Error("Browser session state is unavailable on the server");
+  currentMe = me;
 }
 
 /** Persist a renamed organization so the portal header and settings stay in sync. */
@@ -94,17 +67,28 @@ export function setStoredOrgName(name: string): void {
   if (me) {
     updateStoredMe({ ...me, orgName: trimmed });
   }
-  sessionStorage.removeItem(ORG_NAME_KEY);
+  currentOrgNameOverride = null;
   window.dispatchEvent(new Event(ORG_NAME_UPDATED_EVENT));
 }
 
 export function clearSession(): void {
-  sessionStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem(REFRESH_TOKEN_KEY);
-  sessionStorage.removeItem(ME_KEY);
-  sessionStorage.removeItem(ORG_NAME_KEY);
+  currentMe = null;
+  currentOrgNameOverride = null;
+  clearLegacySensitiveStorage();
   clearUpgradePopupDismissed();
   clearOrgSuspended();
+}
+
+function clearLegacySensitiveStorage(): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+    sessionStorage.removeItem(ME_KEY);
+    sessionStorage.removeItem(ORG_NAME_KEY);
+  } catch {
+    // Browser storage may be unavailable; no sensitive data is written here.
+  }
 }
 
 export function isUpgradePopupDismissed(): boolean {
@@ -135,21 +119,24 @@ export function clearUpgradePopupDismissed(): void {
 }
 
 export async function restoreSessionFromCookie(): Promise<StoredMe | null> {
+  clearLegacySensitiveStorage();
   try {
     const response = await fetch("/api/auth/session", { credentials: "include", cache: "no-store" });
     if (!response.ok) {
-      // Suspended/expired cookie must not leave a stale sessionStorage me around.
+      // Suspended/expired cookies must not leave stale profile data in memory.
       if (response.status === 401 || response.status === 403) {
         clearSession();
       }
       return null;
     }
-    const data = (await response.json()) as StoredMe & {
-      accessToken?: string;
-      refreshToken?: string;
-    };
-    const token = String(data.accessToken ?? "").trim();
-    if (!token) {
+    const data = (await response.json()) as StoredMe;
+    if (
+      !data ||
+      typeof data.orgId !== "string" || !data.orgId ||
+      typeof data.orgName !== "string" || !data.orgName ||
+      !["free", "pro", "enterprise"].includes(data.plan)
+    ) {
+      clearSession();
       return null;
     }
     const me: StoredMe = {
@@ -167,24 +154,11 @@ export async function restoreSessionFromCookie(): Promise<StoredMe | null> {
       authMethod: data.authMethod,
       sessionProvider: data.sessionProvider
     };
-    saveSession(token, me, undefined, data.refreshToken);
+    saveSession(me);
     return me;
   } catch {
     return null;
   }
-}
-
-/**
- * Prefer the in-tab token; if missing (new tab, race after navigation), hydrate
- * from the httpOnly cookie before treating the user as signed out.
- */
-export async function ensureAccessToken(): Promise<string | null> {
-  const existing = getToken();
-  if (existing) return existing;
-  if (typeof window === "undefined") return null;
-  const restored = await restoreSessionFromCookie();
-  if (!restored) return null;
-  return getToken();
 }
 
 export async function establishSessionCookie(accessToken: string, refreshToken?: string): Promise<boolean> {
@@ -201,17 +175,15 @@ export async function establishSessionCookie(accessToken: string, refreshToken?:
   }
 }
 
-export async function signOutRemote(): Promise<void> {
-  const refreshToken = getRefreshToken();
+export async function signOutRemote(): Promise<boolean> {
   try {
-    await fetch("/api/auth/logout", {
+    const response = await fetch("/api/auth/logout", {
       method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken: refreshToken ?? "" })
+      credentials: "include"
     });
+    return response.ok;
   } catch {
-    // still clear local session
+    return false;
   }
 }
 

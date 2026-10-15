@@ -9,7 +9,6 @@ import {Pool} from 'pg';
 import {createServer as createTcpServer} from 'node:net';
 import {OperatorStore} from '../src/server/operators/operatorStore';
 import {IntegrationConnectionStore} from '../src/server/integrationConnectionStore';
-import {encryptCredential} from '../src/server/credentialCrypto';
 import {loadWebhookConfig} from '../src/config/webhookConfig';
 import type {WebhookServerRuntime} from '../src/webhooks/webhookServer';
 
@@ -26,12 +25,13 @@ test('cold old-schema upgrade refuses unknown history and admits proven fixture 
   const realFetch=globalThis.fetch;
   globalThis.fetch=async()=>{throw new Error('No provider or external HTTP is permitted');};
   const key='synthetic-schema-continuity-key',token='synthetic-prior-schema-token';
-  const ciphertext=encryptCredential(token,key),orgId=randomUUID();
+  // Synthetic ciphertext produced by the pinned 0.1.13 implementation
+  // (source SHA256 57f3c8d8b3a94dcaf9b30096f0dfe694101731201ccd30ee8635895a8b4f8997).
+  const ciphertext='GWdtzGnm1bb1V+qH:GPnN6THmNBx2AjaagZMZCQ==:X1yeLFq9ZQMVyREarmMx/kcvquviQ16ui5DyZQ==',orgId=randomUUID();
   const pin=JSON.parse(fs.readFileSync('fixtures/migrations/prior-release-0.1.13.json','utf8')) as {source_commit:string;runner_sha256:string;sql_sha256:Record<string,string>};
   try {
     assert.equal(pin.source_commit,'13240bb0caf8e93cac7ca6241cf2832125fdcffc');
     assert.equal(digest(fs.readFileSync('fixtures/migrations/prior-runner-0.1.13.mjs')),pin.runner_sha256);
-    assert.equal(digest(fs.readFileSync('src/server/credentialCrypto.ts')),'57f3c8d8b3a94dcaf9b30096f0dfe694101731201ccd30ee8635895a8b4f8997','Prior and current encryption implementation identity');
     for(const [filename,sha] of Object.entries(pin.sql_sha256)) {
       const bytes=fs.readFileSync(path.join('migrations',filename));assert.equal(digest(bytes),sha);
       fs.writeFileSync(path.join(priorDirectory,filename),bytes);

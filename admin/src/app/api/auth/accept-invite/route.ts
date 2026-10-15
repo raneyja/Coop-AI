@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { fetchMe, serverApiBase, setSessionCookie } from "@/lib/serverCoopApi";
+import { publicSessionProfile } from "@/lib/publicSessionProfile";
+import { isSameOriginMutation } from "@/lib/portalProxyPolicy";
 
 export async function GET(request: Request) {
   const token = new URL(request.url).searchParams.get("token")?.trim() ?? "";
@@ -19,6 +21,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (!isSameOriginMutation(request)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
   let body: {
     token?: string;
     password?: string;
@@ -80,13 +85,11 @@ export async function POST(request: Request) {
   }
 
   const payload = {
-    ...me.data,
-    accessToken,
-    refreshToken,
+    ...publicSessionProfile(me.data),
     authMethod: "password" as const
   };
 
   const response = NextResponse.json(payload);
-  setSessionCookie(response, accessToken);
+  setSessionCookie(response, accessToken, refreshToken);
   return response;
 }

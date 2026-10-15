@@ -10,7 +10,7 @@ import type {
   TeamsScopePolicy
 } from "./integrations";
 import type { StoredMe } from "./auth";
-import { ensureAccessToken, restoreSessionFromCookie } from "./auth";
+import { restoreSessionFromCookie } from "./auth";
 import { markOrgSuspended, clearOrgSuspended } from "./orgSuspendedState";
 import { normalizeQuotaSnapshot } from "./quotaSnapshot";
 import { billingPlanLabel } from "./billingCopy";
@@ -59,15 +59,6 @@ export type MeResponse = StoredMe & {
   usageTier?: string | null;
   usageMeters?: QuotaSnapshot["usageMeters"];
   quota?: QuotaSnapshot;
-};
-
-export type LoginResponse = {
-  accessToken: string;
-  refreshToken: string;
-  email: string;
-  orgName: string;
-  plan: string;
-  authMethod?: MeResponse["authMethod"];
 };
 
 export type AdminUser = {
@@ -193,11 +184,6 @@ export function normalizeApiKeyInput(value: string): string {
   return value.trim().replace(/[\u200B-\u200D\uFEFF]/g, "");
 }
 
-function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return sessionStorage.getItem("coop_admin_api_token");
-}
-
 /** User-facing copy when the portal truly has no usable session. */
 export const SESSION_EXPIRED_MESSAGE = "Session expired. Sign in again.";
 
@@ -213,22 +199,22 @@ function formatError(status: number, body: ApiError | undefined, fallback: strin
   return body?.message ?? body?.error ?? fallback;
 }
 
+function portalFetch(path: string, options: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(options.headers);
+  headers.delete("Authorization");
+  headers.set("X-Coop-Admin-Request", "1");
+  if (options.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  return fetch(`/api/coop${path}`, { ...options, credentials: "include", headers });
+}
+
 export async function coopFetch<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<ApiResult<T>> {
-  let token = await ensureAccessToken();
-  if (!token) {
-    return { ok: false, status: 401, error: SESSION_EXPIRED_MESSAGE };
-  }
-
-  const run = async (activeToken: string) => {
-    const headers = new Headers(options.headers);
-    headers.set("Authorization", `Bearer ${activeToken}`);
-    if (options.body && !headers.has("Content-Type")) {
-      headers.set("Content-Type", "application/json");
-    }
-    const response = await fetch(`${getApiBase()}${path}`, { ...options, headers });
+  const run = async () => {
+    const response = await portalFetch(path, options);
     const text = await response.text();
     let body: (T & ApiError) | undefined;
     if (text) {
@@ -242,14 +228,12 @@ export async function coopFetch<T>(
   };
 
   try {
-    let { response, body } = await run(token);
+    let { response, body } = await run();
 
     if (response.status === 401 && typeof window !== "undefined") {
       const restored = await restoreSessionFromCookie();
-      const refreshed = getToken();
-      if (restored && refreshed && refreshed !== token) {
-        token = refreshed;
-        ({ response, body } = await run(token));
+      if (restored) {
+        ({ response, body } = await run());
       }
     }
 
@@ -311,7 +295,7 @@ export const validateApiKey = validateSession;
 export async function loginWithPassword(
   email: string,
   password: string
-): Promise<ApiResult<LoginResponse & MeResponse>> {
+): Promise<ApiResult<MeResponse>> {
   try {
     const response = await fetch("/api/auth/login", {
       method: "POST",
@@ -319,7 +303,7 @@ export async function loginWithPassword(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: email.trim().toLowerCase(), password })
     });
-    const body = (await response.json().catch(() => ({}))) as LoginResponse & MeResponse & ApiError;
+    const body = (await response.json().catch(() => ({}))) as MeResponse & ApiError;
     if (!response.ok) {
       const errorCode = typeof body.error === "string" ? body.error : undefined;
       const error = formatError(response.status, body, "Sign-in failed.");
@@ -391,7 +375,7 @@ export async function acceptInviteWithPassword(
   token: string,
   password: string,
   profile: { firstName: string; lastName: string; timezone: string }
-): Promise<ApiResult<LoginResponse & MeResponse>> {
+): Promise<ApiResult<MeResponse>> {
   try {
     const response = await fetch("/api/auth/accept-invite", {
       method: "POST",
@@ -405,7 +389,7 @@ export async function acceptInviteWithPassword(
         timezone: profile.timezone.trim()
       })
     });
-    const body = (await response.json().catch(() => ({}))) as LoginResponse & MeResponse & ApiError;
+    const body = (await response.json().catch(() => ({}))) as MeResponse & ApiError;
     if (!response.ok) {
       return {
         ok: false,
@@ -423,7 +407,7 @@ export async function registerWithPassword(
   email: string,
   password: string,
   orgName?: string
-): Promise<ApiResult<LoginResponse & MeResponse>> {
+): Promise<ApiResult<MeResponse>> {
   try {
     const response = await fetch("/api/auth/register", {
       method: "POST",
@@ -435,7 +419,7 @@ export async function registerWithPassword(
         orgName: orgName?.trim() || undefined
       })
     });
-    const body = (await response.json().catch(() => ({}))) as LoginResponse & MeResponse & ApiError;
+    const body = (await response.json().catch(() => ({}))) as MeResponse & ApiError;
     if (!response.ok) {
       return {
         ok: false,
@@ -509,31 +493,21 @@ async function fetchWithSessionRetry(
   input: string,
   init: RequestInit
 ): Promise<{ response: Response; body: Record<string, unknown> }> {
-  let token = await ensureAccessToken();
-  if (!token) {
-    return {
-      response: new Response(null, { status: 401 }),
-      body: { error: "unauthorized", message: "Not signed in." }
-    };
-  }
-
-  const run = async (activeToken: string) => {
+  const run = async () => {
     const response = await fetch(input, {
       ...init,
-      headers: { ...Object.fromEntries(new Headers(init.headers)), Authorization: `Bearer ${activeToken}` },
+      credentials: "include",
       cache: "no-store"
     });
     const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
     return { response, body };
   };
 
-  let result = await run(token);
+  let result = await run();
   if (result.response.status === 401 && typeof window !== "undefined") {
     const restored = await restoreSessionFromCookie();
-    const refreshed = getToken();
-    if (restored && refreshed && refreshed !== token) {
-      token = refreshed;
-      result = await run(token);
+    if (restored) {
+      result = await run();
     }
   }
   return result;
@@ -542,11 +516,6 @@ async function fetchWithSessionRetry(
 export async function fetchIntegrations(options?: {
   refresh?: boolean;
 }): Promise<ApiResult<IntegrationStatus[]>> {
-  const token = await ensureAccessToken();
-  if (!token) {
-    return { ok: false, status: 401, error: SESSION_EXPIRED_MESSAGE };
-  }
-
   const refreshSuffix = options?.refresh ? "?refresh=true" : "";
 
   try {
@@ -599,11 +568,6 @@ export async function fetchInstallUrl(
     githubAppAvailable?: boolean;
   }>
 > {
-  const token = await ensureAccessToken();
-  if (!token) {
-    return { ok: false, status: 401, error: SESSION_EXPIRED_MESSAGE };
-  }
-
   const query = options?.mode ? `?mode=${encodeURIComponent(options.mode)}` : "";
 
   try {
@@ -1340,22 +1304,12 @@ export async function updateSsoPolicy(
 }
 
 export async function fetchSamlMetadataXml(): Promise<ApiResult<string>> {
-  let token = await ensureAccessToken();
-  if (!token) {
-    return { ok: false, status: 401, error: SESSION_EXPIRED_MESSAGE };
-  }
   try {
-    let response = await fetch(`${getApiBase()}/v1/auth/saml/metadata`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    let response = await portalFetch("/v1/auth/saml/metadata");
     if (response.status === 401 && typeof window !== "undefined") {
       const restored = await restoreSessionFromCookie();
-      const refreshed = getToken();
-      if (restored && refreshed && refreshed !== token) {
-        token = refreshed;
-        response = await fetch(`${getApiBase()}/v1/auth/saml/metadata`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+      if (restored) {
+        response = await portalFetch("/v1/auth/saml/metadata");
       }
     }
     if (!response.ok) {
@@ -1859,25 +1813,12 @@ export async function removeRepoFromCollection(
 }
 
 export async function exportAnalyticsCsv(from: string, to: string): Promise<{ ok: boolean; error?: string }> {
-  let token = await ensureAccessToken();
-  if (!token) {
-    return { ok: false, error: SESSION_EXPIRED_MESSAGE };
-  }
-
   try {
-    let response = await fetch(
-      `${getApiBase()}/v1/admin/analytics/export.csv${analyticsQuery(from, to)}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    let response = await portalFetch(`/v1/admin/analytics/export.csv${analyticsQuery(from, to)}`);
     if (response.status === 401 && typeof window !== "undefined") {
       const restored = await restoreSessionFromCookie();
-      const refreshed = getToken();
-      if (restored && refreshed && refreshed !== token) {
-        token = refreshed;
-        response = await fetch(
-          `${getApiBase()}/v1/admin/analytics/export.csv${analyticsQuery(from, to)}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+      if (restored) {
+        response = await portalFetch(`/v1/admin/analytics/export.csv${analyticsQuery(from, to)}`);
       }
     }
     if (!response.ok) {

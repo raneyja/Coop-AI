@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 export const SESSION_COOKIE = "coop_session";
+export const REFRESH_COOKIE = "coop_refresh";
 
 const DEFAULT_API_BASE = "https://api.coop-ai.dev";
 const PRODUCTION_ADMIN_ORIGIN = "https://admin.coop-ai.dev";
@@ -37,18 +38,33 @@ export function sessionCookieOptions(maxAgeSeconds = 60 * 60 * 24 * 7) {
   };
 }
 
-export function setSessionCookie(response: NextResponse, token: string): void {
+export function setSessionCookie(response: NextResponse, token: string, refreshToken?: string): void {
   response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
+  if (refreshToken?.startsWith("coop_refresh_")) {
+    response.cookies.set(REFRESH_COOKIE, refreshToken, {
+      ...sessionCookieOptions(60 * 60 * 24 * 30),
+      path: "/api/auth"
+    });
+  } else {
+    response.cookies.set(REFRESH_COOKIE, "", { ...sessionCookieOptions(0), path: "/api/auth", maxAge: 0 });
+  }
 }
 
 export function clearSessionCookie(response: NextResponse): void {
   response.cookies.set(SESSION_COOKIE, "", { ...sessionCookieOptions(0), maxAge: 0 });
+  response.cookies.set(REFRESH_COOKIE, "", { ...sessionCookieOptions(0), path: "/api/auth", maxAge: 0 });
 }
 
 export async function readSessionToken(): Promise<string | null> {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value?.trim();
   return token && isCoopCredential(token) ? token : null;
+}
+
+export async function readRefreshToken(): Promise<string | null> {
+  const jar = await cookies();
+  const token = jar.get(REFRESH_COOKIE)?.value?.trim();
+  return token?.startsWith("coop_refresh_") ? token : null;
 }
 
 /** Bearer token from Authorization header, or httpOnly session cookie when absent. */

@@ -6,6 +6,7 @@ import {
   defaultHomePath,
   establishSessionCookie,
   meFromAuthPayload,
+  restoreSessionFromCookie,
   saveSession
 } from "@/lib/auth";
 import { isOrgSuspendedResult, validateSession } from "@/lib/coopApi";
@@ -21,15 +22,19 @@ export default function AuthCallbackPage() {
     const params = new URLSearchParams(hash);
     const token = params.get("coopToken")?.trim();
     const refreshToken = params.get("coopRefresh")?.trim();
-    if (!token) {
-      setError("No session token in callback URL.");
-      return;
-    }
-
-    // Strip the token from the URL bar before validating/saving.
+    // Strip any SAML-delivered token from the URL bar before network work.
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
 
     void (async () => {
+      if (!token) {
+        const restored = await restoreSessionFromCookie();
+        if (!restored) {
+          setError("Sign-in session was unavailable. Please try again.");
+          return;
+        }
+        router.replace(defaultHomePath(restored));
+        return;
+      }
       const result = await validateSession(token);
       if (!result.ok || !result.data) {
         if (isOrgSuspendedResult(result)) {
@@ -39,9 +44,12 @@ export default function AuthCallbackPage() {
         setError(result.error ?? "Sign-in failed.");
         return;
       }
+      if (!(await establishSessionCookie(token, refreshToken))) {
+        setError("Could not establish your sign-in session. Please try again.");
+        return;
+      }
       const me = meFromAuthPayload(result.data);
-      saveSession(token, me, undefined, refreshToken);
-      await establishSessionCookie(token, refreshToken);
+      saveSession(me);
       router.replace(defaultHomePath(me));
     })();
   }, [router]);

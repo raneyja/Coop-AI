@@ -4,15 +4,13 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  clearSession,
   defaultHomePath,
-  getToken,
   isAdminRole,
   meFromAuthPayload,
   restoreSessionFromCookie,
   saveSession
 } from "@/lib/auth";
-import { registerWithPassword, startGoogleAuthUrl, validateSession } from "@/lib/coopApi";
+import { registerWithPassword, startGoogleAuthUrl } from "@/lib/coopApi";
 import { BrandMark } from "@/components/BrandMark";
 
 const PASSWORD_MIN_LENGTH = 12;
@@ -35,16 +33,6 @@ export default function SignupPage() {
 
   useEffect(() => {
     async function resumeSession() {
-      const token = getToken();
-      if (token) {
-        const result = await validateSession(token);
-        if (result.ok && result.data) {
-          router.replace(defaultHomePath(result.data));
-          return;
-        }
-        clearSession();
-      }
-
       const restored = await restoreSessionFromCookie();
       if (restored) {
         router.replace(defaultHomePath(restored));
@@ -54,13 +42,13 @@ export default function SignupPage() {
     void resumeSession();
   }, [router]);
 
-  async function finishSignUp(token: string, payload: Record<string, unknown>, refreshToken?: string) {
+  async function finishSignUp(payload: Record<string, unknown>) {
     const me = meFromAuthPayload(payload);
     if (!isAdminRole(me)) {
       setError("This account does not have admin permissions.");
       return;
     }
-    saveSession(token, me, orgName.trim() || undefined, refreshToken);
+    saveSession(me, orgName.trim() || undefined);
     router.replace(defaultHomePath(me));
   }
 
@@ -88,13 +76,7 @@ export default function SignupPage() {
       return;
     }
 
-    const token = String(result.data.accessToken ?? "").trim();
-    if (!token) {
-      setError("Signup response was incomplete.");
-      return;
-    }
-
-    await finishSignUp(token, result.data, result.data.refreshToken);
+    await finishSignUp(result.data);
   }
 
   return (

@@ -116,16 +116,8 @@ export async function GET(request: Request) {
   }
 
   const redirectTarget = exchangeData.redirect?.trim() || `${adminOrigin}/auth/callback`;
-  const params = new URLSearchParams();
-  params.set("coopToken", exchangeData.accessToken);
-  if (exchangeData.refreshToken?.trim()) {
-    params.set("coopRefresh", exchangeData.refreshToken.trim());
-  }
-  const separator = redirectTarget.includes("#") ? "&" : "#";
-  const location = `${redirectTarget}${separator}${params.toString()}`;
-
-  const response = NextResponse.redirect(location);
-  setSessionCookie(response, exchangeData.accessToken);
+  const response = NextResponse.redirect(redirectTarget);
+  setSessionCookie(response, exchangeData.accessToken, exchangeData.refreshToken);
   response.cookies.set(INVITE_OAUTH_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
   return clearOauthState(response);
 }
