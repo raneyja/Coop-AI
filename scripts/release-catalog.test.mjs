@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {splitAnd,expandScripts,releaseCatalog,SUPPLEMENTAL_SCRIPT_GROUPS,validateStage5Receipts,CI_EVIDENCE_FILES,writeCiReceipt,verifyPrivatePackage} from './release-catalog.mjs';
+import {splitAnd,expandScripts,releaseCatalog,SUPPLEMENTAL_SCRIPT_GROUPS,validateStage5Receipts,CI_EVIDENCE_FILES,writeCiReceipt,verifyPrivatePackage,privatePackageSourceApproved} from './release-catalog.mjs';
 import {databaseSuite} from './enterprise-database-suites.mjs';
+
+test('private package approval binds the branch commit and an identical-tree PR merge',()=>{
+ const approvedSha='a'.repeat(40),checkoutSha='b'.repeat(40),checkoutTree='c'.repeat(40),base='d'.repeat(40);
+ const direct={approvedSha,checkoutSha:approvedSha,checkoutTree,parents:[],approvedTree:checkoutTree};
+ assert.equal(privatePackageSourceApproved(direct),true);
+ const merged={approvedSha,checkoutSha,checkoutTree,parents:[base,approvedSha],approvedTree:checkoutTree};
+ assert.equal(privatePackageSourceApproved(merged),true);
+ for(const changed of [{...merged,parents:[base,'e'.repeat(40)]},{...merged,checkoutTree:'f'.repeat(40)},{...merged,parents:[approvedSha,base]},{...merged,approvedSha:'invalid'}])assert.equal(privatePackageSourceApproved(changed),false);
+});
 
 test('deduplication preserves cwd groups and quoted AND; missing/cyclic groups reject',()=>{
  assert.deepEqual(splitAnd("tsx a && (cd admin && tsx b) && NODE_OPTIONS='a&&b' tsx c"),['tsx a','(cd admin && tsx b)',"NODE_OPTIONS='a&&b' tsx c"]);

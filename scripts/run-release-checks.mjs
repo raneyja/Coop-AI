@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {createHash} from 'node:crypto';
-import {releaseCatalog} from './release-catalog.mjs';
+import {releaseCatalog,privatePackageSourceApproved} from './release-catalog.mjs';
 
 const args=process.argv.slice(2);
 if(args.length!==2||args[0]!=='--lane'||!['unit','supplemental','build','database','full','security'].includes(args[1]))throw new Error('Use --lane unit|supplemental|build|database|security|full; no arbitrary commands or targets');
@@ -57,8 +57,11 @@ try {
   // An unfinished adapter stays a required failure, never an execution alias.
   if(entry.currentStatus?.startsWith('BLOCKED')){results.push({...entry,status:entry.currentStatus});continue;}
   if(entry.groups?.includes('package')){
-   const head=spawnSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}),dirty=spawnSync('git',['status','--porcelain','--untracked-files=no'],{cwd:root,encoding:'utf8'});
-   if(head.status!==0||dirty.status!==0||dirty.stdout.trim()||process.env.COOP_RELEASE_PRIVATE_PACKAGE_SOURCE_SHA!==head.stdout.trim()){results.push({...entry,lane:selected,status:'BLOCKED_PACKAGING_HOLD'});throw new Error('Private packaging requires separate approval for this exact clean source commit');}
+   const git=(...arguments_)=>spawnSync('git',arguments_,{cwd:root,encoding:'utf8'});
+   const head=git('rev-parse','HEAD'),tree=git('rev-parse','HEAD^{tree}'),lineage=git('rev-list','--parents','-n','1','HEAD'),dirty=git('status','--porcelain','--untracked-files=no'),approvedSha=process.env.COOP_RELEASE_PRIVATE_PACKAGE_SOURCE_SHA;
+   const approvedTree=/^[a-f0-9]{40}$/.test(approvedSha??'')?git('rev-parse',`${approvedSha}^{tree}`):null;
+   const identity={approvedSha,checkoutSha:head.stdout.trim(),checkoutTree:tree.stdout.trim(),parents:lineage.stdout.trim().split(' ').slice(1),approvedTree:approvedTree?.stdout.trim()};
+   if([head,tree,lineage,dirty].some(result=>result.status!==0)||approvedTree?.status!==0||dirty.stdout.trim()||!privatePackageSourceApproved(identity)){results.push({...entry,lane:selected,status:'BLOCKED_PACKAGING_HOLD'});throw new Error('Private packaging requires separate approval for this exact clean source commit or identical-tree PR merge');}
   }
   const result=await execute(entry,results.length);results.push({...result,lane:selected});
   fs.writeFileSync(path.join(directory,'results.json'),JSON.stringify(results,null,2),{mode:0o600});

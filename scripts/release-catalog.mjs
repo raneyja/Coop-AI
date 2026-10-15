@@ -6,6 +6,13 @@ import {DATABASE_SUITES} from './enterprise-database-suites.mjs';
 
 export const SUPPLEMENTAL_SCRIPT_GROUPS=['test:status-transition','test:email-template-grounding','test:existing-capability','test:request-batcher','test:project-instructions','test:fim','test:repo-grants-ui'];
 
+export function privatePackageSourceApproved({approvedSha,checkoutSha,checkoutTree,parents,approvedTree}) {
+ const sha=/^[a-f0-9]{40}$/;
+ if(!sha.test(approvedSha??'')||!sha.test(checkoutSha??'')||!sha.test(checkoutTree??'')||!Array.isArray(parents)||parents.some(value=>!sha.test(value)))return false;
+ if(checkoutSha===approvedSha)return true;
+ return parents.length===2&&parents[1]===approvedSha&&checkoutTree===approvedTree&&sha.test(approvedTree??'');
+}
+
 // Split shell AND only outside quotes/parentheses; grouped cwd changes stay owned.
 export function splitAnd(value) {
   const parts=[];let start=0,quote=null,depth=0;
