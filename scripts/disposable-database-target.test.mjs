@@ -22,18 +22,12 @@ test('both actual destructive suites reject overrides before constructing or con
     // Each suite now has its own admission owner. Remove ambient targets so
     // rejection proves the injected override, rather than an unrelated setting.
     for(const key of ['DATABASE_URL','PGHOST','PGHOSTADDR','PGPORT','PGDATABASE','PGUSER','PGPASSWORD','PGSERVICE','PGSERVICEFILE','PGOPTIONS','DOCKER_HOST','DOCKER_CONTEXT','DOCKER_CONFIG','DOCKER_TLS_VERIFY','DOCKER_CERT_PATH','EH10_TEST_DATABASE_URL','EH10_TEST_CA_FILE','EH13_PUBLICATION_FIXTURE_FILE']) delete env[key];
-    const portable=file==='scripts/run-migrations.integration.test.mjs';
-    if(portable) {
-      env.DATABASE_URL=good+'?host=production.invalid&port=5432';
-      env.EH13_PUBLICATION_FIXTURE_FILE='/does-not-exist';
-    } else {
-      env.EH10_TEST_DATABASE_URL=good+'?host=production.invalid&port=5432';
-      env.EH10_TEST_CA_FILE='/unused-fixture';
-    }
+    env.DATABASE_URL=good+'?host=production.invalid&port=5432';
+    env.EH13_PUBLICATION_FIXTURE_FILE='/does-not-exist';
     const result=spawnSync(process.execPath,['--import','tsx','--input-type=module','--eval',code],{cwd:process.cwd(),encoding:'utf8',env});
     assert.equal(result.status,0,result.stderr);const recorded=JSON.parse(result.stdout.trim());
     assert.equal(recorded.constructors,0);assert.equal(recorded.connections,0);
-    assert.match(recorded.message,portable ? /^Publication tests do not accept ambient database or Docker target overrides$/ : /Refusing a target/);
+    assert.match(recorded.message,/^Publication tests do not accept ambient database or Docker target overrides$/);
     assert.equal((result.stdout+result.stderr).includes('FAKE_EH10_GUARD_SECRET'),false);
   }
 });
