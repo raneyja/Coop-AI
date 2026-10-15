@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 env:
-  COOP_RELEASE_EVIDENCE_DIR: ${{ github.workspace }}/../coop-evidence
+  COOP_RELEASE_EVIDENCE_DIR: ${{ github.workspace }}-evidence
   COOP_RELEASE_PRIVATE_PACKAGE_SOURCE_SHA: ${{ vars.COOP_RELEASE_PRIVATE_PACKAGE_SOURCE_SHA }}
 concurrency:
   group: ci-${{ github.ref }}
