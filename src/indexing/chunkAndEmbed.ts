@@ -1,4 +1,3 @@
-import * as fs from "node:fs";
 import * as path from "node:path";
 import type { Pool } from "pg";
 import { JobCancelledError } from "../jobs/errorHandling";
@@ -9,6 +8,7 @@ import { RepoSymbolIndexStore } from "./repoSymbolIndexStore";
 import { chunkFileSource, listEmbeddableFiles, type TextChunk } from "./treeSitterChunker";
 import { withJobOwnedEffect } from '../jobs/jobEffectAdmission';
 import type { Job } from '../jobs/types';
+import { readBoundedCloneFile } from "./readBoundedCloneFile";
 
 const MAX_FILE_BYTES = 512 * 1024;
 const FILE_YIELD_INTERVAL = 20;
@@ -69,23 +69,12 @@ export async function chunkAndEmbed(
     }
 
     const absolutePath = path.join(localPath, filePath);
-    let stat: fs.Stats;
-    try {
-      stat = fs.statSync(absolutePath);
-    } catch {
+    const result = readBoundedCloneFile(absolutePath, MAX_FILE_BYTES);
+    if (result.kind === "skip") {
+      if (result.reason === "oversize") skippedLargeFiles += 1;
       continue;
     }
-    if (!stat.isFile() || stat.size > MAX_FILE_BYTES) {
-      skippedLargeFiles += 1;
-      continue;
-    }
-
-    let source: string;
-    try {
-      source = fs.readFileSync(absolutePath, "utf8");
-    } catch {
-      continue;
-    }
+    const source = result.source;
     if (source.includes("\0")) {
       skippedLargeFiles += 1;
       continue;

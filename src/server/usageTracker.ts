@@ -136,11 +136,9 @@ export class UsageTracker {
           JSON.stringify(entry.metadata ?? {})
         ]
       );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn(
-        `[usage] failed to record "${entry.eventType}" for org ${entry.orgId}: ${message}`
-      );
+    } catch {
+      // Database errors and event metadata can contain caller-controlled text.
+      console.warn("[usage] failed to record usage event");
     }
   }
 

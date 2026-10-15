@@ -87,8 +87,27 @@ export function inspectLocalPublicationContainer(id) {
 export function publicationDatabaseFromEnvironment(env = process.env, expectedSuite = 'publication') {
   rejectPublicationTargetOverrides(env);
   const file=env.EH13_PUBLICATION_FIXTURE_FILE;
-  if (!file || fs.statSync(file).size>4096) throw new Error('Use the owned publication test runner');
-  const descriptor=JSON.parse(fs.readFileSync(file,'utf8'));
+  if (!file || typeof fs.constants.O_NOFOLLOW !== 'number') throw new Error('Use the owned publication test runner');
+  let handle;
+  let descriptor;
+  try {
+    handle=fs.openSync(file,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);
+    const stat=fs.fstatSync(handle);
+    if (!stat.isFile() || stat.size>4096) throw new Error('Invalid fixture size');
+    const buffer=Buffer.alloc(4097);
+    let size=0;
+    while(size<buffer.length){
+      const count=fs.readSync(handle,buffer,size,buffer.length-size,null);
+      if(count===0)break;
+      size+=count;
+    }
+    if(size>4096)throw new Error('Invalid fixture size');
+    descriptor=JSON.parse(buffer.subarray(0,size).toString('utf8'));
+  }catch{
+    throw new Error('Use the owned publication test runner');
+  }finally{
+    if(handle!==undefined)fs.closeSync(handle);
+  }
   validatePublicationDescriptor(descriptor, expectedSuite); // before a Docker call, and before clients
   return validatePublicationContainer(inspectLocalPublicationContainer(descriptor.id),descriptor, expectedSuite);
 }

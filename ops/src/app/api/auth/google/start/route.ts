@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { opsPublicOrigin, serverApiBase } from "@/lib/serverCoopApi";
+import { authorizeState, OPS_OAUTH_STATE_COOKIE, OPS_OAUTH_STATE_MAX_AGE_SEC } from "@/lib/googleOauthState";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -26,7 +27,17 @@ export async function GET(request: Request) {
     });
     const location = backendResponse.headers.get("location");
     if (location) {
-      return NextResponse.redirect(location);
+      const state = authorizeState(location);
+      if (!state) return loginError("invalid_authorize_response", "Google sign-in could not start safely.");
+      const response = NextResponse.redirect(location);
+      response.cookies.set(OPS_OAUTH_STATE_COOKIE, state, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: opsOrigin.startsWith("https://"),
+        path: "/api/auth/google",
+        maxAge: OPS_OAUTH_STATE_MAX_AGE_SEC
+      });
+      return response;
     }
 
     const body = (await backendResponse.json().catch(() => ({}))) as {

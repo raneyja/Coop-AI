@@ -93,6 +93,12 @@ async function run(): Promise<void> {
     );
     console.log("  ✓ getPageBody opens the page and strips HTML");
 
+    globalThis.fetch = (async () => new Response(
+      JSON.stringify({ body: { view: { value: "<p>&amp;lt;script&amp;gt;</p>" } } }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    )) as typeof fetch;
+    assert.equal(await basicClient.getPageBody("43"), "&lt;script&gt;");
+
     capturedUrls = [];
     globalThis.fetch = (async (url: string | URL) => {
       capturedUrls.push(String(url));

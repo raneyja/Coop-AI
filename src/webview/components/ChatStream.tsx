@@ -36,6 +36,7 @@ import { EvidenceArtifactAnchor } from "./EvidenceArtifactAnchor";
 import { SourcesFold } from "./SourcesFold";
 import { MentionAttachmentChip } from "./MentionAttachmentChip";
 import {
+  isCompactContextChipLine,
   parseContextLineAttachments,
   splitPlainChatHistoryBody,
   type HistoryAttachment
@@ -237,7 +238,7 @@ function parseQuickActionBody(body: string): { intent: string; contextLine?: str
   }
 
   // New compact format: second line is "key: value · key: value"
-  if (/^[\w ]+: .+( · [\w ]+: .+)*$/.test(rest)) {
+  if (isCompactContextChipLine(rest)) {
     return { intent, contextLine: rest };
   }
 

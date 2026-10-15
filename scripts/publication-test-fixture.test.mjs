@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import {PUBLICATION_IMAGE,PUBLICATION_IMAGE_REF,PUBLICATION_IMAGE_CONFIG,PUBLICATION_LABEL,rejectPublicationTargetOverrides,validatePublicationDescriptor,validatePublicationContainer,validatePublicationCleanupContainer,publicationDatabaseFromEnvironment} from './publication-test-fixture.mjs';
 
@@ -9,6 +12,17 @@ test('ambient targets reject before Docker inspection or database constructors',
  });
  assert.doesNotThrow(()=>rejectPublicationTargetOverrides({}));
  assert.throws(()=>publicationDatabaseFromEnvironment({}),/owned publication test runner/);
+});
+test('publication fixture rejects symlinks and oversized files before Docker inspection',()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'coop-publication-guard-'));
+ try{
+  const file=path.join(root,'descriptor.json'),link=path.join(root,'link.json');
+  fs.writeFileSync(file,'x'.repeat(4097));
+  fs.symlinkSync(file,link);
+  for(const fixture of [file,link]){
+   assert.throws(()=>publicationDatabaseFromEnvironment({EH13_PUBLICATION_FIXTURE_FILE:fixture}),/owned publication test runner/);
+  }
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
 test('descriptor policy admits no URL or arbitrary fixture target',()=>{
  const runId=randomUUID(),descriptor={runId,name:'coop-eh13-publication-'+runId,id:'a'.repeat(64),port:'56557',createdAfter:Date.now()};

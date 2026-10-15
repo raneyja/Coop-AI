@@ -10,10 +10,15 @@ export type AuthRedirectAllowlist = {
 
 /** Editor URI schemes that receive the session via a protocol handler, not a document navigation. */
 const IDE_AUTH_PROTOCOLS = new Set(["vscode:", "vscode-insiders:", "cursor:", "cursor-insiders:"]);
+const IDE_AUTH_HOST = "coop-ai.coop-ai";
+const IDE_AUTH_PATH = "/auth/callback";
 
 export function isIdeAuthRedirect(redirect: string): boolean {
   try {
-    return IDE_AUTH_PROTOCOLS.has(new URL(redirect).protocol);
+    const url = new URL(redirect);
+    return IDE_AUTH_PROTOCOLS.has(url.protocol) && url.hostname === IDE_AUTH_HOST &&
+      url.pathname === IDE_AUTH_PATH && !url.username && !url.password && !url.port &&
+      !url.search && !url.hash;
   } catch {
     return false;
   }
@@ -38,6 +43,7 @@ export function sanitizeAuthRedirect(
   try {
     const url = new URL(trimmed);
     if (IDE_AUTH_PROTOCOLS.has(url.protocol)) {
+      if (!isIdeAuthRedirect(trimmed)) return undefined;
       return trimmed;
     }
     if (url.protocol !== "https:" && url.protocol !== "http:") {
@@ -181,7 +187,7 @@ function writeIdeAuthHandoffHtml(
   copy: { title: string; heading: string; body: string }
 ): void {
   const safeLocation = escapeHtml(location);
-  const jsLocation = JSON.stringify(location);
+  const jsLocation = JSON.stringify(location).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
   response.writeHead(statusCode, {
     "content-type": "text/html; charset=utf-8",
     "cache-control": "no-store",

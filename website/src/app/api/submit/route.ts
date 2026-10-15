@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { postToGoogleAppsScript } from "@/lib/googleAppsScriptWebhook";
+import { isPlausibleEmail } from "@/lib/emailValidation";
 
 type FormPayload = {
   type: "demo";
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
   }
 
   const email = body.email?.trim().toLowerCase();
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (!email || !isPlausibleEmail(email)) {
     return NextResponse.json({ error: "A valid email is required." }, { status: 400 });
   }
 
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
   };
 
   if (!webhookUrl) {
-    console.warn("[form] GOOGLE_SHEETS_WEBHOOK_URL not set — submission NOT saved:", row);
+    console.warn("[form] GOOGLE_SHEETS_WEBHOOK_URL not set — submission NOT saved");
     return NextResponse.json(
       {
         error:
@@ -55,12 +56,8 @@ export async function POST(request: NextRequest) {
     const result = await postToGoogleAppsScript(webhookUrl, row);
 
     if (!result.ok) {
-      console.error("[form] Google Sheets webhook failed:", {
-        status: result.status,
-        body: result.text.slice(0, 500),
-        parsed: result.parsed,
-        row
-      });
+      // Webhook response text and form fields may contain untrusted or private content.
+      console.error("[form] Google Sheets webhook failed", { status: result.status });
       const hint =
         result.status === 401 || result.text.includes("Sign in")
           ? "Web app must allow access: Anyone (not only Google accounts)."
@@ -75,10 +72,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.info("[form] Saved to sheet:", row.email, row.type, "lastRow:", result.parsed?.lastRow);
+    console.info("[form] Saved to sheet");
     return NextResponse.json({ ok: true });
-  } catch (error) {
-    console.error("[form] Google Sheets webhook error:", error);
+  } catch {
+    console.error("[form] Google Sheets webhook error");
     return NextResponse.json({ error: "Unable to save submission. Please try again." }, { status: 502 });
   }
 }

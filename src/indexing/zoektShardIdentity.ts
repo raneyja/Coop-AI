@@ -79,6 +79,6 @@ export function zoektOrgShardPrefix(orgId: string): string {
   return goQueryEscape(`${orgId}${ZOEKT_ORG_SEPARATOR}`);
 }
 
-function quoteZoektToken(value: string): string {
-  return value.includes(" ") ? `"${value.replace(/"/g, '\\"')}"` : value;
+export function quoteZoektToken(value: string): string {
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }

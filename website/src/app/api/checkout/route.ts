@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveCoopApiBase } from "../../../lib/publicCoopApiBase";
+import { isPlausibleEmail } from "../../../lib/emailValidation";
 
 type CheckoutIntent = "individual" | "team";
 
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
   }
 
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (!isPlausibleEmail(email)) {
     return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
   }
 

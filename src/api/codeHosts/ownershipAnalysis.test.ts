@@ -28,6 +28,14 @@ function score(partial: Partial<OwnershipScore> & Pick<OwnershipScore, "owner" |
   };
 }
 
+test("CODEOWNERS patterns treat regex punctuation literally", () => {
+  const rule = "src/a+b[1].ts @owner";
+  assert.deepEqual(parseCodeowners(rule, "src/a+b[1].ts")?.owners, ["owner"]);
+  assert.equal(parseCodeowners(rule, "src/ab1.ts"), undefined);
+  assert.deepEqual(parseCodeowners("/src/*.ts @typescript", "src/main.ts")?.owners, ["typescript"]);
+  assert.equal(parseCodeowners("/src/*.ts @typescript", "nested/src/main.ts"), undefined);
+});
+
 test("calculateOwnershipScores propagates github login from commit stats", () => {
   const signals: OwnershipSignals = {
     commits: [

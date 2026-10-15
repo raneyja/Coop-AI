@@ -784,20 +784,22 @@ function codeownersPatternMatches(pattern: string, path: string): boolean {
   if (pattern === "*") {
     return true;
   }
-  let regex = pattern
-    .replace(/\./g, "\\.")
-    .replace(/\*\*/g, "§§")
-    .replace(/\*/g, "[^/]*")
-    .replace(/§§/g, ".*");
-  if (regex.endsWith("/")) {
-    regex = `${regex}.*`;
+  let source = "";
+  for (let index = 0; index < pattern.length; index += 1) {
+    const char = pattern[index];
+    if (char === "*") {
+      if (pattern[index + 1] === "*") {
+        source += ".*";
+        index += 1;
+      } else {
+        source += "[^/]*";
+      }
+    } else {
+      source += /[\\^$+?.()|\[\]{}]/.test(char) ? `\\${char}` : char;
+    }
   }
-  if (!regex.startsWith("/") && !regex.startsWith(".*")) {
-    regex = `(^|/)${regex}`;
-  }
-  try {
-    return new RegExp(`^${regex}$`).test(path) || path.startsWith(pattern.replace(/^\//, ""));
-  } catch {
-    return path.includes(pattern.replace(/^\//, ""));
-  }
+  const anchored = pattern.startsWith("/");
+  if (anchored) source = source.slice(1);
+  if (pattern.endsWith("/")) source += ".*";
+  return new RegExp(`${anchored ? "^" : "(^|/)"}${source}$`).test(path);
 }

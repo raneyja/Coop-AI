@@ -36,6 +36,7 @@ import {
   codeHostConnectionMeta,
   codeHostDisplayName,
   codeHostListSubtitle,
+  adminPortalBaseUrl,
   accountDetailIdentity,
   displayOrgName,
   displayPlanLabel,
@@ -831,7 +832,7 @@ function PlanUsageDetail({
 
 function IndexingDetail(props: SettingsDetailProps): React.ReactElement {
   const { prefs, lightningState } = props;
-  const adminBase = (prefs.adminPortalUrl ?? "https://admin.coop-ai.dev").replace(/\/$/, "");
+  const adminBase = adminPortalBaseUrl(prefs.adminPortalUrl);
   const signedIn = preferencesSignedIn(prefs);
   const readyRepos = lightningState?.readyRepos ?? 0;
   const indexingRepos = lightningState?.indexingRepos ?? 0;

@@ -186,15 +186,17 @@ async function handleGoogleExchange(
   const google = deps.operatorGoogleAuth ?? new OperatorGoogleAuthService(deps.operatorAuthConfig);
   const body = asRecord(parsed.body);
   const code = String(body.code ?? "").trim();
+  const stateRaw = String(body.state ?? "").trim();
   const redirectUri = String(body.redirectUri ?? "").trim();
-  if (!code || !redirectUri) {
-    writeJson(response, 400, { error: "invalid_request", message: "code and redirectUri are required." });
+  if (!code || !stateRaw || !redirectUri) {
+    writeJson(response, 400, { error: "invalid_request", message: "code, state, and redirectUri are required." });
     return true;
   }
 
   const result = await google.exchangeCodeForSession(
     { config: deps.operatorAuthConfig, operatorStore: deps.operatorStore! },
     code,
+    stateRaw,
     redirectUri
   );
   if (!result.ok) {

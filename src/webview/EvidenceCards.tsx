@@ -1550,7 +1550,7 @@ export function IntegrationSearchEvidenceCard({
   return (
     <EvidenceCardShell
       artifactId={artifactId}
-      title={`${label.replace("[Sources: ", "").replace("]", "")}`}
+      title={label}
       sources={[integrationProviderChip(provider)]}
       summary={summary}
       actionContext={actionContext}

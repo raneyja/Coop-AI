@@ -6,7 +6,7 @@
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const env = parseEnv(readFileSync(resolve(ROOT, ".env.backend"), "utf8"));
@@ -149,11 +149,14 @@ async function main() {
   });
 
   orgId = await step("Org provisioned in Postgres", async () => {
-    const sql = `SELECT id, plan, billing_email FROM organizations WHERE stripe_customer_id = '${customerId}';`;
-    const out = execSync(
-      `docker exec coopai-postgres-1 psql -U coop -d coopai -t -A -F'|' -c "${sql}"`,
-      { encoding: "utf8" }
-    ).trim();
+    if (!/^cus_[A-Za-z0-9]+$/.test(customerId)) throw new Error("Unexpected Stripe customer ID");
+    const out = execFileSync("docker", [
+      "exec", "-i", "coopai-postgres-1", "psql", "-U", "coop", "-d", "coopai",
+      "-t", "-A", "-F|", "-v", "ON_ERROR_STOP=1", "-v", `customer_id=${customerId}`, "-f", "-"
+    ], {
+      input: "SELECT id, plan, billing_email FROM organizations WHERE stripe_customer_id = :'customer_id';\n",
+      encoding: "utf8"
+    }).trim();
     if (!out) throw new Error("org not found");
     const [id, plan, billingEmail] = out.split("|");
     if (plan !== "pro") throw new Error(`plan=${plan}`);
@@ -172,8 +175,12 @@ async function main() {
   });
 
   await step("Admin API key auth (/v1/me)", async () => {
-    const rawKey = execSync(
-      `docker exec -e DATABASE_URL=postgres://coop:coop@postgres:5432/coopai coopai-api-1 node -e '
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId)) {
+      throw new Error("Unexpected organization ID");
+    }
+    const rawKey = execFileSync("docker", [
+      "exec", "-e", "DATABASE_URL=postgres://coop:coop@postgres:5432/coopai",
+      "-e", `COOP_SMOKE_ORG_ID=${orgId}`, "coopai-api-1", "node", "-e", `
         const { Pool } = require("pg");
         const crypto = require("crypto");
         const databasePoolOptions = require("./src/server/databasePoolOptions.cjs");
@@ -183,14 +190,13 @@ async function main() {
           const hash = crypto.createHash("sha256").update(raw).digest("hex");
           await pool.query(
             "INSERT INTO api_keys (org_id, label, key_hash) VALUES ($1, $2, $3)",
-            ["${orgId}", "smoke-test", hash]
+            [process.env.COOP_SMOKE_ORG_ID, "smoke-test", hash]
           );
           console.log(raw);
           await pool.end();
         })();
-      '`,
-      { encoding: "utf8" }
-    ).trim();
+      `
+    ], { encoding: "utf8" }).trim();
 
     const res = await fetch(`${API_BASE}/v1/me`, {
       headers: { Authorization: `Bearer ${rawKey}` }

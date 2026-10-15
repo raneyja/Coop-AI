@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import type { Preferences } from "./types";
+import { adminPortalBaseUrl } from "./connectionCopy";
 import { CoopNotice } from "../CoopNotice";
 import {
   accountHubSubtitle,
@@ -40,7 +41,7 @@ export function AdminOnboardingBanner({
     return null;
   }
 
-  const adminBase = (prefs.adminPortalUrl ?? "https://admin.coop-ai.dev").replace(/\/$/, "");
+  const adminBase = adminPortalBaseUrl(prefs.adminPortalUrl);
   const scopeHint =
     prefs.plan === "enterprise" && (prefs.integrationHealthSummary?.scopeRequired ?? 0) > 0;
 

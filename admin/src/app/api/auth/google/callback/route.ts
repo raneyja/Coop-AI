@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { serverApiBase, setSessionCookie } from "@/lib/serverCoopApi";
+import { callbackStateCookie, ADMIN_OAUTH_STATE_COOKIE } from "@/lib/googleOauthState";
 
 const INVITE_OAUTH_COOKIE = "coop_oauth_invite";
+
+function clearOauthState(response: NextResponse): NextResponse {
+  response.cookies.set(ADMIN_OAUTH_STATE_COOKIE, "", { httpOnly: true, path: "/api/auth/google", maxAge: 0 });
+  return response;
+}
 
 function loginRedirect(origin: string, error: string, message: string): NextResponse {
   const loginUrl = new URL("/login", origin);
@@ -48,28 +54,34 @@ export async function GET(request: Request) {
   const googleError = url.searchParams.get("error");
   if (googleError) {
     if (inviteCookie) {
-      return acceptInviteRedirect(
+      return clearOauthState(acceptInviteRedirect(
         adminOrigin,
         inviteCookie,
         "google_auth_denied",
         "Google sign-in was cancelled."
-      );
+      ));
     }
-    return loginRedirect(adminOrigin, "google_auth_denied", "Google sign-in was cancelled.");
+    return clearOauthState(loginRedirect(adminOrigin, "google_auth_denied", "Google sign-in was cancelled."));
   }
 
   const code = url.searchParams.get("code")?.trim();
   const state = url.searchParams.get("state")?.trim();
   if (!code || !state) {
     if (inviteCookie) {
-      return acceptInviteRedirect(
+      return clearOauthState(acceptInviteRedirect(
         adminOrigin,
         inviteCookie,
         "invalid_callback",
         "Google sign-in callback was incomplete."
-      );
+      ));
     }
-    return loginRedirect(adminOrigin, "invalid_callback", "Google sign-in callback was incomplete.");
+    return clearOauthState(loginRedirect(adminOrigin, "invalid_callback", "Google sign-in callback was incomplete."));
+  }
+  if (callbackStateCookie(request) !== state) {
+    if (inviteCookie) {
+      return clearOauthState(acceptInviteRedirect(adminOrigin, inviteCookie, "invalid_state", "Google sign-in session did not match this browser."));
+    }
+    return clearOauthState(loginRedirect(adminOrigin, "invalid_state", "Google sign-in session did not match this browser."));
   }
 
   const exchangeResponse = await fetch(`${serverApiBase()}/v1/auth/google/exchange`, {
@@ -95,12 +107,12 @@ export async function GET(request: Request) {
     const errorCode = exchangeData.error ?? "google_exchange_failed";
     const message = detail || "Google sign-in failed.";
     if (exchangeData.redirect?.trim()) {
-      return errorRedirect(exchangeData.redirect.trim(), errorCode, message);
+      return clearOauthState(errorRedirect(exchangeData.redirect.trim(), errorCode, message));
     }
     if (inviteCookie) {
-      return acceptInviteRedirect(adminOrigin, inviteCookie, errorCode, message);
+      return clearOauthState(acceptInviteRedirect(adminOrigin, inviteCookie, errorCode, message));
     }
-    return loginRedirect(adminOrigin, errorCode, message);
+    return clearOauthState(loginRedirect(adminOrigin, errorCode, message));
   }
 
   const redirectTarget = exchangeData.redirect?.trim() || `${adminOrigin}/auth/callback`;
@@ -115,5 +127,5 @@ export async function GET(request: Request) {
   const response = NextResponse.redirect(location);
   setSessionCookie(response, exchangeData.accessToken);
   response.cookies.set(INVITE_OAUTH_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
-  return response;
+  return clearOauthState(response);
 }

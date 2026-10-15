@@ -33,6 +33,7 @@ import { syncOrgCatalog } from "../src/server/catalogSyncService";
 import type { OrgRepoAccessMode } from "../src/server/repoAccessTypes";
 import { principalForUser } from "../src/server/audit/auditLogger";
 import { purgeOrgZoektShards } from "../src/indexing/purgeOrgRepoIndex";
+import { assertLocalDemoDatabaseTarget } from "./local-demo-db-target";
 
 /** Public signing cert from https://mocksaml.com/api/saml/metadata (BoxyHQ MockSAML). */
 const MOCKSAML_IDP_CERT = `-----BEGIN CERTIFICATE-----
@@ -56,6 +57,10 @@ m0eo2USlSRTVl7QHRTuiuSThHpLKQQ==
 
 async function main(): Promise<void> {
   const [, , command, ...args] = process.argv;
+  if (command === "seed-analytics-demo") {
+    // This command deletes demo organizations; reject unsafe targets before a pool exists.
+    assertLocalDemoDatabaseTarget(process.env.DATABASE_URL ?? "");
+  }
   const pool = await getDbPool();
   if (!pool) {
     console.error("DATABASE_URL is required");
@@ -434,18 +439,6 @@ async function main(): Promise<void> {
         break;
       }
       case "seed-analytics-demo": {
-        const databaseUrl = process.env.DATABASE_URL ?? "";
-        const host = databaseUrl.toLowerCase();
-        if (
-          host.includes("railway") ||
-          host.includes("rlwy.net") ||
-          host.includes("coop-ai.dev") ||
-          (host && !host.includes("localhost") && !host.includes("@postgres:"))
-        ) {
-          throw new Error(
-            "seed-analytics-demo is local-only. Refusing to run against a non-local DATABASE_URL."
-          );
-        }
         const demoPassword = process.env.DEMO_PASSWORD ?? "DemoPassword12!";
         const authIdentityStore = new AuthIdentityStore(pool);
         const demoOrgNames = ["Analytics Demo Co", "Solo Analytics Demo"];

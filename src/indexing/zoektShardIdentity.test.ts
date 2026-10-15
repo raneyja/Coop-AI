@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   buildZoektRepoFilter,
   buildZoektScopedQuery,
+  quoteZoektToken,
   zoektRepoName,
   zoektShardFilePrefix
 } from "./zoektShardIdentity";
@@ -27,5 +28,7 @@ assert.equal(buildZoektScopedQuery("", "main", [repo]).length, 0);
 const shard = zoektShardFilePrefix(orgA, repo);
 assert.equal(shard.includes("/"), false);
 assert.match(shard, /%2F/);
+assert.equal(quoteZoektToken('alpha" or repo:other\\tail'), '"alpha\\" or repo:other\\\\tail"');
+assert.equal(buildZoektRepoFilter(orgA, [repo]), `repo:"${zoektRepoName(orgA, repo)}"`);
 
 console.log("zoektShardIdentity: ok");

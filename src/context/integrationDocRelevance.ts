@@ -31,11 +31,11 @@ export function sanitizeIntegrationSnippet(text: string | undefined): string | u
     .replace(/@@@hl@@@|@@@endhl@@@/gi, "")
     .replace(/<\/?[^>]+>/g, " ")
     .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
+    .replace(/&amp;/gi, "&")
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
     .replace(/\s+/g, " ")
     .trim();
