@@ -1,4 +1,5 @@
 import { isIP } from "node:net";
+import { isCanonicalCredentialEncryptionKey } from "./credentialCrypto";
 
 export type ServerConfig = {
   nodeEnv: string;
@@ -23,6 +24,13 @@ export function loadServerConfig(env: NodeJS.ProcessEnv = process.env): ServerCo
   const authFlag = readBoolean(env.COOP_REQUIRE_API_AUTH, nodeEnv === "production");
   if (nodeEnv === "production" && env.COOP_REQUIRE_API_AUTH !== undefined && !authFlag) {
     console.error("[config] COOP_REQUIRE_API_AUTH=false is ignored when NODE_ENV=production");
+  }
+  if (
+    nodeEnv === "production" &&
+    env.CREDENTIALS_ENCRYPTION_KEY &&
+    !isCanonicalCredentialEncryptionKey(env.CREDENTIALS_ENCRYPTION_KEY)
+  ) {
+    throw new Error("CREDENTIALS_ENCRYPTION_KEY must be canonical base64 encoding of a 32-byte key in production.");
   }
   return {
     nodeEnv,

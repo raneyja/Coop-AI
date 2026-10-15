@@ -15,6 +15,20 @@ test("production defaults API auth on", () => {
   assert.equal(config.requireApiAuth, true);
 });
 
+test("production rejects noncanonical or wrong-length encryption key encodings", () => {
+  for (const value of ["change-me-to-a-long-random-secret", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "Zm9v", "00".repeat(32)]) {
+    assert.throws(
+      () => loadServerConfig({ NODE_ENV: "production", CREDENTIALS_ENCRYPTION_KEY: value }),
+      /canonical base64 encoding of a 32-byte key/
+    );
+  }
+  const fixtureKey = Buffer.from(Array.from({ length: 32 }, (_, index) => index)).toString("base64");
+  assert.equal(
+    loadServerConfig({ NODE_ENV: "production", CREDENTIALS_ENCRYPTION_KEY: fixtureKey }).credentialsEncryptionKey,
+    fixtureKey
+  );
+});
+
 test("development honors COOP_REQUIRE_API_AUTH=false", () => {
   const config = loadServerConfig({
     NODE_ENV: "development",

@@ -30,7 +30,7 @@ const pool = new Pool({ connectionString: URL });
 const source = resolve(process.cwd(), "migrations");
 const env = {
   NODE_ENV: "production", DATABASE_URL: URL, JOBS_BACKEND: "postgres", JOBS_WORKERS: "0",
-  GRAPH_CACHE_BACKEND: "postgres", CREDENTIALS_ENCRYPTION_KEY: "synthetic-readiness-key"
+  GRAPH_CACHE_BACKEND: "postgres", CREDENTIALS_ENCRYPTION_KEY: Buffer.from(Array.from({length:32},(_,index)=>index)).toString("base64")
 };
 const config = loadWebhookConfig(env);
 const serverConfig = loadServerConfig(env);

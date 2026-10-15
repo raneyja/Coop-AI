@@ -34,6 +34,7 @@ import type { OrgRepoAccessMode } from "../src/server/repoAccessTypes";
 import { principalForUser } from "../src/server/audit/auditLogger";
 import { purgeOrgZoektShards } from "../src/indexing/purgeOrgRepoIndex";
 import { assertLocalDemoDatabaseTarget } from "./local-demo-db-target";
+import { isCanonicalCredentialEncryptionKey } from "../src/server/credentialCrypto";
 
 /** Public signing cert from https://mocksaml.com/api/saml/metadata (BoxyHQ MockSAML). */
 const MOCKSAML_IDP_CERT = `-----BEGIN CERTIFICATE-----
@@ -57,6 +58,10 @@ m0eo2USlSRTVl7QHRTuiuSThHpLKQQ==
 
 async function main(): Promise<void> {
   const [, , command, ...args] = process.argv;
+  const encryptionKey = process.env.CREDENTIALS_ENCRYPTION_KEY;
+  if (encryptionKey && !isCanonicalCredentialEncryptionKey(encryptionKey)) {
+    throw new Error("CREDENTIALS_ENCRYPTION_KEY must be canonical base64 encoding of a 32-byte key.");
+  }
   if (command === "seed-analytics-demo") {
     // This command deletes demo organizations; reject unsafe targets before a pool exists.
     assertLocalDemoDatabaseTarget(process.env.DATABASE_URL ?? "");
@@ -66,7 +71,6 @@ async function main(): Promise<void> {
     console.error("DATABASE_URL is required");
     process.exit(1);
   }
-  const encryptionKey = process.env.CREDENTIALS_ENCRYPTION_KEY;
   const store = new OrgStore(pool, encryptionKey);
   const ssoConfigStore = new SsoConfigStore(pool);
   const authPolicyStore = new AuthPolicyStore(pool);
