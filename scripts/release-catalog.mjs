@@ -223,7 +223,7 @@ try:
  for name in names:
   data=z.read(name)
   if name.startswith('extension/'):
-   source=name[len('extension/'):];source={'readme.md':'README.md','changelog.md':'CHANGELOG.md'}.get(source,source)
+   source=name[len('extension/'):];source={'readme.md':'README.md','changelog.md':'CHANGELOG.md','LICENSE.txt':'LICENSE'}.get(source,source)
    assert data==(root/source).read_bytes(), 'Packaged bytes differ from current build/source'
   entries.append({'path':name,'sha256':hashlib.sha256(data).hexdigest()})
  identity=next(x for x in ET.fromstring(z.read('extension.vsixmanifest')).iter() if x.tag.split('}')[-1]=='Identity')
