@@ -129,6 +129,7 @@ export async function resolveAuthContext(
   return undefined;
 }
 
+/** Returns true when auth is present or when production auth is not required. */
 export function requireAuth(
   auth: AuthContext | undefined,
   requireInProduction: boolean

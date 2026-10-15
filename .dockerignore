@@ -10,4 +10,5 @@ website/node_modules
 dist
 **/*.md
 .env*
+test
 *.log

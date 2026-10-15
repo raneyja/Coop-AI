@@ -29,9 +29,9 @@ export class CoopSidebarProvider implements vscode.WebviewViewProvider {
   public constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly extensionContext: vscode.ExtensionContext,
-    api: SecureApiClient,
-    services: CoopRuntimeServices
-  ) {
+    private readonly api: SecureApiClient,
+    private readonly services: CoopRuntimeServices
+  ) { {
     this.session = new CoopChatSession({
       extensionUri,
       extensionContext,
