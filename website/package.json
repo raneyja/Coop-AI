@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "npm run typecheck",
     "typecheck": "tsc --noEmit",
-    "test": "tsx src/lib/frontmatter.test.ts"
+    "test": "tsx src/lib/frontmatter.test.ts && tsx src/components/BlogMarkdown.test.ts"
   },
   "dependencies": {
     "@vercel/analytics": "^1.5.0",
