@@ -24,7 +24,7 @@ No. CoopAI at [coop-ai.dev](https://coop-ai.dev) is VS Code code intelligence. C
 
 ### Is my code used to train models?
 
-No. Your code and prompts are never used to train foundation models. See [Security architecture](/docs/security-architecture).
+Chat formatting includes confidentiality instructions and provider-compatible controls. Retention and training terms depend on the actual provider account and agreement; request flags alone do not establish them. See [Security architecture](/docs/security-architecture).
 
 ## Plans
 

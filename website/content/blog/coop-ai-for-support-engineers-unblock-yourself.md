@@ -84,7 +84,7 @@ When a customer is considering a config change on their side, pair **Trace Decis
 
 ## When customer data is in scope
 
-When you are troubleshooting with customer org IDs, auth tokens, or production configs in scope, data handling is not abstract. CoopAI's zero-clone architecture keeps indexing on your infrastructure. LLM inference runs server-side with zero-retention configuration: prompts are not stored for training, retention flags are disabled, and provider keys live on your server, not in the IDE.
+When you are troubleshooting with customer org IDs, auth tokens, or production configs in scope, data handling is not abstract. CoopAI's zero-clone architecture keeps indexing on your infrastructure. LLM inference runs server-side. Chat formatting applies confidentiality instructions and provider-compatible controls, and provider keys stay on the server. Verify retention and training terms for the actual provider account and endpoint.
 
 You can route inference through your own provider keys and keep indexing on your infrastructure. See the [security architecture docs](/docs/security-architecture) for the full model.
 

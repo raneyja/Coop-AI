@@ -1,3 +1,4 @@
+import { responseTiming } from "./chatResponseTiming";
 import type { ChatMessage, ChatPersistedArtifact, RepoContext } from "./types";
 import type { ContextFetchResult } from "../context/requestBatcher";
 import type { DecisionTimeline } from "../types/decisionTimeline";
@@ -21,6 +22,7 @@ export type ChatTurn = {
   threadId: string;
   status: ChatTurnStatus;
   startedAt: number;
+  responseTiming?: import("./chatResponseTiming").ResponseTimingTrace;
   /** Repo/file scope at send time (immutable for the turn). */
   context: RepoContext;
   /** Thread messages including the user bubble that started this turn. */
@@ -219,6 +221,7 @@ export class ThreadRunManager {
     }
     turn.clearResponseDeadline();
     turn.status = "completed";
+    responseTiming(turn.streamAbort.signal)?.finish("completed");
     this.runs.delete(turn.threadId);
   }
 
@@ -229,6 +232,7 @@ export class ThreadRunManager {
     }
     turn.clearResponseDeadline();
     turn.status = "error";
+    responseTiming(turn.streamAbort.signal)?.finish("failed");
     this.runs.delete(turn.threadId);
   }
 

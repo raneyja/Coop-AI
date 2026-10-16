@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { serverApiBase } from "@/lib/serverCoopApi";
+import { adminPublicOrigin, serverApiBase } from "@/lib/serverCoopApi";
+import { authorizeState, ADMIN_OAUTH_STATE_COOKIE, ADMIN_OAUTH_STATE_MAX_AGE_SEC } from "@/lib/googleOauthState";
 
 const INVITE_OAUTH_COOKIE = "coop_oauth_invite";
 const INVITE_OAUTH_MAX_AGE_SEC = 15 * 60;
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
   const firstName = url.searchParams.get("firstName")?.trim() ?? "";
   const lastName = url.searchParams.get("lastName")?.trim() ?? "";
   const timezone = url.searchParams.get("timezone")?.trim() ?? "";
-  const adminOrigin = url.origin.replace(/\/$/, "");
+  const adminOrigin = adminPublicOrigin(url.origin);
   const oauthCallback = `${adminOrigin}/api/auth/google/callback`;
   const finalRedirect = `${adminOrigin}/auth/callback`;
 
@@ -40,7 +41,18 @@ export async function GET(request: Request) {
   const backendResponse = await fetch(backendUrl.toString(), { redirect: "manual", cache: "no-store" });
   const location = backendResponse.headers.get("location");
   if (location) {
+    const state = authorizeState(location);
+    if (!state) {
+      return NextResponse.json({ error: "invalid_authorize_response", message: "Google sign-in could not start safely." }, { status: 502 });
+    }
     const response = NextResponse.redirect(location);
+    response.cookies.set(ADMIN_OAUTH_STATE_COOKIE, state, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: adminOrigin.startsWith("https://"),
+      path: "/api/auth/google",
+      maxAge: ADMIN_OAUTH_STATE_MAX_AGE_SEC
+    });
     if (mode === "invite" && inviteToken) {
       // So Google cancel / incomplete callback can return to accept-invite.
       response.cookies.set(INVITE_OAUTH_COOKIE, inviteToken, {

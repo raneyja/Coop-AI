@@ -1,5 +1,5 @@
-import { fetchWithTimeout } from "../networkResilience";
-import { INTEGRATION_HTTP_TIMEOUT_MS, integrationAuthFailureMessage } from "../integrations/integrationHttp";
+import type { IntegrationProxy } from "../integrations/integrationOperations";
+import { fetchIntegrationResponse, INTEGRATION_HTTP_TIMEOUT_MS, integrationAuthFailureMessage } from "../integrations/integrationHttp";
 
 const ISSUE_CACHE_TTL_MS = 30 * 60 * 1000;
 
@@ -21,6 +21,7 @@ const NON_JIRA_ISSUE_KEY_PREFIXES = new Set([
 ]);
 
 export type JiraClientOptions = {
+  proxy?: IntegrationProxy;
   baseUrl: string;
   email?: string;
   apiToken?: string;
@@ -28,6 +29,8 @@ export type JiraClientOptions = {
   cloudId?: string;
   now?: () => number;
   signal?: AbortSignal;
+  /** Server-owned project admission, including optional nested epic reads. */
+  isIssueKeyAllowed?: (key: string) => boolean;
 };
 
 export type JiraIssue = {
@@ -91,7 +94,12 @@ export class JiraClient {
   private readonly epicCache = new Map<string, CacheEntry<JiraEpic>>();
 
   public constructor(private readonly options: JiraClientOptions) {
-    if (options.oauthAccessToken && options.cloudId) {
+    if (options.proxy) {
+      this.oauthMode = false;
+      this.apiBase = "";
+      this.authHeader = "";
+      this.siteBaseUrl = options.baseUrl;
+    } else if (options.oauthAccessToken && options.cloudId) {
       this.oauthMode = true;
       this.apiBase = `https://api.atlassian.com/ex/jira/${options.cloudId}/rest/api/3`;
       this.authHeader = `Bearer ${options.oauthAccessToken}`;
@@ -111,6 +119,7 @@ export class JiraClient {
   }
 
   public async testConnection(): Promise<{ ok: boolean; message: string }> {
+    if (this.options.proxy) return this.options.proxy("jira.testConnection", [], this.options.signal);
     try {
       if (this.oauthMode) {
         // OAuth tokens from Coop's Atlassian app include read:jira-work, not read:jira-user (/myself).
@@ -128,7 +137,9 @@ export class JiraClient {
   }
 
   public async getIssue(issueKey: string): Promise<JiraIssue> {
+    if (this.options.proxy) return this.options.proxy("jira.getIssue", [issueKey], this.options.signal);
     const normalized = issueKey.toUpperCase();
+    this.requireAllowedIssueKey(normalized);
     const cached = this.issueCache.get(normalized);
     if (cached && cached.expiresAt > this.now()) {
       return cached.data;
@@ -149,10 +160,11 @@ export class JiraClient {
     ].join(",");
 
     const payload = await this.request<JiraIssuePayload>(`/issue/${encodeURIComponent(normalized)}?fields=${fields}`);
-    const issue = mapJiraIssue(payload, this.siteBaseUrl);
+    if (this.options.isIssueKeyAllowed && payload.key !== normalized) throw new JiraApiError("Jira source identity changed.", 403);
+    const issue = this.admitIssue(payload);
 
     const epicKey = issue.epicKey ?? extractEpicFromFields(payload);
-    if (epicKey && !issue.epicName) {
+    if (epicKey && !issue.epicName && (!this.options.isIssueKeyAllowed || this.options.isIssueKeyAllowed(epicKey.toUpperCase()))) {
       try {
         const epic = await this.getEpic(epicKey);
         issue.epicName = epic.summary;
@@ -166,7 +178,9 @@ export class JiraClient {
   }
 
   public async getEpic(epicKey: string): Promise<JiraEpic> {
+    if (this.options.proxy) return this.options.proxy("jira.getEpic", [epicKey], this.options.signal);
     const normalized = epicKey.toUpperCase();
+    this.requireAllowedIssueKey(normalized);
     const cached = this.epicCache.get(normalized);
     if (cached && cached.expiresAt > this.now()) {
       return cached.data;
@@ -175,6 +189,7 @@ export class JiraClient {
     const payload = await this.request<JiraIssuePayload>(
       `/issue/${encodeURIComponent(normalized)}?fields=summary,description,status`
     );
+    if (this.options.isIssueKeyAllowed && payload.key !== normalized) throw new JiraApiError("Jira source identity changed.", 403);
     const epic: JiraEpic = {
       key: payload.key,
       summary: payload.fields.summary,
@@ -188,6 +203,7 @@ export class JiraClient {
   }
 
   public async searchIssues(jql: string, limit = 20): Promise<JiraIssue[]> {
+    if (this.options.proxy) return this.options.proxy("jira.searchIssues", [jql, limit], this.options.signal);
     const result = await this.request<{ issues?: JiraIssuePayload[] }>("/search/jql", {
       method: "POST",
       body: {
@@ -197,7 +213,7 @@ export class JiraClient {
       }
     });
 
-    return (result.issues ?? []).map((issue) => mapJiraIssue(issue, this.siteBaseUrl));
+    return (result.issues ?? []).map(issue => this.admitIssue(issue));
   }
 
   public async listProjects(options?: { limit?: number }): Promise<JiraProject[]> {
@@ -231,6 +247,8 @@ export class JiraClient {
   }
 
   public async getTransitionHistory(issueKey: string): Promise<JiraTransition[]> {
+    if (this.options.proxy) return this.options.proxy("jira.getTransitionHistory", [issueKey], this.options.signal);
+    this.requireAllowedIssueKey(issueKey.toUpperCase());
     const changelog = await this.request<{
       values?: Array<{
         created: string;
@@ -266,9 +284,25 @@ export class JiraClient {
     ];
   }
 
+  private requireAllowedIssueKey(key: string): void {
+    if (this.options.isIssueKeyAllowed && !this.options.isIssueKeyAllowed(key)) {
+      throw new JiraApiError("Jira source is not authorized.", 403);
+    }
+  }
+
+  private admitIssue(payload: JiraIssuePayload): JiraIssue {
+    this.requireAllowedIssueKey(payload.key);
+    const issue = mapJiraIssue(payload, this.siteBaseUrl);
+    if (issue.epicKey && this.options.isIssueKeyAllowed && !this.options.isIssueKeyAllowed(issue.epicKey.toUpperCase())) {
+      delete issue.epicKey;
+      delete issue.epicName;
+    }
+    return issue;
+  }
+
   private async request<T>(path: string, options?: { method?: string; body?: unknown }): Promise<T> {
     const url = path.startsWith("http") ? path : `${this.apiBase}${path}`;
-    const response = await fetchWithTimeout(
+    const response = await fetchIntegrationResponse(
       url,
       {
         method: options?.method ?? "GET",
@@ -278,7 +312,7 @@ export class JiraClient {
           "Content-Type": "application/json"
         },
         body: options?.body ? JSON.stringify(options.body) : undefined,
-        signal: this.options.signal
+        signal: this.options.signal, redirect: "error"
       },
       INTEGRATION_HTTP_TIMEOUT_MS
     );

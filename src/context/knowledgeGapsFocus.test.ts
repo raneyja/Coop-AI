@@ -106,6 +106,23 @@ test("resolveKnowledgeGapsAuditScope demotes unrelated open file when focus pres
   assert.ok(scope.focusTopics.some((t) => /certificate/i.test(t)));
 });
 
+test("explicit file scope outranks unrelated path tokens across languages", () => {
+  for (const file of ["opaque/a.ts", "nested/b.py", "c.rs", "rules.data"]) {
+    for (const reference of ["this file", "the attached file", "this selected file", "the open file", "the current file"]) {
+      const userFocus = `Before changing validation in ${reference}, which rules does its code establish?`;
+      assert.equal(openFileRelatedToGapsFocus(file, userFocus), true);
+      const scope = resolveKnowledgeGapsAuditScope({ file, userFocus });
+      assert.equal(scope.relatedOpenFile, file);
+      assert.equal(scope.secondaryUnrelatedFile, undefined);
+      assert.equal(scope.focusPrimary, false);
+    }
+  }
+  for (const focus of ["Review allocation rules and the open questions from code.",
+    "Review allocation rules in the attached documentation.", "Review the current authorization behavior."]) {
+    assert.equal(openFileRelatedToGapsFocus("opaque/a.ts", focus), false);
+  }
+});
+
 test("knowledgeGapsFocusGatherTerms puts webhook/cert tokens first", () => {
   const terms = knowledgeGapsFocusGatherTerms(
     "focus on webhook delivery and signature certificates"

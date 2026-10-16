@@ -1,7 +1,75 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyAnthropicThinking, buildAnthropicInferenceBody, parseAnthropicLine } from "./anthropicClient";
+import { AnthropicProviderClient, applyAnthropicThinking, buildAnthropicInferenceBody, parseAnthropicLine } from "./anthropicClient";
 import type { ParseState } from "./baseClient";
+import type { ProviderStreamOptions, StreamChunk } from "../types";
+
+const options: ProviderStreamOptions = {model:"claude-sonnet-4-6",temperature:0.5,maxTokens:16000,
+  messages:[{role:"user",content:"fixture"}],requestId:"protocol-control"};
+const event = (value: unknown) => "data: " + JSON.stringify(value) + "\n\n";
+const start = event({type:"message_start",message:{usage:{input_tokens:32}}});
+const text = event({type:"content_block_delta",delta:{type:"text_delta",text:"Complete ✅"}});
+const ending = (reason: string) => event({type:"message_delta",delta:{stop_reason:reason},usage:{output_tokens:3}});
+const stop = event({type:"message_stop"});
+async function streamFixture(body: string): Promise<StreamChunk[]> {
+  const bytes=new TextEncoder().encode(body);
+  const client=new AnthropicProviderClient("anthropic",{apiKey:"test-only",fetchImpl:async()=>new Response(new ReadableStream({
+    start(controller){for(let offset=0;offset<bytes.length;offset+=7)controller.enqueue(bytes.slice(offset,offset+7));controller.close();}
+  }))});
+  const chunks:StreamChunk[]=[];
+  for await(const chunk of client.streamCompletion(options))chunks.push(chunk);
+  return chunks;
+}
+
+test("a complete Anthropic stream preserves split UTF-8, final unnewline-terminated event and actual usage",async()=>{
+  const chunks=await streamFixture(start+text+ending("end_turn")+stop.trimEnd());
+  assert.deepEqual(chunks.filter(chunk=>chunk.type==="delta"),[{type:"delta",text:"Complete ✅"}]);
+  const done=chunks.find(chunk=>chunk.type==="done");assert.equal(done?.finishReason,"stop");
+  assert.equal(done?.usage.inputTokens,32);assert.equal(done?.usage.outputTokens,3);
+  assert(!chunks.some(chunk=>chunk.type==="error"));
+});
+
+test("complete-looking text without message_stop or stop reason cannot masquerade as successful completion",async()=>{
+  for(const body of [start+text+ending("end_turn"),start+text+stop,start+text]){
+    const chunks=await streamFixture(body);const done=chunks.find(chunk=>chunk.type==="done");
+    assert.equal(done?.finishReason,"error");assert.equal(done?.usage.inputTokens,32);
+    assert(chunks.some(chunk=>chunk.type==="error"));
+    assert(!chunks.some(chunk=>chunk.type==="done"&&chunk.finishReason==="stop"));
+  }
+});
+
+test("in-stream Anthropic errors retain known usage and stop without fabricated success",async()=>{
+  for(const finalNewline of [true,false]){
+    let error=event({type:"error",error:{type:"overloaded_error",message:"Overloaded"}});
+    if(!finalNewline)error=error.trimEnd();
+    const chunks=await streamFixture(start+text+error);
+    assert(chunks.some(chunk=>chunk.type==="error"&&chunk.code==="overloaded_error"));
+    const done=chunks.find(chunk=>chunk.type==="done");assert.equal(done?.finishReason,"error");assert.equal(done?.usage.inputTokens,32);
+    assert(!chunks.some(chunk=>chunk.type==="done"&&chunk.finishReason==="stop"));
+  }
+});
+
+test("Anthropic stop reasons preserve capacity limits and reject unhandled continuations",async()=>{
+  for(const [reason,expected] of [["max_tokens","length"],["model_context_window_exceeded","length"],["stop_sequence","stop"],["pause_turn","error"],["future_reason","error"]]){
+    const chunks=await streamFixture(start+text+ending(reason)+stop);
+    assert.equal(chunks.find(chunk=>chunk.type==="done")?.finishReason,expected,reason);
+  }
+});
+
+test("read failure and user Stop retain measured usage with distinct terminal reasons",async()=>{
+  for(const cancelled of [false,true]){
+    const controller=new AbortController();let pulled=false;
+    const client=new AnthropicProviderClient("anthropic",{apiKey:"test-only",fetchImpl:async()=>new Response(new ReadableStream({
+      pull(stream){if(!pulled){pulled=true;stream.enqueue(new TextEncoder().encode(start+text));return;}
+        if(cancelled)controller.abort();stream.error(new Error("transport interrupted"));}
+    }))});
+    const chunks:StreamChunk[]=[];
+    for await(const chunk of client.streamCompletion({...options,signal:controller.signal}))chunks.push(chunk);
+    const done=chunks.find(chunk=>chunk.type==="done");assert.equal(done?.finishReason,cancelled?"cancelled":"error");
+    assert.equal(done?.usage.inputTokens,32);assert.equal(chunks.some(chunk=>chunk.type==="error"),!cancelled);
+    assert(!chunks.some(chunk=>chunk.type==="done"&&chunk.finishReason==="stop"));
+  }
+});
 
 function state(): ParseState {
   return { text: "" };

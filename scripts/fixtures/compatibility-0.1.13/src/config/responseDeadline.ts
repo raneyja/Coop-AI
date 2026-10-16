@@ -1,0 +1,136 @@
+/**
+ * Soft latency guidance for chat / quick actions.
+ *
+ * 15s is a *start answering* guideline — stop gathering context and hand off to
+ * the model with whatever evidence we have. It must never abort the turn,
+ * kill the model, or replace an answer with a timeout message.
+ *
+ * Soft gather is silent to the user: synthesize with partial evidence, do not
+ * post degradation banners or engineer jargon about “budget exhausted.”
+ *
+ * Agent-owned repository hunts share this gather budget; their separate wall
+ * ceiling limits the overall tool loop without cancelling synthesis.
+ */
+export const MAX_USER_FACING_RESPONSE_MS = 15_000;
+
+/** Internal-only marker — never show in chat banners or evidence chrome. */
+export const SOFT_GATHER_BUDGET_EXHAUSTED_INTERNAL =
+  "Soft gather budget exhausted (responseDeadline) — synthesizing with partial blast evidence.";
+
+export function isSoftGatherLatencyMessage(message: string | undefined | null): boolean {
+  if (!message) {
+    return false;
+  }
+  return /soft gather budget exhausted|partial blast evidence|responseDeadline/i.test(message);
+}
+
+/** @deprecated Hard abort reason — kept for tests of legacy helpers; never scheduled on turns. */
+export const RESPONSE_DEADLINE_REASON = "coop-response-deadline";
+
+/** Reserve this much of the soft budget for LLM synthesis after context/job work. */
+export const RESERVED_SYNTHESIS_MS = 6_000;
+
+/**
+ * Floor so a locate job still searches when integrations have already used the
+ * leftover gather budget. First-class locate, not leftover.
+ */
+export const LOCATE_PREFETCH_MIN_MS = 4_000;
+
+/**
+ * A reject hunt cannot produce a trustworthy answer from an index miss alone.
+ * Give its remote filename/body verification one bounded grace window after
+ * the ordinary context-gather window is spent. This does not abort the turn
+ * or create an unbounded retry loop.
+ */
+export const REQUIRED_EVIDENCE_GRACE_MS = 4_000;
+
+export function requiredEvidenceDeadlineAt(
+  startedAt: number,
+  graceMs = REQUIRED_EVIDENCE_GRACE_MS
+): number {
+  return startedAt + MAX_USER_FACING_RESPONSE_MS + Math.max(0, graceMs);
+}
+
+/** Locate prefetch budget: leftover gather time, never below the locate floor. */
+export function locateSearchBudgetMs(remainingGatherMs: number): number {
+  return Math.max(Math.max(0, remainingGatherMs), LOCATE_PREFETCH_MIN_MS);
+}
+
+/** Connect/TTFB ceiling for provider streams (not the soft gather guideline). */
+export const LLM_STREAM_CONNECT_TIMEOUT_MS = 120_000;
+
+export function remainingResponseBudgetMs(
+  startedAt: number,
+  now = Date.now(),
+  maxMs = MAX_USER_FACING_RESPONSE_MS
+): number {
+  return Math.max(0, maxMs - (now - startedAt));
+}
+
+/** Soft budget left for context/job gathering before synthesis should start. */
+export function remainingContextGatherBudgetMs(
+  startedAt: number,
+  now = Date.now(),
+  maxMs = MAX_USER_FACING_RESPONSE_MS,
+  reserveSynthesisMs = RESERVED_SYNTHESIS_MS
+): number {
+  return Math.max(0, remainingResponseBudgetMs(startedAt, now, maxMs) - reserveSynthesisMs);
+}
+
+export function isResponseDeadlineAbort(signal: AbortSignal | undefined): boolean {
+  if (!signal?.aborted) {
+    return false;
+  }
+  const reason = (signal as AbortSignal & { reason?: unknown }).reason;
+  return reason === RESPONSE_DEADLINE_REASON;
+}
+
+export function abortablePromise<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) {
+    return Promise.reject(createAbortError());
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => {
+      reject(createAbortError());
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      }
+    );
+  });
+}
+
+function createAbortError(): Error {
+  const error = new Error("Aborted");
+  error.name = "AbortError";
+  return error;
+}
+
+/**
+ * Historically aborted the turn at 15s. That shut-off is removed — gather budgets
+ * stay soft via remainingContextGatherBudgetMs; AbortSignal is for user Stop only.
+ * Returns a no-op disposer so call sites stay compatible.
+ */
+export function scheduleResponseDeadline(
+  _controller: AbortController,
+  _startedAt: number,
+  _maxMs = MAX_USER_FACING_RESPONSE_MS
+): () => void {
+  return () => undefined;
+}
+
+/** Clears any leftover timer disposer at synthesis handoff (defensive; schedule is a no-op). */
+export function clearResponseDeadlineForSynthesis(clear: (() => void) | undefined): void {
+  clear?.();
+}
+
+/** @deprecated No longer shown — answers must not be replaced by a latency timeout. */
+export const RESPONSE_DEADLINE_USER_MESSAGE =
+  "This took too long (over 15 seconds). Try a narrower question, or run the action again.";

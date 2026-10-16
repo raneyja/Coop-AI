@@ -9,6 +9,8 @@ import {
   normalizeModelSelectionForPlan,
   pickerAppliesToUseCase,
   resolveAssignedModelForUseCase,
+  resolveAssignedSourceVerificationModel,
+  SOURCE_VERIFICATION_MAX_TOKENS,
   resolveFeatureFromUseCase,
   resolveRuntimeAutocompleteModel,
   resolveRuntimeModelForUseCase,
@@ -44,7 +46,24 @@ const quickActionModel = resolveAssignedModelForUseCase("blast_radius");
 assert.equal(quickActionModel.provider, "anthropic");
 assert.equal(quickActionModel.model, "claude-sonnet-4-6");
 
-assert.equal(COOP_FEATURE_MODEL_ASSIGNMENTS.length, 7);
+assert.equal(COOP_FEATURE_MODEL_ASSIGNMENTS.length, 8);
+assert.deepEqual(resolveAssignedSourceVerificationModel(), { provider: "openai", model: "gpt-5.5" });
+assert.equal(SOURCE_VERIFICATION_MAX_TOKENS, 32768);
+for (const plan of ["free", "pro", "enterprise"] as const) {
+  for (const allowUnapprovedProvider of [false, true]) {
+    for (const useCase of ["blast_radius", "knowledge_gaps", "comprehension", "decision_archaeology", "ownership"] as const) {
+      assert.deepEqual(resolveHonoredChatModel({ plan, allowUnapprovedProvider, useCase, sourceClaimReview: true,
+        clientProvider: "anthropic", clientModel: "claude-opus-4-8" }),
+      { provider: "openai", model: "gpt-5.5", selection: "auto" });
+      assert.deepEqual(resolveHonoredChatModel({ plan, allowUnapprovedProvider, useCase, sourceEvidenceRepair: true,
+        clientProvider: "anthropic", clientModel: "claude-opus-4-8" }),
+      { provider: "openai", model: "gpt-5.5", selection: "auto" });
+      const generation = resolveHonoredChatModel({ plan, allowUnapprovedProvider, useCase,
+        clientProvider: "anthropic", clientModel: "claude-opus-4-8", sourceClaimReview: false });
+      assert.equal(generation.model, plan === "free" ? "gemini-2.5-flash" : "claude-opus-4-8");
+    }
+  }
+}
 assert.ok(formatAssignedModelMeta(getFeatureModelAssignment("chat")).includes("OpenAI"));
 
 assert.equal(resolveFeatureFromUseCase("intent_suggest"), "intentSuggest");

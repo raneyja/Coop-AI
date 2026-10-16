@@ -18,6 +18,8 @@ export function TopBar() {
   const router = useRouter();
   const me = getStoredMe();
   const [orgLabel, setOrgLabel] = useState(() => displayOrgName(me));
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     const refresh = () => setOrgLabel(displayOrgName(getStoredMe()));
@@ -27,13 +29,20 @@ export function TopBar() {
   }, []);
 
   async function signOut() {
-    await signOutRemote();
+    setSigningOut(true);
+    setSignOutError(null);
+    const signedOut = await signOutRemote();
+    setSigningOut(false);
+    if (!signedOut) {
+      setSignOutError("Could not sign out. Please try again.");
+      return;
+    }
     clearSession();
     router.replace("/login");
   }
 
   return (
-    <header className="sticky top-0 z-10 flex h-12 items-center justify-between border-b border-coop-border bg-coop-dark/90 px-6 backdrop-blur-sm">
+    <header className="sticky top-0 z-10 flex h-12 items-center justify-between border-b border-coop-border bg-coop-dark/90 px-6 backdrop-blur-xs">
       <div className="flex items-baseline gap-2">
         <p className="text-sm text-white/90">{orgLabel}</p>
         {me ? (
@@ -52,8 +61,9 @@ export function TopBar() {
         >
           Install in VS Code
         </a>
-        <button type="button" onClick={() => void signOut()} className="admin-btn-secondary text-xs">
-          Sign out
+        {signOutError ? <span role="alert" className="text-xs text-red-300">{signOutError}</span> : null}
+        <button type="button" onClick={() => void signOut()} disabled={signingOut} className="admin-btn-secondary text-xs">
+          {signingOut ? "Signing out…" : "Sign out"}
         </button>
       </div>
     </header>

@@ -275,7 +275,9 @@ async function runSearchCode(
   const queries = [query, ...(expandIdentifierAlias ? identifierSearchAliases(query) : [])].filter(
     (candidate, index, all) => all.findIndex((seen) => seen.toLowerCase() === candidate.toLowerCase()) === index
   );
-  const parts: LocalSearchResult[] = [];
+  const parts: LocalSearchResult[] = indexEnabled ? [] : [{
+    source: "fallback", stale: false, availability: "unavailable", hits: [], symbols: []
+  }];
   const taskQuery = ctx.researchQuery ?? query;
   const verifyBody = (path: string, body: string) => ledger.once("verify", repoId, JSON.stringify([path, taskQuery]), async () =>
     isApiRejectAsk(taskQuery) || isRejectShapedSearchCriterion(query)

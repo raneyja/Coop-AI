@@ -1,34 +1,39 @@
 import { NextResponse } from "next/server";
 import {
+  clearSessionCookie,
   fetchMe,
   isCoopCredential,
   readSessionToken,
   setSessionCookie
 } from "@/lib/serverCoopApi";
+import { publicSessionProfile } from "@/lib/publicSessionProfile";
+import { isSameOriginMutation } from "@/lib/portalProxyPolicy";
 
 export async function GET() {
   const token = await readSessionToken();
   if (!token) {
-    return NextResponse.json({ error: "unauthorized", message: "Not signed in." }, { status: 401 });
+    const response = NextResponse.json({ error: "unauthorized", message: "Not signed in." }, { status: 401 });
+    clearSessionCookie(response);
+    return response;
   }
 
   const me = await fetchMe(token);
   if (!me.ok) {
     const response = NextResponse.json(me.data, { status: me.status });
     if (me.status === 401) {
-      response.cookies.set("coop_session", "", { httpOnly: true, path: "/", maxAge: 0 });
+      clearSessionCookie(response);
     }
     return response;
   }
 
-  return NextResponse.json({
-    ...me.data,
-    accessToken: token
-  });
+  return NextResponse.json(publicSessionProfile(me.data));
 }
 
 /** Establish httpOnly session cookie after OAuth / SSO callback. */
 export async function POST(request: Request) {
+  if (!isSameOriginMutation(request)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
   let body: { accessToken?: string; refreshToken?: string };
   try {
     body = (await request.json()) as { accessToken?: string; refreshToken?: string };
@@ -47,11 +52,7 @@ export async function POST(request: Request) {
   }
 
   const refreshToken = String(body.refreshToken ?? "").trim();
-  const response = NextResponse.json({
-    ...me.data,
-    accessToken,
-    refreshToken: refreshToken || undefined
-  });
-  setSessionCookie(response, accessToken);
+  const response = NextResponse.json(publicSessionProfile(me.data));
+  setSessionCookie(response, accessToken, refreshToken);
   return response;
 }

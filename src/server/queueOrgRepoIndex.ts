@@ -96,14 +96,6 @@ export async function queueOrgRepoIndex(
       (activeJob ? isStaleIndexJob(activeJob) : false);
 
     if (!shouldSupersede) {
-      await deps.orgStore.upsertOrgRepo(orgId, repoId, {
-        lightningEnabled: true,
-        indexStatus: active.status === "running" ? "indexing" : "queued",
-        lastJobId: active.jobId,
-        error: undefined,
-        embeddingStatus: undefined,
-        embeddingError: undefined
-      });
       return { outcome: "skipped", reason: "already_active", jobId: active.jobId };
     }
 
@@ -114,14 +106,6 @@ export async function queueOrgRepoIndex(
     const lastJob = await deps.jobQueue.getJob(existing.lastJobId);
     if (lastJob && (lastJob.status === "queued" || lastJob.status === "running")) {
       if (!wasDisabled && !isStaleIndexJob(lastJob)) {
-        await deps.orgStore.upsertOrgRepo(orgId, repoId, {
-          lightningEnabled: true,
-          indexStatus: lastJob.status === "running" ? "indexing" : "queued",
-          lastJobId: lastJob.id,
-          error: undefined,
-          embeddingStatus: undefined,
-          embeddingError: undefined
-        });
         return { outcome: "skipped", reason: "already_active", jobId: lastJob.id };
       }
       await cancelActiveIndexJob(deps.jobQueue, lastJob.id);
@@ -142,16 +126,9 @@ export async function queueOrgRepoIndex(
     return { outcome: "failed", message };
   }
 
-  await deps.orgStore.upsertOrgRepo(orgId, repoId, {
-    lightningEnabled: true,
-    indexStatus: "queued",
-    lastJobId: submit.jobId,
-    error: undefined,
-    embeddingStatus: undefined,
-    embeddingError: undefined
-  });
 
-  return { outcome: "queued", jobId: submit.jobId };
+  return submit.deduplicated ? {outcome:'skipped',reason:'already_active',jobId:submit.jobId}
+    : { outcome: "queued", jobId: submit.jobId };
 }
 
 export type ReindexEmbeddingFailuresResult = {

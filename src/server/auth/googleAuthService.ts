@@ -20,6 +20,8 @@ export type GoogleAuthServiceOptions = {
 
 export type GoogleAuthState = {
   redirect?: string;
+  /** OAuth callback used when the signed state was issued. */
+  callbackUri?: string;
   mode: "login" | "signup" | "invite" | "checkout";
   orgName?: string;
   plan?: "free" | "pro";

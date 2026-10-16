@@ -20,6 +20,7 @@ export function jobParamsMatch(stored: JobParams, requested: JobParams): boolean
   if (!storedRepoId || !requestedRepoId || storedRepoId !== requestedRepoId) {
     return false;
   }
+  if(normalizeJobParam(stored.orgId)!==normalizeJobParam(requested.orgId)) return false;
   return normalizeJobParam(stored.file) === normalizeJobParam(requested.file);
 }
 

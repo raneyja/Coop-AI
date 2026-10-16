@@ -5,7 +5,7 @@ import type { ServerConfig } from "./serverConfig";
 import type { AuthPolicyStore } from "./sso/authPolicyStore";
 import type { SsoConfigStore } from "./sso/ssoConfigStore";
 import type { OrgSsoConfigInput, SsoProvider } from "./sso/ssoConfigStore";
-import { isValidX509Cert } from "./sso/x509Cert";
+import { isRevokedIdpSigningCert, isValidX509Cert } from "./sso/x509Cert";
 import type { UserStore } from "./users/userStore";
 import type { AuthTokenStore } from "./auth/authTokenStore";
 
@@ -277,12 +277,17 @@ function parseSsoConfigInput(
         message: "idpX509Cert looks like a Coop session token. Paste the IdP X.509 signing certificate instead."
       };
     }
+    if (isRevokedIdpSigningCert(rawCert)) {
+      return { ok: false, message: "This IdP signing certificate was revoked. Configure a replacement certificate." };
+    }
     if (!isValidX509Cert(rawCert)) {
       return {
         ok: false,
         message: "idpX509Cert must be a valid X.509 certificate (PEM or base64)."
       };
     }
+  } else if (existingCert && isRevokedIdpSigningCert(existingCert)) {
+    return { ok: false, message: "The saved IdP signing certificate was revoked. Configure a replacement certificate." };
   } else if (!existingCert || !isValidX509Cert(existingCert)) {
     return {
       ok: false,

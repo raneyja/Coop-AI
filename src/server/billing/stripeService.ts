@@ -14,6 +14,8 @@ type StripePortal = { url: string };
 export type StripeSubscription = {
   id: string;
   status: string;
+  customer?: string;
+  metadata?: Record<string,string>;
   quantity?: number;
   itemId?: string;
   priceId?: string;
@@ -91,6 +93,7 @@ export type StripeCheckoutSession = {
   status: string;
   customer: string | { id?: string } | null;
   customer_email: string | null;
+  subscription?: string | { id?: string } | null;
   metadata?: Record<string, string>;
 };
 
@@ -117,7 +120,8 @@ export class StripeService {
       if (customerIds.length === 1) params.set("customer", customerIds[0]);
       if (cursor) params.set("starting_after", cursor);
       const response = await fetch(`https://api.stripe.com/v1/invoices?${params}`, {
-        headers: { Authorization: `Bearer ${this.config.stripeSecretKey}` }
+        headers: { Authorization: `Bearer ${this.config.stripeSecretKey}` },
+        signal: AbortSignal.timeout(10000)
       });
       if (!response.ok) throw new Error(`Stripe invoices unavailable (${response.status})`);
       const page = await response.json() as { data: Array<{
@@ -193,7 +197,8 @@ export class StripeService {
     const response = await fetch(
       `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`,
       {
-        headers: { Authorization: `Bearer ${this.config.stripeSecretKey}` }
+        headers: { Authorization: `Bearer ${this.config.stripeSecretKey}` },
+        signal: AbortSignal.timeout(10000)
       }
     );
     const json = (await response.json().catch(() => ({}))) as StripeCheckoutSession & {
@@ -250,7 +255,8 @@ export class StripeService {
       `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
       {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${this.config.stripeSecretKey}` }
+        headers: { Authorization: `Bearer ${this.config.stripeSecretKey}` },
+        signal: AbortSignal.timeout(10000)
       }
     );
     const json = (await response.json().catch(() => ({}))) as {
@@ -278,12 +284,14 @@ export class StripeService {
     const response = await fetch(
       `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
       {
-        headers: { Authorization: `Bearer ${this.config.stripeSecretKey}` }
+        headers: { Authorization: `Bearer ${this.config.stripeSecretKey}` },
+        signal: AbortSignal.timeout(10000)
       }
     );
-    const json = (await response.json().catch(() => ({}))) as StripeSubscription & {
+    const json = (await response.json().catch(() => ({}))) as Omit<StripeSubscription,"customer" | "items"> & {
       error?: { message?: string; code?: string };
       pause_collection?: { behavior?: string } | null;
+      customer?: string | { id?: string };
       items?: { data?: Array<{ id?: string; quantity?: number; price?: string | { id?: string } }> };
     };
     if (!response.ok) {
@@ -309,6 +317,8 @@ export class StripeService {
     return {
       id: json.id,
       status: json.status,
+      customer: typeof json.customer === "string" ? json.customer : json.customer?.id,
+      metadata: json.metadata,
       quantity: quantity || first?.quantity || json.quantity,
       itemId: first?.id,
       priceId: first?.priceId,

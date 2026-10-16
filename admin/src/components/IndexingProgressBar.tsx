@@ -227,7 +227,7 @@ export function IndexingProgressBar(): React.ReactElement | null {
     return (
       <div className="pointer-events-none fixed bottom-5 right-5 z-50 w-[min(100vw-2rem,20rem)]">
         <div
-          className={`pointer-events-auto rounded-md border px-3 py-2.5 shadow-lg backdrop-blur-sm ${barClass}`}
+          className={`pointer-events-auto rounded-md border px-3 py-2.5 shadow-lg backdrop-blur-xs ${barClass}`}
         >
           <div className="flex items-start gap-2">
             <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setExpanded(true)}>
@@ -259,7 +259,7 @@ export function IndexingProgressBar(): React.ReactElement | null {
   return (
     <div className="pointer-events-none fixed bottom-5 right-5 z-50 w-[min(100vw-2rem,22rem)]">
       <div
-        className={`pointer-events-auto rounded-md border px-4 py-3 shadow-xl backdrop-blur-sm ${barClass}`}
+        className={`pointer-events-auto rounded-md border px-4 py-3 shadow-xl backdrop-blur-xs ${barClass}`}
       >
         <p className="text-sm font-medium leading-snug text-white">{title}</p>
         <p className="mt-1.5 text-xs leading-relaxed text-coop-muted">{line}</p>

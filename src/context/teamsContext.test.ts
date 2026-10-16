@@ -52,7 +52,7 @@ test("Teams search reads hitsContainers instead of the request row", () => {
                   resource: {
                     id: "msg-1",
                     channelIdentity: { teamId: "team", channelId: "chan" },
-                    body: { content: "<p>Do not mix this into the SQL-injection PR.</p>" }
+                    body: { content: "<p>Do not mix this into the SQL-injection PR. &amp;lt;script&amp;gt;</p>" }
                   }
                 }
               ]
@@ -66,6 +66,7 @@ test("Teams search reads hitsContainers instead of the request row", () => {
   assert.equal(hits.length, 1);
   assert.equal(hits[0]?.messageId, "msg-1");
   assert.match(hits[0]?.body ?? "", /Do not mix/);
+  assert.match(hits[0]?.body ?? "", /&lt;script&gt;/);
 });
 
 test("shouldFetchTeamsContext skips Teams while it is coming soon", () => {

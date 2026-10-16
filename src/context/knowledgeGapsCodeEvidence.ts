@@ -4,6 +4,7 @@ import { extractNamedSourceFiles } from "../api/agent/searchQuery";
 import { isOnboardingNoisePath } from "./onboardingSearchQueries";
 import {
   knowledgeGapsFilenameQueries,
+  knowledgeGapsFocusUsesSelectedFile,
   openFileRelatedToGapsFocus
 } from "./knowledgeGapsFocus";
 
@@ -146,7 +147,7 @@ export async function gatherKnowledgeGapsCodeEvidence(options: {
   };
   const work = (async () => {
     if (named.length) { await Promise.all(named.map(path => read(path))); return; }
-    if (selected && /\b(?:this|the)\s+(?:selected|attached|open)\b/i.test(options.focus)) {
+    if (selected && knowledgeGapsFocusUsesSelectedFile(options.focus)) {
       // An explicit selected-file audit has the same scope as a named-file ask.
       await read(selected);
       return;

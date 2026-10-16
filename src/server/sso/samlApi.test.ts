@@ -1,322 +1,87 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { ServerResponse } from "node:http";
-import { handleSamlApiRequest } from "./samlApi";
+import { inflateRawSync } from "node:zlib";
+import { handleSamlApiRequest, type SamlApiDeps } from "./samlApi";
 import { SamlService } from "./samlService";
 import type { OrgStore } from "../orgStore";
 import type { SsoConfigStore, OrgSsoConfig } from "./ssoConfigStore";
-import type { UserStore, UserRecord, CreatedSession } from "../users/userStore";
+import type { UserStore } from "../users/userStore";
 import type { ServerConfig } from "../serverConfig";
 import type { AuthConfig } from "../auth/authConfig";
-import {
-  TEST_IDP_CERT,
-  TEST_IDP_ENTITY_ID,
-  TEST_IDP_SSO_URL,
-  TEST_SAML_BASE_URL,
-  createSignedSamlResponse
-} from "./samlTestFixtures";
+import { TEST_IDP_CERT, TEST_IDP_ENTITY_ID, TEST_IDP_SSO_URL, TEST_SAML_BASE_URL,
+  createSignedSamlResponse, MemorySamlRequestStore, startSamlHttpServer } from "./samlTestFixtures";
 
-const enterpriseOrgId = "org-enterprise-saml-callback";
 
-const serverConfig = {
-  legacyApiToken: undefined,
-  requireApiAuth: true,
-  ssoBaseUrl: TEST_SAML_BASE_URL,
-  ssoSpEntityId: undefined,
-  ssoSessionTtlMs: 43_200_000
-} as ServerConfig;
-
-const authConfig = {
-  adminPortalUrl: "https://admin.coop-ai.dev",
-  marketingBaseUrl: "https://coop-ai.dev"
-} as AuthConfig;
-
-function mockRedirectResponse(): {
-  response: ServerResponse;
-  state: { statusCode?: number; location?: string; body?: string };
-} {
-  const state: { statusCode?: number; location?: string; body?: string } = {};
-  const response = {
-    writeHead(statusCode: number, headers?: Record<string, string>) {
-      state.statusCode = statusCode;
-      state.location = headers?.location;
-    },
-    end(payload?: string) {
-      state.body = payload;
-    }
-  } as ServerResponse;
-  return { response, state };
-}
-
-function encodeRelayState(orgId: string, redirect?: string, mode: "login" | "test" = "login"): string {
-  return Buffer.from(JSON.stringify({ orgId, redirect, mode }), "utf8").toString("base64url");
-}
-
-function testSsoConfig(): OrgSsoConfig {
-  return {
-    orgId: enterpriseOrgId,
-    provider: "saml",
-    idpEntityId: TEST_IDP_ENTITY_ID,
-    idpSsoUrl: TEST_IDP_SSO_URL,
-    idpX509Cert: TEST_IDP_CERT,
-    enabled: true,
-    createdAt: new Date("2026-01-01"),
-    updatedAt: new Date("2026-01-02")
+function fixture() {
+  const orgId = "org-enterprise-saml-callback";
+  const config: OrgSsoConfig = { orgId, provider: "saml", idpEntityId: TEST_IDP_ENTITY_ID,
+    idpSsoUrl: TEST_IDP_SSO_URL, idpX509Cert: TEST_IDP_CERT, enabled: true,
+    createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-02") };
+  const effects = { users: 0, sessions: 0 };
+  const deps: SamlApiDeps = {
+    orgStore: { getOrganization: async (id: string) => id === orgId
+      ? { id, name: "SSO", plan: "enterprise" } : undefined, isOrgSuspended: async () => false } as unknown as OrgStore,
+    ssoConfigStore: { getEnabledConfig: async () => config } as unknown as SsoConfigStore,
+    userStore: { upsertUserFromIdp: async () => { effects.users++; return { id: "user", orgId, email: "sso-test@demo.local" }; },
+      createSession: async () => { effects.sessions++; return { token: "coop_sess_fixture" }; } } as unknown as UserStore,
+    samlService: new SamlService({ baseUrl: TEST_SAML_BASE_URL, requestStore: new MemorySamlRequestStore() }),
+    serverConfig: { requireApiAuth: true, ssoSessionTtlMs: 43200000 } as ServerConfig,
+    authConfig: { adminPortalUrl: "https://admin.coop-ai.dev", marketingBaseUrl: "https://coop-ai.dev" } as AuthConfig
   };
+  return { deps, orgId, effects };
 }
-
-function mockOrgStore(): OrgStore {
-  return {
-    getOrganization: async (orgId: string) =>
-      orgId === enterpriseOrgId
-        ? { id: orgId, name: "SSO Callback Test", plan: "enterprise", createdAt: new Date() }
-        : undefined,
-    isOrgSuspended: async () => false
-  } as unknown as OrgStore;
+async function startLogin(base: string, orgId: string, mode = "login", redirect = "https://admin.coop-ai.dev/auth/callback") {
+  const response = await fetch(`${base}/v1/auth/saml/start?${new URLSearchParams({ orgId, mode, redirect, format: "json" })}`);
+  assert.equal(response.status, 200);
+  const continueUrl = new URL((await response.json() as { redirectUrl: string }).redirectUrl);
+  const continued = await fetch(`${base}${continueUrl.pathname}${continueUrl.search}`, { redirect: "manual" });
+  assert.equal(continued.status, 302);
+  const authorize = new URL(continued.headers.get("location")!);
+  const xml = inflateRawSync(Buffer.from(authorize.searchParams.get("SAMLRequest")!, "base64")).toString();
+  return { relay: authorize.searchParams.get("RelayState")!, cookie: continued.headers.get("set-cookie")!.split(";")[0],
+    requestId: /ID="([^"]+)"/.exec(xml)![1] };
 }
-
-function mockSsoConfigStore(): SsoConfigStore {
-  const config = testSsoConfig();
-  return {
-    getEnabledConfig: async (orgId: string) => (orgId === enterpriseOrgId ? config : undefined)
-  } as unknown as SsoConfigStore;
+async function callback(base: string, login: { relay: string; cookie: string }, body?: string) {
+  return fetch(`${base}/v1/auth/saml/callback`, { method: "POST", redirect: "manual",
+    headers: { "content-type": "application/x-www-form-urlencoded", cookie: login.cookie },
+    body: new URLSearchParams({ RelayState: login.relay, ...(body ? { SAMLResponse: body } : {}) }) });
 }
-
-function mockUserStore(): UserStore {
-  const user: UserRecord = {
-    id: "user-saml-callback",
-    orgId: enterpriseOrgId,
-    email: "sso-callback@demo.local",
-    role: "member",
-    createdAt: new Date("2026-01-01")
-  };
-  const session: CreatedSession = {
-    token: "coop_sess_saml_callback_test_token",
-    userId: user.id,
-    orgId: enterpriseOrgId,
-    expiresAt: new Date(Date.now() + 43_200_000)
-  };
-
-  return {
-    upsertUserFromIdp: async (login: { orgId: string; email: string; idpProvider: string }) => {
-      assert.equal(login.orgId, enterpriseOrgId);
-      assert.equal(login.email, user.email);
-      assert.equal(login.idpProvider, "saml");
-      return user;
-    },
-    createSession: async (userId: string, orgId: string) => {
-      assert.equal(userId, user.id);
-      assert.equal(orgId, enterpriseOrgId);
-      return session;
-    }
-  } as unknown as UserStore;
-}
-
-function callbackFormBody(samlResponse: string, relayState: string): string {
-  return new URLSearchParams({ SAMLResponse: samlResponse, RelayState: relayState }).toString();
-}
-
-test("POST /v1/auth/saml/callback delivers session token on valid signed assertion", async () => {
-  const redirect = "https://admin.coop-ai.dev/auth/callback";
-  const relayState = encodeRelayState(enterpriseOrgId, redirect);
-  const samlResponse = createSignedSamlResponse({ email: "sso-callback@demo.local" });
-  const { response, state } = mockRedirectResponse();
-
-  const handled = await handleSamlApiRequest(
-    {
-      method: "POST",
-      pathname: "/v1/auth/saml/callback",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: undefined,
-      rawBody: callbackFormBody(samlResponse, relayState)
-    },
-    response,
-    {
-      orgStore: mockOrgStore(),
-      userStore: mockUserStore(),
-      ssoConfigStore: mockSsoConfigStore(),
-      samlService: new SamlService({ baseUrl: TEST_SAML_BASE_URL }),
-      serverConfig,
-      authConfig
-    }
-  );
-
-  assert.equal(handled, true);
-  assert.equal(state.statusCode, 302);
-  const location = new URL(state.location!);
-  assert.equal(location.origin + location.pathname, redirect);
-  assert.equal(location.hash.includes("coopToken=coop_sess_saml_callback_test_token"), true);
-});
-
-test("POST /v1/auth/saml/callback redirects saml_validation_failed for invalid assertion", async () => {
-  const redirect = "https://admin.coop-ai.dev/auth/callback";
-  const relayState = encodeRelayState(enterpriseOrgId, redirect);
-  const invalidResponse = Buffer.from("<samlp:Response/>", "utf8").toString("base64");
-  const { response, state } = mockRedirectResponse();
-
-  await handleSamlApiRequest(
-    {
-      method: "POST",
-      pathname: "/v1/auth/saml/callback",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: undefined,
-      rawBody: callbackFormBody(invalidResponse, relayState)
-    },
-    response,
-    {
-      orgStore: mockOrgStore(),
-      userStore: mockUserStore(),
-      ssoConfigStore: mockSsoConfigStore(),
-      samlService: new SamlService({ baseUrl: TEST_SAML_BASE_URL }),
-      serverConfig,
-      authConfig
-    }
-  );
-
-  assert.equal(state.statusCode, 302);
-  const location = new URL(state.location!);
-  assert.equal(location.pathname, "/login");
-  assert.equal(location.searchParams.get("error"), "saml_validation_failed");
-  assert.match(location.searchParams.get("message") ?? "", /.+/);
-});
-
-test("POST /v1/auth/saml/callback returns missing_saml_response when body is empty", async () => {
-  const relayState = encodeRelayState(enterpriseOrgId);
-  const { response, state } = mockRedirectResponse();
-
-  await handleSamlApiRequest(
-    {
-      method: "POST",
-      pathname: "/v1/auth/saml/callback",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: undefined,
-      rawBody: new URLSearchParams({ RelayState: relayState }).toString()
-    },
-    response,
-    {
-      orgStore: mockOrgStore(),
-      userStore: mockUserStore(),
-      ssoConfigStore: mockSsoConfigStore(),
-      samlService: new SamlService({ baseUrl: TEST_SAML_BASE_URL }),
-      serverConfig,
-      authConfig
-    }
-  );
-
-  assert.equal(state.statusCode, 400);
-  assert.deepEqual(JSON.parse(state.body!), {
-    error: "missing_saml_response",
-    message: "The identity provider did not return a SAML response."
+for (const mode of ["login", "test"]) {
+  test(`HTTP ${mode} callback binds start/continue, preserves redirect and mode`, async () => {
+    const x = fixture(), server = await startSamlHttpServer(x.deps);
+    try {
+      const redirect = mode === "test" ? "https://admin.coop-ai.dev/settings/single-sign-on" : "https://admin.coop-ai.dev/auth/callback";
+      const login = await startLogin(server.base, x.orgId, mode, redirect);
+      const response = await callback(server.base, login, createSignedSamlResponse({ requestId: login.requestId }));
+      assert.equal(response.status, 302);
+      const result = new URL(response.headers.get("location")!);
+      assert.equal(result.origin + result.pathname, redirect);
+      assert.equal(mode === "test" ? result.searchParams.get("sso_test") : result.hash.includes("coopToken="), mode === "test" ? "passed" : true);
+      assert.deepEqual(x.effects, mode === "test" ? { users: 0, sessions: 0 } : { users: 1, sessions: 1 });
+    } finally { await server.close(); }
   });
-});
-
-test("POST /v1/auth/saml/callback returns missing_relay_state without org context", async () => {
-  const samlResponse = createSignedSamlResponse();
-  const { response, state } = mockRedirectResponse();
-
-  await handleSamlApiRequest(
-    {
-      method: "POST",
-      pathname: "/v1/auth/saml/callback",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: undefined,
-      rawBody: new URLSearchParams({ SAMLResponse: samlResponse }).toString()
-    },
-    response,
-    {
-      orgStore: mockOrgStore(),
-      userStore: mockUserStore(),
-      ssoConfigStore: mockSsoConfigStore(),
-      samlService: new SamlService({ baseUrl: TEST_SAML_BASE_URL }),
-      serverConfig,
-      authConfig
-    }
-  );
-
-  assert.equal(state.statusCode, 400);
-  assert.deepEqual(JSON.parse(state.body!), {
-    error: "missing_relay_state",
-    message: "SP-initiated login is required (no org in RelayState)."
+  test(`HTTP ${mode} invalid assertion reveals generic error and does not consume`, async () => {
+    const x = fixture(), server = await startSamlHttpServer(x.deps);
+    try {
+      const login = await startLogin(server.base, x.orgId, mode);
+      const response = await callback(server.base, login, Buffer.from("<Response/>").toString("base64"));
+      assert.equal(response.status, 302);
+      const result = new URL(response.headers.get("location")!);
+      assert.equal(result.searchParams.get("error"), "saml_validation_failed");
+      assert.match(result.searchParams.get("message")!, /could not be verified/);
+      assert.deepEqual(x.effects, { users: 0, sessions: 0 });
+      assert.equal((await callback(server.base, login, createSignedSamlResponse({ requestId: login.requestId }))).status, 302);
+    } finally { await server.close(); }
   });
-});
-
-test("POST /v1/auth/saml/callback test mode reports success without creating a session", async () => {
-  const redirect = "https://admin.coop-ai.dev/settings/single-sign-on";
-  const relayState = encodeRelayState(enterpriseOrgId, redirect, "test");
-  const samlResponse = createSignedSamlResponse({ email: "sso-callback@demo.local" });
-  const { response, state } = mockRedirectResponse();
-  let upsertCalls = 0;
-  let sessionCalls = 0;
-
-  const userStore = {
-    upsertUserFromIdp: async () => {
-      upsertCalls += 1;
-      throw new Error("test mode must not upsert users");
-    },
-    createSession: async () => {
-      sessionCalls += 1;
-      throw new Error("test mode must not create sessions");
-    }
-  } as unknown as UserStore;
-
-  await handleSamlApiRequest(
-    {
-      method: "POST",
-      pathname: "/v1/auth/saml/callback",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: undefined,
-      rawBody: callbackFormBody(samlResponse, relayState)
-    },
-    response,
-    {
-      orgStore: mockOrgStore(),
-      userStore,
-      ssoConfigStore: mockSsoConfigStore(),
-      samlService: new SamlService({ baseUrl: TEST_SAML_BASE_URL }),
-      serverConfig,
-      authConfig
-    }
-  );
-
-  assert.equal(upsertCalls, 0);
-  assert.equal(sessionCalls, 0);
-  assert.equal(state.statusCode, 302);
-  const location = new URL(state.location!);
-  assert.equal(location.pathname, "/settings/single-sign-on");
-  assert.equal(location.searchParams.get("sso_test"), "passed");
-  assert.equal(location.searchParams.get("email"), "sso-callback@demo.local");
-  assert.equal(location.hash.includes("coopToken"), false);
-});
-
-test("POST /v1/auth/saml/callback test mode reports failure without logging the admin out", async () => {
-  const redirect = "https://admin.coop-ai.dev/settings/single-sign-on";
-  const relayState = encodeRelayState(enterpriseOrgId, redirect, "test");
-  const invalidResponse = Buffer.from("<samlp:Response/>", "utf8").toString("base64");
-  const { response, state } = mockRedirectResponse();
-
-  await handleSamlApiRequest(
-    {
-      method: "POST",
-      pathname: "/v1/auth/saml/callback",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: undefined,
-      rawBody: callbackFormBody(invalidResponse, relayState)
-    },
-    response,
-    {
-      orgStore: mockOrgStore(),
-      userStore: mockUserStore(),
-      ssoConfigStore: mockSsoConfigStore(),
-      samlService: new SamlService({ baseUrl: TEST_SAML_BASE_URL }),
-      serverConfig,
-      authConfig
-    }
-  );
-
-  assert.equal(state.statusCode, 302);
-  const location = new URL(state.location!);
-  assert.equal(location.pathname, "/settings/single-sign-on");
-  assert.equal(location.searchParams.get("sso_test"), "failed");
-  assert.equal(location.searchParams.get("error"), "saml_validation_failed");
-  assert.equal(location.pathname.includes("/login"), false);
+}
+test("HTTP missing response and forged legacy relay fail without identity effects", async () => {
+  const x = fixture(), server = await startSamlHttpServer(x.deps);
+  try {
+    const login = await startLogin(server.base, x.orgId);
+    const missing = await callback(server.base, login);
+    assert.equal(missing.status, 302);
+    assert.equal(new URL(missing.headers.get("location")!).searchParams.get("error"), "missing_saml_response");
+    assert.equal((await callback(server.base, { ...login, relay: Buffer.from(JSON.stringify({ orgId: x.orgId })).toString("base64url") }, createSignedSamlResponse())).status, 400);
+    assert.deepEqual(x.effects, { users: 0, sessions: 0 });
+  } finally { await server.close(); }
 });

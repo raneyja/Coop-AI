@@ -200,8 +200,22 @@ export function planSeatUpgradeCta(prefs: Preferences): PlanSeatUpgradeCta {
   return { kind: "member-request", nextTier: next, nextLabel };
 }
 
+export function adminPortalBaseUrl(configured?: string): string {
+  const fallback = "https://admin.coop-ai.dev";
+  if (!configured) return fallback;
+  try {
+    const url = new URL(configured);
+    const loopback = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    if ((url.protocol !== "https:" && !(loopback && url.protocol === "http:")) ||
+      url.username || url.password || url.search || url.hash) return fallback;
+    return url.origin;
+  } catch {
+    return fallback;
+  }
+}
+
 export function planAdminPortalHref(prefs: Preferences): string {
-  const base = (prefs.adminPortalUrl ?? "https://admin.coop-ai.dev").replace(/\/$/, "");
+  const base = adminPortalBaseUrl(prefs.adminPortalUrl);
   if (isPlanAdminRole(prefs.userRole) && (prefs.incomingSeatUpgradeRequests?.length ?? 0) > 0) {
     return `${base}/requests`;
   }

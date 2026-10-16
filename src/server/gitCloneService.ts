@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { promisify } from "node:util";
+import { performance } from "node:perf_hooks";
 
 const execFileAsync = promisify(execFile);
 
@@ -29,28 +30,38 @@ export type CloneResult = {
 export async function cloneRepository(
   target: CloneTarget,
   token?: string,
-  workRoot?: string
+  workRoot?: string,
+  signal?: AbortSignal
 ): Promise<CloneResult> {
-  const localPath = resolveCloneLocalPath(target, workRoot);
-
-  if (fs.existsSync(localPath)) {
-    fs.rmSync(localPath, { recursive: true, force: true });
+  signal?.throwIfAborted();
+  const prefix = resolveCloneLocalPath(target, workRoot);
+  fs.mkdirSync(path.dirname(prefix), { recursive: true });
+  // This invocation owns only its fresh directory, even when an attempt repeats.
+  const localPath = fs.mkdtempSync(prefix + "-");
+  const remote = buildCloneUrl(target);
+  const username = target.provider === "github" ? "x-access-token"
+    : target.provider === "gitlab" ? "oauth2" : "x-token-auth";
+  const authorization = token ? Buffer.from(`${username}:${token}`).toString("base64") : undefined;
+  try {
+    await runGit(["clone", "--depth", "1", remote, localPath],
+      gitChildEnvironment(localPath, remote, authorization), 600_000, signal);
+    signal?.throwIfAborted();
+    // These local lookups have no credential and settle physically before cleanup.
+    const env = gitChildEnvironment(localPath);
+    const [headCommit, branch] = await Promise.all([
+      readHead(localPath, ["HEAD"], env, signal),
+      readHead(localPath, ["--abbrev-ref", "HEAD"], env, signal)
+    ]);
+    signal?.throwIfAborted();
+    return {localPath, branch: branch === "HEAD" ? undefined : branch, headCommit, files: walkRepoFiles(localPath)};
+  } catch (error) {
+    try { removeRepositoryClone(localPath); } finally { signal?.throwIfAborted(); }
+    let message = error instanceof Error ? error.message : "Repository clone failed";
+    for (const secret of [token, token && encodeURIComponent(token), authorization]) {
+      if (secret) message = message.split(secret).join("[redacted]");
+    }
+    throw new Error(message);
   }
-  fs.mkdirSync(path.dirname(localPath), { recursive: true });
-
-  const remote = buildCloneUrl(target, token);
-  await execFileAsync("git", ["clone", "--depth", "1", remote, localPath], {
-    timeout: 600_000,
-    maxBuffer: 4 * 1024 * 1024
-  });
-
-  const [headCommit, branch] = await Promise.all([
-    readHeadCommit(localPath),
-    readHeadBranch(localPath)
-  ]);
-  const files = walkRepoFiles(localPath);
-
-  return { localPath, branch, headCommit, files };
 }
 
 /** Directory name is `{org}__{job}__{repo}` under the clone root. `..` cannot escape the root. */
@@ -92,42 +103,56 @@ export function cloneHostForProvider(provider: CloneTarget["provider"]): string 
   return "github.com";
 }
 
-function buildCloneUrl(target: CloneTarget, token?: string): string {
+function buildCloneUrl(target: CloneTarget): string {
   const host = cloneHostForProvider(target.provider);
   const slug = `${target.owner}/${target.repo}.git`;
-  if (token && target.provider === "github") {
-    return `https://x-access-token:${encodeURIComponent(token)}@${host}/${slug}`;
-  }
-  if (token && target.provider === "gitlab") {
-    return `https://oauth2:${encodeURIComponent(token)}@${host}/${slug}`;
-  }
-  if (token && target.provider === "bitbucket") {
-    return `https://x-token-auth:${encodeURIComponent(token)}@${host}/${slug}`;
-  }
   return `https://${host}/${slug}`;
 }
 
-async function readHeadCommit(localPath: string): Promise<string | undefined> {
-  try {
-    const { stdout } = await execFileAsync("git", ["-C", localPath, "rev-parse", "HEAD"], {
-      timeout: 10_000
-    });
-    return stdout.trim() || undefined;
-  } catch {
-    return undefined;
+/** Git owns only this explicit platform/transport environment and its command config. */
+function gitChildEnvironment(localPath: string, remote?: string, authorization?: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const key of ["PATH", "SystemRoot", "SYSTEMROOT", "WINDIR", "ComSpec", "PATHEXT",
+    "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TMPDIR", "TMP", "TEMP",
+    "GIT_SSL_CAINFO", "GIT_SSL_CAPATH", "SSL_CERT_FILE", "SSL_CERT_DIR", "CURL_CA_BUNDLE",
+    "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy"]) {
+    if (process.env[key] !== undefined) env[key] = process.env[key];
   }
+  Object.assign(env, { HOME: localPath, USERPROFILE: localPath, XDG_CONFIG_HOME: localPath,
+    GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_SYSTEM: os.devNull, GIT_CONFIG_GLOBAL: os.devNull,
+    GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "", GIT_TRACE: "0", GIT_TRACE_CURL: "0",
+    GIT_TRACE2: "0", GIT_TRACE2_EVENT: "0", GIT_TRACE2_PERF: "0", GIT_TRACE_PACKET: "0" });
+  const settings = [["credential.helper", ""], ["core.askPass", ""], ["http.followRedirects", "false"],
+    ["http.extraHeader", ""], ["init.templateDir", ""],
+    ...(remote ? [[`http.${remote}.extraHeader`, ""],
+      ...(authorization ? [[`http.${remote}.extraHeader`, `Authorization: Basic ${authorization}`]] : [])] : [])];
+  env.GIT_CONFIG_COUNT = String(settings.length);
+  for (const [index, [key, value]] of settings.entries()) {
+    env[`GIT_CONFIG_KEY_${index}`] = key;
+    env[`GIT_CONFIG_VALUE_${index}`] = value;
+  }
+  return env;
 }
 
-async function readHeadBranch(localPath: string): Promise<string | undefined> {
+async function runGit(args: string[], env: NodeJS.ProcessEnv, timeout: number, signal?: AbortSignal): Promise<{stdout: string}> {
+  const started = performance.now();
+  const command = execFileAsync("git", args, { timeout, maxBuffer: 4 * 1024 * 1024, signal, env, cwd: env.HOME });
+  // execFile can settle on abort before the child stops writing, or resolve after
+  // a timed-out child exits zero. Both require the actual close boundary.
+  const closed = new Promise<void>(resolve => command.child.once("close", () => resolve()));
+  let result;
+  try { result = await command; } finally { await closed; }
+  signal?.throwIfAborted();
+  if (command.child.killed || performance.now() - started >= timeout) throw new Error("Git command timed out or was terminated");
+  return result;
+}
+
+async function readHead(localPath: string, args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal): Promise<string | undefined> {
   try {
-    const { stdout } = await execFileAsync(
-      "git",
-      ["-C", localPath, "rev-parse", "--abbrev-ref", "HEAD"],
-      { timeout: 10_000 }
-    );
-    const branch = stdout.trim();
-    return branch && branch !== "HEAD" ? branch : undefined;
+    const { stdout } = await runGit(["-C", localPath, "rev-parse", ...args], env, 10_000, signal);
+    return stdout.trim() || undefined;
   } catch {
+    // A lookup failure remains optional; the clone owner checks Stop after both settle.
     return undefined;
   }
 }

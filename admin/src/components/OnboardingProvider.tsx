@@ -103,7 +103,7 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
     <OnboardingContext.Provider value={ctx}>
       {children}
       {showResumeBanner ? (
-        <div className="fixed bottom-6 left-1/2 z-[90] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-lg border border-coop-border bg-coop-dark/95 px-4 py-3 shadow-xl shadow-black/40 backdrop-blur-sm">
+        <div className="fixed bottom-6 left-1/2 z-[90] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-lg border border-coop-border bg-coop-dark/95 px-4 py-3 shadow-xl shadow-black/40 backdrop-blur-xs">
           <p className="text-sm text-coop-muted">
             Setup in progress · Step {Math.min(step + 1, stepLabels.length)} of {stepLabels.length} —{" "}
             <span className="text-white">{stepLabels[step] ?? "Setup"}</span>

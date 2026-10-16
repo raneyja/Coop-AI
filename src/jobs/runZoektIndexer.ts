@@ -1,9 +1,12 @@
 import { execFile } from "node:child_process";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { promisify } from "node:util";
 import { zoektRepoName } from "../indexing/zoektShardIdentity";
+import { zoektShardFilePrefix } from '../indexing/zoektShardIdentity';
+import { withJobOwnedEffect } from './jobEffectAdmission';
+import type { Job } from './types';
+import type { Pool } from 'pg';
 
 const execFileAsync = promisify(execFile);
 
@@ -34,7 +37,8 @@ export type RunZoektIndexerResult = {
 export async function runZoektIndexer(
   repoId: string,
   orgId: string,
-  localPath: string
+  localPath: string,
+  attempt: {job: Job; pool: Pool; signal?: AbortSignal}
 ): Promise<RunZoektIndexerResult> {
   const indexRoot = process.env.ZOEKT_INDEX_PATH;
   if (!indexRoot) {
@@ -48,26 +52,49 @@ export async function runZoektIndexer(
     return { zoektAvailable: false, error: "zoekt-git-index not found on PATH" };
   }
 
-  const metaPath = path.join(
-    os.tmpdir(),
-    `zoekt-meta-${orgId.replace(/[^a-zA-Z0-9_-]/g, "_")}-${Date.now()}.json`
-  );
+  attempt.signal?.throwIfAborted();
+  fs.mkdirSync(indexRoot, {recursive: true});
+  const staging = fs.mkdtempSync(path.join(indexRoot, `.attempt-${attempt.job.attemptId ?? 'unadmitted'}-`));
+  const metaPath = path.join(staging, 'meta.json');
+  let publicationAttempted = false;
+  let published = false;
   try {
     fs.writeFileSync(metaPath, JSON.stringify({ Name: zoektRepoName(orgId, repoId) }));
     await execFileAsync(
       "zoekt-git-index",
-      ["-index", indexRoot, "-incremental=false", "-meta", metaPath, localPath],
-      { timeout: 600_000, maxBuffer: 10 * 1024 * 1024 }
+      ["-index", staging, "-incremental=false", "-meta", metaPath, localPath],
+      { timeout: 600_000, maxBuffer: 10 * 1024 * 1024, signal: attempt.signal }
     );
+    publicationAttempted = true;
+    await withJobOwnedEffect(attempt.pool, attempt.job, async () => {
+      publishStagedZoektShards(indexRoot, staging, orgId, repoId);
+    }, attempt.signal);
+    published = true;
     return { zoektAvailable: true, indexPath: indexRoot };
   } catch (error) {
+    attempt.signal?.throwIfAborted();
+    if (publicationAttempted) {
+      // Filesystem effects cannot roll back with the SQL transaction. The
+      // caller must fail/quarantine, including ambiguous COMMIT responses.
+      const message = error instanceof Error ? error.message : "unknown publication failure";
+      throw new Error(`Zoekt shard publication failed; reconcile attempt artifacts at ${staging}: ${message}`);
+    }
     return {
       zoektAvailable: false,
       error: error instanceof Error ? error.message : "Zoekt indexing failed"
     };
   } finally {
-    fs.rmSync(metaPath, { force: true });
+    if (!publicationAttempted || published) fs.rmSync(staging, { recursive: true, force: true });
   }
+}
+
+/** Names are verified before any rename. Multi-shard replacement is still not
+ * atomic across a process kill; that attempt requires durable reconciliation. */
+export function publishStagedZoektShards(indexRoot: string, staging: string, orgId: string, repoId: string): void {
+  const prefix = zoektShardFilePrefix(orgId, repoId) + '_v';
+  const names = fs.readdirSync(staging).filter(name => name.endsWith('.zoekt'));
+  if (!names.length || names.some(name => !name.startsWith(prefix))) throw new Error('Zoekt produced no safely scoped attempt shards');
+  for (const name of names) fs.renameSync(path.join(staging,name),path.join(indexRoot,name));
 }
 
 async function commandExists(name: string): Promise<boolean> {

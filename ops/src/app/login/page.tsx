@@ -51,7 +51,7 @@ export default function LoginPage() {
           </a>
 
           {error ? (
-            <p className="mt-4 rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            <p className="mt-4 rounded-xs border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
               {error}
             </p>
           ) : null}

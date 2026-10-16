@@ -65,12 +65,12 @@ export default function ForgotPasswordPage() {
               />
             </div>
             {error ? (
-              <p className="rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              <p className="rounded-xs border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
                 {error}
               </p>
             ) : null}
             {message ? (
-              <p className="rounded-sm border border-coop-index/30 bg-coop-index/10 px-3 py-2 text-sm text-coop-index">
+              <p className="rounded-xs border border-coop-index/30 bg-coop-index/10 px-3 py-2 text-sm text-coop-index">
                 {message}
               </p>
             ) : null}

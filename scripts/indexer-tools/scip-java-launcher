@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+JAVA_OPTS="$(cat /opt/scip-java/javac-jvm-options) ${JAVA_OPTS:-}"
+export JAVA_OPTS
+exec /opt/scip-java/bin/scip-java "$@"

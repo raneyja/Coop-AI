@@ -27,7 +27,7 @@ function parseAttachedValue(value: string): HistoryAttachment[] {
 
 /** True for quick-action / chat scope chip lines: `key: value · key: value`. */
 export function isCompactContextChipLine(line: string): boolean {
-  return /^[\w ]+: .+( · [\w ]+: .+)*$/.test(line.trim());
+  return /^[\w ]+: .+$/.test(line.trim());
 }
 
 /** Extract @ attachment chips from quick-action context lines (`file: … · attached: …`). */

@@ -14,7 +14,7 @@ fi
 echo "Fetching production DATABASE_PUBLIC_URL from Railway Postgres..."
 DATABASE_URL="$(
   npx --yes @railway/cli variables --service Postgres --json \
-    | node -e "const j=JSON.parse(require('fs').readFileSync(0,'utf8')); const u=j.DATABASE_PUBLIC_URL; const sep=u.includes('?')?'&':'?'; process.stdout.write(u+sep+'sslmode=no-verify');"
+    | node -e "const j=JSON.parse(require('fs').readFileSync(0,'utf8')); const u=j.DATABASE_PUBLIC_URL; process.stdout.write(u);"
 )"
 
 export DATABASE_URL
@@ -26,7 +26,8 @@ node scripts/run-migrations.mjs
 echo "Verifying chat_threads table..."
 node -e "
 const pg = require('pg');
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+const databasePoolOptions = require('./src/server/databasePoolOptions.cjs');
+const pool = new pg.Pool(databasePoolOptions(process.env.DATABASE_URL));
 pool.query(\"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='chat_threads') AS ok\")
   .then((r) => {
     if (!r.rows[0]?.ok) throw new Error('chat_threads still missing after migrate');

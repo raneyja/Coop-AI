@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 import { opsPublicOrigin, serverApiBase, setSessionCookie } from "@/lib/serverCoopApi";
+import { callbackStateCookie, OPS_OAUTH_STATE_COOKIE } from "@/lib/googleOauthState";
+
+function clearOauthState(response: NextResponse): NextResponse {
+  response.cookies.set(OPS_OAUTH_STATE_COOKIE, "", { httpOnly: true, path: "/api/auth/google", maxAge: 0 });
+  return response;
+}
 
 function loginRedirect(origin: string, error: string, message: string): NextResponse {
   const loginUrl = new URL("/login", origin);
@@ -16,13 +22,16 @@ export async function GET(request: Request) {
 
   const googleError = url.searchParams.get("error");
   if (googleError) {
-    return loginRedirect(opsOrigin, "google_auth_denied", "Google sign-in was cancelled.");
+    return clearOauthState(loginRedirect(opsOrigin, "google_auth_denied", "Google sign-in was cancelled."));
   }
 
   const code = url.searchParams.get("code")?.trim();
   const state = url.searchParams.get("state")?.trim();
   if (!code || !state) {
-    return loginRedirect(opsOrigin, "invalid_callback", "Google sign-in callback was incomplete.");
+    return clearOauthState(loginRedirect(opsOrigin, "invalid_callback", "Google sign-in callback was incomplete."));
+  }
+  if (callbackStateCookie(request) !== state) {
+    return clearOauthState(loginRedirect(opsOrigin, "invalid_state", "Google sign-in session did not match this browser."));
   }
 
   const exchangeResponse = await fetch(`${serverApiBase()}/v1/operator/auth/google/exchange`, {
@@ -44,11 +53,11 @@ export async function GET(request: Request) {
       exchangeData.message?.trim() ||
       exchangeData.error?.trim() ||
       (exchangeResponse.status ? `Sign-in request failed (${exchangeResponse.status}).` : "");
-    return loginRedirect(
+    return clearOauthState(loginRedirect(
       opsOrigin,
       exchangeData.error ?? "google_exchange_failed",
       detail || "Google sign-in failed."
-    );
+    ));
   }
 
   const redirectTarget = exchangeData.redirect?.trim() || `${opsOrigin}/auth/callback`;
@@ -59,5 +68,5 @@ export async function GET(request: Request) {
 
   const response = NextResponse.redirect(location);
   setSessionCookie(response, exchangeData.accessToken);
-  return response;
+  return clearOauthState(response);
 }

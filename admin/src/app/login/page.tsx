@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import {
   clearSession,
   defaultHomePath,
-  getToken,
   meFromAuthPayload,
   restoreSessionFromCookie,
   saveSession,
@@ -18,7 +17,6 @@ import {
   loginWithPassword,
   ssoStartUrl,
   startGoogleAuthUrl,
-  validateSession
 } from "@/lib/coopApi";
 import { BrandMark } from "@/components/BrandMark";
 import { OrgSuspendedOverlay } from "@/components/OrgSuspendedOverlay";
@@ -51,6 +49,8 @@ export default function LoginPage() {
   const [orgSuspended, setOrgSuspended] = useState(false);
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
+  const [switchAccountPrompt, setSwitchAccountPrompt] = useState(false);
+  const [switchingAccount, setSwitchingAccount] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -72,34 +72,9 @@ export default function LoginPage() {
         setEmail(emailParam);
       }
 
-      // Email / post-checkout CTAs: clear any existing portal session first.
+      // A link may request account switching, but it cannot sign someone out.
       if (forceSignedOut) {
-        await signOutRemote();
-        clearSession();
         stripFreshLoginParams();
-        if (!cancelled) {
-          setReady(true);
-        }
-        return;
-      }
-
-      const token = getToken();
-      if (token) {
-        const result = await validateSession(token);
-        if (cancelled) {
-          return;
-        }
-        if (result.ok && result.data) {
-          router.replace(defaultHomePath(result.data));
-          return;
-        }
-        if (isOrgSuspendedResult(result)) {
-          clearSession();
-          setOrgSuspended(true);
-          setReady(true);
-          return;
-        }
-        clearSession();
       }
 
       const restored = await restoreSessionFromCookie();
@@ -107,6 +82,11 @@ export default function LoginPage() {
         return;
       }
       if (restored) {
+        if (forceSignedOut) {
+          setSwitchAccountPrompt(true);
+          setReady(true);
+          return;
+        }
         router.replace(defaultHomePath(restored));
         return;
       }
@@ -120,14 +100,9 @@ export default function LoginPage() {
     };
   }, [router]);
 
-  async function finishSignIn(
-    token: string,
-    payload: Record<string, unknown>,
-    refreshToken?: string,
-    orgNameOverride?: string
-  ) {
+  async function finishSignIn(payload: Record<string, unknown>) {
     const me = meFromAuthPayload(payload);
-    saveSession(token, me, orgNameOverride, refreshToken);
+    saveSession(me);
     router.replace(defaultHomePath(me));
   }
 
@@ -159,19 +134,56 @@ export default function LoginPage() {
       return;
     }
 
-    const token = String(result.data.accessToken ?? "").trim();
-    if (!token) {
-      setError("Sign-in response was incomplete.");
+    await finishSignIn(result.data);
+  }
+
+  async function confirmSwitchAccount() {
+    setSwitchingAccount(true);
+    setError(null);
+    const signedOut = await signOutRemote();
+    setSwitchingAccount(false);
+    if (!signedOut) {
+      setError("Could not sign out. Please try again.");
       return;
     }
-
-    await finishSignIn(token, result.data, result.data.refreshToken);
+    clearSession();
+    setSwitchAccountPrompt(false);
   }
 
   if (!ready) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-coop-dark px-4">
         <p className="text-sm text-coop-muted">Preparing sign-in…</p>
+      </div>
+    );
+  }
+
+  if (switchAccountPrompt) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-coop-dark px-4">
+        <div className="w-full max-w-md rounded-md border border-coop-border p-6 text-center">
+          <BrandMark size="md" />
+          <h1 className="mt-6 text-xl font-medium">Switch accounts?</h1>
+          <p className="mt-3 text-sm text-coop-muted">
+            You are already signed in. Your current session stays active until you choose to sign out.
+          </p>
+          {error ? <p className="mt-4 text-sm text-red-300">{error}</p> : null}
+          <button
+            type="button"
+            className="admin-btn-primary mt-6 w-full py-2.5"
+            onClick={() => router.replace("/")}
+          >
+            Continue with current account
+          </button>
+          <button
+            type="button"
+            className="admin-btn-secondary mt-3 w-full py-2.5"
+            disabled={switchingAccount}
+            onClick={() => void confirmSwitchAccount()}
+          >
+            {switchingAccount ? "Signing out…" : "Sign out and switch account"}
+          </button>
+        </div>
       </div>
     );
   }
@@ -227,7 +239,7 @@ export default function LoginPage() {
           </form>
 
           {error ? (
-            <p className="mt-4 rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            <p className="mt-4 rounded-xs border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
               {error}
             </p>
           ) : null}
@@ -290,9 +302,6 @@ export default function LoginPage() {
           </Link>
         </p>
 
-        <p className="mt-3 text-center font-mono text-xs text-coop-muted">
-          Session stored in this browser only.
-        </p>
       </div>
 
       <OrgSuspendedOverlay

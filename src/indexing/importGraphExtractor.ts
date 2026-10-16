@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { readBoundedCloneFile } from "./readBoundedCloneFile";
 
 export type ImportEdgeKind = "import" | "require" | "export-from";
 
@@ -408,16 +409,9 @@ export function extractImportEdges(
     }
 
     const absolutePath = path.join(root, relativePath);
-    let source: string;
-    try {
-      const stat = fs.statSync(absolutePath);
-      if (stat.size > maxFileBytes) {
-        continue;
-      }
-      source = fs.readFileSync(absolutePath, "utf8");
-    } catch {
-      continue;
-    }
+    const result = readBoundedCloneFile(absolutePath, maxFileBytes);
+    if (result.kind === "skip") continue;
+    const source = result.source;
 
     const fileEdges = extractImportEdgesFromSource(relativePath, source, {
       fileSet,

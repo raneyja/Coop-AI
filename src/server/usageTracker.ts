@@ -28,6 +28,9 @@ export type AllowanceUsageEvent = {
   quotaTurnId?: string;
   countsAsMessage: boolean;
   flashCostUsd?: number;
+  sourceClaimReview?: boolean;
+  sourceEvidenceRepair?: boolean;
+  sourceReviewCostUsd?: number;
 };
 
 export type ProductMix = {
@@ -65,10 +68,14 @@ function parseAllowanceRow(row: {
   quota_turn_id?: unknown;
   counts_as_message?: unknown;
   flash_cost_usd?: unknown;
+  source_claim_review?: unknown;
+  source_evidence_repair?: unknown;
+  source_review_cost_usd?: unknown;
 }): AllowanceUsageEvent {
   const inputTokens = Number(row.input_tokens ?? 0);
   const outputTokens = Number(row.output_tokens ?? 0);
   const flashCost = Number(row.flash_cost_usd);
+  const reviewCost = row.source_review_cost_usd == null ? undefined : Number(row.source_review_cost_usd);
   return {
     createdAt: new Date(String(row.created_at)),
     inputTokens: Number.isFinite(inputTokens) ? inputTokens : 0,
@@ -77,7 +84,10 @@ function parseAllowanceRow(row: {
     useCase: typeof row.use_case === "string" ? row.use_case : undefined,
     quotaTurnId: typeof row.quota_turn_id === "string" && row.quota_turn_id.trim() ? row.quota_turn_id.trim() : undefined,
     countsAsMessage: row.counts_as_message === true || row.counts_as_message === "true",
-    flashCostUsd: Number.isFinite(flashCost) ? flashCost : undefined
+    flashCostUsd: Number.isFinite(flashCost) ? flashCost : undefined,
+    sourceClaimReview: row.source_claim_review === true || row.source_claim_review === "true",
+    sourceEvidenceRepair: row.source_evidence_repair === true || row.source_evidence_repair === "true",
+    sourceReviewCostUsd: typeof reviewCost === "number" && Number.isFinite(reviewCost) ? reviewCost : undefined
   };
 }
 
@@ -126,11 +136,9 @@ export class UsageTracker {
           JSON.stringify(entry.metadata ?? {})
         ]
       );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn(
-        `[usage] failed to record "${entry.eventType}" for org ${entry.orgId}: ${message}`
-      );
+    } catch {
+      // Database errors and event metadata can contain caller-controlled text.
+      console.warn("[usage] failed to record usage event");
     }
   }
 
@@ -181,7 +189,10 @@ export class UsageTracker {
               metadata->>'useCase' AS use_case,
               metadata->>'quotaTurnId' AS quota_turn_id,
               metadata->>'countsAsMessage' AS counts_as_message,
-              metadata->>'flashCostUsd' AS flash_cost_usd
+              metadata->>'flashCostUsd' AS flash_cost_usd,
+              metadata->>'sourceClaimReview' AS source_claim_review,
+              metadata->>'sourceEvidenceRepair' AS source_evidence_repair,
+              metadata->>'sourceReviewCostUsd' AS source_review_cost_usd
        FROM usage_events
        WHERE org_id = $1
          AND created_at >= $2

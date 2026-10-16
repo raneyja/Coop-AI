@@ -67,8 +67,8 @@ export default function TermsPage() {
       <p>
         The Services integrate with third-party LLM providers, code hosts, and communication
         platforms. Your use of those services is subject to their respective terms. Coop is not
-        responsible for third-party service availability, pricing, or data practices. When you
-        configure BYOK, inference is governed by your agreement with the LLM provider.
+        responsible for third-party service availability, pricing, or data practices. In your own
+        deployment, inference uses the server operator&apos;s configured provider account and applicable agreement.
       </p>
 
       <h2>6. Intellectual property</h2>

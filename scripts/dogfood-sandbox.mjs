@@ -131,7 +131,12 @@ function faults() {
       res.end(JSON.stringify({error: 'dogfood_injected_fault', status: Number(mode)}));
       return;
     }
-    const upstream = http.request(origin + req.url, {method: req.method, headers: {...req.headers, host: '127.0.0.1:28787'}}, response => {
+    if (!req.url?.startsWith('/') || req.url.startsWith('//') || req.url.includes('\\')) {
+      res.writeHead(400).end();
+      return;
+    }
+    const upstream = http.request({hostname: '127.0.0.1', port: 28787, path: req.url,
+      method: req.method, headers: {...req.headers, host: '127.0.0.1:28787'}}, response => {
       res.writeHead(response.statusCode, response.headers);
       response.pipe(res);
     });

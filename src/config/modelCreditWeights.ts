@@ -3,6 +3,7 @@ import {
   getCatalogModelById,
   getModelCreditWeight,
   getModelDefinition,
+  getModelPricingDefinition,
   isAutoModelSelection,
   type ModelPool,
   UNKNOWN_MODEL_USD_PER_MILLION_IN,
@@ -54,6 +55,10 @@ export type BillUsdCentsInput = {
 };
 
 export type BillUsdCentsResult = {
+  /** False for the legacy unknown-model estimate; it cannot authorize reservations. */
+  pricingKnown: boolean;
+  /** Unrounded standard list-price estimate; includes no cache discount or invoice claim. */
+  estimatedUsd: number;
   usdCents: number;
   usdPerMillionIn: number;
   usdPerMillionOut: number;
@@ -61,16 +66,18 @@ export type BillUsdCentsResult = {
 };
 
 export function billUsdCents(input: BillUsdCentsInput): BillUsdCentsResult {
-  const definition =
-    getModelDefinition(input.provider, input.model) ?? getCatalogModelById(input.model);
-  const usdPerMillionIn = definition?.usdPerMillionIn ?? UNKNOWN_MODEL_USD_PER_MILLION_IN;
-  const usdPerMillionOut = definition?.usdPerMillionOut ?? UNKNOWN_MODEL_USD_PER_MILLION_OUT;
+  const definition = getModelPricingDefinition(input.provider, input.model);
+  // GPT-5.5 long-context rates apply to the whole request, including output.
+  // Threshold uses provider-reported input tokens, not vision-weighted quota tokens.
+  const longContext = definition?.id === "gpt-5.5" && input.inputTokens > 272_000;
+  const usdPerMillionIn = (definition?.usdPerMillionIn ?? UNKNOWN_MODEL_USD_PER_MILLION_IN) * (longContext ? 2 : 1);
+  const usdPerMillionOut = (definition?.usdPerMillionOut ?? UNKNOWN_MODEL_USD_PER_MILLION_OUT) * (longContext ? 1.5 : 1);
   const visionMultiplier = input.visionWeighted ? Math.max(1, input.visionMultiplier ?? 2) : 1;
   const inputTokens = Math.max(0, input.inputTokens) * visionMultiplier;
   const outputTokens = Math.max(0, input.outputTokens) * visionMultiplier;
   const usd = (inputTokens / 1_000_000) * usdPerMillionIn + (outputTokens / 1_000_000) * usdPerMillionOut;
   const usdCents = usd <= 0 ? 0 : Math.max(1, Math.ceil(usd * 100));
-  return { usdCents, usdPerMillionIn, usdPerMillionOut, visionMultiplier };
+  return { pricingKnown: Boolean(definition), estimatedUsd: usd, usdCents, usdPerMillionIn, usdPerMillionOut, visionMultiplier };
 }
 
 export type ClassifyRequestBucketInput = {

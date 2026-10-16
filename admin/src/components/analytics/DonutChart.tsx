@@ -124,7 +124,7 @@ export function DonutChart({
             <li key={s.label} className="flex items-center justify-between gap-3">
               <span className="inline-flex min-w-0 items-center gap-2 text-coop-muted">
                 <span
-                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-xs"
                   style={{ backgroundColor: s.color }}
                 />
                 <span className="truncate capitalize text-white/90">{s.label}</span>

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { buildTeamDomainGraph, calculateOwnershipScores, collectEscalationAvenues, computeOwnershipRisk } from "./ownershipAnalysis";
-import type { OwnershipScore, OwnershipSignals } from "../../types/ownership";
+import { analyzeCommitPatterns, buildOrgContextFromCodeowners, buildTeamDomainGraph, calculateOwnershipScores, collectEscalationAvenues, computeOwnershipRisk, draftOwnerMessage, parseCodeowners } from "./ownershipAnalysis";
+import type { OwnershipReport, OwnershipScore, OwnershipSignals } from "../../types/ownership";
 
 let passed = 0;
 let failed = 0;
@@ -27,6 +27,14 @@ function score(partial: Partial<OwnershipScore> & Pick<OwnershipScore, "owner" |
     ...partial
   };
 }
+
+test("CODEOWNERS patterns treat regex punctuation literally", () => {
+  const rule = "src/a+b[1].ts @owner";
+  assert.deepEqual(parseCodeowners(rule, "src/a+b[1].ts")?.owners, ["owner"]);
+  assert.equal(parseCodeowners(rule, "src/ab1.ts"), undefined);
+  assert.deepEqual(parseCodeowners("/src/*.ts @typescript", "src/main.ts")?.owners, ["typescript"]);
+  assert.equal(parseCodeowners("/src/*.ts @typescript", "nested/src/main.ts"), undefined);
+});
 
 test("calculateOwnershipScores propagates github login from commit stats", () => {
   const signals: OwnershipSignals = {
@@ -155,8 +163,8 @@ test("collectEscalationAvenues never invents handles outside evidence", () => {
     recentReviewers: ["bob"]
   });
   const joined = avenues.join(" | ");
-  assert.match(joined, /CODEOWNERS team @platform/);
-  assert.match(joined, /CODEOWNERS path owners @alice/);
+  assert.match(joined, /repository team @platform.*path ownership unverified/);
+  assert.doesNotMatch(joined, /CODEOWNERS|@alice/);
   assert.match(joined, /recent reviewers @bob/);
   assert.doesNotMatch(joined, /@invented/);
   assert.doesNotMatch(joined, /@dguyen/);
@@ -177,6 +185,71 @@ test("today's matching commit defeats stale expert inactivity but not unrelated 
   assert.equal(computeOwnershipRisk(experts, [commit], activity, now).expertUnavailable, false);
   assert.equal(computeOwnershipRisk(experts, [{...commit, author: "Bob", authorLogin: "bob"}], activity, now).expertUnavailable, true);
   assert.equal(computeOwnershipRisk(experts, [], activity, now).expertUnavailable, true);
+});
+
+test("matched policy preserves declared handles when team lookup returns extra members", () => {
+  for (const path of ["src/handler.ts", "odd_area/process.py", "crates/core.rs", "cmd/main.go"]) {
+    const match = parseCodeowners("* @org/platform @reviewer", path)!;
+    const org = buildOrgContextFromCodeowners(match, [{ name: "Platform", slug: "platform", members: ["extra-member"], htmlUrl: "https://example.test/team" }])!;
+    assert.equal(org.source, "codeowners");
+    assert.equal(org.codeownersPattern, "*");
+    assert.equal(org.teamSlug, "org/platform");
+    assert.deepEqual(org.members, ["org/platform", "reviewer"]);
+    assert.deepEqual(org.teamMembers, ["extra-member"]);
+    const avenues = collectEscalationAvenues(undefined, { orgContext: org }).join("; ");
+    assert.match(avenues, /CODEOWNERS team @org\/platform/);
+    assert.match(avenues, /CODEOWNERS path owners @reviewer/);
+    assert.doesNotMatch(avenues, /extra-member/);
+    match.owners.push("late-mutation");
+    assert.doesNotMatch(org.members.join(","), /late-mutation/);
+  }
+});
+
+test("team metadata without a declared rule cannot establish path owners", () => {
+  const graph = buildTeamDomainGraph([], [], {orgContext: {source: "github_teams", teamName: "Platform", teamSlug: "platform", members: ["alice", "bob"]}});
+  assert.match(graph.escalationPath, /suggested contact; path ownership unverified/);
+  assert.doesNotMatch(graph.escalationPath, /CODEOWNERS|@alice|@bob/);
+});
+
+test("secondary-only ranking and message draft cannot establish maintainer status or policy absence", () => {
+  const candidate = score({ owner: "reviewer", score: 45, tier: "secondary", reviewApprovals: 2, role: "reviewer" });
+  const graph = buildTeamDomainGraph([candidate]);
+  assert.match(graph.escalationPath, /No primary score tier/);
+  assert.doesNotMatch(graph.escalationPath, /No primary owner|has the most context/);
+  const report: OwnershipReport = {owner: "org", repo: "repo", path: "strange/file.rs", scores: [candidate], teamGraph: graph, risk: {singlePointOfFailure: false, expertUnavailable: false, orphaned: false, highTurnover: false, teamDispersion: false}, history: [], warnings: [], completeness: "partial", messageDraft: {recipient: "", text: ""}};
+  assert.doesNotMatch(draftOwnerMessage(report).text, /primary maintainer|recent activity/);
+  assert.match(draftOwnerMessage(report).text, /sampled contribution signals/);
+});
+
+test("latest sampled commit keeps its own message beyond the capped traversal sample", () => {
+  const commits = Array.from({ length: 21 }, (_, index) => ({ sha: String(index), author: "A", message: `older-${index}`, date: "2024-01-01T00:00:00Z" }));
+  commits.push({ sha: "latest", author: "A", message: "Actual latest message", date: "2025-01-01T00:00:00Z" });
+  for (const input of [commits, [...commits].reverse()]) {
+    const entry = analyzeCommitPatterns(input, Date.parse("2025-02-01"))[0]!;
+    assert.deepEqual(entry.latestSampledCommit, { sha: "latest", date: "2025-01-01T00:00:00Z", message: "Actual latest message", sameTimeCount: 1 });
+    assert.equal(entry.messages.length, 20);
+    assert.equal(entry.lastCommitDate, "2025-01-01T00:00:00.000Z");
+  }
+  assert.ok(!analyzeCommitPatterns(commits)[0]!.messages.includes("Actual latest message"));
+});
+
+test("parsed timestamps and ties preserve exact date-message identity without claiming uniqueness", () => {
+  const commits = [
+    { sha: "z", author: "A", message: "tie-z", date: "2025-01-01T01:00:00+01:00" },
+    { sha: "a", author: "A", message: "tie-a", date: "2025-01-01T00:00:00Z" },
+    { sha: "lexically-later", author: "A", message: "older", date: "2025-01-01T05:00:00+06:00" },
+    { sha: "invalid", author: "A", message: "undated", date: "unavailable" }
+  ];
+  for (const input of [commits, [...commits].reverse()]) {
+    const entry = analyzeCommitPatterns(input, Date.parse("2025-02-01"))[0]!;
+    assert.deepEqual(entry.latestSampledCommit, { sha: "a", message: "tie-a", date: "2025-01-01T00:00:00Z", sameTimeCount: 2 });
+    assert.equal(entry.counts.allTime, 4);
+    assert.ok(Number.isFinite(entry.recencyScore));
+  }
+  const invalid = analyzeCommitPatterns([commits[3]!])[0]!;
+  assert.equal(invalid.latestSampledCommit, undefined);
+  assert.equal(invalid.lastCommitDate, undefined);
+  assert.deepEqual(analyzeCommitPatterns([]), []);
 });
 
 console.log(`\nownershipAnalysis: ${passed} passed, ${failed} failed`);

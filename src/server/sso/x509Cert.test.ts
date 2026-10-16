@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isValidX509Cert, normalizeX509Cert } from "./x509Cert";
+import { isRevokedIdpSigningCert, isValidX509Cert, normalizeX509Cert } from "./x509Cert";
+import { REVOKED_PUBLIC_CERT } from "./revokedPublicCert.fixture";
 
 const MOCK_CERT = `-----BEGIN CERTIFICATE-----
 MIIC4jCCAcoCCQC33wnybT5QZDANBgkqhkiG9w0BAQsFADAyMQswCQYDVQQGEwJV
@@ -36,4 +37,13 @@ test("isValidX509Cert rejects session tokens", () => {
     false
   );
   assert.equal(isValidX509Cert(MOCK_CERT), true);
+});
+
+test("historical exposed IdP public key cannot be configured in PEM or base64 form", () => {
+  const base64 = REVOKED_PUBLIC_CERT.replace(/-----BEGIN CERTIFICATE-----|-----END CERTIFICATE-----|\s+/g, "");
+  assert.equal(isRevokedIdpSigningCert(REVOKED_PUBLIC_CERT), true);
+  assert.equal(isRevokedIdpSigningCert(base64), true);
+  assert.equal(isValidX509Cert(REVOKED_PUBLIC_CERT), false);
+  assert.equal(isValidX509Cert(base64), false);
+  assert.equal(isRevokedIdpSigningCert(MOCK_CERT), false);
 });

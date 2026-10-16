@@ -3295,7 +3295,8 @@ function isSearchablePascal(word: string, text: string): boolean {
   if (/^(where|what|which|how|find|who)\b/i.test(text.trim())) {
     return true;
   }
-  return !new RegExp(`^${word}\\b`).test(text.trim());
+  const trimmed = text.trim();
+  return !(trimmed.startsWith(word) && !/\w/.test(trimmed[word.length] ?? ""));
 }
 
 /**

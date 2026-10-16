@@ -1,0 +1,135 @@
+const TRANSIENT_NETWORK_PATTERNS = [
+  "fetch failed",
+  "network error",
+  "network request failed",
+  "failed to fetch",
+  "econnrefused",
+  "enotfound",
+  "eai_again",
+  "etimedout",
+  "econnreset",
+  "socket hang up"
+];
+
+const SETUP_REQUIRED_PATTERNS = [
+  "api key is missing",
+  "chat api returned 401",
+  "chat api returned 403",
+  "must use https"
+];
+
+const QUOTA_LIMIT_PATTERNS = [
+  "daily ai limit",
+  "daily_limit_reached",
+  "quota_limit_reached",
+  "free daily ai limit",
+  "free ai credits",
+  "6-hour window"
+];
+
+/**
+ * Turn low-level fetch/network errors into actionable chat UI copy.
+ */
+export function formatUserFacingNetworkError(error: unknown, fallback = "Chat request failed."): string {
+  if (!(error instanceof Error)) {
+    return fallback;
+  }
+
+  if (error.name === "AbortError") {
+    return "Request cancelled.";
+  }
+
+  const normalized = error.message.trim().toLowerCase();
+  if (!normalized) {
+    return fallback;
+  }
+
+  if (SETUP_REQUIRED_PATTERNS.some((pattern) => normalized.includes(pattern))) {
+    return "Coop isn't connected yet. Open Coop settings to finish setup, then try again.";
+  }
+
+  if (QUOTA_LIMIT_PATTERNS.some((pattern) => normalized.includes(pattern))) {
+    return error.message;
+  }
+
+  if (TRANSIENT_NETWORK_PATTERNS.some((pattern) => normalized.includes(pattern))) {
+    return "Coop isn't connected yet. Open Coop settings to finish setup, then try again.";
+  }
+
+  if (normalized.includes("chat api returned")) {
+    return "Coop isn't ready yet. Please try again in a moment.";
+  }
+
+  return error.message;
+}
+
+export type CoopApiErrorBody = {
+  error?: string;
+  message?: string;
+};
+
+const API_ERROR_MESSAGES: Record<string, string> = {
+  unauthorized: "Sign in with your email or Google in Coop settings.",
+  admin_required: "Only your organization admin can connect GitHub. Ask IT to install the GitHub App.",
+  repo_limit:
+    "You've reached your plan limit for Deep-Indexed repos. Disable another repo or upgrade to Pro for unlimited indexing.",
+  plan_required: "This feature requires an Enterprise plan.",
+  code_host_plan_required:
+    "Connect a code host in the admin portal (Integrations), then Deep-Index repos under Indexing.",
+  team_not_available:
+    "The free plan is individual only — one seat per account. Upgrade to Pro to invite teammates.",
+  quota_limit_reached:
+    "You've used your included AI usage. Upgrade for a larger monthly allowance at https://coop-ai.dev/pricing",
+  daily_limit_reached:
+    "You've used your included AI usage. Upgrade for a larger monthly allowance at https://coop-ai.dev/pricing",
+  sso_not_configured: "SSO is not configured for your organization yet. Ask your admin to finish setup.",
+  sso_required: "Your organization requires SSO sign-in. Use Sign in with SSO.",
+  sso_unavailable: "Enterprise SSO is not available on this Coop environment.",
+  auth_policy_unavailable:
+    "Unable to verify your organization's sign-in policy. Try again later or contact your administrator.",
+  missing_org: "Enter your organization name to sign in with SSO.",
+  "GitHub App is not configured on this server":
+    "GitHub integration is not configured on the Coop server. Contact your Coop administrator.",
+  github_not_configured:
+    "GitHub is not configured on the Coop server. Ask your admin to add GitHub OAuth or GitHub App credentials.",
+  github_not_installed:
+    "GitHub is not connected for your organization. Ask your org admin to connect GitHub in the admin portal (Integrations).",
+  github_auth_expired:
+    "GitHub access expired. Ask your org admin to reconnect GitHub in the admin portal (Integrations → GitHub).",
+  github_list_failed:
+    "Could not load repositories from GitHub. Ask your org admin to reconnect GitHub in the admin portal.",
+  "Teams App is not configured on this server":
+    "Microsoft Teams is not configured on the Coop server. Ask your admin to add TEAMS_APP_CLIENT_ID and TEAMS_APP_CLIENT_SECRET on the API host.",
+  "Slack App is not configured on this server":
+    "Slack is not configured on the Coop server. Ask your admin to add SLACK_APP_CLIENT_ID and SLACK_APP_CLIENT_SECRET on the API host."
+};
+
+export function formatCoopApiError(
+  status: number,
+  body?: { error?: string; message?: string } | null
+): string {
+  const errorCode = body?.error?.trim();
+  const serverMessage = body?.message?.trim();
+  if (errorCode && API_ERROR_MESSAGES[errorCode]) {
+    return API_ERROR_MESSAGES[errorCode];
+  }
+  if (serverMessage && API_ERROR_MESSAGES[serverMessage]) {
+    return API_ERROR_MESSAGES[serverMessage];
+  }
+  if (serverMessage) {
+    return serverMessage;
+  }
+  if (errorCode && (/\s/.test(errorCode) || errorCode.length > 48)) {
+    return errorCode;
+  }
+  if (status === 503) {
+    return "Coop service is unavailable. Contact your administrator.";
+  }
+  if (status === 403) {
+    return "You do not have permission for this action.";
+  }
+  if (status === 401) {
+    return "Sign in with your email or Google in Coop settings.";
+  }
+  return `Request failed (${status}).`;
+}

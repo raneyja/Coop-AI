@@ -56,7 +56,7 @@ Self-hosted deployments must use HTTPS in production so IdPs accept the ACS URL.
 | --- | --- |
 | **SP-initiated only** | No IdP-initiated login — start from Coop (`/v1/auth/saml/start`, admin **Test connection**, or extension **Sign in with SSO**) |
 | **No SCIM** | No IdP-driven user sync — JIT provisioning on first SAML login; offboard via admin **Users** or offboard API |
-| **No assertion replay cache** | `InResponseTo` replay protection is disabled on multi-instance backends. Signature, audience, and `NotBefore` / `NotOnOrAfter` checks still apply. |
+| **Shared request state required** | This version validates `InResponseTo` against a pending PostgreSQL request with opaque RelayState, browser/tenant binding and single-use admission. Signature, issuer, audience and time checks remain required; qualify the deployed version and actual IdP/browser flow. |
 | **API key bypass under `requireSso`** | `requireSso` blocks password and Google sign-in and refresh. Org API keys (`coop_…`) still authenticate automation endpoints — rotate or revoke keys for offboarded users. |
 | **Shared SP** | One Entity ID and ACS URL for all Enterprise tenants; org resolved via RelayState — each IdP app must use the same SP values. |
 | **No session refresh** | SAML sessions expire after TTL (default 12h); users re-authenticate through the IdP — no silent refresh token. |

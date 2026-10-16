@@ -5,14 +5,15 @@ alwaysApply: true
 
 # Clear call to action
 
-Every user-facing response must make the next action unmistakable.
+When the user must act, make the next action unmistakable. Ordinary status,
+analysis and artifact delivery lead with the actual outcome in natural language.
 
-- Start with one of: `Do this now:`, `Status:`, `I’ll handle:`, or `Blocked:`.
+- Use a short status/action label when it helps; canned prefixes are not mandatory.
 - If the user needs to act, put the required action before background or detail.
 - Give one linear happy path first; put alternatives under `Only if blocked:`.
-- For each action, name the surface (`Terminal`, `File`, `Extension UI`, or `Browser`), the exact target or command, and one concrete success signal.
-- If no action is required, say `No action needed.` explicitly.
-- End with the remaining gate, if any, and state whether the work is complete, locally verified, live-verified, or still blocked.
+- For user setup/test steps, name the surface (`Terminal`, `File`, `Extension UI`, or `Browser`), exact target and concrete success signal; follow `clear-user-requests.mdc` and `user-instructions.mdc`.
+- Do authorized work directly. Do not manufacture an ask or repeat `No action needed.` on every progress message.
+- Completion reports state the achieved evidence tier and material remaining gates. Match the user's requested depth; do not append a redundant gate summary to every ordinary answer.
 
 Example:
 

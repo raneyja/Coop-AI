@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
-import { DecisionArchaeologyEngine, type TraceDecisionOptions } from "./decisionArchaeology";
+import { DecisionArchaeologyEngine, extractAlternativesFromText, type TraceDecisionOptions } from "./decisionArchaeology";
 import type { DecisionTimeline } from "../types/decisionTimeline";
 import { buildDecisionSynthesisUserPrompt, decisionTimelineSummary } from "../prompts/decisionSynthesis";
 
 async function main(): Promise<void> {
+  assert.deepEqual(extractAlternativesFromText("We considered polling but chose notifications.", "PR description"), []);
+  assert.deepEqual(extractAlternativesFromText("Instead of polling, we chose notifications.", "PR description"), []);
+  assert.equal(extractAlternativesFromText("We rejected polling because notifications preserve freshness.", "PR description")[0]?.reason_rejected, "notifications preserve freshness");
   const originalFetch = globalThis.fetch;
   const timeline: DecisionTimeline = {
     file: "src/mathRenamed.ts",

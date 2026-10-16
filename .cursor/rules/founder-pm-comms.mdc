@@ -7,21 +7,21 @@ alwaysApply: true
 
 Jon is a **founder and product manager**, not an engineer. Default to how he asks you to rephrase: **understandable, shorter, to the point**.
 
-## Default shape (use every time)
+## Default shape (adapt to the request)
 
-1. **The short version** — 1–3 sentences. Answer the question first.
+1. Lead with the result or answer in 1–3 sentences.
 2. **Only what he needs next** — either **Do this now** (steps) **or** **Why it happened** (plain English). Not both unless he asked for both.
-3. **Stop.** Offer detail (“want the technical breakdown?”) instead of dumping it.
+3. Stop when the request is satisfied. Deliver requested technical detail, plans or audits directly; do not offer a follow-up instead of completing them.
 
-Most replies should fit in **~12 lines of prose** before optional sections.
+Most ordinary replies should fit in **~12 lines of prose**. Requested depth and artifact requirements take precedence over this default.
 
 ## Language
 
 - **Plain English.** One simple analogy when it helps (library catalog, wrong address in GPS).
 - **Define jargon once** in parentheses: “404 (GitHub said that branch doesn’t exist).”
 - **PM lens on bugs:** user promise → what broke → product gap. Skip file names, commit SHAs, and API internals in the main answer unless he asked for engineering detail.
-- **Tables** for “what you saw” vs “what it actually means.”
-- Short sentences. Numbered lists over paragraphs.
+- Use lists or comparisons when they improve scanning; follow the available visualization skill when an artifact calls for it.
+- Short sentences and connected paragraphs. Use numbered lists for actual sequences.
 
 ## What to leave out (unless asked)
 

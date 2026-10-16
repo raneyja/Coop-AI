@@ -177,8 +177,16 @@ function isReferenceOccurrence(occurrence: Occurrence): boolean {
 function parseOccurrenceRange(
   occurrence: Occurrence
 ): { lineStart: number; lineEnd: number } | undefined {
-  const range = occurrence.range;
-  if (!range || range.length < 3) {
+  // Current producers use typed ranges; the packed vector remains valid for
+  // older indexes. A present typed range is authoritative, even if malformed.
+  const typed = occurrence.typedRange;
+  const range = typed.case === "singleLineRange"
+    ? [typed.value.line, typed.value.startCharacter, typed.value.endCharacter]
+    : typed.case === "multiLineRange"
+      ? [typed.value.startLine, typed.value.startCharacter, typed.value.endLine, typed.value.endCharacter]
+      : occurrence.range;
+  if ((range.length !== 3 && range.length !== 4) ||
+      range.some(value => !Number.isInteger(value) || value < 0)) {
     return undefined;
   }
 
@@ -191,11 +199,16 @@ function parseOccurrenceRange(
   if (endLine === undefined) {
     return undefined;
   }
+  const startCharacter = range[1]!;
+  const endCharacter = range[range.length - 1]!;
+  if (endLine < startLine || (endLine === startLine && endCharacter < startCharacter)) {
+    return undefined;
+  }
 
   // SCIP line numbers are 0-based; store 1-based for API consumers.
   return {
     lineStart: startLine + 1,
-    lineEnd: Math.max(startLine, endLine) + 1
+    lineEnd: endLine + 1
   };
 }
 

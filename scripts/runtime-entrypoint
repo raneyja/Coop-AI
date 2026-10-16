@@ -1,0 +1,25 @@
+#!/bin/sh
+set -eu
+# Explicit runtime policy: never launch application commands as UID 0.
+if ! runtime_uid=$(/usr/bin/id -u); then
+  printf '%s\n' 'Coop runtime could not determine its user; refusing to start.' >&2
+  exit 64
+fi
+case "$runtime_uid" in
+  ''|*[!0-9]*)
+    printf '%s\n' 'Coop runtime received an invalid user identity; refusing to start.' >&2
+    exit 64
+    ;;
+esac
+if [ "$runtime_uid" -eq 0 ]; then
+  printf '%s\n' 'Coop runtime requires a non-root user; refusing to start.' >&2
+  exit 64
+fi
+# Preserve the base Node entrypoint's argument behavior and exec/signal chain.
+# Alpine and Debian install setpriv in different standard locations.
+if ! setpriv_bin=$(command -v setpriv); then
+  printf '%s\n' 'Coop runtime requires setpriv; refusing to start.' >&2
+  exit 64
+fi
+# No environment reset, key handling, mount changes, or privilege fallback.
+exec "$setpriv_bin" --no-new-privs -- /usr/local/bin/docker-entrypoint.sh "$@"

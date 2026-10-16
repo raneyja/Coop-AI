@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import {
   decryptCredential,
   encryptCredential,
@@ -131,12 +131,17 @@ export type OperatorOrganizationListItem = {
 export class OrgStore {
   public constructor(
     private readonly pool: Pool,
-    private readonly credentialsEncryptionKey?: string
+    private readonly credentialsEncryptionKey?: string,
+    private readonly sql: Pick<Pool, "query"> = pool
   ) {}
+
+  public inTransaction(client: PoolClient): OrgStore {
+    return new OrgStore(this.pool, this.credentialsEncryptionKey, client);
+  }
 
   public async createOrganization(name: string, plan: OrgPlan = "free"): Promise<Organization> {
     const usageTier = plan === "pro" ? "pro" : null;
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `INSERT INTO organizations (name, plan, usage_tier) VALUES ($1, $2, $3)
        RETURNING id, name, plan, created_at, usage_tier`,
       [name, plan, usageTier]
@@ -160,7 +165,7 @@ export class OrgStore {
   }): Promise<Organization> {
     const seatCount = clampSeatCountForPlan("pro", input.seatCount);
     try {
-      const result = await this.pool.query(
+      const result = await this.sql.query(
         `INSERT INTO organizations (
            name, plan, usage_tier,
            billing_email, stripe_customer_id, stripe_subscription_id,
@@ -194,7 +199,7 @@ export class OrgStore {
   }
 
   public async getOrganization(orgId: string): Promise<Organization | undefined> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT id, name, plan, repo_access_mode, created_at, usage_tier FROM organizations WHERE id = $1`,
       [orgId]
     );
@@ -207,7 +212,7 @@ export class OrgStore {
     if (!trimmed) {
       return undefined;
     }
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT id, name, plan, repo_access_mode, created_at FROM organizations WHERE lower(name) = lower($1) LIMIT 2`,
       [trimmed]
     );
@@ -218,7 +223,7 @@ export class OrgStore {
   }
 
   public async updateRepoAccessMode(orgId: string, mode: OrgRepoAccessMode): Promise<Organization | undefined> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `UPDATE organizations SET repo_access_mode = $2 WHERE id = $1
        RETURNING id, name, plan, repo_access_mode, created_at`,
       [orgId, mode]
@@ -244,7 +249,7 @@ export class OrgStore {
     if (current.name === name) {
       return { ok: true, org: current, previousName: current.name, changed: false };
     }
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `UPDATE organizations SET name = $2
        WHERE id = $1
          AND NOT EXISTS (
@@ -266,7 +271,7 @@ export class OrgStore {
   }
 
   public async setOrganizationPlan(orgId: string, plan: OrgPlan): Promise<Organization | undefined> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `UPDATE organizations
        SET plan = $2,
            usage_tier = CASE
@@ -284,7 +289,7 @@ export class OrgStore {
   public async createApiKey(orgId: string, label = "default"): Promise<{ record: ApiKeyRecord; rawKey: string }> {
     const rawKey = generateApiKey();
     const keyHash = hashApiKey(rawKey);
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `INSERT INTO api_keys (org_id, key_hash, label) VALUES ($1, $2, $3)
        RETURNING id, org_id, label, created_at`,
       [orgId, keyHash, label]
@@ -296,7 +301,7 @@ export class OrgStore {
   }
 
   public async listApiKeys(orgId: string): Promise<ApiKeyListItem[]> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT id, label, created_at FROM api_keys WHERE org_id = $1 ORDER BY created_at DESC`,
       [orgId]
     );
@@ -304,7 +309,7 @@ export class OrgStore {
   }
 
   public async revokeApiKey(orgId: string, keyId: string): Promise<boolean> {
-    const result = await this.pool.query(`DELETE FROM api_keys WHERE id = $1 AND org_id = $2`, [
+    const result = await this.sql.query(`DELETE FROM api_keys WHERE id = $1 AND org_id = $2`, [
       keyId,
       orgId
     ]);
@@ -317,7 +322,7 @@ export class OrgStore {
       return undefined;
     }
     const keyHash = hashApiKey(normalized);
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT k.id AS key_id, o.id AS org_id, o.name AS org_name, o.plan
        FROM api_keys k
        JOIN organizations o ON o.id = k.org_id
@@ -341,7 +346,7 @@ export class OrgStore {
       throw new Error("CREDENTIALS_ENCRYPTION_KEY is not configured");
     }
     const encrypted = encryptCredential(token.trim(), this.credentialsEncryptionKey);
-    await this.pool.query(
+    await this.sql.query(
       `INSERT INTO org_credentials (org_id, provider, encrypted_token, updated_at)
        VALUES ($1, $2, $3, NOW())
        ON CONFLICT (org_id, provider) DO UPDATE SET
@@ -355,7 +360,7 @@ export class OrgStore {
     if (!this.credentialsEncryptionKey) {
       return undefined;
     }
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT encrypted_token FROM org_credentials WHERE org_id = $1 AND provider = $2`,
       [orgId, provider]
     );
@@ -377,7 +382,7 @@ export class OrgStore {
       throw new Error("CREDENTIALS_ENCRYPTION_KEY is not configured");
     }
     const encrypted = encryptCredential(token.trim(), this.credentialsEncryptionKey);
-    await this.pool.query(
+    await this.sql.query(
       `INSERT INTO code_host_installations (org_id, provider, installation_id, encrypted_token, token_expires_at)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (org_id, provider) DO UPDATE SET
@@ -392,7 +397,7 @@ export class OrgStore {
     orgId: string,
     provider: string
   ): Promise<CodeHostInstallationRecord | undefined> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT org_id, provider, installation_id, token_expires_at, created_at
        FROM code_host_installations WHERE org_id = $1 AND provider = $2`,
       [orgId, provider]
@@ -405,7 +410,7 @@ export class OrgStore {
     if (!this.credentialsEncryptionKey) {
       return undefined;
     }
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT encrypted_token FROM code_host_installations WHERE org_id = $1 AND provider = $2`,
       [orgId, provider]
     );
@@ -420,7 +425,7 @@ export class OrgStore {
     installationId: number,
     provider: string
   ): Promise<string | undefined> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT org_id FROM code_host_installations WHERE installation_id = $1 AND provider = $2`,
       [installationId, provider]
     );
@@ -440,7 +445,7 @@ export class OrgStore {
     if (!needle) {
       return undefined;
     }
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT org_id, encrypted_token FROM org_credentials WHERE provider = $1`,
       [provider]
     );
@@ -454,14 +459,30 @@ export class OrgStore {
   }
 
   public async deleteCodeHostInstallation(orgId: string, provider: string): Promise<void> {
-    await this.pool.query(
+    await this.sql.query(
       `DELETE FROM code_host_installations WHERE org_id = $1 AND provider = $2`,
       [orgId, provider]
     );
   }
 
   public async deleteCredential(orgId: string, provider: string): Promise<void> {
-    await this.pool.query(`DELETE FROM org_credentials WHERE org_id = $1 AND provider = $2`, [orgId, provider]);
+    await this.sql.query(`DELETE FROM org_credentials WHERE org_id = $1 AND provider = $2`, [orgId, provider]);
+  }
+
+  /** Called inside the already admitted attempt transaction. No independent
+   * client can turn an old job's metadata into current READY/indexing state. */
+  public async upsertOrgRepoForJob(job: import('../jobs/types').Job, repoId: string,
+    patch: Parameters<OrgStore['upsertOrgRepo']>[2],client: PoolClient): Promise<OrgRepoRecord> {
+    const orgId=String(job.params.orgId ?? '');
+    const token=job.graphGenerations?.find(item=>item.orgId===orgId && item.repoId===repoId);
+    if(!token) throw new Error('Index status has no submitted generation');
+    if(patch.lastJobId !== undefined && patch.lastJobId !== job.id) throw new Error('Index status job identity mismatch');
+    const head=await client.query(`SELECT requested_generation,requested_job_id FROM graph_publication_heads
+      WHERE org_id=$1 AND repo_id=$2 FOR UPDATE`,[orgId,repoId]);
+    if(head.rows.length!==1 || String(head.rows[0].requested_generation)!==token.generation || head.rows[0].requested_job_id!==job.id) {
+      throw new Error('Index status generation superseded');
+    }
+    return this.upsertOrgRepo(orgId,repoId,patch,client);
   }
 
   public async upsertOrgRepo(
@@ -482,9 +503,10 @@ export class OrgStore {
         | "error"
         | "embeddingError"
       >
-    >
+    >,
+    transaction?: Pick<Pool, 'query'>
   ): Promise<OrgRepoRecord> {
-    const existing = await this.getOrgRepo(orgId, repoId);
+    const existing = await this.getOrgRepo(orgId, repoId, transaction);
     const record: OrgRepoRecord = {
       orgId,
       repoId,
@@ -503,7 +525,7 @@ export class OrgStore {
       embeddingError: "embeddingError" in patch ? patch.embeddingError : existing?.embeddingError,
       updatedAt: new Date()
     };
-    await this.pool.query(
+    await (transaction ?? this.sql).query(
       `INSERT INTO org_repos (
          org_id, repo_id, lightning_enabled, index_status, embedding_status,
          browse_status, browse_error, browse_verified_at, default_branch,
@@ -542,8 +564,8 @@ export class OrgStore {
     return record;
   }
 
-  public async getOrgRepo(orgId: string, repoId: string): Promise<OrgRepoRecord | undefined> {
-    const result = await this.pool.query(
+  public async getOrgRepo(orgId: string, repoId: string, transaction?: Pick<Pool, 'query'>): Promise<OrgRepoRecord | undefined> {
+    const result = await (transaction ?? this.sql).query(
       `SELECT org_id, repo_id, lightning_enabled, index_status, embedding_status,
               browse_status, browse_error, browse_verified_at, default_branch,
               last_indexed_at, last_job_id, error, embedding_error, updated_at
@@ -555,7 +577,7 @@ export class OrgStore {
   }
 
   public async listOrgRepos(orgId: string): Promise<OrgRepoRecord[]> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT org_id, repo_id, lightning_enabled, index_status, embedding_status,
               browse_status, browse_error, browse_verified_at, default_branch,
               last_indexed_at, last_job_id, error, embedding_error, updated_at
@@ -568,7 +590,7 @@ export class OrgStore {
   public async listLightningEnabledReposForScheduledIndex(): Promise<
     Array<{ orgId: string; repoId: string }>
   > {
-    const result = await this.pool.query<{ org_id: string; repo_id: string }>(
+    const result = await this.sql.query<{ org_id: string; repo_id: string }>(
       `SELECT r.org_id, r.repo_id
        FROM org_repos r
        JOIN organizations o ON o.id = r.org_id
@@ -583,7 +605,7 @@ export class OrgStore {
   }
 
   public async getOrganizationBilling(orgId: string): Promise<OrgBilling | undefined> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT billing_email, stripe_customer_id, stripe_subscription_id, seat_count, billing_status,
               onboarding_completed_at, usage_tier, stripe_price_id,
               seat_inventory_pro, seat_inventory_pro_plus, seat_inventory_max
@@ -596,7 +618,7 @@ export class OrgStore {
   }
 
   public async findOrganizationByStripeCustomerId(customerId: string): Promise<Organization | undefined> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT id, name, plan, created_at, usage_tier
        FROM organizations
        WHERE stripe_customer_id = $1
@@ -663,18 +685,18 @@ export class OrgStore {
       values.push(Math.max(0, Math.floor(patch.seatInventory.max)));
     }
     if (fields.length === 0) return;
-    await this.pool.query(`UPDATE organizations SET ${fields.join(", ")} WHERE id = $1`, values);
+    await this.sql.query(`UPDATE organizations SET ${fields.join(", ")} WHERE id = $1`, values);
   }
 
   public async markOnboardingComplete(orgId: string): Promise<void> {
-    await this.pool.query(
+    await this.sql.query(
       `UPDATE organizations SET onboarding_completed_at = NOW() WHERE id = $1`,
       [orgId]
     );
   }
 
   public async isOrgSuspended(orgId: string): Promise<boolean> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT operator_status FROM organizations WHERE id = $1`,
       [orgId]
     );
@@ -684,7 +706,7 @@ export class OrgStore {
   }
 
   public async getOrgOperatorMetadata(orgId: string): Promise<OrgOperatorMetadata | undefined> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT operator_status, crm_external_id, operator_notes, suspended_at, suspended_reason, provenance, assignee_operator_id
        FROM organizations WHERE id = $1`,
       [orgId]
@@ -724,11 +746,11 @@ export class OrgStore {
     if (fields.length === 0) {
       return;
     }
-    await this.pool.query(`UPDATE organizations SET ${fields.join(", ")} WHERE id = $1`, values);
+    await this.sql.query(`UPDATE organizations SET ${fields.join(", ")} WHERE id = $1`, values);
   }
 
   public async suspendOrganization(orgId: string, reason: string): Promise<Organization | undefined> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `UPDATE organizations
        SET operator_status = 'suspended', suspended_at = NOW(), suspended_reason = $2
        WHERE id = $1
@@ -740,7 +762,7 @@ export class OrgStore {
   }
 
   public async activateOrganization(orgId: string): Promise<Organization | undefined> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `UPDATE organizations
        SET operator_status = 'active', suspended_at = NULL, suspended_reason = NULL
        WHERE id = $1 AND operator_status = 'suspended'
@@ -753,7 +775,7 @@ export class OrgStore {
 
   /** Ends the customer org without deleting it. Emails can sign up again as a new org. */
   public async cancelOrganization(orgId: string, reason: string): Promise<Organization | undefined> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `UPDATE organizations
        SET operator_status = 'cancelled', suspended_at = NOW(), suspended_reason = $2
        WHERE id = $1
@@ -765,13 +787,13 @@ export class OrgStore {
   }
 
   public async revokeAllApiKeys(orgId: string): Promise<number> {
-    const result = await this.pool.query(`DELETE FROM api_keys WHERE org_id = $1`, [orgId]);
+    const result = await this.sql.query(`DELETE FROM api_keys WHERE org_id = $1`, [orgId]);
     return result.rowCount ?? 0;
   }
 
   /** Complete customer set for platform financial reporting; independent of list filters. */
   public async listOperatorBillingCustomers(): Promise<string[]> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       "SELECT DISTINCT stripe_customer_id FROM organizations WHERE stripe_customer_id IS NOT NULL"
     );
     return result.rows.map((row: { stripe_customer_id: string }) => row.stripe_customer_id);
@@ -814,13 +836,13 @@ export class OrgStore {
             : "o.created_at DESC";
     const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);
 
-    const countResult = await this.pool.query(
+    const countResult = await this.sql.query(
       `SELECT COUNT(*)::int AS total FROM organizations o ${where}`,
       params
     );
     const total = Number(countResult.rows[0]?.total ?? 0);
 
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT o.id, o.name, o.plan, o.created_at, o.operator_status, o.provenance,
               o.billing_status, o.billing_email, o.seat_count, o.stripe_customer_id,
               (

@@ -1,5 +1,9 @@
 # Autocomplete and prompt-library job
 
+Historical October 4 job report, reviewed October 11. Preserve the observations
+below; later run evidence and the current scope govern qualification. Parent
+ownership and retest instructions describe that run, not new launch orders.
+
 Status: source repairs prepared; targeted automated checks passed. Parent owns combined lint/build/package and the new candidate's live retests. Prior `ec3f81270adc960801ba499f96506916a3ae49bae41a97c2a8a16caec16a7a8d` results do not qualify these later edits.
 
 Prompt library's three existing targeted components passed: action inference 3/3, workspace template/run behavior 11/11, account-scoped personal storage 4/4. See [prompt-library evidence](evidence/prompt-library.log). The ordinary aggregate npm command failed sandbox DNS; the same constituent commands ran successfully with the approved escalated tsx runtime.

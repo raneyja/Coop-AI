@@ -1,5 +1,12 @@
 # Agent → Apply → PR ship loop — editor build plan
 
+> Historical August build plan, reviewed October 11. Preserve its decisions,
+> scenarios and results as history; do not restart its waves, obsolete toggle/
+> budget policies or missing-feature work without current evidence and scope.
+> `../AGENTS.md`, current rules and the human's instructions govern. Enterprise
+> execution uses `enterprise-hardening/EXECUTION_PLAN.md` and its run ledger;
+> this file's stage-log, platform and production requirements are historical.
+
 **Updated:** 2026-08-17 — Agent is **always on** (no Settings toggle). Hunt-quality fixes + allowlisted mid-loop Slack/Jira. Dogfood → [agent-dogfood.md](./agent-dogfood.md). Do not follow the Wave 1 default-off / gather-bolt-on UX freeze below as current product law.
 
 **Created:** 2026-08-13  

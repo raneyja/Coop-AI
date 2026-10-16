@@ -1,3 +1,4 @@
+import { createSlackClientFromCredentials, createTeamsClientFromCredentials } from "../api/integrations/buildIntegrationClients";
 import { toRepositoryRelativePath } from "../context/repoFilePath";
 import { getDecisionArchaeologyEngine } from "./decisionArchaeologyRegistry";
 import { CodeHostSecrets } from "../api/codeHosts/codeHostSecrets";
@@ -1138,10 +1139,7 @@ export class DecisionArchaeologyEngine {
       return this.options.slackClient;
     }
     const creds = await this.options.integrationSecrets.getCredentials();
-    if (!creds.slackToken) {
-      return undefined;
-    }
-    return new SlackClient({ token: creds.slackToken });
+    return createSlackClientFromCredentials(creds);
   }
 
   private async resolveTeamsClient(): Promise<TeamsClient | undefined> {
@@ -1149,10 +1147,7 @@ export class DecisionArchaeologyEngine {
       return this.options.teamsClient;
     }
     const creds = await this.options.integrationSecrets.getCredentials();
-    if (!creds.teamsToken) {
-      return undefined;
-    }
-    return new TeamsClient({ accessToken: creds.teamsToken });
+    return createTeamsClientFromCredentials(creds);
   }
 
   private async resolveJiraClient(): Promise<JiraClient | undefined> {
@@ -1317,10 +1312,9 @@ function extractApprovers(prBody: string, reviews: DecisionReview[]): string[] {
 
 export function extractAlternativesFromText(text: string, source: string): DecisionAlternative[] {
   const alternatives: DecisionAlternative[] = [];
+  // Choosing another option does not state why an alternative was rejected.
   const patterns = [
-    /(?:considered|evaluated|tried)\s+(.+?)\s+but\s+(?:chose|picked|went with|selected)\s+(.+?)(?:\.|$)/gi,
-    /(?:rejected|ruled out|decided against)\s+(.+?)\s+(?:because|due to)\s+(.+?)(?:\.|$)/gi,
-    /instead of\s+(.+?),\s+(?:we|I|team)\s+(?:chose|used|went with)\s+(.+?)(?:\.|$)/gi
+    /(?:rejected|ruled out|decided against)\s+(.+?)\s+(?:because|due to)\s+(.+?)(?:\.|$)/gi
   ];
 
   for (const pattern of patterns) {

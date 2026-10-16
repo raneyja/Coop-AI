@@ -79,44 +79,45 @@ export default function PrivacyPage() {
         <li>Comply with legal obligations</li>
       </ul>
       <p>
-        <strong>We do not use your code, prompts, or completions to train machine learning
-        models.</strong>
+        Coop routes code and prompts for inference. Provider training and retention terms must be
+        verified against the actual API account and agreement; request controls alone do not establish them.
       </p>
 
       <h2>3. LLM provider processing</h2>
       <p>
         When you use chat or quick actions, code context and prompts are transmitted from your CoopAI
         server to third-party LLM providers (such as Anthropic, OpenAI, or Google) for inference.
-        These providers process data under their respective API terms. CoopAI applies zero-retention
-        configuration flags to requests where supported. See our{" "}
+        Request formatting applies confidentiality instructions and provider-compatible controls where
+        supported. Those controls do not establish provider-side zero retention or no-training terms. See our{" "}
         <a href="/security">Security page</a> for details.
       </p>
       <p>
-        If you use BYOK (Bring Your Own Key), inference is routed through your organization&apos;s
-        provider account and governed by your agreement with that provider.
+        In your own deployment, the server operator configures supported provider API keys.
+        Provider-side retention depends on the account settings and applicable agreement.
       </p>
 
       <h2>4. Data retention</h2>
       <ul>
         <li>
-          <strong>Website form submissions</strong> are stored in Google Sheets (when configured) or
-          server logs until you request deletion
+          <strong>Website form submissions</strong> can reach configured Google Sheets storage or
+          server logs. Retention and deletion require deployment-specific handling
         </li>
         <li>
-          <strong>Graph and repository index data</strong> is retained for the duration of your
-          subscription or deployment, unless you request deletion
+          <strong>Graph and repository index data</strong>, including source chunks and searchable
+          shards, persists in configured server storage. Subscription cancellation is not automatic
+          erasure; retention and deletion require deployment-specific handling
         </li>
         <li>
-          <strong>LLM inference data</strong> is processed transiently; CoopAI configures requests to
-          disable conversation storage and training use. Provider-side retention varies by provider
-          and contract
+          <strong>Conversation history</strong> persists in VS Code workspace storage and, when synced,
+          PostgreSQL Chat Feed message content and metadata. The current server API does not provide
+          automatic chat expiry or thread deletion. Inference requests also reach configured model
+          providers, whose retention depends on their account settings and agreement
         </li>
         <li>
-          <strong>BYOK audit logs</strong> are retained for 90 days and contain no prompts, responses,
-          or code content
-        </li>
-        <li>
-          <strong>Analytics data</strong> is aggregated and retained per Vercel Analytics policies
+          <strong>Support, audit and usage records</strong> persist separately. Support diagnostics have
+          a seven-day expiry and cleanup path; report text and audit/usage records have no automatic
+          expiry in the current implementation. Backups and external analytics retention need
+          deployment-specific verification
         </li>
       </ul>
 
@@ -144,8 +145,8 @@ export default function PrivacyPage() {
       <h2>6. Self-hosted deployments</h2>
       <p>
         Enterprise customers may deploy the CoopAI server on infrastructure they control. In
-        self-hosted deployments, repository data, graph indexes, and inference traffic remain within
-        your environment. This Privacy Policy still applies to data you submit through our website
+        self-hosted deployments, server storage and indexing can run in your environment. Requests to
+        configured model providers, code hosts and integrations can still leave that environment. This Privacy Policy still applies to data you submit through our website
         and any CoopAI-operated services.
       </p>
 
@@ -165,9 +166,9 @@ export default function PrivacyPage() {
 
       <h2>8. Cookies and tracking</h2>
       <p>
-        Our website uses Vercel Analytics, which collects anonymized usage data without cookies for
-        basic analytics. If you configure a live chat widget (Tawk.to), that provider may set
-        cookies to maintain chat sessions. You can manage cookies through your browser settings.
+        Our website includes Vercel Analytics and Speed Insights. An optional configured Tawk.to
+        widget loads a third-party script. Exact analytics, tracking and cookie behavior depends
+        on the deployed configuration and provider settings; review those controls for your deployment.
       </p>
 
       <h2>9. Children</h2>

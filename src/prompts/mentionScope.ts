@@ -355,7 +355,7 @@ export function historyContentHasScopeChips(content: string): boolean {
 }
 
 function isCompactContextChipLine(line: string): boolean {
-  return /^[\w ]+: .+( · [\w ]+: .+)*$/.test(line.trim());
+  return /^[\w ]+: .+$/.test(line.trim());
 }
 
 export function plainChatHistoryContent(

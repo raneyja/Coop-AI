@@ -106,10 +106,10 @@ const server = createServer(async (request, response) => {
     }
 
     writeJson(response, 404, { error: "not_found" });
-  } catch (error) {
+  } catch {
     writeJson(response, 500, {
       error: "internal_error",
-      message: error instanceof Error ? error.message : String(error)
+      message: "Smoke request failed."
     });
   }
 });

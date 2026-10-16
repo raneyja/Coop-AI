@@ -1,3 +1,5 @@
+import { observePaintedAnswer } from "../lib/answerPaintObservation";
+import type { AnswerTimingIdentity } from "../../chat/chatResponseTiming";
 import React, { useEffect, useRef } from "react";
 import type { ChatImageAttachment, ChatSuggestPayload, ChatTurnActivity } from "../../chat/types";
 import { hasChatTurnActivity } from "../../chat/chatTurnActivity";
@@ -34,6 +36,7 @@ import { EvidenceArtifactAnchor } from "./EvidenceArtifactAnchor";
 import { SourcesFold } from "./SourcesFold";
 import { MentionAttachmentChip } from "./MentionAttachmentChip";
 import {
+  isCompactContextChipLine,
   parseContextLineAttachments,
   splitPlainChatHistoryBody,
   type HistoryAttachment
@@ -42,6 +45,7 @@ import { buildTimelineEntries, groupTimelineSourceCards } from "./chatTimelineEn
 import { shouldUseSuggestClarifyingBody } from "../lib/patchStreamDisplay";
 
 export type ChatMessage = {
+  responseTiming?: AnswerTimingIdentity;
   sourceCitationMode?: "explicit";
   clientSubmissionId?: string;
   role: "user" | "assistant" | "system";
@@ -115,6 +119,8 @@ type ChatSuggestResolveChoice =
   | { choice: "action"; actionId: string };
 
 type ChatStreamProps = {
+  onAnswerPaint?: (identity: AnswerTimingIdentity, milestone: "first-answer-content" | "complete") => boolean;
+  canObserveAnswer?: (identity: AnswerTimingIdentity, streaming: boolean) => boolean;
   messages: ChatMessage[];
   artifacts: ChatInlineArtifact[];
   streamingMessage: ChatMessage | null;
@@ -232,7 +238,7 @@ function parseQuickActionBody(body: string): { intent: string; contextLine?: str
   }
 
   // New compact format: second line is "key: value · key: value"
-  if (/^[\w ]+: .+( · [\w ]+: .+)*$/.test(rest)) {
+  if (isCompactContextChipLine(rest)) {
     return { intent, contextLine: rest };
   }
 
@@ -351,13 +357,28 @@ function MessageBlock({
   message,
   renderBody,
   isStreaming = false,
+  canObserveAnswer,
+  onAnswerPaint,
   onSuggestResolve
 }: {
   message: ChatMessage;
   renderBody: (content: string, relatedArtifactId?: string, messageTimestamp?: number, sourceCitationMode?: "explicit") => React.ReactElement[];
   isStreaming?: boolean;
+  onAnswerPaint?: ChatStreamProps["onAnswerPaint"];
+  canObserveAnswer?: ChatStreamProps["canObserveAnswer"];
   onSuggestResolve?: (choice: ChatSuggestResolveChoice) => void;
 }): React.ReactElement {
+  const articleRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const identity = message.responseTiming;
+    const article = articleRef.current;
+    if (!identity || !article || !canObserveAnswer?.(identity, isStreaming) || message.role !== "assistant" || message.content.trim() === CHAT_STOPPED_MESSAGE) return;
+    return observePaintedAnswer(article, () => {
+      const firstAccepted = onAnswerPaint?.(identity, "first-answer-content");
+      const completeAccepted = !isStreaming && onAnswerPaint?.(identity, "complete");
+      return Boolean(isStreaming ? firstAccepted : completeAccepted);
+    });
+  }, [message.content, message.responseTiming, message.role, isStreaming, onAnswerPaint, canObserveAnswer]);
   const isUser = message.role === "user";
   const parsed = isUser ? parseQuickActionTag(message.content) : { body: message.content };
   const isStoppedNotice =
@@ -379,6 +400,7 @@ function MessageBlock({
         />
       ) : null}
     <article
+      ref={articleRef}
       className={`chat-message ${isUser ? "chat-message--user" : "chat-message--assistant group"}${isStreaming ? " chat-message--streaming" : ""}${isStoppedNotice ? " chat-message--stopped" : ""}`}
       data-role={message.role}
     >
@@ -609,6 +631,8 @@ export function ChatStream({
   actionContext,
   conflicts,
   scrollEpoch = 0,
+  canObserveAnswer,
+  onAnswerPaint,
   onSuggestResolve
 }: ChatStreamProps): React.ReactElement {
   const timelineEntries = buildTimelineEntries(messages, artifacts);
@@ -682,6 +706,8 @@ export function ChatStream({
                 key={group.entry.id}
                 message={group.entry.message}
                 renderBody={renderBody}
+                onAnswerPaint={onAnswerPaint}
+                canObserveAnswer={canObserveAnswer}
                 onSuggestResolve={onSuggestResolve}
               />
             );
@@ -733,7 +759,7 @@ export function ChatStream({
         ) : null}
 
         {streamingMessage ? (
-          <MessageBlock message={streamingMessage} renderBody={renderBody} isStreaming />
+          <MessageBlock message={streamingMessage} renderBody={renderBody} isStreaming onAnswerPaint={onAnswerPaint} canObserveAnswer={canObserveAnswer} />
         ) : null}
 
         <div ref={endRef} className="chat-thread-anchor" />

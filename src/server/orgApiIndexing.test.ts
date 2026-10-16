@@ -217,6 +217,7 @@ void (async () => {
     ]
   };
   const purgePool = {
+    connect: async () => ({query: purgePool.query, release: () => undefined}),
     query: async (sql: string, params: unknown[] = []) => {
       const match = /^DELETE FROM (\w+)/i.exec(sql.trim());
       if (!match) {

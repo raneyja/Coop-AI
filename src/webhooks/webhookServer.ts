@@ -16,10 +16,10 @@ import type { NormalizedWebhookEvent } from "./types";
 import { PlaceholderWebhookClient, WebhookRegistry } from "./webhookRegistry";
 import { WebhookMonitor } from "./webhookMonitor";
 import { handleJobsApiRequest } from "../jobs/jobsApi";
-import { createJobRuntime, startJobRuntime, type JobRuntime } from "../jobs/jobRuntime";
+import { createJobRuntime, startJobRuntime, stopJobRuntime, type JobRuntime } from "../jobs/jobRuntime";
 import { createChatRouter, handleChatApiRequest, llmHealthPayload } from "../api/chatApi";
 import { createOrgInlineGraphFileSnippetFetcher } from "../api/inlineGraphFileSnippet";
-import { getDbPool } from "../server/db";
+import { getDbPool, closeDbPool } from "../server/db";
 import { OrgStore } from "../server/orgStore";
 import { handleEnterpriseApiRequest } from "../server/enterpriseApi";
 import { handleOrgApiRequest } from "../server/orgApi";
@@ -27,6 +27,7 @@ import { createEstateSyncService } from "../server/estateSyncService";
 import { UserStore } from "../server/users/userStore";
 import { SsoConfigStore } from "../server/sso/ssoConfigStore";
 import { AuthPolicyStore } from "../server/sso/authPolicyStore";
+import { PostgresSamlRequestStore } from "../server/sso/samlRequestStore";
 import { SamlService } from "../server/sso/samlService";
 import { AuditLogger } from "../server/audit/auditLogger";
 import { UsageTracker } from "../server/usageTracker";
@@ -88,6 +89,7 @@ import { handleAdminApiRequest } from "../server/adminApi";
 import { handleOperatorApiRequest } from "../server/operatorApi";
 import { loadOperatorAuthConfig } from "../server/operators/operatorAuthConfig";
 import { OperatorStore } from "../server/operators/operatorStore";
+import { OperatorReadiness } from "../server/operators/readiness";
 import { handleBillingApiRequest } from "../server/billing/billingApi";
 import { StripeService } from "../server/billing/stripeService";
 import { loadBillingConfig } from "../server/billing/billingConfig";
@@ -101,6 +103,7 @@ import { AuthIdentityStore } from "../server/auth/authIdentityStore";
 import { AuthTokenStore } from "../server/auth/authTokenStore";
 import { GoogleAuthService } from "../server/auth/googleAuthService";
 import { handleUserAuthApiRequest } from "../server/auth/userAuthApi";
+import { AuthRateLimitStore } from "../server/auth/authRateLimit";
 import { initErrorReporter, reportServerError } from "../server/observability/errorReporter";
 import { resolveHttpRequestId } from "../server/observability/requestId";
 
@@ -124,6 +127,7 @@ export type WebhookServerRuntime = {
   rateLimits: RateLimitTracker;
   tokenPool: TokenPool;
   jobs: JobRuntime;
+  jobStartup?: Promise<void>;
   orgStore?: OrgStore;
   serverConfig: ServerConfig;
   githubApp?: GitHubAppService;
@@ -141,6 +145,7 @@ type ParsedRequest = {
   headers: Record<string, string | undefined>;
   rawBody: Buffer;
   body: unknown;
+  peerAddress?: string;
 };
 
 const MAX_BODY_BYTES = 5 * 1024 * 1024;
@@ -186,6 +191,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
   const authPolicyStore = pool ? new AuthPolicyStore(pool) : undefined;
   const auditLogger = new AuditLogger(pool ?? null);
   const usageTracker = new UsageTracker(pool ?? null);
+  const authRateLimitStore = pool ? new AuthRateLimitStore(pool) : undefined;
   const planQuota = createPlanQuotaService(usageTracker);
   const operatorStore = pool ? new OperatorStore(pool) : undefined;
   const operatorAuthConfig = loadOperatorAuthConfig();
@@ -199,8 +205,9 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       "[operator] Operator API enabled but Google sign-in disabled — set GOOGLE_AUTH_CLIENT_* or COOP_OPERATOR_GOOGLE_*"
     );
   }
-  const samlService = serverConfig.ssoBaseUrl
-    ? new SamlService({ baseUrl: serverConfig.ssoBaseUrl, spEntityId: serverConfig.ssoSpEntityId })
+  const samlService = serverConfig.ssoBaseUrl && pool
+    ? new SamlService({ baseUrl: serverConfig.ssoBaseUrl, spEntityId: serverConfig.ssoSpEntityId,
+      requestStore: new PostgresSamlRequestStore(pool) })
     : undefined;
 
   const githubAppConfig = loadGitHubAppConfig();
@@ -367,9 +374,9 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
       orgStore,
       allowPatFallback: serverConfig.devMode
     });
-  if (serverConfig.jobsWorkersEnabled) {
-    startJobRuntime(jobs);
-  }
+  const jobStartup = serverConfig.jobsWorkersEnabled
+    ? startJobRuntime(jobs).catch(error => console.error("[jobs] runtime startup failed", error))
+    : undefined;
 
   const queue = {
     enqueue: async (event: NormalizedWebhookEvent) => {
@@ -408,12 +415,52 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
   const emailService = new EmailService(billingConfig);
   const supportStore = pool ? new SupportStore(pool) : undefined;
 
+  const readiness = new OperatorReadiness({
+    databaseUrl: config.cache.connectionString ?? process.env.DATABASE_URL,
+    serverConfig, cacheConfig: config.cache, cache, jobs
+  });
   const corsOrigins = loadCorsOrigins();
 
   const server = createServer(async (request, response) => {
     const requestId = resolveHttpRequestId(normalizeHeaders(request.headers));
     response.setHeader("x-request-id", requestId);
     try {
+      // This exact diagnostic GET is header-only: generic readBody must not delay
+      // authorization/admission behind an unfinished or arbitrarily large body.
+      if (request.method === "GET" && new URL(request.url ?? "/", "http://localhost").pathname === "/v1/operator/readiness") {
+        if (applyCors(request, response, corsOrigins)) return;
+        const headers = normalizeHeaders(request.headers);
+        const length = headers["content-length"];
+        const unexpectedBody = Boolean(headers["transfer-encoding"]) || (length !== undefined && Number(length) > 0);
+        if (unexpectedBody) {
+          response.shouldKeepAlive = false;
+          response.setHeader("connection", "close");
+          response.once("finish", () => request.destroy());
+        }
+        const controller = new AbortController();
+        const cancel = () => controller.abort();
+        request.on("error", cancel); // An unread request disconnect must cancel diagnostics, not crash the server.
+        let discardedBytes = 0;
+        request.on("data", (chunk: Buffer) => {
+          // Discard, never collect; retain the existing body limit while auth is in flight.
+          discardedBytes += chunk.length;
+          if (discardedBytes > MAX_BODY_BYTES) { cancel(); request.destroy(); }
+        });
+        request.once("aborted", cancel);
+        request.socket.once("close", cancel);
+        const incompleteEnd = () => { if (!request.complete) cancel(); };
+        request.socket.once("end", incompleteEnd);
+        try {
+          await readiness.handle(headers, response, unexpectedBody
+            ? { oversized: length !== undefined && Number(length) > MAX_BODY_BYTES }
+            : undefined, controller.signal);
+        } finally {
+          request.off("aborted", cancel);
+          request.socket.off("close", cancel);
+          request.socket.off("end", incompleteEnd);
+        }
+        return;
+      }
       const parsed = await parseRequest(request);
       parsed.headers["x-request-id"] = requestId;
       if (
@@ -561,6 +608,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
             pathname: parsed.pathname,
             query: parsed.query,
             headers: parsed.headers,
+            peerAddress: parsed.peerAddress,
             body: parsed.body
           },
           response,
@@ -574,6 +622,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
             authConfig,
             auditLogger,
             serverConfig,
+            authRateLimitStore,
             pool
           }
         )
@@ -652,9 +701,11 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
 
       if (
         await handleIntegrationApiRequest(orgParsed, response, {
+          pool: pool ?? undefined,
           integrationStore,
           scopePolicyStore,
           orgStore,
+          userStore,
           atlassianApp,
           notionApp,
           googleDocsApp,
@@ -667,9 +718,9 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
 
       if (
         await handleBillingApiRequest(
-          { ...orgParsed, rawBody: parsed.rawBody },
+          { ...orgParsed, rawBody: parsed.rawBody, peerAddress: parsed.peerAddress },
           response,
-          { orgStore, userStore, emailService, auditLogger, serverConfig, pool, authIdentityStore, authTokenStore, authConfig }
+          { orgStore, userStore, emailService, auditLogger, serverConfig, pool, authIdentityStore, authTokenStore, authConfig, authRateLimitStore }
         )
       ) {
         return;
@@ -942,6 +993,8 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
     server.on("close", stopSupport);
   }
 
+  server.once("close", () => readiness.close());
+
   return {
     server,
     config,
@@ -952,6 +1005,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
     rateLimits,
     tokenPool,
     jobs,
+    jobStartup,
     orgStore,
     serverConfig,
     githubApp,
@@ -971,6 +1025,53 @@ export async function startWebhookServer(options: WebhookServerOptions = {}): Pr
   return runtime;
 }
 
+const shutdowns = new WeakMap<Server, Promise<boolean>>();
+
+/** A failed drain requires process termination before a replacement may claim work. */
+export function stopWebhookServer(runtime: Pick<WebhookServerRuntime, "server" | "jobs" | "jobStartup">): Promise<boolean> {
+  const existing = shutdowns.get(runtime.server);
+  if (existing) return existing;
+  let timedOut = false;
+  let timer: ReturnType<typeof setTimeout>;
+  let idleCloser: ReturnType<typeof setInterval> | undefined;
+  // close() stops acceptance immediately; admitted HTTP writes finish before cache close.
+  const httpClosed = new Promise<boolean>(resolve => {
+    runtime.server.close(error => {
+      if (idleCloser) clearInterval(idleCloser);
+      resolve(!error || (error as NodeJS.ErrnoException).code === "ERR_SERVER_NOT_RUNNING");
+    });
+    runtime.server.closeIdleConnections();
+    // An admitted response may become keep-alive idle after close() began.
+    // Close only idle connections while that response drains, never its active body.
+    idleCloser = setInterval(() => runtime.server.closeIdleConnections(), 20);
+  });
+  const work = (async () => {
+    await runtime.jobStartup;
+    if (!await httpClosed || timedOut) return false;
+    if (!await stopJobRuntime(runtime.jobs) || timedOut) return false;
+    const backend = runtime.jobs.queue.getBackend();
+    if ("close" in backend && typeof backend.close === "function") await backend.close();
+    if (timedOut) return false;
+    await closeDbPool();
+    return !timedOut;
+  })();
+  const shutdown = Promise.race([
+    work.catch(() => false),
+    new Promise<false>(resolve => {
+      timer = setTimeout(() => {
+        timedOut = true;
+        runtime.server.closeAllConnections();
+        resolve(false);
+      }, runtime.jobs.config.shutdownTimeoutMs ?? 10_000);
+    })
+  ]).finally(() => {
+    clearTimeout(timer);
+    if (idleCloser) clearInterval(idleCloser);
+  });
+  shutdowns.set(runtime.server, shutdown);
+  return shutdown;
+}
+
 async function parseRequest(request: IncomingMessage): Promise<ParsedRequest> {
   const url = new URL(request.url ?? "/", "http://localhost");
   const rawBody = await readBody(request);
@@ -980,6 +1081,7 @@ async function parseRequest(request: IncomingMessage): Promise<ParsedRequest> {
     query: url.searchParams,
     headers: normalizeHeaders(request.headers),
     rawBody,
+    peerAddress: request.socket.remoteAddress,
     body: parseJson(rawBody)
   };
 }
@@ -1053,5 +1155,20 @@ function slackChallenge(body: unknown): string | undefined {
 }
 
 if (require.main === module) {
-  void startWebhookServer();
+  void startWebhookServer().then(runtime => {
+    let shuttingDown = false;
+    const shutdown = () => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      void stopWebhookServer(runtime).then(drained => {
+        if (!drained) console.error("[api] shutdown did not drain HTTP/jobs/cache; terminating before replacement may claim work");
+        process.exit(drained ? 0 : 1);
+      });
+    };
+    process.on("SIGTERM", shutdown);
+    process.on("SIGINT", shutdown);
+  }).catch(() => {
+    console.error("[api] startup failed");
+    process.exit(1);
+  });
 }

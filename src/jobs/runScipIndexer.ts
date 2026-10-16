@@ -6,6 +6,8 @@ import type { Pool } from "pg";
 import { RepoSymbolIndexStore } from "../indexing/repoSymbolIndexStore";
 import { decodeScipIndexFile } from "./scipIndexDecoder";
 import { extractTreeSitterSymbols } from "./treeSitterSymbolExtractor";
+import { withJobOwnedEffect } from './jobEffectAdmission';
+import type { Job } from './types';
 
 const execFileAsync = promisify(execFile);
 
@@ -36,7 +38,8 @@ const SCIP_INDEXERS: Array<{
   {
     languages: ["java", "kotlin"],
     command: "scip-java",
-    args: (root, out) => ["index", "--output", out, "--targetroot", root],
+    // cwd supplies the source root; producer target roots are disposable output.
+    args: (_root, out) => ["index", "--output", out],
     indexQuality: "precise"
   }
 ];
@@ -55,9 +58,15 @@ export async function runScipIndexer(
   orgId: string,
   language: string | undefined,
   localPath: string,
-  pool: Pool
+  pool: Pool,
+  job?: Job,
+  signal?: AbortSignal
 ): Promise<RunScipIndexerResult> {
   const store = new RepoSymbolIndexStore(pool);
+  const replace = (...args: Parameters<RepoSymbolIndexStore['replaceIndex']>) => {
+    signal?.throwIfAborted();
+    return job ? withJobOwnedEffect(pool, job, client => new RepoSymbolIndexStore(client).replaceIndex(...args), signal) : store.replaceIndex(...args);
+  };
   const indexedAt = new Date();
   const resolvedLanguage = language ?? detectLanguage(localPath);
 
@@ -68,12 +77,13 @@ export async function runScipIndexer(
       await execFileAsync(indexer.command, indexer.args(localPath, indexPath), {
         timeout: 900_000,
         maxBuffer: 20 * 1024 * 1024,
-        cwd: localPath
+        cwd: localPath,
+        signal
       });
 
       if (fs.existsSync(indexPath)) {
         const rows = decodeScipIndexFile(indexPath);
-        await store.replaceIndex(orgId, repoId, rows, indexedAt);
+        await replace(orgId, repoId, rows, indexedAt);
         fs.rmSync(indexPath, { force: true });
         return {
           scipAvailable: true,
@@ -93,10 +103,11 @@ export async function runScipIndexer(
         error: "SCIP indexer completed but index.scip was not produced."
       };
     } catch (error) {
+      signal?.throwIfAborted();
       const message = formatExecError("SCIP indexing failed", error);
       const fallbackRows = await safeTreeSitterFallback(localPath);
       if (fallbackRows.length > 0) {
-        await store.replaceIndex(orgId, repoId, fallbackRows, indexedAt);
+        await replace(orgId, repoId, fallbackRows, indexedAt);
         return {
           scipAvailable: false,
           symbolCount: fallbackRows.length,
@@ -118,7 +129,7 @@ export async function runScipIndexer(
   }
 
   const fallbackRows = await safeTreeSitterFallback(localPath);
-  await store.replaceIndex(orgId, repoId, fallbackRows, indexedAt);
+  await replace(orgId, repoId, fallbackRows, indexedAt);
   return {
     scipAvailable: false,
     symbolCount: fallbackRows.length,

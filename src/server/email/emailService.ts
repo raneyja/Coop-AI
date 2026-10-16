@@ -5,6 +5,8 @@ import { displayUsageTierName, type UsageTier } from "../usageTiers";
 export type WelcomeEmailParams = {
   to: string;
   orgName: string;
+  /** Stable billing outbox key; retries must retain the same rendered message. */
+  idempotencyKey?: string;
   /** Fresh sign-in URL (existing accounts / upgrades). */
   adminPortalUrl: string;
   /**
@@ -39,15 +41,33 @@ type PlanWelcomeContent = {
   text: string;
 };
 
+export type PreparedEmail = { from: string; to: string; subject: string; html: string; text?: string };
+export type PreparedEmailAdmission = { signal: AbortSignal; wallDeadlineMs: number; monotonicDeadlineMs: number };
+
 export class EmailService {
   public constructor(private readonly config: BillingConfig) {}
 
   public async sendWelcome(params: WelcomeEmailParams): Promise<void> {
-    const content = buildPlanWelcomeEmail(params, "pro");
-    await this.send(params.to, content.subject, content.html, content.text);
+    const message = this.prepareWelcome(params);
+    await this.send(params.to, message.subject, message.html, message.text, { idempotencyKey: params.idempotencyKey });
+  }
+
+  public prepareWelcome(params: WelcomeEmailParams): PreparedEmail {
+    return { from: this.config.emailFrom, to: params.to, ...buildPlanWelcomeEmail(params, "pro") };
+  }
+
+  public async sendPrepared(message: PreparedEmail, idempotencyKey: string, admission: PreparedEmailAdmission): Promise<void> {
+    if (!admission) throw new Error("Email delivery admission is required");
+    await this.send(message.to, message.subject, message.html, message.text,
+      { idempotencyKey, from: message.from, requireDelivery: true, admission });
   }
 
   public async sendProUpgradeWelcome(params: WelcomeEmailParams): Promise<void> {
+    const message = this.prepareProUpgradeWelcome(params);
+    await this.send(params.to, message.subject, message.html, message.text, { idempotencyKey: params.idempotencyKey });
+  }
+
+  public prepareProUpgradeWelcome(params: WelcomeEmailParams): PreparedEmail {
     const loginUrl = params.adminPortalUrl;
     const billingUrl = billingPortalUrl(params.adminPortalUrl);
     const subject = `${params.orgName} is now on CoopAI Pro`;
@@ -80,7 +100,7 @@ export class EmailService {
       "3. Manage invoices and subscription in Billing:",
       billingUrl
     ].join("\n");
-    await this.send(params.to, subject, html, text);
+    return { from: this.config.emailFrom, to: params.to, subject, html, text };
   }
 
   public async sendFreeSignupWelcome(params: WelcomeEmailParams): Promise<void> {
@@ -231,10 +251,13 @@ export class EmailService {
     return this.send(params.to, subject, html, text, { idempotencyKey: `support-report/${params.reportId}`, linkValidationText: params.reviewUrl });
   }
 
-  private async send(to: string, subject: string, html: string, text?: string, options?: { idempotencyKey?: string; linkValidationText?: string }): Promise<{ mocked: boolean }> {
+  private async send(to: string, subject: string, html: string, text?: string, options?: { idempotencyKey?: string; linkValidationText?: string; from?: string; requireDelivery?: boolean; admission?: PreparedEmailAdmission }): Promise<{ mocked: boolean }> {
     assertEmailLinksArePublic(html, options?.linkValidationText ?? text);
     const idempotencyKey = options?.idempotencyKey;
 
+    if (options?.requireDelivery && (this.config.emailMock || !this.config.resendApiKey)) {
+      throw new Error("Durable email requires a configured delivery provider");
+    }
     if (this.config.emailMock || !this.config.resendApiKey) {
       console.log(`[email:mock] to=${to} subject=${subject}`);
       const link = (options?.linkValidationText ?? text)?.match(/https?:\/\/[^\s]+/)?.[0];
@@ -246,6 +269,16 @@ export class EmailService {
       return { mocked: true };
     }
 
+    const body = JSON.stringify({ from: options?.from ?? this.config.emailFrom, to: [to], subject, html, ...(text ? { text } : {}) });
+    // Timers may not run while a worker is physically paused. Recheck both
+    // wall/monotonic admission clocks synchronously at the external boundary.
+    const admission = options?.admission;
+    if (admission) {
+      admission.signal.throwIfAborted();
+      if (Date.now() >= admission.wallDeadlineMs || performance.now() >= admission.monotonicDeadlineMs) {
+        throw new Error("Email delivery admission expired");
+      }
+    }
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -253,14 +286,8 @@ export class EmailService {
         "Content-Type": "application/json",
         ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {})
       },
-      ...(idempotencyKey ? { signal: AbortSignal.timeout(15000) } : {}),
-      body: JSON.stringify({
-        from: this.config.emailFrom,
-        to: [to],
-        subject,
-        html,
-        ...(text ? { text } : {})
-      })
+      ...(admission ? { signal: admission.signal } : idempotencyKey ? { signal: AbortSignal.timeout(15000) } : {}),
+      body
     });
 
     if (!response.ok) {

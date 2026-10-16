@@ -1,3 +1,6 @@
+import type { Job } from '../jobs/types';
+import type { JobQueue } from '../jobs/jobQueue';
+import type { OrgStore } from '../server/orgStore';
 import type {
   ChangedFile,
   CommitSummary,
@@ -53,6 +56,7 @@ export type RepositoryGraph = {
     indexVersion: number;
     indexedBranch?: string;
     indexedCommit?: string;
+    publication?: {generation:string;requestedGeneration:string;revision:string;origin:string};
   };
 };
 
@@ -124,7 +128,76 @@ const DEFAULT_MAX_REPOS = 100;
 const DEFAULT_MAX_COMMITS = 250;
 const DEFAULT_MAX_METADATA = 250;
 
+export type GraphReadyPatch = { store: OrgStore; patch: Parameters<OrgStore['upsertOrgRepo']>[2] };
 export class GraphCache {
+  private jobQueue?: JobQueue;
+  private memoryClosed=false;
+  private readonly memoryRevisions = new Map<string,string>();
+  private readonly publicationReceipts = new Map<string,string>();
+
+  /** Explicit queue owner, never an ambient job/lease. Bound once by runtime. */
+  public bindJobQueue(queue: JobQueue): void {
+    if(this.jobQueue===queue) return;
+    if(this.jobQueue && this.jobQueue!==queue) throw new Error('Graph cache already belongs to another queue');
+    this.jobQueue=queue;
+    queue.on('job:enqueued',job=>{
+      if(!queue.getBackend().getMemoryGraphHead) return;
+      for(const token of job.graphGenerations ?? []) {
+        const graph=this.entries.get(this.entryKey(token.orgId,token.repoId))?.graph;
+        if(graph) graph.metadata.publication=queue.getBackend().getMemoryGraphHead!(token.orgId,token.repoId);
+      }
+    });
+  }
+
+  protected confirmJobPublication(job: Job): void {
+    this.publicationReceipts.set(job.id+'\0'+job.attemptId,JSON.stringify([job.type,job.params,job.graphGenerations,job.ownerId]));
+  }
+
+  protected hasJobPublication(job: Job): boolean {
+    return this.publicationReceipts.get(job.id+'\0'+job.attemptId)===JSON.stringify([job.type,job.params,job.graphGenerations,job.ownerId]);
+  }
+
+  public finishJobPublication(job:Job): void {this.publicationReceipts.delete(job.id+'\0'+job.attemptId);}
+
+  public async publishJobGraph(job: Job,graph: RepositoryGraph,ready?: GraphReadyPatch,signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted();
+    if(this.memoryClosed) throw new Error('Graph cache closed');
+    if(ready) throw new Error('Memory graph publication cannot attest durable READY');
+    const backend=this.jobQueue?.getBackend();
+    if(!backend?.publishMemoryGraph) throw new Error('Memory graph publication requires its admitted memory queue');
+    const orgId=String(job.params.orgId ?? ''), token=job.graphGenerations?.find(item=>item.orgId===orgId&&item.repoId===graph.repoId);
+    if(!token) throw new Error('Graph scope is not admitted');
+    const snapshot=this.sanitizeGraph(graph);
+    const revision=backend.publishMemoryGraph(job,graph.repoId,()=>this.installGraph(orgId,snapshot));
+    this.memoryRevisions.set(graphCacheKey(orgId,graph.repoId),revision);
+    const installed=this.entries.get(this.entryKey(orgId,graph.repoId))?.graph;
+    if(installed && backend.getMemoryGraphHead) installed.metadata.publication=backend.getMemoryGraphHead(orgId,graph.repoId);
+    this.confirmJobPublication(job);
+  }
+
+  public async assertJobPublished(job: Job,signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted();
+    if(!this.hasJobPublication(job)) throw new Error('Job returned without confirmed graph publication');
+    const backend=this.jobQueue?.getBackend();
+    const repoId=String(job.params.repoId ?? '');
+    if(!backend?.publishMemoryGraph || !repoId) throw new Error('Missing memory publication owner');
+    // A no-op validation uses the same synchronous actual memory attempt/head.
+    backend.publishMemoryGraph(job,repoId);
+  }
+
+  protected markGraphPublication(orgId:string,repoId:string,publication:NonNullable<RepositoryGraph['metadata']['publication']>):void {
+    const graph=this.entries.get(this.entryKey(orgId,repoId))?.graph;
+    if(graph)graph.metadata.publication={...publication};
+  }
+
+  public async flush(): Promise<void> {}
+  public async close(): Promise<void> {this.memoryClosed=true;await this.flush();}
+
+  protected installGraph(orgId: string,graph: RepositoryGraph): void {
+    this.entries.set(this.entryKey(orgId,graph.repoId),this.buildEntry(this.sanitizeGraph(graph)));
+    this.evictExpired();this.evictLru();
+  }
+
   private readonly entries = new Map<string, CacheEntry>();
   private readonly ttlMs: number;
   private readonly maxRepos: number;
@@ -181,9 +254,15 @@ export class GraphCache {
   }
 
   public setGraph(orgId: string, graph: RepositoryGraph): void {
-    this.entries.set(this.entryKey(orgId, graph.repoId), this.buildEntry(this.sanitizeGraph(graph)));
-    this.evictExpired();
-    this.evictLru();
+    const backend=this.jobQueue?.getBackend();
+    if(this.memoryClosed) throw new Error('Graph cache closed');
+    if(backend?.mutateMemoryGraph) {
+      const key=graphCacheKey(orgId,graph.repoId);
+      const revision=backend.mutateMemoryGraph(orgId,graph.repoId,this.memoryRevisions.get(key) ?? '0',()=>this.installGraph(orgId,graph));
+      this.memoryRevisions.set(key,revision);
+      const installed=this.entries.get(this.entryKey(orgId,graph.repoId))?.graph;
+      if(installed && backend.getMemoryGraphHead) installed.metadata.publication=backend.getMemoryGraphHead(orgId,graph.repoId);
+    } else this.installGraph(orgId,graph);
   }
 
   public getGraph(orgId: string, repoId: string): RepositoryGraph | undefined {
@@ -191,7 +270,13 @@ export class GraphCache {
     return entry ? cloneGraph(entry.graph) : undefined;
   }
 
-  public deleteGraph(orgId: string, repoId: string): boolean {
+  public deleteGraph(orgId: string, repoId: string, _options?: {persist?: boolean}): boolean {
+    const backend=this.jobQueue?.getBackend();
+    if(_options?.persist!==false && backend?.mutateMemoryGraph) {
+      const key=graphCacheKey(orgId,repoId);let deleted=false;
+      const revision=backend.mutateMemoryGraph(orgId,repoId,this.memoryRevisions.get(key) ?? '0',()=>{deleted=this.entries.delete(this.entryKey(orgId,repoId));});
+      this.memoryRevisions.set(key,revision);return deleted;
+    }
     return this.entries.delete(this.entryKey(orgId, repoId));
   }
 
@@ -469,7 +554,7 @@ export class GraphCache {
     };
   }
 
-  private sanitizeGraph(graph: RepositoryGraph): RepositoryGraph {
+  protected sanitizeGraph(graph: RepositoryGraph): RepositoryGraph {
     return {
       ...cloneGraph(graph),
       fileTree: graph.fileTree.map(cloneFile),
@@ -512,7 +597,7 @@ export class GraphCache {
       data,
       lastUpdated: entry.graph.lastUpdated,
       freshness: formatFreshness(entry.graph.lastUpdated),
-      stale: Date.now() > entry.expiresAt
+      stale: Date.now() > entry.expiresAt || !!(entry.graph.metadata.publication && entry.graph.metadata.publication.generation!==entry.graph.metadata.publication.requestedGeneration)
     };
   }
 

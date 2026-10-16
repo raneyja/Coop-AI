@@ -37,7 +37,7 @@ Coop chat must feel like **Cursor / Cody / Augment** (IDE), not ChatGPT web. Eve
 
 Source-validated turns carry `sourceCitationMode: "explicit"` through final completion, saved history, rendering, and Copy. Their numeric source quotes use the shared Markdown fence boundaries and preserve original code bytes, including blank lines and CRLF. Anonymous examples keep anonymous IDE chrome; nearby paths and active-file language matches cannot assign them provenance. Streaming and stopped messages use the same explicit display mode. The legacy recovery rules below remain for other historical messages; they do not override a source-validated turn's exact quote contract.
 
-1. Citation locators are recognized on the fence info-string **or** the first body line. Explicit numeric coordinates also support root files (`18:26:AGENTS.md`, `package.json:1-8`); an explicit locator wins over any nearby or active-file inference. Malformed explicit coordinates must never borrow a different nearby source. Bare path inference stays slash-only to avoid treating prose domains as source paths.
+1. Citation locators are recognized on the fence info-string **or** the first body line. Explicit numeric coordinates support clean root/nested paths, including extensionless, Unicode and space-containing names (`7:8:customconfig`), without a language or basename whitelist; evidence verification still binds the actual path and bytes. Coordinates must be positive, ordered safe integers; traversal, control characters and fence injection are invalid. An explicit locator wins over any nearby or active-file inference. Malformed explicit coordinates must never borrow a different nearby source. Bare path and trailing-label inference retain their narrower legacy rules to avoid treating prose domains as source paths. Keep the extension, admin and website parsers aligned.
 2. Placeholder locators (`startLine:endLine:…`) and path-only first lines that look like repo files **must** upgrade to `code-citation`, not `code-fence`.
 3. Locators sitting **above or immediately after** a fence, **indented** fences inside lists, unlabeled fences with a nearby repo path, **bold / File: path wrappers**, and **unclosed fences** that would swallow following lists **must** still render as cite — never anonymous Copy boxes wrapping the rest of the answer.
 4. Mistaken ` ```lang ` dumps of repo code **must** upgrade to cite when:
@@ -53,6 +53,8 @@ Source-validated turns carry `sourceCitationMode: "explicit"` through final comp
 ## Prompt contract
 
 `CURSOR_STYLE_OUTPUT_CONTRACT` in `src/prompts/systemPrompts.ts` owns model-facing rules. Keep PASS/FAIL examples with **numeric** line ranges. Any change to cite/edit/anonymous behavior updates this rule **and** that contract **and** parser tests together.
+
+Frozen source-backed quick actions use `SOURCE_QUICK_ACTION_OUTPUT_CONTRACT` from the same module instead of the legacy generation template. Models select contained numeric source markers; the shared renderer emits exact-byte citation fences locally. The UI citation contract and parser stay the same. Do not append raw-code or exhaustive-section generation instructions to that frozen protocol.
 
 ## Self-check before merging chat/prose/prompt changes
 

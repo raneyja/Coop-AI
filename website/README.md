@@ -10,7 +10,7 @@ This folder is self-contained — it does not share dependencies with the VS Cod
 |-------|---------|
 | `/` | Home — hero, features, testimonial, trust badges |
 | `/product` | Product capabilities and quick actions |
-| `/enterprise` | Zero-retention, BYOK, enterprise features |
+| `/enterprise` | Request controls, SSO, enterprise deployment |
 | `/pricing` | Pricing tiers (placeholder during beta) |
 | `/security` | Security architecture and honest trust posture |
 | `/privacy` | Privacy Policy |

@@ -1,7 +1,7 @@
 /**
  * Knowledge Gaps focus adherence — gather query + audit scope when the user
- * typed text after `/gaps …`. Focus is the primary topic; leftover open-file
- * chips are secondary at most when unrelated.
+ * typed text after `/gaps …`. An explicit selected-file reference keeps that
+ * file primary; otherwise focus outranks unrelated leftover file chips.
  */
 
 import { focusQueryForRetrieval, tokenizeFocusTerms } from "./userFocusQuery";
@@ -81,6 +81,11 @@ export function knowledgeGapsGatherQuery(userFocus?: string): string | undefined
   return focusQueryForRetrieval(userFocus);
 }
 
+/** User scope outranks filename similarity, regardless of language or layout. */
+export function knowledgeGapsFocusUsesSelectedFile(userFocus?: string): boolean {
+  return /\b(?:this\s+file|this\s+selected\b|(?:this|the)\s+(?:selected|attached|open|current)\s+file\b)/i.test(userFocus ?? "");
+}
+
 /** Code-rule audits have a different answer contract from repository health scans. */
 export function isKnowledgeGapsCodeRuleAudit(userFocus?: string): boolean {
   return Boolean(knowledgeGapsGatherQuery(userFocus) &&
@@ -145,7 +150,7 @@ export function knowledgeGapsTopicContentTokens(topic: string): string[] {
   );
 }
 
-/** True when the open file path shares a content token with the focus ask. */
+/** Explicit selected-file scope, otherwise lexical relevance to the focus ask. */
 export function openFileRelatedToGapsFocus(
   file: string | undefined,
   userFocus: string | undefined
@@ -154,6 +159,9 @@ export function openFileRelatedToGapsFocus(
   const gather = knowledgeGapsGatherQuery(userFocus);
   if (!path || !gather) {
     return false;
+  }
+  if (knowledgeGapsFocusUsesSelectedFile(userFocus)) {
+    return true;
   }
   const normalized = path.replace(/\\/g, "/").toLowerCase();
   // Prefer topic content tokens so "documentation" in a verbose ask doesn't
@@ -171,7 +179,8 @@ export function openFileRelatedToGapsFocus(
 
 /**
  * Resolve Gaps audit scope for gather + synthesis.
- * When focus F is present: F is primary; unrelated open file is secondary only.
+ * Explicit selected-file scope wins; otherwise focus is primary and unrelated
+ * open files remain secondary.
  */
 export function resolveKnowledgeGapsAuditScope(options: {
   file?: string;
@@ -188,6 +197,10 @@ export function resolveKnowledgeGapsAuditScope(options: {
       relatedOpenFile: file,
       focusPrimary: false
     };
+  }
+
+  if (file && knowledgeGapsFocusUsesSelectedFile(options.userFocus)) {
+    return { gatherQuery, focusTopics, relatedOpenFile: file, focusPrimary: false };
   }
 
   const hitRelated =

@@ -6,7 +6,7 @@ import { isGeneratedOrVendorPath } from "./evidencePathNoise";
 import { UNKNOWN_HIT_LINE } from "./graphSearchHit";
 import { mentionPathMinScore, rankMentionPathHits, scoreMentionPath } from "./mentionPathScore";
 import { filterReposOwnedByOrg, type RepoAccessCaller } from "./orgRepoMembership";
-import { buildZoektScopedQuery, repoIdFromZoektRepo } from "./zoektShardIdentity";
+import { buildZoektScopedQuery, quoteZoektToken, repoIdFromZoektRepo } from "./zoektShardIdentity";
 
 export type SearchHitSource = "scip" | "zoekt" | "embedding" | "fallback";
 
@@ -338,10 +338,6 @@ async function collectMentionPathHits(
 }
 
 const isNoisyMentionPath = isGeneratedOrVendorPath;
-
-function quoteZoektToken(value: string): string {
-  return value.includes(" ") ? `"${value.replace(/"/g, '\\"')}"` : value;
-}
 
 // ---------------------------------------------------------------------------
 // SCIP symbol search

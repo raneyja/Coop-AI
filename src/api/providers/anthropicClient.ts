@@ -6,6 +6,8 @@ import { runResilientRequest } from "../networkResilience";
 import { LLM_STREAM_CONNECT_TIMEOUT_MS } from "../../config/responseDeadline";
 import { anthropicUsesAdaptiveThinking } from "../../config/chatThinkingBudget";
 
+type AnthropicParseState = ParseState & { messageStopped?: boolean };
+
 export function applyAnthropicThinking(
   body: Record<string, unknown>,
   options: {
@@ -106,8 +108,12 @@ export class AnthropicProviderClient extends BaseProviderClient {
       maxTokens: options.maxTokens,
       thinking: options.thinking
     });
+    if (options.responseSchema) {
+      body.output_config = {...(body.output_config as Record<string, unknown> | undefined),
+        format: {type: "json_schema", schema: options.responseSchema}};
+    }
 
-    const state: ParseState = { text: "" };
+    const state: AnthropicParseState = { text: "" };
     let response: Response;
     try {
       response = await runResilientRequest({
@@ -156,9 +162,32 @@ export class AnthropicProviderClient extends BaseProviderClient {
             yield chunk;
           } else if (chunk?.type === "thinking") {
             yield chunk;
+          } else if (chunk?.type === "error") {
+            yield { type: "done", usage: resolveUsage("anthropic", options, state), model: options.model,
+              provider: "anthropic", finishReason: "error" };
+            yield chunk;
+            return;
           }
         }
       }
+      buffer += decoder.decode();
+      for (const line of buffer.split("\n")) {
+        const chunk = parseAnthropicLine(line, state);
+        if (chunk?.type === "delta") { state.text += chunk.text; yield chunk; }
+        else if (chunk?.type === "thinking") yield chunk;
+        else if (chunk?.type === "error") {
+          yield { type: "done", usage: resolveUsage("anthropic", options, state), model: options.model,
+            provider: "anthropic", finishReason: "error" };
+          yield chunk;
+          return;
+        }
+      }
+    } catch (error) {
+      const cancelled = options.signal?.aborted === true;
+      yield { type: "done", usage: resolveUsage("anthropic", options, state), model: options.model,
+        provider: "anthropic", finishReason: cancelled ? "cancelled" : "error" };
+      if (!cancelled) yield { type: "error", message: error instanceof Error ? error.message : "Anthropic stream failed." };
+      return;
     } finally {
       reader.releaseLock();
     }
@@ -168,16 +197,24 @@ export class AnthropicProviderClient extends BaseProviderClient {
       usage: resolveUsage("anthropic", options, state),
       model: options.model,
       provider: "anthropic",
-      finishReason: state.finishReason ?? "stop"
+      finishReason: options.signal?.aborted ? "cancelled" : state.messageStopped ? state.finishReason ?? "error" : "error"
     };
+    if (!options.signal?.aborted && (!state.messageStopped || !state.finishReason || state.finishReason === "error")) {
+      yield { type: "error", message: "Anthropic stream ended without a supported completed message." };
+    }
   }
 }
 
 /** Exported for unit tests — parses one Anthropic SSE data line. */
-export function parseAnthropicLine(line: string, state: ParseState): StreamChunk | undefined {
+export function parseAnthropicLine(line: string, state: AnthropicParseState): StreamChunk | undefined {
   const data = parseSseDataLine(line) as Record<string, unknown> | undefined;
   if (!data || typeof data.type !== "string") {
     return undefined;
+  }
+  if (data.type === "error") {
+    const error = data.error as Record<string, unknown> | undefined;
+    return { type: "error", message: typeof error?.message === "string" ? error.message.slice(0, 500) : "Anthropic stream failed.",
+      code: typeof error?.type === "string" ? error.type : undefined };
   }
   if (data.type === "message_start") {
     const message = data.message as Record<string, unknown> | undefined;
@@ -203,6 +240,7 @@ export function parseAnthropicLine(line: string, state: ParseState): StreamChunk
     return undefined;
   }
   if (data.type === "message_stop") {
+    state.messageStopped = true;
     const usage = data.usage as Record<string, unknown> | undefined;
     const outputTokens = readUsageInt(usage?.output_tokens);
     if (outputTokens !== undefined) {
@@ -218,7 +256,8 @@ export function parseAnthropicLine(line: string, state: ParseState): StreamChunk
     const delta = data.delta as Record<string, unknown> | undefined;
     const reason = delta?.stop_reason;
     if (typeof reason === "string") {
-      state.finishReason = reason === "max_tokens" ? "length" : "stop";
+      state.finishReason = reason === "max_tokens" || reason === "model_context_window_exceeded" ? "length"
+        : reason === "end_turn" || reason === "stop_sequence" || reason === "refusal" ? "stop" : "error";
     }
   }
   return undefined;

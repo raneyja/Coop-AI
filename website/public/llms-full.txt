@@ -52,7 +52,7 @@ Answer-shaped posts:
 
 - Free Developer: limited Deep-Indexed repos, core workflows
 - Pro: team seats, expanded indexing
-- Enterprise: SSO, zero-retention / BYOK options, self-host path
+- Enterprise: SSO, provider request controls, enterprise deployment
 
 Pricing: https://coop-ai.dev/pricing
 
@@ -61,7 +61,7 @@ Pricing: https://coop-ai.dev/pricing
 - Zero-clone indexing for repos
 - Live query for collaboration tools (no standing Slack/docs index)
 - Multi-tenant isolation by org
-- Enterprise options for zero-retention LLM routing and BYOK
+- Confidential-context request formatting; provider account retention requires verification
 
 Security: https://coop-ai.dev/security
 

@@ -3,11 +3,11 @@
 
 [build]
 builder = "dockerfile"
-dockerfilePath = "Dockerfile"
+dockerfilePath = "Dockerfile.api"
 
 [deploy]
-startCommand = "node dist/webhookServer.js"
-preDeployCommand = "node scripts/run-migrations.mjs"
+startCommand = "/nodejs/bin/node dist/webhookServer.js"
+preDeployCommand = "/nodejs/bin/node scripts/run-migrations.mjs"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"

@@ -1,8 +1,13 @@
 # /fix patch lifecycle — October 9, 2026
 
-Status: Automated Pass; ready for Reload dogfood. Test 8 live Apply remains open.
-Jon clarified that **only Apply failed**. His completed live `/edit` baseline
-remains completed; this work does not reopen unrelated product testing.
+Status: Fixed / live Pass based on Jon's direct confirmation that `/fix` Apply,
+Undo, Reject, and Create PR all work as intended. The live Apply item is closed.
+The confirmation did not supply a candidate hash or repository/ref; none is
+inferred. His completed live `/edit` baseline remains completed. Reopen only an
+observed regression or explicitly requested requalification.
+
+The findings and replay instructions below describe the earlier investigation
+and automated qualification. They do not override the latest user confirmation.
 
 The supplied screenshot was readable. It shows the proposed status interpolation
 in the editor, an unsaved indicator, and an applied Patch card. It establishes an
@@ -57,7 +62,7 @@ These are automated fixture results. They do not reproduce the original live
 failure or qualify actual codehost publication from Jon's account. The built
 candidate includes the shared checkout's preserved and concurrent work.
 
-## Exact live replay, after Jon finishes his current tests
+## Historical live replay plan — superseded by Jon's confirmation
 
 1. **Extension UI:** Reload Window in the Extension Development Host. Open a
    fresh Coop chat, select `CoopAI-Corp/documenso`, branch `main`, and attach
@@ -82,5 +87,5 @@ candidate includes the shared checkout's preserved and concurrent work.
 
 Apply edits the editor working buffer. Saving or publishing through Create pull
 request is a separate operation. Closing an unsaved viewing buffer does not
-publish changes to the codehost. No live Pass is claimed until the named replay
-succeeds.
+publish changes to the codehost. This earlier replay plan is retained as history;
+Jon's subsequent confirmation closes the live workflow gate.

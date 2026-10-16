@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 
 export type AuthProvider = "password" | "google" | "saml";
 
@@ -12,7 +12,9 @@ export type AuthIdentityRecord = {
 };
 
 export class AuthIdentityStore {
-  public constructor(private readonly pool: Pool) {}
+  public constructor(private readonly pool: Pick<Pool, "query">) {}
+
+  public inTransaction(client: PoolClient): AuthIdentityStore { return new AuthIdentityStore(client); }
 
   public async findPasswordIdentity(userId: string): Promise<AuthIdentityRecord | undefined> {
     return this.findByUserAndProvider(userId, "password");

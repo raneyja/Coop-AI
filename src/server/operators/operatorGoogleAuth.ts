@@ -35,13 +35,15 @@ export class OperatorGoogleAuthService {
     }
     return this.google.buildAuthorizeUrl(normalizedRedirect, {
       mode: "login",
-      redirect: postLoginRedirect
+      redirect: postLoginRedirect,
+      callbackUri: normalizedRedirect
     });
   }
 
   public async exchangeCodeForSession(
     deps: OperatorGoogleAuthDeps,
     code: string,
+    stateRaw: string,
     redirectUri: string
   ): Promise<
     | { ok: true; token: string; expiresAt: Date; operator: { id: string; email: string; name?: string; role: string } }
@@ -63,6 +65,16 @@ export class OperatorGoogleAuthService {
         status: 400,
         error: "invalid_redirect_uri",
         message: "OAuth redirect URI is not allowed for operator sign-in."
+      };
+    }
+
+    const state = this.google.parseState(stateRaw);
+    if (!state || state.mode !== "login" || state.callbackUri !== normalizedRedirect) {
+      return {
+        ok: false,
+        status: 400,
+        error: "invalid_state",
+        message: "Operator sign-in session expired or did not match this callback."
       };
     }
 

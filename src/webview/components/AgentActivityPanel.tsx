@@ -114,15 +114,18 @@ function RichLabel({ text }: { text: string }): React.ReactElement {
 function ThinkingBody({ text }: { text: string }): React.ReactElement {
   // Highlight backtick code and simple identifiers like isActiveChat after punctuation.
   const nodes: React.ReactNode[] = [];
-  const pattern = /(`[^`]+`|\b[a-z][a-zA-Z0-9]*(?:[A-Z][a-zA-Z0-9]+)+\b)/g;
+  const pattern = /`[^`]+`|\b[a-z][a-zA-Z0-9]*\b/g;
   let last = 0;
   let match: RegExpExecArray | null;
   let key = 0;
   while ((match = pattern.exec(text)) !== null) {
+    const token = match[0];
+    if (!token.startsWith("`") && !/[A-Z][a-zA-Z0-9]/.test(token)) {
+      continue;
+    }
     if (match.index > last) {
       nodes.push(text.slice(last, match.index));
     }
-    const token = match[0];
     if (token.startsWith("`")) {
       nodes.push(
         <code key={`c-${key++}`} className="coop-agent-inline-code">

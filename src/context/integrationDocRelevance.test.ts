@@ -25,6 +25,10 @@ test("sanitizeIntegrationSnippet removes replacement chars and highlight markers
   assert.equal(out, "Hello world x");
 });
 
+test("sanitizeIntegrationSnippet does not decode a doubly encoded entity twice", () => {
+  assert.equal(sanitizeIntegrationSnippet("&amp;lt;script&amp;gt;"), "&lt;script&gt;");
+});
+
 test("filterDocPagesForUseRepo drops COOP ticket ADRs when Use-repo is not Coop", () => {
   const filtered = filterDocPagesForUseRepo(
     [

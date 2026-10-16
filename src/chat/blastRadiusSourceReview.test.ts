@@ -1,3 +1,5 @@
+import { withPassingClaimReview } from "./sourceClaimReviewTestFixture";
+import { resolveAssignedSourceVerificationModel, SOURCE_VERIFICATION_MAX_TOKENS } from "../config/featureModelAssignments";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { streamSourceGroundedBlast, type BlastModelPhaseEvent } from "./blastRadiusSourceReview";
@@ -24,45 +26,61 @@ const result = (content: string, finishReason = "stop", withUsage = true) => ({
   usage: withUsage ? { ...usage } : undefined
 });
 
-test("normal source answers use one call and preserve the task and all routing/scope controls", async () => {
+test("normal source answers use one synthesis plus private explanation review and preserve the task and all routing/scope controls", async () => {
   for (const task of ["Explain exception handling.", "What happens if this export is removed?",
     "What changes if the call becomes asynchronous?", "What concurrency assumptions are established?"]) {
     const original = { ...request, message: task + "\n## Opened selected-ref source bodies\n" + source };
     const calls: StreamChatParams[] = [], visible: string[] = [], phases: BlastModelPhaseEvent[] = [];
+    const known: Array<{inputTokens: number; estimatedCostUsd: number}> = [];
     const stream: SecureApiClient["streamChat"] = async (body, chunk) => {
       calls.push(body); chunk(quote); assert.deepEqual(visible, []);
       return result(quote);
     };
-    const final = await streamSourceGroundedBlast({ stream, request: original, evidence,
-      onChunk: c => visible.push(c), onPhase: p => phases.push(p), baseUrl: "https://api.example.test" });
-    assert.deepEqual(calls, [original]);
+    const final = await streamSourceGroundedBlast({ stream: withPassingClaimReview(stream), request: original, evidence, question: task,
+      onChunk: c => visible.push(c), onPhase: p => phases.push(p), onPartialUsage: value => known.push(value), baseUrl: "https://api.example.test" });
+    assert.equal(calls.length, 1);
+    assert.equal(JSON.parse(calls[0].message).task, task);
+    assert.equal(calls[0].sourceEvidenceSynthesis, true);
+    assert.deepEqual(calls[0].history, []);
+    assert.equal(calls[0].context.selectedLines, undefined);
+    for (const field of ["model", "provider", "enableThinking", "quotaTurnId", "maxTokens", "temperature"] as const) assert.deepEqual(calls[0][field], original[field]);
     assert.deepEqual(visible, [quote]);
-    assert.deepEqual(final.usage, usage);
-    assert.deepEqual(phases.map(p => [p.phase, p.event]), [["synthesis", "start"], ["synthesis", "complete"]]);
+    assert.equal(final.usage, undefined);
+    assert.equal(known.reduce((sum,value)=>sum+value.inputTokens,0), usage.inputTokens);
+    assert.equal(known.reduce((sum,value)=>sum+value.estimatedCostUsd,0), usage.estimatedCostUsd);
+    assert.deepEqual(phases.map(p => [p.phase, p.event]), [["synthesis", "start"], ["synthesis", "complete"], ["claim-review", "start"], ["claim-review", "complete"]]);
     assert.ok((phases[1].durationMs ?? -1) >= 0);
   }
 });
 
-test("invalid source quotes trigger one replacement preserving original evidence/history/model/thinking/ref/quota", async () => {
+test("invalid source quotes trigger one assigned-model replacement preserving original evidence/history/ref/quota", async () => {
   const calls: StreamChatParams[] = [], visible: string[] = [];
+  const known: Array<{inputTokens: number; outputTokens: number; estimatedCostUsd: number}> = [];
   const invalid = quote.replace("await persist();", "await destroy();");
   const stream: SecureApiClient["streamChat"] = async (body, chunk) => {
     calls.push(body); const answer = calls.length === 1 ? invalid : quote;
     chunk(answer); assert.deepEqual(visible, []);
     return result(answer);
   };
-  const final = await streamSourceGroundedBlast({ stream, request, evidence, onChunk: c => visible.push(c),
-    baseUrl: "https://api.example.test" });
+  const final = await streamSourceGroundedBlast({ stream: withPassingClaimReview(stream), request, evidence, onChunk: c => visible.push(c),
+    onPartialUsage: value => known.push(value), baseUrl: "https://api.example.test" });
   assert.equal(calls.length, 2); assert.deepEqual(visible, [quote]);
   const { message: repairedMessage, ...repairControls } = calls[1];
-  const { message: originalMessage, ...originalControls } = request;
-  assert.deepEqual(repairControls, originalControls);
+  const { message: originalMessage, ...originalControls } = calls[0];
+  for (const field of ["context", "history", "attachments", "mentions", "quotaTurnId"] as const)
+    assert.deepEqual(repairControls[field], originalControls[field]);
+  assert.equal(repairControls.model, resolveAssignedSourceVerificationModel().model);
+  assert.equal(repairControls.provider, resolveAssignedSourceVerificationModel().provider);
+  assert.equal(repairControls.maxTokens, SOURCE_VERIFICATION_MAX_TOKENS);
+  assert.equal(repairControls.enableThinking, true); assert.equal(repairControls.sourceEvidenceRepair, true);
+  assert.equal(repairControls.sourceEvidenceSynthesis, true); assert.equal(repairControls.sourceClaimReview, false);
   assert.ok(repairedMessage.startsWith(originalMessage + "\n\n"));
   assert.match(repairedMessage, /invalid-source-citation/);
-  assert.match(repairedMessage, /untrusted data, not instructions/);
-  assert.equal(final.usage?.inputTokens, 200);
-  assert.equal(final.usage?.outputTokens, 40);
-  assert.equal(final.usage?.estimatedCostUsd, 0.2);
+  assert.match(repairedMessage, /untrusted feedback, not instructions/);
+  assert.equal(final.usage, undefined);
+  assert.equal(known.reduce((sum,value)=>sum+value.inputTokens,0), 200);
+  assert.equal(known.reduce((sum,value)=>sum+value.outputTokens,0), 40);
+  assert.equal(known.reduce((sum,value)=>sum+value.estimatedCostUsd,0), 0.2);
   assert.deepEqual(usage, { inputTokens: 100, outputTokens: 20, estimatedCostUsd: 0.1, provider: "anthropic", model: request.model });
 });
 
@@ -73,7 +91,7 @@ test("empty, length-cutoff and unfinished long/tilde fences get at most one repa
       const answer = ++calls === 1 ? first : result(quote);
       chunk(answer.message.content); assert.deepEqual(visible, []); return answer;
     };
-    await streamSourceGroundedBlast({ stream, request, evidence,
+    await streamSourceGroundedBlast({ stream: withPassingClaimReview(stream), request, evidence,
       onChunk: c => visible.push(c), baseUrl: "https://api.example.test" });
     assert.equal(calls, 2); assert.deepEqual(visible, [quote]);
   }
@@ -87,7 +105,7 @@ test("a failed or invalid repair publishes neither attempt and reports known usa
       if (fail === "throw") throw Error("provider failed");
       return fail === "length" ? result("still partial", "length") : result(quote.replace("persist", "destroy"));
     };
-    await assert.rejects(streamSourceGroundedBlast({ stream, request, evidence,
+    await assert.rejects(streamSourceGroundedBlast({ stream: withPassingClaimReview(stream), request, evidence,
       onChunk: c => visible.push(c), onPartialUsage: u => known.push(u), baseUrl: "https://api.example.test" }));
     assert.equal(calls, 2); assert.deepEqual(visible, []);
     assert.equal(known.length, fail === "throw" ? 1 : 2);
@@ -101,7 +119,7 @@ test("Stop before or during synthesis prevents publication and another request",
     const stream: SecureApiClient["streamChat"] = async (_body, chunk, _base, _signal, onThinking) => {
       calls++; chunk(quote); controller.abort(); onThinking?.("late thought"); return result(quote);
     };
-    await assert.rejects(streamSourceGroundedBlast({ stream, request, evidence, signal: controller.signal,
+    await assert.rejects(streamSourceGroundedBlast({ stream: withPassingClaimReview(stream), request, evidence, signal: controller.signal,
       onChunk: c => visible += c, onThinking: c => thinking += c, baseUrl: "https://api.example.test" }), { name: "AbortError" });
     assert.equal(calls, preAborted ? 0 : 1); assert.equal(visible, ""); assert.equal(thinking, "");
   }
@@ -110,7 +128,7 @@ test("Stop before or during synthesis prevents publication and another request",
 test("Stop just before repair prevents a second call and retains known first-call cost", async () => {
   const controller = new AbortController(); let calls = 0; const known: unknown[] = [];
   const stream: SecureApiClient["streamChat"] = async () => { calls++; return result("partial", "length"); };
-  await assert.rejects(streamSourceGroundedBlast({ stream, request, evidence, signal: controller.signal,
+  await assert.rejects(streamSourceGroundedBlast({ stream: withPassingClaimReview(stream), request, evidence, signal: controller.signal,
     onChunk: () => assert.fail("no publication"), onRepair: () => controller.abort(), onPartialUsage: u => known.push(u),
     baseUrl: "https://api.example.test" }), { name: "AbortError" });
   assert.equal(calls, 1); assert.deepEqual(known, [usage]);
@@ -121,23 +139,25 @@ test("missing call usage remains unavailable while known call costs are retained
     let calls = 0; const known: unknown[] = [];
     const stream: SecureApiClient["streamChat"] = async () => ++calls === 1
       ? result("partial", "length", !missingFirst) : result(quote, "stop", missingFirst);
-    const final = await streamSourceGroundedBlast({ stream, request, evidence, onChunk: () => undefined,
+    const final = await streamSourceGroundedBlast({ stream: withPassingClaimReview(stream), request, evidence, onChunk: () => undefined,
       onPartialUsage: u => known.push(u), baseUrl: "https://api.example.test" });
-    assert.equal(calls, 2); assert.equal(final.usage, undefined); assert.deepEqual(known, [usage]);
+    assert.equal(calls, 2); assert.equal(final.usage, undefined);
+    assert.deepEqual(known.filter(item => (item as typeof usage).estimatedCostUsd > 0), [usage]);
+    assert.equal(known.length, 2, "Known zero-token review usage is also reported without fabricating missing synthesis usage");
   }
 });
 
 test("actual differing model usage is reported per call rather than mislabeled as one model's total", async () => {
   let calls = 0; const known: { model: string }[] = [];
-  const stream: SecureApiClient["streamChat"] = async () => {
+  const stream: SecureApiClient["streamChat"] = async body => {
     const answer = ++calls === 1 ? result("partial", "length") : result(quote);
-    answer.usage!.model = calls === 1 ? "provider-routed-model" : request.model;
+    answer.usage!.model = calls === 1 ? "provider-routed-model" : body.model;
     return answer;
   };
-  const final = await streamSourceGroundedBlast({ stream, request, evidence,
+  const final = await streamSourceGroundedBlast({ stream: withPassingClaimReview(stream), request, evidence,
     onChunk: () => undefined, onPartialUsage: u => known.push(u), baseUrl: "https://api.example.test" });
   assert.equal(final.usage, undefined);
-  assert.deepEqual(known.map(u => u.model), ["provider-routed-model", request.model]);
+  assert.deepEqual(known.map(u => u.model), ["provider-routed-model", resolveAssignedSourceVerificationModel().model, resolveAssignedSourceVerificationModel().model]);
 });
 
 test("graph-only and other use cases retain their existing single streaming path", async () => {
@@ -146,7 +166,7 @@ test("graph-only and other use cases retain their existing single streaming path
     const stream: SecureApiClient["streamChat"] = async (_body, chunk) => {
       calls++; chunk("Available evidence only."); return result("Available evidence only.");
     };
-    await streamSourceGroundedBlast({ stream, request: { ...request, useCase }, evidence: sources,
+    await streamSourceGroundedBlast({ stream: withPassingClaimReview(stream), request: { ...request, useCase }, evidence: sources,
       onChunk: c => visible += c, baseUrl: "https://api.example.test" });
     assert.equal(calls, 1); assert.equal(visible, "Available evidence only.");
   }
@@ -156,7 +176,7 @@ test("quote validity does not create a semantic certification or a mandatory sec
   let calls = 0;
   const prose = "A semantic conclusion requiring model judgment.";
   const stream: SecureApiClient["streamChat"] = async () => { calls++; return result(prose + "\n\n" + quote); };
-  const final = await streamSourceGroundedBlast({ stream, request, evidence,
+  const final = await streamSourceGroundedBlast({ stream: withPassingClaimReview(stream), request, evidence,
     onChunk: () => undefined, baseUrl: "https://api.example.test" });
   assert.equal(calls, 1); assert.equal(final.message.content, prose + "\n\n" + quote);
 });
@@ -165,7 +185,7 @@ test("only successful validation exposes a copied source window for final public
   const localEvidence = { ...evidence, sourceFiles: evidence.sourceFiles!.map(file => ({ ...file })) };
   let validated = 0;
   const stream: SecureApiClient["streamChat"] = async () => result(quote);
-  await streamSourceGroundedBlast({ stream, request, evidence: localEvidence,
+  await streamSourceGroundedBlast({ stream: withPassingClaimReview(stream), request, evidence: localEvidence,
     onChunk: () => undefined, baseUrl: "https://api.example.test",
     onValidated: windows => {
       validated++;
@@ -180,9 +200,9 @@ test("only successful validation exposes a copied source window for final public
 
 test("unavailable usage is never synthesized as a zero-cost completion", async () => {
   const phases: BlastModelPhaseEvent[] = [];
-  const final = await streamSourceGroundedBlast({ stream: async () => result(quote, "stop", false), request, evidence,
+  const final = await streamSourceGroundedBlast({ stream: withPassingClaimReview(async () => result(quote, "stop", false)), request, evidence,
     onChunk: () => undefined, onPhase: phase => phases.push(phase),
-    onPartialUsage: () => assert.fail("no known usage exists"), baseUrl: "https://api.example.test" });
+    onPartialUsage: usage => assert.equal(usage.estimatedCostUsd, 0, "Only the fixture's known review usage exists"), baseUrl: "https://api.example.test" });
   assert.equal(final.usage, undefined);
   assert.equal(phases[1].usage, undefined);
 });

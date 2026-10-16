@@ -1,4 +1,3 @@
-import * as fs from "node:fs";
 import * as path from "node:path";
 import type { Pool } from "pg";
 import { JobCancelledError } from "../jobs/errorHandling";
@@ -7,6 +6,9 @@ import { yieldToEventLoop } from "./eventLoopYield";
 import { RepoEmbeddingsStore, type EmbeddingInsertRow } from "./repoEmbeddingsStore";
 import { RepoSymbolIndexStore } from "./repoSymbolIndexStore";
 import { chunkFileSource, listEmbeddableFiles, type TextChunk } from "./treeSitterChunker";
+import { withJobOwnedEffect } from '../jobs/jobEffectAdmission';
+import type { Job } from '../jobs/types';
+import { readBoundedCloneFile } from "./readBoundedCloneFile";
 
 const MAX_FILE_BYTES = 512 * 1024;
 const FILE_YIELD_INTERVAL = 20;
@@ -20,6 +22,7 @@ export type ChunkAndEmbedResult = {
 
 export type ChunkAndEmbedOptions = {
   signal?: AbortSignal;
+  job?: Job;
   onProgress?: (fraction: number) => void | Promise<void>;
 };
 
@@ -38,6 +41,12 @@ export async function chunkAndEmbed(
 ): Promise<ChunkAndEmbedResult> {
   const symbolStore = new RepoSymbolIndexStore(pool);
   const embeddingStore = new RepoEmbeddingsStore(pool);
+  const replace = (rows: EmbeddingInsertRow[], date: Date) => {
+    assertNotAborted(options.signal);
+    return options.job ? withJobOwnedEffect(pool, options.job,
+      client => new RepoEmbeddingsStore(client).replaceForRepo(orgId,repoId,rows,date), options.signal)
+      : embeddingStore.replaceForRepo(orgId,repoId,rows,date);
+  };
   const symbolCoveredFiles = await symbolStore.loadCoveredFilePaths(orgId, repoId);
 
   const pendingChunks: TextChunk[] = [];
@@ -60,23 +69,12 @@ export async function chunkAndEmbed(
     }
 
     const absolutePath = path.join(localPath, filePath);
-    let stat: fs.Stats;
-    try {
-      stat = fs.statSync(absolutePath);
-    } catch {
+    const result = readBoundedCloneFile(absolutePath, MAX_FILE_BYTES);
+    if (result.kind === "skip") {
+      if (result.reason === "oversize") skippedLargeFiles += 1;
       continue;
     }
-    if (!stat.isFile() || stat.size > MAX_FILE_BYTES) {
-      skippedLargeFiles += 1;
-      continue;
-    }
-
-    let source: string;
-    try {
-      source = fs.readFileSync(absolutePath, "utf8");
-    } catch {
-      continue;
-    }
+    const source = result.source;
     if (source.includes("\0")) {
       skippedLargeFiles += 1;
       continue;
@@ -91,7 +89,7 @@ export async function chunkAndEmbed(
   }
 
   if (pendingChunks.length === 0) {
-    await embeddingStore.replaceForRepo(orgId, repoId, [], new Date());
+    await replace([], new Date());
     return {
       embeddedFiles: 0,
       chunkCount: 0,
@@ -124,7 +122,7 @@ export async function chunkAndEmbed(
     embedding: vectors[index]
   }));
 
-  await embeddingStore.replaceForRepo(orgId, repoId, rows, createdAt);
+  await replace(rows, createdAt);
 
   return {
     embeddedFiles,

@@ -7,11 +7,14 @@ import type { CompletionRequest, CompletionResponse, LlmAuditEvent, StreamChunk 
 import { configuredProviders, loadLlmServerConfig, resolveProviderApiKey, type LlmServerConfig } from "./llmServerConfig";
 import { createProviderClient, createFimClient } from "./providers";
 import { selectFimProvider } from "./fimRouter";
-import { buildUserMessageWithContext, buildProjectInstructionsSystemBlock, systemPromptForUseCase } from "../prompts/systemPrompts";
+import { buildUserMessageWithContext, buildProjectInstructionsSystemBlock, systemPromptForUseCase, SOURCE_QUICK_ACTION_OUTPUT_CONTRACT } from "../prompts/systemPrompts";
 import { REPO_SUMMARY_LOCATE_ONLY_MARKER } from "../prompts/repoSummarySynthesis";
 import { KNOWLEDGE_GAPS_CODE_RULE_AUDIT_MARKER } from "../prompts/knowledgeGapsSynthesis";
 import { appendUserPaperclipAttachmentsPrompt } from "../chat/paperclipAttachments";
 import { resolveProviderThinking } from "../config/modelThinking";
+import { SOURCE_CLAIM_REVIEW_SYSTEM, SOURCE_CLAIM_REVIEW_JSON_SCHEMA } from "../prompts/sourceClaimReview";
+import { supportsStructuredSourceReview } from "../config/sourceClaimReviewPolicy";
+import { SOURCE_EVIDENCE_SYNTHESIS_SYSTEM } from "../prompts/sourceEvidenceSynthesis";
 
 // The enterprise-confidential retention preamble is owned solely by
 // requestFormatter.injectZeroRetentionSystemPrompt, so it is prepended once at
@@ -26,6 +29,15 @@ function requestHasPaperclipAttachments(request: CompletionRequest): boolean {
 }
 
 function buildChatSystemContent(request: CompletionRequest, overridePrompt?: string): string {
+  if (request.sourceClaimReview || request.sourceEvidenceSynthesis) {
+    if (!["blast_radius", "knowledge_gaps", "comprehension", "decision_archaeology", "ownership"].includes(request.useCase)) {
+      throw new Error("Source claim review requires a source quick action");
+    }
+    if (request.sourceClaimReview) return SOURCE_CLAIM_REVIEW_SYSTEM;
+    // The frozen envelope replaces legacy action bundles. Their templates
+    // request raw code and broad sections that conflict with this protocol.
+    return `${SOURCE_EVIDENCE_SYNTHESIS_SYSTEM}\n\n${SOURCE_QUICK_ACTION_OUTPUT_CONTRACT}`;
+  }
   if (overridePrompt) {
     return overridePrompt;
   }
@@ -75,7 +87,9 @@ export class ModelRouter {
   public async *stream(request: CompletionRequest, signal?: AbortSignal): AsyncGenerator<StreamChunk> {
     const started = Date.now();
     const provider = this.resolveProvider(request);
-    const userContent = appendUserPaperclipAttachmentsPrompt(
+    // Private audit payload is already a frozen structured envelope. Ordinary
+    // chat intent/context directives must never reclassify its candidate text.
+    const userContent = request.sourceClaimReview || request.sourceEvidenceSynthesis ? request.message : appendUserPaperclipAttachmentsPrompt(
       buildUserMessageWithContext(request.message, request.context),
       request.attachments
     );
@@ -135,7 +149,10 @@ export class ModelRouter {
         maxTokens: request.modelConfig.maxTokens,
         signal,
         requestId: request.requestId,
-        thinking
+        thinking,
+        responseSchema: request.sourceClaimReview && supportsStructuredSourceReview(provider, request.modelConfig.model)
+          ? SOURCE_CLAIM_REVIEW_JSON_SCHEMA : undefined,
+        requireCompletedMessage: Boolean(request.sourceClaimReview || request.sourceEvidenceSynthesis)
       })) {
         if (chunk.type === "done") {
           inputTokens = chunk.usage.inputTokens;
@@ -226,7 +243,7 @@ export class ModelRouter {
         usage: {
           inputTokens,
           outputTokens,
-          estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens)
+          estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens, route.model)
         },
         model: route.model,
         provider,
@@ -380,7 +397,7 @@ export class ModelRouter {
         usage: {
           inputTokens,
           outputTokens,
-          estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens)
+          estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens, route.model)
         },
         model: route.model,
         provider,
@@ -554,7 +571,7 @@ export class ModelRouter {
       usage: {
         inputTokens,
         outputTokens,
-        estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens)
+        estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens, model)
       },
       model,
       provider,
@@ -595,7 +612,7 @@ export class ModelRouter {
       usage: {
         inputTokens,
         outputTokens,
-        estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens)
+        estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens, model)
       },
       model,
       provider,
@@ -637,7 +654,7 @@ export class ModelRouter {
       usage: {
         inputTokens,
         outputTokens,
-        estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens)
+        estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens, request.modelConfig.model)
       },
       model: request.modelConfig.model,
       provider,

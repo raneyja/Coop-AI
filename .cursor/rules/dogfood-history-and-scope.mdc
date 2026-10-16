@@ -11,16 +11,21 @@ alwaysApply: true
   evidence that historical testing never happened.
 - Preserve completed baseline work and existing in-progress changes. Keep
   historical passes, current-candidate passes, observed regressions, and
-  genuinely untested cases separate. Reopen a completed area only for a
-  specific observed regression or an explicitly requested new qualification.
+  genuinely untested cases separate. Requalify affected changed behavior,
+  a specific observed regression or an explicitly requested new qualification.
 - Jon confirmed on October 7, 2026 that sign-in/account switching, repository
   switching, integrations, billing, autocomplete, editing, and reload testing
-  were already completed. The active repair is file selection -> body read ->
-  source retention -> grounded answer/citation. See
-  `docs/dogfood/runs/2026-10-07-file-context/README.md` for its evidence ledger.
+  were already completed. Those are historical baseline passes; see
+  `docs/dogfood/runs/2026-10-07-file-context/README.md`. Read the relevant later
+  run reports and the human's current scope to identify the active repair.
+  October 11 quick-action, startup and response-measurement reports retain
+  their own results and limitations. Once enterprise work is launched, its
+  `docs/enterprise-hardening/run/STATUS.md` and gate results own current progress.
 - Do not say “we still need to test billing/sign-in” because this file-context
   candidate has no new billing/sign-in entry. Say “the historical baseline
-  remains completed; this candidate's closed-file read still needs a replay.”
+  remains completed; the changed path or specifically requested recovery/
+  security scenario still needs qualification.” Historical happy-path passes
+  do not certify new crash, access-control, load or enterprise requirements.
 - Follow `ship-claim-discipline.mdc`: automated green is not a live Pass. A
   completion report must name actual live results and any remaining gaps in
   plain language; do not silently stop after tests or a build.

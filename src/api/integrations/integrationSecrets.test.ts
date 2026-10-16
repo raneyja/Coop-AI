@@ -1,20 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mergeIntegrationCredentialsForTests } from "./integrationSecrets";
+import { IntegrationSecrets } from "./integrationSecrets";
+import type { IntegrationProxy } from "./integrationOperations";
 
-test("org cloud Slack token wins over a leftover local bot token", () => {
-  const merged = mergeIntegrationCredentialsForTests(
-    { slackToken: "xoxb-local-bot-leftover" },
-    { slackToken: "xoxp-org-user-token" }
-  );
-  assert.equal(merged.slackToken, "xoxp-org-user-token");
+function secrets() {
+  return new IntegrationSecrets({ get: async () => "synthetic-local-token" } as never);
+}
+test("organization mode returns only the authenticated proxy, never local credentials", async () => {
+  const store = secrets();
+  const proxy: IntegrationProxy = async () => undefined as never;
+  store.setCloudFetcher(async () => ({ proxy }));
+  assert.deepEqual(await store.getCredentials(), { proxy });
 });
-
-test("local Slack token remains when cloud has no Slack credential", () => {
-  const merged = mergeIntegrationCredentialsForTests(
-    { slackToken: "xoxp-local-only" },
-    { jiraToken: "atlassian-cloud" }
-  );
-  assert.equal(merged.slackToken, "xoxp-local-only");
-  assert.equal(merged.jiraToken, "atlassian-cloud");
+test("cloud authorization failure cannot fall back to local credentials", async () => {
+  const store = secrets();
+  store.setCloudFetcher(async () => { throw new Error("denied"); });
+  await assert.rejects(store.getCredentials(), /denied/);
+});
+test("signed-out explicitly local configuration remains available", async () => {
+  const store = secrets();
+  store.setCloudFetcher(async () => undefined);
+  assert.equal((await store.getCredentials()).slackToken, "synthetic-local-token");
 });

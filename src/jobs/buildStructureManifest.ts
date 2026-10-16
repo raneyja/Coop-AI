@@ -7,10 +7,10 @@ import { RepoManifestStore } from "../manifest/repoManifestStore";
 import { resolveCodeHostTokenForOrg } from "../server/codeHostCredentialResolver";
 import { getConnector } from "../server/codeHostConnectors/registry";
 import { gitlabApiBaseUrl, loadGitLabAppConfig } from "../server/gitlabAppConfig";
-import { CollectionStore } from "../server/collectionStore";
 import { getDbPool, requireDbPool } from "../server/db";
 import { buildPartialFailure } from "./errorHandling";
 import type { Job } from "./types";
+import { withJobOwnedEffect } from "./jobEffectAdmission";
 import type { JobExecutionContext, ProgressReporter } from "./executors";
 
 const require = createRequire(__filename);
@@ -90,15 +90,16 @@ export async function buildStructureManifest(
   }
 
   const pool = requireDbPool(await getDbPool());
-  const repoIds = collectionId
-    ? await new CollectionStore(pool).listCollectionRepoIds(orgId, collectionId)
-    : [repoId!];
+  // Membership is frozen by the logical submission transaction. A later
+  // collection edit cannot widen this admitted attempt's durable write scope.
+  const repoIds = job.graphGenerations?.filter(item=>item.orgId===orgId).map(item=>item.repoId) ?? [];
+
   if (repoIds.length === 0) {
     throw new Error(collectionId ? "Collection has no repos" : "repoId is required");
   }
 
   if (repoIds.length === 1) {
-    return crawlStructureManifestForRepo(orgId, repoIds[0], ctx, report, signal);
+    return crawlStructureManifestForRepo(orgId, repoIds[0], ctx, report, signal, job);
   }
 
   const completedRepos: string[] = [];
@@ -118,7 +119,7 @@ export async function buildStructureManifest(
         currentRepoId,
         ctx,
         async () => undefined,
-        signal
+        signal, job
       );
       completedRepos.push(currentRepoId);
     } catch (error) {
@@ -164,7 +165,8 @@ async function crawlStructureManifestForRepo(
   repoId: string,
   ctx: JobExecutionContext,
   report: ProgressReporter,
-  signal: AbortSignal
+  signal: AbortSignal,
+  job: Job
 ): Promise<unknown> {
   const target = parseRepoId(repoId);
 
@@ -180,8 +182,6 @@ async function crawlStructureManifestForRepo(
   }
 
   const pool = requireDbPool(await getDbPool());
-  const store = new RepoManifestStore(pool);
-
   await report(5, "Fetching repository tree");
   if (signal.aborted) {
     throw new Error("Job cancelled");
@@ -216,8 +216,11 @@ async function crawlStructureManifestForRepo(
 
   await report(90, "Saving manifest");
   const crawledAt = new Date();
-  await store.upsertManifestRows(orgId, repoId, manifestRows, crawledAt);
-  await store.deletePathsNotInSet(orgId, repoId, allPaths);
+  await withJobOwnedEffect(pool, job, async client => {
+    const store = new RepoManifestStore(client);
+    await store.upsertManifestRows(orgId, repoId, manifestRows, crawledAt);
+    await store.deletePathsNotInSet(orgId, repoId, allPaths);
+  }, signal);
 
   await report(100, "Manifest crawl complete");
   return {

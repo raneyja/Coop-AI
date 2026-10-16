@@ -66,19 +66,19 @@ Manual checklist for admin-controlled Slack channel scoping on Enterprise orgs.
 
 ## 5. API spot checks (optional)
 
-**Terminal** (replace `coop_…` and API base):
+**Terminal:** Set `COOP_API_KEY` in this shell to the developer key issued for this smoke test (`coop_…`); keep its value out of files and Git. The calls below stop locally if it is unset. Replace the API base if needed.
 
 ```bash
 # Scope status
-curl -s -H "Authorization: Bearer coop_YOUR_KEY" \
+curl -s -H "Authorization: Bearer ${COOP_API_KEY:?set COOP_API_KEY}" \
   https://api.coop-ai.dev/v1/admin/integrations/slack/scope | jq
 
 # Channel picker
-curl -s -H "Authorization: Bearer coop_YOUR_KEY" \
+curl -s -H "Authorization: Bearer ${COOP_API_KEY:?set COOP_API_KEY}" \
   "https://api.coop-ai.dev/v1/admin/integrations/slack/resources?q=eng" | jq
 
 # Extension enforcement payload
-curl -s -H "Authorization: Bearer coop_YOUR_KEY" \
+curl -s -H "Authorization: Bearer ${COOP_API_KEY:?set COOP_API_KEY}" \
   "https://api.coop-ai.dev/v1/orgs/integrations/scope?provider=slack" | jq
 ```
 

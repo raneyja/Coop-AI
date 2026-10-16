@@ -1,3 +1,4 @@
+import type { IntegrationOperation, IntegrationOperations } from "./integrations/integrationOperations";
 import axios, { AxiosInstance } from "axios";
 import type { SupportSubmission } from "../support/supportTypes";
 import { assertCoopEndpoint } from "./resolveBaseUrl";
@@ -27,6 +28,7 @@ export type IndexedRepoFileMap = {
 };
 
 export type StreamChatBody = {
+  responseTiming?: { traceId: string; callId: string };
   message: string;
   history: ChatHistoryMessage[];
   context?: ChatContextPayload;
@@ -38,6 +40,9 @@ export type StreamChatBody = {
   temperature: number;
   maxTokens: number;
   enableThinking?: boolean;
+  sourceClaimReview?: boolean;
+  sourceEvidenceSynthesis?: boolean;
+  sourceEvidenceRepair?: boolean;
   sessionMode?: "file-assistant" | "indexed-repo";
   fileSource?: "workspace" | "git" | "remote" | "external";
   quotaTurnId?: string;
@@ -759,40 +764,22 @@ export class CoopBackendClient {
     return this.getOrgIntegrationInstallationStatus(baseUrl, "teams");
   }
 
-  public async getIntegrationCredentials(
-    baseUrl: string,
-    provider: "slack" | "atlassian" | "notion" | "google-docs" | "teams"
-  ): Promise<{
-    provider: "slack" | "atlassian" | "notion" | "google-docs" | "teams";
-    accessToken: string;
-    metadata: Record<string, string | undefined>;
-    tokenExpiresAt?: string;
-  }> {
+  public async executeIntegrationOperation<K extends IntegrationOperation>(
+    baseUrl: string, operation: K, args: IntegrationOperations[K]["args"], signal?: AbortSignal
+  ): Promise<IntegrationOperations[K]["result"]> {
     assertCoopEndpoint(baseUrl);
-    const response = await this.http.get<{
-      provider: "slack" | "atlassian" | "notion" | "google-docs" | "teams";
-      accessToken: string;
-      metadata: Record<string, string | undefined>;
-      tokenExpiresAt?: string;
-    } & CoopApiErrorBody>("/v1/orgs/integrations/credentials", {
-      baseURL: baseUrl.replace(/\/$/, ""),
-      params: { provider },
-      headers: await this.authHeaders(),
-      validateStatus: () => true
-    });
-    if (response.status >= 400) {
-      throw new Error(formatCoopApiError(response.status, response.data));
-    }
-    const accessToken = response.data?.accessToken?.trim();
-    if (!accessToken) {
-      throw new Error(`${provider} credentials were not returned by the server.`);
-    }
-    return {
-      provider,
-      accessToken,
-      metadata: response.data?.metadata ?? {},
-      tokenExpiresAt: response.data?.tokenExpiresAt
-    };
+    // Omitted optional tuple arguments must stay omitted on the JSON wire.
+    const wireArgs: unknown[] = [...args];
+    while (wireArgs.length && wireArgs[wireArgs.length - 1] === undefined) wireArgs.pop();
+    const response = await this.http.post<{ result: IntegrationOperations[K]["result"] } & CoopApiErrorBody>(
+      "/v1/orgs/integrations/operate", { operation, args: wireArgs }, {
+        baseURL: baseUrl.replace(/\/$/, ""), headers: await this.authHeaders(),
+        signal, timeout: 15000, maxRedirects: 0, maxContentLength: 256000, validateStatus: () => true
+      }
+    );
+    if (response.status >= 400) throw new Error(formatCoopApiError(response.status, response.data));
+    if (signal?.aborted) throw new Error("Stopped.");
+    return response.data.result;
   }
 
   public async getIntegrationScope(
@@ -1770,7 +1757,8 @@ export class CoopBackendClient {
     body: StreamChatBody,
     onChunk: (chunk: string) => void,
     signal?: AbortSignal,
-    onThinkingChunk?: (chunk: string) => void
+    onThinkingChunk?: (chunk: string) => void,
+    onTiming?: (event: { backendEvent: string; backendElapsedMs: number; requestId: string }) => void
   ): Promise<StreamChatResult> {
     assertCoopEndpoint(baseUrl);
     const token = await this.options.getToken();
@@ -1797,9 +1785,13 @@ export class CoopBackendClient {
         temperature: body.temperature,
         maxTokens: body.maxTokens,
         enableThinking: body.enableThinking === true,
+        sourceClaimReview: body.sourceClaimReview === true,
+        sourceEvidenceSynthesis: body.sourceEvidenceSynthesis === true,
+        sourceEvidenceRepair: body.sourceEvidenceRepair === true,
         sessionMode: body.sessionMode,
         fileSource: body.fileSource,
         quotaTurnId: body.quotaTurnId,
+        responseTiming: body.responseTiming,
         stream: true
       }),
       signal
@@ -1838,7 +1830,13 @@ export class CoopBackendClient {
         if (!event) {
           continue;
         }
-        if (event.type === "thinking" && typeof event.text === "string") {
+        if (event.type === "response-timing" && event.traceId === body.responseTiming?.traceId &&
+            event.callId === body.responseTiming?.callId &&
+            typeof event.elapsedMs === "number" && Number.isFinite(event.elapsedMs) && event.elapsedMs >= 0 &&
+            typeof event.requestId === "string" && event.requestId.length <= 128 &&
+            ["accepted", "model-start", "first-delta", "completed", "incomplete", "failed", "canceled"].includes(String(event.event))) {
+          onTiming?.({ backendEvent: String(event.event), backendElapsedMs: event.elapsedMs, requestId: event.requestId });
+        } else if (event.type === "thinking" && typeof event.text === "string") {
           onThinkingChunk?.(event.text);
         } else if (event.type === "delta" && typeof event.text === "string") {
           full += event.text;

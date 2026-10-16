@@ -22,6 +22,10 @@ function mockResponse(): ServerResponse & { statusCode?: number; body?: string }
 function mockOrgStore(orgId: string, plan: "pro" | "enterprise"): OrgStore {
   return {
     resolveAuth: async () => undefined,
+    isOrgSuspended: async (candidateOrgId: string) => {
+      assert.equal(candidateOrgId, orgId);
+      return false;
+    },
     getOrganization: async (id: string) => ({
       id,
       name: "Test Org",
@@ -109,6 +113,12 @@ void (async () => {
     assert.equal(result.statusCode, 403, `${endpoint.method} ${endpoint.pathname} should be admin-gated`);
     assert.match(result.body ?? "", /admin_required/, `${endpoint.method} ${endpoint.pathname} should return admin_required`);
   }
+
+  const suspendedDeps = baseDeps({ ...orgStore, isOrgSuspended: async () => true } as OrgStore,
+    mockUserStore("admin", "enterprise"));
+  const suspended = await request(suspendedDeps, "POST", "/v1/collections", { name: "Denied" });
+  assert.equal(suspended.statusCode, 403);
+  assert.match(suspended.body ?? "", /org_suspended/);
 
   const adminAuth: AuthContext = {
     orgId: "org-test",

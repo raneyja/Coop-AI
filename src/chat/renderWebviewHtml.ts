@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { randomBytes } from "node:crypto";
 import * as vscode from "vscode";
 import { activeThemeMode } from "./themeMode";
 
@@ -22,7 +23,7 @@ function webviewAssetUri(
 export function renderWebviewHtml(
   webview: vscode.Webview,
   extensionUri: vscode.Uri,
-  options?: { view?: WebviewViewMode; enforceMinWidth?: boolean; panelSessionId?: string }
+  options?: { view?: WebviewViewMode; enforceMinWidth?: boolean; panelSessionId?: string; startupGeneration?: string }
 ): string {
   const view = options?.view ?? "chat";
   const enforceMinWidth = options?.enforceMinWidth ?? false;
@@ -45,11 +46,20 @@ export function renderWebviewHtml(
       window.__COOP_VIEW__ = "${view}";
       window.__COOP_CHAT_SESSION_ID__ = ${JSON.stringify(options?.panelSessionId ?? null).replace(/</g, "\\u003c")};
       window.__COOP_ENFORCE_MIN_WIDTH__ = ${enforceMinWidth ? "true" : "false"};
+      var api = acquireVsCodeApi();
+      var generation = ${JSON.stringify(options?.startupGeneration ?? null).replace(/</g, "\\u003c")};
+      window.__coopVscodeApi = {
+        getState: function () { return api.getState(); },
+        setState: function (state) { return api.setState(state); },
+        postMessage: function (message) { api.postMessage(Object.assign({}, message, { startupGeneration: generation })); }
+      };
+      window.__coopVscodeApi.postMessage({ type: "webview:startup", payload: { stage: "document-loaded" } });
       window.addEventListener("error", function (event) {
         var root = document.getElementById("root");
         if (!root) { return; }
         var loc = event.filename ? (event.filename + ":" + event.lineno) : "";
         root.textContent = "CoopAI failed to load. " + (event.message || "Unknown error") + (loc ? "\\n" + loc : "");
+        window.__coopVscodeApi.postMessage({ type: "webview:startup", payload: { stage: "frontend-failed" } });
       });
     </script>
     <script nonce="${nonce}" src="${scriptUri}"></script>
@@ -69,10 +79,5 @@ export function getWebviewOptions(extensionUri: vscode.Uri): vscode.WebviewOptio
 }
 
 function createNonce(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let value = "";
-  for (let i = 0; i < 32; i++) {
-    value += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return value;
+  return randomBytes(24).toString("base64");
 }

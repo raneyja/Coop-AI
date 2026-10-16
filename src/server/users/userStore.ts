@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
-import type { Pool } from "pg";
+import { rowToConfig, ssoConfigFingerprint } from "../sso/ssoConfigStore";
+import type { Pool, PoolClient } from "pg";
 import { hashApiKey } from "../credentialCrypto";
 import type { OrgPlan } from "../orgStore";
 import { parseUsageTier, type UsageTier } from "../usageTiers";
@@ -80,60 +81,56 @@ function generateSessionToken(): string {
 const USER_COLUMNS =
   "id, org_id, email, first_name, last_name, timezone, member_onboarding_completed_at, idp_subject, idp_provider, role, last_login_at, deactivated_at, created_at, usage_tier";
 
+export class IdpIdentityError extends Error {}
+
 export class UserStore {
-  public constructor(private readonly pool: Pool) {}
+  public constructor(private readonly pool: Pool, private readonly sql: Pick<Pool, "query"> = pool) {}
 
-  /**
-   * Idempotently materialize the user behind a verified SAML assertion.
-   * Keyed on (idp_provider, idp_subject); falls back to (org_id, email) so an
-   * existing non-SSO user is linked rather than duplicated. A successful login
-   * always refreshes last_login_at and clears deactivated_at (the IdP just
-   * confirmed the user is active).
-   */
-  public async upsertUserFromIdp(login: IdpLogin): Promise<UserRecord> {
-    const role = login.role ?? "member";
-    const existing = await this.pool.query(
-      `SELECT id FROM users
-       WHERE (idp_provider = $1 AND idp_subject = $2)
-          OR (org_id = $3 AND lower(email) = lower($4))
-       ORDER BY (idp_subject IS NOT NULL) DESC
-       LIMIT 1`,
-      [login.idpProvider, login.idpSubject, login.orgId, login.email]
-    );
+  public inTransaction(client: PoolClient): UserStore { return new UserStore(this.pool, client); }
 
-    const existingId = existing.rows[0]?.id ? String(existing.rows[0].id) : undefined;
-
-    let row: Record<string, unknown>;
-    if (existingId) {
-      const updated = await this.pool.query(
-        `UPDATE users SET
-           email = $2,
-           idp_subject = $3,
-           idp_provider = $4,
-           last_login_at = NOW(),
-           deactivated_at = NULL
-         WHERE id = $1
-         RETURNING id, org_id, email, idp_subject, idp_provider, role, last_login_at, deactivated_at, created_at`,
-        [existingId, login.email, login.idpSubject, login.idpProvider]
+  /** Materialize an org-bound verified SAML identity. Subject values from two
+   * tenant IdPs are never evidence that their users are the same person. */
+  public async upsertUserFromIdp(login: IdpLogin, transaction?: PoolClient): Promise<UserRecord> {
+    const client = transaction ?? await this.pool.connect();
+    try {
+      if (!transaction) await client.query("BEGIN");
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`saml-user:${login.orgId}`]);
+      const existing = await client.query(
+        `SELECT id, idp_subject, idp_provider, deactivated_at FROM users
+         WHERE org_id=$3 AND ((idp_provider=$1 AND idp_subject=$2) OR lower(email)=lower($4))
+         ORDER BY (idp_subject IS NOT NULL) DESC LIMIT 1 FOR UPDATE`,
+        [login.idpProvider, login.idpSubject, login.orgId, login.email]
       );
-      row = updated.rows[0];
-    } else {
-      const inserted = await this.pool.query(
-        `INSERT INTO users (org_id, email, idp_subject, idp_provider, role, last_login_at)
-         VALUES ($1, $2, $3, $4, $5, NOW())
-         RETURNING id, org_id, email, idp_subject, idp_provider, role, last_login_at, deactivated_at, created_at`,
-        [login.orgId, login.email, login.idpSubject, login.idpProvider, role]
+      const row = existing.rows[0];
+      if (row?.deactivated_at || (row?.idp_subject &&
+        (row.idp_subject !== login.idpSubject || row.idp_provider !== login.idpProvider))) {
+        throw new IdpIdentityError("SAML identity is disabled or conflicts with the existing account");
+      }
+      const result = row ? await client.query(
+        `UPDATE users SET email=$2, idp_subject=$3, idp_provider=$4, last_login_at=NOW()
+         WHERE id=$1 AND org_id=$5 RETURNING ${USER_COLUMNS}`,
+        [row.id, login.email, login.idpSubject, login.idpProvider, login.orgId]
+      ) : await client.query(
+        `INSERT INTO users (org_id,email,idp_subject,idp_provider,role,last_login_at)
+         VALUES ($1,$2,$3,$4,'member',NOW()) RETURNING ${USER_COLUMNS}`,
+        [login.orgId, login.email, login.idpSubject, login.idpProvider]
       );
-      row = inserted.rows[0];
-    }
-
-    const user = rowToUser(row);
-    await this.ensureMembership(user.id, user.orgId, user.role);
-    return user;
+      const user = rowToUser(result.rows[0]);
+      await client.query(
+        `INSERT INTO org_memberships (user_id,org_id,role) VALUES ($1,$2,$3)
+         ON CONFLICT (user_id,org_id) DO UPDATE SET role=EXCLUDED.role`,
+        [user.id, login.orgId, user.role]
+      );
+      if (!transaction) await client.query("COMMIT");
+      return user;
+    } catch (error) {
+      if (!transaction) await client.query("ROLLBACK");
+      throw error;
+    } finally { if (!transaction) client.release(); }
   }
 
   public async ensureMembership(userId: string, orgId: string, role = "member"): Promise<void> {
-    await this.pool.query(
+    await this.sql.query(
       `INSERT INTO org_memberships (user_id, org_id, role)
        VALUES ($1, $2, $3)
        ON CONFLICT (user_id, org_id) DO UPDATE SET role = EXCLUDED.role`,
@@ -142,7 +139,7 @@ export class UserStore {
   }
 
   public async getUser(userId: string): Promise<UserRecord | undefined> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT ${USER_COLUMNS} FROM users WHERE id = $1`,
       [userId]
     );
@@ -154,7 +151,7 @@ export class UserStore {
     userId: string,
     profile: UserProfileUpdate
   ): Promise<UserRecord | undefined> {
-    const updated = await this.pool.query(
+    const updated = await this.sql.query(
       `UPDATE users SET
          first_name = COALESCE($2, first_name),
          last_name = COALESCE($3, last_name),
@@ -168,14 +165,14 @@ export class UserStore {
   }
 
   public async markMemberOnboardingComplete(userId: string): Promise<void> {
-    await this.pool.query(
+    await this.sql.query(
       `UPDATE users SET member_onboarding_completed_at = NOW() WHERE id = $1`,
       [userId]
     );
   }
 
   public async listOrgUsers(orgId: string): Promise<UserRecord[]> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT u.id, u.org_id, u.email, u.idp_subject, u.idp_provider, u.role,
               COALESCE(
                 u.last_login_at,
@@ -195,7 +192,7 @@ export class UserStore {
     if (!trimmed) {
       return undefined;
     }
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT id, org_id, email, idp_subject, idp_provider, role, last_login_at, deactivated_at, created_at
        FROM users
        WHERE lower(email) = lower($1)
@@ -213,7 +210,7 @@ export class UserStore {
     if (!trimmed) {
       return undefined;
     }
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT ${USER_COLUMNS}
        FROM users
        WHERE org_id = $1 AND lower(email) = lower($2)
@@ -233,7 +230,7 @@ export class UserStore {
     role: UserRole,
     usageTier: UsageTier
   ): Promise<UserRecord | undefined> {
-    const updated = await this.pool.query(
+    const updated = await this.sql.query(
       `UPDATE users
        SET deactivated_at = NULL, role = $2, usage_tier = $3
        WHERE id = $1
@@ -257,7 +254,7 @@ export class UserStore {
     role: UserRole = "member",
     usageTier?: UsageTier | null
   ): Promise<UserRecord> {
-    const inserted = await this.pool.query(
+    const inserted = await this.sql.query(
       `INSERT INTO users (org_id, email, role, usage_tier)
        VALUES ($1, $2, $3, $4)
        RETURNING ${USER_COLUMNS}`,
@@ -272,7 +269,7 @@ export class UserStore {
     userId: string,
     usageTier: UsageTier | null
   ): Promise<UserRecord | undefined> {
-    const updated = await this.pool.query(
+    const updated = await this.sql.query(
       `UPDATE users SET usage_tier = $2 WHERE id = $1
        RETURNING ${USER_COLUMNS}`,
       [userId, usageTier]
@@ -283,7 +280,7 @@ export class UserStore {
 
   /** Drop paid seat SKUs after Stripe cancel/unpaid so members cannot keep Max/Pro+. */
   public async clearOrgUsersUsageTiers(orgId: string): Promise<number> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `UPDATE users SET usage_tier = NULL WHERE org_id = $1 AND usage_tier IS NOT NULL`,
       [orgId]
     );
@@ -296,7 +293,7 @@ export class UserStore {
    * Missing usage_tier still counts (as Pro) so an invite cannot be ignored.
    */
   public async countOccupiedSeatsByTier(orgId: string): Promise<SeatInventory> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT COALESCE(u.usage_tier, 'pro') AS usage_tier, COUNT(*)::int AS count
        FROM users u
        WHERE u.org_id = $1
@@ -321,7 +318,7 @@ export class UserStore {
   }
 
   public async backfillOrgUsersUsageTier(orgId: string, usageTier: UsageTier): Promise<number> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `UPDATE users SET usage_tier = $2
        WHERE org_id = $1 AND usage_tier IS NULL`,
       [orgId, usageTier]
@@ -330,7 +327,7 @@ export class UserStore {
   }
 
   public async setUserRole(userId: string, role: UserRole): Promise<UserRecord | undefined> {
-    const updated = await this.pool.query(
+    const updated = await this.sql.query(
       `UPDATE users SET role = $2 WHERE id = $1
        RETURNING id, org_id, email, idp_subject, idp_provider, role, last_login_at, deactivated_at, created_at`,
       [userId, role]
@@ -349,22 +346,24 @@ export class UserStore {
   public async createSession(
     userId: string,
     orgId: string,
-    options?: number | { ttlMs?: number; authProvider?: SessionAuthProvider }
+    options?: number | { ttlMs?: number; authProvider?: SessionAuthProvider; samlConfigHash?: string; transaction?: PoolClient }
   ): Promise<CreatedSession> {
     const ttlMs =
       typeof options === "number"
         ? options
         : (options?.ttlMs ?? DEFAULT_SESSION_TTL_MS);
     const authProvider = typeof options === "object" ? options.authProvider : undefined;
+    const sql = typeof options === "object" ? options.transaction ?? this.sql : this.sql;
+    const samlConfigHash = typeof options === "object" ? options.samlConfigHash : undefined;
     const token = generateSessionToken();
     const tokenHash = hashApiKey(token);
     const expiresAt = new Date(Date.now() + ttlMs);
-    await this.pool.query(
-      `INSERT INTO user_sessions (token_hash, user_id, org_id, expires_at, auth_provider, last_active_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())`,
-      [tokenHash, userId, orgId, expiresAt, authProvider ?? null]
+    await sql.query(
+      `INSERT INTO user_sessions (token_hash, user_id, org_id, expires_at, auth_provider, saml_config_hash, last_active_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+      [tokenHash, userId, orgId, expiresAt, authProvider ?? null, samlConfigHash ?? null]
     );
-    await this.pool.query(`UPDATE users SET last_login_at = NOW() WHERE id = $1`, [userId]);
+    await sql.query(`UPDATE users SET last_login_at = NOW() WHERE id = $1`, [userId]);
     return { token, userId, orgId, expiresAt };
   }
 
@@ -375,14 +374,16 @@ export class UserStore {
    */
   public async resolveUserSession(rawToken: string): Promise<ResolvedUserSession | undefined> {
     const tokenHash = hashApiKey(rawToken);
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `SELECT u.id AS user_id, u.role AS role, u.deactivated_at AS deactivated_at,
               u.email AS email,
               o.id AS org_id, o.name AS org_name, o.plan AS plan,
-              s.expires_at AS expires_at, s.auth_provider AS auth_provider
+              s.expires_at AS expires_at, s.auth_provider AS auth_provider,
+              s.saml_config_hash, to_jsonb(c) AS saml_config, c.auth_version::text AS saml_auth_version, o.operator_status
        FROM user_sessions s
        JOIN users u ON u.id = s.user_id
        JOIN organizations o ON o.id = s.org_id
+       LEFT JOIN org_sso_config c ON c.org_id=s.org_id
        WHERE s.token_hash = $1`,
       [tokenHash]
     );
@@ -390,13 +391,19 @@ export class UserStore {
     if (!row) {
       return undefined;
     }
+    if ((row.auth_provider ?? "saml") === "saml") {
+      const config = row.saml_config;
+      if (!config?.enabled || !row.saml_config_hash || row.plan !== "enterprise"
+        || ["suspended", "cancelled"].includes(row.operator_status)
+        || ssoConfigFingerprint(rowToConfig({ ...config, auth_version: row.saml_auth_version })) !== row.saml_config_hash) return undefined;
+    }
     if (row.deactivated_at) {
       return undefined;
     }
     if (new Date(String(row.expires_at)).getTime() <= Date.now()) {
       return undefined;
     }
-    await this.pool.query(
+    await this.sql.query(
       `UPDATE user_sessions SET last_active_at = NOW() WHERE token_hash = $1`,
       [tokenHash]
     );
@@ -414,11 +421,11 @@ export class UserStore {
 
   public async revokeSessionByToken(rawToken: string): Promise<void> {
     const tokenHash = hashApiKey(rawToken);
-    await this.pool.query(`DELETE FROM user_sessions WHERE token_hash = $1`, [tokenHash]);
+    await this.sql.query(`DELETE FROM user_sessions WHERE token_hash = $1`, [tokenHash]);
   }
 
   public async revokeUserSessions(userId: string): Promise<void> {
-    await this.pool.query(`DELETE FROM user_sessions WHERE user_id = $1`, [userId]);
+    await this.sql.query(`DELETE FROM user_sessions WHERE user_id = $1`, [userId]);
   }
 
   /**
@@ -426,7 +433,7 @@ export class UserStore {
    * SAML sessions are left intact so users already on SSO keep working.
    */
   public async revokeOrgNonSamlSessions(orgId: string): Promise<number> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `DELETE FROM user_sessions
        WHERE org_id = $1
          AND (auth_provider IS NULL OR auth_provider <> 'saml')`,
@@ -437,12 +444,12 @@ export class UserStore {
 
   /** Revoke every interactive session for an org (e.g. on suspend). */
   public async revokeOrgSessions(orgId: string): Promise<number> {
-    const result = await this.pool.query(`DELETE FROM user_sessions WHERE org_id = $1`, [orgId]);
+    const result = await this.sql.query(`DELETE FROM user_sessions WHERE org_id = $1`, [orgId]);
     return result.rowCount ?? 0;
   }
 
   public async deleteExpiredSessions(): Promise<number> {
-    const result = await this.pool.query(`DELETE FROM user_sessions WHERE expires_at <= NOW()`);
+    const result = await this.sql.query(`DELETE FROM user_sessions WHERE expires_at <= NOW()`);
     return result.rowCount ?? 0;
   }
 
@@ -450,7 +457,7 @@ export class UserStore {
 
   /** Deactivate every active user in the org, drop SSO bindings, and revoke sessions. */
   public async deactivateOrgUsers(orgId: string): Promise<number> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `UPDATE users
        SET deactivated_at = NOW(),
            idp_subject = NULL,
@@ -464,7 +471,7 @@ export class UserStore {
 
   /** Deactivate a user and immediately revoke their sessions. */
   public async deactivateUser(userId: string): Promise<boolean> {
-    const result = await this.pool.query(
+    const result = await this.sql.query(
       `UPDATE users SET deactivated_at = NOW()
        WHERE id = $1 AND deactivated_at IS NULL`,
       [userId]
@@ -475,7 +482,7 @@ export class UserStore {
 
   /** Clear deactivation so a joined person can sign in again. Seat occupancy is unchanged. */
   public async reactivateUser(userId: string): Promise<UserRecord | undefined> {
-    const updated = await this.pool.query(
+    const updated = await this.sql.query(
       `UPDATE users SET deactivated_at = NULL
        WHERE id = $1 AND deactivated_at IS NOT NULL
        RETURNING ${USER_COLUMNS}`,
@@ -486,18 +493,15 @@ export class UserStore {
   }
 
   /** Deactivate by IdP subject (how Okta/Azure deprovisioning identifies a user). */
-  public async deactivateByIdpSubject(idpProvider: string, idpSubject: string): Promise<boolean> {
-    const result = await this.pool.query(
-      `UPDATE users SET deactivated_at = NOW()
-       WHERE idp_provider = $1 AND idp_subject = $2 AND deactivated_at IS NULL
-       RETURNING id`,
-      [idpProvider, idpSubject]
+  public async deactivateByIdpSubject(orgId: string, idpProvider: string, idpSubject: string): Promise<boolean> {
+    const result = await this.sql.query(
+      `WITH changed AS (
+         UPDATE users SET deactivated_at=NOW()
+         WHERE org_id=$1 AND idp_provider=$2 AND idp_subject=$3 AND deactivated_at IS NULL RETURNING id
+       ), revoked AS (DELETE FROM user_sessions s USING changed c WHERE s.user_id=c.id RETURNING s.user_id)
+       SELECT id FROM changed`, [orgId, idpProvider, idpSubject]
     );
-    const id = result.rows[0]?.id ? String(result.rows[0].id) : undefined;
-    if (id) {
-      await this.revokeUserSessions(id);
-    }
-    return Boolean(id);
+    return (result.rowCount ?? 0) > 0;
   }
 
   /**
@@ -505,27 +509,18 @@ export class UserStore {
    * whose idp_subject is NOT in the set of subjects the IdP currently reports as
    * active. Returns the ids that were deactivated.
    */
-  public async reconcileOffboarding(
-    orgId: string,
-    idpProvider: string,
-    activeSubjects: string[]
-  ): Promise<string[]> {
-    const result = await this.pool.query(
-      `UPDATE users SET deactivated_at = NOW()
-       WHERE org_id = $1
-         AND idp_provider = $2
-         AND idp_subject IS NOT NULL
-         AND deactivated_at IS NULL
-         AND NOT (idp_subject = ANY($3::text[]))
-       RETURNING id`,
-      [orgId, idpProvider, activeSubjects]
+  public async reconcileOffboarding(orgId: string, idpProvider: string, activeSubjects: string[]): Promise<string[]> {
+    const result = await this.sql.query(
+      `WITH changed AS (
+         UPDATE users SET deactivated_at=NOW()
+         WHERE org_id=$1 AND idp_provider=$2 AND idp_subject IS NOT NULL
+           AND deactivated_at IS NULL AND NOT (idp_subject=ANY($3::text[])) RETURNING id
+       ), revoked AS (DELETE FROM user_sessions s USING changed c WHERE s.user_id=c.id RETURNING s.user_id)
+       SELECT id FROM changed`, [orgId, idpProvider, activeSubjects]
     );
-    const ids = result.rows.map((r) => String(r.id));
-    for (const id of ids) {
-      await this.revokeUserSessions(id);
-    }
-    return ids;
+    return result.rows.map(row => String(row.id));
   }
+
 }
 
 function rowToUser(row: Record<string, unknown>): UserRecord {

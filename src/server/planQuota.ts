@@ -100,6 +100,9 @@ export type PaidQuotaContext = {
   provider: LlmProvider;
   model: string;
   forceAutoBucket?: boolean;
+  quotaTurnId?: string;
+  /** Set by the API only after validating a private source phase. */
+  internalSourceCall?: boolean;
   /** Org signup time — monthly usage window is this anniversary, not the calendar month. */
   periodAnchor?: Date;
 };
@@ -255,7 +258,7 @@ export class PlanQuotaService {
     if (options?.skipFreeAllowance || !this.appliesToPlan(plan)) {
       return;
     }
-    const usage = await this.getFreeAllowance(orgId, now);
+    const usage = await this.getFreeAllowance(orgId, now, paid?.internalSourceCall ? paid.quotaTurnId : undefined);
     if (!usage.exhausted) {
       return;
     }
@@ -320,6 +323,10 @@ export class PlanQuotaService {
     const flashCostUsd = isFreeFlashModel(entry.model)
       ? flashListCostUsd(entry.inputTokens, entry.outputTokens)
       : undefined;
+    const sourceReviewCostUsd = entry.metadata?.sourceClaimReview === true || entry.metadata?.sourceEvidenceRepair === true
+      ? (Math.max(0, entry.inputTokens) * usd.usdPerMillionIn + Math.max(0, entry.outputTokens) * usd.usdPerMillionOut)
+        * billed.visionMultiplier / 1_000_000
+      : undefined;
     await this.usageTracker?.record({
       orgId,
       userId: entry.userId,
@@ -344,7 +351,8 @@ export class PlanQuotaService {
         ...(useCase ? { useCase } : {}),
         ...(entry.quotaTurnId?.trim() ? { quotaTurnId: entry.quotaTurnId.trim() } : {}),
         countsAsMessage,
-        ...(flashCostUsd != null ? { flashCostUsd } : {})
+        ...(flashCostUsd != null ? { flashCostUsd } : {}),
+        ...(sourceReviewCostUsd != null ? { sourceReviewCostUsd } : {})
       }
     });
   }
@@ -395,7 +403,7 @@ export class PlanQuotaService {
     return { autoCents, frontierCents };
   }
 
-  private async getFreeAllowance(orgId: string, now = new Date()) {
+  private async getFreeAllowance(orgId: string, now = new Date(), quotaTurnId?: string) {
     const eventTypes = [...LLM_USAGE_EVENT_TYPES];
     const cycleRange = rollingWindowRange(now, this.config.rollingWindowMs);
     const weekAnchor =
@@ -410,7 +418,8 @@ export class PlanQuotaService {
       weekEvents,
       weekEnd: week.to,
       windowMs: this.config.rollingWindowMs,
-      now
+      now,
+      quotaTurnId
     });
   }
 

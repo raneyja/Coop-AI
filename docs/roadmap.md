@@ -130,14 +130,14 @@ This document tracks what shipped in the Prompt 2 + pre-work pass, what is inten
 
 ### 4. BYOK on the router (enterprise)
 
-**Goal:** Route inference through customer-owned keys via existing `byokHandler.ts`.
+**Goal:** Design and qualify customer-owned-key routing. The uncalled `byokHandler.ts` prototype was removed during enterprise simplification; BYOK is not a supported current capability.
 
 **Trigger to start:** Enterprise pilot needs customer keys without CoopAI holding provider secrets.
 
 **Build list:**
 
 - [ ] Request field: `customerId` + BYOK provider
-- [ ] `ModelRouter` delegates to `ByokHandler` when configured
+- [ ] Wire an explicitly designed customer-key request path into the maintained `ModelRouter` boundary
 - [ ] Audit log remains PII-free (already required for router)
 
 ---

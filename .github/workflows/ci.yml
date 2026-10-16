@@ -1,34 +1,336 @@
 name: CI
-
 on:
   push:
     branches: [main, master]
   pull_request:
-
+permissions:
+  contents: read
+env:
+  COOP_RELEASE_EVIDENCE_DIR: ${{ github.workspace }}-evidence
+  COOP_RELEASE_PRIVATE_PACKAGE_SOURCE_SHA: ${{ vars.COOP_RELEASE_PRIVATE_PACKAGE_SOURCE_SHA }}
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  lint-and-test:
-    runs-on: ubuntu-latest
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "22"
+          node-version: '22.23.3'
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Run tests
-        run: npm run test:ci
-
-  docker-build:
-    runs-on: ubuntu-latest
+      - run: npm ci --no-audit --no-fund
+      - run: npm run release:check -- --lane unit
+      - name: Retain synthetic Git lifecycle failure location
+        if: failure()
+        run: |
+          log="$COOP_RELEASE_EVIDENCE_DIR/unit/221.log"
+          if [ -f "$log" ]; then
+            grep -F 'Owned clone control failed; supplied credentials omitted' "$log" | head -n 1 > "$COOP_RELEASE_EVIDENCE_DIR/unit/git-clone-failure-location.txt" || true
+          fi
+      - run: npm run release:check -- --lane supplemental
+      - name: Bind retained evidence to this candidate
+        if: always()
+        run: node scripts/release-catalog.mjs --ci-receipt regression
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: regression
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/receipt.json
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/unit/result.json
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/unit/source-before.json
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/unit/source-after.json
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/unit/git-clone-failure-location.txt
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/supplemental/result.json
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/supplemental/source-before.json
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/supplemental/source-after.json
+  builds:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Build API image
-        run: docker build -t coop-api:ci .
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2 # package guard verifies the PR merge's approved head parent and tree
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.3'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            admin/package-lock.json
+            ops/package-lock.json
+            website/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm ci --prefix admin --no-audit --no-fund
+      - run: npm ci --prefix ops --no-audit --no-fund
+      - run: npm ci --prefix website --no-audit --no-fund
+      - run: npm run release:check -- --lane build
+      - run: npm run release:sbom
+      - run: node scripts/release-catalog.mjs --package-content
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-vsix
+          retention-days: 30
+          path: coop-ai.vsix
+          if-no-files-found: error
+      - name: Bind retained evidence to this candidate
+        if: always()
+        run: node scripts/release-catalog.mjs --ci-receipt builds
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: builds
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/receipt.json
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/build/result.json
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/build/source-before.json
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/build/source-after.json
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/sbom/manifest.json
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/package-content/result.json
+  database:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.3'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build:backend && npm run build:workers
+      # The runner refuses unknown images, absent setup and target overrides.
+      # Pull exactly the inspected supported architecture; never a mutable tag.
+      - run: docker pull --platform linux/amd64 pgvector/pgvector@sha256:a97d77306ff47cc1d8add4d000cec2207da2e110746318df3137ce53c337ca30
+      - run: npm run release:check -- --lane database
+      - name: Bind retained evidence to this candidate
+        if: always()
+        run: node scripts/release-catalog.mjs --ci-receipt database
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: database
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/receipt.json
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/database/result.json
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/database/source-before.json
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/database/source-after.json
+  code-security:
+    needs: builds
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: github/codeql-action/init@9f759ee644a3e7c15c1390abf49868036c00067b # v3
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+      - uses: github/codeql-action/analyze@9f759ee644a3e7c15c1390abf49868036c00067b
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.3'
+      - run: npm ci --no-audit --no-fund
+      - name: Rebuild extension files for independent package/source verification
+        run: npm run build:extension && npm run build:webview
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: candidate-vsix
+          path: ${{ runner.temp }}/candidate-vsix
+      - name: Prepare complete source and package scan corpora
+        env:
+          COOP_RELEASE_CANDIDATE_EXCEPTIONS: ${{ vars.COOP_RELEASE_CANDIDATE_EXCEPTIONS }}
+          COOP_RELEASE_HISTORY_EXCEPTIONS: ${{ vars.COOP_RELEASE_HISTORY_EXCEPTIONS }}
+        run: |
+          python3 - <<'PYCODE'
+          import subprocess,pathlib,shutil,zipfile,os,json,hashlib
+          root=pathlib.Path.cwd();work=pathlib.Path(os.environ['RUNNER_TEMP'])/'security-corpora';source=work/'candidate';source.mkdir(parents=True)
+          files=[]
+          for value in subprocess.check_output(['git','ls-files','-z']).decode().split('\0'):
+              if not value:continue
+              original=root/value
+              if original.is_symlink():raise RuntimeError('Symlink source requires explicit qualification')
+              destination=source/value;destination.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(original,destination);files.append(str(destination))
+          archive=pathlib.Path(os.environ['RUNNER_TEMP'])/'candidate-vsix/coop-ai.vsix';package=work/'package';package.mkdir()
+          with zipfile.ZipFile(archive) as z:
+              if z.testzip() is not None:raise RuntimeError('Corrupt VSIX')
+              for entry in z.infolist():
+                  name=pathlib.PurePosixPath(entry.filename)
+                  if name.is_absolute() or '..' in name.parts:raise RuntimeError('Unsafe VSIX path')
+              z.extractall(package)
+          sha=lambda p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
+          inputs={'npmCli':{'path':str(pathlib.Path(subprocess.check_output(['npm','root','-g']).decode().strip())/'npm/bin/npm-cli.js')},'gitleaks':{'path':'/tmp/gitleaks'},'gitleaksConfig':{'path':str(work/'scanner.toml')},'secrets':{'candidate':{'target':str(source),'files':[{'path':f,'sha256':sha(f)} for f in files]},'history':{'target':str(root),'files':[{'path':str(root/'.git/HEAD'),'sha256':sha(root/'.git/HEAD')}]},'package':{'target':str(package),'artifact':{'path':str(archive),'sha256':sha(archive)},'files':[{'path':str(f),'sha256':sha(f)} for f in package.rglob('*') if f.is_file()]}}}
+          for scope,name in [('candidate','COOP_RELEASE_CANDIDATE_EXCEPTIONS'),('history','COOP_RELEASE_HISTORY_EXCEPTIONS')]:
+              raw=os.environ.get(name,'').strip()
+              if not raw:continue
+              if len(raw)>32768:raise RuntimeError(f'{scope} exception input too large')
+              exceptions=json.loads(raw)
+              if not isinstance(exceptions,list):raise RuntimeError(f'{scope} exceptions must be a list')
+              inputs.setdefault('exceptions',{})[scope]=exceptions
+          (work/'scanner.toml').write_text('[extend]\nuseDefault = true\n');(work/'inputs.json').write_text(json.dumps(inputs))
+          PYCODE
+      - name: Pinned source, history and package security checks
+        run: |
+          curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz -o /tmp/gitleaks.tar.gz
+          echo '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gitleaks.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          python3 - <<'PYCODE'
+          import os,pathlib,json,hashlib
+          file=pathlib.Path(os.environ['RUNNER_TEMP'])/'security-corpora/inputs.json';inputs=json.loads(file.read_text())
+          for name in ['npmCli','gitleaks','gitleaksConfig']:inputs[name]['sha256']=hashlib.sha256(pathlib.Path(inputs[name]['path']).read_bytes()).hexdigest()
+          file.write_text(json.dumps(inputs))
+          PYCODE
+          COOP_RELEASE_SECURITY_INPUTS="$RUNNER_TEMP/security-corpora/inputs.json" node scripts/release-security.mjs --source
+      - name: Enforce actual full-branch CodeQL findings
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COOP_RELEASE_CODEQL_EXCEPTIONS: ${{ vars.COOP_RELEASE_CODEQL_EXCEPTIONS }}
+        run: node scripts/release-security.mjs --codeql-findings
+      - name: Bind retained evidence to this candidate
+        if: always()
+        run: node scripts/release-catalog.mjs --ci-receipt code-security
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: code-security
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/receipt.json
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/security/results.json
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/codeql/findings.json
+  container:
+    env:
+      COOP_RELEASE_FROZEN_IMAGE_POLICY: ${{ vars.COOP_RELEASE_FROZEN_IMAGE_POLICY }}
+      COOP_RELEASE_IMAGE_ROLE: ${{ matrix.target }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [api, worker]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.3'
+      - name: Verify producer inventory failure controls
+        run: python3 scripts/indexer-tools/scip-java.test.py
+      - name: Pin scanner and prepare complete image source binding
+        run: |
+          curl -fsSL https://github.com/aquasecurity/trivy/releases/download/v0.72.0/trivy_0.72.0_Linux-64bit.tar.gz -o "$RUNNER_TEMP/trivy.tar.gz"
+          echo "bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea  $RUNNER_TEMP/trivy.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/trivy.tar.gz" -C "$RUNNER_TEMP" trivy
+          node scripts/release-security.mjs --image-inputs > "$RUNNER_TEMP/image-inputs.json"
+      - name: Verify approved private frozen artifact custody
+        id: frozen
+        if: env.COOP_RELEASE_FROZEN_IMAGE_POLICY != ''
+        env:
+          GH_TOKEN: ${{ secrets.COOP_RELEASE_FROZEN_IMAGE_READ_TOKEN }}
+        run: node scripts/release-security.mjs --frozen-image-source
+      - name: Retrieve exact reviewed archive from private custody
+        if: env.COOP_RELEASE_FROZEN_IMAGE_POLICY != ''
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          github-token: ${{ secrets.COOP_RELEASE_FROZEN_IMAGE_READ_TOKEN }}
+          repository: ${{ steps.frozen.outputs.repository }}
+          run-id: ${{ steps.frozen.outputs['run-id'] }}
+          artifact-ids: ${{ steps.frozen.outputs['artifact-id'] }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/frozen-image
+      - name: Verify and load the frozen configuration without rebuilding
+        if: env.COOP_RELEASE_FROZEN_IMAGE_POLICY != ''
+        run: |
+          node scripts/release-security.mjs --frozen-image-import
+          docker image load --input "$RUNNER_TEMP/frozen-image/image.tar"
+          configuration=$(node scripts/release-security.mjs --image-identity "$RUNNER_TEMP/frozen-image/image.tar")
+          docker image tag "$configuration" "coop-$COOP_RELEASE_IMAGE_ROLE:ci"
+      - name: Build current image when no frozen campaign is configured
+        if: env.COOP_RELEASE_FROZEN_IMAGE_POLICY == ''
+        run: |
+          if [ "${{ matrix.target }}" = api ]; then
+            dockerfile=Dockerfile.api
+          else
+            dockerfile=Dockerfile
+          fi
+          docker build --platform linux/amd64 --file "$dockerfile" --target ${{ matrix.target }} -t coop-${{ matrix.target }}:ci .
+      - name: Scan actual image and enforce exact findings
+        env:
+          COOP_RELEASE_IMAGE_ROLE: ${{ matrix.target }}
+          COOP_RELEASE_IMAGE_API_EXCEPTIONS: ${{ vars.COOP_RELEASE_IMAGE_API_EXCEPTIONS }}
+          COOP_RELEASE_IMAGE_WORKER_EXCEPTIONS: ${{ vars.COOP_RELEASE_IMAGE_WORKER_EXCEPTIONS }}
+        run: |
+          export TRIVY_BIN="$RUNNER_TEMP/trivy" TRIVY_CACHE_DIR="$RUNNER_TEMP/trivy-cache"
+          export COOP_RELEASE_TRIVY_SHA256="$(sha256sum "$TRIVY_BIN" | cut -d' ' -f1)"
+          if [ -z "$COOP_RELEASE_FROZEN_IMAGE_POLICY" ]; then
+            docker image save --output "$RUNNER_TEMP/image.tar" coop-${{ matrix.target }}:ci
+          else
+            cp "$RUNNER_TEMP/frozen-image/image.tar" "$RUNNER_TEMP/image.tar"
+          fi
+          export COOP_RELEASE_IMAGE_ID="$(node scripts/release-security.mjs --image-identity "$RUNNER_TEMP/image.tar")"
+          export COOP_RELEASE_IMAGE_INPUTS="$RUNNER_TEMP/image-inputs.json" COOP_RELEASE_IMAGE_REPORT="$RUNNER_TEMP/image-report.json"
+          "$TRIVY_BIN" image --download-java-db-only --cache-dir "$TRIVY_CACHE_DIR" --timeout 5m
+          status=0
+          "$TRIVY_BIN" image --input "$RUNNER_TEMP/image.tar" --scanners vuln --disable-telemetry --skip-version-check --ignorefile /dev/null --format json --list-all-pkgs --cache-dir "$TRIVY_CACHE_DIR" --severity HIGH,CRITICAL --exit-code 1 --timeout 5m --output "$COOP_RELEASE_IMAGE_REPORT" "$COOP_RELEASE_IMAGE_ID" || status=$?
+          test "$status" -le 1
+          node scripts/release-security.mjs --image-report
+      - name: Qualify embedded Java resources through owned image
+        if: always() && matrix.target == 'worker'
+        run: |
+          mkdir "$RUNNER_TEMP/java-owned"
+          docker run --rm --platform linux/amd64 --network none --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges --read-only --mount "type=bind,src=$RUNNER_TEMP/java-owned,dst=/owned" --mount "type=bind,src=$GITHUB_WORKSPACE/scripts/indexer-tools,dst=/tools,readonly" coop-worker:ci python3 /tools/scip-java.py export --output /owned/jars --inventory /owned/inventory.json
+          export COOP_RELEASE_JAVA_ROOT="$RUNNER_TEMP/java-owned/jars" COOP_RELEASE_JAVA_INVENTORY="$RUNNER_TEMP/java-owned/inventory.json"
+          export TRIVY_BIN="$RUNNER_TEMP/trivy" TRIVY_CACHE_DIR="$RUNNER_TEMP/trivy-cache"
+          export COOP_RELEASE_TRIVY_SHA256="$(sha256sum "$TRIVY_BIN" | cut -d' ' -f1)"
+          node scripts/release-security.mjs --java-archive
+      - name: Bind retained evidence to this candidate
+        if: always()
+        run: node scripts/release-catalog.mjs --ci-receipt container-${{ matrix.target }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: container-${{ matrix.target }}
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/receipt.json
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/image/result.json
+            ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/java/results.json
+  stage5-acceptance:
+    needs: [regression, builds, database, code-security, container]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.3'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          path: ${{ runner.temp }}/downloaded-evidence
+      - name: Verify actual jobs and retrieved candidate evidence
+        env:
+          COOP_RELEASE_JOB_RESULTS: ${{ toJSON(needs) }}
+          COOP_RELEASE_DOWNLOADED_EVIDENCE: ${{ runner.temp }}/downloaded-evidence
+        run: node scripts/release-catalog.mjs --stage5-acceptance
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: stage5-decision
+          path: ${{ runner.temp }}/downloaded-evidence/stage5-result.json
+          retention-days: 30
+          if-no-files-found: error

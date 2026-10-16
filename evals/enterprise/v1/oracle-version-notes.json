@@ -1,0 +1,26 @@
+{
+  "version": "v2 author fix cycle before scoring",
+  "corrections": [
+    {
+      "caseId": "EH06-trace-10",
+      "oldOracleSha256": "63bde5993e39c4fcc62cafc6324d051c3b16268062e6a49fac8533e63dc4c0ed",
+      "newOracleSha256": "ec5f9f2251bff3621ed74c8318d95fe0f2d9fa705a3c454dbe23dc488d6af58a",
+      "reason": "The provided fact contains only before/after expressions, without a target patch, commit identity or applied-change proof. The original oracle wording introduced an unsupported introduction claim.",
+      "originalPayloadPreserved": true,
+      "splitUnchanged": true
+    },
+    {
+      "caseId": "EH06-trace-03",
+      "oldOracleSha256": "51cdc763ab615cd46183e2fecbb03c50eb848dd89f69fad029b71e7395c64d0b",
+      "newOracleSha256": "568407e5d4258b34d867088a61d5744d3082fbd4e3d2a1084fa7a9d26a98ca6e",
+      "oldCaseType": "positive",
+      "newCaseType": "expected-unknown",
+      "reason": "Private independent oracle-custodian interpretation corrected an unavailable requested-premise classification; see private review commitment. No new source/fact/question/body/context/split.",
+      "privateReviewCommitment": "ea56afff8f4452ef5bec7d051a140e5a96e22f4d239c4106ff9cb1545819fdee",
+      "originalPayloadPreserved": true,
+      "splitUnchanged": true
+    }
+  ],
+  "freshIndependentReview": "pending",
+  "heldoutTuning": "No prompt/product change, no scored output, no split/case question/source change; corrected unsupported oracle language from unchanged source/fact proof."
+}

@@ -34,7 +34,8 @@ No Caddy, no VM SSH, no Oracle networking. Railway terminates TLS on custom doma
 | File | Purpose |
 |------|---------|
 | `railway.toml` | Dockerfile build, start, pre-deploy migrations, `/health` check |
-| `Dockerfile` | Production API image |
+| `Dockerfile.api` | Minimal production API image; no worker indexing toolchain |
+| `Dockerfile` | Worker and Zoekt indexing image |
 | `scripts/run-migrations.mjs` | Applies `migrations/*.sql` using `DATABASE_URL` |
 | `.env.backend.example` | Variable names — copy values from local `.env.backend` into Railway |
 
@@ -186,7 +187,7 @@ Each vendor app must allow `https://api.coop-ai.dev` callbacks. See [connect-int
 
 Lightning full-text search needs **worker** (indexes repos) + **Zoekt** (serves shards). On Railway:
 
-1. Add a second service from the **same repo** + **same Dockerfile**
+1. Add a second service from the **same repo** with `railway.worker.toml` (`Dockerfile`, separate from the API's `Dockerfile.api`)
 2. **Start command:** `node dist/workerEntry.js`
 3. Set `ZOEKT_INDEX_PATH=/zoekt-indexes`, mount a **Railway Volume** at that path
 4. Add a third service (or combined start script) for `zoekt-webserver -index /zoekt-indexes -listen 0.0.0.0:6070`

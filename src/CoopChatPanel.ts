@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { randomUUID } from "node:crypto";
 import { CoopChatSession } from "./chat/CoopChatSession";
 import { getWebviewOptions } from "./chat/renderWebviewHtml";
 import type { SecureApiClient } from "./chat/SecureApiClient";
@@ -12,7 +13,7 @@ type PanelState = {
 };
 
 function createSessionId(): string {
-  return `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return `session-${randomUUID()}`;
 }
 
 export class CoopChatPanel {

@@ -1,5 +1,12 @@
 # ICP dogfood — staff engineer Monday
 
+Scenario library reviewed October 11. Retain the exact fixture asks and dated
+passes; use the relevant current run report for qualification status. The ICP
+preferences below do not waive separately authorized enterprise latency,
+authorization, source-integrity or recovery gates. Changed behavior and new
+enterprise scenarios need their scoped qualification; do not rerun every
+historical probe automatically or assume historical results qualify a new build.
+
 **Primary surface:** Cursor canvas **[ICP dogfood](/Users/jonraney/.cursor/projects/Users-jonraney-Coop-AI/canvases/enterprise-icp-dogfood.canvas.tsx)**.
 
 This markdown is the backup / git copy. Prefer the canvas. Seven jobs. Fresh sheet — last round’s ship probes (locate / Apply / Stop) already Pass. Do not re-run those.

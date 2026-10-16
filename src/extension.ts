@@ -306,69 +306,9 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   const integrationSecrets = new IntegrationSecrets(context.secrets);
   integrationSecrets.setCloudFetcher(async () => {
-    // Always load org credentials when signed in — including Extension Development Host.
-    // coopAI.devMode must NOT skip this: otherwise Test Slack / chat use a stale local
-    // bot token while Settings shows Connected from org install status.
-    if (!(await api.hasToken())) {
-      return {};
-    }
+    if (!(await api.hasToken())) return undefined;
     const baseUrl = getApiBaseUrl();
-    const overlay: import("./api/integrations/integrationSecrets").IntegrationCredentials = {};
-    try {
-      const slackStatus = await api.getSlackInstallationStatus(baseUrl);
-      if (slackStatus.installed) {
-        const creds = await api.getIntegrationCredentials(baseUrl, "slack");
-        overlay.slackToken = creds.accessToken;
-      }
-    } catch {
-      /* non-fatal */
-    }
-    try {
-      const atlassianStatus = await api.getAtlassianInstallationStatus(baseUrl);
-      if (atlassianStatus.installed) {
-        const creds = await api.getIntegrationCredentials(baseUrl, "atlassian");
-        const siteUrl = creds.metadata.siteUrl?.replace(/\/+$/, "");
-        overlay.jiraToken = creds.accessToken;
-        overlay.confluenceToken = creds.accessToken;
-        overlay.jiraEmail = creds.metadata.email;
-        overlay.confluenceEmail = creds.metadata.email;
-        overlay.atlassianCloudId = creds.metadata.cloudId;
-        if (siteUrl) {
-          overlay.jiraBaseUrl = siteUrl;
-          overlay.confluenceBaseUrl = `${siteUrl}/wiki`;
-        }
-      }
-    } catch {
-      /* non-fatal */
-    }
-    try {
-      const notionStatus = await api.getNotionInstallationStatus(baseUrl);
-      if (notionStatus.installed) {
-        const creds = await api.getIntegrationCredentials(baseUrl, "notion");
-        overlay.notionToken = creds.accessToken;
-      }
-    } catch {
-      /* non-fatal */
-    }
-    try {
-      const googleStatus = await api.getGoogleDocsInstallationStatus(baseUrl);
-      if (googleStatus.installed) {
-        const creds = await api.getIntegrationCredentials(baseUrl, "google-docs");
-        overlay.googleDocsToken = creds.accessToken;
-      }
-    } catch {
-      /* non-fatal */
-    }
-    try {
-      const teamsStatus = await api.getTeamsInstallationStatus(baseUrl);
-      if (teamsStatus.installed) {
-        const creds = await api.getIntegrationCredentials(baseUrl, "teams");
-        overlay.teamsToken = creds.accessToken;
-      }
-    } catch {
-      /* non-fatal */
-    }
-    return overlay;
+    return { proxy: (operation, args, signal) => api.executeIntegrationOperation(baseUrl, operation, args, signal) };
   });
   registerDecisionArchaeologyEngine(
     createDecisionArchaeologyEngine({

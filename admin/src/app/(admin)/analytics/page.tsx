@@ -281,7 +281,7 @@ export default function AnalyticsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-sm border border-coop-border">
+          <div className="flex rounded-xs border border-coop-border">
             {(["7d", "30d", "90d"] as AnalyticsRange[]).map((option) => (
               <button
                 key={option}

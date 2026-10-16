@@ -97,6 +97,24 @@ function warningsBeyondLimitations(warnings: string[], limitations: string[]): s
   return filterDetailWarnings(warnings, limitations);
 }
 
+export function pullRequestLinkLabel(rawUrl: string | undefined): string {
+  if (!rawUrl) return "View PR";
+  try {
+    const url = new URL(rawUrl);
+    const segments = url.pathname.split("/").filter(Boolean);
+    if (
+      url.protocol === "https:" && url.hostname === "github.com" &&
+      !url.username && !url.password && !url.port &&
+      segments.length === 4 && segments[2] === "pull" && /^\d+$/.test(segments[3])
+    ) {
+      return `View on ${segments[0]}/${segments[1]}`;
+    }
+  } catch {
+    // Untrusted or malformed URLs get a neutral label.
+  }
+  return "View PR";
+}
+
 function shouldShowChronology(timeline: DecisionTimelineData): boolean {
   if (timeline.chronology.length === 0) {
     return false;
@@ -317,11 +335,7 @@ export function DecisionTimeline({
               open={expanded.pr}
               onToggle={() => toggle("pr")}
               link={timeline.linkedPR.htmlUrl}
-              linkLabel={
-                timeline.linkedPR.htmlUrl?.includes("github.com/")
-                  ? `View on ${timeline.linkedPR.htmlUrl.split("github.com/")[1]?.split("/pulls/")[0] ?? "GitHub"}`
-                  : "View PR"
-              }
+              linkLabel={pullRequestLinkLabel(timeline.linkedPR.htmlUrl)}
             >
               <PrBlock
                 pr={timeline.linkedPR}

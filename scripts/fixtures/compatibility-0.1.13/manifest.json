@@ -1,0 +1,63 @@
+{
+  "release": "0.1.13",
+  "sourceCommit": "13240bb0caf8e93cac7ca6241cf2832125fdcffc",
+  "axios": {
+    "version": "1.20.0",
+    "integrity": "sha512-r8aOh8j9cGKpgQAqpzrUHnSIc6a59Y3Xf/cv8sy1DrHCkZHzQGEuoq1tARk6qSyDdtQGSDgpb9kFlruzPvrgwg=="
+  },
+  "files": [
+    {
+      "path": "src/api/CoopBackendClient.ts",
+      "sha256": "2975c14803d3189b26fd017381b7ff3259538338a37cca85da8546d771cb0c8c"
+    },
+    {
+      "path": "src/api/networkResilience.ts",
+      "sha256": "c0d7eeaadb57d1a9261d8de0ba14cb1cfc6fde79ac0e0f4e44f5e4bcf495248d"
+    },
+    {
+      "path": "src/api/resolveBaseUrl.ts",
+      "sha256": "b1ed4163eb86c0f369fcca34c0761f03e51373a90e1931bc1383dfe5ba6ea3bc"
+    },
+    {
+      "path": "src/api/userFacingErrors.ts",
+      "sha256": "1514a65c18cfcecf65e1dd9ac8002be3549fc321bb82f738bdc604474b8eae10"
+    },
+    {
+      "path": "src/chat/types.ts",
+      "sha256": "2e083d264abdccfa8d3e0352455fc823b30c6453fad4f77470681821646982ec"
+    },
+    {
+      "path": "src/config/authApiBase.ts",
+      "sha256": "8a376ebaf2751a49bbb823a7ad582b8bb4c1def7c95c8ca7759e518f56149210"
+    },
+    {
+      "path": "src/config/lightningConfig.ts",
+      "sha256": "132f9be8d3434eaf79b328fb21477d86fd26631f7b613930f430fa8bc18ca9c2"
+    },
+    {
+      "path": "src/config/responseDeadline.ts",
+      "sha256": "1069b07c5d72ee16190ed2a50d13684a2cc0fd606679f18383a572d5617116b3"
+    },
+    {
+      "path": "src/integrationScope/types.ts",
+      "sha256": "2edbe19c6c6ee8b043b69fd31b5f7113c98bdd06209946d874ce7e09c599aa24"
+    },
+    {
+      "path": "src/license/licenseChecker.ts",
+      "sha256": "87683486d2e7714c4caf0d9916240cd2d8f8a27ddcf6b0c0015d429af67c1cd1"
+    },
+    {
+      "path": "src/license/planSearchScope.ts",
+      "sha256": "c6072f27d18b3f14f8fb142935e9396f338f9032672c2b6e960b87b424fd9d68"
+    },
+    {
+      "path": "src/server/integrationApi.ts",
+      "sha256": "6ba1a0d81b285f02aae980686795be6280c500f45646250906709c6db42c7e4e"
+    },
+    {
+      "path": "src/server/resolveIntegrationScope.ts",
+      "sha256": "32d97fa14d772a494375320e1011817fe8b53149b9c8f247d360dfe311acaabf"
+    }
+  ],
+  "scope": "Frozen public prior-release client/API-handler source for actual loopback compatibility tests. No installed Extension Host or full prior backend deployment claim."
+}

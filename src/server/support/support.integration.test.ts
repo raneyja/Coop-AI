@@ -1,3 +1,4 @@
+import databasePoolOptions from "../databasePoolOptions.cjs";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -6,14 +7,14 @@ import { SupportStore } from "./supportStore";
 import type { SupportSubmission } from "../../support/supportTypes";
 
 async function main() {
-  const url = process.env.SUPPORT_TEST_DATABASE_URL;
-  if (!url) { console.log("support database tests skipped: set SUPPORT_TEST_DATABASE_URL to a local test database"); return; }
+  const {publicationDatabaseFromEnvironment} = require('../../../scripts/publication-test-fixture.mjs');
+  const url: string = publicationDatabaseFromEnvironment(process.env, 'support');
   const schema = `support_test_${randomUUID().replace(/-/g, "")}`;
-  const admin = new Pool({ connectionString: url });
+  const admin = new Pool(databasePoolOptions(url));
   let pool: Pool | undefined;
   try {
     await admin.query(`CREATE SCHEMA ${schema}`);
-    pool = new Pool({ connectionString: url, options: `-c search_path=${schema},public`, max: 6 });
+    pool = new Pool({ ...databasePoolOptions(url), options: `-c search_path=${schema},public`, max: 6 });
     // Isolated schema: no customer tables or reports are mutated.
     await pool.query("CREATE TABLE organizations(id uuid PRIMARY KEY,name text); CREATE TABLE operators(id uuid PRIMARY KEY,email text,role text,disabled_at timestamptz); CREATE TABLE operator_audit_log(operator_id uuid,action text,target_org_id uuid,metadata jsonb)");
     await pool.query(await readFile("migrations/032_support_reports.sql", "utf8"));

@@ -1,5 +1,6 @@
 import type { UseCase } from "../api/types";
 import { FREE_FLASH_MODEL } from "../config/featureModelAssignments";
+import { getCatalogModelById, UNKNOWN_MODEL_USD_PER_MILLION_IN, UNKNOWN_MODEL_USD_PER_MILLION_OUT } from "../config/llmModels";
 
 export { FREE_FLASH_MODEL };
 /** Shut down June 2026. Spend already recorded under this id still counts. */
@@ -25,6 +26,9 @@ export type FreeAllowanceEvent = {
   quotaTurnId?: string;
   countsAsMessage: boolean;
   flashCostUsd?: number;
+  sourceClaimReview?: boolean;
+  sourceEvidenceRepair?: boolean;
+  sourceReviewCostUsd?: number;
 };
 
 export type FreeAllowanceTotals = {
@@ -68,6 +72,18 @@ export function eventFlashCostUsd(event: FreeAllowanceEvent): number {
   return flashListCostUsd(event.inputTokens, event.outputTokens);
 }
 
+/** Internal verification/replacement consumes the allowance at actual catalog cost.
+ * Flash keeps its existing raw-cost rules; never add the review cost twice. */
+export function eventFreeCostUsd(event: FreeAllowanceEvent): number {
+  if (isFreeFlashModel(event.model)) return eventFlashCostUsd(event);
+  if (event.sourceClaimReview !== true && event.sourceEvidenceRepair !== true) return 0;
+  if (typeof event.sourceReviewCostUsd === "number" && Number.isFinite(event.sourceReviewCostUsd)
+    && event.sourceReviewCostUsd >= 0) return event.sourceReviewCostUsd;
+  const model = getCatalogModelById(event.model);
+  return (Math.max(0, event.inputTokens) * (model?.usdPerMillionIn ?? UNKNOWN_MODEL_USD_PER_MILLION_IN)
+    + Math.max(0, event.outputTokens) * (model?.usdPerMillionOut ?? UNKNOWN_MODEL_USD_PER_MILLION_OUT)) / 1_000_000;
+}
+
 export function countFreeMessages(events: FreeAllowanceEvent[]): number {
   const turns = new Set<string>();
   let singles = 0;
@@ -102,7 +118,7 @@ export function cycleResumeAt(
 ): Date {
   const sorted = [...events].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   let messages = countFreeMessages(sorted);
-  let cost = sorted.reduce((sum, event) => sum + eventFlashCostUsd(event), 0);
+  let cost = sorted.reduce((sum, event) => sum + eventFreeCostUsd(event), 0);
   if (messages < FREE_CYCLE_MESSAGE_LIMIT && cost < FREE_CYCLE_USD) {
     const oldest = sorted[0]?.createdAt ?? now;
     return new Date(oldest.getTime() + windowMs);
@@ -115,7 +131,7 @@ export function cycleResumeAt(
     if (!dropped) {
       break;
     }
-    cost -= eventFlashCostUsd(dropped);
+    cost -= eventFreeCostUsd(dropped);
     resume = new Date(dropped.createdAt.getTime() + windowMs);
   }
   return resume.getTime() < now.getTime() ? now : resume;
@@ -127,15 +143,19 @@ export function summarizeFreeAllowance(input: {
   weekEnd: Date;
   windowMs: number;
   now: Date;
+  /** An already recorded turn may finish its internal calls; cost caps still apply. */
+  quotaTurnId?: string;
 }): FreeAllowanceTotals {
   const messages = countFreeMessages(input.cycleEvents);
-  const cycleUsd = input.cycleEvents.reduce((sum, event) => sum + eventFlashCostUsd(event), 0);
-  const weekUsd = input.weekEvents.reduce((sum, event) => sum + eventFlashCostUsd(event), 0);
+  const cycleUsd = input.cycleEvents.reduce((sum, event) => sum + eventFreeCostUsd(event), 0);
+  const weekUsd = input.weekEvents.reduce((sum, event) => sum + eventFreeCostUsd(event), 0);
   const messageRatio = messages / FREE_CYCLE_MESSAGE_LIMIT;
   const cycleUsdRatio = cycleUsd / FREE_CYCLE_USD;
   const weekUsdRatio = weekUsd / FREE_WEEK_USD;
   const usedRatio = Math.min(1, Math.max(0, messageRatio, cycleUsdRatio, weekUsdRatio));
-  const cycleBlocked = messages >= FREE_CYCLE_MESSAGE_LIMIT || cycleUsd >= FREE_CYCLE_USD;
+  const continuingTurn = Boolean(input.quotaTurnId?.trim() && input.cycleEvents.some(event =>
+    event.countsAsMessage && event.quotaTurnId === input.quotaTurnId!.trim()));
+  const cycleBlocked = (messages >= FREE_CYCLE_MESSAGE_LIMIT && !continuingTurn) || cycleUsd >= FREE_CYCLE_USD;
   const weekBlocked = weekUsd >= FREE_WEEK_USD;
   const exhausted = cycleBlocked || weekBlocked;
   const blockedWindow: FreeBlockedWindow | undefined = weekBlocked ? "week" : cycleBlocked ? "cycle" : undefined;

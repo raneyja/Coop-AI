@@ -4,7 +4,7 @@ import { UserWorkspaceStore, workspaceRepoLimitForPlan } from "./userWorkspaceSt
 async function testWorkspaceRepoLimitForPlan() {
   assert.equal(workspaceRepoLimitForPlan("pro"), 3);
   assert.equal(workspaceRepoLimitForPlan("enterprise"), 3);
-  assert.equal(workspaceRepoLimitForPlan("free"), null);
+  assert.equal(workspaceRepoLimitForPlan("free"), 3);
 }
 
 async function testSetUserWorkspaceReposEnforcesCap() {
@@ -69,21 +69,19 @@ async function testSetUserWorkspaceReposEnforcesCap() {
   };
 
   const store = new UserWorkspaceStore(pool as never);
-  await store.setUserWorkspaceRepos("org-1", "user-1", ["github:a/b", "github:a/c"], "pro");
-  const quota = await store.getUserWorkspaceQuota("org-1", "user-1", "pro");
-  assert.equal(quota.selectedCount, 2);
-  assert.equal(quota.canAddMore, true);
-
-  await assert.rejects(
-    () =>
-      store.setUserWorkspaceRepos(
-        "org-1",
-        "user-1",
-        ["github:a/b", "github:a/c", "github:a/d", "github:a/e"],
-        "pro"
-      ),
-    /at most 3/
-  );
+  for (const plan of ["free", "pro", "enterprise"] as const) {
+    await store.setUserWorkspaceRepos("org-1", "user-1", ["github:a/b", "github:a/c"], plan);
+    const quota = await store.getUserWorkspaceQuota("org-1", "user-1", plan);
+    assert.equal(quota.selectedCount, 2);
+    assert.equal(quota.limit, 3);
+    assert.equal(quota.canAddMore, true);
+    await assert.rejects(() => store.setUserWorkspaceRepos("org-1", "user-1",
+      ["github:a/b", "github:a/c", "github:a/d", "github:a/e"], plan), /at most 3/);
+    assert.equal((await store.getUserWorkspaceQuota("org-1", "user-1", plan)).selectedCount, 2,
+      "rejected selection must preserve existing rows");
+    await store.setUserWorkspaceRepos("org-1", "user-1", ["github:a/b", "github:a/c", "github:a/d"], plan);
+    assert.equal((await store.getUserWorkspaceQuota("org-1", "user-1", plan)).canAddMore, false);
+  }
 }
 
 async function run() {

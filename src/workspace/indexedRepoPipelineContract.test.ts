@@ -19,7 +19,7 @@ void (async () => {
   await test("INDEX_REPOSITORY persists branch on repo_stats", () => {
     const source = read("jobs/executors.ts");
     assert.match(source, /branch:\s*clone\.branch/);
-    assert.match(source, /new RepoStatsStore\(pool\)\.upsertStats/);
+    assert.match(source, /withJobOwnedEffect\(pool, job, client => new RepoStatsStore\(client\)\.upsertStats/);
   });
 
   await test("inventory client preserves indexed branch from API", () => {

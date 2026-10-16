@@ -73,6 +73,9 @@ test("sanitizeAuthRedirect rejects unsafe schemes and https without allowlist", 
   assert.equal(sanitizeAuthRedirect(""), undefined);
   assert.equal(sanitizeAuthRedirect("not-a-url"), undefined);
   assert.equal(sanitizeAuthRedirect("https://admin.coop-ai.dev/auth/callback"), undefined);
+  assert.equal(sanitizeAuthRedirect("vscode://evil.extension/auth/callback", allowlist), undefined);
+  assert.equal(sanitizeAuthRedirect("vscode://coop-ai.coop-ai/wrong", allowlist), undefined);
+  assert.equal(sanitizeAuthRedirect("vscode://coop-ai.coop-ai/auth/callback#injected", allowlist), undefined);
 });
 
 test("deliverAuthError hands vscode URIs an HTML page instead of a protocol 302", () => {
@@ -155,6 +158,15 @@ test("deliverSessionToken hands vscode URIs an HTML success page instead of a pr
     state.body ?? "",
     /window\.location\.href = "vscode:\/\/coop-ai\.coop-ai\/auth\/callback#coopToken=access-token-123&coopRefresh=refresh-456"/
   );
+});
+
+test("IDE handoff keeps token data from ending the inline script", () => {
+  const { response, state } = mockRedirectResponse();
+  deliverSessionToken(response, "</script><script>alert(1)</script>", "vscode://coop-ai.coop-ai/auth/callback");
+  const html = state.body ?? "";
+  assert.equal((html.match(/<script>/g) ?? []).length, 1);
+  assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/);
+  assert.match(html, /%3C%2Fscript%3E/);
 });
 
 test("deliverSessionToken still 302s browser portal callbacks", () => {

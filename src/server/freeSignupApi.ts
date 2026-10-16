@@ -6,7 +6,8 @@ import type { AuthIdentityStore } from "./auth/authIdentityStore";
 import type { AuthTokenStore } from "./auth/authTokenStore";
 import type { AuthConfig } from "./auth/authConfig";
 import { hashPassword, validatePasswordStrength } from "./auth/passwordCrypto";
-import { authClientKey, consumeAuthRateLimit } from "./auth/authRateLimit";
+import { consumeAuthRequest, type AuthRateLimitStore } from "./auth/authRateLimit";
+import type { ServerConfig } from "./serverConfig";
 import { loadBillingConfig } from "./billing/billingConfig";
 import { adminPortalFreshLoginUrl, adminPortalLoginUrl } from "./billing/adminPortalUrl";
 
@@ -14,10 +15,13 @@ type ParsedRequest = {
   method: string;
   pathname: string;
   body: unknown;
+  peerAddress?: string;
   headers?: Record<string, string | undefined>;
 };
 
 export type FreeSignupApiDeps = {
+  serverConfig: ServerConfig;
+  authRateLimitStore?: AuthRateLimitStore;
   orgStore?: OrgStore;
   userStore?: UserStore;
   authIdentityStore?: AuthIdentityStore;
@@ -52,11 +56,14 @@ export async function handleFreeSignupApiRequest(
     .trim()
     .toLowerCase();
   const password = String(body.password ?? "");
-  if (!consumeAuthRateLimit(authClientKey(parsed.headers ?? {}))) {
-    writeJson(response, 429, {
-      error: "rate_limited",
-      message: "Too many attempts. Try again in a few minutes."
-    });
+  try {
+    if (!(await consumeAuthRequest({ headers: parsed.headers ?? {}, peerAddress: parsed.peerAddress,
+      serverConfig: deps.serverConfig, authRateLimitStore: deps.authRateLimitStore }))) {
+      writeJson(response, 429, { error: "rate_limited", message: "Too many attempts. Try again in a few minutes." });
+      return true;
+    }
+  } catch {
+    writeJson(response, 503, { error: "signup_unavailable", message: "Signup is temporarily unavailable. Try again later." });
     return true;
   }
   if (!isValidEmail(email)) {

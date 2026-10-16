@@ -99,7 +99,10 @@ test("buildUserMessageWithContext emits file_history for who-created asks", () =
     ]
   });
   assert.ok(message.includes("<file_history"));
-  assert.ok(message.includes("created: jon"));
+  assert.ok(message.includes("earliest_returned: jon 2024-01-15T00:00:00.000Z abc12345 add auth middleware"));
+  assert.ok(message.includes("provenance anchor, not proof"));
+  assert.ok(message.includes("creation remains unverified"));
+  assert.ok(!message.includes("created: jon"));
   assert.ok(message.includes("latest: jon"));
 });
 

@@ -3,37 +3,21 @@
  * Search/manifest samples miss apps/api internals; compose at repo root is not architecture.
  */
 
-import { isOnboardingNoisePath, selectOnboardingEvidencePaths } from "./onboardingSearchQueries";
+import { isOnboardingNoisePath } from "./onboardingSearchQueries";
 import { isReadmeAnchorPath } from "./userFocusQuery";
 
 export const MAX_UNDERSTAND_WALK_LISTINGS = 16;
 export const MAX_UNDERSTAND_WALK_DEPTH = 4;
 export const MAX_UNDERSTAND_DOMAIN_FILES = 6;
 
-const PARENT_DIRS = ["apps", "packages", "services", "src"];
-const PREFERRED_CHILDREN = new Set([
-  "api",
-  "web",
-  "live",
-  "admin",
-  "space",
-  "server",
-  "backend",
-  "frontend",
-  "app",
-  "core"
-]);
-const CODE_CHILD_DIR =
-  /^(plane|src|app|db|api|server|middleware|models|views|handlers|routers?|auth|core|lib)$/i;
-const SKIP_CHILD_DIR = /^(tests?|migrations?|node_modules|dist|build|bin|fixtures?|seeds?|locales?|\.)/i;
-const DOMAIN_RANK_QUERY = "authentication issue models views router middleware";
+const SKIP_CHILD_DIR = /^(?:\.(?:git|hg|svn|cache)|node_modules|vendor|dist|build|coverage)$/i;
 
 export type UnderstandTreeEntry = { name: string; type: "dir" | "file" };
 export type UnderstandDirListing = { dir: string; entries: UnderstandTreeEntry[] };
 
 export function pickUnderstandParentDirs(topLevelDirs: string[]): string[] {
-  const present = new Set(topLevelDirs.map((dir) => dir.replace(/\/$/, "").toLowerCase()));
-  return PARENT_DIRS.filter((dir) => present.has(dir));
+  return [...new Set(topLevelDirs.map(dir => dir.replace(/\/$/, "")))]
+    .filter(dir => dir && !SKIP_CHILD_DIR.test(dir)).sort();
 }
 
 export function isUnderstandArchitectureNoisePath(path: string): boolean {
@@ -58,31 +42,22 @@ export function isUnderstandDomainSourcePath(path: string): boolean {
   if (isUnderstandArchitectureNoisePath(normalized)) {
     return false;
   }
-  if (!/\.(py|ts|tsx|js|jsx|go|rb|java|rs)$/i.test(normalized)) {
-    return false;
-  }
-  return /^(apps|packages|services|src)\//i.test(normalized);
+  return Boolean(normalized.trim()) && !/(?:^|\/)(?:node_modules|vendor|dist|build|\.git)(?:\/|$)/i.test(normalized);
 }
 
 export function nextUnderstandWalkDirs(
   dir: string,
   entries: UnderstandTreeEntry[],
-  depth: number
+  _depth: number
 ): string[] {
   const parent = dir.replace(/\/$/, "");
   const dirs = entries
     .filter((entry) => entry.type === "dir")
     .map((entry) => entry.name.replace(/\/$/, ""))
     .filter((name) => name && !SKIP_CHILD_DIR.test(name));
-  if (depth === 0) {
-    const preferred = dirs.filter((name) => PREFERRED_CHILDREN.has(name.toLowerCase()));
-    const rest = dirs.filter((name) => !PREFERRED_CHILDREN.has(name.toLowerCase()));
-    return [...preferred, ...rest].slice(0, 4).map((name) => `${parent}/${name}`);
-  }
-  return dirs
-    .filter((name) => CODE_CHILD_DIR.test(name))
-    .slice(0, 4)
-    .map((name) => `${parent}/${name}`);
+  // Traverse real directory names without assuming a language, framework,
+  // product name, or conventional src/apps layout. Global bounds control cost.
+  return dirs.sort().slice(0, 4).map(name => `${parent}/${name}`);
 }
 
 export function selectUnderstandDomainPathsFromListings(listings: UnderstandDirListing[]): string[] {
@@ -94,7 +69,7 @@ export function selectUnderstandDomainPathsFromListings(listings: UnderstandDirL
         continue;
       }
       const path = prefix ? `${prefix}/${entry.name}` : entry.name;
-      if (isUnderstandDomainSourcePath(path) || /(^|\/)(manage|urls|wsgi|asgi|settings)\.py$/i.test(path)) {
+      if (isUnderstandDomainSourcePath(path)) {
         files.push(path);
       }
     }
@@ -102,7 +77,9 @@ export function selectUnderstandDomainPathsFromListings(listings: UnderstandDirL
   if (files.length === 0) {
     return [];
   }
-  return selectOnboardingEvidencePaths(files, DOMAIN_RANK_QUERY, MAX_UNDERSTAND_DOMAIN_FILES);
+  // Preserve case-sensitive identities. The bounded walk supplies a sample,
+  // not a framework-specific proof or an exhaustive architecture inventory.
+  return [...new Set(files)].sort().slice(0, MAX_UNDERSTAND_DOMAIN_FILES);
 }
 
 export function filterComposeArchitectureFiles<T extends { path: string }>(
@@ -174,10 +151,12 @@ export async function collectUnderstandDomainPaths(options: {
     if (options.deadlineAt && Date.now() >= options.deadlineAt) {
       break;
     }
-    const batch = queue.splice(0, 6);
+    const batch = queue.splice(0, Math.min(6, MAX_UNDERSTAND_WALK_LISTINGS - listed));
+    // Count attempts, including unavailable directories, against the bound.
+    listed += batch.length;
     const resolved = await Promise.all(
       batch.map(async (item) => {
-        const key = item.path.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "").toLowerCase();
+        const key = item.path.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
         if (seen.has(key)) {
           return undefined;
         }
@@ -194,13 +173,12 @@ export async function collectUnderstandDomainPaths(options: {
       if (!item) {
         continue;
       }
-      listed += 1;
       listings.push({ dir: item.path, entries: item.entries });
       if (item.depth >= MAX_UNDERSTAND_WALK_DEPTH || listed >= MAX_UNDERSTAND_WALK_LISTINGS) {
         continue;
       }
       for (const next of nextUnderstandWalkDirs(item.path, item.entries, item.depth)) {
-        const key = next.replace(/\\/g, "/").toLowerCase();
+        const key = next.replace(/\\/g, "/");
         if (!seen.has(key)) {
           queue.push({ path: next, depth: item.depth + 1 });
         }

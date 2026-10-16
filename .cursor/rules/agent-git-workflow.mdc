@@ -11,7 +11,7 @@ GitHub Actions Lint is `npm run lint` (`tsc --noEmit` on extension, webview, and
 
 ## Before every commit the user requested
 
-1. Run `git status` and `git diff` (staged + unstaged). Stage **all files required** for the change to typecheck — not only the file you edited last.
+1. Run `git status` and `git diff` (staged + unstaged), and inventory required untracked source. Stage the **complete authorized change** and its necessary types/clients/call sites by explicit paths — not only the file edited last, and never unrelated pre-existing work. Preserve unknown staged/unstaged changes; do not reset or sweep them into the commit.
 2. Related surfaces that often get left behind: `src/chat/types.ts`, `SecureApiClient.ts`, `CoopBackendClient.ts`, webview message handlers, admin mirrors of the same API.
 3. Run **`npm run lint`** from the repo root. Fix failures (or include missing files) before `git commit`.
 4. If the commit touches Marketplace listing surfaces (`package.json` categories/description, root `README.md`, Stack banner under `website/public/screenshots/docs/`), also run **`npm run test:marketplace-listing`**. See `.cursor/rules/vscode-marketplace-listing.mdc`.
@@ -34,7 +34,7 @@ GitHub Actions Lint is `npm run lint` (`tsc --noEmit` on extension, webview, and
 ## Scope
 
 - Applies when the user asks to commit, push, open a PR, or “ship this.”
-- Does not require the full CI test matrix locally unless the user asks or the change is in those test areas.
+- Run checks proportionate to the change. An explicitly launched program's required CI/security/database/evaluation/release gates also apply; this lint minimum does not waive them. Small unrelated changes do not require the full program matrix.
 - Secrets, amend, force-push, and hook-skip rules in the user commit protocol still apply.
 
 **Lint ≠ product Pass.** Green `npm run lint` (and unit tests) are a git/CI gate only. For reject-hunt / locate / Extension Host dogfood Fail classes, still use claim tiers in `.cursor/rules/ship-claim-discipline.mdc` — never say “fixed” from lint alone.

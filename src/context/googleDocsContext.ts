@@ -1,3 +1,4 @@
+import { createGoogleDocsClientFromCredentials } from "../api/integrations/buildIntegrationClients";
 import { GoogleDocsClient } from "../api/googleDocs/googleDocsClient";
 import { googleDocumentIdFromText } from "../api/googleDocs/documentUrl";
 import type { IntegrationSecrets } from "../api/integrations/integrationSecrets";
@@ -122,7 +123,10 @@ export async function fetchGoogleDocsSearchContext(options: {
   }
 
   const creds = await options.secrets.getCredentials();
-  if (!creds.googleDocsToken && !options.client) {
+  if (creds.proxy && (!options.integrationScope?.enforced || !options.integrationScope.allowed)) {
+    return { source: "google-docs-search", query: "", documents: [], error: "Integration source authorization is unavailable." };
+  }
+  if (!creds.proxy && !creds.googleDocsToken && !options.client) {
     return {
       source: "google-docs-search",
       query: "",
@@ -170,7 +174,7 @@ export async function fetchGoogleDocsSearchContext(options: {
   const query = latest ? "latest" : terms.join(" OR ");
   const client =
     options.client ??
-    new GoogleDocsClient({ accessToken: creds.googleDocsToken!, signal: options.signal });
+    createGoogleDocsClientFromCredentials(creds, { signal: options.signal })!;
   const existingDocs = (options.existingHits?.documents ?? []) as GoogleDocsSearchPage[];
   if (options.openIds?.length && existingDocs.length > 0) {
     const scopedExistingDocs = options.integrationScope?.enforced
@@ -181,7 +185,7 @@ export async function fetchGoogleDocsSearchContext(options: {
       : existingDocs;
     const documents = await attachGoogleDocBodies(client, scopedExistingDocs, {
       jobScoped: false,
-      openIds: options.openIds
+      openIds: options.openIds, failClosed: Boolean(creds.proxy)
     });
     return {
       source: "google-docs-search",
@@ -239,7 +243,7 @@ export async function fetchGoogleDocsSearchContext(options: {
           jobScoped: Boolean(
             (options.jobScoped && options.jobVerb !== "latest") || options.openAfterHit
           ),
-          openIds: options.openIds
+          openIds: options.openIds, failClosed: Boolean(creds.proxy)
         });
     const repoQuery =
       options.owner?.trim() && options.repo?.trim()
@@ -299,13 +303,14 @@ function pagesToOpen(
 async function attachGoogleDocBodies(
   client: GoogleDocsSearchClient,
   pages: GoogleDocsSearchPage[],
-  options: { jobScoped: boolean; openIds?: string[] }
+  options: { failClosed?: boolean; jobScoped: boolean; openIds?: string[] }
 ): Promise<GoogleDocsSearchPage[]> {
   if (pages.length === 0 || !client.getDocumentPlainText) {
     return pages;
   }
   if (options.openIds?.length) {
     return openHitsByIds({
+      failClosed: options.failClosed,
       hits: pages,
       ids: options.openIds,
       idOf: (page) => page.id,
@@ -315,8 +320,10 @@ async function attachGoogleDocBodies(
           const excerpt = sanitizeIntegrationSnippet(
             clipOpenedBody(raw, OPENED_PAGE_BODY_CHARS) ?? ""
           );
+          if (!excerpt && options.failClosed) throw new Error("Authorized integration read returned no body.");
           return excerpt ? { ...page, excerpt, opened: true } : { ...page, opened: true };
-        } catch {
+        } catch (error) {
+          if (options.failClosed) throw error;
           return { ...page, opened: true };
         }
       }
@@ -331,7 +338,8 @@ async function attachGoogleDocBodies(
       try {
         const body = await client.getDocumentPlainText?.(page.id);
         return { id: page.id, body };
-      } catch {
+      } catch (error) {
+        if (options.failClosed) throw error;
         return { id: page.id, body: undefined };
       }
     })

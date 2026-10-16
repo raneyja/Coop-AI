@@ -1,8 +1,10 @@
-import { fetchWithTimeout, isFetchTimeout } from "../networkResilience";
-import { INTEGRATION_HTTP_TIMEOUT_MS, integrationAuthFailureMessage } from "../integrations/integrationHttp";
+import type { IntegrationProxy } from "../integrations/integrationOperations";
+import { isFetchTimeout } from "../networkResilience";
+import { fetchIntegrationResponse, INTEGRATION_HTTP_TIMEOUT_MS, integrationAuthFailureMessage } from "../integrations/integrationHttp";
 import { confluenceSiteUrlError, isPlaceholderAtlassianSite } from "./resolveConfluenceBaseUrl";
 
 export type ConfluenceClientOptions = {
+  proxy?: IntegrationProxy;
   baseUrl: string;
   email?: string;
   apiToken?: string;
@@ -136,7 +138,12 @@ export class ConfluenceClient {
   private platformApiBase?: string;
 
   public constructor(private readonly options: ConfluenceClientOptions) {
-    if (options.oauthAccessToken && options.cloudId) {
+    if (options.proxy) {
+      this.oauthMode = false;
+      this.siteOrigin = "";
+      this.apiBase = "";
+      this.authHeader = "";
+    } else if (options.oauthAccessToken && options.cloudId) {
       this.oauthMode = true;
       this.siteOrigin = wikiSiteOrigin(options.baseUrl);
       this.apiBase = `https://api.atlassian.com/ex/confluence/${options.cloudId}/wiki/rest/api`;
@@ -154,6 +161,7 @@ export class ConfluenceClient {
   }
 
   public async testConnection(): Promise<{ ok: boolean; message: string }> {
+    if (this.options.proxy) return this.options.proxy("confluence.testConnection", [], this.options.signal);
     const siteError = confluenceSiteUrlError(`${this.siteOrigin}/wiki`);
     if (siteError) {
       return { ok: false, message: siteError };
@@ -176,6 +184,7 @@ export class ConfluenceClient {
   }
 
   public async searchPages(cql: string, limit = 20): Promise<ConfluencePage[]> {
+    if (this.options.proxy) return this.options.proxy("confluence.searchPages", [cql, limit], this.options.signal);
     const result = await this.request<{
       results?: Array<{
         content?: {
@@ -193,6 +202,7 @@ export class ConfluenceClient {
     }>("/search", {
       query: {
         cql,
+        expand: "content.space,content.history",
         limit: String(Math.min(limit, 50))
       }
     });
@@ -220,6 +230,7 @@ export class ConfluenceClient {
 
   /** Open a search hit — page body as plain text, not the search snippet. */
   public async getPageBody(pageId: string): Promise<string | undefined> {
+    if (this.options.proxy) return this.options.proxy("confluence.getPageBody", [pageId], this.options.signal);
     const id = pageId.trim();
     if (!id) {
       return undefined;
@@ -375,12 +386,12 @@ export class ConfluenceClient {
     if (this.platformApiBase) {
       return this.platformApiBase;
     }
-    const response = await fetchWithTimeout(
+    const response = await fetchIntegrationResponse(
       `${this.siteOrigin}/_edge/tenant_info`,
       {
         method: "GET",
         headers: { Accept: "application/json" },
-        signal: this.options.signal
+        signal: this.options.signal, redirect: "error"
       },
       INTEGRATION_HTTP_TIMEOUT_MS
     );
@@ -450,7 +461,7 @@ export class ConfluenceClient {
       }
     }
 
-    const response = await fetchWithTimeout(
+    const response = await fetchIntegrationResponse(
       url.toString(),
       {
         method: "GET",
@@ -458,7 +469,7 @@ export class ConfluenceClient {
           Authorization: this.authHeader,
           Accept: "application/json"
         },
-        signal: this.options.signal
+        signal: this.options.signal, redirect: "error"
       },
       INTEGRATION_HTTP_TIMEOUT_MS
     );
@@ -480,10 +491,10 @@ function stripHtml(html: string): string {
   return html
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
     .replace(/\s+/g, " ")
     .trim();
 }

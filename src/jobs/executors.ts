@@ -31,6 +31,7 @@ import { runZoektIndexer } from "./runZoektIndexer";
 import { collectRepoStats } from "../workspace/collectRepoStats";
 import { RepoStatsStore } from "../workspace/repoStatsStore";
 import { verifyRepoBrowse } from "../indexing/verifyRepoBrowse";
+import { withJobOwnedEffect } from "./jobEffectAdmission";
 
 export type JobExecutionContext = {
   cache: GraphCache;
@@ -160,21 +161,10 @@ export async function buildDependencyGraph(
   }
 
   const target = parseRepoId(repoId);
+  if(orgId) await ctx.cache.ensureLoaded(orgId,repoId);
   let graph = orgId ? ctx.cache.getGraph(orgId, repoId) : undefined;
   if (!graph) {
-    graph = orgId
-      ? ctx.cache.upsertRepository(orgId, {
-          repoId,
-          owner: target.owner,
-          repo: target.repo,
-          provider: target.provider
-        })
-      : blankRepositoryGraph({
-          repoId,
-          owner: target.owner,
-          repo: target.repo,
-          provider: target.provider
-        });
+    graph = blankRepositoryGraph({repoId,owner:target.owner,repo:target.repo,provider:target.provider});
     if (!orgId) {
       logSkipGraphPersist(repoId);
     }
@@ -183,8 +173,10 @@ export async function buildDependencyGraph(
   await report(50, "Loading durable dependency edges");
   const filePaths = new Set(graph.fileTree.map((f) => f.path));
   const merged = await loadDurableDependencyEdges(orgId, repoId, filePaths);
-  const updated = orgId ? ctx.cache.setDependencies(orgId, repoId, merged) : undefined;
-  graph = updated ?? graph;
+  graph.dependencies=merged;
+  graph.lastUpdated=new Date();graph.metadata.lastIndexedAt=graph.lastUpdated;graph.metadata.indexVersion++;
+  if(!orgId) throw new Error('Graph publication requires an organization');
+  await ctx.cache.publishJobGraph(job,graph,undefined,signal);
 
   await report(85, "Building transitive index");
   const nodeCount = graph.fileTree.length;
@@ -214,8 +206,14 @@ async function indexRepository(
     throw new Error("Invalid parameters: repoId is required");
   }
 
+  const updateIndex = async (patch: Parameters<OrgStore['upsertOrgRepo']>[2]) => {
+    const store = ctx.orgStore;
+    const pool = await getDbPool();
+    if (!orgId || !store || !pool) throw new Error('Index status requires a durable attempt database');
+    return withJobOwnedEffect(pool, job, client => store.upsertOrgRepoForJob(job, repoId, patch, client), signal);
+  };
   if (orgId && ctx.orgStore) {
-    await ctx.orgStore.upsertOrgRepo(orgId, repoId, {
+    await updateIndex({
       indexStatus: "indexing",
       error: undefined,
       embeddingStatus: "pending",
@@ -228,6 +226,7 @@ async function indexRepository(
 
   await report(15, "Preparing repository clone");
   const target = parseRepoId(repoId);
+  if(orgId) await ctx.cache.ensureLoaded(orgId,repoId);
   let graph = orgId ? ctx.cache.getGraph(orgId, repoId) : undefined;
   if (!graph) {
     if (!orgId) {
@@ -239,12 +238,7 @@ async function indexRepository(
         provider: target.provider
       });
     } else {
-      graph = ctx.cache.upsertRepository(orgId, {
-        repoId,
-        owner: target.owner,
-        repo: target.repo,
-        provider: target.provider
-      });
+      graph = blankRepositoryGraph({repoId,owner:target.owner,repo:target.repo,provider:target.provider});
     }
   }
 
@@ -267,7 +261,7 @@ async function indexRepository(
       );
     }
     await report(30, "Cloning repository");
-    const clone = await cloneRepository({ ...target, orgId, jobId: job.id }, token);
+    const clone = await cloneRepository({ ...target, orgId, jobId: `${job.id}-${job.attemptId}` }, token, undefined, signal);
     cloneLocalPath = clone.localPath;
 
     let scipResult: Awaited<ReturnType<typeof runScipIndexer>> | undefined;
@@ -279,10 +273,10 @@ async function indexRepository(
       const pool = await getDbPool();
       if (pool) {
         await report(42, "Running SCIP symbol indexing");
-        scipResult = await runScipIndexer(repoId, orgId, undefined, clone.localPath, pool);
+        scipResult = await runScipIndexer(repoId, orgId, undefined, clone.localPath, pool, job, signal);
 
         await report(55, "Building Zoekt full-text index");
-        zoektResult = await runZoektIndexer(repoId, orgId, clone.localPath);
+        zoektResult = await runZoektIndexer(repoId, orgId, clone.localPath, {job, pool, signal});
 
         let shouldEmbed = false;
         if (ctx.orgStore) {
@@ -293,7 +287,7 @@ async function indexRepository(
           await report(65, "Embedding files without symbol coverage");
           try {
             embedResult = await chunkAndEmbed(repoId, orgId, clone.localPath, pool, {
-              signal,
+              signal, job,
               onProgress: async (fraction) => {
                 // Wide band (65–85) so large repos don't look stuck at 77–79.
                 await report(65 + Math.round(fraction * 20), "Embedding files without symbol coverage");
@@ -327,11 +321,7 @@ async function indexRepository(
     graph.metadata.lastIndexedAt = now;
     graph.metadata.indexVersion += 1;
     graph.lastUpdated = now;
-    if (orgId) {
-      ctx.cache.setGraph(orgId, graph);
-    } else {
-      logSkipGraphPersist(repoId);
-    }
+    // Remains private until final graph + READY commit.
 
     // Import graph while clone still exists — durable edges, no filename heuristics.
     // Zoekt is often unavailable in prod; Blast dependents depend on these rows.
@@ -378,7 +368,7 @@ async function indexRepository(
         }
 
         try {
-          await new RepoDependencyEdgesStore(pool).replaceEdges(orgId, repoId, edgeRows, now);
+          await withJobOwnedEffect(pool, job, client => new RepoDependencyEdgesStore(pool).replaceEdges(orgId, repoId, edgeRows, now, client), signal);
           console.log(
             `[index] import-graph persisted repo=${repoId} edges=${edgeRows.length}`
           );
@@ -404,11 +394,7 @@ async function indexRepository(
         type: edge.kind === "reference" ? ("reference" as const) : ("import" as const)
       }))
     );
-    if (orgId) {
-      ctx.cache.setDependencies(orgId, repoId, cacheEdges);
-    } else {
-      logSkipGraphPersist(repoId);
-    }
+    graph.dependencies=cacheEdges;
 
     // Measure the repo while the clone still exists — chat answers counts from
     // this record instead of estimating from a retrieval sample.
@@ -417,7 +403,7 @@ async function indexRepository(
     if (orgId) {
       const pool = await getDbPool();
       if (pool) {
-        await new RepoStatsStore(pool).upsertStats(orgId, repoId, {
+        await withJobOwnedEffect(pool, job, client => new RepoStatsStore(client).upsertStats(orgId, repoId, {
           branch: clone.branch ?? target.branch,
           fileCount: repoStats.fileCount,
           lineCount: repoStats.lineCount,
@@ -425,7 +411,7 @@ async function indexRepository(
           languages: repoStats.languages,
           headCommit: clone.headCommit,
           indexedAt: now
-        });
+        }), signal);
       }
     }
 
@@ -450,21 +436,11 @@ async function indexRepository(
       browseVerifiedAt = new Date();
     }
 
-    if (orgId && ctx.orgStore) {
-      await ctx.orgStore.upsertOrgRepo(orgId, repoId, {
-        lightningEnabled: true,
-        indexStatus: "ready",
-        embeddingStatus,
-        lastIndexedAt: now,
-        lastJobId: job.id,
-        error: undefined,
-        embeddingError,
-        browseStatus,
-        browseError,
-        browseVerifiedAt,
-        defaultBranch
-      });
-    }
+    if(!orgId) throw new Error('Graph publication requires an organization');
+    await ctx.cache.publishJobGraph(job,graph,ctx.orgStore ? {store:ctx.orgStore,patch:{
+      lightningEnabled:true,indexStatus:'ready',embeddingStatus,lastIndexedAt:now,lastJobId:job.id,
+      error:undefined,embeddingError,browseStatus,browseError,browseVerifiedAt,defaultBranch
+    }} : undefined,signal);
 
     await report(95, "Index ready");
     return {
@@ -501,7 +477,7 @@ async function indexRepository(
         "Turn off Deep-Index for this repo, or install the app on the account that owns it.";
     }
     if (orgId && ctx.orgStore) {
-      await ctx.orgStore.upsertOrgRepo(orgId, repoId, {
+      await updateIndex({
         indexStatus: "error",
         lastJobId: job.id,
         error: message,
@@ -510,7 +486,7 @@ async function indexRepository(
         browseVerifiedAt: new Date()
       });
     }
-    throw error instanceof Error ? new Error(message) : error;
+    throw error instanceof JobCancelledError ? error : error instanceof Error ? new Error(message) : error;
   } finally {
     if (cloneLocalPath) {
       removeRepositoryClone(cloneLocalPath);
@@ -573,23 +549,6 @@ async function generateRepoSummary(
   };
 }
 
-function ensureRepoGraph(ctx: JobExecutionContext, repoId: string, params: Record<string, unknown>): void {
-  const orgId = params.orgId ? String(params.orgId) : undefined;
-  if (!orgId) {
-    logSkipGraphPersist(repoId);
-    return;
-  }
-  if (ctx.cache.getGraph(orgId, repoId)) {
-    return;
-  }
-  const target = parseRepoId(repoId);
-  ctx.cache.upsertRepository(orgId, {
-    repoId,
-    owner: String(params.owner ?? target.owner),
-    repo: String(params.repo ?? target.repo),
-    provider: target.provider
-  });
-}
 
 async function loadKnowledgeGapScanSlice(
   ctx: JobExecutionContext,

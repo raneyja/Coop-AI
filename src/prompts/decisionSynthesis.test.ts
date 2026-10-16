@@ -194,8 +194,8 @@ test("decision synthesis includes enriched evidence fields and enrichment instru
     repo: "fastify"
   });
   assert.ok(prompt.includes("## Evidence enrichment"));
-  assert.ok(prompt.includes("lead with this for full-file traces"));
-  assert.ok(prompt.includes("Recent decision commit"));
+  assert.ok(prompt.includes("historical accounts, not exhaustive activity"));
+  assert.ok(prompt.includes("Recent sampled commit"));
   assert.ok(prompt.includes("Sampled provenance (background)"));
   assert.ok(prompt.includes("primary rationale source"));
   assert.ok(prompt.includes("Target: fastify.js:10-20"));
@@ -240,6 +240,31 @@ test("same author on both sampled commits is a possible contact, not an exclusiv
   assert.ok(DECISION_HISTORIAN_SYSTEM.includes("Even when one person authored every attached commit"));
   assert.ok(DECISION_HISTORIAN_SYSTEM.includes("do not call them the only person to engage"));
   assert.ok(DECISION_HISTORIAN_SYSTEM.includes("attached current ownership policy explicitly establishes"));
+});
+
+test("trace synthesis partitions source kinds without forcing design status or code introduction", () => {
+  const prompt = buildDecisionSynthesisUserPrompt({ timeline, file: "fastify.js" });
+  assert.ok(DECISION_HISTORIAN_SYSTEM.includes("**Current observations**"));
+  assert.ok(DECISION_HISTORIAN_SYSTEM.includes("**Recorded history**"));
+  assert.ok(DECISION_HISTORIAN_SYSTEM.includes("**Unknowns**"));
+  assert.ok(DECISION_HISTORIAN_SYSTEM.includes("attached relevant target patch"));
+  assert.ok(DECISION_HISTORIAN_SYSTEM.includes("whether a proposed improvement remains unimplemented"));
+  assert.ok(DECISION_HISTORIAN_SYSTEM.includes("does not establish the design decision is active"));
+  assert.ok(prompt.includes("Prefer fewer supported claims"));
+  assert.ok(!prompt.includes("lead the opening / **Technical decision** with that recent decision story"));
+});
+
+test("metadata-only discussion and derived alternatives remain unknown without original text", () => {
+  const prompt = buildDecisionSynthesisUserPrompt({
+    file: "fastify.js",
+    timeline: {
+      ...timeline,
+      linkedPR: { number: 2, title: "A design choice", state: "merged", description: "", approvers: ["alice"], reviews: [] },
+      alternatives: [{ option: "A", proposed_by: "alice", reason_rejected: "B", source: "pr:2" }]
+    }
+  });
+  assert.ok(prompt.includes("Bundle has no original attached discussion body"));
+  assert.ok(prompt.includes("Metadata, approvals and extracted alternatives do not fill that gap"));
 });
 
 test("formatTimelineForPrompt surfaces technical debt on jira tickets", () => {

@@ -1,59 +1,28 @@
 ---
-title: Zero-retention LLM routing
-description: Configure zero-retention headers for enterprise-confidential code paths.
+title: LLM request controls and retention
+description: Understand request controls and the provider account evidence needed for retention claims.
 section: enterprise
 order: 2
-lastUpdated: "2026-06-29"
+lastUpdated: "2026-10-11"
 ---
 
-Zero-retention routing ensures LLM providers do not retain prompts or completions for training or logging beyond the request lifecycle.
+Chat/messages requests through Coop’s maintained formatter receive confidentiality instructions, payload sanitization and provider-compatible formatting. Controls differ by endpoint: some fill-in-the-middle completion paths send code prefixes/suffixes with provider headers and do not pass through that formatter. Check those bodies separately. These are application controls. A custom header, system instruction or source-code flag does not establish provider-side zero retention or no-training terms.
 
-## When zero-retention applies
+## Qualify the actual provider account
 
-| Path | Retention |
-| --- | --- |
-| **Chat** (`POST /v1/chat`) | Standard provider retention policies; Enterprise can enforce zero-retention |
-| **Inline completion** | Separate path with `x-use-case: code-completion-only` — distinct from chat |
-| **Enterprise confidential** | Zero-retention headers on all inference for flagged orgs |
+Retention depends on the API product, provider account/project, enabled features, account settings and applicable agreement. Verify those details for the deployment before relying on a zero-retention claim. Missing account evidence leaves that claim unqualified.
 
-## Inline completion routing
+Chat, quick actions and inline completion each need their actual outbound path checked. An inline-completion use-case label distinguishes routing; it is not a separate retention agreement or proof of faster responses.
 
-The VS Code extension sends inline completion requests with:
+## Provider keys
 
-```http
-x-use-case: code-completion-only
-```
+For a deployment on your infrastructure, its server operator configures supported provider API keys. This is deployment configuration. Customer-owned-key routing per organization, a self-service key-management flow and additional Bedrock/Azure/Vertex connectors are not available product capabilities.
 
-This routes through a dedicated completion path with stricter retention controls and faster models (e.g. Claude Haiku).
+Coordinate provider/account selection with the deployment operator. Do not weaken enterprise provider admission to enable a provider whose account and data-handling terms have not been qualified. See [Enterprise deployment](/docs/enterprise-deployment).
 
-## BYOK (Bring Your Own Key)
+## Evidence and reporting
 
-Enterprise customers can supply their own LLM provider keys:
-
-- Keys stored in `.env.backend` on your self-hosted API
-- Inference routes through **your** provider accounts
-- Your existing enterprise agreements with Anthropic/OpenAI apply
-
-See [Enterprise deployment](/docs/enterprise-deployment).
-
-## Supported providers
-
-| Provider | Env variable |
-| --- | --- |
-| Anthropic | `ANTHROPIC_API_KEY` |
-| OpenAI | `OPENAI_API_KEY` |
-| Google Gemini | `GEMINI_API_KEY` or `GOOGLE_API_KEY` |
-| DeepSeek | `DEEPSEEK_API_KEY` (Enterprise, requires `COOP_LLM_ALLOW_UNAPPROVED=true`) |
-
-## Attestation
-
-Enterprise plans include a zero-retention attestation document describing:
-
-- Which code paths use zero-retention headers
-- Provider retention policies referenced
-- Data flow from extension → API → LLM provider
-
-Contact [support@coop-ai.dev](mailto:support@coop-ai.dev) for attestation copies.
+Automated retention dashboards and signed zero-retention attestations are not available product features. Review the actual deployment's request paths, account settings and data flow with the Coop team, and discuss applicable contractual evidence and a DPA. A generated statement alone is not compliance evidence or certification.
 
 ## Next steps
 

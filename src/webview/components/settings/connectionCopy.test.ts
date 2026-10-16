@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   accountDetailIdentity,
   accountHubSubtitle,
+  adminPortalBaseUrl,
   displayIdentitySubtitle,
   displayOrgName,
   displayPlanLabel,
@@ -250,6 +251,15 @@ test("planAdminPortalHref deep-links admins with incoming requests", () => {
     }),
     "https://admin.coop-ai.dev/requests"
   );
+});
+
+test("admin portal links reject executable and credential-bearing URLs", () => {
+  assert.equal(adminPortalBaseUrl("javascript:alert(1)"), "https://admin.coop-ai.dev");
+  assert.equal(adminPortalBaseUrl("data:text/html,evil"), "https://admin.coop-ai.dev");
+  assert.equal(adminPortalBaseUrl("https://user:pass@evil.example"), "https://admin.coop-ai.dev");
+  assert.equal(adminPortalBaseUrl("http://evil.example"), "https://admin.coop-ai.dev");
+  assert.equal(adminPortalBaseUrl("http://localhost:3002/"), "http://localhost:3002");
+  assert.equal(adminPortalBaseUrl("https://admin.example.test/"), "https://admin.example.test");
 });
 
 test("incomingSeatUpgradeCopy is admin-only", () => {

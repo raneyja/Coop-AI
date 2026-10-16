@@ -4,11 +4,9 @@ import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  clearSession,
   defaultHomePath,
   meFromAuthPayload,
-  saveSession,
-  signOutRemote
+  saveSession
 } from "@/lib/auth";
 import { acceptInviteWithPassword, fetchInvitePreview, startGoogleAuthUrl } from "@/lib/coopApi";
 import { timezoneOptionsWithDefault, detectBrowserTimezone } from "@/lib/timezones";
@@ -50,15 +48,6 @@ function AcceptInviteContent() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(oauthError);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    // Activation / invite links must not reuse another browser session.
-    async function clearExistingSession() {
-      await signOutRemote();
-      clearSession();
-    }
-    void clearExistingSession();
-  }, []);
 
   useEffect(() => {
     if (oauthError) {
@@ -103,14 +92,14 @@ function AcceptInviteContent() {
     void loadPreview();
   }, [token]);
 
-  async function finishAcceptance(tokenValue: string, payload: Record<string, unknown>, refreshToken?: string) {
+  async function finishAcceptance(payload: Record<string, unknown>) {
     const me = meFromAuthPayload(payload);
     const role = (me.role ?? "").toLowerCase();
     if (role !== "admin" && role !== "member" && role !== "owner") {
       setError("This invitation could not be activated for your account.");
       return;
     }
-    saveSession(tokenValue, me, preview?.orgName, refreshToken);
+    saveSession(me, preview?.orgName);
     router.replace(defaultHomePath(me));
   }
 
@@ -170,13 +159,7 @@ function AcceptInviteContent() {
       return;
     }
 
-    const accessToken = String(result.data.accessToken ?? "").trim();
-    if (!accessToken) {
-      setError("Invitation acceptance response was incomplete.");
-      return;
-    }
-
-    await finishAcceptance(accessToken, result.data, result.data.refreshToken);
+    await finishAcceptance(result.data);
   }
 
   if (!token || previewError) {
@@ -326,7 +309,7 @@ function AcceptInviteContent() {
             </div>
 
             {error ? (
-              <p className="rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              <p className="rounded-xs border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
                 {error}
               </p>
             ) : null}

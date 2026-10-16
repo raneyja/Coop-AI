@@ -41,7 +41,7 @@ Slack threads, Jira issues, and tickets sit alongside the code graph so answers 
 
 CoopAI routes LLM inference through a server-side model router with **zero-retention configuration**: enterprise-confidential context, retention flags disabled, and provider keys stored on your server, not in the IDE or source control.
 
-We do not use your code, prompts, or completions to train models. BYOK and enterprise deployment paths are first-class, not afterthoughts.
+Server operators configure supported LLM provider keys for their deployment. Provider-side retention and training terms must be verified for the actual account and agreement; request flags alone do not establish them.
 
 ## What is next
 

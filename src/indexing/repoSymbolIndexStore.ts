@@ -28,7 +28,7 @@ export type DependencyEdge = {
 };
 
 export class RepoSymbolIndexStore {
-  public constructor(private readonly pool: Pool) {}
+  public constructor(private readonly pool: Pick<Pool, "query">) {}
 
   public async countSymbols(orgId: string, repoId: string): Promise<number> {
     const result = await this.pool.query<{ count: string }>(

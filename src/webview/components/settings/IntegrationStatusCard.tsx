@@ -2,6 +2,7 @@ import React from "react";
 import type { MemberToolStatus } from "../../../chat/integrationStatusTypes";
 import { memberToolStatusLabel } from "./integrationStatus";
 import type { Preferences } from "./types";
+import { adminPortalBaseUrl } from "./connectionCopy";
 
 type IntegrationStatusCardProps = {
   name: string;
@@ -43,7 +44,7 @@ export function IntegrationStatusCard({
 }
 
 export function MemberAdminPortalLink({ prefs }: { prefs: Preferences }): React.ReactElement {
-  const adminBase = (prefs.adminPortalUrl ?? "https://admin.coop-ai.dev").replace(/\/$/, "");
+  const adminBase = adminPortalBaseUrl(prefs.adminPortalUrl);
   return (
     <p className="coop-settings-card-desc px-0.5 mt-3">
       Need a tool connected?{" "}

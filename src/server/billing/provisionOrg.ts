@@ -33,7 +33,8 @@ export async function provisionOrgFromCheckout(
   billingConfig: BillingConfig,
   input: ProvisionInput,
   authTokenStore?: AuthTokenStore,
-  authIdentityStore?: AuthIdentityStore
+  authIdentityStore?: AuthIdentityStore,
+  requireDurableEmail = false
 ): Promise<ProvisionResult> {
   const loginUrl = adminPortalFreshLoginUrl(billingConfig.adminPortalUrl, {
     email: input.adminEmail
@@ -46,7 +47,7 @@ export async function provisionOrgFromCheckout(
     if (!org) {
       throw new Error(`Upgrade target org not found: ${input.existingOrgId}`);
     }
-    return linkPaidCheckoutToExistingOrg(org, orgStore, userStore, emailService, input, billing, loginUrl);
+    return linkPaidCheckoutToExistingOrg(org, orgStore, userStore, emailService, input, billing, loginUrl, requireDurableEmail);
   }
 
   const existing = await orgStore.findOrganizationByStripeCustomerId(input.stripeCustomerId);
@@ -65,7 +66,8 @@ export async function provisionOrgFromCheckout(
         emailService,
         input,
         billing,
-        loginUrl
+        loginUrl,
+        requireDurableEmail
       );
     }
   }
@@ -90,7 +92,7 @@ export async function provisionOrgFromCheckout(
       orgName: org.name,
       adminPortalUrl: loginUrl,
       activateAccountUrl
-    })
+    }), requireDurableEmail
   );
 
   return { orgId: org.id, orgName: org.name };
@@ -107,7 +109,8 @@ async function linkPaidCheckoutToExistingOrg(
   emailService: EmailService,
   input: ProvisionInput,
   billing: CheckoutBillingPatch,
-  loginUrl: string
+  loginUrl: string,
+  requireDurableEmail: boolean
 ): Promise<ProvisionResult> {
   await orgStore.setOrganizationPlan(org.id, "pro");
   await orgStore.updateOrganizationBilling(org.id, billing);
@@ -117,7 +120,7 @@ async function linkPaidCheckoutToExistingOrg(
       to: input.adminEmail,
       orgName: org.name,
       adminPortalUrl: loginUrl
-    })
+    }), requireDurableEmail
   );
   return { orgId: org.id, orgName: org.name };
 }
@@ -149,11 +152,13 @@ async function findFreeOrgForCheckoutAdmin(
 async function sendCheckoutEmail(
   label: string,
   orgId: string,
-  send: () => Promise<void>
+  send: () => Promise<void>,
+  requireDurableEmail = false
 ): Promise<void> {
   try {
     await send();
   } catch (error) {
+    if (requireDurableEmail) throw error;
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[billing] ${label} failed after org was saved`, { orgId, message });
   }

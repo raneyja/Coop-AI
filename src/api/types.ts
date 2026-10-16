@@ -82,6 +82,10 @@ export type CompletionRequest = {
   allowUnapprovedProvider?: boolean;
   /** Enable provider thinking when the model/provider supports it. */
   enableThinking?: boolean;
+  /** Same quick-action routing/quota, dedicated private review output contract. */
+  sourceClaimReview?: boolean;
+  sourceEvidenceSynthesis?: boolean;
+  sourceEvidenceRepair?: boolean;
   /** L vs R for this turn — drives file-assistant system contract when set. */
   sessionMode?: "file-assistant" | "indexed-repo";
 };
@@ -112,6 +116,7 @@ export type StreamChunk =
   | { type: "error"; message: string; code?: string; requestId?: string };
 
 export type V1ChatRequestBody = {
+  responseTiming?: { traceId: string; callId: string };
   message: string;
   history?: ChatHistoryMessage[];
   context?: ChatContextPayload;
@@ -125,6 +130,9 @@ export type V1ChatRequestBody = {
   stream?: boolean;
   /** Client asks the API to enable provider thinking when supported. */
   enableThinking?: boolean;
+  sourceClaimReview?: boolean;
+  sourceEvidenceSynthesis?: boolean;
+  sourceEvidenceRepair?: boolean;
   /** L vs R for this turn. Stored on chat.message metadata. Not a new quota bucket. */
   sessionMode?: "file-assistant" | "indexed-repo";
   fileSource?: "workspace" | "git" | "remote" | "external";
@@ -149,6 +157,10 @@ export type ProviderStreamOptions = {
   requestId: string;
   /** When set, the provider request enables native thinking and may emit thinking chunks. */
   thinking?: ProviderThinkingOptions;
+  /** Trusted internal output grammar; not an arbitrary client-supplied schema. */
+  responseSchema?: Record<string, unknown>;
+  /** Source-backed drafts and audits cannot treat transport EOF as completion. */
+  requireCompletedMessage?: boolean;
 };
 
 export type LlmAuditEvent = {

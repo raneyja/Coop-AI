@@ -9,11 +9,11 @@ import { WorkerPool, workerPoolConfigFromJobConfig } from "./workerPool";
 
 export type JobRuntime = {
   config: JobQueueConfig;
+  cache: GraphCache;
   queue: JobQueue;
   monitor: JobMonitor;
   workers: WorkerPool;
   scheduler: JobScheduler;
-  reclaimTimer?: ReturnType<typeof setInterval>;
 };
 
 import type { OrgStore } from "../server/orgStore";
@@ -60,42 +60,19 @@ export function createJobRuntime(options: {
   });
   queue.on("job:failed", (job) => monitor.recordFailure(job));
 
-  return { config, queue, monitor, workers, scheduler };
+  return { config, queue, monitor, workers, scheduler, cache:options.cache };
 }
 
-export async function startJobRuntime(
-  runtime: JobRuntime,
-  options?: {
-    reclaimStaleJobs?: () => Promise<number>;
-    periodicReclaim?: () => Promise<number>;
-    reclaimIntervalMs?: number;
-  }
-): Promise<void> {
-  if (options?.reclaimStaleJobs) {
-    const reclaimed = await options.reclaimStaleJobs();
-    if (reclaimed > 0) {
-      console.log(`[jobs] reclaimed ${reclaimed} orphaned running job(s) on startup`);
-    }
-  }
+export async function startJobRuntime(runtime: JobRuntime): Promise<void> {
+  await runtime.queue.reclaimExpired(3);
   runtime.workers.start();
-  void runtime.scheduler.start();
-
-  if (options?.periodicReclaim && options.reclaimIntervalMs) {
-    runtime.reclaimTimer = setInterval(() => {
-      void options.periodicReclaim!().then((reclaimed) => {
-        if (reclaimed > 0) {
-          console.log(`[jobs] reclaimed ${reclaimed} stale running job(s)`);
-        }
-      });
-    }, options.reclaimIntervalMs);
-  }
+  await runtime.scheduler.start();
 }
 
-export function stopJobRuntime(runtime: JobRuntime): void {
-  if (runtime.reclaimTimer) {
-    clearInterval(runtime.reclaimTimer);
-    runtime.reclaimTimer = undefined;
-  }
-  runtime.workers.stop();
+export async function stopJobRuntime(runtime: JobRuntime): Promise<boolean> {
   runtime.scheduler.stop();
+  const drained = await runtime.workers.stop();
+  if(!drained) return false;
+  try { await runtime.cache.close(); return true; }
+  catch { return false; }
 }

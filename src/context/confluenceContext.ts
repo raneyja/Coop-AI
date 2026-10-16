@@ -115,8 +115,11 @@ export async function fetchConfluenceSearchContext(options: {
 
   const injectedClient = options.client;
   const creds = injectedClient ? undefined : await options.secrets.getCredentials();
+  if (creds?.proxy && (!options.integrationScope?.enforced || !options.integrationScope.allowed)) {
+    return { source: "confluence-search", cql: "", pages: [], error: "Integration source authorization is unavailable." };
+  }
   const auth = creds ? resolveConfluenceAuth(creds) : undefined;
-  if (!injectedClient && !auth && !creds?.atlassianCloudId) {
+  if (!injectedClient && !auth && !creds?.atlassianCloudId && !creds?.proxy) {
     return {
       source: "confluence-search",
       cql: "",
@@ -162,7 +165,7 @@ export async function fetchConfluenceSearchContext(options: {
       jiraBaseUrl: creds.jiraBaseUrl
     });
     const siteError = confluenceSiteUrlError(baseUrl);
-    if (siteError && !creds.atlassianCloudId) {
+    if (siteError && !creds.atlassianCloudId && !creds.proxy) {
       return {
         source: "confluence-search",
         cql: resolvedCql,
@@ -199,7 +202,7 @@ export async function fetchConfluenceSearchContext(options: {
     const scopedExistingPages = filterConfluencePagesByScope(existingPages, options.integrationScope);
     const pages = await attachConfluencePageBodies(client, scopedExistingPages, {
       jobScoped: false,
-      openIds: options.openIds
+      openIds: options.openIds, failClosed: Boolean(creds?.proxy)
     });
     return {
       source: "confluence-search",
@@ -278,7 +281,7 @@ export async function fetchConfluenceSearchContext(options: {
           jobScoped: Boolean(
             (options.jobScoped && options.jobVerb !== "latest") || options.openAfterHit
           ),
-          openIds: options.openIds
+          openIds: options.openIds, failClosed: Boolean(creds?.proxy)
         });
 
     return {
@@ -346,13 +349,14 @@ function pagesToOpen(
 async function attachConfluencePageBodies(
   client: ConfluenceSearchClient,
   pages: ConfluenceSearchPage[],
-  options: { jobScoped: boolean; openIds?: string[] }
+  options: { failClosed?: boolean; jobScoped: boolean; openIds?: string[] }
 ): Promise<ConfluenceSearchPage[]> {
   if (pages.length === 0 || !client.getPageBody) {
     return pages;
   }
   if (options.openIds?.length) {
     return openHitsByIds({
+      failClosed: options.failClosed,
       hits: pages,
       ids: options.openIds,
       idOf: (page) => page.id,
@@ -362,8 +366,10 @@ async function attachConfluencePageBodies(
           const excerpt = sanitizeIntegrationSnippet(
             clipOpenedBody(raw, OPENED_PAGE_BODY_CHARS) ?? ""
           );
+          if (!excerpt && options.failClosed) throw new Error("Authorized integration read returned no body.");
           return excerpt ? { ...page, excerpt, opened: true } : { ...page, opened: true };
-        } catch {
+        } catch (error) {
+          if (options.failClosed) throw error;
           return { ...page, opened: true };
         }
       }
@@ -378,7 +384,8 @@ async function attachConfluencePageBodies(
       try {
         const body = await client.getPageBody?.(page.id);
         return { id: page.id, body };
-      } catch {
+      } catch (error) {
+        if (options.failClosed) throw error;
         return { id: page.id, body: undefined };
       }
     })

@@ -1,3 +1,5 @@
+import type { IntegrationOperation, IntegrationOperations } from "../api/integrations/integrationOperations";
+import { responseTiming } from "./chatResponseTiming";
 import axios, { AxiosInstance } from "axios";
 import type { SupportSubmission } from "../support/supportTypes";
 import { shouldRecordUsageEvent } from "../telemetry/usageEventPolicy";
@@ -56,6 +58,11 @@ export type StreamChatParams = {
   temperature: number;
   maxTokens: number;
   enableThinking?: boolean;
+  /** Private explanation validation for the five source-backed quick actions. */
+  sourceClaimReview?: boolean;
+  sourceEvidenceSynthesis?: boolean;
+  /** One private corrective replacement; always uses the assigned verification model. */
+  sourceEvidenceRepair?: boolean;
   sessionMode?: "file-assistant" | "indexed-repo";
   fileSource?: "workspace" | "git" | "remote" | "external";
   quotaTurnId?: string;
@@ -449,15 +456,10 @@ export class SecureApiClient {
     return this.backend.getTeamsInstallationStatus(baseUrl);
   }
 
-  public async getIntegrationCredentials(
-    baseUrl: string,
-    provider: "slack" | "atlassian" | "notion" | "google-docs" | "teams"
-  ): Promise<{
-    accessToken: string;
-    metadata: Record<string, string | undefined>;
-  }> {
-    const response = await this.backend.getIntegrationCredentials(baseUrl, provider);
-    return { accessToken: response.accessToken, metadata: response.metadata };
+  public async executeIntegrationOperation<K extends IntegrationOperation>(
+    baseUrl: string, operation: K, args: IntegrationOperations[K]["args"], signal?: AbortSignal
+  ): Promise<IntegrationOperations[K]["result"]> {
+    return this.backend.executeIntegrationOperation(baseUrl, operation, args, signal);
   }
 
   public async getIntegrationScope(
@@ -747,6 +749,12 @@ export class SecureApiClient {
     usage?: { inputTokens: number; outputTokens: number; estimatedCostUsd: number; provider: string; model: string };
     finishReason?: FinishReason;
   }> {
+    const trace = responseTiming(signal);
+    const callId = trace?.nextCallId();
+    const end = trace?.span("ai", { callId, useCase: body.useCase, provider: body.provider,
+      model: body.model, requestChars: body.message.length, thinkingEnabled: body.enableThinking === true });
+    let firstDelta = false;
+    try {
     assertCoopEndpoint(baseUrl);
     await this.ensureToken();
     this.setBaseUrl(baseUrl);
@@ -788,13 +796,21 @@ export class SecureApiClient {
         temperature: body.temperature,
         maxTokens: body.maxTokens,
         enableThinking: body.enableThinking === true,
+        sourceClaimReview: body.sourceClaimReview === true,
+        sourceEvidenceSynthesis: body.sourceEvidenceSynthesis === true,
+        sourceEvidenceRepair: body.sourceEvidenceRepair === true,
         sessionMode: body.sessionMode,
         fileSource: body.fileSource,
-        quotaTurnId: body.quotaTurnId ?? this.quotaTurnId
+        quotaTurnId: body.quotaTurnId ?? this.quotaTurnId,
+        responseTiming: trace && callId ? { traceId: trace.identity.traceId, callId } : undefined
       },
-      onChunk,
+      chunk => {
+        if (!firstDelta && chunk.trim()) { firstDelta = true; trace?.event("model-first-delta", { callId, displayed: false }); }
+        onChunk(chunk);
+      },
       signal,
-      onThinkingChunk
+      onThinkingChunk,
+      event => trace?.event("backend", { callId, ...event })
     );
 
     const usage =
@@ -808,6 +824,7 @@ export class SecureApiClient {
           }
         : undefined;
 
+    end?.(signal?.aborted ? "canceled" : result.usage?.type === "done" && result.finishReason !== "length" ? "completed" : "incomplete");
     return {
       message: {
         role: "assistant",
@@ -817,6 +834,7 @@ export class SecureApiClient {
       usage,
       finishReason: result.finishReason
     };
+    } catch (error) { end?.(signal?.aborted ? "canceled" : "failed"); throw error; }
   }
 
   /** @deprecated Use streamChat */

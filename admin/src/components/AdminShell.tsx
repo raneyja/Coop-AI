@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  getToken,
   getStoredMe,
   isAdminRole,
   isMemberAllowedPath,
@@ -38,17 +37,11 @@ export function AdminShell({ children }: AdminShellProps) {
 
   useEffect(() => {
     async function guard() {
-      let token = getToken();
-      if (!token) {
-        const restored = await restoreSessionFromCookie();
-        if (!restored) {
-          router.replace("/login");
-          return;
-        }
-        token = getToken();
+      const me = getStoredMe() ?? await restoreSessionFromCookie();
+      if (!me) {
+        router.replace("/login");
+        return;
       }
-
-      const me = getStoredMe();
       if (me && isMemberRole(me) && !isMemberAllowedPath(pathname)) {
         router.replace(defaultHomePath(me));
         return;

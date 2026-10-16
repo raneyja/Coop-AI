@@ -154,7 +154,7 @@ export function repoSummarySourceFact(label: string, summary: RepoSummaryEvidenc
 
   if (label === repoSummarySourceLabelManifest()) {
     if (typeof manifest?.fileCount === "number") {
-      return `manifest reports ${manifest.fileCount.toLocaleString()} files`;
+      return `${manifest.fileCount.toLocaleString()} sampled manifest entries`;
     }
     if (typeof inventory?.fileCount === "number") {
       return `manifest/metadata for ${inventory.fileCount.toLocaleString()} files`;
@@ -218,7 +218,7 @@ export function isGithubOnlyRepoSummaryEvidence(summary: RepoSummaryEvidence): b
  * Rich inventory + tree with a few samples is NOT narrow. Thin → short + partial confidence.
  */
 export function isNarrowRepoSummaryEvidence(summary: RepoSummaryEvidence): boolean {
-  if (summary.focusCoverage?.missing.length) return true;
+  if (summary.focusCoverage?.missing.length && !summary.focusCoverage.sourceBodiesAvailable) return true;
   const entries = (summary.entryFiles ?? []).filter((file) => file.path?.trim()).length;
   const focusPaths = (summary.focusSearchPaths ?? []).filter((path) => path.trim()).length;
   const anchors = Math.max(entries, focusPaths);
@@ -232,7 +232,7 @@ export function isNarrowRepoSummaryEvidence(summary: RepoSummaryEvidence): boole
       ? ((summary.treeOverview as { topLevelDirs: unknown[] }).topLevelDirs?.length ?? 0)
       : 0;
   const hasTree = topDirs >= 2;
-  const hasInventory = Boolean(summary.repoInventory?.fileCount || summary.manifest?.fileCount);
+  const hasInventory = typeof summary.repoInventory?.fileCount === "number";
   if (hasTree && hasInventory && anchors >= 2) {
     return false;
   }

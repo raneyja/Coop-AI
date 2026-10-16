@@ -62,7 +62,7 @@ async function main() {
     await page.fill("#seats", "2");
     await page.click('button[type="submit"]');
 
-    await page.waitForURL(/checkout\.stripe\.com/, { timeout: 30000 });
+    await page.waitForURL((url) => url.protocol === "https:" && url.hostname === "checkout.stripe.com", { timeout: 30000 });
 
     const stripeFrame = page.frameLocator('iframe[name*="__privateStripeFrame"]').first();
     const cardInput = page.locator('input[name="cardNumber"], input[placeholder*="1234"]').first();
@@ -128,7 +128,8 @@ async function main() {
       `docker exec -e DATABASE_URL=postgres://coop:coop@postgres:5432/coopai coopai-api-1 node -e "
         const { Pool } = require('pg');
         const crypto = require('crypto');
-        const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+        const databasePoolOptions = require('./src/server/databasePoolOptions.cjs');
+        const pool = new Pool(databasePoolOptions(process.env.DATABASE_URL));
         (async () => {
           const raw = 'coop_' + crypto.randomBytes(24).toString('hex');
           const hash = crypto.createHash('sha256').update(raw).digest('hex');

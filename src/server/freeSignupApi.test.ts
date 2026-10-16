@@ -18,6 +18,8 @@ function mockResponse(): ServerResponse & { statusCode?: number; body?: unknown 
   return response as ServerResponse & { statusCode?: number; body?: unknown };
 }
 
+const serverConfig = { nodeEnv: "test", devMode: true, requireApiAuth: false, jobsWorkersEnabled: false };
+
 const authConfig = {
   publicBaseUrl: "http://localhost:8787",
   oauthStateSecret: "test",
@@ -90,7 +92,7 @@ test("free signup creates org, owner, session, and sends welcome email", async (
       authIdentityStore: authIdentityStore as never,
       authTokenStore: authTokenStore as never,
       emailService: emailService as never,
-      authConfig
+      authConfig, serverConfig
     }
   );
 
@@ -133,7 +135,7 @@ test("free signup rejects invalid email", async () => {
       authIdentityStore: {} as never,
       authTokenStore: {} as never,
       emailService: {} as never,
-      authConfig
+      authConfig, serverConfig
     }
   );
   assert.equal(handled, true);
@@ -175,7 +177,7 @@ test("free signup rejects existing active email", async () => {
       authIdentityStore: {} as never,
       authTokenStore: {} as never,
       emailService: {} as never,
-      authConfig
+      authConfig, serverConfig
     }
   );
   assert.equal(handled, true);
@@ -203,7 +205,7 @@ test("free signup rejects weak password", async () => {
       authIdentityStore: {} as never,
       authTokenStore: {} as never,
       emailService: {} as never,
-      authConfig
+      authConfig, serverConfig
     }
   );
   assert.equal(handled, true);
@@ -225,7 +227,7 @@ test("free signup rate-limits repeated attempts from the same client", async () 
     authIdentityStore: {} as never,
     authTokenStore: {} as never,
     emailService: {} as never,
-    authConfig
+    authConfig, serverConfig
   };
   for (let i = 0; i < AUTH_RATE_LIMIT_MAX; i++) {
     const allowed = mockResponse();

@@ -8,6 +8,9 @@ import { startVscodeThemeSync } from "./theme";
 
 function AppShell({ children }: { children: React.ReactNode }): React.ReactElement {
   usePanelWidthMode();
+  React.useEffect(() => {
+    getVsCodeApi().postMessage({ type: "webview:startup", payload: { stage: "frontend-mounted" } });
+  }, []);
   return <>{children}</>;
 }
 
@@ -19,6 +22,10 @@ class BootErrorBoundary extends React.Component<
 
   public static getDerivedStateFromError(error: Error): { error: Error } {
     return { error };
+  }
+
+  public componentDidCatch(): void {
+    getVsCodeApi().postMessage({ type: "webview:startup", payload: { stage: "frontend-failed" } });
   }
 
   public render(): React.ReactNode {
@@ -46,6 +53,7 @@ declare global {
 }
 
 function showBootError(error: unknown): void {
+  window.__coopVscodeApi?.postMessage({ type: "webview:startup", payload: { stage: "frontend-failed" } });
   const root = document.getElementById("root");
   if (!root) {
     return;

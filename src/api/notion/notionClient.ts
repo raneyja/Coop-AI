@@ -1,10 +1,12 @@
-import { fetchWithTimeout, isFetchTimeout } from "../networkResilience";
-import { INTEGRATION_HTTP_TIMEOUT_MS, integrationAuthFailureMessage } from "../integrations/integrationHttp";
+import type { IntegrationProxy } from "../integrations/integrationOperations";
+import { isFetchTimeout } from "../networkResilience";
+import { fetchIntegrationResponse, INTEGRATION_HTTP_TIMEOUT_MS, integrationAuthFailureMessage } from "../integrations/integrationHttp";
 
 const NOTION_API = "https://api.notion.com/v1";
 const NOTION_VERSION = "2022-06-28";
 
 export type NotionClientOptions = {
+  proxy?: IntegrationProxy;
   token: string;
   signal?: AbortSignal;
 };
@@ -49,6 +51,7 @@ export class NotionClient {
   }
 
   public async testConnection(): Promise<{ ok: boolean; message: string }> {
+    if (this.options.proxy) return this.options.proxy("notion.testConnection", [], this.options.signal);
     try {
       const profile = await this.getBotProfile();
       const name = profile.ownerName;
@@ -90,6 +93,7 @@ export class NotionClient {
   }
 
   public async searchPages(query: string, limit = 20): Promise<NotionPage[]> {
+    if (this.options.proxy) return this.options.proxy("notion.searchPages", [query, limit], this.options.signal);
     const result = await this.request<{
       results?: Array<{
         id: string;
@@ -118,11 +122,48 @@ export class NotionClient {
     }));
   }
 
+  /** Search only administrator-approved roots; workspace-wide search cannot express this ACL. */
+  public async searchScopedPages(resources: Array<{ id: string; type: "page" | "database" }>, query: string, limit = 20): Promise<NotionPage[]> {
+    const pages: NotionPage[] = [];
+    for (const resource of resources.slice(0, 50)) {
+      if (resource.type === "page") {
+        const page = await this.getPageMetadata(resource.id);
+        if (page.id !== resource.id) throw new NotionApiError("Notion returned a foreign source identity.");
+        if (!query || page.title.toLowerCase().includes(query.toLowerCase())) pages.push(page);
+      } else {
+        const result = await this.request<{ results?: Array<{
+          id: string; url?: string; last_edited_time?: string; parent?: NotionParent;
+          properties?: Record<string, { title?: Array<{ plain_text?: string }> }>;
+        }> }>(`/databases/${encodeURIComponent(resource.id)}/query`, { method: "POST", body: { page_size: Math.min(limit, 50) } });
+        for (const raw of result.results ?? []) {
+          const page: NotionPage = { id: raw.id, title: extractNotionTitle(raw.properties) ?? "Untitled", updated: raw.last_edited_time ?? "",
+            htmlUrl: raw.url ?? "", parentId: extractNotionParentId(raw.parent), parentType: extractNotionParentType(raw.parent) };
+          if (page.parentId !== resource.id) throw new NotionApiError("Notion returned a foreign source identity.");
+          if (!query || page.title.toLowerCase().includes(query.toLowerCase())) pages.push(page);
+        }
+      }
+      if (pages.length >= limit) break;
+    }
+    return pages.slice(0, limit);
+  }
+
+  /** Permission metadata only; the backend checks the parent before retrieving blocks. */
+  public async getPageMetadata(pageId: string): Promise<NotionPage> {
+    const page = await this.request<{
+      id: string; url?: string; last_edited_time?: string; parent?: NotionParent;
+      properties?: Record<string, { title?: Array<{ plain_text?: string }> }>;
+    }>(`/pages/${encodeURIComponent(pageId)}`);
+    return { id: page.id, title: extractNotionTitle(page.properties) ?? "Untitled",
+      updated: page.last_edited_time ?? "", htmlUrl: page.url ?? "",
+      parentId: extractNotionParentId(page.parent), parentType: extractNotionParentType(page.parent) };
+  }
+
   /**
    * Open a search hit — page body as plain text from block children.
    * Shallow flatten only (no deep toggle recursion) to stay inside gather budget.
    */
   public async getPagePlainText(pageId: string): Promise<string | undefined> {
+    if (this.options.proxy) return this.options.proxy("notion.getPagePlainText", [pageId], this.options.signal);
     const id = pageId.trim();
     if (!id) {
       return undefined;
@@ -208,13 +249,13 @@ export class NotionClient {
   }
 
   private async request<T>(path: string, options?: { method?: string; body?: unknown }): Promise<T> {
-    const response = await fetchWithTimeout(
+    const response = await fetchIntegrationResponse(
       `${NOTION_API}${path}`,
       {
         method: options?.method ?? "GET",
         headers: this.headers,
         body: options?.body ? JSON.stringify(options.body) : undefined,
-        signal: this.options.signal
+        signal: this.options.signal, redirect: "error"
       },
       INTEGRATION_HTTP_TIMEOUT_MS
     );

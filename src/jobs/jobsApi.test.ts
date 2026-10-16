@@ -9,6 +9,11 @@ import { JobMonitor } from "./monitoring";
 import { handleJobsApiRequest, type JobsApiDeps } from "./jobsApi";
 import { JobType } from "./types";
 import type { WorkerPool } from "./workerPool";
+import { MemoryQueueBackend } from "./backends/memoryBackend";
+import { GraphCache } from "../cache/graphCache";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { buildSync } from "esbuild";
 
 const ORG_A = "org-a";
 const ORG_B = "org-b";
@@ -145,13 +150,10 @@ test("org B cannot read org A's job result", async () => {
   const monitor = new JobMonitor({ queueDepthAlertThreshold: 50, failureRateAlertThreshold: 0.5 });
   const deps = depsFor(queue, monitor);
   const jobId = await seedOrgJob(queue, ORG_A, { marker: "result-secret" });
-  const job = await queue.getJob(jobId);
+  const job = await queue.claimNext('test-result-worker', 30_000);
   assert.ok(job);
-  job.status = "completed";
-  job.result = { repoId: "github:org-a/secret-repo", marker: "result-secret" };
-  job.completedAt = new Date();
-  await queue.getBackend().update(job);
-  await queue.results.store(jobId, job.result);
+  assert.equal(job.id, jobId);
+  await queue.completeJob(job, {repoId: "github:org-a/secret-repo", marker: "result-secret"});
 
   const denied = await call(deps, "GET", `/api/jobs/${jobId}/result`, "key-b");
   assert.equal(denied.status, 404);
@@ -194,12 +196,12 @@ test("org B stats do not include org A's job id", async () => {
   const monitor = new JobMonitor({ queueDepthAlertThreshold: 50, failureRateAlertThreshold: 0.5 });
   const deps = depsFor(queue, monitor);
   const jobId = await seedOrgJob(queue, ORG_A);
-  const job = await queue.getJob(jobId);
+  const job = await queue.claimNext('test-failure-worker', 30_000);
   assert.ok(job);
-  job.status = "failed";
-  job.error = "clone failed github:org-a/secret-repo";
-  await queue.getBackend().update(job);
-  monitor.recordFailure(job);
+  assert.equal(job.id, jobId);
+  const failed = await queue.failJob(job, "clone failed github:org-a/secret-repo");
+  assert.ok(failed);
+  monitor.recordFailure(failed);
 
   const stats = await call(deps, "GET", "/api/jobs/stats", "key-b");
   assert.equal(stats.raw.includes(jobId), false);
@@ -229,4 +231,123 @@ test("create cannot stamp another org id", async () => {
 
   const foreign = await call(deps, "GET", `/api/jobs/${jobId}`, "key-b");
   assert.equal(foreign.status, 404);
+});
+
+test("expired memory attempt cannot renew, publish results/events or overwrite its reclaimed successor", async t => {
+  let now = Date.now();
+  t.mock.method(Date, "now", () => now);
+  const backend = new MemoryQueueBackend();
+  const queue = new JobQueue(queueConfig(), backend);
+  const id = await seedOrgJob(queue, ORG_A);
+  const old = await queue.claimNext("old-worker", 30_000);
+  assert.ok(old);
+  assert.equal(await queue.renew(old, 30_000), true);
+  assert.equal(await queue.updateProgress(old, 25), true);
+  const live = await queue.getJob(id);
+  assert.ok(live);
+  assert.equal(live.leaseExpiresAt?.getTime(), now + 30_000);
+  // Advance the ownership clock; save intentionally preserves existing submissions.
+  now = live.leaseExpiresAt.getTime() + 1;
+  assert.equal((await backend.get(id))?.leaseExpiresAt?.getTime(), live.leaseExpiresAt.getTime());
+  assert.ok(live.leaseExpiresAt.getTime() < Date.now());
+  let events = 0;
+  for (const name of ["job:update", "job:completed", "job:failed", "job:enqueued"]) queue.on(name, () => events++);
+  assert.equal(await queue.renew(old, 30_000), false);
+  assert.equal(await queue.updateProgress(old, 80), false);
+  assert.equal(await queue.completeJob(old, { marker: "stale" }), undefined);
+  assert.equal(await queue.failJob(old, "stale failure", { marker: "stale partial" }), undefined);
+  await queue.requeue(old);
+  assert.equal(events, 0);
+  assert.equal(await queue.results.get(id), undefined);
+  assert.equal((await queue.getJob(id))?.status, "running");
+  assert.equal(await queue.reclaimExpired(2), 1);
+  const successor = await queue.claimNext("new-worker", 30_000);
+  assert.ok(successor);
+  assert.notEqual(successor.attemptId, old.attemptId);
+  const before = await queue.getJob(id);
+  const beforeEvents = events;
+  assert.equal(await queue.renew(old, 30_000), false);
+  assert.equal(await queue.completeJob(old, { marker: "old overwrite" }), undefined);
+  assert.equal(await queue.failJob(old, "old failure"), undefined);
+  assert.equal(await queue.updateProgress(old, 99), false);
+  await queue.requeue(old);
+  assert.equal(events, beforeEvents);
+  assert.deepEqual(await queue.getJob(id), before);
+  assert.ok(await queue.completeJob(successor, { marker: "fresh" }));
+  assert.deepEqual((await queue.results.get(id))?.result, { marker: "fresh" });
+});
+
+test("cancelled memory attempt cannot publish completion or results and following work remains claimable", async () => {
+  const queue = new JobQueue(queueConfig());
+  const id = await seedOrgJob(queue, ORG_A);
+  const job = await queue.claimNext("worker", 30_000);
+  assert.ok(job);
+  let completed = 0;
+  queue.on("job:completed", () => completed++);
+  assert.equal((await queue.cancelJob(id, { includeRunning: true }))?.status, "cancelled");
+  assert.equal(await queue.completeJob(job, { marker: "late" }), undefined);
+  assert.equal(await queue.failJob(job, "late failure"), undefined);
+  assert.equal(await queue.updateProgress(job, 100), false);
+  assert.equal(await queue.results.get(id), undefined);
+  assert.equal(completed, 0);
+  assert.equal((await queue.getJob(id))?.status, "cancelled");
+  const nextId = await seedOrgJob(queue, ORG_A);
+  const next = await queue.claimNext("worker", 30_000);
+  assert.equal(next?.id, nextId);
+  assert.ok(next && await queue.completeJob(next, { marker: "next" }));
+  assert.equal(completed, 1);
+});
+
+test("worker shutdown retains an abort-ignoring executor slot until physical settlement", async t => {
+  const queue = new JobQueue(queueConfig());
+  let release!: () => void;
+  let entered!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const running = new Promise<void>(resolve => { entered = resolve; });
+  let calls = 0;
+  let signal: AbortSignal | undefined;
+  // Match the production worker bundle: direct CJS loading cannot import the
+  // ESM-only SCIP dependency. All execution below uses the controlled executor.
+  const parent = path.join(process.cwd(), "dist", "tests");
+  fs.mkdirSync(parent, { recursive: true });
+  const owned = fs.mkdtempSync(path.join(parent, "worker-memory-control-"));
+  let cleanupWorker: WorkerPool | undefined;
+  t.after(async () => {
+    release();
+    try { if (cleanupWorker) assert.equal(await cleanupWorker.stop(1_000), true); }
+    finally { fs.rmSync(owned, { recursive: true, force: true }); }
+  });
+  const bundle = path.join(owned, "worker.cjs");
+  buildSync({ entryPoints: [require.resolve("./workerPool")], outfile: bundle,
+    bundle: true, platform: "node", format: "cjs", logLevel: "silent",
+    external: ["vscode", "pg", "@sentry/node", "node-cron", "web-tree-sitter", "tree-sitter-wasms"] });
+  const { WorkerPool: BundledWorkerPool } = require(bundle) as { WorkerPool: typeof import("./workerPool").WorkerPool };
+  const worker = new BundledWorkerPool(queue, {
+    concurrency: 1, maxJobDurationMs: 2_000, leaseDurationMs: 500,
+    heartbeatIntervalMs: 50, shutdownTimeoutMs: 50, retryPolicy: { maxRetries: 1, backoffMs: 1 }
+  }, { cache: new GraphCache() }, undefined, async (_job, _context, _report, currentSignal) => {
+    calls++; signal = currentSignal; entered(); await held; return { marker: "late executor" };
+  });
+  cleanupWorker = worker;
+  await seedOrgJob(queue, ORG_A);
+  const following = await seedOrgJob(queue, ORG_A);
+  worker.start(5);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([running, new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error("Worker did not enter the controlled executor")), 1_000);
+    })]);
+  } finally { if (timer) clearTimeout(timer); }
+  assert.equal(await worker.stop(5), false);
+  assert.equal(signal?.aborted, true);
+  assert.equal(worker.activeCount, 1);
+  worker.start(5);
+  assert.equal(worker.acceptingWork, false);
+  assert.equal(calls, 1);
+  assert.equal((await queue.getJob(following))?.status, "queued");
+  release();
+  assert.equal(await worker.stop(1_000), true);
+  assert.equal(worker.activeCount, 0);
+  assert.equal(calls, 1);
+  assert.equal((await queue.getJob(following))?.status, "queued");
 });

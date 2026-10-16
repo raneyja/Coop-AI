@@ -3,6 +3,13 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
 
+/** Enforce a 32-byte key encoding at production entry points; generation provenance is an operator responsibility. */
+export function isCanonicalCredentialEncryptionKey(value: string): boolean {
+  if (!/^[A-Za-z0-9+/]{43}=$/.test(value)) return false;
+  const bytes = Buffer.from(value, "base64");
+  return bytes.length === 32 && bytes.toString("base64") === value;
+}
+
 function deriveKey(secret: string): Buffer {
   return createHash("sha256").update(secret).digest();
 }

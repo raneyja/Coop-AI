@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Model assignments — Auto default, paid picker, assigned internals
 
-Production **Free** users do not pick a model (Auto only). **Paid** and **Enterprise** users get a global picker that defaults to **Auto**. Auto still means `COOP_FEATURE_MODEL_ASSIGNMENTS`, not a callable model id.
+Production **Free** users do not pick a model (Auto only). **Paid** and **Enterprise** users get a global picker that defaults to **Auto**. Auto is a routing choice, not a callable model id. `COOP_FEATURE_MODEL_ASSIGNMENTS` owns feature defaults; the same module's tier/phase resolvers define the Free and private-verification exceptions.
 
 ## Source of truth
 
@@ -20,6 +20,7 @@ Production **Free** users do not pick a model (Auto only). **Paid** and **Enterp
 | Autocomplete | Mistral | codestral-latest | No — always Auto bucket |
 | Intent suggest (chip classifier) | OpenAI | gpt-4o-mini | No |
 | Sources expand preview | OpenAI | gpt-4o-mini | No |
+| Source verification (`sourceVerification`) | OpenAI | gpt-5.5 | No — server-enforced for private review and corrective replacement |
 | PR notes | OpenAI | gpt-4o-mini | No |
 
 ## Required wiring (all must stay connected)
@@ -28,7 +29,8 @@ Production **Free** users do not pick a model (Auto only). **Paid** and **Enterp
 2. **Composer** (`ChatComposer.tsx` + `ModelPickerSelect`) — same picker; hidden on Free.
 3. **Extension runtime** — `resolveRuntimeModelForUseCase()` for chat / QA / edit; `resolveRuntimeAutocompleteModel()` always uses the autocomplete assignment unless `devMode`.
 4. **Config writes** — `stripUserModelPreferenceUpdates()` allows `llmProvider` / `defaultModel` when `canUserSelectModels` (paid, enterprise, or devMode). Free writes are stripped.
-5. **Server enforcement** — `resolveHonoredChatModel` in `chatApi.ts`: Auto / Free / unknown / non-picker use cases → assignment. Paid catalog ids honored. Inline completions stay assigned + Auto bucket.
+5. **Server enforcement** — `resolveHonoredChatModel` in `chatApi.ts`: normal paid/enterprise Auto, unknown and non-picker use cases resolve through the feature assignment; allowed paid catalog picks are honored. Free initial non-inline answers use the tier-enforced Gemini Flash route (`gemini-2.5-flash` at this review), independently of the default feature row. Inline completions stay assigned + Auto bucket. Read the actual shared resolver before changing or documenting routing.
+6. **Source verification/recovery** — `sourceClaimReview` and `sourceEvidenceRepair` use `resolveAssignedSourceVerificationModel()` before Free, picker and dev overrides; server enforces their capacity and thinking. Only initial generation retains normal answer routing. A corrective replacement uses `sourceEvidenceSynthesis: true`, `sourceEvidenceRepair: true`, `sourceClaimReview: false`, and the original frozen evidence; native review JSON applies only to review. Original quick-action use case and one `quotaTurnId` remain; every actual call is metered once. Free allowance includes the actual verification/recovery cost, not a zero-cost non-Flash side path. At most one corrective replacement is allowed.
 
 ## Tests
 

@@ -30,6 +30,16 @@ async function run(): Promise<void> {
     assert.ok(REPO_SUMMARY_EVIDENCE_SYSTEM.includes("actual control flow"));
   });
 
+  test("manifest samples never become canonical repository totals", () => {
+    const sampled = formatRepoSummaryForPrompt({manifest: {fileCount: 5, extensionBreakdown: {".rs": 5}}});
+    assert.ok(sampled.includes("Sampled entries: 5"));
+    assert.ok(sampled.includes("never a repository total"));
+    assert.ok(!sampled.includes("- Files: 5"));
+    const withInventory = formatRepoSummaryForPrompt({repoInventory: {fileCount: 400}, manifest: {fileCount: 5}});
+    assert.ok(withInventory.includes("- Files: 400"));
+    assert.ok(!withInventory.includes("- Files: 5"));
+  });
+
   test("formatRepoSummaryForPrompt includes tree and entry files", () => {
     const text = formatRepoSummaryForPrompt({
       treeOverview: { topLevelDirs: ["src", "docs"], topLevelFiles: ["package.json"] },
@@ -145,7 +155,7 @@ async function run(): Promise<void> {
       summary: { entryFiles: [{ path: "package.json" }] }
     });
     assert.ok(prompt.includes("compose service names"));
-    assert.ok(prompt.includes("docker-entrypoint"));
+    assert.ok(prompt.includes("Deployment scripts and compose service names describe deployment only"));
     assert.ok(prompt.includes("Deploy/CI"));
     assert.ok(prompt.includes("never as the Architecture story"));
     assert.ok(prompt.includes("Thin / narrow anchors (required)"));
@@ -239,12 +249,22 @@ async function run(): Promise<void> {
     assert.ok(prompt.includes("cover each topic that has attached evidence"));
     assert.ok(prompt.includes("Tests/migrations only if"));
     assert.ok(prompt.includes("compose service names"));
-    assert.ok(prompt.includes("A frontend modal, store, or widget is not the API"));
-    assert.ok(prompt.includes("not where a message is sent"));
-    assert.ok(prompt.includes("do not name the types file as the send/handle path"));
+    assert.ok(prompt.includes("A directory or filename does not establish an API or frontend role"));
+    assert.ok(prompt.includes("Determine declarations versus executed behavior from the attached body"));
+    assert.ok(prompt.includes("cite that implementation regardless of its path or language"));
     assert.ok(prompt.includes("## Section quality gates (strict pass / fail)"));
     assert.ok(prompt.includes("### Focus-search evidence"));
     assert.ok(prompt.includes("apps/api/issue/views.py"));
+  });
+
+  test("unconventional implementation paths are never classified from names", () => {
+    for (const path of ["Custom/Operation", "interfaces/types.ts", "Other/worker.kt"]) {
+      const prompt = buildRepoSummarySynthesisUserPrompt({owner: "org", repo: "project", userFocus: "Explain API authentication, input validation, and persistence.", summary: {entryFiles: [{path, content: "function execute(input) { validate(input); return persist(input); }"}]}});
+      assert.ok(prompt.includes("Determine declarations versus executed behavior from the attached body"));
+      assert.ok(prompt.includes("regardless of its path or language"));
+      assert.ok(!prompt.includes("A `types.ts`, `interfaces/`, or `.d.ts` file defines shapes"));
+      assert.ok(!prompt.includes("domain path under apps/, packages/, or src/"));
+    }
   });
 
   test("buildRepoSummarySynthesisUserPrompt omits User focus when no custom ask", () => {
@@ -254,9 +274,22 @@ async function run(): Promise<void> {
       summary: { entryFiles: [{ path: "package.json" }] }
     });
     assert.ok(!prompt.includes("## User focus (required)"));
-    assert.ok(prompt.includes("Synthesize a **repository-wide** overview"));
+    assert.ok(prompt.includes("Synthesize an overview scoped to the inspected bodies and admitted relationships"));
     assert.ok(prompt.includes("compose service names"));
-    assert.ok(prompt.includes("docker-entrypoint"));
+    assert.ok(prompt.includes("Deployment scripts and compose service names describe deployment only"));
+  });
+
+  test("source kinds cannot promote helper behavior into repository guarantees", () => {
+    assert.ok(REPO_SUMMARY_EVIDENCE_SYSTEM.includes("a comment establishes stated intent"));
+    assert.ok(REPO_SUMMARY_EVIDENCE_SYSTEM.includes("primary, sole, or universal enforcement point without reviewed caller and coverage evidence"));
+    assert.ok(REPO_SUMMARY_EVIDENCE_SYSTEM.includes("does not guarantee all requests or stored values satisfy that condition"));
+    assert.ok(REPO_SUMMARY_EVIDENCE_SYSTEM.includes("without a reviewed call or explicit relationship"));
+    for (const userFocus of [undefined, "Explain the validation flow."]) {
+      const prompt = buildRepoSummarySynthesisUserPrompt({owner: "org", repo: "project", userFocus,
+        summary: {entryFiles: [{path: "Custom/helper", content: "function validate(value) { return value.length > 0; }"}]}});
+      assert.ok(prompt.includes("overview scoped to the inspected bodies and admitted relationships"));
+      assert.ok(!prompt.includes("Synthesize a **repository-wide** overview"));
+    }
   });
 
   test("locate-shaped Understand Repo skips architecture syllabus", () => {

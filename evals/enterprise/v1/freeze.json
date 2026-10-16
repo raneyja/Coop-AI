@@ -1,0 +1,35 @@
+{
+  "schema": "coop-enterprise-freeze-v1",
+  "catalogSha256": "2102eb9790a0d4190b028913d21719da226e4d964b61bf82a797a2bf4cfcc132",
+  "developmentSha256": "c0528a9162d5be8de88f90f973a35479914eb1fc33bc5110ba162f5d92407d95",
+  "heldoutSha256": "0befa4e8fe7dc34fdb6795a79cb4f30bb455c5d69b2d59055bfaf60a16c04a6e",
+  "rubricSha256": "e7391acb43aa1ff10e8a474d6d83d777a7e2226df0c05c624d1dc90ef7e37bb4",
+  "historicalSha256": "d5e41c319f29fc8c878ead3a25eee7bd42cec9e5ec02685b80240d78fb07d42d",
+  "datedEvidence": [
+    {
+      "path": "/Users/jonraney/Coop-AI/docs/enterprise-hardening/run/answer-pipeline-diagnosis.json",
+      "sha256": "c6e85820d950dd18157eaa72c760d49deba1bcb65ac76f0c61aa695063555c45",
+      "role": "dated starting evidence; latest mechanical repair review supersedes unknown Plane formatter cause only"
+    },
+    {
+      "path": "/Users/jonraney/Coop-AI/docs/enterprise-hardening/run/oracle-adjudication.json",
+      "sha256": "ad560a19a2df908010edaab2800fb345f93d1e467d9fca5c1ebdd01a0c9e2955",
+      "role": "dated starting evidence; latest mechanical repair review supersedes unknown Plane formatter cause only"
+    },
+    {
+      "path": "/Users/jonraney/Coop-AI/docs/enterprise-hardening/run/answer-design-decision.md",
+      "sha256": "f76f83aa1fbec605ad307aebc163e4b467ab32e58bccc6fd7aa4f11a5c7a3569",
+      "role": "dated starting evidence; latest mechanical repair review supersedes unknown Plane formatter cause only"
+    },
+    {
+      "path": "/Users/jonraney/Coop-AI/docs/enterprise-hardening/run/phase-contract.json",
+      "sha256": "a41269a9e92df2fcc4ec47bd50d53e2030b9679498e61de61b54890220b8960f",
+      "role": "dated starting evidence; latest mechanical repair review supersedes unknown Plane formatter cause only"
+    }
+  ],
+  "heldoutPolicy": "Private review/scoring custodians only. Repair authors receive development corpus and opaque commitments, never heldout questions/oracles/fixtures or expected strings. Freeze split before any scoring; do not tune to IDs.",
+  "oracleReview": "Fresh v3 harness/rubric/custody review PENDING; v1 and v2 source/evidence/oracles/results preserved under evidence/round1 and round2; all60 v2 corpus commitments unchanged",
+  "oracleVersionNotesSha256": "f3d5f5a6a16a68eabe3b9fcc29be7c6e5d5e4afead26af789d2e1e7922ac4c5d",
+  "safetyCatalogSha256": "ea10b9515a8df05231565d03faa791eb11eff3a88458f4b4770d9e36e186f32b",
+  "revision": "v3"
+}

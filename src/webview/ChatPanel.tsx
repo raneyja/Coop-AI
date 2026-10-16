@@ -6,6 +6,7 @@ import { ChatActivityStrip } from "./components/ChatActivityStrip";
 import { CoopNotice } from "./components/CoopNotice";
 import { QuotaExceededNotice, type QuotaExceededNoticeState } from "./components/QuotaExceededNotice";
 import { ChatComposer } from "./components/ChatComposer";
+import { SubmissionDisplayClock, type AnswerTimingIdentity } from "../chat/chatResponseTiming";
 import { ChatStream, ChatMessage, type ChatInlineArtifact, renderInlineArtifact } from "./components/ChatStream";
 import { ChatProse } from "./components/ChatProse";
 import { CitationNavigationProvider } from "./components/CitationNavigationContext";
@@ -125,8 +126,8 @@ type InboundMessage =
   | { type: "theme:update"; payload: { mode: "light" | "dark" | "high-contrast" } }
   | { type: "context:update"; payload: RepoContext }
   | { type: "chat:history"; payload: ChatHistoryPayload | ChatMessage[] }
-  | { type: "chat:delta"; payload: { chunk: string; threadId?: string } }
-  | { type: "chat:thinking-delta"; payload: { chunk: string; threadId?: string } }
+  | { type: "chat:delta"; payload: { chunk: string; threadId?: string; responseTiming?: AnswerTimingIdentity } }
+  | { type: "chat:thinking-delta"; payload: { chunk: string; threadId?: string; responseTiming?: AnswerTimingIdentity } }
   | {
       type: "agent:activity";
       payload: {
@@ -140,7 +141,7 @@ type InboundMessage =
       payload: { message?: ChatMessage; threadId?: string; hadPartial?: boolean };
     }
   | { type: "chat:error"; payload: { message: string; threadId?: string } }
-  | { type: "chat:stream-resume"; payload: { threadId: string; partialText: string } }
+  | { type: "chat:stream-resume"; payload: { threadId: string; partialText: string; responseTiming?: import("../chat/chatResponseTiming").AnswerTimingIdentity } }
   | {
       type: "chat:quota-exceeded";
       payload: {
@@ -465,26 +466,20 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
   } | undefined>();
   const [conflictState, setConflictState] = useState<ConflictResolutionState | undefined>();
   const [patchCards, setPatchCards] = useState<PatchCardState[]>([]);
-  const [prNotesByTimestamp, setPrNotesByTimestamp] = useState<
-    Record<number, { text?: string; title?: string; loading?: boolean }>
-  >({});
+  const [prNotesByTimestamp, setPrNotesByTimestamp] = useState<Map<number, { text?: string; title?: string; loading?: boolean }>>(() => new Map());
   const [openCreatePrTimestamp, setOpenCreatePrTimestamp] = useState<number | undefined>();
-  const [createPrFilesByTimestamp, setCreatePrFilesByTimestamp] = useState<
-    Record<number, Array<{ path: string; content: string }>>
-  >({});
-  const [createPrDiffByTimestamp, setCreatePrDiffByTimestamp] = useState<Record<number, string>>({});
+  const [createPrFilesByTimestamp, setCreatePrFilesByTimestamp] = useState<Map<number, Array<{ path: string; content: string }>>>(() => new Map());
+  const [createPrDiffByTimestamp, setCreatePrDiffByTimestamp] = useState<Map<number, string>>(() => new Map());
   const [standaloneCreatePr, setStandaloneCreatePr] = useState<
     { timestamp: number; files: Array<{ path: string; content: string }> } | undefined
   >();
   const [standalonePrSubmitting, setStandalonePrSubmitting] = useState(false);
   const standalonePrSubmitGuard = useMemo(() => createConfirmSubmitGuard(), []);
-  const [prCreateByTimestamp, setPrCreateByTimestamp] = useState<
-    Record<
-      number,
-      | { htmlUrl: string; number: number; provider?: CodeHostProviderPreference }
-      | { error: string }
-    >
-  >({});
+  const [prCreateByTimestamp, setPrCreateByTimestamp] = useState<Map<
+    number,
+    | { htmlUrl: string; number: number; provider?: CodeHostProviderPreference }
+    | { error: string }
+  >>(() => new Map());
   const [suppressedPatchTimestamps, setSuppressedPatchTimestamps] = useState<number[]>([]);
   const [degradationNotification, setDegradationNotification] = useState<DegradationNotificationPayload | undefined>();
   const [usageLabel, setUsageLabel] = useState<string | undefined>();
@@ -576,6 +571,18 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     return false;
   }, [messages]);
 
+  const displaySubmissionsRef = useRef(new SubmissionDisplayClock());
+  const [streamTiming, setStreamTiming] = useState<AnswerTimingIdentity | undefined>();
+  const onAnswerPaint = useCallback((identity: AnswerTimingIdentity, milestone: "first-answer-content" | "complete") => {
+    const elapsedMs = displaySubmissionsRef.current.receipt(identity, milestone);
+    if (elapsedMs === undefined) return false;
+    vscode.postMessage({ type: "chat:display-receipt", payload: { ...identity, milestone, elapsedMs } });
+    return true;
+  }, [vscode]);
+
+  const canObserveAnswer = useCallback((identity: AnswerTimingIdentity, streaming: boolean) =>
+    displaySubmissionsRef.current.pending(identity, streaming ? "first-answer-content" : "complete"), []);
+
   const streamMessage = useMemo<ChatMessage | null>(() => {
     if (!debouncedStream) {
       return null;
@@ -587,11 +594,12 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     return {
       role: "assistant",
       content: debouncedStream,
+      responseTiming: streamTiming,
       sourceCitationMode: "explicit",
       timestamp: Date.now(),
       links: []
     };
-  }, [debouncedStream, streamingEditTurn]);
+  }, [debouncedStream, streamingEditTurn, streamTiming]);
 
   const inlineThinkingOptions = useMemo(
     () => ({ awaitingResponse: isStreaming && !streamMessage }),
@@ -823,6 +831,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         return;
       }
       const clientSubmissionId = `${Date.now()}-${++submissionSequenceRef.current}`;
+      displaySubmissionsRef.current.submit(clientSubmissionId);
+      setStreamTiming(undefined);
       outgoing.payload = { ...outgoing.payload, clientSubmissionId };
       payload = outgoing;
       const optimistic: ChatMessage = {
@@ -941,8 +951,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
               }
               if (typeof messageTimestamp === "number") {
                 setPrCreateByTimestamp((current) => {
-                  const next = { ...current };
-                  delete next[messageTimestamp];
+                  const next = new Map(current);
+                  next.delete(messageTimestamp);
                   return next;
                 });
               }
@@ -971,41 +981,40 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
                 return;
               }
               setPrCreateByTimestamp((current) => {
-                const next = { ...current };
-                delete next[messageTimestamp];
+                const next = new Map(current);
+                next.delete(messageTimestamp);
                 return next;
               });
               setCreatePrFilesByTimestamp((current) => {
-                if (!(messageTimestamp in current)) {
+                if (!current.has(messageTimestamp)) {
                   return current;
                 }
-                const next = { ...current };
-                delete next[messageTimestamp];
+                const next = new Map(current);
+                next.delete(messageTimestamp);
                 return next;
               });
             }}
             prCreated={
               typeof messageTimestamp === "number"
-                ? createdPullRequestFromResult(prCreateByTimestamp[messageTimestamp])
+                ? createdPullRequestFromResult(prCreateByTimestamp.get(messageTimestamp))
                 : undefined
             }
             prCreateError={
               typeof messageTimestamp === "number"
-                ? prCreateErrorFromResult(prCreateByTimestamp[messageTimestamp], context.provider)
+                ? prCreateErrorFromResult(prCreateByTimestamp.get(messageTimestamp), context.provider)
                 : undefined
             }
             onRequestPrNotes={() => {
               if (typeof messageTimestamp !== "number") {
                 return;
               }
-              const override = createPrFilesByTimestamp[messageTimestamp];
+              const override = createPrFilesByTimestamp.get(messageTimestamp);
               const titlePaths = (override ?? card.prFiles)?.map((file) => file.path) ?? [];
               const preview = override ? mergeAppliedPrPreviewFiles(patchCards) : card.files;
               const diff =
-                createPrDiffByTimestamp[messageTimestamp] || compactPatchDiffForPrNotes(preview);
-              setPrNotesByTimestamp((current) => ({
-                ...current,
-                [messageTimestamp]: { ...current[messageTimestamp], loading: true }
+                createPrDiffByTimestamp.get(messageTimestamp) || compactPatchDiffForPrNotes(preview);
+              setPrNotesByTimestamp((current) => new Map(current).set(messageTimestamp, {
+                ...current.get(messageTimestamp), loading: true
               }));
               post({
                 type: "patch:summarize-pr",
@@ -1019,7 +1028,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             }}
             createPrFilesOverride={
               typeof messageTimestamp === "number"
-                ? createPrFilesByTimestamp[messageTimestamp]
+                ? createPrFilesByTimestamp.get(messageTimestamp)
                 : undefined
             }
             openCreatePrRequested={
@@ -1032,17 +1041,17 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             }}
             prNotesLoading={
               typeof messageTimestamp === "number"
-                ? Boolean(prNotesByTimestamp[messageTimestamp]?.loading)
+                ? Boolean(prNotesByTimestamp.get(messageTimestamp)?.loading)
                 : false
             }
             generatedPrNotes={
               typeof messageTimestamp === "number"
-                ? prNotesByTimestamp[messageTimestamp]?.text
+                ? prNotesByTimestamp.get(messageTimestamp)?.text
                 : undefined
             }
             generatedPrTitle={
               typeof messageTimestamp === "number"
-                ? prNotesByTimestamp[messageTimestamp]?.title
+                ? prNotesByTimestamp.get(messageTimestamp)?.title
                 : undefined
             }
           />
@@ -1074,7 +1083,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       return;
     }
     const timestamp = openCreatePrTimestamp;
-    const files = createPrFilesByTimestamp[timestamp];
+    const files = createPrFilesByTimestamp.get(timestamp);
     const hasCard = shouldRenderPatchCardForMessage(patchCards, timestamp);
     if (hasCard) {
       return;
@@ -1084,9 +1093,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     }
     setStandaloneCreatePr({ timestamp, files });
     setStandalonePrSubmitting(false);
-    setPrNotesByTimestamp((current) => ({
-      ...current,
-      [timestamp]: { ...current[timestamp], loading: true }
+    setPrNotesByTimestamp((current) => new Map(current).set(timestamp, {
+      ...current.get(timestamp), loading: true
     }));
     post({
       type: "patch:summarize-pr",
@@ -1094,7 +1102,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         messageTimestamp: timestamp,
         title: defaultPrTitle(files.map((file) => file.path)),
         diff:
-          createPrDiffByTimestamp[timestamp] ||
+          createPrDiffByTimestamp.get(timestamp) ||
           files.map((file) => `${file.path}\n(editor changes)`).join("\n\n"),
         files: files.map((file) => file.path)
       }
@@ -1112,7 +1120,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     if (!standaloneCreatePr) {
       return;
     }
-    const result = prCreateByTimestamp[standaloneCreatePr.timestamp];
+    const result = prCreateByTimestamp.get(standaloneCreatePr.timestamp);
     if (result && ("htmlUrl" in result || "error" in result)) {
       setStandalonePrSubmitting(false);
     }
@@ -1364,8 +1372,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             setPatchCards([]);
             setSuppressedPatchTimestamps([]);
           }
-          setPrCreateByTimestamp({});
-          setCreatePrDiffByTimestamp({});
+          setPrCreateByTimestamp(new Map());
+          setCreatePrDiffByTimestamp(new Map());
           setStandaloneCreatePr(undefined);
           setChatHistorySynced(true);
           // Do not clear isStreaming on mid-turn history echoes. Only clear when
@@ -1401,8 +1409,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             return next;
           });
           resetEphemeralChatState();
-          setPrCreateByTimestamp({});
-          setCreatePrDiffByTimestamp({});
+          setPrCreateByTimestamp(new Map());
+          setCreatePrDiffByTimestamp(new Map());
           setStandaloneCreatePr(undefined);
           setScrollEpoch((epoch) => epoch + 1);
           if (shouldResetComposerDraft(message.payload.preserveDraft)) {
@@ -1434,6 +1442,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           setThinkingBuffer("");
           setAgentOverlay(undefined);
           setIsStreaming(true);
+          setStreamTiming(message.payload.responseTiming);
           setStreamingBuffer(message.payload.partialText);
           break;
         }
@@ -1471,6 +1480,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           }
           setIntentFeedback(undefined);
           setIsStreaming(true);
+          setStreamTiming(message.payload.responseTiming);
           setStreamingBuffer((prev) => prev + message.payload.chunk);
           break;
         }
@@ -1679,10 +1689,10 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
             (file) => file.path.trim() && file.content.length > 0 && !isOsAbsoluteDiskPath(file.path)
           );
           if (files.length > 0) {
-            setCreatePrFilesByTimestamp((current) => ({ ...current, [timestamp]: files }));
+            setCreatePrFilesByTimestamp((current) => new Map(current).set(timestamp, files));
           }
           if (message.payload.diff?.trim()) {
-            setCreatePrDiffByTimestamp((current) => ({ ...current, [timestamp]: message.payload.diff as string }));
+            setCreatePrDiffByTimestamp((current) => new Map(current).set(timestamp, message.payload.diff as string));
           }
           setOpenCreatePrTimestamp(timestamp);
           break;
@@ -1692,13 +1702,10 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           if (typeof timestamp !== "number") {
             break;
           }
-          setPrNotesByTimestamp((current) => ({
-            ...current,
-            [timestamp]: {
+          setPrNotesByTimestamp((current) => new Map(current).set(timestamp, {
               text: message.payload.notes,
               title: message.payload.title,
               loading: false
-            }
           }));
           break;
         }
@@ -1707,13 +1714,10 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           if (typeof timestamp !== "number" || !message.payload.htmlUrl) {
             break;
           }
-          setPrCreateByTimestamp((current) => ({
-            ...current,
-            [timestamp]: {
+          setPrCreateByTimestamp((current) => new Map(current).set(timestamp, {
               htmlUrl: message.payload.htmlUrl,
               number: message.payload.number,
               provider: message.payload.provider
-            }
           }));
           break;
         }
@@ -1722,10 +1726,7 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           if (typeof timestamp !== "number" || !message.payload.error) {
             break;
           }
-          setPrCreateByTimestamp((current) => ({
-            ...current,
-            [timestamp]: { error: message.payload.error }
-          }));
+          setPrCreateByTimestamp((current) => new Map(current).set(timestamp, { error: message.payload.error }));
           break;
         }
         case "degradation:notification":
@@ -2550,6 +2551,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
       {isActiveChat ? (
         <>
           <ChatStream
+            onAnswerPaint={onAnswerPaint}
+            canObserveAnswer={canObserveAnswer}
             messages={messages}
             artifacts={inlineArtifacts}
             streamingMessage={streamMessage}
@@ -2732,23 +2735,23 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
         submitting={standalonePrSubmitting}
         error={
           standaloneCreatePr
-            ? prCreateErrorFromResult(prCreateByTimestamp[standaloneCreatePr.timestamp], context.provider)
+            ? prCreateErrorFromResult(prCreateByTimestamp.get(standaloneCreatePr.timestamp), context.provider)
             : undefined
         }
         notesLoading={
           standaloneCreatePr
-            ? Boolean(prNotesByTimestamp[standaloneCreatePr.timestamp]?.loading)
+            ? Boolean(prNotesByTimestamp.get(standaloneCreatePr.timestamp)?.loading)
             : false
         }
         generatedNotes={
-          standaloneCreatePr ? prNotesByTimestamp[standaloneCreatePr.timestamp]?.text : undefined
+          standaloneCreatePr ? prNotesByTimestamp.get(standaloneCreatePr.timestamp)?.text : undefined
         }
         generatedTitle={
-          standaloneCreatePr ? prNotesByTimestamp[standaloneCreatePr.timestamp]?.title : undefined
+          standaloneCreatePr ? prNotesByTimestamp.get(standaloneCreatePr.timestamp)?.title : undefined
         }
         created={
           standaloneCreatePr
-            ? createdPullRequestFromResult(prCreateByTimestamp[standaloneCreatePr.timestamp])
+            ? createdPullRequestFromResult(prCreateByTimestamp.get(standaloneCreatePr.timestamp))
             : undefined
         }
         onOpenLink={handleOpenLink}
@@ -2772,8 +2775,8 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
           void standalonePrSubmitGuard(async () => {
             setStandalonePrSubmitting(true);
             setPrCreateByTimestamp((current) => {
-              const next = { ...current };
-              delete next[timestamp];
+              const next = new Map(current);
+              next.delete(timestamp);
               return next;
             });
             const provider = draft.provider ?? context.provider;

@@ -55,7 +55,10 @@ export function listDecisionSourceLabels(
 ): string[] {
   const host = resolveEvidenceCodeHost(codeHost ?? timeline.provider);
   const labels: string[] = [];
-  if (timeline.originalCommit) {
+  if (timeline.focusCommit) {
+    labels.push(decisionSourceLabelCommit(timeline.focusCommit.sha, host));
+  }
+  if (timeline.originalCommit && timeline.originalCommit.sha !== timeline.focusCommit?.sha) {
     labels.push(decisionSourceLabelCommit(timeline.originalCommit.sha, host));
   }
   if (timeline.linkedPR) {
@@ -110,44 +113,50 @@ export function listDecisionSourcesChecklist(
   codeHost?: string | null
 ): string[] {
   return listDecisionSourceLabels(timeline, codeHost).map((label) => {
-    const suffix = decisionSourceChecklistSuffix(label);
+    const suffix = decisionSourceChecklistSuffix(label, timeline);
     return `${label} — ${suffix}`;
   });
 }
 
-function decisionSourceChecklistSuffix(label: string): string {
+function decisionSourceChecklistSuffix(label: string, timeline: DecisionTimeline): string {
   if (/\[Sources: (?:GitHub|GitLab|Bitbucket) commit/.test(label)) {
     return "sampled commit and message — provenance; original introduction and alternatives unknown unless verified";
   }
-  if (label.startsWith("[Sources: PR #") || label.startsWith("[Sources: MR #")) {
-    return "PR description, review comments, and approvals — decision rationale and rejected options";
+  if (/\[Sources: (?:PR|MR|PR\/MR) #/.test(label)) {
+    const pr = timeline.linkedPR;
+    const parts = ["PR/MR metadata"];
+    if (pr?.description.trim()) parts.push("attached description");
+    const reviews = pr?.reviews.filter((review) => review.body.trim()).length ?? 0;
+    if (reviews) parts.push(`${reviews} attached review comment(s)`);
+    if (pr?.approvers.length) parts.push("listed approvers");
+    return `${parts.join(", ")} — rationale and rejected options only when stated in attached text`;
   }
   if (label.startsWith("[Sources: Slack")) {
-    return "thread discussion — consensus and informal alternatives";
+    return "attached thread messages — consensus and alternatives only when explicitly recorded";
   }
   if (label.startsWith("[Sources: Teams")) {
-    return "Teams thread — discussion and informal alternatives";
+    return "attached Teams messages — alternatives only when explicitly recorded";
   }
   if (label.startsWith("[Sources: Jira")) {
-    return "ticket requirements, acceptance criteria, and scope";
+    return "attached ticket fields — requirements, acceptance criteria, and scope only when present";
   }
   if (label.startsWith("[Sources: Confluence pages")) {
-    return "architecture or ADR documentation from Confluence search (grouped pages)";
+    return "Confluence search results and available excerpts — full page bodies not attached";
   }
   if (label.startsWith("[Sources: Confluence")) {
-    return "architecture or ADR documentation from Confluence search";
+    return "Confluence search result and available excerpt — full page body not attached";
   }
   if (label.startsWith("[Sources: Notion pages")) {
-    return "design or decision documentation from Notion search (grouped pages)";
+    return "Notion search results — titles and links only; page bodies not attached";
   }
   if (label.startsWith("[Sources: Notion")) {
-    return "design or decision documentation from Notion search";
+    return "Notion search result — title and link only; page body not attached";
   }
   if (label.startsWith("[Sources: Google Docs (")) {
-    return "design or decision documentation from Google Docs search (grouped documents)";
+    return "Google Docs search results — titles and links only; document bodies not attached";
   }
   if (label.startsWith("[Sources: Google Docs")) {
-    return "design or decision documentation from Google Docs search";
+    return "Google Docs search result — title and link only; document body not attached";
   }
   return "summarize what this source contributed to the decision";
 }

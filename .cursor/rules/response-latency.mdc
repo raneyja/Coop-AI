@@ -9,6 +9,8 @@ alwaysApply: true
 
 **Hard rule:** Never abort a turn, kill the model, or replace an answer with a timeout message solely because 15 seconds elapsed. AbortSignal is for **user Stop** (and same-thread re-send) only.
 
+This governs Coop's interactive product, not engineering-agent execution time. Starting synthesis and publishing an answer are different stages: source-backed drafts stay private until the existing evidence/completion/review gates pass. Unsupported, malformed, incomplete or provider-failed drafts may remain withheld with an honest failure; speed never waives those checks.
+
 ## Scope
 
 Applies to **every** user-facing answer path (one shared funnel: `handleChatSend` → gather → model stream):
@@ -32,8 +34,8 @@ Does **not** apply to:
 1. Use `MAX_USER_FACING_RESPONSE_MS` / `remainingContextGatherBudgetMs` from `src/config/responseDeadline.ts` as **soft gather** caps — do not invent other ceilings for “when to stop fetching.”
 2. Do **not** schedule a turn abort at 15s (`scheduleResponseDeadline` is a no-op). Never call a path that posts the legacy “over 15 seconds” timeout bubble.
 3. Cap interactive gather / job-poll waits to the **remaining soft gather budget**, then synthesize with partial/cached context.
-4. If gather hits the soft budget before synthesis: **still call the model** — never hang, never substitute a timeout error for an answer.
-5. Once synthesis/streaming has started (model handoff or first token): finish the answer — latency guideline does not apply mid-stream.
+4. If gather hits the soft budget before synthesis, continue through the existing authorized synthesis/failure path with admitted partial evidence — never hang or substitute an elapsed-time error. Preserve permission, quota and evidence checks.
+5. Once synthesis/streaming has started (model handoff or first token), finish the in-flight work through its completion/validation/publication contract. The latency guideline does not cancel it or require a rejected draft to publish.
 6. Do not stack sequential calls that can each take 15s+; parallelize or fail open early into synthesis.
 7. Never add artificial delays that delay the first useful answer past the soft guideline when gather could degrade earlier.
 
@@ -50,4 +52,4 @@ Does **not** apply to:
 
 ## Self-check
 
-Before shipping chat/QA latency changes: would a senior engineer ever wait >15s staring at “Preparing answer” with no degradation? If yes, cut gather work earlier — but **always** still deliver a model answer (unless the user stopped or quota blocked).
+Before shipping chat/QA latency changes: could gather degrade earlier while preserving useful admitted evidence? If yes, shorten gather work. Then qualify actual useful display, completion, quality and cost together. A missed target stays a performance failure/open gate; do not abort by the clock, publish invalid text or call progress-only UI a useful answer.

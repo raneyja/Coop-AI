@@ -11,6 +11,12 @@ export type JobStatus = "queued" | "running" | "completed" | "failed" | "cancell
 export type JobPriority = "high" | "normal" | "low";
 
 export type JobParams = Record<string, unknown>;
+export type JobLease = { ownerId: string; attemptId: string };
+/** These executors mutate shared index state and cannot be replayed on a lease alone. */
+export const EFFECT_JOB_TYPES = [JobType.INDEX_REPOSITORY, JobType.BUILD_DEPENDENCY_GRAPH, JobType.BUILD_STRUCTURE_MANIFEST];
+
+export const GRAPH_JOB_TYPES: readonly JobType[] = Object.freeze([JobType.INDEX_REPOSITORY, JobType.BUILD_DEPENDENCY_GRAPH]);
+export type JobGraphGeneration = { orgId: string; repoId: string; generation: string };
 
 export interface Job {
   id: string;
@@ -28,6 +34,13 @@ export interface Job {
   estimatedDurationMs: number;
   retryCount: number;
   scheduled?: boolean;
+  ownerId?: string;
+  attemptId?: string;
+  leaseExpiresAt?: Date;
+  availableAt?: Date;
+  effectQuarantined?: boolean;
+  /** Issued by logical submission; historical null never grants authority. */
+  graphGenerations?: JobGraphGeneration[];
 }
 
 export interface JobResultRecord {
@@ -66,6 +79,7 @@ export interface JobSubmitResponse {
   /** True when an existing completed scan was returned instead of enqueueing a new job. */
   cached?: boolean;
   completedAt?: string;
+  deduplicated?: boolean;
 }
 
 export const PRIORITY_WEIGHT: Record<JobPriority, number> = {
@@ -107,6 +121,7 @@ export function serializeJob(job: Job): Record<string, unknown> {
     completedAt: job.completedAt?.toISOString(),
     estimatedDurationMs: job.estimatedDurationMs,
     retryCount: job.retryCount,
-    scheduled: job.scheduled
+    scheduled: job.scheduled,
+    effectQuarantined: job.effectQuarantined === true
   };
 }
