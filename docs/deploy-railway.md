@@ -187,7 +187,7 @@ Each vendor app must allow `https://api.coop-ai.dev` callbacks. See [connect-int
 
 Lightning full-text search needs **worker** (indexes repos) + **Zoekt** (serves shards). On Railway:
 
-1. Add a second service from the **same repo** + **same Dockerfile**
+1. Add a second service from the **same repo** with `railway.worker.toml` (`Dockerfile`, separate from the API's `Dockerfile.api`)
 2. **Start command:** `node dist/workerEntry.js`
 3. Set `ZOEKT_INDEX_PATH=/zoekt-indexes`, mount a **Railway Volume** at that path
 4. Add a third service (or combined start script) for `zoekt-webserver -index /zoekt-indexes -listen 0.0.0.0:6070`

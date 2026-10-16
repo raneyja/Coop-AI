@@ -39,7 +39,7 @@ API service gets: `ZOEKT_URL=http://coop-zoekt.railway.internal:6070` (or Railwa
 1. **+ New** → **GitHub Repo** → same Coop-AI repo as API
 2. Rename service **`coop-worker`**
 3. **Settings → Deploy**
-   - **Build:** Dockerfile (same as API)
+   - **Build:** `railway.worker.toml` using the worker `Dockerfile` (the API uses `Dockerfile.api`)
    - **Start command:** `node dist/workerEntry.js`
 4. **Variables** — copy from **Coop-AI** (API service):
    - `DATABASE_URL` (reference Postgres)
@@ -60,7 +60,7 @@ Zoekt is built into the Docker image (see `Dockerfile`).
 1. **+ New** → **Empty service** or same repo with custom start
 2. Rename **`coop-zoekt`**
 3. **Settings → Deploy**
-   - **Build:** same Dockerfile as API (includes `zoekt-webserver` binary)
+   - **Build:** worker `Dockerfile` (includes `zoekt-webserver`; the API image does not)
    - **Start command:**
      ```
      zoekt-webserver -index /zoekt-indexes -listen 0.0.0.0:$PORT

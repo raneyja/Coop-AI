@@ -62,7 +62,7 @@ services:
   zoekt:
     cap_drop: ["ALL"]
     security_opt: ["no-new-privileges:true"]
-    # Same image as api/worker — the Zoekt webserver binary is included.
+    # Same image as the worker — the Zoekt webserver binary is included.
     # Serves the full-text index shards built by the worker container.
     build: .
     command:

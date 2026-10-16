@@ -16,5 +16,10 @@ if [ "$runtime_uid" -eq 0 ]; then
   exit 64
 fi
 # Preserve the base Node entrypoint's argument behavior and exec/signal chain.
+# Alpine and Debian install setpriv in different standard locations.
+if ! setpriv_bin=$(command -v setpriv); then
+  printf '%s\n' 'Coop runtime requires setpriv; refusing to start.' >&2
+  exit 64
+fi
 # No environment reset, key handling, mount changes, or privilege fallback.
-exec /usr/bin/setpriv --no-new-privs -- /usr/local/bin/docker-entrypoint.sh "$@"
+exec "$setpriv_bin" --no-new-privs -- /usr/local/bin/docker-entrypoint.sh "$@"
