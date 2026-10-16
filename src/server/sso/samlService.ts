@@ -9,7 +9,7 @@ import {
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { SAML_REQUEST_TTL_MS, type SamlRequestStore, type SamlLoginRequest } from "./samlRequestStore";
 import { ssoConfigFingerprint, type OrgSsoConfig } from "./ssoConfigStore";
-import { normalizeX509Cert } from "./x509Cert";
+import { isRevokedIdpSigningCert, normalizeX509Cert } from "./x509Cert";
 
 /**
  * The verified identity extracted from a signed SAML assertion. Only produced
@@ -186,6 +186,9 @@ export class SamlService {
   }
 
   private buildSaml(config: OrgSsoConfig, cacheProvider: CacheProvider): SAML {
+    if (isRevokedIdpSigningCert(config.idpX509Cert)) {
+      throw new SsoConfigError("SAML IdP signing certificate has been revoked");
+    }
     const samlConfig: SamlConfig = {
       // SP identity
       issuer: this.spEntityId,

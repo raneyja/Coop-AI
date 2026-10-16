@@ -7,6 +7,7 @@ import type { SsoConfigStore } from "./sso/ssoConfigStore";
 import type { AuthPolicyStore } from "./sso/authPolicyStore";
 import type { UserStore } from "./users/userStore";
 import type { ServerConfig } from "./serverConfig";
+import { REVOKED_PUBLIC_CERT } from "./sso/revokedPublicCert.fixture";
 
 function mockResponse(): ServerResponse & { statusCode?: number; body?: unknown } {
   const response = {
@@ -268,6 +269,19 @@ test("PUT /v1/sso/config rejects session tokens as certificates", async () => {
   assert.equal(response.statusCode, 400);
   const body = response.body as { error: string };
   assert.equal(body.error, "invalid_request");
+});
+
+test("PUT /v1/sso/config requires replacement of the exposed IdP signing key", async () => {
+  const response = mockResponse();
+  await handleEnterpriseApiRequest({
+    method: "PUT", pathname: "/v1/sso/config",
+    headers: { authorization: "Bearer coop_sess_test" },
+    body: { provider: "okta", idpEntityId: "https://idp.example.com/entity",
+      idpSsoUrl: "https://idp.example.com/sso", idpX509Cert: REVOKED_PUBLIC_CERT }
+  }, response, { orgStore: mockOrgStore(), ssoConfigStore: mockSsoConfigStore(),
+    authPolicyStore: mockAuthPolicyStore(), userStore, serverConfig });
+  assert.equal(response.statusCode, 400);
+  assert.match((response.body as { message: string }).message, /revoked.*replacement/i);
 });
 
 test("PUT /v1/sso/config rejects non-HTTPS IdP SSO URLs", async () => {

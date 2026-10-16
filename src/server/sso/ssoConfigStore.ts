@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
-import { isValidX509Cert, normalizeX509Cert } from "./x509Cert";
+import { isRevokedIdpSigningCert, isValidX509Cert, normalizeX509Cert } from "./x509Cert";
 
 export type SsoProvider = "okta" | "azuread" | "saml";
 
@@ -45,11 +45,14 @@ export class SsoConfigStore {
   /** Returns the config only when SSO is configured AND enabled for the org. */
   public async getEnabledConfig(orgId: string): Promise<OrgSsoConfig | undefined> {
     const config = await this.getConfig(orgId);
-    return config?.enabled ? config : undefined;
+    return config?.enabled && !isRevokedIdpSigningCert(config.idpX509Cert) ? config : undefined;
   }
 
   public async upsertConfig(orgId: string, input: OrgSsoConfigInput): Promise<OrgSsoConfig> {
     const idpX509Cert = normalizeX509Cert(input.idpX509Cert);
+    if (isRevokedIdpSigningCert(idpX509Cert)) {
+      throw new Error("IdP signing certificate was revoked; configure a replacement certificate.");
+    }
     if (!isValidX509Cert(idpX509Cert)) {
       throw new Error(
         "idpX509Cert must be a valid X.509 certificate (PEM or base64), not a Coop session token."

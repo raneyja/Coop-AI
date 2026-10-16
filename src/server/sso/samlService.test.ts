@@ -5,6 +5,7 @@ import { SamlService } from "./samlService";
 import type { OrgSsoConfig } from "./ssoConfigStore";
 import { TEST_IDP_CERT, TEST_IDP_ENTITY_ID, TEST_IDP_SSO_URL, TEST_SAML_BASE_URL,
   createSignedSamlResponse, MemorySamlRequestStore } from "./samlTestFixtures";
+import { REVOKED_PUBLIC_CERT } from "./revokedPublicCert.fixture";
 
 export function testSsoConfig(overrides: Partial<OrgSsoConfig> = {}): OrgSsoConfig {
   return { orgId: "org-enterprise-saml-test", provider: "saml", idpEntityId: TEST_IDP_ENTITY_ID,
@@ -38,6 +39,13 @@ test("ForceAuthn and Azure interactive login preserved", async () => {
   assert.equal(x.url.searchParams.get("prompt"), "login");
   assert.match(x.xml, /ForceAuthn="true"/);
 });
+
+test("an existing configuration using the exposed IdP key cannot start SAML login", async () => {
+  const service = new SamlService({ baseUrl: TEST_SAML_BASE_URL, requestStore: new MemorySamlRequestStore() });
+  await assert.rejects(service.beginLogin(testSsoConfig({ idpX509Cert: REVOKED_PUBLIC_CERT }), { mode: "login" }),
+    { name: "SsoConfigError", message: "SAML IdP signing certificate has been revoked" });
+});
+
 test("unsigned/tampered callback cannot consume pending state", async () => {
   const x = await login();
   const body = createSignedSamlResponse({ requestId: x.requestId });

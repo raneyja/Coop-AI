@@ -1,3 +1,20 @@
+import { createHash, X509Certificate } from "node:crypto";
+
+// Public-key fingerprint of the historical test IdP key exposed in source.
+// Keep this revocation even if the certificate is reissued with a new wrapper.
+const REVOKED_IDP_SIGNING_KEY_SPKI_SHA256 =
+  "d222aec0c039906cfd790ef911edbd86efa1697fb2428642334863671b8a61b8";
+
+export function isRevokedIdpSigningCert(raw: string): boolean {
+  try {
+    const certificate = new X509Certificate(normalizeX509Cert(raw));
+    const publicKey = certificate.publicKey.export({ type: "spki", format: "der" });
+    return createHash("sha256").update(publicKey).digest("hex") === REVOKED_IDP_SIGNING_KEY_SPKI_SHA256;
+  } catch {
+    return false;
+  }
+}
+
 /** Normalize IdP signing certificates for @node-saml/node-saml (PEM or base64 DER). */
 export function normalizeX509Cert(raw: string): string {
   const trimmed = raw.trim().replace(/\\n/g, "\n");
@@ -38,5 +55,5 @@ export function isValidX509Cert(raw: string): boolean {
     .replace(/-----BEGIN CERTIFICATE-----/g, "")
     .replace(/-----END CERTIFICATE-----/g, "")
     .replace(/\s+/g, "");
-  return body.length >= 100 && /^[A-Za-z0-9+/=]+$/.test(body);
+  return body.length >= 100 && /^[A-Za-z0-9+/=]+$/.test(body) && !isRevokedIdpSigningCert(raw);
 }
