@@ -67,6 +67,11 @@ test('image artifacts require package coverage and exact identity; HIGH rows rem
  const missing=imageReport();delete missing.Results[0].Packages;assert.equal(validateImageReport(missing,config).pass,false);
  const high=imageReport();high.Results[0].Vulnerabilities=[{VulnerabilityID:'CVE-fixture',PkgName:'fixture',InstalledVersion:'1',Severity:'HIGH'}];assert.equal(validateImageReport(high,config).findings.length,1);
  high.Results[0].Vulnerabilities[0].Severity='not-severity';assert.equal(validateImageReport(high,config).pass,false);
+ const worker=imageReport();worker.Results[0].Type='alpine';for(const Type of ['gobinary','jar'])worker.Results.push({Type,Target:Type,Packages:[{Name:'fixture',Version:'1'}],Vulnerabilities:[]});
+ const workerCoverage={...config,requiredTypes:['alpine','node-pkg','gobinary','jar']};
+ assert.equal(validateImageReport(worker,workerCoverage).pass,true);
+ assert.match(validateImageReport(imageReport(),workerCoverage).issues.join(' '),/alpine/);
+ worker.Results.pop();assert.match(validateImageReport(worker,workerCoverage).issues.join(' '),/jar/);
  assert.equal(checkImageReceipt({}).pass,false);
 });
 test('all eight exact current audit receipts pass; lock/report/age drift fails',()=>{
@@ -176,8 +181,11 @@ test('full security owner can pass complete synthetic retained proof; missing/dr
   const inventoryPath=write('_evidence/java-inventory.json',{components:[{resource:'one.jar',sha256:sha(resource)}]}),javaReport=write('_evidence/java.json',{Results:[{Type:'jar',Packages:[{Name:'fixture:one',Version:'1',FilePath:'one.jar',AnalyzedBy:'jar'}]}]});
   const inputs={gitleaks:{path:tool,sha256:sha(tool)},gitleaksConfig:{path:config,sha256:sha(config)},auditReceipts:[],secrets:{candidate:{target:corpus,files:candidateFiles},history:{target:root,files:[{path:path.join(root,'.git/HEAD'),sha256:sha(path.join(root,'.git/HEAD'))}]},package:{target:unpacked,files:list(unpacked),artifact:{path:archive,sha256:sha(archive)}}},images:[],javaReceipt:{scannerVersion:'0.72.0',scannerPath:scanner,scannerSha256:sha(scanner),directory:javaDir,inventoryPath,inventorySha256:sha(inventoryPath),reportPath:javaReport,reportSha256:sha(javaReport),databases:dbs}};
   for(const area of ['root','admin','ops','website'])for(const kind of ['full','production'])inputs.auditReceipts.push({area,kind,node:'22.23.3',npm:'10.9.9',exitCode:0,scannedAt:new Date().toISOString(),lockSha256:sha(path.join(root,area==='root'?'package-lock.json':area+'/package-lock.json')),reportPath:audit,reportSha256:sha(audit)});
-  const imagePath=write('_evidence/image.json',{ArtifactType:'container_image',Metadata:{ImageID:'sha256:'+'a'.repeat(64)},Results:['debian','node-pkg','gobinary'].map(Type=>({Type,Target:Type,Packages:[{Name:'fixture',Version:'1'}]}))});
-  for(const role of ['api','worker'])inputs.images.push({role,artifactId:'sha256:'+'a'.repeat(64),requiredTypes:['debian','node-pkg','gobinary'],scannerVersion:'0.72.0',scannerPath:scanner,scannerSha256:sha(scanner),reportPath:imagePath,reportSha256:sha(imagePath),scannedAt:new Date().toISOString(),databases:dbs,inputs:canonicalInputBindings(imageSourceInputs(root),root)});
+  for(const role of ['api','worker']){
+   const requiredTypes=role==='api'?['debian','node-pkg']:['alpine','node-pkg','gobinary','jar'];
+   const imagePath=write('_evidence/image-'+role+'.json',{ArtifactType:'container_image',Metadata:{ImageID:'sha256:'+'a'.repeat(64)},Results:requiredTypes.map(Type=>({Type,Target:Type,Packages:[{Name:'fixture',Version:'1'}]}))});
+   inputs.images.push({role,artifactId:'sha256:'+'a'.repeat(64),requiredTypes,scannerVersion:'0.72.0',scannerPath:scanner,scannerSha256:sha(scanner),reportPath:imagePath,reportSha256:sha(imagePath),scannedAt:new Date().toISOString(),databases:dbs,inputs:canonicalInputBindings(imageSourceInputs(root),root)});
+  }
   const context=securitySourceContext(root,'refs/heads/fixture'),policy=govPolicy();
   const codeql={...externalObservation('codeql'),...context,payload:{analyses:[{commit_sha:context.commit,ref:context.ref,tool:{name:'CodeQL'},error:'',results_count:0,rules_count:1}],alerts:[]}},gov={...externalObservation('governance'),...context};
   const bind=(name,value)=>{const file=write('_evidence/'+name,value);return {path:file,sha256:sha(file)};};

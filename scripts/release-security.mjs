@@ -232,11 +232,16 @@ export function validateImageReport(report,{artifactId,requiredTypes}) {
  }
  return outcome(issues,{findings});
 }
+function requiredImageTypes(role) {
+ if(role==='api')return ['debian','node-pkg'];
+ if(role==='worker')return ['alpine','node-pkg','gobinary','jar'];
+ throw new Error('Unknown image role');
+}
 export function checkImageReceipt(receipt,{exceptions=[],now=Date.now(),root=process.cwd()}={}) {
  try {
   if(!Array.isArray(exceptions)||exceptions.some(e=>!Number.isFinite(Date.parse(e?.activatedAt))||Date.parse(e.activatedAt)>now||!Number.isFinite(Date.parse(e.expiresAt))||Date.parse(e.expiresAt)-Date.parse(e.activatedAt)>14*24*60*60*1000))throw new Error('Invalid or overlong image risk exception');
   if(!receipt||!['api','worker'].includes(receipt.role)||receipt.scannerVersion!=='0.72.0'||!SHA.test(receipt.scannerSha256??'')||!SHA.test(receipt.reportSha256??'')||hashFile(receipt.reportPath)!==receipt.reportSha256||!Number.isFinite(Date.parse(receipt.scannedAt))||Date.parse(receipt.scannedAt)>now||now-Date.parse(receipt.scannedAt)>24*60*60*1000||!Array.isArray(receipt.databases)||!receipt.databases.length)throw new Error('Missing, malformed or stale image scan receipt');
-  const required=receipt.role==='api'?['debian','node-pkg']:['debian','node-pkg','gobinary'];if(!Array.isArray(receipt.requiredTypes)||required.some(type=>!receipt.requiredTypes.includes(type)))throw new Error('Incomplete declared image role coverage');
+  const required=requiredImageTypes(receipt.role);if(!Array.isArray(receipt.requiredTypes)||required.some(type=>!receipt.requiredTypes.includes(type)))throw new Error('Incomplete declared image role coverage');
   const inputsSha256=binding(receipt.inputs,root);
   if(hashFile(receipt.scannerPath)!==receipt.scannerSha256)throw new Error('Image scanner identity mismatch');
   for(const db of receipt.databases){const metadata=readJson(db.metadataPath);if(!SHA.test(db.sha256??'')||hashFile(db.path)!==db.sha256||!SHA.test(db.metadataSha256??'')||hashFile(db.metadataPath)!==db.metadataSha256||metadata.NextUpdate!==db.nextUpdate||!Number.isFinite(Date.parse(db.nextUpdate))||Date.parse(db.nextUpdate)<=now)throw new Error('Expired or mismatched image advisory database');}
@@ -444,7 +449,7 @@ function imageReceiptFromEnvironment() {
  const cache=process.env.TRIVY_CACHE_DIR,databases=[];
  for(const name of ['db/trivy.db','java-db/trivy-java.db']){const file=path.join(cache,name),metadataPath=path.join(path.dirname(file),'metadata.json'),metadata=readJson(metadataPath);databases.push({path:file,sha256:hashFile(file),metadataPath,metadataSha256:hashFile(metadataPath),nextUpdate:metadata.NextUpdate});}
  const reportPath=process.env.COOP_RELEASE_IMAGE_REPORT,report=readJson(reportPath);
- return {role:process.env.COOP_RELEASE_IMAGE_ROLE,artifactId:process.env.COOP_RELEASE_IMAGE_ID,scannerVersion:'0.72.0',scannerPath:process.env.TRIVY_BIN,scannerSha256:process.env.COOP_RELEASE_TRIVY_SHA256,reportPath,reportSha256:hashFile(reportPath),scannedAt:new Date().toISOString(),databases,inputs:canonicalInputBindings(readJson(process.env.COOP_RELEASE_IMAGE_INPUTS),process.cwd()),requiredTypes:process.env.COOP_RELEASE_IMAGE_ROLE==='api'?['debian','node-pkg']:['debian','node-pkg','gobinary']};
+ return {role:process.env.COOP_RELEASE_IMAGE_ROLE,artifactId:process.env.COOP_RELEASE_IMAGE_ID,scannerVersion:'0.72.0',scannerPath:process.env.TRIVY_BIN,scannerSha256:process.env.COOP_RELEASE_TRIVY_SHA256,reportPath,reportSha256:hashFile(reportPath),scannedAt:new Date().toISOString(),databases,inputs:canonicalInputBindings(readJson(process.env.COOP_RELEASE_IMAGE_INPUTS),process.cwd()),requiredTypes:requiredImageTypes(process.env.COOP_RELEASE_IMAGE_ROLE)};
 }
 
 function main() {
