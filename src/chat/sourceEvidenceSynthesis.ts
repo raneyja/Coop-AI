@@ -12,7 +12,7 @@ export function buildSourceEvidenceSynthesisRequest(request: StreamChatParams, q
     // consume it entirely before emitting any answer; retain reasoning with
     // enough completion capacity instead of weakening the quality policy.
     maxTokens: request.enableThinking ? Math.max(request.maxTokens ?? 0, 16_000) : request.maxTokens,
-    history: [], attachments: undefined, mentions: undefined,
+    history: [], attachments: undefined, mentions: undefined, ordinaryTurn: undefined,
     context: {owner: request.context.owner, repo: request.context.repo, branch: request.context.branch, file: request.context.file},
     message: JSON.stringify({schema: "coop-source-evidence-v1", task: question?.trim() || `Review the admitted evidence for the ${request.useCase} quick action.`, action: request.useCase,
       ...evidence, windows: sourceClaimModelWindows(evidence.windows)})};

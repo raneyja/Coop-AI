@@ -5,7 +5,7 @@ import { scopeKnowledgeGapsSourceAudit, verifyKnowledgeGapsSourceAudit } from ".
 import type { SecureApiClient, StreamChatParams } from "./SecureApiClient";
 import { LENGTH_CONTINUE_PROMPT, shouldContinueForLengthStop } from "./lengthContinue";
 import type { ReviewedSourceWindow } from "../prompts/sourceCitationIntegrity";
-import { reviewSourceClaims, type SourceClaimIssue } from "./sourceClaimReview";
+import { reviewSourceClaims, supportedSourceCandidate, MAX_SOURCE_CONTEXT_REDUCTIONS, sourceClaimBlocks, type SourceClaimIssue } from "./sourceClaimReview";
 import { buildSourceEvidenceSynthesisRequest, buildSourceEvidenceRepairRequest } from "./sourceEvidenceSynthesis";
 import { renderSourceEvidenceReferences } from "../prompts/sourceEvidenceReferences";
 
@@ -106,10 +106,10 @@ export async function streamSourceReviewedKnowledgeGaps(options: {
     if (total) options.onFailureUsage?.(total);
     else for (const call of results) if (call.usage) options.onFailureUsage?.(call.usage);
   };
-  const assessClaims = async (verified: ReturnType<typeof verifyReview>) => {
+  const assessClaims = async (verified: ReturnType<typeof verifyReview>, collectSupportedContexts = false) => {
     if (verified.failure) return undefined;
     return reviewSourceClaims({ request, candidate: scopeKnowledgeGapsSourceAudit(verified.content), windows: evidence.focusFiles!,
-      question: options.question ?? evidence.userFocus, signal, run: async body => {
+      question: options.question ?? evidence.userFocus, signal, collectSupportedContexts, run: async body => {
         const result = await stream(body, () => undefined, baseUrl, signal);
         results.push(result);
         options.onCallComplete?.("claim-review", result);
@@ -138,7 +138,16 @@ export async function streamSourceReviewedKnowledgeGaps(options: {
       signal?.throwIfAborted();
       if (reviewed.finishReason === "cancelled") throw new DOMException("The request was stopped.", "AbortError");
       verified = timeResponseWork(signal, "source-validation", () => assess(reviewed));
-      const replacementClaims = await assessClaims(verified);
+      let replacementClaims = await assessClaims(verified, true);
+      for (let reduction = 0; reduction < MAX_SOURCE_CONTEXT_REDUCTIONS
+        && !verified.failure && replacementClaims && !replacementClaims.supported; reduction++) {
+        const original = scopeKnowledgeGapsSourceAudit(verified.content);
+        const partial = supportedSourceCandidate(replacementClaims, original);
+        if (!partial || sourceClaimBlocks(partial).length >= sourceClaimBlocks(original).length) break;
+        reviewed = {...reviewed, message: {...reviewed.message, content: partial}};
+        verified = timeResponseWork(signal, "source-validation", () => assess(reviewed));
+        replacementClaims = await assessClaims(verified, reduction + 1 < MAX_SOURCE_CONTEXT_REDUCTIONS);
+      }
       if (replacementClaims && !replacementClaims.supported) {
         throw new Error("The source review could not verify its explanation against the reviewed source. Retry this request.");
       }

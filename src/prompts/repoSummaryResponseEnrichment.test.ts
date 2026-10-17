@@ -13,7 +13,7 @@ import type { StreamChatParams, SecureApiClient } from "../chat/SecureApiClient"
 import type { RepoSummaryEvidence } from "../context/contextBundleEvidence";
 
 const focus = "Explain backend authentication, input validation and persistence";
-const request: StreamChatParams = { message: focus, context: { owner: "fixture", repo: "service", branch: "release" },
+const request: StreamChatParams = { message: focus, history: [], temperature: 0.5, context: { owner: "fixture", repo: "service", branch: "release" },
   model: "claude-sonnet-4-6", provider: "anthropic", useCase: "comprehension", maxTokens: 16000,
   enableThinking: true, quotaTurnId: "same-fixture-turn" };
 const card = (source: string, start = 10, fence = "```", path = "src/operation.ts", close = fence) =>
@@ -124,13 +124,14 @@ test("actual owner refuses invalid paths/ranges/source/fences and never reaches 
     assert.equal(run.seen.length,2);assert.ok(run.seen.every(body => !body.sourceClaimReview));
   }
 });
-test("existing source-card and byte budgets still refuse atomically with positive counterparts", async () => {
+test("actual owner omits whole excess citations, preserves the card ceiling and rejects a sole oversized quote", async () => {
   const files = [{ path: "src/operation.ts",content: "same();",startLine: 10 }];
   const marker = "[[source:window-1:10:10]]";
   for (const count of [MAX_RENDERED_SOURCE_REFERENCES,MAX_RENDERED_SOURCE_REFERENCES + 1]) {
     const run = await runOwner(files,Array(count).fill(marker).join("\n"));
     if (count === MAX_RENDERED_SOURCE_REFERENCES) { const final = await run.promise;assert.equal(verifySourceCitationQuotes(final.message.content,files).verifiedQuotes,count); }
-    else { await assert.rejects(run.promise,/reviewed evidence/);assert.deepEqual(run.visible,[]);assert.equal(run.seen.length,2); }
+    else { const final=await run.promise;assert.equal(verifySourceCitationQuotes(final.message.content,files).verifiedQuotes,MAX_RENDERED_SOURCE_REFERENCES);
+      assert(!final.message.content.includes("[[source:"));assert(run.seen.some(body=>body.sourceClaimReview)); }
   }
   for (const size of [MAX_RENDERED_SOURCE_BYTES,MAX_RENDERED_SOURCE_BYTES + 1]) {
     const window = [{ path: "src/operation.ts",content: "x".repeat(size),startLine: 10 }],run = await runOwner(window,marker);

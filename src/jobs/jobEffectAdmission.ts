@@ -2,8 +2,9 @@ import type { Pool, PoolClient } from 'pg';
 import { EFFECT_JOB_TYPES, type Job, type JobGraphGeneration } from './types';
 import { JobCancelledError } from './errorHandling';
 
-/** Shared by queue claims and destructive index purge. It only serializes
- * admission; it does not turn external artifacts or async cache writes into transactions. */
+/** Claims, quarantine and purge take exclusive access; owned effects retain
+ * shared access through their SQL/physical callback. Always lock global -> job
+ * -> sorted heads. External writes still require uncertain-outcome quarantine. */
 export const JOB_EFFECT_ADMISSION_LOCK = 731804;
 
 /** Hold the durable attempt row through the actual write transaction. Reclaim,
@@ -20,11 +21,14 @@ export async function withJobOwnedEffect<T>(pool: Pool, job: Job, operation: (cl
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock_shared($1)', [JOB_EFFECT_ADMISSION_LOCK]);
     // A predicate on SELECT FOR UPDATE can be evaluated before its row-lock wait.
     // Re-admit in a new statement after holding the row, using the database clock.
     await client.query('SELECT id FROM jobs WHERE id=$1 FOR UPDATE', [ownership[0]]);
     const owned = await client.query(admission, ownership);
     if (!owned.rows.length) throw new JobCancelledError('Index effect attempt lost ownership');
+    const quarantined = await client.query('SELECT id FROM jobs WHERE effect_quarantined LIMIT 1');
+    if (quarantined.rows.length) throw new JobCancelledError('Index effects require worker termination and reconciliation');
     await assertJobGraphGenerations(client, generations);
     // Head locks may wait too. Re-read the database clock AFTER every lock
     // before any SQL or nontransactional physical callback is allowed to enter.

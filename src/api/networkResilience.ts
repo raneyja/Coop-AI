@@ -79,21 +79,24 @@ export async function retryWithBackoff<T>(
   operation: (attempt: number) => Promise<T>,
   policy: Partial<RetryPolicy> = {},
   shouldRetry: (error: unknown) => boolean = () => true,
-  onRetry?: (attempt: number, delayMs: number, error?: unknown) => void
+  onRetry?: (attempt: number, delayMs: number, error?: unknown) => void,
+  signal?: AbortSignal
 ): Promise<T> {
   const merged = mergeRetryPolicy(policy);
   let lastError: unknown;
   for (let attempt = 0; attempt <= merged.maxRetries; attempt += 1) {
+    signal?.throwIfAborted();
     try {
       return await operation(attempt);
     } catch (error) {
+      signal?.throwIfAborted();
       lastError = error;
       if (attempt >= merged.maxRetries || !shouldRetry(error)) {
         throw error;
       }
       const delayMs = retryDelayMs(attempt, merged, error);
       onRetry?.(attempt + 1, delayMs, error);
-      await delay(delayMs);
+      await delay(delayMs, signal);
     }
   }
   throw lastError;
@@ -161,7 +164,8 @@ export async function runResilientRequest<T>({
     },
     policy,
     (error) => shouldRetryError?.(error) ?? isRetryableError(error, policy),
-    onRetry
+    onRetry,
+    userSignal
   );
 }
 
@@ -245,6 +249,12 @@ function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === "AbortError";
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const abort = () => { clearTimeout(timer); signal?.removeEventListener("abort", abort); reject(signal?.reason); };
+    const timer = setTimeout(() => { signal?.removeEventListener("abort", abort); resolve(); }, ms);
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) abort();
+  });
 }

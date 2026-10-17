@@ -118,7 +118,15 @@ export function productMixFromEventTypes(
 }
 
 export class UsageTracker {
-  public constructor(private readonly pool?: Pool | null) {}
+  public constructor(private readonly pool?: Pick<Pool, "query"> | null) {}
+
+  /** Billing/admission callers must observe a failed durable write. Analytics
+   * can continue using best-effort record below. */
+  public async recordRequired(entry: UsageEventEntry): Promise<void> {
+    if (!this.pool) throw new Error("Usage storage unavailable");
+    await this.pool.query(`INSERT INTO usage_events (org_id, user_id, principal, event_type, metadata)
+      VALUES ($1,$2,$3,$4,$5::jsonb) ON CONFLICT DO NOTHING`, [entry.orgId,entry.userId ?? null,entry.principal,entry.eventType,JSON.stringify(entry.metadata ?? {})]);
+  }
 
   public async record(entry: UsageEventEntry): Promise<void> {
     if (!this.pool) {

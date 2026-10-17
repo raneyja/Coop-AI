@@ -8,6 +8,11 @@ import {
   hasUnderstandRepoEntryBodies
 } from "./indexedRepoContextEnrichment";
 import type { ContextFetchRequest } from "./requestBatcher";
+import type { UserIntent } from "./intentDetector";
+
+// Validate the fixture's enum values without loading VS Code's editor runtime.
+const quickActionIntent = ("quick_action_clicked" satisfies `${UserIntent.QUICK_ACTION_CLICKED}`) as UserIntent.QUICK_ACTION_CLICKED;
+const manualChatIntent = ("manual_chat_submit" satisfies `${UserIntent.MANUAL_CHAT_SUBMIT}`) as UserIntent.MANUAL_CHAT_SUBMIT;
 
 async function run(): Promise<void> {
   let passed = 0;
@@ -40,7 +45,7 @@ async function run(): Promise<void> {
       },
       intent: {
         id: "evt-1",
-        intent: "quick_action_clicked" as const,
+        intent: quickActionIntent,
         timestamp: new Date(),
         costEstimate: "expensive" as const,
         context: {
@@ -74,6 +79,7 @@ async function run(): Promise<void> {
             fetchRepoFile: async () => ({
               path: "README.md",
               content: "# App\n",
+              branch: "main",
               encoding: "utf-8"
             })
           })
@@ -123,7 +129,7 @@ async function run(): Promise<void> {
       params: { repoId: "github:acme/app", owner: "acme", repo: "app", branch: "main" },
       intent: {
         id: "evt-ping",
-        intent: "manual_chat_submit" as const,
+        intent: manualChatIntent,
         timestamp: new Date(),
         costEstimate: "cheap" as const,
         context: { queryText: "test" }
@@ -149,7 +155,7 @@ async function run(): Promise<void> {
       params: { repoId: "github:acme/app", owner: "acme", repo: "app", branch: "main" },
       intent: {
         id: "evt-count",
-        intent: "manual_chat_submit" as const,
+        intent: manualChatIntent,
         timestamp: new Date(),
         costEstimate: "cheap" as const,
         context: { queryText: "how many files are inside of this repo?" }
@@ -219,7 +225,7 @@ async function run(): Promise<void> {
       params: { repoId: "github:coopai-group/InspectIQ", owner: "coopai-group", repo: "InspectIQ", branch: "main" },
       intent: {
         id: "evt-plain-ping",
-        intent: "manual_chat_submit" as const,
+        intent: manualChatIntent,
         timestamp: new Date(),
         costEstimate: "cheap" as const,
         context: { queryText: "test" }
@@ -300,7 +306,7 @@ async function run(): Promise<void> {
       },
       intent: {
         id: "evt-2",
-        intent: "quick_action_clicked" as const,
+        intent: quickActionIntent,
         timestamp: new Date(),
         costEstimate: "expensive" as const,
         context: {
@@ -386,7 +392,7 @@ async function run(): Promise<void> {
       },
       intent: {
         id: "evt-3",
-        intent: "quick_action_clicked" as const,
+        intent: quickActionIntent,
         timestamp: new Date(),
         costEstimate: "expensive" as const,
         context: {
@@ -420,11 +426,12 @@ async function run(): Promise<void> {
             branch: "preview"
           }),
           getBackendClient: () => ({
-            fetchRepoFile: async (_base: string, _repoId: string, path: string) => ({
-              path,
-              content: path === "README.md" ? "# Plane\n" : '{"name":"plane"}\n',
-              encoding: "utf-8"
-            })
+            fetchRepoFile: async (_base: string, _repoId: string, path: string, branch: string) => {
+              assert.equal(branch, "preview");
+              return {path, branch: "preview",
+                content: path === "README.md" ? "# Plane\n" : '{"name":"plane"}\n',
+                encoding: "utf-8"};
+            }
           })
         } as never,
         apiBaseUrl: "https://api.coop-ai.dev",
@@ -441,6 +448,7 @@ async function run(): Promise<void> {
           getFileContent: async (path: string) => ({
             path,
             content: path.endsWith("README.md") ? "# Plane\n" : '{"name":"plane"}\n',
+            branch: "preview",
             encoding: "utf-8" as const,
             lines: []
           })

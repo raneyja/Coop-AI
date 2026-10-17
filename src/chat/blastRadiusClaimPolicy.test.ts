@@ -17,6 +17,7 @@ const fixtures = [
 const request: StreamChatParams = {
   message: "Explain confirmed dependencies, possible impact and unknowns.",
   context: { owner: "org", repo: "arbitrary", branch: "review" },
+  history: [], temperature: 0.5,
   model: "claude-sonnet-4-6", provider: "anthropic", useCase: "blast_radius",
   maxTokens: 16000, enableThinking: true, quotaTurnId: "original-turn"
 };
@@ -74,8 +75,13 @@ test("a repeatedly unsupported explanation exhausts one replacement and publishe
   const stream: SecureApiClient["streamChat"] = async body => {
     calls++;
     if (!body.sourceClaimReview) return response(content);
-    return response(sourceClaimVerdictFixture(body, [{claim, category: "conditions",
-      reason: "The known-failure branch rethrows instead."}]));
+    // Reject every prose block for this no-recoverable-context case. Otherwise
+    // the fixture approves the inserted graph context, which the existing
+    // supported-context recovery may correctly retain without this claim.
+    const input = JSON.parse(body.message);
+    return response(sourceClaimVerdictFixture(body,
+      input.blocks.map((block: {text: string}) => ({claim: block.text, category: "conditions",
+        reason: "No supported prose remains in this scripted negative verdict."}))));
   };
   await assert.rejects(streamSourceGroundedBlast({ stream, request, evidence, baseUrl: "https://api.example.test",
     onChunk: () => assert.fail("unverified explanation became visible") }), /could not verify the answer's explanation/);

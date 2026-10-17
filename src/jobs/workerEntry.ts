@@ -20,6 +20,7 @@ import { createGitLabConnector } from "../server/codeHostConnectors/gitlabConnec
 import { loadBitbucketAppConfig } from "../server/bitbucketAppConfig";
 import { createBitbucketConnector } from "../server/codeHostConnectors/bitbucketConnector";
 import { registerConnector } from "../server/codeHostConnectors/registry";
+import { WorkerPresence, workerArtifactSha256 } from "./workerPresence";
 
 /** Railway/Docker healthchecks expect HTTP /health — workers are not the API. */
 function startWorkerHealthServer(port: number, acceptingWork: () => boolean): ReturnType<typeof createServer> {
@@ -107,7 +108,26 @@ async function main(): Promise<void> {
     allowPatFallback: serverConfig.devMode
   });
 
-  await startJobRuntime(runtime);
+  if (serverConfig.workerFleetId && (jobConfig.backend !== "postgres" || !jobConfig.databaseUrl)) {
+    throw new Error("Worker presence requires the PostgreSQL job database");
+  }
+  const presence = serverConfig.workerFleetId && jobConfig.databaseUrl
+    ? new WorkerPresence({ databaseUrl: jobConfig.databaseUrl, fleetId: serverConfig.workerFleetId,
+      bundleSha256: workerArtifactSha256(process.argv[1]),
+      state: () => ({ acceptingWork: runtime.workers.acceptingWork, capacity: jobConfig.workerConcurrency, activeJobs: runtime.workers.activeCount }) })
+    : undefined;
+  try {
+    await presence?.start();
+    await startJobRuntime(runtime);
+    if (presence && !await presence.refresh()) throw new Error("Worker presence startup could not be confirmed");
+  } catch (error) {
+    const stopping = stopJobRuntime(runtime);
+    await presence?.stop(); await stopping;
+    const backend = runtime.queue.getBackend();
+    if ("close" in backend && typeof backend.close === "function") await backend.close();
+    await closeDbPool();
+    throw error;
+  }
 
   if (pool && orgStore) {
     void resumeEmbeddingFailuresForAllOrgs({
@@ -139,7 +159,7 @@ async function main(): Promise<void> {
   const healthPort = Number(process.env.PORT ?? 8787);
   const healthServer = startWorkerHealthServer(
     Number.isFinite(healthPort) && healthPort > 0 ? healthPort : 8787,
-    () => runtime.workers.acceptingWork
+    () => runtime.workers.acceptingWork && (!presence || presence.fresh)
   );
 
   console.log("[workers] CoopAI job workers started");
@@ -148,7 +168,9 @@ async function main(): Promise<void> {
   const shutdown = async () => {
     if (shuttingDown) return;
     shuttingDown = true;
-    const drained = await stopJobRuntime(runtime);
+    const stopping = stopJobRuntime(runtime); // Stops new claims synchronously before withdrawing presence.
+    const withdrawn = await presence?.stop();
+    const drained = await stopping;
     if (!drained) {
       console.error('[workers] shutdown did not drain admitted work/cache persistence; terminating before replacement may claim work');
       process.exit(1);
@@ -158,7 +180,7 @@ async function main(): Promise<void> {
     const backend = runtime.queue.getBackend();
     if ('close' in backend && typeof backend.close === 'function') await backend.close();
     await closeDbPool();
-    process.exit(0);
+    process.exit(withdrawn === false ? 1 : 0);
   };
   process.on("SIGINT", () => void shutdown());
   process.on("SIGTERM", () => void shutdown());

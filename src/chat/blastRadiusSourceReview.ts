@@ -6,7 +6,7 @@ import { validateBlastSourceCitations } from "../prompts/blastRadiusSourceGuard"
 import { splitMarkdownBlocks } from "../prompts/markdownProse";
 import type { ReviewedSourceWindow } from "../prompts/sourceCitationIntegrity";
 import { shouldContinueForLengthStop } from "./lengthContinue";
-import { reviewSourceClaims, type SourceClaimIssue } from "./sourceClaimReview";
+import { reviewSourceClaims, supportedSourceCandidate, MAX_SOURCE_CONTEXT_REDUCTIONS, sourceClaimBlocks, type SourceClaimVerdict, type SourceClaimIssue } from "./sourceClaimReview";
 import { isRemoteTrustedBlastGraphSource } from "../engines/blastRadiusDependentsFallback";
 import { buildSourceEvidenceSynthesisRequest, buildSourceEvidenceRepairRequest } from "./sourceEvidenceSynthesis";
 import { renderSourceEvidenceReferences } from "../prompts/sourceEvidenceReferences";
@@ -95,7 +95,8 @@ export async function streamSourceGroundedBlast(options: {
     if (checked.invalidCount) reasons.push("invalid-source-citation");
     return { ...checked, reasons };
   };
-  const assessClaims = async (checked: ReturnType<typeof assess>): Promise<SourceClaimIssue[]> => {
+  let finalVerdict: SourceClaimVerdict | undefined;
+  const assessClaims = async (checked: ReturnType<typeof assess>, collectSupportedContexts = false): Promise<SourceClaimIssue[]> => {
     if (checked.reasons.length) return [];
     checked.content = enrichBlastRadiusResponse(checked.content, evidence);
     if (options.prepareAnswer) checked.content = options.prepareAnswer(checked.content);
@@ -113,8 +114,9 @@ export async function streamSourceGroundedBlast(options: {
     Object.assign(checked, prepared);
     const verdict = await reviewSourceClaims({ request, candidate: checked.content,
       windows: checked.windows, question: options.question, signal,
-      relations,
+      relations, collectSupportedContexts,
       run: body => runPhase("claim-review", body) });
+    finalVerdict = verdict;
     if (!verdict.supported) checked.reasons.push("unsupported-claims");
     return verdict.issues;
   };
@@ -144,7 +146,15 @@ export async function streamSourceGroundedBlast(options: {
           "Build a fresh, shorter answer from the original task and frozen evidence. Feedback identifies at least one failure, not every failure; unchecked claims were not approved. Reconsider every finding instead of editing only the reported issue. Separate observed call arguments from outcomes. Without a specified incompatible change and inspected consumer, describe compatibility questions, never inevitable breakage. Do not assume middleware, authentication, error classes or result contracts from imported names. Cite source with standalone [[source:window-ID:first:last]] references using actual admitted IDs and integers; Coop copies the bytes. Do not retype source code or invent a proposed change. Preserve complete conditions and inspected scope."
         ].join("\n\n")));
       checked = timeResponseWork(signal, "source-validation", () => assess(result));
-      await assessClaims(checked);
+      await assessClaims(checked, true);
+      for (let reduction = 0; reduction < MAX_SOURCE_CONTEXT_REDUCTIONS
+        && checked.reasons.length === 1 && checked.reasons[0] === "unsupported-claims"; reduction++) {
+        const partial = supportedSourceCandidate(finalVerdict, checked.content);
+        if (!partial || sourceClaimBlocks(partial).length >= sourceClaimBlocks(checked.content).length) break;
+        result = {...result, message: {...result.message, content: partial}};
+        checked = timeResponseWork(signal, "source-validation", () => assess(result));
+        await assessClaims(checked, reduction + 1 < MAX_SOURCE_CONTEXT_REDUCTIONS);
+      }
     }
     if (checked.reasons.includes("unsupported-claims")) throw new Error("Coop could not verify the answer's explanation against the reviewed source. Retry this request.");
     if (checked.reasons.length) throw new Error("Coop could not complete an answer with valid source quotes. Retry this request.");

@@ -114,7 +114,7 @@ test("an oversized card expansion is rejected whole without partial rendering", 
   const windows = [{ path: "opaque", startLine: 1, content: Array.from({length: 321}, () => "x").join("\n") }];
   const marker = "[[source:window-1:1:321]]";
   assert.deepEqual(render(marker, windows), { content: marker, invalidReferences: 1 });
-  const selected = "[[source:window-1:1:301]]";
+  const selected = "[[source:window-1:1:321]]";
   const output = render(`[[source:window-1:1:1]]\n\n${selected}`, windows);
   assert.equal(output.invalidReferences, 1);
   assert.equal((output.content.match(/```1:1:opaque/g) ?? []).length, 1);
@@ -144,4 +144,37 @@ test("the total source-byte budget counts UTF-8 and never clips source", () => {
   assert.equal((repeated.content.match(/```1:1:unicode/g) ?? []).length, 1);
   assert.ok(repeated.content.includes(partial));
   assert.ok(repeated.content.endsWith(marker));
+});
+
+
+test("fragmented long ranges fit the unchanged total budget without clipping any selected line", () => {
+  const lengths = [9, 4, 13, 18, 75, 56, 82, 35];
+  const windows = lengths.map((length, index) => ({path: `nested/source${index}.opaque`, startLine: 100,
+    content: Array.from({length}, (_, line) => `line-${index}-${line}`).join("\n")}));
+  const input = windows.map((window,index) => `[[source:window-${index + 1}:100:${99 + lengths[index]}]]`).join("\n\n");
+  const output = render(input,windows);
+  assert.equal(output.invalidReferences,0);
+  assert.equal(verifySourceCitationQuotes(output.content,windows).invalidQuotes,0);
+  assert(verifySourceCitationQuotes(output.content,windows).verifiedQuotes <= 16);
+  for (let index=0;index<windows.length;index++) for (const line of windows[index].content.split("\n"))
+    assert(output.content.split("\n").includes(line), `No clipping of ${line}`);
+  assert.deepEqual(render(output.content,windows),output);
+});
+
+test("packed ranges still reject total line overflow atomically", () => {
+  const windows = [{path:"source.opaque",startLine:1,content:Array.from({length:320},(_,i)=>`line-${i}`).join("\n")}];
+  const exact = render("[[source:window-1:1:320]]",windows);assert.equal(exact.invalidReferences,0);
+  const overflow = render("[[source:window-1:1:320]]\n\n[[source:window-1:320:320]]",windows);
+  assert.equal(overflow.invalidReferences,1);assert(overflow.content.endsWith("[[source:window-1:320:320]]"));
+});
+
+
+test("private preparation can omit a whole over-budget valid selection while malformed references remain invalid",()=>{
+ const windows=[{path:"fixture.ts",startLine:1,content:Array.from({length:321},(_,i)=>`call${i}();`).join("\n")}];
+ const text="The shown calls are present.\n\n[[source:window-1:1:320]]\n\n[[source:window-1:321:321]]";
+ const result=render(text,windows,{omitOverBudgetSelections:true});
+ assert.equal(result.invalidReferences,0);assert.equal(result.omittedBudgetReferences,1);
+ assert(result.content.includes("call319();"));assert(!result.content.includes("call320();"));
+ const malformed=render(text+"\n[[source:window-1:999:1000]]",windows,{omitOverBudgetSelections:true});
+ assert.equal(malformed.invalidReferences,1);
 });

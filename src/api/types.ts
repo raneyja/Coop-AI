@@ -23,7 +23,11 @@ export type UseCase =
 
 export type FinishReason = "stop" | "length" | "error" | "cancelled";
 
+export type UsageProvenance = "provider-final" | "provider-partial" | "estimated" | "unavailable";
+
 export type TokenUsage = {
+  /** Provider-adapter evidence, never supplied by a request body. Missing is not final. */
+  provenance?: UsageProvenance;
   inputTokens: number;
   outputTokens: number;
   estimatedCostUsd: number;
@@ -69,6 +73,10 @@ export type FimSegments = {
 };
 
 export type CompletionRequest = {
+  /** Internal server callback; never populated from request JSON. */
+  onProviderDispatch?: () => Promise<void>;
+  /** Admitted internal planning phase, never copied from a caller flag. */
+  ordinaryPlan?: boolean;
   requestId: string;
   orgId: string;
   plan: ChatOrgPlan;
@@ -91,6 +99,7 @@ export type CompletionRequest = {
 };
 
 export type FimStreamOptions = {
+  onProviderDispatch?: () => Promise<void>;
   prefix: string;
   suffix: string;
   model: string;
@@ -115,7 +124,11 @@ export type StreamChunk =
   | { type: "done"; usage: TokenUsage; model: string; provider: LlmProvider; finishReason: FinishReason }
   | { type: "error"; message: string; code?: string; requestId?: string };
 
+export type OrdinaryTurnPhase = "plan" | "answer" | "continue";
+export type OrdinaryTurnEnvelope = {phase: OrdinaryTurnPhase; task: string; answerUseCase: UseCase};
+
 export type V1ChatRequestBody = {
+  ordinaryTurn?: OrdinaryTurnEnvelope;
   responseTiming?: { traceId: string; callId: string };
   message: string;
   history?: ChatHistoryMessage[];
@@ -149,6 +162,8 @@ export type ProviderThinkingOptions = {
 };
 
 export type ProviderStreamOptions = {
+  /** Persist the dispatch marker immediately before the actual fetch call. */
+  onProviderDispatch?: () => Promise<void>;
   messages: ChatRequestMessage[];
   model: string;
   temperature: number;

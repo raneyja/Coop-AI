@@ -332,11 +332,15 @@ export class IndexedRepoWorkspace {
       return undefined;
     }
 
+    const branch = target.branch?.trim() || undefined;
+
     try {
       const remote = await this.deps.api
         .getBackendClient()
-        .fetchRepoFile(this.deps.apiBaseUrl, repoId, cleanPath, target.branch);
-      if (remote.content?.trim()) {
+        .fetchRepoFile(this.deps.apiBaseUrl, repoId, cleanPath, branch);
+      // Browse may recover a stale ref using the default branch. Evidence for
+      // this frozen gather must still match its explicitly requested ref.
+      if (remote.content?.trim() && (!branch || remote.branch === branch)) {
         return {
           path: remote.path || cleanPath,
           repoId,
@@ -360,10 +364,10 @@ export class IndexedRepoWorkspace {
           provider,
           owner: identity.owner,
           repo: identity.repo,
-          branch: target.branch
+          branch
         });
         const content = remote.content ?? remote.lines?.map((line) => line.text).join("\n");
-        if (content?.trim()) {
+        if (content?.trim() && (!branch || remote.branch === branch)) {
           return {
             path: remote.path || cleanPath,
             repoId,

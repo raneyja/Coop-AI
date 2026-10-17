@@ -9,6 +9,7 @@ export type ErrorReportContext = {
   orgId?: string;
   route?: string;
   jobId?: string;
+  attemptId?: string;
   jobType?: string;
 };
 
@@ -91,12 +92,14 @@ export function resetErrorReporterForTests(): void {
 }
 
 export function sanitizeErrorContext(context: ErrorReportContext): ErrorReportContext {
+  const attemptId = asTag(context.attemptId);
   return {
     service: context.service,
     requestId: asTag(context.requestId),
     orgId: asTag(context.orgId),
     route: asTag(context.route),
     jobId: asTag(context.jobId),
+    ...(attemptId ? { attemptId } : {}),
     jobType: asTag(context.jobType)
   };
 }

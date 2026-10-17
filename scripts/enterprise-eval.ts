@@ -67,7 +67,7 @@ export async function fixtureWorkspace(c: Case) {
     fetchRepoInventoryViaCloud:async()=>inventory,fetchRepoManifest:async()=>{throw Error("Unavailable fixture manifest");},
     getBackendClient:()=>({fetchRepoFile:async(_base:string,id:string,p:string,ref:string)=>{
       if(id!==repoId || ref!==c.identity.branch)throw Error("Fixture identity mismatch");reads.push(p);
-      const w=c.windows.find(w=>w.path===p);if(!w)throw Error("Fixture source denied");return {path:p,content:w.content};}})},
+      const w=c.windows.find(w=>w.path===p);if(!w)throw Error("Fixture source denied");return {path:p,content:w.content,branch:ref};}})},
     codeHostRouter:{searchRepositoryFiles:async()=>[],getFileContent:async()=>{throw Error("No unauthorized source fallback");},countRepositoryFiles:async()=>{throw Error("Fixture total unavailable");}}} as unknown as RepoInventoryDeps;
   const workspace=new IndexedRepoWorkspace(deps),target={...c.identity,repoId};
   const bodies=[];

@@ -51,6 +51,7 @@ export class DeepSeekProviderClient extends BaseProviderClient {
       },
       {
         messages: [],
+        onProviderDispatch: options.onProviderDispatch,
         model: options.model,
         temperature: options.temperature,
         maxTokens: options.maxTokens,

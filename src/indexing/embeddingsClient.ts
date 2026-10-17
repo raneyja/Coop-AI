@@ -30,6 +30,7 @@ type OpenAiEmbeddingsResponse = {
 export type EmbedTextsOptions = {
   /** When set, bulk indexing serializes across workers via Postgres advisory locks. */
   pool?: import("pg").Pool;
+  signal?: AbortSignal;
 };
 
 export function estimateEmbeddingTokens(text: string): number {
@@ -78,11 +79,12 @@ export async function embedTexts(texts: string[], options: EmbedTextsOptions = {
     throw new Error("OPENAI_API_KEY is required for Lightning Mode embedding indexing");
   }
 
-  const runBatches = async (): Promise<number[][]> => {
+  const runBatches = async (signal = options.signal): Promise<number[][]> => {
     const results: number[][] = new Array(texts.length);
     let offset = 0;
     for (const batch of splitEmbeddingBatches(texts)) {
-      const batchEmbeddings = await requestEmbeddings(apiKey, batch);
+      signal?.throwIfAborted();
+      const batchEmbeddings = await requestEmbeddings(apiKey, batch, signal);
       for (let i = 0; i < batchEmbeddings.length; i += 1) {
         results[offset + i] = batchEmbeddings[i];
       }
@@ -92,7 +94,7 @@ export async function embedTexts(texts: string[], options: EmbedTextsOptions = {
   };
 
   if (options.pool) {
-    return withEmbeddingConcurrencyLimit(options.pool, apiKey, runBatches);
+    return withEmbeddingConcurrencyLimit(options.pool, apiKey, runBatches, options.signal);
   }
   return runBatches();
 }
@@ -105,9 +107,10 @@ export async function embedQuery(text: string): Promise<number[]> {
   return embedding;
 }
 
-async function requestEmbeddings(apiKey: string, inputs: string[]): Promise<number[][]> {
+async function requestEmbeddings(apiKey: string, inputs: string[], callerSignal?: AbortSignal): Promise<number[][]> {
   return runResilientRequest({
     policy: EMBEDDING_RETRY_POLICY,
+    signal: callerSignal,
     timeoutMs: 120_000,
     run: async (signal) => {
       const response = await fetch(OPENAI_EMBEDDINGS_URL, {

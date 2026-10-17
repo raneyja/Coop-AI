@@ -1,4 +1,4 @@
-import { BaseProviderClient, parseSseDataLine, type ParseState } from "./baseClient";
+import { BaseProviderClient, parseSseDataLine, readUsageInt, type ParseState } from "./baseClient";
 import type { ProviderStreamOptions, StreamChunk } from "../types";
 
 export class OpenAiProviderClient extends BaseProviderClient {
@@ -44,25 +44,25 @@ export function applyOpenAiThinking(
 }
 
 export function parseOpenAiSseLine(line: string, state: ParseState): StreamChunk | undefined {
-  if (line.trim() === "data: [DONE]") {state.streamTerminated = true; return undefined;}
+  if (line.trim() === "data: [DONE]") {state.streamTerminated = true; state.usageTerminal = state.finishReason !== undefined; return undefined;}
   const data = parseSseDataLine(line) as Record<string, unknown> | undefined;
   if (!data) {
     return undefined;
   }
+  if (state.streamTerminated) return {type:"error",message:"Provider returned data after its terminal marker."};
   const providerError = data.error as Record<string, unknown> | undefined;
   if (providerError && typeof providerError === "object") return {type: "error",
     message: typeof providerError.message === "string" ? providerError.message.slice(0, 500) : "OpenAI stream failed.",
     code: typeof providerError.code === "string" ? providerError.code : undefined};
   const usage = data.usage as Record<string, unknown> | undefined;
   if (usage) {
-    const promptTokens = readUsageInt(usage.prompt_tokens);
-    const completionTokens = readUsageInt(usage.completion_tokens);
-    if (promptTokens !== undefined) {
-      state.inputTokens = promptTokens;
-    }
-    if (completionTokens !== undefined) {
-      state.outputTokens = completionTokens;
-    }
+    state.inputTokens = readUsageInt(usage.prompt_tokens);
+    state.outputTokens = readUsageInt(usage.completion_tokens);
+    const total = readUsageInt(usage.total_tokens);
+    state.usageComplete = state.inputTokens !== undefined && state.outputTokens !== undefined
+      && Number.isSafeInteger(state.inputTokens + state.outputTokens)
+      && total === state.inputTokens + state.outputTokens
+      && Array.isArray(data.choices) && data.choices.length === 0;
   }
   const choices = data.choices;
   if (!Array.isArray(choices) || choices.length === 0) {
@@ -70,6 +70,11 @@ export function parseOpenAiSseLine(line: string, state: ParseState): StreamChunk
   }
   const choice = choices[0] as Record<string, unknown>;
   const delta = choice.delta as Record<string, unknown> | undefined;
+  if (state.finishReason && (typeof delta?.content === "string" && delta.content.length > 0
+    || typeof delta?.reasoning_content === "string" && delta.reasoning_content.length > 0
+    || typeof delta?.reasoning === "string" && delta.reasoning.length > 0
+    || typeof choice.finish_reason === "string" && choice.finish_reason))
+    return {type:"error",message:"Provider returned content after its completion reason."};
   if (typeof choice.finish_reason === "string" && choice.finish_reason) {
     state.finishReason = choice.finish_reason === "length" ? "length" : choice.finish_reason === "stop" ? "stop" : "error";
   }
@@ -89,7 +94,3 @@ export function parseOpenAiSseLine(line: string, state: ParseState): StreamChunk
   return { type: "delta", text };
 }
 
-function readUsageInt(value: unknown): number | undefined {
-  const parsed = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : undefined;
-}

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { streamSourceGroundedBlast } from "./blastRadiusSourceReview";
 import { streamSourceReviewedKnowledgeGaps } from "./knowledgeGapsSourceReview";
-import { buildSourceClaimReviewRequest, parseSourceClaimVerdict, reviewSourceClaims, sourceClaimBlocks } from "./sourceClaimReview";
+import { buildSourceClaimReviewRequest, parseSourceClaimVerdict, reviewSourceClaims, sourceClaimBlocks, supportedSourceCandidate } from "./sourceClaimReview";
 import { sourceClaimVerdictFixture } from "./sourceClaimReviewTestFixture";
 import { KNOWLEDGE_GAPS_CODE_RULE_AUDIT_MARKER } from "../prompts/knowledgeGapsSynthesis";
 import { scopeKnowledgeGapsSourceAudit } from "../prompts/knowledgeGapsEnrichment";
@@ -25,9 +25,21 @@ const request: StreamChatParams = { message: KNOWLEDGE_GAPS_CODE_RULE_AUDIT_MARK
   history: [{role: "assistant", timestamp: 1, content: "unverified old claims"}],
   model: usage.model, provider: "anthropic", useCase: "blast_radius", maxTokens: 16000,
   temperature: 0.5, enableThinking: true, quotaTurnId: "one-user-turn", sessionMode: "indexed-repo", fileSource: "remote" };
-const verdict = (body: StreamChatParams, revise: boolean) => result(sourceClaimVerdictFixture(body,
-  revise ? [{claim: unsupported, category: "conditions",
-    reason: "The shown operation is conditional on scope and allowed, not universal."}] : []));
+const verdict = (body: StreamChatParams, revise: boolean) => {
+  const value = JSON.parse(sourceClaimVerdictFixture(body,
+    revise ? [{claim: unsupported, category: "conditions",
+      reason: "The shown operation is conditional on scope and allowed, not universal."}] : []));
+  const input = JSON.parse(body.message);
+  if (input.reviewCoverage === "complete") {
+    // This fixture has exactly two possible factual statements; its headings,
+    // open question and verification recommendation are not source findings.
+    for (const check of value.checks) {
+      const block = input.blocks.find((block: {id: string}) => block.id === check.blockId);
+      if (![supported, unsupported].includes(block.text)) check.kind = block.text.endsWith("?") ? "question" : "scope";
+    }
+  }
+  return result(JSON.stringify(value));
+};
 
 for (const action of ["blast_radius", "knowledge_gaps"] as const) {
   const run = (stream: SecureApiClient["streamChat"], extra: {signal?: AbortSignal; onUsage?: (cost: number) => void; onThinking?: (content: string) => void;
@@ -39,7 +51,7 @@ for (const action of ["blast_radius", "knowledge_gaps"] as const) {
       prepareAnswer: extra.prepareAnswer, onValidated: extra.onValidated, onThinking: extra.onThinking, onPhase: extra.onPhase};
     const promise = action === "blast_radius"
       ? streamSourceGroundedBlast({...options, evidence: {directDependents: [windows[0].path],
-          sourceFiles: windows.map(window => ({...window, role: "dependent", repoId: "github:tenant/arbitrary", branch: "release"}))}, onPartialUsage: u => {extra.onUsage?.(u.estimatedCostUsd); extra.onKnownUsage?.(u);}})
+          sourceFiles: windows.map(window => ({...window, endLine: window.startLine + window.content.split("\n").length - 1, truncated: false, role: "dependent", repoId: "github:tenant/arbitrary", branch: "release"}))}, onPartialUsage: u => {extra.onUsage?.(u.estimatedCostUsd); extra.onKnownUsage?.(u);}})
       : streamSourceReviewedKnowledgeGaps({...options, evidence: {focusFiles: windows}, onFailureUsage: u => {extra.onUsage?.(u.estimatedCostUsd); extra.onKnownUsage?.(u);},
           onCallComplete: (role, result) => extra.onPhase?.({phase: role === "source-synthesis" ? "synthesis" : role === "replacement" ? "repair" : "claim-review",
             event: "complete", model: result.usage?.model ?? "", provider: result.usage?.provider ?? "", usage: result.usage})});
@@ -274,7 +286,7 @@ for (const action of ["blast_radius", "knowledge_gaps"] as const) {
     };
     const {visible, promise} = run(stream);
     const final = await promise;
-    assert.equal(calls, 1 + Math.ceil(sourceClaimBlocks(published).length / 8));
+    assert.equal(calls, 1 + Math.ceil(sourceClaimBlocks(published).length / 16));
     assert.deepEqual(checked, sourceClaimBlocks(published).map(block => block.id));
     assert.equal(final.usage?.inputTokens, calls * usage.inputTokens);
     assert.equal(final.usage?.estimatedCostUsd, calls * usage.estimatedCostUsd);
@@ -368,7 +380,7 @@ test("bounded reviews preserve full qualifiers and require every unit before pub
   const verdict = await reviewSourceClaims({request, candidate, windows, run: async body => {
     const input = JSON.parse(body.message);
     assert.equal(input.candidate, undefined);
-    assert(input.blocks.length <= 8);
+    assert(input.blocks.length <= 16);
     assert.equal(input.windows[0].endLine, 23);
     checked.push(...input.blocks.map((block: {id: string}) => block.id));
     return result(sourceClaimVerdictFixture(body));
@@ -480,7 +492,7 @@ test("v3 malformed or foreign qualification anchors and legacy status fields fai
     {qualificationStatus: "present", publicQualifications: ["."]},
     {qualificationStatus: "present", publicQualifications: ["Only sampled entries are known."]},
     {qualificationStatus: "present", publicQualifications: ["await execute();"]},
-    {qualificationStatus: "present", publicQualifications: ["The operation always succeeds.", "The operation always succeeds."]},
+    {qualificationStatus: "present", publicQualifications: Array(9).fill("The operation always succeeds.")},
     {qualificationStatus: "none-required", publicQualifications: ["The operation always succeeds."]},
     {qualificationStatus: "unreviewed"}, {counterexampleStatus: "unreviewed"},
     {counterexampleStatus: "excluded-by-candidate", publicQualifications: []},
@@ -570,4 +582,156 @@ test("numbered source lines cannot mutate bytes, numbering or containment while 
     const changed = structuredClone(input); mutate(changed);
     assert.throws(() => parseSourceClaimVerdict(good, candidate, {...body, message: JSON.stringify(changed)}), /invalid review/);
   }
+});
+
+
+test("a failed sole repair can retain independently supported whole contexts only after exact final review", async () => {
+  for (const action of ["blast_radius", "knowledge_gaps"] as const) {
+    const calls: StreamChatParams[] = [], visible: string[] = [];
+    const candidate = answer(unsupported + "\n\n" + supported);
+    const stream: SecureApiClient["streamChat"] = async body => {
+      calls.push(body);
+      if (!body.sourceClaimReview) return result(candidate);
+      return result(sourceClaimVerdictFixture(body, body.message.includes(unsupported)
+        ? [{claim: unsupported, category: "conditions", reason: "Conditional source does not establish universal execution."}] : []));
+    };
+    const run = action === "blast_radius"
+      ? streamSourceGroundedBlast({stream, request: {...request, useCase: action}, onChunk: text => visible.push(text), baseUrl: "https://fixture.invalid",
+        evidence: {directDependents: [windows[0].path], sourceFiles: windows.map(window => ({...window, endLine: window.startLine + window.content.split("\n").length - 1, truncated: false, role: "dependent" as const, repoId: "github:tenant/arbitrary", branch: "release"}))}})
+      : streamSourceReviewedKnowledgeGaps({stream, request: {...request, useCase: action}, onChunk: text => visible.push(text), baseUrl: "https://fixture.invalid", evidence: {focusFiles: windows}});
+    const final = await run;
+    assert.equal(calls.filter(call => !call.sourceClaimReview).length, 2, "Only one model corrective replacement");
+    assert.equal(calls.filter(call => call.sourceClaimReview).length, 3);
+    assert.equal(JSON.parse(calls[3].message).reviewCoverage, "complete");
+    assert.equal(JSON.parse(calls[4].message).reviewCoverage, "complete", "First reduced answer is fully reviewed to retain late counterexamples");
+    assert.equal(visible.length, 1); assert.equal(visible[0], final.message.content);
+    assert(visible[0].includes(supported)); assert(!visible[0].includes(unsupported)); assert(visible[0].includes(quote));
+    assert.equal(JSON.parse(calls[4].message).candidateId, (await import("node:crypto")).createHash("sha256").update(visible[0]).digest("hex"));
+  }
+});
+
+test("a rejected sentence removes its entire local context including otherwise supported neighbors", async () => {
+  const kept = "The shown source contains a conditional execute call.";
+  const candidate = answer(unsupported + " " + supported + "\n\n" + kept);
+  const visible: string[] = [];
+  const stream: SecureApiClient["streamChat"] = async body => result(body.sourceClaimReview
+    ? sourceClaimVerdictFixture(body, body.message.includes(unsupported)
+      ? [{claim: unsupported, category: "conditions", reason: "Universal claim is not supported."}] : []) : candidate);
+  const final = await streamSourceReviewedKnowledgeGaps({stream, request: {...request, useCase: "knowledge_gaps"}, onChunk: text => visible.push(text), baseUrl: "https://fixture.invalid", evidence: {focusFiles: windows}});
+  assert.equal(visible.length, 1); assert(final.message.content.includes(kept));
+  assert(!final.message.content.includes(unsupported)); assert(!final.message.content.includes(supported));
+});
+
+test("partial publication refuses deferred units, rejected final review and Stop without another generation", async () => {
+  for (const mode of ["deferred", "final-reject", "stop"] as const) {
+    let calls = 0; const visible: string[] = [], controller = new AbortController();
+    const stream: SecureApiClient["streamChat"] = async body => {
+      calls++;
+      if (!body.sourceClaimReview) return result(answer(unsupported + "\n\n" + supported));
+      const raw = JSON.parse(sourceClaimVerdictFixture(body, body.message.includes(unsupported)
+        ? [{claim: unsupported, category: "conditions", reason: "Universal claim unsupported."}] : mode === "final-reject"
+          ? [{claim: supported, category: "scope", reason: "Deliberate final review rejection."}] : []));
+      const input = JSON.parse(body.message);
+      if (input.reviewCoverage === "complete") for (const check of raw.checks) {
+        const block = input.blocks.find((block: {id: string}) => block.id === check.blockId);
+        if (![supported,unsupported].includes(block.text)) check.kind = block.text.endsWith("?") ? "question" : "scope";
+      }
+      if (calls === 4 && mode === "deferred") {
+        Object.assign(raw.checks[1], {kind: "unreviewed", decision: "deferred", supports: [], qualificationStatus: "unreviewed", counterexampleStatus: "unreviewed", publicQualifications: []});
+      }
+      if (calls === 5 && mode === "stop") controller.abort();
+      return result(JSON.stringify(raw));
+    };
+    await assert.rejects(streamSourceReviewedKnowledgeGaps({stream, request: {...request, useCase: "knowledge_gaps"}, signal: controller.signal, onChunk: text => visible.push(text), baseUrl: "https://fixture.invalid", evidence: {focusFiles: windows}}));
+    assert.deepEqual(visible, []); assert.equal(calls, mode === "deferred" ? 4 : 5);
+  }
+});
+
+
+test("reduction reuses existing quotes and refuses repeated-card budget overflow", () => {
+  const context = {text: supported, references: [{path: windows[0].path, startLine: 1, endLine: 10000}]};
+  const subset = supportedSourceCandidate({supported: false, issues: [], supportedContexts: [context]},quote)!;
+  assert(subset.includes(quote)); assert.equal((subset.match(/```21:23:/g) ?? []).length,1);
+  assert.equal(supportedSourceCandidate({supported: false, issues: [], supportedContexts: Array(17).fill(context)},quote),undefined);
+});
+
+
+test("a new counterexample in reduced-body review removes that whole context with a hard reduction bound", async () => {
+  let calls=0; const visible:string[]=[];
+  const later="The operation always succeeds.";
+  const stream:SecureApiClient["streamChat"]=async body=>{
+    calls++;
+    if(!body.sourceClaimReview)return result(answer(unsupported+"\n\n"+later+"\n\n"+supported));
+    const bad=body.message.includes(later)&&!body.message.includes(unsupported)?later:unsupported;
+    return result(sourceClaimVerdictFixture(body,body.message.includes(bad)?[{claim:bad,category:"conditions",reason:"An earlier call can prevent execution."}]:[]));
+  };
+  const final=await streamSourceReviewedKnowledgeGaps({stream,request:{...request,useCase:"knowledge_gaps"},evidence:{focusFiles:windows},baseUrl:"https://fixture.invalid",onChunk:x=>visible.push(x)});
+  assert.equal(calls,6);assert.equal(visible.length,1);assert.equal(visible[0],final.message.content);
+  assert(final.message.content.includes(supported));assert(!final.message.content.includes(unsupported));assert(!final.message.content.includes(later));
+});
+
+
+test("shared source reduction can reuse one exact original card across supported local contexts without clipping",()=>{
+ const context={text:supported,references:[{path:windows[0].path,startLine:1,endLine:10000}]};
+ const candidate=supportedSourceCandidate({supported:false,issues:[],supportedContexts:Array(17).fill(context)},quote,{deduplicateCitations:true})!;
+ assert(candidate);assert.equal((candidate.match(/```21:23:/g)??[]).length,1);assert.equal((candidate.match(/When reached/g)??[]).length,17);
+ assert(candidate.includes(quote));
+});
+
+
+test("shared flow collects every initial failure before its single corrective generation", async () => {
+  const {streamSourceReviewedEvidence} = await import("./sourceBackedActionReview");
+  const second = "Every downstream write succeeds.";
+  let repairs = 0, initialReviews = 0;
+  const visible: string[] = [];
+  const stream: SecureApiClient["streamChat"] = async body => {
+    if (body.sourceEvidenceRepair) {
+      repairs++;
+      assert(body.message.includes(unsupported)); assert(body.message.includes(second));
+      return result(answer(supported));
+    }
+    if (!body.sourceClaimReview) return result(answer(unsupported + "\n\n" + second));
+    const input = JSON.parse(body.message);
+    if (body.message.includes(unsupported)) {
+      initialReviews++; assert.equal(input.reviewCoverage, "complete");
+    }
+    return result(sourceClaimVerdictFixture(body, [unsupported, second].filter(claim => body.message.includes(claim))
+      .map(claim => ({claim, category: "conditions" as const, reason: "Earlier failures may prevent execution."}))));
+  };
+  await streamSourceReviewedEvidence({stream, request, windows, facts: [], baseUrl: "https://fixture.invalid", onChunk: x => visible.push(x)});
+  assert.equal(repairs, 1); assert.equal(initialReviews, 1); assert.equal(visible.length, 1);
+  assert(visible[0].includes(supported)); assert(!visible[0].includes(unsupported)); assert(!visible[0].includes(second));
+});
+
+test("shared reduction prefers original cards covering the reviewed operations over a closing-brace fragment", () => {
+  const closing = "```23:23:arbitrary/nested/source.opaque\n}\n```";
+  const reduced = supportedSourceCandidate({supported: false, issues: [], supportedContexts: [{text: supported,
+    references: [{path: windows[0].path, startLine: 21, endLine: 23}]}]}, closing + "\n\n" + quote, {deduplicateCitations: true});
+  assert(reduced?.includes(quote)); assert(!reduced?.includes(closing));
+});
+
+
+test("qualifiers may omit inline-code formatting but never words, operators or owned-context boundaries", () => {
+  const candidate = "When `enabled` is true and `authorized` is true, the body contains the call.";
+  const body = buildSourceClaimReviewRequest(request, candidate, windows);
+  const good = JSON.parse(sourceClaimVerdictFixture(body));
+  Object.assign(good.checks[0], {qualificationStatus: "present", counterexampleStatus: "excluded-by-candidate",
+    publicQualifications: ["When enabled is true and authorized is true"]});
+  assert.equal(parseSourceClaimVerdict(result(JSON.stringify(good)), candidate, body).supported, true);
+  for (const wrong of ["When enabled is true or authorized is true", "When enabled and authorized are true", "When enabled is false", "A qualification from another paragraph"]) {
+    good.checks[0].publicQualifications = [wrong];
+    assert.throws(() => parseSourceClaimVerdict(result(JSON.stringify(good)), candidate, body), /invalid review/);
+  }
+});
+
+
+test("repeated literal qualifiers for repeated conditions do not invalidate a complete semantic review", () => {
+  const candidate = "The first call is conditional when present, and the second call is conditional when present.";
+  const body = buildSourceClaimReviewRequest(request, candidate, windows);
+  const data = JSON.parse(sourceClaimVerdictFixture(body));
+  Object.assign(data.checks[0], {qualificationStatus: "present", counterexampleStatus: "excluded-by-candidate",
+    publicQualifications: ["when present", "when present"]});
+  assert.equal(parseSourceClaimVerdict(result(JSON.stringify(data)), candidate, body).supported, true);
+  data.checks[0].qualificationStatus = "missing";
+  assert.equal(parseSourceClaimVerdict(result(JSON.stringify(data)), candidate, body).supported, false);
 });

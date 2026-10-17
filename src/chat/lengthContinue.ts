@@ -35,7 +35,7 @@ export function shouldContinueForLengthStop(options: {
   content: string;
   alreadyContinued: boolean;
 }): boolean {
-  if (options.alreadyContinued) {
+  if (options.alreadyContinued || (options.finishReason !== "length" && options.finishReason !== "stop")) {
     return false;
   }
   if (options.finishReason === "length") {

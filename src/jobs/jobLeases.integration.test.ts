@@ -2,7 +2,7 @@
 const {publicationDatabaseFromEnvironment} = require('../../scripts/publication-test-fixture.mjs');
 const releaseDatabase: string = publicationDatabaseFromEnvironment(process.env, 'jobs');
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import { before, after, beforeEach, afterEach, test } from 'node:test';
@@ -406,17 +406,28 @@ const fs=require('node:fs'),path=require('node:path');if(process.env.EH08_ZOEKT_
     assert.equal((await q.getJob(id))?.status,'queued');assert.equal(calls,1);
   });
 
-  test('actual built workerEntry starts empty queue and handles SIGTERM with clean resource closure',async()=>{
+  test('actual built workerEntry registers its artifact and retires presence on clean SIGTERM',async()=>{
+    const fleetId='artifact-'+randomUUID();
+    const expectedHash=createHash('sha256').update(fs.readFileSync('dist/workerEntry.js')).digest('hex');
     const child=spawn(process.execPath,['dist/workerEntry.js'],{cwd:process.cwd(),env:{PATH:process.env.PATH,
       NODE_ENV:'test',DATABASE_URL:url,DATABASE_SSL:'false',JOBS_BACKEND:'postgres',JOBS_WORKER_CONCURRENCY:'1',
+      COOP_WORKER_FLEET_ID:fleetId,
       GRAPH_CACHE_BACKEND:'memory',PORT:'56549'},stdio:['ignore','pipe','pipe']});
+    const closed=new Promise<number|null>(resolve=>child.once('close',code=>resolve(code)));
     let output='';child.stdout.on('data',x=>output+=x);child.stderr.on('data',x=>output+=x);
     try{
       await until(async()=>{try{return (await fetch('http://127.0.0.1:56549/health')).status===200;}catch{return false;}},5_000);
-      const ended=new Promise<number|null>(resolve=>child.once('exit',code=>resolve(code)));child.kill('SIGTERM');
-      const code=await Promise.race([ended,new Promise<'bound'>(resolve=>{const timer=setTimeout(()=>resolve('bound'),3_000);timer.unref();})]);
+      const rows=(await pool.query('SELECT bundle_sha256,accepting_work FROM worker_presence WHERE fleet_id=$1',[fleetId])).rows;
+      assert.equal(rows.length,1);assert.equal(rows[0].bundle_sha256,expectedHash);assert.equal(rows[0].accepting_work,true);
+      child.kill('SIGTERM');
+      const code=await Promise.race([closed,new Promise<'bound'>(resolve=>{const timer=setTimeout(()=>resolve('bound'),3_000);timer.unref();})]);
       assert.equal(code,0,output);
-    }finally{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');}
+      assert.equal((await pool.query('SELECT COUNT(*)::int n FROM worker_presence WHERE fleet_id=$1',[fleetId])).rows[0].n,0);
+    }finally{
+      if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');
+      await closed;
+      await pool.query('DELETE FROM worker_presence WHERE fleet_id=$1',[fleetId]);
+    }
   });
 
   for(const phase of ['before-effect','after-effect'])test(`SIGKILL ${phase} leaves a recoverable attempt; replay effects explicitly unqualified`,async()=>{

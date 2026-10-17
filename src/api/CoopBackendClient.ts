@@ -28,6 +28,7 @@ export type IndexedRepoFileMap = {
 };
 
 export type StreamChatBody = {
+  ordinaryTurn?: V1ChatRequestBody["ordinaryTurn"];
   responseTiming?: { traceId: string; callId: string };
   message: string;
   history: ChatHistoryMessage[];
@@ -1752,6 +1753,19 @@ export class CoopBackendClient {
     return response.data ?? { provider, discovered: 0, queued: 0, skipped: 0 };
   }
 
+  public async closeSourceTurn(baseUrl: string, quotaTurnId: string): Promise<boolean> {
+    assertCoopEndpoint(baseUrl);
+    const token = await this.options.getToken();
+    if (!token) return false;
+    try {
+      const response = await fetch(`${baseUrl.replace(/\/$/, "")}/v1/chat/source-turn/close`, {
+        method: "POST", headers: {authorization: `Bearer ${token}`, "content-type": "application/json"},
+        body: JSON.stringify({quotaTurnId}), signal: AbortSignal.timeout(2_000)
+      });
+      return response.ok;
+    } catch { return false; }
+  }
+
   public async streamChat(
     baseUrl: string,
     body: StreamChatBody,
@@ -1790,6 +1804,7 @@ export class CoopBackendClient {
         sourceEvidenceRepair: body.sourceEvidenceRepair === true,
         sessionMode: body.sessionMode,
         fileSource: body.fileSource,
+        ordinaryTurn: body.ordinaryTurn,
         quotaTurnId: body.quotaTurnId,
         responseTiming: body.responseTiming,
         stream: true

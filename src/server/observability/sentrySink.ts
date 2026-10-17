@@ -91,6 +91,9 @@ function tagsFromContext(context: ErrorReportContext): Record<string, string> {
   if (context.jobId) {
     tags.jobId = context.jobId;
   }
+  if (context.attemptId) {
+    tags.attemptId = context.attemptId;
+  }
   if (context.jobType) {
     tags.jobType = context.jobType;
   }

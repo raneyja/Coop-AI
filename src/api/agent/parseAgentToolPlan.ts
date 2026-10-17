@@ -15,6 +15,14 @@ const REPO_TOOLS = new Set<AgentToolName>([
   "propose_patch"
 ]);
 
+/** Explicit repository-free planning never inherits a prior selected repository. */
+export function agentPlanningRepoId(repoId: string, context: {owner?: unknown; repo?: unknown}, allowedRepoTools: unknown): string | undefined {
+  const {owner,repo} = context;
+  if (owner === undefined && repo === undefined) return allowedRepoTools === false ? "none" : undefined;
+  if (typeof owner !== "string" || !owner || typeof repo !== "string" || !repo) return undefined;
+  return ["github","gitlab","bitbucket"].some(provider => repoId === `${provider}:${owner}/${repo}`) ? repoId : undefined;
+}
+
 export type ParsedAgentToolPlan =
   | { kind: "call"; tool: AgentToolName; args: Record<string, unknown> }
   | { kind: "done" }

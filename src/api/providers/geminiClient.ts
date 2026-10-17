@@ -1,6 +1,6 @@
 import { formatZeroRetentionRequest } from "../requestFormatter";
 import { getZeroRetentionConfig } from "../zeroRetentionConfig";
-import { BaseProviderClient, resolveUsage, type ParseState } from "./baseClient";
+import { BaseProviderClient, resolveUsage, readUsageInt, type ParseState } from "./baseClient";
 import type { ProviderStreamOptions, StreamChunk } from "../types";
 import { runResilientRequest } from "../networkResilience";
 import { LLM_STREAM_CONNECT_TIMEOUT_MS } from "../../config/responseDeadline";
@@ -35,13 +35,16 @@ export class GeminiProviderClient extends BaseProviderClient {
         timeoutMs: LLM_STREAM_CONNECT_TIMEOUT_MS,
         signal: options.signal,
         policy: { maxRetries: 0 },
-        run: async (signal) =>
-          this.fetchImpl(url, {
+        run: async (signal) => {
+          signal?.throwIfAborted();
+          await options.onProviderDispatch?.();
+          return this.fetchImpl(url, {
             method: "POST",
             headers,
             body: JSON.stringify(applied),
             signal
-          })
+          });
+        }
       });
     } catch (error) {
       if (strict && options.signal?.aborted) {
@@ -152,12 +155,6 @@ export function parseGeminiSseLine(line: string, state: ParseState, strict = fal
     const data = JSON.parse(payload) as Record<string, unknown>;
     if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Invalid event");
     const usageMetadata = data.usageMetadata as Record<string, unknown> | undefined;
-    if (usageMetadata) {
-      const inputTokens = readUsageInt(usageMetadata.promptTokenCount);
-      const outputTokens = geminiBilledOutputTokens(usageMetadata);
-      if (inputTokens !== undefined) state.inputTokens = inputTokens;
-      if (outputTokens !== undefined) state.outputTokens = outputTokens;
-    }
     if (data.error) return strict ? [{type: "error", message: "Gemini returned a streaming error."}] : [];
     const candidates = data.candidates as Array<Record<string, unknown>> | undefined;
     if (strict && candidates !== undefined && !Array.isArray(candidates)) throw new Error("Invalid candidates");
@@ -167,6 +164,7 @@ export function parseGeminiSseLine(line: string, state: ParseState, strict = fal
     if (strict && content != null && (typeof content !== "object" || Array.isArray(content)
       || (content.parts !== undefined && !Array.isArray(content.parts)))) throw new Error("Invalid content");
     const chunks: StreamChunk[] = parseGeminiParts(content?.parts as Array<Record<string, unknown>> | undefined);
+    if (strict && state.finishReason && chunks.length) return [{type:"error",message:"Gemini returned content after its completion reason."}];
     const reason = candidate?.finishReason;
     if (strict && reason != null && typeof reason !== "string") throw new Error("Invalid reason");
     if (typeof reason === "string" && reason && reason !== "FINISH_REASON_UNSPECIFIED") {
@@ -174,6 +172,18 @@ export function parseGeminiSseLine(line: string, state: ParseState, strict = fal
       if (strict && state.finishReason && state.finishReason !== mapped) return [{type: "error", message: "Gemini returned conflicting completion reasons."}];
       state.finishReason = mapped;
       if (strict && mapped === "error") chunks.push({type: "error", message: "Gemini stopped without a supported completion reason."});
+    }
+    if (usageMetadata) {
+      const input = readUsageInt(usageMetadata.promptTokenCount), total = readUsageInt(usageMetadata.totalTokenCount);
+      const candidatesCount = readUsageInt(usageMetadata.candidatesTokenCount);
+      const thoughts = usageMetadata.thoughtsTokenCount === undefined ? undefined : readUsageInt(usageMetadata.thoughtsTokenCount);
+      const tools = usageMetadata.toolUsePromptTokenCount === undefined ? 0 : readUsageInt(usageMetadata.toolUsePromptTokenCount);
+      const output = total !== undefined && input !== undefined && total >= input ? total - input : undefined;
+      state.inputTokens = input; state.outputTokens = output ?? geminiBilledOutputTokens(usageMetadata);
+      state.usageComplete = input !== undefined && output !== undefined && candidatesCount !== undefined
+        && output >= candidatesCount && tools === 0
+        && (usageMetadata.thoughtsTokenCount === undefined || thoughts !== undefined && output === candidatesCount + thoughts);
+      state.usageTerminal = state.finishReason !== undefined;
     }
     return chunks;
   } catch {
@@ -212,10 +222,6 @@ export function parseGeminiParts(
   return chunks;
 }
 
-function readUsageInt(value: unknown): number | undefined {
-  const parsed = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : undefined;
-}
 
 /** Visible answer tokens plus thinking tokens. Google bills both as output. */
 export function geminiBilledOutputTokens(usageMetadata: Record<string, unknown>): number | undefined {
