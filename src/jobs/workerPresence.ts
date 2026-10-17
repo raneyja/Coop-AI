@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync, statSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import { Pool, type Client } from "pg";
 import databasePoolOptions from "../server/databasePoolOptions.cjs";
@@ -13,11 +13,28 @@ type WorkerState = { acceptingWork: boolean; capacity: number; activeJobs: numbe
 
 /** Hash the actual launched artifact; never accept an environment's self-claimed build id. */
 export function workerArtifactSha256(filename: string): string {
+  let descriptor: number | undefined;
   try {
-    const stat = statSync(filename);
-    if (!stat.isFile() || stat.size < 1 || stat.size > 128 * 1024 * 1024) throw new Error();
-    return createHash("sha256").update(readFileSync(filename)).digest("hex");
+    descriptor = openSync(filename, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const stat = fstatSync(descriptor, {bigint: true});
+    if (!stat.isFile() || stat.size < 1n || stat.size > 128n * 1024n * 1024n) throw new Error();
+    const hash = createHash("sha256"), buffer = Buffer.allocUnsafe(64 * 1024);
+    let remaining = Number(stat.size);
+    while (remaining > 0) {
+      const bytes = readSync(descriptor, buffer, 0, Math.min(buffer.length, remaining), null);
+      if (bytes === 0) throw new Error();
+      hash.update(buffer.subarray(0, bytes)); remaining -= bytes;
+    }
+    if (readSync(descriptor, buffer, 0, 1, null) !== 0) throw new Error();
+    const after = fstatSync(descriptor, {bigint: true});
+    if (after.size !== stat.size || after.mtimeNs !== stat.mtimeNs || after.ctimeNs !== stat.ctimeNs) throw new Error();
+    return hash.digest("hex");
   } catch { throw new Error("Worker artifact identity is unavailable"); }
+  finally {
+    if (descriptor !== undefined) {
+      try { closeSync(descriptor); } catch { throw new Error("Worker artifact identity is unavailable"); }
+    }
+  }
 }
 
 /** Owned by the dedicated worker process, including idle time and shutdown. */

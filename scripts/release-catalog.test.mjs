@@ -88,7 +88,8 @@ test('unit fixture preparation is owned by the declared build and precedes depen
 
 test('supplemental controls are declared separately from real provider and database execution',()=>{
  const catalog=releaseCatalog();
- assert.equal(catalog.lanes.supplemental.length,154);
+ assert.equal(catalog.lanes.supplemental.length,155);
+ assert(catalog.lanes.supplemental.some(x=>x.command.includes('src/jobs/workerArtifact.test.ts')));
  assert(catalog.lanes.supplemental.some(x=>x.command.includes('scripts/enterprise-eval.test.ts')));
  assert(catalog.lanes.supplemental.some(x=>x.command.includes('scripts/dogfood-release.test.mjs')));
  assert(catalog.lanes.supplemental.some(x=>x.command==='(cd admin && tsx --tsconfig tsconfig.json src/lib/activeGrantRepoIds.test.ts)'));
