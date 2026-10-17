@@ -153,8 +153,10 @@ jobs:
           path: ${{ runner.temp }}/candidate-vsix
       - name: Prepare complete source and package scan corpora
         env:
-          COOP_RELEASE_CANDIDATE_EXCEPTIONS: ${{ vars.COOP_RELEASE_CANDIDATE_EXCEPTIONS }}
-          COOP_RELEASE_HISTORY_EXCEPTIONS: ${{ vars.COOP_RELEASE_HISTORY_EXCEPTIONS }}
+          # PR68's exact head requires independent package and secret-disposition pins.
+          # A missing selected payload means no exceptions, never shared fallback.
+          COOP_RELEASE_CANDIDATE_EXCEPTIONS: ${{ github.repository == 'raneyja/Coop-AI' && github.event_name == 'pull_request' && github.event.pull_request.number == 68 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha != '' && github.event.pull_request.head.sha == vars.COOP_RELEASE_CANDIDATE_PACKAGE_SOURCE_SHA && github.event.pull_request.head.sha == vars.COOP_RELEASE_INVITE_ONLY_SECRET_SOURCE_SHA && (vars.COOP_RELEASE_INVITE_ONLY_CANDIDATE_EXCEPTIONS || '[]') || vars.COOP_RELEASE_CANDIDATE_EXCEPTIONS }}
+          COOP_RELEASE_HISTORY_EXCEPTIONS: ${{ github.repository == 'raneyja/Coop-AI' && github.event_name == 'pull_request' && github.event.pull_request.number == 68 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha != '' && github.event.pull_request.head.sha == vars.COOP_RELEASE_CANDIDATE_PACKAGE_SOURCE_SHA && github.event.pull_request.head.sha == vars.COOP_RELEASE_INVITE_ONLY_SECRET_SOURCE_SHA && (vars.COOP_RELEASE_INVITE_ONLY_HISTORY_EXCEPTIONS || '[]') || vars.COOP_RELEASE_HISTORY_EXCEPTIONS }}
         run: |
           python3 - <<'PYCODE'
           import subprocess,pathlib,shutil,zipfile,os,json,hashlib
