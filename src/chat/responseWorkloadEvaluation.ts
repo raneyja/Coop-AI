@@ -62,13 +62,30 @@ export async function evaluateResponseWorkloads(): Promise<{ schemaVersion: numb
     const router = { async *stream() {
       yield { type: "thinking", text: "Synthetic private processing" } as StreamChunk;
       yield { type: "delta", text: answer } as StreamChunk;
-      yield { type: "done", usage: { inputTokens: 1, outputTokens: 1, estimatedCostUsd: 0 },
+      yield { type: "done", usage: { provenance: "provider-final", inputTokens: 1, outputTokens: 1, estimatedCostUsd: 0 },
         provider: "anthropic", model: "fixture", finishReason: "stop" } as StreamChunk;
     } } as unknown as ModelRouter;
-    void handleChatApiRequest({ pathname: "/v1/chat", method: "POST", headers: {}, body }, response as unknown as ServerResponse, {
+    // This timing harness uses a synthetic authenticated org and admitted turn.
+    // Dev/legacy requests deliberately cannot run private source phases. Actual
+    // authorization, persistence and billing remain separate integration gates.
+    const quota = { cappedSubject: () => undefined, check: async () => undefined,
+      recordTokens: async () => undefined } as unknown as PlanQuotaService;
+    void handleChatApiRequest({ pathname: "/v1/chat", method: "POST",
+      headers: Object.fromEntries(new Headers(init?.headers).entries()), body }, response as unknown as ServerResponse, {
       router, config: { defaultProvider: "anthropic", mockMode: true, allowUnapprovedProvider: true, apiKeys: {} },
       serverConfig: { nodeEnv: "test", requireApiAuth: false, jobsWorkersEnabled: false, devMode: true },
-      planQuota: { check: async () => undefined, recordTokens: async () => undefined } as unknown as PlanQuotaService
+      orgStore: {
+        resolveAuth: async () => ({orgId: "00000000-0000-4000-8000-000000000001",
+          orgName: "timing-fixture", plan: "enterprise", apiKeyId: "synthetic"}),
+        getOrganization: async () => ({plan: "enterprise"})
+      } as unknown as import("../server/orgStore").OrgStore,
+      planQuota: quota,
+      sourceTurnAuthority: {
+        admit: async ({check}) => {
+          await check(quota, traceId, body.sourceClaimReview === true || body.sourceEvidenceRepair === true, new Date());
+          return {id: traceId, source: true};
+        }, complete: async () => undefined, close: async () => undefined
+      }
     }).catch(error => { streamController.error(error); });
     if (!callId) throw new Error("Uncorrelated fixture request");
     return promise;
@@ -110,7 +127,7 @@ export async function evaluateResponseWorkloads(): Promise<{ schemaVersion: numb
             const endPublication = trace.span("publication-validation");
             const checked = verifySourceCitationQuotes(final.message.content, evidence.focusFiles); endPublication(); trace.finish("completed");
             results.push({ workload: { language: family.language, structure: family.structure, evidence: volume.label,
-              files: volume.files, sourceChars: evidence.focusFiles!.reduce((sum, file) => sum + file.content.length, 0), cache: cacheMode, cacheHit, concurrency, scenario },
+              files: volume.files, sourceChars: evidence.focusFiles!.reduce((sum, file) => sum + (file.content?.length ?? 0), 0), cache: cacheMode, cacheHit, concurrency, scenario },
               mode: "harness-synthetic-provider", timings: { publicationMs, hostCompletionMs: trace.elapsedMs(),
                 firstVisibleAnswerContentMs: null, firstUsefulSupportedAnswerMs: null, displayCompletionMs: null },
               quality: { sourceRef: "pass", citationIntegrity: checked.invalidQuotes === 0 && checked.verifiedQuotes === 1 ? "pass" : "fail",

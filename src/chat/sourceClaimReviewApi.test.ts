@@ -5,6 +5,7 @@ import { SecureApiClient, type StreamChatParams } from "./SecureApiClient";
 import { handleChatApiRequest } from "../api/chatApi";
 import { ModelRouter } from "../api/ModelRouter";
 import type { PlanQuotaService } from "../server/planQuota";
+import { usageFixture } from "../api/providers/providerUsageFixtures.testSupport";
 
 test("private review mode survives client, transport and API boundaries into the actual provider system contract", async () => {
   const original = globalThis.fetch;
@@ -73,12 +74,12 @@ test("private review mode survives client, transport and API boundaries into the
           assert.equal(checkSchema.properties.publicQualifications.items.type, "string");
         } else assert.equal(body.response_format,undefined,"Corrective source prose does not request audit JSON");
         assert.equal(body.thinking, undefined);
-        return new Response('data: {"choices":[{"delta":{"content":"private-verdict"}}]}\n\ndata: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":2}}\n\ndata: [DONE]\n\n');
+        return new Response(usageFixture("openai", 10, 2, {text: "private-verdict"}));
       }
       assert.deepEqual(body.thinking, {type:"adaptive"});
       assert.equal(body.output_config.effort,"medium");
       assert.equal(body.output_config.format,undefined); assert.equal(body.response_format,undefined);
-      return new Response('data: {"type":"message_start","message":{"usage":{"input_tokens":10}}}\n\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"private-verdict"}}\n\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}}\n\ndata: {"type":"message_stop"}\n\n');
+      return new Response(usageFixture("anthropic", 10, 2, {text: "private-verdict"}));
     };
     const client = new SecureApiClient({get: async () => "fixture-token"} as never);
     for ([synthesisMode, repairMode] of [[false,false],[true,false],[true,true]]) for (const useCase of ["blast_radius", "knowledge_gaps", "comprehension", "decision_archaeology", "ownership"] as const) {

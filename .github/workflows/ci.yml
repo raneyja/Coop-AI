@@ -7,7 +7,9 @@ permissions:
   contents: read
 env:
   COOP_RELEASE_EVIDENCE_DIR: ${{ github.workspace }}-evidence
-  COOP_RELEASE_PRIVATE_PACKAGE_SOURCE_SHA: ${{ vars.COOP_RELEASE_PRIVATE_PACKAGE_SOURCE_SHA }}
+  # A separately approved candidate must match this PR's exact head. Other
+  # candidates retain the existing approval; no shared pin needs replacement.
+  COOP_RELEASE_PRIVATE_PACKAGE_SOURCE_SHA: ${{ github.event.pull_request.head.sha == vars.COOP_RELEASE_CANDIDATE_PACKAGE_SOURCE_SHA && vars.COOP_RELEASE_CANDIDATE_PACKAGE_SOURCE_SHA || vars.COOP_RELEASE_PRIVATE_PACKAGE_SOURCE_SHA }}
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -216,6 +218,8 @@ jobs:
     env:
       COOP_RELEASE_FROZEN_IMAGE_POLICY: ${{ vars.COOP_RELEASE_FROZEN_IMAGE_POLICY }}
       COOP_RELEASE_IMAGE_ROLE: ${{ matrix.target }}
+      TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
+      TRIVY_JAVA_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-java-db:1
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -309,6 +313,10 @@ jobs:
             ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/receipt.json
             ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/image/result.json
             ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/java/results.json
+            ${{ runner.temp }}/image-report.json
+            ${{ runner.temp }}/image-inputs.json
+            ${{ runner.temp }}/trivy-cache/db/metadata.json
+            ${{ runner.temp }}/trivy-cache/java-db/metadata.json
   stage5-acceptance:
     needs: [regression, builds, database, code-security, container]
     if: always()

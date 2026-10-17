@@ -73,7 +73,8 @@ async function recordCompletion(
   });
   await recordV1ChatUsageTokens(quota, org, honored, {
     ...tokens,
-    requestId
+    requestId,
+    useCase
   });
   return honored;
 }
@@ -127,6 +128,7 @@ test("one /slack topic ask bills one Auto interpreter and one separate answer â€
   assert.equal(interpreterHonored.selection, "auto");
   assert.equal(interpreterHonored.model, "gpt-4o-mini");
   assert.notEqual(interpMeta.model, FRONTIER_PICK);
+  assert.equal(interpMeta.countsAsMessage, false);
 
   const answerMeta = events[1]!.metadata;
   assert.equal(answerHonored.model, FRONTIER_PICK);
@@ -134,6 +136,7 @@ test("one /slack topic ask bills one Auto interpreter and one separate answer â€
   assert.equal(answerMeta.model, FRONTIER_PICK);
   assert.equal(answerMeta.bucket, "frontier");
   assert.notEqual(answerMeta.model, interpMeta.model);
+  assert.equal(answerMeta.countsAsMessage, true);
 });
 
 test("regex fail-open that never calls a model records zero interpreter tokens", async () => {
@@ -178,6 +181,6 @@ test("front-door interpreter stream stays intent_suggest on the /v1/chat path", 
   const apiPath = path.join(__dirname, "../../api/chatApi.ts");
   const apiSrc = fs.readFileSync(apiPath, "utf8");
   assert.match(apiSrc, /export async function recordV1ChatUsageTokens/);
-  assert.match(apiSrc, /await recordV1ChatUsageTokens\(/);
+  assert.match(apiSrc, /\brecordV1ChatUsageTokens\(\s*(?:planQuota|quota)\s*,\s*org\s*,/);
   assert.doesNotMatch(apiSrc, /forceAutoBucket:\s*true[\s\S]{0,80}eventType:\s*"chat\.message"/);
 });

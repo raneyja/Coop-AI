@@ -66,6 +66,7 @@ async function run(): Promise<void> {
   for (const mode of ["missing", "open", "stop"] as const) {
     let active = true;
     let calls = 0;
+    const closedTurns: string[] = [];
     let finishLoad!: () => void;
     const controller = new AbortController();
     const turn = { id: "captured-turn", threadId: "captured-thread", streamGeneration: 1,
@@ -85,7 +86,8 @@ async function run(): Promise<void> {
       blockIfFreeQuotaExhausted: async () => false, listConnectedIntegrationTools: () => [],
       isViewingThread: () => false,
       buildProjectInstructionsBlock: async () => undefined,
-      options: { agentOrchestrator: { run: async (_request: unknown, options: { capturedAttachment?: { repoId: string; branch?: string; files: Array<{content: string}> } }) => {
+      options: { api: { closeSourceTurn: async (_base: unknown, id: string) => { closedTurns.push(id); } },
+        agentOrchestrator: { run: async (_request: unknown, options: { capturedAttachment?: { repoId: string; branch?: string; files: Array<{content: string}> } }) => {
         calls++;
         assert.equal(options.capturedAttachment?.files[0].content, "captured-old");
         assert.equal(options.capturedAttachment?.repoId, "github:fixture/remote");
@@ -101,6 +103,8 @@ async function run(): Promise<void> {
     if (mode !== "open") finishLoad();
     await execution;
     assert.equal(calls, mode === "stop" ? 0 : 1);
+    assert.ok(closedTurns.length >= 1, "completed and stopped turns close their authority");
+    assert.ok(closedTurns.every(id => id === turn.id), "cleanup keeps the captured turn identity");
   }
   const uri = { scheme: "untitled", path: "/selection-fixture", toString: () => "untitled:selection-fixture" };
   rememberRemotePatchBuffer("src/auth.ts", uri as vscode.Uri, "export function parser() {}", {
@@ -109,7 +113,7 @@ async function run(): Promise<void> {
   const editor = {
     document: { uri, languageId: "typescript", lineCount: 30, getWordRangeAtPosition: () => undefined },
     selection: { isEmpty: false, start: {line: 9, character: 0}, end: {line: 17, character: 0} }
-  } as vscode.TextEditor;
+  } as unknown as vscode.TextEditor;
   const originalEditor = vscode.window.activeTextEditor;
   const originalTabGroups = vscode.window.tabGroups;
   const originalVisible = vscode.window.visibleTextEditors;
@@ -127,11 +131,11 @@ async function run(): Promise<void> {
     assert.equal(captured.fileSource, "remote");
     assert.deepEqual(selectionSession.currentContext, {}, "capturing a new panel must not change the origin thread");
     (vscode.window as {activeTextEditor: vscode.TextEditor | undefined}).activeTextEditor = undefined;
-    (vscode.window as {visibleTextEditors: vscode.TextEditor[]}).visibleTextEditors = [editor];
+    (vscode.window as {visibleTextEditors: readonly vscode.TextEditor[]}).visibleTextEditors = [editor];
     assert.deepEqual(selectionSession.captureNewChatSelection().selectedLines, [10, 17], "toolbar focus keeps the single explicit visible selection");
-    (vscode.window as {visibleTextEditors: vscode.TextEditor[]}).visibleTextEditors = [editor, {...editor}];
+    (vscode.window as {visibleTextEditors: readonly vscode.TextEditor[]}).visibleTextEditors = [editor, {...editor}];
     assert.equal(selectionSession.captureNewChatSelection(), undefined, "ambiguous visible selections cannot be guessed");
-    (vscode.window as {visibleTextEditors: vscode.TextEditor[]}).visibleTextEditors = [editor];
+    (vscode.window as {visibleTextEditors: readonly vscode.TextEditor[]}).visibleTextEditors = [editor];
     editor.selection = {...editor.selection, isEmpty: true} as vscode.Selection;
     assert.equal(selectionSession.captureNewChatSelection(), undefined, "passive open files cannot seed New chat");
   } finally {
@@ -146,9 +150,9 @@ async function run(): Promise<void> {
     (vscode.window as {activeTextEditor: vscode.TextEditor | undefined}).activeTextEditor = {
       document:{uri:{scheme:"file",fsPath:"/fixture/src/selected.ts",path:"/fixture/src/selected.ts"},languageId:"typescript",getWordRangeAtPosition:()=>undefined},
       selection:{isEmpty:false,start:{line:1,character:0},end:{line:3,character:0}}
-    } as vscode.TextEditor;
+    } as unknown as vscode.TextEditor;
     (vscode.window as {tabGroups: unknown}).tabGroups = {all:[]};
-    (vscode.window as {visibleTextEditors: vscode.TextEditor[]}).visibleTextEditors = [];
+    (vscode.window as {visibleTextEditors: readonly vscode.TextEditor[]}).visibleTextEditors = [];
     const localSelectionSession = Object.assign(Object.create(CoopChatSession.prototype), {
       currentContext:{owner:"remote",repo:"previous",scope:"repo"}, preferences:{}
     });
@@ -190,7 +194,7 @@ async function run(): Promise<void> {
       (vscode.workspace as {openTextDocument:unknown}).openTextDocument = async (requested:vscode.Uri) => {
         assert.equal(requested.toString(),hiddenUri.toString()); return hiddenDoc;
       };
-      const restoredTurn = {context:{file:"src/selected.ts",fileSource:"workspace"},editAnchor:{file:"src/selected.ts",fileContents:{}}};
+      const restoredTurn = {context:{file:"src/selected.ts",fileSource:"workspace"},editAnchor:{file:"src/selected.ts",fileContents:{} as Record<string,string>}};
       await hiddenSession.loadEditAnchorFile(restoredTurn);
       assert.equal(restoredTurn.editAnchor.fileContents["src/selected.ts"],hiddenDoc.getText(),"reload reads only the attached open tab");
     } finally {
@@ -222,7 +226,7 @@ async function run(): Promise<void> {
   });
   try {
     (vscode.window as {tabGroups: unknown}).tabGroups = {all: []};
-    (vscode.window as {visibleTextEditors: vscode.TextEditor[]}).visibleTextEditors = [];
+    (vscode.window as {visibleTextEditors: readonly vscode.TextEditor[]}).visibleTextEditors = [];
     remotePickSession.refreshEditorContext(editor);
     assert.equal(explicitPicks, 0, "a passive remote tab cannot steal a fresh repo-only chat");
     remotePickSession.refreshEditorContext(editor, {userActivatedEditor: true});
