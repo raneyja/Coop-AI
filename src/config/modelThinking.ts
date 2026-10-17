@@ -122,3 +122,13 @@ export function missingCatalogThinkingIds(): string[] {
 }
 
 export { ANTHROPIC_THINKING_BUDGET_TOKENS };
+
+/** Bounded private source phases retain reasoning and their full admission /
+ * semantic checks. This separate effort policy requires paired positive and
+ * counterexample qualification; it does not change catalog chat defaults. */
+export function resolveSourcePhaseThinking(provider: LlmProvider, model: string, maxTokens: number): ProviderThinkingOptions | undefined {
+  const thinking=resolveProviderThinking(provider,model,maxTokens);
+  if (thinking?.mode === "openai-reasoning") return {...thinking,effort:"low"};
+  if (thinking?.mode === "adaptive") return {...thinking,effort:"medium"};
+  return thinking;
+}

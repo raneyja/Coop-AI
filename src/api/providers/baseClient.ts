@@ -39,11 +39,11 @@ export abstract class BaseProviderClient {
         timeoutMs: LLM_STREAM_CONNECT_TIMEOUT_MS,
         signal: options.signal,
         policy: { maxRetries: 0 },
-        run: async (signal) =>
-          this.fetchImpl(url, {
-            ...init,
-            signal
-          })
+        run: async (signal) => {
+          signal?.throwIfAborted();
+          await options.onProviderDispatch?.();
+          return this.fetchImpl(url, {...init, signal});
+        }
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Provider request failed.";
@@ -179,6 +179,9 @@ export type ParseState = {
   outputTokens?: number;
   /** OpenAI-compatible [DONE] marker, used by clients requiring strict completion. */
   streamTerminated?: boolean;
+  /** Explicit, validated counters and provider-native usage termination. */
+  usageComplete?: boolean;
+  usageTerminal?: boolean;
 };
 
 export function resolveUsage(
@@ -186,16 +189,20 @@ export function resolveUsage(
   options: ProviderStreamOptions,
   state: ParseState
 ): TokenUsage {
-  const inputTokens = state.inputTokens ?? 0;
-  const outputTokens = state.outputTokens ?? 0;
-  if (inputTokens > 0 || outputTokens > 0) {
-    return {
-      inputTokens,
-      outputTokens,
-      estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens, options.model)
-    };
+  const input = readUsageInt(state.inputTokens), output = readUsageInt(state.outputTokens);
+  if (input !== undefined || output !== undefined) {
+    const inputTokens = input ?? 0, outputTokens = output ?? 0;
+    return {inputTokens, outputTokens,
+      provenance: state.usageComplete === true && state.usageTerminal === true
+        && input !== undefined && output !== undefined ? "provider-final" : "provider-partial",
+      estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens, options.model)};
   }
   return buildUsage(provider, options, state.text);
+}
+
+/** Presence and integer validity are distinct from explicit numeric zero. */
+export function readUsageInt(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 }
 
 export function buildUsage(provider: LlmProvider, options: ProviderStreamOptions, outputText: string): TokenUsage {
@@ -205,6 +212,7 @@ export function buildUsage(provider: LlmProvider, options: ProviderStreamOptions
   return {
     inputTokens,
     outputTokens,
+    provenance: "estimated",
     estimatedCostUsd: estimateCostUsd(provider, inputTokens, outputTokens, options.model)
   };
 }
@@ -221,6 +229,6 @@ export function parseSseDataLine(line: string): unknown | undefined {
   try {
     return JSON.parse(payload);
   } catch {
-    return undefined;
+    throw new Error("Provider returned malformed stream data.");
   }
 }

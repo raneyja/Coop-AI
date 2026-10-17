@@ -4,7 +4,7 @@ const releaseDatabase: string = publicationDatabaseFromEnvironment(process.env, 
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
-import { after, test } from 'node:test';
+import { after, beforeEach, test } from 'node:test';
 import { Pool, type PoolClient } from 'pg';
 import { withJobOwnedEffect } from './jobEffectAdmission';
 import { JobType, type Job } from './types';
@@ -19,6 +19,8 @@ after(async () => {
   await effect.end(); await control.end();
   if (process.env.EH08_LOCK_RESULTS) writeFileSync(process.env.EH08_LOCK_RESULTS, JSON.stringify(observations, null, 2)+'\n');
 });
+// Fault cases intentionally create quarantine; each subtest owns a fresh state.
+beforeEach(async()=>{await control.query('TRUNCATE jobs,graph_publication_heads,graph_snapshots CASCADE');});
 async function until(predicate: () => Promise<boolean>) {
   const end = Date.now()+2500;
   while (Date.now()<end) { if (await predicate()) return; await new Promise(resolve=>setTimeout(resolve,5)); }

@@ -10,7 +10,7 @@ import { resolveAssignedSourceVerificationModel } from "../config/featureModelAs
 
 const request: StreamChatParams = { message: "Who should review this file?", context: {owner: "org", repo: "service", branch: "release", file: "unusual/core.rs"},
   history: [{role: "user", content: "Old unverified claim", timestamp: 1}], model: "picked-model", provider: "anthropic", useCase: "ownership",
-  quotaTurnId: "same-owner-turn", maxTokens: 16000, enableThinking: true };
+  quotaTurnId: "same-owner-turn", temperature: 0.5, maxTokens: 16000, enableThinking: true };
 const report: OwnershipReport = { owner: "org", repo: "service", path: "unusual/core.rs", provider: "gitlab", completeness: "full",
   scores: [{owner: "contributor", score: 100, tier: "primary", commitCount: 0, reviewApprovals: 2, issueResolutions: 1, activityWeight: 1,
     role: "both", specialty: "database/migrations", presence: {state: "active", label: "Active · inferred"}}],
@@ -103,7 +103,7 @@ test("post-formatting unsupported owner claims cannot publish; repeated rejectio
   const stream: SecureApiClient["streamChat"] = async body => {calls++; return result(body.sourceClaimReview ? sourceClaimVerdictFixture(body, [{claim: bad, category: "scope", reason: "Policy coverage is partial."}]) : "A contact candidate was sampled.");};
   await assert.rejects(streamSourceReviewedOwnership({stream, request, report, windows: [], baseUrl: "https://fixture.invalid", prepareAnswer: answer => answer + "\n\n" + bad,
     onChunk: chunk => visible.push(chunk), onFailureUsage: value => {cost += value.estimatedCostUsd;}}), /could not verify/);
-  assert.equal(calls, 4); assert.equal(cost, 0.4); assert.deepEqual(visible, []);
+  assert.equal(calls, 6); assert.equal(cost, 0.6); assert.deepEqual(visible, []);
 });
 
 test("ownership facts and source windows are frozen before synthesis; scoped no-code ownership answers need no invented quote", async () => {

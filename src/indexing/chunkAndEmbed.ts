@@ -105,7 +105,7 @@ export async function chunkAndEmbed(
   for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
     assertNotAborted(options.signal);
     const batch = batches[batchIndex];
-    const batchEmbeddings = await embedTexts(batch, { pool });
+    const batchEmbeddings = await embedTexts(batch, { pool, signal: options.signal });
     for (let i = 0; i < batchEmbeddings.length; i += 1) {
       vectors[offset + i] = batchEmbeddings[i];
     }

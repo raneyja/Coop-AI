@@ -147,8 +147,8 @@ export class PlanQuotaExceededError extends Error {
 export class PlanQuotaUnavailableError extends Error {
   public readonly code = "quota_metering_unavailable";
 
-  public constructor() {
-    super("Usage metering is temporarily unavailable. Try again in a moment.");
+  public constructor(message = "Usage metering is temporarily unavailable. Try again in a moment.") {
+    super(message);
     this.name = "PlanQuotaUnavailableError";
   }
 }
@@ -159,6 +159,10 @@ export class PlanQuotaService {
     private readonly config: PlanQuotaConfig
   ) {}
 
+  public withUsageTracker(tracker: UsageTracker): PlanQuotaService {
+    return new PlanQuotaService(tracker, this.config);
+  }
+
   public appliesToPlan(plan: OrgPlan | ChatOrgPlan): boolean {
     return plan === "free" && this.config.enabled;
   }
@@ -167,12 +171,19 @@ export class PlanQuotaService {
     return effectiveUsageTier(plan, usageTier) != null;
   }
 
+  /** Exactly the subject whose settled spend check() caps; buckets share it. */
+  public cappedSubject(orgId: string, plan: OrgPlan | ChatOrgPlan, paid?: Pick<PaidQuotaContext, "usageTier" | "userId">): string | undefined {
+    if (orgId === "dev" || orgId === "legacy") return undefined;
+    if (this.appliesPaidCaps(plan, paid?.usageTier)) return paid?.userId?.trim() ? `seat:${paid.userId.trim()}` : "org-key";
+    return this.appliesToPlan(plan) ? "free-org" : undefined;
+  }
+
   public async getSnapshot(
     orgId: string,
     plan: OrgPlan | ChatOrgPlan,
     now = new Date()
   ): Promise<PlanQuotaSnapshot | undefined> {
-    if (!this.appliesToPlan(plan) || orgId === "dev") {
+    if (!this.appliesToPlan(plan) || (orgId === "dev" || orgId === "legacy")) {
       return undefined;
     }
     const usage = await this.getFreeAllowance(orgId, now);
@@ -188,7 +199,7 @@ export class PlanQuotaService {
     userId?: string
   ): Promise<PaidUsageMeters | undefined> {
     const tier = effectiveUsageTier(plan, usageTier);
-    if (!tier || orgId === "dev") {
+    if (!tier || (orgId === "dev" || orgId === "legacy")) {
       return undefined;
     }
     if (!this.usageTracker?.canRead()) {
@@ -207,7 +218,7 @@ export class PlanQuotaService {
     periodAnchor?: Date
   ): Promise<Map<string, PaidUsageMeters>> {
     const meters = new Map<string, PaidUsageMeters>();
-    if (orgId === "dev" || !this.usageTracker?.canRead()) {
+    if ((orgId === "dev" || orgId === "legacy") || !this.usageTracker?.canRead()) {
       return meters;
     }
     const ids = users.map((user) => user.id.trim()).filter(Boolean);
@@ -244,7 +255,7 @@ export class PlanQuotaService {
     paid?: PaidQuotaContext,
     options?: { skipFreeAllowance?: boolean; skipPaidCap?: boolean }
   ): Promise<void> {
-    if (orgId === "dev") {
+    if ((orgId === "dev" || orgId === "legacy")) {
       return;
     }
     const tier = effectiveUsageTier(plan, paid?.usageTier);
@@ -291,7 +302,7 @@ export class PlanQuotaService {
       countsAsMessage?: boolean;
     }
   ): Promise<void> {
-    if (orgId === "dev") {
+    if ((orgId === "dev" || orgId === "legacy")) {
       return;
     }
     const billed = billTokensForQuota({
@@ -327,7 +338,7 @@ export class PlanQuotaService {
       ? (Math.max(0, entry.inputTokens) * usd.usdPerMillionIn + Math.max(0, entry.outputTokens) * usd.usdPerMillionOut)
         * billed.visionMultiplier / 1_000_000
       : undefined;
-    await this.usageTracker?.record({
+    await this.usageTracker?.recordRequired({
       orgId,
       userId: entry.userId,
       principal: entry.principal,
@@ -394,7 +405,7 @@ export class PlanQuotaService {
     userId?: string
   ): Promise<{ autoCents: number; frontierCents: number }> {
     const range = paidUsagePeriodRange(periodAnchor, now);
-    const eventTypes = [...LLM_USAGE_EVENT_TYPES];
+    const eventTypes = [...LLM_USAGE_EVENT_TYPES, "chat.turn_reserved"];
     const subject = userId?.trim() ? userId.trim() : null;
     const [autoCents, frontierCents] = await Promise.all([
       this.usageTracker!.sumUsdCentsForSubject(orgId, range, eventTypes, "auto", subject),
@@ -430,7 +441,7 @@ export class PlanQuotaService {
     if (!this.usageTracker) {
       return [];
     }
-    return this.usageTracker.listAllowanceEventsForOrg(orgId, range, [...LLM_USAGE_EVENT_TYPES]);
+    return this.usageTracker.listAllowanceEventsForOrg(orgId, range, [...LLM_USAGE_EVENT_TYPES, "chat.turn_reserved"]);
   }
 }
 

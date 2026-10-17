@@ -1,4 +1,5 @@
-import { withPassingClaimReview } from "./sourceClaimReviewTestFixture";
+import { enrichBlastRadiusResponse } from "../prompts/blastRadiusSynthesis";
+import { sourceClaimVerdictFixture, withPassingClaimReview } from "./sourceClaimReviewTestFixture";
 import { resolveAssignedSourceVerificationModel, SOURCE_VERIFICATION_MAX_TOKENS } from "../config/featureModelAssignments";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -10,7 +11,7 @@ const source = "if (ready) {\n  await persist();\n}";
 const quote = "```1:3:src/caller.ts\n" + source + "\n```";
 const request: StreamChatParams = {
   message: "Explain exception handling.\n## Opened selected-ref source bodies\n" + source,
-  context: { owner: "org", repo: "project", branch: "release", selectedLines: { start: 1, end: 1 } },
+  context: { owner: "org", repo: "project", branch: "release", selectedLines: [1, 1] },
   fileSource: "remote", sessionMode: "indexed-repo",
   history: [{ role: "user", content: "Keep the original question in scope.", timestamp: 1 }],
   model: "claude-sonnet-4-6", provider: "anthropic", useCase: "blast_radius",
@@ -205,4 +206,67 @@ test("unavailable usage is never synthesized as a zero-cost completion", async (
     onPartialUsage: usage => assert.equal(usage.estimatedCostUsd, 0, "Only the fixture's known review usage exists"), baseUrl: "https://api.example.test" });
   assert.equal(final.usage, undefined);
   assert.equal(phases[1].usage, undefined);
+});
+
+
+const sourceOnlyBody = "export function forward(item: unknown) {\n  return persist(item);\n}";
+const sourceOnlyQuote = "```1:3:src/forward.ts\n" + sourceOnlyBody + "\n```";
+const sourceOnlyEvidence: BlastRadiusEvidence = { file: "src/forward.ts", directDependents: [],
+  namedAskSymbols: ["forward"], sourceEvidenceGathered: true, sourceFiles: [{
+    role: "target", path: "src/forward.ts", content: sourceOnlyBody, repoId: "github:org/project",
+    branch: "release", startLine: 1, endLine: 3, truncated: false }] };
+
+test("source-only Blast final formatting retains useful target findings through private review and publication", async () => {
+  const answer = "The opened body passes `item` to `persist`; the helper body is not shown.\n\n" + sourceOnlyQuote;
+  let synthesisCalls = 0, reviews = 0; const visible: string[] = [];
+  const stream: SecureApiClient["streamChat"] = async (body, chunk) => {
+    assert.deepEqual(visible, [], "No draft is visible before review completes");
+    if (body.sourceClaimReview) {
+      reviews++;
+      assert.ok(JSON.parse(body.message).blocks.some((block: { text: string }) => block.text.includes("The opened body passes")));
+      return result(sourceClaimVerdictFixture(body));
+    }
+    synthesisCalls++; chunk(answer); return result(answer);
+  };
+  let verified = 0;
+  const final = await streamSourceGroundedBlast({ stream, request, evidence: sourceOnlyEvidence,
+    question: "What does the opened function establish? Keep caller impact separate.",
+    prepareAnswer: content => enrichBlastRadiusResponse(content, sourceOnlyEvidence),
+    onValidated: (_windows, quotes) => { verified = quotes; },
+    onChunk: content => visible.push(content), baseUrl: "https://api.example.test" });
+  assert.equal(synthesisCalls, 1); assert.equal(reviews, 1); assert.equal(verified, 1);
+  assert.ok(final.message.content.includes(answer));
+  assert.match(final.message.content, /Graph-based caller coverage remains \*\*unverified\*\*/);
+  assert.deepEqual(visible, [final.message.content]);
+});
+
+test("source-only Blast still rejects invalid quotes without publishing either attempt", async () => {
+  let calls = 0; const visible: string[] = [];
+  await assert.rejects(streamSourceGroundedBlast({ request, evidence: sourceOnlyEvidence,
+    stream: async body => { assert.equal(body.sourceClaimReview, false); calls++; return result(sourceOnlyQuote.replace("persist(item)", "destroy(item)")); },
+    onChunk: content => visible.push(content), baseUrl: "https://api.example.test" }));
+  assert.equal(calls, 2); assert.deepEqual(visible, []);
+});
+
+test("source-only Blast quote preservation does not bypass rejection of unsupported caller claims", async () => {
+  const badClaim = "Every caller will break.";
+  let synthesisCalls = 0, reviews = 0; const visible: string[] = [];
+  const stream: SecureApiClient["streamChat"] = async body => {
+    if (body.sourceClaimReview) {
+      reviews++;
+      return result(sourceClaimVerdictFixture(body, [{ claim: badClaim, category: "scope",
+        reason: "No callers or a specified incompatible change were admitted." }]));
+    }
+    synthesisCalls++; return result(badClaim + "\n\n" + sourceOnlyQuote);
+  };
+  try {
+    await streamSourceGroundedBlast({ stream, request, evidence: sourceOnlyEvidence,
+      prepareAnswer: content => enrichBlastRadiusResponse(content, sourceOnlyEvidence),
+      onChunk: content => { assert.ok(!content.includes(badClaim)); visible.push(content); }, baseUrl: "https://api.example.test" });
+  } catch (error) {
+    assert.match(String(error), /could not verify|could not complete/);
+  }
+  assert.equal(synthesisCalls, 2, "Keep the existing single repair bound");
+  assert.ok(reviews >= 2, "Both source-bearing attempts must reach semantic review");
+  assert.ok(!visible.join("").includes(badClaim));
 });

@@ -1,3 +1,5 @@
+import { agentPlanningRepoId } from "../api/agent/parseAgentToolPlan";
+import { ordinaryContinuationParams, type StreamChatParams } from "./SecureApiClient";
 import { shouldFollowEditorAfterThreadRestore } from "./chatThreadRestore";
 import { createSharedInitialization } from "./sessionInitialization";
 import { attachmentBodyMetadata, attachmentBundleMetadata, attachmentSerializedMetadata } from "./attachmentDiagnostics";
@@ -612,11 +614,10 @@ import {
   openFileSelectionOwnsChange,
   REMOTE_SELECTION_UNREADABLE_ERROR
 } from "./openFileSelectionChange";
-import { buildAgentAnswerPrompt, buildAgentToolPlanPrompt } from "../api/agent/parseAgentToolPlan";
+import { buildAgentAnswerPrompt } from "../api/agent/parseAgentToolPlan";
 import type { AgentConversationMessage, AgentPlanTurnInput, AgentStreamAnswerInput } from "../api/agent/agentTypes";
 import { promoteAgentIntegrationSearches } from "../api/agent/promoteAgentIntegrations";
 import { integrationProvidersFromAgentSteps } from "../api/agent/integrationTools";
-import { buildInterpretOpenedArtifactPrompt, type OpenedVendorArtifact } from "../api/agent/openedIntegrationEvidence";
 import {
   EDIT_UNREADABLE_FILE_ERROR,
   hasEditTargetInScope,
@@ -4928,14 +4929,17 @@ export class CoopChatSession {
     }>,
     allowedRepoTools = true,
     intentPurpose?: string,
-    projectInstructions?: string
+    projectInstructions?: string,
+    owner?: {turn: ChatTurn; task: string; answerUseCase: "chat" | "code_edit"; baseUrl: string}
   ): Promise<string> {
-    if (this.turnStreamAbort?.aborted) {
+    if ((owner?.turn.streamAbort.signal ?? this.turnStreamAbort)?.aborted) {
       return JSON.stringify({ done: true });
     }
-    const prompt = buildAgentToolPlanPrompt({
+    const planningRepoId = owner ? agentPlanningRepoId(input.repoId, owner.turn.context, allowedRepoTools) : input.repoId;
+    if (planningRepoId === undefined) return "";
+    const planInput = {
       message: input.message,
-      repoId: input.repoId,
+      repoId: planningRepoId,
       round: input.round,
       priorSummaries: input.priorSteps.map((step) => step.summary),
       lastToolResult: input.lastToolResult,
@@ -4944,14 +4948,16 @@ export class CoopChatSession {
       intentPurpose,
       allowedRepoTools,
       projectInstructions
-    });
+    };
+    const prompt = JSON.stringify(planInput);
     const history = this.conversationToHistory(input.conversation);
     let full = "";
     try {
       await this.options.api.streamChat(
         {
           message: prompt,
-          context: {},
+          context: owner ? {owner: owner.turn.context.owner, repo: owner.turn.context.repo, branch: owner.turn.context.branch} : {},
+          ...(owner ? {quotaTurnId: owner.turn.id, ordinaryTurn: {phase: "plan" as const, task: owner.task, answerUseCase: owner.answerUseCase}} : {}),
           history,
           model: runtime.model,
           provider: runtime.provider,
@@ -4963,8 +4969,8 @@ export class CoopChatSession {
         (chunk) => {
           full += chunk;
         },
-        this.preferences.apiBaseUrl,
-        this.turnStreamAbort
+        owner?.baseUrl ?? this.preferences.apiBaseUrl,
+        owner?.turn.streamAbort.signal ?? this.turnStreamAbort
       );
     } catch {
       return "";
@@ -5092,52 +5098,6 @@ export class CoopChatSession {
     });
   }
 
-  private async interpretOpenedVendorHits(
-    artifacts: OpenedVendorArtifact[],
-    ask: string,
-    signal?: AbortSignal
-  ): Promise<string | undefined> {
-    if (artifacts.length === 0 || signal?.aborted) {
-      return undefined;
-    }
-    const assignment = getFeatureModelAssignment("intentSuggest");
-    const notes = await Promise.all(
-      artifacts.map(async (artifact) => {
-        if (signal?.aborted) {
-          return "";
-        }
-        const prompt = buildInterpretOpenedArtifactPrompt({ ask, artifact });
-        let full = "";
-        try {
-          await this.options.api.streamChat(
-            {
-              message: prompt,
-              context: {},
-              history: [],
-              model: assignment.model,
-              provider: assignment.provider,
-              useCase: "chat",
-              temperature: 0,
-              maxTokens: 220,
-              enableThinking: false
-            },
-            (chunk) => {
-              full += chunk;
-            },
-            this.preferences.apiBaseUrl,
-            signal
-          );
-        } catch {
-          return `${artifact.title}: ${artifact.body.slice(0, 400)}`;
-        }
-        const text = rewriteCustomerFacingProse(full.trim());
-        return text ? `${artifact.title}: ${text}` : "";
-      })
-    );
-    const joined = notes.filter(Boolean).join("\n\n");
-    return joined || undefined;
-  }
-
   private async streamAgentAnswer(
     input: AgentStreamAnswerInput,
     runtime: { model: string; provider: import("./types").LlmProviderPreference },
@@ -5146,7 +5106,8 @@ export class CoopChatSession {
     signal?: AbortSignal,
     threadId?: string,
     requestTurn?: ChatTurn,
-    requestRunId?: string
+    requestRunId?: string,
+    requestBaseUrl?: string
   ): Promise<string> {
     const fileScope = resolveRepoFileScope(input.message);
     const projectInstructionsBlock = repoFileScopeAllowsPath(fileScope, "AGENTS.md")
@@ -5184,9 +5145,9 @@ export class CoopChatSession {
       });
     }
     let full = "";
-    const result = await this.options.api.streamChat(
-      {
+    const answerRequest: StreamChatParams = {
         message,
+        ...(requestTurn ? {quotaTurnId: requestTurn.id, ordinaryTurn: {phase: "answer" as const, task: input.message, answerUseCase: useCase}} : {}),
         context: {
           owner: requestTurn ? requestTurn.context.owner : this.currentContext.owner,
           repo: requestTurn ? requestTurn.context.repo : this.currentContext.repo,
@@ -5201,7 +5162,9 @@ export class CoopChatSession {
         // Locate synthesis reports already verified source; avoid another
         // reasoning phase after discovery has used the interactive budget.
         enableThinking: input.action !== "locate" && !input.directFileAnswer
-      },
+      };
+    const result = await this.options.api.streamChat(
+      answerRequest,
       (chunk) => {
         if (signal?.aborted) {
           return;
@@ -5209,7 +5172,7 @@ export class CoopChatSession {
         full += chunk;
         onChunk(chunk);
       },
-      this.preferences.apiBaseUrl,
+      requestBaseUrl ?? this.preferences.apiBaseUrl,
       signal,
       (thinkingChunk) => {
         if (signal?.aborted) {
@@ -5227,25 +5190,7 @@ export class CoopChatSession {
     ) {
       let extra = "";
       const continued = await this.options.api.streamChat(
-        {
-          message: LENGTH_CONTINUE_PROMPT,
-          context: {
-            owner: requestTurn ? requestTurn.context.owner : this.currentContext.owner,
-            repo: requestTurn ? requestTurn.context.repo : this.currentContext.repo,
-            branch: requestTurn ? requestTurn.context.branch : this.currentContext.branch
-          },
-          history: [
-            ...this.conversationToHistory(input.conversation, { summarizeTools: true }),
-            { role: "user" as const, content: message, timestamp: Date.now() },
-            { role: "assistant" as const, content, timestamp: Date.now() }
-          ],
-          model: runtime.model,
-          provider: runtime.provider,
-          useCase,
-          temperature: this.preferences.temperature,
-          maxTokens: resolveChatOutputMaxTokens(this.preferences.maxTokens),
-          enableThinking: false
-        },
+        ordinaryContinuationParams(answerRequest, result.message.content || full),
         (chunk) => {
           if (signal?.aborted) {
             return;
@@ -5253,7 +5198,7 @@ export class CoopChatSession {
           extra += chunk;
           onChunk(chunk);
         },
-        this.preferences.apiBaseUrl,
+        requestBaseUrl ?? this.preferences.apiBaseUrl,
         signal
       );
       content += extra || continued.message.content || "";
@@ -5309,6 +5254,9 @@ export class CoopChatSession {
    */
   private async runAgentOwnedTurn(turn: ChatTurn, query: string): Promise<void> {
     const signal = turn.streamAbort.signal;
+    const baseUrl = this.preferences.apiBaseUrl;
+    const closeTurn = () => { void this.options.api.closeSourceTurn(baseUrl, turn.id); };
+    signal.addEventListener("abort", closeTurn, {once: true});
     const isCancelled = () => !this.threadRuns.isStreamActive(turn);
     const repoId = buildRepoId(this.preferences, turn.context);
     const action = turn.agentAction ?? "none";
@@ -5447,7 +5395,6 @@ export class CoopChatSession {
               priorHits: input.priorHits,
               signal: input.signal ?? signal
             }),
-          interpretOpens: (artifacts) => this.interpretOpenedVendorHits(artifacts, query, signal),
           onDiagnostic: (event) => {
             if (typeof event.runId === "string") agentRunId = event.runId;
             this.logAgentDiagnostic(turn.threadId, {
@@ -5474,13 +5421,14 @@ export class CoopChatSession {
               })),
               allowedRepoTools,
               turn.intentPlan.purpose,
-              projectInstructionsBlock
+              projectInstructionsBlock,
+              {turn, task: query, answerUseCase: chatUseCase, baseUrl}
             );
           },
           streamAnswer: (input) =>
             this.streamAgentAnswer(input, runtimeModel, chatUseCase, (chunk) => {
               outputGate.push(chunk);
-            }, signal, turn.threadId, turn, agentRunId),
+            }, signal, turn.threadId, turn, agentRunId, baseUrl),
           onStep: (_step, steps) => {
             if (isCancelled()) {
               return;
@@ -5613,6 +5561,8 @@ export class CoopChatSession {
         payload: { message, threadId: turn.threadId }
       });
     } finally {
+      signal.removeEventListener("abort", closeTurn);
+      await this.options.api.closeSourceTurn(baseUrl, turn.id);
       deltaBatcher.dispose();
       const currentTurn = (this.threadRuns as unknown as {
         get?: (threadId: string) => ChatTurn | undefined;
@@ -6243,8 +6193,9 @@ export class CoopChatSession {
     base?: string;
     files: Array<{ path: string; content: string }>;
   }): Promise<void> {
+    const threadId = this.activeThreadId();
     const fail = (error: string): void => {
-      this.post({
+      this.postForThread(threadId, {
         type: "patch:pr-error",
         payload: { messageTimestamp: payload.messageTimestamp, error }
       });
@@ -6281,7 +6232,7 @@ export class CoopChatSession {
         fail("Created, but the host did not return a link.");
         return;
       }
-      this.post({
+      this.postForThread(threadId, {
         type: "patch:pr-created",
         payload: {
           messageTimestamp: payload.messageTimestamp,
@@ -6301,6 +6252,7 @@ export class CoopChatSession {
     diff: string;
     files?: string[];
   }): Promise<void> {
+    const threadId = this.activeThreadId();
     const complete: PrNotesCompleteFn = async (params) => {
       let full = "";
       await this.options.api.streamChat(
@@ -6329,7 +6281,7 @@ export class CoopChatSession {
       files: payload.files,
       complete
     });
-    this.post({
+    this.postForThread(threadId, {
       type: "patch:pr-notes",
       payload: {
         messageTimestamp: payload.messageTimestamp,
@@ -8901,6 +8853,10 @@ export class CoopChatSession {
     }
 
     const deltaBatcher = this.createChatDeltaBatcher(turn.threadId);
+    const sourceTurnBaseUrl = this.preferences.apiBaseUrl;
+    const closeTurn = () => { void this.options.api.closeSourceTurn(sourceTurnBaseUrl, turn.id); };
+    signal.addEventListener("abort", closeTurn, {once: true});
+    const hasSourceTurn = ["blast-radius", "knowledge-gaps", "understand-repo", "trace-decision", "find-owner"].includes(effectiveQuickAction ?? "");
     try {
       const mentionRefs = this.quickActionMentionRefs(options?.mentions);
       const activeRepoId = buildRepoId(this.preferences, turnContext);
@@ -9739,12 +9695,7 @@ export class CoopChatSession {
             }
           })
         : this.options.api.streamChat.bind(this.options.api);
-      const result = await streamSourceGroundedBlast({
-        stream: synthesisStream,
-        evidence: effectiveQuickAction === "blast-radius" ? blastRadiusEvidence : undefined,
-        question: userFocus?.trim() || taskContent,
-        prepareAnswer: prepareSourceAnswer,
-        request: {
+      const synthesisRequest: StreamChatParams = {
           message: apiMessage,
           context: {
             owner: fileAssistantTurn ? undefined : turnContext.owner,
@@ -9763,12 +9714,19 @@ export class CoopChatSession {
           temperature: this.preferences.temperature,
           maxTokens: resolveChatOutputMaxTokens(this.preferences.maxTokens),
           enableThinking: enableSynthesisThinking,
-          ...(["blast-radius", "knowledge-gaps", "understand-repo", "trace-decision", "find-owner"].includes(effectiveQuickAction ?? "") ? { quotaTurnId: turn.id } : {})
-        },
+          quotaTurnId: turn.id,
+          ...(!hasSourceTurn ? {ordinaryTurn: {phase: "answer" as const, task: userFocus?.trim() || taskContent, answerUseCase: chatUseCase}} : {})
+        };
+      const result = await streamSourceGroundedBlast({
+        stream: synthesisStream,
+        evidence: effectiveQuickAction === "blast-radius" ? blastRadiusEvidence : undefined,
+        question: userFocus?.trim() || taskContent,
+        prepareAnswer: prepareSourceAnswer,
+        request: synthesisRequest,
         onChunk: (chunk) => {
           outputGate.push(chunk);
         },
-        baseUrl: this.preferences.apiBaseUrl,
+        baseUrl: sourceTurnBaseUrl,
         signal,
         onPhase: (phase) => this.logAgentDiagnostic(turn.threadId, {
           stage: "blast-model-phase", turnId: turn.id, elapsedMs: Date.now() - turn.startedAt,
@@ -9814,7 +9772,7 @@ export class CoopChatSession {
           });
         }
         const continued = await this.options.api.streamChat(
-          {
+          !hasSourceTurn ? ordinaryContinuationParams(synthesisRequest, result.message.content) : {
             message: effectiveQuickAction === "knowledge-gaps"
               ? buildKnowledgeGapsContinuationMessage(apiMessage, full)
               : LENGTH_CONTINUE_PROMPT,
@@ -9836,12 +9794,13 @@ export class CoopChatSession {
             temperature: this.preferences.temperature,
             maxTokens: resolveChatOutputMaxTokens(this.preferences.maxTokens),
             enableThinking: false,
-            quotaTurnId: turn.id
+            quotaTurnId: turn.id,
+            ...(!hasSourceTurn ? {ordinaryTurn: {phase: "continue" as const, task: userFocus?.trim() || taskContent, answerUseCase: chatUseCase}} : {})
           },
           (chunk) => {
             outputGate.push(chunk);
           },
-          this.preferences.apiBaseUrl,
+          sourceTurnBaseUrl,
           signal
         );
         if (continued.finishReason === "length" || hasTrailingEmptyHeadings(full)) {
@@ -10011,6 +9970,8 @@ export class CoopChatSession {
       });
     } finally {
       deltaBatcher.dispose();
+      signal.removeEventListener("abort", closeTurn);
+      await this.options.api.closeSourceTurn(sourceTurnBaseUrl, turn.id);
       const currentTurn = (this.threadRuns as unknown as {
         get?: (threadId: string) => ChatTurn | undefined;
       }).get?.(turn.threadId);

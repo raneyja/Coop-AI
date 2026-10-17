@@ -21,6 +21,8 @@ import {
 import { isCoopDevMode } from "../config/lightningConfig";
 import { isRetryableError, runResilientRequest, statusFromError } from "../api/networkResilience";
 import { formatUserFacingNetworkError } from "../api/userFacingErrors";
+import { buildChatContinuation, normalizeChatRequestBody } from "../api/chatContinuation";
+import type { V1ChatRequestBody } from "../api/types";
 import type { UseCase, FinishReason } from "../api/types";
 import type { LlmProvider } from "../api/zeroRetentionConfig";
 import type {
@@ -44,6 +46,7 @@ import { DEFAULT_API_BASE, SECRET_KEY_API_TOKEN, SECRET_KEY_REFRESH_TOKEN } from
 import { verifyStoredSession } from "./verifyStoredSession";
 
 export type StreamChatParams = {
+  ordinaryTurn?: import("../api/types").OrdinaryTurnEnvelope;
   message: string;
   context: RepoContext & {
     contextBundle?: unknown;
@@ -68,6 +71,23 @@ export type StreamChatParams = {
   quotaTurnId?: string;
 };
 
+/** The same serialization is used for actual transport and recovery binding. */
+export function streamChatRequestBody(body: StreamChatParams, quotaTurnId = body.quotaTurnId): import("../api/CoopBackendClient").StreamChatBody {
+  const normalized = normalizeChatRequestBody({...body, provider: body.provider as LlmProvider, quotaTurnId,
+    history: body.history.filter((entry): entry is ChatMessage & {role: "user" | "assistant"} =>
+      !entry.cancelled && (entry.role === "user" || entry.role === "assistant"))});
+  return {...normalized, history: normalized.history ?? [], model: body.model, provider: body.provider as LlmProvider,
+    useCase: body.useCase, temperature: body.temperature, maxTokens: body.maxTokens};
+}
+
+export function ordinaryContinuationParams(initial: StreamChatParams, answer: string): StreamChatParams {
+  const captured = JSON.parse(JSON.stringify(initial)) as StreamChatParams;
+  const continuation = buildChatContinuation(streamChatRequestBody(captured), answer);
+  return {...captured, message: continuation.message, attachments: undefined,
+    history: (continuation.history ?? []).map(entry => ({...entry, timestamp: 0})),
+    ordinaryTurn: continuation.ordinaryTurn, enableThinking: false};
+}
+
 export class SecureApiClient {
   private http: AxiosInstance;
   private readonly backend: CoopBackendClient;
@@ -76,6 +96,10 @@ export class SecureApiClient {
   public beginQuotaTurn(id = crypto.randomUUID()): string {
     this.quotaTurnId = id;
     return id;
+  }
+
+  public async closeSourceTurn(baseUrl: string, quotaTurnId: string): Promise<boolean> {
+    return this.backend.closeSourceTurn(baseUrl, quotaTurnId);
   }
 
   public constructor(private readonly secrets: vscode.SecretStorage) {
@@ -759,51 +783,10 @@ export class SecureApiClient {
     await this.ensureToken();
     this.setBaseUrl(baseUrl);
 
-    const history = body.history
-      .filter((entry): entry is ChatMessage & { role: "user" | "assistant" } =>
-        !entry.cancelled && (entry.role === "user" || entry.role === "assistant")
-      )
-      .map((entry) => ({
-        role: entry.role,
-        content: entry.content,
-        attachments: entry.attachments
-      }));
-
     const result = await this.backend.streamChat(
       baseUrl,
-      {
-        message: body.message,
-        history,
-        context: {
-          owner: body.context.owner,
-          repo: body.context.repo,
-          branch: body.context.branch,
-          file: body.context.file,
-          selectedLines: body.context.selectedLines,
-          languageId: body.context.languageId,
-          contextBundle: body.context.contextBundle,
-          projectInstructions: body.context.projectInstructions
-        },
-        attachments: body.attachments,
-        mentions: body.mentions?.map((mention) => ({
-          repoId: mention.repoId,
-          path: mention.path,
-          lines: mention.lines
-        })),
-        model: body.model,
-        provider: body.provider as LlmProvider,
-        useCase: body.useCase,
-        temperature: body.temperature,
-        maxTokens: body.maxTokens,
-        enableThinking: body.enableThinking === true,
-        sourceClaimReview: body.sourceClaimReview === true,
-        sourceEvidenceSynthesis: body.sourceEvidenceSynthesis === true,
-        sourceEvidenceRepair: body.sourceEvidenceRepair === true,
-        sessionMode: body.sessionMode,
-        fileSource: body.fileSource,
-        quotaTurnId: body.quotaTurnId ?? this.quotaTurnId,
-        responseTiming: trace && callId ? { traceId: trace.identity.traceId, callId } : undefined
-      },
+      {...streamChatRequestBody(body, body.quotaTurnId ?? this.quotaTurnId),
+        responseTiming: trace && callId ? {traceId: trace.identity.traceId, callId} : undefined},
       chunk => {
         if (!firstDelta && chunk.trim()) { firstDelta = true; trace?.event("model-first-delta", { callId, displayed: false }); }
         onChunk(chunk);

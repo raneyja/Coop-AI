@@ -1,5 +1,5 @@
 import { getZeroRetentionConfig } from "../zeroRetentionConfig";
-import { BaseProviderClient, parseSseDataLine, resolveUsage, type ParseState } from "./baseClient";
+import { BaseProviderClient, parseSseDataLine, resolveUsage, readUsageInt, type ParseState } from "./baseClient";
 import { formatZeroRetentionRequest } from "../requestFormatter";
 import type { ProviderStreamOptions, ProviderThinkingOptions, StreamChunk } from "../types";
 import { runResilientRequest } from "../networkResilience";
@@ -120,13 +120,16 @@ export class AnthropicProviderClient extends BaseProviderClient {
         timeoutMs: LLM_STREAM_CONNECT_TIMEOUT_MS,
         signal: options.signal,
         policy: { maxRetries: 0 },
-        run: async (signal) =>
-          this.fetchImpl(url, {
+        run: async (signal) => {
+          signal?.throwIfAborted();
+          await options.onProviderDispatch?.();
+          return this.fetchImpl(url, {
             method: "POST",
             headers,
             body: JSON.stringify(body),
             signal
-          })
+          });
+        }
       });
     } catch (error) {
       yield {
@@ -211,6 +214,7 @@ export function parseAnthropicLine(line: string, state: AnthropicParseState): St
   if (!data || typeof data.type !== "string") {
     return undefined;
   }
+  if (state.messageStopped && data.type !== "ping") return {type:"error",message:"Anthropic returned data after message_stop."};
   if (data.type === "error") {
     const error = data.error as Record<string, unknown> | undefined;
     return { type: "error", message: typeof error?.message === "string" ? error.message.slice(0, 500) : "Anthropic stream failed.",
@@ -219,10 +223,11 @@ export function parseAnthropicLine(line: string, state: AnthropicParseState): St
   if (data.type === "message_start") {
     const message = data.message as Record<string, unknown> | undefined;
     const usage = message?.usage as Record<string, unknown> | undefined;
-    const inputTokens = readUsageInt(usage?.input_tokens);
-    if (inputTokens !== undefined) {
-      state.inputTokens = inputTokens;
-    }
+    const input = readUsageInt(usage?.input_tokens);
+    const created = usage?.cache_creation_input_tokens === undefined ? 0 : readUsageInt(usage.cache_creation_input_tokens);
+    const cached = usage?.cache_read_input_tokens === undefined ? 0 : readUsageInt(usage.cache_read_input_tokens);
+    state.inputTokens = input !== undefined && created !== undefined && cached !== undefined
+      && Number.isSafeInteger(input + created + cached) ? input + created + cached : undefined;
   }
   if (data.type === "content_block_delta") {
     const delta = data.delta as Record<string, unknown> | undefined;
@@ -243,16 +248,12 @@ export function parseAnthropicLine(line: string, state: AnthropicParseState): St
     state.messageStopped = true;
     const usage = data.usage as Record<string, unknown> | undefined;
     const outputTokens = readUsageInt(usage?.output_tokens);
-    if (outputTokens !== undefined) {
-      state.outputTokens = outputTokens;
-    }
+    if (usage !== undefined) state.outputTokens = outputTokens;
   }
   if (data.type === "message_delta") {
     const usage = data.usage as Record<string, unknown> | undefined;
     const outputTokens = readUsageInt(usage?.output_tokens);
-    if (outputTokens !== undefined) {
-      state.outputTokens = outputTokens;
-    }
+    if (usage !== undefined) state.outputTokens = outputTokens;
     const delta = data.delta as Record<string, unknown> | undefined;
     const reason = delta?.stop_reason;
     if (typeof reason === "string") {
@@ -260,10 +261,8 @@ export function parseAnthropicLine(line: string, state: AnthropicParseState): St
         : reason === "end_turn" || reason === "stop_sequence" || reason === "refusal" ? "stop" : "error";
     }
   }
+  state.usageComplete = readUsageInt(state.inputTokens) !== undefined && readUsageInt(state.outputTokens) !== undefined;
+  state.usageTerminal = state.messageStopped === true && state.finishReason !== undefined;
   return undefined;
 }
 
-function readUsageInt(value: unknown): number | undefined {
-  const parsed = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : undefined;
-}

@@ -1,4 +1,5 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
+import databasePoolOptions from "../server/databasePoolOptions.cjs";
 import {randomUUID,createHash} from 'node:crypto';
 import {withJobOwnedEffect,withJobEffectExclusion} from '../jobs/jobEffectAdmission';
 import {GRAPH_JOB_TYPES,type Job} from '../jobs/types';
@@ -16,6 +17,12 @@ type PendingPersist = {
 };
 
 let loggedMissingOrgPersist = false;
+
+export type GraphStorageReadiness = {
+  status: "ok" | "failed" | "unverified";
+  reason: string;
+  publication?: { scopes: number; pending: number; legacy: number; unattested: number; inconsistent: number };
+};
 
 export class PersistingGraphCache extends GraphCache {
   private readonly pool: Pool;
@@ -38,6 +45,68 @@ export class PersistingGraphCache extends GraphCache {
   }
 
   public constructor(options: PersistOptions) { super(options);this.pool=options.pool; }
+
+  /** Bind a diagnostic connection to this owner's actual pool, not just its
+   * configured backend name. Never return the credential-bearing target. */
+  public usesDatabase(connectionString: string): boolean {
+    try {
+      if (!this.pool.options.connectionString) return false;
+      const expected = databasePoolOptions(connectionString);
+      const actual = databasePoolOptions(this.pool.options.connectionString);
+      return actual.connectionString === expected.connectionString
+        && JSON.stringify(this.pool.options.ssl ?? false) === JSON.stringify(expected.ssl);
+    } catch { return false; }
+  }
+
+  /** Read metadata on the caller's independently bounded diagnostic client.
+   * Pending generations are normal indexing work, not a dependency outage.
+   * This measures graph publication metadata, never external index shards or
+   * whether a particular repository is current enough for a customer request. */
+  public async getStorageReadiness(client: Pick<PoolClient, "query">): Promise<GraphStorageReadiness> {
+    const result = await client.query(`WITH publication AS (
+      SELECT h.org_id, h.requested_generation, h.published_generation,
+        (s.org_id IS NOT NULL AND (h.origin = 'legacy-unattested' OR s.origin = 'legacy-unattested'))
+          OR (h.published_generation > 0 AND h.origin = 'legacy-unattested') AS legacy,
+        (h.published_generation > 0 AND h.origin <> 'legacy-unattested'
+          AND NOT (h.origin ~ '^standalone:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            OR (NOT h.tombstone AND h.origin ~ '^job:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+            OR (h.tombstone AND h.origin = 'purge')))
+          OR (h.published_generation = 0 AND s.org_id IS NOT NULL AND s.origin <> 'legacy-unattested') AS unattested,
+        h.org_id IS NULL
+          OR h.published_generation > h.requested_generation
+          OR h.requested_generation < 0 OR h.published_generation < 0 OR h.revision < 0
+          OR (h.published_generation > 0 AND h.revision = 0)
+          OR (h.tombstone AND h.published_generation = 0)
+          OR (h.origin LIKE 'job:%' AND h.published_job_id::text IS DISTINCT FROM split_part(h.origin, ':', 2))
+          OR (h.origin NOT LIKE 'job:%' AND h.published_job_id IS NOT NULL)
+          OR (h.tombstone AND s.org_id IS NOT NULL)
+          OR (NOT h.tombstone AND h.published_generation > 0 AND
+            (s.org_id IS NULL OR s.generation IS DISTINCT FROM h.published_generation
+              OR s.revision IS DISTINCT FROM h.revision OR s.origin IS DISTINCT FROM h.origin))
+          OR (h.published_generation = 0 AND s.org_id IS NOT NULL AND
+            (s.generation <> 0 OR s.revision <> 0 OR h.revision <> 0)) AS inconsistent
+      FROM public.graph_publication_heads h FULL JOIN public.graph_snapshots s USING (org_id, repo_id)
+    ) SELECT count(*)::text AS scopes,
+      count(*) FILTER (WHERE requested_generation > published_generation)::text AS pending,
+      count(*) FILTER (WHERE legacy)::text AS legacy,
+      count(*) FILTER (WHERE unattested)::text AS unattested,
+      count(*) FILTER (WHERE inconsistent)::text AS inconsistent FROM publication`);
+    const row = result.rows[0];
+    const publication = { scopes: Number(row.scopes), pending: Number(row.pending),
+      legacy: Number(row.legacy), unattested: Number(row.unattested), inconsistent: Number(row.inconsistent) };
+    if (Object.values(publication).some(value => !Number.isSafeInteger(value) || value < 0)) {
+      return { status: "unverified", reason: "graph_publication_measurement_unavailable" };
+    }
+    // Recheck owner state after SQL settles: a concurrent failed/uncertain
+    // publication or shutdown must not become an optimistic storage positive.
+    if (this.closed || this.persistenceFailure || this.failedJobPublications.size) {
+      return { status: "failed", reason: "graph_persistence_requires_reconciliation", publication };
+    }
+    if (publication.inconsistent) return { status: "failed", reason: "graph_publication_metadata_inconsistent", publication };
+    if (publication.legacy) return { status: "unverified", reason: "legacy_graph_publication_unattested", publication };
+    if (publication.unattested) return { status: "unverified", reason: "graph_publication_origin_unverified", publication };
+    return { status: "ok", reason: "graph_publication_storage_available", publication };
+  }
 
   /** Refresh durable heads even on a local hit. A late read never rolls memory
    * back over another read/local mutation or a newer confirmed revision. */

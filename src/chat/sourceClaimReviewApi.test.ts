@@ -12,9 +12,18 @@ test("private review mode survives client, transport and API boundaries into the
   let providerCalls = 0, synthesisMode = false, repairMode = false;
   const router = new ModelRouter({config: {defaultProvider: "anthropic", mockMode: false,
     allowUnapprovedProvider: false, apiKeys: {anthropic: "fixture-key", openai: "fixture-key"}}});
-  const deps = {router, config: {defaultProvider: "anthropic" as const, mockMode: false, allowUnapprovedProvider: false, apiKeys: {}},
+  const deps = {router, orgStore: {
+      resolveAuth: async () => ({orgId: "00000000-0000-4000-8000-000000000001",orgName: "fixture",plan: "enterprise",apiKeyId: "fixture"}),
+      getOrganization: async () => ({plan: "enterprise"})
+    } as unknown as import("../server/orgStore").OrgStore, sourceTurnAuthority: {
+    // This test owns provider/prompt transport only. Actual grant admission is
+    // exercised separately by sourceTurnAuthority.integration.test.ts.
+    admit: async ({check,quota}: {check: (quota: PlanQuotaService,id: string,continuation: boolean,now: Date)=>Promise<void>;quota: PlanQuotaService}) => {
+      await check(quota,"same-server-turn",true,new Date()); return {id:"same-server-turn",source:true};
+    }, complete: async () => undefined, close: async () => undefined
+  }, config: {defaultProvider: "anthropic" as const, mockMode: false, allowUnapprovedProvider: false, apiKeys: {}},
     serverConfig: {nodeEnv: "test", requireApiAuth: false, legacyApiToken: "fixture-token", jobsWorkersEnabled: false, devMode: true},
-    planQuota: {check: async () => undefined, recordTokens: async (_org: string, _plan: string, value: Record<string, unknown>) => {recorded.push(value);}} as unknown as PlanQuotaService};
+    planQuota: {cappedSubject: () => undefined,check: async () => undefined, recordTokens: async (_org: string, _plan: string, value: Record<string, unknown>) => {recorded.push(value);}} as unknown as PlanQuotaService};
   try {
     globalThis.fetch = async (url, init) => {
       const body = JSON.parse(String(init?.body));
@@ -42,7 +51,7 @@ test("private review mode survives client, transport and API boundaries into the
         assert(!system.includes("```start:end:path"));
         assert(!system.includes("Required response structure"), "Frozen actions do not inherit competing legacy templates");
         assert(!system.includes("first body line is REAL integers"), "Only local source rendering owns code fences");
-        assert(system.includes("at most six markers total"));
+        assert(system.includes("16 rendered source cards"));
       }
       assert.equal(body.model, synthesisMode && !repairMode ? "claude-sonnet-4-6" : "gpt-5.5");
       const user = body.messages.find((part: {role: string}) => part.role === "user");
@@ -51,7 +60,7 @@ test("private review mode survives client, transport and API boundaries into the
       assert.equal(userText, '{"candidate":"Review this as a PR; what would you block?"}');
       assert(!userText.includes("Turn directive"), "Candidate words must not trigger ordinary chat instructions");
       if (!synthesisMode || repairMode) {
-        assert.equal(body.reasoning_effort, "medium");
+        assert.equal(body.reasoning_effort, "low");
         assert.equal(body.max_completion_tokens, 32768);
         if (!synthesisMode) {
           assert.equal(body.response_format.type,"json_schema");
@@ -67,7 +76,7 @@ test("private review mode survives client, transport and API boundaries into the
         return new Response('data: {"choices":[{"delta":{"content":"private-verdict"}}]}\n\ndata: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":2}}\n\ndata: [DONE]\n\n');
       }
       assert.deepEqual(body.thinking, {type:"adaptive"});
-      assert.equal(body.output_config.effort,"high");
+      assert.equal(body.output_config.effort,"medium");
       assert.equal(body.output_config.format,undefined); assert.equal(body.response_format,undefined);
       return new Response('data: {"type":"message_start","message":{"usage":{"input_tokens":10}}}\n\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"private-verdict"}}\n\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}}\n\ndata: {"type":"message_stop"}\n\n');
     };
@@ -81,7 +90,7 @@ test("private review mode survives client, transport and API boundaries into the
     }
     assert.equal(providerCalls, 15);
     assert.equal(recorded.length, 15);
-    assert(recorded.every(value => value.quotaTurnId === "same-user-turn"));
+    assert(recorded.every(value => value.quotaTurnId === "same-server-turn"));
     for (const body of [{useCase: "chat", sourceClaimReview: true}, {useCase: "blast_radius", sourceClaimReview: "true"},
       {useCase: "chat", sourceEvidenceSynthesis: true}, {useCase: "ownership", sourceEvidenceSynthesis: "true"},
       {useCase: "comprehension", sourceEvidenceSynthesis: true, sourceClaimReview: true},

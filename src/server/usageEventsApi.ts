@@ -28,6 +28,7 @@ export type UsageEventsApiDeps = {
   serverConfig: ServerConfig;
   usageTracker?: UsageTracker;
   planQuota?: PlanQuotaService;
+  sourceTurnAuthority?: Pick<import("./sourceTurnAuthority").SourceTurnAuthority, "recordImmediate">;
 };
 
 const ACCEPTED_PROVIDERS = new Set<LlmProvider>(["openai", "anthropic", "gemini", "mistral"]);
@@ -73,6 +74,12 @@ export async function handleUsageEventsApiRequest(
         ? (item.metadata as Record<string, unknown>)
         : {};
 
+    // Billing, quota credits and reservations have server owners. Generic
+    // client telemetry cannot write monetary fields or manufacture credit.
+    if (["chat.message","chat.turn_reserved","quota.credit"].includes(eventType)
+      || ["usdCents","flashCostUsd","sourceReviewCostUsd","billingCallId","billedTokens","countsAsMessage"].some(key => key in metadata)) {
+      writeJson(response,400,{error:"invalid_request",message:"Server billing events cannot be submitted as telemetry."});return true;
+    }
     if (eventType === "completion.accepted" && deps.planQuota) {
       const billed = await billAcceptedCompletion(deps, auth, actor, metadata, response);
       if (billed === "quota_error") {
@@ -140,11 +147,12 @@ async function billAcceptedCompletion(
   }
 
   try {
-    await deps.planQuota.check(
+    const commit = async (quota: PlanQuotaService, now?: Date) => {
+    await quota.check(
       auth.orgId,
       plan,
       Math.ceil(inputTokens + outputTokens),
-      undefined,
+      now,
       {
         usageTier,
         userId: actor.userId,
@@ -155,7 +163,7 @@ async function billAcceptedCompletion(
         periodAnchor: org.createdAt
       }
     );
-    await deps.planQuota.recordTokens(auth.orgId, plan, {
+    await quota.recordTokens(auth.orgId, plan, {
       eventType: "completion.accepted",
       inputTokens: Math.max(0, Math.floor(inputTokens)),
       outputTokens: Math.max(0, Math.floor(outputTokens)),
@@ -174,6 +182,10 @@ async function billAcceptedCompletion(
       useCase: "inline_completion",
       countsAsMessage: true
     });
+    };
+    if (deps.sourceTurnAuthority && auth.orgId !== "dev" && auth.orgId !== "legacy")
+      await deps.sourceTurnAuthority.recordImmediate(auth.orgId,deps.planQuota.cappedSubject(auth.orgId,plan,{usageTier,userId: actor.userId}),deps.planQuota,commit);
+    else await commit(deps.planQuota);
     return "recorded";
   } catch (error) {
     if (error instanceof PlanQuotaExceededError) {
