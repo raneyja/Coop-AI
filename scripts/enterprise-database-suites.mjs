@@ -1,6 +1,7 @@
 // Fixed test-only commands. Callers may select a name, never a URL or command.
 const ts = file => ['--require', './scripts/vscode-test-stub.cjs', '--import', './node_modules/tsx/dist/loader.mjs', '--test', file];
 export const DATABASE_SUITES = Object.freeze({
+  'source-turns': {setup: true, commands: [ts('src/server/sourceTurnAuthority.integration.test.ts')]},
   'schema-rollout': {setup:false,preparation:[['scripts/build-compatibility-fixtures.mjs']],commands:[ts('scripts/schema-deployment-compatibility.integration.test.ts')]},
   compatibility: {setup:true,preparation:[['scripts/build-compatibility-fixtures.mjs']],commands:[ts('scripts/client-api-compatibility.integration.test.ts')]},
   auth: {setup: false, commands: [ts('src/server/auth/authRateLimit.integration.test.ts')]},
@@ -10,7 +11,7 @@ export const DATABASE_SUITES = Object.freeze({
     commands: [['--require','./scripts/vscode-test-stub.cjs','--import','./node_modules/tsx/dist/loader.mjs','src/server/integrationApi.publication.extra.test.ts']]},
   migrations: {setup: false, commands: [['--test', 'scripts/run-migrations.integration.test.mjs']]},
   assembly: {setup: false, commands: [ts('scripts/enterprise-assembly-controls.integration.test.ts')]},
-  jobs: {setup: true, commands: [['--require','./scripts/vscode-test-stub.cjs','--test','dist/tests/jobLeases.integration.test.cjs']]},
+  jobs: {setup: true, commands: [['--require','./scripts/vscode-test-stub.cjs','--test','dist/tests/jobLeases.integration.test.cjs'],ts('src/jobs/indexConcurrency.integration.test.ts'),ts('src/indexing/embeddingRateLimiter.integration.test.ts')]},
   graph: {setup: true,
     // Match the production worker's bundle boundary for the ESM-only SCIP schema.
     // Compile both the test and its real process-kill child from current source.

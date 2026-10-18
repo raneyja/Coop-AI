@@ -164,6 +164,8 @@ const FREE_FORCED_MODEL = { provider: "gemini" as const, model: FREE_FLASH_MODEL
 
 /** Private verification capacity is operator-owned, independent of answer preferences. */
 export const SOURCE_VERIFICATION_MAX_TOKENS = 32_768;
+/** Shared client/server envelope bound; every prose unit still needs review. */
+export const SOURCE_CLAIM_REVIEW_BATCH_SIZE = 16;
 
 export function resolveAssignedSourceVerificationModel(): { provider: LlmProvider; model: string } {
   const assignment = getFeatureModelAssignment("sourceVerification");

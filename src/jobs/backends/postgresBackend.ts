@@ -4,12 +4,13 @@ import databasePoolOptions from "../../server/databasePoolOptions.cjs";
 import type { Job, JobLease, JobParams, JobResultRecord, JobStatus } from "../types";
 import { EFFECT_JOB_TYPES, GRAPH_JOB_TYPES, JobType } from "../types";
 import { JOB_EFFECT_ADMISSION_LOCK } from "../jobEffectAdmission";
+import { DISJOINT_INDEX_ORGANIZATIONS_SQL } from "../effectJobConcurrency";
 import type { PostgresCapableBackend } from "../resultStorage";
 
 type PgPool = {
   query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
   end?: () => Promise<void>;
-  connect: () => Promise<{query: PgPool['query']; release: () => void}>;
+  connect: () => Promise<{query: PgPool['query']; release: (error?: Error) => void; on: (event: "error", listener: (error: Error) => void) => void; removeListener: (event: "error", listener: (error: Error) => void) => void}>;
 };
 
 
@@ -23,9 +24,9 @@ export class PostgresQueueBackend implements PostgresCapableBackend {
   /** Head allocation and the queued row are one logical submission. */
   public async save(job: Job): Promise<Job> {
     await this.ensureInit();
-    const client = await this.pool!.connect();
+    const client = await boundedControlClient(this.pool!);
     try {
-      await client.query('BEGIN');
+      await client.query("BEGIN; SET LOCAL idle_in_transaction_session_timeout = '5s'");
       // Serialize submission/dedup with actual effect admission and purge.
       await client.query('SELECT pg_advisory_xact_lock($1)', [JOB_EFFECT_ADMISSION_LOCK]);
       const previous = await client.query('SELECT * FROM jobs WHERE id=$1', [job.id]);
@@ -100,9 +101,9 @@ export class PostgresQueueBackend implements PostgresCapableBackend {
 
   public async claimNext(ownerId: string, leaseMs: number): Promise<Job | undefined> {
     await this.ensureInit();
-    const client = await this.pool!.connect();
+    const client = await boundedControlClient(this.pool!);
     try {
-    await client.query('BEGIN');
+    await client.query("BEGIN; SET LOCAL idle_in_transaction_session_timeout = '5s'");
     await client.query('SELECT pg_advisory_xact_lock($1)', [JOB_EFFECT_ADMISSION_LOCK]);
     const result = await client.query(
       `WITH next AS (
@@ -113,7 +114,8 @@ export class PostgresQueueBackend implements PostgresCapableBackend {
              WHERE h.org_id IS NULL OR h.requested_generation::text<>token->>'generation')))
            AND (type <> ALL($4::text[]) OR NOT EXISTS (
              SELECT 1 FROM jobs blocked WHERE blocked.effect_quarantined
-               OR (blocked.status = 'running' AND blocked.type = ANY($4::text[]))))
+               OR (blocked.status = 'running' AND blocked.type = ANY($4::text[])
+                 AND NOT ${DISJOINT_INDEX_ORGANIZATIONS_SQL})))
          ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END, created_at
          LIMIT 1 FOR UPDATE SKIP LOCKED
        ) UPDATE jobs SET status = 'running', owner_id = $1, attempt_id = $2,
@@ -140,7 +142,7 @@ export class PostgresQueueBackend implements PostgresCapableBackend {
     job=structuredClone(job); // Freeze caller identity/result before any checkout or lock wait.
     record=record && structuredClone(record);
     await this.ensureInit();
-    const client=await this.pool!.connect();
+    const client=await boundedControlClient(this.pool!);
     const identity=[job.id,lease.ownerId,lease.attemptId,job.type,JSON.stringify(job.params),job.userId ?? null,
       job.graphGenerations ? JSON.stringify(job.graphGenerations) : null];
     const checkHeads=async()=>{
@@ -155,12 +157,18 @@ export class PostgresQueueBackend implements PostgresCapableBackend {
       }
     };
     try {
-    await client.query('BEGIN');
+    await client.query("BEGIN; SET LOCAL idle_in_transaction_session_timeout = '5s'");
+    // Same global -> attempt -> heads order as effect entry and quarantine.
+    if (EFFECT_JOB_TYPES.includes(job.type)) await client.query('SELECT pg_advisory_xact_lock($1)', [JOB_EFFECT_ADMISSION_LOCK]);
     await client.query('SELECT id FROM jobs WHERE id=$1 FOR UPDATE',[job.id]);
     const admitted=await client.query(`SELECT id FROM jobs WHERE id=$1 AND owner_id=$2 AND attempt_id=$3
       AND status='running' AND type=$4 AND params=$5::jsonb AND user_id IS NOT DISTINCT FROM $6::varchar
       AND graph_generations IS NOT DISTINCT FROM $7::jsonb AND lease_expires_at>clock_timestamp()`,identity);
     if(!admitted.rows.length){await client.query('ROLLBACK');return undefined;}
+    if (job.status === 'completed' && EFFECT_JOB_TYPES.includes(job.type)
+      && (await client.query('SELECT id FROM jobs WHERE effect_quarantined LIMIT 1')).rows.length) {
+      throw new Error('Index effects require worker termination and reconciliation before completion');
+    }
     await checkHeads();
     const result = await client.query(
       `WITH updated AS (
@@ -202,10 +210,15 @@ export class PostgresQueueBackend implements PostgresCapableBackend {
 
   public async cancel(id: string, includeRunning: boolean): Promise<Job | undefined> {
     await this.ensureInit();
+    // One server statement: a paused client cannot retain a short admission
+    // transaction between acquiring the lock and committing quarantine.
     const result = await this.pool!.query(
-      `UPDATE jobs SET status = 'cancelled', completed_at = clock_timestamp(), error = 'Cancelled by user',
+      `WITH admission AS MATERIALIZED (SELECT pg_advisory_xact_lock($4::bigint))
+       UPDATE jobs SET status = 'cancelled', completed_at = clock_timestamp(), error = 'Cancelled by user',
          effect_quarantined = status = 'running' AND type = ANY($3::text[])
-       WHERE id = $1 AND (status = 'queued' OR ($2::boolean AND status = 'running')) RETURNING *`, [id, includeRunning, EFFECT_JOB_TYPES]);
+       FROM admission
+       WHERE id = $1 AND (status = 'queued' OR ($2::boolean AND status = 'running')) RETURNING jobs.*`,
+      [id, includeRunning, EFFECT_JOB_TYPES, JOB_EFFECT_ADMISSION_LOCK]);
     return result.rows[0] ? rowToJob(result.rows[0]) : undefined;
   }
 
@@ -453,8 +466,12 @@ function parseJson(value: unknown): unknown {
 
 /** Database time, not process uptime or job start age, determines recovery. */
 export async function reclaimExpiredJobLeases(pool: PgPool, maxRetries = 3): Promise<number> {
+  // The admission CTE is consumed before ModifyTable acquires target row locks.
+  // Autocommit finishes on the server even if the worker is SIGSTOP-paused while
+  // waiting for its acknowledgement; no client-side transaction gap remains.
   const result = await pool.query(
-    `UPDATE jobs SET
+    `WITH admission AS MATERIALIZED (SELECT pg_advisory_xact_lock($3::bigint))
+     UPDATE jobs SET
        status = CASE WHEN type = ANY($2::text[]) OR retry_count >= $1 THEN 'failed' ELSE 'queued' END,
        completed_at = CASE WHEN type = ANY($2::text[]) OR retry_count >= $1 THEN clock_timestamp() ELSE NULL END,
        error = CASE WHEN type = ANY($2::text[]) THEN 'Expired effect attempt quarantined; terminate worker and reconcile effects'
@@ -464,6 +481,26 @@ export async function reclaimExpiredJobLeases(pool: PgPool, maxRetries = 3): Pro
        owner_id = CASE WHEN type = ANY($2::text[]) THEN owner_id ELSE NULL END,
        attempt_id = CASE WHEN type = ANY($2::text[]) THEN attempt_id ELSE NULL END, lease_expires_at = NULL,
        started_at = NULL, progress = 0, available_at = clock_timestamp()
-     WHERE status = 'running' AND lease_expires_at <= clock_timestamp() RETURNING id`, [maxRetries, EFFECT_JOB_TYPES]);
+     FROM admission WHERE status = 'running' AND lease_expires_at <= clock_timestamp() RETURNING jobs.id`,
+    [maxRetries, EFFECT_JOB_TYPES, JOB_EFFECT_ADMISSION_LOCK]);
   return result.rows.length;
+}
+
+/** Only short queue-control transactions use this bound. Physical effect
+ * callbacks retain their separate ownership/reconciliation contract. PostgreSQL
+ * rolls back a paused control client instead of retaining global admission. */
+async function boundedControlClient(pool: PgPool) {
+  const client = await pool.connect();
+  let failure: Error | undefined;
+  const onError = (error: Error) => { failure ??= error; };
+  client.on('error', onError);
+  return {
+    query: async (text: string, params?: unknown[]) => {
+      if (failure) throw failure;
+      const result = await client.query(text, params);
+      if (failure) throw failure;
+      return result;
+    },
+    release: () => { client.release(failure); client.removeListener('error', onError); }
+  };
 }

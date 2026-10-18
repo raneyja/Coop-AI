@@ -173,7 +173,7 @@ export class WorkerPool extends EventEmitter {
     if (failed) {
       this.monitor?.recordCompletion(failed, Date.now() - startedAt);
       this.emit('job:done', failed);
-      captureException(error, {jobId: failed.id, jobType: failed.type,
+      captureException(error, {jobId: failed.id, attemptId: failed.attemptId, jobType: failed.type,
         orgId: typeof failed.params.orgId === 'string' ? failed.params.orgId : undefined, route: 'job'});
     }
     if (error instanceof JobTimeoutError) this.monitor?.recordWorkerCrash(error);

@@ -8,6 +8,7 @@ import type { GraphCache } from "../../cache/graphCache";
 import { PersistingGraphCache } from "../../cache/graphCachePostgres";
 import type { CacheConfig } from "../../config/webhookConfig";
 import type { JobRuntime } from "../../jobs/jobRuntime";
+import { workerFleetReadiness } from "../../jobs/workerPresence";
 import { extractBearerToken } from "../authMiddleware";
 import { writeJson } from "../adminApiShared";
 import databasePoolOptions from "../databasePoolOptions.cjs";
@@ -34,8 +35,10 @@ const REQUIRED_COLUMNS: Record<string, string[]> = {
   operators: ["id", "role", "disabled_at"],
   operator_sessions: ["operator_id", "token_hash", "expires_at"],
   jobs: ["id", "status", "owner_id", "attempt_id", "lease_expires_at", "effect_quarantined"],
+  worker_presence: ["instance_id", "fleet_id", "bundle_sha256", "accepting_work", "capacity", "active_jobs", "observed_at", "lease_expires_at"],
   job_results: ["job_id", "expires_at"],
-  graph_snapshots: ["org_id", "repo_id", "payload"],
+  graph_snapshots: ["org_id", "repo_id", "payload", "generation", "revision", "origin"],
+  graph_publication_heads: ["org_id", "repo_id", "requested_generation", "published_generation", "revision", "tombstone", "origin", "published_job_id"],
   repo_manifests: ["org_id", "repo_id"],
   repo_symbol_index: ["org_id", "repo_id"],
   repo_embeddings: ["org_id", "repo_id"],
@@ -131,19 +134,25 @@ export class OperatorReadiness {
         && jobs.config.backend === "postgres" && jobs.queue.getBackend().name === "postgres"
         && sameDatabase(this.dependencies.databaseUrl, jobs.config.databaseUrl)
         && ["postgres", "memory"].includes(cacheConfig.backend)
-        && (cacheConfig.backend !== "postgres" || cache instanceof PersistingGraphCache);
+        && (cacheConfig.backend !== "postgres" || (cache instanceof PersistingGraphCache
+          && sameDatabase(this.dependencies.databaseUrl, cacheConfig.connectionString)
+          && cache.usesDatabase(this.dependencies.databaseUrl)));
+      const graphStorage = cacheConfig.backend === "postgres" && cache instanceof PersistingGraphCache
+        ? !configOk || schema.status !== "ok"
+          ? { status: "unverified" as const, reason: "graph_configuration_or_schema_unverified" }
+          : await cache.getStorageReadiness(client)
+        : { status: "unverified" as const, reason: "memory_cache_persistence_and_freshness_unverified" };
+      if (cancelled) return;
+      const workers = !configOk || schema.status !== "ok"
+        ? { status: "unverified" as const, reason: "worker_configuration_or_schema_unverified" }
+        : await workerFleetReadiness(client, serverConfig);
+      if (cancelled) return;
       const checks: Record<string, Check> = {
         database: { status: "ok" },
         schema,
         configuration: { status: configOk ? "ok" : "failed", ...(configOk ? {} : { reason: "runtime_configuration_incomplete" }) },
-        graphStorage: {
-          status: "unverified", reason: cacheConfig.backend === "postgres" && cache instanceof PersistingGraphCache
-            ? "buffered_cache_publication_freshness_contract_missing"
-            : "memory_cache_persistence_and_freshness_unverified"
-        },
-        workers: !serverConfig.jobsWorkersEnabled
-          ? { status: "unverified", reason: "remote_fleet_freshness_contract_missing" }
-          : { status: jobs.workers.acceptingWork ? "ok" : "failed", reason: jobs.workers.acceptingWork ? "local_accepting_signal_only" : "local_worker_not_accepting" },
+        graphStorage,
+        workers,
         indexStorage: { status: "unverified", reason: "shared_storage_and_served_generation_contract_missing" }
       };
       await client.query("ROLLBACK");

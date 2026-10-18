@@ -442,7 +442,7 @@ export function imageSourceInputs(root=process.cwd()) {
  const files=[];
  const visit=folder=>{for(const entry of fs.readdirSync(folder,{withFileTypes:true})){const file=path.join(folder,entry.name);if(entry.isSymbolicLink())throw new Error('Image source symlink unsupported');if(entry.isDirectory())visit(file);else if(entry.isFile())files.push({path:file,sha256:hashFile(file)});}};
  for(const directory of ['src','migrations','scripts/indexer-tools'])visit(path.join(root,directory));
- for(const name of ['Dockerfile','.dockerignore','package.json','package-lock.json','tsconfig.backend.json','scripts/admin-org.ts','scripts/run-migrations.mjs','scripts/runtime-entrypoint'])files.push({path:path.join(root,name),sha256:hashFile(path.join(root,name))});
+ for(const name of ['Dockerfile','Dockerfile.api','.dockerignore','package.json','package-lock.json','tsconfig.backend.json','scripts/admin-org.ts','scripts/run-migrations.mjs','scripts/runtime-entrypoint'])files.push({path:path.join(root,name),sha256:hashFile(path.join(root,name))});
  return files.sort((a,b)=>a.path.localeCompare(b.path));
 }
 function imageReceiptFromEnvironment() {

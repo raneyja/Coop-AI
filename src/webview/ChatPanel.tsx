@@ -538,6 +538,13 @@ export function ChatPanel({ vscode }: ChatPanelProps): React.ReactElement {
     setDegradationNotification(undefined);
     setCommandConfirm(undefined);
     setAttachmentError("");
+    setPrNotesByTimestamp(new Map());
+    setCreatePrFilesByTimestamp(new Map());
+    setCreatePrDiffByTimestamp(new Map());
+    setPrCreateByTimestamp(new Map());
+    setOpenCreatePrTimestamp(undefined);
+    setStandaloneCreatePr(undefined);
+    setStandalonePrSubmitting(false);
     pendingFlushRef.current = false;
     followUpQueueRef.current = [];
     setFollowUpQueue([]);

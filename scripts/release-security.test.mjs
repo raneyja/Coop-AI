@@ -163,7 +163,7 @@ test('full security owner can pass complete synthetic retained proof; missing/dr
  const write=(name,value)=>{const file=path.join(root,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,typeof value==='string'?value:JSON.stringify(value));return file;};
  const g=args=>{const r=spawnSync('git',['-C',root,...args],{encoding:'utf8',env:{PATH:process.env.PATH,GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null'},timeout:10000});assert.equal(r.status,0,r.stderr);return r.stdout.trim();};
  try{
-  for(const name of ['src/fixture.ts','migrations/fixture.sql','scripts/indexer-tools/go.mod','tsconfig.backend.json','scripts/admin-org.ts','scripts/run-migrations.mjs','scripts/runtime-entrypoint','.dockerignore','Dockerfile','.github/workflows/ci.yml','scripts/release-security.mjs'])write(name,'fixture');
+  for(const name of ['src/fixture.ts','migrations/fixture.sql','scripts/indexer-tools/go.mod','tsconfig.backend.json','scripts/admin-org.ts','scripts/run-migrations.mjs','scripts/runtime-entrypoint','.dockerignore','Dockerfile','Dockerfile.api','.github/workflows/ci.yml','scripts/release-security.mjs'])write(name,'fixture');
   write('.gitignore','_evidence/\n');
   const pkg={name:'fixture',publisher:'fixture',version:'1.0.0'};write('package.json',pkg);
   for(const name of ['package-lock.json','admin/package-lock.json','ops/package-lock.json','website/package-lock.json'])write(name,{fixture:name});
@@ -294,7 +294,7 @@ test('frozen image scope transfers between source roots but changed image/report
 function frozenFixture(base) {
  const root=path.join(base,'source'),directory=path.join(base,'bundle');fs.mkdirSync(root);fs.mkdirSync(directory);
  for(const name of ['src','migrations','scripts/indexer-tools']){fs.mkdirSync(path.join(root,name),{recursive:true});fs.writeFileSync(path.join(root,name,'fixture'),'same synthetic input');}
- for(const name of ['Dockerfile','.dockerignore','package.json','package-lock.json','tsconfig.backend.json','scripts/admin-org.ts','scripts/run-migrations.mjs','scripts/runtime-entrypoint'])fs.writeFileSync(path.join(root,name),'synthetic input');
+ for(const name of ['Dockerfile','Dockerfile.api','.dockerignore','package.json','package-lock.json','tsconfig.backend.json','scripts/admin-org.ts','scripts/run-migrations.mjs','scripts/runtime-entrypoint'])fs.writeFileSync(path.join(root,name),'synthetic input');
  const archive=path.join(directory,'image.tar'),bytes=JSON.stringify({os:'linux',architecture:'amd64',rootfs:{type:'layers',diff_ids:[]}}),configurationId='sha256:'+createHash('sha256').update(bytes).digest('hex');
  const program=`import io,json,tarfile,sys
 b=sys.argv[2].encode();name=sys.argv[3]+'.json'
@@ -345,14 +345,14 @@ test('actual frozen CLI denies inactive approval before metadata reads and verif
  }finally{fs.rmSync(base,{recursive:true,force:true});}
 });
 
-test('image source binding includes runtime entrypoint and Docker exclusions; drift or missing input refuses reuse',()=>{
+test('image source binding includes both Docker recipes, runtime entrypoint and exclusions; drift or missing input refuses reuse',()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'coop-image-launch-binding-'));
  try{
   for(const folder of ['src','migrations','scripts/indexer-tools'])fs.mkdirSync(path.join(root,folder),{recursive:true});
-  for(const name of ['Dockerfile','.dockerignore','package.json','package-lock.json','tsconfig.backend.json','scripts/admin-org.ts','scripts/run-migrations.mjs','scripts/runtime-entrypoint'])fs.writeFileSync(path.join(root,name),'fixture');
+  for(const name of ['Dockerfile','Dockerfile.api','.dockerignore','package.json','package-lock.json','tsconfig.backend.json','scripts/admin-org.ts','scripts/run-migrations.mjs','scripts/runtime-entrypoint'])fs.writeFileSync(path.join(root,name),'fixture');
   const bound=()=>canonicalInputBindings(imageSourceInputs(root),root);
   const original=bound();
-  for(const name of ['.dockerignore','scripts/runtime-entrypoint']){
+  for(const name of ['Dockerfile','Dockerfile.api','.dockerignore','scripts/runtime-entrypoint']){
    assert.ok(original.some(input=>input.path===name));
    fs.writeFileSync(path.join(root,name),'changed');assert.notDeepEqual(bound(),original);
    assert.throws(()=>canonicalInputBindings(original,root),/identity mismatch/);

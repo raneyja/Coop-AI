@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { EFFECT_JOB_TYPES, GRAPH_JOB_TYPES, JobType as Types } from '../types';
 import type { Job, JobLease, JobParams, JobResultRecord, JobStatus, JobType } from "../types";
 import { pickNewestMatchingCompletedJob, pickNewestReusableJob } from "../jobReuse";
+import { effectJobsConflict } from '../effectJobConcurrency';
 import type { QueueBackend } from "./types";
 
 type RateLimitEntry = {
@@ -57,7 +58,7 @@ export class MemoryQueueBackend implements QueueBackend {
   public publishMemoryGraph(job: Job,repoId: string,publish?: () => void): string {
     const current=this.owned(job.id,{ownerId:job.ownerId ?? '',attemptId:job.attemptId ?? ''});
     const token=current?.graphGenerations?.find(item=>item.repoId===repoId && item.orgId===String(job.params.orgId));
-    if(!current || current.effectQuarantined || current.userId!==job.userId || current.type!==job.type || JSON.stringify(current.params)!==JSON.stringify(job.params)
+    if(!current || [...this.jobs.values()].some(item=>item.effectQuarantined) || current.userId!==job.userId || current.type!==job.type || JSON.stringify(current.params)!==JSON.stringify(job.params)
       || JSON.stringify(current.graphGenerations)!==JSON.stringify(job.graphGenerations) || !token) throw new Error('Memory graph attempt not owned');
     const head=this.head(token.orgId,repoId);
     if(String(head.requested)!==token.generation || head.jobId!==job.id) throw new Error('Memory graph generation superseded');
@@ -97,7 +98,8 @@ export class MemoryQueueBackend implements QueueBackend {
     const rank = { high: 0, normal: 1, low: 2 };
     const job = [...this.jobs.values()].filter(item => item.status === 'queued' && (!item.availableAt || item.availableAt.getTime() <= now))
       .filter(item => !EFFECT_JOB_TYPES.includes(item.type) || !!item.graphGenerations?.length && item.graphGenerations.every(token=>String(this.head(token.orgId,token.repoId).requested)===token.generation))
-      .filter(item => !EFFECT_JOB_TYPES.includes(item.type) || ![...this.jobs.values()].some(blocked => blocked.effectQuarantined || blocked.status === 'running' && EFFECT_JOB_TYPES.includes(blocked.type)))
+      .filter(item => !EFFECT_JOB_TYPES.includes(item.type) || ![...this.jobs.values()].some(blocked => blocked.effectQuarantined
+        || blocked.status === 'running' && EFFECT_JOB_TYPES.includes(blocked.type) && effectJobsConflict(item,blocked)))
       .sort((a, b) => rank[a.priority] - rank[b.priority] || a.createdAt.getTime() - b.createdAt.getTime())[0];
     if (!job) return undefined;
     Object.assign(job, {status: 'running', ownerId, attemptId: randomUUID(), leaseExpiresAt: new Date(now + leaseMs), startedAt: new Date(now), completedAt: undefined, progress: 5, error: undefined});
@@ -121,11 +123,13 @@ export class MemoryQueueBackend implements QueueBackend {
     const current = this.owned(job.id, lease);
     if (!current || current.type!==job.type || current.userId!==job.userId || JSON.stringify(current.params)!==JSON.stringify(job.params)
       || JSON.stringify(current.graphGenerations)!==JSON.stringify(job.graphGenerations)) return undefined;
+    if (job.status==='completed' && EFFECT_JOB_TYPES.includes(job.type)
+      && [...this.jobs.values()].some(item=>item.effectQuarantined)) return undefined;
     if(GRAPH_JOB_TYPES.includes(current.type) && job.status==='completed' && current.graphGenerations?.some(token=>{
       const head=this.head(token.orgId,token.repoId);return String(head.requested)!==token.generation || String(head.published)!==token.generation || head.jobId!==job.id;
     })) return undefined;
     Object.assign(current, {status: job.status, progress: job.progress, result: job.result, error: job.error,
-      effectQuarantined: Boolean(job.effectQuarantined),
+      effectQuarantined: Boolean(current.effectQuarantined || job.effectQuarantined),
       completedAt: job.status === 'running' ? undefined : new Date()});
     return cloneJob(current);
   }

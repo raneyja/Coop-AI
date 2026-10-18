@@ -6,7 +6,7 @@ import {
   CATALOG_THINKING_KIND,
   inferThinkingKind,
   missingCatalogThinkingIds,
-  resolveProviderThinking
+  resolveProviderThinking, resolveSourcePhaseThinking
 } from "./modelThinking";
 import { applyAnthropicThinking } from "../api/providers/anthropicClient";
 import { applyOpenAiThinking } from "../api/providers/openaiClient";
@@ -78,4 +78,11 @@ test("DeepSeek Reasoner and Codestral do not send extra thinking request fields"
   assert.equal(inferThinkingKind("deepseek", "deepseek-reasoner"), "parse-only");
   assert.equal(resolveProviderThinking("mistral", "codestral-latest", 16_000), undefined);
   assert.equal(inferThinkingKind("mistral", "codestral-latest"), "none");
+});
+
+test("source effort remains reasoning-enabled and separate from catalog chat defaults",()=>{
+ assert.deepEqual(resolveSourcePhaseThinking("openai","gpt-5.5",32768),{mode:"openai-reasoning",effort:"low"});
+ assert.deepEqual(resolveProviderThinking("openai","gpt-5.5",32768),{mode:"openai-reasoning",effort:"medium"});
+ assert.deepEqual(resolveSourcePhaseThinking("anthropic","claude-sonnet-4-6",16000),{mode:"adaptive",effort:"medium"});
+ assert.deepEqual(resolveProviderThinking("anthropic","claude-sonnet-4-6",16000),{mode:"adaptive",effort:"high"});
 });

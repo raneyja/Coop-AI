@@ -238,10 +238,10 @@ test("blast-radius synthesis requires attached documentation titles", () => {
       file: "fastify.js",
       directDependents: ["lib/plugin.js"],
       confluenceSearch: {
-        pages: [{ id: "1", title: "Fastify rollout runbook", updated: "2026-01-01", htmlUrl: "https://wiki/1" }]
+        pages: [{ id: "1", title: "Fastify rollout runbook", htmlUrl: "https://wiki/1" }]
       },
       notionSearch: {
-        pages: [{ id: "2", title: "Fastify architecture notes", updated: "2026-01-02", url: "https://notion/2" }]
+        pages: [{ id: "2", title: "Fastify architecture notes", url: "https://notion/2" }]
       }
     },
     file: "fastify.js"
@@ -412,6 +412,22 @@ test("import-only evidence cannot establish named behavior impact or complete de
   assert.match(system, /Function names do not prove expected behavior or a defect/);
   assert.match(system, /every section including Risks must keep its runtime impact unverified/);
   assert.match(BLAST_RADIUS_EVIDENCE_SYSTEM, /not a call to a named symbol unless its use is verified/);
+});
+
+
+test("source-only Blast preserves opened target findings and quote with an idempotent caller limit", () => {
+  const source = "export function forward(item: unknown) {\n  return persist(item);\n}";
+  const quote = "```1:3:src/forward.ts\n" + source + "\n```";
+  const answer = "The opened body passes `item` to `persist`; its helper body is not shown.\n\n" + quote;
+  for (const namedAskSymbols of [[], ["forward"]]) {
+    const evidence = { file: "src/forward.ts", directDependents: [], namedAskSymbols,
+      sourceEvidenceGathered: true, sourceFiles: [{ path: "src/forward.ts", role: "target" as const,
+        content: source, repoId: "github:org/project", branch: "release", startLine: 1, endLine: 3, truncated: false }] };
+    const rendered = enrichBlastRadiusResponse(answer, evidence);
+    assert.ok(rendered.includes(answer), "Opened target findings must survive missing caller edges");
+    assert.match(rendered, /Graph-based caller coverage remains \*\*unverified\*\*/);
+    assert.equal(enrichBlastRadiusResponse(rendered, evidence), rendered, "Final private preparation must not duplicate the limit");
+  }
 });
 
 console.log(`\nblastRadiusSynthesis: ${passed}/${passed + failed} tests passed`);

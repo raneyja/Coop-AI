@@ -220,6 +220,7 @@ void (async () => {
         getFileContent: async (path: string) => ({
           path,
           content: "# from browse path\n",
+          branch: "preview",
           encoding: "utf-8" as const,
           lines: [{ number: 1, text: "# from browse path" }]
         })
@@ -248,6 +249,7 @@ void (async () => {
           fetchRepoFile: async (_base: string, _repoId: string, path: string) => ({
             path,
             content: "plane-remote-body\n",
+            branch: "preview",
             truncated: false
           })
         })
@@ -276,6 +278,35 @@ void (async () => {
     assert.equal(file?.content?.includes("plane-remote-body"), true);
     assert.equal(file?.repoId, "github:CoopAI-Corp/plane");
   });
+
+  for (const scenario of [
+    { name: "ref mismatch from both readers is refused", requested: "preview", cloud: "main", router: "main", expected: undefined },
+    { name: "missing ref identity from both readers is refused", requested: "preview", cloud: undefined, router: undefined, expected: undefined },
+    { name: "matching direct reader can recover mismatched cloud evidence", requested: "preview", cloud: "main", router: "preview", expected: "router" },
+    { name: "matching cloud ref is retained", requested: "preview", cloud: "preview", router: "main", expected: "cloud" },
+    { name: "unspecified ref can use the default branch", requested: undefined, cloud: "main", router: undefined, expected: "cloud" },
+    { name: "pinned commit must match exactly", requested: "a".repeat(40), cloud: "a".repeat(40), router: undefined, expected: "cloud" },
+    { name: "branch name cannot substitute for pinned commit", requested: "a".repeat(40), cloud: "main", router: "main", expected: undefined }
+  ]) {
+    await test(`readFile ${scenario.name}`, async () => {
+      const calls: string[] = [];
+      const deps = {
+        apiBaseUrl: "https://api.coop-ai.dev",
+        api: { getBackendClient: () => ({ fetchRepoFile: async (_base: string, _repoId: string, path: string, branch?: string) => {
+          calls.push("cloud"); assert.equal(branch, scenario.requested);
+          return { path, content: "cloud", branch: scenario.cloud };
+        } }) },
+        codeHostRouter: { getFileContent: async (path: string, coords: { branch?: string }) => {
+          calls.push("router"); assert.equal(coords.branch, scenario.requested);
+          return { path, content: "router", branch: scenario.router };
+        } }
+      } as unknown as RepoInventoryDeps;
+      const file = await new IndexedRepoWorkspace(deps).readFile({ repoId: "github:fixture/repo", branch: scenario.requested }, "src/example.ts");
+      assert.equal(file?.content, scenario.expected);
+      assert.deepEqual(calls, scenario.expected === "cloud" ? ["cloud"] : ["cloud", "router"]);
+      if (file) assert.equal(file.origin, "remote");
+    });
+  }
 
   await test("listDirectory falls back to org tree API when code-host listing is empty", async () => {
     const calls: string[] = [];

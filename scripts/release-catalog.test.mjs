@@ -88,7 +88,8 @@ test('unit fixture preparation is owned by the declared build and precedes depen
 
 test('supplemental controls are declared separately from real provider and database execution',()=>{
  const catalog=releaseCatalog();
- assert.equal(catalog.lanes.supplemental.length,154);
+ assert.equal(catalog.lanes.supplemental.length,155);
+ assert(catalog.lanes.supplemental.some(x=>x.command.includes('src/jobs/workerArtifact.test.ts')));
  assert(catalog.lanes.supplemental.some(x=>x.command.includes('scripts/enterprise-eval.test.ts')));
  assert(catalog.lanes.supplemental.some(x=>x.command.includes('scripts/dogfood-release.test.mjs')));
  assert(catalog.lanes.supplemental.some(x=>x.command==='(cd admin && tsx --tsconfig tsconfig.json src/lib/activeGrantRepoIds.test.ts)'));
@@ -133,5 +134,104 @@ test('actual Stage5 CLI verifies downloaded hashes and rejects a tampered artifa
   for(const [job,entries] of Object.entries(CI_EVIDENCE_FILES)){const folder=path.join(root,job),files=[];for(const entry of entries){const file=path.join(folder,entry);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,'{"synthetic":true}');files.push({path:entry,sha256:createHash('sha256').update(fs.readFileSync(file)).digest('hex')});}fs.writeFileSync(path.join(folder,'receipt.json'),JSON.stringify({schema:'coop-ci-receipt-v1',job,commit:candidate,pass:true,files}));}
   const run=()=>spawnSync(process.execPath,['scripts/release-catalog.mjs','--stage5-acceptance'],{encoding:'utf8',timeout:10000,env:{PATH:process.env.PATH,GITHUB_SHA:candidate,COOP_RELEASE_JOB_RESULTS:JSON.stringify(jobs()),COOP_RELEASE_DOWNLOADED_EVIDENCE:root}});
   assert.equal(run().status,0);fs.writeFileSync(path.join(root,'database/database/result.json'),'tampered');const bad=run();assert.equal(bad.status,1);assert.match(bad.stderr,/hash\/identity mismatch/);
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
+
+test('container artifact archives retain root receipts and separate diagnostics for the actual Stage5 CLI',async()=>{
+ const fs=(await import('node:fs')).default,os=(await import('node:os')).default,path=(await import('node:path')).default;
+ const {spawnSync}=await import('node:child_process'),{createHash}=await import('node:crypto');
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'coop-container-artifacts-'));
+ try{
+  const workflow=fs.readFileSync('.github/workflows/ci.yml','utf8');
+  const container=workflow.split('\n  container:\n')[1].split('\n  stage5-acceptance:\n')[0];
+  const uploads=container.split(/^      - /m).slice(1).filter(step=>step.includes('uses: actions/upload-artifact@'));
+  assert.equal(uploads.length,2);
+  const definitions=uploads.map(step=>{
+   assert.match(step,/(?:^|\n        )uses: actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\n/);
+   assert.match(step,/^        if: always\(\)$/m);
+   assert.match(step,/^          retention-days: 30$/m);
+   assert.match(step,/^          if-no-files-found: error$/m);
+   return {name:step.match(/^          name: (.+)$/m)[1],paths:step.match(/^          path: \|\n((?:            .*(?:\n|$))+)/m)[1].trim().split('\n').map(line=>line.trim())};
+  });
+  assert.deepEqual(definitions.map(d=>d.name),['container-${{ matrix.target }}','container-${{ matrix.target }}-scanner']);
+  assert.deepEqual(definitions[0].paths,['${{ env.COOP_RELEASE_EVIDENCE_DIR }}/receipt.json','${{ env.COOP_RELEASE_EVIDENCE_DIR }}/image/result.json','${{ env.COOP_RELEASE_EVIDENCE_DIR }}/java/results.json']);
+  assert.deepEqual(definitions[1].paths,['${{ runner.temp }}/image-report.json','${{ runner.temp }}/image-inputs.json','${{ runner.temp }}/trivy-cache/db/metadata.json','${{ runner.temp }}/trivy-cache/java-db/metadata.json']);
+  const downloaded=path.join(root,'downloaded');fs.mkdirSync(downloaded);
+  const write=(file,value)=>{fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,JSON.stringify(value));};
+  const hash=file=>createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+  // Match the pinned upload action's common search-path root, ZIP it, then
+  // extract under the artifact name as download-artifact does by default.
+  const archive=(name,inputs)=>{
+   const destination=path.join(downloaded,name);fs.rmSync(destination,{recursive:true,force:true});
+   const program=`import json,pathlib,os,sys,zipfile
+inputs=[pathlib.Path(p) for p in json.loads(sys.argv[1])];root=pathlib.Path(os.path.commonpath([str(p.parent) for p in inputs]));archive=pathlib.Path(sys.argv[2])
+with zipfile.ZipFile(archive,'w') as z:
+ for p in inputs:
+  if p.is_file():z.write(p,p.relative_to(root))
+with zipfile.ZipFile(archive) as z:
+ assert z.testzip() is None
+ z.extractall(sys.argv[3]);print(json.dumps(z.namelist()))`;
+   const packed=spawnSync('python3',['-c',program,JSON.stringify(inputs),path.join(root,name+'.zip'),destination],{encoding:'utf8',timeout:10000});
+   assert.equal(packed.status,0,packed.stderr);return JSON.parse(packed.stdout);
+  };
+  // Other lanes use the same declared receipt/hash contract, without running
+  // builds or scans. Container lanes below use the real receipt producer.
+  for(const [job,entries] of Object.entries(CI_EVIDENCE_FILES).filter(([name])=>!name.startsWith('container-'))){
+   const folder=path.join(downloaded,job),files=[];
+   for(const entry of entries){const file=path.join(folder,entry);write(file,{fixture:true});files.push({path:entry,sha256:hash(file)});}
+   write(path.join(folder,'receipt.json'),{schema:'coop-ci-receipt-v1',job,commit:candidate,pass:true,files});
+  }
+  const sources={};
+  const resolve=(definition,evidence,temp)=>definition.paths.map(p=>p.replace('${{ env.COOP_RELEASE_EVIDENCE_DIR }}',evidence).replace('${{ runner.temp }}',temp));
+  for(const role of ['api','worker']){
+   const work=path.join(root,role,'work'),evidence=path.join(work,'Coop-AI','Coop-AI-evidence'),temp=path.join(work,'_temp'),name='container-'+role;
+   write(path.join(evidence,'image/result.json'),{pass:true});
+   if(role==='worker')write(path.join(evidence,'java/results.json'),{pass:true});
+   const receipt=writeCiReceipt(name,evidence,candidate);assert.equal(receipt.pass,true);
+   assert.deepEqual(receipt.files.map(f=>f.path),CI_EVIDENCE_FILES[name]);
+   for(const file of resolve(definitions[1],evidence,temp))write(file,{diagnostic:path.relative(temp,file)});
+   const entries=archive(name,resolve(definitions[0],evidence,temp));
+   assert.deepEqual(entries.sort(),['receipt.json',...CI_EVIDENCE_FILES[name]].sort());
+   if(role==='api')assert(!entries.includes('java/results.json'));
+   const scannerName=definitions[1].name.replace('${{ matrix.target }}',role);
+   assert(!Object.hasOwn(CI_EVIDENCE_FILES,scannerName));
+   const scannerEntries=archive(scannerName,resolve(definitions[1],evidence,temp));assert.equal(scannerEntries.length,4);
+   for(const input of resolve(definitions[1],evidence,temp)){
+    const relative=path.relative(temp,input);assert(scannerEntries.includes(relative));
+    assert.equal(hash(path.join(downloaded,scannerName,relative)),hash(input));
+   }
+   sources[role]={evidence,temp};
+  }
+  const run=(jobResults=jobs())=>{
+   fs.rmSync(path.join(downloaded,'stage5-result.json'),{force:true});
+   return spawnSync(process.execPath,['scripts/release-catalog.mjs','--stage5-acceptance'],{encoding:'utf8',timeout:10000,env:{PATH:process.env.PATH,GITHUB_SHA:candidate,COOP_RELEASE_JOB_RESULTS:JSON.stringify(jobResults),COOP_RELEASE_DOWNLOADED_EVIDENCE:downloaded}});
+  };
+  const good=run();assert.equal(good.status,0,good.stderr);assert.equal(JSON.parse(good.stdout).pass,true);
+  const rejected=(result,reason)=>{assert.equal(result.status,1,result.stdout);if(result.stdout)assert.equal(JSON.parse(result.stdout).pass,false);if(reason)assert.match(result.stderr,reason);};
+  for(const role of ['api','worker']){
+   const name='container-'+role,folder=path.join(downloaded,name),receiptFile=path.join(folder,'receipt.json'),receiptBytes=fs.readFileSync(receiptFile);
+   fs.rmSync(receiptFile);rejected(run(),/ENOENT/);fs.writeFileSync(receiptFile,receiptBytes);
+   fs.writeFileSync(receiptFile,'{');rejected(run(),/SyntaxError/);fs.writeFileSync(receiptFile,receiptBytes);
+   const wrong=JSON.parse(receiptBytes);wrong.commit='c'.repeat(40);write(receiptFile,wrong);rejected(run());fs.writeFileSync(receiptFile,receiptBytes);
+   for(const entry of CI_EVIDENCE_FILES[name]){
+    const member=path.join(folder,entry),bytes=fs.readFileSync(member);
+    fs.rmSync(member);rejected(run(),/ENOENT/);fs.writeFileSync(member,bytes);
+    fs.writeFileSync(member,'tampered');rejected(run(),/hash\/identity mismatch/);fs.writeFileSync(member,bytes);
+   }
+   for(const partial of [false,true]){
+    const failed=path.join(root,'failed-'+role+'-'+partial);
+    if(partial)write(path.join(failed,'image/result.json'),{pass:role==='worker'});
+    const receipt=writeCiReceipt(name,failed,candidate);assert.equal(receipt.pass,false);
+    archive(name,resolve(definitions[0],failed,sources[role].temp));rejected(run());
+   }
+   archive(name,resolve(definitions[0],sources[role].evidence,sources[role].temp));
+  }
+  for(const job of ['container','builds'])for(const status of ['failure','skipped','cancelled',undefined]){
+   const result=jobs();if(status===undefined)delete result[job];else result[job].result=status;rejected(run(result));
+  }
+  // Recreate the old mixed-root upload: the exact same valid producer bytes
+  // become unreachable to the unchanged CLI, proving this catches the defect.
+  archive('container-api',[...resolve(definitions[0],sources.api.evidence,sources.api.temp),...resolve(definitions[1],sources.api.evidence,sources.api.temp)]);
+  rejected(run(),/container-api\/receipt\.json/);
  }finally{fs.rmSync(root,{recursive:true,force:true});}
 });

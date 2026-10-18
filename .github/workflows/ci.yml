@@ -7,7 +7,9 @@ permissions:
   contents: read
 env:
   COOP_RELEASE_EVIDENCE_DIR: ${{ github.workspace }}-evidence
-  COOP_RELEASE_PRIVATE_PACKAGE_SOURCE_SHA: ${{ vars.COOP_RELEASE_PRIVATE_PACKAGE_SOURCE_SHA }}
+  # A separately approved candidate must match this PR's exact head. Other
+  # candidates retain the existing approval; no shared pin needs replacement.
+  COOP_RELEASE_PRIVATE_PACKAGE_SOURCE_SHA: ${{ github.event.pull_request.head.sha == vars.COOP_RELEASE_CANDIDATE_PACKAGE_SOURCE_SHA && vars.COOP_RELEASE_CANDIDATE_PACKAGE_SOURCE_SHA || vars.COOP_RELEASE_PRIVATE_PACKAGE_SOURCE_SHA }}
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -151,8 +153,10 @@ jobs:
           path: ${{ runner.temp }}/candidate-vsix
       - name: Prepare complete source and package scan corpora
         env:
-          COOP_RELEASE_CANDIDATE_EXCEPTIONS: ${{ vars.COOP_RELEASE_CANDIDATE_EXCEPTIONS }}
-          COOP_RELEASE_HISTORY_EXCEPTIONS: ${{ vars.COOP_RELEASE_HISTORY_EXCEPTIONS }}
+          # PR68's exact head requires independent package and secret-disposition pins.
+          # A missing selected payload means no exceptions, never shared fallback.
+          COOP_RELEASE_CANDIDATE_EXCEPTIONS: ${{ github.repository == 'raneyja/Coop-AI' && github.event_name == 'pull_request' && github.event.pull_request.number == 68 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha != '' && github.event.pull_request.head.sha == vars.COOP_RELEASE_CANDIDATE_PACKAGE_SOURCE_SHA && github.event.pull_request.head.sha == vars.COOP_RELEASE_INVITE_ONLY_SECRET_SOURCE_SHA && (vars.COOP_RELEASE_INVITE_ONLY_CANDIDATE_EXCEPTIONS || '[]') || vars.COOP_RELEASE_CANDIDATE_EXCEPTIONS }}
+          COOP_RELEASE_HISTORY_EXCEPTIONS: ${{ github.repository == 'raneyja/Coop-AI' && github.event_name == 'pull_request' && github.event.pull_request.number == 68 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha != '' && github.event.pull_request.head.sha == vars.COOP_RELEASE_CANDIDATE_PACKAGE_SOURCE_SHA && github.event.pull_request.head.sha == vars.COOP_RELEASE_INVITE_ONLY_SECRET_SOURCE_SHA && (vars.COOP_RELEASE_INVITE_ONLY_HISTORY_EXCEPTIONS || '[]') || vars.COOP_RELEASE_HISTORY_EXCEPTIONS }}
         run: |
           python3 - <<'PYCODE'
           import subprocess,pathlib,shutil,zipfile,os,json,hashlib
@@ -216,6 +220,8 @@ jobs:
     env:
       COOP_RELEASE_FROZEN_IMAGE_POLICY: ${{ vars.COOP_RELEASE_FROZEN_IMAGE_POLICY }}
       COOP_RELEASE_IMAGE_ROLE: ${{ matrix.target }}
+      TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
+      TRIVY_JAVA_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-java-db:1
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -309,6 +315,18 @@ jobs:
             ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/receipt.json
             ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/image/result.json
             ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/java/results.json
+      - name: Retain container scanner diagnostics separately from acceptance evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: container-${{ matrix.target }}-scanner
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/image-report.json
+            ${{ runner.temp }}/image-inputs.json
+            ${{ runner.temp }}/trivy-cache/db/metadata.json
+            ${{ runner.temp }}/trivy-cache/java-db/metadata.json
   stage5-acceptance:
     needs: [regression, builds, database, code-security, container]
     if: always()

@@ -168,6 +168,7 @@ export function releaseCatalog(root=process.cwd()) {
   "src/jobs/hydrateKnowledgeGapGraph.test.ts",
   "src/jobs/jobActivityPolicy.test.ts",
   "src/jobs/jobReuse.test.ts",
+  "src/jobs/workerArtifact.test.ts",
   "src/jobs/knowledgeGapDetector.test.ts",
   "src/webview/slackPresenceDisplay.test.ts",
   "src/engines/decisionFocusCommit.test.ts",

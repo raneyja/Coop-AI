@@ -557,7 +557,8 @@ export function honestNamedFunctionBlastAnswer(symbols: string[], file?: string)
 /**
  * Prevent “0 dependents / no impact” claims when evidence is empty/unverified,
  * and prepend production-ranked callers when the model omitted them.
- * Empty graph: **replace** the essay — never prepend a caveat and keep fluff.
+ * Graph-only evidence replaces speculative essays. Opened-source findings stay
+ * available to the source/claim validators even when caller edges are missing.
  */
 export function importOnlyNamedBlastAnswer(evidence: BlastRadiusEvidence | undefined): string | undefined {
   if (!evidence) return undefined;
@@ -604,6 +605,12 @@ export function enrichBlastRadiusResponse(
   if (importOnlyAnswer) return importOnlyAnswer;
 
   if (!hasDependents) {
+    if (trimmed && evidence.sourceFiles?.some(source => source.content.trim())) {
+      // Missing graph edges do not invalidate a different opened-source finding.
+      // This formats the private candidate; it does not certify its prose.
+      const limit = "Graph-based caller coverage remains **unverified**; no caller relationships were confirmed in this turn's graph.";
+      return trimmed.includes(limit) ? content : `${content}\n\n${limit}`;
+    }
     return named.length > 0
       ? honestNamedFunctionBlastAnswer(named, evidence.file)
       : honestUnverifiedBlastAnswer(evidence.file);

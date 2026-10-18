@@ -32,6 +32,7 @@ import { SamlService } from "../server/sso/samlService";
 import { AuditLogger } from "../server/audit/auditLogger";
 import { UsageTracker } from "../server/usageTracker";
 import { createPlanQuotaService } from "../server/planQuota";
+import { SourceTurnAuthority } from "../server/sourceTurnAuthority";
 import { handleUsageEventsApiRequest } from "../server/usageEventsApi";
 import { handleChatThreadsApiRequest } from "../server/chatThreadsApi";
 import { handleSamlApiRequest } from "../server/sso/samlApi";
@@ -193,6 +194,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
   const usageTracker = new UsageTracker(pool ?? null);
   const authRateLimitStore = pool ? new AuthRateLimitStore(pool) : undefined;
   const planQuota = createPlanQuotaService(usageTracker);
+  const sourceTurnAuthority = pool ? new SourceTurnAuthority(pool) : undefined;
   const operatorStore = pool ? new OperatorStore(pool) : undefined;
   const operatorAuthConfig = loadOperatorAuthConfig();
   if (operatorStore && operatorAuthConfig.googleClientId) {
@@ -661,7 +663,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
             body: parsed.body
           },
           response,
-          { orgStore, userStore, serverConfig, usageTracker, planQuota }
+          { orgStore, userStore, serverConfig, usageTracker, planQuota, sourceTurnAuthority }
         )
       ) {
         return;
@@ -692,7 +694,7 @@ export async function createWebhookServer(options: WebhookServerOptions = {}): P
             body: parsed.body
           },
           response,
-          { router: chatRouter, orgStore, serverConfig, userStore, auditLogger, usageTracker, graphQuery, fetchFileSnippet: inlineGraphFileSnippetFetcher },
+          { router: chatRouter, orgStore, serverConfig, userStore, auditLogger, usageTracker, planQuota, sourceTurnAuthority, graphQuery, fetchFileSnippet: inlineGraphFileSnippetFetcher },
           request
         )
       ) {
