@@ -315,6 +315,14 @@ jobs:
             ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/receipt.json
             ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/image/result.json
             ${{ env.COOP_RELEASE_EVIDENCE_DIR }}/java/results.json
+      - name: Retain container scanner diagnostics separately from acceptance evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: container-${{ matrix.target }}-scanner
+          retention-days: 30
+          if-no-files-found: error
+          path: |
             ${{ runner.temp }}/image-report.json
             ${{ runner.temp }}/image-inputs.json
             ${{ runner.temp }}/trivy-cache/db/metadata.json
