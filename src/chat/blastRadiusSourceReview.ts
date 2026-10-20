@@ -49,7 +49,7 @@ export async function streamSourceGroundedBlast(options: {
     let result: Result;
     try {
       // Keep answer chunks private until completeness and quote checks pass.
-      result = await stream(body, () => undefined, baseUrl, signal, chunk => {
+      result = await stream({ ...body, inferenceRole: phase === "synthesis" ? "source_validation" : "source_repair" }, () => undefined, baseUrl, signal, chunk => {
         if (!signal?.aborted) onThinking?.(chunk);
       });
     } catch (error) {

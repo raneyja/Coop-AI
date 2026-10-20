@@ -1,4 +1,4 @@
-import type { ChatMessage, ChatPersistedArtifact, RepoContext } from "./types";
+import type { ChatMessage, ChatPersistedArtifact, RepoContext, UserPreferences, IntegrationChatProvider } from "./types";
 import type { ContextFetchResult } from "../context/requestBatcher";
 import type { DecisionTimeline } from "../types/decisionTimeline";
 import { scheduleResponseDeadline } from "../config/responseDeadline";
@@ -25,6 +25,12 @@ export type ChatTurn = {
   context: RepoContext;
   /** Thread messages including the user bubble that started this turn. */
   history: ChatMessage[];
+  /** Send-time settings and capabilities; UI/account switches cannot retarget work. */
+  requestSettings?: Readonly<UserPreferences>;
+  connectedIntegrations?: IntegrationChatProvider[];
+  quotaTurnId?: string;
+  assertIdentity?: () => Promise<void>;
+  inferenceCalls?: import("../config/inferenceRoles").InferenceCall[];
   artifacts: ChatPersistedArtifact[];
   sessionCostUsd: number;
   modelMessage: string;
@@ -89,6 +95,10 @@ export type BeginChatTurnInput = {
   threadId: string;
   context: RepoContext;
   history: ChatMessage[];
+  requestSettings?: UserPreferences;
+  connectedIntegrations?: IntegrationChatProvider[];
+  quotaTurnId?: string;
+  assertIdentity?: () => Promise<void>;
   artifacts: ChatPersistedArtifact[];
   sessionCostUsd: number;
   modelMessage: string;
@@ -109,6 +119,9 @@ function createTurnId(): string {
 function captureIntentPlan(plan: ChatIntentPlan): ChatIntentPlan {
   return Object.freeze({
     ...plan,
+    commandConstraint: plan.commandConstraint ? Object.freeze({ ...plan.commandConstraint }) : undefined,
+    codeIntent: plan.codeIntent ? Object.freeze({ ...plan.codeIntent }) : undefined,
+    completionNeeds: plan.completionNeeds ? [...plan.completionNeeds] : undefined,
     tools: Object.freeze([...plan.tools]) as unknown as ChatIntentPlan["tools"],
     jobs: Object.freeze(
       (plan.jobs ?? []).map((job) =>
@@ -142,8 +155,12 @@ export class ThreadRunManager {
       threadId: input.threadId,
       status: "running",
       startedAt,
-      context: { ...input.context },
-      history: [...input.history],
+      context: { ...input.context, ...(input.context.selectedLines ? { selectedLines: [...input.context.selectedLines] as [number, number] } : {}) },
+      history: input.history.map((entry) => ({ ...entry, attachments: entry.attachments?.map((attachment) => ({ ...attachment })) })),
+      requestSettings: input.requestSettings ? Object.freeze({ ...input.requestSettings }) : undefined,
+      connectedIntegrations: input.connectedIntegrations ? [...input.connectedIntegrations] : undefined,
+      quotaTurnId: input.quotaTurnId,
+      assertIdentity: input.assertIdentity,
       artifacts: [...input.artifacts],
       sessionCostUsd: input.sessionCostUsd,
       modelMessage: input.modelMessage,
@@ -163,7 +180,7 @@ export class ThreadRunManager {
       streamGeneration,
       partialAssistant: "",
       pendingMentions: input.pendingMentions,
-      pendingLocalFiles: input.pendingLocalFiles,
+      pendingLocalFiles: input.pendingLocalFiles ? { ...input.pendingLocalFiles, files: input.pendingLocalFiles.files.map(file => ({ ...file })) } : undefined,
       attachFullFile: Boolean(input.attachFullFile),
       codeEditIntent: Boolean(input.codeEditIntent)
     };

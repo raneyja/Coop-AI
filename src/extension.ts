@@ -6,6 +6,7 @@ import { CoopSettingsPanel } from "./CoopSettingsPanel";
 import { SupportReportPanel } from "./support/SupportReportPanel";
 import { CoopSidebarProvider } from "./CoopSidebarProvider";
 import { CoopChatSession } from "./chat/CoopChatSession";
+import { isUnauthenticatedApiError } from "./chat/verifyStoredSession";
 import { coopSessionRegistry } from "./chat/CoopSessionRegistry";
 import { getWebviewOptions } from "./chat/renderWebviewHtml";
 import { readConfiguration, readDegradationConfiguration, SecureApiClient } from "./chat/SecureApiClient";
@@ -629,11 +630,29 @@ export function activate(context: vscode.ExtensionContext): void {
             await api.fetchMe(resolveUserAuthApiBase(readConfiguration().apiBaseUrl));
             await refreshAllSessions();
             void vscode.window.showInformationMessage("Signed in to Coop.");
-          } catch {
-            await api.clearToken();
-            await api.clearRefreshToken();
-            void vscode.window.showErrorMessage(
-              "Sign-in failed: could not verify your session. Try again or contact your admin."
+          } catch (error) {
+            const failure = error as {
+              code?: string;
+              message?: string;
+              cause?: { code?: string };
+              response?: { status?: number };
+            };
+            console.error("[CoopAI] sign-in verification failed", {
+              status: failure.response?.status,
+              code: failure.code,
+              causeCode: failure.cause?.code,
+              message: failure.message
+            });
+            if (isUnauthenticatedApiError(error)) {
+              await api.clearToken();
+              await api.clearRefreshToken();
+              void vscode.window.showErrorMessage(
+                "Sign-in failed: the server rejected this session. Try signing in again."
+              );
+              return;
+            }
+            void vscode.window.showWarningMessage(
+              "Coop saved your sign-in, but the server is temporarily unreachable. It will verify automatically when the connection returns."
             );
           }
         })();

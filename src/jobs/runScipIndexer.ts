@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { promisify } from "node:util";
 import type { Pool } from "pg";
 import { RepoSymbolIndexStore } from "../indexing/repoSymbolIndexStore";
+import { buildGoScipArgs, requireNonEmptyScipAnalysis } from "../indexing/scipIndexerContract";
 import { decodeScipIndexFile } from "./scipIndexDecoder";
 import { extractTreeSitterSymbols } from "./treeSitterSymbolExtractor";
 
@@ -30,7 +31,7 @@ const SCIP_INDEXERS: Array<{
   {
     languages: ["go"],
     command: "scip-go",
-    args: (root, out) => ["--output", out, root],
+    args: buildGoScipArgs,
     indexQuality: "precise"
   },
   {
@@ -73,6 +74,7 @@ export async function runScipIndexer(
 
       if (fs.existsSync(indexPath)) {
         const rows = decodeScipIndexFile(indexPath);
+        requireNonEmptyScipAnalysis(rows.length);
         await store.replaceIndex(orgId, repoId, rows, indexedAt);
         fs.rmSync(indexPath, { force: true });
         return {
@@ -93,6 +95,7 @@ export async function runScipIndexer(
         error: "SCIP indexer completed but index.scip was not produced."
       };
     } catch (error) {
+      fs.rmSync(indexPath, { force: true });
       const message = formatExecError("SCIP indexing failed", error);
       const fallbackRows = await safeTreeSitterFallback(localPath);
       if (fallbackRows.length > 0) {

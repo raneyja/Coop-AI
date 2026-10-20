@@ -166,7 +166,7 @@ export class AnthropicProviderClient extends BaseProviderClient {
     yield {
       type: "done",
       usage: resolveUsage("anthropic", options, state),
-      model: options.model,
+      model: state.model ?? options.model,
       provider: "anthropic",
       finishReason: state.finishReason ?? "stop"
     };
@@ -181,6 +181,7 @@ export function parseAnthropicLine(line: string, state: ParseState): StreamChunk
   }
   if (data.type === "message_start") {
     const message = data.message as Record<string, unknown> | undefined;
+    if (typeof message?.model === "string") state.model = message.model;
     const usage = message?.usage as Record<string, unknown> | undefined;
     const inputTokens = readUsageInt(usage?.input_tokens);
     if (inputTokens !== undefined) {

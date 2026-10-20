@@ -1,3 +1,5 @@
+import { defaultInferenceRole, isInferenceRole } from "../config/inferenceRoles";
+import type { InferenceRole } from "../config/inferenceRoles";
 import axios, { AxiosInstance } from "axios";
 import type { SupportSubmission } from "../support/supportTypes";
 import { shouldRecordUsageEvent } from "../telemetry/usageEventPolicy";
@@ -40,6 +42,7 @@ import type { IntegrationSecrets } from "../api/integrations/integrationSecrets"
 import type { CodeHostRouter } from "../api/codeHosts/codeHostRouter";
 import { DEFAULT_API_BASE, SECRET_KEY_API_TOKEN, SECRET_KEY_REFRESH_TOKEN } from "./types";
 import { verifyStoredSession } from "./verifyStoredSession";
+import { coopApiHttpsAgent } from "../api/coopApiHttpsAgent";
 
 export type StreamChatParams = {
   message: string;
@@ -53,12 +56,15 @@ export type StreamChatParams = {
   model: string;
   provider: LlmProviderPreference;
   useCase: UseCase;
+  inferenceRole?: InferenceRole;
   temperature: number;
   maxTokens: number;
   enableThinking?: boolean;
   sessionMode?: "file-assistant" | "indexed-repo";
   fileSource?: "workspace" | "git" | "remote" | "external";
   quotaTurnId?: string;
+  /** Local guard only: never serialized or logged. */
+  assertIdentity?: () => Promise<void>;
 };
 
 export class SecureApiClient {
@@ -72,15 +78,29 @@ export class SecureApiClient {
   }
 
   public constructor(private readonly secrets: vscode.SecretStorage) {
-    this.http = axios.create({ timeout: 60_000 });
+    this.http = axios.create({ timeout: 60_000, httpsAgent: coopApiHttpsAgent });
     this.backend = new CoopBackendClient({
       getToken: () => this.getToken()
     });
   }
 
   public setBaseUrl(baseUrl: string): void {
-    this.http = axios.create({ baseURL: baseUrl.replace(/\/$/, ""), timeout: 60_000 });
+    this.http = axios.create({
+      baseURL: baseUrl.replace(/\/$/, ""),
+      timeout: 60_000,
+      httpsAgent: coopApiHttpsAgent
+    });
     this.backend.setBaseUrl(baseUrl);
+  }
+
+  /** Capture opaque credential ownership; switching accounts invalidates subsequent work. */
+  public async captureRequestIdentity(): Promise<() => Promise<void>> {
+    const token = await this.getToken();
+    return async () => {
+      if (await this.getToken() !== token) {
+        throw new Error("The signed-in account changed. Send this request again in the current account.");
+      }
+    };
   }
 
   public async setToken(token: string): Promise<void> {
@@ -748,6 +768,8 @@ export class SecureApiClient {
     finishReason?: FinishReason;
   }> {
     assertCoopEndpoint(baseUrl);
+    await body.assertIdentity?.();
+    if (body.inferenceRole !== undefined && !isInferenceRole(body.inferenceRole)) throw new Error("Unregistered inference role.");
     await this.ensureToken();
     this.setBaseUrl(baseUrl);
 
@@ -785,6 +807,7 @@ export class SecureApiClient {
         model: body.model,
         provider: body.provider as LlmProvider,
         useCase: body.useCase,
+        inferenceRole: body.inferenceRole ?? defaultInferenceRole(body.useCase),
         temperature: body.temperature,
         maxTokens: body.maxTokens,
         enableThinking: body.enableThinking === true,
@@ -794,7 +817,8 @@ export class SecureApiClient {
       },
       onChunk,
       signal,
-      onThinkingChunk
+      onThinkingChunk,
+      body.assertIdentity
     );
 
     const usage =
@@ -834,6 +858,7 @@ export class SecureApiClient {
         model: body.model || llm.model,
         provider: llm.llmProvider,
         useCase: "chat",
+        inferenceRole: "answer",
         temperature: llm.temperature,
         maxTokens: llm.maxTokens
       },

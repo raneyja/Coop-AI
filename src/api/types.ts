@@ -1,3 +1,4 @@
+import type { InferenceRole } from "../config/inferenceRoles";
 import type { ChatImageAttachment } from "../chat/types";
 import type { ChatRequestMessage } from "./requestFormatter";
 import type { LlmProvider } from "./zeroRetentionConfig";
@@ -78,6 +79,7 @@ export type CompletionRequest = {
   attachments?: ChatImageAttachment[];
   segments?: FimSegments;
   useCase: UseCase;
+  inferenceRole?: InferenceRole;
   modelConfig: ModelRuntimeConfig;
   allowUnapprovedProvider?: boolean;
   /** Enable provider thinking when the model/provider supports it. */
@@ -120,6 +122,7 @@ export type V1ChatRequestBody = {
   model?: string;
   provider?: LlmProvider;
   useCase?: UseCase;
+  inferenceRole?: InferenceRole;
   temperature?: number;
   maxTokens?: number;
   stream?: boolean;
@@ -152,12 +155,14 @@ export type ProviderStreamOptions = {
 };
 
 export type LlmAuditEvent = {
+  requestedModel?: string;
   requestId: string;
   orgId: string;
   plan: ChatOrgPlan;
   provider: LlmProvider;
   model: string;
   useCase: UseCase;
+  inferenceRole?: InferenceRole;
   inputTokens: number;
   outputTokens: number;
   latencyMs: number;

@@ -14,7 +14,7 @@ RUN npm run build:backend && npm run build:workers && npm run build:admin
 FROM golang:1.25-bookworm AS gotools
 
 # scip-go: compiler-accurate Go symbol indexer (produces .scip files)
-RUN go install github.com/scip-code/scip-go/cmd/scip-go@latest
+RUN go install github.com/scip-code/scip-go/cmd/scip-go@v0.2.7
 
 # Zoekt: Google's full-text code search engine
 # zoekt-git-index: builds the shard index from a git repo
@@ -30,28 +30,39 @@ FROM node:22-bookworm-slim
 #   ca-certificates  — HTTPS in Node fetch
 #   python3          — required by scip-python
 #   default-jdk-headless — Java runtime for scip-java
-#   curl             — scip-java jar download
+#   maven            — Maven repositories indexed by scip-java
+#   curl             — pinned indexer bootstrap downloads
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git ca-certificates python3 default-jdk-headless curl \
+    git ca-certificates python3 default-jdk-headless maven curl \
   && rm -rf /var/lib/apt/lists/*
 
 # npm-based SCIP indexers
 RUN npm install -g @sourcegraph/scip-typescript @sourcegraph/scip-python
 
-# Go-based binaries from the gotools stage
+# scip-go shells out to the Go command while loading a repository. Keep the
+# indexer and its matching toolchain together in the production runtime.
 COPY --from=gotools /go/bin/scip-go /go/bin/zoekt-git-index /go/bin/zoekt-webserver \
   /usr/local/bin/
+COPY --from=gotools /usr/local/go /usr/local/go
+ENV PATH="/usr/local/go/bin:${PATH}" \
+    GOTOOLCHAIN=local
 
-# scip-java: standalone jar + shell wrapper
-# Pin to a known-good release. Update SCIP_JAVA_VERSION to bump.
+# scip-java v0.9.8 has no GitHub release asset. Build the standalone launcher
+# from its pinned Maven Central artifact using a checksum-pinned Coursier jar.
 ARG SCIP_JAVA_VERSION=0.9.8
+ARG COURSIER_VERSION=2.1.26
+ARG COURSIER_SHA256=d3135830850eddfb9998be66ab4c79478ee6cff56012bb5a177532b1df47c7cc
 RUN curl -fsSL \
-    "https://github.com/sourcegraph/scip-java/releases/download/v${SCIP_JAVA_VERSION}/scip-java.jar" \
-    -o /usr/local/lib/scip-java.jar \
-  && printf '#!/bin/sh\nexec java -jar /usr/local/lib/scip-java.jar "$@"\n' \
-    > /usr/local/bin/scip-java \
+    "https://github.com/coursier/coursier/releases/download/v${COURSIER_VERSION}/coursier.jar" \
+    -o /tmp/coursier.jar \
+  && echo "${COURSIER_SHA256}  /tmp/coursier.jar" | sha256sum -c - \
+  && java -jar /tmp/coursier.jar bootstrap --standalone \
+    -o /usr/local/bin/scip-java \
+    "com.sourcegraph:scip-java_2.13:${SCIP_JAVA_VERSION}" \
+    --main com.sourcegraph.scip_java.ScipJava \
   && chmod +x /usr/local/bin/scip-java \
-  || echo "WARN: scip-java download failed — Java/Kotlin indexing will fall back to tree-sitter"
+  && /usr/local/bin/scip-java --help >/dev/null \
+  && rm -f /tmp/coursier.jar
 
 WORKDIR /app
 

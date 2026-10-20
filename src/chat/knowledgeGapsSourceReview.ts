@@ -70,6 +70,7 @@ export async function streamSourceReviewedKnowledgeGaps(options: {
   signal?.throwIfAborted();
   const reviewRequest: StreamChatParams = {
     ...request,
+    inferenceRole: "source_validation",
     message: [
       "## Task: answer the original code-rule question from attached evidence",
       "Read the numbered source bodies directly. Establish only behavior supported by the attached evidence. Answer the original request; do not substitute a canned guard, write path, or repository-health report. Conversation history is task context, not additional verified source.",
@@ -99,7 +100,7 @@ export async function streamSourceReviewedKnowledgeGaps(options: {
         history: []
       };
       options.onRecovery?.(reviewed.message.content.length, failure, replacementRequest);
-      reviewed = await stream(replacementRequest, () => undefined, baseUrl, signal, onThinking);
+      reviewed = await stream({ ...replacementRequest, inferenceRole: "source_repair" }, () => undefined, baseUrl, signal, onThinking);
       results.push(reviewed);
       options.onCallComplete?.("replacement", reviewed);
       verified = verifyReview(reviewed, evidence);

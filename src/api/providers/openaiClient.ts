@@ -42,6 +42,7 @@ export function parseOpenAiSseLine(line: string, state: ParseState): StreamChunk
   if (!data) {
     return undefined;
   }
+  if (typeof data.model === "string") state.model = data.model;
   const usage = data.usage as Record<string, unknown> | undefined;
   if (usage) {
     const promptTokens = readUsageInt(usage.prompt_tokens);

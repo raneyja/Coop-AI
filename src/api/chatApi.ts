@@ -1,3 +1,4 @@
+import { isInferenceRole, inferencePolicyUseCase } from "../config/inferenceRoles";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { ModelRouter } from "./ModelRouter";
 import type { LlmServerConfig } from "./llmServerConfig";
@@ -185,15 +186,20 @@ export async function handleChatApiRequest(
   const visionWeighted =
     visionAttachmentCount > 0 ||
     history.some((entry) => countVisionWeightedAttachments(entry.attachments) > 0);
+  if (body.inferenceRole !== undefined && !isInferenceRole(body.inferenceRole)) {
+    writeJson(response, 400, { error: "invalid_request", message: "Unregistered inference role." });
+    return true;
+  }
   const useCase = readUseCase(body.useCase);
+  const policyUseCase = inferencePolicyUseCase(body.inferenceRole, useCase);
   const clientProvider = readProvider(body.provider, config.defaultProvider);
   const clientModel = typeof body.model === "string" && body.model ? body.model : undefined;
   const honored = resolveHonoredChatModel({
     allowUnapprovedProvider: config.allowUnapprovedProvider,
     plan: org.plan,
-    useCase,
+    useCase: policyUseCase,
     clientProvider,
-    clientModel
+    clientModel: body.inferenceRole === "tool_plan" ? undefined : clientModel
   });
   const provider = honored.provider;
   const model = honored.model;
@@ -247,6 +253,8 @@ export async function handleChatApiRequest(
 
     let usageTokens: { inputTokens: number; outputTokens: number } | undefined;
     let recordedUsage = false;
+    let servingModel = model;
+    let servingProvider = provider;
 
     try {
       for await (const chunk of router.stream(
@@ -259,6 +267,7 @@ export async function handleChatApiRequest(
           context: body.context,
           attachments: attachments.length ? attachments : undefined,
           useCase,
+          inferenceRole: body.inferenceRole,
           allowUnapprovedProvider: config.allowUnapprovedProvider,
           enableThinking: body.enableThinking === true,
           sessionMode: body.sessionMode,
@@ -272,6 +281,8 @@ export async function handleChatApiRequest(
         abortController.signal
       )) {
         if (chunk.type === "done" && !recordedUsage) {
+          servingModel = chunk.model;
+          servingProvider = chunk.provider;
           usageTokens = {
             inputTokens: chunk.usage.inputTokens,
             outputTokens: chunk.usage.outputTokens
@@ -280,6 +291,7 @@ export async function handleChatApiRequest(
             inputTokens: usageTokens.inputTokens,
             outputTokens: usageTokens.outputTokens,
             requestId,
+            inferenceRole: body.inferenceRole, servingModel, servingProvider,
             visionWeighted,
             sessionMode: body.sessionMode,
             fileSource: body.fileSource,
@@ -312,7 +324,7 @@ export async function handleChatApiRequest(
     userId: org.userId,
     principal: org.principal,
     action: "chat.completion",
-    metadata: { provider, model, requestId }
+    metadata: { provider: servingProvider, model: servingModel, requestedProvider: provider, requestedModel: model, requestId, inferenceRole: body.inferenceRole }
   });
   if (usageTokens && !recordedUsage) {
     await recordV1ChatUsageTokens(planQuota, org, { provider, model, selection }, {
@@ -353,6 +365,9 @@ export async function recordV1ChatUsageTokens(
     inputTokens: number;
     outputTokens: number;
     requestId?: string;
+    inferenceRole?: import("../config/inferenceRoles").InferenceRole;
+    servingModel?: string;
+    servingProvider?: LlmProvider;
     visionWeighted?: boolean;
     sessionMode?: "file-assistant" | "indexed-repo";
     fileSource?: "workspace" | "git" | "remote" | "external";
@@ -370,6 +385,9 @@ export async function recordV1ChatUsageTokens(
     principal: org.principal,
     metadata: {
       requestId: usage.requestId,
+      inferenceRole: usage.inferenceRole,
+      servingModel: usage.servingModel,
+      servingProvider: usage.servingProvider,
       ...(usage.sessionMode ? { sessionMode: usage.sessionMode } : {}),
       ...(usage.fileSource ? { fileSource: usage.fileSource } : {})
     },

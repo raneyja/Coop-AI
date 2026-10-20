@@ -1,7 +1,8 @@
+import type { InferenceRole } from "../config/inferenceRoles";
 import axios, { AxiosInstance } from "axios";
 import type { SupportSubmission } from "../support/supportTypes";
 import { assertCoopEndpoint } from "./resolveBaseUrl";
-import { resolveUserAuthApiBase } from "../config/authApiBase";
+import { buildUserGoogleAuthStartUrl, resolveUserAuthApiBase } from "../config/authApiBase";
 import { isRetryableError, runResilientRequest } from "./networkResilience";
 import { formatCoopApiError, type CoopApiErrorBody } from "./userFacingErrors";
 import { MAX_USER_FACING_RESPONSE_MS } from "../config/responseDeadline";
@@ -16,6 +17,7 @@ import type {
   FinishReason
 } from "./types";
 import type { LlmProvider } from "./zeroRetentionConfig";
+import { coopApiHttpsAgent } from "./coopApiHttpsAgent";
 
 export type IndexedRepoFileMap = {
   repoId: string;
@@ -35,6 +37,7 @@ export type StreamChatBody = {
   model: string;
   provider: LlmProvider;
   useCase: UseCase;
+  inferenceRole?: InferenceRole;
   temperature: number;
   maxTokens: number;
   enableThinking?: boolean;
@@ -234,7 +237,10 @@ export type CoopBackendClientOptions = {
 };
 
 export class CoopBackendClient {
-  private http: AxiosInstance = axios.create({ timeout: 120_000 });
+  private http: AxiosInstance = axios.create({
+    timeout: 120_000,
+    httpsAgent: coopApiHttpsAgent
+  });
 
   public constructor(private readonly options: CoopBackendClientOptions) {}
 
@@ -245,7 +251,8 @@ export class CoopBackendClient {
   public setBaseUrl(baseUrl: string): void {
     this.http = axios.create({
       baseURL: baseUrl.replace(/\/$/, ""),
-      timeout: 120_000
+      timeout: 120_000,
+      httpsAgent: coopApiHttpsAgent
     });
   }
 
@@ -537,14 +544,8 @@ export class CoopBackendClient {
   }
 
   public startGoogleAuthUrl(baseUrl: string, redirect?: string): string {
-    const authBase = this.userAuthBase(baseUrl);
-    assertCoopEndpoint(authBase);
-    const params = new URLSearchParams({ mode: "login" });
-    const sanitized = redirect?.trim();
-    if (sanitized) {
-      params.set("redirect", sanitized);
-    }
-    return `${authBase}/v1/auth/google/start?${params.toString()}`;
+    assertCoopEndpoint(this.userAuthBase(baseUrl));
+    return buildUserGoogleAuthStartUrl(baseUrl, redirect);
   }
 
   public async refreshSession(baseUrl: string, refreshToken: string): Promise<AuthSessionResponse> {
@@ -1770,10 +1771,12 @@ export class CoopBackendClient {
     body: StreamChatBody,
     onChunk: (chunk: string) => void,
     signal?: AbortSignal,
-    onThinkingChunk?: (chunk: string) => void
+    onThinkingChunk?: (chunk: string) => void,
+    assertIdentity?: () => Promise<void>
   ): Promise<StreamChatResult> {
     assertCoopEndpoint(baseUrl);
     const token = await this.options.getToken();
+    await assertIdentity?.();
     if (!token) {
       throw new Error("CoopAI API key is missing. Configure it in the sidebar settings.");
     }
@@ -1794,6 +1797,7 @@ export class CoopBackendClient {
         model: body.model,
         provider: body.provider,
         useCase: body.useCase,
+        inferenceRole: body.inferenceRole,
         temperature: body.temperature,
         maxTokens: body.maxTokens,
         enableThinking: body.enableThinking === true,

@@ -69,7 +69,7 @@ export class ModelRouter {
   }
 
   public isMockMode(): boolean {
-    return this.config.mockMode || this.getConfiguredProviders().length === 0;
+    return this.config.mockMode;
   }
 
   public async *stream(request: CompletionRequest, signal?: AbortSignal): AsyncGenerator<StreamChunk> {
@@ -120,6 +120,7 @@ export class ModelRouter {
     }
 
     const client = createProviderClient(provider, { apiKey });
+    let servingModel = request.modelConfig.model;
     let inputTokens = 0;
     let outputTokens = 0;
 
@@ -138,19 +139,20 @@ export class ModelRouter {
         thinking
       })) {
         if (chunk.type === "done") {
+          servingModel = chunk.model;
           inputTokens = chunk.usage.inputTokens;
           outputTokens = chunk.usage.outputTokens;
         }
         yield chunk;
         if (chunk.type === "error") {
-          this.audit(request, provider, started, "error", inputTokens, outputTokens, "ProviderError");
+          this.audit(request, provider, started, "error", inputTokens, outputTokens, "ProviderError", servingModel);
           return;
         }
       }
-      this.audit(request, provider, started, "ok", inputTokens, outputTokens);
+      this.audit(request, provider, started, "ok", inputTokens, outputTokens, undefined, servingModel);
     } catch (error) {
       yield { type: "error", message: error instanceof Error ? error.message : "Stream failed." };
-      this.audit(request, provider, started, "error", inputTokens, outputTokens, "StreamException");
+      this.audit(request, provider, started, "error", inputTokens, outputTokens, "StreamException", servingModel);
     }
   }
 
@@ -247,6 +249,7 @@ export class ModelRouter {
       throw new Error(`No API key configured for provider ${provider}.`);
     }
 
+    let servingModel = route.model;
     const client = createFimClient(provider, { apiKey });
     let text = "";
     let usage = { inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0 };
@@ -264,6 +267,7 @@ export class ModelRouter {
       if (chunk.type === "delta") {
         text += chunk.text;
       } else if (chunk.type === "done") {
+        servingModel = chunk.model;
         usage = chunk.usage;
         finishReason = chunk.finishReason;
       } else if (chunk.type === "error") {
@@ -277,11 +281,11 @@ export class ModelRouter {
     }
 
     text = stripInlineFences(text);
-    this.audit(request, provider, started, "ok", usage.inputTokens, usage.outputTokens);
+    this.audit(request, provider, started, "ok", usage.inputTokens, usage.outputTokens, undefined, servingModel);
     return {
       text,
       usage,
-      model: route.model,
+      model: servingModel,
       provider,
       finishReason
     };
@@ -321,6 +325,7 @@ export class ModelRouter {
       return;
     }
 
+    let servingModel = route.model;
     const client = createFimClient(provider, { apiKey });
     let inputTokens = 0;
     let outputTokens = 0;
@@ -336,6 +341,7 @@ export class ModelRouter {
         requestId: request.requestId
       })) {
         if (chunk.type === "done") {
+          servingModel = chunk.model;
           inputTokens = chunk.usage.inputTokens;
           outputTokens = chunk.usage.outputTokens;
         }
@@ -345,7 +351,7 @@ export class ModelRouter {
           return;
         }
       }
-      this.audit(request, provider, started, "ok", inputTokens, outputTokens);
+      this.audit(request, provider, started, "ok", inputTokens, outputTokens, undefined, servingModel);
     } catch (error) {
       yield { type: "error", message: error instanceof Error ? error.message : "FIM stream failed." };
       this.audit(request, provider, started, "error", inputTokens, outputTokens, "StreamException");
@@ -401,6 +407,7 @@ export class ModelRouter {
       throw new Error(`No API key configured for provider ${provider}.`);
     }
 
+    let servingModel = route.model;
     const client = createProviderClient(provider, { apiKey });
     let text = "";
     let usage = {
@@ -421,6 +428,7 @@ export class ModelRouter {
       if (chunk.type === "delta") {
         text += chunk.text;
       } else if (chunk.type === "done") {
+        servingModel = chunk.model;
         usage = chunk.usage;
         finishReason = chunk.finishReason;
       } else if (chunk.type === "error") {
@@ -434,11 +442,11 @@ export class ModelRouter {
     }
 
     text = stripInlineFences(text);
-    this.audit(request, provider, started, "ok", usage.inputTokens, usage.outputTokens);
+    this.audit(request, provider, started, "ok", usage.inputTokens, usage.outputTokens, undefined, servingModel);
     return {
       text,
       usage,
-      model: route.model,
+      model: servingModel,
       provider,
       finishReason
     };
@@ -487,6 +495,7 @@ export class ModelRouter {
       return;
     }
 
+    let servingModel = route.model;
     const client = createProviderClient(provider, { apiKey });
     let inputTokens = 0;
     let outputTokens = 0;
@@ -501,6 +510,7 @@ export class ModelRouter {
         requestId: request.requestId
       })) {
         if (chunk.type === "done") {
+          servingModel = chunk.model;
           inputTokens = chunk.usage.inputTokens;
           outputTokens = chunk.usage.outputTokens;
         }
@@ -510,7 +520,7 @@ export class ModelRouter {
           return;
         }
       }
-      this.audit(request, provider, started, "ok", inputTokens, outputTokens);
+      this.audit(request, provider, started, "ok", inputTokens, outputTokens, undefined, servingModel);
     } catch (error) {
       yield { type: "error", message: error instanceof Error ? error.message : "Inline stream failed." };
       this.audit(request, provider, started, "error", inputTokens, outputTokens, "StreamException");
@@ -652,15 +662,18 @@ export class ModelRouter {
     status: "ok" | "error",
     inputTokens: number,
     outputTokens: number,
-    errorClass?: string
+    errorClass?: string,
+    servingModel = request.modelConfig.model
   ): void {
     const event: LlmAuditEvent = {
       requestId: request.requestId,
       orgId: request.orgId,
       plan: request.plan,
       provider,
-      model: request.modelConfig.model,
+      model: servingModel,
+      requestedModel: request.modelConfig.model,
       useCase: request.useCase,
+      inferenceRole: request.inferenceRole,
       inputTokens,
       outputTokens,
       latencyMs: Date.now() - started,

@@ -133,6 +133,8 @@ export type ChatTurnActivity = {
 };
 
 export type ChatMessage = {
+  /** Returned provider/model/usage attribution; never an instruction or source. */
+  inferenceCalls?: import("../config/inferenceRoles").InferenceCall[];
   /** Validated source turns keep anonymous examples separate from explicit quotes. */
   sourceCitationMode?: "explicit";
   clientSubmissionId?: string;

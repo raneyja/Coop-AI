@@ -1,4 +1,5 @@
 import { DEFAULT_API_BASE } from "../chat/types";
+import { ADMIN_PORTAL_URL } from "./publicUrls";
 
 export function isLoopbackCoopApiBase(baseUrl: string): boolean {
   try {
@@ -19,4 +20,24 @@ export function resolveUserAuthApiBase(apiBaseUrl: string): string {
     return DEFAULT_API_BASE;
   }
   return trimmed;
+}
+
+/**
+ * Hosted Google sign-in runs through the admin portal so the browser never
+ * needs to navigate to the API hostname. The portal performs the API exchange
+ * server-side and hands the finished session back to the editor URI.
+ */
+export function buildUserGoogleAuthStartUrl(apiBaseUrl: string, redirect?: string): string {
+  const authBase = resolveUserAuthApiBase(apiBaseUrl);
+  const isHostedCoop = authBase === DEFAULT_API_BASE;
+  const startUrl = new URL(
+    isHostedCoop ? "/api/auth/google/start" : "/v1/auth/google/start",
+    isHostedCoop ? ADMIN_PORTAL_URL : authBase
+  );
+  startUrl.searchParams.set("mode", "login");
+  const sanitized = redirect?.trim();
+  if (sanitized) {
+    startUrl.searchParams.set("redirect", sanitized);
+  }
+  return startUrl.toString();
 }

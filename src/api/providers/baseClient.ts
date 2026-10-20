@@ -95,7 +95,7 @@ export abstract class BaseProviderClient {
           yield {
             type: "done",
             usage: resolveUsage(this.provider, options, state),
-            model: options.model,
+            model: state.model ?? options.model,
             provider: this.provider,
             finishReason: "cancelled"
           };
@@ -109,7 +109,7 @@ export abstract class BaseProviderClient {
     yield {
       type: "done",
       usage: resolveUsage(this.provider, options, state),
-      model: options.model,
+      model: state.model ?? options.model,
       provider: this.provider,
       finishReason: state.finishReason ?? "stop"
     };
@@ -151,6 +151,7 @@ export abstract class BaseProviderClient {
 
 export type ParseState = {
   text: string;
+  model?: string;
   finishReason?: FinishReason;
   inputTokens?: number;
   outputTokens?: number;

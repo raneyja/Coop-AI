@@ -1,3 +1,5 @@
+import { agentRequestContext } from "./agentRequestContext";
+import type { InferenceRole } from "../config/inferenceRoles";
 import { shouldFollowEditorAfterThreadRestore } from "./chatThreadRestore";
 import { createSharedInitialization } from "./sessionInitialization";
 import { attachmentBodyMetadata, attachmentBundleMetadata, attachmentSerializedMetadata } from "./attachmentDiagnostics";
@@ -45,6 +47,7 @@ import { summarizePrNotes, type PrNotesCompleteFn } from "../edit/prNotesSummary
 import { activeThemeMode } from "./themeMode";
 import { coopSessionRegistry } from "./CoopSessionRegistry";
 import { authIdentityKey, shouldRebindAccountThreads } from "./authIdentity";
+import { shouldPreserveVerifiedSession } from "./verifyStoredSession";
 import { chatRepoListFromWorkspaceRepos } from "./workspaceRepoExplorer";
 import {
   readDegradationConfiguration,
@@ -1081,7 +1084,15 @@ export class CoopChatSession {
       return;
     }
     const tokenAfterVerification = await this.options.api.getToken();
-    this.preferences = refreshedPreferences;
+    const preserveVerifiedSession = shouldPreserveVerifiedSession({
+      wasSignedIn: this.preferences.isSignedIn,
+      nextSignedIn: refreshedPreferences.isSignedIn,
+      tokenBefore: tokenBeforeVerification,
+      tokenAfter: tokenAfterVerification
+    });
+    if (!preserveVerifiedSession) {
+      this.preferences = refreshedPreferences;
+    }
     this.applyDefaultRepoToContext();
     if (this.preferences.plan === "free" && !isFreeQuotaExhausted(this.preferences.quotaCredits)) {
       this.post({ type: "chat:quota-cleared" });
@@ -1093,7 +1104,7 @@ export class CoopChatSession {
     // preserves storage only for the exact last-verified session credential.
     const currentToken = await this.options.api.getToken();
     const nextIdentity = tokenBeforeVerification === tokenAfterVerification &&
-      tokenAfterVerification === currentToken ? authIdentityKey(refreshedPreferences) : "";
+      tokenAfterVerification === currentToken ? authIdentityKey(this.preferences) : "";
     const previousIdentity = this.lastSignedInIdentity;
     if (shouldRebindAccountThreads(previousIdentity, nextIdentity, currentToken, this.lastVerifiedSessionToken)) {
       this.syncSurfacesAfterAuthChange(previousIdentity, nextIdentity);
@@ -1702,6 +1713,7 @@ export class CoopChatSession {
 
   private async finishTurnAssistantMessage(turn: ChatTurn, finalMessage: ChatMessage): Promise<void> {
     if (!this.threadRuns.isStreamActive(turn)) return;
+    finalMessage = { ...finalMessage, inferenceCalls: turn.inferenceCalls?.map(call => ({ ...call })) };
     let message = finalMessage;
     if (turn.sourceCitationWindows !== undefined) {
       // A source-backed synthesis has already validated this frozen evidence.
@@ -4380,24 +4392,34 @@ export class CoopChatSession {
   }
 
   /** Prefer Deep-Index / GitHub default / workspace over stale Settings `main`. */
-  private async pinCanonicalRepoBranchForTurn(): Promise<void> {
-    if (!isHonestRepoIntelligenceScope(this.currentContext)) {
-      return;
+  private async pinCanonicalRepoBranchForTurn(options?: { isCurrent?: () => boolean; assertIdentity?: () => Promise<void>; settings?: UserPreferences }): Promise<boolean> {
+    const context = { ...this.currentContext };
+    const settings = options?.settings ?? { ...this.preferences };
+    const stillOwnsTarget = () => (options?.isCurrent?.() ?? true) &&
+      ["owner", "repo", "provider", "branch", "file"].every(key =>
+        this.currentContext[key as keyof RepoContext] === context[key as keyof RepoContext]);
+    await options?.assertIdentity?.();
+    if (!stillOwnsTarget()) return false;
+    if (!isHonestRepoIntelligenceScope(context)) {
+      return true;
     }
-    const owner = this.currentContext.owner?.trim();
-    const repo = this.currentContext.repo?.trim();
+    const owner = context.owner?.trim();
+    const repo = context.repo?.trim();
     if (!owner || !repo) {
-      return;
+      return true;
     }
     const provider =
-      this.currentContext.provider ?? this.preferences.defaultCodeHost ?? "github";
-    const repoId = buildRepoId(this.preferences, { owner, repo, provider });
+      context.provider ?? settings.defaultCodeHost ?? "github";
+    const repoId = buildRepoId(settings, { owner, repo, provider });
     if (!repoId) {
-      return;
+      return true;
     }
 
     let branch: string | undefined;
     const hasApiToken = await this.options.api.hasToken();
+
+    await options?.assertIdentity?.();
+    if (!stillOwnsTarget()) return false;
 
     // 1) Indexed branch (Deep-Index) — strongest signal for non-main defaults like preview.
     if (hasApiToken) {
@@ -4407,12 +4429,15 @@ export class CoopChatSession {
           owner,
           repo,
           provider,
-          branch: this.currentContext.branch
+          branch: context.branch
         });
       } catch {
         branch = undefined;
       }
     }
+
+    await options?.assertIdentity?.();
+    if (!stillOwnsTarget()) return false;
 
     // 2) Full resolver (workspace catalog + tree probe) when index is missing.
     if (!branch) {
@@ -4422,12 +4447,12 @@ export class CoopChatSession {
             repoId,
             owner,
             repo,
-            branch: this.currentContext.branch,
+            branch: context.branch,
             provider
           },
           {
             api: this.options.api,
-            apiBaseUrl: this.preferences.apiBaseUrl,
+            apiBaseUrl: settings.apiBaseUrl,
             codeHostRouter: this.options.codeHostRouter,
             resolveWorkspaceBranch: hasApiToken
               ? async (id) => this.resolveWorkspaceDefaultBranch(id)
@@ -4439,6 +4464,9 @@ export class CoopChatSession {
         /* fall through */
       }
     }
+
+    await options?.assertIdentity?.();
+    if (!stillOwnsTarget()) return false;
 
     // 3) Live code-host default branch (works even without Coop API token).
     if (!branch) {
@@ -4454,15 +4482,18 @@ export class CoopChatSession {
       }
     }
 
+    await options?.assertIdentity?.();
+    if (!stillOwnsTarget()) return false;
+
     if (!branch) {
       this.logContextDebug(
         `Branch pin: no canonical branch for ${owner}/${repo} (session=${this.currentContext.branch ?? "none"})`
       );
-      return;
+      return true;
     }
 
     if (branch === this.currentContext.branch) {
-      return;
+      return true;
     }
 
     this.logContextDebug(
@@ -4475,6 +4506,7 @@ export class CoopChatSession {
       this.preferences = { ...this.preferences, branch };
       void updateConfiguration({ branch });
     }
+    return true;
   }
 
   private async resolveWorkspaceDefaultBranch(repoId: string): Promise<string | undefined> {
@@ -4899,6 +4931,18 @@ export class CoopChatSession {
     }));
   }
 
+  private recordOwnedInference(turn: ChatTurn | undefined, role: InferenceRole,
+    result: { usage?: { provider: string; model: string; inputTokens: number; outputTokens: number; estimatedCostUsd: number } }): void {
+    if (!turn || !result.usage) return;
+    const call = { role, ...result.usage };
+    (turn.inferenceCalls ??= []).push(call);
+    this.logAgentDiagnostic(turn.threadId, { stage: "inference-complete", turnId: turn.id, ...call });
+    turn.sessionCostUsd += call.estimatedCostUsd;
+    this.postForThread(turn.threadId, { type: "chat:usage", payload: { ...call, sessionCostUsd: turn.sessionCostUsd } });
+    if (this.isViewingThread(turn.threadId)) this.sessionCostUsd = turn.sessionCostUsd;
+    this.persistTurnThread(turn);
+  }
+
   /**
    * Same-conversation tool pick. JSON only. Fail-open: empty string → orchestrator fallback.
    */
@@ -4913,9 +4957,12 @@ export class CoopChatSession {
     }>,
     allowedRepoTools = true,
     intentPurpose?: string,
-    projectInstructions?: string
+    projectInstructions?: string,
+    turn?: ChatTurn
   ): Promise<string> {
-    if (this.turnStreamAbort?.aborted) {
+    const settings = turn?.requestSettings ?? this.preferences;
+    const signal = turn?.streamAbort.signal;
+    if (signal?.aborted) {
       return JSON.stringify({ done: true });
     }
     const prompt = buildAgentToolPlanPrompt({
@@ -4930,12 +4977,17 @@ export class CoopChatSession {
       allowedRepoTools,
       projectInstructions
     });
-    const history = this.conversationToHistory(input.conversation);
+    const owned = agentRequestContext(turn);
+    const history = [...owned.history, ...this.conversationToHistory(input.conversation)];
     let full = "";
     try {
-      await this.options.api.streamChat(
+      const result = await this.options.api.streamChat(
         {
-          message: prompt,
+          message: [owned.brief, prompt].filter(Boolean).join("\n\n"),
+          attachments: owned.attachments,
+          inferenceRole: "tool_plan",
+          quotaTurnId: turn?.quotaTurnId,
+          assertIdentity: turn?.assertIdentity,
           context: {},
           history,
           model: runtime.model,
@@ -4948,9 +5000,10 @@ export class CoopChatSession {
         (chunk) => {
           full += chunk;
         },
-        this.preferences.apiBaseUrl,
-        this.turnStreamAbort
+        settings.apiBaseUrl,
+        signal
       );
+      this.recordOwnedInference(turn, "tool_plan", result);
     } catch {
       return "";
     }
@@ -4965,12 +5018,19 @@ export class CoopChatSession {
     provider: IntegrationChatProvider,
     query: string,
     file?: string,
-    extra?: { openIds?: string[]; priorHits?: Record<string, unknown>; signal?: AbortSignal }
+    extra?: { openIds?: string[]; priorHits?: Record<string, unknown>; signal?: AbortSignal; turn?: ChatTurn }
   ): Promise<Record<string, unknown>> {
-    const owner = this.currentContext.owner ?? this.preferences.owner;
-    const repo = this.currentContext.repo ?? this.preferences.repo;
+    await extra?.turn?.assertIdentity?.();
+    const context = extra?.turn?.context ?? this.currentContext;
+    const settings = extra?.turn?.requestSettings ?? this.preferences;
+    const owner = context.owner ?? settings.owner;
+    const repo = context.repo ?? settings.repo;
     const secrets = this.options.integrationSecrets;
-    const gathering = this.contextGatheringOptions();
+    const codeHostConnected = context.provider === "gitlab"
+      ? Boolean(settings.hasGitLabToken || settings.hasGitLabAppInstalled)
+      : context.provider === "bitbucket"
+        ? Boolean(settings.hasBitbucketCredentials || settings.hasBitbucketAppInstalled)
+        : Boolean(settings.hasGitHubToken || settings.hasGitHubAppInstalled);
     let slackScope: ResolvedIntegrationScope | undefined;
     let atlassianScope: ResolvedIntegrationScope | undefined;
     let notionScope: ResolvedIntegrationScope | undefined;
@@ -4992,7 +5052,7 @@ export class CoopChatSession {
       if (scoped) {
         try {
           const resolved = await this.options.api.getIntegrationScope(
-            this.preferences.apiBaseUrl,
+            settings.apiBaseUrl,
             scoped
           );
           if (scoped === "slack") slackScope = resolved;
@@ -5005,6 +5065,7 @@ export class CoopChatSession {
         }
       }
     }
+    await extra?.turn?.assertIdentity?.();
     const extraTerms = query.trim() ? [query.trim()] : undefined;
     const searchOnly = !extra?.openIds?.length;
     const openIds = extra?.openIds;
@@ -5035,9 +5096,9 @@ export class CoopChatSession {
       case "jira":
         return fetchJiraSearchContext({
           ...base,
-          preferHost: this.currentContext.provider,
+          preferHost: context.provider,
           codeHostRouter: this.options.codeHostRouter,
-          codeHostConnected: gathering.codeHostConnected ?? this.isCodeHostConnected(),
+          codeHostConnected,
           integrationScope: atlassianScope
         });
       case "teams":
@@ -5103,7 +5164,8 @@ export class CoopChatSession {
   private async interpretOpenedVendorHits(
     artifacts: OpenedVendorArtifact[],
     ask: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    turn?: ChatTurn
   ): Promise<string | undefined> {
     if (artifacts.length === 0 || signal?.aborted) {
       return undefined;
@@ -5117,14 +5179,17 @@ export class CoopChatSession {
         const prompt = buildInterpretOpenedArtifactPrompt({ ask, artifact });
         let full = "";
         try {
-          await this.options.api.streamChat(
+          const result = await this.options.api.streamChat(
             {
               message: prompt,
               context: {},
               history: [],
               model: assignment.model,
               provider: assignment.provider,
-              useCase: "chat",
+              useCase: "intent_suggest",
+              inferenceRole: "opened_source_interpretation",
+              quotaTurnId: turn?.quotaTurnId,
+              assertIdentity: turn?.assertIdentity,
               temperature: 0,
               maxTokens: 220,
               enableThinking: false
@@ -5132,9 +5197,10 @@ export class CoopChatSession {
             (chunk) => {
               full += chunk;
             },
-            this.preferences.apiBaseUrl,
+            (turn?.requestSettings ?? this.preferences).apiBaseUrl,
             signal
           );
+          this.recordOwnedInference(turn, "opened_source_interpretation", result);
         } catch {
           return `${artifact.title}: ${artifact.body.slice(0, 400)}`;
         }
@@ -5156,6 +5222,8 @@ export class CoopChatSession {
     requestTurn?: ChatTurn,
     requestRunId?: string
   ): Promise<string> {
+    const settings = requestTurn?.requestSettings ?? this.preferences;
+    const owned = agentRequestContext(requestTurn);
     const fileScope = resolveRepoFileScope(input.message);
     const projectInstructionsBlock = repoFileScopeAllowsPath(fileScope, "AGENTS.md")
       ? input.projectInstructions ?? await this.buildProjectInstructionsBlock(requestTurn?.context, requestTurn?.startedAt, input.message)
@@ -5174,9 +5242,10 @@ export class CoopChatSession {
       userQuestion: input.message,
       contextBundle: [{ data: input.repoFacts }]
     }) : prompt;
-    const message = input.requestedFiles?.length
+    const evidenceMessage = input.requestedFiles?.length
       ? `${scopedPrompt}\n\n${formatRequestedFileOutcomes(input.requestedFiles)}` : scopedPrompt;
-    const history = this.conversationToHistory(input.conversation, { summarizeTools: true });
+    const message = [owned.brief, evidenceMessage].filter(Boolean).join("\n\n");
+    const history = [...owned.history, ...this.conversationToHistory(input.conversation, { summarizeTools: true })];
     if (requestTurn && vscode.workspace.getConfiguration("coopAI").get<boolean>("agentDiagnostics", false)) {
       const historyEvidence = history.flatMap((entry) => {
         try {
@@ -5195,6 +5264,10 @@ export class CoopChatSession {
     const result = await this.options.api.streamChat(
       {
         message,
+        attachments: owned.attachments,
+        inferenceRole: "answer",
+        quotaTurnId: requestTurn?.quotaTurnId,
+        assertIdentity: requestTurn?.assertIdentity,
         context: {
           owner: requestTurn ? requestTurn.context.owner : this.currentContext.owner,
           repo: requestTurn ? requestTurn.context.repo : this.currentContext.repo,
@@ -5204,8 +5277,8 @@ export class CoopChatSession {
         model: runtime.model,
         provider: runtime.provider,
         useCase,
-        temperature: this.preferences.temperature,
-        maxTokens: resolveChatOutputMaxTokens(this.preferences.maxTokens),
+        temperature: settings.temperature,
+        maxTokens: resolveChatOutputMaxTokens(settings.maxTokens),
         // Locate synthesis reports already verified source; avoid another
         // reasoning phase after discovery has used the interactive budget.
         enableThinking: input.action !== "locate" && !input.directFileAnswer
@@ -5217,7 +5290,7 @@ export class CoopChatSession {
         full += chunk;
         onChunk(chunk);
       },
-      this.preferences.apiBaseUrl,
+      settings.apiBaseUrl,
       signal,
       (thinkingChunk) => {
         if (signal?.aborted) {
@@ -5227,6 +5300,7 @@ export class CoopChatSession {
         this.postThinkingDelta(id, thinkingChunk, requestTurn);
       }
     );
+    this.recordOwnedInference(requestTurn, "answer", result);
     let content = result.message.content || full;
     let finishReason = result.finishReason;
     if (
@@ -5237,21 +5311,24 @@ export class CoopChatSession {
       const continued = await this.options.api.streamChat(
         {
           message: LENGTH_CONTINUE_PROMPT,
+          inferenceRole: "continuation",
+          quotaTurnId: requestTurn?.quotaTurnId,
+          assertIdentity: requestTurn?.assertIdentity,
           context: {
             owner: requestTurn ? requestTurn.context.owner : this.currentContext.owner,
             repo: requestTurn ? requestTurn.context.repo : this.currentContext.repo,
             branch: requestTurn ? requestTurn.context.branch : this.currentContext.branch
           },
           history: [
-            ...this.conversationToHistory(input.conversation, { summarizeTools: true }),
-            { role: "user" as const, content: message, timestamp: Date.now() },
+            ...history,
+            { role: "user" as const, content: message, attachments: owned.attachments, timestamp: Date.now() },
             { role: "assistant" as const, content, timestamp: Date.now() }
           ],
           model: runtime.model,
           provider: runtime.provider,
           useCase,
-          temperature: this.preferences.temperature,
-          maxTokens: resolveChatOutputMaxTokens(this.preferences.maxTokens),
+          temperature: settings.temperature,
+          maxTokens: resolveChatOutputMaxTokens(settings.maxTokens),
           enableThinking: false
         },
         (chunk) => {
@@ -5261,9 +5338,10 @@ export class CoopChatSession {
           extra += chunk;
           onChunk(chunk);
         },
-        this.preferences.apiBaseUrl,
+        settings.apiBaseUrl,
         signal
       );
+      this.recordOwnedInference(requestTurn, "continuation", continued);
       content += extra || continued.message.content || "";
       finishReason = continued.finishReason;
     }
@@ -5287,26 +5365,28 @@ export class CoopChatSession {
           sourceHint?: string;
         }
       | undefined,
-    _message: string
+    _message: string,
+    turn?: ChatTurn
   ): boolean {
-    const fileAssistant = isFileAssistantSession(this.currentContext);
-    const repoId = buildRepoId(this.preferences, this.currentContext);
+    const context = turn?.context ?? this.currentContext;
+    const fileAssistant = isFileAssistantSession(context);
+    const repoId = buildRepoId(turn?.requestSettings ?? this.preferences, context);
     // An observed server rejection must enter the repo agent even if the
     // planner/session scope was downgraded to plain chat. Otherwise the
     // search -> open/read contract is skipped before the orchestrator runs.
-    if (isApiRejectAsk(_message) && repoId && !quickAction && options?.composerMode !== "edit" && !fileAssistant) {
+    if (turn?.intentPlan.interpretation !== "model" && isApiRejectAsk(_message) && repoId && !quickAction && options?.composerMode !== "edit" && !fileAssistant) {
       return true;
     }
     return agentOwnsIndexedGather({
       fileAssistant,
       hasQuickAction: Boolean(quickAction),
       isEditTurn: options?.composerMode === "edit",
-      agentAction: this.turnAgentAction,
+      agentAction: turn?.agentAction ?? this.turnAgentAction,
       skipOpenFileFeatureAdd: shouldSkipAgentHuntForOpenFileFeatureAdd({
         message: _message,
-        openFile: this.currentContext.file
+        openFile: context.file
       }),
-      honestRepoScope: isHonestRepoIntelligenceScope(this.currentContext),
+      honestRepoScope: isHonestRepoIntelligenceScope(context),
       repoId
     });
   }
@@ -5318,25 +5398,18 @@ export class CoopChatSession {
   private async runAgentOwnedTurn(turn: ChatTurn, query: string): Promise<void> {
     const signal = turn.streamAbort.signal;
     const isCancelled = () => !this.threadRuns.isStreamActive(turn);
-    const repoId = buildRepoId(this.preferences, turn.context);
+    const settings = turn.requestSettings ?? this.preferences;
+    const repoId = buildRepoId(settings, turn.context);
     const action = turn.agentAction ?? "none";
     const chatUseCase = action === "change" ? "code_edit" : "chat";
     const modelPrefs = {
-      devMode: this.preferences.devMode,
-      llmProvider: this.preferences.llmProvider,
-      model: this.preferences.model,
-      plan: this.preferences.plan,
-      usageTier: this.preferences.usageTier
+      devMode: settings.devMode,
+      llmProvider: settings.llmProvider,
+      model: settings.model,
+      plan: settings.plan,
+      usageTier: settings.usageTier
     };
-    const runtimeModel =
-      action === "change"
-        ? resolveRuntimeModelForUseCase("code_edit", modelPrefs)
-        : canUserSelectModels(modelPrefs) && !isAutoModelSelection(modelPrefs.model)
-          ? resolveRuntimeModelForUseCase("chat", modelPrefs)
-          : (() => {
-              const editAssignment = getFeatureModelAssignment("edit");
-              return { provider: editAssignment.provider, model: editAssignment.model };
-            })();
+    const runtimeModel = resolveRuntimeModelForUseCase(chatUseCase, modelPrefs);
 
     const synthesisMessages = this.synthesisActivityMessages(
       `agent-${turn.streamGeneration}-${Date.now()}`,
@@ -5386,14 +5459,14 @@ export class CoopChatSession {
       turn.clearResponseDeadline = () => undefined;
 
       const allowedIntegrations = integrationsForAgentLoop({
-        connected: this.listConnectedIntegrationTools(),
+        connected: turn.connectedIntegrations ?? [],
         plan: turn.intentPlan,
         query
       });
       const allowedRepoTools = turn.allowsRepoTools ?? false;
       const projectInstructionsBlock = await this.buildProjectInstructionsBlock(turn.context, turn.startedAt, query);
       const plannedSearchQueries = plannedCodeSearchQueries(turn.intentPlan.jobs);
-      const intentBrief = formatIntentBriefForAgent(turn.intentPlan);
+      const intentBrief = agentRequestContext(turn).brief;
       if (turn.context.fileSource === "remote" && turn.editAnchorLoad &&
           !lookupPatchFileContent(turn.editAnchor?.file ?? turn.context.file ?? "", turn.editAnchor?.fileContents)?.trim()) {
         await abortablePromise(turn.editAnchorLoad, signal);
@@ -5426,6 +5499,7 @@ export class CoopChatSession {
         },
         {
           signal,
+          assertIdentity: turn.assertIdentity,
           wallMs: AGENT_JOB_WALL_MS,
           startedAt: turn.startedAt,
           repoTarget: { repoId, owner: turn.context.owner, repo: turn.context.repo, provider: turn.context.provider, branch: turn.context.branch },
@@ -5453,9 +5527,10 @@ export class CoopChatSession {
             this.searchIntegrationForAgent(input.provider, input.query, turn.context.file, {
               openIds: input.openIds,
               priorHits: input.priorHits,
-              signal: input.signal ?? signal
+              signal: input.signal ?? signal,
+              turn
             }),
-          interpretOpens: (artifacts) => this.interpretOpenedVendorHits(artifacts, query, signal),
+          interpretOpens: (artifacts) => this.interpretOpenedVendorHits(artifacts, query, signal, turn),
           onDiagnostic: (event) => {
             if (typeof event.runId === "string") agentRunId = event.runId;
             this.logAgentDiagnostic(turn.threadId, {
@@ -5482,7 +5557,8 @@ export class CoopChatSession {
               })),
               allowedRepoTools,
               turn.intentPlan.purpose,
-              projectInstructionsBlock
+              projectInstructionsBlock,
+              turn
             );
           },
           streamAnswer: (input) =>
@@ -6310,9 +6386,12 @@ export class CoopChatSession {
     diff: string;
     files?: string[];
   }): Promise<void> {
+    const settings = { ...this.preferences };
+    const ownerTurn = this.threadRuns.get(this.activeThreadId());
+    const assertIdentity = await this.options.api.captureRequestIdentity?.();
     const complete: PrNotesCompleteFn = async (params) => {
       let full = "";
-      await this.options.api.streamChat(
+      const result = await this.options.api.streamChat(
         {
           message: params.message,
           context: {},
@@ -6320,6 +6399,8 @@ export class CoopChatSession {
           model: params.model,
           provider: params.provider,
           useCase: "pr_summary",
+          inferenceRole: "pr_summary",
+          assertIdentity,
           temperature: params.temperature,
           maxTokens: params.maxTokens,
           enableThinking: false
@@ -6327,9 +6408,10 @@ export class CoopChatSession {
         (chunk) => {
           full += chunk;
         },
-        this.preferences.apiBaseUrl,
+        settings.apiBaseUrl,
         params.signal
       );
+      this.recordOwnedInference(ownerTurn, "pr_summary", result);
       return full;
     };
     const result = await summarizePrNotes({
@@ -6878,6 +6960,10 @@ export class CoopChatSession {
   ): Promise<void> {
     const requestStartedAt = options?.requestStartedAt ?? Date.now();
     const submissionThreadId = this.activeThreadId();
+    const submissionContext = { ...this.currentContext };
+    const submissionHistory = this.chatHistory?.map(entry => ({ ...entry, attachments: entry.attachments?.map(attachment => ({ ...attachment })) })) ?? [];
+    attachments = attachments?.map(attachment => ({ ...attachment }));
+    this.threadRuns.abort(submissionThreadId);
     const cancellationGeneration = this.threadRuns.cancellationGeneration(submissionThreadId);
     const submissionCancelled = () =>
       this.threadRuns.cancellationGeneration(submissionThreadId) !== cancellationGeneration ||
@@ -6886,7 +6972,11 @@ export class CoopChatSession {
       this.post({ type: "chat:error", payload: { message: "The selected repository branch is still loading. Try again once it is ready." } });
       return;
     }
-    this.options.api.beginQuotaTurn();
+    const quotaTurnId = this.options.api.beginQuotaTurn();
+    const requestSettings = { ...this.preferences };
+    const connectedIntegrations = this.listConnectedIntegrationTools();
+    const assertIdentity = await this.options.api.captureRequestIdentity?.();
+    if (submissionCancelled()) return;
     // A new send abandons any unanswered suggest chips.
     if (!options?.skipQuickActionSuggest && !options?.skipUserHistoryPush) {
       this.dismissPendingQuickActionSuggest();
@@ -6997,8 +7087,11 @@ export class CoopChatSession {
         parsed: parsedSlash,
         slashUserArgs: options?.slashUserArgs
       });
-      const plan = await this.resolveChatIntentPlan(interpretMessage, { constraint });
+      const plan = await this.resolveChatIntentPlan(interpretMessage, { constraint, settings: requestSettings, context: submissionContext, history: submissionHistory, connectedTools: connectedIntegrations, assertIdentity, quotaTurnId, attachments, startedAt: requestStartedAt });
       if (submissionCancelled()) return;
+      await assertIdentity?.();
+      if (["owner", "repo", "provider", "branch", "file"].some(key =>
+        this.currentContext[key as keyof RepoContext] !== submissionContext[key as keyof RepoContext])) return;
       options = { ...options, intentPlan: plan };
 
       if (parsedSlash) {
@@ -7105,7 +7198,7 @@ export class CoopChatSession {
     }
 
     if (!isFileAssistantSession(this.currentContext)) {
-      await this.pinCanonicalRepoBranchForTurn();
+      if (await this.pinCanonicalRepoBranchForTurn({ isCurrent: () => !submissionCancelled(), assertIdentity, settings: requestSettings }) === false) return;
     }
 
     // Untitled-N leftover over Use-repo coords: clear before the L gate so
@@ -7330,6 +7423,10 @@ export class CoopChatSession {
       threadId: this.activeThreadId(),
       context: { ...this.currentContext },
       history: [...this.chatHistory],
+      requestSettings,
+      quotaTurnId,
+      assertIdentity,
+      connectedIntegrations,
       artifacts: [...this.threadArtifacts],
       sessionCostUsd: this.sessionCostUsd,
       modelMessage,
@@ -7342,6 +7439,7 @@ export class CoopChatSession {
       attachFullFile: this.pendingChatAttachFullFile,
       codeEditIntent: options?.composerMode === "edit"
     });
+    if (turn.intentPlan.inferenceUsage) this.recordOwnedInference(turn, "intent", { usage: turn.intentPlan.inferenceUsage });
     this.attachEditAnchor(turn);
     // Align turn clock with chat timing helper (soft gather budgets use startedAt).
     if (capturedAttachmentMetadata) this.logAttachmentDiagnostic(turn, "attachment-capture", capturedAttachmentMetadata);
@@ -7544,7 +7642,7 @@ export class CoopChatSession {
         });
     turn.agentAction = this.turnAgentAction;
     turn.allowsRepoTools = this.turnAllowsRepoTools;
-    if (this.shouldRunAgentOwnedTurn(quickAction, options, message)) {
+    if (this.shouldRunAgentOwnedTurn(quickAction, options, message, turn)) {
       await this.runAgentOwnedTurn(turn, message);
       return;
     }
@@ -7557,13 +7655,6 @@ export class CoopChatSession {
         }
         throw error;
       }
-    }
-    // Enrichment may resolve indexed branch after the turn snapshot — keep Scope in sync.
-    if (
-      this.currentContext.branch?.trim() &&
-      turn.context.branch !== this.currentContext.branch
-    ) {
-      turn.context = { ...turn.context, branch: this.currentContext.branch };
     }
     if (!this.threadRuns.isStreamActive(turn)) {
       return;
@@ -8145,26 +8236,31 @@ export class CoopChatSession {
    */
   private async resolveChatIntentPlan(
     message: string,
-    options?: { constraint?: ChatCommandConstraint }
+    options?: { constraint?: ChatCommandConstraint; settings?: UserPreferences; context?: RepoContext; history?: ChatMessage[]; connectedTools?: IntegrationChatProvider[]; assertIdentity?: () => Promise<void>; quotaTurnId?: string; attachments?: ChatImageAttachment[]; startedAt?: number }
   ): Promise<ChatIntentPlan> {
-    const connectedTools = this.listConnectedIntegrationTools();
-    const owner = this.currentContext.owner?.trim() || this.preferences.owner?.trim();
-    const repo = this.currentContext.repo?.trim() || this.preferences.repo?.trim();
-    const fileAssistant = isFileAssistantSession(this.currentContext);
+    const settings = options?.settings ?? { ...this.preferences };
+    const context = options?.context ?? this.currentContext;
+    const connectedTools = options?.connectedTools ?? this.listConnectedIntegrationTools();
+    const owner = context.owner?.trim() || settings.owner?.trim();
+    const repo = context.repo?.trim() || settings.repo?.trim();
+    const fileAssistant = isFileAssistantSession(context);
     const input = {
       message,
-      conversation: this.chatHistory.filter((entry) => !entry.cancelled).slice(-4)
-        .map((entry) => `${entry.role}: ${entry.content.slice(0, 2000)}`).join("\n"),
-      activeFile: this.currentContext.file,
+      conversation: buildModelHistory([...(options?.history ?? this.chatHistory), { role: "user", content: message, timestamp: Date.now() }])
+        .map((entry) => `${entry.role}: ${entry.content}`).join("\n"),
+      activeFile: context.file,
+      sourceTarget: fileAssistant ? { file: context.file, fileSource: context.fileSource, selectedLines: context.selectedLines } : { ...context },
       connectedTools,
       constraint: options?.constraint,
       useRepo: fileAssistant || !(owner && repo) ? undefined : `${owner}/${repo}`
     };
-    const finishPlan = (plan: ChatIntentPlan): ChatIntentPlan =>
-      fileAssistant ? applyFileAssistantIntentPlan(plan) : plan;
-    // Interpreter runs before the turn clock is stamped. Do not reuse a prior
-    // turn's startedAt or the cheap model is skipped for the rest of the session.
-    const remainingMs = remainingContextGatherBudgetMs(Date.now());
+    let inferenceUsage: ChatIntentPlan["inferenceUsage"];
+    const finishPlan = (plan: ChatIntentPlan): ChatIntentPlan => ({
+      ...(fileAssistant ? applyFileAssistantIntentPlan(plan) : plan), inferenceUsage
+    });
+    // The original submission clock survives slash re-entry; a previous turn's
+    // clock must never suppress interpretation for this request.
+    const remainingMs = remainingContextGatherBudgetMs(options?.startedAt ?? Date.now());
     if (!isIntentSuggestModelEnabled() || remainingMs <= 0) {
       return finishPlan(planChatFrontDoorFromRules(input));
     }
@@ -8174,7 +8270,7 @@ export class CoopChatSession {
     this.intentSuggestAbort = controller;
     const complete: IntentSuggestCompleteFn = async (params) => {
       let full = "";
-      await this.options.api.streamChat(
+      const result = await this.options.api.streamChat(
         {
           message: params.message,
           context: {},
@@ -8182,6 +8278,10 @@ export class CoopChatSession {
           model: params.model,
           provider: params.provider,
           useCase: FRONT_DOOR_INTERPRETER_USE_CASE,
+          inferenceRole: "intent",
+          assertIdentity: options?.assertIdentity,
+          quotaTurnId: options?.quotaTurnId,
+          attachments: options?.attachments,
           temperature: params.temperature,
           maxTokens: params.maxTokens,
           enableThinking: false
@@ -8189,9 +8289,10 @@ export class CoopChatSession {
         (chunk) => {
           full += chunk;
         },
-        this.preferences.apiBaseUrl,
+        settings.apiBaseUrl,
         params.signal
       );
+      inferenceUsage = result.usage;
       return full;
     };
 
@@ -8637,6 +8738,9 @@ export class CoopChatSession {
    * UI never dumps full bodies even when this skips.
    */
   private async enrichTimelineSourcePreviewsBestEffort(timeline: DecisionTimeline): Promise<void> {
+    const settings = { ...this.preferences };
+    const ownerTurn = this.threadRuns.get(this.activeThreadId());
+    const assertIdentity = await this.options.api.captureRequestIdentity?.();
     const remainingMs = remainingContextGatherBudgetMs(this.chatTurnStartedAt || Date.now());
     if (remainingMs < 400) {
       return;
@@ -8644,7 +8748,7 @@ export class CoopChatSession {
     const timeoutMs = Math.min(EVIDENCE_PREVIEW_TIMEOUT_MS, Math.max(400, remainingMs));
     const complete: EvidencePreviewCompleteFn = async (params) => {
       let full = "";
-      await this.options.api.streamChat(
+      const result = await this.options.api.streamChat(
         {
           message: params.message,
           context: {},
@@ -8652,6 +8756,8 @@ export class CoopChatSession {
           model: params.model,
           provider: params.provider,
           useCase: "evidence_preview",
+          inferenceRole: "evidence_preview",
+          assertIdentity,
           temperature: params.temperature,
           maxTokens: params.maxTokens,
           enableThinking: false
@@ -8659,9 +8765,10 @@ export class CoopChatSession {
         (chunk) => {
           full += chunk;
         },
-        this.preferences.apiBaseUrl,
+        settings.apiBaseUrl,
         params.signal
       );
+      this.recordOwnedInference(ownerTurn, "evidence_preview", result);
       return full;
     };
     try {
@@ -8779,6 +8886,8 @@ export class CoopChatSession {
         threadId: this.activeThreadId(),
         context: { ...this.currentContext },
         history: [...this.chatHistory],
+        requestSettings: { ...this.preferences },
+        connectedIntegrations: this.listConnectedIntegrationTools(),
         artifacts: [...this.threadArtifacts],
         sessionCostUsd: this.sessionCostUsd,
         modelMessage: content,
@@ -8792,7 +8901,9 @@ export class CoopChatSession {
     if (!turn.editAnchor) {
       this.attachEditAnchor(turn);
     }
+    const settings = turn.requestSettings ?? this.preferences;
     const turnContext = turn.context;
+    const ownedTask = agentRequestContext(turn);
     const pendingLocalWorkspace =
       turn.pendingLocalFiles?.source === "local-workspace" &&
       Boolean(turn.pendingLocalFiles.files.some((file) => file.content?.trim()));
@@ -8840,11 +8951,11 @@ export class CoopChatSession {
       chatUseCase = useCaseForSynthesisRoute(synthesisRoute, chatUseCase);
     }
     let runtimeModel = resolveRuntimeModelForUseCase(chatUseCase, {
-      devMode: this.preferences.devMode,
-      llmProvider: this.preferences.llmProvider,
-      model: this.preferences.model,
-      plan: this.preferences.plan,
-      usageTier: this.preferences.usageTier
+      devMode: settings.devMode,
+      llmProvider: settings.llmProvider,
+      model: settings.model,
+      plan: settings.plan,
+      usageTier: settings.usageTier
     });
     // Agent coding loop: mutation uses code_edit prompt + edit model; locate/understand
     // keep chat prompt but use the edit-tier model (not chat mini).
@@ -8852,27 +8963,27 @@ export class CoopChatSession {
       !options?.composerMode &&
       !effectiveQuickAction &&
       !integrationProvider &&
-      !this.preferences.devMode
+      !settings.devMode
     ) {
       if (turn.agentAction === "change") {
         chatUseCase = "code_edit";
         runtimeModel = resolveRuntimeModelForUseCase("code_edit", {
-          devMode: this.preferences.devMode,
-          llmProvider: this.preferences.llmProvider,
-          model: this.preferences.model,
-          plan: this.preferences.plan,
-          usageTier: this.preferences.usageTier
+          devMode: settings.devMode,
+          llmProvider: settings.llmProvider,
+          model: settings.model,
+          plan: settings.plan,
+          usageTier: settings.usageTier
         });
       } else if (
         turn.agentAction === "locate" ||
         turn.agentAction === "understand"
       ) {
         const pickerOpen = canUserSelectModels({
-          devMode: this.preferences.devMode,
-          plan: this.preferences.plan,
-          usageTier: this.preferences.usageTier
+          devMode: settings.devMode,
+          plan: settings.plan,
+          usageTier: settings.usageTier
         });
-        if (!pickerOpen || isAutoModelSelection(this.preferences.model)) {
+        if (!pickerOpen || isAutoModelSelection(settings.model)) {
           const editAssignment = getFeatureModelAssignment("edit");
           runtimeModel = {
             provider: editAssignment.provider,
@@ -8884,7 +8995,7 @@ export class CoopChatSession {
     // Open-file PR review: keep the chat/reviewer-checks prompt, but use the
     // assigned quick-actions model. Picker choice must not skip gather quality.
     if (
-      !this.preferences.devMode &&
+      !settings.devMode &&
       !effectiveQuickAction &&
       !integrationProvider &&
       !options?.composerMode &&
@@ -8908,7 +9019,7 @@ export class CoopChatSession {
     const signal = turn.streamAbort.signal;
     const isCancelled = () => !this.threadRuns.isStreamActive(turn);
 
-    if (this.preferences.useCachedResponses && !skipResponseCache) {
+    if (settings.useCachedResponses && !skipResponseCache) {
       const cached = this.readCache(cacheKey);
       if (cached) {
         await delayUntilMinResponseVisible(turn.startedAt, Date.now(), minResponseVisibleMs);
@@ -8947,7 +9058,7 @@ export class CoopChatSession {
     const deltaBatcher = this.createChatDeltaBatcher(turn.threadId);
     try {
       const mentionRefs = this.quickActionMentionRefs(options?.mentions);
-      const activeRepoId = buildRepoId(this.preferences, turnContext);
+      const activeRepoId = buildRepoId(settings, turnContext);
       const allMentionsOutOfScope = allMentionsOutOfScopeForActiveRepo(mentionRefs, activeRepoId);
 
       const skipLocalAttach = shouldSkipOpenFileAttach({
@@ -9175,8 +9286,8 @@ export class CoopChatSession {
       ) {
         const outOfScopePaths = resolveOutOfScopeMentionLabels("integration", mentionRefs, {
           activeRepoId,
-          owner: turnContext.owner ?? this.preferences.owner,
-          repo: turnContext.repo ?? this.preferences.repo,
+          owner: turnContext.owner ?? settings.owner,
+          repo: turnContext.repo ?? settings.repo,
           contextBundle
         });
         const targetLabel =
@@ -9284,8 +9395,8 @@ export class CoopChatSession {
           ? buildDecisionSynthesisUserPrompt({
               timeline: decisionTimeline,
               file: turnContext.file ?? decisionTimeline.file,
-              owner: turnContext.owner ?? this.preferences.owner,
-              repo: turnContext.repo ?? this.preferences.repo,
+              owner: turnContext.owner ?? settings.owner,
+              repo: turnContext.repo ?? settings.repo,
               lineRange: decisionTimeline.lineRange,
               codeSnippet: decisionTimeline.codeSnippet,
               userQuestion: taskContent,
@@ -9307,9 +9418,9 @@ export class CoopChatSession {
               })
             : effectiveQuickAction === "understand-repo" && repoSummary
               ? buildRepoSummarySynthesisUserPrompt({
-                  owner: turnContext.owner ?? this.preferences.owner ?? "unknown",
-                  repo: turnContext.repo ?? this.preferences.repo ?? "unknown",
-                  branch: turnContext.branch ?? this.preferences.branch,
+                  owner: turnContext.owner ?? settings.owner ?? "unknown",
+                  repo: turnContext.repo ?? settings.repo ?? "unknown",
+                  branch: turnContext.branch ?? settings.branch,
                   activeFile: turnContext.file,
                   summary: repoSummary,
                   userQuestion: taskContent,
@@ -9321,8 +9432,8 @@ export class CoopChatSession {
                 ? buildBlastRadiusSynthesisUserPrompt({
                     evidence: blastRadiusEvidence,
                     file: turnContext.file ?? blastRadiusEvidence.file ?? "unknown",
-                    owner: turnContext.owner ?? this.preferences.owner,
-                    repo: turnContext.repo ?? this.preferences.repo,
+                    owner: turnContext.owner ?? settings.owner,
+                    repo: turnContext.repo ?? settings.repo,
                     userQuestion: taskContent,
                     userFocus,
                     mentionedFiles: mentionRefs,
@@ -9338,8 +9449,8 @@ export class CoopChatSession {
                       googleDocs: googleDocsEvidence,
                       teams: teamsEvidence,
                       file: turnContext.file,
-                      owner: turnContext.owner ?? this.preferences.owner,
-                      repo: turnContext.repo ?? this.preferences.repo,
+                      owner: turnContext.owner ?? settings.owner,
+                      repo: turnContext.repo ?? settings.repo,
                       userQuestion: taskContent,
                       userFocus,
                       mentionedFiles: mentionRefs,
@@ -9378,8 +9489,8 @@ export class CoopChatSession {
                     : synthesisRoute?.kind === "incident"
                       ? buildIncidentReconstructionUserPrompt({
                           userQuestion: taskContent,
-                          owner: turnContext.owner ?? this.preferences.owner,
-                          repo: turnContext.repo ?? this.preferences.repo,
+                          owner: turnContext.owner ?? settings.owner,
+                          repo: turnContext.repo ?? settings.repo,
                           file: turnContext.file,
                           integrations: incidentIntegrationsFromBundle(contextBundle, {
                             jiraConnected: this.isIntegrationConnected("jira"),
@@ -9426,8 +9537,8 @@ export class CoopChatSession {
         const inScopeKeys = new Set(
           partitionMentionsForQuickAction(scopeAction, mentionRefs, {
             activeRepoId,
-            owner: turnContext.owner ?? this.preferences.owner,
-            repo: turnContext.repo ?? this.preferences.repo,
+            owner: turnContext.owner ?? settings.owner,
+            repo: turnContext.repo ?? settings.repo,
             repoSummary: effectiveQuickAction === "understand-repo" ? repoSummary : undefined
           }).inRepo.map((mention) => mentionAttachmentKey(mention))
         );
@@ -9509,6 +9620,7 @@ export class CoopChatSession {
                 fileAssistant: fileAssistantMessage,
                 remoteSelectionChange
               });
+      apiMessage = `${ownedTask.brief}\n\n${apiMessage}`;
       const projectInstructionsBlock =
         effectiveQuickAction === "understand-repo" ? undefined : await this.buildProjectInstructionsBlock(turnContext, turn.startedAt, turn.modelMessage);
       if (projectInstructionsBlock) {
@@ -9710,20 +9822,23 @@ export class CoopChatSession {
           sessionMode: sessionModeForContext(turnContext),
           fileSource: turnContext.fileSource,
           history: priorHistory,
-          attachments: attachments?.length ? attachments : undefined,
+          attachments: ownedTask.attachments ?? (attachments?.length ? attachments : undefined),
           mentions: options?.mentions,
           model: runtimeModel.model,
           provider: runtimeModel.provider,
           useCase: chatUseCase,
-          temperature: this.preferences.temperature,
-          maxTokens: resolveChatOutputMaxTokens(this.preferences.maxTokens),
+          inferenceRole: "answer",
+          quotaTurnId: turn.quotaTurnId ?? turn.id,
+          assertIdentity: turn.assertIdentity,
+          temperature: settings.temperature,
+          maxTokens: resolveChatOutputMaxTokens(settings.maxTokens),
           enableThinking: enableSynthesisThinking,
-          ...(["blast-radius", "knowledge-gaps"].includes(effectiveQuickAction ?? "") ? { quotaTurnId: turn.id } : {})
+
         },
         onChunk: (chunk) => {
           outputGate.push(chunk);
         },
-        baseUrl: this.preferences.apiBaseUrl,
+        baseUrl: settings.apiBaseUrl,
         signal,
         onPhase: (phase) => this.logAgentDiagnostic(turn.threadId, {
           stage: "blast-model-phase", turnId: turn.id, elapsedMs: Date.now() - turn.startedAt,
@@ -9782,20 +9897,23 @@ export class CoopChatSession {
             fileSource: turnContext.fileSource,
             history: [
               ...priorHistory,
+              { role: "user" as const, content: apiMessage, attachments: ownedTask.attachments ?? attachments, timestamp: turn.startedAt },
               ...(full.trim() ? [{ role: "assistant" as const, content: full, timestamp: Date.now() }] : [])
             ],
             model: runtimeModel.model,
             provider: runtimeModel.provider,
             useCase: chatUseCase,
-            temperature: this.preferences.temperature,
-            maxTokens: resolveChatOutputMaxTokens(this.preferences.maxTokens),
-            enableThinking: false,
-            quotaTurnId: turn.id
+            inferenceRole: "continuation",
+            quotaTurnId: turn.quotaTurnId ?? turn.id,
+            assertIdentity: turn.assertIdentity,
+            temperature: settings.temperature,
+            maxTokens: resolveChatOutputMaxTokens(settings.maxTokens),
+            enableThinking: false
           },
           (chunk) => {
             outputGate.push(chunk);
           },
-          this.preferences.apiBaseUrl,
+          settings.apiBaseUrl,
           signal
         );
         if (continued.finishReason === "length" || hasTrailingEmptyHeadings(full)) {

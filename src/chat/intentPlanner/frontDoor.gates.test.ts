@@ -331,6 +331,8 @@ test("handleChatSend interprets before routeSlashCommand (slash bypass is imposs
     const plan = planRawChatAskFromRules(ask).plan;
     const session = Object.assign(Object.create(CoopChatSession.prototype), {
       currentContext: { provider: "gitlab", owner: "org", repo: "one", branch: "main", scope: "repo" },
+      preferences: {},
+      listConnectedIntegrationTools: () => [],
       options: { api: { beginQuotaTurn() {} } },
       threadRuns: new ThreadRunManager(),
       dismissPendingQuickActionSuggest() { events.push("dismiss"); },
@@ -362,7 +364,7 @@ test("handleChatSend interprets before routeSlashCommand (slash bypass is imposs
   );
   assert.match(
     src,
-    /currentContext\.owner\?\.trim\(\) \|\| this\.preferences\.owner/,
+    /context\.owner\?\.trim\(\) \|\| settings\.owner/,
     "Use-repo chip must win over Settings when resolving useRepo"
   );
   assert.doesNotMatch(
@@ -384,6 +386,7 @@ test("integration document slash commands reach interpretation without a selecte
     const events: string[] = [];
     const plan = planRawChatAskFromRules(ask).plan;
     const session = Object.assign(Object.create(CoopChatSession.prototype), {
+      preferences: {}, listConnectedIntegrationTools: () => [],
       currentContext: {}, options: { api: { beginQuotaTurn() {} } },
       threadRuns: new ThreadRunManager(),
       dismissPendingQuickActionSuggest() {},
@@ -408,6 +411,7 @@ test("Stop during intent planning prevents late slash execution and permits the 
   let first = true;
   const session = Object.assign(Object.create(CoopChatSession.prototype), {
     currentContext: { provider: "gitlab", owner: "org", repo: "one", branch: "main", scope: "repo" },
+    preferences: {}, listConnectedIntegrationTools: () => [],
     options: { api: { beginQuotaTurn() {} } },
     threadRuns: new ThreadRunManager(),
     dismissPendingQuickActionSuggest() {},

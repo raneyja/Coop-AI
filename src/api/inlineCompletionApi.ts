@@ -132,6 +132,7 @@ export async function handleInlineCompletionRequest(
     },
     segments,
     useCase: "inline_completion" as const,
+    inferenceRole: "autocomplete" as const,
     allowUnapprovedProvider: config.allowUnapprovedProvider,
     modelConfig: {
       provider: resolvedProvider,

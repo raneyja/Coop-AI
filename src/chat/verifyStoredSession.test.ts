@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   isUnauthenticatedApiError,
+  shouldPreserveVerifiedSession,
   verifyStoredSession,
   type SessionVerifierApi
 } from "./verifyStoredSession";
@@ -37,6 +38,39 @@ function mockApi(overrides: Partial<SessionVerifierApi> & Pick<SessionVerifierAp
 test("isUnauthenticatedApiError detects axios 401", () => {
   assert.equal(isUnauthenticatedApiError(authError()), true);
   assert.equal(isUnauthenticatedApiError(new Error("fetch failed")), false);
+});
+
+test("preserves a verified signed-in state when an outage leaves the token untouched", () => {
+  assert.equal(
+    shouldPreserveVerifiedSession({
+      wasSignedIn: true,
+      nextSignedIn: false,
+      tokenBefore: "coop_sess_valid",
+      tokenAfter: "coop_sess_valid"
+    }),
+    true
+  );
+});
+
+test("does not preserve sign-in after authentication clears or replaces the token", () => {
+  assert.equal(
+    shouldPreserveVerifiedSession({
+      wasSignedIn: true,
+      nextSignedIn: false,
+      tokenBefore: "coop_sess_expired",
+      tokenAfter: undefined
+    }),
+    false
+  );
+  assert.equal(
+    shouldPreserveVerifiedSession({
+      wasSignedIn: true,
+      nextSignedIn: false,
+      tokenBefore: "coop_sess_old",
+      tokenAfter: "coop_sess_new"
+    }),
+    false
+  );
 });
 
 test("verifyStoredSession returns /v1/me when the token is valid", async () => {

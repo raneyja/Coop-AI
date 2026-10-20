@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { serverApiBase } from "@/lib/serverCoopApi";
+import { resolveGoogleAuthClientRedirect } from "@/lib/googleAuthRedirect";
 
 const INVITE_OAUTH_COOKIE = "coop_oauth_invite";
 const INVITE_OAUTH_MAX_AGE_SEC = 15 * 60;
@@ -15,7 +16,10 @@ export async function GET(request: Request) {
   const timezone = url.searchParams.get("timezone")?.trim() ?? "";
   const adminOrigin = url.origin.replace(/\/$/, "");
   const oauthCallback = `${adminOrigin}/api/auth/google/callback`;
-  const finalRedirect = `${adminOrigin}/auth/callback`;
+  const finalRedirect = resolveGoogleAuthClientRedirect(
+    url.searchParams.get("redirect"),
+    `${adminOrigin}/auth/callback`
+  );
 
   const backendUrl = new URL(`${serverApiBase()}/v1/auth/google/start`);
   backendUrl.searchParams.set("mode", mode);
